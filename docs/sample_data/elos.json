@@ -1,0 +1,29 @@
+[
+  {
+    "localityCode": "BSB",
+    "roleType": "PSICOLOGIA",
+    "name": "Cap. Ana Ribeiro",
+    "rank": "Cap",
+    "phone": "(61) 99999-0001",
+    "email": "ana.ribeiro@fab.mil.br",
+    "om": "CIPAVD BSB"
+  },
+  {
+    "localityCode": "RJ",
+    "roleType": "SSO",
+    "name": "Ten. Carlos Souza",
+    "rank": "Ten",
+    "phone": "(21) 98888-0002",
+    "email": "carlos.souza@fab.mil.br",
+    "om": "CIPAVD RJ"
+  },
+  {
+    "localityCode": "SP",
+    "roleType": "JURIDICO",
+    "name": "Maj. Daniela Lima",
+    "rank": "Maj",
+    "phone": "(11) 97777-0003",
+    "email": "daniela.lima@fab.mil.br",
+    "om": "CIPAVD SP"
+  }
+]

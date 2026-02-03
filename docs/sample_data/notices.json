@@ -1,0 +1,24 @@
+[
+  {
+    "title": "Revisar cronograma de visitas",
+    "body": "Atualizar datas de visitas para as localidades com atrasos reportados.",
+    "localityCode": "BSB",
+    "dueDate": "2026-02-10T12:00:00Z",
+    "priority": "HIGH",
+    "pinned": true
+  },
+  {
+    "title": "Checklist de acompanhamento",
+    "body": "Todos devem atualizar os itens de acompanhamento da fase atual.",
+    "specialtyName": "Psicologia",
+    "dueDate": "2026-02-14T12:00:00Z",
+    "priority": "MEDIUM",
+    "pinned": false
+  },
+  {
+    "title": "Aviso nacional",
+    "body": "Reforço do fluxo de relatórios obrigatórios.",
+    "priority": "LOW",
+    "pinned": false
+  }
+]

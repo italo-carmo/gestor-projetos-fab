@@ -1,0 +1,1311 @@
+openapi: 3.0.3
+info:
+  title: SMIF Gestão API — Full
+  version: 0.3.0
+  description: Especificação completa (Auth, Admin, RBAC, Localities, Specialties,
+    Meetings, Tasks, Reports, Notices, Checklists, KPIs, Org/Elos, Dashboards).
+servers:
+- url: http://localhost:3000
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+        code:
+          type: string
+        details: {}
+      required:
+      - message
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+      required:
+      - email
+      - password
+    TokenResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+      required:
+      - accessToken
+    LoginResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        user:
+          $ref: '#/components/schemas/UserSafe'
+      required:
+      - accessToken
+      - refreshToken
+      - user
+    UserSafe:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: object
+          properties:
+            id:
+              type: string
+            name:
+              type: string
+      required:
+      - id
+      - name
+      - email
+    Paginated:
+      type: object
+      properties:
+        items:
+          type: array
+          items: {}
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+    Role:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        isSystemRole:
+          type: boolean
+      required:
+      - id
+      - name
+    Permission:
+      type: object
+      properties:
+        id:
+          type: string
+        resource:
+          type: string
+        action:
+          type: string
+        scope:
+          type: string
+          enum:
+          - NATIONAL
+          - LOCALITY
+          - SPECIALTY
+          - LOCALITY_SPECIALTY
+          - OWN
+        description:
+          type: string
+          nullable: true
+      required:
+      - id
+      - resource
+      - action
+      - scope
+    Specialty:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        color:
+          type: string
+          nullable: true
+        icon:
+          type: string
+          nullable: true
+      required:
+      - id
+      - name
+    Locality:
+      type: object
+      properties:
+        id:
+          type: string
+        code:
+          type: string
+        name:
+          type: string
+        commandName:
+          type: string
+          nullable: true
+        commanderName:
+          type: string
+          nullable: true
+        visitDate:
+          type: string
+          format: date-time
+          nullable: true
+        recruitsFemaleCountCurrent:
+          type: integer
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+      required:
+      - id
+      - code
+      - name
+    Phase:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+          enum:
+          - PREPARACAO
+          - EXECUCAO
+          - ACOMPANHAMENTO
+        order:
+          type: integer
+      required:
+      - id
+      - name
+      - order
+    Meeting:
+      type: object
+      properties:
+        id:
+          type: string
+        datetime:
+          type: string
+          format: date-time
+        scope:
+          type: string
+          enum:
+          - NATIONAL
+          - LOCALITY
+        status:
+          type: string
+          enum:
+          - PLANNED
+          - HELD
+          - CANCELLED
+        agenda:
+          type: string
+          nullable: true
+        localityId:
+          type: string
+          nullable: true
+        participantsJson: {}
+      required:
+      - id
+      - datetime
+      - scope
+      - status
+    TaskTemplate:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        phaseId:
+          type: string
+        specialtyId:
+          type: string
+          nullable: true
+        appliesToAllLocalities:
+          type: boolean
+        reportRequiredDefault:
+          type: boolean
+      required:
+      - id
+      - title
+      - phaseId
+      - appliesToAllLocalities
+      - reportRequiredDefault
+    TaskInstance:
+      type: object
+      properties:
+        id:
+          type: string
+        taskTemplateId:
+          type: string
+        localityId:
+          type: string
+        meetingId:
+          type: string
+          nullable: true
+        dueDate:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum:
+          - NOT_STARTED
+          - STARTED
+          - IN_PROGRESS
+          - DONE
+          - BLOCKED
+        priority:
+          type: string
+          enum:
+          - CRITICAL
+          - HIGH
+          - MEDIUM
+          - LOW
+        progressPercent:
+          type: integer
+        assignedToId:
+          type: string
+          nullable: true
+        reportRequired:
+          type: boolean
+        isLate:
+          type: boolean
+        blockedByIds:
+          type: array
+          items:
+            type: string
+          nullable: true
+      required:
+      - id
+      - taskTemplateId
+      - localityId
+      - dueDate
+      - status
+      - priority
+      - progressPercent
+      - reportRequired
+      - isLate
+    Report:
+      type: object
+      properties:
+        id:
+          type: string
+        taskInstanceId:
+          type: string
+        fileName:
+          type: string
+        fileUrl:
+          type: string
+        approved:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required:
+      - id
+      - taskInstanceId
+      - fileName
+      - fileUrl
+    Notice:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        body:
+          type: string
+        localityId:
+          type: string
+          nullable: true
+        specialtyId:
+          type: string
+          nullable: true
+        dueDate:
+          type: string
+          format: date-time
+          nullable: true
+        priority:
+          type: string
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+        pinned:
+          type: boolean
+      required:
+      - id
+      - title
+      - body
+    Checklist:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        phaseId:
+          type: string
+          nullable: true
+        specialtyId:
+          type: string
+          nullable: true
+      required:
+      - id
+      - title
+    Kpi:
+      type: object
+      properties:
+        id:
+          type: string
+        key:
+          type: string
+        label:
+          type: string
+        visibility:
+          type: string
+          enum:
+          - DEFAULT
+          - EXECUTIVE
+      required:
+      - id
+      - key
+      - label
+    KpiValue:
+      type: object
+      properties:
+        id:
+          type: string
+        kpiId:
+          type: string
+        date:
+          type: string
+          format: date
+        value:
+          type: number
+        localityId:
+          type: string
+          nullable: true
+        specialtyId:
+          type: string
+          nullable: true
+      required:
+      - id
+      - kpiId
+      - date
+      - value
+    Elo:
+      type: object
+      properties:
+        id:
+          type: string
+        localityId:
+          type: string
+        roleType:
+          type: string
+          enum:
+          - PSICOLOGIA
+          - SSO
+          - JURIDICO
+          - CPCA
+          - GRAD_MASTER
+        name:
+          type: string
+        rank:
+          type: string
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        om:
+          type: string
+          nullable: true
+      required:
+      - id
+      - localityId
+      - roleType
+      - name
+    AuditLog:
+      type: object
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        resource:
+          type: string
+        action:
+          type: string
+        entityId:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        diffJson: {}
+      required:
+      - id
+      - resource
+      - action
+      - createdAt
+security:
+- bearerAuth: []
+paths:
+  /auth/login:
+    post:
+      tags:
+      - Auth
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /auth/refresh:
+    post:
+      tags:
+      - Auth
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken:
+                  type: string
+              required:
+              - refreshToken
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+  /auth/me:
+    get:
+      tags:
+      - Auth
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+  /roles:
+    get:
+      tags:
+      - RBAC
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Role'
+    post:
+      tags:
+      - RBAC
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Role'
+      responses:
+        '201':
+          description: Created
+  /roles/{id}:
+    put:
+      tags:
+      - RBAC
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Role'
+      responses:
+        '200':
+          description: OK
+    delete:
+      tags:
+      - RBAC
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '204':
+          description: No Content
+  /roles/{id}/clone:
+    post:
+      tags:
+      - RBAC
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+      responses:
+        '201':
+          description: Created
+  /permissions:
+    get:
+      tags:
+      - RBAC
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Permission'
+  /roles/{id}/permissions:
+    put:
+      tags:
+      - RBAC
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                permissions:
+                  type: array
+                  items:
+                    type: object
+              required:
+              - permissions
+      responses:
+        '200':
+          description: OK
+  /admin/rbac/export:
+    get:
+      tags:
+      - Admin
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+  /admin/rbac/import:
+    post:
+      tags:
+      - Admin
+      parameters:
+      - name: mode
+        in: query
+        schema:
+          type: string
+          enum:
+          - replace
+          - merge
+          default: replace
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /localities:
+    get:
+      tags:
+      - Localities
+      responses:
+        '200':
+          description: OK
+    post:
+      tags:
+      - Localities
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Locality'
+      responses:
+        '201':
+          description: Created
+  /localities/{id}:
+    put:
+      tags:
+      - Localities
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Locality'
+      responses:
+        '200':
+          description: OK
+    delete:
+      tags:
+      - Localities
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '204':
+          description: No Content
+  /specialties:
+    get:
+      tags:
+      - Specialties
+      responses:
+        '200':
+          description: OK
+    post:
+      tags:
+      - Specialties
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Specialty'
+      responses:
+        '201':
+          description: Created
+  /specialties/{id}:
+    put:
+      tags:
+      - Specialties
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Specialty'
+      responses:
+        '200':
+          description: OK
+    delete:
+      tags:
+      - Specialties
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '204':
+          description: No Content
+  /users:
+    get:
+      tags:
+      - Users
+      responses:
+        '200':
+          description: OK
+    post:
+      tags:
+      - Users
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '201':
+          description: Created
+  /users/{id}:
+    put:
+      tags:
+      - Users
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: OK
+  /users/{id}/deactivate:
+    patch:
+      tags:
+      - Users
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                active:
+                  type: boolean
+              required:
+              - active
+      responses:
+        '200':
+          description: OK
+  /phases:
+    get:
+      tags:
+      - Phases
+      responses:
+        '200':
+          description: OK
+  /meetings:
+    get:
+      tags:
+      - Meetings
+      responses:
+        '200':
+          description: OK
+    post:
+      tags:
+      - Meetings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Meeting'
+      responses:
+        '201':
+          description: Created
+  /meetings/{id}:
+    put:
+      tags:
+      - Meetings
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Meeting'
+      responses:
+        '200':
+          description: OK
+  /meetings/{id}/decisions:
+    post:
+      tags:
+      - Meetings
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                text:
+                  type: string
+              required:
+              - text
+      responses:
+        '201':
+          description: Created
+  /meetings/{id}/generate-tasks:
+    post:
+      tags:
+      - Meetings
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '201':
+          description: Created
+  /task-templates:
+    get:
+      tags:
+      - Tasks
+      responses:
+        '200':
+          description: OK
+    post:
+      tags:
+      - Tasks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskTemplate'
+      responses:
+        '201':
+          description: Created
+  /task-templates/{id}/generate-instances:
+    post:
+      tags:
+      - Tasks
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '201':
+          description: Created
+  /task-instances:
+    get:
+      tags:
+      - Tasks
+      responses:
+        '200':
+          description: OK
+  /task-instances/{id}/status:
+    put:
+      tags:
+      - Tasks
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+              required:
+              - status
+      responses:
+        '200':
+          description: OK
+        '409':
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /task-instances/{id}/progress:
+    put:
+      tags:
+      - Tasks
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                progressPercent:
+                  type: integer
+              required:
+              - progressPercent
+      responses:
+        '200':
+          description: OK
+  /task-instances/{id}/assign:
+    put:
+      tags:
+      - Tasks
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                assignedToId:
+                  type: string
+                  nullable: true
+              required:
+              - assignedToId
+      responses:
+        '200':
+          description: OK
+  /task-instances/gantt:
+    get:
+      tags:
+      - Gantt
+      responses:
+        '200':
+          description: OK
+  /task-instances/calendar:
+    get:
+      tags:
+      - Calendar
+      parameters:
+      - name: year
+        in: query
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: OK
+  /reports/upload:
+    post:
+      tags:
+      - Reports
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                taskInstanceId:
+                  type: string
+              required:
+              - file
+              - taskInstanceId
+      responses:
+        '201':
+          description: Created
+  /reports/{id}/download:
+    get:
+      tags:
+      - Reports
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+  /reports/{id}/approve:
+    put:
+      tags:
+      - Reports
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                approved:
+                  type: boolean
+              required:
+              - approved
+      responses:
+        '200':
+          description: OK
+  /notices:
+    get:
+      tags:
+      - Notices
+      responses:
+        '200':
+          description: OK
+    post:
+      tags:
+      - Notices
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Notice'
+      responses:
+        '201':
+          description: Created
+  /checklists:
+    get:
+      tags:
+      - Checklists
+      responses:
+        '200':
+          description: OK
+    post:
+      tags:
+      - Checklists
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Checklist'
+      responses:
+        '201':
+          description: Created
+  /checklists/{id}/items:
+    post:
+      tags:
+      - Checklists
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '201':
+          description: Created
+  /checklist-item-status/batch:
+    put:
+      tags:
+      - Checklists
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: OK
+  /kpis:
+    get:
+      tags:
+      - KPIs
+      responses:
+        '200':
+          description: OK
+    post:
+      tags:
+      - KPIs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Kpi'
+      responses:
+        '201':
+          description: Created
+  /kpis/{id}/values:
+    post:
+      tags:
+      - KPIs
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KpiValue'
+      responses:
+        '201':
+          description: Created
+  /kpis/dashboard:
+    get:
+      tags:
+      - KPIs
+      responses:
+        '200':
+          description: OK
+  /elos:
+    get:
+      tags:
+      - Elos
+      responses:
+        '200':
+          description: OK
+    post:
+      tags:
+      - Elos
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Elo'
+      responses:
+        '201':
+          description: Created
+  /org-chart:
+    get:
+      tags:
+      - Org
+      responses:
+        '200':
+          description: OK
+  /localities/{id}/progress:
+    get:
+      tags:
+      - Dashboards
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+  /dashboard/national:
+    get:
+      tags:
+      - Dashboards
+      responses:
+        '200':
+          description: OK
+  /audit-logs:
+    get:
+      tags:
+      - Audit
+      responses:
+        '200':
+          description: OK

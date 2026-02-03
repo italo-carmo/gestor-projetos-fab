@@ -1,0 +1,53 @@
+{
+  "TaskStatus": [
+    "NOT_STARTED",
+    "STARTED",
+    "IN_PROGRESS",
+    "DONE",
+    "BLOCKED"
+  ],
+  "TaskPriority": [
+    "CRITICAL",
+    "HIGH",
+    "MEDIUM",
+    "LOW"
+  ],
+  "PhaseName": [
+    "PREPARACAO",
+    "EXECUCAO",
+    "ACOMPANHAMENTO"
+  ],
+  "MeetingScope": [
+    "NATIONAL",
+    "LOCALITY"
+  ],
+  "MeetingStatus": [
+    "PLANNED",
+    "HELD",
+    "CANCELLED"
+  ],
+  "NoticePriority": [
+    "LOW",
+    "MEDIUM",
+    "HIGH"
+  ],
+  "ChecklistItemStatus": [
+    "NOT_STARTED",
+    "IN_PROGRESS",
+    "DONE"
+  ],
+  "PermissionScope": [
+    "NATIONAL",
+    "LOCALITY",
+    "SPECIALTY",
+    "LOCALITY_SPECIALTY",
+    "OWN"
+  ],
+  "EloRoleType": [
+    "PSICOLOGIA",
+    "SSO",
+    "JURIDICO",
+    "CPCA",
+    "GRAD_MASTER"
+  ]
+}

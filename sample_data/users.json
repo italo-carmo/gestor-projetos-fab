@@ -1,0 +1,76 @@
+[
+  {
+    "name": "Admin TI",
+    "email": "ti@smif.local",
+    "password": "Admin123",
+    "roleName": "TI"
+  },
+  {
+    "name": "Coordenação CIPAVD",
+    "email": "cipavd@smif.local",
+    "password": "Admin123",
+    "roleName": "Coordenação CIPAVD"
+  },
+  {
+    "name": "Comandante COMGEP",
+    "email": "comgep@smif.local",
+    "password": "Admin123",
+    "roleName": "Comandante COMGEP"
+  },
+  {
+    "name": "GSD BSB",
+    "email": "gsd.bsb@smif.local",
+    "password": "Admin123",
+    "roleName": "GSD Localidade",
+    "localityCode": "BSB"
+  },
+  {
+    "name": "GSD RJ",
+    "email": "gsd.rj@smif.local",
+    "password": "Admin123",
+    "roleName": "GSD Localidade",
+    "localityCode": "RJ"
+  },
+  {
+    "name": "GSD SP",
+    "email": "gsd.sp@smif.local",
+    "password": "Admin123",
+    "roleName": "GSD Localidade",
+    "localityCode": "SP"
+  },
+  {
+    "name": "GSD ANP",
+    "email": "gsd.anp@smif.local",
+    "password": "Admin123",
+    "roleName": "GSD Localidade",
+    "localityCode": "ANP"
+  },
+  {
+    "name": "GSD CG",
+    "email": "gsd.cg@smif.local",
+    "password": "Admin123",
+    "roleName": "GSD Localidade",
+    "localityCode": "CG"
+  },
+  {
+    "name": "GSD REC",
+    "email": "gsd.rec@smif.local",
+    "password": "Admin123",
+    "roleName": "GSD Localidade",
+    "localityCode": "REC"
+  },
+  {
+    "name": "GSD BEL",
+    "email": "gsd.bel@smif.local",
+    "password": "Admin123",
+    "roleName": "GSD Localidade",
+    "localityCode": "BEL"
+  },
+  {
+    "name": "GSD POA",
+    "email": "gsd.poa@smif.local",
+    "password": "Admin123",
+    "roleName": "GSD Localidade",
+    "localityCode": "POA"
+  }
+]

@@ -1,0 +1,26 @@
+{
+  "name": "smif-gestao",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev:backend": "npm --prefix backend run start:dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "install:all": "npm install --workspaces",
+    "prisma:migrate": "npm --prefix backend run prisma:migrate",
+    "prisma:generate": "npm --prefix backend run prisma:generate",
+    "seed:demo": "npm --prefix backend run seed:demo",
+    "test": "npm --prefix backend run test",
+    "e2e": "playwright test",
+    "lint": "npm --prefix backend run lint && npm --prefix frontend run lint",
+    "format": "npm --prefix backend run format && npm --prefix frontend run format"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.53.0",
+    "concurrently": "^9.1.0",
+    "prettier": "^3.4.2"
+  }
+}

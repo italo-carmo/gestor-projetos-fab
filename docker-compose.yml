@@ -1,0 +1,31 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: smif-postgres
+    environment:
+      POSTGRES_USER: smif
+      POSTGRES_PASSWORD: smif
+      POSTGRES_DB: smif_gestao
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  minio:
+    image: minio/minio:latest
+    container_name: smif-minio
+    environment:
+      MINIO_ROOT_USER: smifadmin
+      MINIO_ROOT_PASSWORD: smifadmin123
+    command: server /data --console-address ":9001"
+    ports:
+      - '9000:9000'
+      - '9001:9001'
+    volumes:
+      - minio_data:/data
+
+volumes:
+  pgdata:
+  minio_data:

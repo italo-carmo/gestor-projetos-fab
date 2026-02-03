@@ -1,0 +1,441 @@
+{
+  "version": "1.0",
+  "notes": "Matriz inicial (ajustável via Admin TI). Foco no core de tarefas/fases/andamento.",
+  "roles": [
+    {
+      "name": "TI",
+      "isSystemRole": true,
+      "wildcard": true,
+      "permissions": [
+        {
+          "resource": "*",
+          "action": "*",
+          "scope": "NATIONAL"
+        }
+      ]
+    },
+    {
+      "name": "Coordenação CIPAVD",
+      "isSystemRole": true,
+      "wildcard": false,
+      "permissions": [
+        {
+          "resource": "phases",
+          "action": "view",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "task_templates",
+          "action": "view",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "task_templates",
+          "action": "create",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "task_templates",
+          "action": "update",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "task_instances",
+          "action": "view",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "task_instances",
+          "action": "update",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "task_instances",
+          "action": "assign",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "task_instances",
+          "action": "export",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "reports",
+          "action": "view",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "reports",
+          "action": "download",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "reports",
+          "action": "approve",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "meetings",
+          "action": "view",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "meetings",
+          "action": "create",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "meetings",
+          "action": "update",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "tasks",
+          "action": "generate_from_meeting",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "notices",
+          "action": "view",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "notices",
+          "action": "create",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "notices",
+          "action": "update",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "notices",
+          "action": "delete",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "notices",
+          "action": "pin",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "checklists",
+          "action": "view",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "checklists",
+          "action": "create",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "checklists",
+          "action": "update",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "checklists",
+          "action": "export",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "elos",
+          "action": "view",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "elos",
+          "action": "create",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "elos",
+          "action": "update",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "elos",
+          "action": "delete",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "org_chart",
+          "action": "view",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "audit_logs",
+          "action": "view",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "localities",
+          "action": "view",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "specialties",
+          "action": "view",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "dashboard",
+          "action": "view",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "gantt",
+          "action": "view",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "calendar",
+          "action": "view",
+          "scope": "NATIONAL"
+        }
+      ]
+    },
+    {
+      "name": "GSD Localidade",
+      "isSystemRole": true,
+      "wildcard": false,
+      "constraintsTemplate": {
+        "localityId": "$user.localityId"
+      },
+      "permissions": [
+        {
+          "resource": "phases",
+          "action": "view",
+          "scope": "LOCALITY"
+        },
+        {
+          "resource": "task_instances",
+          "action": "view",
+          "scope": "LOCALITY"
+        },
+        {
+          "resource": "task_instances",
+          "action": "update",
+          "scope": "LOCALITY"
+        },
+        {
+          "resource": "task_instances",
+          "action": "assign",
+          "scope": "LOCALITY"
+        },
+        {
+          "resource": "reports",
+          "action": "view",
+          "scope": "LOCALITY"
+        },
+        {
+          "resource": "reports",
+          "action": "upload",
+          "scope": "LOCALITY"
+        },
+        {
+          "resource": "reports",
+          "action": "download",
+          "scope": "LOCALITY"
+        },
+        {
+          "resource": "dashboard",
+          "action": "view",
+          "scope": "LOCALITY"
+        },
+        {
+          "resource": "gantt",
+          "action": "view",
+          "scope": "LOCALITY"
+        },
+        {
+          "resource": "calendar",
+          "action": "view",
+          "scope": "LOCALITY"
+        },
+        {
+          "resource": "meetings",
+          "action": "view",
+          "scope": "LOCALITY"
+        },
+        {
+          "resource": "notices",
+          "action": "view",
+          "scope": "LOCALITY"
+        },
+        {
+          "resource": "notices",
+          "action": "create",
+          "scope": "LOCALITY"
+        },
+        {
+          "resource": "notices",
+          "action": "update",
+          "scope": "LOCALITY"
+        },
+        {
+          "resource": "notices",
+          "action": "delete",
+          "scope": "LOCALITY"
+        },
+        {
+          "resource": "notices",
+          "action": "pin",
+          "scope": "LOCALITY"
+        },
+        {
+          "resource": "checklists",
+          "action": "view",
+          "scope": "LOCALITY"
+        },
+        {
+          "resource": "checklists",
+          "action": "update",
+          "scope": "LOCALITY"
+        },
+        {
+          "resource": "org_chart",
+          "action": "view",
+          "scope": "LOCALITY"
+        }
+      ]
+    },
+    {
+      "name": "Admin Especialidade Local",
+      "isSystemRole": true,
+      "wildcard": false,
+      "constraintsTemplate": {
+        "localityId": "$user.localityId",
+        "specialtyId": "$user.specialtyId"
+      },
+      "permissions": [
+        {
+          "resource": "task_instances",
+          "action": "view",
+          "scope": "LOCALITY_SPECIALTY"
+        },
+        {
+          "resource": "task_instances",
+          "action": "update",
+          "scope": "LOCALITY_SPECIALTY"
+        },
+        {
+          "resource": "reports",
+          "action": "view",
+          "scope": "LOCALITY_SPECIALTY"
+        },
+        {
+          "resource": "reports",
+          "action": "upload",
+          "scope": "LOCALITY_SPECIALTY"
+        },
+        {
+          "resource": "reports",
+          "action": "download",
+          "scope": "LOCALITY_SPECIALTY"
+        },
+        {
+          "resource": "dashboard",
+          "action": "view",
+          "scope": "LOCALITY_SPECIALTY"
+        },
+        {
+          "resource": "calendar",
+          "action": "view",
+          "scope": "LOCALITY_SPECIALTY"
+        },
+        {
+          "resource": "notices",
+          "action": "view",
+          "scope": "LOCALITY_SPECIALTY"
+        },
+        {
+          "resource": "notices",
+          "action": "create",
+          "scope": "LOCALITY_SPECIALTY"
+        },
+        {
+          "resource": "notices",
+          "action": "update",
+          "scope": "LOCALITY_SPECIALTY"
+        },
+        {
+          "resource": "notices",
+          "action": "delete",
+          "scope": "LOCALITY_SPECIALTY"
+        },
+        {
+          "resource": "notices",
+          "action": "pin",
+          "scope": "LOCALITY_SPECIALTY"
+        },
+        {
+          "resource": "checklists",
+          "action": "view",
+          "scope": "LOCALITY_SPECIALTY"
+        },
+        {
+          "resource": "checklists",
+          "action": "update",
+          "scope": "LOCALITY_SPECIALTY"
+        },
+        {
+          "resource": "org_chart",
+          "action": "view",
+          "scope": "LOCALITY_SPECIALTY"
+        }
+      ]
+    },
+    {
+      "name": "Comandante COMGEP",
+      "isSystemRole": true,
+      "wildcard": false,
+      "flags": {
+        "executive_hide_pii": true
+      },
+      "permissions": [
+        {
+          "resource": "dashboard",
+          "action": "view",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "kpis",
+          "action": "view",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "kpis",
+          "action": "export",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "task_instances",
+          "action": "view",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "gantt",
+          "action": "view",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "notices",
+          "action": "view",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "checklists",
+          "action": "view",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "org_chart",
+          "action": "view",
+          "scope": "NATIONAL"
+        }
+      ]
+    }
+  ]
+}

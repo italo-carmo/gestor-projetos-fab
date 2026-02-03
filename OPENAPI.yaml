@@ -1,0 +1,532 @@
+openapi: 3.0.3
+info:
+  title: SMIF Gestão API
+  version: 0.1.0
+  description: API do sistema SMIF Gestão (RBAC + projetos/tarefas/reuniões/relatórios).
+servers:
+- url: http://localhost:3000
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+        code:
+          type: string
+        details: {}
+      required:
+      - message
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+      required:
+      - email
+      - password
+    LoginResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        user:
+          $ref: '#/components/schemas/UserSafe'
+      required:
+      - accessToken
+      - refreshToken
+      - user
+    UserSafe:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          type: object
+          properties:
+            id:
+              type: string
+            name:
+              type: string
+      required:
+      - id
+      - name
+      - email
+    Paginated:
+      type: object
+      properties:
+        items:
+          type: array
+          items: {}
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+    Locality:
+      type: object
+      properties:
+        id:
+          type: string
+        code:
+          type: string
+        name:
+          type: string
+        commandName:
+          type: string
+          nullable: true
+        commanderName:
+          type: string
+          nullable: true
+        visitDate:
+          type: string
+          format: date-time
+          nullable: true
+        recruitsFemaleCountCurrent:
+          type: integer
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+      required:
+      - id
+      - code
+      - name
+    Specialty:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        color:
+          type: string
+          nullable: true
+        icon:
+          type: string
+          nullable: true
+      required:
+      - id
+      - name
+    Meeting:
+      type: object
+      properties:
+        id:
+          type: string
+        datetime:
+          type: string
+          format: date-time
+        scope:
+          type: string
+          enum:
+          - NATIONAL
+          - LOCALITY
+        status:
+          type: string
+          enum:
+          - PLANNED
+          - HELD
+          - CANCELLED
+        agenda:
+          type: string
+          nullable: true
+        platformLink:
+          type: string
+          nullable: true
+        localityId:
+          type: string
+          nullable: true
+      required:
+      - id
+      - datetime
+      - scope
+      - status
+    TaskInstance:
+      type: object
+      properties:
+        id:
+          type: string
+        taskTemplateId:
+          type: string
+        localityId:
+          type: string
+        dueDate:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum:
+          - NOT_STARTED
+          - STARTED
+          - IN_PROGRESS
+          - DONE
+          - LATE
+          - BLOCKED
+        priority:
+          type: string
+          enum:
+          - CRITICAL
+          - HIGH
+          - MEDIUM
+          - LOW
+        progressPercent:
+          type: integer
+        assignedToId:
+          type: string
+          nullable: true
+        reportRequired:
+          type: boolean
+      required:
+      - id
+      - taskTemplateId
+      - localityId
+      - dueDate
+      - status
+      - priority
+      - progressPercent
+      - reportRequired
+security:
+- bearerAuth: []
+paths:
+  /auth/login:
+    post:
+      tags:
+      - Auth
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /auth/refresh:
+    post:
+      tags:
+      - Auth
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken:
+                  type: string
+              required:
+              - refreshToken
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken:
+                    type: string
+                required:
+                - accessToken
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /auth/me:
+    get:
+      tags:
+      - Auth
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /localities:
+    get:
+      tags:
+      - Localities
+      parameters:
+      - name: q
+        in: query
+        schema:
+          type: string
+      - name: page
+        in: query
+        schema:
+          type: integer
+          default: 1
+      - name: pageSize
+        in: query
+        schema:
+          type: integer
+          default: 25
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Locality'
+                  page:
+                    type: integer
+                  pageSize:
+                    type: integer
+                  total:
+                    type: integer
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      tags:
+      - Localities
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Locality'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                required:
+                - id
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /localities/{id}:
+    put:
+      tags:
+      - Localities
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Locality'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Locality'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags:
+      - Localities
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '204':
+          description: No Content
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /specialties:
+    get:
+      tags:
+      - Specialties
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Specialty'
+    post:
+      tags:
+      - Specialties
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Specialty'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+  /meetings:
+    get:
+      tags:
+      - Meetings
+      parameters:
+      - name: from
+        in: query
+        schema:
+          type: string
+          format: date-time
+      - name: to
+        in: query
+        schema:
+          type: string
+          format: date-time
+      - name: localityId
+        in: query
+        schema:
+          type: string
+      - name: status
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Meeting'
+    post:
+      tags:
+      - Meetings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Meeting'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+  /task-instances:
+    get:
+      tags:
+      - Tasks
+      parameters:
+      - name: status
+        in: query
+        schema:
+          type: string
+      - name: localityId
+        in: query
+        schema:
+          type: string
+      - name: specialtyId
+        in: query
+        schema:
+          type: string
+      - name: dueFrom
+        in: query
+        schema:
+          type: string
+          format: date-time
+      - name: dueTo
+        in: query
+        schema:
+          type: string
+          format: date-time
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TaskInstance'

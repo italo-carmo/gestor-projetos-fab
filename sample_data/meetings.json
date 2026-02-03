@@ -1,0 +1,14 @@
+[
+  {
+    "datetime": "2026-02-05T14:00:00",
+    "scope": "NATIONAL",
+    "status": "PLANNED",
+    "agenda": "Kickoff nacional e alinhamento de fases."
+  },
+  {
+    "datetime": "2026-02-12T14:00:00",
+    "scope": "NATIONAL",
+    "status": "PLANNED",
+    "agenda": "Checklist de preparação e geração de tarefas."
+  }
+]

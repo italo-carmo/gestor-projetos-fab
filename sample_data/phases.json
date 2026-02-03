@@ -1,0 +1,14 @@
+[
+  {
+    "name": "PREPARACAO",
+    "order": 1
+  },
+  {
+    "name": "EXECUCAO",
+    "order": 2
+  },
+  {
+    "name": "ACOMPANHAMENTO",
+    "order": 3
+  }
+]

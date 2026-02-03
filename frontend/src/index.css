@@ -1,0 +1,20 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap');
+
+:root {
+  font-family: 'Montserrat', 'Segoe UI', sans-serif;
+  color: #0B1B3B;
+  background-color: #F5F8FC;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background-color: #F5F8FC;
+}
+
+#root {
+  min-height: 100vh;
+}

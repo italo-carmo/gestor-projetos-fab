@@ -1,0 +1,58 @@
+[
+  {
+    "title": "Briefing inicial da unidade",
+    "phaseName": "PREPARACAO",
+    "specialtyName": "Coordenação",
+    "appliesToAllLocalities": true,
+    "reportRequiredDefault": true
+  },
+  {
+    "title": "Nomeação dos elos locais",
+    "phaseName": "PREPARACAO",
+    "specialtyName": "Coordenação",
+    "appliesToAllLocalities": true,
+    "reportRequiredDefault": false
+  },
+  {
+    "title": "Plano de acolhimento (Psicologia)",
+    "phaseName": "PREPARACAO",
+    "specialtyName": "Psicologia",
+    "appliesToAllLocalities": true,
+    "reportRequiredDefault": true
+  },
+  {
+    "title": "Canal de denúncia e fluxo",
+    "phaseName": "EXECUCAO",
+    "specialtyName": "Jurídico",
+    "appliesToAllLocalities": true,
+    "reportRequiredDefault": true
+  },
+  {
+    "title": "Comunicação interna do programa",
+    "phaseName": "EXECUCAO",
+    "specialtyName": "Comunicação",
+    "appliesToAllLocalities": true,
+    "reportRequiredDefault": false
+  },
+  {
+    "title": "Visita da comissão — checklist",
+    "phaseName": "EXECUCAO",
+    "specialtyName": "Coordenação",
+    "appliesToAllLocalities": true,
+    "reportRequiredDefault": true
+  },
+  {
+    "title": "Relatório pós-visita",
+    "phaseName": "ACOMPANHAMENTO",
+    "specialtyName": "Coordenação",
+    "appliesToAllLocalities": true,
+    "reportRequiredDefault": true
+  },
+  {
+    "title": "Acompanhamento turnover (mensal)",
+    "phaseName": "ACOMPANHAMENTO",
+    "specialtyName": "Serviço Social",
+    "appliesToAllLocalities": true,
+    "reportRequiredDefault": false
+  }
+]

@@ -1,0 +1,386 @@
+// Prisma schema for SMIF Gestao
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id               String         @id @default(cuid())
+  email            String         @unique
+  name             String
+  passwordHash     String
+  isActive         Boolean        @default(true)
+  executiveHidePii Boolean        @default(false)
+  localityId       String?
+  specialtyId      String?
+  flagsJson        Json?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  locality         Locality?      @relation(fields: [localityId], references: [id])
+  specialty        Specialty?     @relation(fields: [specialtyId], references: [id])
+  roles            UserRole[]
+  refreshTokens    RefreshToken[]
+  assignedTasks    TaskInstance[] @relation("TaskAssignee")
+  auditLogs        AuditLog[]
+}
+
+model Role {
+  id                     String           @id @default(cuid())
+  name                   String           @unique
+  description            String?
+  isSystemRole           Boolean          @default(false)
+  wildcard               Boolean          @default(false)
+  flagsJson              Json?
+  constraintsTemplateJson Json?
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
+
+  permissions            RolePermission[]
+  users                  UserRole[]
+}
+
+model Permission {
+  id          String           @id @default(cuid())
+  resource    String
+  action      String
+  scope       PermissionScope
+  description String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  roles       RolePermission[]
+
+  @@unique([resource, action, scope])
+}
+
+model RolePermission {
+  id           String      @id @default(cuid())
+  roleId       String
+  permissionId String
+
+  role         Role        @relation(fields: [roleId], references: [id])
+  permission   Permission  @relation(fields: [permissionId], references: [id])
+
+  @@unique([roleId, permissionId])
+}
+
+model UserRole {
+  id      String @id @default(cuid())
+  userId  String
+  roleId  String
+
+  user    User   @relation(fields: [userId], references: [id])
+  role    Role   @relation(fields: [roleId], references: [id])
+
+  @@unique([userId, roleId])
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Locality {
+  id                         String          @id @default(cuid())
+  code                       String          @unique
+  name                       String
+  commandName                String?
+  commanderName              String?
+  visitDate                  DateTime?
+  recruitsFemaleCountCurrent Int?
+  notes                      String?
+  createdAt                  DateTime        @default(now())
+  updatedAt                  DateTime        @updatedAt
+
+  users                      User[]
+  taskInstances              TaskInstance[]
+  meetings                   Meeting[]
+  recruitsHistory            RecruitsHistory[]
+  notices                    Notice[]
+  elos                       Elo[]
+  checklistItemStatuses      ChecklistItemStatus[]
+}
+
+model Specialty {
+  id         String         @id @default(cuid())
+  name       String         @unique
+  color      String?
+  icon       String?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  users      User[]
+  templates  TaskTemplate[]
+}
+
+model Phase {
+  id        String      @id @default(cuid())
+  name      PhaseName   @unique
+  order     Int
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  templates TaskTemplate[]
+}
+
+model TaskTemplate {
+  id                     String        @id @default(cuid())
+  title                  String
+  description            String?
+  phaseId                String
+  specialtyId            String?
+  appliesToAllLocalities Boolean
+  reportRequiredDefault  Boolean
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+
+  phase                  Phase         @relation(fields: [phaseId], references: [id])
+  specialty              Specialty?    @relation(fields: [specialtyId], references: [id])
+  instances              TaskInstance[]
+
+  @@index([phaseId])
+}
+
+model TaskInstance {
+  id              String        @id @default(cuid())
+  taskTemplateId  String
+  localityId      String
+  meetingId       String?
+  dueDate         DateTime
+  status          TaskStatus
+  priority        TaskPriority
+  progressPercent Int
+  assignedToId    String?
+  reportRequired  Boolean
+  blockedByIdsJson Json?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  taskTemplate    TaskTemplate  @relation(fields: [taskTemplateId], references: [id])
+  locality        Locality      @relation(fields: [localityId], references: [id])
+  meeting         Meeting?      @relation(fields: [meetingId], references: [id])
+  assignedTo      User?         @relation("TaskAssignee", fields: [assignedToId], references: [id])
+  reports         Report[]
+
+  @@index([localityId])
+  @@index([localityId, dueDate, status])
+  @@index([meetingId])
+}
+
+model Meeting {
+  id              String        @id @default(cuid())
+  datetime        DateTime
+  scope           MeetingScope
+  status          MeetingStatus
+  agenda          String?
+  localityId      String?
+  participantsJson Json?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  locality        Locality?     @relation(fields: [localityId], references: [id])
+  tasks           TaskInstance[]
+  decisions       MeetingDecision[]
+}
+
+model MeetingDecision {
+  id         String   @id @default(cuid())
+  meetingId  String
+  text       String
+  createdAt  DateTime @default(now())
+
+  meeting    Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  @@index([meetingId])
+}
+
+model Report {
+  id             String       @id @default(cuid())
+  taskInstanceId String
+  fileName       String
+  fileUrl        String
+  approved       Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+
+  taskInstance   TaskInstance @relation(fields: [taskInstanceId], references: [id])
+}
+
+model Notice {
+  id           String          @id @default(cuid())
+  title        String
+  body         String
+  localityId   String?
+  specialtyId  String?
+  dueDate      DateTime?
+  priority     NoticePriority @default(MEDIUM)
+  pinned       Boolean         @default(false)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  locality     Locality?      @relation(fields: [localityId], references: [id])
+  specialty    Specialty?     @relation(fields: [specialtyId], references: [id])
+
+  @@index([localityId, specialtyId, dueDate])
+}
+
+model Checklist {
+  id          String      @id @default(cuid())
+  title       String
+  phaseId     String?
+  specialtyId String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  phase       Phase?      @relation(fields: [phaseId], references: [id])
+  specialty   Specialty? @relation(fields: [specialtyId], references: [id])
+  items       ChecklistItem[]
+}
+
+model ChecklistItem {
+  id             String      @id @default(cuid())
+  checklistId    String
+  title          String
+  taskTemplateId String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  checklist      Checklist   @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  taskTemplate   TaskTemplate? @relation(fields: [taskTemplateId], references: [id])
+  statuses       ChecklistItemStatus[]
+
+  @@index([checklistId])
+  @@index([taskTemplateId])
+}
+
+model ChecklistItemStatus {
+  id              String               @id @default(cuid())
+  checklistItemId String
+  localityId      String
+  status          ChecklistItemStatusType
+  updatedAt       DateTime             @updatedAt
+
+  checklistItem   ChecklistItem        @relation(fields: [checklistItemId], references: [id], onDelete: Cascade)
+  locality        Locality             @relation(fields: [localityId], references: [id])
+
+  @@unique([checklistItemId, localityId])
+  @@index([localityId])
+}
+
+model Elo {
+  id         String      @id @default(cuid())
+  localityId String
+  roleType   EloRoleType
+  name       String
+  rank       String?
+  phone      String?
+  email      String?
+  om         String?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  locality   Locality    @relation(fields: [localityId], references: [id])
+
+  @@index([localityId, roleType])
+}
+
+model RecruitsHistory {
+  id                  String    @id @default(cuid())
+  localityId          String
+  date                DateTime
+  recruitsFemaleCount Int
+  turnoverCount       Int
+  createdAt           DateTime  @default(now())
+
+  locality            Locality  @relation(fields: [localityId], references: [id])
+
+  @@unique([localityId, date])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  localityId String?
+  resource  String
+  action    String
+  entityId  String?
+  diffJson  Json?
+  createdAt DateTime @default(now())
+
+  user      User?    @relation(fields: [userId], references: [id])
+  locality  Locality? @relation(fields: [localityId], references: [id])
+
+  @@index([createdAt, resource, entityId])
+  @@index([localityId])
+}
+
+enum TaskStatus {
+  NOT_STARTED
+  STARTED
+  IN_PROGRESS
+  DONE
+  BLOCKED
+}
+
+enum TaskPriority {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum PhaseName {
+  PREPARACAO
+  EXECUCAO
+  ACOMPANHAMENTO
+}
+
+enum MeetingScope {
+  NATIONAL
+  LOCALITY
+}
+
+enum MeetingStatus {
+  PLANNED
+  HELD
+  CANCELLED
+}
+
+enum NoticePriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum ChecklistItemStatusType {
+  NOT_STARTED
+  IN_PROGRESS
+  DONE
+}
+
+enum EloRoleType {
+  PSICOLOGIA
+  SSO
+  JURIDICO
+  CPCA
+  GRAD_MASTER
+}
+
+enum PermissionScope {
+  NATIONAL
+  LOCALITY
+  SPECIALTY
+  LOCALITY_SPECIALTY
+  OWN
+}

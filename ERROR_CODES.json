@@ -1,0 +1,44 @@
+{
+  "RBAC_FORBIDDEN": {
+    "httpStatus": 403,
+    "message": "Acesso negado para esta operação.",
+    "details": {
+      "hint": "Verifique permissões (resource/action/scope) e escopo do usuário."
+    }
+  },
+  "AUTH_INVALID_CREDENTIALS": {
+    "httpStatus": 401,
+    "message": "Credenciais inválidas."
+  },
+  "AUTH_TOKEN_EXPIRED": {
+    "httpStatus": 401,
+    "message": "Sessão expirada."
+  },
+  "VALIDATION_ERROR": {
+    "httpStatus": 400,
+    "message": "Dados inválidos."
+  },
+  "NOT_FOUND": {
+    "httpStatus": 404,
+    "message": "Recurso não encontrado."
+  },
+  "CONFLICT_UNIQUE": {
+    "httpStatus": 409,
+    "message": "Conflito: valor já existe (unique)."
+  },
+  "REPORT_REQUIRED": {
+    "httpStatus": 409,
+    "message": "Relatório obrigatório para concluir a tarefa.",
+    "details": {
+      "field": "reportRequired",
+      "rule": "DONE exige Report"
+    }
+  },
+  "TASK_BLOCKED": {
+    "httpStatus": 409,
+    "message": "Tarefa bloqueada por dependências pendentes.",
+    "details": {
+      "field": "blockedByIds"
+    }
+  }
+}

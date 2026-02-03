@@ -1,0 +1,146 @@
+[
+  {
+    "localityCode": "BSB",
+    "date": "2025-10-01",
+    "recruitsFemaleCount": 26,
+    "turnoverCount": 1
+  },
+  {
+    "localityCode": "BSB",
+    "date": "2025-11-01",
+    "recruitsFemaleCount": 28,
+    "turnoverCount": 2
+  },
+  {
+    "localityCode": "BSB",
+    "date": "2025-12-01",
+    "recruitsFemaleCount": 30,
+    "turnoverCount": 0
+  },
+  {
+    "localityCode": "RJ",
+    "date": "2025-10-01",
+    "recruitsFemaleCount": 18,
+    "turnoverCount": 1
+  },
+  {
+    "localityCode": "RJ",
+    "date": "2025-11-01",
+    "recruitsFemaleCount": 20,
+    "turnoverCount": 2
+  },
+  {
+    "localityCode": "RJ",
+    "date": "2025-12-01",
+    "recruitsFemaleCount": 22,
+    "turnoverCount": 0
+  },
+  {
+    "localityCode": "SP",
+    "date": "2025-10-01",
+    "recruitsFemaleCount": 24,
+    "turnoverCount": 1
+  },
+  {
+    "localityCode": "SP",
+    "date": "2025-11-01",
+    "recruitsFemaleCount": 26,
+    "turnoverCount": 2
+  },
+  {
+    "localityCode": "SP",
+    "date": "2025-12-01",
+    "recruitsFemaleCount": 28,
+    "turnoverCount": 0
+  },
+  {
+    "localityCode": "ANP",
+    "date": "2025-10-01",
+    "recruitsFemaleCount": 14,
+    "turnoverCount": 1
+  },
+  {
+    "localityCode": "ANP",
+    "date": "2025-11-01",
+    "recruitsFemaleCount": 16,
+    "turnoverCount": 2
+  },
+  {
+    "localityCode": "ANP",
+    "date": "2025-12-01",
+    "recruitsFemaleCount": 18,
+    "turnoverCount": 0
+  },
+  {
+    "localityCode": "CG",
+    "date": "2025-10-01",
+    "recruitsFemaleCount": 12,
+    "turnoverCount": 1
+  },
+  {
+    "localityCode": "CG",
+    "date": "2025-11-01",
+    "recruitsFemaleCount": 14,
+    "turnoverCount": 2
+  },
+  {
+    "localityCode": "CG",
+    "date": "2025-12-01",
+    "recruitsFemaleCount": 16,
+    "turnoverCount": 0
+  },
+  {
+    "localityCode": "REC",
+    "date": "2025-10-01",
+    "recruitsFemaleCount": 10,
+    "turnoverCount": 1
+  },
+  {
+    "localityCode": "REC",
+    "date": "2025-11-01",
+    "recruitsFemaleCount": 12,
+    "turnoverCount": 2
+  },
+  {
+    "localityCode": "REC",
+    "date": "2025-12-01",
+    "recruitsFemaleCount": 14,
+    "turnoverCount": 0
+  },
+  {
+    "localityCode": "BEL",
+    "date": "2025-10-01",
+    "recruitsFemaleCount": 8,
+    "turnoverCount": 1
+  },
+  {
+    "localityCode": "BEL",
+    "date": "2025-11-01",
+    "recruitsFemaleCount": 10,
+    "turnoverCount": 2
+  },
+  {
+    "localityCode": "BEL",
+    "date": "2025-12-01",
+    "recruitsFemaleCount": 12,
+    "turnoverCount": 0
+  },
+  {
+    "localityCode": "POA",
+    "date": "2025-10-01",
+    "recruitsFemaleCount": 6,
+    "turnoverCount": 1
+  },
+  {
+    "localityCode": "POA",
+    "date": "2025-11-01",
+    "recruitsFemaleCount": 8,
+    "turnoverCount": 2
+  },
+  {
+    "localityCode": "POA",
+    "date": "2025-12-01",
+    "recruitsFemaleCount": 10,
+    "turnoverCount": 0
+  }
+]

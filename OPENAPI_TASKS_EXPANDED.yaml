@@ -1,0 +1,451 @@
+openapi: 3.0.3
+info:
+  title: SMIF Gestão API — Task Core
+  version: 0.2.0
+  description: Especificação focada no núcleo de gestão (fases/tarefas/andamento/gantt/calendário).
+servers:
+- url: http://localhost:3000
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+        code:
+          type: string
+        details: {}
+      required:
+      - message
+    Phase:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+          enum:
+          - PREPARACAO
+          - EXECUCAO
+          - ACOMPANHAMENTO
+        order:
+          type: integer
+      required:
+      - id
+      - name
+      - order
+    TaskTemplate:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        phaseId:
+          type: string
+        specialtyId:
+          type: string
+          nullable: true
+        appliesToAllLocalities:
+          type: boolean
+        reportRequiredDefault:
+          type: boolean
+      required:
+      - id
+      - title
+      - phaseId
+      - appliesToAllLocalities
+      - reportRequiredDefault
+    TaskInstance:
+      type: object
+      properties:
+        id:
+          type: string
+        taskTemplateId:
+          type: string
+        localityId:
+          type: string
+        meetingId:
+          type: string
+          nullable: true
+        dueDate:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: &id002
+          - NOT_STARTED
+          - STARTED
+          - IN_PROGRESS
+          - DONE
+          - BLOCKED
+        priority:
+          type: string
+          enum: &id001
+          - CRITICAL
+          - HIGH
+          - MEDIUM
+          - LOW
+        progressPercent:
+          type: integer
+          minimum: 0
+          maximum: 100
+        assignedToId:
+          type: string
+          nullable: true
+        reportRequired:
+          type: boolean
+        isLate:
+          type: boolean
+        blockedByIds:
+          type: array
+          items:
+            type: string
+          nullable: true
+      required:
+      - id
+      - taskTemplateId
+      - localityId
+      - dueDate
+      - status
+      - priority
+      - progressPercent
+      - reportRequired
+      - isLate
+    LocalityProgress:
+      type: object
+      properties:
+        localityId:
+          type: string
+        overallProgress:
+          type: number
+        byPhase:
+          type: array
+          items:
+            type: object
+            properties:
+              phaseName:
+                type: string
+              progress:
+                type: number
+      required:
+      - localityId
+      - overallProgress
+      - byPhase
+security:
+- bearerAuth: []
+paths:
+  /phases:
+    get:
+      tags:
+      - Phases
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Phase'
+  /task-templates:
+    get:
+      tags:
+      - TaskTemplates
+      responses:
+        '200':
+          description: OK
+    post:
+      tags:
+      - TaskTemplates
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskTemplate'
+      responses:
+        '201':
+          description: Created
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /task-templates/{id}/generate-instances:
+    post:
+      tags:
+      - TaskTemplates
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                localities:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      localityId:
+                        type: string
+                      dueDate:
+                        type: string
+                        format: date-time
+                    required:
+                    - localityId
+                    - dueDate
+                reportRequired:
+                  type: boolean
+                priority:
+                  type: string
+                  enum: *id001
+                meetingId:
+                  type: string
+                  nullable: true
+              required:
+              - localities
+      responses:
+        '201':
+          description: Created batch
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /task-instances:
+    get:
+      tags:
+      - TaskInstances
+      parameters:
+      - name: localityId
+        in: query
+        schema:
+          type: string
+      - name: phaseId
+        in: query
+        schema:
+          type: string
+      - name: status
+        in: query
+        schema:
+          type: string
+      - name: assigneeId
+        in: query
+        schema:
+          type: string
+      - name: dueFrom
+        in: query
+        schema:
+          type: string
+          format: date-time
+      - name: dueTo
+        in: query
+        schema:
+          type: string
+          format: date-time
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TaskInstance'
+  /task-instances/{id}/status:
+    put:
+      tags:
+      - TaskInstances
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: *id002
+              required:
+              - status
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskInstance'
+        '409':
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /task-instances/{id}/progress:
+    put:
+      tags:
+      - TaskInstances
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                progressPercent:
+                  type: integer
+                  minimum: 0
+                  maximum: 100
+              required:
+              - progressPercent
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskInstance'
+  /task-instances/{id}/assign:
+    put:
+      tags:
+      - TaskInstances
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                assignedToId:
+                  type: string
+                  nullable: true
+              required:
+              - assignedToId
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskInstance'
+  /task-instances/gantt:
+    get:
+      tags:
+      - Gantt
+      parameters:
+      - name: localityId
+        in: query
+        schema:
+          type: string
+      - name: from
+        in: query
+        schema:
+          type: string
+      - name: to
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TaskInstance'
+  /task-instances/calendar:
+    get:
+      tags:
+      - Calendar
+      parameters:
+      - name: year
+        in: query
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+  /localities/{id}/progress:
+    get:
+      tags:
+      - Dashboards
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocalityProgress'
+  /dashboard/national:
+    get:
+      tags:
+      - Dashboards
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
