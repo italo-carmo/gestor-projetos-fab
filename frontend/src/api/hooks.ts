@@ -24,6 +24,169 @@ export function useTasks(filters: Record<string, any>) {
   });
 }
 
+export function useTaskInstance(id: string, enabled = true) {
+  return useQuery({
+    queryKey: qk.task(id),
+    queryFn: async () => (await api.get(`/task-instances/${id}`)).data,
+    enabled: Boolean(id) && enabled,
+    staleTime: 15_000,
+  });
+}
+
+export function useActivities(filters: Record<string, any>) {
+  return useQuery({
+    queryKey: qk.activities(filters),
+    queryFn: async () => (await api.get('/activities', { params: filters })).data,
+    staleTime: 15_000,
+  });
+}
+
+export function useActivityComments(activityId: string) {
+  return useQuery({
+    queryKey: qk.activityComments(activityId || ''),
+    queryFn: async () => (await api.get(`/activities/${activityId}/comments`)).data,
+    enabled: Boolean(activityId),
+    staleTime: 5_000,
+  });
+}
+
+export function useAddActivityComment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; text: string }) =>
+      (await api.post(`/activities/${args.id}/comments`, { text: args.text })).data,
+    onSuccess: (_data, args) => {
+      qc.invalidateQueries({ queryKey: qk.activityComments(args.id) });
+      qc.invalidateQueries({ queryKey: ['activities'] });
+    },
+  });
+}
+
+export function useMarkActivityCommentsSeen() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await api.post(`/activities/${id}/comments/seen`)).data,
+    onSuccess: (_data, id) => {
+      qc.invalidateQueries({ queryKey: qk.activityComments(id) });
+      qc.invalidateQueries({ queryKey: ['activities'] });
+    },
+  });
+}
+
+export function useCreateActivity() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      title: string;
+      description?: string | null;
+      localityId?: string | null;
+      eventDate?: string | null;
+      reportRequired?: boolean;
+    }) => (await api.post('/activities', payload)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['activities'] }),
+  });
+}
+
+export function useUpdateActivity() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      payload: {
+        title?: string;
+        description?: string | null;
+        localityId?: string | null;
+        eventDate?: string | null;
+        reportRequired?: boolean;
+      };
+    }) => (await api.put(`/activities/${args.id}`, args.payload)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['activities'] }),
+  });
+}
+
+export function useUpdateActivityStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; status: string }) =>
+      (await api.put(`/activities/${args.id}/status`, { status: args.status })).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['activities'] }),
+  });
+}
+
+export function useUpsertActivityReport() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      payload: {
+        date: string;
+        location: string;
+        responsible: string;
+        missionSupport: string;
+        introduction: string;
+        missionObjectives: string;
+        executionSchedule: string;
+        activitiesPerformed: string;
+        participantsCount: number;
+        participantsCharacteristics: string;
+        conclusion: string;
+        city: string;
+        closingDate: string;
+      };
+    }) => (await api.put(`/activities/${args.id}/report`, args.payload)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['activities'] }),
+  });
+}
+
+export function useSignActivityReport() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await api.post(`/activities/${id}/report/sign`)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['activities'] }),
+  });
+}
+
+export function useUploadActivityReportPhoto() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; file: File }) => {
+      const form = new FormData();
+      form.append('file', args.file);
+      return (await api.post(`/activities/${args.id}/report/photos`, form)).data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['activities'] }),
+  });
+}
+
+export function useDeleteActivityReportPhoto() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; photoId: string }) =>
+      (await api.delete(`/activities/${args.id}/report/photos/${args.photoId}`)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['activities'] }),
+  });
+}
+
+export function useExportActivityReportPdf() {
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const response = await api.get(`/activities/${id}/report/pdf`, {
+        responseType: 'blob',
+      });
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `relatorio-atividade-${id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      return true;
+    },
+  });
+}
+
 export function useUpdateTaskStatus() {
   const qc = useQueryClient();
   return useMutation({
@@ -79,26 +242,140 @@ export function useUpdateTaskProgress() {
 export function useAssignTask() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (args: { id: string; assignedToId: string | null }) =>
-      (await api.put(`/task-instances/${args.id}/assign`, { assignedToId: args.assignedToId })).data,
-    onMutate: async (args) => {
-      await qc.cancelQueries({ queryKey: ["tasks"] });
-      const snapshots = qc.getQueriesData({ queryKey: ["tasks"] });
-      snapshots.forEach(([key, data]: any) => {
-        if (!data?.items) return;
-        qc.setQueryData(key, {
-          ...data,
-          items: data.items.map((item: any) =>
-            item.id === args.id ? { ...item, assignedToId: args.assignedToId } : item,
-          ),
-        });
-      });
-      return { snapshots };
+    mutationFn: async (args: {
+      id: string;
+      assignedToId?: string | null;
+      localityId?: string | null;
+      assigneeType?: 'USER' | 'ELO' | 'LOCALITY_COMMAND' | 'LOCALITY_COMMANDER' | null;
+      assigneeId?: string | null;
+    }) =>
+      (
+        await api.put(`/task-instances/${args.id}/assign`, {
+          assignedToId: args.assignedToId,
+          localityId: args.localityId,
+          assigneeType: args.assigneeType,
+          assigneeId: args.assigneeId,
+        })
+      ).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["tasks"] }),
+  });
+}
+
+export function useTaskAssignees(localityId: string) {
+  return useQuery({
+    queryKey: qk.taskAssignees(localityId || ''),
+    queryFn: async () => (await api.get('/task-instances/assignees', { params: { localityId } })).data,
+    enabled: Boolean(localityId),
+    staleTime: 10_000,
+  });
+}
+
+export function useTaskComments(taskId: string) {
+  return useQuery({
+    queryKey: qk.taskComments(taskId || ''),
+    queryFn: async () => (await api.get(`/task-instances/${taskId}/comments`)).data,
+    enabled: Boolean(taskId),
+    staleTime: 5_000,
+  });
+}
+
+export function useAddTaskComment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; text: string }) =>
+      (await api.post(`/task-instances/${args.id}/comments`, { text: args.text })).data,
+    onSuccess: (_data, args) => {
+      qc.invalidateQueries({ queryKey: qk.taskComments(args.id) });
+      qc.invalidateQueries({ queryKey: ['tasks'] });
+      qc.invalidateQueries({ queryKey: ['gantt'] });
+      qc.invalidateQueries({ queryKey: ['calendar'] });
     },
-    onError: (_err, _args, ctx) => {
-      ctx?.snapshots?.forEach(([key, data]: any) => qc.setQueryData(key, data));
+  });
+}
+
+export function useMarkTaskCommentsSeen() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await api.post(`/task-instances/${id}/comments/seen`)).data,
+    onSuccess: (_data, id) => {
+      qc.invalidateQueries({ queryKey: qk.taskComments(id) });
+      qc.invalidateQueries({ queryKey: ['tasks'] });
+      qc.invalidateQueries({ queryKey: ['gantt'] });
+      qc.invalidateQueries({ queryKey: ['calendar'] });
     },
-    onSettled: () => qc.invalidateQueries({ queryKey: ["tasks"] }),
+  });
+}
+
+export function useUpdateTaskMeeting() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; meetingId: string | null }) =>
+      (await api.put(`/task-instances/${args.id}/meeting`, { meetingId: args.meetingId })).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['tasks'] });
+      qc.invalidateQueries({ queryKey: ['meetings'] });
+    },
+  });
+}
+
+export function useUpdateTaskEloRole() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; eloRoleId: string | null }) =>
+      (await api.put(`/task-instances/${args.id}/elo-role`, { eloRoleId: args.eloRoleId })).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['tasks'] }),
+  });
+}
+
+export function usePostos() {
+  return useQuery({
+    queryKey: qk.postos,
+    queryFn: async () => (await api.get('/postos')).data,
+    staleTime: 60_000,
+  });
+}
+
+export function useCreatePosto() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: { code: string; name: string; sortOrder?: number }) =>
+      (await api.post('/postos', payload)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.postos }),
+  });
+}
+
+export function useUpdatePosto() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; payload: { code?: string; name?: string; sortOrder?: number } }) =>
+      (await api.put(`/postos/${args.id}`, args.payload)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.postos }),
+  });
+}
+
+export function useDeletePosto() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await api.delete(`/postos/${id}`)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.postos }),
+  });
+}
+
+export function useBatchAssignTasks() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { ids: string[]; assignedToId: string | null }) =>
+      (await api.put('/task-instances/batch/assign', args)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['tasks'] }),
+  });
+}
+
+export function useBatchStatusTasks() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { ids: string[]; status: string }) =>
+      (await api.put('/task-instances/batch/status', args)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['tasks'] }),
   });
 }
 
@@ -139,10 +416,44 @@ export function usePhases() {
   });
 }
 
+export function useUpdatePhase() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; displayName: string | null }) =>
+      (await api.patch(`/phases/${args.id}`, { displayName: args.displayName })).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['phases'] }),
+  });
+}
+
 export function useTaskTemplates() {
   return useQuery({
     queryKey: qk.taskTemplates,
     queryFn: async () => (await api.get('/task-templates')).data,
+  });
+}
+
+export function useCreateTaskTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: any) => (await api.post('/task-templates', payload)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.taskTemplates }),
+  });
+}
+
+export function useCloneTaskTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await api.post(`/task-templates/${id}/clone`)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.taskTemplates }),
+  });
+}
+
+export function useGenerateInstances() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; payload: any }) =>
+      (await api.post(`/task-templates/${args.id}/generate-instances`, args.payload)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['tasks'] }),
   });
 }
 
@@ -177,6 +488,30 @@ export function useRbacImport() {
       qc.invalidateQueries({ queryKey: qk.roles });
       qc.invalidateQueries({ queryKey: ["admin","rbac","export"] });
     },
+  });
+}
+
+export function useUsers() {
+  return useQuery({
+    queryKey: ['users'],
+    queryFn: async () => (await api.get('/users')).data,
+  });
+}
+
+export function useUpdateUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; eloRoleId: string | null }) =>
+      (await api.patch(`/users/${args.id}`, { eloRoleId: args.eloRoleId })).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
+  });
+}
+
+export function useRbacSimulate(params: { userId?: string; roleId?: string }) {
+  return useQuery({
+    queryKey: ['admin', 'rbac', 'simulate', params],
+    queryFn: async () => (await api.get('/admin/rbac/simulate', { params })).data,
+    enabled: Boolean(params.userId || params.roleId),
   });
 }
 
@@ -366,11 +701,80 @@ export function useAuditLogs(filters: Record<string, any>) {
   });
 }
 
-export function useLocalities() {
+export function useLocalities(enabled = true) {
   return useQuery({
     queryKey: qk.localities,
     queryFn: async () => (await api.get('/localities')).data,
+    enabled,
     staleTime: 60_000,
+  });
+}
+
+export function useEloRoles() {
+  return useQuery({
+    queryKey: qk.eloRoles,
+    queryFn: async () => (await api.get('/elo-roles')).data,
+    staleTime: 60_000,
+  });
+}
+
+export function useCreateEloRole() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: { code: string; name: string; sortOrder?: number }) =>
+      (await api.post('/elo-roles', payload)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.eloRoles }),
+  });
+}
+
+export function useUpdateEloRole() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; payload: { code?: string; name?: string; sortOrder?: number } }) =>
+      (await api.put(`/elo-roles/${args.id}`, args.payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.eloRoles });
+      qc.invalidateQueries({ queryKey: ['elos'] });
+    },
+  });
+}
+
+export function useDeleteEloRole() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await api.delete(`/elo-roles/${id}`)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.eloRoles });
+      qc.invalidateQueries({ queryKey: ['elos'] });
+    },
+  });
+}
+
+export function useUpdateLocality() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; payload: Record<string, any> }) =>
+      (await api.put(`/localities/${args.id}`, args.payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.localities });
+      qc.invalidateQueries({ queryKey: qk.dashboardRecruits });
+      qc.invalidateQueries({ queryKey: ['dashboardNational'] });
+      qc.invalidateQueries({ queryKey: ['dashboardExecutive'] });
+    },
+  });
+}
+
+export function useUpdateLocalityRecruits() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; recruitsFemaleCountCurrent: number }) =>
+      (await api.put(`/localities/${args.id}/recruits`, { recruitsFemaleCountCurrent: args.recruitsFemaleCountCurrent })).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.localities });
+      qc.invalidateQueries({ queryKey: qk.dashboardRecruits });
+      qc.invalidateQueries({ queryKey: ['dashboardNational'] });
+      qc.invalidateQueries({ queryKey: ['dashboardExecutive'] });
+    },
   });
 }
 
@@ -379,5 +783,39 @@ export function useSpecialties() {
     queryKey: qk.specialties,
     queryFn: async () => (await api.get('/specialties')).data,
     staleTime: 60_000,
+  });
+}
+
+export function useSearch(q: string) {
+  return useQuery({
+    queryKey: qk.search(q),
+    queryFn: async () => (await api.get('/search', { params: { q } })).data,
+    enabled: Boolean(q && q.length >= 2),
+    staleTime: 5_000,
+  });
+}
+
+export function useExecutiveDashboard(filters: Record<string, any>) {
+  return useQuery({
+    queryKey: qk.executiveDashboard(filters),
+    queryFn: async () => (await api.get('/dashboard/executive', { params: filters })).data,
+    staleTime: 15_000,
+  });
+}
+
+export function useDashboardRecruits(enabled = true) {
+  return useQuery({
+    queryKey: qk.dashboardRecruits,
+    queryFn: async () => (await api.get('/dashboard/recruits')).data,
+    enabled,
+    staleTime: 15_000,
+  });
+}
+
+export function useKpiDashboard(filters: Record<string, any>) {
+  return useQuery({
+    queryKey: qk.kpiDashboard(filters),
+    queryFn: async () => (await api.get('/kpis/dashboard', { params: filters })).data,
+    staleTime: 15_000,
   });
 }

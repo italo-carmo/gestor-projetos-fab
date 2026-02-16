@@ -25,7 +25,7 @@ import { EmptyState } from '../components/states/EmptyState';
 import { useToast } from '../app/toast';
 import { parseApiError } from '../app/apiErrors';
 import { can } from '../app/rbac';
-import { NoticePriority } from '../constants/enums';
+import { NoticePriority, NOTICE_PRIORITY_LABELS } from '../constants/enums';
 
 const priorityColor: Record<string, string> = {
   LOW: '#E8F2FF',
@@ -157,38 +157,6 @@ export function NoticesPage() {
   if (noticesQuery.isError) return <ErrorState error={noticesQuery.error} onRetry={() => noticesQuery.refetch()} />;
 
   const notices = noticesQuery.data?.items ?? [];
-  const now = Date.now();
-  const startWeek = new Date();
-  const endWeek = new Date();
-  endWeek.setDate(startWeek.getDate() + 7);
-
-  const columns = [
-    {
-      title: 'Pinned',
-      items: notices.filter((n: any) => n.pinned),
-    },
-    {
-      title: 'Esta semana',
-      items: notices.filter(
-        (n: any) =>
-          !n.pinned &&
-          n.dueDate &&
-          new Date(n.dueDate).getTime() >= now &&
-          new Date(n.dueDate).getTime() <= endWeek.getTime(),
-      ),
-    },
-    {
-      title: 'Sem prazo',
-      items: notices.filter((n: any) => !n.pinned && !n.dueDate),
-    },
-    {
-      title: 'Vencidos',
-      items: notices.filter(
-        (n: any) => !n.pinned && n.dueDate && new Date(n.dueDate).getTime() < now,
-      ),
-    },
-  ];
-
   const canCreate = can(me, 'notices', 'create');
   const canUpdate = can(me, 'notices', 'update');
   const canDelete = can(me, 'notices', 'delete');
@@ -240,7 +208,7 @@ export function NoticesPage() {
               <MenuItem value="">Todas</MenuItem>
               {NoticePriority.map((p) => (
                 <MenuItem key={p} value={p}>
-                  {p}
+                  {NOTICE_PRIORITY_LABELS[p] ?? p}
                 </MenuItem>
               ))}
             </TextField>
@@ -269,68 +237,80 @@ export function NoticesPage() {
       )}
 
       {notices.length > 0 && (
-        <Box display="grid" gridTemplateColumns={{ xs: '1fr', md: 'repeat(4, 1fr)' }} gap={2}>
-          {columns.map((column) => (
-            <Card key={column.title} variant="outlined" sx={{ background: '#F7FAFF' }}>
-              <CardContent>
-                <Typography variant="subtitle1" gutterBottom>
-                  {column.title}
-                </Typography>
-                <Stack spacing={2}>
-                  {column.items.length === 0 && (
-                    <Typography variant="caption" color="text.secondary">
-                      Sem avisos
+        <>
+          <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 2 }}>
+            Avisos por grupo — evite grupos de WhatsApp, centralize aqui prazos e to-dos
+          </Typography>
+          <Box display="grid" gridTemplateColumns={{ xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(3, 1fr)' }} gap={2}>
+            {((specialtiesQuery.data?.items ?? []) as any[]).concat([{ id: '_sem', name: 'Geral (sem grupo)' }]).map((spec) => {
+              const specNotices = spec.id === '_sem'
+                ? notices.filter((n: any) => !n.specialtyId)
+                : notices.filter((n: any) => n.specialtyId === spec.id);
+              return (
+                <Card key={spec.id} variant="outlined" sx={{ background: '#F7FAFF', borderColor: 'primary.light' }}>
+                  <CardContent>
+                    <Typography variant="subtitle1" fontWeight={700} gutterBottom color="primary.main">
+                      {spec.name}
                     </Typography>
-                  )}
-                  {column.items.map((notice: any) => (
-                    <Card
-                      key={notice.id}
-                      variant="outlined"
-                      sx={{ background: priorityColor[notice.priority] ?? '#F5F8FC' }}
-                    >
-                      <CardContent>
-                        <Stack direction="row" justifyContent="space-between" alignItems="center">
-                          <Typography variant="subtitle2">{notice.title}</Typography>
-                          <Stack direction="row" spacing={1}>
-                            {canPin && (
-                              <IconButton size="small" onClick={() => handlePin(notice)}>
-                                <PushPinIcon fontSize="small" color={notice.pinned ? 'primary' : 'inherit'} />
-                              </IconButton>
-                            )}
-                            {canUpdate && (
-                              <IconButton size="small" onClick={() => openEdit(notice)}>
-                                <EditIcon fontSize="small" />
-                              </IconButton>
-                            )}
-                            {canDelete && (
-                              <IconButton size="small" onClick={() => handleDelete(notice.id)}>
-                                <DeleteOutlineIcon fontSize="small" />
-                              </IconButton>
-                            )}
+                    <Box display="grid" gap={2}>
+                      {specNotices.length === 0 && (
+                        <Typography variant="caption" color="text.secondary">Nenhum aviso</Typography>
+                      )}
+                      {specNotices.map((notice: any, idx: number) => (
+                        <Box
+                          key={notice.id}
+                          onClick={() => openEdit(notice)}
+                          sx={{
+                            p: 2,
+                            background: priorityColor[notice.priority] ?? '#FFFDE7',
+                            borderRadius: 1,
+                            boxShadow: '2px 2px 8px rgba(0,0,0,0.1)',
+                            border: '1px solid rgba(0,0,0,0.08)',
+                            cursor: canUpdate ? 'pointer' : 'default',
+                            transform: `rotate(${(idx % 3 - 1) * 0.5}deg)`,
+                            '&:hover': canUpdate ? { boxShadow: '3px 3px 12px rgba(0,0,0,0.15)' } : {},
+                          }}
+                        >
+                          <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+                            <Typography variant="subtitle2" fontWeight={600}>{notice.title}</Typography>
+                            <Stack direction="row" spacing={0}>
+                              {canPin && (
+                                <IconButton size="small" onClick={(e) => { e.stopPropagation(); handlePin(notice); }}>
+                                  <PushPinIcon fontSize="small" color={notice.pinned ? 'primary' : 'inherit'} />
+                                </IconButton>
+                              )}
+                              {canUpdate && (
+                                <IconButton size="small" onClick={(e) => { e.stopPropagation(); openEdit(notice); }}>
+                                  <EditIcon fontSize="small" />
+                                </IconButton>
+                              )}
+                              {canDelete && (
+                                <IconButton size="small" onClick={(e) => { e.stopPropagation(); handleDelete(notice.id); }}>
+                                  <DeleteOutlineIcon fontSize="small" />
+                                </IconButton>
+                              )}
+                            </Stack>
                           </Stack>
-                        </Stack>
-                        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                          {notice.body}
-                        </Typography>
-                        <Divider sx={{ my: 1 }} />
-                        <Stack direction="row" spacing={1} alignItems="center">
-                          {notice.dueDate && (
-                            <Chip
-                              size="small"
-                              label={new Date(notice.dueDate).toLocaleDateString('pt-BR')}
-                              color={notice.isLate ? 'error' : 'default'}
-                            />
+                          <Typography variant="body2" color="text.secondary" sx={{ mt: 1, lineHeight: 1.4 }}>
+                            {notice.body}
+                          </Typography>
+                          {(notice.dueDate || notice.priority) && (
+                            <Stack direction="row" spacing={1} sx={{ mt: 1 }} flexWrap="wrap">
+                              {notice.dueDate && (
+                                <Chip size="small" label={new Date(notice.dueDate).toLocaleDateString('pt-BR')} />
+                              )}
+                              <Chip size="small" label={NOTICE_PRIORITY_LABELS[notice.priority] ?? notice.priority} variant="outlined" />
+                            </Stack>
                           )}
-                          <Chip size="small" label={notice.priority} />
-                        </Stack>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </Stack>
-              </CardContent>
-            </Card>
-          ))}
-        </Box>
+                        </Box>
+                      ))}
+                    </Box>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </Box>
+        </>
       )}
 
       <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)} PaperProps={{ sx: { width: { xs: '100%', md: 420 } } }}>
@@ -390,7 +370,7 @@ export function NoticesPage() {
           >
             {NoticePriority.map((p) => (
               <MenuItem key={p} value={p}>
-                {p}
+                {NOTICE_PRIORITY_LABELS[p] ?? p}
               </MenuItem>
             ))}
           </TextField>

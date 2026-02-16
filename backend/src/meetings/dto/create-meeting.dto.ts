@@ -4,11 +4,18 @@ export class CreateMeetingDto {
   @IsDateString()
   datetime: string;
 
-  @IsEnum(['NATIONAL', 'LOCALITY'])
+  @IsString()
   scope: string;
 
   @IsEnum(['PLANNED', 'HELD', 'CANCELLED'])
   status: string;
+
+  @IsEnum(['ONLINE', 'PRESENCIAL'])
+  meetingType: string;
+
+  @IsOptional()
+  @IsString()
+  meetingLink?: string | null;
 
   @IsOptional()
   @IsString()
@@ -20,6 +27,5 @@ export class CreateMeetingDto {
 
   @IsOptional()
   @IsArray()
-  participantsJson?: any[];
+  participantIds?: string[];
 }
-

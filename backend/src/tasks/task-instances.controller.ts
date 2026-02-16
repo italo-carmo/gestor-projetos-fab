@@ -1,10 +1,13 @@
-import { Body, Controller, Get, Param, Put, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../common/current-user.decorator';
 import { RequirePermission } from '../rbac/require-permission.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
-import { RbacUser } from '../rbac/rbac.types';
+import type { RbacUser } from '../rbac/rbac.types';
 import { TaskAssignDto } from './dto/task-assign.dto';
+import { TaskCommentDto } from './dto/task-comment.dto';
+import { TaskEloRoleDto } from './dto/task-elo-role.dto';
+import { TaskMeetingDto } from './dto/task-meeting.dto';
 import { TaskProgressDto } from './dto/task-progress.dto';
 import { TaskStatusDto } from './dto/task-status.dto';
 import { TasksService } from './tasks.service';
@@ -13,6 +16,12 @@ import { TasksService } from './tasks.service';
 @UseGuards(JwtAuthGuard, RbacGuard)
 export class TaskInstancesController {
   constructor(private readonly tasks: TasksService) {}
+
+  @Get('assignees')
+  @RequirePermission('task_instances', 'assign')
+  listAssignees(@Query('localityId') localityId: string | undefined, @CurrentUser() user: RbacUser) {
+    return this.tasks.listAssignees(localityId, user);
+  }
 
   @Get()
   @RequirePermission('task_instances', 'view')
@@ -23,6 +32,8 @@ export class TaskInstancesController {
     @Query('assigneeId') assigneeId: string | undefined,
     @Query('dueFrom') dueFrom: string | undefined,
     @Query('dueTo') dueTo: string | undefined,
+    @Query('meetingId') meetingId: string | undefined,
+    @Query('eloRoleId') eloRoleId: string | undefined,
     @Query('page') page: string | undefined,
     @Query('pageSize') pageSize: string | undefined,
     @CurrentUser() user: RbacUser,
@@ -34,9 +45,29 @@ export class TaskInstancesController {
       assigneeId,
       dueFrom,
       dueTo,
+      meetingId,
+      eloRoleId,
       page,
       pageSize,
     }, user);
+  }
+
+  @Get(':id/comments')
+  @RequirePermission('task_instances', 'view')
+  comments(@Param('id') id: string, @CurrentUser() user: RbacUser) {
+    return this.tasks.listComments(id, user);
+  }
+
+  @Post(':id/comments')
+  @RequirePermission('task_instances', 'update')
+  addComment(@Param('id') id: string, @Body() dto: TaskCommentDto, @CurrentUser() user: RbacUser) {
+    return this.tasks.addComment(id, dto.text, user);
+  }
+
+  @Post(':id/comments/seen')
+  @RequirePermission('task_instances', 'view')
+  markCommentsSeen(@Param('id') id: string, @CurrentUser() user: RbacUser) {
+    return this.tasks.markCommentsSeen(id, user);
   }
 
   @Put(':id/status')
@@ -58,7 +89,31 @@ export class TaskInstancesController {
   @Put(':id/assign')
   @RequirePermission('task_instances', 'assign')
   assign(@Param('id') id: string, @Body() dto: TaskAssignDto, @CurrentUser() user: RbacUser) {
-    return this.tasks.assignTask(id, dto.assignedToId ?? null, user);
+    return this.tasks.assignTask(id, dto, user);
+  }
+
+  @Put(':id/meeting')
+  @RequirePermission('task_instances', 'update')
+  updateMeeting(@Param('id') id: string, @Body() dto: TaskMeetingDto, @CurrentUser() user: RbacUser) {
+    return this.tasks.updateTaskMeeting(id, dto.meetingId ?? null, user);
+  }
+
+  @Put(':id/elo-role')
+  @RequirePermission('task_instances', 'update')
+  updateEloRole(@Param('id') id: string, @Body() dto: TaskEloRoleDto, @CurrentUser() user: RbacUser) {
+    return this.tasks.updateTaskEloRole(id, dto.eloRoleId ?? null, user);
+  }
+
+  @Put('batch/assign')
+  @RequirePermission('task_instances', 'assign')
+  batchAssign(@Body() body: { ids: string[]; assignedToId: string | null }, @CurrentUser() user: RbacUser) {
+    return this.tasks.batchAssign(body.ids ?? [], body.assignedToId ?? null, user);
+  }
+
+  @Put('batch/status')
+  @RequirePermission('task_instances', 'update')
+  batchStatus(@Body() body: { ids: string[]; status: string }, @CurrentUser() user: RbacUser) {
+    return this.tasks.batchStatus(body.ids ?? [], body.status as any, user);
   }
 
   @Get('gantt')
@@ -74,7 +129,17 @@ export class TaskInstancesController {
 
   @Get('calendar')
   @RequirePermission('calendar', 'view')
-  calendar(@Query('year') year: string, @CurrentUser() user: RbacUser) {
-    return this.tasks.getCalendar(Number(year), user);
+  calendar(
+    @Query('year') year: string,
+    @Query('localityId') localityId: string | undefined,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.tasks.getCalendar(Number(year), localityId, user);
+  }
+
+  @Get(':id')
+  @RequirePermission('task_instances', 'view')
+  getById(@Param('id') id: string, @CurrentUser() user: RbacUser) {
+    return this.tasks.getTaskInstanceById(id, user);
   }
 }

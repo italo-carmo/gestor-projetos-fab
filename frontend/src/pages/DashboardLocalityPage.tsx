@@ -30,7 +30,7 @@ export function DashboardLocalityPage() {
     .sort((a: any, b: any) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
     .slice(0, 5);
   const late = tasks.filter((task: any) => task.isLate).slice(0, 5);
-  const unassigned = tasks.filter((task: any) => !task.assignedToId).slice(0, 5);
+  const unassigned = tasks.filter((task: any) => task.hasAssignee === false).slice(0, 5);
 
   const localityInfo = (dashboardQuery.data?.items ?? []).find((loc: any) => loc.localityId === id);
 
@@ -51,7 +51,7 @@ export function DashboardLocalityPage() {
               Ver Gantt
             </Button>
             <Button component={Link} to={`/calendar?localityId=${id}`} variant="outlined" size="small">
-              Ver Calendario
+              Ver Calendário
             </Button>
           </Stack>
           <Stack spacing={1}>
@@ -71,7 +71,7 @@ export function DashboardLocalityPage() {
         <Card sx={{ flex: 1 }}>
           <CardContent>
             <Typography variant="h6" gutterBottom>
-              Proximas tarefas
+              Próximas tarefas
             </Typography>
             {upcoming.length === 0 ? (
               <EmptyState title="Sem tarefas" description="Nenhuma tarefa cadastrada." />
@@ -80,7 +80,10 @@ export function DashboardLocalityPage() {
                 {upcoming.map((task: any) => (
                   <Box key={task.id} display="flex" justifyContent="space-between" alignItems="center">
                     <Typography variant="body2">{task.taskTemplate?.title ?? 'Tarefa'}</Typography>
-                    <DueBadge dueDate={task.dueDate} />
+                    <Box display="flex" alignItems="center" gap={1}>
+                      {(task.comments?.unread ?? 0) > 0 && <Chip size="small" color="warning" label="Novo comentário" />}
+                      <DueBadge dueDate={task.dueDate} />
+                    </Box>
                   </Box>
                 ))}
               </Stack>
@@ -101,7 +104,10 @@ export function DashboardLocalityPage() {
                 {late.map((task: any) => (
                   <Box key={task.id} display="flex" justifyContent="space-between" alignItems="center">
                     <Typography variant="body2">{task.taskTemplate?.title ?? 'Tarefa'}</Typography>
-                    <Chip size="small" label="Atrasada" color="warning" />
+                    <Box display="flex" alignItems="center" gap={1}>
+                      {(task.comments?.unread ?? 0) > 0 && <Chip size="small" color="warning" label="Novo comentário" />}
+                      <Chip size="small" label="Atrasada" color="warning" />
+                    </Box>
                   </Box>
                 ))}
               </Stack>

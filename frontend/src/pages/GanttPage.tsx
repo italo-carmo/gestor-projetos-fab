@@ -1,4 +1,4 @@
-import { Box, Card, CardContent, TextField, Typography, MenuItem } from '@mui/material';
+import { Box, Button, ButtonGroup, Card, CardContent, Chip, MenuItem, TextField, Typography } from '@mui/material';
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useDashboardNational, useGantt, usePhases, useTaskTemplates, useMe } from '../api/hooks';
@@ -7,10 +7,12 @@ import { ErrorState } from '../components/states/ErrorState';
 import { EmptyState } from '../components/states/EmptyState';
 import { GanttView } from '../components/gantt/GanttView';
 import { TaskDetailsDrawer } from '../components/tasks/TaskDetailsDrawer';
+import { TASK_STATUS_LABELS } from '../constants/enums';
 
 export function GanttPage() {
   const [params, setParams] = useSearchParams();
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'Day' | 'Week' | 'Month'>('Week');
   const { data: me } = useMe();
 
   const localityId = params.get('localityId') ?? '';
@@ -35,14 +37,15 @@ export function GanttPage() {
   const phasesQuery = usePhases();
   const templatesQuery = useTaskTemplates();
 
-  const templateMap = new Map((templatesQuery.data?.items ?? []).map((t: any) => [t.id, t]));
+  const templateMap = new Map<string, any>(((templatesQuery.data?.items ?? []) as any[]).map((t: any) => [t.id, t]));
 
-  const localities = (dashboardQuery.data?.items ?? []).map((loc: any) => ({
+  const localities = ((dashboardQuery.data?.items ?? []) as any[]).map((loc: any) => ({
     id: loc.localityId,
     name: loc.localityName,
   }));
+  const localityNameMap = new Map(localities.map((l: any) => [l.id, l.name]));
 
-  const phases = (phasesQuery.data?.items ?? []).map((phase: any) => ({
+  const phases = ((phasesQuery.data?.items ?? []) as any[]).map((phase: any) => ({
     id: phase.id,
     name: phase.name,
   }));
@@ -54,6 +57,7 @@ export function GanttPage() {
       ...task,
       taskTemplate: template,
       phaseName: template ? phaseMap.get(template.phaseId) : undefined,
+      localityName: localityNameMap.get(task.localityId) ?? '—',
     };
   });
   if (phaseId) {
@@ -76,8 +80,11 @@ export function GanttPage() {
 
   return (
     <Box>
-      <Typography variant="h4" gutterBottom>
-        Gantt
+      <Typography variant="h4" gutterBottom fontWeight={700}>
+        Cronograma (Gantt)
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        Visão de tarefas ao longo do tempo. Clique em uma barra para ver detalhes.
       </Typography>
       <Card sx={{ mb: 2 }}>
         <CardContent sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: 'repeat(5, 1fr)' } }}>
@@ -119,7 +126,7 @@ export function GanttPage() {
             <MenuItem value="">Todos</MenuItem>
             {['NOT_STARTED', 'STARTED', 'IN_PROGRESS', 'BLOCKED', 'DONE'].map((s) => (
               <MenuItem key={s} value={s}>
-                {s}
+                {TASK_STATUS_LABELS[s] ?? s}
               </MenuItem>
             ))}
           </TextField>
@@ -134,7 +141,7 @@ export function GanttPage() {
           <TextField
             size="small"
             type="date"
-            label="Ate"
+            label="Até"
             InputLabelProps={{ shrink: true }}
             value={to}
             onChange={(e) => updateParam('to', e.target.value)}
@@ -143,9 +150,25 @@ export function GanttPage() {
       </Card>
 
       {items.length === 0 ? (
-        <EmptyState title="Sem tarefas" description="Nao ha itens para o periodo selecionado." />
+        <EmptyState title="Sem tarefas" description="Nenhum item para o período selecionado. Ajuste os filtros ou datas." />
       ) : (
-        <GanttView items={items} onSelect={(id) => setSelectedTaskId(id)} />
+        <Card>
+          <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+              <Typography variant="body2" color="text.secondary">Visualização:</Typography>
+              <ButtonGroup size="small">
+                <Button variant={viewMode === 'Day' ? 'contained' : 'outlined'} onClick={() => setViewMode('Day')}>Dia</Button>
+                <Button variant={viewMode === 'Week' ? 'contained' : 'outlined'} onClick={() => setViewMode('Week')}>Semana</Button>
+                <Button variant={viewMode === 'Month' ? 'contained' : 'outlined'} onClick={() => setViewMode('Month')}>Mês</Button>
+              </ButtonGroup>
+              <Chip size="small" label={`${items.length} tarefas`} variant="outlined" />
+              <Typography variant="caption" color="text.secondary">
+                Dica: clique e arraste no gráfico para navegar pelos meses (também funciona com rolagem).
+              </Typography>
+            </Box>
+            <GanttView items={items} onSelect={(id) => setSelectedTaskId(id)} viewMode={viewMode} />
+          </Box>
+        </Card>
       )}
 
       <TaskDetailsDrawer
@@ -153,6 +176,7 @@ export function GanttPage() {
         open={Boolean(selectedTaskId)}
         onClose={() => setSelectedTaskId(null)}
         user={me}
+        localities={localities}
       />
     </Box>
   );

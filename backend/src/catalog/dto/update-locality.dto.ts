@@ -19,6 +19,10 @@ export class UpdateLocalityDto {
 
   @IsOptional()
   @IsDateString()
+  individualMeetingDate?: string | null;
+
+  @IsOptional()
+  @IsDateString()
   visitDate?: string | null;
 
   @IsOptional()

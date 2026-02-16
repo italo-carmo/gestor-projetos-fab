@@ -66,10 +66,10 @@ export function OrgChartPage() {
               </Typography>
               <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} flexWrap="wrap">
                 {group.elos.map((elo: any) => (
-                  <Card key={elo.id} variant="outlined" sx={{ minWidth: 220 }}>
-                    <CardContent>
-                      <Typography variant="subtitle2">{elo.name}</Typography>
-                      <Chip size="small" label={elo.roleType} sx={{ mt: 1 }} />
+                    <Card key={elo.id} variant="outlined" sx={{ minWidth: 220 }}>
+                      <CardContent>
+                      <Typography variant="subtitle2">{elo.name ?? 'Contato'}</Typography>
+                      <Chip size="small" label={elo.eloRole?.name ?? elo.eloRole?.code ?? '—'} sx={{ mt: 1 }} />
                       <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
                         {elo.om ?? '-'}
                       </Typography>
@@ -94,4 +94,3 @@ export function OrgChartPage() {
     </Box>
   );
 }
-

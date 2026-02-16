@@ -308,6 +308,18 @@ components:
           type: string
         fileUrl:
           type: string
+        storageKey:
+          type: string
+          nullable: true
+        mimeType:
+          type: string
+          nullable: true
+        fileSize:
+          type: integer
+          nullable: true
+        checksum:
+          type: string
+          nullable: true
         approved:
           type: boolean
         createdAt:
@@ -686,6 +698,24 @@ paths:
           description: Bad Request
           content:
             application/json:
+  /admin/rbac/simulate:
+    get:
+      tags:
+      - Admin
+      parameters:
+      - name: userId
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: roleId
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
               schema:
                 $ref: '#/components/schemas/Error'
   /localities:
@@ -976,6 +1006,19 @@ paths:
       responses:
         '201':
           description: Created
+  /task-templates/{id}/clone:
+    post:
+      tags:
+      - TaskTemplates
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '201':
+          description: Created
   /task-instances:
     get:
       tags:
@@ -1062,6 +1105,52 @@ paths:
       responses:
         '200':
           description: OK
+  /task-instances/batch/assign:
+    put:
+      tags:
+      - TaskInstances
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ids:
+                  type: array
+                  items:
+                    type: string
+                assignedToId:
+                  type: string
+                  nullable: true
+              required:
+              - ids
+      responses:
+        '200':
+          description: OK
+  /task-instances/batch/status:
+    put:
+      tags:
+      - TaskInstances
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ids:
+                  type: array
+                  items:
+                    type: string
+                status:
+                  type: string
+              required:
+              - ids
+              - status
+      responses:
+        '200':
+          description: OK
   /task-instances/gantt:
     get:
       tags:
@@ -1114,6 +1203,11 @@ paths:
         required: true
         schema:
           type: string
+      - name: token
+        in: query
+        required: true
+        schema:
+          type: string
       responses:
         '200':
           description: OK
@@ -1138,6 +1232,19 @@ paths:
                   type: boolean
               required:
               - approved
+      responses:
+        '200':
+          description: OK
+  /reports/{id}/signed-url:
+    get:
+      tags:
+      - Reports
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
       responses:
         '200':
           description: OK
@@ -1302,10 +1409,30 @@ paths:
       responses:
         '200':
           description: OK
+  /dashboard/executive:
+    get:
+      tags:
+      - Dashboards
+      responses:
+        '200':
+          description: OK
   /audit-logs:
     get:
       tags:
       - Audit
+      responses:
+        '200':
+          description: OK
+  /search:
+    get:
+      tags:
+      - Search
+      parameters:
+      - name: q
+        in: query
+        required: true
+        schema:
+          type: string
       responses:
         '200':
           description: OK

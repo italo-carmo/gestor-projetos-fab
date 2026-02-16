@@ -5,7 +5,7 @@ import { RequirePermission } from './require-permission.decorator';
 import { RbacGuard } from './rbac.guard';
 import { RbacService } from './rbac.service';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
-import { RbacUser } from './rbac.types';
+import type { RbacUser } from './rbac.types';
 
 @Controller('admin/rbac')
 @UseGuards(JwtAuthGuard, RbacGuard)
@@ -22,7 +22,13 @@ export class AdminRbacController {
   @RequirePermission('admin_rbac', 'import')
   @UseGuards(ThrottlerGuard)
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
-  import(@Body() body: any, @Query('mode') mode?: 'replace' | 'merge', @CurrentUser() user: RbacUser) {
+  import(@Body() body: any, @CurrentUser() user: RbacUser, @Query('mode') mode?: 'replace' | 'merge') {
     return this.rbac.importMatrix(body, mode ?? 'replace', user?.id);
+  }
+
+  @Get('simulate')
+  @RequirePermission('admin_rbac', 'export')
+  simulate(@Query('userId') userId?: string, @Query('roleId') roleId?: string) {
+    return this.rbac.simulateAccess({ userId, roleId });
   }
 }

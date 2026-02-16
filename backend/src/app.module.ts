@@ -17,6 +17,9 @@ import { ExportsModule } from './exports/exports.module';
 import { HealthModule } from './health/health.module';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { CatalogModule } from './catalog/catalog.module';
+import { KpisModule } from './kpis/kpis.module';
+import { SearchModule } from './search/search.module';
+import { ActivitiesModule } from './activities/activities.module';
 
 @Module({
   imports: [
@@ -41,6 +44,9 @@ import { CatalogModule } from './catalog/catalog.module';
     ExportsModule,
     HealthModule,
     CatalogModule,
+    KpisModule,
+    SearchModule,
+    ActivitiesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

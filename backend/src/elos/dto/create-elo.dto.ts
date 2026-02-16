@@ -1,11 +1,11 @@
-import { IsEnum, IsOptional, IsString } from 'class-validator';
+import { IsOptional, IsString } from 'class-validator';
 
 export class CreateEloDto {
   @IsString()
   localityId: string;
 
-  @IsEnum(['PSICOLOGIA', 'SSO', 'JURIDICO', 'CPCA', 'GRAD_MASTER'])
-  roleType: string;
+  @IsString()
+  eloRoleId: string;
 
   @IsString()
   name: string;

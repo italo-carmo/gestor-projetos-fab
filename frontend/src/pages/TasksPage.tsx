@@ -1,7 +1,8 @@
-import { Box, Button, Card, CardContent, Stack, Tab, Tabs, Typography } from '@mui/material';
-import { useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { useDashboardNational, usePhases, useTaskTemplates, useTasks, useMe } from '../api/hooks';
+import { Box, Button, Card, CardContent, Link, MenuItem, Stack, Tab, Tabs, TextField, Typography } from '@mui/material';
+import { format } from 'date-fns';
+import { useEffect, useMemo, useState } from 'react';
+import { Link as RouterLink, useSearchParams } from 'react-router-dom';
+import { useDashboardNational, useEloRoles, usePhases, useTaskTemplates, useTasks, useMe, useBatchAssignTasks, useBatchStatusTasks } from '../api/hooks';
 import { useDebounce } from '../app/useDebounce';
 import { FiltersBar } from '../components/filters/FiltersBar';
 import { SkeletonState } from '../components/states/SkeletonState';
@@ -13,11 +14,18 @@ import { ProgressInline } from '../components/chips/ProgressInline';
 import { TaskDetailsDrawer } from '../components/tasks/TaskDetailsDrawer';
 import { api } from '../api/client';
 import { can } from '../app/rbac';
+import { DataGrid } from '@mui/x-data-grid';
+import type { GridColDef, GridRowSelectionModel } from '@mui/x-data-grid';
+import { ptBR as dataGridPtBR } from '@mui/x-data-grid/locales';
+import { useToast } from '../app/toast';
+import { parseApiError } from '../app/apiErrors';
+import { TASK_STATUS_LABELS } from '../constants/enums';
 
 export function TasksPage() {
   const [params, setParams] = useSearchParams();
   const [tab, setTab] = useState(0);
   const { data: me } = useMe();
+  const toast = useToast();
 
   const search = params.get('q') ?? '';
   const debouncedSearch = useDebounce(search, 300);
@@ -28,6 +36,7 @@ export function TasksPage() {
   const assigneeId = params.get('assigneeId') ?? '';
   const dueFrom = params.get('dueFrom') ?? '';
   const dueTo = params.get('dueTo') ?? '';
+  const eloRoleId = params.get('eloRoleId') ?? '';
 
   const taskFilters = useMemo(
     () => ({
@@ -37,12 +46,15 @@ export function TasksPage() {
       assigneeId: assigneeId || undefined,
       dueFrom: dueFrom || undefined,
       dueTo: dueTo || undefined,
+      eloRoleId: eloRoleId || undefined,
     }),
-    [localityId, phaseId, status, assigneeId, dueFrom, dueTo],
+    [localityId, phaseId, status, assigneeId, dueFrom, dueTo, eloRoleId],
   );
 
   const tasksQuery = useTasks(taskFilters);
   const phasesQuery = usePhases();
+  const eloRolesQuery = useEloRoles();
+  const eloRoles = eloRolesQuery.data?.items ?? [];
   const templatesQuery = useTaskTemplates();
   const dashboardQuery = useDashboardNational({});
 
@@ -55,30 +67,52 @@ export function TasksPage() {
     ? items.filter((item: any) => item.taskTemplate?.title?.toLowerCase().includes(debouncedSearch.toLowerCase()))
     : items;
 
-  const localities = (dashboardQuery.data?.items ?? []).map((loc: any) => ({
+  const localities = ((dashboardQuery.data?.items ?? []) as any[]).map((loc: any) => ({
     id: loc.localityId,
     name: loc.localityName,
   }));
   const localityMap = new Map(localities.map((loc) => [loc.id, loc.name]));
 
-  const phases = (phasesQuery.data?.items ?? []).map((phase: any) => ({
+  const phases = ((phasesQuery.data?.items ?? []) as any[]).map((phase: any) => ({
     id: phase.id,
     name: phase.name,
   }));
   const phaseMap = new Map(phases.map((phase) => [phase.id, phase.name]));
 
-  const assignees = me?.executive_hide_pii
+  const assignees: { id: string; name: string }[] = me?.executive_hide_pii
     ? []
     : Array.from(
-        new Map(
+        new Map<string, { id: string; name: string }>(
           filteredItems
             .filter((item: any) => item.assignedToId)
-            .map((item: any) => [item.assignedToId, { id: item.assignedToId, name: `Usuario ${item.assignedToId}` }]),
+            .map((item: any) => [
+              String(item.assignedToId),
+              {
+                id: String(item.assignedToId),
+                name:
+                  item.assignee?.name ??
+                  item.assignedTo?.name ??
+                  item.assignedTo?.email ??
+                  `Usuário ${String(item.assignedToId).slice(0, 8)}`,
+              },
+            ]),
         ).values(),
       );
 
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const taskIdFromUrl = params.get('taskId') ?? '';
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(taskIdFromUrl || null);
   const selectedTask = filteredItems.find((item: any) => item.id === selectedTaskId) ?? null;
+
+  useEffect(() => {
+    if (taskIdFromUrl && taskIdFromUrl !== selectedTaskId) setSelectedTaskId(taskIdFromUrl);
+  }, [taskIdFromUrl, selectedTaskId]);
+  const [selectionModel, setSelectionModel] = useState<GridRowSelectionModel>(() => ({ type: 'include', ids: new Set() }));
+  const selectedIds = selectionModel?.type === 'include' && selectionModel?.ids ? Array.from(selectionModel.ids) : [];
+  const safeRows = Array.isArray(filteredItems) ? filteredItems.filter((r: any) => r != null && r.id != null) : [];
+  const [batchAssignee, setBatchAssignee] = useState('');
+  const [batchStatus, setBatchStatus] = useState('');
+  const batchAssign = useBatchAssignTasks();
+  const batchStatusMutation = useBatchStatusTasks();
 
   const updateParam = (key: string, value: string) => {
     const next = new URLSearchParams(params);
@@ -133,8 +167,11 @@ export function TasksPage() {
             dueTo={dueTo}
             onDueFromChange={(value) => updateParam('dueFrom', value)}
             onDueToChange={(value) => updateParam('dueTo', value)}
+            eloRoleId={eloRoleId}
+            onEloRoleChange={(value) => updateParam('eloRoleId', value)}
             localities={localities}
             phases={phases}
+            eloRoles={eloRoles}
             assignees={assignees}
             onClear={clearFilters}
           />
@@ -156,44 +193,170 @@ export function TasksPage() {
       {filteredItems.length > 0 && tab === 0 && (
         <Card>
           <CardContent>
-            <Box component="table" width="100%" sx={{ borderCollapse: 'collapse' }}>
-              <Box component="thead">
-                <Box component="tr">
-                  {['Titulo', 'Localidade', 'Fase', 'Prazo', 'Responsavel', 'Status', 'Progresso', 'Acoes'].map(
-                    (header) => (
-                      <Box key={header} component="th" sx={{ textAlign: 'left', pb: 1, fontWeight: 600 }}>
-                        {header}
-                      </Box>
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} mb={2} alignItems="center">
+              <Typography variant="subtitle2">
+                Selecionadas: {selectedIds.length}
+              </Typography>
+              {can(me, 'task_instances', 'assign') && (
+                <TextField
+                  size="small"
+                  label="Responsável (ID interno)"
+                  value={batchAssignee}
+                  onChange={(e) => setBatchAssignee(e.target.value)}
+                  sx={{ minWidth: 180 }}
+                />
+              )}
+              {can(me, 'task_instances', 'update') && (
+                <TextField
+                  select
+                  size="small"
+                  label="Status"
+                  value={batchStatus}
+                  onChange={(e) => setBatchStatus(e.target.value)}
+                  sx={{ minWidth: 160 }}
+                >
+                  <MenuItem value="">-</MenuItem>
+                  {['NOT_STARTED', 'STARTED', 'IN_PROGRESS', 'BLOCKED', 'DONE'].map((s) => (
+                    <MenuItem key={s} value={s}>
+                      {TASK_STATUS_LABELS[s] ?? s}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              )}
+              <Button
+                variant="outlined"
+                disabled={!selectedIds.length || !can(me, 'task_instances', 'assign')}
+                onClick={async () => {
+                  try {
+                    await batchAssign.mutateAsync({ ids: selectedIds.map(String), assignedToId: batchAssignee || null });
+                    toast.push({ message: 'Responsável atualizado', severity: 'success' });
+                  } catch (error) {
+                    const payload = parseApiError(error);
+                    toast.push({ message: payload.message ?? 'Erro ao atribuir', severity: 'error' });
+                  }
+                }}
+              >
+                Atribuir em massa
+              </Button>
+              <Button
+                variant="outlined"
+                disabled={!selectedIds.length || !batchStatus || !can(me, 'task_instances', 'update')}
+                onClick={async () => {
+                  try {
+                    await batchStatusMutation.mutateAsync({ ids: selectedIds.map(String), status: batchStatus });
+                    toast.push({ message: 'Status atualizado', severity: 'success' });
+                  } catch (error) {
+                    const payload = parseApiError(error);
+                    toast.push({ message: payload.message ?? 'Erro ao atualizar', severity: 'error' });
+                  }
+                }}
+              >
+                Status em massa
+              </Button>
+            </Stack>
+            <Box sx={{ height: 520 }}>
+              <DataGrid
+                rows={safeRows}
+                getRowId={(row) => String(row.id)}
+                localeText={dataGridPtBR.components.MuiDataGrid.defaultProps.localeText}
+                columns={[
+                  {
+                    field: 'title',
+                    headerName: 'Título',
+                    flex: 1,
+                    valueGetter: (_, row) => row.taskTemplate?.title ?? '-',
+                  },
+                  {
+                    field: 'locality',
+                    headerName: 'Localidade',
+                    width: 160,
+                    valueGetter: (_, row) => localityMap.get(row.localityId) ?? row.localityId ?? '-',
+                  },
+                  {
+                    field: 'phase',
+                    headerName: 'Fase',
+                    width: 160,
+                    valueGetter: (_, row) => phaseMap.get(row.taskTemplate?.phaseId) ?? '-',
+                  },
+                  {
+                    field: 'dueDate',
+                    headerName: 'Prazo',
+                    width: 150,
+                    renderCell: (params) => <DueBadge dueDate={params.row.dueDate} />,
+                  },
+                  {
+                    field: 'assignee',
+                    headerName: 'Responsável',
+                    width: 160,
+                    valueGetter: (_, row) =>
+                      me?.executive_hide_pii
+                        ? '-'
+                        : row.assignee?.label ??
+                          row.assignee?.name ??
+                          row.assignedTo?.name ??
+                          row.assignedTo?.email ??
+                          '-',
+                  },
+                  {
+                    field: 'comments',
+                    headerName: 'Comentários',
+                    width: 150,
+                    renderCell: (params) => {
+                      const total = params.row.comments?.total ?? 0;
+                      const unread = params.row.comments?.unread ?? 0;
+                      if (!total) return '—';
+                      return unread > 0 ? `Novo (${unread})` : `${total}`;
+                    },
+                  },
+                  {
+                    field: 'status',
+                    headerName: 'Status',
+                    width: 140,
+                    renderCell: (params) => (
+                      <StatusChip
+                        status={params.row.status}
+                        isLate={params.row.isLate}
+                        blocked={params.row.blockedByIds?.length > 0}
+                      />
                     ),
-                  )}
-                </Box>
-              </Box>
-              <Box component="tbody">
-                {filteredItems.map((task: any, index: number) => (
-                  <Box
-                    component="tr"
-                    key={task.id}
-                    sx={{ cursor: 'pointer', borderTop: '1px solid #E6ECF5' }}
-                    onClick={() => setSelectedTaskId(task.id)}
-                    data-testid={`tasks-table-row-${index}`}
-                  >
-                    <Box component="td" sx={{ py: 1 }}>{task.taskTemplate?.title ?? '-'}</Box>
-                    <Box component="td" sx={{ py: 1 }}>{localityMap.get(task.localityId) ?? task.localityId ?? '-'}</Box>
-                    <Box component="td" sx={{ py: 1 }}>{phaseMap.get(task.taskTemplate?.phaseId) ?? '-'}</Box>
-                    <Box component="td" sx={{ py: 1 }}><DueBadge dueDate={task.dueDate} /></Box>
-                    <Box component="td" sx={{ py: 1 }}>
-                      {me?.executive_hide_pii ? '-' : task.assignedToId ?? '-'}
-                    </Box>
-                    <Box component="td" sx={{ py: 1 }}>
-                      <StatusChip status={task.status} isLate={task.isLate} blocked={task.blockedByIds?.length > 0} />
-                    </Box>
-                    <Box component="td" sx={{ py: 1 }}>
-                      <ProgressInline value={task.progressPercent ?? 0} />
-                    </Box>
-                    <Box component="td" sx={{ py: 1 }}>Abrir</Box>
-                  </Box>
-                ))}
-              </Box>
+                  },
+                  {
+                    field: 'progress',
+                    headerName: 'Progresso',
+                    width: 160,
+                    renderCell: (params) => <ProgressInline value={params.row.progressPercent ?? 0} />,
+                  },
+                  {
+                    field: 'eloRole',
+                    headerName: 'Elo',
+                    width: 120,
+                    valueGetter: (_, row) => row.eloRole?.name ?? row.eloRole?.code ?? '—',
+                  },
+                  {
+                    field: 'meeting',
+                    headerName: 'Reunião',
+                    width: 180,
+                    renderCell: (params) => {
+                      const m = params.row.meeting;
+                      if (!m) return '—';
+                      return (
+                        <Link component={RouterLink} to={`/meetings?meetingId=${m.id}`} sx={{ fontSize: 13 }}>
+                          {format(new Date(m.datetime), 'dd/MM/yyyy')} — {m.scope ? (m.scope.length > 15 ? m.scope.slice(0, 15) + '…' : m.scope) : 'Reunião'}
+                        </Link>
+                      );
+                    },
+                  },
+                ] as GridColDef[]}
+                checkboxSelection
+                rowSelectionModel={selectionModel}
+                onRowSelectionModelChange={(newModel) => {
+                  if (newModel && typeof newModel === 'object' && 'type' in newModel && 'ids' in newModel && newModel.ids instanceof Set) {
+                    setSelectionModel(newModel as GridRowSelectionModel);
+                  }
+                }}
+                onRowClick={(params) => setSelectedTaskId(params.row.id)}
+                disableRowSelectionOnClick
+              />
             </Box>
           </CardContent>
         </Card>
@@ -205,7 +368,7 @@ export function TasksPage() {
             <Card key={column}>
               <CardContent>
                 <Typography variant="h6" gutterBottom>
-                  {column}
+                  {TASK_STATUS_LABELS[column] ?? column}
                 </Typography>
                 <Box display="grid" gap={1}>
                   {filteredItems
@@ -220,6 +383,21 @@ export function TasksPage() {
                         <CardContent>
                           <Typography variant="subtitle2">{task.taskTemplate?.title ?? '-'}</Typography>
                           <DueBadge dueDate={task.dueDate} />
+                          {(task.comments?.unread ?? 0) > 0 && (
+                            <Typography variant="caption" color="warning.main" display="block" sx={{ mt: 0.4 }}>
+                              Novo comentário ({task.comments.unread})
+                            </Typography>
+                          )}
+                          {task.eloRole && (
+                            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                              Elo: {task.eloRole.name ?? task.eloRole.code}
+                            </Typography>
+                          )}
+                          {task.meeting && (
+                            <Link component={RouterLink} to={`/meetings?meetingId=${task.meeting.id}`} onClick={(e) => e.stopPropagation()} sx={{ fontSize: 11, mt: 0.5, display: 'block' }}>
+                              Reunião: {format(new Date(task.meeting.datetime), 'dd/MM')}
+                            </Link>
+                          )}
                         </CardContent>
                       </Card>
                     ))}
@@ -235,6 +413,7 @@ export function TasksPage() {
         open={Boolean(selectedTaskId)}
         onClose={() => setSelectedTaskId(null)}
         user={me}
+        localities={localities}
       />
     </Box>
   );

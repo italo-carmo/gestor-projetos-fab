@@ -25,6 +25,11 @@
           "scope": "NATIONAL"
         },
         {
+          "resource": "phases",
+          "action": "update",
+          "scope": "NATIONAL"
+        },
+        {
           "resource": "task_templates",
           "action": "view",
           "scope": "NATIONAL"
@@ -193,6 +198,11 @@
           "resource": "calendar",
           "action": "view",
           "scope": "NATIONAL"
+        },
+        {
+          "resource": "search",
+          "action": "view",
+          "scope": "NATIONAL"
         }
       ]
     },
@@ -256,6 +266,11 @@
         },
         {
           "resource": "meetings",
+          "action": "view",
+          "scope": "LOCALITY"
+        },
+        {
+          "resource": "search",
           "action": "view",
           "scope": "LOCALITY"
         },
@@ -346,6 +361,11 @@
           "scope": "LOCALITY_SPECIALTY"
         },
         {
+          "resource": "search",
+          "action": "view",
+          "scope": "LOCALITY_SPECIALTY"
+        },
+        {
           "resource": "notices",
           "action": "view",
           "scope": "LOCALITY_SPECIALTY"
@@ -432,6 +452,11 @@
         },
         {
           "resource": "org_chart",
+          "action": "view",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "search",
           "action": "view",
           "scope": "NATIONAL"
         }

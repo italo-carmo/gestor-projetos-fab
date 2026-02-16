@@ -1,11 +1,11 @@
 import { Chip } from '@mui/material';
 
 const map: Record<string, { label: string; color: 'default' | 'primary' | 'warning' | 'success' | 'error' }> = {
-  NOT_STARTED: { label: 'Nao iniciada', color: 'default' },
+  NOT_STARTED: { label: 'Não iniciada', color: 'default' },
   STARTED: { label: 'Iniciada', color: 'primary' },
   IN_PROGRESS: { label: 'Em andamento', color: 'primary' },
   BLOCKED: { label: 'Bloqueada', color: 'warning' },
-  DONE: { label: 'Concluida', color: 'success' },
+  DONE: { label: 'Concluída', color: 'success' },
 };
 
 export function StatusChip({ status, isLate, blocked }: { status: string; isLate?: boolean; blocked?: boolean }) {

@@ -105,7 +105,7 @@ async function main() {
 
     await prisma.rolePermission.deleteMany({ where: { roleId: roleRecord.id } });
     await prisma.rolePermission.createMany({
-      data: permissionIds.map((perm) => ({ roleId: roleRecord.id, permissionId: perm.id })),
+      data: permissionIds.map((perm: { id: string }) => ({ roleId: roleRecord.id, permissionId: perm.id })),
     });
   }
 
@@ -217,7 +217,9 @@ async function main() {
 
   // TaskInstances (por localidade)
   const templatesInDb = await prisma.taskTemplate.findMany({ include: { phase: true, specialty: true } });
-  const templateByTitle = new Map(templatesInDb.map(t => [t.title, t]));
+  const templateByTitle = new Map<string, { id: string; title: string }>(
+    templatesInDb.map((t: { id: string; title: string }) => [t.title, t]),
+  );
 
   for (const ti of taskInstances) {
     const tmpl = templateByTitle.get(ti.taskTitle);

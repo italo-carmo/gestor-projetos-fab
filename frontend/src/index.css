@@ -1,20 +1,83 @@
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@400;500;600;700;800&display=swap');
 
 :root {
-  font-family: 'Montserrat', 'Segoe UI', sans-serif;
-  color: #0B1B3B;
-  background-color: #F5F8FC;
+  --bg-base: #f2f6f8;
+  --bg-overlay: #e6f0f4;
+  --surface: #ffffff;
+  --text-main: #132c38;
+  --text-muted: #4a6675;
+  --line-soft: rgba(17, 66, 89, 0.14);
+  --accent-main: #0c657e;
+  --accent-warm: #c56a2b;
+  font-family: 'Sora', 'Manrope', 'Segoe UI', sans-serif;
+  color: var(--text-main);
+  background-color: var(--bg-base);
 }
 
 * {
   box-sizing: border-box;
 }
 
-body {
-  margin: 0;
-  background-color: #F5F8FC;
-}
-
+html,
+body,
 #root {
   min-height: 100vh;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(1200px 700px at 95% -10%, rgba(12, 101, 126, 0.16), transparent 60%),
+    radial-gradient(900px 500px at -10% 15%, rgba(197, 106, 43, 0.14), transparent 58%),
+    linear-gradient(180deg, var(--bg-base) 0%, var(--bg-overlay) 100%);
+  color: var(--text-main);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(18, 63, 84, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(18, 63, 84, 0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: radial-gradient(circle at center, black 15%, transparent 90%);
+  z-index: -1;
+}
+
+a {
+  color: inherit;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-enter {
+  animation: fade-up 240ms ease-out both;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.55);
+}
+
+*::-webkit-scrollbar-thumb {
+  background: rgba(12, 101, 126, 0.32);
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.7);
 }

@@ -14,6 +14,27 @@
     "httpStatus": 401,
     "message": "Sessão expirada."
   },
+  "AUTH_LOCKED": {
+    "httpStatus": 429,
+    "message": "Conta temporariamente bloqueada por tentativas inválidas.",
+    "details": {
+      "hint": "Tente novamente em alguns minutos."
+    }
+  },
+  "FILE_TYPE_INVALID": {
+    "httpStatus": 400,
+    "message": "Tipo de arquivo inválido.",
+    "details": {
+      "hint": "Envie PDF, PNG ou JPEG."
+    }
+  },
+  "FILE_TOO_LARGE": {
+    "httpStatus": 400,
+    "message": "Arquivo excede o tamanho permitido.",
+    "details": {
+      "hint": "Limite de 10 MB."
+    }
+  },
   "VALIDATION_ERROR": {
     "httpStatus": 400,
     "message": "Dados inválidos."
@@ -40,5 +61,29 @@
     "details": {
       "field": "blockedByIds"
     }
+  },
+  "ACTIVITY_REPORT_REQUIRED": {
+    "httpStatus": 409,
+    "message": "Relatório obrigatório para concluir a atividade.",
+    "details": {
+      "field": "reportRequired",
+      "rule": "DONE exige ActivityReport assinado"
+    }
+  },
+  "ACTIVITY_REPORT_SIGNATURE_REQUIRED": {
+    "httpStatus": 409,
+    "message": "Assinatura digital obrigatória para concluir a atividade.",
+    "details": {
+      "field": "signatureHash",
+      "rule": "DONE exige assinatura digital válida"
+    }
+  },
+  "ACTIVITY_REPORT_NOT_FOUND": {
+    "httpStatus": 404,
+    "message": "Relatório da atividade não encontrado."
+  },
+  "CHECKLIST_AUTOMATIC_ONLY": {
+    "httpStatus": 409,
+    "message": "Checklist é atualizado automaticamente por tarefas e atividades finalizadas."
   }
 }

@@ -15,18 +15,29 @@ model User {
   passwordHash     String
   isActive         Boolean        @default(true)
   executiveHidePii Boolean        @default(false)
+  loginFailedCount Int            @default(0)
+  lockUntil        DateTime?
   localityId       String?
   specialtyId      String?
+  eloRoleId        String?        // Responsável por este elo (ex: Psicologia a nível Brasil)
   flagsJson        Json?
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
 
   locality         Locality?      @relation(fields: [localityId], references: [id])
   specialty        Specialty?     @relation(fields: [specialtyId], references: [id])
+  eloRole          EloRole?      @relation(fields: [eloRoleId], references: [id])
   roles            UserRole[]
   refreshTokens    RefreshToken[]
   assignedTasks    TaskInstance[] @relation("TaskAssignee")
+  taskComments     TaskComment[]  @relation("TaskCommentAuthor")
+  taskCommentReads TaskCommentRead[]
+  createdActivities Activity[]    @relation("ActivityCreator")
+  activityComments ActivityComment[] @relation("ActivityCommentAuthor")
+  activityCommentReads ActivityCommentRead[]
+  signedActivityReports ActivityReport[] @relation("ActivityReportSigner")
   auditLogs        AuditLog[]
+  meetingParticipations MeetingParticipant[]
 }
 
 model Role {
@@ -98,7 +109,8 @@ model Locality {
   name                       String
   commandName                String?
   commanderName              String?
-  visitDate                  DateTime?
+  individualMeetingDate      DateTime?       // Data da Reunião Individual
+  visitDate                  DateTime?       // Data da Visita da CIPAV
   recruitsFemaleCountCurrent Int?
   notes                      String?
   createdAt                  DateTime        @default(now())
@@ -106,11 +118,83 @@ model Locality {
 
   users                      User[]
   taskInstances              TaskInstance[]
+  activities                 Activity[]
   meetings                   Meeting[]
   recruitsHistory            RecruitsHistory[]
   notices                    Notice[]
   elos                       Elo[]
   checklistItemStatuses      ChecklistItemStatus[]
+  kpiValues                  KpiValue[]
+  auditLogs                  AuditLog[]
+}
+
+model Activity {
+  id            String        @id @default(cuid())
+  title         String
+  description   String?
+  localityId    String?
+  eventDate     DateTime?
+  status        ActivityStatus @default(NOT_STARTED)
+  reportRequired Boolean      @default(false)
+  createdById   String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  locality      Locality?     @relation(fields: [localityId], references: [id])
+  createdBy     User?         @relation("ActivityCreator", fields: [createdById], references: [id])
+  report        ActivityReport?
+  comments      ActivityComment[]
+  commentReads  ActivityCommentRead[]
+
+  @@index([localityId])
+  @@index([status])
+  @@index([eventDate])
+}
+
+model ActivityReport {
+  id                        String   @id @default(cuid())
+  activityId                String   @unique
+  date                      DateTime
+  location                  String
+  responsible               String
+  missionSupport            String
+  introduction              String
+  missionObjectives         String
+  executionSchedule         String
+  activitiesPerformed       String
+  participantsCount         Int
+  participantsCharacteristics String
+  conclusion                String
+  city                      String
+  closingDate               DateTime
+  signaturePayloadHash      String?
+  signatureHash             String?
+  signatureAlgorithm        String?
+  signatureVersion          Int?
+  signedAt                  DateTime?
+  signedById                String?
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  activity                  Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  signedBy                  User?    @relation("ActivityReportSigner", fields: [signedById], references: [id], onDelete: SetNull)
+  photos                    ActivityReportPhoto[]
+}
+
+model ActivityReportPhoto {
+  id          String   @id @default(cuid())
+  reportId    String
+  fileName    String
+  fileUrl     String
+  storageKey  String?
+  mimeType    String?
+  fileSize    Int?
+  checksum    String?
+  createdAt   DateTime @default(now())
+
+  report      ActivityReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId])
 }
 
 model Specialty {
@@ -123,16 +207,21 @@ model Specialty {
 
   users      User[]
   templates  TaskTemplate[]
+  notices    Notice[]
+  checklists Checklist[]
+  kpiValues  KpiValue[]
 }
 
 model Phase {
   id        String      @id @default(cuid())
   name      PhaseName   @unique
+  displayName String?
   order     Int
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
 
   templates TaskTemplate[]
+  checklists Checklist[]
 }
 
 model TaskTemplate {
@@ -141,14 +230,17 @@ model TaskTemplate {
   description            String?
   phaseId                String
   specialtyId            String?
+  eloRoleId              String?
   appliesToAllLocalities Boolean
   reportRequiredDefault  Boolean
   createdAt              DateTime      @default(now())
   updatedAt              DateTime      @updatedAt
 
-  phase                  Phase         @relation(fields: [phaseId], references: [id])
-  specialty              Specialty?    @relation(fields: [specialtyId], references: [id])
-  instances              TaskInstance[]
+  phase        Phase         @relation(fields: [phaseId], references: [id])
+  specialty    Specialty?    @relation(fields: [specialtyId], references: [id])
+  eloRole      EloRole?     @relation(fields: [eloRoleId], references: [id])
+  instances    TaskInstance[]
+  checklistItems ChecklistItem[]
 
   @@index([phaseId])
 }
@@ -158,11 +250,16 @@ model TaskInstance {
   taskTemplateId  String
   localityId      String
   meetingId       String?
+  eloRoleId       String?
   dueDate         DateTime
   status          TaskStatus
   priority        TaskPriority
   progressPercent Int
   assignedToId    String?
+  assignedEloId   String?
+  assigneeType    TaskAssigneeType?
+  externalAssigneeName String?
+  externalAssigneeRole String?
   reportRequired  Boolean
   blockedByIdsJson Json?
   createdAt       DateTime      @default(now())
@@ -171,19 +268,36 @@ model TaskInstance {
   taskTemplate    TaskTemplate  @relation(fields: [taskTemplateId], references: [id])
   locality        Locality      @relation(fields: [localityId], references: [id])
   meeting         Meeting?      @relation(fields: [meetingId], references: [id])
+  eloRole         EloRole?      @relation(fields: [eloRoleId], references: [id])
   assignedTo      User?         @relation("TaskAssignee", fields: [assignedToId], references: [id])
+  assignedElo     Elo?          @relation("TaskAssigneeElo", fields: [assignedEloId], references: [id])
   reports         Report[]
+  comments        TaskComment[]
+  commentReads    TaskCommentRead[]
 
   @@index([localityId])
   @@index([localityId, dueDate, status])
   @@index([meetingId])
+  @@index([eloRoleId])
+  @@index([assignedEloId])
+}
+
+model Posto {
+  id         String   @id @default(cuid())
+  code       String   @unique  // ex: SGT, CAP, SOLD
+  name       String   // ex: Sargento, Capitão, Soldado
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
 model Meeting {
   id              String        @id @default(cuid())
   datetime        DateTime
-  scope           MeetingScope
+  scope           String        @default("")  // texto livre: o que será tratado na reunião
   status          MeetingStatus
+  meetingType     MeetingType   @default(PRESENCIAL)
+  meetingLink     String?
   agenda          String?
   localityId      String?
   participantsJson Json?
@@ -191,8 +305,22 @@ model Meeting {
   updatedAt       DateTime      @updatedAt
 
   locality        Locality?     @relation(fields: [localityId], references: [id])
+  participants    MeetingParticipant[]
   tasks           TaskInstance[]
   decisions       MeetingDecision[]
+}
+
+model MeetingParticipant {
+  id        String   @id @default(cuid())
+  meetingId String
+  userId    String
+
+  meeting   Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([meetingId, userId])
+  @@index([meetingId])
+  @@index([userId])
 }
 
 model MeetingDecision {
@@ -211,10 +339,97 @@ model Report {
   taskInstanceId String
   fileName       String
   fileUrl        String
+  storageKey     String?
+  mimeType       String?
+  fileSize       Int?
+  checksum       String?
   approved       Boolean      @default(false)
   createdAt      DateTime     @default(now())
 
   taskInstance   TaskInstance @relation(fields: [taskInstanceId], references: [id])
+}
+
+model TaskComment {
+  id             String   @id @default(cuid())
+  taskInstanceId String
+  authorId       String
+  text           String
+  createdAt      DateTime @default(now())
+
+  taskInstance   TaskInstance @relation(fields: [taskInstanceId], references: [id], onDelete: Cascade)
+  author         User         @relation("TaskCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([taskInstanceId, createdAt])
+  @@index([authorId])
+}
+
+model TaskCommentRead {
+  id             String   @id @default(cuid())
+  taskInstanceId String
+  userId         String
+  seenAt         DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  taskInstance   TaskInstance @relation(fields: [taskInstanceId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([taskInstanceId, userId])
+  @@index([userId, seenAt])
+}
+
+model ActivityComment {
+  id         String   @id @default(cuid())
+  activityId String
+  authorId   String
+  text       String
+  createdAt  DateTime @default(now())
+
+  activity   Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  author     User     @relation("ActivityCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([activityId, createdAt])
+  @@index([authorId])
+}
+
+model ActivityCommentRead {
+  id         String   @id @default(cuid())
+  activityId String
+  userId     String
+  seenAt     DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  activity   Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([activityId, userId])
+  @@index([userId, seenAt])
+}
+
+model Kpi {
+  id         String         @id @default(cuid())
+  key        String         @unique
+  label      String
+  visibility KpiVisibility  @default(DEFAULT)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  values     KpiValue[]
+}
+
+model KpiValue {
+  id          String      @id @default(cuid())
+  kpiId       String
+  date        DateTime
+  value       Float
+  localityId  String?
+  specialtyId String?
+  createdAt   DateTime    @default(now())
+
+  kpi         Kpi         @relation(fields: [kpiId], references: [id], onDelete: Cascade)
+  locality    Locality?   @relation(fields: [localityId], references: [id])
+  specialty   Specialty?  @relation(fields: [specialtyId], references: [id])
+
+  @@index([kpiId, date])
 }
 
 model Notice {
@@ -240,11 +455,13 @@ model Checklist {
   title       String
   phaseId     String?
   specialtyId String?
+  eloRoleId   String?     // Elo responsável por acompanhar este checklist (ex: Psicologia)
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
   phase       Phase?      @relation(fields: [phaseId], references: [id])
-  specialty   Specialty? @relation(fields: [specialtyId], references: [id])
+  specialty   Specialty?  @relation(fields: [specialtyId], references: [id])
+  eloRole     EloRole?    @relation(fields: [eloRoleId], references: [id])
   items       ChecklistItem[]
 }
 
@@ -278,21 +495,38 @@ model ChecklistItemStatus {
   @@index([localityId])
 }
 
+model EloRole {
+  id        String   @id @default(cuid())
+  code      String   @unique  // ex: PSICOLOGIA, SSO, JURIDICO, CPCA, GRAD_MASTER
+  name      String   // ex: Psicologia, SSO, Jurídico
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  elos            Elo[]
+  taskInstances   TaskInstance[]
+  taskTemplates   TaskTemplate[]
+  users           User[]
+  checklists      Checklist[]
+}
+
 model Elo {
-  id         String      @id @default(cuid())
+  id         String   @id @default(cuid())
   localityId String
-  roleType   EloRoleType
+  eloRoleId  String
   name       String
   rank       String?
   phone      String?
   email      String?
   om         String?
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  locality   Locality    @relation(fields: [localityId], references: [id])
+  locality  Locality  @relation(fields: [localityId], references: [id])
+  eloRole   EloRole   @relation(fields: [eloRoleId], references: [id])
+  assignedTasks TaskInstance[] @relation("TaskAssigneeElo")
 
-  @@index([localityId, roleType])
+  @@index([localityId, eloRoleId])
 }
 
 model RecruitsHistory {
@@ -340,21 +574,33 @@ enum TaskPriority {
   LOW
 }
 
+enum TaskAssigneeType {
+  USER
+  ELO
+  LOCALITY_COMMAND
+  LOCALITY_COMMANDER
+}
+
 enum PhaseName {
   PREPARACAO
   EXECUCAO
   ACOMPANHAMENTO
 }
 
-enum MeetingScope {
-  NATIONAL
-  LOCALITY
+enum MeetingType {
+  ONLINE
+  PRESENCIAL
 }
 
 enum MeetingStatus {
   PLANNED
   HELD
   CANCELLED
+}
+
+enum KpiVisibility {
+  DEFAULT
+  EXECUTIVE
 }
 
 enum NoticePriority {
@@ -369,18 +615,17 @@ enum ChecklistItemStatusType {
   DONE
 }
 
-enum EloRoleType {
-  PSICOLOGIA
-  SSO
-  JURIDICO
-  CPCA
-  GRAD_MASTER
-}
-
 enum PermissionScope {
   NATIONAL
   LOCALITY
   SPECIALTY
   LOCALITY_SPECIALTY
   OWN
+}
+
+enum ActivityStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  DONE
+  CANCELLED
 }

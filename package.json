@@ -1,6 +1,9 @@
 {
   "name": "smif-gestao",
   "private": true,
+  "engines": {
+    "node": "^20.19 || ^22.12 || >=24.0"
+  },
   "workspaces": [
     "backend",
     "frontend"
@@ -8,11 +11,13 @@
   "scripts": {
     "dev:backend": "npm --prefix backend run start:dev",
     "dev:frontend": "npm --prefix frontend run dev",
-    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev": "npx concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "install:all": "npm install --workspaces",
     "prisma:migrate": "npm --prefix backend run prisma:migrate",
     "prisma:generate": "npm --prefix backend run prisma:generate",
     "seed:demo": "npm --prefix backend run seed:demo",
+    "run:all": "bash scripts/run-all.sh",
+    "run:all:prod": "bash scripts/run-all.sh --prod",
     "test": "npm --prefix backend run test",
     "e2e": "playwright test",
     "lint": "npm --prefix backend run lint && npm --prefix frontend run lint",

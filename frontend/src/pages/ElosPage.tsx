@@ -11,7 +11,7 @@ import {
 } from '@mui/material';
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useCreateElo, useDeleteElo, useElos, useLocalities, useUpdateElo, useMe } from '../api/hooks';
+import { useCreateElo, useDeleteElo, useEloRoles, useElos, useLocalities, useUpdateElo, useMe } from '../api/hooks';
 import { FiltersBar } from '../components/filters/FiltersBar';
 import { EmptyState } from '../components/states/EmptyState';
 import { ErrorState } from '../components/states/ErrorState';
@@ -19,7 +19,6 @@ import { SkeletonState } from '../components/states/SkeletonState';
 import { useToast } from '../app/toast';
 import { parseApiError } from '../app/apiErrors';
 import { can } from '../app/rbac';
-import { EloRoleType } from '../constants/enums';
 
 export function ElosPage() {
   const [params, setParams] = useSearchParams();
@@ -37,8 +36,20 @@ export function ElosPage() {
   );
 
   const elosQuery = useElos(filters);
+  const elosAllQuery = useElos({}); // para montar mapa graduado master por localidade
   const localitiesQuery = useLocalities();
+  const eloRolesQuery = useEloRoles();
   const createElo = useCreateElo();
+
+  const gradMasterByLocalityId = useMemo(() => {
+    const map = new Map<string, string>();
+    (elosAllQuery.data?.items ?? []).forEach((elo: any) => {
+      if (elo.eloRole?.code === 'GRAD_MASTER' && elo.localityId) map.set(elo.localityId, elo.name ?? '');
+    });
+    return map;
+  }, [elosAllQuery.data?.items]);
+
+  const eloRoles = eloRolesQuery.data?.items ?? [];
   const updateElo = useUpdateElo();
   const deleteElo = useDeleteElo();
 
@@ -46,7 +57,7 @@ export function ElosPage() {
   const [editing, setEditing] = useState<any | null>(null);
   const [form, setForm] = useState({
     localityId: '',
-    roleType: 'PSICOLOGIA',
+    eloRoleId: '',
     name: '',
     rank: '',
     phone: '',
@@ -67,7 +78,7 @@ export function ElosPage() {
     setEditing(null);
     setForm({
       localityId: '',
-      roleType: 'PSICOLOGIA',
+      eloRoleId: eloRoles[0]?.id ?? '',
       name: '',
       rank: '',
       phone: '',
@@ -81,7 +92,7 @@ export function ElosPage() {
     setEditing(elo);
     setForm({
       localityId: elo.localityId,
-      roleType: elo.roleType,
+      eloRoleId: elo.eloRoleId ?? elo.eloRole?.id ?? '',
       name: elo.name ?? '',
       rank: elo.rank ?? '',
       phone: elo.phone ?? '',
@@ -95,7 +106,7 @@ export function ElosPage() {
     try {
       const payload = {
         localityId: form.localityId,
-        roleType: form.roleType,
+        eloRoleId: form.eloRoleId,
         name: form.name,
         rank: form.rank || null,
         phone: form.phone || null,
@@ -156,15 +167,15 @@ export function ElosPage() {
             <TextField
               select
               size="small"
-              label="Role"
+              label="Tipo de elo"
               value={roleType}
               onChange={(e) => updateParam('roleType', e.target.value)}
               sx={{ minWidth: 180 }}
             >
               <MenuItem value="">Todos</MenuItem>
-              {EloRoleType.map((role) => (
-                <MenuItem key={role} value={role}>
-                  {role}
+              {eloRoles.map((r: any) => (
+                <MenuItem key={r.id} value={r.code}>
+                  {r.name}
                 </MenuItem>
               ))}
             </TextField>
@@ -182,7 +193,7 @@ export function ElosPage() {
             <Box component="table" width="100%" sx={{ borderCollapse: 'collapse' }}>
               <Box component="thead">
                 <Box component="tr">
-                  {['Localidade', 'Role', 'Nome', 'OM', 'Telefone', 'Email', 'Ações'].map((header) => (
+                  {['Localidade', 'Graduado Master', 'Papel', 'Nome', 'OM', 'Telefone', 'Email', 'Ações'].map((header) => (
                     <Box key={header} component="th" sx={{ textAlign: 'left', pb: 1 }}>
                       {header}
                     </Box>
@@ -196,7 +207,10 @@ export function ElosPage() {
                       {elo.locality?.name ?? elo.localityId}
                     </Box>
                     <Box component="td" sx={{ py: 1 }}>
-                      {elo.roleType}
+                      {gradMasterByLocalityId.get(elo.localityId) ?? '—'}
+                    </Box>
+                    <Box component="td" sx={{ py: 1 }}>
+                      {elo.eloRole?.name ?? elo.eloRole?.code ?? '—'}
                     </Box>
                     <Box component="td" sx={{ py: 1 }}>
                       {elo.name}
@@ -249,13 +263,14 @@ export function ElosPage() {
           <TextField
             select
             size="small"
-            label="Role"
-            value={form.roleType}
-            onChange={(e) => setForm({ ...form, roleType: e.target.value })}
+            label="Tipo de elo"
+            value={form.eloRoleId}
+            onChange={(e) => setForm({ ...form, eloRoleId: e.target.value })}
+            fullWidth
           >
-            {EloRoleType.map((role) => (
-              <MenuItem key={role} value={role}>
-                {role}
+            {eloRoles.map((r: any) => (
+              <MenuItem key={r.id} value={r.id}>
+                {r.name} ({r.code})
               </MenuItem>
             ))}
           </TextField>

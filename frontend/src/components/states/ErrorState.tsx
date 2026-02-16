@@ -9,7 +9,7 @@ export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () =>
         Algo deu errado
       </Typography>
       <Typography variant="body2" color="text.secondary" gutterBottom>
-        {payload.message ?? 'Nao foi possivel carregar os dados.'}
+        {payload.message ?? 'Não foi possível carregar os dados.'}
       </Typography>
       {onRetry && (
         <Button variant="outlined" onClick={onRetry}>

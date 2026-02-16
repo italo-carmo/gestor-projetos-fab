@@ -20,19 +20,33 @@ export class AuthService {
     private readonly audit: AuditService,
   ) {}
 
-  async validateUser(email: string, password: string) {
-    const user = await this.users.findByEmail(email);
-    if (!user || !user.isActive) return null;
+  async login(email: string, password: string) {
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = await this.users.findByEmail(normalizedEmail);
+    if (!user || !user.isActive) throwError('AUTH_INVALID_CREDENTIALS');
+
+    if (user.lockUntil && user.lockUntil.getTime() > Date.now()) {
+      throwError('AUTH_LOCKED', { until: user.lockUntil.toISOString() });
+    }
 
     const ok = await bcrypt.compare(password, user.passwordHash);
-    if (!ok) return null;
+    if (!ok) {
+      const nextCount = (user.loginFailedCount ?? 0) + 1;
+      const shouldLock = nextCount >= 5;
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          loginFailedCount: nextCount,
+          lockUntil: shouldLock ? new Date(Date.now() + 15 * 60 * 1000) : null,
+        },
+      });
+      throwError('AUTH_INVALID_CREDENTIALS');
+    }
 
-    return user;
-  }
-
-  async login(email: string, password: string) {
-    const user = await this.validateUser(email, password);
-    if (!user) throwError('AUTH_INVALID_CREDENTIALS');
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { loginFailedCount: 0, lockUntil: null },
+    });
 
     const tokens = await this.issueTokens(user.id, user.email);
     const role = user.roles[0]?.role
@@ -93,10 +107,33 @@ export class AuthService {
       {
         secret: this.config.get<string>('JWT_ACCESS_SECRET'),
         expiresIn: this.config.get<string>('JWT_ACCESS_TTL') ?? '900s',
-      },
+      } as any,
     );
 
-    return { accessToken };
+    const newRefreshId = await this.prisma.refreshToken.create({
+      data: {
+        userId: stored.userId,
+        tokenHash: 'pending',
+        expiresAt: new Date(Date.now() + this.getRefreshTtlMs()),
+      },
+      select: { id: true },
+    });
+
+    const refreshPayload: JwtRefreshPayload = { sub: stored.userId, jti: newRefreshId.id };
+    const newRefreshToken = await this.jwt.signAsync(refreshPayload, {
+      secret: this.config.get<string>('JWT_REFRESH_SECRET'),
+      expiresIn: this.config.get<string>('JWT_REFRESH_TTL') ?? '7d',
+    } as any);
+
+    const tokenHash = await bcrypt.hash(newRefreshToken, REFRESH_TOKEN_SALT_ROUNDS);
+    await this.prisma.refreshToken.update({
+      where: { id: newRefreshId.id },
+      data: { tokenHash },
+    });
+
+    await this.prisma.refreshToken.delete({ where: { id: stored.id } });
+
+    return { accessToken, refreshToken: newRefreshToken };
   }
 
   async me(userId: string) {
@@ -121,6 +158,7 @@ export class AuthService {
       email: user.email,
       name: user.name,
       executive_hide_pii: executiveFlag,
+      elo_role_id: (user as any).eloRoleId ?? null,
       permissions,
       scopes: [],
       flags: {
@@ -134,7 +172,7 @@ export class AuthService {
     const accessToken = await this.jwt.signAsync(accessPayload, {
       secret: this.config.get<string>('JWT_ACCESS_SECRET'),
       expiresIn: this.config.get<string>('JWT_ACCESS_TTL') ?? '900s',
-    });
+    } as any);
 
     const refreshId = await this.prisma.refreshToken.create({
       data: {
@@ -149,7 +187,7 @@ export class AuthService {
     const refreshToken = await this.jwt.signAsync(refreshPayload, {
       secret: this.config.get<string>('JWT_REFRESH_SECRET'),
       expiresIn: this.config.get<string>('JWT_REFRESH_TTL') ?? '7d',
-    });
+    } as any);
 
     const tokenHash = await bcrypt.hash(refreshToken, REFRESH_TOKEN_SALT_ROUNDS);
     await this.prisma.refreshToken.update({

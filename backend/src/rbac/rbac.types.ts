@@ -11,6 +11,7 @@ export type RbacUser = {
   email: string;
   localityId?: string | null;
   specialtyId?: string | null;
+  eloRoleId?: string | null;
   executiveHidePii: boolean;
   roles: {
     id: string;

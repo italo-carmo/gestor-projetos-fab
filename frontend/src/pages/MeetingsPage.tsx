@@ -1,4 +1,5 @@
 import {
+  Autocomplete,
   Box,
   Button,
   Card,
@@ -14,13 +15,18 @@ import {
   StepLabel,
   Stepper,
   Tab,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
   Tabs,
   TextField,
   Typography,
 } from '@mui/material';
 import { addDays, endOfMonth, format, startOfMonth, startOfWeek } from 'date-fns';
-import { useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   useAddMeetingDecision,
   useCreateMeeting,
@@ -30,8 +36,11 @@ import {
   usePhases,
   useSpecialties,
   useTaskTemplates,
+  useTasks,
   useUpdateMeeting,
+  useUpdateTaskMeeting,
   useMe,
+  useUsers,
 } from '../api/hooks';
 import { FiltersBar } from '../components/filters/FiltersBar';
 import { EmptyState } from '../components/states/EmptyState';
@@ -40,12 +49,17 @@ import { SkeletonState } from '../components/states/SkeletonState';
 import { useToast } from '../app/toast';
 import { parseApiError } from '../app/apiErrors';
 import { can } from '../app/rbac';
-import { MeetingScope, MeetingStatus, TaskPriority } from '../constants/enums';
+import { MeetingStatus, MEETING_STATUS_LABELS, MeetingType, MEETING_TYPE_LABELS, TaskPriority, TASK_PRIORITY_LABELS } from '../constants/enums';
 
-const statusColors: Record<string, string> = {
-  PLANNED: '#E8F2FF',
-  HELD: '#E8F8EF',
-  CANCELLED: '#FFE7E9',
+const STATUS_BG: Record<string, string> = {
+  PLANNED: '#E3F2FD',
+  HELD: '#E8F5E9',
+  CANCELLED: '#FFEBEE',
+};
+const STATUS_CHIP_COLOR: Record<string, 'default' | 'primary' | 'success' | 'error'> = {
+  PLANNED: 'primary',
+  HELD: 'success',
+  CANCELLED: 'error',
 };
 
 export function MeetingsPage() {
@@ -55,24 +69,27 @@ export function MeetingsPage() {
   const { data: me } = useMe();
 
   const status = params.get('status') ?? '';
-  const scope = params.get('scope') ?? '';
+  const scopeSearch = params.get('scope') ?? '';
   const localityId = params.get('localityId') ?? '';
   const from = params.get('from') ?? '';
   const to = params.get('to') ?? '';
+  const meetingIdFromUrl = params.get('meetingId') ?? '';
 
   const filters = useMemo(
     () => ({
       status: status || undefined,
-      scope: scope || undefined,
+      scope: scopeSearch || undefined,
       localityId: localityId || undefined,
       from: from || undefined,
       to: to || undefined,
     }),
-    [status, scope, localityId, from, to],
+    [status, scopeSearch, localityId, from, to],
   );
 
   const meetingsQuery = useMeetings(filters);
   const localitiesQuery = useLocalities();
+  const usersQuery = useUsers();
+  const users = usersQuery.data?.items ?? [];
   const phasesQuery = usePhases();
   const specialtiesQuery = useSpecialties();
   const templatesQuery = useTaskTemplates();
@@ -81,19 +98,25 @@ export function MeetingsPage() {
   const updateMeeting = useUpdateMeeting();
   const addDecision = useAddMeetingDecision();
   const generateTasks = useGenerateMeetingTasks();
+  const updateTaskMeeting = useUpdateTaskMeeting();
+  const tasksQuery = useTasks({ pageSize: '200' });
+  const allTasks = tasksQuery.data?.items ?? [];
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedMeeting, setSelectedMeeting] = useState<any | null>(null);
   const [form, setForm] = useState({
     datetime: '',
-    scope: 'NATIONAL',
+    scope: '',
     status: 'PLANNED',
+    meetingType: 'PRESENCIAL',
+    meetingLink: '',
     localityId: '',
     agenda: '',
-    participantsText: '',
+    participantIds: [] as string[],
   });
 
   const [decisionText, setDecisionText] = useState('');
+  const [linkTaskValue, setLinkTaskValue] = useState<any | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [wizardStep, setWizardStep] = useState(0);
   const [wizardPayload, setWizardPayload] = useState<any>({
@@ -110,6 +133,35 @@ export function MeetingsPage() {
     localities: [] as { localityId: string; dueDate: string }[],
   });
 
+  useEffect(() => {
+    if (meetingIdFromUrl && meetingsQuery.data?.items?.length) {
+      const meeting = meetingsQuery.data.items.find((m: any) => m.id === meetingIdFromUrl);
+      if (meeting) {
+        setSelectedMeeting(meeting);
+        setLinkTaskValue(null);
+        setDrawerOpen(true);
+      }
+    }
+  }, [meetingIdFromUrl, meetingsQuery.data?.items]);
+
+  useEffect(() => {
+    if (!drawerOpen || !selectedMeeting?.id || !meetingsQuery.data?.items) return;
+    const found = meetingsQuery.data.items.find((m: any) => m.id === selectedMeeting.id);
+    if (found) setSelectedMeeting(found);
+  }, [drawerOpen, selectedMeeting?.id, meetingsQuery.data?.items]);
+
+  const calendarDays = useMemo(() => {
+    const start = startOfWeek(startOfMonth(new Date()), { weekStartsOn: 1 });
+    const end = endOfMonth(new Date());
+    const days = [];
+    let current = start;
+    while (current <= end) {
+      days.push(current);
+      current = addDays(current, 1);
+    }
+    return days;
+  }, []);
+
   const updateParam = (key: string, value: string) => {
     const next = new URLSearchParams(params);
     if (value) next.set(key, value);
@@ -123,46 +175,44 @@ export function MeetingsPage() {
     setSelectedMeeting(null);
     setForm({
       datetime: '',
-      scope: 'NATIONAL',
+      scope: '',
       status: 'PLANNED',
+      meetingType: 'PRESENCIAL',
+      meetingLink: '',
       localityId: '',
       agenda: '',
-      participantsText: '',
+      participantIds: [],
     });
     setDrawerOpen(true);
   };
 
   const openEdit = (meeting: any) => {
     setSelectedMeeting(meeting);
+    setLinkTaskValue(null);
     setForm({
       datetime: meeting.datetime ? meeting.datetime.slice(0, 16) : '',
-      scope: meeting.scope ?? 'NATIONAL',
+      scope: meeting.scope ?? '',
       status: meeting.status ?? 'PLANNED',
+      meetingType: meeting.meetingType ?? 'PRESENCIAL',
+      meetingLink: meeting.meetingLink ?? '',
       localityId: meeting.localityId ?? '',
       agenda: meeting.agenda ?? '',
-      participantsText: meeting.participantsJson ? JSON.stringify(meeting.participantsJson, null, 2) : '',
+      participantIds: (meeting.participants ?? []).map((p: any) => p.user?.id ?? p.userId).filter(Boolean),
     });
     setDrawerOpen(true);
   };
 
   const handleSave = async () => {
     try {
-      let participantsJson: any = null;
-      if (form.participantsText) {
-        try {
-          participantsJson = JSON.parse(form.participantsText);
-        } catch {
-          toast.push({ message: 'JSON de participantes inválido', severity: 'warning' });
-          return;
-        }
-      }
       const payload = {
         datetime: new Date(form.datetime).toISOString(),
-        scope: form.scope,
+        scope: form.scope.trim(),
         status: form.status,
-        localityId: form.localityId || null,
-        agenda: form.agenda,
-        participantsJson,
+        meetingType: form.meetingType,
+        meetingLink: form.meetingType === 'ONLINE' ? form.meetingLink.trim() || null : null,
+        localityId: form.meetingType === 'PRESENCIAL' ? form.localityId || null : null,
+        agenda: form.agenda || null,
+        participantIds: form.participantIds,
       };
       if (selectedMeeting) {
         await updateMeeting.mutateAsync({ id: selectedMeeting.id, payload });
@@ -248,21 +298,12 @@ export function MeetingsPage() {
   const meetings = meetingsQuery.data?.items ?? [];
   const localities = localitiesQuery.data?.items ?? [];
 
-  const calendarDays = useMemo(() => {
-    const start = startOfWeek(startOfMonth(new Date()), { weekStartsOn: 1 });
-    const end = endOfMonth(new Date());
-    const days = [];
-    let current = start;
-    while (current <= end) {
-      days.push(current);
-      current = addDays(current, 1);
-    }
-    return days;
-  }, []);
-
   const canCreate = can(me, 'meetings', 'create');
   const canUpdate = can(me, 'meetings', 'update');
   const canGenerate = can(me, 'tasks', 'generate_from_meeting');
+
+  const getTaskOptionLabel = (t: any) =>
+    (t.taskTemplate?.title ?? t.title ?? 'Tarefa') + ' - ' + format(new Date(t.dueDate), 'dd/MM/yyyy');
 
   return (
     <Box>
@@ -295,25 +336,18 @@ export function MeetingsPage() {
               <MenuItem value="">Todos</MenuItem>
               {MeetingStatus.map((s) => (
                 <MenuItem key={s} value={s}>
-                  {s}
+                  {MEETING_STATUS_LABELS[s] ?? s}
                 </MenuItem>
               ))}
             </TextField>
             <TextField
-              select
               size="small"
-              label="Escopo"
-              value={scope}
+              label="Escopo (texto)"
+              value={scopeSearch}
               onChange={(e) => updateParam('scope', e.target.value)}
-              sx={{ minWidth: 160 }}
-            >
-              <MenuItem value="">Todos</MenuItem>
-              {MeetingScope.map((s) => (
-                <MenuItem key={s} value={s}>
-                  {s}
-                </MenuItem>
-              ))}
-            </TextField>
+              placeholder="O que será tratado"
+              sx={{ minWidth: 200 }}
+            />
             <TextField
               size="small"
               type="date"
@@ -335,7 +369,8 @@ export function MeetingsPage() {
       </Card>
 
       <Tabs value={tab} onChange={(_, value) => setTab(value)} sx={{ mb: 2 }}>
-        <Tab label="Cards" />
+        <Tab label="Cartões" />
+        <Tab label="Linhas" />
         <Tab label="Calendário" />
       </Tabs>
 
@@ -344,16 +379,30 @@ export function MeetingsPage() {
       {meetings.length > 0 && tab === 0 && (
         <Box display="grid" gridTemplateColumns={{ xs: '1fr', md: 'repeat(3, 1fr)' }} gap={2}>
           {meetings.map((meeting: any) => (
-            <Card key={meeting.id} variant="outlined" sx={{ background: statusColors[meeting.status] ?? '#F5F8FC' }}>
+            <Card
+              key={meeting.id}
+              variant="outlined"
+              sx={{
+                background: STATUS_BG[meeting.status] ?? '#F5F8FC',
+                borderLeft: `4px solid ${meeting.status === 'PLANNED' ? '#1976d2' : meeting.status === 'HELD' ? '#2e7d32' : '#c62828'}`,
+              }}
+            >
               <CardContent>
                 <Stack spacing={1}>
                   <Typography variant="subtitle1">{format(new Date(meeting.datetime), 'dd/MM/yyyy HH:mm')}</Typography>
-                  <Chip size="small" label={meeting.status} />
+                  <Chip
+                    size="small"
+                    label={MEETING_STATUS_LABELS[meeting.status] ?? meeting.status}
+                    color={STATUS_CHIP_COLOR[meeting.status] ?? 'default'}
+                  />
+                  <Typography variant="body2" color="text.secondary">
+                    {meeting.scope || 'Sem escopo'}
+                  </Typography>
                   <Typography variant="body2" color="text.secondary">
                     {meeting.agenda ?? 'Sem pauta'}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    {meeting.locality?.name ?? 'Brasil'}
+                    {meeting.meetingType === 'ONLINE' ? 'Online' : meeting.locality?.name ?? '—'}
                   </Typography>
                   <Button variant="text" onClick={() => openEdit(meeting)}>
                     Ver detalhes
@@ -365,7 +414,57 @@ export function MeetingsPage() {
         </Box>
       )}
 
-      {tab === 1 && (
+      {meetings.length > 0 && tab === 1 && (
+        <Card>
+          <CardContent sx={{ overflow: 'auto' }}>
+            <Table size="small">
+              <TableHead>
+                <TableRow sx={{ borderBottom: 2, borderColor: 'divider' }}>
+                  <TableCell sx={{ fontWeight: 600 }}>Data/Hora</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>Escopo</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>Tipo</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>Local/Link</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>Ações</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {meetings.map((meeting: any) => (
+                  <TableRow
+                    key={meeting.id}
+                    hover
+                    sx={{ cursor: 'pointer' }}
+                    onClick={() => openEdit(meeting)}
+                  >
+                    <TableCell>{format(new Date(meeting.datetime), 'dd/MM/yyyy HH:mm')}</TableCell>
+                    <TableCell>
+                      <Chip
+                        size="small"
+                        label={MEETING_STATUS_LABELS[meeting.status] ?? meeting.status}
+                        color={STATUS_CHIP_COLOR[meeting.status] ?? 'default'}
+                      />
+                    </TableCell>
+                    <TableCell sx={{ maxWidth: 280 }} title={meeting.scope}>
+                      <Typography variant="body2" noWrap>{meeting.scope || '—'}</Typography>
+                    </TableCell>
+                    <TableCell>{MEETING_TYPE_LABELS[meeting.meetingType] ?? meeting.meetingType}</TableCell>
+                    <TableCell sx={{ maxWidth: 200 }}>
+                      <Typography variant="body2" noWrap>
+                        {meeting.meetingType === 'ONLINE' ? (meeting.meetingLink || '—') : (meeting.locality?.name ?? '—')}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Button size="small" onClick={(e) => { e.stopPropagation(); openEdit(meeting); }}>Detalhes</Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
+      {tab === 2 && (
         <Card>
           <CardContent>
             <Box display="grid" gridTemplateColumns="repeat(7, 1fr)" gap={1}>
@@ -383,9 +482,13 @@ export function MeetingsPage() {
                         <Chip
                           key={meeting.id}
                           size="small"
-                          label={meeting.scope}
+                          label={meeting.scope || MEETING_STATUS_LABELS[meeting.status]}
                           onClick={() => openEdit(meeting)}
-                          sx={{ cursor: 'pointer' }}
+                          sx={{
+                            cursor: 'pointer',
+                            bgcolor: STATUS_BG[meeting.status],
+                            borderLeft: `3px solid ${meeting.status === 'PLANNED' ? '#1976d2' : meeting.status === 'HELD' ? '#2e7d32' : '#c62828'}`,
+                          }}
                         />
                       ))}
                     </Stack>
@@ -410,19 +513,15 @@ export function MeetingsPage() {
             disabled={Boolean(selectedMeeting) && !canUpdate}
           />
           <TextField
-            select
             size="small"
-            label="Escopo"
+            label="Escopo (o que será tratado)"
             value={form.scope}
             onChange={(e) => setForm({ ...form, scope: e.target.value })}
+            placeholder="Ex.: Alinhamento de fases, checklist de preparação"
+            multiline
+            minRows={2}
             disabled={Boolean(selectedMeeting) && !canUpdate}
-          >
-            {MeetingScope.map((s) => (
-              <MenuItem key={s} value={s}>
-                {s}
-              </MenuItem>
-            ))}
-          </TextField>
+          />
           <TextField
             select
             size="small"
@@ -433,25 +532,51 @@ export function MeetingsPage() {
           >
             {MeetingStatus.map((s) => (
               <MenuItem key={s} value={s}>
-                {s}
+                {MEETING_STATUS_LABELS[s] ?? s}
               </MenuItem>
             ))}
           </TextField>
           <TextField
             select
             size="small"
-            label="Localidade"
-            value={form.localityId}
-            onChange={(e) => setForm({ ...form, localityId: e.target.value })}
+            label="Tipo"
+            value={form.meetingType}
+            onChange={(e) => setForm({ ...form, meetingType: e.target.value })}
             disabled={Boolean(selectedMeeting) && !canUpdate}
           >
-            <MenuItem value="">Brasil</MenuItem>
-            {localities.map((l: any) => (
-              <MenuItem key={l.id} value={l.id}>
-                {l.name}
+            {MeetingType.map((t) => (
+              <MenuItem key={t} value={t}>
+                {MEETING_TYPE_LABELS[t] ?? t}
               </MenuItem>
             ))}
           </TextField>
+          {form.meetingType === 'PRESENCIAL' && (
+            <TextField
+              select
+              size="small"
+              label="Localidade"
+              value={form.localityId}
+              onChange={(e) => setForm({ ...form, localityId: e.target.value })}
+              disabled={Boolean(selectedMeeting) && !canUpdate}
+            >
+              <MenuItem value="">Selecione</MenuItem>
+              {localities.map((l: any) => (
+                <MenuItem key={l.id} value={l.id}>
+                  {l.name}
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
+          {form.meetingType === 'ONLINE' && (
+            <TextField
+              size="small"
+              label="Link da reunião"
+              value={form.meetingLink}
+              onChange={(e) => setForm({ ...form, meetingLink: e.target.value })}
+              placeholder="https://meet.google.com/..."
+              disabled={Boolean(selectedMeeting) && !canUpdate}
+            />
+          )}
           <TextField
             size="small"
             label="Pauta"
@@ -462,15 +587,21 @@ export function MeetingsPage() {
             disabled={Boolean(selectedMeeting) && !canUpdate}
           />
           <TextField
+            select
             size="small"
-            label="Participantes (JSON)"
-            value={form.participantsText}
-            onChange={(e) => setForm({ ...form, participantsText: e.target.value })}
-            multiline
-            minRows={3}
-            placeholder='[{"nome":"Fulano","papel":"Coordenação","om":"CIPAVD","contato":"(61) ..."}]'
+            label="Participantes"
+            SelectProps={{ multiple: true }}
+            value={form.participantIds}
+            onChange={(e) => setForm({ ...form, participantIds: e.target.value as string[] })}
             disabled={Boolean(selectedMeeting) && !canUpdate}
-          />
+            helperText="Usuários do sistema (logins existentes)"
+          >
+            {users.map((u: any) => (
+              <MenuItem key={u.id} value={u.id}>
+                {u.name ?? u.email} {u.email ? `(${u.email})` : ''}
+              </MenuItem>
+            ))}
+          </TextField>
           <Stack direction="row" spacing={1}>
             {(canCreate || canUpdate) && (
               <Button variant="contained" onClick={handleSave}>
@@ -492,20 +623,17 @@ export function MeetingsPage() {
               <Divider />
               <Typography variant="subtitle1">Participantes</Typography>
               <Stack spacing={1}>
-                {(selectedMeeting.participantsJson ?? []).length === 0 && (
+                {(selectedMeeting.participants ?? []).length === 0 && (
                   <Typography variant="body2" color="text.secondary">
-                    Nenhum participante registrado.
+                    Nenhum participante incluído.
                   </Typography>
                 )}
-                {(selectedMeeting.participantsJson ?? []).map((p: any, index: number) => (
-                  <Card key={`${p.name ?? 'p'}-${index}`} variant="outlined">
-                    <CardContent>
-                      <Typography variant="subtitle2">{p.nome ?? p.name ?? 'Participante'}</Typography>
+                {(selectedMeeting.participants ?? []).map((p: any) => (
+                  <Card key={p.id} variant="outlined">
+                    <CardContent sx={{ py: 1, '&:last-child': { pb: 1 } }}>
+                      <Typography variant="subtitle2">{p.user?.name ?? p.user?.email ?? 'Usuário'}</Typography>
                       <Typography variant="body2" color="text.secondary">
-                        {p.papel ?? p.role ?? '-'} · {p.om ?? '-'}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {p.contato ?? p.contact ?? '-'}
+                        {p.user?.email ?? ''}
                       </Typography>
                     </CardContent>
                   </Card>
@@ -539,19 +667,50 @@ export function MeetingsPage() {
               <Stack spacing={1}>
                 {(selectedMeeting.tasks ?? []).map((task: any) => (
                   <Card key={task.id} variant="outlined">
-                    <CardContent>
+                    <CardContent sx={{ py: 1, '&:last-child': { pb: 1 } }}>
                       <Typography variant="body2">{task.taskTemplate?.title ?? 'Tarefa'}</Typography>
-                      <Typography variant="caption" color="text.secondary">
+                      <Typography variant="caption" color="text.secondary" display="block">
                         {format(new Date(task.dueDate), 'dd/MM/yyyy')}
                       </Typography>
+                      <Button
+                        component={Link}
+                        to={`/tasks?taskId=${task.id}`}
+                        size="small"
+                        sx={{ mt: 0.5 }}
+                      >
+                        Ver tarefa →
+                      </Button>
                     </CardContent>
                   </Card>
                 ))}
-                {selectedMeeting.tasks?.length === 0 && (
+                {(selectedMeeting.tasks ?? []).length === 0 && (
                   <Typography variant="body2" color="text.secondary">
                     Nenhuma tarefa vinculada.
                   </Typography>
                 )}
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                  Vincular tarefa existente
+                </Typography>
+                <Autocomplete
+                  size="small"
+                  value={linkTaskValue}
+                  onChange={(_e, newValue: any) => {
+                    setLinkTaskValue(null);
+                    if (newValue) {
+                      updateTaskMeeting
+                        .mutateAsync({ id: newValue.id, meetingId: selectedMeeting.id })
+                        .then(() => toast.push({ message: 'Tarefa vinculada à reunião', severity: 'success' }))
+                        .catch((err) => toast.push({ message: parseApiError(err).message, severity: 'error' }));
+                    }
+                  }}
+                  options={allTasks.filter(
+                    (t: any) => !(selectedMeeting.tasks ?? []).some((linked: any) => linked.id === t.id),
+                  )}
+                  getOptionLabel={getTaskOptionLabel}
+                  renderInput={(params) => (
+                    <TextField {...params} label="Selecionar tarefa" placeholder="Buscar tarefa..." />
+                  )}
+                />
               </Stack>
             </>
           )}
@@ -562,7 +721,7 @@ export function MeetingsPage() {
         <Box p={3} display="flex" flexDirection="column" gap={2}>
           <Typography variant="h5">Gerar tarefas</Typography>
           <Stepper activeStep={wizardStep}>
-            {['Template', 'Localidades', 'Revisão'].map((label) => (
+            {['Modelo', 'Localidades', 'Revisão'].map((label) => (
               <Step key={label}>
                 <StepLabel>{label}</StepLabel>
               </Step>
@@ -574,7 +733,7 @@ export function MeetingsPage() {
               <TextField
                 select
                 size="small"
-                label="Template existente"
+                label="Modelo existente"
                 value={wizardPayload.templateId}
                 onChange={(e) => setWizardPayload({ ...wizardPayload, templateId: e.target.value })}
               >
@@ -694,7 +853,7 @@ export function MeetingsPage() {
               >
                 {TaskPriority.map((p) => (
                   <MenuItem key={p} value={p}>
-                    {p}
+                    {TASK_PRIORITY_LABELS[p] ?? p}
                   </MenuItem>
                 ))}
               </TextField>

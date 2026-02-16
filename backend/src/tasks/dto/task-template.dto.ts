@@ -15,6 +15,10 @@ export class TaskTemplateDto {
   @IsString()
   specialtyId?: string | null;
 
+  @IsOptional()
+  @IsString()
+  eloRoleId?: string | null;
+
   @IsBoolean()
   appliesToAllLocalities: boolean;
 

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, MeetingScope, MeetingStatus } from '@prisma/client';
+import { Prisma, MeetingStatus, MeetingType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { TasksService } from '../tasks/tasks.service';
 import { AuditService } from '../audit/audit.service';
@@ -27,7 +27,7 @@ export class MeetingsService {
   }, user?: RbacUser) {
     const where: Prisma.MeetingWhereInput = {};
     if (filters.status) where.status = filters.status as MeetingStatus;
-    if (filters.scope) where.scope = filters.scope as MeetingScope;
+    if (filters.scope) where.scope = { contains: filters.scope, mode: 'insensitive' };
     if (filters.localityId) where.localityId = filters.localityId;
     if (filters.from || filters.to) {
       where.datetime = {};
@@ -37,8 +37,9 @@ export class MeetingsService {
 
     const constraints = this.getScopeConstraints(user);
     if (constraints.localityId) {
+      const andArr = Array.isArray(where.AND) ? where.AND : (where.AND ? [where.AND] : []);
       where.AND = [
-        ...(where.AND ?? []),
+        ...andArr,
         {
           OR: [{ localityId: null }, { localityId: constraints.localityId }],
         },
@@ -53,6 +54,7 @@ export class MeetingsService {
         orderBy: { datetime: 'desc' },
         include: {
           locality: true,
+          participants: { include: { user: { select: { id: true, name: true, email: true } } } },
           decisions: true,
           tasks: {
             include: { taskTemplate: true },
@@ -72,23 +74,37 @@ export class MeetingsService {
     datetime: string;
     scope: string;
     status: string;
+    meetingType?: string;
+    meetingLink?: string | null;
     agenda?: string | null;
     localityId?: string | null;
-    participantsJson?: any[] | null;
+    participantIds?: string[];
   }, user?: RbacUser) {
-    if (payload.scope === MeetingScope.LOCALITY && !payload.localityId) {
-      throwError('VALIDATION_ERROR', { reason: 'LOCALITY_REQUIRED' });
+    const meetingType = (payload.meetingType as MeetingType) ?? MeetingType.PRESENCIAL;
+    if (meetingType === MeetingType.PRESENCIAL && !payload.localityId) {
+      throwError('VALIDATION_ERROR', { reason: 'LOCALITY_REQUIRED_FOR_PRESENCIAL' });
     }
-    this.assertScope(payload.scope as MeetingScope, payload.localityId ?? null, user);
+    if (meetingType === MeetingType.ONLINE && !payload.meetingLink?.trim()) {
+      throwError('VALIDATION_ERROR', { reason: 'MEETING_LINK_REQUIRED_FOR_ONLINE' });
+    }
+    this.assertLocality(payload.localityId ?? null, user);
 
     const created = await this.prisma.meeting.create({
       data: {
         datetime: new Date(payload.datetime),
-        scope: payload.scope as MeetingScope,
+        scope: sanitizeText(payload.scope ?? '') || '',
         status: payload.status as MeetingStatus,
+        meetingType,
+        meetingLink: payload.meetingLink?.trim() || null,
         agenda: payload.agenda ? sanitizeText(payload.agenda) : null,
         localityId: payload.localityId ?? null,
-        participantsJson: payload.participantsJson ?? null,
+        participants: payload.participantIds?.length
+          ? { create: payload.participantIds.map((userId) => ({ userId })) }
+          : undefined,
+      },
+      include: {
+        locality: true,
+        participants: { include: { user: { select: { id: true, name: true, email: true } } } },
       },
     });
 
@@ -108,29 +124,49 @@ export class MeetingsService {
     datetime?: string;
     scope?: string;
     status?: string;
+    meetingType?: string;
+    meetingLink?: string | null;
     agenda?: string | null;
     localityId?: string | null;
-    participantsJson?: any[] | null;
+    participantIds?: string[];
   }, user?: RbacUser) {
     const existing = await this.prisma.meeting.findUnique({ where: { id } });
     if (!existing) throwError('NOT_FOUND');
 
-    const scope = (payload.scope as MeetingScope | undefined) ?? existing.scope;
+    const meetingType = (payload.meetingType as MeetingType | undefined) ?? existing.meetingType;
     const localityId = payload.localityId ?? existing.localityId ?? null;
-    if (scope === MeetingScope.LOCALITY && !localityId) {
-      throwError('VALIDATION_ERROR', { reason: 'LOCALITY_REQUIRED' });
+    const meetingLink = payload.meetingLink !== undefined ? payload.meetingLink?.trim() || null : existing.meetingLink;
+
+    if (meetingType === MeetingType.PRESENCIAL && !localityId) {
+      throwError('VALIDATION_ERROR', { reason: 'LOCALITY_REQUIRED_FOR_PRESENCIAL' });
     }
-    this.assertScope(scope, localityId, user);
+    if (meetingType === MeetingType.ONLINE && !meetingLink) {
+      throwError('VALIDATION_ERROR', { reason: 'MEETING_LINK_REQUIRED_FOR_ONLINE' });
+    }
+    this.assertLocality(localityId, user);
+
+    if (payload.participantIds !== undefined) {
+      await this.prisma.meetingParticipant.deleteMany({ where: { meetingId: id } });
+    }
 
     const updated = await this.prisma.meeting.update({
       where: { id },
       data: {
         datetime: payload.datetime ? new Date(payload.datetime) : undefined,
-        scope: payload.scope ? (payload.scope as MeetingScope) : undefined,
+        scope: payload.scope !== undefined ? (sanitizeText(payload.scope) || '') : undefined,
         status: payload.status ? (payload.status as MeetingStatus) : undefined,
+        meetingType: payload.meetingType ? (payload.meetingType as MeetingType) : undefined,
+        meetingLink: payload.meetingLink !== undefined ? meetingLink : undefined,
         agenda: payload.agenda ? sanitizeText(payload.agenda) : payload.agenda === null ? null : undefined,
-        localityId,
-        participantsJson: payload.participantsJson ?? undefined,
+        localityId: payload.localityId !== undefined ? localityId : undefined,
+        participants:
+          payload.participantIds?.length
+            ? { create: payload.participantIds.map((userId) => ({ userId })) }
+            : undefined,
+      },
+      include: {
+        locality: true,
+        participants: { include: { user: { select: { id: true, name: true, email: true } } } },
       },
     });
 
@@ -149,7 +185,7 @@ export class MeetingsService {
   async addDecision(meetingId: string, text: string, user?: RbacUser) {
     const meeting = await this.prisma.meeting.findUnique({ where: { id: meetingId } });
     if (!meeting) throwError('NOT_FOUND');
-    this.assertScope(meeting.scope, meeting.localityId ?? null, user);
+    this.assertLocality(meeting.localityId ?? null, user);
 
     const created = await this.prisma.meetingDecision.create({
       data: {
@@ -183,7 +219,7 @@ export class MeetingsService {
   }, user?: RbacUser) {
     const meeting = await this.prisma.meeting.findUnique({ where: { id: meetingId } });
     if (!meeting) throwError('NOT_FOUND');
-    this.assertScope(meeting.scope, meeting.localityId ?? null, user);
+    this.assertLocality(meeting.localityId ?? null, user);
 
     let templateId = payload.templateId;
     if (!templateId) {
@@ -234,13 +270,10 @@ export class MeetingsService {
     };
   }
 
-  private assertScope(scope: MeetingScope, localityId: string | null, user?: RbacUser) {
+  private assertLocality(localityId: string | null, user?: RbacUser) {
     const constraints = this.getScopeConstraints(user);
     if (!constraints.localityId) return;
-    if (scope === MeetingScope.NATIONAL) {
-      throwError('RBAC_FORBIDDEN');
-    }
-    if (localityId !== constraints.localityId) {
+    if (localityId != null && localityId !== constraints.localityId) {
       throwError('RBAC_FORBIDDEN');
     }
   }

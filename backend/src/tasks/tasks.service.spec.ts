@@ -11,7 +11,10 @@ const prismaMock = {
 
 const auditMock = {
   log: jest.fn(),
-};
+  prisma: null,
+  truncateDiff: jest.fn(),
+  list: jest.fn(),
+} as any;
 
 describe('TasksService rules', () => {
   const service = new TasksService(prismaMock, auditMock);

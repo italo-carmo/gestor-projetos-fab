@@ -26,6 +26,10 @@
     "HELD",
     "CANCELLED"
   ],
+  "KpiVisibility": [
+    "DEFAULT",
+    "EXECUTIVE"
+  ],
   "NoticePriority": [
     "LOW",
     "MEDIUM",

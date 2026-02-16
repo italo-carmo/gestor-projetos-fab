@@ -1,10 +1,10 @@
 import { Controller, Get, Query, Res, UseGuards } from '@nestjs/common';
-import { Response } from 'express';
+import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RequirePermission } from '../rbac/require-permission.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
 import { CurrentUser } from '../common/current-user.decorator';
-import { RbacUser } from '../rbac/rbac.types';
+import type { RbacUser } from '../rbac/rbac.types';
 import { TasksService } from '../tasks/tasks.service';
 import { ChecklistsService } from '../checklists/checklists.service';
 
@@ -41,7 +41,9 @@ export class ExportsController {
       'status',
       'priority',
       'dueDate',
+      'assigneeTipo',
       'assigneeId',
+      'assigneeNome',
       'progressPercent',
       'isLate',
       'meetingId',
@@ -55,7 +57,9 @@ export class ExportsController {
       item.status,
       item.priority,
       item.dueDate ? new Date(item.dueDate).toISOString() : '',
-      item.assignedToId ?? '',
+      item.assignee?.type ?? item.assigneeType ?? '',
+      item.assignedToId ?? item.assignedEloId ?? '',
+      item.assignee?.name ?? item.externalAssigneeName ?? '',
       String(item.progressPercent ?? 0),
       item.isLate ? 'true' : 'false',
       item.meetingId ?? '',
@@ -111,4 +115,3 @@ function toCsv(headers: string[], rows: string[][]) {
   }
   return lines.join('\n');
 }
-

@@ -49,7 +49,8 @@ export class NoticesService {
       });
     }
     if (scopeFilters.length > 0) {
-      where.AND = [...(where.AND ?? []), ...scopeFilters];
+      const andArr = Array.isArray(where.AND) ? where.AND : (where.AND ? [where.AND] : []);
+      where.AND = [...andArr, ...scopeFilters];
     }
 
     const { page, pageSize, skip, take } = parsePagination(filters.page, filters.pageSize);

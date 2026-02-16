@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, EloRoleType } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { RbacUser } from '../rbac/rbac.types';
 import { throwError } from '../common/http-error';
@@ -14,10 +14,11 @@ export class ElosService {
     private readonly audit: AuditService,
   ) {}
 
-  async list(filters: { localityId?: string; roleType?: string; page?: string; pageSize?: string }, user?: RbacUser) {
+  async list(filters: { localityId?: string; roleType?: string; eloRoleId?: string; page?: string; pageSize?: string }, user?: RbacUser) {
     const where: Prisma.EloWhereInput = {};
     if (filters.localityId) where.localityId = filters.localityId;
-    if (filters.roleType) where.roleType = filters.roleType as EloRoleType;
+    if (filters.eloRoleId) where.eloRoleId = filters.eloRoleId;
+    if (filters.roleType) where.eloRole = { code: filters.roleType };
 
     const constraints = this.getScopeConstraints(user);
     if (constraints.localityId) where.localityId = constraints.localityId;
@@ -27,8 +28,8 @@ export class ElosService {
     const [items, total] = await this.prisma.$transaction([
       this.prisma.elo.findMany({
         where,
-        include: { locality: true },
-        orderBy: [{ locality: { name: 'asc' } }, { roleType: 'asc' }],
+        include: { locality: true, eloRole: true },
+        orderBy: [{ locality: { name: 'asc' } }, { eloRole: { sortOrder: 'asc' } }],
         skip,
         take,
       }),
@@ -46,7 +47,7 @@ export class ElosService {
 
   async create(payload: {
     localityId: string;
-    roleType: string;
+    eloRoleId: string;
     name: string;
     rank?: string | null;
     phone?: string | null;
@@ -57,7 +58,7 @@ export class ElosService {
     const created = await this.prisma.elo.create({
       data: {
         localityId: payload.localityId,
-        roleType: payload.roleType as EloRoleType,
+        eloRoleId: payload.eloRoleId,
         name: sanitizeText(payload.name),
         rank: payload.rank ? sanitizeText(payload.rank) : null,
         phone: payload.phone ? sanitizeText(payload.phone) : null,
@@ -72,7 +73,7 @@ export class ElosService {
       action: 'create',
       entityId: created.id,
       localityId: created.localityId,
-      diffJson: { roleType: created.roleType, name: created.name },
+      diffJson: { eloRoleId: created.eloRoleId, name: created.name },
     });
 
     return this.mapElo(created, user?.executiveHidePii);
@@ -80,7 +81,7 @@ export class ElosService {
 
   async update(id: string, payload: {
     localityId?: string;
-    roleType?: string;
+    eloRoleId?: string;
     name?: string;
     rank?: string | null;
     phone?: string | null;
@@ -97,7 +98,7 @@ export class ElosService {
       where: { id },
       data: {
         localityId,
-        roleType: payload.roleType ? (payload.roleType as EloRoleType) : undefined,
+        eloRoleId: payload.eloRoleId ?? undefined,
         name: payload.name ? sanitizeText(payload.name) : undefined,
         rank: payload.rank ? sanitizeText(payload.rank) : payload.rank === null ? null : undefined,
         phone: payload.phone ? sanitizeText(payload.phone) : payload.phone === null ? null : undefined,
@@ -134,18 +135,19 @@ export class ElosService {
     return { ok: true };
   }
 
-  async orgChart(filters: { localityId?: string; roleType?: string }, user?: RbacUser) {
+  async orgChart(filters: { localityId?: string; roleType?: string; eloRoleId?: string }, user?: RbacUser) {
     const where: Prisma.EloWhereInput = {};
     if (filters.localityId) where.localityId = filters.localityId;
-    if (filters.roleType) where.roleType = filters.roleType as EloRoleType;
+    if (filters.eloRoleId) where.eloRoleId = filters.eloRoleId;
+    if (filters.roleType) where.eloRole = { code: filters.roleType };
 
     const constraints = this.getScopeConstraints(user);
     if (constraints.localityId) where.localityId = constraints.localityId;
 
     const items = await this.prisma.elo.findMany({
       where,
-      include: { locality: true },
-      orderBy: [{ locality: { name: 'asc' } }, { roleType: 'asc' }],
+      include: { locality: true, eloRole: true },
+      orderBy: [{ locality: { name: 'asc' } }, { eloRole: { sortOrder: 'asc' } }],
     });
 
     const grouped: Record<string, any[]> = {};
@@ -180,8 +182,7 @@ export class ElosService {
 
   private mapElo(item: any, executiveHidePii?: boolean) {
     if (!executiveHidePii) return item;
-    const { phone, email, ...rest } = item;
+    const { phone, email, name, rank, ...rest } = item;
     return rest;
   }
 }
-

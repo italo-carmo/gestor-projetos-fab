@@ -532,6 +532,54 @@ export const PERMISSIONS: SeedPermission[] = [
     "description": "delete on specialties (OWN)"
   },
   {
+    "resource": "elo_roles",
+    "action": "view",
+    "scope": "NATIONAL",
+    "description": "view on elo roles (tipos de elo)"
+  },
+  {
+    "resource": "elo_roles",
+    "action": "create",
+    "scope": "NATIONAL",
+    "description": "create on elo roles"
+  },
+  {
+    "resource": "elo_roles",
+    "action": "update",
+    "scope": "NATIONAL",
+    "description": "update on elo roles"
+  },
+  {
+    "resource": "elo_roles",
+    "action": "delete",
+    "scope": "NATIONAL",
+    "description": "delete on elo roles"
+  },
+  {
+    "resource": "postos",
+    "action": "view",
+    "scope": "NATIONAL",
+    "description": "view on postos (postos/cargos para participantes de atividade)"
+  },
+  {
+    "resource": "postos",
+    "action": "create",
+    "scope": "NATIONAL",
+    "description": "create on postos"
+  },
+  {
+    "resource": "postos",
+    "action": "update",
+    "scope": "NATIONAL",
+    "description": "update on postos"
+  },
+  {
+    "resource": "postos",
+    "action": "delete",
+    "scope": "NATIONAL",
+    "description": "delete on postos"
+  },
+  {
     "resource": "localities",
     "action": "view",
     "scope": "NATIONAL",

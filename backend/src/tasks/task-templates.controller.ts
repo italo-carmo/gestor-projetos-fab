@@ -3,7 +3,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../common/current-user.decorator';
 import { RequirePermission } from '../rbac/require-permission.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
-import { RbacUser } from '../rbac/rbac.types';
+import type { RbacUser } from '../rbac/rbac.types';
 import { GenerateInstancesDto } from './dto/generate-instances.dto';
 import { TaskTemplateDto } from './dto/task-template.dto';
 import { TasksService } from './tasks.service';
@@ -28,6 +28,7 @@ export class TaskTemplatesController {
       description: dto.description ?? null,
       phase: { connect: { id: dto.phaseId } },
       specialty: dto.specialtyId ? { connect: { id: dto.specialtyId } } : undefined,
+      eloRole: dto.eloRoleId ? { connect: { id: dto.eloRoleId } } : undefined,
       appliesToAllLocalities: dto.appliesToAllLocalities,
       reportRequiredDefault: dto.reportRequiredDefault,
     }, user);
@@ -51,5 +52,11 @@ export class TaskTemplatesController {
       },
       user,
     );
+  }
+
+  @Post(':id/clone')
+  @RequirePermission('task_templates', 'create')
+  clone(@Param('id') id: string, @CurrentUser() user: RbacUser) {
+    return this.tasks.cloneTaskTemplate(id, user);
   }
 }

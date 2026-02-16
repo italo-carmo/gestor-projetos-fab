@@ -56,6 +56,7 @@ export class RbacService {
       email: user.email,
       localityId: user.localityId,
       specialtyId: user.specialtyId,
+      eloRoleId: user.eloRoleId,
       executiveHidePii: user.executiveHidePii || executiveFromRole,
       roles,
     };
@@ -97,8 +98,8 @@ export class RbacService {
         description: description ?? role.description,
         isSystemRole: false,
         wildcard: role.wildcard,
-        flagsJson: role.flagsJson,
-        constraintsTemplateJson: role.constraintsTemplateJson,
+        flagsJson: (role.flagsJson ?? undefined) as any,
+        constraintsTemplateJson: (role.constraintsTemplateJson ?? undefined) as any,
         permissions: {
           create: role.permissions.map((rp) => ({ permissionId: rp.permissionId })),
         },
@@ -212,6 +213,7 @@ export class RbacService {
       throwError('VALIDATION_ERROR', { invalidPermissions });
     }
 
+    const backup = await this.exportMatrix();
     let updatedRoles = 0;
     let createdRoles = 0;
 
@@ -233,8 +235,8 @@ export class RbacService {
             description: role.description ?? null,
             isSystemRole: role.isSystemRole ?? false,
             wildcard: role.wildcard ?? false,
-            flagsJson: role.flags ?? undefined,
-            constraintsTemplateJson: role.constraintsTemplate ?? undefined,
+            flagsJson: (role.flags ?? undefined) as any,
+            constraintsTemplateJson: (role.constraintsTemplate ?? undefined) as any,
             permissions: {
               create: permissionIds.map((id) => ({ permissionId: id })),
             },
@@ -247,8 +249,8 @@ export class RbacService {
           data: {
             description: role.description ?? existing.description,
             wildcard: role.wildcard ?? existing.wildcard,
-            flagsJson: role.flags ?? existing.flagsJson,
-            constraintsTemplateJson: role.constraintsTemplate ?? existing.constraintsTemplateJson,
+            flagsJson: (role.flags ?? existing.flagsJson ?? undefined) as any,
+            constraintsTemplateJson: (role.constraintsTemplate ?? existing.constraintsTemplateJson ?? undefined) as any,
           },
         });
 
@@ -274,9 +276,51 @@ export class RbacService {
       userId,
       resource: 'admin_rbac',
       action: 'import',
-      diffJson: { mode, updatedRoles, createdRoles },
+      diffJson: { mode, updatedRoles, createdRoles, backup },
     });
 
     return { updatedRoles, createdRoles, warnings: [] };
+  }
+
+  async simulateAccess(params: { userId?: string; roleId?: string }) {
+    if (params.userId) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: params.userId },
+        include: {
+          roles: {
+            include: {
+              role: {
+                include: { permissions: { include: { permission: true } } },
+              },
+            },
+          },
+        },
+      });
+      if (!user) throwError('NOT_FOUND');
+      const permissions = user.roles.flatMap((ur) =>
+        ur.role.permissions.map((rp) => ({
+          resource: rp.permission.resource,
+          action: rp.permission.action,
+          scope: rp.permission.scope,
+        })),
+      );
+      return { source: 'user', id: user.id, permissions };
+    }
+
+    if (params.roleId) {
+      const role = await this.prisma.role.findUnique({
+        where: { id: params.roleId },
+        include: { permissions: { include: { permission: true } } },
+      });
+      if (!role) throwError('NOT_FOUND');
+      const permissions = role.permissions.map((rp) => ({
+        resource: rp.permission.resource,
+        action: rp.permission.action,
+        scope: rp.permission.scope,
+      }));
+      return { source: 'role', id: role.id, permissions };
+    }
+
+    throwError('VALIDATION_ERROR', { reason: 'MISSING_PARAMS' });
   }
 }

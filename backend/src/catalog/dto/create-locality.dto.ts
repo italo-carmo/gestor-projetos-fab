@@ -17,6 +17,10 @@ export class CreateLocalityDto {
 
   @IsOptional()
   @IsDateString()
+  individualMeetingDate?: string | null;
+
+  @IsOptional()
+  @IsDateString()
   visitDate?: string | null;
 
   @IsOptional()

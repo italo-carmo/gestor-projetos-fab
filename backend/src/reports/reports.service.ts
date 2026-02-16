@@ -3,15 +3,30 @@ import { PrismaService } from '../prisma/prisma.service';
 import { throwError } from '../common/http-error';
 import { AuditService } from '../audit/audit.service';
 import { RbacUser } from '../rbac/rbac.types';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class ReportsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly jwt: JwtService,
+    private readonly config: ConfigService,
   ) {}
 
-  async createReport(params: { taskInstanceId: string; fileName: string; fileUrl: string }, user?: RbacUser) {
+  async createReport(
+    params: {
+      taskInstanceId: string;
+      fileName: string;
+      fileUrl: string;
+      storageKey?: string | null;
+      mimeType?: string | null;
+      fileSize?: number | null;
+      checksum?: string | null;
+    },
+    user?: RbacUser,
+  ) {
     const instance = await this.prisma.taskInstance.findUnique({
       where: { id: params.taskInstanceId },
       include: { taskTemplate: { select: { specialtyId: true } } },
@@ -29,6 +44,10 @@ export class ReportsService {
         taskInstanceId: params.taskInstanceId,
         fileName: params.fileName,
         fileUrl: params.fileUrl,
+        storageKey: params.storageKey ?? null,
+        mimeType: params.mimeType ?? null,
+        fileSize: params.fileSize ?? null,
+        checksum: params.checksum ?? null,
       },
     });
 
@@ -60,6 +79,30 @@ export class ReportsService {
       }
     }
     return report;
+  }
+
+  async getSignedUrl(id: string, user?: RbacUser) {
+    if (user?.executiveHidePii && this.config.get<string>('REPORTS_ALLOW_EXEC_DOWNLOAD') !== 'true') {
+      throwError('RBAC_FORBIDDEN');
+    }
+    const report = await this.getReport(id, user);
+    const secret = this.config.get<string>('REPORTS_SIGNED_URL_SECRET') ?? this.config.get<string>('JWT_ACCESS_SECRET');
+    const ttl = this.config.get<string>('REPORTS_SIGNED_URL_TTL') ?? '600s';
+    const token = await this.jwt.signAsync(
+      { rid: report.id },
+      { secret, expiresIn: ttl } as any,
+    );
+    return { url: `/reports/${report.id}/download?token=${token}`, expiresIn: ttl };
+  }
+
+  async verifyDownloadToken(token: string) {
+    const secret = this.config.get<string>('REPORTS_SIGNED_URL_SECRET') ?? this.config.get<string>('JWT_ACCESS_SECRET');
+    try {
+      const payload = await this.jwt.verifyAsync<{ rid: string }>(token, { secret });
+      return payload.rid;
+    } catch {
+      throwError('AUTH_INVALID_CREDENTIALS');
+    }
   }
 
   async approveReport(id: string, approved: boolean, user?: RbacUser) {

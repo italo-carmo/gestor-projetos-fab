@@ -3,7 +3,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../common/current-user.decorator';
 import { RequirePermission } from '../rbac/require-permission.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
-import { RbacUser } from '../rbac/rbac.types';
+import type { RbacUser } from '../rbac/rbac.types';
 import { CreateChecklistDto } from './dto/create-checklist.dto';
 import { CreateChecklistItemDto } from './dto/create-checklist-item.dto';
 import { UpdateChecklistStatusDto } from './dto/update-checklist-status.dto';
@@ -19,9 +19,10 @@ export class ChecklistsController {
   list(
     @Query('phaseId') phaseId: string | undefined,
     @Query('specialtyId') specialtyId: string | undefined,
+    @Query('eloRoleId') eloRoleId: string | undefined,
     @CurrentUser() user: RbacUser,
   ) {
-    return this.checklists.list({ phaseId, specialtyId }, user);
+    return this.checklists.list({ phaseId, specialtyId, eloRoleId }, user);
   }
 
   @Post()

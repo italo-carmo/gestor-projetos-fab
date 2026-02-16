@@ -1,4 +1,5 @@
 import { Box, Button, MenuItem, Stack, TextField } from '@mui/material';
+import { TASK_STATUS_LABELS } from '../../constants/enums';
 
 export type FiltersBarProps = {
   search?: string;
@@ -15,8 +16,11 @@ export type FiltersBarProps = {
   dueTo?: string;
   onDueFromChange?: (value: string) => void;
   onDueToChange?: (value: string) => void;
+  eloRoleId?: string;
+  onEloRoleChange?: (value: string) => void;
   localities?: { id: string; name: string }[];
   phases?: { id: string; name: string }[];
+  eloRoles?: { id: string; code: string; name: string }[];
   assignees?: { id: string; name: string }[];
   onClear?: () => void;
 };
@@ -37,8 +41,11 @@ export function FiltersBar(props: FiltersBarProps) {
     dueTo,
     onDueFromChange,
     onDueToChange,
+    eloRoleId,
+    onEloRoleChange,
     localities,
     phases,
+    eloRoles,
     assignees,
     onClear,
   } = props;
@@ -104,7 +111,24 @@ export function FiltersBar(props: FiltersBarProps) {
           <MenuItem value="">Todos</MenuItem>
           {['NOT_STARTED', 'STARTED', 'IN_PROGRESS', 'BLOCKED', 'DONE'].map((s) => (
             <MenuItem key={s} value={s}>
-              {s}
+              {TASK_STATUS_LABELS[s] ?? s}
+            </MenuItem>
+          ))}
+        </TextField>
+      )}
+      {onEloRoleChange && (
+        <TextField
+          select
+          size="small"
+          label="Elo"
+          value={eloRoleId ?? ''}
+          onChange={(e) => onEloRoleChange(e.target.value)}
+          sx={{ minWidth: 140 }}
+        >
+          <MenuItem value="">Todos</MenuItem>
+          {(eloRoles ?? []).map((r) => (
+            <MenuItem key={r.id} value={r.id}>
+              {r.name}
             </MenuItem>
           ))}
         </TextField>
@@ -113,7 +137,7 @@ export function FiltersBar(props: FiltersBarProps) {
         <TextField
           select
           size="small"
-          label="Responsavel"
+          label="Responsável"
           value={assigneeId ?? ''}
           onChange={(e) => onAssigneeChange(e.target.value)}
           sx={{ minWidth: 160 }}
@@ -142,7 +166,7 @@ export function FiltersBar(props: FiltersBarProps) {
         <TextField
           size="small"
           type="date"
-          label="Ate"
+          label="Até"
           InputLabelProps={{ shrink: true }}
           value={dueTo ?? ''}
           onChange={(e) => onDueToChange(e.target.value)}

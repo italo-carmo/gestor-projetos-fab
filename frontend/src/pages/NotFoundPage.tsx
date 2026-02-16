@@ -4,7 +4,7 @@ export function NotFoundPage() {
   return (
     <Box>
       <Typography variant="h4" gutterBottom>
-        Pagina nao encontrada
+        Página não encontrada
       </Typography>
     </Box>
   );

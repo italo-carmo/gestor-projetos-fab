@@ -6,12 +6,20 @@ export class UpdateMeetingDto {
   datetime?: string;
 
   @IsOptional()
-  @IsEnum(['NATIONAL', 'LOCALITY'])
+  @IsString()
   scope?: string;
 
   @IsOptional()
   @IsEnum(['PLANNED', 'HELD', 'CANCELLED'])
   status?: string;
+
+  @IsOptional()
+  @IsEnum(['ONLINE', 'PRESENCIAL'])
+  meetingType?: string;
+
+  @IsOptional()
+  @IsString()
+  meetingLink?: string | null;
 
   @IsOptional()
   @IsString()
@@ -23,6 +31,5 @@ export class UpdateMeetingDto {
 
   @IsOptional()
   @IsArray()
-  participantsJson?: any[];
+  participantIds?: string[];
 }
-

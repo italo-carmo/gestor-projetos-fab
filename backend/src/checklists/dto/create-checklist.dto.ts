@@ -11,5 +11,9 @@ export class CreateChecklistDto {
   @IsOptional()
   @IsString()
   specialtyId?: string | null;
+
+  @IsOptional()
+  @IsString()
+  eloRoleId?: string | null;
 }
 

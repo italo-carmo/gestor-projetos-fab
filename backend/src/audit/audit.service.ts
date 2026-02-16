@@ -15,7 +15,7 @@ export class AuditService {
     entityId?: string | null;
     diffJson?: Record<string, unknown> | null;
   }) {
-    const diffJson = params.diffJson ? this.truncateDiff(params.diffJson) : null;
+    const diffJson = params.diffJson ? this.truncateDiff(params.diffJson) : Prisma.JsonNull;
     return this.prisma.auditLog.create({
       data: {
         userId: params.userId ?? null,
@@ -23,7 +23,7 @@ export class AuditService {
         resource: params.resource,
         action: params.action,
         entityId: params.entityId ?? null,
-        diffJson,
+        diffJson: diffJson as any,
       },
     });
   }

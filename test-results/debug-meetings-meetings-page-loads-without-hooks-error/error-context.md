@@ -1,0 +1,139 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - generic [ref=e5]:
+        - heading "SMIF Gestao - Comissao de Iniciacao" [level=6] [ref=e6]
+        - generic [ref=e9]:
+          - textbox "Busca global" [ref=e10]
+          - group
+        - paragraph [ref=e11]: "Contexto: Brasil"
+        - paragraph [ref=e12]: Coordenação CIPAVD
+    - navigation [ref=e13]:
+      - generic [ref=e15]:
+        - heading "SMIF Gestao" [level=6] [ref=e16]
+        - list [ref=e17]:
+          - link "Dashboard" [ref=e18] [cursor=pointer]:
+            - /url: /dashboard/national
+            - img [ref=e20]
+            - generic [ref=e23]: Dashboard
+          - link "Tarefas" [ref=e24] [cursor=pointer]:
+            - /url: /tasks
+            - img [ref=e26]
+            - generic [ref=e29]: Tarefas
+          - link "Templates" [ref=e30] [cursor=pointer]:
+            - /url: /templates
+            - img [ref=e32]
+            - generic [ref=e35]: Templates
+          - link "Gantt" [ref=e36] [cursor=pointer]:
+            - /url: /gantt
+            - img [ref=e38]
+            - generic [ref=e41]: Gantt
+          - link "Calendário" [ref=e42] [cursor=pointer]:
+            - /url: /calendar
+            - img [ref=e44]
+            - generic [ref=e47]: Calendário
+          - link "Reuniões" [ref=e48] [cursor=pointer]:
+            - /url: /meetings
+            - img [ref=e50]
+            - generic [ref=e53]: Reuniões
+          - link "Avisos" [ref=e54] [cursor=pointer]:
+            - /url: /notices
+            - img [ref=e56]
+            - generic [ref=e59]: Avisos
+          - link "Checklists" [ref=e60] [cursor=pointer]:
+            - /url: /checklists
+            - img [ref=e62]
+            - generic [ref=e65]: Checklists
+          - link "Elos" [ref=e66] [cursor=pointer]:
+            - /url: /elos
+            - img [ref=e68]
+            - generic [ref=e71]: Elos
+          - link "Organograma" [ref=e72] [cursor=pointer]:
+            - /url: /org-chart
+            - img [ref=e74]
+            - generic [ref=e77]: Organograma
+          - link "Auditoria" [ref=e78] [cursor=pointer]:
+            - /url: /audit
+            - img [ref=e80]
+            - generic [ref=e83]: Auditoria
+    - main [ref=e84]:
+      - generic [ref=e86]:
+        - generic [ref=e87]:
+          - heading "Reuniões" [level=4] [ref=e88]
+          - button "Nova reunião" [ref=e89] [cursor=pointer]
+        - generic [ref=e91]:
+          - generic [ref=e92]:
+            - generic [ref=e93]:
+              - generic: Localidade
+              - generic [ref=e94]:
+                - combobox "Localidade" [ref=e95] [cursor=pointer]
+                - textbox
+                - img
+                - group:
+                  - generic: Localidade
+            - button "Limpar" [ref=e96] [cursor=pointer]
+          - generic [ref=e97]:
+            - generic [ref=e98]:
+              - generic: Status
+              - generic [ref=e99]:
+                - combobox "Status" [ref=e100] [cursor=pointer]
+                - textbox
+                - img
+                - group:
+                  - generic: Status
+            - generic [ref=e101]:
+              - generic: Escopo
+              - generic [ref=e102]:
+                - combobox "Escopo" [ref=e103] [cursor=pointer]
+                - textbox
+                - img
+                - group:
+                  - generic: Escopo
+            - generic [ref=e104]:
+              - generic [ref=e105]: De
+              - generic [ref=e106]:
+                - textbox "De" [ref=e107]
+                - group:
+                  - generic: De
+            - generic [ref=e108]:
+              - generic [ref=e109]: Até
+              - generic [ref=e110]:
+                - textbox "Até" [ref=e111]
+                - group:
+                  - generic: Até
+        - tablist [ref=e114]:
+          - tab "Cards" [selected] [ref=e115] [cursor=pointer]
+          - tab "Calendário" [ref=e116] [cursor=pointer]
+        - generic [ref=e118]:
+          - generic [ref=e121]:
+            - heading "12/02/2026 14:00" [level=6] [ref=e122]
+            - generic [ref=e124]: PLANNED
+            - paragraph [ref=e125]: Checklist de preparação e geração de tarefas.
+            - generic [ref=e126]: Brasil
+            - button "Ver detalhes" [ref=e127] [cursor=pointer]
+          - generic [ref=e130]:
+            - heading "12/02/2026 14:00" [level=6] [ref=e131]
+            - generic [ref=e133]: PLANNED
+            - paragraph [ref=e134]: Checklist de preparação e geração de tarefas.
+            - generic [ref=e135]: Brasil
+            - button "Ver detalhes" [ref=e136] [cursor=pointer]
+          - generic [ref=e139]:
+            - heading "05/02/2026 14:00" [level=6] [ref=e140]
+            - generic [ref=e142]: PLANNED
+            - paragraph [ref=e143]: Kickoff nacional e alinhamento de fases.
+            - generic [ref=e144]: Brasil
+            - button "Ver detalhes" [ref=e145] [cursor=pointer]
+          - generic [ref=e148]:
+            - heading "05/02/2026 14:00" [level=6] [ref=e149]
+            - generic [ref=e151]: PLANNED
+            - paragraph [ref=e152]: Kickoff nacional e alinhamento de fases.
+            - generic [ref=e153]: Brasil
+            - button "Ver detalhes" [ref=e154] [cursor=pointer]
+  - generic [ref=e155]:
+    - img [ref=e157]
+    - button "Open Tanstack query devtools" [ref=e205] [cursor=pointer]:
+      - img [ref=e206]
+```

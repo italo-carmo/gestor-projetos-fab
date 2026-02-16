@@ -15,7 +15,7 @@ test.describe("Core + Secondary Modules", () => {
 
     await page.click("text=Tarefas");
     await page.fill("[data-testid=filter-q]", "Briefing");
-    await page.click("[data-testid=tasks-table-row-0]");
+    await page.locator(".MuiDataGrid-row").first().click();
     await expect(page.locator("[data-testid=task-drawer]")).toBeVisible();
     await page.click("[data-testid=task-status]");
     await page.click("text=IN_PROGRESS");
@@ -29,7 +29,7 @@ test.describe("Core + Secondary Modules", () => {
 
     await page.click("text=Tarefas");
     await page.fill("[data-testid=filter-q]", "Briefing");
-    await page.click("[data-testid=tasks-table-row-0]");
+    await page.locator(".MuiDataGrid-row").first().click();
 
     await page.click("[data-testid=task-mark-done]");
     await expect(page.locator("text=Relatorio obrigatorio")).toBeVisible();

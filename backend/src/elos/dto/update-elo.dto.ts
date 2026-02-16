@@ -1,4 +1,4 @@
-import { IsEnum, IsOptional, IsString } from 'class-validator';
+import { IsOptional, IsString } from 'class-validator';
 
 export class UpdateEloDto {
   @IsOptional()
@@ -6,8 +6,8 @@ export class UpdateEloDto {
   localityId?: string;
 
   @IsOptional()
-  @IsEnum(['PSICOLOGIA', 'SSO', 'JURIDICO', 'CPCA', 'GRAD_MASTER'])
-  roleType?: string;
+  @IsString()
+  eloRoleId?: string;
 
   @IsOptional()
   @IsString()
