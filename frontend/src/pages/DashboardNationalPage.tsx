@@ -1,4 +1,4 @@
-import { Box, Button, Card, CardContent, Chip, Grid, Table, TableBody, TableCell, TableHead, TableRow, Typography } from '@mui/material';
+import { Box, Button, Card, CardContent, Chip, Grid, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from '@mui/material';
 import TargetIcon from '@mui/icons-material/GpsFixed';
 import PeopleIcon from '@mui/icons-material/Groups';
 import DescriptionIcon from '@mui/icons-material/Description';
@@ -160,54 +160,56 @@ export function DashboardNationalPage() {
               {items.length === 0 ? (
                 <EmptyState title="Sem dados" description="Nenhuma localidade encontrada." />
               ) : (
-                <Table size="small">
-                  <TableHead>
-                    <TableRow sx={{ bgcolor: 'primary.main' }}>
-                      <TableCell sx={{ color: 'white', fontWeight: 600 }}>Localidade / GSD</TableCell>
-                      <TableCell sx={{ color: 'white', fontWeight: 600 }}>% Geral</TableCell>
-                      <TableCell sx={{ color: 'white', fontWeight: 600 }}>Recrutas</TableCell>
-                      <TableCell sx={{ color: 'white', fontWeight: 600 }}>Comandante</TableCell>
-                      <TableCell sx={{ color: 'white', fontWeight: 600 }}>Visita</TableCell>
-                      <TableCell sx={{ color: 'white', fontWeight: 600 }}>Atrasadas</TableCell>
-                      <TableCell sx={{ color: 'white', fontWeight: 600 }}>Sem resp.</TableCell>
-                      <TableCell sx={{ color: 'white', fontWeight: 600 }}>Bloqueadas</TableCell>
-                      <TableCell sx={{ color: 'white', fontWeight: 600 }}>Abrir</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {items.map((loc) => (
-                      <TableRow key={loc.localityId} hover>
-                        <TableCell>
-                          <Typography variant="body2" fontWeight={600}>{loc.localityName}</Typography>
-                          {loc.commandName && (
-                            <Typography variant="caption" color="text.secondary">{loc.commandName}</Typography>
-                          )}
-                        </TableCell>
-                        <TableCell>{Math.round(loc.progress)}%</TableCell>
-                        <TableCell>{loc.recruitsFemaleCountCurrent ?? 0}</TableCell>
-                        <TableCell>{loc.commanderName ?? '—'}</TableCell>
-                        <TableCell>{loc.visitDate ? new Date(loc.visitDate).toLocaleDateString('pt-BR') : '—'}</TableCell>
-                        <TableCell>{loc.late}</TableCell>
-                        <TableCell>{loc.unassigned}</TableCell>
-                        <TableCell>{loc.blocked}</TableCell>
-                        <TableCell>
-                          <Link
-                            to={`/dashboard/locality/${loc.localityId}`}
-                            onMouseEnter={() =>
-                              qc.prefetchQuery({
-                                queryKey: ['localityProgress', loc.localityId],
-                                queryFn: async () =>
-                                  (await api.get(`/localities/${loc.localityId}/progress`)).data,
-                              })
-                            }
-                          >
-                            Abrir
-                          </Link>
-                        </TableCell>
+                <TableContainer sx={{ width: '100%', overflowX: 'auto' }}>
+                  <Table size="small" sx={{ minWidth: 980 }}>
+                    <TableHead>
+                      <TableRow sx={{ bgcolor: 'primary.main' }}>
+                        <TableCell sx={{ color: 'white', fontWeight: 600 }}>Localidade / GSD</TableCell>
+                        <TableCell sx={{ color: 'white', fontWeight: 600 }}>% Geral</TableCell>
+                        <TableCell sx={{ color: 'white', fontWeight: 600 }}>Recrutas</TableCell>
+                        <TableCell sx={{ color: 'white', fontWeight: 600 }}>Comandante</TableCell>
+                        <TableCell sx={{ color: 'white', fontWeight: 600 }}>Visita</TableCell>
+                        <TableCell sx={{ color: 'white', fontWeight: 600 }}>Atrasadas</TableCell>
+                        <TableCell sx={{ color: 'white', fontWeight: 600 }}>Sem resp.</TableCell>
+                        <TableCell sx={{ color: 'white', fontWeight: 600 }}>Bloqueadas</TableCell>
+                        <TableCell sx={{ color: 'white', fontWeight: 600 }}>Abrir</TableCell>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHead>
+                    <TableBody>
+                      {items.map((loc) => (
+                        <TableRow key={loc.localityId} hover>
+                          <TableCell>
+                            <Typography variant="body2" fontWeight={600}>{loc.localityName}</Typography>
+                            {loc.commandName && (
+                              <Typography variant="caption" color="text.secondary">{loc.commandName}</Typography>
+                            )}
+                          </TableCell>
+                          <TableCell>{Math.round(loc.progress)}%</TableCell>
+                          <TableCell>{loc.recruitsFemaleCountCurrent ?? 0}</TableCell>
+                          <TableCell>{loc.commanderName ?? '—'}</TableCell>
+                          <TableCell>{loc.visitDate ? new Date(loc.visitDate).toLocaleDateString('pt-BR') : '—'}</TableCell>
+                          <TableCell>{loc.late}</TableCell>
+                          <TableCell>{loc.unassigned}</TableCell>
+                          <TableCell>{loc.blocked}</TableCell>
+                          <TableCell>
+                            <Link
+                              to={`/dashboard/locality/${loc.localityId}`}
+                              onMouseEnter={() =>
+                                qc.prefetchQuery({
+                                  queryKey: ['localityProgress', loc.localityId],
+                                  queryFn: async () =>
+                                    (await api.get(`/localities/${loc.localityId}/progress`)).data,
+                                })
+                              }
+                            >
+                              Abrir
+                            </Link>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
               )}
             </CardContent>
           </Card>

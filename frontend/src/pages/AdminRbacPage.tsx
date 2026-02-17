@@ -85,6 +85,7 @@ export function AdminRbacPage() {
   const [simRoleId, setSimRoleId] = useState('');
 
   const [moduleUserId, setModuleUserId] = useState('');
+  const [moduleSearch, setModuleSearch] = useState('');
   const [updatingModuleResource, setUpdatingModuleResource] = useState('');
 
   const roleEditorQuery = useRbacSimulate({ roleId: editRoleId || undefined });
@@ -155,8 +156,21 @@ export function AdminRbacPage() {
     [permissionCatalog],
   );
 
-  const userModules =
-    (userModuleAccessQuery.data?.modules as UserModuleAccessItem[] | undefined) ?? [];
+  const userModules = useMemo(
+    () => ((userModuleAccessQuery.data?.modules as UserModuleAccessItem[] | undefined) ?? []),
+    [userModuleAccessQuery.data?.modules],
+  );
+  const filteredUserModules = useMemo(() => {
+    const term = moduleSearch.trim().toLowerCase();
+    const sorted = [...userModules].sort((a, b) =>
+      formatModuleLabel(a.resource).localeCompare(formatModuleLabel(b.resource), 'pt-BR'),
+    );
+    if (!term) return sorted;
+    return sorted.filter((module) => {
+      const label = formatModuleLabel(module.resource).toLowerCase();
+      return label.includes(term);
+    });
+  }, [moduleSearch, userModules]);
 
   const handleToggleRoleModule = async (resource: string, enabled: boolean) => {
     if (!editRoleId) return;
@@ -198,6 +212,27 @@ export function AdminRbacPage() {
       });
     } finally {
       setUpdatingRoleResource('');
+    }
+  };
+
+  const handleToggleUserModule = async (resource: string, enabled: boolean) => {
+    if (!moduleUserId) return;
+    try {
+      setUpdatingModuleResource(resource);
+      await updateUserModuleAccess.mutateAsync({
+        userId: moduleUserId,
+        resource,
+        enabled,
+      });
+      toast.push({ message: 'Módulo atualizado', severity: 'success' });
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({
+        message: payload.message ?? 'Erro ao atualizar módulo',
+        severity: 'error',
+      });
+    } finally {
+      setUpdatingModuleResource('');
     }
   };
 
@@ -426,7 +461,7 @@ export function AdminRbacPage() {
                 Acesso por módulo por usuário
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                O papel continua como padrão. Aqui você pode ligar ou desligar módulos específicos para uma pessoa.
+                Selecione um usuário e ligue/desligue os módulos permitidos para ele.
               </Typography>
               <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 2 }}>
                 <TextField
@@ -434,7 +469,10 @@ export function AdminRbacPage() {
                   size="small"
                   label="Usuário"
                   value={moduleUserId}
-                  onChange={(e) => setModuleUserId(e.target.value)}
+                  onChange={(e) => {
+                    setModuleUserId(e.target.value);
+                    setModuleSearch('');
+                  }}
                   sx={{ minWidth: 280 }}
                 >
                   <MenuItem value="">Selecionar</MenuItem>
@@ -444,15 +482,14 @@ export function AdminRbacPage() {
                     </MenuItem>
                   ))}
                 </TextField>
-                {moduleUserId && userModuleAccessQuery.data && (
-                  <Chip
-                    size="small"
-                    variant="outlined"
-                    color="primary"
-                    label={`Ativos: ${userModuleAccessQuery.data.summary?.enabled ?? 0} / ${userModuleAccessQuery.data.summary?.total ?? 0}`}
-                    sx={{ alignSelf: 'center' }}
-                  />
-                )}
+                <TextField
+                  size="small"
+                  label="Buscar módulo"
+                  value={moduleSearch}
+                  onChange={(e) => setModuleSearch(e.target.value)}
+                  sx={{ minWidth: 240 }}
+                  disabled={!moduleUserId}
+                />
               </Stack>
 
               {!moduleUserId ? (
@@ -467,72 +504,59 @@ export function AdminRbacPage() {
                 <Typography variant="body2" color="error.main">
                   {parseApiError(userModuleAccessQuery.error).message ?? 'Erro ao carregar módulos.'}
                 </Typography>
+              ) : filteredUserModules.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  Nenhum módulo encontrado para o filtro atual.
+                </Typography>
               ) : (
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight: 600 }}>Módulo</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>Padrão do papel</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>Acesso do usuário</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>Origem</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {userModules.map((module) => (
-                      <TableRow key={module.resource}>
-                        <TableCell>
-                          <Typography variant="body2" fontWeight={600}>
-                            {formatModuleLabel(module.resource)}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {module.resource}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>{module.baseEnabled ? 'Ativo' : 'Inativo'}</TableCell>
-                        <TableCell>
-                          <Switch
-                            checked={Boolean(module.enabled)}
-                            disabled={
-                              updateUserModuleAccess.isPending &&
-                              updatingModuleResource === module.resource
-                            }
-                            onChange={async (_evt, checked) => {
-                              try {
-                                setUpdatingModuleResource(module.resource);
-                                await updateUserModuleAccess.mutateAsync({
-                                  userId: moduleUserId,
-                                  resource: module.resource,
-                                  enabled: checked,
-                                });
-                                toast.push({ message: 'Módulo atualizado', severity: 'success' });
-                              } catch (error) {
-                                const payload = parseApiError(error);
-                                toast.push({
-                                  message: payload.message ?? 'Erro ao atualizar módulo',
-                                  severity: 'error',
-                                });
-                              } finally {
-                                setUpdatingModuleResource('');
-                              }
-                            }}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          {module.isOverridden ? (
-                            <Chip
-                              size="small"
-                              label="Override usuário"
-                              color="warning"
-                              variant="outlined"
-                            />
-                          ) : (
-                            <Chip size="small" label="Papel" variant="outlined" />
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                <Stack spacing={1.25}>
+                  {filteredUserModules.map((module) => (
+                    <Box
+                      key={module.resource}
+                      sx={{
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        borderRadius: 2,
+                        px: 2,
+                        py: 1.25,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 2,
+                      }}
+                    >
+                      <Box>
+                        <Typography variant="body2" fontWeight={600}>
+                          {formatModuleLabel(module.resource)}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Padrão do papel: {module.baseEnabled ? 'ligado' : 'desligado'}
+                        </Typography>
+                      </Box>
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        {module.isOverridden && (
+                          <Chip size="small" label="Personalizado" color="warning" variant="outlined" />
+                        )}
+                        <Chip
+                          size="small"
+                          label={module.enabled ? 'Ligado' : 'Desligado'}
+                          color={module.enabled ? 'success' : 'default'}
+                          variant={module.enabled ? 'filled' : 'outlined'}
+                        />
+                        <Switch
+                          checked={Boolean(module.enabled)}
+                          disabled={
+                            updateUserModuleAccess.isPending &&
+                            updatingModuleResource === module.resource
+                          }
+                          onChange={(_evt, checked) => {
+                            void handleToggleUserModule(module.resource, checked);
+                          }}
+                        />
+                      </Stack>
+                    </Box>
+                  ))}
+                </Stack>
               )}
             </CardContent>
           </Card>
