@@ -29,6 +29,8 @@ const catalog_module_1 = require("./catalog/catalog.module");
 const kpis_module_1 = require("./kpis/kpis.module");
 const search_module_1 = require("./search/search.module");
 const activities_module_1 = require("./activities/activities.module");
+const documents_module_1 = require("./documents/documents.module");
+const bi_module_1 = require("./bi/bi.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -59,6 +61,8 @@ exports.AppModule = AppModule = __decorate([
             kpis_module_1.KpisModule,
             search_module_1.SearchModule,
             activities_module_1.ActivitiesModule,
+            documents_module_1.DocumentsModule,
+            bi_module_1.BiModule,
         ],
         controllers: [app_controller_1.AppController],
         providers: [app_service_1.AppService],

@@ -7,6 +7,7 @@ import { UsersService } from '../users/users.service';
 import { JwtPayload, JwtRefreshPayload } from './auth.types';
 import { throwError } from '../common/http-error';
 import { AuditService } from '../audit/audit.service';
+import { RbacService } from '../rbac/rbac.service';
 
 const REFRESH_TOKEN_SALT_ROUNDS = 10;
 
@@ -18,6 +19,7 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
     private readonly audit: AuditService,
+    private readonly rbac: RbacService,
   ) {}
 
   async login(email: string, password: string) {
@@ -137,32 +139,18 @@ export class AuthService {
   }
 
   async me(userId: string) {
-    const user = await this.users.findById(userId);
-    if (!user) throwError('AUTH_INVALID_CREDENTIALS');
-
-    const roleFlags = user.roles.map((userRole) => userRole.role.flagsJson ?? {});
-    const executiveFlag =
-      user.executiveHidePii ||
-      roleFlags.some((flags) => flags && (flags as any).executive_hide_pii === true);
-
-    const permissions = user.roles.flatMap((userRole) =>
-      userRole.role.permissions.map((rp) => ({
-        resource: rp.permission.resource,
-        action: rp.permission.action,
-        scope: rp.permission.scope,
-      })),
-    );
+    const access = await this.rbac.getUserAccess(userId);
 
     return {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      executive_hide_pii: executiveFlag,
-      elo_role_id: (user as any).eloRoleId ?? null,
-      permissions,
+      id: access.id,
+      email: access.email,
+      name: access.name,
+      executive_hide_pii: access.executiveHidePii,
+      elo_role_id: access.eloRoleId ?? null,
+      permissions: access.permissions,
       scopes: [],
       flags: {
-        executive_hide_pii: executiveFlag,
+        executive_hide_pii: access.executiveHidePii,
       },
     };
   }

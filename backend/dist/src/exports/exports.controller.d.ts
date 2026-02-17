@@ -6,6 +6,6 @@ export declare class ExportsController {
     private readonly tasks;
     private readonly checklists;
     constructor(tasks: TasksService, checklists: ChecklistsService);
-    exportTasks(localityId: string | undefined, phaseId: string | undefined, status: string | undefined, assigneeId: string | undefined, dueFrom: string | undefined, dueTo: string | undefined, user: RbacUser, res: Response): Promise<void>;
+    exportTasks(localityId: string | undefined, phaseId: string | undefined, status: string | undefined, assigneeId: string | undefined, assigneeIds: string | undefined, dueFrom: string | undefined, dueTo: string | undefined, user: RbacUser, res: Response): Promise<void>;
     exportChecklists(phaseId: string | undefined, specialtyId: string | undefined, user: RbacUser, res: Response): Promise<void>;
 }

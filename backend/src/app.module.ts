@@ -20,6 +20,8 @@ import { CatalogModule } from './catalog/catalog.module';
 import { KpisModule } from './kpis/kpis.module';
 import { SearchModule } from './search/search.module';
 import { ActivitiesModule } from './activities/activities.module';
+import { DocumentsModule } from './documents/documents.module';
+import { BiModule } from './bi/bi.module';
 
 @Module({
   imports: [
@@ -47,6 +49,8 @@ import { ActivitiesModule } from './activities/activities.module';
     KpisModule,
     SearchModule,
     ActivitiesModule,
+    DocumentsModule,
+    BiModule,
   ],
   controllers: [AppController],
   providers: [AppService],

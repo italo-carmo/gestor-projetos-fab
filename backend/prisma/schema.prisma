@@ -28,6 +28,7 @@ model User {
   specialty        Specialty?     @relation(fields: [specialtyId], references: [id])
   eloRole          EloRole?      @relation(fields: [eloRoleId], references: [id])
   roles            UserRole[]
+  moduleAccessOverrides UserModuleAccessOverride[]
   refreshTokens    RefreshToken[]
   assignedTasks    TaskInstance[] @relation("TaskAssignee")
   taskComments     TaskComment[]  @relation("TaskCommentAuthor")
@@ -38,6 +39,22 @@ model User {
   signedActivityReports ActivityReport[] @relation("ActivityReportSigner")
   auditLogs        AuditLog[]
   meetingParticipations MeetingParticipant[]
+  biSurveyImportBatches BiSurveyImportBatch[]
+}
+
+model UserModuleAccessOverride {
+  id        String   @id @default(cuid())
+  userId    String
+  resource  String
+  enabled   Boolean
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, resource])
+  @@index([userId])
+  @@index([resource])
 }
 
 model Role {
@@ -123,6 +140,7 @@ model Locality {
   recruitsHistory            RecruitsHistory[]
   notices                    Notice[]
   elos                       Elo[]
+  documents                  DocumentAsset[]
   checklistItemStatuses      ChecklistItemStatus[]
   kpiValues                  KpiValue[]
   auditLogs                  AuditLog[]
@@ -143,12 +161,31 @@ model Activity {
   locality      Locality?     @relation(fields: [localityId], references: [id])
   createdBy     User?         @relation("ActivityCreator", fields: [createdById], references: [id])
   report        ActivityReport?
+  documents     DocumentAsset[]
+  visitScheduleItems ActivityVisitScheduleItem[]
   comments      ActivityComment[]
   commentReads  ActivityCommentRead[]
 
   @@index([localityId])
   @@index([status])
   @@index([eventDate])
+}
+
+model ActivityVisitScheduleItem {
+  id               String   @id @default(cuid())
+  activityId       String
+  title            String
+  startTime        String
+  durationMinutes  Int
+  location         String
+  responsible      String
+  participants     String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  activity         Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  @@index([activityId, startTime])
 }
 
 model ActivityReport {
@@ -308,6 +345,7 @@ model Meeting {
   participants    MeetingParticipant[]
   tasks           TaskInstance[]
   decisions       MeetingDecision[]
+  documents       DocumentAsset[]
 }
 
 model MeetingParticipant {
@@ -347,6 +385,85 @@ model Report {
   createdAt      DateTime     @default(now())
 
   taskInstance   TaskInstance @relation(fields: [taskInstanceId], references: [id])
+}
+
+model DocumentAsset {
+  id          String           @id @default(cuid())
+  title       String
+  category    DocumentCategory
+  subcategoryId String?
+  sourcePath  String
+  fileName    String
+  fileUrl     String
+  storageKey  String?
+  mimeType    String?
+  fileSize    Int?
+  checksum    String?
+  localityId  String?
+  activityId  String?
+  meetingId   String?
+  tagsJson    Json?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  locality    Locality?        @relation(fields: [localityId], references: [id])
+  subcategory DocumentSubcategory? @relation(fields: [subcategoryId], references: [id], onDelete: SetNull)
+  activity    Activity?        @relation(fields: [activityId], references: [id], onDelete: SetNull)
+  meeting     Meeting?         @relation(fields: [meetingId], references: [id], onDelete: SetNull)
+  content     DocumentContent?
+  links       DocumentLink[]
+
+  @@index([category, localityId, createdAt])
+  @@index([category, subcategoryId, createdAt])
+  @@index([activityId])
+  @@index([meetingId])
+}
+
+model DocumentSubcategory {
+  id          String           @id @default(cuid())
+  category    DocumentCategory
+  name        String
+  parentId    String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  parent      DocumentSubcategory?  @relation("DocumentSubcategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children    DocumentSubcategory[] @relation("DocumentSubcategoryTree")
+  documents   DocumentAsset[]
+
+  @@unique([category, parentId, name])
+  @@index([category, createdAt])
+  @@index([category, parentId, createdAt])
+}
+
+model DocumentContent {
+  id          String              @id @default(cuid())
+  documentId  String              @unique
+  parseStatus DocumentParseStatus @default(PENDING)
+  textContent String?
+  parsedAt    DateTime?
+  metadataJson Json?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  document    DocumentAsset       @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([parseStatus, parsedAt])
+}
+
+model DocumentLink {
+  id          String             @id @default(cuid())
+  documentId  String
+  entityType  DocumentLinkEntity
+  entityId    String
+  label       String?
+  createdAt   DateTime           @default(now())
+
+  document    DocumentAsset      @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, entityType, entityId])
+  @@index([documentId, entityType])
+  @@index([entityType, entityId])
 }
 
 model TaskComment {
@@ -559,6 +676,53 @@ model AuditLog {
   @@index([localityId])
 }
 
+model BiSurveyImportBatch {
+  id            String          @id @default(cuid())
+  fileName      String
+  format        BiImportFormat
+  sheetName     String?
+  totalRows     Int
+  insertedRows  Int
+  duplicateRows Int
+  invalidRows   Int
+  importedById  String?
+  importedAt    DateTime        @default(now())
+
+  importedBy    User?           @relation(fields: [importedById], references: [id], onDelete: SetNull)
+  responses     BiSurveyResponse[]
+
+  @@index([importedAt])
+  @@index([importedById, importedAt])
+}
+
+model BiSurveyResponse {
+  id                 String              @id @default(cuid())
+  batchId            String?
+  submittedAt        DateTime?
+  sufferedViolenceRaw String?
+  sufferedViolence   Boolean?
+  violenceTypes      String[]            @default([])
+  postoGraduacao     String?
+  om                 String?
+  posto              String?
+  autodeclara        String?
+  extraColumn        String?
+  rawPayload         Json?
+  sourceRow          Int?
+  sourceHash         String              @unique
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  batch              BiSurveyImportBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+
+  @@index([submittedAt])
+  @@index([sufferedViolence, om])
+  @@index([om, postoGraduacao])
+  @@index([posto])
+  @@index([autodeclara])
+  @@index([batchId])
+}
+
 enum TaskStatus {
   NOT_STARTED
   STARTED
@@ -572,6 +736,33 @@ enum TaskPriority {
   HIGH
   MEDIUM
   LOW
+}
+
+enum DocumentCategory {
+  GENERAL
+  MISSION
+  PRESENTATION
+  HISTORY
+  RESEARCH
+  SMIF
+  VISUAL_IDENTITY
+}
+
+enum DocumentParseStatus {
+  PENDING
+  EXTRACTED
+  PARTIAL
+  FAILED
+  NOT_SUPPORTED
+}
+
+enum DocumentLinkEntity {
+  TASK_INSTANCE
+  TASK_TEMPLATE
+  ACTIVITY
+  MEETING
+  ELO
+  LOCALITY
 }
 
 enum TaskAssigneeType {
@@ -628,4 +819,9 @@ enum ActivityStatus {
   IN_PROGRESS
   DONE
   CANCELLED
+}
+
+enum BiImportFormat {
+  CSV
+  XLSX
 }

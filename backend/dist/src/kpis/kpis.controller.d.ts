@@ -10,8 +10,8 @@ export declare class KpisController {
             id: string;
             createdAt: Date;
             updatedAt: Date;
-            key: string;
             label: string;
+            key: string;
             visibility: import("@prisma/client").$Enums.KpiVisibility;
         }[];
     }>;
@@ -19,8 +19,8 @@ export declare class KpisController {
         id: string;
         createdAt: Date;
         updatedAt: Date;
-        key: string;
         label: string;
+        key: string;
         visibility: import("@prisma/client").$Enums.KpiVisibility;
     }, never, import("@prisma/client/runtime/client").DefaultArgs, import("@prisma/client").Prisma.PrismaClientOptions>;
     addValue(id: string, dto: CreateKpiValueDto): import("@prisma/client").Prisma.Prisma__KpiValueClient<{
@@ -28,8 +28,8 @@ export declare class KpisController {
         specialtyId: string | null;
         createdAt: Date;
         localityId: string | null;
-        date: Date;
         value: number;
+        date: Date;
         kpiId: string;
     }, never, import("@prisma/client/runtime/client").DefaultArgs, import("@prisma/client").Prisma.PrismaClientOptions>;
     dashboard(from: string | undefined, to: string | undefined, user: RbacUser): Promise<{

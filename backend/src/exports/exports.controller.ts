@@ -23,13 +23,14 @@ export class ExportsController {
     @Query('phaseId') phaseId: string | undefined,
     @Query('status') status: string | undefined,
     @Query('assigneeId') assigneeId: string | undefined,
+    @Query('assigneeIds') assigneeIds: string | undefined,
     @Query('dueFrom') dueFrom: string | undefined,
     @Query('dueTo') dueTo: string | undefined,
     @CurrentUser() user: RbacUser,
     @Res() res: Response,
   ) {
     const items = await this.tasks.listTaskInstancesForExport(
-      { localityId, phaseId, status, assigneeId, dueFrom, dueTo },
+      { localityId, phaseId, status, assigneeId, assigneeIds, dueFrom, dueTo },
       user,
     );
 

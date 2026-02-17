@@ -68,6 +68,75 @@ export declare class ActivitiesService {
         ok: boolean;
         seenAt: Date;
     }>;
+    listSchedule(activityId: string, user?: RbacUser): Promise<{
+        activity: {
+            id: string;
+            title: string;
+            eventDate: Date | null;
+            locality: {
+                id: string;
+                name: string;
+                code: string;
+            } | null;
+        };
+        items: {
+            id: any;
+            activityId: any;
+            title: any;
+            startTime: any;
+            durationMinutes: any;
+            location: any;
+            responsible: any;
+            participants: any;
+            createdAt: any;
+            updatedAt: any;
+        }[];
+    }>;
+    createScheduleItem(activityId: string, payload: {
+        title: string;
+        startTime: string;
+        durationMinutes: number;
+        location: string;
+        responsible: string;
+        participants: string;
+    }, user?: RbacUser): Promise<{
+        id: any;
+        activityId: any;
+        title: any;
+        startTime: any;
+        durationMinutes: any;
+        location: any;
+        responsible: any;
+        participants: any;
+        createdAt: any;
+        updatedAt: any;
+    }>;
+    updateScheduleItem(activityId: string, itemId: string, payload: {
+        title?: string;
+        startTime?: string;
+        durationMinutes?: number;
+        location?: string;
+        responsible?: string;
+        participants?: string;
+    }, user?: RbacUser): Promise<{
+        id: any;
+        activityId: any;
+        title: any;
+        startTime: any;
+        durationMinutes: any;
+        location: any;
+        responsible: any;
+        participants: any;
+        createdAt: any;
+        updatedAt: any;
+    }>;
+    deleteScheduleItem(activityId: string, itemId: string, user?: RbacUser): Promise<{
+        ok: boolean;
+    }>;
+    buildSchedulePdf(activityId: string, user?: RbacUser): Promise<{
+        fileName: string;
+        buffer: Buffer<ArrayBufferLike>;
+    }>;
     upsertReport(activityId: string, payload: {
         date: string;
         location: string;
@@ -124,6 +193,12 @@ export declare class ActivitiesService {
     private attachActivityCommentSummary;
     private mapActivity;
     private mapComment;
+    private mapScheduleItem;
+    private normalizeScheduleTime;
+    private normalizeDurationMinutes;
+    private findScheduleLogoPath;
+    private formatDuration;
+    private sanitizeRequiredText;
     private sanitizeCommentText;
     private assertLocalityConstraint;
     private invalidateSignature;

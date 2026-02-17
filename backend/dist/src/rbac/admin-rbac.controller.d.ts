@@ -1,5 +1,6 @@
 import { RbacService } from './rbac.service';
 import type { RbacUser } from './rbac.types';
+import { SetUserModuleAccessDto } from './dto/set-user-module-access.dto';
 export declare class AdminRbacController {
     private readonly rbac;
     constructor(rbac: RbacService);
@@ -31,7 +32,60 @@ export declare class AdminRbacController {
         permissions: {
             resource: string;
             action: string;
-            scope: import("@prisma/client").$Enums.PermissionScope;
+            scope: import("@prisma/client").PermissionScope;
         }[];
+        moduleAccessOverrides: {
+            resource: string;
+            enabled: boolean;
+        }[];
+        wildcard?: undefined;
+    } | {
+        source: string;
+        id: string;
+        wildcard: boolean;
+        permissions: {
+            resource: string;
+            action: string;
+            scope: import("@prisma/client").PermissionScope;
+        }[];
+        moduleAccessOverrides?: undefined;
+    }>;
+    userModuleAccess(userId: string): Promise<{
+        user: {
+            id: string;
+            name: string;
+            email: string;
+        };
+        modules: {
+            resource: string;
+            baseEnabled: boolean;
+            enabled: boolean;
+            isOverridden: boolean;
+            source: string;
+        }[];
+        summary: {
+            total: number;
+            enabled: number;
+            overridden: number;
+        };
+    }>;
+    setUserModuleAccess(userId: string, dto: SetUserModuleAccessDto, user: RbacUser): Promise<{
+        user: {
+            id: string;
+            name: string;
+            email: string;
+        };
+        modules: {
+            resource: string;
+            baseEnabled: boolean;
+            enabled: boolean;
+            isOverridden: boolean;
+            source: string;
+        }[];
+        summary: {
+            total: number;
+            enabled: number;
+            overridden: number;
+        };
     }>;
 }

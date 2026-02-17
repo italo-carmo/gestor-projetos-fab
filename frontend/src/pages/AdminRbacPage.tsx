@@ -1,13 +1,11 @@
 import {
   Box,
-  Button,
   Card,
   CardContent,
+  Chip,
   MenuItem,
   Stack,
-  Stepper,
-  Step,
-  StepLabel,
+  Switch,
   Table,
   TableBody,
   TableCell,
@@ -16,138 +14,194 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { useMe, usePermissionsCatalog, useRbacExport, useRbacImport, useRbacSimulate, useRoles, useUsers, useUpdateUser, useEloRoles } from '../api/hooks';
+import {
+  useMe,
+  usePermissionsCatalog,
+  useRbacSimulate,
+  useRoles,
+  useUsers,
+  useUpdateUser,
+  useEloRoles,
+  useUserModuleAccess,
+  useUpdateUserModuleAccess,
+  useSetRolePermissions,
+} from '../api/hooks';
 import { can } from '../app/rbac';
-import { useState, useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useToast } from '../app/toast';
 import { parseApiError } from '../app/apiErrors';
-import { PermissionScope } from '../constants/enums';
-import { ConfirmDialog } from '../components/dialogs/ConfirmDialog';
 
-type RbacExport = { version?: string; roles?: Array<{ name: string; permissions?: Array<{ resource: string; action: string; scope: string }> }> };
+type PermissionItem = { resource: string; action: string; scope: string };
+type RoleItem = { id: string; name: string };
+type UserItem = { id: string; name: string; email: string; eloRoleId?: string | null };
+type EloRoleItem = { id: string; code: string; name: string };
+type SimulateResponse = { permissions?: PermissionItem[]; wildcard?: boolean };
+type UserModuleAccessItem = {
+  resource: string;
+  baseEnabled: boolean;
+  enabled: boolean;
+  isOverridden: boolean;
+};
 
-function validateRbacPayload(payload: unknown): { valid: boolean; errors: string[] } {
-  const errors: string[] = [];
-  if (!payload || typeof payload !== 'object') {
-    errors.push('Payload deve ser um objeto JSON.');
-    return { valid: false, errors };
-  }
-  const p = payload as Record<string, unknown>;
-  if (!p.roles || !Array.isArray(p.roles)) {
-    errors.push('Campo "roles" é obrigatório e deve ser um array.');
-    return { valid: false, errors };
-  }
-  const validScopes = new Set(PermissionScope);
-  p.roles.forEach((role: unknown, idx: number) => {
-    if (!role || typeof role !== 'object') {
-      errors.push(`Role[${idx}]: deve ser um objeto.`);
-      return;
-    }
-    const r = role as Record<string, unknown>;
-    if (!r.permissions || !Array.isArray(r.permissions)) return;
-    r.permissions.forEach((perm: unknown, pidx: number) => {
-      const pm = perm as Record<string, unknown>;
-      if (!pm.resource || !pm.action || !pm.scope) {
-        errors.push(`Role[${idx}].permissions[${pidx}]: resource, action e scope são obrigatórios.`);
-      } else if (!validScopes.has(pm.scope as string)) {
-        errors.push(`Role[${idx}].permissions[${pidx}]: scope inválido "${pm.scope}".`);
-      }
-    });
-  });
-  return { valid: errors.length === 0, errors };
+function formatModuleLabel(resource: string) {
+  return resource
+    .split('_')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
 }
 
-function computeDiff(current: RbacExport, incoming: RbacExport) {
-  const currentRoles = new Map((current.roles ?? []).map((r) => [r.name, r]));
-  const incomingRoles = incoming.roles ?? [];
-  const rolesCreated: string[] = [];
-  const rolesUpdated: string[] = [];
-  const permsByRole: Record<string, { added: string[]; removed: string[] }> = {};
+function groupPermissionsByModule(items: PermissionItem[]) {
+  const grouped = new Map<string, Set<string>>();
+  for (const item of items) {
+    const set = grouped.get(item.resource) ?? new Set<string>();
+    set.add(item.action);
+    grouped.set(item.resource, set);
+  }
 
-  incomingRoles.forEach((inc) => {
-    const curr = currentRoles.get(inc.name);
-    const incPerms = new Set((inc.permissions ?? []).map((p) => `${p.resource}:${p.action}:${p.scope}`));
-    if (!curr) {
-      rolesCreated.push(inc.name);
-      permsByRole[inc.name] = { added: Array.from(incPerms), removed: [] };
-    } else {
-      const currPerms = new Set((curr.permissions ?? []).map((p) => `${p.resource}:${p.action}:${p.scope}`));
-      const added = Array.from(incPerms).filter((p) => !currPerms.has(p));
-      const removed = Array.from(currPerms).filter((p) => !incPerms.has(p));
-      if (added.length || removed.length) {
-        rolesUpdated.push(inc.name);
-        permsByRole[inc.name] = { added, removed };
-      }
-    }
-  });
-
-  return { rolesCreated, rolesUpdated, permsByRole };
+  return Array.from(grouped.entries())
+    .map(([resource, actions]) => ({
+      resource,
+      actions: Array.from(actions).sort((a, b) => a.localeCompare(b)),
+    }))
+    .sort((a, b) => a.resource.localeCompare(b.resource));
 }
 
 export function AdminRbacPage() {
   const { data: me } = useMe();
   const toast = useToast();
+
   const rolesQuery = useRoles();
   const usersQuery = useUsers();
   const permissionsQuery = usePermissionsCatalog();
-  const exportQuery = useRbacExport();
-  const rbacImport = useRbacImport();
-  const [importStep, setImportStep] = useState(0);
-  const [importPayload, setImportPayload] = useState('');
-  const [importMode, setImportMode] = useState<'merge' | 'replace'>('merge');
+  const updateUser = useUpdateUser();
+  const eloRolesQuery = useEloRoles();
+  const setRolePermissions = useSetRolePermissions();
+
+  const [editRoleId, setEditRoleId] = useState('');
+  const [updatingRoleResource, setUpdatingRoleResource] = useState('');
+
   const [simUserId, setSimUserId] = useState('');
   const [simRoleId, setSimRoleId] = useState('');
-  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  const [moduleUserId, setModuleUserId] = useState('');
+  const [updatingModuleResource, setUpdatingModuleResource] = useState('');
+
+  const roleEditorQuery = useRbacSimulate({ roleId: editRoleId || undefined });
   const simulateQuery = useRbacSimulate({
     userId: simUserId || undefined,
     roleId: simRoleId || undefined,
   });
-  const updateUser = useUpdateUser();
-  const eloRolesQuery = useEloRoles();
-  const eloRoles = eloRolesQuery.data?.items ?? [];
+  const userModuleAccessQuery = useUserModuleAccess(moduleUserId || undefined);
+  const updateUserModuleAccess = useUpdateUserModuleAccess();
 
-  const currentExport = (exportQuery.data ?? {}) as RbacExport;
-  const parsedIncoming = useMemo(() => {
-    try {
-      return JSON.parse(importPayload || '{}') as RbacExport;
-    } catch {
-      return null;
-    }
-  }, [importPayload]);
-
-  const validation = useMemo(() => (parsedIncoming ? validateRbacPayload(parsedIncoming) : null), [parsedIncoming]);
-  const diff = useMemo(
-    () => (parsedIncoming && validation?.valid ? computeDiff(currentExport, parsedIncoming) : null),
-    [currentExport, parsedIncoming, validation?.valid],
+  const roles = ((rolesQuery.data?.items ?? []) as RoleItem[]).sort((a, b) =>
+    a.name.localeCompare(b.name, 'pt-BR'),
+  );
+  const users = ((usersQuery.data?.items ?? []) as UserItem[]).sort((a, b) =>
+    a.name.localeCompare(b.name, 'pt-BR'),
+  );
+  const eloRoles = ((eloRolesQuery.data?.items ?? []) as EloRoleItem[]).sort((a, b) =>
+    a.name.localeCompare(b.name, 'pt-BR'),
+  );
+  const permissionCatalog = useMemo(
+    () => (permissionsQuery.data?.items ?? []) as PermissionItem[],
+    [permissionsQuery.data?.items],
   );
 
-  const handleExportDownload = () => {
-    const data = exportQuery.data ?? {};
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `rbac-export-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.push({ message: 'Exportação baixada', severity: 'success' });
-  };
+  const permissionsByResource = useMemo(() => {
+    const map = new Map<string, PermissionItem[]>();
+    for (const item of permissionCatalog) {
+      const list = map.get(item.resource) ?? [];
+      list.push(item);
+      map.set(item.resource, list);
+    }
+    return map;
+  }, [permissionCatalog]);
 
-  const handleImportConfirm = async () => {
-    setConfirmOpen(false);
+  const allResources = useMemo(
+    () => Array.from(permissionsByResource.keys()).sort((a, b) => a.localeCompare(b, 'pt-BR')),
+    [permissionsByResource],
+  );
+
+  const roleEditorData = roleEditorQuery.data as SimulateResponse | undefined;
+  const roleEditorPermissions = useMemo(
+    () => roleEditorData?.permissions ?? [],
+    [roleEditorData?.permissions],
+  );
+  const roleEditorPermissionKeys = useMemo(
+    () =>
+      new Set(
+        roleEditorPermissions.map(
+          (perm) => `${perm.resource}:${perm.action}:${perm.scope}`,
+        ),
+      ),
+    [roleEditorPermissions],
+  );
+  const roleIsWildcard = Boolean(roleEditorData?.wildcard);
+
+  const simulatorData = simulateQuery.data as SimulateResponse | undefined;
+  const simulatorPermissions = useMemo(
+    () => simulatorData?.permissions ?? [],
+    [simulatorData?.permissions],
+  );
+  const simulatorModules = useMemo(
+    () => groupPermissionsByModule(simulatorPermissions),
+    [simulatorPermissions],
+  );
+
+  const catalogModules = useMemo(
+    () => groupPermissionsByModule(permissionCatalog),
+    [permissionCatalog],
+  );
+
+  const userModules =
+    (userModuleAccessQuery.data?.modules as UserModuleAccessItem[] | undefined) ?? [];
+
+  const handleToggleRoleModule = async (resource: string, enabled: boolean) => {
+    if (!editRoleId) return;
+    if (roleIsWildcard) {
+      toast.push({
+        message:
+          'Este papel está como curinga (*). Ajuste o papel para não curinga antes de editar por módulo.',
+        severity: 'warning',
+      });
+      return;
+    }
+
+    const currentPermissions = roleEditorPermissions;
+    const modulePermissions = permissionsByResource.get(resource) ?? [];
+    let nextPermissions = currentPermissions;
+
+    if (enabled) {
+      const toAdd = modulePermissions.filter(
+        (perm) => !roleEditorPermissionKeys.has(`${perm.resource}:${perm.action}:${perm.scope}`),
+      );
+      nextPermissions = [...currentPermissions, ...toAdd];
+    } else {
+      nextPermissions = currentPermissions.filter((perm) => perm.resource !== resource);
+    }
+
     try {
-      const payload = JSON.parse(importPayload || '{}');
-      await rbacImport.mutateAsync({ payload, mode: importMode });
-      toast.push({ message: 'RBAC importado com sucesso', severity: 'success' });
-      setImportStep(0);
-      setImportPayload('');
+      setUpdatingRoleResource(resource);
+      await setRolePermissions.mutateAsync({
+        roleId: editRoleId,
+        permissions: nextPermissions,
+      });
+      await roleEditorQuery.refetch();
+      toast.push({ message: 'Permissões do papel atualizadas', severity: 'success' });
     } catch (error) {
       const payload = parseApiError(error);
-      toast.push({ message: payload.message ?? 'Erro na importação', severity: 'error' });
+      toast.push({
+        message: payload.message ?? 'Erro ao atualizar permissões do papel',
+        severity: 'error',
+      });
+    } finally {
+      setUpdatingRoleResource('');
     }
   };
 
-  if (!can(me, 'roles', 'view') && !can(me, 'admin_rbac', 'export')) {
+  if (!can(me, 'roles', 'view') && !can(me, 'users', 'view')) {
     return (
       <Box>
         <Typography variant="h4" gutterBottom>
@@ -166,113 +220,111 @@ export function AdminRbacPage() {
         Admin RBAC
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Matriz de permissões: exporte, importe e simule permissões por usuário ou role.
+        Gerencie permissões por seleção visual de módulos, sem JSON.
       </Typography>
 
       <Stack spacing={2}>
-        <Card>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Exportar / Importar
-            </Typography>
-            <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems="center">
-              <Button variant="contained" onClick={handleExportDownload} disabled={!exportQuery.data}>
-                Baixar JSON
-              </Button>
-              <Button variant="outlined" onClick={() => setImportStep(1)}>
-                Importar JSON
-              </Button>
-            </Stack>
+        {can(me, 'roles', 'view') && can(me, 'roles', 'permissions') && (
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Permissões por módulo (papel)
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Selecione um papel e ligue/desligue os módulos. Isso altera o acesso padrão de todos os usuários desse papel.
+              </Typography>
 
-            {importStep > 0 && (
-              <Box sx={{ mt: 3 }}>
-                <Stepper activeStep={importStep} sx={{ mb: 2 }}>
-                  <Step><StepLabel>Arquivo / Colar</StepLabel></Step>
-                  <Step><StepLabel>Revisar alterações</StepLabel></Step>
-                  <Step><StepLabel>Confirmar</StepLabel></Step>
-                </Stepper>
+              <TextField
+                select
+                size="small"
+                label="Papel"
+                value={editRoleId}
+                onChange={(e) => setEditRoleId(e.target.value)}
+                sx={{ minWidth: 280, mb: 2 }}
+              >
+                <MenuItem value="">Selecionar</MenuItem>
+                {roles.map((role) => (
+                  <MenuItem key={role.id} value={role.id}>
+                    {role.name}
+                  </MenuItem>
+                ))}
+              </TextField>
 
-                {importStep === 1 && (
-                  <Stack spacing={2}>
-                    <TextField
-                      select
-                      size="small"
-                      label="Modo"
-                      value={importMode}
-                      onChange={(e) => setImportMode(e.target.value as 'merge' | 'replace')}
-                      sx={{ minWidth: 160 }}
-                    >
-                      <MenuItem value="merge">Mesclar (adicionar permissões)</MenuItem>
-                      <MenuItem value="replace">Substituir (substituir por papel)</MenuItem>
-                    </TextField>
-                    <TextField
-                      multiline
-                      minRows={8}
-                      placeholder='{"version":"1.0","roles":[...]}'
-                      value={importPayload}
-                      onChange={(e) => setImportPayload(e.target.value)}
-                      fullWidth
-                      error={!!validation && !validation.valid}
-                      helperText={validation?.errors?.slice(0, 3).join(' ')}
-                    />
-                    {validation?.valid && diff && (
-                      <Typography variant="body2" color="text.secondary">
-                        Papéis a criar: {diff.rolesCreated.length}. Papéis a atualizar: {diff.rolesUpdated.length}.
-                      </Typography>
-                    )}
-                    <Stack direction="row" spacing={1}>
-                      <Button variant="text" onClick={() => setImportStep(0)}>Cancelar</Button>
-                      <Button
-                        variant="contained"
-                        onClick={() => setImportStep(2)}
-                        disabled={!validation?.valid}
-                      >
-                        Revisar alterações
-                      </Button>
-                    </Stack>
-                  </Stack>
-                )}
-
-                {importStep === 2 && diff && (
-                  <Stack spacing={2}>
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Papel</TableCell>
-                          <TableCell>Adicionadas</TableCell>
-                          <TableCell>Removidas</TableCell>
+              {!editRoleId ? (
+                <Typography variant="body2" color="text.secondary">
+                  Selecione um papel para editar módulos.
+                </Typography>
+              ) : roleEditorQuery.isLoading ? (
+                <Typography variant="body2" color="text.secondary">
+                  Carregando permissões do papel...
+                </Typography>
+              ) : roleEditorQuery.isError ? (
+                <Typography variant="body2" color="error.main">
+                  {parseApiError(roleEditorQuery.error).message ?? 'Erro ao carregar permissões do papel.'}
+                </Typography>
+              ) : (
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell sx={{ fontWeight: 600 }}>Módulo</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Acesso</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Permissões do módulo</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Observação</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {allResources.map((resource) => {
+                      const enabled = roleIsWildcard
+                        ? true
+                        : roleEditorPermissions.some((perm) => perm.resource === resource);
+                      const modulePerms = permissionsByResource.get(resource) ?? [];
+                      return (
+                        <TableRow key={resource}>
+                          <TableCell>
+                            <Typography variant="body2" fontWeight={600}>
+                              {formatModuleLabel(resource)}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {resource}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Switch
+                              checked={enabled}
+                              disabled={
+                                (setRolePermissions.isPending &&
+                                  updatingRoleResource === resource) ||
+                                roleIsWildcard
+                              }
+                              onChange={(_evt, checked) => {
+                                void handleToggleRoleModule(resource, checked);
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell>{modulePerms.length}</TableCell>
+                          <TableCell>
+                            {roleIsWildcard ? (
+                              <Chip
+                                size="small"
+                                label="Papel curinga (*)"
+                                color="warning"
+                                variant="outlined"
+                              />
+                            ) : enabled ? (
+                              'Ativo'
+                            ) : (
+                              'Inativo'
+                            )}
+                          </TableCell>
                         </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {[...diff.rolesCreated, ...diff.rolesUpdated].map((roleName) => {
-                          const { added, removed } = diff.permsByRole[roleName] ?? { added: [], removed: [] };
-                          return (
-                            <TableRow key={roleName}>
-                              <TableCell>
-                                <Typography variant="body2" fontWeight={600}>{roleName}</Typography>
-                                {diff.rolesCreated.includes(roleName) && (
-                                  <Typography variant="caption" color="primary">(nova)</Typography>
-                                )}
-                              </TableCell>
-                              <TableCell>{added.slice(0, 5).join(', ')}{added.length > 5 ? ` +${added.length - 5}` : ''}</TableCell>
-                              <TableCell>{removed.slice(0, 5).join(', ')}{removed.length > 5 ? ` +${removed.length - 5}` : ''}</TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                    <Stack direction="row" spacing={1}>
-                      <Button variant="text" onClick={() => setImportStep(1)}>Voltar</Button>
-                      <Button variant="contained" color="primary" onClick={() => setConfirmOpen(true)}>
-                        Confirmar importação
-                      </Button>
-                    </Stack>
-                  </Stack>
-                )}
-              </Box>
-            )}
-          </CardContent>
-        </Card>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardContent>
@@ -285,11 +337,14 @@ export function AdminRbacPage() {
                 size="small"
                 label="Usuário"
                 value={simUserId}
-                onChange={(e) => { setSimUserId(e.target.value); setSimRoleId(''); }}
-                sx={{ minWidth: 200 }}
+                onChange={(e) => {
+                  setSimUserId(e.target.value);
+                  setSimRoleId('');
+                }}
+                sx={{ minWidth: 240 }}
               >
                 <MenuItem value="">Selecionar</MenuItem>
-                {(usersQuery.data?.items ?? []).map((user: any) => (
+                {users.map((user) => (
                   <MenuItem key={user.id} value={user.id}>
                     {user.name} ({user.email})
                   </MenuItem>
@@ -300,23 +355,188 @@ export function AdminRbacPage() {
                 size="small"
                 label="Papel"
                 value={simRoleId}
-                onChange={(e) => { setSimRoleId(e.target.value); setSimUserId(''); }}
-                sx={{ minWidth: 200 }}
+                onChange={(e) => {
+                  setSimRoleId(e.target.value);
+                  setSimUserId('');
+                }}
+                sx={{ minWidth: 240 }}
               >
                 <MenuItem value="">Selecionar</MenuItem>
-                {(rolesQuery.data?.items ?? []).map((role: any) => (
+                {roles.map((role) => (
                   <MenuItem key={role.id} value={role.id}>
                     {role.name}
                   </MenuItem>
                 ))}
               </TextField>
             </Stack>
-            <Typography variant="subtitle2" sx={{ mt: 2 }}>Permissões efetivas</Typography>
-            <Box component="pre" sx={{ background: '#F5F8FC', p: 2, borderRadius: 2, overflow: 'auto', fontSize: 12 }}>
-              {simulateQuery.data ? JSON.stringify(simulateQuery.data.permissions, null, 2) : 'Selecione usuário ou role.'}
-            </Box>
+
+            <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>
+              Módulos efetivos
+            </Typography>
+            {!simUserId && !simRoleId ? (
+              <Typography variant="body2" color="text.secondary">
+                Selecione usuário ou papel para visualizar as permissões efetivas.
+              </Typography>
+            ) : simulateQuery.isLoading ? (
+              <Typography variant="body2" color="text.secondary">
+                Carregando simulação...
+              </Typography>
+            ) : simulateQuery.isError ? (
+              <Typography variant="body2" color="error.main">
+                {parseApiError(simulateQuery.error).message ?? 'Erro ao simular permissões.'}
+              </Typography>
+            ) : simulatorModules.length === 0 ? (
+              <Typography variant="body2" color="text.secondary">
+                Sem módulos habilitados para o recorte selecionado.
+              </Typography>
+            ) : (
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 600 }}>Módulo</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Ações</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {simulatorModules.map((item) => (
+                    <TableRow key={item.resource}>
+                      <TableCell>
+                        <Typography variant="body2" fontWeight={600}>
+                          {formatModuleLabel(item.resource)}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {item.resource}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        {item.actions.includes('*') ? 'Todas' : item.actions.join(', ')}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
           </CardContent>
         </Card>
+
+        {can(me, 'users', 'view') && can(me, 'users', 'update') && (
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Acesso por módulo por usuário
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                O papel continua como padrão. Aqui você pode ligar ou desligar módulos específicos para uma pessoa.
+              </Typography>
+              <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 2 }}>
+                <TextField
+                  select
+                  size="small"
+                  label="Usuário"
+                  value={moduleUserId}
+                  onChange={(e) => setModuleUserId(e.target.value)}
+                  sx={{ minWidth: 280 }}
+                >
+                  <MenuItem value="">Selecionar</MenuItem>
+                  {users.map((user) => (
+                    <MenuItem key={user.id} value={user.id}>
+                      {user.name} ({user.email})
+                    </MenuItem>
+                  ))}
+                </TextField>
+                {moduleUserId && userModuleAccessQuery.data && (
+                  <Chip
+                    size="small"
+                    variant="outlined"
+                    color="primary"
+                    label={`Ativos: ${userModuleAccessQuery.data.summary?.enabled ?? 0} / ${userModuleAccessQuery.data.summary?.total ?? 0}`}
+                    sx={{ alignSelf: 'center' }}
+                  />
+                )}
+              </Stack>
+
+              {!moduleUserId ? (
+                <Typography variant="body2" color="text.secondary">
+                  Selecione um usuário para ajustar os módulos.
+                </Typography>
+              ) : userModuleAccessQuery.isLoading ? (
+                <Typography variant="body2" color="text.secondary">
+                  Carregando módulos...
+                </Typography>
+              ) : userModuleAccessQuery.isError ? (
+                <Typography variant="body2" color="error.main">
+                  {parseApiError(userModuleAccessQuery.error).message ?? 'Erro ao carregar módulos.'}
+                </Typography>
+              ) : (
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell sx={{ fontWeight: 600 }}>Módulo</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Padrão do papel</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Acesso do usuário</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Origem</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {userModules.map((module) => (
+                      <TableRow key={module.resource}>
+                        <TableCell>
+                          <Typography variant="body2" fontWeight={600}>
+                            {formatModuleLabel(module.resource)}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {module.resource}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>{module.baseEnabled ? 'Ativo' : 'Inativo'}</TableCell>
+                        <TableCell>
+                          <Switch
+                            checked={Boolean(module.enabled)}
+                            disabled={
+                              updateUserModuleAccess.isPending &&
+                              updatingModuleResource === module.resource
+                            }
+                            onChange={async (_evt, checked) => {
+                              try {
+                                setUpdatingModuleResource(module.resource);
+                                await updateUserModuleAccess.mutateAsync({
+                                  userId: moduleUserId,
+                                  resource: module.resource,
+                                  enabled: checked,
+                                });
+                                toast.push({ message: 'Módulo atualizado', severity: 'success' });
+                              } catch (error) {
+                                const payload = parseApiError(error);
+                                toast.push({
+                                  message: payload.message ?? 'Erro ao atualizar módulo',
+                                  severity: 'error',
+                                });
+                              } finally {
+                                setUpdatingModuleResource('');
+                              }
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          {module.isOverridden ? (
+                            <Chip
+                              size="small"
+                              label="Override usuário"
+                              color="warning"
+                              variant="outlined"
+                            />
+                          ) : (
+                            <Chip size="small" label="Papel" variant="outlined" />
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {can(me, 'users', 'view') && can(me, 'users', 'update') && (
           <Card>
@@ -336,7 +556,7 @@ export function AdminRbacPage() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {(usersQuery.data?.items ?? []).map((user: any) => (
+                  {users.map((user) => (
                     <TableRow key={user.id}>
                       <TableCell>{user.name}</TableCell>
                       <TableCell>{user.email}</TableCell>
@@ -350,17 +570,25 @@ export function AdminRbacPage() {
                             updateUser.mutate(
                               { id: user.id, eloRoleId: val || null },
                               {
-                                onSuccess: () => toast.push({ message: 'Elo atualizado', severity: 'success' }),
-                                onError: (err) => toast.push({ message: parseApiError(err).message ?? 'Erro ao atualizar', severity: 'error' }),
+                                onSuccess: () =>
+                                  toast.push({ message: 'Elo atualizado', severity: 'success' }),
+                                onError: (err) =>
+                                  toast.push({
+                                    message:
+                                      parseApiError(err).message ?? 'Erro ao atualizar',
+                                    severity: 'error',
+                                  }),
                               },
                             );
                           }}
                           disabled={updateUser.isPending}
-                          sx={{ minWidth: 200 }}
+                          sx={{ minWidth: 220 }}
                         >
                           <MenuItem value="">Nenhum</MenuItem>
-                          {eloRoles.map((r: any) => (
-                            <MenuItem key={r.id} value={r.id}>{r.name} ({r.code})</MenuItem>
+                          {eloRoles.map((role) => (
+                            <MenuItem key={role.id} value={role.id}>
+                              {role.name} ({role.code})
+                            </MenuItem>
                           ))}
                         </TextField>
                       </TableCell>
@@ -375,24 +603,39 @@ export function AdminRbacPage() {
         <Card>
           <CardContent>
             <Typography variant="h6" gutterBottom>
-              Catálogo de permissões
+              Catálogo de módulos
             </Typography>
-            <Box component="pre" sx={{ background: '#F5F8FC', p: 2, borderRadius: 2, overflow: 'auto', fontSize: 12 }}>
-              {permissionsQuery.data ? JSON.stringify(permissionsQuery.data.items, null, 2) : 'Carregando...'}
-            </Box>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+              Referência visual dos módulos e ações disponíveis no sistema.
+            </Typography>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ fontWeight: 600 }}>Módulo</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>Ações</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {catalogModules.map((item) => (
+                  <TableRow key={item.resource}>
+                    <TableCell>
+                      <Typography variant="body2" fontWeight={600}>
+                        {formatModuleLabel(item.resource)}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {item.resource}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      {item.actions.includes('*') ? 'Todas' : item.actions.join(', ')}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       </Stack>
-
-      <ConfirmDialog
-        open={confirmOpen}
-        title="Confirmar importaçãoação"
-        message={`Importar matriz RBAC em modo "${importMode === 'merge' ? 'mesclar' : 'substituir'}"? Isso alterará as permissões dos papéis listados.`}
-        confirmLabel="Importar"
-        cancelLabel="Cancelar"
-        onConfirm={handleImportConfirm}
-        onCancel={() => setConfirmOpen(false)}
-      />
     </Box>
   );
 }

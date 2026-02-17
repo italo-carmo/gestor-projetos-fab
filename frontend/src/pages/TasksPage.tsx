@@ -2,7 +2,7 @@ import { Box, Button, Card, CardContent, Link, MenuItem, Stack, Tab, Tabs, TextF
 import { format } from 'date-fns';
 import { useEffect, useMemo, useState } from 'react';
 import { Link as RouterLink, useSearchParams } from 'react-router-dom';
-import { useDashboardNational, useEloRoles, usePhases, useTaskTemplates, useTasks, useMe, useBatchAssignTasks, useBatchStatusTasks } from '../api/hooks';
+import { useDashboardNational, useEloRoles, usePhases, useTaskTemplates, useTasks, useMe, useBatchAssignTasks, useBatchStatusTasks, useUsers } from '../api/hooks';
 import { useDebounce } from '../app/useDebounce';
 import { FiltersBar } from '../components/filters/FiltersBar';
 import { SkeletonState } from '../components/states/SkeletonState';
@@ -33,7 +33,12 @@ export function TasksPage() {
   const localityId = params.get('localityId') ?? '';
   const phaseId = params.get('phaseId') ?? '';
   const status = params.get('status') ?? '';
-  const assigneeId = params.get('assigneeId') ?? '';
+  const assigneeIdsParam = params.get('assigneeIds') ?? params.get('assigneeId') ?? '';
+  const assigneeIds = assigneeIdsParam
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const assigneeIdsFilter = assigneeIds.join(',');
   const dueFrom = params.get('dueFrom') ?? '';
   const dueTo = params.get('dueTo') ?? '';
   const eloRoleId = params.get('eloRoleId') ?? '';
@@ -43,15 +48,17 @@ export function TasksPage() {
       localityId: localityId || undefined,
       phaseId: phaseId || undefined,
       status: status || undefined,
-      assigneeId: assigneeId || undefined,
+      assigneeIds: assigneeIdsFilter || undefined,
       dueFrom: dueFrom || undefined,
       dueTo: dueTo || undefined,
       eloRoleId: eloRoleId || undefined,
     }),
-    [localityId, phaseId, status, assigneeId, dueFrom, dueTo, eloRoleId],
+    [localityId, phaseId, status, assigneeIdsFilter, dueFrom, dueTo, eloRoleId],
   );
 
   const tasksQuery = useTasks(taskFilters);
+  const canViewUsers = can(me, 'users', 'view');
+  const usersQuery = useUsers(canViewUsers);
   const phasesQuery = usePhases();
   const eloRolesQuery = useEloRoles();
   const eloRoles = eloRolesQuery.data?.items ?? [];
@@ -81,23 +88,30 @@ export function TasksPage() {
 
   const assignees: { id: string; name: string }[] = me?.executive_hide_pii
     ? []
-    : Array.from(
-        new Map<string, { id: string; name: string }>(
-          filteredItems
-            .filter((item: any) => item.assignedToId)
-            .map((item: any) => [
-              String(item.assignedToId),
-              {
-                id: String(item.assignedToId),
-                name:
-                  item.assignee?.name ??
-                  item.assignedTo?.name ??
-                  item.assignedTo?.email ??
-                  `Usuário ${String(item.assignedToId).slice(0, 8)}`,
-              },
-            ]),
-        ).values(),
-      );
+    : (usersQuery.data?.items ?? []).length > 0
+      ? (usersQuery.data?.items ?? [])
+          .map((user: any) => ({
+            id: String(user.id),
+            name: user.name ?? user.email ?? `Usuário ${String(user.id).slice(0, 8)}`,
+          }))
+          .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+      : Array.from(
+          new Map<string, { id: string; name: string }>(
+            items
+              .filter((item: any) => item.assignedToId)
+              .map((item: any) => [
+                String(item.assignedToId),
+                {
+                  id: String(item.assignedToId),
+                  name:
+                    item.assignee?.name ??
+                    item.assignedTo?.name ??
+                    item.assignedTo?.email ??
+                    `Usuário ${String(item.assignedToId).slice(0, 8)}`,
+                },
+              ]),
+          ).values(),
+        );
 
   const taskIdFromUrl = params.get('taskId') ?? '';
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(taskIdFromUrl || null);
@@ -118,6 +132,14 @@ export function TasksPage() {
     const next = new URLSearchParams(params);
     if (value) next.set(key, value);
     else next.delete(key);
+    setParams(next);
+  };
+
+  const updateAssigneeIds = (values: string[]) => {
+    const next = new URLSearchParams(params);
+    if (values.length > 0) next.set('assigneeIds', values.join(','));
+    else next.delete('assigneeIds');
+    next.delete('assigneeId');
     setParams(next);
   };
 
@@ -161,8 +183,8 @@ export function TasksPage() {
             onPhaseChange={(value) => updateParam('phaseId', value)}
             status={status}
             onStatusChange={(value) => updateParam('status', value)}
-            assigneeId={assigneeId}
-            onAssigneeChange={(value) => updateParam('assigneeId', value)}
+            assigneeId={assigneeIds[0] ?? ''}
+            onAssigneeChange={(value) => updateAssigneeIds(value ? [value] : [])}
             dueFrom={dueFrom}
             dueTo={dueTo}
             onDueFromChange={(value) => updateParam('dueFrom', value)}
@@ -199,12 +221,21 @@ export function TasksPage() {
               </Typography>
               {can(me, 'task_instances', 'assign') && (
                 <TextField
+                  select
                   size="small"
-                  label="Responsável (ID interno)"
+                  label="Responsável"
                   value={batchAssignee}
                   onChange={(e) => setBatchAssignee(e.target.value)}
-                  sx={{ minWidth: 180 }}
-                />
+                  sx={{ minWidth: 260 }}
+                >
+                  <MenuItem value="">Selecionar</MenuItem>
+                  <MenuItem value="__UNASSIGNED__">Sem responsável</MenuItem>
+                  {assignees.map((assignee) => (
+                    <MenuItem key={assignee.id} value={assignee.id}>
+                      {assignee.name}
+                    </MenuItem>
+                  ))}
+                </TextField>
               )}
               {can(me, 'task_instances', 'update') && (
                 <TextField
@@ -225,10 +256,18 @@ export function TasksPage() {
               )}
               <Button
                 variant="outlined"
-                disabled={!selectedIds.length || !can(me, 'task_instances', 'assign')}
+                disabled={
+                  !selectedIds.length ||
+                  !batchAssignee ||
+                  !can(me, 'task_instances', 'assign')
+                }
                 onClick={async () => {
                   try {
-                    await batchAssign.mutateAsync({ ids: selectedIds.map(String), assignedToId: batchAssignee || null });
+                    await batchAssign.mutateAsync({
+                      ids: selectedIds.map(String),
+                      assignedToId:
+                        batchAssignee === '__UNASSIGNED__' ? null : batchAssignee,
+                    });
                     toast.push({ message: 'Responsável atualizado', severity: 'success' });
                   } catch (error) {
                     const payload = parseApiError(error);
@@ -262,32 +301,33 @@ export function TasksPage() {
                 columns={[
                   {
                     field: 'title',
-                    headerName: 'Título',
-                    flex: 1,
+                    headerName: 'Título da tarefa',
+                    flex: 1.4,
+                    minWidth: 360,
                     valueGetter: (_, row) => row.taskTemplate?.title ?? '-',
                   },
                   {
                     field: 'locality',
                     headerName: 'Localidade',
-                    width: 160,
+                    width: 145,
                     valueGetter: (_, row) => localityMap.get(row.localityId) ?? row.localityId ?? '-',
                   },
                   {
                     field: 'phase',
                     headerName: 'Fase',
-                    width: 160,
+                    width: 130,
                     valueGetter: (_, row) => phaseMap.get(row.taskTemplate?.phaseId) ?? '-',
                   },
                   {
                     field: 'dueDate',
                     headerName: 'Prazo',
-                    width: 150,
-                    renderCell: (params) => <DueBadge dueDate={params.row.dueDate} />,
+                    width: 125,
+                    renderCell: (params) => <DueBadge dueDate={params.row.dueDate} status={params.row.status} />,
                   },
                   {
                     field: 'assignee',
                     headerName: 'Responsável',
-                    width: 160,
+                    width: 170,
                     valueGetter: (_, row) =>
                       me?.executive_hide_pii
                         ? '-'
@@ -300,7 +340,7 @@ export function TasksPage() {
                   {
                     field: 'comments',
                     headerName: 'Comentários',
-                    width: 150,
+                    width: 120,
                     renderCell: (params) => {
                       const total = params.row.comments?.total ?? 0;
                       const unread = params.row.comments?.unread ?? 0;
@@ -311,7 +351,7 @@ export function TasksPage() {
                   {
                     field: 'status',
                     headerName: 'Status',
-                    width: 140,
+                    width: 130,
                     renderCell: (params) => (
                       <StatusChip
                         status={params.row.status}
@@ -323,19 +363,19 @@ export function TasksPage() {
                   {
                     field: 'progress',
                     headerName: 'Progresso',
-                    width: 160,
+                    width: 145,
                     renderCell: (params) => <ProgressInline value={params.row.progressPercent ?? 0} />,
                   },
                   {
                     field: 'eloRole',
                     headerName: 'Elo',
-                    width: 120,
+                    width: 100,
                     valueGetter: (_, row) => row.eloRole?.name ?? row.eloRole?.code ?? '—',
                   },
                   {
                     field: 'meeting',
                     headerName: 'Reunião',
-                    width: 180,
+                    width: 170,
                     renderCell: (params) => {
                       const m = params.row.meeting;
                       if (!m) return '—';
@@ -363,7 +403,16 @@ export function TasksPage() {
       )}
 
       {filteredItems.length > 0 && tab === 1 && (
-        <Box display="grid" gridTemplateColumns={{ xs: '1fr', md: 'repeat(5, 1fr)' }} gap={2}>
+        <Box
+          display="grid"
+          gridTemplateColumns={{
+            xs: '1fr',
+            md: 'repeat(2, minmax(0, 1fr))',
+            lg: 'repeat(3, minmax(0, 1fr))',
+            xl: 'repeat(5, minmax(0, 1fr))',
+          }}
+          gap={2}
+        >
           {['NOT_STARTED', 'STARTED', 'IN_PROGRESS', 'BLOCKED', 'DONE'].map((column) => (
             <Card key={column}>
               <CardContent>
@@ -382,7 +431,7 @@ export function TasksPage() {
                       >
                         <CardContent>
                           <Typography variant="subtitle2">{task.taskTemplate?.title ?? '-'}</Typography>
-                          <DueBadge dueDate={task.dueDate} />
+                          <DueBadge dueDate={task.dueDate} status={task.status} />
                           {(task.comments?.unread ?? 0) > 0 && (
                             <Typography variant="caption" color="warning.main" display="block" sx={{ mt: 0.4 }}>
                               Novo comentário ({task.comments.unread})

@@ -26,19 +26,23 @@ export class RbacGuard implements CanActivate {
 
     const { resource, action, scope } = requirement;
 
-    const wildcard = access.roles.some((role) => role.wildcard);
-    if (wildcard) return true;
-
-    const allowed = access.roles.some((role) =>
-      role.permissions.some((perm) => {
-        if (perm.resource !== resource && perm.resource !== '*') return false;
-        if (perm.action !== action && perm.action !== '*') return false;
-        if (scope && perm.scope !== scope) return false;
-        return true;
-      }),
-    );
+    const allowed = access.permissions.some((perm) => {
+      if (perm.resource !== resource && perm.resource !== '*') return false;
+      if (perm.action !== action && perm.action !== '*') return false;
+      if (scope && perm.scope !== scope) return false;
+      return true;
+    });
 
     if (!allowed) {
+      const wildcard = access.roles.some((role) => role.wildcard);
+      if (wildcard) {
+        const blockedByOverride = access.moduleAccessOverrides.some(
+          (override) => override.resource === resource && !override.enabled,
+        );
+        if (!blockedByOverride) {
+          return true;
+        }
+      }
       throwError('RBAC_FORBIDDEN');
     }
 

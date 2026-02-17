@@ -6,7 +6,8 @@ export function formatDate(input?: string | Date | null, pattern = 'dd/MM/yyyy')
   return format(date, pattern);
 }
 
-export function dueBadge(dueDate?: string | Date | null) {
+export function dueBadge(dueDate?: string | Date | null, status?: string | null) {
+  if (status === 'DONE') return { label: 'Concluída', tone: 'success' as const };
   if (!dueDate) return { label: '-', tone: 'default' as const };
   const date = typeof dueDate === 'string' ? parseISO(dueDate) : dueDate;
   const days = differenceInDays(date, new Date());

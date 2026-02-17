@@ -9,13 +9,13 @@ export declare class ReportsController {
     }, user: RbacUser): Promise<{
         id: string;
         createdAt: Date;
-        taskInstanceId: string;
         fileName: string;
         fileUrl: string;
         storageKey: string | null;
         mimeType: string | null;
         fileSize: number | null;
         checksum: string | null;
+        taskInstanceId: string;
         approved: boolean;
     }>;
     download(id: string, token: string | undefined, res: Response, user: RbacUser): Promise<void | Response<any, Record<string, any>>>;
@@ -26,13 +26,13 @@ export declare class ReportsController {
     approve(id: string, approved: boolean, user: RbacUser): Promise<{
         id: string;
         createdAt: Date;
-        taskInstanceId: string;
         fileName: string;
         fileUrl: string;
         storageKey: string | null;
         mimeType: string | null;
         fileSize: number | null;
         checksum: string | null;
+        taskInstanceId: string;
         approved: boolean;
     }>;
 }

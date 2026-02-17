@@ -21,7 +21,7 @@ let SearchService = class SearchService {
     async query(q, user) {
         const query = q?.trim();
         if (!query) {
-            return { tasks: [], notices: [], meetings: [], localities: [] };
+            return { tasks: [], notices: [], meetings: [], localities: [], documents: [] };
         }
         const taskWhere = {
             taskTemplate: { title: { contains: query, mode: 'insensitive' } },
@@ -61,7 +61,16 @@ let SearchService = class SearchService {
         };
         if (user?.localityId)
             localityWhere.id = user.localityId;
-        const [tasks, notices, meetings, localities] = await this.prisma.$transaction([
+        const documentWhere = {
+            OR: [
+                { title: { contains: query, mode: 'insensitive' } },
+                { sourcePath: { contains: query, mode: 'insensitive' } },
+            ],
+        };
+        if (user?.localityId) {
+            documentWhere.AND = [{ OR: [{ localityId: null }, { localityId: user.localityId }] }];
+        }
+        const [tasks, notices, meetings, localities, documents] = await this.prisma.$transaction([
             this.prisma.taskInstance.findMany({
                 where: taskWhere,
                 include: { taskTemplate: true, locality: true },
@@ -77,6 +86,11 @@ let SearchService = class SearchService {
             }),
             this.prisma.locality.findMany({
                 where: localityWhere,
+                take: 10,
+            }),
+            this.prisma.documentAsset.findMany({
+                where: documentWhere,
+                include: { locality: { select: { id: true, name: true, code: true } } },
                 take: 10,
             }),
         ]);
@@ -106,6 +120,14 @@ let SearchService = class SearchService {
                 id: loc.id,
                 code: loc.code,
                 name: loc.name,
+            })),
+            documents: documents.map((doc) => ({
+                id: doc.id,
+                title: doc.title,
+                category: doc.category,
+                localityId: doc.localityId,
+                localityName: doc.locality?.name ?? null,
+                fileName: doc.fileName,
             })),
         };
         return user?.executiveHidePii ? (0, executive_1.sanitizeForExecutive)(payload) : payload;

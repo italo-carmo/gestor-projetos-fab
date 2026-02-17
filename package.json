@@ -16,6 +16,7 @@
     "prisma:migrate": "npm --prefix backend run prisma:migrate",
     "prisma:generate": "npm --prefix backend run prisma:generate",
     "seed:demo": "npm --prefix backend run seed:demo",
+    "seed:repositorio": "npm --prefix backend run seed:repositorio",
     "run:all": "bash scripts/run-all.sh",
     "run:all:prod": "bash scripts/run-all.sh --prod",
     "test": "npm --prefix backend run test",

@@ -28,6 +28,8 @@ const update_activity_dto_1 = require("./dto/update-activity.dto");
 const update_activity_status_dto_1 = require("./dto/update-activity-status.dto");
 const upsert_activity_report_dto_1 = require("./dto/upsert-activity-report.dto");
 const activity_comment_dto_1 = require("./dto/activity-comment.dto");
+const create_activity_schedule_item_dto_1 = require("./dto/create-activity-schedule-item.dto");
+const update_activity_schedule_item_dto_1 = require("./dto/update-activity-schedule-item.dto");
 const platform_express_1 = require("@nestjs/platform-express");
 const multer_1 = require("multer");
 const multer_exception_filter_1 = require("../reports/multer-exception.filter");
@@ -64,6 +66,24 @@ let ActivitiesController = class ActivitiesController {
     }
     markCommentsSeen(id, user) {
         return this.activities.markCommentsSeen(id, user);
+    }
+    listSchedule(id, user) {
+        return this.activities.listSchedule(id, user);
+    }
+    createScheduleItem(id, dto, user) {
+        return this.activities.createScheduleItem(id, dto, user);
+    }
+    updateScheduleItem(id, itemId, dto, user) {
+        return this.activities.updateScheduleItem(id, itemId, dto, user);
+    }
+    deleteScheduleItem(id, itemId, user) {
+        return this.activities.deleteScheduleItem(id, itemId, user);
+    }
+    async exportSchedulePdf(id, user, res) {
+        const { fileName, buffer } = await this.activities.buildSchedulePdf(id, user);
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+        return res.send(buffer);
     }
     upsertReport(id, dto, user) {
         return this.activities.upsertReport(id, dto, user);
@@ -179,6 +199,56 @@ __decorate([
     __metadata("design:paramtypes", [String, Object]),
     __metadata("design:returntype", void 0)
 ], ActivitiesController.prototype, "markCommentsSeen", null);
+__decorate([
+    (0, common_1.Get)(':id/schedule'),
+    (0, require_permission_decorator_1.RequirePermission)('task_instances', 'view'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", void 0)
+], ActivitiesController.prototype, "listSchedule", null);
+__decorate([
+    (0, common_1.Post)(':id/schedule'),
+    (0, require_permission_decorator_1.RequirePermission)('task_instances', 'update'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)()),
+    __param(2, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, create_activity_schedule_item_dto_1.CreateActivityScheduleItemDto, Object]),
+    __metadata("design:returntype", void 0)
+], ActivitiesController.prototype, "createScheduleItem", null);
+__decorate([
+    (0, common_1.Put)(':id/schedule/:itemId'),
+    (0, require_permission_decorator_1.RequirePermission)('task_instances', 'update'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Param)('itemId')),
+    __param(2, (0, common_1.Body)()),
+    __param(3, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String, update_activity_schedule_item_dto_1.UpdateActivityScheduleItemDto, Object]),
+    __metadata("design:returntype", void 0)
+], ActivitiesController.prototype, "updateScheduleItem", null);
+__decorate([
+    (0, common_1.Delete)(':id/schedule/:itemId'),
+    (0, require_permission_decorator_1.RequirePermission)('task_instances', 'update'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Param)('itemId')),
+    __param(2, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String, Object]),
+    __metadata("design:returntype", void 0)
+], ActivitiesController.prototype, "deleteScheduleItem", null);
+__decorate([
+    (0, common_1.Get)(':id/schedule/pdf'),
+    (0, require_permission_decorator_1.RequirePermission)('reports', 'download'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, current_user_decorator_1.CurrentUser)()),
+    __param(2, (0, common_1.Res)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object, Object]),
+    __metadata("design:returntype", Promise)
+], ActivitiesController.prototype, "exportSchedulePdf", null);
 __decorate([
     (0, common_1.Put)(':id/report'),
     (0, require_permission_decorator_1.RequirePermission)('reports', 'create'),

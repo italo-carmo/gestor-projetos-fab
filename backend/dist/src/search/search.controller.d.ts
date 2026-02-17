@@ -30,5 +30,13 @@ export declare class SearchController {
             code: string;
             name: string;
         }[];
+        documents: {
+            id: string;
+            title: string;
+            category: import("@prisma/client").$Enums.DocumentCategory;
+            localityId: string | null;
+            localityName: string | null;
+            fileName: string;
+        }[];
     }>;
 }

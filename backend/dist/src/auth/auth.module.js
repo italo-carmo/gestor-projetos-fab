@@ -15,12 +15,13 @@ const auth_service_1 = require("./auth.service");
 const auth_controller_1 = require("./auth.controller");
 const jwt_strategy_1 = require("./jwt.strategy");
 const users_module_1 = require("../users/users.module");
+const rbac_module_1 = require("../rbac/rbac.module");
 let AuthModule = class AuthModule {
 };
 exports.AuthModule = AuthModule;
 exports.AuthModule = AuthModule = __decorate([
     (0, common_1.Module)({
-        imports: [config_1.ConfigModule, passport_1.PassportModule, jwt_1.JwtModule.register({}), users_module_1.UsersModule],
+        imports: [config_1.ConfigModule, passport_1.PassportModule, jwt_1.JwtModule.register({}), users_module_1.UsersModule, rbac_module_1.RbacModule],
         controllers: [auth_controller_1.AuthController],
         providers: [auth_service_1.AuthService, jwt_strategy_1.JwtStrategy],
         exports: [auth_service_1.AuthService],

@@ -26,6 +26,8 @@ import { UpdateActivityDto } from './dto/update-activity.dto';
 import { UpdateActivityStatusDto } from './dto/update-activity-status.dto';
 import { UpsertActivityReportDto } from './dto/upsert-activity-report.dto';
 import { ActivityCommentDto } from './dto/activity-comment.dto';
+import { CreateActivityScheduleItemDto } from './dto/create-activity-schedule-item.dto';
+import { UpdateActivityScheduleItemDto } from './dto/update-activity-schedule-item.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { MulterExceptionFilter } from '../reports/multer-exception.filter';
@@ -92,6 +94,56 @@ export class ActivitiesController {
   @RequirePermission('task_instances', 'view')
   markCommentsSeen(@Param('id') id: string, @CurrentUser() user: RbacUser) {
     return this.activities.markCommentsSeen(id, user);
+  }
+
+  @Get(':id/schedule')
+  @RequirePermission('task_instances', 'view')
+  listSchedule(@Param('id') id: string, @CurrentUser() user: RbacUser) {
+    return this.activities.listSchedule(id, user);
+  }
+
+  @Post(':id/schedule')
+  @RequirePermission('task_instances', 'update')
+  createScheduleItem(
+    @Param('id') id: string,
+    @Body() dto: CreateActivityScheduleItemDto,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.activities.createScheduleItem(id, dto, user);
+  }
+
+  @Put(':id/schedule/:itemId')
+  @RequirePermission('task_instances', 'update')
+  updateScheduleItem(
+    @Param('id') id: string,
+    @Param('itemId') itemId: string,
+    @Body() dto: UpdateActivityScheduleItemDto,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.activities.updateScheduleItem(id, itemId, dto, user);
+  }
+
+  @Delete(':id/schedule/:itemId')
+  @RequirePermission('task_instances', 'update')
+  deleteScheduleItem(
+    @Param('id') id: string,
+    @Param('itemId') itemId: string,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.activities.deleteScheduleItem(id, itemId, user);
+  }
+
+  @Get(':id/schedule/pdf')
+  @RequirePermission('reports', 'download')
+  async exportSchedulePdf(
+    @Param('id') id: string,
+    @CurrentUser() user: RbacUser,
+    @Res() res: Response,
+  ) {
+    const { fileName, buffer } = await this.activities.buildSchedulePdf(id, user);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    return res.send(buffer);
   }
 
   @Put(':id/report')

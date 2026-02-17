@@ -27,8 +27,8 @@ let ExportsController = class ExportsController {
         this.tasks = tasks;
         this.checklists = checklists;
     }
-    async exportTasks(localityId, phaseId, status, assigneeId, dueFrom, dueTo, user, res) {
-        const items = await this.tasks.listTaskInstancesForExport({ localityId, phaseId, status, assigneeId, dueFrom, dueTo }, user);
+    async exportTasks(localityId, phaseId, status, assigneeId, assigneeIds, dueFrom, dueTo, user, res) {
+        const items = await this.tasks.listTaskInstancesForExport({ localityId, phaseId, status, assigneeId, assigneeIds, dueFrom, dueTo }, user);
         const headers = [
             'taskId',
             'title',
@@ -92,12 +92,13 @@ __decorate([
     __param(1, (0, common_1.Query)('phaseId')),
     __param(2, (0, common_1.Query)('status')),
     __param(3, (0, common_1.Query)('assigneeId')),
-    __param(4, (0, common_1.Query)('dueFrom')),
-    __param(5, (0, common_1.Query)('dueTo')),
-    __param(6, (0, current_user_decorator_1.CurrentUser)()),
-    __param(7, (0, common_1.Res)()),
+    __param(4, (0, common_1.Query)('assigneeIds')),
+    __param(5, (0, common_1.Query)('dueFrom')),
+    __param(6, (0, common_1.Query)('dueTo')),
+    __param(7, (0, current_user_decorator_1.CurrentUser)()),
+    __param(8, (0, common_1.Res)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, Object, Object, Object, Object, Object, Object, Object]),
+    __metadata("design:paramtypes", [Object, Object, Object, Object, Object, Object, Object, Object, Object]),
     __metadata("design:returntype", Promise)
 ], ExportsController.prototype, "exportTasks", null);
 __decorate([

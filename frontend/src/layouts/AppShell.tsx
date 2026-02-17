@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import {
   AppBar,
   Avatar,
+  Button,
   Box,
   Chip,
   CssBaseline,
@@ -16,6 +17,7 @@ import {
   ListItemText,
   Popover,
   TextField,
+  Tooltip,
   Toolbar,
   Typography,
 } from '@mui/material';
@@ -36,20 +38,28 @@ import AccountTreeIcon from '@mui/icons-material/AccountTree';
 import ContactPhoneIcon from '@mui/icons-material/ContactPhone';
 import HistoryIcon from '@mui/icons-material/History';
 import EventNoteIcon from '@mui/icons-material/EventNote';
+import FolderOpenIcon from '@mui/icons-material/FolderOpen';
+import LogoutIcon from '@mui/icons-material/Logout';
+import ChevronLeftRoundedIcon from '@mui/icons-material/ChevronLeftRounded';
+import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
+import InsightsRoundedIcon from '@mui/icons-material/InsightsRounded';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { useDebounce } from '../app/useDebounce';
 import { can } from '../app/rbac';
 import { useMe, useSearch } from '../api/hooks';
 import { MEETING_STATUS_LABELS, NOTICE_PRIORITY_LABELS } from '../constants/enums';
 
-const drawerWidth = 284;
+const drawerExpandedWidth = 284;
+const drawerCollapsedWidth = 92;
 
 const navItems = [
   { label: 'Painel Nacional', to: '/dashboard/national', icon: <DashboardIcon fontSize="small" /> },
   { label: 'Painel Exec.', to: '/dashboard/executive', icon: <DashboardIcon fontSize="small" /> },
+  { label: 'BI Pesquisas', to: '/dashboard/bi', icon: <InsightsRoundedIcon fontSize="small" /> },
   { label: 'Atividades', to: '/activities', icon: <EventNoteIcon fontSize="small" /> },
   { label: 'Tarefas', to: '/tasks', icon: <TaskIcon fontSize="small" /> },
   { label: 'Modelos de tarefa', to: '/templates', icon: <TaskIcon fontSize="small" /> },
+  { label: 'Acervo', to: '/documents', icon: <FolderOpenIcon fontSize="small" /> },
   { label: 'Cronograma', to: '/gantt', icon: <TimelineIcon fontSize="small" /> },
   { label: 'Calendário', to: '/calendar', icon: <CalendarMonthIcon fontSize="small" /> },
   { label: 'Reuniões', to: '/meetings', icon: <GroupsIcon fontSize="small" /> },
@@ -72,6 +82,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('lg'));
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState(false);
   const [globalQuery, setGlobalQuery] = useState('');
   const debounced = useDebounce(globalQuery, 300);
   const searchQuery = useSearch(debounced);
@@ -80,6 +91,14 @@ export function AppShell({ children }: { children: ReactNode }) {
   const contextFromQuery = searchParams.get('localityId');
   const localityFromPath = location.pathname.startsWith('/dashboard/locality/') ? location.pathname.split('/').pop() : null;
   const contextLocality = contextFromQuery ?? localityFromPath;
+  const sidebarCollapsed = !isMobile && desktopSidebarCollapsed;
+  const sidebarWidth = sidebarCollapsed ? drawerCollapsedWidth : drawerExpandedWidth;
+
+  const handleLogout = () => {
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    window.location.assign('/login');
+  };
 
   const visibleNavItems = navItems.filter((item) => {
     if (item.to === '/admin/rbac') {
@@ -87,6 +106,9 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
     if (item.to === '/dashboard/executive') {
       return can(me, 'dashboard', 'view') && (me?.executive_hide_pii || can(me, 'roles', 'view'));
+    }
+    if (item.to === '/dashboard/bi') {
+      return can(me, 'dashboard', 'view');
     }
     if (item.to === '/audit') {
       return can(me, 'audit_logs', 'view');
@@ -105,6 +127,9 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
     if (item.to === '/templates') {
       return can(me, 'task_templates', 'view');
+    }
+    if (item.to === '/documents') {
+      return can(me, 'search', 'view');
     }
     if (item.to === '/activities') {
       return can(me, 'task_instances', 'view');
@@ -129,46 +154,62 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const drawer = useMemo(
     () => (
-      <Box sx={{ p: 2, pt: 2.4 }}>
-        <Box
-          sx={{
-            px: 1.5,
-            py: 1.1,
-            borderRadius: 2.4,
-            border: `1px solid ${alpha('#0C657E', 0.2)}`,
-            background: `linear-gradient(145deg, ${alpha('#0C657E', 0.12)}, ${alpha('#C56A2B', 0.1)})`,
-          }}
-        >
-          <Typography variant="overline" sx={{ color: 'text.secondary', letterSpacing: '0.08em' }}>
-            Sistema
-          </Typography>
-          <Typography variant="h6" sx={{ fontWeight: 800, mt: 0.2 }}>
-            SMIF Gestão
-          </Typography>
+      <Box sx={{ p: sidebarCollapsed ? 1 : 2, pt: sidebarCollapsed ? 1.2 : 2.4 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: sidebarCollapsed ? 'center' : 'space-between', pb: 0.7 }}>
+          {!sidebarCollapsed && (
+            <Typography
+              variant="overline"
+              sx={{ display: 'block', px: 1.2, color: 'text.secondary', letterSpacing: '0.08em' }}
+            >
+              MÓDULOS
+            </Typography>
+          )}
+          {!isMobile && (
+            <Tooltip title={sidebarCollapsed ? 'Expandir menu' : 'Contrair menu'} placement={sidebarCollapsed ? 'right' : 'bottom'}>
+              <IconButton
+                size="small"
+                onClick={() => setDesktopSidebarCollapsed((value) => !value)}
+                sx={{ border: `1px solid ${alpha('#114259', 0.2)}`, bgcolor: alpha('#FFFFFF', 0.5) }}
+              >
+                {sidebarCollapsed ? <ChevronRightRoundedIcon fontSize="small" /> : <ChevronLeftRoundedIcon fontSize="small" />}
+              </IconButton>
+            </Tooltip>
+          )}
         </Box>
-        <Typography
-          variant="caption"
-          sx={{ display: 'block', px: 1.2, pt: 1.8, pb: 0.7, color: 'text.secondary', letterSpacing: '0.08em' }}
-        >
-          MÓDULOS
-        </Typography>
         <List disablePadding>
           {visibleNavItems.map((item) => {
             const selected = location.pathname === item.to || location.pathname.startsWith(`${item.to}/`);
-            return (
-              <ListItemButton key={item.to} component={Link} to={item.to} selected={selected} onClick={() => setMobileOpen(false)}>
-                <ListItemIcon sx={{ minWidth: 34, color: selected ? 'primary.dark' : 'text.secondary' }}>{item.icon}</ListItemIcon>
-                <ListItemText
-                  primary={item.label}
-                  primaryTypographyProps={{ fontSize: 13.5, fontWeight: selected ? 700 : 600, lineHeight: 1.22 }}
-                />
+            const button = (
+              <ListItemButton
+                key={item.to}
+                component={Link}
+                to={item.to}
+                selected={selected}
+                onClick={() => setMobileOpen(false)}
+                sx={{ justifyContent: sidebarCollapsed ? 'center' : 'flex-start', px: sidebarCollapsed ? 1 : undefined }}
+              >
+                <ListItemIcon sx={{ minWidth: sidebarCollapsed ? 0 : 34, color: selected ? 'primary.dark' : 'text.secondary' }}>
+                  {item.icon}
+                </ListItemIcon>
+                {!sidebarCollapsed && (
+                  <ListItemText
+                    primary={item.label}
+                    primaryTypographyProps={{ fontSize: 13.5, fontWeight: selected ? 700 : 600, lineHeight: 1.22 }}
+                  />
+                )}
               </ListItemButton>
+            );
+            if (!sidebarCollapsed) return button;
+            return (
+              <Tooltip key={`tt-${item.to}`} title={item.label} placement="right">
+                {button}
+              </Tooltip>
             );
           })}
         </List>
       </Box>
     ),
-    [location.pathname, visibleNavItems],
+    [isMobile, location.pathname, sidebarCollapsed, visibleNavItems],
   );
 
   return (
@@ -184,19 +225,25 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2, minWidth: 220 }}>
             <Box
               sx={{
-                width: 34,
-                height: 34,
-                borderRadius: 1.7,
+                width: 40,
+                height: 40,
+                borderRadius: '50%',
+                p: 0.4,
                 display: 'grid',
                 placeItems: 'center',
-                fontSize: 13,
-                fontWeight: 800,
-                color: '#fff',
                 background: 'linear-gradient(135deg, #0C657E 10%, #C56A2B 90%)',
-                boxShadow: '0 10px 20px rgba(8, 54, 71, 0.18)',
+                boxShadow: '0 10px 22px rgba(8, 54, 71, 0.22)',
               }}
             >
-              SM
+              <Avatar
+                src="/brand/cipavd-7.png"
+                alt="CIPAVD"
+                sx={{
+                  width: 32,
+                  height: 32,
+                  bgcolor: '#f8fafc',
+                }}
+              />
             </Box>
             <Box>
               <Typography variant="subtitle2" sx={{ fontWeight: 800, lineHeight: 1.1 }}>
@@ -282,10 +329,24 @@ export function AppShell({ children }: { children: ReactNode }) {
                         <ListItemText primary={loc.name} secondary={loc.code} />
                       </ListItemButton>
                     ))}
+                    {(searchQuery.data?.documents ?? []).map((doc: any) => (
+                      <ListItemButton
+                        key={doc.id}
+                        component={Link}
+                        to={`/documents?q=${encodeURIComponent(doc.title)}`}
+                        onClick={() => setAnchorEl(null)}
+                      >
+                        <ListItemText
+                          primary={doc.title}
+                          secondary={doc.localityName ? `Acervo • ${doc.localityName}` : 'Acervo'}
+                        />
+                      </ListItemButton>
+                    ))}
                     {(searchQuery.data?.tasks?.length ?? 0) +
                       (searchQuery.data?.notices?.length ?? 0) +
                       (searchQuery.data?.meetings?.length ?? 0) +
-                      (searchQuery.data?.localities?.length ?? 0) ===
+                      (searchQuery.data?.localities?.length ?? 0) +
+                      (searchQuery.data?.documents?.length ?? 0) ===
                       0 && (
                       <Typography variant="body2" color="text.secondary" sx={{ px: 1.3, py: 1 }}>
                         Nenhum resultado.
@@ -309,11 +370,27 @@ export function AppShell({ children }: { children: ReactNode }) {
             <Typography variant="body2" sx={{ fontWeight: 700, display: { xs: 'none', sm: 'inline' } }}>
               {me?.name ?? 'Usuário'}
             </Typography>
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<LogoutIcon fontSize="small" />}
+              onClick={handleLogout}
+              sx={{ ml: 0.4 }}
+            >
+              Sair
+            </Button>
           </Box>
         </Toolbar>
       </AppBar>
 
-      <Box component="nav" sx={{ width: { lg: drawerWidth }, flexShrink: { lg: 0 } }}>
+      <Box
+        component="nav"
+        sx={{
+          width: { lg: sidebarWidth },
+          flexShrink: { lg: 0 },
+          transition: theme.transitions.create('width', { duration: theme.transitions.duration.shorter }),
+        }}
+      >
         <Drawer
           variant={isMobile ? 'temporary' : 'permanent'}
           open={isMobile ? mobileOpen : true}
@@ -321,8 +398,12 @@ export function AppShell({ children }: { children: ReactNode }) {
           ModalProps={{ keepMounted: true }}
           sx={{
             '& .MuiDrawer-paper': {
-              width: drawerWidth,
+              width: { xs: drawerExpandedWidth, lg: sidebarWidth },
               boxSizing: 'border-box',
+              top: { lg: 76 },
+              height: { lg: 'calc(100% - 76px)' },
+              overflowX: 'hidden',
+              transition: theme.transitions.create('width', { duration: theme.transitions.duration.shorter }),
             },
           }}
         >

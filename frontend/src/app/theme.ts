@@ -125,8 +125,12 @@ export const theme = createTheme({
           paddingInline: 16,
           minHeight: 38,
         },
+        contained: {
+          color: '#FFFFFF',
+        },
         containedPrimary: {
           background: 'linear-gradient(135deg, #0C657E 0%, #0A5471 100%)',
+          color: '#FFFFFF',
           boxShadow: '0 10px 24px rgba(8, 77, 99, 0.24)',
           ':hover': {
             background: 'linear-gradient(135deg, #0A5A72 0%, #08475F 100%)',

@@ -35,10 +35,7 @@ let RbacGuard = class RbacGuard {
             return true;
         }
         const { resource, action, scope } = requirement;
-        const wildcard = access.roles.some((role) => role.wildcard);
-        if (wildcard)
-            return true;
-        const allowed = access.roles.some((role) => role.permissions.some((perm) => {
+        const allowed = access.permissions.some((perm) => {
             if (perm.resource !== resource && perm.resource !== '*')
                 return false;
             if (perm.action !== action && perm.action !== '*')
@@ -46,8 +43,15 @@ let RbacGuard = class RbacGuard {
             if (scope && perm.scope !== scope)
                 return false;
             return true;
-        }));
+        });
         if (!allowed) {
+            const wildcard = access.roles.some((role) => role.wildcard);
+            if (wildcard) {
+                const blockedByOverride = access.moduleAccessOverrides.some((override) => override.resource === resource && !override.enabled);
+                if (!blockedByOverride) {
+                    return true;
+                }
+            }
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         }
         return true;

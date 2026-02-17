@@ -1,5 +1,4 @@
-import { Box, Button, Card, CardContent, Chip, Stack, TextField, Typography } from '@mui/material';
-import { alpha } from '@mui/material/styles';
+import { Box, Button, Card, CardContent, TextField, Typography } from '@mui/material';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../app/toast';
@@ -31,10 +30,11 @@ export function LoginPage() {
     <Box
       sx={{
         minHeight: '100vh',
-        px: 2,
-        py: { xs: 3, md: 4 },
+        px: 2.2,
+        py: { xs: 3, md: 4.5 },
         display: 'grid',
         placeItems: 'center',
+        background: 'linear-gradient(180deg, #f6fbff 0%, #eef6fb 100%)',
       }}
     >
       <Box
@@ -49,35 +49,39 @@ export function LoginPage() {
         <Card
           sx={{
             display: 'grid',
-            alignContent: 'space-between',
+            placeItems: 'center',
             p: { xs: 3, md: 4 },
             minHeight: { xs: 270, md: 420 },
             background: 'linear-gradient(145deg, rgba(12,101,126,0.93), rgba(8,73,91,0.95))',
-            color: 'white',
-            borderColor: alpha('#0C657E', 0.32),
             boxShadow: '0 24px 44px rgba(7, 46, 60, 0.28)',
           }}
         >
-          <Box>
-            <Typography variant="overline" sx={{ letterSpacing: '0.09em', opacity: 0.92 }}>
-              Sistema Institucional
-            </Typography>
-            <Typography variant="h3" sx={{ fontSize: { xs: 30, md: 40 }, lineHeight: 1.1, mt: 0.8, maxWidth: 420 }}>
-              Gestão Profissional da Comissão
-            </Typography>
-            <Typography variant="body1" sx={{ mt: 1.5, opacity: 0.92, maxWidth: 500 }}>
-              Acompanhe atividades externas, tarefas internas, reuniões, checklists e relatórios em uma experiência unificada.
-            </Typography>
-          </Box>
-          <Stack direction="row" flexWrap="wrap" gap={1}>
-            <Chip label="Atividades" size="small" sx={{ bgcolor: alpha('#fff', 0.14), color: 'white' }} />
-            <Chip label="Relatórios" size="small" sx={{ bgcolor: alpha('#fff', 0.14), color: 'white' }} />
-            <Chip label="Auditoria" size="small" sx={{ bgcolor: alpha('#fff', 0.14), color: 'white' }} />
-            <Chip label="RBAC" size="small" sx={{ bgcolor: alpha('#fff', 0.14), color: 'white' }} />
-          </Stack>
+          <Box
+            component="img"
+            src="/logo-png.png"
+            alt="CIPAVD"
+            sx={{
+              width: { xs: '92%', md: '85%' },
+              maxWidth: 520,
+              maxHeight: { xs: 280, md: 420 },
+              objectFit: 'contain',
+              display: 'block',
+              mx: 'auto',
+              filter: 'drop-shadow(0 18px 30px rgba(3, 23, 30, 0.35))',
+            }}
+          />
         </Card>
 
-        <Card sx={{ alignSelf: 'stretch', display: 'grid', placeItems: 'center' }}>
+        <Card
+          sx={{
+            width: '100%',
+            maxWidth: 430,
+            alignSelf: 'stretch',
+            display: 'grid',
+            placeItems: 'center',
+            boxShadow: '0 22px 45px rgba(9, 43, 54, 0.14)',
+          }}
+        >
           <CardContent sx={{ width: '100%', maxWidth: 390, p: { xs: 2.6, md: 3.4 } }}>
             <Typography variant="h5" sx={{ fontWeight: 800 }}>
               Entrar

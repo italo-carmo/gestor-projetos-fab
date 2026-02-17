@@ -119,7 +119,13 @@ export function AdminPhasesPage() {
                       variant="contained"
                       disabled={!isDirty(phase) || updatePhase.isPending}
                       onClick={() => save(phase)}
-                      sx={{ color: '#fff' }}
+                      sx={{
+                        color: '#fff',
+                        '&.Mui-disabled': {
+                          color: 'rgba(255,255,255,0.78)',
+                          background: 'linear-gradient(135deg, rgba(12,101,126,0.72) 0%, rgba(10,84,113,0.72) 100%)',
+                        },
+                      }}
                     >
                       Salvar
                     </Button>

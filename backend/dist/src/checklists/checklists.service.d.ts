@@ -82,4 +82,5 @@ export declare class ChecklistsService {
     private aggregateTaskStatus;
     private aggregateActivityStatus;
     private normalizeChecklistActivityTitle;
+    private buildAutomaticChecklistItems;
 }

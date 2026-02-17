@@ -10,8 +10,8 @@ test('meetings page loads without hooks error', async ({ page }) => {
   });
 
   await page.goto('/login');
-  await page.fill('input[name=email]', 'cipavd@smif.local');
-  await page.fill('input[name=password]', 'Admin123');
+  await page.fill('input[name=email]', 'admin@smif.local');
+  await page.fill('input[name=password]', 'Smif@2026');
   await page.click('button[type=submit]');
   await expect(page).toHaveURL(/dashboard/);
 

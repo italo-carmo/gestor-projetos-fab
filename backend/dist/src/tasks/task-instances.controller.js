@@ -33,12 +33,13 @@ let TaskInstancesController = class TaskInstancesController {
     listAssignees(localityId, user) {
         return this.tasks.listAssignees(localityId, user);
     }
-    list(localityId, phaseId, status, assigneeId, dueFrom, dueTo, meetingId, eloRoleId, page, pageSize, user) {
+    list(localityId, phaseId, status, assigneeId, assigneeIds, dueFrom, dueTo, meetingId, eloRoleId, page, pageSize, user) {
         return this.tasks.listTaskInstances({
             localityId,
             phaseId,
             status,
             assigneeId,
+            assigneeIds,
             dueFrom,
             dueTo,
             meetingId,
@@ -104,15 +105,16 @@ __decorate([
     __param(1, (0, common_1.Query)('phaseId')),
     __param(2, (0, common_1.Query)('status')),
     __param(3, (0, common_1.Query)('assigneeId')),
-    __param(4, (0, common_1.Query)('dueFrom')),
-    __param(5, (0, common_1.Query)('dueTo')),
-    __param(6, (0, common_1.Query)('meetingId')),
-    __param(7, (0, common_1.Query)('eloRoleId')),
-    __param(8, (0, common_1.Query)('page')),
-    __param(9, (0, common_1.Query)('pageSize')),
-    __param(10, (0, current_user_decorator_1.CurrentUser)()),
+    __param(4, (0, common_1.Query)('assigneeIds')),
+    __param(5, (0, common_1.Query)('dueFrom')),
+    __param(6, (0, common_1.Query)('dueTo')),
+    __param(7, (0, common_1.Query)('meetingId')),
+    __param(8, (0, common_1.Query)('eloRoleId')),
+    __param(9, (0, common_1.Query)('page')),
+    __param(10, (0, common_1.Query)('pageSize')),
+    __param(11, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, Object, Object, Object, Object, Object, Object, Object, Object, Object, Object]),
+    __metadata("design:paramtypes", [Object, Object, Object, Object, Object, Object, Object, Object, Object, Object, Object, Object]),
     __metadata("design:returntype", void 0)
 ], TaskInstancesController.prototype, "list", null);
 __decorate([

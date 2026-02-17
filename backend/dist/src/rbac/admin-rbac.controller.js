@@ -20,6 +20,7 @@ const require_permission_decorator_1 = require("./require-permission.decorator")
 const rbac_guard_1 = require("./rbac.guard");
 const rbac_service_1 = require("./rbac.service");
 const throttler_1 = require("@nestjs/throttler");
+const set_user_module_access_dto_1 = require("./dto/set-user-module-access.dto");
 let AdminRbacController = class AdminRbacController {
     rbac;
     constructor(rbac) {
@@ -33,6 +34,12 @@ let AdminRbacController = class AdminRbacController {
     }
     simulate(userId, roleId) {
         return this.rbac.simulateAccess({ userId, roleId });
+    }
+    userModuleAccess(userId) {
+        return this.rbac.getUserModuleAccess(userId);
+    }
+    setUserModuleAccess(userId, dto, user) {
+        return this.rbac.setUserModuleAccess(userId, { resource: dto.resource, enabled: dto.enabled }, user?.id);
     }
 };
 exports.AdminRbacController = AdminRbacController;
@@ -64,6 +71,24 @@ __decorate([
     __metadata("design:paramtypes", [String, String]),
     __metadata("design:returntype", void 0)
 ], AdminRbacController.prototype, "simulate", null);
+__decorate([
+    (0, common_1.Get)('user-module-access/:userId'),
+    (0, require_permission_decorator_1.RequirePermission)('users', 'view'),
+    __param(0, (0, common_1.Param)('userId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], AdminRbacController.prototype, "userModuleAccess", null);
+__decorate([
+    (0, common_1.Put)('user-module-access/:userId'),
+    (0, require_permission_decorator_1.RequirePermission)('users', 'update'),
+    __param(0, (0, common_1.Param)('userId')),
+    __param(1, (0, common_1.Body)()),
+    __param(2, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, set_user_module_access_dto_1.SetUserModuleAccessDto, Object]),
+    __metadata("design:returntype", void 0)
+], AdminRbacController.prototype, "setUserModuleAccess", null);
 exports.AdminRbacController = AdminRbacController = __decorate([
     (0, common_1.Controller)('admin/rbac'),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, rbac_guard_1.RbacGuard),

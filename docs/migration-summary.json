@@ -1,0 +1,30 @@
+{
+  "repositoryPath": "/Users/italocarmo/Downloads/Repositório",
+  "resetExecuted": true,
+  "localities": 24,
+  "users": 27,
+  "taskTemplates": 16,
+  "taskInstances": 82,
+  "activities": 33,
+  "meetings": 3,
+  "elos": 29,
+  "documents": 265,
+  "documentContents": 265,
+  "documentLinks": 454,
+  "importedDocumentsInThisRun": 265,
+  "operationalSync": {
+    "parsedDocuments": 265,
+    "extractedDocuments": 98,
+    "linkedEntities": 455,
+    "createdElos": 29,
+    "createdMeetings": 2,
+    "createdActivities": 19,
+    "createdTaskTemplates": 5,
+    "createdTaskInstances": 5
+  },
+  "defaultCredentials": {
+    "adminEmail": "admin@smif.local",
+    "tiEmail": "ti@smif.local",
+    "password": "Smif@2026"
+  }
+}

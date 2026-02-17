@@ -5,6 +5,8 @@ import { UpdateActivityDto } from './dto/update-activity.dto';
 import { UpdateActivityStatusDto } from './dto/update-activity-status.dto';
 import { UpsertActivityReportDto } from './dto/upsert-activity-report.dto';
 import { ActivityCommentDto } from './dto/activity-comment.dto';
+import { CreateActivityScheduleItemDto } from './dto/create-activity-schedule-item.dto';
+import { UpdateActivityScheduleItemDto } from './dto/update-activity-schedule-item.dto';
 import type { Request, Response } from 'express';
 export declare class ActivitiesController {
     private readonly activities;
@@ -51,6 +53,58 @@ export declare class ActivitiesController {
         ok: boolean;
         seenAt: Date;
     }>;
+    listSchedule(id: string, user: RbacUser): Promise<{
+        activity: {
+            id: string;
+            title: string;
+            eventDate: Date | null;
+            locality: {
+                id: string;
+                name: string;
+                code: string;
+            } | null;
+        };
+        items: {
+            id: any;
+            activityId: any;
+            title: any;
+            startTime: any;
+            durationMinutes: any;
+            location: any;
+            responsible: any;
+            participants: any;
+            createdAt: any;
+            updatedAt: any;
+        }[];
+    }>;
+    createScheduleItem(id: string, dto: CreateActivityScheduleItemDto, user: RbacUser): Promise<{
+        id: any;
+        activityId: any;
+        title: any;
+        startTime: any;
+        durationMinutes: any;
+        location: any;
+        responsible: any;
+        participants: any;
+        createdAt: any;
+        updatedAt: any;
+    }>;
+    updateScheduleItem(id: string, itemId: string, dto: UpdateActivityScheduleItemDto, user: RbacUser): Promise<{
+        id: any;
+        activityId: any;
+        title: any;
+        startTime: any;
+        durationMinutes: any;
+        location: any;
+        responsible: any;
+        participants: any;
+        createdAt: any;
+        updatedAt: any;
+    }>;
+    deleteScheduleItem(id: string, itemId: string, user: RbacUser): Promise<{
+        ok: boolean;
+    }>;
+    exportSchedulePdf(id: string, user: RbacUser, res: Response): Promise<Response<any, Record<string, any>>>;
     upsertReport(id: string, dto: UpsertActivityReportDto, user: RbacUser): Promise<any>;
     signReport(id: string, user: RbacUser): Promise<{
         activityId: string;

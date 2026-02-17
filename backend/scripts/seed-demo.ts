@@ -151,6 +151,34 @@ async function main() {
     });
   }
 
+  const postos = [
+    { code: 'TEN_BRIG', name: 'Tenente-Brigadeiro do Ar', sortOrder: 1 },
+    { code: 'MAJ_BRIG', name: 'Major-Brigadeiro', sortOrder: 2 },
+    { code: 'BRIG', name: 'Brigadeiro', sortOrder: 3 },
+    { code: 'CEL', name: 'Coronel', sortOrder: 4 },
+    { code: 'TEN_CEL', name: 'Tenente-Coronel', sortOrder: 5 },
+    { code: 'MAJ', name: 'Major', sortOrder: 6 },
+    { code: 'CAP', name: 'Capitão', sortOrder: 7 },
+    { code: '1TEN', name: 'Primeiro-Tenente', sortOrder: 8 },
+    { code: '2TEN', name: 'Segundo-Tenente', sortOrder: 9 },
+    { code: 'ASP', name: 'Aspirante a Oficial', sortOrder: 10 },
+    { code: 'SO', name: 'Suboficial', sortOrder: 11 },
+    { code: '1SGT', name: 'Primeiro-Sargento', sortOrder: 12 },
+    { code: '2SGT', name: 'Segundo-Sargento', sortOrder: 13 },
+    { code: '3SGT', name: 'Terceiro-Sargento', sortOrder: 14 },
+    { code: 'CB', name: 'Cabo', sortOrder: 15 },
+    { code: 'S1', name: 'Soldado de Primeira Classe', sortOrder: 16 },
+    { code: 'S2', name: 'Soldado de Segunda Classe', sortOrder: 17 },
+  ];
+
+  for (const posto of postos) {
+    await prisma.posto.upsert({
+      where: { code: posto.code },
+      update: { name: posto.name, sortOrder: posto.sortOrder },
+      create: posto,
+    });
+  }
+
   for (const u of users) {
     const role = await prisma.role.findUnique({ where: { name: u.roleName } });
     if (!role) continue;

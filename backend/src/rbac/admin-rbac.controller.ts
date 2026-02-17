@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../common/current-user.decorator';
 import { RequirePermission } from './require-permission.decorator';
@@ -6,6 +6,7 @@ import { RbacGuard } from './rbac.guard';
 import { RbacService } from './rbac.service';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import type { RbacUser } from './rbac.types';
+import { SetUserModuleAccessDto } from './dto/set-user-module-access.dto';
 
 @Controller('admin/rbac')
 @UseGuards(JwtAuthGuard, RbacGuard)
@@ -30,5 +31,25 @@ export class AdminRbacController {
   @RequirePermission('admin_rbac', 'export')
   simulate(@Query('userId') userId?: string, @Query('roleId') roleId?: string) {
     return this.rbac.simulateAccess({ userId, roleId });
+  }
+
+  @Get('user-module-access/:userId')
+  @RequirePermission('users', 'view')
+  userModuleAccess(@Param('userId') userId: string) {
+    return this.rbac.getUserModuleAccess(userId);
+  }
+
+  @Put('user-module-access/:userId')
+  @RequirePermission('users', 'update')
+  setUserModuleAccess(
+    @Param('userId') userId: string,
+    @Body() dto: SetUserModuleAccessDto,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.rbac.setUserModuleAccess(
+      userId,
+      { resource: dto.resource, enabled: dto.enabled },
+      user?.id,
+    );
   }
 }

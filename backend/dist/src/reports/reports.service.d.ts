@@ -20,25 +20,25 @@ export declare class ReportsService {
     }, user?: RbacUser): Promise<{
         id: string;
         createdAt: Date;
-        taskInstanceId: string;
         fileName: string;
         fileUrl: string;
         storageKey: string | null;
         mimeType: string | null;
         fileSize: number | null;
         checksum: string | null;
+        taskInstanceId: string;
         approved: boolean;
     }>;
     getReport(id: string, user?: RbacUser): Promise<{
         id: string;
         createdAt: Date;
-        taskInstanceId: string;
         fileName: string;
         fileUrl: string;
         storageKey: string | null;
         mimeType: string | null;
         fileSize: number | null;
         checksum: string | null;
+        taskInstanceId: string;
         approved: boolean;
     }>;
     getSignedUrl(id: string, user?: RbacUser): Promise<{
@@ -49,13 +49,13 @@ export declare class ReportsService {
     approveReport(id: string, approved: boolean, user?: RbacUser): Promise<{
         id: string;
         createdAt: Date;
-        taskInstanceId: string;
         fileName: string;
         fileUrl: string;
         storageKey: string | null;
         mimeType: string | null;
         fileSize: number | null;
         checksum: string | null;
+        taskInstanceId: string;
         approved: boolean;
     }>;
 }

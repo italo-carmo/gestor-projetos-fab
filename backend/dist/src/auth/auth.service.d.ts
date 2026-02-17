@@ -3,13 +3,15 @@ import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
 import { AuditService } from '../audit/audit.service';
+import { RbacService } from '../rbac/rbac.service';
 export declare class AuthService {
     private readonly users;
     private readonly prisma;
     private readonly jwt;
     private readonly config;
     private readonly audit;
-    constructor(users: UsersService, prisma: PrismaService, jwt: JwtService, config: ConfigService, audit: AuditService);
+    private readonly rbac;
+    constructor(users: UsersService, prisma: PrismaService, jwt: JwtService, config: ConfigService, audit: AuditService, rbac: RbacService);
     login(email: string, password: string): Promise<{
         accessToken: string;
         refreshToken: string;
@@ -32,11 +34,11 @@ export declare class AuthService {
         email: string;
         name: string;
         executive_hide_pii: boolean;
-        elo_role_id: any;
+        elo_role_id: string | null;
         permissions: {
             resource: string;
             action: string;
-            scope: import("@prisma/client").$Enums.PermissionScope;
+            scope: import("@prisma/client").PermissionScope;
         }[];
         scopes: never[];
         flags: {

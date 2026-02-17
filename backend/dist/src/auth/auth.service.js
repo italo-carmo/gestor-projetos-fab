@@ -51,6 +51,7 @@ const prisma_service_1 = require("../prisma/prisma.service");
 const users_service_1 = require("../users/users.service");
 const http_error_1 = require("../common/http-error");
 const audit_service_1 = require("../audit/audit.service");
+const rbac_service_1 = require("../rbac/rbac.service");
 const REFRESH_TOKEN_SALT_ROUNDS = 10;
 let AuthService = class AuthService {
     users;
@@ -58,12 +59,14 @@ let AuthService = class AuthService {
     jwt;
     config;
     audit;
-    constructor(users, prisma, jwt, config, audit) {
+    rbac;
+    constructor(users, prisma, jwt, config, audit, rbac) {
         this.users = users;
         this.prisma = prisma;
         this.jwt = jwt;
         this.config = config;
         this.audit = audit;
+        this.rbac = rbac;
     }
     async login(email, password) {
         const normalizedEmail = email.trim().toLowerCase();
@@ -163,27 +166,17 @@ let AuthService = class AuthService {
         return { accessToken, refreshToken: newRefreshToken };
     }
     async me(userId) {
-        const user = await this.users.findById(userId);
-        if (!user)
-            (0, http_error_1.throwError)('AUTH_INVALID_CREDENTIALS');
-        const roleFlags = user.roles.map((userRole) => userRole.role.flagsJson ?? {});
-        const executiveFlag = user.executiveHidePii ||
-            roleFlags.some((flags) => flags && flags.executive_hide_pii === true);
-        const permissions = user.roles.flatMap((userRole) => userRole.role.permissions.map((rp) => ({
-            resource: rp.permission.resource,
-            action: rp.permission.action,
-            scope: rp.permission.scope,
-        })));
+        const access = await this.rbac.getUserAccess(userId);
         return {
-            id: user.id,
-            email: user.email,
-            name: user.name,
-            executive_hide_pii: executiveFlag,
-            elo_role_id: user.eloRoleId ?? null,
-            permissions,
+            id: access.id,
+            email: access.email,
+            name: access.name,
+            executive_hide_pii: access.executiveHidePii,
+            elo_role_id: access.eloRoleId ?? null,
+            permissions: access.permissions,
             scopes: [],
             flags: {
-                executive_hide_pii: executiveFlag,
+                executive_hide_pii: access.executiveHidePii,
             },
         };
     }
@@ -236,6 +229,7 @@ exports.AuthService = AuthService = __decorate([
         prisma_service_1.PrismaService,
         jwt_1.JwtService,
         config_1.ConfigService,
-        audit_service_1.AuditService])
+        audit_service_1.AuditService,
+        rbac_service_1.RbacService])
 ], AuthService);
 //# sourceMappingURL=auth.service.js.map

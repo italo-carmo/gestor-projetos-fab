@@ -2,6 +2,11 @@ import { PermissionScope, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { RbacUser } from './rbac.types';
+type PermissionEntry = {
+    resource: string;
+    action: string;
+    scope: PermissionScope;
+};
 export declare class RbacService {
     private readonly prisma;
     private readonly audit;
@@ -98,6 +103,47 @@ export declare class RbacService {
         createdRoles: number;
         warnings: never[];
     }>;
+    getUserModuleAccess(userId: string): Promise<{
+        user: {
+            id: string;
+            name: string;
+            email: string;
+        };
+        modules: {
+            resource: string;
+            baseEnabled: boolean;
+            enabled: boolean;
+            isOverridden: boolean;
+            source: string;
+        }[];
+        summary: {
+            total: number;
+            enabled: number;
+            overridden: number;
+        };
+    }>;
+    setUserModuleAccess(userId: string, payload: {
+        resource: string;
+        enabled: boolean;
+    }, actorUserId?: string): Promise<{
+        user: {
+            id: string;
+            name: string;
+            email: string;
+        };
+        modules: {
+            resource: string;
+            baseEnabled: boolean;
+            enabled: boolean;
+            isOverridden: boolean;
+            source: string;
+        }[];
+        summary: {
+            total: number;
+            enabled: number;
+            overridden: number;
+        };
+    }>;
     simulateAccess(params: {
         userId?: string;
         roleId?: string;
@@ -107,7 +153,24 @@ export declare class RbacService {
         permissions: {
             resource: string;
             action: string;
-            scope: import("@prisma/client").$Enums.PermissionScope;
+            scope: PermissionScope;
         }[];
+        moduleAccessOverrides: {
+            resource: string;
+            enabled: boolean;
+        }[];
+        wildcard?: undefined;
+    } | {
+        source: string;
+        id: string;
+        wildcard: boolean;
+        permissions: PermissionEntry[];
+        moduleAccessOverrides?: undefined;
     }>;
+    private buildAccessFromUser;
+    private listPermissionEntries;
+    private listPermissionResources;
+    private dedupePermissions;
+    private applyModuleAccessOverrides;
 }
+export {};

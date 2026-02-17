@@ -36,33 +36,13 @@ let RbacService = class RbacService {
                         },
                     },
                 },
+                moduleAccessOverrides: true,
             },
         });
         if (!user) {
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         }
-        const roles = user.roles.map((userRole) => ({
-            id: userRole.role.id,
-            name: userRole.role.name,
-            wildcard: userRole.role.wildcard,
-            constraintsTemplateJson: userRole.role.constraintsTemplateJson,
-            flagsJson: userRole.role.flagsJson,
-            permissions: userRole.role.permissions.map((rp) => ({
-                resource: rp.permission.resource,
-                action: rp.permission.action,
-                scope: rp.permission.scope,
-            })),
-        }));
-        const executiveFromRole = roles.some((role) => role.flagsJson && role.flagsJson.executive_hide_pii === true);
-        return {
-            id: user.id,
-            email: user.email,
-            localityId: user.localityId,
-            specialtyId: user.specialtyId,
-            eloRoleId: user.eloRoleId,
-            executiveHidePii: user.executiveHidePii || executiveFromRole,
-            roles,
-        };
+        return this.buildAccessFromUser(user);
     }
     async listRoles() {
         return this.prisma.role.findMany({ orderBy: { name: 'asc' } });
@@ -238,6 +218,105 @@ let RbacService = class RbacService {
         });
         return { updatedRoles, createdRoles, warnings: [] };
     }
+    async getUserModuleAccess(userId) {
+        const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+            include: {
+                roles: {
+                    include: {
+                        role: {
+                            include: { permissions: { include: { permission: true } } },
+                        },
+                    },
+                },
+                moduleAccessOverrides: true,
+            },
+        });
+        if (!user)
+            (0, http_error_1.throwError)('NOT_FOUND');
+        const resources = await this.listPermissionResources();
+        const wildcard = user.roles.some((ur) => ur.role.wildcard);
+        const roleResources = new Set(user.roles.flatMap((ur) => ur.role.permissions.map((rp) => rp.permission.resource)));
+        const overrideByResource = new Map(user.moduleAccessOverrides.map((item) => [item.resource, item.enabled]));
+        const modules = resources.map((resource) => {
+            const baseEnabled = wildcard || roleResources.has(resource);
+            const overrideEnabled = overrideByResource.has(resource)
+                ? overrideByResource.get(resource)
+                : null;
+            const enabled = overrideEnabled ?? baseEnabled;
+            const isOverridden = overrideEnabled !== null;
+            return {
+                resource,
+                baseEnabled,
+                enabled,
+                isOverridden,
+                source: isOverridden ? 'override' : baseEnabled ? 'role' : 'none',
+            };
+        });
+        return {
+            user: {
+                id: user.id,
+                name: user.name,
+                email: user.email,
+            },
+            modules,
+            summary: {
+                total: modules.length,
+                enabled: modules.filter((item) => item.enabled).length,
+                overridden: modules.filter((item) => item.isOverridden).length,
+            },
+        };
+    }
+    async setUserModuleAccess(userId, payload, actorUserId) {
+        const resource = String(payload.resource ?? '').trim();
+        if (!resource) {
+            (0, http_error_1.throwError)('VALIDATION_ERROR', { reason: 'RESOURCE_REQUIRED' });
+        }
+        const permissionExists = await this.prisma.permission.findFirst({
+            where: { resource },
+            select: { id: true },
+        });
+        if (!permissionExists) {
+            (0, http_error_1.throwError)('VALIDATION_ERROR', { reason: 'INVALID_RESOURCE', resource });
+        }
+        const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+            include: {
+                roles: {
+                    include: {
+                        role: {
+                            include: { permissions: { include: { permission: true } } },
+                        },
+                    },
+                },
+            },
+        });
+        if (!user)
+            (0, http_error_1.throwError)('NOT_FOUND');
+        const wildcard = user.roles.some((ur) => ur.role.wildcard);
+        const roleResources = new Set(user.roles.flatMap((ur) => ur.role.permissions.map((rp) => rp.permission.resource)));
+        const baseEnabled = wildcard || roleResources.has(resource);
+        if (payload.enabled === baseEnabled) {
+            await this.prisma.userModuleAccessOverride.deleteMany({
+                where: { userId, resource },
+            });
+        }
+        else {
+            await this.prisma.userModuleAccessOverride.upsert({
+                where: { userId_resource: { userId, resource } },
+                update: { enabled: payload.enabled },
+                create: { userId, resource, enabled: payload.enabled },
+            });
+        }
+        await this.audit.log({
+            userId: actorUserId,
+            resource: 'admin_rbac',
+            action: 'set_user_module_access',
+            entityId: userId,
+            diffJson: { resource, enabled: payload.enabled, baseEnabled },
+        });
+        return this.getUserModuleAccess(userId);
+    }
     async simulateAccess(params) {
         if (params.userId) {
             const user = await this.prisma.user.findUnique({
@@ -250,16 +329,18 @@ let RbacService = class RbacService {
                             },
                         },
                     },
+                    moduleAccessOverrides: true,
                 },
             });
             if (!user)
                 (0, http_error_1.throwError)('NOT_FOUND');
-            const permissions = user.roles.flatMap((ur) => ur.role.permissions.map((rp) => ({
-                resource: rp.permission.resource,
-                action: rp.permission.action,
-                scope: rp.permission.scope,
-            })));
-            return { source: 'user', id: user.id, permissions };
+            const access = await this.buildAccessFromUser(user);
+            return {
+                source: 'user',
+                id: user.id,
+                permissions: access.permissions,
+                moduleAccessOverrides: access.moduleAccessOverrides,
+            };
         }
         if (params.roleId) {
             const role = await this.prisma.role.findUnique({
@@ -268,14 +349,106 @@ let RbacService = class RbacService {
             });
             if (!role)
                 (0, http_error_1.throwError)('NOT_FOUND');
-            const permissions = role.permissions.map((rp) => ({
+            const basePermissions = role.permissions.map((rp) => ({
                 resource: rp.permission.resource,
                 action: rp.permission.action,
                 scope: rp.permission.scope,
             }));
-            return { source: 'role', id: role.id, permissions };
+            const wildcardPermissions = role.wildcard
+                ? await this.listPermissionEntries()
+                : [];
+            const permissions = this.dedupePermissions([
+                ...basePermissions,
+                ...wildcardPermissions,
+            ]);
+            return {
+                source: 'role',
+                id: role.id,
+                wildcard: role.wildcard,
+                permissions,
+            };
         }
         (0, http_error_1.throwError)('VALIDATION_ERROR', { reason: 'MISSING_PARAMS' });
+    }
+    async buildAccessFromUser(user) {
+        const roles = user.roles.map((userRole) => ({
+            id: userRole.role.id,
+            name: userRole.role.name,
+            wildcard: userRole.role.wildcard,
+            constraintsTemplateJson: userRole.role.constraintsTemplateJson,
+            flagsJson: userRole.role.flagsJson,
+            permissions: userRole.role.permissions.map((rp) => ({
+                resource: rp.permission.resource,
+                action: rp.permission.action,
+                scope: rp.permission.scope,
+            })),
+        }));
+        const moduleAccessOverrides = user.moduleAccessOverrides.map((item) => ({
+            resource: item.resource,
+            enabled: item.enabled,
+        }));
+        const roleWildcard = roles.some((role) => role.wildcard);
+        const enabledOverrideResources = moduleAccessOverrides
+            .filter((item) => item.enabled)
+            .map((item) => item.resource);
+        const needsCatalogPermissions = roleWildcard || enabledOverrideResources.length > 0;
+        const catalogPermissions = needsCatalogPermissions
+            ? await this.listPermissionEntries(roleWildcard ? undefined : { resource: { in: enabledOverrideResources } })
+            : [];
+        const rolePermissions = this.dedupePermissions(roles.flatMap((role) => role.permissions));
+        const basePermissions = roleWildcard
+            ? this.dedupePermissions([...rolePermissions, ...catalogPermissions])
+            : rolePermissions;
+        const permissions = this.applyModuleAccessOverrides(basePermissions, moduleAccessOverrides, catalogPermissions);
+        const executiveFromRole = roles.some((role) => role.flagsJson && role.flagsJson.executive_hide_pii === true);
+        return {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            localityId: user.localityId,
+            specialtyId: user.specialtyId,
+            eloRoleId: user.eloRoleId,
+            executiveHidePii: user.executiveHidePii || executiveFromRole,
+            permissions,
+            moduleAccessOverrides,
+            roles,
+        };
+    }
+    async listPermissionEntries(where) {
+        const items = await this.prisma.permission.findMany({
+            where,
+            select: { resource: true, action: true, scope: true },
+        });
+        return items.map((item) => ({
+            resource: item.resource,
+            action: item.action,
+            scope: item.scope,
+        }));
+    }
+    async listPermissionResources() {
+        const items = await this.prisma.permission.findMany({
+            select: { resource: true },
+            distinct: ['resource'],
+            orderBy: { resource: 'asc' },
+        });
+        return items.map((item) => item.resource);
+    }
+    dedupePermissions(items) {
+        const map = new Map();
+        for (const item of items) {
+            const key = `${item.resource}:${item.action}:${item.scope}`;
+            if (!map.has(key)) {
+                map.set(key, item);
+            }
+        }
+        return Array.from(map.values());
+    }
+    applyModuleAccessOverrides(basePermissions, overrides, catalogPermissions) {
+        const disabledResources = new Set(overrides.filter((item) => !item.enabled).map((item) => item.resource));
+        const enabledResources = new Set(overrides.filter((item) => item.enabled).map((item) => item.resource));
+        const filtered = basePermissions.filter((item) => !disabledResources.has(item.resource));
+        const extra = catalogPermissions.filter((item) => enabledResources.has(item.resource));
+        return this.dedupePermissions([...filtered, ...extra]);
     }
 };
 exports.RbacService = RbacService;

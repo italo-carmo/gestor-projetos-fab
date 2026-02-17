@@ -1,0 +1,37 @@
+{
+  "checkedAt": "2026-02-16T17:43:05.395Z",
+  "repositoryPath": "/Users/italocarmo/Downloads/Repositório",
+  "totals": {
+    "repositoryFiles": 265,
+    "documentAssets": 265,
+    "filesPresentInDb": 265,
+    "filesMissingInDb": 0,
+    "docsWithoutSourceMatchInRepo": 0
+  },
+  "missingExamples": [],
+  "extraExamples": [],
+  "parseStatusCounts": {
+    "NOT_SUPPORTED": 164,
+    "PARTIAL": 3,
+    "EXTRACTED": 98
+  },
+  "linksByEntityType": {
+    "TASK_INSTANCE": 4,
+    "ELO": 29,
+    "MEETING": 3,
+    "ACTIVITY": 229,
+    "LOCALITY": 189
+  },
+  "operations": {
+    "taskInstances": 82,
+    "taskInstancesByStatus": {
+      "DONE": 11,
+      "NOT_STARTED": 71
+    },
+    "activities": 33,
+    "meetings": 3,
+    "activityReports": 0
+  },
+  "documentsWithLinks": 198,
+  "documentsWithoutLinks": 67
+}

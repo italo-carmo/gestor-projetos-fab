@@ -22,6 +22,8 @@ import { RecruitsHistoryPage } from './pages/RecruitsHistoryPage';
 import { OrgChartPage } from './pages/OrgChartPage';
 import { AuditPage } from './pages/AuditPage';
 import { TaskTemplatesPage } from './pages/TaskTemplatesPage';
+import { DocumentsPage } from './pages/DocumentsPage';
+import { BiSurveyDashboardPage } from './pages/BiSurveyDashboardPage';
 import { RequireAuth } from './app/RequireAuth';
 
 function App() {
@@ -37,6 +39,7 @@ function App() {
                 <Route path="/" element={<Navigate to="/dashboard/national" replace />} />
                 <Route path="/dashboard/national" element={<DashboardNationalPage />} />
                 <Route path="/dashboard/executive" element={<DashboardExecutivePage />} />
+                <Route path="/dashboard/bi" element={<BiSurveyDashboardPage />} />
                 <Route path="/dashboard/locality/:id" element={<DashboardLocalityPage />} />
                 <Route path="/tasks" element={<TasksPage />} />
                 <Route path="/activities" element={<ActivitiesPage />} />
@@ -48,6 +51,7 @@ function App() {
                 <Route path="/notices" element={<NoticesPage />} />
                 <Route path="/checklists" element={<ChecklistsPage />} />
                 <Route path="/templates" element={<TaskTemplatesPage />} />
+                <Route path="/documents" element={<DocumentsPage />} />
                 <Route path="/elos" element={<ElosPage />} />
                 <Route path="/org-chart" element={<OrgChartPage />} />
                 <Route path="/audit" element={<AuditPage />} />

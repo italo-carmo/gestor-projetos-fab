@@ -4,19 +4,6 @@ export declare class AuditController {
     constructor(audit: AuditService);
     list(resource: string | undefined, userId: string | undefined, localityId: string | undefined, entityId: string | undefined, from: string | undefined, to: string | undefined, page: string | undefined, pageSize: string | undefined): Promise<{
         items: ({
-            locality: {
-                id: string;
-                createdAt: Date;
-                updatedAt: Date;
-                name: string;
-                code: string;
-                commandName: string | null;
-                commanderName: string | null;
-                individualMeetingDate: Date | null;
-                visitDate: Date | null;
-                recruitsFemaleCountCurrent: number | null;
-                notes: string | null;
-            } | null;
             user: {
                 id: string;
                 specialtyId: string | null;
@@ -32,6 +19,19 @@ export declare class AuditController {
                 loginFailedCount: number;
                 lockUntil: Date | null;
                 localityId: string | null;
+            } | null;
+            locality: {
+                id: string;
+                createdAt: Date;
+                updatedAt: Date;
+                name: string;
+                code: string;
+                commandName: string | null;
+                commanderName: string | null;
+                individualMeetingDate: Date | null;
+                visitDate: Date | null;
+                recruitsFemaleCountCurrent: number | null;
+                notes: string | null;
             } | null;
         } & {
             id: string;

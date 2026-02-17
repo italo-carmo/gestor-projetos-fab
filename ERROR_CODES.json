@@ -28,6 +28,13 @@
       "hint": "Envie PDF, PNG ou JPEG."
     }
   },
+  "BI_FILE_TYPE_INVALID": {
+    "httpStatus": 400,
+    "message": "Tipo de arquivo inválido para importação BI.",
+    "details": {
+      "hint": "Envie arquivo CSV ou XLSX."
+    }
+  },
   "FILE_TOO_LARGE": {
     "httpStatus": 400,
     "message": "Arquivo excede o tamanho permitido.",

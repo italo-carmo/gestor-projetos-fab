@@ -26,6 +26,11 @@ const audit_service_1 = require("../audit/audit.service");
 const sanitize_1 = require("../common/sanitize");
 const pagination_1 = require("../common/pagination");
 const activityPhotosDir = node_path_1.default.resolve(process.cwd(), 'storage', 'activity-reports');
+const scheduleLogoCandidates = [
+    node_path_1.default.resolve(process.cwd(), 'frontend', 'public', 'brand', 'cipavd-7.png'),
+    node_path_1.default.resolve(process.cwd(), 'public', 'brand', 'cipavd-7.png'),
+    node_path_1.default.resolve(process.cwd(), '..', 'frontend', 'public', 'brand', 'cipavd-7.png'),
+];
 let ActivitiesService = class ActivitiesService {
     prisma;
     audit;
@@ -295,6 +300,210 @@ let ActivitiesService = class ActivitiesService {
             create: { activityId: id, userId: user.id, seenAt },
         });
         return { ok: true, seenAt };
+    }
+    async listSchedule(activityId, user) {
+        const activity = await this.prisma.activity.findUnique({
+            where: { id: activityId },
+            select: {
+                id: true,
+                title: true,
+                eventDate: true,
+                localityId: true,
+                locality: { select: { id: true, code: true, name: true } },
+            },
+        });
+        if (!activity)
+            (0, http_error_1.throwError)('NOT_FOUND');
+        this.assertLocalityConstraint(activity.localityId, user);
+        const items = await this.prisma.activityVisitScheduleItem.findMany({
+            where: { activityId },
+            orderBy: [{ startTime: 'asc' }, { createdAt: 'asc' }],
+        });
+        return {
+            activity: {
+                id: activity.id,
+                title: activity.title,
+                eventDate: activity.eventDate,
+                locality: activity.locality,
+            },
+            items: items.map((item) => this.mapScheduleItem(item)),
+        };
+    }
+    async createScheduleItem(activityId, payload, user) {
+        const activity = await this.prisma.activity.findUnique({
+            where: { id: activityId },
+            select: { id: true, localityId: true },
+        });
+        if (!activity)
+            (0, http_error_1.throwError)('NOT_FOUND');
+        this.assertLocalityConstraint(activity.localityId, user);
+        const created = await this.prisma.activityVisitScheduleItem.create({
+            data: {
+                activityId,
+                title: this.sanitizeRequiredText(payload.title, 'title'),
+                startTime: this.normalizeScheduleTime(payload.startTime),
+                durationMinutes: this.normalizeDurationMinutes(payload.durationMinutes),
+                location: this.sanitizeRequiredText(payload.location, 'location'),
+                responsible: this.sanitizeRequiredText(payload.responsible, 'responsible'),
+                participants: this.sanitizeRequiredText(payload.participants, 'participants'),
+            },
+        });
+        await this.audit.log({
+            userId: user?.id,
+            resource: 'activities',
+            action: 'create_schedule_item',
+            entityId: created.id,
+            localityId: activity.localityId ?? undefined,
+            diffJson: { activityId, startTime: created.startTime },
+        });
+        return this.mapScheduleItem(created);
+    }
+    async updateScheduleItem(activityId, itemId, payload, user) {
+        const activity = await this.prisma.activity.findUnique({
+            where: { id: activityId },
+            select: { id: true, localityId: true },
+        });
+        if (!activity)
+            (0, http_error_1.throwError)('NOT_FOUND');
+        this.assertLocalityConstraint(activity.localityId, user);
+        const existing = await this.prisma.activityVisitScheduleItem.findFirst({
+            where: { id: itemId, activityId },
+        });
+        if (!existing)
+            (0, http_error_1.throwError)('NOT_FOUND');
+        const updated = await this.prisma.activityVisitScheduleItem.update({
+            where: { id: itemId },
+            data: {
+                title: payload.title === undefined ? undefined : this.sanitizeRequiredText(payload.title, 'title'),
+                startTime: payload.startTime === undefined ? undefined : this.normalizeScheduleTime(payload.startTime),
+                durationMinutes: payload.durationMinutes === undefined
+                    ? undefined
+                    : this.normalizeDurationMinutes(payload.durationMinutes),
+                location: payload.location === undefined ? undefined : this.sanitizeRequiredText(payload.location, 'location'),
+                responsible: payload.responsible === undefined
+                    ? undefined
+                    : this.sanitizeRequiredText(payload.responsible, 'responsible'),
+                participants: payload.participants === undefined
+                    ? undefined
+                    : this.sanitizeRequiredText(payload.participants, 'participants'),
+            },
+        });
+        await this.audit.log({
+            userId: user?.id,
+            resource: 'activities',
+            action: 'update_schedule_item',
+            entityId: itemId,
+            localityId: activity.localityId ?? undefined,
+            diffJson: { activityId },
+        });
+        return this.mapScheduleItem(updated);
+    }
+    async deleteScheduleItem(activityId, itemId, user) {
+        const activity = await this.prisma.activity.findUnique({
+            where: { id: activityId },
+            select: { id: true, localityId: true },
+        });
+        if (!activity)
+            (0, http_error_1.throwError)('NOT_FOUND');
+        this.assertLocalityConstraint(activity.localityId, user);
+        const existing = await this.prisma.activityVisitScheduleItem.findFirst({
+            where: { id: itemId, activityId },
+            select: { id: true },
+        });
+        if (!existing)
+            (0, http_error_1.throwError)('NOT_FOUND');
+        await this.prisma.activityVisitScheduleItem.delete({ where: { id: itemId } });
+        await this.audit.log({
+            userId: user?.id,
+            resource: 'activities',
+            action: 'delete_schedule_item',
+            entityId: itemId,
+            localityId: activity.localityId ?? undefined,
+            diffJson: { activityId },
+        });
+        return { ok: true };
+    }
+    async buildSchedulePdf(activityId, user) {
+        const activity = await this.prisma.activity.findUnique({
+            where: { id: activityId },
+            include: {
+                locality: { select: { id: true, code: true, name: true } },
+                visitScheduleItems: {
+                    orderBy: [{ startTime: 'asc' }, { createdAt: 'asc' }],
+                },
+            },
+        });
+        if (!activity)
+            (0, http_error_1.throwError)('NOT_FOUND');
+        this.assertLocalityConstraint(activity.localityId, user);
+        const doc = new pdfkit_1.default({ margin: 48, size: 'A4' });
+        const chunks = [];
+        const done = new Promise((resolve, reject) => {
+            doc.on('data', (chunk) => chunks.push(chunk));
+            doc.on('end', () => resolve(Buffer.concat(chunks)));
+            doc.on('error', reject);
+        });
+        const logoPath = this.findScheduleLogoPath();
+        if (logoPath) {
+            const logoY = doc.y;
+            try {
+                doc.image(logoPath, (doc.page.width - 150) / 2, logoY, {
+                    fit: [150, 150],
+                    align: 'center',
+                });
+                doc.y = logoY + 160;
+            }
+            catch {
+                doc.y = logoY + 8;
+            }
+        }
+        const writeLine = (label, value) => {
+            doc.font('Helvetica-Bold').fontSize(10).text(label);
+            doc.moveDown(0.2);
+            doc.font('Helvetica').fontSize(11).text(value || '-', { align: 'left' });
+            doc.moveDown(0.7);
+        };
+        doc.font('Helvetica-Bold').fontSize(16).text('Cronograma da Visita', { align: 'center' });
+        doc.moveDown(1);
+        writeLine('Atividade', activity.title);
+        writeLine('Localidade', activity.locality ? `${activity.locality.name} (${activity.locality.code})` : 'Não vinculada');
+        writeLine('Data da visita', activity.eventDate ? this.formatDate(activity.eventDate) : 'Não informada');
+        doc.font('Helvetica-Bold').fontSize(12).text('Programação', { underline: true });
+        doc.moveDown(0.4);
+        if (activity.visitScheduleItems.length === 0) {
+            doc.font('Helvetica').fontSize(11).text('Nenhum item de cronograma cadastrado para esta visita.');
+        }
+        else {
+            activity.visitScheduleItems.forEach((item, index) => {
+                if (doc.y > doc.page.height - 150) {
+                    doc.addPage();
+                }
+                const rowY = doc.y;
+                doc
+                    .roundedRect(doc.page.margins.left, rowY, doc.page.width - doc.page.margins.left - doc.page.margins.right, 96, 6)
+                    .fillAndStroke('#F5F8FC', '#D7E0EC');
+                const blockStart = rowY + 10;
+                doc.fillColor('#111827');
+                doc.font('Helvetica-Bold').fontSize(11).text(`${index + 1}. ${item.startTime} • ${this.formatDuration(item.durationMinutes)}`, doc.page.margins.left + 10, blockStart);
+                doc
+                    .font('Helvetica')
+                    .fontSize(10)
+                    .text(`Atividade: ${item.title}`, doc.page.margins.left + 10, blockStart + 18, {
+                    width: doc.page.width - doc.page.margins.left - doc.page.margins.right - 20,
+                })
+                    .text(`Local: ${item.location}`, { width: doc.page.width - doc.page.margins.left - doc.page.margins.right - 20 })
+                    .text(`Responsável: ${item.responsible}`, { width: doc.page.width - doc.page.margins.left - doc.page.margins.right - 20 })
+                    .text(`Participantes: ${item.participants}`, {
+                    width: doc.page.width - doc.page.margins.left - doc.page.margins.right - 20,
+                });
+                doc.y = rowY + 106;
+            });
+        }
+        doc.end();
+        const buffer = await done;
+        const sanitizedTitle = activity.title.replace(/[^a-zA-Z0-9-_]+/g, '_').slice(0, 60);
+        const fileName = `cronograma_visita_${sanitizedTitle || activity.id}.pdf`;
+        return { fileName, buffer };
     }
     async upsertReport(activityId, payload, user) {
         const activity = await this.prisma.activity.findUnique({
@@ -732,6 +941,59 @@ let ActivitiesService = class ActivitiesService {
                 ? 'Usuário interno'
                 : comment.author?.name ?? comment.author?.email ?? 'Usuário',
         };
+    }
+    mapScheduleItem(item) {
+        return {
+            id: item.id,
+            activityId: item.activityId,
+            title: item.title,
+            startTime: item.startTime,
+            durationMinutes: item.durationMinutes,
+            location: item.location,
+            responsible: item.responsible,
+            participants: item.participants,
+            createdAt: item.createdAt,
+            updatedAt: item.updatedAt,
+        };
+    }
+    normalizeScheduleTime(value) {
+        const normalized = String(value ?? '').trim();
+        if (!/^([01]\d|2[0-3]):([0-5]\d)$/.test(normalized)) {
+            (0, http_error_1.throwError)('VALIDATION_ERROR', { field: 'startTime', reason: 'TIME_INVALID' });
+        }
+        return normalized;
+    }
+    normalizeDurationMinutes(value) {
+        const parsed = Number(value);
+        if (!Number.isFinite(parsed) || parsed < 1) {
+            (0, http_error_1.throwError)('VALIDATION_ERROR', { field: 'durationMinutes', reason: 'DURATION_INVALID' });
+        }
+        return Math.round(parsed);
+    }
+    findScheduleLogoPath() {
+        for (const candidate of scheduleLogoCandidates) {
+            if (node_fs_1.default.existsSync(candidate)) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+    formatDuration(minutes) {
+        const rounded = Math.max(1, Math.round(minutes));
+        const hours = Math.floor(rounded / 60);
+        const mins = rounded % 60;
+        if (hours <= 0)
+            return `${mins} min`;
+        if (mins === 0)
+            return `${hours}h`;
+        return `${hours}h ${mins}min`;
+    }
+    sanitizeRequiredText(value, field) {
+        const normalized = (0, sanitize_1.sanitizeText)(value ?? '');
+        if (!normalized.trim()) {
+            (0, http_error_1.throwError)('VALIDATION_ERROR', { field, reason: 'REQUIRED' });
+        }
+        return normalized;
     }
     sanitizeCommentText(input) {
         return String(input ?? '')

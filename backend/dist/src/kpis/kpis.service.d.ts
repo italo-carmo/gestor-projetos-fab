@@ -9,8 +9,8 @@ export declare class KpisService {
             id: string;
             createdAt: Date;
             updatedAt: Date;
-            key: string;
             label: string;
+            key: string;
             visibility: import("@prisma/client").$Enums.KpiVisibility;
         }[];
     }>;
@@ -22,8 +22,8 @@ export declare class KpisService {
         id: string;
         createdAt: Date;
         updatedAt: Date;
-        key: string;
         label: string;
+        key: string;
         visibility: import("@prisma/client").$Enums.KpiVisibility;
     }, never, import("@prisma/client/runtime/client").DefaultArgs, Prisma.PrismaClientOptions>;
     addValue(kpiId: string, payload: {
@@ -36,8 +36,8 @@ export declare class KpisService {
         specialtyId: string | null;
         createdAt: Date;
         localityId: string | null;
-        date: Date;
         value: number;
+        date: Date;
         kpiId: string;
     }, never, import("@prisma/client/runtime/client").DefaultArgs, Prisma.PrismaClientOptions>;
     dashboard(filters: {

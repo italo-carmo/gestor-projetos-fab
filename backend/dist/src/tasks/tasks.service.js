@@ -677,6 +677,28 @@ let TasksService = class TasksService {
             include: { locality: true, taskTemplate: true },
         });
         const statusById = new Map(tasks.map((task) => [task.id, task.status]));
+        const localityById = new Map(localities.map((locality) => [locality.id, locality]));
+        const mapNationalTaskDetail = (task) => {
+            const locality = localityById.get(task.localityId);
+            const isLate = this.isLate(task);
+            const isUnassigned = this.isTaskUnassigned(task);
+            const isBlocked = this.isBlocked(task.blockedByIdsJson, statusById);
+            return {
+                taskId: task.id,
+                title: task.taskTemplate?.title ?? 'Tarefa',
+                localityId: task.localityId,
+                localityCode: locality?.code ?? '',
+                localityName: locality?.name ?? '',
+                phaseId: task.taskTemplate?.phaseId ?? null,
+                dueDate: task.dueDate,
+                status: task.status,
+                priority: task.priority,
+                progressPercent: task.progressPercent,
+                isLate,
+                isUnassigned,
+                isBlocked,
+            };
+        };
         const perLocality = localities.map((locality) => {
             const localityTasks = tasks.filter((task) => task.localityId === locality.id);
             const late = localityTasks.filter((task) => this.isLate(task)).length;
@@ -702,6 +724,21 @@ let TasksService = class TasksService {
             };
         });
         const totalRecruits = localities.reduce((acc, l) => acc + (l.recruitsFemaleCountCurrent ?? 0), 0);
+        const lateItems = tasks
+            .filter((task) => this.isLate(task))
+            .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())
+            .map((task) => mapNationalTaskDetail(task));
+        const unassignedItems = tasks
+            .filter((task) => this.isTaskUnassigned(task))
+            .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())
+            .map((task) => mapNationalTaskDetail(task));
+        const riskTasks = tasks
+            .filter((task) => this.isLate(task) ||
+            this.isTaskUnassigned(task) ||
+            this.isBlocked(task.blockedByIdsJson, statusById))
+            .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())
+            .slice(0, 10)
+            .map((task) => mapNationalTaskDetail(task));
         return {
             items: perLocality,
             totals: {
@@ -712,6 +749,9 @@ let TasksService = class TasksService {
                 recruitsFemale: totalRecruits,
                 reportsProduced: reportsCount,
             },
+            lateItems,
+            unassignedItems,
+            riskTasks,
             executive_hide_pii: user?.executiveHidePii ?? false,
         };
     }
@@ -796,6 +836,32 @@ let TasksService = class TasksService {
         ]);
         const localityIds = localities.map((loc) => loc.id);
         const filteredTasks = tasks.filter((task) => localityIds.includes(task.localityId));
+        const localityById = new Map(localities.map((locality) => [locality.id, locality]));
+        const statusById = new Map(filteredTasks.map((task) => [task.id, task.status]));
+        const dayMs = 1000 * 60 * 60 * 24;
+        const mapExecutiveTaskItem = (task) => {
+            const locality = localityById.get(task.localityId);
+            const late = this.isLate(task);
+            const blocked = this.isBlocked(task.blockedByIdsJson, statusById);
+            return {
+                taskId: task.id,
+                title: task.taskTemplate?.title ?? 'Tarefa',
+                phaseId: task.taskTemplate?.phaseId ?? null,
+                phaseName: task.taskTemplate?.phase?.name ?? '',
+                localityId: task.localityId,
+                localityCode: locality?.code ?? '',
+                localityName: locality?.name ?? '',
+                dueDate: task.dueDate,
+                status: task.status,
+                priority: task.priority,
+                progressPercent: task.progressPercent,
+                reportRequired: task.reportRequired,
+                isLate: late,
+                daysLate: late ? Math.max(1, Math.ceil((Date.now() - task.dueDate.getTime()) / dayMs)) : 0,
+                isUnassigned: this.isTaskUnassigned(task),
+                isBlocked: blocked,
+            };
+        };
         const progressByPhase = phases.map((phase) => {
             const phaseTasks = filteredTasks.filter((task) => task.taskTemplate.phaseId === phase.id);
             const avg = phaseTasks.length
@@ -812,30 +878,123 @@ let TasksService = class TasksService {
                 const avg = phaseTasks.length
                     ? phaseTasks.reduce((acc, task) => acc + task.progressPercent, 0) / phaseTasks.length
                     : 0;
-                return { localityId: locality.id, progress: avg };
+                return {
+                    localityId: locality.id,
+                    localityCode: locality.code,
+                    localityName: locality.name,
+                    progress: Math.round(avg),
+                };
             });
-            const above = perLocality.filter((entry) => entry.progress >= threshold).length;
+            const localitiesAbove = perLocality
+                .filter((entry) => entry.progress >= threshold)
+                .sort((a, b) => b.progress - a.progress);
+            const localitiesBelow = perLocality
+                .filter((entry) => entry.progress < threshold)
+                .sort((a, b) => a.progress - b.progress);
             return {
                 phaseId: phase.id,
                 phaseName: phase.name,
                 threshold,
-                percentLocalitiesAbove: localities.length ? Math.round((above / localities.length) * 100) : 0,
+                localitiesAboveCount: localitiesAbove.length,
+                localitiesBelowCount: localitiesBelow.length,
+                percentLocalitiesAbove: localities.length ? Math.round((localitiesAbove.length / localities.length) * 100) : 0,
+                localitiesAbove,
+                localitiesBelow,
             };
         });
+        const progressByLocality = localities
+            .map((locality) => {
+            const localityTasks = filteredTasks.filter((task) => task.localityId === locality.id);
+            const avg = localityTasks.length
+                ? localityTasks.reduce((acc, task) => acc + task.progressPercent, 0) / localityTasks.length
+                : 0;
+            return {
+                localityId: locality.id,
+                localityCode: locality.code,
+                localityName: locality.name,
+                progress: Math.round(avg),
+                tasksCount: localityTasks.length,
+            };
+        })
+            .sort((a, b) => b.progress - a.progress);
         const lateTasks = filteredTasks.filter((task) => task.status !== client_1.TaskStatus.DONE && task.dueDate < new Date());
+        const lateTaskItems = lateTasks
+            .slice()
+            .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())
+            .map((task) => mapExecutiveTaskItem(task));
         const weeklyTrend = [];
         for (let i = 7; i >= 0; i -= 1) {
             const start = new Date(Date.now() - i * 7 * 24 * 60 * 60 * 1000);
             const end = new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000);
-            const count = filteredTasks.filter((task) => task.dueDate >= start && task.dueDate < end && task.status !== client_1.TaskStatus.DONE).length;
-            weeklyTrend.push({ week: start.toISOString().slice(0, 10), late: count });
+            const weekItems = filteredTasks.filter((task) => task.dueDate >= start && task.dueDate < end && task.status !== client_1.TaskStatus.DONE);
+            const byLocality = new Map();
+            for (const task of weekItems) {
+                const locality = localityById.get(task.localityId);
+                const key = locality?.id ?? task.localityId;
+                const current = byLocality.get(key);
+                if (current) {
+                    current.count += 1;
+                    continue;
+                }
+                byLocality.set(key, {
+                    localityId: key,
+                    localityCode: locality?.code ?? '',
+                    localityName: locality?.name ?? '',
+                    count: 1,
+                });
+            }
+            weeklyTrend.push({
+                week: start.toISOString().slice(0, 10),
+                late: weekItems.length,
+                localities: Array.from(byLocality.values())
+                    .sort((a, b) => b.count - a.count)
+                    .slice(0, 6),
+            });
         }
         const unassigned = filteredTasks.filter((task) => this.isTaskUnassigned(task));
+        const unassignedTaskItems = unassigned
+            .slice()
+            .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())
+            .map((task) => mapExecutiveTaskItem(task));
         const unassignedByCommand = new Map();
+        const unassignedByLocality = new Map();
         for (const task of unassigned) {
-            const locality = localities.find((loc) => loc.id === task.localityId);
+            const locality = localityById.get(task.localityId);
             const key = locality?.commandName ?? 'Sem comando';
             unassignedByCommand.set(key, (unassignedByCommand.get(key) ?? 0) + 1);
+            const localityKey = locality?.id ?? task.localityId;
+            const current = unassignedByLocality.get(localityKey);
+            if (current) {
+                current.count += 1;
+            }
+            else {
+                unassignedByLocality.set(localityKey, {
+                    localityId: localityKey,
+                    localityCode: locality?.code ?? '',
+                    localityName: locality?.name ?? '',
+                    commandName: locality?.commandName ?? 'Sem comando',
+                    count: 1,
+                });
+            }
+        }
+        const blockedTasks = filteredTasks.filter((task) => this.isBlocked(task.blockedByIdsJson, statusById));
+        const blockedByLocality = new Map();
+        for (const task of blockedTasks) {
+            const locality = localityById.get(task.localityId);
+            const localityKey = locality?.id ?? task.localityId;
+            const current = blockedByLocality.get(localityKey);
+            if (current) {
+                current.count += 1;
+            }
+            else {
+                blockedByLocality.set(localityKey, {
+                    localityId: localityKey,
+                    localityCode: locality?.code ?? '',
+                    localityName: locality?.name ?? '',
+                    commandName: locality?.commandName ?? 'Sem comando',
+                    count: 1,
+                });
+            }
         }
         const leadTimesByPhase = phases.map((phase) => {
             const doneTasks = filteredTasks.filter((task) => task.taskTemplate.phaseId === phase.id && task.status === client_1.TaskStatus.DONE);
@@ -844,12 +1003,28 @@ let TasksService = class TasksService {
                     doneTasks.length /
                     (1000 * 60 * 60 * 24)
                 : 0;
-            return { phaseId: phase.id, phaseName: phase.name, avgLeadDays: Number(avgDays.toFixed(1)) };
+            const sampleTasks = doneTasks
+                .map((task) => ({
+                ...mapExecutiveTaskItem(task),
+                leadDays: Number(((task.updatedAt.getTime() - task.createdAt.getTime()) / dayMs).toFixed(1)),
+            }))
+                .sort((a, b) => b.leadDays - a.leadDays)
+                .slice(0, 12);
+            return {
+                phaseId: phase.id,
+                phaseName: phase.name,
+                avgLeadDays: Number(avgDays.toFixed(1)),
+                doneCount: doneTasks.length,
+                sampleTasks,
+            };
         });
         const reportRequiredTasks = filteredTasks.filter((task) => task.reportRequired && task.status === client_1.TaskStatus.DONE);
         const approvedReports = new Set(reports.filter((report) => report.approved).map((report) => report.taskInstanceId));
         const complianceApproved = reportRequiredTasks.filter((task) => approvedReports.has(task.id)).length;
         const compliancePending = reportRequiredTasks.length - complianceApproved;
+        const reportPendingItems = reportRequiredTasks
+            .filter((task) => !approvedReports.has(task.id))
+            .map((task) => mapExecutiveTaskItem(task));
         const recruitsByLocality = new Map();
         for (const entry of recruitsHistory) {
             const key = entry.localityId;
@@ -872,7 +1047,7 @@ let TasksService = class TasksService {
         const riskScores = localities.map((locality) => {
             const localityTasks = filteredTasks.filter((task) => task.localityId === locality.id);
             const late = localityTasks.filter((task) => this.isLate(task)).length;
-            const blocked = localityTasks.filter((task) => this.isBlocked(task.blockedByIdsJson)).length;
+            const blocked = localityTasks.filter((task) => this.isBlocked(task.blockedByIdsJson, statusById)).length;
             const unassignedCount = localityTasks.filter((task) => this.isTaskUnassigned(task)).length;
             const reportPending = localityTasks.filter((task) => task.reportRequired && task.status === client_1.TaskStatus.DONE && !approvedReports.has(task.id)).length;
             const score = late * 2 + blocked * 2 + unassignedCount + reportPending * 2;
@@ -888,11 +1063,13 @@ let TasksService = class TasksService {
             progress: {
                 overall: overallProgress,
                 byPhase: progressByPhase,
+                byLocality: progressByLocality,
             },
             localityAboveThreshold: localityProgressByPhase,
             late: {
                 total: lateTasks.length,
                 trend: weeklyTrend,
+                items: lateTaskItems,
             },
             unassigned: {
                 total: unassigned.length,
@@ -900,12 +1077,23 @@ let TasksService = class TasksService {
                     commandName,
                     count,
                 })),
+                byLocality: Array.from(unassignedByLocality.values()).sort((a, b) => b.count - a.count),
+                items: unassignedTaskItems,
+            },
+            blocked: {
+                total: blockedTasks.length,
+                byLocality: Array.from(blockedByLocality.values()).sort((a, b) => b.count - a.count),
+                items: blockedTasks
+                    .slice()
+                    .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())
+                    .map((task) => mapExecutiveTaskItem(task)),
             },
             leadTime: leadTimesByPhase,
             reportsCompliance: {
                 approved: complianceApproved,
                 pending: compliancePending,
                 total: reportRequiredTasks.length,
+                pendingItems: reportPendingItems,
             },
             recruits: {
                 aggregate: recruitsAggregate,
@@ -1185,8 +1373,16 @@ let TasksService = class TasksService {
             where.eloRoleId = filters.eloRoleId;
         if (filters.status)
             where.status = filters.status;
-        if (filters.assigneeId)
+        const assigneeIds = (filters.assigneeIds ?? '')
+            .split(',')
+            .map((value) => value.trim())
+            .filter(Boolean);
+        if (assigneeIds.length > 0) {
+            where.assignedToId = { in: assigneeIds };
+        }
+        else if (filters.assigneeId) {
             where.assignedToId = filters.assigneeId;
+        }
         if (filters.dueFrom || filters.dueTo) {
             where.dueDate = {};
             if (filters.dueFrom)

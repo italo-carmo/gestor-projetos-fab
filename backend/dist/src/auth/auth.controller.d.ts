@@ -30,11 +30,11 @@ export declare class AuthController {
         email: string;
         name: string;
         executive_hide_pii: boolean;
-        elo_role_id: any;
+        elo_role_id: string | null;
         permissions: {
             resource: string;
             action: string;
-            scope: import("@prisma/client").$Enums.PermissionScope;
+            scope: import("@prisma/client").PermissionScope;
         }[];
         scopes: never[];
         flags: {

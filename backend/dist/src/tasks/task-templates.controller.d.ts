@@ -46,13 +46,13 @@ export declare class TaskTemplatesController {
             taskTemplateId: string;
             localityId: string;
             status: import("@prisma/client").$Enums.TaskStatus;
+            reportRequired: boolean;
             dueDate: Date;
             priority: import("@prisma/client").$Enums.TaskPriority;
             progressPercent: number;
             assigneeType: import("@prisma/client").$Enums.TaskAssigneeType | null;
             externalAssigneeName: string | null;
             externalAssigneeRole: string | null;
-            reportRequired: boolean;
             blockedByIdsJson: import("@prisma/client/runtime/client").JsonValue | null;
             meetingId: string | null;
             assignedToId: string | null;

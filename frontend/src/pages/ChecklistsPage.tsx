@@ -1,4 +1,5 @@
 import {
+  Alert,
   Box,
   Button,
   Card,
@@ -78,6 +79,7 @@ export function ChecklistsPage() {
   const phaseId = params.get('phaseId') ?? '';
   const specialtyId = params.get('specialtyId') ?? '';
   const eloRoleId = params.get('eloRoleId') ?? '';
+  const itemSourceType = params.get('itemSourceType') ?? '';
 
   const filters = useMemo(
     () => ({
@@ -210,6 +212,9 @@ export function ChecklistsPage() {
 
       <Card sx={{ mb: 2, borderRadius: 2, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
         <CardContent>
+          <Alert severity="info" sx={{ mb: 2 }}>
+            Este checklist é automático: os checks são renderizados pelo andamento real de tarefas e atividades de cada localidade.
+          </Alert>
           <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" sx={{ mb: 2 }}>
             <Typography variant="caption" color="text.secondary">
               Legenda:
@@ -279,6 +284,18 @@ export function ChecklistsPage() {
                 </MenuItem>
               ))}
             </TextField>
+            <TextField
+              select
+              size="small"
+              label="Tipo de item"
+              value={itemSourceType}
+              onChange={(e) => updateParam('itemSourceType', e.target.value)}
+              sx={{ minWidth: 170 }}
+            >
+              <MenuItem value="">Todos</MenuItem>
+              <MenuItem value="TASK">Somente tarefas</MenuItem>
+              <MenuItem value="ACTIVITY">Somente atividades</MenuItem>
+            </TextField>
             <Button variant="text" onClick={clearFilters} sx={{ ml: 1 }}>
               Limpar filtros
             </Button>
@@ -321,7 +338,19 @@ export function ChecklistsPage() {
 
       {filteredByPhase.map((checklist: any) => {
         const items = checklist.items ?? [];
-        const localityProgress = checklist.localityProgress ?? [];
+        const filteredItems = itemSourceType
+          ? items.filter((item: any) => item.sourceType === itemSourceType)
+          : items;
+        const localityProgress = localities.map((locality: any) => {
+          if (filteredItems.length === 0) return { localityId: locality.id, percent: 0 };
+          const doneCount = filteredItems.filter(
+            (item: any) => item.statuses?.[locality.id] === 'DONE',
+          ).length;
+          return {
+            localityId: locality.id,
+            percent: Math.round((doneCount / filteredItems.length) * 100),
+          };
+        });
         const completedLocalities = localityProgress.filter((p: any) => p.percent === 100).length;
         const totalLocalities = localities.length;
         const progressPercent = totalLocalities ? Math.round((completedLocalities / totalLocalities) * 100) : 0;
@@ -378,9 +407,9 @@ export function ChecklistsPage() {
                 <Typography variant="body2" color="text.secondary">
                   Nenhuma localidade no escopo.
                 </Typography>
-              ) : items.length === 0 ? (
+              ) : filteredItems.length === 0 ? (
                 <Typography variant="body2" color="text.secondary">
-                  Nenhum item neste checklist.
+                  Nenhum item do tipo selecionado neste checklist.
                 </Typography>
               ) : viewByLocality ? (
                 <Box sx={{ overflowX: 'auto' }}>
@@ -390,7 +419,7 @@ export function ChecklistsPage() {
                       <TableCell sx={{ fontWeight: 600, width: 180, position: 'sticky', left: 0, bgcolor: 'background.paper', zIndex: 1 }}>
                         Localidade
                       </TableCell>
-                      {items.map((item: any) => (
+                      {filteredItems.map((item: any) => (
                         <TableCell key={item.id} align="center" sx={{ fontWeight: 600, minWidth: 44 }}>
                           <Tooltip title={item.title}>
                             <Typography variant="caption" noWrap sx={{ maxWidth: 80, display: 'block' }}>
@@ -408,7 +437,7 @@ export function ChecklistsPage() {
                         <TableCell sx={{ fontWeight: 500, position: 'sticky', left: 0, bgcolor: 'background.paper', zIndex: 1 }}>
                           {loc.name}
                         </TableCell>
-                        {items.map((item: any) => {
+                        {filteredItems.map((item: any) => {
                           const status = item.statuses?.[loc.id] ?? 'NOT_STARTED';
                           return (
                             <TableCell key={item.id} align="center" sx={{ py: 0.75 }}>
@@ -444,7 +473,7 @@ export function ChecklistsPage() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {items.map((item: any) => (
+                    {filteredItems.map((item: any) => (
                       <TableRow key={item.id} hover>
                         <TableCell sx={{ fontWeight: 500, position: 'sticky', left: 0, bgcolor: 'background.paper', zIndex: 1 }}>
                           <Stack direction="row" spacing={1} alignItems="center">

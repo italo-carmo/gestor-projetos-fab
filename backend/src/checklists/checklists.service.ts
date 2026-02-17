@@ -40,6 +40,37 @@ export class ChecklistsService {
       }),
     ]);
 
+    if (checklists.length === 0) {
+      const autoItems = await this.buildAutomaticChecklistItems(localities, filters, constraints);
+      const localityProgress = localities.map((locality) => {
+        if (autoItems.length === 0) return { localityId: locality.id, percent: 0 };
+        const doneCount = autoItems.filter(
+          (item) => item.statuses[locality.id] === ChecklistItemStatusType.DONE,
+        ).length;
+        return {
+          localityId: locality.id,
+          percent: Math.round((doneCount / autoItems.length) * 100),
+        };
+      });
+      return {
+        items: autoItems.length
+          ? [
+              {
+                id: 'auto-checklist',
+                title: 'Checklist Automático',
+                phaseId: filters.phaseId ?? null,
+                specialtyId: filters.specialtyId ?? null,
+                eloRoleId: filters.eloRoleId ?? null,
+                eloRole: null,
+                items: autoItems,
+                localityProgress,
+              },
+            ]
+          : [],
+        localities,
+      };
+    }
+
     const localityIds = localities.map((l) => l.id);
     const templateIds = checklists.flatMap((c) =>
       c.items.filter((i) => i.taskTemplateId).map((i) => i.taskTemplateId as string),
@@ -225,21 +256,19 @@ export class ChecklistsService {
 
   private aggregateTaskStatus(statuses: TaskStatus[]) {
     if (statuses.length === 0) return ChecklistItemStatusType.NOT_STARTED;
-    const anyDone = statuses.some((status) => status === TaskStatus.DONE);
-    if (anyDone) return ChecklistItemStatusType.DONE;
-    const anyProgress = statuses.some((status) =>
-      ([TaskStatus.STARTED, TaskStatus.IN_PROGRESS, TaskStatus.BLOCKED] as TaskStatus[]).includes(status),
-    );
+    const allDone = statuses.every((status) => status === TaskStatus.DONE);
+    if (allDone) return ChecklistItemStatusType.DONE;
+    const anyProgress = statuses.some((status) => status !== TaskStatus.NOT_STARTED);
     if (anyProgress) return ChecklistItemStatusType.IN_PROGRESS;
     return ChecklistItemStatusType.NOT_STARTED;
   }
 
   private aggregateActivityStatus(statuses: ActivityStatus[]) {
     if (statuses.length === 0) return ChecklistItemStatusType.NOT_STARTED;
-    const anyDone = statuses.some((status) => status === ActivityStatus.DONE);
-    if (anyDone) return ChecklistItemStatusType.DONE;
+    const allDone = statuses.every((status) => status === ActivityStatus.DONE);
+    if (allDone) return ChecklistItemStatusType.DONE;
     const anyProgress = statuses.some((status) =>
-      ([ActivityStatus.IN_PROGRESS] as ActivityStatus[]).includes(status),
+      ([ActivityStatus.IN_PROGRESS, ActivityStatus.DONE, ActivityStatus.CANCELLED] as ActivityStatus[]).includes(status),
     );
     if (anyProgress) return ChecklistItemStatusType.IN_PROGRESS;
     return ChecklistItemStatusType.NOT_STARTED;
@@ -247,5 +276,112 @@ export class ChecklistsService {
 
   private normalizeChecklistActivityTitle(value: string) {
     return (value ?? '').trim().toLocaleLowerCase('pt-BR');
+  }
+
+  private async buildAutomaticChecklistItems(
+    localities: Array<{ id: string; name: string }>,
+    filters: { phaseId?: string; specialtyId?: string; eloRoleId?: string },
+    constraints: { localityId?: string; specialtyId?: string; eloRoleId?: string },
+  ) {
+    const localityIds = localities.map((locality) => locality.id);
+    if (localityIds.length === 0) return [];
+
+    const selectedEloRoleId = filters.eloRoleId ?? constraints.eloRoleId;
+    const selectedSpecialtyId = filters.specialtyId ?? constraints.specialtyId;
+
+    const taskInstances = await this.prisma.taskInstance.findMany({
+      where: {
+        localityId: { in: localityIds },
+        ...(selectedEloRoleId
+          ? {
+              OR: [{ eloRoleId: selectedEloRoleId }, { taskTemplate: { eloRoleId: selectedEloRoleId } }],
+            }
+          : {}),
+        taskTemplate: {
+          ...(filters.phaseId ? { phaseId: filters.phaseId } : {}),
+          ...(selectedSpecialtyId ? { specialtyId: selectedSpecialtyId } : {}),
+        },
+      },
+      select: {
+        taskTemplateId: true,
+        localityId: true,
+        status: true,
+        taskTemplate: {
+          select: {
+            id: true,
+            title: true,
+          },
+        },
+      },
+    });
+
+    const activities = await this.prisma.activity.findMany({
+      where: {
+        localityId: { in: localityIds },
+      },
+      select: { title: true, localityId: true, status: true },
+    });
+
+    const templateById = new Map<string, string>();
+    const taskStatusByTemplateLocality = new Map<string, TaskStatus[]>();
+    for (const instance of taskInstances) {
+      if (!instance.taskTemplateId || !instance.taskTemplate?.title) continue;
+      templateById.set(instance.taskTemplateId, instance.taskTemplate.title);
+      const key = `${instance.taskTemplateId}:${instance.localityId}`;
+      const list = taskStatusByTemplateLocality.get(key) ?? [];
+      list.push(instance.status);
+      taskStatusByTemplateLocality.set(key, list);
+    }
+
+    const activityStatusByTitleLocality = new Map<string, ActivityStatus[]>();
+    for (const activity of activities) {
+      const titleKey = this.normalizeChecklistActivityTitle(activity.title);
+      const key = `${titleKey}:${activity.localityId}`;
+      const list = activityStatusByTitleLocality.get(key) ?? [];
+      list.push(activity.status);
+      activityStatusByTitleLocality.set(key, list);
+    }
+
+    const automaticTaskItems = Array.from(templateById.entries())
+      .sort((a, b) => a[1].localeCompare(b[1]))
+      .map(([taskTemplateId, title]) => {
+        const statusesByLocality: Record<string, ChecklistItemStatusType> = {};
+        for (const locality of localities) {
+          const key = `${taskTemplateId}:${locality.id}`;
+          const statuses = taskStatusByTemplateLocality.get(key) ?? [];
+          statusesByLocality[locality.id] = this.aggregateTaskStatus(statuses);
+        }
+        return {
+          id: `auto-task:${taskTemplateId}`,
+          title,
+          taskTemplateId,
+          sourceType: 'TASK',
+          statuses: statusesByLocality,
+        };
+      });
+
+    const activityTitles = Array.from(
+      new Set(activities.map((activity) => this.normalizeChecklistActivityTitle(activity.title))),
+    ).filter(Boolean);
+
+    const automaticActivityItems = activityTitles
+      .sort((a, b) => a.localeCompare(b))
+      .map((titleKey) => {
+        const statusesByLocality: Record<string, ChecklistItemStatusType> = {};
+        for (const locality of localities) {
+          const key = `${titleKey}:${locality.id}`;
+          const statuses = activityStatusByTitleLocality.get(key) ?? [];
+          statusesByLocality[locality.id] = this.aggregateActivityStatus(statuses);
+        }
+        return {
+          id: `auto-activity:${titleKey}`,
+          title: activities.find((item) => this.normalizeChecklistActivityTitle(item.title) === titleKey)?.title ?? titleKey,
+          taskTemplateId: null,
+          sourceType: 'ACTIVITY',
+          statuses: statusesByLocality,
+        };
+      });
+
+    return [...automaticTaskItems, ...automaticActivityItems];
   }
 }

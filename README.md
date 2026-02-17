@@ -61,6 +61,10 @@ VITE_API_BASE_URL=http://localhost:3000
 - `comgep@smif.local` / `Admin123`
 - `gsd.bsb@smif.local` / `Admin123`
 
+## Credenciais após importação real (`npm run seed:repositorio`)
+- `admin@smif.local` / `Smif@2026`
+- `ti@smif.local` / `Smif@2026`
+
 ## Endpoints iniciais
 - POST `/auth/login`
 - POST `/auth/refresh`

@@ -12,6 +12,8 @@ export type FiltersBarProps = {
   onStatusChange?: (value: string) => void;
   assigneeId?: string;
   onAssigneeChange?: (value: string) => void;
+  assigneeIds?: string[];
+  onAssigneesChange?: (values: string[]) => void;
   dueFrom?: string;
   dueTo?: string;
   onDueFromChange?: (value: string) => void;
@@ -37,6 +39,8 @@ export function FiltersBar(props: FiltersBarProps) {
     onStatusChange,
     assigneeId,
     onAssigneeChange,
+    assigneeIds,
+    onAssigneesChange,
     dueFrom,
     dueTo,
     onDueFromChange,
@@ -49,6 +53,9 @@ export function FiltersBar(props: FiltersBarProps) {
     assignees,
     onClear,
   } = props;
+
+  const parseMultiSelectValue = (value: string | string[]) =>
+    (Array.isArray(value) ? value : value.split(',')).map((entry) => entry.trim()).filter(Boolean);
 
   return (
     <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems="center" flexWrap="wrap">
@@ -133,7 +140,32 @@ export function FiltersBar(props: FiltersBarProps) {
           ))}
         </TextField>
       )}
-      {onAssigneeChange && (
+      {onAssigneesChange ? (
+        <TextField
+          select
+          size="small"
+          label="Responsáveis"
+          value={assigneeIds ?? []}
+          onChange={(e) => onAssigneesChange(parseMultiSelectValue(e.target.value as string | string[]))}
+          sx={{ minWidth: 280 }}
+          SelectProps={{
+            multiple: true,
+            renderValue: (selected) => {
+              const ids = parseMultiSelectValue(selected as string | string[]);
+              if (ids.length === 0) return 'Todos';
+              const names = (assignees ?? []).filter((user) => ids.includes(user.id)).map((user) => user.name);
+              return names.length > 0 ? names.join(', ') : `${ids.length} selecionado(s)`;
+            },
+            inputProps: { 'data-testid': 'filter-assignee' },
+          }}
+        >
+          {(assignees ?? []).map((user) => (
+            <MenuItem key={user.id} value={user.id}>
+              {user.name}
+            </MenuItem>
+          ))}
+        </TextField>
+      ) : onAssigneeChange && (
         <TextField
           select
           size="small"

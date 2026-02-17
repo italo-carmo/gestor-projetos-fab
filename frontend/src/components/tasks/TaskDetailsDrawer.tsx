@@ -222,7 +222,7 @@ export function TaskDetailsDrawer({ task, open, onClose, user, localities = [], 
               <Typography variant="h5">{task.taskTemplate?.title ?? 'Tarefa'}</Typography>
               <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
                 <StatusChip status={task.status} isLate={task.isLate} blocked={task.blockedByIds?.length > 0} />
-                <DueBadge dueDate={task.dueDate} />
+                <DueBadge dueDate={task.dueDate} status={task.status} />
               </Stack>
               {reportRequiredLabel && (
                 <Typography variant="caption" color="warning.main">
