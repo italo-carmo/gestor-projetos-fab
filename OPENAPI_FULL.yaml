@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: SMIF Gestão API — Full
+  title: CIPAVD Gestão API — Full
   version: 0.3.0
   description: Especificação completa (Auth, Admin, RBAC, Localities, Specialties,
     Meetings, Tasks, Reports, Notices, Checklists, KPIs, Org/Elos, Dashboards).

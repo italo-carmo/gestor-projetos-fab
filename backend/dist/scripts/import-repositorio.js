@@ -570,14 +570,14 @@ async function upsertUsers(localityByCode) {
     const admin = await prisma.user.upsert({
         where: { email: process.env.IMPORT_ADMIN_EMAIL ?? 'admin@smif.local' },
         update: {
-            name: 'Administrador SMIF',
+            name: 'Administrador CIPAVD',
             passwordHash: hash,
             isActive: true,
             executiveHidePii: false,
         },
         create: {
             email: process.env.IMPORT_ADMIN_EMAIL ?? 'admin@smif.local',
-            name: 'Administrador SMIF',
+            name: 'Administrador CIPAVD',
             passwordHash: hash,
             isActive: true,
             executiveHidePii: false,
@@ -594,14 +594,14 @@ async function upsertUsers(localityByCode) {
         tiUser = await prisma.user.upsert({
             where: { email: legacyTiEmail },
             update: {
-                name: 'TI SMIF',
+                name: 'TI CIPAVD',
                 passwordHash: hash,
                 isActive: true,
                 executiveHidePii: false,
             },
             create: {
                 email: legacyTiEmail,
-                name: 'TI SMIF',
+                name: 'TI CIPAVD',
                 passwordHash: hash,
                 isActive: true,
                 executiveHidePii: false,

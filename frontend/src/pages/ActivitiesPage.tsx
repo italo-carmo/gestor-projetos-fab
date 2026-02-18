@@ -19,6 +19,7 @@ import {
   Typography,
 } from '@mui/material';
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   useActivityComments,
   useActivitySchedule,
@@ -46,6 +47,7 @@ import { can } from '../app/rbac';
 import { EmptyState } from '../components/states/EmptyState';
 import { ErrorState } from '../components/states/ErrorState';
 import { SkeletonState } from '../components/states/SkeletonState';
+import { EntityDocumentLinksManager } from '../components/documents/EntityDocumentLinksManager';
 import { ACTIVITY_STATUS_LABELS, ActivityStatus } from '../constants/enums';
 
 const blankReport = {
@@ -73,9 +75,11 @@ const blankScheduleItem = {
   participants: '',
 };
 
-type ActivityDrawerTab = 'activity' | 'schedule' | 'report';
+type ActivityDrawerTab = 'activity' | 'schedule' | 'report' | 'documents';
 
 export function ActivitiesPage() {
+  const [searchParams] = useSearchParams();
+  const activityIdFromUrl = searchParams.get('activityId') ?? '';
   const toast = useToast();
 
   const [statusFilter, setStatusFilter] = useState('');
@@ -92,8 +96,8 @@ export function ActivitiesPage() {
   });
 
   const { data: me } = useMe();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(activityIdFromUrl || null);
+  const [drawerOpen, setDrawerOpen] = useState(Boolean(activityIdFromUrl));
   const [isCreateMode, setIsCreateMode] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [drawerTab, setDrawerTab] = useState<ActivityDrawerTab>('activity');
@@ -118,11 +122,12 @@ export function ActivitiesPage() {
   const items = activitiesQuery.data?.items ?? [];
 
   useEffect(() => {
+    if (activitiesQuery.isLoading) return;
     if (selectedId && !items.some((i: any) => i.id === selectedId)) {
       setSelectedId(null);
       if (!isCreateMode) setDrawerOpen(false);
     }
-  }, [items, selectedId, isCreateMode]);
+  }, [activitiesQuery.isLoading, items, selectedId, isCreateMode]);
 
   const selected = items.find((i: any) => i.id === selectedId) ?? null;
 
@@ -540,6 +545,7 @@ export function ActivitiesPage() {
               <Tab value="activity" label="Dados da atividade" />
               <Tab value="schedule" label="Cronograma" />
               <Tab value="report" label="Relatório" />
+              <Tab value="documents" label="Documentos" />
             </Tabs>
           )}
 
@@ -1067,6 +1073,15 @@ export function ActivitiesPage() {
                 </Stack>
               </Stack>
             </>
+          )}
+
+          {!isCreateMode && selected && drawerTab === 'documents' && (
+            <EntityDocumentLinksManager
+              entityType="ACTIVITY"
+              entityId={selected.id}
+              canManage={canUpdate}
+              title="Documentos da atividade"
+            />
           )}
         </Box>
       </Drawer>

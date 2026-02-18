@@ -1,4 +1,4 @@
-# SMIF Gestao - Monorepo
+# CIPAVD Gestao - Monorepo
 
 ## Requisitos
 - Node.js `^20.19` ou `^22.12` (Prisma 7 não suporta Node 18)

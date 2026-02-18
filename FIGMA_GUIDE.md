@@ -1,4 +1,4 @@
-# FIGMA_GUIDE — Guia de Design System (SMIF Gestão)
+# FIGMA_GUIDE — Guia de Design System (CIPAVD Gestão)
 
 Este guia serve para replicar um visual **moderno, fluido, profissional**, com identidade **azul e branco** (FAB).  
 Use como “tokens” para Figma e como referência para a UI do React/MUI.

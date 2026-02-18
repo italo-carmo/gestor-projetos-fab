@@ -1,5 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { DocumentCategory, DocumentLinkEntity, Prisma } from '@prisma/client';
+import {
+  DocumentCategory,
+  DocumentLinkEntity,
+  PermissionScope,
+  Prisma,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { throwError } from '../common/http-error';
 import type { RbacUser } from '../rbac/rbac.types';
@@ -45,7 +50,8 @@ export class DocumentsService {
       where.localityId = filters.localityId;
     }
 
-    if (user?.localityId) {
+    if (this.shouldApplyLocalityScope(user)) {
+      const scopedLocalityId = user?.localityId as string;
       const andArr = Array.isArray(where.AND)
         ? where.AND
         : where.AND
@@ -53,7 +59,7 @@ export class DocumentsService {
           : [];
       where.AND = [
         ...andArr,
-        { OR: [{ localityId: null }, { localityId: user.localityId }] },
+        { OR: [{ localityId: null }, { localityId: scopedLocalityId }] },
       ];
     }
 
@@ -352,9 +358,9 @@ export class DocumentsService {
     if (!document) throwError('NOT_FOUND');
 
     if (
-      user?.localityId &&
+      this.shouldApplyLocalityScope(user) &&
       document.localityId &&
-      document.localityId !== user.localityId
+      document.localityId !== user?.localityId
     ) {
       throwError('RBAC_FORBIDDEN');
     }
@@ -370,9 +376,9 @@ export class DocumentsService {
     if (!document) throwError('NOT_FOUND');
 
     if (
-      user?.localityId &&
+      this.shouldApplyLocalityScope(user) &&
       document.localityId &&
-      document.localityId !== user.localityId
+      document.localityId !== user?.localityId
     ) {
       throwError('RBAC_FORBIDDEN');
     }
@@ -396,10 +402,10 @@ export class DocumentsService {
     }
 
     if (
-      user?.localityId &&
+      this.shouldApplyLocalityScope(user) &&
       normalizedLocalityId !== undefined &&
       normalizedLocalityId !== null &&
-      normalizedLocalityId !== user.localityId
+      normalizedLocalityId !== user?.localityId
     ) {
       throwError('RBAC_FORBIDDEN');
     }
@@ -481,6 +487,338 @@ export class DocumentsService {
       document,
       content,
       links: enrichedLinks,
+    };
+  }
+
+  async listLinks(
+    filters: {
+      documentId?: string;
+      entityType?: string;
+      entityId?: string;
+      pageSize?: string;
+    },
+    user?: RbacUser,
+  ) {
+    const where: Prisma.DocumentLinkWhereInput = {};
+    if (filters.documentId) where.documentId = filters.documentId;
+    if (filters.entityId) where.entityId = filters.entityId;
+
+    if (filters.entityType) {
+      where.entityType = this.parseEntityType(filters.entityType);
+    }
+
+    const scopedDocumentWhere = this.documentScopeWhere(user);
+    if (Object.keys(scopedDocumentWhere).length > 0) {
+      where.document = scopedDocumentWhere;
+    }
+
+    const take = this.parseTake(filters.pageSize, 200, 1000);
+
+    const links = await this.prisma.documentLink.findMany({
+      where,
+      orderBy: [{ createdAt: 'desc' }],
+      take,
+      include: {
+        document: {
+          include: this.documentInclude(),
+        },
+      },
+    });
+
+    const enriched = await this.enrichLinks(links);
+    return {
+      items: enriched.map((item: any) => ({
+        ...item,
+        document: item.document
+          ? this.mapDocumentWithAccess(item.document, user)
+          : null,
+      })),
+    };
+  }
+
+  async createLink(
+    payload: {
+      documentId: string;
+      entityType: string;
+      entityId: string;
+      label?: string | null;
+    },
+    user?: RbacUser,
+  ) {
+    const documentId = String(payload.documentId ?? '').trim();
+    const entityId = String(payload.entityId ?? '').trim();
+    const entityType = this.parseEntityType(payload.entityType);
+    const label = payload.label?.trim() || null;
+
+    if (!documentId) {
+      throwError('VALIDATION_ERROR', { field: 'documentId', reason: 'required' });
+    }
+    if (!entityId) {
+      throwError('VALIDATION_ERROR', { field: 'entityId', reason: 'required' });
+    }
+
+    const document = await this.prisma.documentAsset.findUnique({
+      where: { id: documentId },
+      include: this.documentInclude(),
+    });
+    if (!document) throwError('NOT_FOUND');
+    this.assertDocumentScope(document, user);
+
+    await this.assertLinkEntityExists(entityType, entityId);
+
+    const link = await this.prisma.documentLink.upsert({
+      where: {
+        documentId_entityType_entityId: {
+          documentId,
+          entityType,
+          entityId,
+        },
+      },
+      update: {
+        label,
+      },
+      create: {
+        documentId,
+        entityType,
+        entityId,
+        label,
+      },
+    });
+
+    const [enriched] = await this.enrichLinks([link]);
+    return {
+      ...enriched,
+      document: this.mapDocumentWithAccess(document, user),
+    };
+  }
+
+  async updateLink(
+    id: string,
+    payload: {
+      documentId?: string;
+      entityId?: string;
+      label?: string | null;
+    },
+    user?: RbacUser,
+  ) {
+    const existing = await this.prisma.documentLink.findUnique({
+      where: { id },
+      include: {
+        document: {
+          include: this.documentInclude(),
+        },
+      },
+    });
+    if (!existing) throwError('NOT_FOUND');
+    this.assertDocumentScope(existing.document, user);
+
+    const nextDocumentId =
+      payload.documentId === undefined
+        ? existing.documentId
+        : String(payload.documentId ?? '').trim();
+    const nextEntityId =
+      payload.entityId === undefined
+        ? existing.entityId
+        : String(payload.entityId ?? '').trim();
+    const nextLabel =
+      payload.label === undefined ? existing.label : payload.label?.trim() || null;
+
+    if (!nextDocumentId) {
+      throwError('VALIDATION_ERROR', { field: 'documentId', reason: 'required' });
+    }
+    if (!nextEntityId) {
+      throwError('VALIDATION_ERROR', { field: 'entityId', reason: 'required' });
+    }
+
+    let nextDocument = existing.document;
+    if (nextDocumentId !== existing.documentId) {
+      const document = await this.prisma.documentAsset.findUnique({
+        where: { id: nextDocumentId },
+        include: this.documentInclude(),
+      });
+      if (!document) throwError('NOT_FOUND');
+      this.assertDocumentScope(document, user);
+      nextDocument = document;
+    }
+
+    if (nextEntityId !== existing.entityId) {
+      await this.assertLinkEntityExists(existing.entityType, nextEntityId);
+    }
+
+    const updated = await this.prisma.documentLink.update({
+      where: { id },
+      data: {
+        documentId: nextDocumentId,
+        entityId: nextEntityId,
+        label: nextLabel,
+      },
+    });
+
+    const [enriched] = await this.enrichLinks([updated]);
+    return {
+      ...enriched,
+      document: this.mapDocumentWithAccess(nextDocument, user),
+    };
+  }
+
+  async deleteLink(id: string, user?: RbacUser) {
+    const existing = await this.prisma.documentLink.findUnique({
+      where: { id },
+      include: {
+        document: {
+          select: { id: true, localityId: true },
+        },
+      },
+    });
+    if (!existing) throwError('NOT_FOUND');
+    this.assertDocumentScope(existing.document, user);
+
+    await this.prisma.documentLink.delete({ where: { id } });
+    return { success: true };
+  }
+
+  async listLinkCandidates(
+    filters: {
+      entityType: string;
+      q?: string;
+      pageSize?: string;
+    },
+    user?: RbacUser,
+  ) {
+    const entityType = this.parseEntityType(filters.entityType);
+    const q = String(filters.q ?? '').trim();
+    const take = this.parseTake(filters.pageSize, 30, 100);
+
+    if (
+      entityType !== DocumentLinkEntity.TASK_INSTANCE &&
+      entityType !== DocumentLinkEntity.ACTIVITY &&
+      entityType !== DocumentLinkEntity.MEETING
+    ) {
+      throwError('VALIDATION_ERROR', {
+        field: 'entityType',
+        reason: 'unsupported_entity_type',
+        allowed: [
+          DocumentLinkEntity.TASK_INSTANCE,
+          DocumentLinkEntity.ACTIVITY,
+          DocumentLinkEntity.MEETING,
+        ],
+      });
+    }
+
+    if (entityType === DocumentLinkEntity.TASK_INSTANCE) {
+      const where: Prisma.TaskInstanceWhereInput = {};
+      if (this.shouldApplyLocalityScope(user))
+        where.localityId = user?.localityId as string;
+      if (user?.specialtyId) {
+        where.taskTemplate = { specialtyId: user.specialtyId };
+      }
+      if (q) {
+        where.OR = [
+          { taskTemplate: { title: { contains: q, mode: 'insensitive' } } },
+          { locality: { name: { contains: q, mode: 'insensitive' } } },
+          { locality: { code: { contains: q, mode: 'insensitive' } } },
+          { id: { contains: q, mode: 'insensitive' } },
+        ];
+      }
+      const rows = await this.prisma.taskInstance.findMany({
+        where,
+        take,
+        orderBy: [{ dueDate: 'desc' }],
+        select: {
+          id: true,
+          dueDate: true,
+          taskTemplate: { select: { title: true } },
+          locality: { select: { code: true, name: true } },
+        },
+      });
+      return {
+        items: rows.map((row) => ({
+          id: row.id,
+          label: row.taskTemplate?.title ?? 'Tarefa',
+          subtitle: row.locality?.code ?? row.locality?.name ?? null,
+          extra: row.dueDate ? row.dueDate.toISOString().slice(0, 10) : null,
+        })),
+      };
+    }
+
+    if (entityType === DocumentLinkEntity.ACTIVITY) {
+      const where: Prisma.ActivityWhereInput = {};
+      if (this.shouldApplyLocalityScope(user)) {
+        where.OR = [
+          { localityId: null },
+          { localityId: user?.localityId as string },
+        ];
+      }
+      if (q) {
+        const qWhere: Prisma.ActivityWhereInput = {
+          OR: [
+            { title: { contains: q, mode: 'insensitive' } },
+            { description: { contains: q, mode: 'insensitive' } },
+            { id: { contains: q, mode: 'insensitive' } },
+          ],
+        };
+        where.AND = where.AND
+          ? Array.isArray(where.AND)
+            ? [...where.AND, qWhere]
+            : [where.AND, qWhere]
+          : [qWhere];
+      }
+      const rows = await this.prisma.activity.findMany({
+        where,
+        take,
+        orderBy: [{ eventDate: 'desc' }, { createdAt: 'desc' }],
+        select: {
+          id: true,
+          title: true,
+          eventDate: true,
+          locality: { select: { code: true, name: true } },
+        },
+      });
+      return {
+        items: rows.map((row) => ({
+          id: row.id,
+          label: row.title,
+          subtitle: row.locality?.code ?? row.locality?.name ?? null,
+          extra: row.eventDate ? row.eventDate.toISOString().slice(0, 10) : null,
+        })),
+      };
+    }
+
+    const where: Prisma.MeetingWhereInput = {};
+    if (this.shouldApplyLocalityScope(user)) {
+      where.OR = [{ localityId: null }, { localityId: user?.localityId as string }];
+    }
+    if (q) {
+      const qWhere: Prisma.MeetingWhereInput = {
+        OR: [
+          { scope: { contains: q, mode: 'insensitive' } },
+          { id: { contains: q, mode: 'insensitive' } },
+        ],
+      };
+      where.AND = where.AND
+        ? Array.isArray(where.AND)
+          ? [...where.AND, qWhere]
+          : [where.AND, qWhere]
+        : [qWhere];
+    }
+    const rows = await this.prisma.meeting.findMany({
+      where,
+      take,
+      orderBy: [{ datetime: 'desc' }],
+      select: {
+        id: true,
+        datetime: true,
+        scope: true,
+        locality: { select: { code: true, name: true } },
+      },
+    });
+    return {
+      items: rows.map((row) => ({
+        id: row.id,
+        label: row.scope?.trim() || 'Reunião',
+        subtitle: row.locality?.code ?? row.locality?.name ?? null,
+        extra: row.datetime.toISOString().slice(0, 16).replace('T', ' '),
+      })),
     };
   }
 
@@ -756,8 +1094,8 @@ export class DocumentsService {
     return links.map((link) => ({
       ...link,
       entityDisplayName:
-        link.label ??
         labelByTypeAndId.get(`${link.entityType}:${link.entityId}`) ??
+        link.label ??
         link.entityId,
     }));
   }
@@ -825,9 +1163,9 @@ export class DocumentsService {
   }
 
   private documentScopeWhere(user?: RbacUser): Prisma.DocumentAssetWhereInput {
-    if (!user?.localityId) return {};
+    if (!this.shouldApplyLocalityScope(user)) return {};
     return {
-      OR: [{ localityId: null }, { localityId: user.localityId }],
+      OR: [{ localityId: null }, { localityId: user?.localityId as string }],
     };
   }
 
@@ -844,5 +1182,109 @@ export class DocumentsService {
       content: { select: { parseStatus: true, parsedAt: true } },
       _count: { select: { links: true } },
     };
+  }
+
+  private parseEntityType(value: string): DocumentLinkEntity {
+    const normalized = String(value ?? '').trim().toUpperCase();
+    if (
+      normalized !== DocumentLinkEntity.TASK_INSTANCE &&
+      normalized !== DocumentLinkEntity.TASK_TEMPLATE &&
+      normalized !== DocumentLinkEntity.ACTIVITY &&
+      normalized !== DocumentLinkEntity.MEETING &&
+      normalized !== DocumentLinkEntity.ELO &&
+      normalized !== DocumentLinkEntity.LOCALITY
+    ) {
+      throwError('VALIDATION_ERROR', {
+        field: 'entityType',
+        reason: 'invalid_enum',
+      });
+    }
+    return normalized as DocumentLinkEntity;
+  }
+
+  private parseTake(
+    pageSizeRaw: string | undefined,
+    defaultValue: number,
+    maxValue: number,
+  ) {
+    const parsed = Number(pageSizeRaw);
+    if (!Number.isFinite(parsed) || parsed <= 0) return defaultValue;
+    return Math.min(Math.floor(parsed), maxValue);
+  }
+
+  private assertDocumentScope(
+    document: { localityId?: string | null },
+    user?: RbacUser,
+  ) {
+    if (!this.shouldApplyLocalityScope(user)) return;
+    if (!document.localityId) return;
+    if (document.localityId !== (user?.localityId as string)) {
+      throwError('RBAC_FORBIDDEN');
+    }
+  }
+
+  private shouldApplyLocalityScope(user?: RbacUser) {
+    if (!user?.localityId) return false;
+    if (this.isAdminUser(user)) return false;
+
+    const hasNationalSearchScope = user.permissions.some(
+      (permission) =>
+        (permission.resource === 'search' || permission.resource === '*') &&
+        (permission.action === 'view' || permission.action === '*') &&
+        permission.scope === PermissionScope.NATIONAL,
+    );
+
+    return !hasNationalSearchScope;
+  }
+
+  private async assertLinkEntityExists(
+    entityType: DocumentLinkEntity,
+    entityId: string,
+  ) {
+    if (entityType === DocumentLinkEntity.TASK_INSTANCE) {
+      const found = await this.prisma.taskInstance.findUnique({
+        where: { id: entityId },
+        select: { id: true },
+      });
+      if (!found) throwError('NOT_FOUND');
+      return;
+    }
+    if (entityType === DocumentLinkEntity.TASK_TEMPLATE) {
+      const found = await this.prisma.taskTemplate.findUnique({
+        where: { id: entityId },
+        select: { id: true },
+      });
+      if (!found) throwError('NOT_FOUND');
+      return;
+    }
+    if (entityType === DocumentLinkEntity.ACTIVITY) {
+      const found = await this.prisma.activity.findUnique({
+        where: { id: entityId },
+        select: { id: true },
+      });
+      if (!found) throwError('NOT_FOUND');
+      return;
+    }
+    if (entityType === DocumentLinkEntity.MEETING) {
+      const found = await this.prisma.meeting.findUnique({
+        where: { id: entityId },
+        select: { id: true },
+      });
+      if (!found) throwError('NOT_FOUND');
+      return;
+    }
+    if (entityType === DocumentLinkEntity.ELO) {
+      const found = await this.prisma.elo.findUnique({
+        where: { id: entityId },
+        select: { id: true },
+      });
+      if (!found) throwError('NOT_FOUND');
+      return;
+    }
+    const found = await this.prisma.locality.findUnique({
+      where: { id: entityId },
+      select: { id: true },
+    });
+    if (!found) throwError('NOT_FOUND');
   }
 }

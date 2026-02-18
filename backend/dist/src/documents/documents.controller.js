@@ -28,6 +28,8 @@ const documents_service_1 = require("./documents.service");
 const create_document_subcategory_dto_1 = require("./dto/create-document-subcategory.dto");
 const update_document_subcategory_dto_1 = require("./dto/update-document-subcategory.dto");
 const update_document_dto_1 = require("./dto/update-document.dto");
+const create_document_link_dto_1 = require("./dto/create-document-link.dto");
+const update_document_link_dto_1 = require("./dto/update-document-link.dto");
 const documentsDir = node_path_1.default.resolve(process.cwd(), 'storage', 'documents');
 if (!node_fs_1.default.existsSync(documentsDir)) {
     node_fs_1.default.mkdirSync(documentsDir, { recursive: true });
@@ -54,6 +56,21 @@ let DocumentsController = class DocumentsController {
     }
     coverage(user) {
         return this.documents.coverage(user);
+    }
+    listLinks(documentId, entityType, entityId, pageSize, user) {
+        return this.documents.listLinks({ documentId, entityType, entityId, pageSize }, user);
+    }
+    createLink(dto, user) {
+        return this.documents.createLink(dto, user);
+    }
+    updateLink(linkId, dto, user) {
+        return this.documents.updateLink(linkId, dto, user);
+    }
+    deleteLink(linkId, user) {
+        return this.documents.deleteLink(linkId, user);
+    }
+    linkCandidates(entityType, q, pageSize, user) {
+        return this.documents.listLinkCandidates({ entityType, q, pageSize }, user);
     }
     getContent(id, user) {
         return this.documents.getContent(id, user);
@@ -134,6 +151,57 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", void 0)
 ], DocumentsController.prototype, "coverage", null);
+__decorate([
+    (0, common_1.Get)('links'),
+    (0, require_permission_decorator_1.RequirePermission)('search', 'view'),
+    __param(0, (0, common_1.Query)('documentId')),
+    __param(1, (0, common_1.Query)('entityType')),
+    __param(2, (0, common_1.Query)('entityId')),
+    __param(3, (0, common_1.Query)('pageSize')),
+    __param(4, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object, Object, Object, Object]),
+    __metadata("design:returntype", void 0)
+], DocumentsController.prototype, "listLinks", null);
+__decorate([
+    (0, common_1.Post)('links'),
+    (0, require_permission_decorator_1.RequirePermission)('search', 'view'),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [create_document_link_dto_1.CreateDocumentLinkDto, Object]),
+    __metadata("design:returntype", void 0)
+], DocumentsController.prototype, "createLink", null);
+__decorate([
+    (0, common_1.Put)('links/:linkId'),
+    (0, require_permission_decorator_1.RequirePermission)('search', 'view'),
+    __param(0, (0, common_1.Param)('linkId')),
+    __param(1, (0, common_1.Body)()),
+    __param(2, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, update_document_link_dto_1.UpdateDocumentLinkDto, Object]),
+    __metadata("design:returntype", void 0)
+], DocumentsController.prototype, "updateLink", null);
+__decorate([
+    (0, common_1.Delete)('links/:linkId'),
+    (0, require_permission_decorator_1.RequirePermission)('search', 'view'),
+    __param(0, (0, common_1.Param)('linkId')),
+    __param(1, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", void 0)
+], DocumentsController.prototype, "deleteLink", null);
+__decorate([
+    (0, common_1.Get)('link-candidates'),
+    (0, require_permission_decorator_1.RequirePermission)('search', 'view'),
+    __param(0, (0, common_1.Query)('entityType')),
+    __param(1, (0, common_1.Query)('q')),
+    __param(2, (0, common_1.Query)('pageSize')),
+    __param(3, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object, Object, Object]),
+    __metadata("design:returntype", void 0)
+], DocumentsController.prototype, "linkCandidates", null);
 __decorate([
     (0, common_1.Get)(':id/content'),
     (0, require_permission_decorator_1.RequirePermission)('search', 'view'),

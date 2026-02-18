@@ -1,4 +1,4 @@
-// Prisma schema for SMIF Gestao
+// Prisma schema for CIPAVD Gestao
 
 generator client {
   provider = "prisma-client-js"

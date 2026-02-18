@@ -1,8 +1,8 @@
 openapi: 3.0.3
 info:
-  title: SMIF Gestão API
+  title: CIPAVD Gestão API
   version: 0.1.0
-  description: API do sistema SMIF Gestão (RBAC + projetos/tarefas/reuniões/relatórios).
+  description: API do sistema CIPAVD Gestão (RBAC + projetos/tarefas/reuniões/relatórios).
 servers:
 - url: http://localhost:3000
 components:

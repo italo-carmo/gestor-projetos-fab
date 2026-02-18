@@ -1062,6 +1062,83 @@ export function useDocumentContent(id: string) {
   });
 }
 
+export function useDocumentLinks(filters: {
+  documentId?: string;
+  entityType?: string;
+  entityId?: string;
+  pageSize?: number;
+}) {
+  return useQuery({
+    queryKey: qk.documentLinks(filters),
+    queryFn: async () => (await api.get("/documents/links", { params: filters })).data,
+    enabled: Boolean(filters.documentId || (filters.entityType && filters.entityId)),
+    staleTime: 5_000,
+  });
+}
+
+export function useDocumentLinkCandidates(filters: {
+  entityType?: string;
+  q?: string;
+  pageSize?: number;
+}) {
+  return useQuery({
+    queryKey: qk.documentLinkCandidates(filters),
+    queryFn: async () =>
+      (await api.get("/documents/link-candidates", { params: filters })).data,
+    enabled: Boolean(filters.entityType),
+    staleTime: 10_000,
+  });
+}
+
+export function useCreateDocumentLink() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      documentId: string;
+      entityType: string;
+      entityId: string;
+      label?: string | null;
+    }) => (await api.post("/documents/links", payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["documents", "links"] });
+      qc.invalidateQueries({ queryKey: ["documents"] });
+      qc.invalidateQueries({ queryKey: ["search"] });
+    },
+  });
+}
+
+export function useUpdateDocumentLink() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      payload: {
+        documentId?: string;
+        entityId?: string;
+        label?: string | null;
+      };
+    }) => (await api.put(`/documents/links/${args.id}`, args.payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["documents", "links"] });
+      qc.invalidateQueries({ queryKey: ["documents"] });
+      qc.invalidateQueries({ queryKey: ["search"] });
+    },
+  });
+}
+
+export function useDeleteDocumentLink() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      (await api.delete(`/documents/links/${id}`)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["documents", "links"] });
+      qc.invalidateQueries({ queryKey: ["documents"] });
+      qc.invalidateQueries({ queryKey: ["search"] });
+    },
+  });
+}
+
 export function useDownloadDocument() {
   return useMutation({
     mutationFn: async (args: { id: string; fileName: string }) => {

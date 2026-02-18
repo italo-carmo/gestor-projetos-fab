@@ -1,4 +1,4 @@
-# Migração do Repositório Google Drive para o SMIF Gestão
+# Migração do Repositório Google Drive para o CIPAVD Gestão
 
 ## Objetivo
 Centralizar o acervo da CIPAVD/SMIF no sistema e permitir desativar o repositório externo.

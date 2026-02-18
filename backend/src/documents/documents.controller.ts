@@ -23,6 +23,8 @@ import { DocumentsService } from './documents.service';
 import { CreateDocumentSubcategoryDto } from './dto/create-document-subcategory.dto';
 import { UpdateDocumentSubcategoryDto } from './dto/update-document-subcategory.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
+import { CreateDocumentLinkDto } from './dto/create-document-link.dto';
+import { UpdateDocumentLinkDto } from './dto/update-document-link.dto';
 
 const documentsDir = path.resolve(process.cwd(), 'storage', 'documents');
 if (!fs.existsSync(documentsDir)) {
@@ -89,6 +91,54 @@ export class DocumentsController {
   @RequirePermission('search', 'view')
   coverage(@CurrentUser() user: RbacUser) {
     return this.documents.coverage(user);
+  }
+
+  @Get('links')
+  @RequirePermission('search', 'view')
+  listLinks(
+    @Query('documentId') documentId: string | undefined,
+    @Query('entityType') entityType: string | undefined,
+    @Query('entityId') entityId: string | undefined,
+    @Query('pageSize') pageSize: string | undefined,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.documents.listLinks(
+      { documentId, entityType, entityId, pageSize },
+      user,
+    );
+  }
+
+  @Post('links')
+  @RequirePermission('search', 'view')
+  createLink(@Body() dto: CreateDocumentLinkDto, @CurrentUser() user: RbacUser) {
+    return this.documents.createLink(dto, user);
+  }
+
+  @Put('links/:linkId')
+  @RequirePermission('search', 'view')
+  updateLink(
+    @Param('linkId') linkId: string,
+    @Body() dto: UpdateDocumentLinkDto,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.documents.updateLink(linkId, dto, user);
+  }
+
+  @Delete('links/:linkId')
+  @RequirePermission('search', 'view')
+  deleteLink(@Param('linkId') linkId: string, @CurrentUser() user: RbacUser) {
+    return this.documents.deleteLink(linkId, user);
+  }
+
+  @Get('link-candidates')
+  @RequirePermission('search', 'view')
+  linkCandidates(
+    @Query('entityType') entityType: string,
+    @Query('q') q: string | undefined,
+    @Query('pageSize') pageSize: string | undefined,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.documents.listLinkCandidates({ entityType, q, pageSize }, user);
   }
 
   @Get(':id/content')

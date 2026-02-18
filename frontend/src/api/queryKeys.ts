@@ -31,6 +31,9 @@ export const qk = {
   documentSubcategories: (filters: Record<string, any>) => ["documents", "subcategories", filters] as const,
   documentCoverage: ["documents", "coverage"] as const,
   documentContent: (id: string) => ["documents", id, "content"] as const,
+  documentLinks: (filters: Record<string, any>) => ["documents", "links", filters] as const,
+  documentLinkCandidates: (filters: Record<string, any>) =>
+    ["documents", "link-candidates", filters] as const,
   executiveDashboard: (filters: Record<string, any>) => ["dashboardExecutive", filters] as const,
   kpiDashboard: (filters: Record<string, any>) => ["kpiDashboard", filters] as const,
   biSurveyDashboard: (filters: Record<string, any>) => ["biSurvey", "dashboard", filters] as const,

@@ -78,6 +78,58 @@ export declare class DocumentsService {
             createdAt: Date;
         }[];
     }>;
+    listLinks(filters: {
+        documentId?: string;
+        entityType?: string;
+        entityId?: string;
+        pageSize?: string;
+    }, user?: RbacUser): Promise<{
+        items: any[];
+    }>;
+    createLink(payload: {
+        documentId: string;
+        entityType: string;
+        entityId: string;
+        label?: string | null;
+    }, user?: RbacUser): Promise<{
+        document: any;
+        entityDisplayName: string;
+        id: string;
+        documentId: string;
+        entityType: DocumentLinkEntity;
+        entityId: string;
+        label: string | null;
+        createdAt: Date;
+    }>;
+    updateLink(id: string, payload: {
+        documentId?: string;
+        entityId?: string;
+        label?: string | null;
+    }, user?: RbacUser): Promise<{
+        document: any;
+        entityDisplayName: string;
+        id: string;
+        documentId: string;
+        entityType: DocumentLinkEntity;
+        entityId: string;
+        label: string | null;
+        createdAt: Date;
+    }>;
+    deleteLink(id: string, user?: RbacUser): Promise<{
+        success: boolean;
+    }>;
+    listLinkCandidates(filters: {
+        entityType: string;
+        q?: string;
+        pageSize?: string;
+    }, user?: RbacUser): Promise<{
+        items: {
+            id: string;
+            label: string;
+            subtitle: string | null;
+            extra: string | null;
+        }[];
+    }>;
     coverage(user?: RbacUser): Promise<{
         totalDocuments: number;
         linkedDocuments: number;
@@ -111,4 +163,9 @@ export declare class DocumentsService {
     private asRecord;
     private documentScopeWhere;
     private documentInclude;
+    private parseEntityType;
+    private parseTake;
+    private assertDocumentScope;
+    private shouldApplyLocalityScope;
+    private assertLinkEntityExists;
 }

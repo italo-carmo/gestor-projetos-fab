@@ -247,7 +247,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </Box>
             <Box>
               <Typography variant="subtitle2" sx={{ fontWeight: 800, lineHeight: 1.1 }}>
-                SMIF Gestão
+                CIPAVD Gestão
               </Typography>
               <Typography variant="caption" sx={{ color: 'text.secondary', lineHeight: 1.1 }}>
                 Comissão de Iniciação

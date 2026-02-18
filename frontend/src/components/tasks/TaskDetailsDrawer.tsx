@@ -35,6 +35,7 @@ import { can } from '../../app/rbac';
 import { StatusChip } from '../chips/StatusChip';
 import { ProgressInline } from '../chips/ProgressInline';
 import { DueBadge } from '../chips/DueBadge';
+import { EntityDocumentLinksManager } from '../documents/EntityDocumentLinksManager';
 import { TaskStatus, TASK_STATUS_LABELS } from '../../constants/enums';
 import { formatDate } from '../../app/date';
 
@@ -387,6 +388,12 @@ export function TaskDetailsDrawer({ task, open, onClose, user, localities = [], 
                     Salvar
                   </Button>
                 </Stack>
+                <EntityDocumentLinksManager
+                  entityType="TASK_INSTANCE"
+                  entityId={task.id}
+                  canManage={canUpdate}
+                  title="Documentos da tarefa"
+                />
               </Stack>
             )}
 

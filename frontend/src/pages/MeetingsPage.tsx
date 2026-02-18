@@ -43,6 +43,7 @@ import {
   useUsers,
 } from '../api/hooks';
 import { FiltersBar } from '../components/filters/FiltersBar';
+import { EntityDocumentLinksManager } from '../components/documents/EntityDocumentLinksManager';
 import { EmptyState } from '../components/states/EmptyState';
 import { ErrorState } from '../components/states/ErrorState';
 import { SkeletonState } from '../components/states/SkeletonState';
@@ -710,6 +711,13 @@ export function MeetingsPage() {
                   renderInput={(params) => (
                     <TextField {...params} label="Selecionar tarefa" placeholder="Buscar tarefa..." />
                   )}
+                />
+                <Divider sx={{ my: 1 }} />
+                <EntityDocumentLinksManager
+                  entityType="MEETING"
+                  entityId={selectedMeeting.id}
+                  canManage={canUpdate}
+                  title="Documentos da reunião"
                 />
               </Stack>
             </>

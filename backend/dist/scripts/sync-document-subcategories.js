@@ -38,6 +38,10 @@ function splitPath(input) {
         .map((part) => part.trim())
         .filter(Boolean);
 }
+function canonicalPath(input) {
+    const parts = splitPath(input);
+    return parts.join('/');
+}
 function mapCategory(relativePath) {
     const norm = normalize(relativePath);
     if (norm.startsWith('1. CIPAVD - DOCUMENTOS GERAIS'))
@@ -107,14 +111,14 @@ async function main() {
     });
     const relativeFolders = new Set();
     for (const absFolder of listAllDirectories(repoRoot)) {
-        const relative = normalizeRelPath(node_path_1.default.relative(repoRoot, absFolder));
+        const relative = canonicalPath(node_path_1.default.relative(repoRoot, absFolder));
         if (!relative || relative === '.')
             continue;
         relativeFolders.add(relative);
     }
     for (const doc of docs) {
         const sourceNorm = normalizeRelPath(doc.sourcePath);
-        const dir = normalizeRelPath(node_path_1.default.posix.dirname(sourceNorm));
+        const dir = canonicalPath(node_path_1.default.posix.dirname(sourceNorm));
         if (!dir || dir === '.')
             continue;
         relativeFolders.add(dir);
@@ -154,7 +158,7 @@ async function main() {
     let clearedDocuments = 0;
     for (const doc of docs) {
         const sourceNorm = normalizeRelPath(doc.sourcePath);
-        const dir = normalizeRelPath(node_path_1.default.posix.dirname(sourceNorm));
+        const dir = canonicalPath(node_path_1.default.posix.dirname(sourceNorm));
         let targetSubcategoryId = null;
         if (dir && dir !== '.') {
             const key = `${doc.category}|${normalize(dir)}`;

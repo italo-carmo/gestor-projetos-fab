@@ -1,4 +1,4 @@
-# Alinhamento de Escopo — SMIF Gestão
+# Alinhamento de Escopo — CIPAVD Gestão
 
 ## Contexto do Projeto
 Sistema web para gerenciamento da **Comissão de Iniciação de Recrutamento Feminino da FAB**, com foco em acompanhamento de tarefas, prevenção de assédio moral/sexual e monitoramento por localidade (GSD/Comando).

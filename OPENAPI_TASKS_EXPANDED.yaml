@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: SMIF Gestão API — Task Core
+  title: CIPAVD Gestão API — Task Core
   version: 0.2.0
   description: Especificação focada no núcleo de gestão (fases/tarefas/andamento/gantt/calendário).
 servers:

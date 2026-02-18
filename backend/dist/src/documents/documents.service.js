@@ -38,7 +38,8 @@ let DocumentsService = class DocumentsService {
         if (filters.localityId) {
             where.localityId = filters.localityId;
         }
-        if (user?.localityId) {
+        if (this.shouldApplyLocalityScope(user)) {
+            const scopedLocalityId = user?.localityId;
             const andArr = Array.isArray(where.AND)
                 ? where.AND
                 : where.AND
@@ -46,7 +47,7 @@ let DocumentsService = class DocumentsService {
                     : [];
             where.AND = [
                 ...andArr,
-                { OR: [{ localityId: null }, { localityId: user.localityId }] },
+                { OR: [{ localityId: null }, { localityId: scopedLocalityId }] },
             ];
         }
         const { page, pageSize, skip, take } = (0, pagination_1.parsePagination)(filters.page, filters.pageSize);
@@ -290,9 +291,9 @@ let DocumentsService = class DocumentsService {
         });
         if (!document)
             (0, http_error_1.throwError)('NOT_FOUND');
-        if (user?.localityId &&
+        if (this.shouldApplyLocalityScope(user) &&
             document.localityId &&
-            document.localityId !== user.localityId) {
+            document.localityId !== user?.localityId) {
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         }
         return this.mapDocumentWithAccess(document, user);
@@ -304,9 +305,9 @@ let DocumentsService = class DocumentsService {
         });
         if (!document)
             (0, http_error_1.throwError)('NOT_FOUND');
-        if (user?.localityId &&
+        if (this.shouldApplyLocalityScope(user) &&
             document.localityId &&
-            document.localityId !== user.localityId) {
+            document.localityId !== user?.localityId) {
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         }
         if (!this.canEdit(document, user)) {
@@ -325,10 +326,10 @@ let DocumentsService = class DocumentsService {
             if (!locality)
                 (0, http_error_1.throwError)('NOT_FOUND');
         }
-        if (user?.localityId &&
+        if (this.shouldApplyLocalityScope(user) &&
             normalizedLocalityId !== undefined &&
             normalizedLocalityId !== null &&
-            normalizedLocalityId !== user.localityId) {
+            normalizedLocalityId !== user?.localityId) {
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         }
         const normalizedSubcategoryId = payload.subcategoryId === undefined
@@ -394,6 +395,282 @@ let DocumentsService = class DocumentsService {
             document,
             content,
             links: enrichedLinks,
+        };
+    }
+    async listLinks(filters, user) {
+        const where = {};
+        if (filters.documentId)
+            where.documentId = filters.documentId;
+        if (filters.entityId)
+            where.entityId = filters.entityId;
+        if (filters.entityType) {
+            where.entityType = this.parseEntityType(filters.entityType);
+        }
+        const scopedDocumentWhere = this.documentScopeWhere(user);
+        if (Object.keys(scopedDocumentWhere).length > 0) {
+            where.document = scopedDocumentWhere;
+        }
+        const take = this.parseTake(filters.pageSize, 200, 1000);
+        const links = await this.prisma.documentLink.findMany({
+            where,
+            orderBy: [{ createdAt: 'desc' }],
+            take,
+            include: {
+                document: {
+                    include: this.documentInclude(),
+                },
+            },
+        });
+        const enriched = await this.enrichLinks(links);
+        return {
+            items: enriched.map((item) => ({
+                ...item,
+                document: item.document
+                    ? this.mapDocumentWithAccess(item.document, user)
+                    : null,
+            })),
+        };
+    }
+    async createLink(payload, user) {
+        const documentId = String(payload.documentId ?? '').trim();
+        const entityId = String(payload.entityId ?? '').trim();
+        const entityType = this.parseEntityType(payload.entityType);
+        const label = payload.label?.trim() || null;
+        if (!documentId) {
+            (0, http_error_1.throwError)('VALIDATION_ERROR', { field: 'documentId', reason: 'required' });
+        }
+        if (!entityId) {
+            (0, http_error_1.throwError)('VALIDATION_ERROR', { field: 'entityId', reason: 'required' });
+        }
+        const document = await this.prisma.documentAsset.findUnique({
+            where: { id: documentId },
+            include: this.documentInclude(),
+        });
+        if (!document)
+            (0, http_error_1.throwError)('NOT_FOUND');
+        this.assertDocumentScope(document, user);
+        await this.assertLinkEntityExists(entityType, entityId);
+        const link = await this.prisma.documentLink.upsert({
+            where: {
+                documentId_entityType_entityId: {
+                    documentId,
+                    entityType,
+                    entityId,
+                },
+            },
+            update: {
+                label,
+            },
+            create: {
+                documentId,
+                entityType,
+                entityId,
+                label,
+            },
+        });
+        const [enriched] = await this.enrichLinks([link]);
+        return {
+            ...enriched,
+            document: this.mapDocumentWithAccess(document, user),
+        };
+    }
+    async updateLink(id, payload, user) {
+        const existing = await this.prisma.documentLink.findUnique({
+            where: { id },
+            include: {
+                document: {
+                    include: this.documentInclude(),
+                },
+            },
+        });
+        if (!existing)
+            (0, http_error_1.throwError)('NOT_FOUND');
+        this.assertDocumentScope(existing.document, user);
+        const nextDocumentId = payload.documentId === undefined
+            ? existing.documentId
+            : String(payload.documentId ?? '').trim();
+        const nextEntityId = payload.entityId === undefined
+            ? existing.entityId
+            : String(payload.entityId ?? '').trim();
+        const nextLabel = payload.label === undefined ? existing.label : payload.label?.trim() || null;
+        if (!nextDocumentId) {
+            (0, http_error_1.throwError)('VALIDATION_ERROR', { field: 'documentId', reason: 'required' });
+        }
+        if (!nextEntityId) {
+            (0, http_error_1.throwError)('VALIDATION_ERROR', { field: 'entityId', reason: 'required' });
+        }
+        let nextDocument = existing.document;
+        if (nextDocumentId !== existing.documentId) {
+            const document = await this.prisma.documentAsset.findUnique({
+                where: { id: nextDocumentId },
+                include: this.documentInclude(),
+            });
+            if (!document)
+                (0, http_error_1.throwError)('NOT_FOUND');
+            this.assertDocumentScope(document, user);
+            nextDocument = document;
+        }
+        if (nextEntityId !== existing.entityId) {
+            await this.assertLinkEntityExists(existing.entityType, nextEntityId);
+        }
+        const updated = await this.prisma.documentLink.update({
+            where: { id },
+            data: {
+                documentId: nextDocumentId,
+                entityId: nextEntityId,
+                label: nextLabel,
+            },
+        });
+        const [enriched] = await this.enrichLinks([updated]);
+        return {
+            ...enriched,
+            document: this.mapDocumentWithAccess(nextDocument, user),
+        };
+    }
+    async deleteLink(id, user) {
+        const existing = await this.prisma.documentLink.findUnique({
+            where: { id },
+            include: {
+                document: {
+                    select: { id: true, localityId: true },
+                },
+            },
+        });
+        if (!existing)
+            (0, http_error_1.throwError)('NOT_FOUND');
+        this.assertDocumentScope(existing.document, user);
+        await this.prisma.documentLink.delete({ where: { id } });
+        return { success: true };
+    }
+    async listLinkCandidates(filters, user) {
+        const entityType = this.parseEntityType(filters.entityType);
+        const q = String(filters.q ?? '').trim();
+        const take = this.parseTake(filters.pageSize, 30, 100);
+        if (entityType !== client_1.DocumentLinkEntity.TASK_INSTANCE &&
+            entityType !== client_1.DocumentLinkEntity.ACTIVITY &&
+            entityType !== client_1.DocumentLinkEntity.MEETING) {
+            (0, http_error_1.throwError)('VALIDATION_ERROR', {
+                field: 'entityType',
+                reason: 'unsupported_entity_type',
+                allowed: [
+                    client_1.DocumentLinkEntity.TASK_INSTANCE,
+                    client_1.DocumentLinkEntity.ACTIVITY,
+                    client_1.DocumentLinkEntity.MEETING,
+                ],
+            });
+        }
+        if (entityType === client_1.DocumentLinkEntity.TASK_INSTANCE) {
+            const where = {};
+            if (this.shouldApplyLocalityScope(user))
+                where.localityId = user?.localityId;
+            if (user?.specialtyId) {
+                where.taskTemplate = { specialtyId: user.specialtyId };
+            }
+            if (q) {
+                where.OR = [
+                    { taskTemplate: { title: { contains: q, mode: 'insensitive' } } },
+                    { locality: { name: { contains: q, mode: 'insensitive' } } },
+                    { locality: { code: { contains: q, mode: 'insensitive' } } },
+                    { id: { contains: q, mode: 'insensitive' } },
+                ];
+            }
+            const rows = await this.prisma.taskInstance.findMany({
+                where,
+                take,
+                orderBy: [{ dueDate: 'desc' }],
+                select: {
+                    id: true,
+                    dueDate: true,
+                    taskTemplate: { select: { title: true } },
+                    locality: { select: { code: true, name: true } },
+                },
+            });
+            return {
+                items: rows.map((row) => ({
+                    id: row.id,
+                    label: row.taskTemplate?.title ?? 'Tarefa',
+                    subtitle: row.locality?.code ?? row.locality?.name ?? null,
+                    extra: row.dueDate ? row.dueDate.toISOString().slice(0, 10) : null,
+                })),
+            };
+        }
+        if (entityType === client_1.DocumentLinkEntity.ACTIVITY) {
+            const where = {};
+            if (this.shouldApplyLocalityScope(user)) {
+                where.OR = [
+                    { localityId: null },
+                    { localityId: user?.localityId },
+                ];
+            }
+            if (q) {
+                const qWhere = {
+                    OR: [
+                        { title: { contains: q, mode: 'insensitive' } },
+                        { description: { contains: q, mode: 'insensitive' } },
+                        { id: { contains: q, mode: 'insensitive' } },
+                    ],
+                };
+                where.AND = where.AND
+                    ? Array.isArray(where.AND)
+                        ? [...where.AND, qWhere]
+                        : [where.AND, qWhere]
+                    : [qWhere];
+            }
+            const rows = await this.prisma.activity.findMany({
+                where,
+                take,
+                orderBy: [{ eventDate: 'desc' }, { createdAt: 'desc' }],
+                select: {
+                    id: true,
+                    title: true,
+                    eventDate: true,
+                    locality: { select: { code: true, name: true } },
+                },
+            });
+            return {
+                items: rows.map((row) => ({
+                    id: row.id,
+                    label: row.title,
+                    subtitle: row.locality?.code ?? row.locality?.name ?? null,
+                    extra: row.eventDate ? row.eventDate.toISOString().slice(0, 10) : null,
+                })),
+            };
+        }
+        const where = {};
+        if (this.shouldApplyLocalityScope(user)) {
+            where.OR = [{ localityId: null }, { localityId: user?.localityId }];
+        }
+        if (q) {
+            const qWhere = {
+                OR: [
+                    { scope: { contains: q, mode: 'insensitive' } },
+                    { id: { contains: q, mode: 'insensitive' } },
+                ],
+            };
+            where.AND = where.AND
+                ? Array.isArray(where.AND)
+                    ? [...where.AND, qWhere]
+                    : [where.AND, qWhere]
+                : [qWhere];
+        }
+        const rows = await this.prisma.meeting.findMany({
+            where,
+            take,
+            orderBy: [{ datetime: 'desc' }],
+            select: {
+                id: true,
+                datetime: true,
+                scope: true,
+                locality: { select: { code: true, name: true } },
+            },
+        });
+        return {
+            items: rows.map((row) => ({
+                id: row.id,
+                label: row.scope?.trim() || 'Reunião',
+                subtitle: row.locality?.code ?? row.locality?.name ?? null,
+                extra: row.datetime.toISOString().slice(0, 16).replace('T', ' '),
+            })),
         };
     }
     async coverage(user) {
@@ -593,8 +870,8 @@ let DocumentsService = class DocumentsService {
         }
         return links.map((link) => ({
             ...link,
-            entityDisplayName: link.label ??
-                labelByTypeAndId.get(`${link.entityType}:${link.entityId}`) ??
+            entityDisplayName: labelByTypeAndId.get(`${link.entityType}:${link.entityId}`) ??
+                link.label ??
                 link.entityId,
         }));
     }
@@ -639,10 +916,10 @@ let DocumentsService = class DocumentsService {
         return value;
     }
     documentScopeWhere(user) {
-        if (!user?.localityId)
+        if (!this.shouldApplyLocalityScope(user))
             return {};
         return {
-            OR: [{ localityId: null }, { localityId: user.localityId }],
+            OR: [{ localityId: null }, { localityId: user?.localityId }],
         };
     }
     documentInclude() {
@@ -658,6 +935,99 @@ let DocumentsService = class DocumentsService {
             content: { select: { parseStatus: true, parsedAt: true } },
             _count: { select: { links: true } },
         };
+    }
+    parseEntityType(value) {
+        const normalized = String(value ?? '').trim().toUpperCase();
+        if (normalized !== client_1.DocumentLinkEntity.TASK_INSTANCE &&
+            normalized !== client_1.DocumentLinkEntity.TASK_TEMPLATE &&
+            normalized !== client_1.DocumentLinkEntity.ACTIVITY &&
+            normalized !== client_1.DocumentLinkEntity.MEETING &&
+            normalized !== client_1.DocumentLinkEntity.ELO &&
+            normalized !== client_1.DocumentLinkEntity.LOCALITY) {
+            (0, http_error_1.throwError)('VALIDATION_ERROR', {
+                field: 'entityType',
+                reason: 'invalid_enum',
+            });
+        }
+        return normalized;
+    }
+    parseTake(pageSizeRaw, defaultValue, maxValue) {
+        const parsed = Number(pageSizeRaw);
+        if (!Number.isFinite(parsed) || parsed <= 0)
+            return defaultValue;
+        return Math.min(Math.floor(parsed), maxValue);
+    }
+    assertDocumentScope(document, user) {
+        if (!this.shouldApplyLocalityScope(user))
+            return;
+        if (!document.localityId)
+            return;
+        if (document.localityId !== user?.localityId) {
+            (0, http_error_1.throwError)('RBAC_FORBIDDEN');
+        }
+    }
+    shouldApplyLocalityScope(user) {
+        if (!user?.localityId)
+            return false;
+        if (this.isAdminUser(user))
+            return false;
+        const hasNationalSearchScope = user.permissions.some((permission) => (permission.resource === 'search' || permission.resource === '*') &&
+            (permission.action === 'view' || permission.action === '*') &&
+            permission.scope === client_1.PermissionScope.NATIONAL);
+        return !hasNationalSearchScope;
+    }
+    async assertLinkEntityExists(entityType, entityId) {
+        if (entityType === client_1.DocumentLinkEntity.TASK_INSTANCE) {
+            const found = await this.prisma.taskInstance.findUnique({
+                where: { id: entityId },
+                select: { id: true },
+            });
+            if (!found)
+                (0, http_error_1.throwError)('NOT_FOUND');
+            return;
+        }
+        if (entityType === client_1.DocumentLinkEntity.TASK_TEMPLATE) {
+            const found = await this.prisma.taskTemplate.findUnique({
+                where: { id: entityId },
+                select: { id: true },
+            });
+            if (!found)
+                (0, http_error_1.throwError)('NOT_FOUND');
+            return;
+        }
+        if (entityType === client_1.DocumentLinkEntity.ACTIVITY) {
+            const found = await this.prisma.activity.findUnique({
+                where: { id: entityId },
+                select: { id: true },
+            });
+            if (!found)
+                (0, http_error_1.throwError)('NOT_FOUND');
+            return;
+        }
+        if (entityType === client_1.DocumentLinkEntity.MEETING) {
+            const found = await this.prisma.meeting.findUnique({
+                where: { id: entityId },
+                select: { id: true },
+            });
+            if (!found)
+                (0, http_error_1.throwError)('NOT_FOUND');
+            return;
+        }
+        if (entityType === client_1.DocumentLinkEntity.ELO) {
+            const found = await this.prisma.elo.findUnique({
+                where: { id: entityId },
+                select: { id: true },
+            });
+            if (!found)
+                (0, http_error_1.throwError)('NOT_FOUND');
+            return;
+        }
+        const found = await this.prisma.locality.findUnique({
+            where: { id: entityId },
+            select: { id: true },
+        });
+        if (!found)
+            (0, http_error_1.throwError)('NOT_FOUND');
     }
 };
 exports.DocumentsService = DocumentsService;

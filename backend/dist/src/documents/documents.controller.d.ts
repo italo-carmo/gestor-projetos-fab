@@ -4,6 +4,8 @@ import { DocumentsService } from './documents.service';
 import { CreateDocumentSubcategoryDto } from './dto/create-document-subcategory.dto';
 import { UpdateDocumentSubcategoryDto } from './dto/update-document-subcategory.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
+import { CreateDocumentLinkDto } from './dto/create-document-link.dto';
+import { UpdateDocumentLinkDto } from './dto/update-document-link.dto';
 export declare class DocumentsController {
     private readonly documents;
     constructor(documents: DocumentsService);
@@ -71,6 +73,40 @@ export declare class DocumentsController {
             category: import("@prisma/client").DocumentCategory;
             parentId: string | null;
             count: number;
+        }[];
+    }>;
+    listLinks(documentId: string | undefined, entityType: string | undefined, entityId: string | undefined, pageSize: string | undefined, user: RbacUser): Promise<{
+        items: any[];
+    }>;
+    createLink(dto: CreateDocumentLinkDto, user: RbacUser): Promise<{
+        document: any;
+        entityDisplayName: string;
+        id: string;
+        documentId: string;
+        entityType: import("@prisma/client").DocumentLinkEntity;
+        entityId: string;
+        label: string | null;
+        createdAt: Date;
+    }>;
+    updateLink(linkId: string, dto: UpdateDocumentLinkDto, user: RbacUser): Promise<{
+        document: any;
+        entityDisplayName: string;
+        id: string;
+        documentId: string;
+        entityType: import("@prisma/client").DocumentLinkEntity;
+        entityId: string;
+        label: string | null;
+        createdAt: Date;
+    }>;
+    deleteLink(linkId: string, user: RbacUser): Promise<{
+        success: boolean;
+    }>;
+    linkCandidates(entityType: string, q: string | undefined, pageSize: string | undefined, user: RbacUser): Promise<{
+        items: {
+            id: string;
+            label: string;
+            subtitle: string | null;
+            extra: string | null;
         }[];
     }>;
     getContent(id: string, user: RbacUser): Promise<{

@@ -1,11 +1,17 @@
 import {
   Alert,
+  Autocomplete,
   Box,
   Breadcrumbs,
   Button,
   Card,
   CardContent,
+  Checkbox,
   Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Divider,
   Drawer,
   Grid,
@@ -27,16 +33,20 @@ import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import FolderOpenRoundedIcon from '@mui/icons-material/FolderOpenRounded';
 import CreateNewFolderRoundedIcon from '@mui/icons-material/CreateNewFolderRounded';
 import { useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link as RouterLink, useSearchParams } from 'react-router-dom';
 import {
   useCreateDocumentSubcategory,
+  useCreateDocumentLink,
+  useDeleteDocumentLink,
   useDeleteDocumentSubcategory,
   useDocumentContent,
+  useDocumentLinkCandidates,
   useDocuments,
   useDocumentsCoverage,
   useDocumentSubcategories,
   useDownloadDocument,
   useLocalities,
+  useUpdateDocumentLink,
   useUpdateDocument,
   useUpdateDocumentSubcategory,
 } from '../api/hooks';
@@ -52,11 +62,12 @@ const CATEGORY_LABELS: Record<string, string> = {
   PRESENTATION: 'Apresentacoes',
   HISTORY: 'Historico',
   RESEARCH: 'Pesquisas',
-  SMIF: 'SMIF',
+  SMIF: 'CIPAVD',
   VISUAL_IDENTITY: 'Identidade visual',
 };
 
 const CATEGORY_OPTIONS = Object.entries(CATEGORY_LABELS);
+const CATEGORY_KEYS = new Set(CATEGORY_OPTIONS.map(([key]) => key));
 
 const PARSE_STATUS_LABEL: Record<string, string> = {
   EXTRACTED: 'Extraido',
@@ -120,11 +131,19 @@ type DocumentsCoverage = {
 
 type DocumentLinkItem = {
   id: string;
+  documentId?: string;
   entityType: string;
   entityId: string;
   label?: string | null;
   entityDisplayName?: string | null;
   createdAt?: string;
+};
+
+type DocumentLinkCandidateItem = {
+  id: string;
+  label: string;
+  subtitle?: string | null;
+  extra?: string | null;
 };
 
 type DocumentContentResponse = {
@@ -143,17 +162,44 @@ function formatDate(value?: string | Date | null) {
   return new Date(value).toLocaleString('pt-BR');
 }
 
+function getFileExtension(fileName?: string | null) {
+  if (!fileName) return '';
+  const dotIndex = fileName.lastIndexOf('.');
+  if (dotIndex < 0) return '';
+  return fileName.slice(dotIndex + 1).toUpperCase();
+}
+
+function getLinkedEntityPath(link: DocumentLinkItem) {
+  if (link.entityType === 'TASK_INSTANCE') return `/tasks?taskId=${link.entityId}`;
+  if (link.entityType === 'ACTIVITY') return `/activities?activityId=${link.entityId}`;
+  if (link.entityType === 'MEETING') return `/meetings?meetingId=${link.entityId}`;
+  return null;
+}
+
 export function DocumentsPage() {
   const [searchParams] = useSearchParams();
   const [q, setQ] = useState(searchParams.get('q') ?? '');
-  const [category, setCategory] = useState('');
-  const [currentFolderId, setCurrentFolderId] = useState('');
+  const [category, setCategory] = useState(searchParams.get('category') ?? '');
+  const [currentFolderId, setCurrentFolderId] = useState(searchParams.get('subcategoryId') ?? '');
   const [localityId, setLocalityId] = useState('');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [newFolderName, setNewFolderName] = useState('');
   const [renamingFolderId, setRenamingFolderId] = useState('');
   const [renamingFolderName, setRenamingFolderName] = useState('');
+  const [newLinkEntityType, setNewLinkEntityType] = useState<'TASK_INSTANCE' | 'ACTIVITY' | 'MEETING'>('ACTIVITY');
+  const [newLinkSearch, setNewLinkSearch] = useState('');
+  const [newLinkTargetId, setNewLinkTargetId] = useState('');
+  const [newLinkLabel, setNewLinkLabel] = useState('');
+  const [editingLinkId, setEditingLinkId] = useState('');
+  const [editingLinkLabel, setEditingLinkLabel] = useState('');
+  const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
+  const [moveDialogOpen, setMoveDialogOpen] = useState(false);
+  const [moveDocIds, setMoveDocIds] = useState<string[]>([]);
+  const [moveForm, setMoveForm] = useState({
+    category: '',
+    subcategoryId: '',
+  });
   const [editForm, setEditForm] = useState({
     title: '',
     category: '',
@@ -163,15 +209,17 @@ export function DocumentsPage() {
   });
 
   const toast = useToast();
+  const hasValidCategory = CATEGORY_KEYS.has(category);
 
   const filters = useMemo(
     () => ({
       q: q.trim() || undefined,
-      category: category || undefined,
+      category: hasValidCategory ? category : undefined,
+      subcategoryId: currentFolderId || undefined,
       localityId: localityId || undefined,
       pageSize: 500,
     }),
-    [q, category, localityId],
+    [q, category, hasValidCategory, currentFolderId, localityId],
   );
 
   const documentsQuery = useDocuments(filters);
@@ -183,17 +231,34 @@ export function DocumentsPage() {
   const createSubcategory = useCreateDocumentSubcategory();
   const updateSubcategory = useUpdateDocumentSubcategory();
   const deleteSubcategory = useDeleteDocumentSubcategory();
+  const createDocumentLink = useCreateDocumentLink();
+  const updateDocumentLink = useUpdateDocumentLink();
+  const deleteDocumentLink = useDeleteDocumentLink();
   const contentQuery = useDocumentContent(selectedId ?? '');
+  const linkCandidatesQuery = useDocumentLinkCandidates({
+    entityType: selectedId ? newLinkEntityType : undefined,
+    q: newLinkSearch.trim() || undefined,
+    pageSize: 40,
+  });
 
   const localities = (localitiesQuery.data?.items ?? []) as LocalityOption[];
-  const items = (documentsQuery.data?.items ?? []) as DocumentRow[];
+  const items = useMemo(
+    () => (documentsQuery.data?.items ?? []) as DocumentRow[],
+    [documentsQuery.data?.items],
+  );
   const coverage = coverageQuery.data as DocumentsCoverage | undefined;
   const allSubcategories = useMemo(
     () => (subcategoriesQuery.data?.items ?? []) as DocumentSubcategory[],
     [subcategoriesQuery.data?.items],
   );
   const selected = items.find((doc) => doc.id === selectedId) ?? null;
+  const moveDocuments = useMemo(
+    () => items.filter((doc) => moveDocIds.includes(doc.id)),
+    [items, moveDocIds],
+  );
+  const moveDocument = moveDocuments[0] ?? null;
   const documentContent = contentQuery.data as DocumentContentResponse | undefined;
+  const linkCandidates = (linkCandidatesQuery.data?.items ?? []) as DocumentLinkCandidateItem[];
 
   const subcategoriesById = useMemo(() => {
     const map = new Map<string, DocumentSubcategory>();
@@ -204,8 +269,8 @@ export function DocumentsPage() {
   }, [allSubcategories]);
 
   const subcategoriesOfCategory = useMemo(
-    () => allSubcategories.filter((item) => item.category === category),
-    [allSubcategories, category],
+    () => allSubcategories.filter((item) => item.category === (hasValidCategory ? category : '')),
+    [allSubcategories, category, hasValidCategory],
   );
 
   const folderPath = useMemo(() => {
@@ -238,6 +303,21 @@ export function DocumentsPage() {
         .sort((a, b) => (a.fullPath ?? a.name).localeCompare(b.fullPath ?? b.name)),
     [allSubcategories, editForm.category],
   );
+  const subcategoriesOfMoveCategory = useMemo(
+    () =>
+      allSubcategories
+        .filter((item) => item.category === moveForm.category)
+        .sort((a, b) => (a.fullPath ?? a.name).localeCompare(b.fullPath ?? b.name)),
+    [allSubcategories, moveForm.category],
+  );
+  const moveDestinationOption = useMemo(
+    () =>
+      subcategoriesOfMoveCategory.map((sub) => ({
+        id: sub.id,
+        label: sub.fullPath ?? sub.name,
+      })),
+    [subcategoriesOfMoveCategory],
+  );
 
   const categoryCountMap = useMemo(() => {
     const map = new Map<string, number>();
@@ -255,12 +335,36 @@ export function DocumentsPage() {
     return map;
   }, [allSubcategories]);
 
-  const documentsInCurrentFolder =
-    !category
-      ? ([] as DocumentRow[])
-      : currentFolderId
-        ? items.filter((doc) => doc.category === category && (doc.subcategoryId ?? '') === currentFolderId)
-        : items.filter((doc) => doc.category === category && !doc.subcategoryId);
+  const documentsInCurrentFolder = useMemo(() => {
+    if (currentFolderId) {
+      return items.filter((doc) => (doc.subcategoryId ?? '') === currentFolderId);
+    }
+    if (!hasValidCategory) return [] as DocumentRow[];
+    return items.filter((doc) => doc.category === category && !doc.subcategoryId);
+  }, [category, currentFolderId, hasValidCategory, items]);
+
+  const editableDocumentsInCurrentFolderIds = useMemo(
+    () => documentsInCurrentFolder.filter((doc) => doc.canEdit).map((doc) => doc.id),
+    [documentsInCurrentFolder],
+  );
+  const selectedDocumentsInCurrentFolder = useMemo(
+    () => documentsInCurrentFolder.filter((doc) => selectedDocIds.includes(doc.id) && doc.canEdit),
+    [documentsInCurrentFolder, selectedDocIds],
+  );
+  const allCurrentFolderSelected =
+    editableDocumentsInCurrentFolderIds.length > 0 &&
+    selectedDocumentsInCurrentFolder.length === editableDocumentsInCurrentFolderIds.length;
+  const someCurrentFolderSelected =
+    selectedDocumentsInCurrentFolder.length > 0 &&
+    selectedDocumentsInCurrentFolder.length < editableDocumentsInCurrentFolderIds.length;
+  const titleCountInCurrentFolder = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const doc of documentsInCurrentFolder) {
+      const key = (doc.title ?? '').trim().toLowerCase();
+      map.set(key, (map.get(key) ?? 0) + 1);
+    }
+    return map;
+  }, [documentsInCurrentFolder]);
 
   const openDetails = (doc: DocumentRow) => {
     setSelectedId(doc.id);
@@ -271,6 +375,12 @@ export function DocumentsPage() {
       localityId: doc.localityId ?? '',
       sourcePath: doc.sourcePath ?? '',
     });
+    setNewLinkEntityType('ACTIVITY');
+    setNewLinkSearch('');
+    setNewLinkTargetId('');
+    setNewLinkLabel('');
+    setEditingLinkId('');
+    setEditingLinkLabel('');
     setDrawerOpen(true);
   };
 
@@ -296,6 +406,137 @@ export function DocumentsPage() {
     } catch (error) {
       const payload = parseApiError(error);
       toast.push({ message: payload.message ?? 'Erro ao atualizar documento.', severity: 'error' });
+    }
+  };
+
+  const openMoveDialog = (doc: DocumentRow) => {
+    setMoveDocIds([doc.id]);
+    setMoveForm({
+      category: doc.category,
+      subcategoryId: doc.subcategoryId ?? '',
+    });
+    setMoveDialogOpen(true);
+  };
+
+  const openMoveSelectedDialog = () => {
+    if (selectedDocumentsInCurrentFolder.length === 0) {
+      toast.push({ message: 'Selecione ao menos um documento para mover.', severity: 'warning' });
+      return;
+    }
+    const first = selectedDocumentsInCurrentFolder[0];
+    setMoveDocIds(selectedDocumentsInCurrentFolder.map((doc) => doc.id));
+    setMoveForm({
+      category: first.category,
+      subcategoryId: first.subcategoryId ?? '',
+    });
+    setMoveDialogOpen(true);
+  };
+
+  const handleConfirmMove = async () => {
+    if (moveDocIds.length === 0) return;
+    const targetCategory = moveForm.category || moveDocument?.category || '';
+    if (!targetCategory) {
+      toast.push({ message: 'Selecione uma categoria de destino.', severity: 'warning' });
+      return;
+    }
+    try {
+      await Promise.all(
+        moveDocIds.map((docId) =>
+          updateDocument.mutateAsync({
+            id: docId,
+            payload: {
+              category: targetCategory,
+              subcategoryId: moveForm.subcategoryId || null,
+            },
+          }),
+        ),
+      );
+      toast.push({
+        message: moveDocIds.length > 1 ? `${moveDocIds.length} documentos movidos com sucesso.` : 'Documento movido com sucesso.',
+        severity: 'success',
+      });
+      setMoveDialogOpen(false);
+      setMoveDocIds([]);
+      setSelectedDocIds((prev) => prev.filter((id) => !moveDocIds.includes(id)));
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({ message: payload.message ?? 'Erro ao mover documento.', severity: 'error' });
+    }
+  };
+
+  const toggleDocumentSelection = (docId: string) => {
+    if (!editableDocumentsInCurrentFolderIds.includes(docId)) return;
+    setSelectedDocIds((prev) => (prev.includes(docId) ? prev.filter((id) => id !== docId) : [...prev, docId]));
+  };
+
+  const toggleSelectAllInCurrentFolder = () => {
+    if (allCurrentFolderSelected) {
+      setSelectedDocIds((prev) => prev.filter((id) => !editableDocumentsInCurrentFolderIds.includes(id)));
+      return;
+    }
+    setSelectedDocIds((prev) => {
+      const next = new Set(prev);
+      for (const id of editableDocumentsInCurrentFolderIds) {
+        next.add(id);
+      }
+      return Array.from(next);
+    });
+  };
+
+  const handleCreateLink = async () => {
+    if (!selected) return;
+    if (!newLinkTargetId) {
+      toast.push({ message: 'Selecione o item para vincular.', severity: 'warning' });
+      return;
+    }
+    try {
+      await createDocumentLink.mutateAsync({
+        documentId: selected.id,
+        entityType: newLinkEntityType,
+        entityId: newLinkTargetId,
+        label: newLinkLabel.trim() || undefined,
+      });
+      setNewLinkTargetId('');
+      setNewLinkLabel('');
+      setNewLinkSearch('');
+      toast.push({ message: 'Vínculo criado com sucesso.', severity: 'success' });
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({ message: payload.message ?? 'Erro ao criar vínculo.', severity: 'error' });
+    }
+  };
+
+  const startEditLink = (link: DocumentLinkItem) => {
+    setEditingLinkId(link.id);
+    setEditingLinkLabel(link.label ?? '');
+  };
+
+  const handleSaveLinkLabel = async (linkId: string) => {
+    try {
+      await updateDocumentLink.mutateAsync({
+        id: linkId,
+        payload: { label: editingLinkLabel.trim() || null },
+      });
+      setEditingLinkId('');
+      setEditingLinkLabel('');
+      toast.push({ message: 'Vínculo atualizado com sucesso.', severity: 'success' });
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({ message: payload.message ?? 'Erro ao atualizar vínculo.', severity: 'error' });
+    }
+  };
+
+  const handleDeleteLink = async (linkId: string) => {
+    try {
+      await deleteDocumentLink.mutateAsync(linkId);
+      if (editingLinkId === linkId) {
+        setEditingLinkId('');
+        setEditingLinkLabel('');
+      }
+      toast.push({ message: 'Vínculo removido com sucesso.', severity: 'success' });
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({ message: payload.message ?? 'Erro ao remover vínculo.', severity: 'error' });
     }
   };
 
@@ -403,6 +644,15 @@ export function DocumentsPage() {
       : folderPath.length === 0
         ? `${CATEGORY_LABELS[category] ?? category} / raiz`
         : `${CATEGORY_LABELS[category] ?? category} / ${folderPath.map((item) => item.name).join(' / ')}`;
+  const currentFolderMeta = currentFolderId
+    ? subcategoriesById.get(currentFolderId) ?? null
+    : null;
+  const hasActiveListFilters = Boolean(q.trim() || localityId);
+  const folderHasHiddenDocuments =
+    Boolean(currentFolderMeta) &&
+    (currentFolderMeta?.documentCount ?? 0) > 0 &&
+    documentsInCurrentFolder.length === 0 &&
+    hasActiveListFilters;
 
   if (documentsQuery.isLoading) return <SkeletonState />;
   if (documentsQuery.isError) {
@@ -599,10 +849,12 @@ export function DocumentsPage() {
                     fullWidth
                   />
                   <Button
+                    size="small"
                     variant="contained"
                     startIcon={<CreateNewFolderRoundedIcon fontSize="small" />}
                     onClick={handleCreateSubcategory}
                     disabled={createSubcategory.isPending}
+                    sx={{ whiteSpace: 'nowrap' }}
                   >
                     Criar subpasta
                   </Button>
@@ -720,14 +972,72 @@ export function DocumentsPage() {
             )}
           </Stack>
 
+          {category && documentsInCurrentFolder.length > 0 && (
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} justifyContent="space-between" mb={1.2}>
+              <Typography variant="caption" color="text.secondary">
+                {selectedDocumentsInCurrentFolder.length > 0
+                  ? `${selectedDocumentsInCurrentFolder.length} selecionado(s)`
+                  : 'Selecione documentos para mover em lote'}
+              </Typography>
+              <Stack direction="row" spacing={1}>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={openMoveSelectedDialog}
+                  disabled={selectedDocumentsInCurrentFolder.length === 0}
+                >
+                  Mover selecionados
+                </Button>
+                <Button
+                  size="small"
+                  variant="text"
+                  onClick={() => setSelectedDocIds([])}
+                  disabled={selectedDocumentsInCurrentFolder.length === 0}
+                >
+                  Limpar selecao
+                </Button>
+              </Stack>
+            </Stack>
+          )}
+
           {!category ? (
             <Alert severity="info">Selecione uma categoria para listar arquivos.</Alert>
           ) : documentsInCurrentFolder.length === 0 ? (
-            <EmptyState title="Sem documentos" description="Nenhum documento encontrado nesta pasta com os filtros atuais." />
+            folderHasHiddenDocuments ? (
+              <Alert
+                severity="warning"
+                action={
+                  <Button
+                    size="small"
+                    onClick={() => {
+                      setQ('');
+                      setLocalityId('');
+                    }}
+                  >
+                    Limpar filtros
+                  </Button>
+                }
+              >
+                Esta pasta possui {currentFolderMeta?.documentCount ?? 0} arquivo(s), mas eles estao ocultos pelos filtros atuais.
+              </Alert>
+            ) : (
+              <EmptyState title="Sem documentos" description="Nenhum documento encontrado nesta pasta com os filtros atuais." />
+            )
           ) : (
             <Table size="small">
               <TableHead>
                 <TableRow sx={{ bgcolor: 'primary.main' }}>
+                  <TableCell padding="checkbox" sx={{ color: 'white', fontWeight: 700 }}>
+                    <Checkbox
+                      size="small"
+                      checked={allCurrentFolderSelected}
+                      indeterminate={someCurrentFolderSelected}
+                      onChange={toggleSelectAllInCurrentFolder}
+                      disabled={editableDocumentsInCurrentFolderIds.length === 0}
+                      sx={{ color: 'white', '&.Mui-checked': { color: 'white' }, '&.MuiCheckbox-indeterminate': { color: 'white' } }}
+                      inputProps={{ 'aria-label': 'Selecionar todos os documentos da pasta' }}
+                    />
+                  </TableCell>
                   <TableCell sx={{ color: 'white', fontWeight: 700 }}>Documento</TableCell>
                   <TableCell sx={{ color: 'white', fontWeight: 700 }}>Pasta</TableCell>
                   <TableCell sx={{ color: 'white', fontWeight: 700 }}>Localidade</TableCell>
@@ -741,13 +1051,37 @@ export function DocumentsPage() {
               <TableBody>
                 {documentsInCurrentFolder.map((doc) => (
                   <TableRow key={doc.id} hover onClick={() => openDetails(doc)} sx={{ cursor: 'pointer' }}>
+                    <TableCell padding="checkbox">
+                      <Checkbox
+                        size="small"
+                        checked={selectedDocIds.includes(doc.id)}
+                        onClick={(event) => event.stopPropagation()}
+                        onChange={() => toggleDocumentSelection(doc.id)}
+                        disabled={!doc.canEdit}
+                        inputProps={{ 'aria-label': `Selecionar ${doc.title}` }}
+                      />
+                    </TableCell>
                     <TableCell>
-                      <Typography variant="body2" fontWeight={700}>
-                        {doc.title}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {doc.fileName} • {formatFileSize(doc.fileSize)}
-                      </Typography>
+                      {(() => {
+                        const key = (doc.title ?? '').trim().toLowerCase();
+                        const sameTitleCount = titleCountInCurrentFolder.get(key) ?? 1;
+                        const hasVariants = sameTitleCount > 1;
+                        const ext = getFileExtension(doc.fileName);
+                        return (
+                          <>
+                            <Typography variant="body2" fontWeight={700}>
+                              {doc.title}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {doc.fileName} • {formatFileSize(doc.fileSize)}
+                            </Typography>
+                            <Stack direction="row" spacing={0.6} flexWrap="wrap" useFlexGap sx={{ mt: 0.4 }}>
+                              {ext && <Chip size="small" variant="outlined" color="info" label={ext} />}
+                              {hasVariants && <Chip size="small" variant="outlined" label={`${sameTitleCount} versoes`} />}
+                            </Stack>
+                          </>
+                        );
+                      })()}
                     </TableCell>
                     <TableCell>
                       <Stack direction="row" spacing={0.6} flexWrap="wrap" useFlexGap>
@@ -802,6 +1136,17 @@ export function DocumentsPage() {
                         >
                           Baixar
                         </Button>
+                        <Button
+                          size="small"
+                          variant="contained"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openMoveDialog(doc);
+                          }}
+                          disabled={!doc.canEdit}
+                        >
+                          Mover
+                        </Button>
                       </Stack>
                     </TableCell>
                   </TableRow>
@@ -816,7 +1161,13 @@ export function DocumentsPage() {
         anchor="right"
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        PaperProps={{ sx: { width: { xs: '100%', md: 680 } } }}
+        PaperProps={{
+          sx: {
+            width: { xs: '100%', md: 680 },
+            top: 76,
+            height: 'calc(100% - 76px)',
+          },
+        }}
       >
         <Box p={2.4} sx={{ height: '100%', overflowY: 'auto' }}>
           {!selected ? (
@@ -927,6 +1278,14 @@ export function DocumentsPage() {
                   <Typography variant="body2">
                     <strong>Arquivo:</strong> {selected.fileName}
                   </Typography>
+                  {getFileExtension(selected.fileName) && (
+                    <Stack direction="row" spacing={0.6} alignItems="center">
+                      <Typography variant="body2">
+                        <strong>Formato:</strong>
+                      </Typography>
+                      <Chip size="small" color="info" variant="outlined" label={getFileExtension(selected.fileName)} />
+                    </Stack>
+                  )}
                   <Typography variant="body2">
                     <strong>Tamanho:</strong> {formatFileSize(selected.fileSize)}
                   </Typography>
@@ -945,6 +1304,63 @@ export function DocumentsPage() {
                   <Typography variant="subtitle2" sx={{ mb: 1 }}>
                     Vinculos do documento
                   </Typography>
+                  <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} sx={{ mb: 1.2 }}>
+                    <TextField
+                      select
+                      size="small"
+                      label="Tipo de vínculo"
+                      value={newLinkEntityType}
+                      onChange={(e) => {
+                        setNewLinkEntityType(e.target.value as 'TASK_INSTANCE' | 'ACTIVITY' | 'MEETING');
+                        setNewLinkTargetId('');
+                      }}
+                      sx={{ minWidth: 180 }}
+                    >
+                      <MenuItem value="TASK_INSTANCE">Tarefa</MenuItem>
+                      <MenuItem value="ACTIVITY">Atividade</MenuItem>
+                      <MenuItem value="MEETING">Reunião</MenuItem>
+                    </TextField>
+                    <TextField
+                      size="small"
+                      label="Buscar item"
+                      value={newLinkSearch}
+                      onChange={(e) => setNewLinkSearch(e.target.value)}
+                      sx={{ minWidth: 220 }}
+                    />
+                    <TextField
+                      select
+                      size="small"
+                      label="Vincular a"
+                      value={newLinkTargetId}
+                      onChange={(e) => setNewLinkTargetId(e.target.value)}
+                      fullWidth
+                    >
+                      <MenuItem value="">Selecione</MenuItem>
+                      {linkCandidates.map((item) => (
+                        <MenuItem key={item.id} value={item.id}>
+                          {item.label}
+                          {item.subtitle ? ` — ${item.subtitle}` : ''}
+                          {item.extra ? ` (${item.extra})` : ''}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  </Stack>
+                  <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} sx={{ mb: 1.8 }}>
+                    <TextField
+                      size="small"
+                      label="Nota do vínculo (opcional)"
+                      value={newLinkLabel}
+                      onChange={(e) => setNewLinkLabel(e.target.value)}
+                      fullWidth
+                    />
+                    <Button
+                      variant="contained"
+                      onClick={handleCreateLink}
+                      disabled={!selected.canEdit || createDocumentLink.isPending}
+                    >
+                      Vincular
+                    </Button>
+                  </Stack>
                   {contentQuery.isLoading ? (
                     <Typography variant="body2" color="text.secondary">
                       Carregando vinculos...
@@ -959,19 +1375,90 @@ export function DocumentsPage() {
                         <TableRow sx={{ bgcolor: 'primary.main' }}>
                           <TableCell sx={{ color: 'white', fontWeight: 700 }}>Tipo</TableCell>
                           <TableCell sx={{ color: 'white', fontWeight: 700 }}>Vinculado a</TableCell>
-                          <TableCell sx={{ color: 'white', fontWeight: 700 }}>ID</TableCell>
+                          <TableCell sx={{ color: 'white', fontWeight: 700 }}>Nota</TableCell>
                           <TableCell sx={{ color: 'white', fontWeight: 700 }}>Criado em</TableCell>
+                          <TableCell sx={{ color: 'white', fontWeight: 700 }}>Ações</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {(documentContent?.links ?? []).map((link) => (
-                          <TableRow key={link.id} hover>
-                            <TableCell>{LINK_ENTITY_LABEL[link.entityType] ?? link.entityType}</TableCell>
-                            <TableCell>{link.entityDisplayName ?? link.label ?? link.entityId}</TableCell>
-                            <TableCell sx={{ fontFamily: 'monospace', fontSize: 12 }}>{link.entityId}</TableCell>
-                            <TableCell>{formatDate(link.createdAt)}</TableCell>
-                          </TableRow>
-                        ))}
+                        {(documentContent?.links ?? []).map((link) => {
+                          const linkedPath = getLinkedEntityPath(link);
+                          return (
+                            <TableRow key={link.id} hover>
+                              <TableCell>{LINK_ENTITY_LABEL[link.entityType] ?? link.entityType}</TableCell>
+                              <TableCell>
+                                {linkedPath ? (
+                                  <Link component={RouterLink} to={linkedPath} underline="hover">
+                                    {link.entityDisplayName ?? link.label ?? link.entityId}
+                                  </Link>
+                                ) : (
+                                  link.entityDisplayName ?? link.label ?? link.entityId
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                {editingLinkId === link.id ? (
+                                  <TextField
+                                    size="small"
+                                    value={editingLinkLabel}
+                                    onChange={(e) => setEditingLinkLabel(e.target.value)}
+                                    fullWidth
+                                  />
+                                ) : (
+                                  link.label ?? '—'
+                                )}
+                              </TableCell>
+                              <TableCell>{formatDate(link.createdAt)}</TableCell>
+                              <TableCell>
+                                <Stack direction="row" spacing={0.5}>
+                                  {editingLinkId === link.id ? (
+                                    <>
+                                      <Button
+                                        size="small"
+                                        variant="text"
+                                        onClick={() => {
+                                          setEditingLinkId('');
+                                          setEditingLinkLabel('');
+                                        }}
+                                      >
+                                        Cancelar
+                                      </Button>
+                                      <Button
+                                        size="small"
+                                        variant="outlined"
+                                        onClick={() => {
+                                          void handleSaveLinkLabel(link.id);
+                                        }}
+                                        disabled={!selected.canEdit || updateDocumentLink.isPending}
+                                      >
+                                        Salvar
+                                      </Button>
+                                    </>
+                                  ) : (
+                                    <Button
+                                      size="small"
+                                      variant="text"
+                                      onClick={() => startEditLink(link)}
+                                      disabled={!selected.canEdit}
+                                    >
+                                      Editar
+                                    </Button>
+                                  )}
+                                  <Button
+                                    size="small"
+                                    variant="text"
+                                    color="error"
+                                    onClick={() => {
+                                      void handleDeleteLink(link.id);
+                                    }}
+                                    disabled={!selected.canEdit || deleteDocumentLink.isPending}
+                                  >
+                                    Excluir
+                                  </Button>
+                                </Stack>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   )}
@@ -1004,6 +1491,123 @@ export function DocumentsPage() {
           )}
         </Box>
       </Drawer>
+
+      <Dialog
+        open={moveDialogOpen}
+        onClose={() => {
+          setMoveDialogOpen(false);
+          setMoveDocIds([]);
+        }}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>{moveDocIds.length > 1 ? 'Mover documentos' : 'Mover documento'}</DialogTitle>
+        <DialogContent sx={{ display: 'grid', gap: 1.2, pt: '12px !important' }}>
+          {moveDocIds.length > 1 ? (
+            <Typography variant="body2" color="text.secondary">
+              Documentos selecionados: <strong>{moveDocIds.length}</strong>
+            </Typography>
+          ) : (
+            <Typography variant="body2" color="text.secondary">
+              Documento: <strong>{moveDocument?.title ?? '—'}</strong>
+            </Typography>
+          )}
+          <Typography variant="body2" color="text.secondary">
+            Origem:{' '}
+            {moveDocument?.subcategoryId
+              ? folderPathById.get(moveDocument.subcategoryId) ?? 'Subpasta'
+              : 'Raiz da categoria'}
+          </Typography>
+          <TextField
+            select
+            size="small"
+            label="Categoria destino"
+            value={moveForm.category}
+            onChange={(e) =>
+              setMoveForm({
+                category: e.target.value,
+                subcategoryId: '',
+              })
+            }
+            fullWidth
+          >
+            {CATEGORY_OPTIONS.map(([key, label]) => (
+              <MenuItem key={key} value={key}>
+                {label}
+              </MenuItem>
+            ))}
+          </TextField>
+          <Autocomplete
+            size="small"
+            options={moveDestinationOption}
+            value={moveDestinationOption.find((option) => option.id === moveForm.subcategoryId) ?? null}
+            onChange={(_event, value) =>
+              setMoveForm({
+                ...moveForm,
+                subcategoryId: value?.id ?? '',
+              })
+            }
+            getOptionLabel={(option) => option.label}
+            noOptionsText="Nenhuma subpasta para esta categoria."
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="Subpasta destino"
+                placeholder="Digite para buscar por caminho da subpasta"
+              />
+            )}
+          />
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() =>
+                setMoveForm({
+                  ...moveForm,
+                  subcategoryId: '',
+                })
+              }
+            >
+              Enviar para raiz
+            </Button>
+            <Button
+              size="small"
+              variant="text"
+              onClick={() =>
+                setMoveForm({
+                  category: category || moveForm.category,
+                  subcategoryId: currentFolderId,
+                })
+              }
+              disabled={!category}
+            >
+              Usar pasta aberta
+            </Button>
+          </Stack>
+          <Typography variant="caption" color="text.secondary">
+            Destino final: {moveForm.subcategoryId ? folderPathById.get(moveForm.subcategoryId) ?? 'Subpasta' : 'Raiz da categoria'}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setMoveDialogOpen(false);
+              setMoveDocIds([]);
+            }}
+          >
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            onClick={() => {
+              void handleConfirmMove();
+            }}
+            disabled={!moveDocument || updateDocument.isPending}
+          >
+            Confirmar
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
