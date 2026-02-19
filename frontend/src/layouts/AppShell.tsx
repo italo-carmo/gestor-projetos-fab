@@ -95,6 +95,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const searchQuery = useSearch(debounced);
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const { data: me } = useMe();
+  const currentRoleLabel = me?.roles?.[0]?.name ?? 'Sem papel';
   const contextFromQuery = searchParams.get('localityId');
   const localityFromPath = location.pathname.startsWith('/dashboard/locality/') ? location.pathname.split('/').pop() : null;
   const contextLocality = contextFromQuery ?? localityFromPath;
@@ -388,9 +389,14 @@ export function AppShell({ children }: { children: ReactNode }) {
             <Avatar sx={{ width: 32, height: 32, bgcolor: alpha('#0C657E', 0.12), color: '#0A4D61', fontSize: 13 }}>
               {(me?.name ?? 'U').slice(0, 1).toUpperCase()}
             </Avatar>
-            <Typography variant="body2" sx={{ fontWeight: 700, display: { xs: 'none', sm: 'inline' } }}>
-              {me?.name ?? 'Usuário'}
-            </Typography>
+            <Box sx={{ display: { xs: 'none', sm: 'grid' }, lineHeight: 1 }}>
+              <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                {me?.name ?? 'Usuário'}
+              </Typography>
+              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
+                {currentRoleLabel}
+              </Typography>
+            </Box>
             <Button
               size="small"
               variant="outlined"
