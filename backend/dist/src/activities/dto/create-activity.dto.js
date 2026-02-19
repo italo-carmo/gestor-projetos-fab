@@ -17,6 +17,7 @@ class CreateActivityDto {
     localityId;
     eventDate;
     reportRequired;
+    responsibleUserIds;
 }
 exports.CreateActivityDto = CreateActivityDto;
 __decorate([
@@ -44,4 +45,10 @@ __decorate([
     (0, class_validator_1.IsBoolean)(),
     __metadata("design:type", Boolean)
 ], CreateActivityDto.prototype, "reportRequired", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsArray)(),
+    (0, class_validator_1.IsString)({ each: true }),
+    __metadata("design:type", Array)
+], CreateActivityDto.prototype, "responsibleUserIds", void 0);
 //# sourceMappingURL=create-activity.dto.js.map

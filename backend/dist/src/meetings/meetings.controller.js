@@ -16,8 +16,10 @@ exports.MeetingsController = void 0;
 const common_1 = require("@nestjs/common");
 const jwt_auth_guard_1 = require("../auth/jwt-auth.guard");
 const current_user_decorator_1 = require("../common/current-user.decorator");
+const http_error_1 = require("../common/http-error");
 const require_permission_decorator_1 = require("../rbac/require-permission.decorator");
 const rbac_guard_1 = require("../rbac/rbac.guard");
+const role_access_1 = require("../rbac/role-access");
 const create_meeting_dto_1 = require("./dto/create-meeting.dto");
 const update_meeting_dto_1 = require("./dto/update-meeting.dto");
 const meeting_decision_dto_1 = require("./dto/meeting-decision.dto");
@@ -29,19 +31,29 @@ let MeetingsController = class MeetingsController {
         this.meetings = meetings;
     }
     list(status, scope, localityId, from, to, page, pageSize, user) {
+        this.assertMeetingsAccess(user);
         return this.meetings.list({ status, scope, localityId, from, to, page, pageSize }, user);
     }
     create(dto, user) {
+        this.assertMeetingsAccess(user);
         return this.meetings.create(dto, user);
     }
     update(id, dto, user) {
+        this.assertMeetingsAccess(user);
         return this.meetings.update(id, dto, user);
     }
     addDecision(id, dto, user) {
+        this.assertMeetingsAccess(user);
         return this.meetings.addDecision(id, dto.text, user);
     }
     generateTasks(id, dto, user) {
+        this.assertMeetingsAccess(user);
         return this.meetings.generateTasks(id, dto, user);
+    }
+    assertMeetingsAccess(user) {
+        if (!(0, role_access_1.isNationalCommissionMember)(user)) {
+            (0, http_error_1.throwError)('RBAC_FORBIDDEN');
+        }
     }
 };
 exports.MeetingsController = MeetingsController;

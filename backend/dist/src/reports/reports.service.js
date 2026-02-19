@@ -16,6 +16,7 @@ const http_error_1 = require("../common/http-error");
 const audit_service_1 = require("../audit/audit.service");
 const jwt_1 = require("@nestjs/jwt");
 const config_1 = require("@nestjs/config");
+const role_access_1 = require("../rbac/role-access");
 let ReportsService = class ReportsService {
     prisma;
     audit;
@@ -30,16 +31,15 @@ let ReportsService = class ReportsService {
     async createReport(params, user) {
         const instance = await this.prisma.taskInstance.findUnique({
             where: { id: params.taskInstanceId },
-            include: { taskTemplate: { select: { specialtyId: true } } },
+            include: {
+                taskTemplate: { select: { specialtyId: true } },
+                assignedElo: { select: { id: true, eloRoleId: true } },
+                responsibles: { select: { userId: true } },
+            },
         });
         if (!instance)
             (0, http_error_1.throwError)('NOT_FOUND');
-        if (user?.localityId && user.localityId !== instance.localityId) {
-            (0, http_error_1.throwError)('RBAC_FORBIDDEN');
-        }
-        if (user?.specialtyId && user.specialtyId !== instance.taskTemplate?.specialtyId) {
-            (0, http_error_1.throwError)('RBAC_FORBIDDEN');
-        }
+        this.assertTaskOperateAccess(instance, user);
         const report = await this.prisma.report.create({
             data: {
                 taskInstanceId: params.taskInstanceId,
@@ -65,18 +65,17 @@ let ReportsService = class ReportsService {
         const report = await this.prisma.report.findUnique({ where: { id } });
         if (!report)
             (0, http_error_1.throwError)('NOT_FOUND');
-        if (user?.localityId || user?.specialtyId) {
-            const instance = await this.prisma.taskInstance.findUnique({
-                where: { id: report.taskInstanceId },
-                include: { taskTemplate: { select: { specialtyId: true } } },
-            });
-            if (instance && user?.localityId && instance.localityId !== user.localityId) {
-                (0, http_error_1.throwError)('RBAC_FORBIDDEN');
-            }
-            if (instance && user?.specialtyId && instance.taskTemplate?.specialtyId !== user.specialtyId) {
-                (0, http_error_1.throwError)('RBAC_FORBIDDEN');
-            }
-        }
+        const instance = await this.prisma.taskInstance.findUnique({
+            where: { id: report.taskInstanceId },
+            include: {
+                taskTemplate: { select: { specialtyId: true } },
+                assignedElo: { select: { id: true, eloRoleId: true } },
+                responsibles: { select: { userId: true } },
+            },
+        });
+        if (!instance)
+            (0, http_error_1.throwError)('NOT_FOUND');
+        this.assertTaskViewAccess(instance, user);
         return report;
     }
     async getSignedUrl(id, user) {
@@ -103,19 +102,17 @@ let ReportsService = class ReportsService {
         const report = await this.prisma.report.findUnique({ where: { id } });
         if (!report)
             (0, http_error_1.throwError)('NOT_FOUND');
-        let instance = null;
-        if (user?.localityId || user?.specialtyId) {
-            instance = await this.prisma.taskInstance.findUnique({
-                where: { id: report.taskInstanceId },
-                include: { taskTemplate: { select: { specialtyId: true } } },
-            });
-            if (instance && user?.localityId && instance.localityId !== user.localityId) {
-                (0, http_error_1.throwError)('RBAC_FORBIDDEN');
-            }
-            if (instance && user?.specialtyId && instance.taskTemplate?.specialtyId !== user.specialtyId) {
-                (0, http_error_1.throwError)('RBAC_FORBIDDEN');
-            }
-        }
+        const instance = await this.prisma.taskInstance.findUnique({
+            where: { id: report.taskInstanceId },
+            include: {
+                taskTemplate: { select: { specialtyId: true } },
+                assignedElo: { select: { id: true, eloRoleId: true } },
+                responsibles: { select: { userId: true } },
+            },
+        });
+        if (!instance)
+            (0, http_error_1.throwError)('NOT_FOUND');
+        this.assertTaskViewAccess(instance, user);
         const updated = await this.prisma.report.update({ where: { id }, data: { approved } });
         await this.audit.log({
             userId: user?.id,
@@ -126,6 +123,58 @@ let ReportsService = class ReportsService {
             diffJson: { approved },
         });
         return updated;
+    }
+    isTaskResponsible(instance, user) {
+        if (!user?.id)
+            return false;
+        if (instance.assignedToId === user.id)
+            return true;
+        if (Array.isArray(instance.responsibles)) {
+            return instance.responsibles.some((entry) => entry.userId === user.id);
+        }
+        return false;
+    }
+    assertTaskOperateAccess(instance, user) {
+        if (!user?.id)
+            (0, http_error_1.throwError)('RBAC_FORBIDDEN');
+        const profile = (0, role_access_1.resolveAccessProfile)(user);
+        if (profile.ti)
+            return;
+        if (!this.isTaskResponsible(instance, user)) {
+            (0, http_error_1.throwError)('RBAC_FORBIDDEN');
+        }
+    }
+    assertTaskViewAccess(instance, user) {
+        if (!user?.id)
+            return;
+        const profile = (0, role_access_1.resolveAccessProfile)(user);
+        if (profile.ti || profile.nationalCommission)
+            return;
+        if (profile.localityAdmin) {
+            if (!profile.localityId || instance.localityId === profile.localityId)
+                return;
+            (0, http_error_1.throwError)('RBAC_FORBIDDEN');
+        }
+        const specialtyMatch = profile.groupSpecialtyId
+            ? instance.taskTemplate?.specialtyId === profile.groupSpecialtyId
+            : false;
+        const eloRoleMatch = profile.groupEloRoleId
+            ? instance.eloRoleId === profile.groupEloRoleId ||
+                instance.assignedElo?.eloRoleId === profile.groupEloRoleId
+            : false;
+        if (profile.specialtyAdmin) {
+            if (profile.localityId && instance.localityId !== profile.localityId) {
+                (0, http_error_1.throwError)('RBAC_FORBIDDEN');
+            }
+            if (specialtyMatch || eloRoleMatch)
+                return;
+            (0, http_error_1.throwError)('RBAC_FORBIDDEN');
+        }
+        if (this.isTaskResponsible(instance, user))
+            return;
+        if (user.localityId && instance.localityId === user.localityId && (specialtyMatch || eloRoleMatch))
+            return;
+        (0, http_error_1.throwError)('RBAC_FORBIDDEN');
     }
 };
 exports.ReportsService = ReportsService;

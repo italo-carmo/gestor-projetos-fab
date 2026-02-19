@@ -2,7 +2,7 @@ import { Box, Button, Card, CardContent, Link, MenuItem, Stack, Tab, Tabs, TextF
 import { format } from 'date-fns';
 import { useEffect, useMemo, useState } from 'react';
 import { Link as RouterLink, useSearchParams } from 'react-router-dom';
-import { useDashboardNational, useEloRoles, usePhases, useTaskTemplates, useTasks, useMe, useBatchAssignTasks, useBatchStatusTasks, useUsers } from '../api/hooks';
+import { useLocalities, useEloRoles, usePhases, useTaskTemplates, useTasks, useMe, useBatchAssignTasks, useBatchStatusTasks, useUsers } from '../api/hooks';
 import { useDebounce } from '../app/useDebounce';
 import { FiltersBar } from '../components/filters/FiltersBar';
 import { SkeletonState } from '../components/states/SkeletonState';
@@ -20,6 +20,29 @@ import { ptBR as dataGridPtBR } from '@mui/x-data-grid/locales';
 import { useToast } from '../app/toast';
 import { parseApiError } from '../app/apiErrors';
 import { TASK_STATUS_LABELS } from '../constants/enums';
+
+function resolveTaskTitle(task: any) {
+  const raw =
+    task?.taskTemplate?.title ??
+    task?.title ??
+    task?.taskTitle ??
+    '';
+  const normalized = String(raw).trim();
+  return normalized || 'Tarefa sem título';
+}
+
+function resolveTaskLocalityName(task: any, localityMap: Map<string, string>) {
+  const fromTask = String(task?.localityName ?? task?.locality?.name ?? '').trim();
+  if (fromTask) return fromTask;
+
+  const mapped = localityMap.get(String(task?.localityId ?? ''));
+  if (mapped && mapped.trim()) return mapped.trim();
+
+  const fromCode = String(task?.localityCode ?? task?.locality?.code ?? '').trim();
+  if (fromCode) return fromCode;
+
+  return '-';
+}
 
 export function TasksPage() {
   const [params, setParams] = useSearchParams();
@@ -63,21 +86,34 @@ export function TasksPage() {
   const eloRolesQuery = useEloRoles();
   const eloRoles = eloRolesQuery.data?.items ?? [];
   const templatesQuery = useTaskTemplates();
-  const dashboardQuery = useDashboardNational({});
+  const localitiesQuery = useLocalities();
 
   const templateMap = new Map((templatesQuery.data?.items ?? []).map((t: any) => [t.id, t]));
   const items = (tasksQuery.data?.items ?? []).map((task: any) => ({
     ...task,
-    taskTemplate: templateMap.get(task.taskTemplateId),
+    taskTemplate: task.taskTemplate ?? templateMap.get(task.taskTemplateId) ?? null,
   }));
   const filteredItems = debouncedSearch
-    ? items.filter((item: any) => item.taskTemplate?.title?.toLowerCase().includes(debouncedSearch.toLowerCase()))
+    ? items.filter((item: any) => resolveTaskTitle(item).toLowerCase().includes(debouncedSearch.toLowerCase()))
     : items;
 
-  const localities = ((dashboardQuery.data?.items ?? []) as any[]).map((loc: any) => ({
-    id: loc.localityId,
-    name: loc.localityName,
-  }));
+  const localitiesData = (localitiesQuery.data?.items ?? []) as any[];
+  const localities = localitiesData.length > 0
+    ? localitiesData.map((loc: any) => ({
+        id: String(loc.id),
+        name: String(loc.name ?? loc.code ?? loc.id),
+      }))
+    : Array.from(
+        new Map<string, { id: string; name: string }>(
+          items.map((task: any) => [
+            String(task.localityId),
+            {
+              id: String(task.localityId),
+              name: resolveTaskLocalityName(task, new Map()),
+            },
+          ]),
+        ).values(),
+      );
   const localityMap = new Map(localities.map((loc) => [loc.id, loc.name]));
 
   const phases = ((phasesQuery.data?.items ?? []) as any[]).map((phase: any) => ({
@@ -94,7 +130,10 @@ export function TasksPage() {
             id: String(user.id),
             name: user.name ?? user.email ?? `Usuário ${String(user.id).slice(0, 8)}`,
           }))
-          .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+          .sort(
+            (a: { id: string; name: string }, b: { id: string; name: string }) =>
+              a.name.localeCompare(b.name, 'pt-BR'),
+          )
       : Array.from(
           new Map<string, { id: string; name: string }>(
             items
@@ -304,13 +343,13 @@ export function TasksPage() {
                     headerName: 'Título da tarefa',
                     flex: 1.4,
                     minWidth: 360,
-                    valueGetter: (_, row) => row.taskTemplate?.title ?? '-',
+                    valueGetter: (_, row) => resolveTaskTitle(row),
                   },
                   {
                     field: 'locality',
                     headerName: 'Localidade',
                     width: 145,
-                    valueGetter: (_, row) => localityMap.get(row.localityId) ?? row.localityId ?? '-',
+                    valueGetter: (_, row) => resolveTaskLocalityName(row, localityMap),
                   },
                   {
                     field: 'phase',
@@ -430,7 +469,7 @@ export function TasksPage() {
                         onClick={() => setSelectedTaskId(task.id)}
                       >
                         <CardContent>
-                          <Typography variant="subtitle2">{task.taskTemplate?.title ?? '-'}</Typography>
+                          <Typography variant="subtitle2">{resolveTaskTitle(task)}</Typography>
                           <DueBadge dueDate={task.dueDate} status={task.status} />
                           {(task.comments?.unread ?? 0) > 0 && (
                             <Typography variant="caption" color="warning.main" display="block" sx={{ mt: 0.4 }}>

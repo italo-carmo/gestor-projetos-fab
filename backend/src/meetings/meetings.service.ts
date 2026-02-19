@@ -215,6 +215,7 @@ export class MeetingsService {
     reportRequired?: boolean;
     priority?: string;
     assigneeId?: string | null;
+    assigneeIds?: string[];
     localities: { localityId: string; dueDate: string }[];
   }, user?: RbacUser) {
     const meeting = await this.prisma.meeting.findUnique({ where: { id: meetingId } });
@@ -247,6 +248,7 @@ export class MeetingsService {
         priority: payload.priority,
         meetingId,
         assignedToId: payload.assigneeId ?? null,
+        assigneeIds: payload.assigneeIds ?? [],
       },
       user,
     );

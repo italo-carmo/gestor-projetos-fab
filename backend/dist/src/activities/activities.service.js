@@ -25,6 +25,7 @@ const http_error_1 = require("../common/http-error");
 const audit_service_1 = require("../audit/audit.service");
 const sanitize_1 = require("../common/sanitize");
 const pagination_1 = require("../common/pagination");
+const role_access_1 = require("../rbac/role-access");
 const activityPhotosDir = node_path_1.default.resolve(process.cwd(), 'storage', 'activity-reports');
 const scheduleLogoCandidates = [
     node_path_1.default.resolve(process.cwd(), 'frontend', 'public', 'brand', 'cipavd-7.png'),
@@ -41,21 +42,24 @@ let ActivitiesService = class ActivitiesService {
         this.config = config;
     }
     async list(filters, user) {
-        const where = {};
+        const andClauses = [];
         if (filters.localityId)
-            where.localityId = filters.localityId;
+            andClauses.push({ localityId: filters.localityId });
         if (filters.status)
-            where.status = filters.status;
+            andClauses.push({ status: filters.status });
         if (filters.q) {
-            where.OR = [
-                { title: { contains: filters.q, mode: 'insensitive' } },
-                { description: { contains: filters.q, mode: 'insensitive' } },
-            ];
+            andClauses.push({
+                OR: [
+                    { title: { contains: filters.q, mode: 'insensitive' } },
+                    { description: { contains: filters.q, mode: 'insensitive' } },
+                ],
+            });
         }
-        if (user?.localityId) {
-            const andArr = Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : [];
-            where.AND = [...andArr, { OR: [{ localityId: null }, { localityId: user.localityId }] }];
+        const accessWhere = this.buildActivityAccessWhere(user, 'view');
+        if (Object.keys(accessWhere).length > 0) {
+            andClauses.push(accessWhere);
         }
+        const where = andClauses.length > 0 ? { AND: andClauses } : {};
         const { page, pageSize, skip, take } = (0, pagination_1.parsePagination)(filters.page, filters.pageSize);
         const [items, total] = await this.prisma.$transaction([
             this.prisma.activity.findMany({
@@ -66,6 +70,12 @@ let ActivitiesService = class ActivitiesService {
                 include: {
                     locality: { select: { id: true, code: true, name: true } },
                     createdBy: { select: { id: true, name: true } },
+                    responsibles: {
+                        include: {
+                            user: { select: { id: true, name: true, email: true, localityId: true, specialtyId: true, eloRoleId: true } },
+                        },
+                        orderBy: [{ createdAt: 'asc' }],
+                    },
                     report: {
                         include: {
                             photos: {
@@ -81,7 +91,7 @@ let ActivitiesService = class ActivitiesService {
         ]);
         const withCommentSummary = await this.attachActivityCommentSummary(items, user);
         return {
-            items: withCommentSummary.map((item) => this.mapActivity(item)),
+            items: withCommentSummary.map((item) => this.mapActivity(item, user?.executiveHidePii)),
             page,
             pageSize,
             total,
@@ -90,6 +100,7 @@ let ActivitiesService = class ActivitiesService {
     async create(payload, user) {
         const localityId = payload.localityId ?? user?.localityId ?? null;
         this.assertLocalityConstraint(localityId, user);
+        const responsibleUserIds = await this.resolveActivityResponsibleIds(localityId, payload.responsibleUserIds ?? [], user);
         const created = await this.prisma.activity.create({
             data: {
                 title: (0, sanitize_1.sanitizeText)(payload.title),
@@ -98,10 +109,24 @@ let ActivitiesService = class ActivitiesService {
                 eventDate: payload.eventDate ? new Date(payload.eventDate) : null,
                 reportRequired: payload.reportRequired ?? false,
                 createdById: user?.id ?? null,
+                responsibles: responsibleUserIds.length > 0
+                    ? {
+                        create: responsibleUserIds.map((userId) => ({
+                            userId,
+                            assignedById: user?.id ?? null,
+                        })),
+                    }
+                    : undefined,
             },
             include: {
                 locality: { select: { id: true, code: true, name: true } },
                 createdBy: { select: { id: true, name: true } },
+                responsibles: {
+                    include: {
+                        user: { select: { id: true, name: true, email: true, localityId: true, specialtyId: true, eloRoleId: true } },
+                    },
+                    orderBy: [{ createdAt: 'asc' }],
+                },
                 report: {
                     include: {
                         photos: { select: { id: true, fileName: true, fileUrl: true, createdAt: true } },
@@ -118,15 +143,22 @@ let ActivitiesService = class ActivitiesService {
             localityId: created.localityId ?? undefined,
             diffJson: { title: created.title, reportRequired: created.reportRequired },
         });
-        return this.mapActivity(created);
+        return this.mapActivity(created, user?.executiveHidePii);
     }
     async update(id, payload, user) {
-        const existing = await this.prisma.activity.findUnique({ where: { id } });
+        const existing = await this.prisma.activity.findUnique({
+            where: { id },
+            include: {
+                responsibles: { select: { userId: true } },
+            },
+        });
         if (!existing)
             (0, http_error_1.throwError)('NOT_FOUND');
-        this.assertLocalityConstraint(existing.localityId, user);
+        this.assertActivityOperateAccess(existing, user);
         const localityId = payload.localityId === undefined ? existing.localityId : payload.localityId;
         this.assertLocalityConstraint(localityId, user);
+        const responsibleUserIds = await this.resolveActivityResponsibleIds(localityId, payload.responsibleUserIds ??
+            existing.responsibles.map((entry) => entry.userId), user);
         const updated = await this.prisma.activity.update({
             where: { id },
             data: {
@@ -143,10 +175,27 @@ let ActivitiesService = class ActivitiesService {
                         ? null
                         : new Date(payload.eventDate),
                 reportRequired: payload.reportRequired ?? undefined,
+                responsibles: {
+                    deleteMany: {},
+                    ...(responsibleUserIds.length > 0
+                        ? {
+                            create: responsibleUserIds.map((userId) => ({
+                                userId,
+                                assignedById: user?.id ?? null,
+                            })),
+                        }
+                        : {}),
+                },
             },
             include: {
                 locality: { select: { id: true, code: true, name: true } },
                 createdBy: { select: { id: true, name: true } },
+                responsibles: {
+                    include: {
+                        user: { select: { id: true, name: true, email: true, localityId: true, specialtyId: true, eloRoleId: true } },
+                    },
+                    orderBy: [{ createdAt: 'asc' }],
+                },
                 report: {
                     include: {
                         photos: { select: { id: true, fileName: true, fileUrl: true, createdAt: true } },
@@ -167,12 +216,13 @@ let ActivitiesService = class ActivitiesService {
                 reportRequired: updated.reportRequired,
             },
         });
-        return this.mapActivity(updated);
+        return this.mapActivity(updated, user?.executiveHidePii);
     }
     async updateStatus(id, status, user) {
         const existing = await this.prisma.activity.findUnique({
             where: { id },
             include: {
+                responsibles: { select: { userId: true } },
                 report: {
                     include: { photos: { select: { id: true } } },
                 },
@@ -180,7 +230,7 @@ let ActivitiesService = class ActivitiesService {
         });
         if (!existing)
             (0, http_error_1.throwError)('NOT_FOUND');
-        this.assertLocalityConstraint(existing.localityId, user);
+        this.assertActivityOperateAccess(existing, user);
         if (status === client_1.ActivityStatus.DONE && existing.reportRequired) {
             if (!existing.report) {
                 (0, http_error_1.throwError)('ACTIVITY_REPORT_REQUIRED');
@@ -195,6 +245,12 @@ let ActivitiesService = class ActivitiesService {
             include: {
                 locality: { select: { id: true, code: true, name: true } },
                 createdBy: { select: { id: true, name: true } },
+                responsibles: {
+                    include: {
+                        user: { select: { id: true, name: true, email: true, localityId: true, specialtyId: true, eloRoleId: true } },
+                    },
+                    orderBy: [{ createdAt: 'asc' }],
+                },
                 report: {
                     include: {
                         photos: { select: { id: true, fileName: true, fileUrl: true, createdAt: true } },
@@ -211,16 +267,25 @@ let ActivitiesService = class ActivitiesService {
             localityId: updated.localityId ?? undefined,
             diffJson: { status },
         });
-        return this.mapActivity(updated);
+        return this.mapActivity(updated, user?.executiveHidePii);
     }
     async listComments(id, user) {
         const activity = await this.prisma.activity.findUnique({
             where: { id },
-            select: { id: true, localityId: true },
+            select: {
+                id: true,
+                localityId: true,
+                responsibles: {
+                    select: {
+                        userId: true,
+                        user: { select: { id: true, specialtyId: true, eloRoleId: true } },
+                    },
+                },
+            },
         });
         if (!activity)
             (0, http_error_1.throwError)('NOT_FOUND');
-        this.assertLocalityConstraint(activity.localityId, user);
+        this.assertActivityViewAccess(activity, user);
         const [comments, readState] = await this.prisma.$transaction([
             this.prisma.activityComment.findMany({
                 where: { activityId: id },
@@ -251,11 +316,20 @@ let ActivitiesService = class ActivitiesService {
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         const activity = await this.prisma.activity.findUnique({
             where: { id },
-            select: { id: true, localityId: true },
+            select: {
+                id: true,
+                localityId: true,
+                responsibles: {
+                    select: {
+                        userId: true,
+                        user: { select: { id: true, specialtyId: true, eloRoleId: true } },
+                    },
+                },
+            },
         });
         if (!activity)
             (0, http_error_1.throwError)('NOT_FOUND');
-        this.assertLocalityConstraint(activity.localityId, user);
+        this.assertActivityOperateAccess(activity, user);
         const normalized = this.sanitizeCommentText(text);
         if (!normalized) {
             (0, http_error_1.throwError)('VALIDATION_ERROR', { field: 'text', reason: 'COMMENT_REQUIRED' });
@@ -288,11 +362,15 @@ let ActivitiesService = class ActivitiesService {
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         const activity = await this.prisma.activity.findUnique({
             where: { id },
-            select: { id: true, localityId: true },
+            select: {
+                id: true,
+                localityId: true,
+                responsibles: { select: { userId: true } },
+            },
         });
         if (!activity)
             (0, http_error_1.throwError)('NOT_FOUND');
-        this.assertLocalityConstraint(activity.localityId, user);
+        this.assertActivityViewAccess(activity, user);
         const seenAt = new Date();
         await this.prisma.activityCommentRead.upsert({
             where: { activityId_userId: { activityId: id, userId: user.id } },
@@ -309,12 +387,18 @@ let ActivitiesService = class ActivitiesService {
                 title: true,
                 eventDate: true,
                 localityId: true,
+                responsibles: {
+                    select: {
+                        userId: true,
+                        user: { select: { id: true, specialtyId: true, eloRoleId: true } },
+                    },
+                },
                 locality: { select: { id: true, code: true, name: true } },
             },
         });
         if (!activity)
             (0, http_error_1.throwError)('NOT_FOUND');
-        this.assertLocalityConstraint(activity.localityId, user);
+        this.assertActivityViewAccess(activity, user);
         const items = await this.prisma.activityVisitScheduleItem.findMany({
             where: { activityId },
             orderBy: [{ startTime: 'asc' }, { createdAt: 'asc' }],
@@ -332,11 +416,11 @@ let ActivitiesService = class ActivitiesService {
     async createScheduleItem(activityId, payload, user) {
         const activity = await this.prisma.activity.findUnique({
             where: { id: activityId },
-            select: { id: true, localityId: true },
+            select: { id: true, localityId: true, responsibles: { select: { userId: true } } },
         });
         if (!activity)
             (0, http_error_1.throwError)('NOT_FOUND');
-        this.assertLocalityConstraint(activity.localityId, user);
+        this.assertActivityOperateAccess(activity, user);
         const created = await this.prisma.activityVisitScheduleItem.create({
             data: {
                 activityId,
@@ -361,11 +445,11 @@ let ActivitiesService = class ActivitiesService {
     async updateScheduleItem(activityId, itemId, payload, user) {
         const activity = await this.prisma.activity.findUnique({
             where: { id: activityId },
-            select: { id: true, localityId: true },
+            select: { id: true, localityId: true, responsibles: { select: { userId: true } } },
         });
         if (!activity)
             (0, http_error_1.throwError)('NOT_FOUND');
-        this.assertLocalityConstraint(activity.localityId, user);
+        this.assertActivityOperateAccess(activity, user);
         const existing = await this.prisma.activityVisitScheduleItem.findFirst({
             where: { id: itemId, activityId },
         });
@@ -401,11 +485,11 @@ let ActivitiesService = class ActivitiesService {
     async deleteScheduleItem(activityId, itemId, user) {
         const activity = await this.prisma.activity.findUnique({
             where: { id: activityId },
-            select: { id: true, localityId: true },
+            select: { id: true, localityId: true, responsibles: { select: { userId: true } } },
         });
         if (!activity)
             (0, http_error_1.throwError)('NOT_FOUND');
-        this.assertLocalityConstraint(activity.localityId, user);
+        this.assertActivityOperateAccess(activity, user);
         const existing = await this.prisma.activityVisitScheduleItem.findFirst({
             where: { id: itemId, activityId },
             select: { id: true },
@@ -427,6 +511,12 @@ let ActivitiesService = class ActivitiesService {
         const activity = await this.prisma.activity.findUnique({
             where: { id: activityId },
             include: {
+                responsibles: {
+                    select: {
+                        userId: true,
+                        user: { select: { id: true, specialtyId: true, eloRoleId: true } },
+                    },
+                },
                 locality: { select: { id: true, code: true, name: true } },
                 visitScheduleItems: {
                     orderBy: [{ startTime: 'asc' }, { createdAt: 'asc' }],
@@ -435,7 +525,7 @@ let ActivitiesService = class ActivitiesService {
         });
         if (!activity)
             (0, http_error_1.throwError)('NOT_FOUND');
-        this.assertLocalityConstraint(activity.localityId, user);
+        this.assertActivityViewAccess(activity, user);
         const doc = new pdfkit_1.default({ margin: 48, size: 'A4' });
         const chunks = [];
         const done = new Promise((resolve, reject) => {
@@ -508,11 +598,11 @@ let ActivitiesService = class ActivitiesService {
     async upsertReport(activityId, payload, user) {
         const activity = await this.prisma.activity.findUnique({
             where: { id: activityId },
-            include: { report: true },
+            include: { report: true, responsibles: { select: { userId: true } } },
         });
         if (!activity)
             (0, http_error_1.throwError)('NOT_FOUND');
-        this.assertLocalityConstraint(activity.localityId, user);
+        this.assertActivityOperateAccess(activity, user);
         const reportData = {
             date: new Date(payload.date),
             location: (0, sanitize_1.sanitizeText)(payload.location),
@@ -553,6 +643,12 @@ let ActivitiesService = class ActivitiesService {
             include: {
                 locality: { select: { id: true, code: true, name: true } },
                 createdBy: { select: { id: true, name: true } },
+                responsibles: {
+                    include: {
+                        user: { select: { id: true, name: true, email: true, localityId: true, specialtyId: true, eloRoleId: true } },
+                    },
+                    orderBy: [{ createdAt: 'asc' }],
+                },
                 report: {
                     include: {
                         photos: {
@@ -579,16 +675,16 @@ let ActivitiesService = class ActivitiesService {
             localityId: updated.localityId ?? undefined,
             diffJson: { reportSignedReset: true },
         });
-        return this.mapActivity(updated);
+        return this.mapActivity(updated, user?.executiveHidePii);
     }
     async addReportPhoto(activityId, file, user) {
         const activity = await this.prisma.activity.findUnique({
             where: { id: activityId },
-            include: { report: true },
+            include: { report: true, responsibles: { select: { userId: true } } },
         });
         if (!activity)
             (0, http_error_1.throwError)('NOT_FOUND');
-        this.assertLocalityConstraint(activity.localityId, user);
+        this.assertActivityOperateAccess(activity, user);
         if (!activity.report)
             (0, http_error_1.throwError)('ACTIVITY_REPORT_NOT_FOUND');
         const created = await this.prisma.activityReportPhoto.create({
@@ -616,11 +712,11 @@ let ActivitiesService = class ActivitiesService {
     async removeReportPhoto(activityId, photoId, user) {
         const activity = await this.prisma.activity.findUnique({
             where: { id: activityId },
-            include: { report: true },
+            include: { report: true, responsibles: { select: { userId: true } } },
         });
         if (!activity)
             (0, http_error_1.throwError)('NOT_FOUND');
-        this.assertLocalityConstraint(activity.localityId, user);
+        this.assertActivityOperateAccess(activity, user);
         if (!activity.report)
             (0, http_error_1.throwError)('ACTIVITY_REPORT_NOT_FOUND');
         const photo = await this.prisma.activityReportPhoto.findFirst({
@@ -646,6 +742,7 @@ let ActivitiesService = class ActivitiesService {
         const activity = await this.prisma.activity.findUnique({
             where: { id: activityId },
             include: {
+                responsibles: { select: { userId: true } },
                 report: {
                     include: {
                         photos: {
@@ -664,7 +761,7 @@ let ActivitiesService = class ActivitiesService {
         });
         if (!activity)
             (0, http_error_1.throwError)('NOT_FOUND');
-        this.assertLocalityConstraint(activity.localityId, user);
+        this.assertActivityOperateAccess(activity, user);
         if (!activity.report)
             (0, http_error_1.throwError)('ACTIVITY_REPORT_NOT_FOUND');
         const report = activity.report;
@@ -755,6 +852,12 @@ let ActivitiesService = class ActivitiesService {
         const activity = await this.prisma.activity.findUnique({
             where: { id: activityId },
             include: {
+                responsibles: {
+                    select: {
+                        userId: true,
+                        user: { select: { id: true, specialtyId: true, eloRoleId: true } },
+                    },
+                },
                 locality: { select: { id: true, code: true, name: true } },
                 createdBy: { select: { id: true, name: true } },
                 report: {
@@ -775,7 +878,7 @@ let ActivitiesService = class ActivitiesService {
         });
         if (!activity)
             (0, http_error_1.throwError)('NOT_FOUND');
-        this.assertLocalityConstraint(activity.localityId, user);
+        this.assertActivityViewAccess(activity, user);
         if (!activity.report)
             (0, http_error_1.throwError)('ACTIVITY_REPORT_NOT_FOUND');
         const report = activity.report;
@@ -912,9 +1015,21 @@ let ActivitiesService = class ActivitiesService {
             };
         });
     }
-    mapActivity(activity) {
+    mapActivity(activity, executiveHidePii) {
+        const { responsibles, ...rest } = activity ?? {};
+        const responsibleUsers = Array.isArray(activity?.responsibles)
+            ? activity.responsibles
+                .map((entry) => entry?.user)
+                .filter(Boolean)
+                .map((user) => ({
+                id: user.id,
+                name: user.name ?? user.email ?? `Usuário ${String(user.id).slice(0, 8)}`,
+                email: user.email ?? null,
+            }))
+            : [];
         return {
-            ...activity,
+            ...rest,
+            responsibleUsers: executiveHidePii ? [] : responsibleUsers,
             report: activity.report
                 ? {
                     ...activity.report,
@@ -1002,9 +1117,145 @@ let ActivitiesService = class ActivitiesService {
             .trim();
     }
     assertLocalityConstraint(localityId, user) {
-        if (user?.localityId && localityId && user.localityId !== localityId) {
+        if (!user)
+            return;
+        const profile = (0, role_access_1.resolveAccessProfile)(user);
+        if (profile.ti || profile.nationalCommission)
+            return;
+        if (user.localityId && localityId && user.localityId !== localityId) {
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         }
+    }
+    buildActivityAccessWhere(user, mode) {
+        if (!user?.id)
+            return {};
+        const profile = (0, role_access_1.resolveAccessProfile)(user);
+        if (mode === 'operate') {
+            if (profile.ti)
+                return {};
+            return { responsibles: { some: { userId: user.id } } };
+        }
+        if (profile.ti || profile.nationalCommission)
+            return {};
+        if (profile.localityAdmin && profile.localityId) {
+            return { localityId: profile.localityId };
+        }
+        if (profile.specialtyAdmin) {
+            const and = [];
+            if (profile.localityId)
+                and.push({ localityId: profile.localityId });
+            const groupOr = [];
+            if (profile.groupSpecialtyId) {
+                groupOr.push({ responsibles: { some: { user: { specialtyId: profile.groupSpecialtyId } } } });
+            }
+            if (profile.groupEloRoleId) {
+                groupOr.push({ responsibles: { some: { user: { eloRoleId: profile.groupEloRoleId } } } });
+            }
+            if (groupOr.length > 0)
+                and.push({ OR: groupOr });
+            if (and.length === 0)
+                return { id: '__forbidden__' };
+            return and.length === 1 ? and[0] : { AND: and };
+        }
+        const viewerOr = [
+            { responsibles: { some: { userId: user.id } } },
+        ];
+        if (user.localityId) {
+            const groupOr = [];
+            if (user.specialtyId) {
+                groupOr.push({ responsibles: { some: { user: { specialtyId: user.specialtyId } } } });
+            }
+            if (user.eloRoleId) {
+                groupOr.push({ responsibles: { some: { user: { eloRoleId: user.eloRoleId } } } });
+            }
+            if (groupOr.length > 0) {
+                viewerOr.push({ localityId: user.localityId, OR: groupOr });
+            }
+        }
+        return { OR: viewerOr };
+    }
+    isActivityResponsible(activity, user) {
+        if (!user?.id)
+            return false;
+        if (Array.isArray(activity?.responsibles)) {
+            return activity.responsibles.some((entry) => entry.userId === user.id);
+        }
+        return false;
+    }
+    hasActivityGroupMatch(activity, specialtyId, eloRoleId) {
+        if (!Array.isArray(activity?.responsibles))
+            return false;
+        return activity.responsibles.some((entry) => {
+            const responsibleUser = entry?.user;
+            if (!responsibleUser)
+                return false;
+            if (specialtyId && responsibleUser.specialtyId === specialtyId)
+                return true;
+            if (eloRoleId && responsibleUser.eloRoleId === eloRoleId)
+                return true;
+            return false;
+        });
+    }
+    assertActivityViewAccess(activity, user) {
+        if (!user?.id)
+            return;
+        const profile = (0, role_access_1.resolveAccessProfile)(user);
+        if (profile.ti || profile.nationalCommission)
+            return;
+        if (profile.localityAdmin) {
+            if (!profile.localityId || activity.localityId === profile.localityId)
+                return;
+            (0, http_error_1.throwError)('RBAC_FORBIDDEN');
+        }
+        if (profile.specialtyAdmin) {
+            if (profile.localityId && activity.localityId !== profile.localityId) {
+                (0, http_error_1.throwError)('RBAC_FORBIDDEN');
+            }
+            if (this.hasActivityGroupMatch(activity, profile.groupSpecialtyId, profile.groupEloRoleId))
+                return;
+            (0, http_error_1.throwError)('RBAC_FORBIDDEN');
+        }
+        if (this.isActivityResponsible(activity, user))
+            return;
+        if (user.localityId &&
+            activity.localityId === user.localityId &&
+            this.hasActivityGroupMatch(activity, user.specialtyId, user.eloRoleId)) {
+            return;
+        }
+        (0, http_error_1.throwError)('RBAC_FORBIDDEN');
+    }
+    assertActivityOperateAccess(activity, user) {
+        if (!user?.id)
+            (0, http_error_1.throwError)('RBAC_FORBIDDEN');
+        const profile = (0, role_access_1.resolveAccessProfile)(user);
+        if (profile.ti)
+            return;
+        if (!this.isActivityResponsible(activity, user)) {
+            (0, http_error_1.throwError)('RBAC_FORBIDDEN');
+        }
+    }
+    async resolveActivityResponsibleIds(localityId, responsibleUserIds, user) {
+        const normalized = Array.from(new Set((responsibleUserIds ?? [])
+            .map((value) => String(value ?? '').trim())
+            .filter(Boolean)));
+        if (normalized.length === 0)
+            return [];
+        if (!localityId) {
+            (0, http_error_1.throwError)('VALIDATION_ERROR', { field: 'localityId', reason: 'REQUIRED_FOR_RESPONSIBLES' });
+        }
+        const users = await this.prisma.user.findMany({
+            where: { id: { in: normalized }, isActive: true },
+            select: { id: true, localityId: true },
+        });
+        if (users.length !== normalized.length) {
+            (0, http_error_1.throwError)('VALIDATION_ERROR', { reason: 'ACTIVITY_RESPONSIBLE_INVALID' });
+        }
+        const mismatched = users.some((candidate) => candidate.localityId !== localityId);
+        if (mismatched) {
+            (0, http_error_1.throwError)('VALIDATION_ERROR', { reason: 'ACTIVITY_RESPONSIBLE_LOCALITY_MISMATCH' });
+        }
+        this.assertLocalityConstraint(localityId, user);
+        return users.map((candidate) => candidate.id);
     }
     async invalidateSignature(reportId) {
         await this.prisma.activityReport.update({

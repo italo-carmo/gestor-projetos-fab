@@ -4,4 +4,5 @@ export declare class UpdateActivityDto {
     localityId?: string | null;
     eventDate?: string | null;
     reportRequired?: boolean;
+    responsibleUserIds?: string[];
 }

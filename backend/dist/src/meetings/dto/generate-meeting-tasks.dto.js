@@ -20,6 +20,7 @@ class GenerateMeetingTasksDto {
     reportRequired;
     priority;
     assigneeId;
+    assigneeIds;
     localities;
 }
 exports.GenerateMeetingTasksDto = GenerateMeetingTasksDto;
@@ -63,6 +64,12 @@ __decorate([
     (0, class_validator_1.IsString)(),
     __metadata("design:type", Object)
 ], GenerateMeetingTasksDto.prototype, "assigneeId", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsArray)(),
+    (0, class_validator_1.IsString)({ each: true }),
+    __metadata("design:type", Array)
+], GenerateMeetingTasksDto.prototype, "assigneeIds", void 0);
 __decorate([
     (0, class_validator_1.IsArray)(),
     __metadata("design:type", Array)

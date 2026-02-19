@@ -12,6 +12,10 @@ export class CreateEloDto {
 
   @IsOptional()
   @IsString()
+  userId?: string;
+
+  @IsOptional()
+  @IsString()
   rank?: string | null;
 
   @IsOptional()
@@ -26,4 +30,3 @@ export class CreateEloDto {
   @IsString()
   om?: string | null;
 }
-

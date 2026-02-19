@@ -48,6 +48,7 @@ let TaskTemplatesController = class TaskTemplatesController {
             priority: dto.priority,
             meetingId: dto.meetingId ?? null,
             assignedToId: dto.assignedToId ?? null,
+            assigneeIds: dto.assigneeIds ?? [],
         }, user);
     }
     clone(id, user) {

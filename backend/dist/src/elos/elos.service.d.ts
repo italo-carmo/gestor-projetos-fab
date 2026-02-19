@@ -22,6 +22,7 @@ export declare class ElosService {
         localityId: string;
         eloRoleId: string;
         name: string;
+        userId?: string;
         rank?: string | null;
         phone?: string | null;
         email?: string | null;
@@ -31,6 +32,7 @@ export declare class ElosService {
         localityId?: string;
         eloRoleId?: string;
         name?: string;
+        userId?: string;
         rank?: string | null;
         phone?: string | null;
         email?: string | null;
@@ -45,12 +47,59 @@ export declare class ElosService {
         eloRoleId?: string;
     }, user?: RbacUser): Promise<{
         items: {
+            localityId: string;
             localityName: string;
+            localityCode: string;
             elos: any[];
         }[];
         executive_hide_pii: boolean;
     }>;
+    listOrgChartCandidates(filters: {
+        localityId?: string;
+        eloRoleId?: string;
+        q?: string;
+    }, user?: RbacUser): Promise<{
+        items: {
+            id: string;
+            eloRoleId: string | null;
+            eloRole: {
+                id: string;
+                name: string;
+                code: string;
+            } | null;
+            name: string;
+            locality: {
+                id: string;
+                name: string;
+                code: string;
+            } | null;
+            email: string;
+            localityId: string | null;
+        }[];
+    }>;
+    createOrgChartAssignment(payload: {
+        localityId: string;
+        eloRoleId: string;
+        userId: string;
+        rank?: string | null;
+        phone?: string | null;
+        om?: string | null;
+    }, user?: RbacUser): Promise<any>;
+    updateOrgChartAssignment(id: string, payload: {
+        localityId?: string;
+        eloRoleId?: string;
+        userId?: string;
+        rank?: string | null;
+        phone?: string | null;
+        om?: string | null;
+    }, user?: RbacUser): Promise<any>;
+    removeOrgChartAssignment(id: string, user?: RbacUser): Promise<{
+        ok: boolean;
+    }>;
     private getScopeConstraints;
     private assertConstraints;
+    private assertCanManageOrgChart;
+    private assertUserMatchesAssignment;
+    private buildEloMatchKey;
     private mapElo;
 }

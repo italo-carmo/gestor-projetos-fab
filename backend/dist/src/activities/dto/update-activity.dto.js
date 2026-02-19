@@ -17,6 +17,7 @@ class UpdateActivityDto {
     localityId;
     eventDate;
     reportRequired;
+    responsibleUserIds;
 }
 exports.UpdateActivityDto = UpdateActivityDto;
 __decorate([
@@ -45,4 +46,10 @@ __decorate([
     (0, class_validator_1.IsBoolean)(),
     __metadata("design:type", Boolean)
 ], UpdateActivityDto.prototype, "reportRequired", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsArray)(),
+    (0, class_validator_1.IsString)({ each: true }),
+    __metadata("design:type", Array)
+], UpdateActivityDto.prototype, "responsibleUserIds", void 0);
 //# sourceMappingURL=update-activity.dto.js.map

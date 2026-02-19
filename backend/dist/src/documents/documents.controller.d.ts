@@ -130,4 +130,5 @@ export declare class DocumentsController {
     getById(id: string, user: RbacUser): Promise<any>;
     update(id: string, dto: UpdateDocumentDto, user: RbacUser): Promise<any>;
     download(id: string, user: RbacUser, res: Response): Promise<void>;
+    private assertDocumentsAccess;
 }

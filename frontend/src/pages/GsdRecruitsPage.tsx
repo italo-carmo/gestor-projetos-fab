@@ -14,8 +14,9 @@ import {
 } from '@mui/material';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useDashboardRecruits, useLocalities, useMe, useUpdateLocality, useUpdateLocalityRecruits } from '../api/hooks';
+import { useDashboardRecruits, useMe, useUpdateLocalityRecruits } from '../api/hooks';
 import { can } from '../app/rbac';
+import { canEditRecruitsCount } from '../app/roleAccess';
 import { useToast } from '../app/toast';
 import { parseApiError } from '../app/apiErrors';
 import { EmptyState } from '../components/states/EmptyState';
@@ -24,15 +25,8 @@ import { SkeletonState } from '../components/states/SkeletonState';
 
 export function GsdRecruitsPage() {
   const { data: me, isLoading: meLoading } = useMe();
-  const canViewLocalities = can(me, 'localities', 'view');
-  const canUpdateLocality = can(me, 'localities', 'update');
-  const canUpdateOwnRecruits = can(me, 'dashboard', 'view') && Boolean(me?.localityId);
-  const canEditRecruits = canUpdateLocality || canUpdateOwnRecruits;
-
-  const localitiesQuery = useLocalities(canViewLocalities);
-  const recruitsQuery = useDashboardRecruits(!canViewLocalities && can(me, 'dashboard', 'view'));
-
-  const updateLocality = useUpdateLocality();
+  const canViewRecruits = can(me, 'dashboard', 'view');
+  const recruitsQuery = useDashboardRecruits(canViewRecruits);
   const updateLocalityRecruits = useUpdateLocalityRecruits();
   const toast = useToast();
 
@@ -40,21 +34,18 @@ export function GsdRecruitsPage() {
   const [selected, setSelected] = useState<any | null>(null);
   const [formRecruitsCount, setFormRecruitsCount] = useState<string>('');
 
-  const query = canViewLocalities ? localitiesQuery : recruitsQuery;
+  if (meLoading || recruitsQuery.isLoading) return <SkeletonState />;
+  if (recruitsQuery.isError) return <ErrorState error={recruitsQuery.error} onRetry={() => recruitsQuery.refetch()} />;
 
-  if (meLoading || query.isLoading) return <SkeletonState />;
-  if (query.isError) return <ErrorState error={query.error} onRetry={() => query.refetch()} />;
-
-  const items = canViewLocalities
-    ? (localitiesQuery.data?.items ?? [])
-    : (recruitsQuery.data?.currentPerLocality ?? []).map((loc: any) => ({
-        id: loc.localityId,
-        name: loc.localityName,
-        code: loc.code,
-        recruitsFemaleCountCurrent: loc.recruitsFemaleCountCurrent,
-      }));
+  const items = (recruitsQuery.data?.currentPerLocality ?? []).map((loc: any) => ({
+    id: loc.localityId,
+    name: loc.localityName,
+    code: loc.code,
+    recruitsFemaleCountCurrent: loc.recruitsFemaleCountCurrent,
+  }));
 
   const openEdit = (loc: any) => {
+    if (!canEditRecruitsCount(me, loc.id)) return;
     setSelected(loc);
     setFormRecruitsCount(String(loc.recruitsFemaleCountCurrent ?? ''));
     setDrawerOpen(true);
@@ -70,17 +61,10 @@ export function GsdRecruitsPage() {
     }
 
     try {
-      if (canUpdateLocality) {
-        await updateLocality.mutateAsync({
-          id: selected.id,
-          payload: { recruitsFemaleCountCurrent: value },
-        });
-      } else {
-        await updateLocalityRecruits.mutateAsync({
-          id: selected.id,
-          recruitsFemaleCountCurrent: value,
-        });
-      }
+      await updateLocalityRecruits.mutateAsync({
+        id: selected.id,
+        recruitsFemaleCountCurrent: value,
+      });
       toast.push({ message: 'Número de recrutas atualizado com histórico.', severity: 'success' });
       setDrawerOpen(false);
     } catch (error) {
@@ -128,7 +112,12 @@ export function GsdRecruitsPage() {
                     </TableCell>
                     <TableCell>{loc.recruitsFemaleCountCurrent ?? 0}</TableCell>
                     <TableCell align="right">
-                      <Button size="small" variant="outlined" onClick={() => openEdit(loc)} disabled={!canEditRecruits}>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => openEdit(loc)}
+                        disabled={!canEditRecruitsCount(me, loc.id)}
+                      >
                         Editar quantidade
                       </Button>
                       <Button size="small" component={Link} to="/recruits-history" sx={{ ml: 0.5 }}>
@@ -175,7 +164,11 @@ export function GsdRecruitsPage() {
             <Button
               variant="contained"
               onClick={handleSave}
-              disabled={!canEditRecruits || updateLocality.isPending || updateLocalityRecruits.isPending}
+              disabled={
+                !selected ||
+                !canEditRecruitsCount(me, selected.id) ||
+                updateLocalityRecruits.isPending
+              }
             >
               Salvar
             </Button>

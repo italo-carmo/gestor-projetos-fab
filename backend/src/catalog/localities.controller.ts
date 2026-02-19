@@ -4,6 +4,7 @@ import { CurrentUser } from '../common/current-user.decorator';
 import { throwError } from '../common/http-error';
 import { RequirePermission } from '../rbac/require-permission.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
+import { canEditRecruitsByRole, isNationalCommissionMember, ROLE_TI, hasRole } from '../rbac/role-access';
 import type { RbacUser } from '../rbac/rbac.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { sanitizeText } from '../common/sanitize';
@@ -19,7 +20,8 @@ export class LocalitiesController {
   @Get()
   @RequirePermission('localities', 'view')
   async list(@CurrentUser() user: RbacUser) {
-    const where = user?.localityId ? { id: user.localityId } : undefined;
+    const canViewAll = isNationalCommissionMember(user) || hasRole(user, ROLE_TI);
+    const where = !canViewAll && user?.localityId ? { id: user.localityId } : undefined;
     const items = await this.prisma.locality.findMany({ where, orderBy: { name: 'asc' } });
     return { items };
   }
@@ -45,6 +47,7 @@ export class LocalitiesController {
   @RequirePermission('localities', 'update')
   async update(@Param('id') id: string, @Body() dto: UpdateLocalityDto, @CurrentUser() user: RbacUser) {
     this.assertLocalityAccess(id, user);
+    this.assertRecruitsMutationAccess(id, user, dto.recruitsFemaleCountCurrent);
 
     const updated = await this.prisma.locality.update({
       where: { id },
@@ -87,8 +90,7 @@ export class LocalitiesController {
     @Body() dto: UpdateLocalityRecruitsDto,
     @CurrentUser() user: RbacUser,
   ) {
-    if (!user?.localityId) throwError('RBAC_FORBIDDEN');
-    this.assertLocalityAccess(id, user);
+    this.assertRecruitsMutationAccess(id, user, dto.recruitsFemaleCountCurrent);
 
     const updated = await this.prisma.locality.update({
       where: { id },
@@ -125,8 +127,21 @@ export class LocalitiesController {
   }
 
   private assertLocalityAccess(localityId: string, user?: RbacUser) {
+    const bypassLocalityConstraint = isNationalCommissionMember(user) || hasRole(user, ROLE_TI);
+    if (bypassLocalityConstraint) return;
     if (!user?.localityId) return;
     if (user.localityId !== localityId) {
+      throwError('RBAC_FORBIDDEN');
+    }
+  }
+
+  private assertRecruitsMutationAccess(
+    localityId: string,
+    user: RbacUser | undefined,
+    recruitsFemaleCountCurrent: number | null | undefined,
+  ) {
+    if (recruitsFemaleCountCurrent === undefined || recruitsFemaleCountCurrent === null) return;
+    if (!canEditRecruitsByRole(user, localityId)) {
       throwError('RBAC_FORBIDDEN');
     }
   }

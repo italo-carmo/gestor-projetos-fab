@@ -39,6 +39,16 @@ import { EntityDocumentLinksManager } from '../documents/EntityDocumentLinksMana
 import { TaskStatus, TASK_STATUS_LABELS } from '../../constants/enums';
 import { formatDate } from '../../app/date';
 
+function resolveTaskTitle(task: any) {
+  const raw =
+    task?.taskTemplate?.title ??
+    task?.title ??
+    task?.taskTitle ??
+    '';
+  const normalized = String(raw).trim();
+  return normalized || 'Tarefa sem título';
+}
+
 export type TaskDetailsDrawerProps = {
   task: any | null;
   open: boolean;
@@ -220,7 +230,7 @@ export function TaskDetailsDrawer({ task, open, onClose, user, localities = [], 
         {task ? (
           <>
             <Stack spacing={1}>
-              <Typography variant="h5">{task.taskTemplate?.title ?? 'Tarefa'}</Typography>
+              <Typography variant="h5">{resolveTaskTitle(task)}</Typography>
               <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
                 <StatusChip status={task.status} isLate={task.isLate} blocked={task.blockedByIds?.length > 0} />
                 <DueBadge dueDate={task.dueDate} status={task.status} />

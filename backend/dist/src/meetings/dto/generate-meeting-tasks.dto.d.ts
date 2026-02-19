@@ -7,6 +7,7 @@ export declare class GenerateMeetingTasksDto {
     reportRequired?: boolean;
     priority?: string;
     assigneeId?: string | null;
+    assigneeIds?: string[];
     localities: {
         localityId: string;
         dueDate: string;

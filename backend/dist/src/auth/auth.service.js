@@ -171,8 +171,13 @@ let AuthService = class AuthService {
             id: access.id,
             email: access.email,
             name: access.name,
+            localityId: access.localityId ?? null,
             executive_hide_pii: access.executiveHidePii,
             elo_role_id: access.eloRoleId ?? null,
+            roles: access.roles.map((role) => ({
+                id: role.id,
+                name: role.name,
+            })),
             permissions: access.permissions,
             scopes: [],
             flags: {

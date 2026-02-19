@@ -24,6 +24,7 @@ const current_user_decorator_1 = require("../common/current-user.decorator");
 const http_error_1 = require("../common/http-error");
 const require_permission_decorator_1 = require("../rbac/require-permission.decorator");
 const rbac_guard_1 = require("../rbac/rbac.guard");
+const role_access_1 = require("../rbac/role-access");
 const documents_service_1 = require("./documents.service");
 const create_document_subcategory_dto_1 = require("./dto/create-document-subcategory.dto");
 const update_document_subcategory_dto_1 = require("./dto/update-document-subcategory.dto");
@@ -40,48 +41,63 @@ let DocumentsController = class DocumentsController {
         this.documents = documents;
     }
     list(q, category, subcategoryId, localityId, page, pageSize, user) {
+        this.assertDocumentsAccess(user);
         return this.documents.list({ q, category, subcategoryId, localityId, page, pageSize }, user);
     }
     listSubcategories(category, user) {
+        this.assertDocumentsAccess(user);
         return this.documents.listSubcategories({ category }, user);
     }
     createSubcategory(dto, user) {
+        this.assertDocumentsAccess(user);
         return this.documents.createSubcategory(dto, user);
     }
     updateSubcategory(id, dto, user) {
+        this.assertDocumentsAccess(user);
         return this.documents.updateSubcategory(id, dto, user);
     }
     deleteSubcategory(id, user) {
+        this.assertDocumentsAccess(user);
         return this.documents.deleteSubcategory(id, user);
     }
     coverage(user) {
+        this.assertDocumentsAccess(user);
         return this.documents.coverage(user);
     }
     listLinks(documentId, entityType, entityId, pageSize, user) {
+        this.assertDocumentsAccess(user);
         return this.documents.listLinks({ documentId, entityType, entityId, pageSize }, user);
     }
     createLink(dto, user) {
+        this.assertDocumentsAccess(user);
         return this.documents.createLink(dto, user);
     }
     updateLink(linkId, dto, user) {
+        this.assertDocumentsAccess(user);
         return this.documents.updateLink(linkId, dto, user);
     }
     deleteLink(linkId, user) {
+        this.assertDocumentsAccess(user);
         return this.documents.deleteLink(linkId, user);
     }
     linkCandidates(entityType, q, pageSize, user) {
+        this.assertDocumentsAccess(user);
         return this.documents.listLinkCandidates({ entityType, q, pageSize }, user);
     }
     getContent(id, user) {
+        this.assertDocumentsAccess(user);
         return this.documents.getContent(id, user);
     }
     getById(id, user) {
+        this.assertDocumentsAccess(user);
         return this.documents.getById(id, user);
     }
     update(id, dto, user) {
+        this.assertDocumentsAccess(user);
         return this.documents.update(id, dto, user);
     }
     async download(id, user, res) {
+        this.assertDocumentsAccess(user);
         const document = await this.documents.getById(id, user);
         const fileName = document.storageKey ?? node_path_1.default.basename(document.fileUrl);
         const filePath = node_path_1.default.join(documentsDir, fileName);
@@ -89,6 +105,11 @@ let DocumentsController = class DocumentsController {
             (0, http_error_1.throwError)('NOT_FOUND');
         }
         return res.download(filePath, document.fileName);
+    }
+    assertDocumentsAccess(user) {
+        if (!(0, role_access_1.hasRole)(user, role_access_1.ROLE_COORDENACAO_CIPAVD)) {
+            (0, http_error_1.throwError)('RBAC_FORBIDDEN');
+        }
     }
 };
 exports.DocumentsController = DocumentsController;

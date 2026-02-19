@@ -73,7 +73,7 @@ let TaskInstancesController = class TaskInstancesController {
         return this.tasks.updateTaskEloRole(id, dto.eloRoleId ?? null, user);
     }
     batchAssign(body, user) {
-        return this.tasks.batchAssign(body.ids ?? [], body.assignedToId ?? null, user);
+        return this.tasks.batchAssign(body.ids ?? [], body.assignedToId ?? null, body.assigneeIds ?? [], user);
     }
     batchStatus(body, user) {
         return this.tasks.batchStatus(body.ids ?? [], body.status, user);

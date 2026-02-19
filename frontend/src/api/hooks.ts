@@ -910,6 +910,65 @@ export function useOrgChart(filters: Record<string, any>) {
   });
 }
 
+export function useOrgChartCandidates(filters: Record<string, any>, enabled = true) {
+  return useQuery({
+    queryKey: ['orgChart', 'candidates', filters],
+    queryFn: async () => (await api.get('/org-chart/candidates', { params: filters })).data,
+    enabled,
+    staleTime: 10_000,
+  });
+}
+
+export function useCreateOrgChartAssignment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      localityId: string;
+      eloRoleId: string;
+      userId: string;
+      rank?: string | null;
+      phone?: string | null;
+      om?: string | null;
+    }) => (await api.post('/org-chart/assignments', payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['orgChart'] });
+      qc.invalidateQueries({ queryKey: ['elos'] });
+    },
+  });
+}
+
+export function useUpdateOrgChartAssignment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      payload: {
+        localityId?: string;
+        eloRoleId?: string;
+        userId?: string;
+        rank?: string | null;
+        phone?: string | null;
+        om?: string | null;
+      };
+    }) => (await api.put(`/org-chart/assignments/${args.id}`, args.payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['orgChart'] });
+      qc.invalidateQueries({ queryKey: ['elos'] });
+    },
+  });
+}
+
+export function useDeleteOrgChartAssignment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await api.delete(`/org-chart/assignments/${id}`)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['orgChart'] });
+      qc.invalidateQueries({ queryKey: ['elos'] });
+    },
+  });
+}
+
 /** Audit logs */
 export function useAuditLogs(filters: Record<string, any>) {
   return useQuery({

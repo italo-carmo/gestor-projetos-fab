@@ -15,6 +15,7 @@ class UpdateEloDto {
     localityId;
     eloRoleId;
     name;
+    userId;
     rank;
     phone;
     email;
@@ -36,6 +37,11 @@ __decorate([
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], UpdateEloDto.prototype, "name", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], UpdateEloDto.prototype, "userId", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),

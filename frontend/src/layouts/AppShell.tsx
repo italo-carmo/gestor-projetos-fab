@@ -46,6 +46,13 @@ import InsightsRoundedIcon from '@mui/icons-material/InsightsRounded';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { useDebounce } from '../app/useDebounce';
 import { can } from '../app/rbac';
+import {
+  hasAnyRole,
+  hasRole,
+  isNationalCommissionMember,
+  ROLE_COMANDANTE_COMGEP,
+  ROLE_COORDENACAO_CIPAVD,
+} from '../app/roleAccess';
 import { useMe, useSearch } from '../api/hooks';
 import { MEETING_STATUS_LABELS, NOTICE_PRIORITY_LABELS } from '../constants/enums';
 
@@ -101,6 +108,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   };
 
   const visibleNavItems = navItems.filter((item) => {
+    const isCoordCipavd = hasRole(me, ROLE_COORDENACAO_CIPAVD);
+    const isNationalCommission = isNationalCommissionMember(me);
+    const isBiRole = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP]);
+
+    if (item.to === '/dashboard/national') {
+      return isNationalCommission && can(me, 'dashboard', 'view');
+    }
     if (item.to === '/admin/rbac') {
       return can(me, 'admin_rbac', 'export') || can(me, 'roles', 'view');
     }
@@ -108,7 +122,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       return can(me, 'dashboard', 'view') && (me?.executive_hide_pii || can(me, 'roles', 'view'));
     }
     if (item.to === '/dashboard/bi') {
-      return can(me, 'dashboard', 'view');
+      return isBiRole && can(me, 'dashboard', 'view');
     }
     if (item.to === '/audit') {
       return can(me, 'audit_logs', 'view');
@@ -129,10 +143,13 @@ export function AppShell({ children }: { children: ReactNode }) {
       return can(me, 'task_templates', 'view');
     }
     if (item.to === '/documents') {
-      return can(me, 'search', 'view');
+      return isCoordCipavd && can(me, 'search', 'view');
     }
     if (item.to === '/activities') {
       return can(me, 'task_instances', 'view');
+    }
+    if (item.to === '/meetings') {
+      return isNationalCommission && can(me, 'meetings', 'view');
     }
     if (item.to === '/gsd-recruits') {
       return can(me, 'localities', 'view') || (can(me, 'dashboard', 'view') && Boolean(me?.localityId));
@@ -211,6 +228,15 @@ export function AppShell({ children }: { children: ReactNode }) {
     ),
     [isMobile, location.pathname, sidebarCollapsed, visibleNavItems],
   );
+
+  const canSeeDocuments = hasRole(me, ROLE_COORDENACAO_CIPAVD);
+  const canSeeMeetings = isNationalCommissionMember(me);
+  const totalSearchResults =
+    (searchQuery.data?.tasks?.length ?? 0) +
+    (searchQuery.data?.notices?.length ?? 0) +
+    (canSeeMeetings ? (searchQuery.data?.meetings?.length ?? 0) : 0) +
+    (searchQuery.data?.localities?.length ?? 0) +
+    (canSeeDocuments ? (searchQuery.data?.documents?.length ?? 0) : 0);
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh' }}>
@@ -309,7 +335,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                         />
                       </ListItemButton>
                     ))}
-                    {(searchQuery.data?.meetings ?? []).map((meeting: any) => (
+                    {canSeeMeetings && (searchQuery.data?.meetings ?? []).map((meeting: any) => (
                       <ListItemButton key={meeting.id} component={Link} to="/meetings" onClick={() => setAnchorEl(null)}>
                         <ListItemText
                           primary={
@@ -329,7 +355,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                         <ListItemText primary={loc.name} secondary={loc.code} />
                       </ListItemButton>
                     ))}
-                    {(searchQuery.data?.documents ?? []).map((doc: any) => (
+                    {canSeeDocuments && (searchQuery.data?.documents ?? []).map((doc: any) => (
                       <ListItemButton
                         key={doc.id}
                         component={Link}
@@ -342,12 +368,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                         />
                       </ListItemButton>
                     ))}
-                    {(searchQuery.data?.tasks?.length ?? 0) +
-                      (searchQuery.data?.notices?.length ?? 0) +
-                      (searchQuery.data?.meetings?.length ?? 0) +
-                      (searchQuery.data?.localities?.length ?? 0) +
-                      (searchQuery.data?.documents?.length ?? 0) ===
-                      0 && (
+                    {totalSearchResults === 0 && (
                       <Typography variant="body2" color="text.secondary" sx={{ px: 1.3, py: 1 }}>
                         Nenhum resultado.
                       </Typography>

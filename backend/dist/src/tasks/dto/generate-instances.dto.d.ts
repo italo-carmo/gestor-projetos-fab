@@ -7,4 +7,5 @@ export declare class GenerateInstancesDto {
     priority?: string;
     meetingId?: string | null;
     assignedToId?: string | null;
+    assigneeIds?: string[];
 }

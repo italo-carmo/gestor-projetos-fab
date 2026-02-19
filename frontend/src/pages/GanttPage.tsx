@@ -1,7 +1,7 @@
 import { Box, Button, ButtonGroup, Card, CardContent, Chip, MenuItem, TextField, Typography } from '@mui/material';
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useDashboardNational, useGantt, usePhases, useTaskTemplates, useMe } from '../api/hooks';
+import { useLocalities, useGantt, usePhases, useTaskTemplates, useMe } from '../api/hooks';
 import { SkeletonState } from '../components/states/SkeletonState';
 import { ErrorState } from '../components/states/ErrorState';
 import { EmptyState } from '../components/states/EmptyState';
@@ -33,15 +33,15 @@ export function GanttPage() {
   );
 
   const ganttQuery = useGantt(filters);
-  const dashboardQuery = useDashboardNational({});
+  const localitiesQuery = useLocalities();
   const phasesQuery = usePhases();
   const templatesQuery = useTaskTemplates();
 
   const templateMap = new Map<string, any>(((templatesQuery.data?.items ?? []) as any[]).map((t: any) => [t.id, t]));
 
-  const localities = ((dashboardQuery.data?.items ?? []) as any[]).map((loc: any) => ({
-    id: loc.localityId,
-    name: loc.localityName,
+  const localities = ((localitiesQuery.data?.items ?? []) as any[]).map((loc: any) => ({
+    id: loc.id,
+    name: loc.name ?? loc.code ?? loc.id,
   }));
   const localityNameMap = new Map(localities.map((l: any) => [l.id, l.name]));
 
@@ -51,13 +51,53 @@ export function GanttPage() {
   }));
   const phaseMap = new Map(phases.map((phase) => [phase.id, phase.name]));
 
+  const resolveTaskTitle = (task: any) => {
+    const raw = task?.taskTemplate?.title ?? task?.title ?? task?.taskTitle ?? '';
+    const normalized = String(raw).trim();
+    return normalized || 'Tarefa sem título';
+  };
+
+  const resolveTaskPhaseName = (task: any, template: any) => {
+    const direct = String(task?.phaseName ?? '').trim();
+    if (direct) return direct;
+
+    const fromTaskTemplate = String(
+      task?.taskTemplate?.phase?.displayName ?? task?.taskTemplate?.phase?.name ?? '',
+    ).trim();
+    if (fromTaskTemplate) return fromTaskTemplate;
+
+    const fromTemplate = String(
+      template?.phase?.displayName ?? template?.phase?.name ?? '',
+    ).trim();
+    if (fromTemplate) return fromTemplate;
+
+    const fromMap = template?.phaseId ? phaseMap.get(template.phaseId) : undefined;
+    if (fromMap && String(fromMap).trim()) return String(fromMap).trim();
+
+    return 'Sem fase';
+  };
+
+  const resolveTaskLocalityName = (task: any) => {
+    const direct = String(task?.localityName ?? task?.locality?.name ?? '').trim();
+    if (direct) return direct;
+
+    const mapped = localityNameMap.get(task.localityId);
+    if (mapped && String(mapped).trim()) return String(mapped).trim();
+
+    const code = String(task?.localityCode ?? task?.locality?.code ?? '').trim();
+    if (code) return code;
+
+    return '—';
+  };
+
   let items = (ganttQuery.data?.items ?? []).map((task: any) => {
-    const template = templateMap.get(task.taskTemplateId);
+    const template = task.taskTemplate ?? templateMap.get(task.taskTemplateId) ?? null;
     return {
       ...task,
       taskTemplate: template,
-      phaseName: template ? phaseMap.get(template.phaseId) : undefined,
-      localityName: localityNameMap.get(task.localityId) ?? '—',
+      taskTitle: resolveTaskTitle(task),
+      phaseName: resolveTaskPhaseName(task, template),
+      localityName: resolveTaskLocalityName(task),
     };
   });
   if (phaseId) {

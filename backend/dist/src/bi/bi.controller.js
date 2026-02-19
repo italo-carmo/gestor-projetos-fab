@@ -23,13 +23,15 @@ const http_error_1 = require("../common/http-error");
 const multer_exception_filter_1 = require("../reports/multer-exception.filter");
 const require_permission_decorator_1 = require("../rbac/require-permission.decorator");
 const rbac_guard_1 = require("../rbac/rbac.guard");
+const role_access_1 = require("../rbac/role-access");
 const bi_service_1 = require("./bi.service");
 let BiController = class BiController {
     bi;
     constructor(bi) {
         this.bi = bi;
     }
-    dashboard(from, to, om, posto, postoGraduacao, autodeclara, suffered, violenceType, combineMode) {
+    dashboard(from, to, om, posto, postoGraduacao, autodeclara, suffered, violenceType, combineMode, user) {
+        this.assertBiAccess(user);
         return this.bi.dashboard({
             from,
             to,
@@ -42,7 +44,8 @@ let BiController = class BiController {
             combineMode,
         });
     }
-    listResponses(from, to, om, posto, postoGraduacao, autodeclara, suffered, violenceType, q, combineMode, page, pageSize) {
+    listResponses(from, to, om, posto, postoGraduacao, autodeclara, suffered, violenceType, q, combineMode, page, pageSize, user) {
+        this.assertBiAccess(user);
         return this.bi.listResponses({
             from,
             to,
@@ -58,10 +61,12 @@ let BiController = class BiController {
             pageSize,
         });
     }
-    listImports(page, pageSize) {
+    listImports(page, pageSize, user) {
+        this.assertBiAccess(user);
         return this.bi.listImports({ page, pageSize });
     }
     importSurvey(file, req, user) {
+        this.assertBiAccess(user);
         if (!file) {
             if (req.fileValidationError === 'BI_FILE_TYPE_INVALID') {
                 (0, http_error_1.throwError)('BI_FILE_TYPE_INVALID');
@@ -70,8 +75,14 @@ let BiController = class BiController {
         }
         return this.bi.importSurvey(file, user);
     }
-    deleteResponses(body) {
+    deleteResponses(body, user) {
+        this.assertBiAccess(user);
         return this.bi.deleteResponses(body);
+    }
+    assertBiAccess(user) {
+        if (!(0, role_access_1.isNationalCommissionMember)(user)) {
+            (0, http_error_1.throwError)('RBAC_FORBIDDEN');
+        }
     }
 };
 exports.BiController = BiController;
@@ -87,8 +98,9 @@ __decorate([
     __param(6, (0, common_1.Query)('suffered')),
     __param(7, (0, common_1.Query)('violenceType')),
     __param(8, (0, common_1.Query)('combineMode')),
+    __param(9, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, Object, Object, Object, Object, Object, Object, Object, Object]),
+    __metadata("design:paramtypes", [Object, Object, Object, Object, Object, Object, Object, Object, Object, Object]),
     __metadata("design:returntype", void 0)
 ], BiController.prototype, "dashboard", null);
 __decorate([
@@ -106,8 +118,9 @@ __decorate([
     __param(9, (0, common_1.Query)('combineMode')),
     __param(10, (0, common_1.Query)('page')),
     __param(11, (0, common_1.Query)('pageSize')),
+    __param(12, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, Object, Object, Object, Object, Object, Object, Object, Object, Object, Object, Object]),
+    __metadata("design:paramtypes", [Object, Object, Object, Object, Object, Object, Object, Object, Object, Object, Object, Object, Object]),
     __metadata("design:returntype", void 0)
 ], BiController.prototype, "listResponses", null);
 __decorate([
@@ -115,8 +128,9 @@ __decorate([
     (0, require_permission_decorator_1.RequirePermission)('dashboard', 'view'),
     __param(0, (0, common_1.Query)('page')),
     __param(1, (0, common_1.Query)('pageSize')),
+    __param(2, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:paramtypes", [Object, Object, Object]),
     __metadata("design:returntype", void 0)
 ], BiController.prototype, "listImports", null);
 __decorate([
@@ -151,8 +165,9 @@ __decorate([
     (0, common_1.Post)('surveys/responses/delete'),
     (0, require_permission_decorator_1.RequirePermission)('dashboard', 'view'),
     __param(0, (0, common_1.Body)()),
+    __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
+    __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", void 0)
 ], BiController.prototype, "deleteResponses", null);
 exports.BiController = BiController = __decorate([

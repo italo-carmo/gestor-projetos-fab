@@ -193,4 +193,5 @@ export declare class MeetingsController {
             assignedEloId: string | null;
         }[];
     }>;
+    private assertMeetingsAccess;
 }

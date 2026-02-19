@@ -1,6 +1,11 @@
-import { IsIn, IsOptional, IsString } from 'class-validator';
+import { IsArray, IsIn, IsOptional, IsString } from 'class-validator';
 
 export class TaskAssignDto {
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  assigneeIds?: string[];
+
   @IsOptional()
   @IsString()
   assignedToId?: string | null;

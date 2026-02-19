@@ -58,4 +58,7 @@ export declare class ReportsService {
         taskInstanceId: string;
         approved: boolean;
     }>;
+    private isTaskResponsible;
+    private assertTaskOperateAccess;
+    private assertTaskViewAccess;
 }

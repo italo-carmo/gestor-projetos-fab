@@ -108,8 +108,11 @@ export class TaskInstancesController {
 
   @Put('batch/assign')
   @RequirePermission('task_instances', 'assign')
-  batchAssign(@Body() body: { ids: string[]; assignedToId: string | null }, @CurrentUser() user: RbacUser) {
-    return this.tasks.batchAssign(body.ids ?? [], body.assignedToId ?? null, user);
+  batchAssign(
+    @Body() body: { ids: string[]; assignedToId: string | null; assigneeIds?: string[] },
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.tasks.batchAssign(body.ids ?? [], body.assignedToId ?? null, body.assigneeIds ?? [], user);
   }
 
   @Put('batch/status')

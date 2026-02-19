@@ -15,6 +15,10 @@ export class UpdateEloDto {
 
   @IsOptional()
   @IsString()
+  userId?: string;
+
+  @IsOptional()
+  @IsString()
   rank?: string | null;
 
   @IsOptional()
@@ -29,4 +33,3 @@ export class UpdateEloDto {
   @IsString()
   om?: string | null;
 }
-

@@ -64,4 +64,5 @@ export declare class LocalitiesController {
         ok: boolean;
     }>;
     private assertLocalityAccess;
+    private assertRecruitsMutationAccess;
 }

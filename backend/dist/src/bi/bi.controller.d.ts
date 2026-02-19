@@ -4,7 +4,7 @@ import { BiService } from './bi.service';
 export declare class BiController {
     private readonly bi;
     constructor(bi: BiService);
-    dashboard(from: string | undefined, to: string | undefined, om: string | undefined, posto: string | undefined, postoGraduacao: string | undefined, autodeclara: string | undefined, suffered: string | undefined, violenceType: string | undefined, combineMode: string | undefined): Promise<{
+    dashboard(from: string | undefined, to: string | undefined, om: string | undefined, posto: string | undefined, postoGraduacao: string | undefined, autodeclara: string | undefined, suffered: string | undefined, violenceType: string | undefined, combineMode: string | undefined, user: RbacUser): Promise<{
         kpis: {
             totalResponses: number;
             totalRowsInDb: number;
@@ -106,7 +106,7 @@ export declare class BiController {
             importedById: string | null;
         }) | null;
     }>;
-    listResponses(from: string | undefined, to: string | undefined, om: string | undefined, posto: string | undefined, postoGraduacao: string | undefined, autodeclara: string | undefined, suffered: string | undefined, violenceType: string | undefined, q: string | undefined, combineMode: string | undefined, page: string | undefined, pageSize: string | undefined): Promise<{
+    listResponses(from: string | undefined, to: string | undefined, om: string | undefined, posto: string | undefined, postoGraduacao: string | undefined, autodeclara: string | undefined, suffered: string | undefined, violenceType: string | undefined, q: string | undefined, combineMode: string | undefined, page: string | undefined, pageSize: string | undefined, user: RbacUser): Promise<{
         items: {
             id: string;
             createdAt: Date;
@@ -129,7 +129,7 @@ export declare class BiController {
         pageSize: number;
         total: number;
     }>;
-    listImports(page: string | undefined, pageSize: string | undefined): Promise<{
+    listImports(page: string | undefined, pageSize: string | undefined, user: RbacUser): Promise<{
         items: ({
             importedBy: {
                 id: string;
@@ -196,8 +196,9 @@ export declare class BiController {
         violenceType?: string;
         q?: string;
         combineMode?: string;
-    }): Promise<{
+    }, user: RbacUser): Promise<{
         mode: string;
         deletedCount: number;
     }>;
+    private assertBiAccess;
 }

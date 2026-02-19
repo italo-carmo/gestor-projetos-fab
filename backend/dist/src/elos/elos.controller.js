@@ -21,6 +21,8 @@ const rbac_guard_1 = require("../rbac/rbac.guard");
 const elos_service_1 = require("./elos.service");
 const create_elo_dto_1 = require("./dto/create-elo.dto");
 const update_elo_dto_1 = require("./dto/update-elo.dto");
+const create_org_chart_assignment_dto_1 = require("./dto/create-org-chart-assignment.dto");
+const update_org_chart_assignment_dto_1 = require("./dto/update-org-chart-assignment.dto");
 let ElosController = class ElosController {
     elos;
     constructor(elos) {
@@ -93,6 +95,18 @@ let OrgChartController = class OrgChartController {
     orgChart(localityId, roleType, user) {
         return this.elos.orgChart({ localityId, roleType }, user);
     }
+    candidates(localityId, eloRoleId, q, user) {
+        return this.elos.listOrgChartCandidates({ localityId, eloRoleId, q }, user);
+    }
+    createAssignment(dto, user) {
+        return this.elos.createOrgChartAssignment(dto, user);
+    }
+    updateAssignment(id, dto, user) {
+        return this.elos.updateOrgChartAssignment(id, dto, user);
+    }
+    removeAssignment(id, user) {
+        return this.elos.removeOrgChartAssignment(id, user);
+    }
 };
 exports.OrgChartController = OrgChartController;
 __decorate([
@@ -105,6 +119,45 @@ __decorate([
     __metadata("design:paramtypes", [Object, Object, Object]),
     __metadata("design:returntype", void 0)
 ], OrgChartController.prototype, "orgChart", null);
+__decorate([
+    (0, common_1.Get)('candidates'),
+    (0, require_permission_decorator_1.RequirePermission)('org_chart', 'view'),
+    __param(0, (0, common_1.Query)('localityId')),
+    __param(1, (0, common_1.Query)('eloRoleId')),
+    __param(2, (0, common_1.Query)('q')),
+    __param(3, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object, Object, Object]),
+    __metadata("design:returntype", void 0)
+], OrgChartController.prototype, "candidates", null);
+__decorate([
+    (0, common_1.Post)('assignments'),
+    (0, require_permission_decorator_1.RequirePermission)('org_chart', 'view'),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [create_org_chart_assignment_dto_1.CreateOrgChartAssignmentDto, Object]),
+    __metadata("design:returntype", void 0)
+], OrgChartController.prototype, "createAssignment", null);
+__decorate([
+    (0, common_1.Put)('assignments/:id'),
+    (0, require_permission_decorator_1.RequirePermission)('org_chart', 'view'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)()),
+    __param(2, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, update_org_chart_assignment_dto_1.UpdateOrgChartAssignmentDto, Object]),
+    __metadata("design:returntype", void 0)
+], OrgChartController.prototype, "updateAssignment", null);
+__decorate([
+    (0, common_1.Delete)('assignments/:id'),
+    (0, require_permission_decorator_1.RequirePermission)('org_chart', 'view'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", void 0)
+], OrgChartController.prototype, "removeAssignment", null);
 exports.OrgChartController = OrgChartController = __decorate([
     (0, common_1.Controller)('org-chart'),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, rbac_guard_1.RbacGuard),

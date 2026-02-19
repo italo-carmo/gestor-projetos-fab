@@ -31,9 +31,13 @@ model User {
   moduleAccessOverrides UserModuleAccessOverride[]
   refreshTokens    RefreshToken[]
   assignedTasks    TaskInstance[] @relation("TaskAssignee")
+  taskResponsibilities TaskResponsible[] @relation("TaskResponsibleUser")
+  taskResponsibilityAssignments TaskResponsible[] @relation("TaskResponsibleAssigner")
   taskComments     TaskComment[]  @relation("TaskCommentAuthor")
   taskCommentReads TaskCommentRead[]
   createdActivities Activity[]    @relation("ActivityCreator")
+  activityResponsibilities ActivityResponsible[] @relation("ActivityResponsibleUser")
+  activityResponsibilityAssignments ActivityResponsible[] @relation("ActivityResponsibleAssigner")
   activityComments ActivityComment[] @relation("ActivityCommentAuthor")
   activityCommentReads ActivityCommentRead[]
   signedActivityReports ActivityReport[] @relation("ActivityReportSigner")
@@ -163,6 +167,7 @@ model Activity {
   report        ActivityReport?
   documents     DocumentAsset[]
   visitScheduleItems ActivityVisitScheduleItem[]
+  responsibles  ActivityResponsible[]
   comments      ActivityComment[]
   commentReads  ActivityCommentRead[]
 
@@ -309,6 +314,7 @@ model TaskInstance {
   assignedTo      User?         @relation("TaskAssignee", fields: [assignedToId], references: [id])
   assignedElo     Elo?          @relation("TaskAssigneeElo", fields: [assignedEloId], references: [id])
   reports         Report[]
+  responsibles    TaskResponsible[]
   comments        TaskComment[]
   commentReads    TaskCommentRead[]
 
@@ -317,6 +323,38 @@ model TaskInstance {
   @@index([meetingId])
   @@index([eloRoleId])
   @@index([assignedEloId])
+}
+
+model TaskResponsible {
+  id             String       @id @default(cuid())
+  taskInstanceId String
+  userId         String
+  assignedById   String?
+  createdAt      DateTime     @default(now())
+
+  taskInstance   TaskInstance @relation(fields: [taskInstanceId], references: [id], onDelete: Cascade)
+  user           User         @relation("TaskResponsibleUser", fields: [userId], references: [id], onDelete: Cascade)
+  assignedBy     User?        @relation("TaskResponsibleAssigner", fields: [assignedById], references: [id], onDelete: SetNull)
+
+  @@unique([taskInstanceId, userId])
+  @@index([taskInstanceId, createdAt])
+  @@index([userId])
+}
+
+model ActivityResponsible {
+  id           String   @id @default(cuid())
+  activityId   String
+  userId       String
+  assignedById String?
+  createdAt    DateTime @default(now())
+
+  activity     Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  user         User     @relation("ActivityResponsibleUser", fields: [userId], references: [id], onDelete: Cascade)
+  assignedBy   User?    @relation("ActivityResponsibleAssigner", fields: [assignedById], references: [id], onDelete: SetNull)
+
+  @@unique([activityId, userId])
+  @@index([activityId, createdAt])
+  @@index([userId])
 }
 
 model Posto {

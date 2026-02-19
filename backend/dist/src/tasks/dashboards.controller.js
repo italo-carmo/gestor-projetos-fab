@@ -16,8 +16,10 @@ exports.DashboardsController = void 0;
 const common_1 = require("@nestjs/common");
 const jwt_auth_guard_1 = require("../auth/jwt-auth.guard");
 const current_user_decorator_1 = require("../common/current-user.decorator");
+const http_error_1 = require("../common/http-error");
 const require_permission_decorator_1 = require("../rbac/require-permission.decorator");
 const rbac_guard_1 = require("../rbac/rbac.guard");
+const role_access_1 = require("../rbac/role-access");
 const tasks_service_1 = require("./tasks.service");
 let DashboardsController = class DashboardsController {
     tasks;
@@ -28,6 +30,9 @@ let DashboardsController = class DashboardsController {
         return this.tasks.getLocalityProgress(id, user);
     }
     national(user) {
+        if (!(0, role_access_1.isNationalCommissionMember)(user)) {
+            (0, http_error_1.throwError)('RBAC_FORBIDDEN');
+        }
         return this.tasks.getDashboardNational(user);
     }
     recruits(user) {

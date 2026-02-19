@@ -19,4 +19,9 @@ export class GenerateInstancesDto {
   @IsOptional()
   @IsString()
   assignedToId?: string | null;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  assigneeIds?: string[];
 }

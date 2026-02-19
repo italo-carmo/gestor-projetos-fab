@@ -25,6 +25,19 @@ import { TaskTemplatesPage } from './pages/TaskTemplatesPage';
 import { DocumentsPage } from './pages/DocumentsPage';
 import { BiSurveyDashboardPage } from './pages/BiSurveyDashboardPage';
 import { RequireAuth } from './app/RequireAuth';
+import { RequireRoleAccess } from './app/RequireRoleAccess';
+import {
+  hasRole,
+  isNationalCommissionMember,
+  resolveHomePath,
+  ROLE_COORDENACAO_CIPAVD,
+} from './app/roleAccess';
+import { useMe } from './api/hooks';
+
+function HomeRedirect() {
+  const { data } = useMe();
+  return <Navigate to={resolveHomePath(data)} replace />;
+}
 
 function App() {
   return (
@@ -36,22 +49,50 @@ function App() {
           <RequireAuth>
             <AppShell>
               <Routes>
-                <Route path="/" element={<Navigate to="/dashboard/national" replace />} />
-                <Route path="/dashboard/national" element={<DashboardNationalPage />} />
+                <Route path="/" element={<HomeRedirect />} />
+                <Route
+                  path="/dashboard/national"
+                  element={
+                    <RequireRoleAccess allow={(user) => isNationalCommissionMember(user)}>
+                      <DashboardNationalPage />
+                    </RequireRoleAccess>
+                  }
+                />
                 <Route path="/dashboard/executive" element={<DashboardExecutivePage />} />
-                <Route path="/dashboard/bi" element={<BiSurveyDashboardPage />} />
+                <Route
+                  path="/dashboard/bi"
+                  element={
+                    <RequireRoleAccess allow={(user) => isNationalCommissionMember(user)}>
+                      <BiSurveyDashboardPage />
+                    </RequireRoleAccess>
+                  }
+                />
                 <Route path="/dashboard/locality/:id" element={<DashboardLocalityPage />} />
                 <Route path="/tasks" element={<TasksPage />} />
                 <Route path="/activities" element={<ActivitiesPage />} />
                 <Route path="/gantt" element={<GanttPage />} />
                 <Route path="/calendar" element={<CalendarPage />} />
-                <Route path="/meetings" element={<MeetingsPage />} />
+                <Route
+                  path="/meetings"
+                  element={
+                    <RequireRoleAccess allow={(user) => isNationalCommissionMember(user)}>
+                      <MeetingsPage />
+                    </RequireRoleAccess>
+                  }
+                />
                 <Route path="/gsd-recruits" element={<GsdRecruitsPage />} />
                 <Route path="/recruits-history" element={<RecruitsHistoryPage />} />
                 <Route path="/notices" element={<NoticesPage />} />
                 <Route path="/checklists" element={<ChecklistsPage />} />
                 <Route path="/templates" element={<TaskTemplatesPage />} />
-                <Route path="/documents" element={<DocumentsPage />} />
+                <Route
+                  path="/documents"
+                  element={
+                    <RequireRoleAccess allow={(user) => hasRole(user, ROLE_COORDENACAO_CIPAVD)}>
+                      <DocumentsPage />
+                    </RequireRoleAccess>
+                  }
+                />
                 <Route path="/elos" element={<ElosPage />} />
                 <Route path="/org-chart" element={<OrgChartPage />} />
                 <Route path="/audit" element={<AuditPage />} />

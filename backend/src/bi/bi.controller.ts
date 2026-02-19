@@ -20,6 +20,9 @@ import { throwError } from '../common/http-error';
 import { MulterExceptionFilter } from '../reports/multer-exception.filter';
 import { RequirePermission } from '../rbac/require-permission.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
+import {
+  isNationalCommissionMember,
+} from '../rbac/role-access';
 import type { RbacUser } from '../rbac/rbac.types';
 import { BiService } from './bi.service';
 
@@ -40,7 +43,9 @@ export class BiController {
     @Query('suffered') suffered: string | undefined,
     @Query('violenceType') violenceType: string | undefined,
     @Query('combineMode') combineMode: string | undefined,
+    @CurrentUser() user: RbacUser,
   ) {
+    this.assertBiAccess(user);
     return this.bi.dashboard({
       from,
       to,
@@ -69,7 +74,9 @@ export class BiController {
     @Query('combineMode') combineMode: string | undefined,
     @Query('page') page: string | undefined,
     @Query('pageSize') pageSize: string | undefined,
+    @CurrentUser() user: RbacUser,
   ) {
+    this.assertBiAccess(user);
     return this.bi.listResponses({
       from,
       to,
@@ -91,7 +98,9 @@ export class BiController {
   listImports(
     @Query('page') page: string | undefined,
     @Query('pageSize') pageSize: string | undefined,
+    @CurrentUser() user: RbacUser,
   ) {
+    this.assertBiAccess(user);
     return this.bi.listImports({ page, pageSize });
   }
 
@@ -127,6 +136,7 @@ export class BiController {
     @Req() req: Request & { fileValidationError?: string },
     @CurrentUser() user: RbacUser,
   ) {
+    this.assertBiAccess(user);
     if (!file) {
       if (req.fileValidationError === 'BI_FILE_TYPE_INVALID') {
         throwError('BI_FILE_TYPE_INVALID');
@@ -155,7 +165,15 @@ export class BiController {
       q?: string;
       combineMode?: string;
     },
+    @CurrentUser() user: RbacUser,
   ) {
+    this.assertBiAccess(user);
     return this.bi.deleteResponses(body);
+  }
+
+  private assertBiAccess(user: RbacUser) {
+    if (!isNationalCommissionMember(user)) {
+      throwError('RBAC_FORBIDDEN');
+    }
   }
 }

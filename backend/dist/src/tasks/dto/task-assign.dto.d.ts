@@ -1,4 +1,5 @@
 export declare class TaskAssignDto {
+    assigneeIds?: string[];
     assignedToId?: string | null;
     localityId?: string | null;
     assigneeId?: string | null;

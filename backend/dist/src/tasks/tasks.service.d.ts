@@ -80,6 +80,7 @@ export declare class TasksService {
         priority?: TaskPriority | string;
         meetingId?: string | null;
         assignedToId?: string | null;
+        assigneeIds?: string[];
     }, user?: RbacUser): Promise<{
         items: {
             id: string;
@@ -171,12 +172,13 @@ export declare class TasksService {
         }[];
     }>;
     assignTask(id: string, payload: {
+        assigneeIds?: string[];
         assignedToId?: string | null;
         localityId?: string | null;
         assigneeType?: 'USER' | 'ELO' | 'LOCALITY_COMMAND' | 'LOCALITY_COMMANDER' | null;
         assigneeId?: string | null;
     }, user?: RbacUser): Promise<any>;
-    batchAssign(ids: string[], assignedToId: string | null, user?: RbacUser): Promise<{
+    batchAssign(ids: string[], assignedToId: string | null, assigneeIds?: string[], user?: RbacUser): Promise<{
         updated: number;
     }>;
     batchStatus(ids: string[], status: TaskStatus, user?: RbacUser): Promise<{
@@ -518,6 +520,13 @@ export declare class TasksService {
     private mapPhase;
     private getScopeConstraints;
     private assertConstraints;
+    private buildTaskAccessWhere;
+    private isTaskResponsibleUser;
+    private assertTaskViewAccess;
+    private assertTaskOperateAccess;
+    private assertCanAssignInLocality;
+    private assertCanAssignInTaskScope;
+    private resolveTaskResponsibleIds;
     updateTaskMeeting(id: string, meetingId: string | null, user?: RbacUser): Promise<any>;
     updateTaskEloRole(id: string, eloRoleId: string | null, user?: RbacUser): Promise<any>;
     private hasBlockingDependencies;

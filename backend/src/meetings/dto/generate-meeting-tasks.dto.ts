@@ -33,7 +33,11 @@ export class GenerateMeetingTasksDto {
   @IsString()
   assigneeId?: string | null;
 
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  assigneeIds?: string[];
+
   @IsArray()
   localities: { localityId: string; dueDate: string }[];
 }
-

@@ -7,6 +7,8 @@ import type { RbacUser } from '../rbac/rbac.types';
 import { ElosService } from './elos.service';
 import { CreateEloDto } from './dto/create-elo.dto';
 import { UpdateEloDto } from './dto/update-elo.dto';
+import { CreateOrgChartAssignmentDto } from './dto/create-org-chart-assignment.dto';
+import { UpdateOrgChartAssignmentDto } from './dto/update-org-chart-assignment.dto';
 
 @Controller('elos')
 @UseGuards(JwtAuthGuard, RbacGuard)
@@ -57,5 +59,41 @@ export class OrgChartController {
     @CurrentUser() user: RbacUser,
   ) {
     return this.elos.orgChart({ localityId, roleType }, user);
+  }
+
+  @Get('candidates')
+  @RequirePermission('org_chart', 'view')
+  candidates(
+    @Query('localityId') localityId: string | undefined,
+    @Query('eloRoleId') eloRoleId: string | undefined,
+    @Query('q') q: string | undefined,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.elos.listOrgChartCandidates({ localityId, eloRoleId, q }, user);
+  }
+
+  @Post('assignments')
+  @RequirePermission('org_chart', 'view')
+  createAssignment(
+    @Body() dto: CreateOrgChartAssignmentDto,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.elos.createOrgChartAssignment(dto, user);
+  }
+
+  @Put('assignments/:id')
+  @RequirePermission('org_chart', 'view')
+  updateAssignment(
+    @Param('id') id: string,
+    @Body() dto: UpdateOrgChartAssignmentDto,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.elos.updateOrgChartAssignment(id, dto, user);
+  }
+
+  @Delete('assignments/:id')
+  @RequirePermission('org_chart', 'view')
+  removeAssignment(@Param('id') id: string, @CurrentUser() user: RbacUser) {
+    return this.elos.removeOrgChartAssignment(id, user);
   }
 }

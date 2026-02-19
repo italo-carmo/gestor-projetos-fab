@@ -70,6 +70,7 @@ export declare class TaskInstancesController {
     batchAssign(body: {
         ids: string[];
         assignedToId: string | null;
+        assigneeIds?: string[];
     }, user: RbacUser): Promise<{
         updated: number;
     }>;

@@ -29,8 +29,13 @@ export declare class AuthController {
         id: string;
         email: string;
         name: string;
+        localityId: string | null;
         executive_hide_pii: boolean;
         elo_role_id: string | null;
+        roles: {
+            id: string;
+            name: string;
+        }[];
         permissions: {
             resource: string;
             action: string;

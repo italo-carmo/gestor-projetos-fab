@@ -3,6 +3,8 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../app/toast';
 import { parseApiError } from '../app/apiErrors';
+import { resolveHomePath } from '../app/roleAccess';
+import { api } from '../api/client';
 import { useLogin } from '../api/hooks';
 
 export function LoginPage() {
@@ -18,8 +20,9 @@ export function LoginPage() {
       const data = await login.mutateAsync({ email: email.trim().toLowerCase(), password });
       if (data?.accessToken) localStorage.setItem('accessToken', data.accessToken);
       if (data?.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
+      const me = (await api.get('/auth/me')).data;
       toast.push({ message: 'Login realizado', severity: 'success' });
-      navigate('/dashboard/national');
+      navigate(resolveHomePath(me));
     } catch (error) {
       const payload = parseApiError(error);
       toast.push({ message: payload.message ?? 'Credenciais inválidas', severity: 'error' });

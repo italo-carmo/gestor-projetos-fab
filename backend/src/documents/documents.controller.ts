@@ -18,6 +18,7 @@ import { CurrentUser } from '../common/current-user.decorator';
 import { throwError } from '../common/http-error';
 import { RequirePermission } from '../rbac/require-permission.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
+import { hasRole, ROLE_COORDENACAO_CIPAVD } from '../rbac/role-access';
 import type { RbacUser } from '../rbac/rbac.types';
 import { DocumentsService } from './documents.service';
 import { CreateDocumentSubcategoryDto } from './dto/create-document-subcategory.dto';
@@ -47,6 +48,7 @@ export class DocumentsController {
     @Query('pageSize') pageSize: string | undefined,
     @CurrentUser() user: RbacUser,
   ) {
+    this.assertDocumentsAccess(user);
     return this.documents.list(
       { q, category, subcategoryId, localityId, page, pageSize },
       user,
@@ -59,6 +61,7 @@ export class DocumentsController {
     @Query('category') category: string | undefined,
     @CurrentUser() user: RbacUser,
   ) {
+    this.assertDocumentsAccess(user);
     return this.documents.listSubcategories({ category }, user);
   }
 
@@ -68,6 +71,7 @@ export class DocumentsController {
     @Body() dto: CreateDocumentSubcategoryDto,
     @CurrentUser() user: RbacUser,
   ) {
+    this.assertDocumentsAccess(user);
     return this.documents.createSubcategory(dto, user);
   }
 
@@ -78,18 +82,21 @@ export class DocumentsController {
     @Body() dto: UpdateDocumentSubcategoryDto,
     @CurrentUser() user: RbacUser,
   ) {
+    this.assertDocumentsAccess(user);
     return this.documents.updateSubcategory(id, dto, user);
   }
 
   @Delete('subcategories/:id')
   @RequirePermission('search', 'view')
   deleteSubcategory(@Param('id') id: string, @CurrentUser() user: RbacUser) {
+    this.assertDocumentsAccess(user);
     return this.documents.deleteSubcategory(id, user);
   }
 
   @Get('coverage')
   @RequirePermission('search', 'view')
   coverage(@CurrentUser() user: RbacUser) {
+    this.assertDocumentsAccess(user);
     return this.documents.coverage(user);
   }
 
@@ -102,6 +109,7 @@ export class DocumentsController {
     @Query('pageSize') pageSize: string | undefined,
     @CurrentUser() user: RbacUser,
   ) {
+    this.assertDocumentsAccess(user);
     return this.documents.listLinks(
       { documentId, entityType, entityId, pageSize },
       user,
@@ -111,6 +119,7 @@ export class DocumentsController {
   @Post('links')
   @RequirePermission('search', 'view')
   createLink(@Body() dto: CreateDocumentLinkDto, @CurrentUser() user: RbacUser) {
+    this.assertDocumentsAccess(user);
     return this.documents.createLink(dto, user);
   }
 
@@ -121,12 +130,14 @@ export class DocumentsController {
     @Body() dto: UpdateDocumentLinkDto,
     @CurrentUser() user: RbacUser,
   ) {
+    this.assertDocumentsAccess(user);
     return this.documents.updateLink(linkId, dto, user);
   }
 
   @Delete('links/:linkId')
   @RequirePermission('search', 'view')
   deleteLink(@Param('linkId') linkId: string, @CurrentUser() user: RbacUser) {
+    this.assertDocumentsAccess(user);
     return this.documents.deleteLink(linkId, user);
   }
 
@@ -138,18 +149,21 @@ export class DocumentsController {
     @Query('pageSize') pageSize: string | undefined,
     @CurrentUser() user: RbacUser,
   ) {
+    this.assertDocumentsAccess(user);
     return this.documents.listLinkCandidates({ entityType, q, pageSize }, user);
   }
 
   @Get(':id/content')
   @RequirePermission('search', 'view')
   getContent(@Param('id') id: string, @CurrentUser() user: RbacUser) {
+    this.assertDocumentsAccess(user);
     return this.documents.getContent(id, user);
   }
 
   @Get(':id')
   @RequirePermission('search', 'view')
   getById(@Param('id') id: string, @CurrentUser() user: RbacUser) {
+    this.assertDocumentsAccess(user);
     return this.documents.getById(id, user);
   }
 
@@ -160,6 +174,7 @@ export class DocumentsController {
     @Body() dto: UpdateDocumentDto,
     @CurrentUser() user: RbacUser,
   ) {
+    this.assertDocumentsAccess(user);
     return this.documents.update(id, dto, user);
   }
 
@@ -170,6 +185,7 @@ export class DocumentsController {
     @CurrentUser() user: RbacUser,
     @Res() res: Response,
   ) {
+    this.assertDocumentsAccess(user);
     const document = await this.documents.getById(id, user);
 
     const fileName = document.storageKey ?? path.basename(document.fileUrl);
@@ -179,5 +195,11 @@ export class DocumentsController {
     }
 
     return res.download(filePath, document.fileName);
+  }
+
+  private assertDocumentsAccess(user: RbacUser) {
+    if (!hasRole(user, ROLE_COORDENACAO_CIPAVD)) {
+      throwError('RBAC_FORBIDDEN');
+    }
   }
 }

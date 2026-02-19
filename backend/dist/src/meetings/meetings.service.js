@@ -205,6 +205,7 @@ let MeetingsService = class MeetingsService {
             priority: payload.priority,
             meetingId,
             assignedToId: payload.assigneeId ?? null,
+            assigneeIds: payload.assigneeIds ?? [],
         }, user);
         await this.audit.log({
             userId: user?.id,

@@ -26,6 +26,7 @@ export declare class ActivitiesService {
         localityId?: string | null;
         eventDate?: string | null;
         reportRequired?: boolean;
+        responsibleUserIds?: string[];
     }, user?: RbacUser): Promise<any>;
     update(id: string, payload: {
         title?: string;
@@ -33,6 +34,7 @@ export declare class ActivitiesService {
         localityId?: string | null;
         eventDate?: string | null;
         reportRequired?: boolean;
+        responsibleUserIds?: string[];
     }, user?: RbacUser): Promise<any>;
     updateStatus(id: string, status: ActivityStatus, user?: RbacUser): Promise<any>;
     listComments(id: string, user?: RbacUser): Promise<{
@@ -201,6 +203,12 @@ export declare class ActivitiesService {
     private sanitizeRequiredText;
     private sanitizeCommentText;
     private assertLocalityConstraint;
+    private buildActivityAccessWhere;
+    private isActivityResponsible;
+    private hasActivityGroupMatch;
+    private assertActivityViewAccess;
+    private assertActivityOperateAccess;
+    private resolveActivityResponsibleIds;
     private invalidateSignature;
     private formatDate;
     private formatDateTime;

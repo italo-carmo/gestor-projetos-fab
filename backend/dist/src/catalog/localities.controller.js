@@ -19,6 +19,7 @@ const current_user_decorator_1 = require("../common/current-user.decorator");
 const http_error_1 = require("../common/http-error");
 const require_permission_decorator_1 = require("../rbac/require-permission.decorator");
 const rbac_guard_1 = require("../rbac/rbac.guard");
+const role_access_1 = require("../rbac/role-access");
 const prisma_service_1 = require("../prisma/prisma.service");
 const sanitize_1 = require("../common/sanitize");
 const create_locality_dto_1 = require("./dto/create-locality.dto");
@@ -30,7 +31,8 @@ let LocalitiesController = class LocalitiesController {
         this.prisma = prisma;
     }
     async list(user) {
-        const where = user?.localityId ? { id: user.localityId } : undefined;
+        const canViewAll = (0, role_access_1.isNationalCommissionMember)(user) || (0, role_access_1.hasRole)(user, role_access_1.ROLE_TI);
+        const where = !canViewAll && user?.localityId ? { id: user.localityId } : undefined;
         const items = await this.prisma.locality.findMany({ where, orderBy: { name: 'asc' } });
         return { items };
     }
@@ -50,6 +52,7 @@ let LocalitiesController = class LocalitiesController {
     }
     async update(id, dto, user) {
         this.assertLocalityAccess(id, user);
+        this.assertRecruitsMutationAccess(id, user, dto.recruitsFemaleCountCurrent);
         const updated = await this.prisma.locality.update({
             where: { id },
             data: {
@@ -84,9 +87,7 @@ let LocalitiesController = class LocalitiesController {
         return updated;
     }
     async updateRecruits(id, dto, user) {
-        if (!user?.localityId)
-            (0, http_error_1.throwError)('RBAC_FORBIDDEN');
-        this.assertLocalityAccess(id, user);
+        this.assertRecruitsMutationAccess(id, user, dto.recruitsFemaleCountCurrent);
         const updated = await this.prisma.locality.update({
             where: { id },
             data: {
@@ -116,9 +117,19 @@ let LocalitiesController = class LocalitiesController {
         return { ok: true };
     }
     assertLocalityAccess(localityId, user) {
+        const bypassLocalityConstraint = (0, role_access_1.isNationalCommissionMember)(user) || (0, role_access_1.hasRole)(user, role_access_1.ROLE_TI);
+        if (bypassLocalityConstraint)
+            return;
         if (!user?.localityId)
             return;
         if (user.localityId !== localityId) {
+            (0, http_error_1.throwError)('RBAC_FORBIDDEN');
+        }
+    }
+    assertRecruitsMutationAccess(localityId, user, recruitsFemaleCountCurrent) {
+        if (recruitsFemaleCountCurrent === undefined || recruitsFemaleCountCurrent === null)
+            return;
+        if (!(0, role_access_1.canEditRecruitsByRole)(user, localityId)) {
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         }
     }

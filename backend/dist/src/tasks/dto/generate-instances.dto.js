@@ -17,6 +17,7 @@ class GenerateInstancesDto {
     priority;
     meetingId;
     assignedToId;
+    assigneeIds;
 }
 exports.GenerateInstancesDto = GenerateInstancesDto;
 __decorate([
@@ -43,4 +44,10 @@ __decorate([
     (0, class_validator_1.IsString)(),
     __metadata("design:type", Object)
 ], GenerateInstancesDto.prototype, "assignedToId", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsArray)(),
+    (0, class_validator_1.IsString)({ each: true }),
+    __metadata("design:type", Array)
+], GenerateInstancesDto.prototype, "assigneeIds", void 0);
 //# sourceMappingURL=generate-instances.dto.js.map

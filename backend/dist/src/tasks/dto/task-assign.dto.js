@@ -12,12 +12,19 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.TaskAssignDto = void 0;
 const class_validator_1 = require("class-validator");
 class TaskAssignDto {
+    assigneeIds;
     assignedToId;
     localityId;
     assigneeId;
     assigneeType;
 }
 exports.TaskAssignDto = TaskAssignDto;
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsArray)(),
+    (0, class_validator_1.IsString)({ each: true }),
+    __metadata("design:type", Array)
+], TaskAssignDto.prototype, "assigneeIds", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),

@@ -36,7 +36,8 @@ function getTaskStyles(status: string, isLate?: boolean) {
 export type GanttItem = {
   id: string;
   localityId?: string;
-  taskTemplate?: { title?: string; phaseId?: string } | null;
+  taskTitle?: string;
+  taskTemplate?: { title?: string; phaseId?: string; phase?: { name?: string; displayName?: string } | null } | null;
   phaseName?: string;
   localityName?: string;
   dueDate: string | Date;
@@ -200,8 +201,10 @@ export function GanttView({
     return items.map((item) => {
       const due = typeof item.dueDate === 'string' ? parseISO(item.dueDate) : new Date(item.dueDate);
       const start = addDays(due, -DEFAULT_DURATION_DAYS);
-      const title = item.taskTemplate?.title ?? 'Tarefa';
-      const phase = item.phaseName ?? 'Fase';
+      const title = String(item.taskTitle ?? item.taskTemplate?.title ?? '').trim() || 'Tarefa sem título';
+      const phase =
+        String(item.phaseName ?? item.taskTemplate?.phase?.displayName ?? item.taskTemplate?.phase?.name ?? '').trim() ||
+        'Sem fase';
       const locality = item.localityName ?? '—';
       const name = `${phase} | ${title} — ${locality}`;
 
