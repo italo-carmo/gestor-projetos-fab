@@ -42,6 +42,10 @@
       "hint": "Limite de 10 MB."
     }
   },
+  "USER_LOCAL_ROLE_REQUIRES_LOCALITY": {
+    "httpStatus": 400,
+    "message": "Este papel exige localidade obrigatória."
+  },
   "VALIDATION_ERROR": {
     "httpStatus": 400,
     "message": "Dados inválidos."

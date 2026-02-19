@@ -64,6 +64,18 @@ function getUserRoles(user: UserItem) {
     .filter((role): role is { id: string; name: string } => Boolean(role?.id && role?.name));
 }
 
+function normalizeRoleName(roleName: string | null | undefined) {
+  return String(roleName ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+}
+
+function roleRequiresLocality(roleName: string | null | undefined) {
+  return normalizeRoleName(roleName) === 'admin especialidade local';
+}
+
 export function AdminRbacPage() {
   const { data: me } = useMe();
   const toast = useToast();
@@ -123,6 +135,16 @@ export function AdminRbacPage() {
     () => new Map(localities.map((locality) => [locality.id, locality])),
     [localities],
   );
+  const selectedEditRole = useMemo(
+    () => roles.find((role) => role.id === editRoleId) ?? null,
+    [editRoleId, roles],
+  );
+  const selectedLdapRole = useMemo(
+    () => roles.find((role) => role.id === ldapRoleId) ?? null,
+    [ldapRoleId, roles],
+  );
+  const editRoleNeedsLocality = roleRequiresLocality(selectedEditRole?.name);
+  const ldapRoleNeedsLocality = roleRequiresLocality(selectedLdapRole?.name);
   const filteredUsers = useMemo(() => {
     const nameTerm = nameFilter.trim().toLowerCase();
     const cpfTerm = cpfFilter.trim().toLowerCase();
@@ -163,6 +185,13 @@ export function AdminRbacPage() {
     if (!editingUser) return;
     if (!editRoleId) {
       toast.push({ message: 'Selecione um papel para salvar.', severity: 'warning' });
+      return;
+    }
+    if (editRoleNeedsLocality && !editLocalityId) {
+      toast.push({
+        message: 'Para Admin Especialidade Local, a localidade é obrigatória.',
+        severity: 'warning',
+      });
       return;
     }
 
@@ -230,6 +259,13 @@ export function AdminRbacPage() {
     }
     if (!ldapRoleId) {
       toast.push({ message: 'Selecione o papel do usuário.', severity: 'warning' });
+      return;
+    }
+    if (ldapRoleNeedsLocality && !ldapLocalityId) {
+      toast.push({
+        message: 'Para Admin Especialidade Local, a localidade é obrigatória.',
+        severity: 'warning',
+      });
       return;
     }
 
@@ -338,6 +374,12 @@ export function AdminRbacPage() {
                   value={ldapLocalityId}
                   onChange={(event) => setLdapLocalityId(event.target.value)}
                   sx={{ minWidth: 230 }}
+                  error={ldapRoleNeedsLocality && !ldapLocalityId}
+                  helperText={
+                    ldapRoleNeedsLocality && !ldapLocalityId
+                      ? 'Obrigatória para este papel.'
+                      : undefined
+                  }
                 >
                   <MenuItem value="">Sem localidade</MenuItem>
                   {localities.map((locality) => (
@@ -351,7 +393,12 @@ export function AdminRbacPage() {
                   onClick={() => {
                     void handleCreateFromLdap();
                   }}
-                  disabled={upsertLdapUser.isPending || !ldapPreview || !ldapRoleId}
+                  disabled={
+                    upsertLdapUser.isPending ||
+                    !ldapPreview ||
+                    !ldapRoleId ||
+                    (ldapRoleNeedsLocality && !ldapLocalityId)
+                  }
                 >
                   {upsertLdapUser.isPending ? 'Salvando...' : 'Vincular usuário'}
                 </Button>
@@ -560,6 +607,12 @@ export function AdminRbacPage() {
               label="Localidade"
               value={editLocalityId}
               onChange={(event) => setEditLocalityId(event.target.value)}
+              error={editRoleNeedsLocality && !editLocalityId}
+              helperText={
+                editRoleNeedsLocality && !editLocalityId
+                  ? 'Localidade obrigatória para este papel.'
+                  : undefined
+              }
             >
               <MenuItem value="">Sem localidade</MenuItem>
               {localities.map((locality) => (
@@ -577,7 +630,7 @@ export function AdminRbacPage() {
             onClick={() => {
               void handleSaveUser();
             }}
-            disabled={updateUser.isPending}
+            disabled={updateUser.isPending || (editRoleNeedsLocality && !editLocalityId)}
           >
             {updateUser.isPending ? 'Salvando...' : 'Salvar'}
           </Button>

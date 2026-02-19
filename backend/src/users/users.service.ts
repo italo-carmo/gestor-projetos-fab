@@ -2,6 +2,22 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { throwError } from '../common/http-error';
 
+const LOCALITY_REQUIRED_ROLE_NAMES = new Set([
+  'admin especialidade local',
+]);
+
+function normalizeRoleName(roleName: string | null | undefined) {
+  return String(roleName ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+}
+
+function roleRequiresLocality(roleName: string | null | undefined) {
+  return LOCALITY_REQUIRED_ROLE_NAMES.has(normalizeRoleName(roleName));
+}
+
 @Injectable()
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
@@ -87,14 +103,45 @@ export class UsersService {
       roleId?: string | null;
     },
   ) {
+    const existingUser = await this.prisma.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        localityId: true,
+        roles: {
+          select: {
+            role: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!existingUser) {
+      throwError('NOT_FOUND');
+    }
+
+    let targetRoleName: string | null = null;
     if (payload.roleId !== undefined && payload.roleId !== null) {
       const roleExists = await this.prisma.role.findUnique({
         where: { id: payload.roleId },
-        select: { id: true },
+        select: { id: true, name: true },
       });
       if (!roleExists) {
         throwError('NOT_FOUND');
       }
+      targetRoleName = roleExists.name;
+    } else {
+      targetRoleName = existingUser.roles[0]?.role?.name ?? null;
+    }
+
+    const targetLocalityId =
+      payload.localityId !== undefined ? payload.localityId : existingUser.localityId;
+    if (roleRequiresLocality(targetRoleName) && !targetLocalityId) {
+      throwError('USER_LOCAL_ROLE_REQUIRES_LOCALITY');
     }
 
     await this.prisma.$transaction(async (tx) => {

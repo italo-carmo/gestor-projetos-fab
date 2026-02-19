@@ -30,6 +30,14 @@ type UserAccessPayload = Prisma.UserGetPayload<{
   };
 }>;
 
+const LOCALITY_REQUIRED_ROLE_NAMES = new Set([
+  'admin especialidade local',
+]);
+
+function roleRequiresLocality(roleName: string | null | undefined) {
+  return LOCALITY_REQUIRED_ROLE_NAMES.has(normalizeRoleName(roleName));
+}
+
 @Injectable()
 export class RbacService {
   constructor(
@@ -443,6 +451,9 @@ export class RbacService {
     const role = await this.prisma.role.findUnique({ where: { id: payload.roleId } });
     if (!role) {
       throwError('NOT_FOUND');
+    }
+    if (roleRequiresLocality(role.name) && !payload.localityId) {
+      throwError('USER_LOCAL_ROLE_REQUIRES_LOCALITY');
     }
 
     const profile = await this.fabLdap.lookupByUid(uid);
