@@ -17,5 +17,11 @@ export class UpdateUserDto {
   @ValidateIf((_o, v) => v != null)
   @IsString()
   @MinLength(3)
+  specialtyId?: string | null;
+
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsString()
+  @MinLength(3)
   roleId?: string | null;
 }

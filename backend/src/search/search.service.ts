@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { RbacUser } from '../rbac/rbac.types';
 import { sanitizeForExecutive } from '../common/executive';
+import { resolveAccessProfile } from '../rbac/role-access';
 
 @Injectable()
 export class SearchService {
@@ -13,10 +14,18 @@ export class SearchService {
       return { tasks: [], notices: [], meetings: [], localities: [], documents: [] };
     }
 
+    const constraints = this.getScopeConstraints(user);
+
     const taskWhere: any = {
       taskTemplate: { title: { contains: query, mode: 'insensitive' } },
     };
-    if (user?.localityId) taskWhere.localityId = user.localityId;
+    if (constraints.localityId) taskWhere.localityId = constraints.localityId;
+    if (constraints.specialtyId) {
+      taskWhere.taskTemplate = {
+        ...taskWhere.taskTemplate,
+        specialtyId: constraints.specialtyId,
+      };
+    }
 
     const noticeWhere: any = {
       OR: [
@@ -24,15 +33,15 @@ export class SearchService {
         { body: { contains: query, mode: 'insensitive' } },
       ],
     };
-    if (user?.localityId) {
+    if (constraints.localityId) {
       noticeWhere.AND = [
-        { OR: [{ localityId: null }, { localityId: user.localityId }] },
+        { OR: [{ localityId: null }, { localityId: constraints.localityId }] },
       ];
     }
-    if (user?.specialtyId) {
+    if (constraints.specialtyId) {
       noticeWhere.AND = [
         ...(noticeWhere.AND ?? []),
-        { OR: [{ specialtyId: null }, { specialtyId: user.specialtyId }] },
+        { OR: [{ specialtyId: null }, { specialtyId: constraints.specialtyId }] },
       ];
     }
 
@@ -41,8 +50,8 @@ export class SearchService {
         { agenda: { contains: query, mode: 'insensitive' } },
       ],
     };
-    if (user?.localityId) {
-      meetingWhere.AND = [{ OR: [{ localityId: null }, { localityId: user.localityId }] }];
+    if (constraints.localityId) {
+      meetingWhere.AND = [{ OR: [{ localityId: null }, { localityId: constraints.localityId }] }];
     }
 
     const localityWhere: any = {
@@ -51,7 +60,7 @@ export class SearchService {
         { code: { contains: query, mode: 'insensitive' } },
       ],
     };
-    if (user?.localityId) localityWhere.id = user.localityId;
+    if (constraints.localityId) localityWhere.id = constraints.localityId;
 
     const documentWhere: any = {
       OR: [
@@ -59,8 +68,8 @@ export class SearchService {
         { sourcePath: { contains: query, mode: 'insensitive' } },
       ],
     };
-    if (user?.localityId) {
-      documentWhere.AND = [{ OR: [{ localityId: null }, { localityId: user.localityId }] }];
+    if (constraints.localityId) {
+      documentWhere.AND = [{ OR: [{ localityId: null }, { localityId: constraints.localityId }] }];
     }
 
     const [tasks, notices, meetings, localities, documents] = await this.prisma.$transaction([
@@ -126,5 +135,24 @@ export class SearchService {
     };
 
     return user?.executiveHidePii ? sanitizeForExecutive(payload) : payload;
+  }
+
+  private getScopeConstraints(user?: RbacUser) {
+    if (!user) return {};
+    const profile = resolveAccessProfile(user);
+    if (profile.ti || profile.nationalCommission) return {};
+    if (profile.localityAdmin) {
+      return { localityId: profile.localityId ?? undefined, specialtyId: undefined };
+    }
+    if (profile.specialtyAdmin) {
+      return {
+        localityId: profile.localityId ?? undefined,
+        specialtyId: profile.groupSpecialtyId ?? undefined,
+      };
+    }
+    return {
+      localityId: user.localityId ?? undefined,
+      specialtyId: user.specialtyId ?? undefined,
+    };
   }
 }

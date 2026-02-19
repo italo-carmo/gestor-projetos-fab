@@ -6,7 +6,7 @@ import { throwError } from '../common/http-error';
 import { sanitizeText } from '../common/sanitize';
 import { AuditService } from '../audit/audit.service';
 import { parsePagination } from '../common/pagination';
-import { isNationalCommissionMember } from '../rbac/role-access';
+import { hasNationalManagementScope } from '../rbac/role-access';
 
 @Injectable()
 export class ElosService {
@@ -382,7 +382,7 @@ export class ElosService {
 
   private getScopeConstraints(user?: RbacUser) {
     if (!user) return {};
-    if (isNationalCommissionMember(user)) return {};
+    if (hasNationalManagementScope(user)) return {};
     return {
       localityId: user.localityId ?? undefined,
     };
@@ -396,7 +396,7 @@ export class ElosService {
   }
 
   private assertCanManageOrgChart(user?: RbacUser) {
-    if (!isNationalCommissionMember(user)) {
+    if (!hasNationalManagementScope(user)) {
       throwError('RBAC_FORBIDDEN');
     }
   }

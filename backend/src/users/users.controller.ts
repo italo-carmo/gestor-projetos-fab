@@ -23,6 +23,7 @@ export class UsersController {
     return this.users.update(id, {
       eloRoleId: dto.eloRoleId,
       localityId: dto.localityId,
+      specialtyId: dto.specialtyId,
       roleId: dto.roleId,
     });
   }

@@ -46,6 +46,10 @@
     "httpStatus": 400,
     "message": "Este papel exige localidade obrigatória."
   },
+  "USER_SPECIALTY_ROLE_REQUIRES_SPECIALTY": {
+    "httpStatus": 400,
+    "message": "Este papel exige especialidade obrigatória."
+  },
   "VALIDATION_ERROR": {
     "httpStatus": 400,
     "message": "Dados inválidos."

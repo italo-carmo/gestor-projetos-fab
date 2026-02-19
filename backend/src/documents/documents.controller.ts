@@ -18,7 +18,7 @@ import { CurrentUser } from '../common/current-user.decorator';
 import { throwError } from '../common/http-error';
 import { RequirePermission } from '../rbac/require-permission.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
-import { hasRole, ROLE_COORDENACAO_CIPAVD } from '../rbac/role-access';
+import { hasAnyRole, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from '../rbac/role-access';
 import type { RbacUser } from '../rbac/rbac.types';
 import { DocumentsService } from './documents.service';
 import { CreateDocumentSubcategoryDto } from './dto/create-document-subcategory.dto';
@@ -198,7 +198,7 @@ export class DocumentsController {
   }
 
   private assertDocumentsAccess(user: RbacUser) {
-    if (!hasRole(user, ROLE_COORDENACAO_CIPAVD)) {
+    if (!hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_TI])) {
       throwError('RBAC_FORBIDDEN');
     }
   }

@@ -39,6 +39,10 @@ export function isTiUser(user: RbacUser | undefined) {
   return hasRole(user, ROLE_TI);
 }
 
+export function hasNationalManagementScope(user: RbacUser | undefined) {
+  return isTiUser(user) || isNationalCommissionMember(user);
+}
+
 export function isLocalityAdmin(user: RbacUser | undefined) {
   return hasAnyRole(user, [
     ROLE_GSD_LOCALIDADE,
@@ -96,8 +100,7 @@ export function canEditRecruitsByRole(
   targetLocalityId: string,
 ) {
   if (!user) return false;
-  if (hasRole(user, ROLE_TI)) return true;
-  if (isNationalCommissionMember(user)) return true;
+  if (hasRole(user, ROLE_COORDENACAO_CIPAVD)) return true;
   if (hasRole(user, ROLE_GSD_LOCALIDADE) && user.localityId === targetLocalityId) {
     return true;
   }

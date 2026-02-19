@@ -36,19 +36,22 @@ export function isNationalCommissionMember(user: MePayload | undefined) {
   ]);
 }
 
+export function hasNationalManagementScope(user: MePayload | undefined) {
+  return hasRole(user, ROLE_TI) || isNationalCommissionMember(user);
+}
+
 export function canEditRecruitsCount(
   user: (MePayload & { localityId?: string | null }) | undefined,
   targetLocalityId: string,
 ) {
   if (!user) return false;
-  if (hasRole(user, ROLE_TI)) return true;
-  if (isNationalCommissionMember(user)) return true;
+  if (hasRole(user, ROLE_COORDENACAO_CIPAVD)) return true;
   if (hasRole(user, ROLE_GSD_LOCALIDADE) && user.localityId === targetLocalityId) return true;
   return false;
 }
 
 export function resolveHomePath(user: MePayload | undefined) {
-  if (isNationalCommissionMember(user)) return '/dashboard/national';
+  if (hasNationalManagementScope(user)) return '/dashboard/national';
   if (can(user, 'task_instances', 'view')) return '/activities';
   return '/dashboard/executive';
 }

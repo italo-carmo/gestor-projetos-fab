@@ -5,6 +5,7 @@ import { RbacUser } from '../rbac/rbac.types';
 import { throwError } from '../common/http-error';
 import { sanitizeText } from '../common/sanitize';
 import { AuditService } from '../audit/audit.service';
+import { resolveAccessProfile } from '../rbac/role-access';
 
 @Injectable()
 export class ChecklistsService {
@@ -92,9 +93,26 @@ export class ChecklistsService {
           select: { taskTemplateId: true, localityId: true, status: true },
         })
       : [];
+    const selectedEloRoleId = filters.eloRoleId ?? constraints.eloRoleId;
+    const selectedSpecialtyId = filters.specialtyId ?? constraints.specialtyId;
+
     const activities = activityChecklistKeys.size > 0 && localityIds.length > 0
       ? await this.prisma.activity.findMany({
-          where: { localityId: { in: localityIds } },
+          where: {
+            localityId: { in: localityIds },
+            ...(selectedSpecialtyId || selectedEloRoleId
+              ? {
+                  responsibles: {
+                    some: {
+                      user: {
+                        ...(selectedSpecialtyId ? { specialtyId: selectedSpecialtyId } : {}),
+                        ...(selectedEloRoleId ? { eloRoleId: selectedEloRoleId } : {}),
+                      },
+                    },
+                  },
+                }
+              : {}),
+          },
           select: { title: true, localityId: true, status: true },
         })
       : [];
@@ -171,7 +189,7 @@ export class ChecklistsService {
   }
 
   async create(payload: { title: string; phaseId?: string | null; specialtyId?: string | null; eloRoleId?: string | null }, user?: RbacUser) {
-    this.assertConstraints(payload.specialtyId ?? null, user);
+    this.assertConstraints(payload.specialtyId ?? null, payload.eloRoleId ?? null, user);
     const title = sanitizeText(payload.title).trim();
     const existing = await this.prisma.checklist.findFirst({
       where: {
@@ -213,7 +231,7 @@ export class ChecklistsService {
   async addItem(checklistId: string, payload: { title: string; taskTemplateId?: string | null }, user?: RbacUser) {
     const checklist = await this.prisma.checklist.findUnique({ where: { id: checklistId } });
     if (!checklist) throwError('NOT_FOUND');
-    this.assertConstraints(checklist.specialtyId ?? null, user);
+    this.assertConstraints(checklist.specialtyId ?? null, checklist.eloRoleId ?? null, user);
 
     const created = await this.prisma.checklistItem.create({
       data: {
@@ -240,6 +258,24 @@ export class ChecklistsService {
 
   private getScopeConstraints(user?: RbacUser) {
     if (!user) return {};
+    const profile = resolveAccessProfile(user);
+    if (profile.ti || profile.nationalCommission) {
+      return {};
+    }
+    if (profile.localityAdmin) {
+      return {
+        localityId: profile.localityId ?? undefined,
+        specialtyId: undefined,
+        eloRoleId: undefined,
+      };
+    }
+    if (profile.specialtyAdmin) {
+      return {
+        localityId: profile.localityId ?? undefined,
+        specialtyId: profile.groupSpecialtyId ?? undefined,
+        eloRoleId: profile.groupEloRoleId ?? undefined,
+      };
+    }
     return {
       localityId: user.localityId ?? undefined,
       specialtyId: user.specialtyId ?? undefined,
@@ -247,9 +283,16 @@ export class ChecklistsService {
     };
   }
 
-  private assertConstraints(specialtyId: string | null, user?: RbacUser) {
+  private assertConstraints(
+    specialtyId: string | null,
+    eloRoleId: string | null,
+    user?: RbacUser,
+  ) {
     const constraints = this.getScopeConstraints(user);
     if (constraints.specialtyId && constraints.specialtyId !== specialtyId) {
+      throwError('RBAC_FORBIDDEN');
+    }
+    if (constraints.eloRoleId && constraints.eloRoleId !== eloRoleId) {
       throwError('RBAC_FORBIDDEN');
     }
   }
@@ -318,6 +361,18 @@ export class ChecklistsService {
     const activities = await this.prisma.activity.findMany({
       where: {
         localityId: { in: localityIds },
+        ...(selectedSpecialtyId || selectedEloRoleId
+          ? {
+              responsibles: {
+                some: {
+                  user: {
+                    ...(selectedSpecialtyId ? { specialtyId: selectedSpecialtyId } : {}),
+                    ...(selectedEloRoleId ? { eloRoleId: selectedEloRoleId } : {}),
+                  },
+                },
+              },
+            }
+          : {}),
       },
       select: { title: true, localityId: true, status: true },
     });

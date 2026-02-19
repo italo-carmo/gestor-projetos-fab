@@ -27,10 +27,12 @@ import { BiSurveyDashboardPage } from './pages/BiSurveyDashboardPage';
 import { RequireAuth } from './app/RequireAuth';
 import { RequireRoleAccess } from './app/RequireRoleAccess';
 import {
-  hasRole,
-  isNationalCommissionMember,
+  hasAnyRole,
+  hasNationalManagementScope,
+  ROLE_COMANDANTE_COMGEP,
   resolveHomePath,
   ROLE_COORDENACAO_CIPAVD,
+  ROLE_TI,
 } from './app/roleAccess';
 import { useMe } from './api/hooks';
 
@@ -53,7 +55,7 @@ function App() {
                 <Route
                   path="/dashboard/national"
                   element={
-                    <RequireRoleAccess allow={(user) => isNationalCommissionMember(user)}>
+                    <RequireRoleAccess allow={(user) => hasNationalManagementScope(user)}>
                       <DashboardNationalPage />
                     </RequireRoleAccess>
                   }
@@ -62,7 +64,11 @@ function App() {
                 <Route
                   path="/dashboard/bi"
                   element={
-                    <RequireRoleAccess allow={(user) => isNationalCommissionMember(user)}>
+                    <RequireRoleAccess
+                      allow={(user) =>
+                        hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI])
+                      }
+                    >
                       <BiSurveyDashboardPage />
                     </RequireRoleAccess>
                   }
@@ -75,7 +81,7 @@ function App() {
                 <Route
                   path="/meetings"
                   element={
-                    <RequireRoleAccess allow={(user) => isNationalCommissionMember(user)}>
+                    <RequireRoleAccess allow={(user) => hasNationalManagementScope(user)}>
                       <MeetingsPage />
                     </RequireRoleAccess>
                   }
@@ -88,7 +94,7 @@ function App() {
                 <Route
                   path="/documents"
                   element={
-                    <RequireRoleAccess allow={(user) => hasRole(user, ROLE_COORDENACAO_CIPAVD)}>
+                    <RequireRoleAccess allow={(user) => hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_TI])}>
                       <DocumentsPage />
                     </RequireRoleAccess>
                   }

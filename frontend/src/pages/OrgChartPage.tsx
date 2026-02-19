@@ -11,7 +11,7 @@ import {
   useUpdateOrgChartAssignment,
 } from '../api/hooks';
 import { parseApiError } from '../app/apiErrors';
-import { isNationalCommissionMember } from '../app/roleAccess';
+import { hasNationalManagementScope } from '../app/roleAccess';
 import { useToast } from '../app/toast';
 import { EmptyState } from '../components/states/EmptyState';
 import { ErrorState } from '../components/states/ErrorState';
@@ -22,7 +22,7 @@ export function OrgChartPage() {
   const search = params.get('q') ?? '';
   const toast = useToast();
   const { data: me } = useMe();
-  const canManage = isNationalCommissionMember(me);
+  const canManage = hasNationalManagementScope(me);
   const eloRolesQuery = useEloRoles();
   const createAssignment = useCreateOrgChartAssignment();
   const updateAssignment = useUpdateOrgChartAssignment();

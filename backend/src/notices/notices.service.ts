@@ -6,6 +6,7 @@ import { RbacUser } from '../rbac/rbac.types';
 import { throwError } from '../common/http-error';
 import { sanitizeText } from '../common/sanitize';
 import { parsePagination } from '../common/pagination';
+import { resolveAccessProfile } from '../rbac/role-access';
 
 @Injectable()
 export class NoticesService {
@@ -196,6 +197,22 @@ export class NoticesService {
 
   private getScopeConstraints(user?: RbacUser) {
     if (!user) return {};
+    const profile = resolveAccessProfile(user);
+    if (profile.ti || profile.nationalCommission) {
+      return {};
+    }
+    if (profile.localityAdmin) {
+      return {
+        localityId: profile.localityId ?? undefined,
+        specialtyId: undefined,
+      };
+    }
+    if (profile.specialtyAdmin) {
+      return {
+        localityId: profile.localityId ?? undefined,
+        specialtyId: profile.groupSpecialtyId ?? undefined,
+      };
+    }
     return {
       localityId: user.localityId ?? undefined,
       specialtyId: user.specialtyId ?? undefined,
@@ -212,4 +229,3 @@ export class NoticesService {
     }
   }
 }
-

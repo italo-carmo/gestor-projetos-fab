@@ -4,7 +4,7 @@ import { CurrentUser } from '../common/current-user.decorator';
 import { throwError } from '../common/http-error';
 import { RequirePermission } from '../rbac/require-permission.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
-import { isNationalCommissionMember } from '../rbac/role-access';
+import { hasNationalManagementScope } from '../rbac/role-access';
 import type { RbacUser } from '../rbac/rbac.types';
 import { TasksService } from './tasks.service';
 
@@ -22,7 +22,7 @@ export class DashboardsController {
   @Get('dashboard/national')
   @RequirePermission('dashboard', 'view')
   national(@CurrentUser() user: RbacUser) {
-    if (!isNationalCommissionMember(user)) {
+    if (!hasNationalManagementScope(user)) {
       throwError('RBAC_FORBIDDEN');
     }
     return this.tasks.getDashboardNational(user);

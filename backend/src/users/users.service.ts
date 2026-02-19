@@ -4,6 +4,14 @@ import { throwError } from '../common/http-error';
 
 const LOCALITY_REQUIRED_ROLE_NAMES = new Set([
   'admin especialidade local',
+  'gsd localidade',
+  'admin localidade',
+  'administracao local',
+]);
+
+const SPECIALTY_REQUIRED_ROLE_NAMES = new Set([
+  'admin especialidade local',
+  'admin especialidade nacional',
 ]);
 
 function normalizeRoleName(roleName: string | null | undefined) {
@@ -16,6 +24,10 @@ function normalizeRoleName(roleName: string | null | undefined) {
 
 function roleRequiresLocality(roleName: string | null | undefined) {
   return LOCALITY_REQUIRED_ROLE_NAMES.has(normalizeRoleName(roleName));
+}
+
+function roleRequiresSpecialty(roleName: string | null | undefined) {
+  return SPECIALTY_REQUIRED_ROLE_NAMES.has(normalizeRoleName(roleName));
 }
 
 @Injectable()
@@ -100,6 +112,7 @@ export class UsersService {
     payload: {
       eloRoleId?: string | null;
       localityId?: string | null;
+      specialtyId?: string | null;
       roleId?: string | null;
     },
   ) {
@@ -108,6 +121,8 @@ export class UsersService {
       select: {
         id: true,
         localityId: true,
+        specialtyId: true,
+        eloRoleId: true,
         roles: {
           select: {
             role: {
@@ -143,6 +158,13 @@ export class UsersService {
     if (roleRequiresLocality(targetRoleName) && !targetLocalityId) {
       throwError('USER_LOCAL_ROLE_REQUIRES_LOCALITY');
     }
+    const targetSpecialtyId =
+      payload.specialtyId !== undefined ? payload.specialtyId : existingUser.specialtyId;
+    const targetEloRoleId =
+      payload.eloRoleId !== undefined ? payload.eloRoleId : existingUser.eloRoleId;
+    if (roleRequiresSpecialty(targetRoleName) && !targetSpecialtyId && !targetEloRoleId) {
+      throwError('USER_SPECIALTY_ROLE_REQUIRES_SPECIALTY');
+    }
 
     await this.prisma.$transaction(async (tx) => {
       await tx.user.update({
@@ -150,6 +172,8 @@ export class UsersService {
         data: {
           eloRoleId:
             payload.eloRoleId !== undefined ? payload.eloRoleId : undefined,
+          specialtyId:
+            payload.specialtyId !== undefined ? payload.specialtyId : undefined,
           localityId:
             payload.localityId !== undefined ? payload.localityId : undefined,
         },

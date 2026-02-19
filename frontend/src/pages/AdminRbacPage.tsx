@@ -30,6 +30,7 @@ import {
   useMe,
   useRemoveUserRole,
   useRoles,
+  useSpecialties,
   useUpdateUser,
   useUpsertLdapUser,
   useUsers,
@@ -39,6 +40,7 @@ import { useToast } from '../app/toast';
 
 type RoleItem = { id: string; name: string };
 type LocalityItem = { id: string; name: string; code: string };
+type SpecialtyItem = { id: string; name: string };
 type UserRoleItem = { role?: { id: string; name: string } | null };
 type UserItem = {
   id: string;
@@ -46,6 +48,7 @@ type UserItem = {
   email: string;
   ldapUid?: string | null;
   localityId?: string | null;
+  specialtyId?: string | null;
   roles?: UserRoleItem[];
 };
 type LdapLookupResponse = {
@@ -73,7 +76,18 @@ function normalizeRoleName(roleName: string | null | undefined) {
 }
 
 function roleRequiresLocality(roleName: string | null | undefined) {
-  return normalizeRoleName(roleName) === 'admin especialidade local';
+  const normalized = normalizeRoleName(roleName);
+  return (
+    normalized === 'admin especialidade local' ||
+    normalized === 'gsd localidade' ||
+    normalized === 'admin localidade' ||
+    normalized === 'administracao local'
+  );
+}
+
+function roleRequiresSpecialty(roleName: string | null | undefined) {
+  const normalized = normalizeRoleName(roleName);
+  return normalized === 'admin especialidade local' || normalized === 'admin especialidade nacional';
 }
 
 export function AdminRbacPage() {
@@ -86,6 +100,7 @@ export function AdminRbacPage() {
   const rolesQuery = useRoles();
   const usersQuery = useUsers(canViewUsers);
   const localitiesQuery = useLocalities(canViewLocalities);
+  const specialtiesQuery = useSpecialties(can(me, 'specialties', 'view'));
   const updateUser = useUpdateUser();
   const removeUserRole = useRemoveUserRole();
   const ldapLookup = useLookupLdapUser();
@@ -94,6 +109,7 @@ export function AdminRbacPage() {
   const [editingUser, setEditingUser] = useState<UserItem | null>(null);
   const [editRoleId, setEditRoleId] = useState('');
   const [editLocalityId, setEditLocalityId] = useState('');
+  const [editSpecialtyId, setEditSpecialtyId] = useState('');
   const [removeTarget, setRemoveTarget] = useState<{
     userId: string;
     userName: string;
@@ -104,6 +120,7 @@ export function AdminRbacPage() {
   const [ldapUid, setLdapUid] = useState('');
   const [ldapRoleId, setLdapRoleId] = useState('');
   const [ldapLocalityId, setLdapLocalityId] = useState('');
+  const [ldapSpecialtyId, setLdapSpecialtyId] = useState('');
   const [ldapPreview, setLdapPreview] = useState<LdapLookupResponse['user'] | null>(null);
   const [nameFilter, setNameFilter] = useState('');
   const [cpfFilter, setCpfFilter] = useState('');
@@ -135,6 +152,17 @@ export function AdminRbacPage() {
     () => new Map(localities.map((locality) => [locality.id, locality])),
     [localities],
   );
+  const specialties = useMemo(
+    () =>
+      ((specialtiesQuery.data?.items ?? []) as SpecialtyItem[]).sort((a, b) =>
+        a.name.localeCompare(b.name, 'pt-BR'),
+      ),
+    [specialtiesQuery.data?.items],
+  );
+  const specialtyById = useMemo(
+    () => new Map(specialties.map((specialty) => [specialty.id, specialty])),
+    [specialties],
+  );
   const selectedEditRole = useMemo(
     () => roles.find((role) => role.id === editRoleId) ?? null,
     [editRoleId, roles],
@@ -145,6 +173,8 @@ export function AdminRbacPage() {
   );
   const editRoleNeedsLocality = roleRequiresLocality(selectedEditRole?.name);
   const ldapRoleNeedsLocality = roleRequiresLocality(selectedLdapRole?.name);
+  const editRoleNeedsSpecialty = roleRequiresSpecialty(selectedEditRole?.name);
+  const ldapRoleNeedsSpecialty = roleRequiresSpecialty(selectedLdapRole?.name);
   const filteredUsers = useMemo(() => {
     const nameTerm = nameFilter.trim().toLowerCase();
     const cpfTerm = cpfFilter.trim().toLowerCase();
@@ -179,6 +209,7 @@ export function AdminRbacPage() {
     setEditingUser(user);
     setEditRoleId(primaryRole?.id ?? '');
     setEditLocalityId(user.localityId ?? '');
+    setEditSpecialtyId(user.specialtyId ?? '');
   };
 
   const handleSaveUser = async () => {
@@ -189,7 +220,14 @@ export function AdminRbacPage() {
     }
     if (editRoleNeedsLocality && !editLocalityId) {
       toast.push({
-        message: 'Para Admin Especialidade Local, a localidade é obrigatória.',
+        message: 'Este papel exige localidade obrigatória.',
+        severity: 'warning',
+      });
+      return;
+    }
+    if (editRoleNeedsSpecialty && !editSpecialtyId) {
+      toast.push({
+        message: 'Este papel exige especialidade obrigatória.',
         severity: 'warning',
       });
       return;
@@ -200,6 +238,7 @@ export function AdminRbacPage() {
         id: editingUser.id,
         roleId: editRoleId,
         localityId: editLocalityId || null,
+        specialtyId: editSpecialtyId || null,
       });
       toast.push({ message: 'Usuário atualizado com sucesso.', severity: 'success' });
       setEditingUser(null);
@@ -263,7 +302,14 @@ export function AdminRbacPage() {
     }
     if (ldapRoleNeedsLocality && !ldapLocalityId) {
       toast.push({
-        message: 'Para Admin Especialidade Local, a localidade é obrigatória.',
+        message: 'Este papel exige localidade obrigatória.',
+        severity: 'warning',
+      });
+      return;
+    }
+    if (ldapRoleNeedsSpecialty && !ldapSpecialtyId) {
+      toast.push({
+        message: 'Este papel exige especialidade obrigatória.',
         severity: 'warning',
       });
       return;
@@ -274,12 +320,14 @@ export function AdminRbacPage() {
         uid: ldapPreview.uid,
         roleId: ldapRoleId,
         localityId: ldapLocalityId || null,
+        specialtyId: ldapSpecialtyId || null,
         replaceExistingRoles: true,
       });
       toast.push({ message: 'Usuário LDAP vinculado com sucesso.', severity: 'success' });
       setLdapUid('');
       setLdapRoleId('');
       setLdapLocalityId('');
+      setLdapSpecialtyId('');
       setLdapPreview(null);
     } catch (error) {
       toast.push({
@@ -388,6 +436,27 @@ export function AdminRbacPage() {
                     </MenuItem>
                   ))}
                 </TextField>
+                <TextField
+                  select
+                  size="small"
+                  label="Especialidade"
+                  value={ldapSpecialtyId}
+                  onChange={(event) => setLdapSpecialtyId(event.target.value)}
+                  sx={{ minWidth: 230 }}
+                  error={ldapRoleNeedsSpecialty && !ldapSpecialtyId}
+                  helperText={
+                    ldapRoleNeedsSpecialty && !ldapSpecialtyId
+                      ? 'Obrigatória para este papel.'
+                      : undefined
+                  }
+                >
+                  <MenuItem value="">Sem especialidade</MenuItem>
+                  {specialties.map((specialty) => (
+                    <MenuItem key={specialty.id} value={specialty.id}>
+                      {specialty.name}
+                    </MenuItem>
+                  ))}
+                </TextField>
                 <Button
                   variant="contained"
                   onClick={() => {
@@ -397,7 +466,8 @@ export function AdminRbacPage() {
                     upsertLdapUser.isPending ||
                     !ldapPreview ||
                     !ldapRoleId ||
-                    (ldapRoleNeedsLocality && !ldapLocalityId)
+                    (ldapRoleNeedsLocality && !ldapLocalityId) ||
+                    (ldapRoleNeedsSpecialty && !ldapSpecialtyId)
                   }
                 >
                   {upsertLdapUser.isPending ? 'Salvando...' : 'Vincular usuário'}
@@ -490,13 +560,14 @@ export function AdminRbacPage() {
                     <TableCell sx={{ fontWeight: 700 }}>CPF/Email</TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>Papel</TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>Localidade</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Especialidade</TableCell>
                     <TableCell sx={{ fontWeight: 700, width: 110 }}>Ações</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {filteredUsers.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={5}>
+                      <TableCell colSpan={6}>
                         <Typography variant="body2" color="text.secondary">
                           Nenhum usuário encontrado com os filtros selecionados.
                         </Typography>
@@ -509,6 +580,9 @@ export function AdminRbacPage() {
                     const localityName = user.localityId
                       ? (localityById.get(user.localityId)?.name ?? user.localityId)
                       : 'Sem localidade';
+                    const specialtyName = user.specialtyId
+                      ? (specialtyById.get(user.specialtyId)?.name ?? user.specialtyId)
+                      : 'Sem especialidade';
 
                     return (
                       <TableRow key={user.id} hover>
@@ -531,6 +605,7 @@ export function AdminRbacPage() {
                           )}
                         </TableCell>
                         <TableCell>{localityName}</TableCell>
+                        <TableCell>{specialtyName}</TableCell>
                         <TableCell>
                           <Stack direction="row" spacing={0.2}>
                             <IconButton
@@ -621,6 +696,26 @@ export function AdminRbacPage() {
                 </MenuItem>
               ))}
             </TextField>
+            <TextField
+              select
+              size="small"
+              label="Especialidade"
+              value={editSpecialtyId}
+              onChange={(event) => setEditSpecialtyId(event.target.value)}
+              error={editRoleNeedsSpecialty && !editSpecialtyId}
+              helperText={
+                editRoleNeedsSpecialty && !editSpecialtyId
+                  ? 'Especialidade obrigatória para este papel.'
+                  : undefined
+              }
+            >
+              <MenuItem value="">Sem especialidade</MenuItem>
+              {specialties.map((specialty) => (
+                <MenuItem key={specialty.id} value={specialty.id}>
+                  {specialty.name}
+                </MenuItem>
+              ))}
+            </TextField>
           </Stack>
         </DialogContent>
         <DialogActions>
@@ -630,7 +725,11 @@ export function AdminRbacPage() {
             onClick={() => {
               void handleSaveUser();
             }}
-            disabled={updateUser.isPending || (editRoleNeedsLocality && !editLocalityId)}
+            disabled={
+              updateUser.isPending ||
+              (editRoleNeedsLocality && !editLocalityId) ||
+              (editRoleNeedsSpecialty && !editSpecialtyId)
+            }
           >
             {updateUser.isPending ? 'Salvando...' : 'Salvar'}
           </Button>

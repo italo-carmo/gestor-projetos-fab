@@ -93,7 +93,7 @@ export function LoginPage() {
               Entrar
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 2.4 }}>
-              Informe seu CPF e senha LDAP.
+              Informe seu CPF e senha do Portal.
             </Typography>
             <Box component="form" onSubmit={handleSubmit} display="grid" gap={1.5}>
               <TextField

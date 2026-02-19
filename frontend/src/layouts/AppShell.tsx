@@ -49,9 +49,10 @@ import { can } from '../app/rbac';
 import {
   hasAnyRole,
   hasRole,
-  isNationalCommissionMember,
+  hasNationalManagementScope,
   ROLE_COMANDANTE_COMGEP,
   ROLE_COORDENACAO_CIPAVD,
+  ROLE_TI,
 } from '../app/roleAccess';
 import { useMe, useSearch } from '../api/hooks';
 import { MEETING_STATUS_LABELS, NOTICE_PRIORITY_LABELS } from '../constants/enums';
@@ -110,11 +111,11 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const visibleNavItems = navItems.filter((item) => {
     const isCoordCipavd = hasRole(me, ROLE_COORDENACAO_CIPAVD);
-    const isNationalCommission = isNationalCommissionMember(me);
-    const isBiRole = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP]);
+    const isNationalManager = hasNationalManagementScope(me);
+    const isBiRole = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI]);
 
     if (item.to === '/dashboard/national') {
-      return isNationalCommission && can(me, 'dashboard', 'view');
+      return isNationalManager && can(me, 'dashboard', 'view');
     }
     if (item.to === '/admin/rbac') {
       return can(me, 'admin_rbac', 'export') || can(me, 'roles', 'view');
@@ -144,13 +145,13 @@ export function AppShell({ children }: { children: ReactNode }) {
       return can(me, 'task_templates', 'view');
     }
     if (item.to === '/documents') {
-      return isCoordCipavd && can(me, 'search', 'view');
+      return (isCoordCipavd || hasRole(me, ROLE_TI)) && can(me, 'search', 'view');
     }
     if (item.to === '/activities') {
       return can(me, 'task_instances', 'view');
     }
     if (item.to === '/meetings') {
-      return isNationalCommission && can(me, 'meetings', 'view');
+      return isNationalManager && can(me, 'meetings', 'view');
     }
     if (item.to === '/gsd-recruits') {
       return can(me, 'localities', 'view') || (can(me, 'dashboard', 'view') && Boolean(me?.localityId));
@@ -230,8 +231,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     [isMobile, location.pathname, sidebarCollapsed, visibleNavItems],
   );
 
-  const canSeeDocuments = hasRole(me, ROLE_COORDENACAO_CIPAVD);
-  const canSeeMeetings = isNationalCommissionMember(me);
+  const canSeeDocuments = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]);
+  const canSeeMeetings = hasNationalManagementScope(me);
   const totalSearchResults =
     (searchQuery.data?.tasks?.length ?? 0) +
     (searchQuery.data?.notices?.length ?? 0) +

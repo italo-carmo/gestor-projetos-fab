@@ -32,10 +32,22 @@ type UserAccessPayload = Prisma.UserGetPayload<{
 
 const LOCALITY_REQUIRED_ROLE_NAMES = new Set([
   'admin especialidade local',
+  'gsd localidade',
+  'admin localidade',
+  'administracao local',
+]);
+
+const SPECIALTY_REQUIRED_ROLE_NAMES = new Set([
+  'admin especialidade local',
+  'admin especialidade nacional',
 ]);
 
 function roleRequiresLocality(roleName: string | null | undefined) {
   return LOCALITY_REQUIRED_ROLE_NAMES.has(normalizeRoleName(roleName));
+}
+
+function roleRequiresSpecialty(roleName: string | null | undefined) {
+  return SPECIALTY_REQUIRED_ROLE_NAMES.has(normalizeRoleName(roleName));
 }
 
 @Injectable()
@@ -452,10 +464,6 @@ export class RbacService {
     if (!role) {
       throwError('NOT_FOUND');
     }
-    if (roleRequiresLocality(role.name) && !payload.localityId) {
-      throwError('USER_LOCAL_ROLE_REQUIRES_LOCALITY');
-    }
-
     const profile = await this.fabLdap.lookupByUid(uid);
     if (!profile) {
       throwError('VALIDATION_ERROR', { reason: 'LDAP_USER_NOT_FOUND', uid });
@@ -472,8 +480,24 @@ export class RbacService {
         id: true,
         email: true,
         name: true,
+        localityId: true,
+        specialtyId: true,
+        eloRoleId: true,
       },
     });
+
+    const targetLocalityId =
+      payload.localityId !== undefined ? payload.localityId : (existing?.localityId ?? null);
+    if (roleRequiresLocality(role.name) && !targetLocalityId) {
+      throwError('USER_LOCAL_ROLE_REQUIRES_LOCALITY');
+    }
+    const targetSpecialtyId =
+      payload.specialtyId !== undefined ? payload.specialtyId : (existing?.specialtyId ?? null);
+    const targetEloRoleId =
+      payload.eloRoleId !== undefined ? payload.eloRoleId : (existing?.eloRoleId ?? null);
+    if (roleRequiresSpecialty(role.name) && !targetSpecialtyId && !targetEloRoleId) {
+      throwError('USER_SPECIALTY_ROLE_REQUIRES_SPECIALTY');
+    }
 
     const uniqueEmail = await this.resolveUniqueEmail(preferredEmail, uid, existing?.id);
     const user = existing

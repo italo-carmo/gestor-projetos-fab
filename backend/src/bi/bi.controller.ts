@@ -21,7 +21,10 @@ import { MulterExceptionFilter } from '../reports/multer-exception.filter';
 import { RequirePermission } from '../rbac/require-permission.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
 import {
-  isNationalCommissionMember,
+  hasAnyRole,
+  ROLE_COMANDANTE_COMGEP,
+  ROLE_COORDENACAO_CIPAVD,
+  ROLE_TI,
 } from '../rbac/role-access';
 import type { RbacUser } from '../rbac/rbac.types';
 import { BiService } from './bi.service';
@@ -172,7 +175,7 @@ export class BiController {
   }
 
   private assertBiAccess(user: RbacUser) {
-    if (!isNationalCommissionMember(user)) {
+    if (!hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI])) {
       throwError('RBAC_FORBIDDEN');
     }
   }

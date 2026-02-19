@@ -356,6 +356,11 @@
           "scope": "LOCALITY_SPECIALTY"
         },
         {
+          "resource": "gantt",
+          "action": "view",
+          "scope": "LOCALITY_SPECIALTY"
+        },
+        {
           "resource": "calendar",
           "action": "view",
           "scope": "LOCALITY_SPECIALTY"
@@ -404,6 +409,206 @@
           "resource": "org_chart",
           "action": "view",
           "scope": "LOCALITY_SPECIALTY"
+        }
+      ]
+    },
+    {
+      "name": "Admin Especialidade Nacional",
+      "isSystemRole": true,
+      "wildcard": false,
+      "constraintsTemplate": {
+        "specialtyId": "$user.specialtyId"
+      },
+      "permissions": [
+        {
+          "resource": "task_instances",
+          "action": "view",
+          "scope": "SPECIALTY"
+        },
+        {
+          "resource": "task_instances",
+          "action": "update",
+          "scope": "SPECIALTY"
+        },
+        {
+          "resource": "reports",
+          "action": "view",
+          "scope": "SPECIALTY"
+        },
+        {
+          "resource": "reports",
+          "action": "upload",
+          "scope": "SPECIALTY"
+        },
+        {
+          "resource": "reports",
+          "action": "download",
+          "scope": "SPECIALTY"
+        },
+        {
+          "resource": "dashboard",
+          "action": "view",
+          "scope": "SPECIALTY"
+        },
+        {
+          "resource": "gantt",
+          "action": "view",
+          "scope": "SPECIALTY"
+        },
+        {
+          "resource": "calendar",
+          "action": "view",
+          "scope": "SPECIALTY"
+        },
+        {
+          "resource": "search",
+          "action": "view",
+          "scope": "SPECIALTY"
+        },
+        {
+          "resource": "notices",
+          "action": "view",
+          "scope": "SPECIALTY"
+        },
+        {
+          "resource": "notices",
+          "action": "create",
+          "scope": "SPECIALTY"
+        },
+        {
+          "resource": "notices",
+          "action": "update",
+          "scope": "SPECIALTY"
+        },
+        {
+          "resource": "notices",
+          "action": "delete",
+          "scope": "SPECIALTY"
+        },
+        {
+          "resource": "notices",
+          "action": "pin",
+          "scope": "SPECIALTY"
+        },
+        {
+          "resource": "checklists",
+          "action": "view",
+          "scope": "SPECIALTY"
+        },
+        {
+          "resource": "checklists",
+          "action": "update",
+          "scope": "SPECIALTY"
+        },
+        {
+          "resource": "org_chart",
+          "action": "view",
+          "scope": "SPECIALTY"
+        }
+      ]
+    },
+    {
+      "name": "Admin Localidade",
+      "isSystemRole": true,
+      "wildcard": false,
+      "constraintsTemplate": {
+        "localityId": "$user.localityId"
+      },
+      "permissions": [
+        {
+          "resource": "phases",
+          "action": "view",
+          "scope": "LOCALITY"
+        },
+        {
+          "resource": "task_instances",
+          "action": "view",
+          "scope": "LOCALITY"
+        },
+        {
+          "resource": "task_instances",
+          "action": "update",
+          "scope": "LOCALITY"
+        },
+        {
+          "resource": "task_instances",
+          "action": "assign",
+          "scope": "LOCALITY"
+        },
+        {
+          "resource": "reports",
+          "action": "view",
+          "scope": "LOCALITY"
+        },
+        {
+          "resource": "reports",
+          "action": "upload",
+          "scope": "LOCALITY"
+        },
+        {
+          "resource": "reports",
+          "action": "download",
+          "scope": "LOCALITY"
+        },
+        {
+          "resource": "dashboard",
+          "action": "view",
+          "scope": "LOCALITY"
+        },
+        {
+          "resource": "gantt",
+          "action": "view",
+          "scope": "LOCALITY"
+        },
+        {
+          "resource": "calendar",
+          "action": "view",
+          "scope": "LOCALITY"
+        },
+        {
+          "resource": "search",
+          "action": "view",
+          "scope": "LOCALITY"
+        },
+        {
+          "resource": "notices",
+          "action": "view",
+          "scope": "LOCALITY"
+        },
+        {
+          "resource": "notices",
+          "action": "create",
+          "scope": "LOCALITY"
+        },
+        {
+          "resource": "notices",
+          "action": "update",
+          "scope": "LOCALITY"
+        },
+        {
+          "resource": "notices",
+          "action": "delete",
+          "scope": "LOCALITY"
+        },
+        {
+          "resource": "notices",
+          "action": "pin",
+          "scope": "LOCALITY"
+        },
+        {
+          "resource": "checklists",
+          "action": "view",
+          "scope": "LOCALITY"
+        },
+        {
+          "resource": "checklists",
+          "action": "update",
+          "scope": "LOCALITY"
+        },
+        {
+          "resource": "org_chart",
+          "action": "view",
+          "scope": "LOCALITY"
         }
       ]
     },
