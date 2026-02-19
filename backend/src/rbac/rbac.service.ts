@@ -465,8 +465,6 @@ export class RbacService {
     });
 
     const uniqueEmail = await this.resolveUniqueEmail(preferredEmail, uid, existing?.id);
-    const roleReplacement = Boolean(payload.replaceExistingRoles);
-
     const user = existing
       ? await this.prisma.user.update({
           where: { id: existing.id },
@@ -496,16 +494,12 @@ export class RbacService {
           },
         });
 
-    if (roleReplacement) {
-      await this.prisma.userRole.deleteMany({
-        where: { userId: user.id },
-      });
-    }
+    await this.prisma.userRole.deleteMany({
+      where: { userId: user.id },
+    });
 
-    await this.prisma.userRole.upsert({
-      where: { userId_roleId: { userId: user.id, roleId: role.id } },
-      update: {},
-      create: { userId: user.id, roleId: role.id },
+    await this.prisma.userRole.create({
+      data: { userId: user.id, roleId: role.id },
     });
 
     const userWithRoles = await this.prisma.user.findUnique({
@@ -530,7 +524,7 @@ export class RbacService {
         uid,
         roleId: role.id,
         roleName: role.name,
-        replaceExistingRoles: roleReplacement,
+        replaceExistingRoles: true,
         localityId: payload.localityId ?? null,
         specialtyId: payload.specialtyId ?? null,
         eloRoleId: payload.eloRoleId ?? null,

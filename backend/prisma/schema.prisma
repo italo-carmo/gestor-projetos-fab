@@ -110,6 +110,7 @@ model UserRole {
   user    User   @relation(fields: [userId], references: [id])
   role    Role   @relation(fields: [roleId], references: [id])
 
+  @@unique([userId])
   @@unique([userId, roleId])
 }
 

@@ -93,6 +93,10 @@ export function AdminRbacPage() {
   const [ldapRoleId, setLdapRoleId] = useState('');
   const [ldapLocalityId, setLdapLocalityId] = useState('');
   const [ldapPreview, setLdapPreview] = useState<LdapLookupResponse['user'] | null>(null);
+  const [nameFilter, setNameFilter] = useState('');
+  const [cpfFilter, setCpfFilter] = useState('');
+  const [roleFilterId, setRoleFilterId] = useState('');
+  const [localityFilterId, setLocalityFilterId] = useState('');
 
   const users = useMemo(
     () =>
@@ -119,6 +123,34 @@ export function AdminRbacPage() {
     () => new Map(localities.map((locality) => [locality.id, locality])),
     [localities],
   );
+  const filteredUsers = useMemo(() => {
+    const nameTerm = nameFilter.trim().toLowerCase();
+    const cpfTerm = cpfFilter.trim().toLowerCase();
+
+    return users.filter((user) => {
+      const role = getUserRoles(user)[0] ?? null;
+
+      if (nameTerm && !String(user.name ?? '').toLowerCase().includes(nameTerm)) {
+        return false;
+      }
+
+      if (cpfTerm && !String(user.ldapUid ?? '').toLowerCase().includes(cpfTerm)) {
+        return false;
+      }
+
+      if (roleFilterId && role?.id !== roleFilterId) {
+        return false;
+      }
+
+      if (localityFilterId) {
+        if ((user.localityId ?? '') !== localityFilterId) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [cpfFilter, localityFilterId, nameFilter, roleFilterId, users]);
 
   const openEditModal = (user: UserItem) => {
     const primaryRole = getUserRoles(user)[0];
@@ -333,6 +365,67 @@ export function AdminRbacPage() {
             <Typography variant="h6" gutterBottom>
               Usuários cadastrados
             </Typography>
+            <Stack
+              direction={{ xs: 'column', md: 'row' }}
+              spacing={1.2}
+              sx={{ mb: 1.6 }}
+            >
+              <TextField
+                size="small"
+                label="Filtrar por nome"
+                value={nameFilter}
+                onChange={(event) => setNameFilter(event.target.value)}
+                sx={{ minWidth: 220 }}
+              />
+              <TextField
+                size="small"
+                label="Filtrar por CPF"
+                value={cpfFilter}
+                onChange={(event) => setCpfFilter(event.target.value)}
+                sx={{ minWidth: 190 }}
+              />
+              <TextField
+                select
+                size="small"
+                label="Filtrar por papel"
+                value={roleFilterId}
+                onChange={(event) => setRoleFilterId(event.target.value)}
+                sx={{ minWidth: 220 }}
+              >
+                <MenuItem value="">Todos</MenuItem>
+                {roles.map((role) => (
+                  <MenuItem key={role.id} value={role.id}>
+                    {role.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+              <TextField
+                select
+                size="small"
+                label="Filtrar por localidade"
+                value={localityFilterId}
+                onChange={(event) => setLocalityFilterId(event.target.value)}
+                sx={{ minWidth: 220 }}
+              >
+                <MenuItem value="">Todas</MenuItem>
+                {localities.map((locality) => (
+                  <MenuItem key={locality.id} value={locality.id}>
+                    {locality.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+              <Button
+                variant="text"
+                onClick={() => {
+                  setNameFilter('');
+                  setCpfFilter('');
+                  setRoleFilterId('');
+                  setLocalityFilterId('');
+                }}
+              >
+                Limpar filtros
+              </Button>
+            </Stack>
 
             {usersQuery.isLoading ? (
               <Typography variant="body2" color="text.secondary">
@@ -354,7 +447,16 @@ export function AdminRbacPage() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {users.map((user) => {
+                  {filteredUsers.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={5}>
+                        <Typography variant="body2" color="text.secondary">
+                          Nenhum usuário encontrado com os filtros selecionados.
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {filteredUsers.map((user) => {
                     const rolesByUser = getUserRoles(user);
                     const primaryRole = rolesByUser[0] ?? null;
                     const localityName = user.localityId
@@ -370,20 +472,15 @@ export function AdminRbacPage() {
                         </TableCell>
                         <TableCell>{user.ldapUid || user.email}</TableCell>
                         <TableCell>
-                          {rolesByUser.length === 0 ? (
+                          {!primaryRole ? (
                             <Chip size="small" label="Sem papel" variant="outlined" />
                           ) : (
-                            <Stack direction="row" spacing={0.6} flexWrap="wrap">
-                              {rolesByUser.map((role, index) => (
-                                <Chip
-                                  key={`${user.id}-${role.id}`}
-                                  size="small"
-                                  label={role.name}
-                                  color={index === 0 ? 'primary' : 'default'}
-                                  variant={index === 0 ? 'filled' : 'outlined'}
-                                />
-                              ))}
-                            </Stack>
+                            <Chip
+                              size="small"
+                              label={primaryRole.name}
+                              color="primary"
+                              variant="filled"
+                            />
                           )}
                         </TableCell>
                         <TableCell>{localityName}</TableCell>
@@ -451,7 +548,6 @@ export function AdminRbacPage() {
               value={editRoleId}
               onChange={(event) => setEditRoleId(event.target.value)}
             >
-              <MenuItem value="">Sem papel</MenuItem>
               {roles.map((role) => (
                 <MenuItem key={role.id} value={role.id}>
                   {role.name}
