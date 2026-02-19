@@ -8,16 +8,19 @@ import { api } from '../api/client';
 import { useLogin } from '../api/hooks';
 
 export function LoginPage() {
-  const [email, setEmail] = useState('');
+  const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
-  const login = useLogin();
+  const loginMutation = useLogin();
   const navigate = useNavigate();
   const toast = useToast();
+
+  const normalizeCpfInput = (value: string) => value.replace(/\D/g, '');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const data = await login.mutateAsync({ email: email.trim().toLowerCase(), password });
+      const normalizedLogin = login.includes('@') ? login.trim() : normalizeCpfInput(login);
+      const data = await loginMutation.mutateAsync({ login: normalizedLogin, password });
       if (data?.accessToken) localStorage.setItem('accessToken', data.accessToken);
       if (data?.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
       const me = (await api.get('/auth/me')).data;
@@ -90,15 +93,17 @@ export function LoginPage() {
               Entrar
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 2.4 }}>
-              Informe seu email institucional e senha.
+              Informe seu CPF e senha LDAP.
             </Typography>
             <Box component="form" onSubmit={handleSubmit} display="grid" gap={1.5}>
               <TextField
-                name="email"
-                label="Email"
-                autoComplete="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                name="login"
+                label="CPF"
+                autoComplete="username"
+                value={login}
+                onChange={(e) => setLogin(normalizeCpfInput(e.target.value))}
+                inputProps={{ inputMode: 'numeric', pattern: '[0-9]*', maxLength: 11 }}
+                placeholder="Somente números"
                 fullWidth
               />
               <TextField
@@ -110,8 +115,8 @@ export function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 fullWidth
               />
-              <Button variant="contained" type="submit" disabled={login.isPending} sx={{ mt: 0.6 }}>
-                {login.isPending ? 'Entrando...' : 'Entrar'}
+              <Button variant="contained" type="submit" disabled={loginMutation.isPending} sx={{ mt: 0.6 }}>
+                {loginMutation.isPending ? 'Entrando...' : 'Entrar'}
               </Button>
             </Box>
           </CardContent>

@@ -22,6 +22,7 @@ import { SearchModule } from './search/search.module';
 import { ActivitiesModule } from './activities/activities.module';
 import { DocumentsModule } from './documents/documents.module';
 import { BiModule } from './bi/bi.module';
+import { FabLdapModule } from './ldap/fab-ldap.module';
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { BiModule } from './bi/bi.module';
     ActivitiesModule,
     DocumentsModule,
     BiModule,
+    FabLdapModule,
   ],
   controllers: [AppController],
   providers: [AppService],

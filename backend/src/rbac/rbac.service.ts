@@ -1,9 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { PermissionScope, Prisma } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
+import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { throwError } from '../common/http-error';
 import { AuditService } from '../audit/audit.service';
 import { RbacUser } from './rbac.types';
+import { FabLdapService } from '../ldap/fab-ldap.service';
 
 type PermissionEntry = { resource: string; action: string; scope: PermissionScope };
 type UserAccessPayload = Prisma.UserGetPayload<{
@@ -26,6 +29,7 @@ export class RbacService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly fabLdap: FabLdapService,
   ) {}
 
   async getUserAccess(userId: string): Promise<RbacUser> {
@@ -392,6 +396,160 @@ export class RbacService {
     return this.getUserModuleAccess(userId);
   }
 
+  async lookupLdapUser(uid: string) {
+    const normalizedUid = String(uid ?? '').trim();
+    if (!normalizedUid) {
+      throwError('VALIDATION_ERROR', { reason: 'LDAP_UID_REQUIRED' });
+    }
+
+    const profile = await this.fabLdap.lookupByUid(normalizedUid);
+    if (!profile) {
+      throwError('NOT_FOUND');
+    }
+
+    return {
+      user: {
+        uid: profile.uid,
+        dn: profile.dn,
+        name: profile.name,
+        email: profile.email,
+        fabom: profile.fabom,
+      },
+    };
+  }
+
+  async upsertLdapUser(
+    payload: {
+      uid: string;
+      roleId: string;
+      localityId?: string | null;
+      specialtyId?: string | null;
+      eloRoleId?: string | null;
+      replaceExistingRoles?: boolean;
+    },
+    actorUserId?: string,
+  ) {
+    const uid = String(payload.uid ?? '').trim();
+    if (!uid) {
+      throwError('VALIDATION_ERROR', { reason: 'LDAP_UID_REQUIRED' });
+    }
+
+    const role = await this.prisma.role.findUnique({ where: { id: payload.roleId } });
+    if (!role) {
+      throwError('NOT_FOUND');
+    }
+
+    const profile = await this.fabLdap.lookupByUid(uid);
+    if (!profile) {
+      throwError('VALIDATION_ERROR', { reason: 'LDAP_USER_NOT_FOUND', uid });
+    }
+
+    const preferredEmail = this.normalizeEmail(profile.email) ?? `${uid}@fab.intraer`;
+    const preferredName = profile.name?.trim() || `Militar ${uid}`;
+
+    const existing = await this.prisma.user.findFirst({
+      where: {
+        OR: [{ ldapUid: uid }, { email: preferredEmail }],
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+      },
+    });
+
+    const uniqueEmail = await this.resolveUniqueEmail(preferredEmail, uid, existing?.id);
+    const roleReplacement = Boolean(payload.replaceExistingRoles);
+
+    const user = existing
+      ? await this.prisma.user.update({
+          where: { id: existing.id },
+          data: {
+            ldapUid: uid,
+            name: preferredName,
+            email: uniqueEmail,
+            isActive: true,
+            localityId:
+              payload.localityId !== undefined ? payload.localityId : undefined,
+            specialtyId:
+              payload.specialtyId !== undefined ? payload.specialtyId : undefined,
+            eloRoleId:
+              payload.eloRoleId !== undefined ? payload.eloRoleId : undefined,
+          },
+        })
+      : await this.prisma.user.create({
+          data: {
+            ldapUid: uid,
+            name: preferredName,
+            email: uniqueEmail,
+            passwordHash: await this.createTemporaryPasswordHash(uid),
+            isActive: true,
+            localityId: payload.localityId ?? null,
+            specialtyId: payload.specialtyId ?? null,
+            eloRoleId: payload.eloRoleId ?? null,
+          },
+        });
+
+    if (roleReplacement) {
+      await this.prisma.userRole.deleteMany({
+        where: { userId: user.id },
+      });
+    }
+
+    await this.prisma.userRole.upsert({
+      where: { userId_roleId: { userId: user.id, roleId: role.id } },
+      update: {},
+      create: { userId: user.id, roleId: role.id },
+    });
+
+    const userWithRoles = await this.prisma.user.findUnique({
+      where: { id: user.id },
+      include: {
+        roles: {
+          include: {
+            role: {
+              select: { id: true, name: true },
+            },
+          },
+        },
+      },
+    });
+
+    await this.audit.log({
+      userId: actorUserId,
+      resource: 'admin_rbac',
+      action: 'upsert_ldap_user',
+      entityId: user.id,
+      diffJson: {
+        uid,
+        roleId: role.id,
+        roleName: role.name,
+        replaceExistingRoles: roleReplacement,
+        localityId: payload.localityId ?? null,
+        specialtyId: payload.specialtyId ?? null,
+        eloRoleId: payload.eloRoleId ?? null,
+      },
+    });
+
+    return {
+      user: userWithRoles
+        ? {
+            id: userWithRoles.id,
+            name: userWithRoles.name,
+            email: userWithRoles.email,
+            ldapUid: userWithRoles.ldapUid,
+            localityId: userWithRoles.localityId,
+            specialtyId: userWithRoles.specialtyId,
+            eloRoleId: userWithRoles.eloRoleId,
+            roles: userWithRoles.roles.map((item) => ({
+              id: item.role.id,
+              name: item.role.name,
+            })),
+          }
+        : null,
+    };
+  }
+
   async simulateAccess(params: { userId?: string; roleId?: string }) {
     if (params.userId) {
       const user = await this.prisma.user.findUnique({
@@ -557,5 +715,53 @@ export class RbacService {
     );
 
     return this.dedupePermissions([...filtered, ...extra]);
+  }
+
+  private normalizeEmail(email: string | null | undefined) {
+    const value = String(email ?? '').trim().toLowerCase();
+    return value || null;
+  }
+
+  private async resolveUniqueEmail(
+    preferredEmail: string,
+    uid: string,
+    excludeUserId?: string,
+  ) {
+    const base = this.normalizeEmail(preferredEmail) ?? `${uid}@fab.intraer`;
+    const alreadyExists = async (email: string) => {
+      const existing = await this.prisma.user.findFirst({
+        where: {
+          email,
+          ...(excludeUserId ? { id: { not: excludeUserId } } : {}),
+        },
+        select: { id: true },
+      });
+      return Boolean(existing);
+    };
+
+    if (!(await alreadyExists(base))) {
+      return base;
+    }
+
+    const fallbackBase = `${uid}@fab.intraer`;
+    if (!(await alreadyExists(fallbackBase))) {
+      return fallbackBase;
+    }
+
+    let attempt = 1;
+    while (attempt <= 1000) {
+      const candidate = `${uid}+${attempt}@fab.intraer`;
+      if (!(await alreadyExists(candidate))) {
+        return candidate;
+      }
+      attempt += 1;
+    }
+
+    throwError('CONFLICT_UNIQUE', { field: 'email', uid });
+  }
+
+  private async createTemporaryPasswordHash(uid: string) {
+    const raw = `ldap:${uid}:${Date.now()}:${randomBytes(12).toString('hex')}`;
+    return bcrypt.hash(raw, 10);
   }
 }

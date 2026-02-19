@@ -2,6 +2,7 @@ import { PermissionScope, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { RbacUser } from './rbac.types';
+import { FabLdapService } from '../ldap/fab-ldap.service';
 type PermissionEntry = {
     resource: string;
     action: string;
@@ -10,7 +11,8 @@ type PermissionEntry = {
 export declare class RbacService {
     private readonly prisma;
     private readonly audit;
-    constructor(prisma: PrismaService, audit: AuditService);
+    private readonly fabLdap;
+    constructor(prisma: PrismaService, audit: AuditService, fabLdap: FabLdapService);
     getUserAccess(userId: string): Promise<RbacUser>;
     listRoles(): Promise<{
         id: string;
@@ -144,6 +146,37 @@ export declare class RbacService {
             overridden: number;
         };
     }>;
+    lookupLdapUser(uid: string): Promise<{
+        user: {
+            uid: string;
+            dn: string;
+            name: string | null;
+            email: string | null;
+            fabom: string | null;
+        };
+    }>;
+    upsertLdapUser(payload: {
+        uid: string;
+        roleId: string;
+        localityId?: string | null;
+        specialtyId?: string | null;
+        eloRoleId?: string | null;
+        replaceExistingRoles?: boolean;
+    }, actorUserId?: string): Promise<{
+        user: {
+            id: string;
+            name: string;
+            email: string;
+            ldapUid: string | null;
+            localityId: string | null;
+            specialtyId: string | null;
+            eloRoleId: string | null;
+            roles: {
+                id: string;
+                name: string;
+            }[];
+        } | null;
+    }>;
     simulateAccess(params: {
         userId?: string;
         roleId?: string;
@@ -172,5 +205,8 @@ export declare class RbacService {
     private listPermissionResources;
     private dedupePermissions;
     private applyModuleAccessOverrides;
+    private normalizeEmail;
+    private resolveUniqueEmail;
+    private createTemporaryPasswordHash;
 }
 export {};

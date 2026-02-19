@@ -41,6 +41,7 @@ export declare class AuditService {
                 name: string;
                 flagsJson: Prisma.JsonValue | null;
                 email: string;
+                ldapUid: string | null;
                 passwordHash: string;
                 isActive: boolean;
                 executiveHidePii: boolean;

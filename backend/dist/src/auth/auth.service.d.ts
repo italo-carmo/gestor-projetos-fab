@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
 import { AuditService } from '../audit/audit.service';
 import { RbacService } from '../rbac/rbac.service';
+import { FabLdapService } from '../ldap/fab-ldap.service';
 export declare class AuthService {
     private readonly users;
     private readonly prisma;
@@ -11,8 +12,9 @@ export declare class AuthService {
     private readonly config;
     private readonly audit;
     private readonly rbac;
-    constructor(users: UsersService, prisma: PrismaService, jwt: JwtService, config: ConfigService, audit: AuditService, rbac: RbacService);
-    login(email: string, password: string): Promise<{
+    private readonly fabLdap;
+    constructor(users: UsersService, prisma: PrismaService, jwt: JwtService, config: ConfigService, audit: AuditService, rbac: RbacService, fabLdap: FabLdapService);
+    login(login: string, password: string): Promise<{
         accessToken: string;
         refreshToken: string;
         user: {
@@ -52,4 +54,7 @@ export declare class AuthService {
     }>;
     private issueTokens;
     private getRefreshTtlMs;
+    private registerFailedLogin;
+    private registerSuccessfulLogin;
+    private getHttpErrorCode;
 }

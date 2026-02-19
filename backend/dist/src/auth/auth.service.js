@@ -52,6 +52,7 @@ const users_service_1 = require("../users/users.service");
 const http_error_1 = require("../common/http-error");
 const audit_service_1 = require("../audit/audit.service");
 const rbac_service_1 = require("../rbac/rbac.service");
+const fab_ldap_service_1 = require("../ldap/fab-ldap.service");
 const REFRESH_TOKEN_SALT_ROUNDS = 10;
 let AuthService = class AuthService {
     users;
@@ -60,57 +61,67 @@ let AuthService = class AuthService {
     config;
     audit;
     rbac;
-    constructor(users, prisma, jwt, config, audit, rbac) {
+    fabLdap;
+    constructor(users, prisma, jwt, config, audit, rbac, fabLdap) {
         this.users = users;
         this.prisma = prisma;
         this.jwt = jwt;
         this.config = config;
         this.audit = audit;
         this.rbac = rbac;
+        this.fabLdap = fabLdap;
     }
-    async login(email, password) {
-        const normalizedEmail = email.trim().toLowerCase();
-        const user = await this.users.findByEmail(normalizedEmail);
+    async login(login, password) {
+        const normalizedLogin = String(login ?? '').trim();
+        if (!normalizedLogin || !password) {
+            (0, http_error_1.throwError)('AUTH_INVALID_CREDENTIALS');
+        }
+        const user = await this.users.findForAuth(normalizedLogin);
         if (!user || !user.isActive)
             (0, http_error_1.throwError)('AUTH_INVALID_CREDENTIALS');
         if (user.lockUntil && user.lockUntil.getTime() > Date.now()) {
             (0, http_error_1.throwError)('AUTH_LOCKED', { until: user.lockUntil.toISOString() });
         }
-        const ok = await bcrypt.compare(password, user.passwordHash);
-        if (!ok) {
-            const nextCount = (user.loginFailedCount ?? 0) + 1;
-            const shouldLock = nextCount >= 5;
-            await this.prisma.user.update({
-                where: { id: user.id },
-                data: {
-                    loginFailedCount: nextCount,
-                    lockUntil: shouldLock ? new Date(Date.now() + 15 * 60 * 1000) : null,
-                },
+        const ldapUid = user.ldapUid?.trim() || normalizedLogin;
+        try {
+            const ldapProfile = await this.fabLdap.authenticate(ldapUid, password);
+            await this.registerSuccessfulLogin(user.id, {
+                ldapUid,
+                name: ldapProfile.name,
+                email: ldapProfile.email,
             });
+        }
+        catch (error) {
+            if (this.getHttpErrorCode(error) === 'AUTH_INVALID_CREDENTIALS') {
+                await this.registerFailedLogin(user.id, user.loginFailedCount ?? 0);
+            }
+            throw error;
+        }
+        const refreshedUser = await this.users.findById(user.id);
+        if (!refreshedUser || !refreshedUser.isActive) {
             (0, http_error_1.throwError)('AUTH_INVALID_CREDENTIALS');
         }
-        await this.prisma.user.update({
-            where: { id: user.id },
-            data: { loginFailedCount: 0, lockUntil: null },
-        });
-        const tokens = await this.issueTokens(user.id, user.email);
-        const role = user.roles[0]?.role
-            ? { id: user.roles[0].role.id, name: user.roles[0].role.name }
+        if (!refreshedUser.roles.length) {
+            (0, http_error_1.throwError)('RBAC_FORBIDDEN');
+        }
+        const tokens = await this.issueTokens(refreshedUser.id, refreshedUser.email);
+        const role = refreshedUser.roles[0]?.role
+            ? { id: refreshedUser.roles[0].role.id, name: refreshedUser.roles[0].role.name }
             : null;
         await this.audit.log({
-            userId: user.id,
+            userId: refreshedUser.id,
             resource: 'auth',
-            action: 'login',
-            entityId: user.id,
-            localityId: user.localityId ?? undefined,
+            action: 'login_ldap',
+            entityId: refreshedUser.id,
+            localityId: refreshedUser.localityId ?? undefined,
         });
         return {
             accessToken: tokens.accessToken,
             refreshToken: tokens.refreshToken,
             user: {
-                id: user.id,
-                name: user.name,
-                email: user.email,
+                id: refreshedUser.id,
+                name: refreshedUser.name,
+                email: refreshedUser.email,
                 role: role ?? undefined,
             },
         };
@@ -226,6 +237,63 @@ let AuthService = class AuthService {
         };
         return value * multipliers[unit];
     }
+    async registerFailedLogin(userId, currentFailedCount) {
+        const nextCount = currentFailedCount + 1;
+        const shouldLock = nextCount >= 5;
+        await this.prisma.user.update({
+            where: { id: userId },
+            data: {
+                loginFailedCount: nextCount,
+                lockUntil: shouldLock ? new Date(Date.now() + 15 * 60 * 1000) : null,
+            },
+        });
+    }
+    async registerSuccessfulLogin(userId, profile) {
+        const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+            select: { id: true, name: true, email: true, ldapUid: true },
+        });
+        if (!user)
+            return;
+        const data = {
+            loginFailedCount: 0,
+            lockUntil: null,
+        };
+        if (profile.ldapUid && user.ldapUid !== profile.ldapUid) {
+            data.ldapUid = profile.ldapUid;
+        }
+        const normalizedName = profile.name?.trim();
+        if (normalizedName && normalizedName !== user.name) {
+            data.name = normalizedName;
+        }
+        const normalizedEmail = profile.email?.trim().toLowerCase() ?? null;
+        if (normalizedEmail && normalizedEmail !== user.email) {
+            const emailConflict = await this.prisma.user.findFirst({
+                where: {
+                    email: normalizedEmail,
+                    id: { not: userId },
+                },
+                select: { id: true },
+            });
+            if (!emailConflict) {
+                data.email = normalizedEmail;
+            }
+        }
+        await this.prisma.user.update({
+            where: { id: userId },
+            data,
+        });
+    }
+    getHttpErrorCode(error) {
+        if (!(error instanceof common_1.HttpException))
+            return null;
+        const response = error.getResponse();
+        if (typeof response === 'object' && response && 'code' in response) {
+            const code = response.code;
+            return typeof code === 'string' ? code : null;
+        }
+        return null;
+    }
 };
 exports.AuthService = AuthService;
 exports.AuthService = AuthService = __decorate([
@@ -235,6 +303,7 @@ exports.AuthService = AuthService = __decorate([
         jwt_1.JwtService,
         config_1.ConfigService,
         audit_service_1.AuditService,
-        rbac_service_1.RbacService])
+        rbac_service_1.RbacService,
+        fab_ldap_service_1.FabLdapService])
 ], AuthService);
 //# sourceMappingURL=auth.service.js.map

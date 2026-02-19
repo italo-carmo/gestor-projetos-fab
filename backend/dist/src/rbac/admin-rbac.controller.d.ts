@@ -1,6 +1,8 @@
 import { RbacService } from './rbac.service';
 import type { RbacUser } from './rbac.types';
 import { SetUserModuleAccessDto } from './dto/set-user-module-access.dto';
+import { LookupLdapUserDto } from './dto/lookup-ldap-user.dto';
+import { UpsertLdapUserDto } from './dto/upsert-ldap-user.dto';
 export declare class AdminRbacController {
     private readonly rbac;
     constructor(rbac: RbacService);
@@ -87,5 +89,29 @@ export declare class AdminRbacController {
             enabled: number;
             overridden: number;
         };
+    }>;
+    lookupLdapUser(query: LookupLdapUserDto): Promise<{
+        user: {
+            uid: string;
+            dn: string;
+            name: string | null;
+            email: string | null;
+            fabom: string | null;
+        };
+    }>;
+    upsertLdapUser(dto: UpsertLdapUserDto, user: RbacUser): Promise<{
+        user: {
+            id: string;
+            name: string;
+            email: string;
+            ldapUid: string | null;
+            localityId: string | null;
+            specialtyId: string | null;
+            eloRoleId: string | null;
+            roles: {
+                id: string;
+                name: string;
+            }[];
+        } | null;
     }>;
 }

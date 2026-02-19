@@ -17,40 +17,45 @@ let UsersService = class UsersService {
     constructor(prisma) {
         this.prisma = prisma;
     }
-    findByEmail(email) {
-        return this.prisma.user.findUnique({
-            where: { email },
+    authInclude = {
+        roles: {
             include: {
-                roles: {
+                role: {
                     include: {
-                        role: {
-                            include: {
-                                permissions: {
-                                    include: { permission: true },
-                                },
-                            },
+                        permissions: {
+                            include: { permission: true },
                         },
                     },
                 },
             },
+        },
+    };
+    findByEmail(email) {
+        return this.prisma.user.findUnique({
+            where: { email },
+            include: this.authInclude,
+        });
+    }
+    findByLdapUid(ldapUid) {
+        return this.prisma.user.findUnique({
+            where: { ldapUid },
+            include: this.authInclude,
+        });
+    }
+    findForAuth(identifier) {
+        const value = String(identifier ?? '').trim();
+        const normalizedEmail = value.toLowerCase();
+        return this.prisma.user.findFirst({
+            where: {
+                OR: [{ ldapUid: value }, { email: normalizedEmail }],
+            },
+            include: this.authInclude,
         });
     }
     findById(id) {
         return this.prisma.user.findUnique({
             where: { id },
-            include: {
-                roles: {
-                    include: {
-                        role: {
-                            include: {
-                                permissions: {
-                                    include: { permission: true },
-                                },
-                            },
-                        },
-                    },
-                },
-            },
+            include: this.authInclude,
         });
     }
     list() {
@@ -59,10 +64,21 @@ let UsersService = class UsersService {
                 id: true,
                 name: true,
                 email: true,
+                ldapUid: true,
                 localityId: true,
                 specialtyId: true,
                 eloRoleId: true,
                 eloRole: { select: { id: true, code: true, name: true } },
+                roles: {
+                    select: {
+                        role: {
+                            select: {
+                                id: true,
+                                name: true,
+                            },
+                        },
+                    },
+                },
             },
             orderBy: { name: 'asc' },
         });
@@ -75,10 +91,21 @@ let UsersService = class UsersService {
                 id: true,
                 name: true,
                 email: true,
+                ldapUid: true,
                 localityId: true,
                 specialtyId: true,
                 eloRoleId: true,
                 eloRole: { select: { id: true, code: true, name: true } },
+                roles: {
+                    select: {
+                        role: {
+                            select: {
+                                id: true,
+                                name: true,
+                            },
+                        },
+                    },
+                },
             },
         });
     }

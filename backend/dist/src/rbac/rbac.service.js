@@ -1,25 +1,63 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
     var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
     if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
     else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.RbacService = void 0;
 const common_1 = require("@nestjs/common");
+const bcrypt = __importStar(require("bcrypt"));
+const crypto_1 = require("crypto");
 const prisma_service_1 = require("../prisma/prisma.service");
 const http_error_1 = require("../common/http-error");
 const audit_service_1 = require("../audit/audit.service");
+const fab_ldap_service_1 = require("../ldap/fab-ldap.service");
 let RbacService = class RbacService {
     prisma;
     audit;
-    constructor(prisma, audit) {
+    fabLdap;
+    constructor(prisma, audit, fabLdap) {
         this.prisma = prisma;
         this.audit = audit;
+        this.fabLdap = fabLdap;
     }
     async getUserAccess(userId) {
         const user = await this.prisma.user.findUnique({
@@ -317,6 +355,132 @@ let RbacService = class RbacService {
         });
         return this.getUserModuleAccess(userId);
     }
+    async lookupLdapUser(uid) {
+        const normalizedUid = String(uid ?? '').trim();
+        if (!normalizedUid) {
+            (0, http_error_1.throwError)('VALIDATION_ERROR', { reason: 'LDAP_UID_REQUIRED' });
+        }
+        const profile = await this.fabLdap.lookupByUid(normalizedUid);
+        if (!profile) {
+            (0, http_error_1.throwError)('NOT_FOUND');
+        }
+        return {
+            user: {
+                uid: profile.uid,
+                dn: profile.dn,
+                name: profile.name,
+                email: profile.email,
+                fabom: profile.fabom,
+            },
+        };
+    }
+    async upsertLdapUser(payload, actorUserId) {
+        const uid = String(payload.uid ?? '').trim();
+        if (!uid) {
+            (0, http_error_1.throwError)('VALIDATION_ERROR', { reason: 'LDAP_UID_REQUIRED' });
+        }
+        const role = await this.prisma.role.findUnique({ where: { id: payload.roleId } });
+        if (!role) {
+            (0, http_error_1.throwError)('NOT_FOUND');
+        }
+        const profile = await this.fabLdap.lookupByUid(uid);
+        if (!profile) {
+            (0, http_error_1.throwError)('VALIDATION_ERROR', { reason: 'LDAP_USER_NOT_FOUND', uid });
+        }
+        const preferredEmail = this.normalizeEmail(profile.email) ?? `${uid}@fab.intraer`;
+        const preferredName = profile.name?.trim() || `Militar ${uid}`;
+        const existing = await this.prisma.user.findFirst({
+            where: {
+                OR: [{ ldapUid: uid }, { email: preferredEmail }],
+            },
+            select: {
+                id: true,
+                email: true,
+                name: true,
+            },
+        });
+        const uniqueEmail = await this.resolveUniqueEmail(preferredEmail, uid, existing?.id);
+        const roleReplacement = Boolean(payload.replaceExistingRoles);
+        const user = existing
+            ? await this.prisma.user.update({
+                where: { id: existing.id },
+                data: {
+                    ldapUid: uid,
+                    name: preferredName,
+                    email: uniqueEmail,
+                    isActive: true,
+                    localityId: payload.localityId !== undefined ? payload.localityId : undefined,
+                    specialtyId: payload.specialtyId !== undefined ? payload.specialtyId : undefined,
+                    eloRoleId: payload.eloRoleId !== undefined ? payload.eloRoleId : undefined,
+                },
+            })
+            : await this.prisma.user.create({
+                data: {
+                    ldapUid: uid,
+                    name: preferredName,
+                    email: uniqueEmail,
+                    passwordHash: await this.createTemporaryPasswordHash(uid),
+                    isActive: true,
+                    localityId: payload.localityId ?? null,
+                    specialtyId: payload.specialtyId ?? null,
+                    eloRoleId: payload.eloRoleId ?? null,
+                },
+            });
+        if (roleReplacement) {
+            await this.prisma.userRole.deleteMany({
+                where: { userId: user.id },
+            });
+        }
+        await this.prisma.userRole.upsert({
+            where: { userId_roleId: { userId: user.id, roleId: role.id } },
+            update: {},
+            create: { userId: user.id, roleId: role.id },
+        });
+        const userWithRoles = await this.prisma.user.findUnique({
+            where: { id: user.id },
+            include: {
+                roles: {
+                    include: {
+                        role: {
+                            select: { id: true, name: true },
+                        },
+                    },
+                },
+            },
+        });
+        await this.audit.log({
+            userId: actorUserId,
+            resource: 'admin_rbac',
+            action: 'upsert_ldap_user',
+            entityId: user.id,
+            diffJson: {
+                uid,
+                roleId: role.id,
+                roleName: role.name,
+                replaceExistingRoles: roleReplacement,
+                localityId: payload.localityId ?? null,
+                specialtyId: payload.specialtyId ?? null,
+                eloRoleId: payload.eloRoleId ?? null,
+            },
+        });
+        return {
+            user: userWithRoles
+                ? {
+                    id: userWithRoles.id,
+                    name: userWithRoles.name,
+                    email: userWithRoles.email,
+                    ldapUid: userWithRoles.ldapUid,
+                    localityId: userWithRoles.localityId,
+                    specialtyId: userWithRoles.specialtyId,
+                    eloRoleId: userWithRoles.eloRoleId,
+                    roles: userWithRoles.roles.map((item) => ({
+                        id: item.role.id,
+                        name: item.role.name,
+                    })),
+                }
+                : null,
+        };
+    }
     async simulateAccess(params) {
         if (params.userId) {
             const user = await this.prisma.user.findUnique({
@@ -450,11 +614,49 @@ let RbacService = class RbacService {
         const extra = catalogPermissions.filter((item) => enabledResources.has(item.resource));
         return this.dedupePermissions([...filtered, ...extra]);
     }
+    normalizeEmail(email) {
+        const value = String(email ?? '').trim().toLowerCase();
+        return value || null;
+    }
+    async resolveUniqueEmail(preferredEmail, uid, excludeUserId) {
+        const base = this.normalizeEmail(preferredEmail) ?? `${uid}@fab.intraer`;
+        const alreadyExists = async (email) => {
+            const existing = await this.prisma.user.findFirst({
+                where: {
+                    email,
+                    ...(excludeUserId ? { id: { not: excludeUserId } } : {}),
+                },
+                select: { id: true },
+            });
+            return Boolean(existing);
+        };
+        if (!(await alreadyExists(base))) {
+            return base;
+        }
+        const fallbackBase = `${uid}@fab.intraer`;
+        if (!(await alreadyExists(fallbackBase))) {
+            return fallbackBase;
+        }
+        let attempt = 1;
+        while (attempt <= 1000) {
+            const candidate = `${uid}+${attempt}@fab.intraer`;
+            if (!(await alreadyExists(candidate))) {
+                return candidate;
+            }
+            attempt += 1;
+        }
+        (0, http_error_1.throwError)('CONFLICT_UNIQUE', { field: 'email', uid });
+    }
+    async createTemporaryPasswordHash(uid) {
+        const raw = `ldap:${uid}:${Date.now()}:${(0, crypto_1.randomBytes)(12).toString('hex')}`;
+        return bcrypt.hash(raw, 10);
+    }
 };
 exports.RbacService = RbacService;
 exports.RbacService = RbacService = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
-        audit_service_1.AuditService])
+        audit_service_1.AuditService,
+        fab_ldap_service_1.FabLdapService])
 ], RbacService);
 //# sourceMappingURL=rbac.service.js.map

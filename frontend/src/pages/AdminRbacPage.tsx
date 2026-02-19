@@ -1,5 +1,6 @@
 import {
   Box,
+  Button,
   Card,
   CardContent,
   Chip,
@@ -25,6 +26,10 @@ import {
   useUserModuleAccess,
   useUpdateUserModuleAccess,
   useSetRolePermissions,
+  useLookupLdapUser,
+  useUpsertLdapUser,
+  useLocalities,
+  useSpecialties,
 } from '../api/hooks';
 import { can } from '../app/rbac';
 import { useMemo, useState } from 'react';
@@ -33,14 +38,32 @@ import { parseApiError } from '../app/apiErrors';
 
 type PermissionItem = { resource: string; action: string; scope: string };
 type RoleItem = { id: string; name: string };
-type UserItem = { id: string; name: string; email: string; eloRoleId?: string | null };
+type UserItem = {
+  id: string;
+  name: string;
+  email: string;
+  ldapUid?: string | null;
+  eloRoleId?: string | null;
+  roles?: Array<{ id: string; name: string }>;
+};
 type EloRoleItem = { id: string; code: string; name: string };
+type LocalityItem = { id: string; name: string; code: string };
+type SpecialtyItem = { id: string; name: string };
 type SimulateResponse = { permissions?: PermissionItem[]; wildcard?: boolean };
 type UserModuleAccessItem = {
   resource: string;
   baseEnabled: boolean;
   enabled: boolean;
   isOverridden: boolean;
+};
+type LdapLookupResponse = {
+  user?: {
+    uid: string;
+    dn: string;
+    name: string | null;
+    email: string | null;
+    fabom: string | null;
+  };
 };
 
 function formatModuleLabel(resource: string) {
@@ -77,6 +100,12 @@ export function AdminRbacPage() {
   const updateUser = useUpdateUser();
   const eloRolesQuery = useEloRoles();
   const setRolePermissions = useSetRolePermissions();
+  const ldapLookup = useLookupLdapUser();
+  const upsertLdapUser = useUpsertLdapUser();
+  const canReadLocalities = can(me, 'localities', 'view');
+  const canReadSpecialties = can(me, 'specialties', 'view');
+  const localitiesQuery = useLocalities(canReadLocalities);
+  const specialtiesQuery = useSpecialties(canReadSpecialties);
 
   const [editRoleId, setEditRoleId] = useState('');
   const [updatingRoleResource, setUpdatingRoleResource] = useState('');
@@ -87,6 +116,14 @@ export function AdminRbacPage() {
   const [moduleUserId, setModuleUserId] = useState('');
   const [moduleSearch, setModuleSearch] = useState('');
   const [updatingModuleResource, setUpdatingModuleResource] = useState('');
+
+  const [ldapUid, setLdapUid] = useState('');
+  const [ldapRoleId, setLdapRoleId] = useState('');
+  const [ldapLocalityId, setLdapLocalityId] = useState('');
+  const [ldapSpecialtyId, setLdapSpecialtyId] = useState('');
+  const [ldapEloRoleId, setLdapEloRoleId] = useState('');
+  const [ldapReplaceRoles, setLdapReplaceRoles] = useState(false);
+  const [ldapUserPreview, setLdapUserPreview] = useState<LdapLookupResponse['user'] | null>(null);
 
   const roleEditorQuery = useRbacSimulate({ roleId: editRoleId || undefined });
   const simulateQuery = useRbacSimulate({
@@ -103,6 +140,12 @@ export function AdminRbacPage() {
     a.name.localeCompare(b.name, 'pt-BR'),
   );
   const eloRoles = ((eloRolesQuery.data?.items ?? []) as EloRoleItem[]).sort((a, b) =>
+    a.name.localeCompare(b.name, 'pt-BR'),
+  );
+  const localities = ((localitiesQuery.data?.items ?? []) as LocalityItem[]).sort((a, b) =>
+    a.name.localeCompare(b.name, 'pt-BR'),
+  );
+  const specialties = ((specialtiesQuery.data?.items ?? []) as SpecialtyItem[]).sort((a, b) =>
     a.name.localeCompare(b.name, 'pt-BR'),
   );
   const permissionCatalog = useMemo(
@@ -233,6 +276,59 @@ export function AdminRbacPage() {
       });
     } finally {
       setUpdatingModuleResource('');
+    }
+  };
+
+  const handleLookupLdapUser = async () => {
+    const uid = ldapUid.trim();
+    if (!uid) {
+      toast.push({ message: 'Informe o CPF/UID FAB.', severity: 'warning' });
+      return;
+    }
+
+    try {
+      const data = (await ldapLookup.mutateAsync(uid)) as LdapLookupResponse;
+      if (!data?.user) {
+        toast.push({ message: 'Usuário não encontrado no LDAP.', severity: 'warning' });
+        setLdapUserPreview(null);
+        return;
+      }
+      setLdapUserPreview(data.user);
+      toast.push({ message: 'Usuário encontrado no LDAP.', severity: 'success' });
+    } catch (error) {
+      setLdapUserPreview(null);
+      toast.push({
+        message: parseApiError(error).message ?? 'Erro ao consultar LDAP',
+        severity: 'error',
+      });
+    }
+  };
+
+  const handleUpsertLdapUser = async () => {
+    if (!ldapUserPreview) {
+      toast.push({ message: 'Busque o usuário no LDAP antes de vincular.', severity: 'warning' });
+      return;
+    }
+    if (!ldapRoleId) {
+      toast.push({ message: 'Selecione um papel.', severity: 'warning' });
+      return;
+    }
+
+    try {
+      await upsertLdapUser.mutateAsync({
+        uid: ldapUserPreview.uid,
+        roleId: ldapRoleId,
+        localityId: ldapLocalityId || null,
+        specialtyId: ldapSpecialtyId || null,
+        eloRoleId: ldapEloRoleId || null,
+        replaceExistingRoles: ldapReplaceRoles,
+      });
+      toast.push({ message: 'Usuário LDAP vinculado com sucesso.', severity: 'success' });
+    } catch (error) {
+      toast.push({
+        message: parseApiError(error).message ?? 'Erro ao vincular usuário LDAP',
+        severity: 'error',
+      });
     }
   };
 
@@ -381,7 +477,7 @@ export function AdminRbacPage() {
                 <MenuItem value="">Selecionar</MenuItem>
                 {users.map((user) => (
                   <MenuItem key={user.id} value={user.id}>
-                    {user.name} ({user.email})
+                    {user.name} ({user.ldapUid || user.email})
                   </MenuItem>
                 ))}
               </TextField>
@@ -458,6 +554,151 @@ export function AdminRbacPage() {
           <Card>
             <CardContent>
               <Typography variant="h6" gutterBottom>
+                Vincular usuário FAB (LDAP)
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Busque o militar no LDAP da FAB e atribua o papel no sistema.
+              </Typography>
+
+              <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ mb: 2 }}>
+                <TextField
+                  size="small"
+                  label="CPF/UID FAB"
+                  value={ldapUid}
+                  onChange={(e) => setLdapUid(e.target.value)}
+                  sx={{ minWidth: 260 }}
+                />
+                <Button
+                  variant="outlined"
+                  onClick={() => {
+                    void handleLookupLdapUser();
+                  }}
+                  disabled={ldapLookup.isPending}
+                >
+                  {ldapLookup.isPending ? 'Consultando...' : 'Buscar no LDAP'}
+                </Button>
+              </Stack>
+
+              {ldapUserPreview && (
+                <Box
+                  sx={{
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    borderRadius: 2,
+                    px: 2,
+                    py: 1.5,
+                    mb: 2,
+                  }}
+                >
+                  <Typography variant="body2" fontWeight={700}>
+                    {ldapUserPreview.name || 'Sem nome no LDAP'}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                    UID: {ldapUserPreview.uid}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                    Email: {ldapUserPreview.email || 'Não informado'}
+                  </Typography>
+                  {ldapUserPreview.fabom && (
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                      OM: {ldapUserPreview.fabom}
+                    </Typography>
+                  )}
+                </Box>
+              )}
+
+              <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ mb: 1.5 }}>
+                <TextField
+                  select
+                  size="small"
+                  label="Papel"
+                  value={ldapRoleId}
+                  onChange={(e) => setLdapRoleId(e.target.value)}
+                  sx={{ minWidth: 260 }}
+                >
+                  <MenuItem value="">Selecionar</MenuItem>
+                  {roles.map((role) => (
+                    <MenuItem key={role.id} value={role.id}>
+                      {role.name}
+                    </MenuItem>
+                  ))}
+                </TextField>
+                <TextField
+                  select
+                  size="small"
+                  label="Localidade (opcional)"
+                  value={ldapLocalityId}
+                  onChange={(e) => setLdapLocalityId(e.target.value)}
+                  sx={{ minWidth: 260 }}
+                >
+                  <MenuItem value="">Sem localidade</MenuItem>
+                  {localities.map((locality) => (
+                    <MenuItem key={locality.id} value={locality.id}>
+                      {locality.name}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </Stack>
+
+              <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ mb: 2 }}>
+                <TextField
+                  select
+                  size="small"
+                  label="Especialidade (opcional)"
+                  value={ldapSpecialtyId}
+                  onChange={(e) => setLdapSpecialtyId(e.target.value)}
+                  sx={{ minWidth: 260 }}
+                >
+                  <MenuItem value="">Sem especialidade</MenuItem>
+                  {specialties.map((specialty) => (
+                    <MenuItem key={specialty.id} value={specialty.id}>
+                      {specialty.name}
+                    </MenuItem>
+                  ))}
+                </TextField>
+                <TextField
+                  select
+                  size="small"
+                  label="Elo responsável (opcional)"
+                  value={ldapEloRoleId}
+                  onChange={(e) => setLdapEloRoleId(e.target.value)}
+                  sx={{ minWidth: 260 }}
+                >
+                  <MenuItem value="">Nenhum</MenuItem>
+                  {eloRoles.map((role) => (
+                    <MenuItem key={role.id} value={role.id}>
+                      {role.name}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </Stack>
+
+              <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} alignItems={{ md: 'center' }}>
+                <Chip
+                  size="small"
+                  color={ldapReplaceRoles ? 'warning' : 'default'}
+                  variant={ldapReplaceRoles ? 'filled' : 'outlined'}
+                  label={ldapReplaceRoles ? 'Substituir papéis atuais' : 'Manter papéis atuais'}
+                  onClick={() => setLdapReplaceRoles((current) => !current)}
+                />
+                <Button
+                  variant="contained"
+                  onClick={() => {
+                    void handleUpsertLdapUser();
+                  }}
+                  disabled={upsertLdapUser.isPending || !ldapUserPreview || !ldapRoleId}
+                >
+                  {upsertLdapUser.isPending ? 'Vinculando...' : 'Vincular usuário LDAP'}
+                </Button>
+              </Stack>
+            </CardContent>
+          </Card>
+        )}
+
+        {can(me, 'users', 'view') && can(me, 'users', 'update') && (
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
                 Acesso por módulo por usuário
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
@@ -478,7 +719,7 @@ export function AdminRbacPage() {
                   <MenuItem value="">Selecionar</MenuItem>
                   {users.map((user) => (
                     <MenuItem key={user.id} value={user.id}>
-                      {user.name} ({user.email})
+                      {user.name} ({user.ldapUid || user.email})
                     </MenuItem>
                   ))}
                 </TextField>
@@ -583,7 +824,7 @@ export function AdminRbacPage() {
                   {users.map((user) => (
                     <TableRow key={user.id}>
                       <TableCell>{user.name}</TableCell>
-                      <TableCell>{user.email}</TableCell>
+                      <TableCell>{user.ldapUid || user.email}</TableCell>
                       <TableCell>
                         <TextField
                           select

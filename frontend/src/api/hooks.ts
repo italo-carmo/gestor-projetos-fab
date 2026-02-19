@@ -11,7 +11,7 @@ export function useMe() {
 
 export function useLogin() {
   return useMutation({
-    mutationFn: async (args: { email: string; password: string }) =>
+    mutationFn: async (args: { login: string; password: string }) =>
       (await api.post("/auth/login", args)).data,
   });
 }
@@ -725,6 +725,31 @@ export function useRbacSimulate(params: { userId?: string; roleId?: string }) {
   });
 }
 
+export function useLookupLdapUser() {
+  return useMutation({
+    mutationFn: async (uid: string) =>
+      (await api.get("/admin/rbac/ldap-user", { params: { uid } })).data,
+  });
+}
+
+export function useUpsertLdapUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      uid: string;
+      roleId: string;
+      localityId?: string | null;
+      specialtyId?: string | null;
+      eloRoleId?: string | null;
+      replaceExistingRoles?: boolean;
+    }) => (await api.post("/admin/rbac/ldap-user", args)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["users"] });
+      qc.invalidateQueries({ queryKey: qk.me });
+    },
+  });
+}
+
 export function useUploadReport() {
   const qc = useQueryClient();
   return useMutation({
@@ -1069,11 +1094,12 @@ export function useUpdateLocalityRecruits() {
   });
 }
 
-export function useSpecialties() {
+export function useSpecialties(enabled = true) {
   return useQuery({
     queryKey: qk.specialties,
     queryFn: async () => (await api.get("/specialties")).data,
     staleTime: 60_000,
+    enabled,
   });
 }
 

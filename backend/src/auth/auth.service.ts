@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { HttpException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
@@ -8,6 +8,7 @@ import { JwtPayload, JwtRefreshPayload } from './auth.types';
 import { throwError } from '../common/http-error';
 import { AuditService } from '../audit/audit.service';
 import { RbacService } from '../rbac/rbac.service';
+import { FabLdapService } from '../ldap/fab-ldap.service';
 
 const REFRESH_TOKEN_SALT_ROUNDS = 10;
 
@@ -20,56 +21,66 @@ export class AuthService {
     private readonly config: ConfigService,
     private readonly audit: AuditService,
     private readonly rbac: RbacService,
+    private readonly fabLdap: FabLdapService,
   ) {}
 
-  async login(email: string, password: string) {
-    const normalizedEmail = email.trim().toLowerCase();
-    const user = await this.users.findByEmail(normalizedEmail);
+  async login(login: string, password: string) {
+    const normalizedLogin = String(login ?? '').trim();
+    if (!normalizedLogin || !password) {
+      throwError('AUTH_INVALID_CREDENTIALS');
+    }
+
+    const user = await this.users.findForAuth(normalizedLogin);
     if (!user || !user.isActive) throwError('AUTH_INVALID_CREDENTIALS');
 
     if (user.lockUntil && user.lockUntil.getTime() > Date.now()) {
       throwError('AUTH_LOCKED', { until: user.lockUntil.toISOString() });
     }
 
-    const ok = await bcrypt.compare(password, user.passwordHash);
-    if (!ok) {
-      const nextCount = (user.loginFailedCount ?? 0) + 1;
-      const shouldLock = nextCount >= 5;
-      await this.prisma.user.update({
-        where: { id: user.id },
-        data: {
-          loginFailedCount: nextCount,
-          lockUntil: shouldLock ? new Date(Date.now() + 15 * 60 * 1000) : null,
-        },
+    const ldapUid = user.ldapUid?.trim() || normalizedLogin;
+
+    try {
+      const ldapProfile = await this.fabLdap.authenticate(ldapUid, password);
+      await this.registerSuccessfulLogin(user.id, {
+        ldapUid,
+        name: ldapProfile.name,
+        email: ldapProfile.email,
       });
-      throwError('AUTH_INVALID_CREDENTIALS');
+    } catch (error) {
+      if (this.getHttpErrorCode(error) === 'AUTH_INVALID_CREDENTIALS') {
+        await this.registerFailedLogin(user.id, user.loginFailedCount ?? 0);
+      }
+      throw error;
     }
 
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: { loginFailedCount: 0, lockUntil: null },
-    });
+    const refreshedUser = await this.users.findById(user.id);
+    if (!refreshedUser || !refreshedUser.isActive) {
+      throwError('AUTH_INVALID_CREDENTIALS');
+    }
+    if (!refreshedUser.roles.length) {
+      throwError('RBAC_FORBIDDEN');
+    }
 
-    const tokens = await this.issueTokens(user.id, user.email);
-    const role = user.roles[0]?.role
-      ? { id: user.roles[0].role.id, name: user.roles[0].role.name }
+    const tokens = await this.issueTokens(refreshedUser.id, refreshedUser.email);
+    const role = refreshedUser.roles[0]?.role
+      ? { id: refreshedUser.roles[0].role.id, name: refreshedUser.roles[0].role.name }
       : null;
 
     await this.audit.log({
-      userId: user.id,
+      userId: refreshedUser.id,
       resource: 'auth',
-      action: 'login',
-      entityId: user.id,
-      localityId: user.localityId ?? undefined,
+      action: 'login_ldap',
+      entityId: refreshedUser.id,
+      localityId: refreshedUser.localityId ?? undefined,
     });
 
     return {
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
       user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
+        id: refreshedUser.id,
+        name: refreshedUser.name,
+        email: refreshedUser.email,
         role: role ?? undefined,
       },
     };
@@ -204,5 +215,71 @@ export class AuthService {
       d: 24 * 60 * 60 * 1000,
     };
     return value * multipliers[unit];
+  }
+
+  private async registerFailedLogin(userId: string, currentFailedCount: number) {
+    const nextCount = currentFailedCount + 1;
+    const shouldLock = nextCount >= 5;
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        loginFailedCount: nextCount,
+        lockUntil: shouldLock ? new Date(Date.now() + 15 * 60 * 1000) : null,
+      },
+    });
+  }
+
+  private async registerSuccessfulLogin(
+    userId: string,
+    profile: { ldapUid: string; name: string | null; email: string | null },
+  ) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, name: true, email: true, ldapUid: true },
+    });
+    if (!user) return;
+
+    const data: any = {
+      loginFailedCount: 0,
+      lockUntil: null,
+    };
+
+    if (profile.ldapUid && user.ldapUid !== profile.ldapUid) {
+      data.ldapUid = profile.ldapUid;
+    }
+
+    const normalizedName = profile.name?.trim();
+    if (normalizedName && normalizedName !== user.name) {
+      data.name = normalizedName;
+    }
+
+    const normalizedEmail = profile.email?.trim().toLowerCase() ?? null;
+    if (normalizedEmail && normalizedEmail !== user.email) {
+      const emailConflict = await this.prisma.user.findFirst({
+        where: {
+          email: normalizedEmail,
+          id: { not: userId },
+        },
+        select: { id: true },
+      });
+      if (!emailConflict) {
+        data.email = normalizedEmail;
+      }
+    }
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data,
+    });
+  }
+
+  private getHttpErrorCode(error: unknown): string | null {
+    if (!(error instanceof HttpException)) return null;
+    const response = error.getResponse();
+    if (typeof response === 'object' && response && 'code' in response) {
+      const code = (response as { code?: unknown }).code;
+      return typeof code === 'string' ? code : null;
+    }
+    return null;
   }
 }

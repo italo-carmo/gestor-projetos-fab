@@ -21,6 +21,8 @@ const rbac_guard_1 = require("./rbac.guard");
 const rbac_service_1 = require("./rbac.service");
 const throttler_1 = require("@nestjs/throttler");
 const set_user_module_access_dto_1 = require("./dto/set-user-module-access.dto");
+const lookup_ldap_user_dto_1 = require("./dto/lookup-ldap-user.dto");
+const upsert_ldap_user_dto_1 = require("./dto/upsert-ldap-user.dto");
 let AdminRbacController = class AdminRbacController {
     rbac;
     constructor(rbac) {
@@ -40,6 +42,19 @@ let AdminRbacController = class AdminRbacController {
     }
     setUserModuleAccess(userId, dto, user) {
         return this.rbac.setUserModuleAccess(userId, { resource: dto.resource, enabled: dto.enabled }, user?.id);
+    }
+    lookupLdapUser(query) {
+        return this.rbac.lookupLdapUser(query.uid);
+    }
+    upsertLdapUser(dto, user) {
+        return this.rbac.upsertLdapUser({
+            uid: dto.uid,
+            roleId: dto.roleId,
+            localityId: dto.localityId,
+            specialtyId: dto.specialtyId,
+            eloRoleId: dto.eloRoleId,
+            replaceExistingRoles: dto.replaceExistingRoles ?? false,
+        }, user?.id);
     }
 };
 exports.AdminRbacController = AdminRbacController;
@@ -89,6 +104,23 @@ __decorate([
     __metadata("design:paramtypes", [String, set_user_module_access_dto_1.SetUserModuleAccessDto, Object]),
     __metadata("design:returntype", void 0)
 ], AdminRbacController.prototype, "setUserModuleAccess", null);
+__decorate([
+    (0, common_1.Get)('ldap-user'),
+    (0, require_permission_decorator_1.RequirePermission)('users', 'view'),
+    __param(0, (0, common_1.Query)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [lookup_ldap_user_dto_1.LookupLdapUserDto]),
+    __metadata("design:returntype", void 0)
+], AdminRbacController.prototype, "lookupLdapUser", null);
+__decorate([
+    (0, common_1.Post)('ldap-user'),
+    (0, require_permission_decorator_1.RequirePermission)('users', 'update'),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [upsert_ldap_user_dto_1.UpsertLdapUserDto, Object]),
+    __metadata("design:returntype", void 0)
+], AdminRbacController.prototype, "upsertLdapUser", null);
 exports.AdminRbacController = AdminRbacController = __decorate([
     (0, common_1.Controller)('admin/rbac'),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, rbac_guard_1.RbacGuard),

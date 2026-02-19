@@ -13,6 +13,7 @@ export declare class AuditController {
                 name: string;
                 flagsJson: import("@prisma/client/runtime/client").JsonValue | null;
                 email: string;
+                ldapUid: string | null;
                 passwordHash: string;
                 isActive: boolean;
                 executiveHidePii: boolean;

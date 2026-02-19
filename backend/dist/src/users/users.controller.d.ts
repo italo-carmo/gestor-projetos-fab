@@ -14,7 +14,14 @@ export declare class UsersController {
                 code: string;
             } | null;
             name: string;
+            roles: {
+                role: {
+                    id: string;
+                    name: string;
+                };
+            }[];
             email: string;
+            ldapUid: string | null;
             localityId: string | null;
         }[];
     }>;
@@ -28,7 +35,14 @@ export declare class UsersController {
             code: string;
         } | null;
         name: string;
+        roles: {
+            role: {
+                id: string;
+                name: string;
+            };
+        }[];
         email: string;
+        ldapUid: string | null;
         localityId: string | null;
     }>;
 }

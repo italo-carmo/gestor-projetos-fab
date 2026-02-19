@@ -7,6 +7,8 @@ import { RbacService } from './rbac.service';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import type { RbacUser } from './rbac.types';
 import { SetUserModuleAccessDto } from './dto/set-user-module-access.dto';
+import { LookupLdapUserDto } from './dto/lookup-ldap-user.dto';
+import { UpsertLdapUserDto } from './dto/upsert-ldap-user.dto';
 
 @Controller('admin/rbac')
 @UseGuards(JwtAuthGuard, RbacGuard)
@@ -49,6 +51,31 @@ export class AdminRbacController {
     return this.rbac.setUserModuleAccess(
       userId,
       { resource: dto.resource, enabled: dto.enabled },
+      user?.id,
+    );
+  }
+
+  @Get('ldap-user')
+  @RequirePermission('users', 'view')
+  lookupLdapUser(@Query() query: LookupLdapUserDto) {
+    return this.rbac.lookupLdapUser(query.uid);
+  }
+
+  @Post('ldap-user')
+  @RequirePermission('users', 'update')
+  upsertLdapUser(
+    @Body() dto: UpsertLdapUserDto,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.rbac.upsertLdapUser(
+      {
+        uid: dto.uid,
+        roleId: dto.roleId,
+        localityId: dto.localityId,
+        specialtyId: dto.specialtyId,
+        eloRoleId: dto.eloRoleId,
+        replaceExistingRoles: dto.replaceExistingRoles ?? false,
+      },
       user?.id,
     );
   }
