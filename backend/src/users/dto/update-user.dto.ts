@@ -6,4 +6,16 @@ export class UpdateUserDto {
   @IsString()
   @MinLength(3)
   eloRoleId?: string | null;
+
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsString()
+  @MinLength(3)
+  localityId?: string | null;
+
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsString()
+  @MinLength(3)
+  roleId?: string | null;
 }

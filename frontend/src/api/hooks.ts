@@ -678,10 +678,28 @@ export function useUsers(enabled = true) {
 export function useUpdateUser() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (args: { id: string; eloRoleId: string | null }) =>
-      (await api.patch(`/users/${args.id}`, { eloRoleId: args.eloRoleId }))
-        .data,
+    mutationFn: async (args: {
+      id: string;
+      eloRoleId?: string | null;
+      localityId?: string | null;
+      roleId?: string | null;
+    }) => {
+      const { id, ...payload } = args;
+      return (await api.patch(`/users/${id}`, payload)).data;
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["users"] }),
+  });
+}
+
+export function useRemoveUserRole() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { userId: string; roleId: string }) =>
+      (await api.delete(`/users/${args.userId}/roles/${args.roleId}`)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["users"] });
+      qc.invalidateQueries({ queryKey: qk.me });
+    },
   });
 }
 

@@ -10,9 +10,18 @@ type MePayload = {
   permissions?: Array<{ resource: string; action: string; scope?: string }>;
 };
 
+export function normalizeRoleName(roleName: string | null | undefined) {
+  return String(roleName ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+}
+
 export function hasRole(user: MePayload | undefined, roleName: string) {
   if (!user?.roles) return false;
-  return user.roles.some((role) => role.name === roleName);
+  const expected = normalizeRoleName(roleName);
+  return user.roles.some((role) => normalizeRoleName(role.name) === expected);
 }
 
 export function hasAnyRole(user: MePayload | undefined, roleNames: string[]) {

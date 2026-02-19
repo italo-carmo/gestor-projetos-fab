@@ -7,6 +7,12 @@ import { throwError } from '../common/http-error';
 import { AuditService } from '../audit/audit.service';
 import { RbacUser } from './rbac.types';
 import { FabLdapService } from '../ldap/fab-ldap.service';
+import {
+  normalizeRoleName,
+  ROLE_COMANDANTE_COMGEP,
+  ROLE_COORDENACAO_CIPAVD,
+  ROLE_TI,
+} from './role-access';
 
 type PermissionEntry = { resource: string; action: string; scope: PermissionScope };
 type UserAccessPayload = Prisma.UserGetPayload<{
@@ -617,6 +623,11 @@ export class RbacService {
         scope: rp.permission.scope,
       })),
     }));
+    const normalizedRoles = new Set(roles.map((role) => normalizeRoleName(role.name)));
+    const hasNationalScope =
+      normalizedRoles.has(normalizeRoleName(ROLE_TI)) ||
+      normalizedRoles.has(normalizeRoleName(ROLE_COORDENACAO_CIPAVD)) ||
+      normalizedRoles.has(normalizeRoleName(ROLE_COMANDANTE_COMGEP));
     const moduleAccessOverrides = user.moduleAccessOverrides.map((item) => ({
       resource: item.resource,
       enabled: item.enabled,
@@ -653,7 +664,7 @@ export class RbacService {
       id: user.id,
       name: user.name,
       email: user.email,
-      localityId: user.localityId,
+      localityId: hasNationalScope ? null : user.localityId,
       specialtyId: user.specialtyId,
       eloRoleId: user.eloRoleId,
       executiveHidePii: user.executiveHidePii || executiveFromRole,

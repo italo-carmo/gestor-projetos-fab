@@ -9,14 +9,23 @@ export const ROLE_ADMIN_ESPECIALIDADE_NACIONAL = 'Admin Especialidade Nacional';
 export const ROLE_ADMIN_LOCALIDADE = 'Admin Localidade';
 export const ROLE_ADMINISTRACAO_LOCAL = 'Administração Local';
 
+export function normalizeRoleName(roleName: string | null | undefined) {
+  return String(roleName ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+}
+
 export function hasRole(user: RbacUser | undefined, roleName: string) {
   if (!user) return false;
-  return user.roles.some((role) => role.name === roleName);
+  const expected = normalizeRoleName(roleName);
+  return user.roles.some((role) => normalizeRoleName(role.name) === expected);
 }
 
 export function hasAnyRole(user: RbacUser | undefined, roleNames: string[]) {
   if (!user || roleNames.length === 0) return false;
-  return user.roles.some((role) => roleNames.includes(role.name));
+  return roleNames.some((roleName) => hasRole(user, roleName));
 }
 
 export function isNationalCommissionMember(user: RbacUser | undefined) {
@@ -57,6 +66,7 @@ export function isLocalSpecialtyAdmin(user: RbacUser | undefined) {
 export function resolveAccessProfile(user: RbacUser | undefined) {
   const ti = isTiUser(user);
   const nationalCommission = isNationalCommissionMember(user);
+  const effectiveLocalityId = ti || nationalCommission ? undefined : user?.localityId ?? undefined;
   const localityAdmin = isLocalityAdmin(user);
   const specialtyAdmin = isSpecialtyAdmin(user);
   const nationalSpecialtyAdmin = isNationalSpecialtyAdmin(user);
@@ -72,7 +82,7 @@ export function resolveAccessProfile(user: RbacUser | undefined) {
     // Users tied to a specialty can represent group-admin scope either by specialtyId or eloRoleId.
     groupSpecialtyId: user?.specialtyId ?? undefined,
     groupEloRoleId: user?.eloRoleId ?? undefined,
-    localityId: user?.localityId ?? undefined,
+    localityId: effectiveLocalityId,
     isAdminLike:
       ti ||
       nationalCommission ||
