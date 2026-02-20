@@ -5,7 +5,7 @@ ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 COPY package.json package-lock.json ./
 RUN npm install --legacy-peer-deps
 COPY . .
-RUN npm run build
+RUN npx vite build
 
 FROM node:20-alpine
 WORKDIR /app
