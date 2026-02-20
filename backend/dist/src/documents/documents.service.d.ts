@@ -1,12 +1,14 @@
 import { DocumentCategory, DocumentLinkEntity, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { RbacUser } from '../rbac/rbac.types';
+import { AuditService } from '../audit/audit.service';
 import { CreateDocumentSubcategoryDto } from './dto/create-document-subcategory.dto';
 import { UpdateDocumentSubcategoryDto } from './dto/update-document-subcategory.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
 export declare class DocumentsService {
     private readonly prisma;
-    constructor(prisma: PrismaService);
+    private readonly audit;
+    constructor(prisma: PrismaService, audit: AuditService);
     list(filters: {
         q?: string;
         category?: string;
@@ -36,7 +38,7 @@ export declare class DocumentsService {
         }[];
         tree: any[];
     }>;
-    createSubcategory(payload: CreateDocumentSubcategoryDto, _user?: RbacUser): Promise<{
+    createSubcategory(payload: CreateDocumentSubcategoryDto, user?: RbacUser): Promise<{
         documentCount: number;
         totalDocumentCount: number;
         id: string;
@@ -46,7 +48,7 @@ export declare class DocumentsService {
         category: import("@prisma/client").$Enums.DocumentCategory;
         parentId: string | null;
     }>;
-    updateSubcategory(id: string, payload: UpdateDocumentSubcategoryDto, _user?: RbacUser): Promise<{
+    updateSubcategory(id: string, payload: UpdateDocumentSubcategoryDto, user?: RbacUser): Promise<{
         id: string;
         createdAt: Date;
         updatedAt: Date;
@@ -54,7 +56,7 @@ export declare class DocumentsService {
         category: import("@prisma/client").$Enums.DocumentCategory;
         parentId: string | null;
     }>;
-    deleteSubcategory(id: string, _user?: RbacUser): Promise<{
+    deleteSubcategory(id: string, user?: RbacUser): Promise<{
         deletedFolders: number;
         unlinkedDocuments: number;
     }>;

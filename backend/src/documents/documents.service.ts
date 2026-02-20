@@ -9,13 +9,17 @@ import { PrismaService } from '../prisma/prisma.service';
 import { throwError } from '../common/http-error';
 import type { RbacUser } from '../rbac/rbac.types';
 import { parsePagination } from '../common/pagination';
+import { AuditService } from '../audit/audit.service';
 import { CreateDocumentSubcategoryDto } from './dto/create-document-subcategory.dto';
 import { UpdateDocumentSubcategoryDto } from './dto/update-document-subcategory.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
 
 @Injectable()
 export class DocumentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   async list(
     filters: {
@@ -194,7 +198,7 @@ export class DocumentsService {
 
   async createSubcategory(
     payload: CreateDocumentSubcategoryDto,
-    _user?: RbacUser,
+    user?: RbacUser,
   ) {
     const category = payload.category;
     const name = payload.name?.trim();
@@ -247,6 +251,18 @@ export class DocumentsService {
       },
     });
 
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'documents',
+      action: 'create_subcategory',
+      entityId: created.id,
+      diffJson: {
+        category: created.category,
+        name: created.name,
+        parentId: created.parentId,
+      },
+    });
+
     return {
       ...created,
       documentCount: 0,
@@ -257,7 +273,7 @@ export class DocumentsService {
   async updateSubcategory(
     id: string,
     payload: UpdateDocumentSubcategoryDto,
-    _user?: RbacUser,
+    user?: RbacUser,
   ) {
     const current = await this.prisma.documentSubcategory.findUnique({
       where: { id },
@@ -317,16 +333,29 @@ export class DocumentsService {
       });
     }
 
-    return this.prisma.documentSubcategory.update({
+    const updated = await this.prisma.documentSubcategory.update({
       where: { id },
       data: {
         name: nextName,
         parentId: nextParentId,
       },
     });
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'documents',
+      action: 'update_subcategory',
+      entityId: id,
+      diffJson: {
+        name: updated.name,
+        parentId: updated.parentId,
+      },
+    });
+
+    return updated;
   }
 
-  async deleteSubcategory(id: string, _user?: RbacUser) {
+  async deleteSubcategory(id: string, user?: RbacUser) {
     const current = await this.prisma.documentSubcategory.findUnique({
       where: { id },
       select: { id: true },
@@ -343,6 +372,17 @@ export class DocumentsService {
         where: { id: { in: ids } },
       }),
     ]);
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'documents',
+      action: 'delete_subcategory',
+      entityId: id,
+      diffJson: {
+        deletedFolders: deleted.count,
+        unlinkedDocuments: unlinked.count,
+      },
+    });
 
     return {
       deletedFolders: deleted.count,
@@ -458,6 +498,20 @@ export class DocumentsService {
         subcategoryId: nextSubcategoryId,
       },
       include: this.documentInclude(),
+    });
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'documents',
+      action: 'update_document',
+      entityId: id,
+      localityId: updated.localityId ?? undefined,
+      diffJson: {
+        title: updated.title,
+        category: updated.category,
+        localityId: updated.localityId ?? null,
+        subcategoryId: updated.subcategoryId ?? null,
+      },
     });
 
     return this.mapDocumentWithAccess(updated, user);
@@ -585,6 +639,19 @@ export class DocumentsService {
       },
     });
 
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'documents',
+      action: 'create_link',
+      entityId: link.id,
+      localityId: document.localityId ?? undefined,
+      diffJson: {
+        documentId: link.documentId,
+        entityType: link.entityType,
+        entityId: link.entityId,
+      },
+    });
+
     const [enriched] = await this.enrichLinks([link]);
     return {
       ...enriched,
@@ -654,6 +721,19 @@ export class DocumentsService {
       },
     });
 
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'documents',
+      action: 'update_link',
+      entityId: id,
+      localityId: nextDocument.localityId ?? undefined,
+      diffJson: {
+        documentId: updated.documentId,
+        entityType: updated.entityType,
+        entityId: updated.entityId,
+      },
+    });
+
     const [enriched] = await this.enrichLinks([updated]);
     return {
       ...enriched,
@@ -674,6 +754,20 @@ export class DocumentsService {
     this.assertDocumentScope(existing.document, user);
 
     await this.prisma.documentLink.delete({ where: { id } });
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'documents',
+      action: 'delete_link',
+      entityId: id,
+      localityId: existing.document.localityId ?? undefined,
+      diffJson: {
+        documentId: existing.documentId,
+        entityType: existing.entityType,
+        entityId: existing.entityId,
+      },
+    });
+
     return { success: true };
   }
 
@@ -707,18 +801,24 @@ export class DocumentsService {
 
     if (entityType === DocumentLinkEntity.TASK_INSTANCE) {
       const where: Prisma.TaskInstanceWhereInput = {};
+      const andClauses: Prisma.TaskInstanceWhereInput[] = [];
       if (this.shouldApplyLocalityScope(user))
         where.localityId = user?.localityId as string;
       if (user?.specialtyId) {
-        where.taskTemplate = { specialtyId: user.specialtyId };
+        andClauses.push({ OR: [{ specialtyId: null }, { specialtyId: user.specialtyId }] });
       }
       if (q) {
-        where.OR = [
-          { taskTemplate: { title: { contains: q, mode: 'insensitive' } } },
-          { locality: { name: { contains: q, mode: 'insensitive' } } },
-          { locality: { code: { contains: q, mode: 'insensitive' } } },
-          { id: { contains: q, mode: 'insensitive' } },
-        ];
+        andClauses.push({
+          OR: [
+            { taskTemplate: { title: { contains: q, mode: 'insensitive' } } },
+            { locality: { name: { contains: q, mode: 'insensitive' } } },
+            { locality: { code: { contains: q, mode: 'insensitive' } } },
+            { id: { contains: q, mode: 'insensitive' } },
+          ],
+        });
+      }
+      if (andClauses.length > 0) {
+        where.AND = andClauses;
       }
       const rows = await this.prisma.taskInstance.findMany({
         where,

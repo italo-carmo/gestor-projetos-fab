@@ -4,6 +4,7 @@ import { TaskCommentDto } from './dto/task-comment.dto';
 import { TaskEloRoleDto } from './dto/task-elo-role.dto';
 import { TaskMeetingDto } from './dto/task-meeting.dto';
 import { TaskProgressDto } from './dto/task-progress.dto';
+import { TaskSpecialtyDto } from './dto/task-specialty.dto';
 import { TaskStatusDto } from './dto/task-status.dto';
 import { TasksService } from './tasks.service';
 export declare class TaskInstancesController {
@@ -23,7 +24,7 @@ export declare class TaskInstancesController {
             subtitle?: string;
         }[];
     }>;
-    list(localityId: string | undefined, phaseId: string | undefined, status: string | undefined, assigneeId: string | undefined, assigneeIds: string | undefined, dueFrom: string | undefined, dueTo: string | undefined, meetingId: string | undefined, eloRoleId: string | undefined, page: string | undefined, pageSize: string | undefined, user: RbacUser): Promise<{
+    list(localityId: string | undefined, phaseId: string | undefined, status: string | undefined, assigneeId: string | undefined, assigneeIds: string | undefined, dueFrom: string | undefined, dueTo: string | undefined, meetingId: string | undefined, eloRoleId: string | undefined, specialtyId: string | undefined, page: string | undefined, pageSize: string | undefined, user: RbacUser): Promise<{
         items: any[];
         page: number;
         pageSize: number;
@@ -67,6 +68,7 @@ export declare class TaskInstancesController {
     assign(id: string, dto: TaskAssignDto, user: RbacUser): Promise<any>;
     updateMeeting(id: string, dto: TaskMeetingDto, user: RbacUser): Promise<any>;
     updateEloRole(id: string, dto: TaskEloRoleDto, user: RbacUser): Promise<any>;
+    updateSpecialty(id: string, dto: TaskSpecialtyDto, user: RbacUser): Promise<any>;
     batchAssign(body: {
         ids: string[];
         assignedToId: string | null;
@@ -79,6 +81,9 @@ export declare class TaskInstancesController {
         status: string;
     }, user: RbacUser): Promise<{
         updated: number;
+    }>;
+    remove(id: string, user: RbacUser): Promise<{
+        ok: boolean;
     }>;
     gantt(localityId: string | undefined, from: string | undefined, to: string | undefined, user: RbacUser): Promise<{
         items: any[];

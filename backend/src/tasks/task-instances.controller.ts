@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../common/current-user.decorator';
 import { RequirePermission } from '../rbac/require-permission.decorator';
@@ -9,6 +9,7 @@ import { TaskCommentDto } from './dto/task-comment.dto';
 import { TaskEloRoleDto } from './dto/task-elo-role.dto';
 import { TaskMeetingDto } from './dto/task-meeting.dto';
 import { TaskProgressDto } from './dto/task-progress.dto';
+import { TaskSpecialtyDto } from './dto/task-specialty.dto';
 import { TaskStatusDto } from './dto/task-status.dto';
 import { TasksService } from './tasks.service';
 
@@ -35,6 +36,7 @@ export class TaskInstancesController {
     @Query('dueTo') dueTo: string | undefined,
     @Query('meetingId') meetingId: string | undefined,
     @Query('eloRoleId') eloRoleId: string | undefined,
+    @Query('specialtyId') specialtyId: string | undefined,
     @Query('page') page: string | undefined,
     @Query('pageSize') pageSize: string | undefined,
     @CurrentUser() user: RbacUser,
@@ -49,6 +51,7 @@ export class TaskInstancesController {
       dueTo,
       meetingId,
       eloRoleId,
+      specialtyId,
       page,
       pageSize,
     }, user);
@@ -106,6 +109,12 @@ export class TaskInstancesController {
     return this.tasks.updateTaskEloRole(id, dto.eloRoleId ?? null, user);
   }
 
+  @Put(':id/specialty')
+  @RequirePermission('task_instances', 'update')
+  updateSpecialty(@Param('id') id: string, @Body() dto: TaskSpecialtyDto, @CurrentUser() user: RbacUser) {
+    return this.tasks.updateTaskSpecialty(id, dto.specialtyId ?? null, user);
+  }
+
   @Put('batch/assign')
   @RequirePermission('task_instances', 'assign')
   batchAssign(
@@ -119,6 +128,12 @@ export class TaskInstancesController {
   @RequirePermission('task_instances', 'update')
   batchStatus(@Body() body: { ids: string[]; status: string }, @CurrentUser() user: RbacUser) {
     return this.tasks.batchStatus(body.ids ?? [], body.status as any, user);
+  }
+
+  @Delete(':id')
+  @RequirePermission('task_instances', 'update')
+  remove(@Param('id') id: string, @CurrentUser() user: RbacUser) {
+    return this.tasks.deleteTaskInstance(id, user);
   }
 
   @Get('gantt')

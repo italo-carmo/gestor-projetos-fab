@@ -358,6 +358,12 @@ export function TasksPage() {
                     valueGetter: (_, row) => phaseMap.get(row.taskTemplate?.phaseId) ?? '-',
                   },
                   {
+                    field: 'specialty',
+                    headerName: 'Especialidade',
+                    width: 160,
+                    valueGetter: (_, row) => row.specialtyName ?? 'Todas',
+                  },
+                  {
                     field: 'dueDate',
                     headerName: 'Prazo',
                     width: 125,
@@ -481,6 +487,9 @@ export function TasksPage() {
                               Elo: {task.eloRole.name ?? task.eloRole.code}
                             </Typography>
                           )}
+                          <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                            Especialidade: {task.specialtyName ?? 'Todas'}
+                          </Typography>
                           {task.meeting && (
                             <Link component={RouterLink} to={`/meetings?meetingId=${task.meeting.id}`} onClick={(e) => e.stopPropagation()} sx={{ fontSize: 11, mt: 0.5, display: 'block' }}>
                               Reunião: {format(new Date(task.meeting.datetime), 'dd/MM')}
@@ -500,6 +509,7 @@ export function TasksPage() {
         task={selectedTask}
         open={Boolean(selectedTaskId)}
         onClose={() => setSelectedTaskId(null)}
+        onDeleted={() => setSelectedTaskId(null)}
         user={me}
         localities={localities}
       />

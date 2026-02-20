@@ -29,7 +29,15 @@ let UsersController = class UsersController {
         return { items };
     }
     async update(id, dto) {
-        return this.users.update(id, { eloRoleId: dto.eloRoleId });
+        return this.users.update(id, {
+            eloRoleId: dto.eloRoleId,
+            localityId: dto.localityId,
+            specialtyId: dto.specialtyId,
+            roleId: dto.roleId,
+        });
+    }
+    async removeRole(id, roleId) {
+        return this.users.removeRole(id, roleId);
     }
 };
 exports.UsersController = UsersController;
@@ -49,6 +57,15 @@ __decorate([
     __metadata("design:paramtypes", [String, update_user_dto_1.UpdateUserDto]),
     __metadata("design:returntype", Promise)
 ], UsersController.prototype, "update", null);
+__decorate([
+    (0, common_1.Delete)(':id/roles/:roleId'),
+    (0, require_permission_decorator_1.RequirePermission)('users', 'update'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Param)('roleId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:returntype", Promise)
+], UsersController.prototype, "removeRole", null);
 exports.UsersController = UsersController = __decorate([
     (0, common_1.Controller)('users'),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, rbac_guard_1.RbacGuard),

@@ -18,6 +18,7 @@ const audit_service_1 = require("../audit/audit.service");
 const http_error_1 = require("../common/http-error");
 const sanitize_1 = require("../common/sanitize");
 const pagination_1 = require("../common/pagination");
+const role_access_1 = require("../rbac/role-access");
 let MeetingsService = class MeetingsService {
     prisma;
     tasks;
@@ -217,6 +218,35 @@ let MeetingsService = class MeetingsService {
         });
         return result;
     }
+    async delete(id, user) {
+        const existing = await this.prisma.meeting.findUnique({
+            where: { id },
+            select: { id: true, scope: true, localityId: true },
+        });
+        if (!existing)
+            (0, http_error_1.throwError)('NOT_FOUND');
+        this.assertDeleteAccess(user);
+        const [, deleted] = await this.prisma.$transaction([
+            this.prisma.taskInstance.updateMany({
+                where: { meetingId: id },
+                data: { meetingId: null },
+            }),
+            this.prisma.meeting.delete({ where: { id } }),
+        ]);
+        await this.audit.log({
+            userId: user?.id,
+            resource: 'meetings',
+            action: 'delete',
+            entityId: id,
+            localityId: existing.localityId ?? undefined,
+            diffJson: {
+                scope: existing.scope,
+                localityId: existing.localityId ?? null,
+                meetingType: deleted.meetingType,
+            },
+        });
+        return { ok: true };
+    }
     getScopeConstraints(user) {
         if (!user)
             return {};
@@ -231,6 +261,13 @@ let MeetingsService = class MeetingsService {
         if (localityId != null && localityId !== constraints.localityId) {
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         }
+    }
+    assertDeleteAccess(user) {
+        if (!user?.id)
+            (0, http_error_1.throwError)('RBAC_FORBIDDEN');
+        if ((0, role_access_1.hasAnyRole)(user, [role_access_1.ROLE_COORDENACAO_CIPAVD, role_access_1.ROLE_TI]))
+            return;
+        (0, http_error_1.throwError)('RBAC_FORBIDDEN');
     }
 };
 exports.MeetingsService = MeetingsService;

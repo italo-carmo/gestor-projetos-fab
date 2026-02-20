@@ -30,6 +30,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import {
   useAddMeetingDecision,
   useCreateMeeting,
+  useDeleteMeeting,
   useGenerateMeetingTasks,
   useLocalities,
   useMeetings,
@@ -49,6 +50,7 @@ import { ErrorState } from '../components/states/ErrorState';
 import { SkeletonState } from '../components/states/SkeletonState';
 import { useToast } from '../app/toast';
 import { parseApiError } from '../app/apiErrors';
+import { hasAnyRole, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from '../app/roleAccess';
 import { can } from '../app/rbac';
 import { MeetingStatus, MEETING_STATUS_LABELS, MeetingType, MEETING_TYPE_LABELS, TaskPriority, TASK_PRIORITY_LABELS } from '../constants/enums';
 
@@ -96,6 +98,7 @@ export function MeetingsPage() {
   const templatesQuery = useTaskTemplates();
 
   const createMeeting = useCreateMeeting();
+  const deleteMeeting = useDeleteMeeting();
   const updateMeeting = useUpdateMeeting();
   const addDecision = useAddMeetingDecision();
   const generateTasks = useGenerateMeetingTasks();
@@ -302,9 +305,24 @@ export function MeetingsPage() {
   const canCreate = can(me, 'meetings', 'create');
   const canUpdate = can(me, 'meetings', 'update');
   const canGenerate = can(me, 'tasks', 'generate_from_meeting');
+  const canDelete = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]) && canUpdate;
 
   const getTaskOptionLabel = (t: any) =>
     (t.taskTemplate?.title ?? t.title ?? 'Tarefa') + ' - ' + format(new Date(t.dueDate), 'dd/MM/yyyy');
+
+  const handleDeleteMeeting = async () => {
+    if (!selectedMeeting || !canDelete) return;
+    if (!window.confirm('Deseja excluir esta reunião? Esta ação será registrada em auditoria.')) return;
+    try {
+      await deleteMeeting.mutateAsync(selectedMeeting.id);
+      toast.push({ message: 'Reunião excluída', severity: 'success' });
+      setSelectedMeeting(null);
+      setDrawerOpen(false);
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({ message: payload.message ?? 'Erro ao excluir reunião', severity: 'error' });
+    }
+  };
 
   return (
     <Box>
@@ -607,6 +625,16 @@ export function MeetingsPage() {
             {(canCreate || canUpdate) && (
               <Button variant="contained" onClick={handleSave}>
                 Salvar
+              </Button>
+            )}
+            {selectedMeeting && canDelete && (
+              <Button
+                variant="outlined"
+                color="error"
+                onClick={handleDeleteMeeting}
+                disabled={deleteMeeting.isPending}
+              >
+                Excluir
               </Button>
             )}
             <Button variant="text" onClick={() => setDrawerOpen(false)}>

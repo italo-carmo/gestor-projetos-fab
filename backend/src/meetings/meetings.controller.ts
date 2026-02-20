@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../common/current-user.decorator';
 import { throwError } from '../common/http-error';
@@ -59,6 +59,13 @@ export class MeetingsController {
   generateTasks(@Param('id') id: string, @Body() dto: GenerateMeetingTasksDto, @CurrentUser() user: RbacUser) {
     this.assertMeetingsAccess(user);
     return this.meetings.generateTasks(id, dto, user);
+  }
+
+  @Delete(':id')
+  @RequirePermission('meetings', 'update')
+  remove(@Param('id') id: string, @CurrentUser() user: RbacUser) {
+    this.assertMeetingsAccess(user);
+    return this.meetings.delete(id, user);
   }
 
   private assertMeetingsAccess(user: RbacUser) {

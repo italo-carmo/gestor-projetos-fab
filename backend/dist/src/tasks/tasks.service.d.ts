@@ -84,6 +84,7 @@ export declare class TasksService {
     }, user?: RbacUser): Promise<{
         items: {
             id: string;
+            specialtyId: string | null;
             eloRoleId: string | null;
             createdAt: Date;
             updatedAt: Date;
@@ -113,6 +114,7 @@ export declare class TasksService {
         dueTo?: string;
         meetingId?: string;
         eloRoleId?: string;
+        specialtyId?: string;
         page?: string;
         pageSize?: string;
     }, user?: RbacUser): Promise<{
@@ -522,13 +524,19 @@ export declare class TasksService {
     private assertConstraints;
     private buildTaskAccessWhere;
     private isTaskResponsibleUser;
+    private matchesTaskSpecialty;
     private assertTaskViewAccess;
     private assertTaskOperateAccess;
     private assertCanAssignInLocality;
     private assertCanAssignInTaskScope;
+    private assertDeleteAccess;
     private resolveTaskResponsibleIds;
     updateTaskMeeting(id: string, meetingId: string | null, user?: RbacUser): Promise<any>;
     updateTaskEloRole(id: string, eloRoleId: string | null, user?: RbacUser): Promise<any>;
+    updateTaskSpecialty(id: string, specialtyId: string | null, user?: RbacUser): Promise<any>;
+    deleteTaskInstance(id: string, user?: RbacUser): Promise<{
+        ok: boolean;
+    }>;
     private hasBlockingDependencies;
     private buildTaskWhere;
     listTaskInstancesForExport(filters: {
@@ -539,6 +547,7 @@ export declare class TasksService {
         assigneeIds?: string;
         dueFrom?: string;
         dueTo?: string;
+        specialtyId?: string;
     }, user?: RbacUser): Promise<any[]>;
     private parsePagination;
 }

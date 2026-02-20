@@ -40,6 +40,7 @@ export declare class TaskTemplatesController {
     generateInstances(id: string, dto: GenerateInstancesDto, user: RbacUser): Promise<{
         items: {
             id: string;
+            specialtyId: string | null;
             eloRoleId: string | null;
             createdAt: Date;
             updatedAt: Date;

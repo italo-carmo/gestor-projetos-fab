@@ -157,6 +157,7 @@ model Activity {
   title         String
   description   String?
   localityId    String?
+  specialtyId   String?
   eventDate     DateTime?
   status        ActivityStatus @default(NOT_STARTED)
   reportRequired Boolean      @default(false)
@@ -165,6 +166,7 @@ model Activity {
   updatedAt     DateTime      @updatedAt
 
   locality      Locality?     @relation(fields: [localityId], references: [id])
+  specialty     Specialty?    @relation(fields: [specialtyId], references: [id])
   createdBy     User?         @relation("ActivityCreator", fields: [createdById], references: [id])
   report        ActivityReport?
   documents     DocumentAsset[]
@@ -174,6 +176,7 @@ model Activity {
   commentReads  ActivityCommentRead[]
 
   @@index([localityId])
+  @@index([specialtyId])
   @@index([status])
   @@index([eventDate])
 }
@@ -250,7 +253,9 @@ model Specialty {
   updatedAt  DateTime       @updatedAt
 
   users      User[]
+  activities Activity[]
   templates  TaskTemplate[]
+  taskInstances TaskInstance[]
   notices    Notice[]
   checklists Checklist[]
   kpiValues  KpiValue[]
@@ -293,6 +298,7 @@ model TaskInstance {
   id              String        @id @default(cuid())
   taskTemplateId  String
   localityId      String
+  specialtyId     String?
   meetingId       String?
   eloRoleId       String?
   dueDate         DateTime
@@ -311,6 +317,7 @@ model TaskInstance {
 
   taskTemplate    TaskTemplate  @relation(fields: [taskTemplateId], references: [id])
   locality        Locality      @relation(fields: [localityId], references: [id])
+  specialty       Specialty?    @relation(fields: [specialtyId], references: [id])
   meeting         Meeting?      @relation(fields: [meetingId], references: [id])
   eloRole         EloRole?      @relation(fields: [eloRoleId], references: [id])
   assignedTo      User?         @relation("TaskAssignee", fields: [assignedToId], references: [id])
@@ -321,6 +328,7 @@ model TaskInstance {
   commentReads    TaskCommentRead[]
 
   @@index([localityId])
+  @@index([specialtyId])
   @@index([localityId, dueDate, status])
   @@index([meetingId])
   @@index([eloRoleId])

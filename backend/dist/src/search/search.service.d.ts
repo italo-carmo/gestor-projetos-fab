@@ -39,4 +39,5 @@ export declare class SearchService {
             fileName: string;
         }[];
     }>;
+    private getScopeConstraints;
 }

@@ -136,6 +136,7 @@ let TasksService = class TasksService {
             data: {
                 taskTemplateId: templateId,
                 localityId: entry.localityId,
+                specialtyId: template.specialtyId ?? null,
                 dueDate: new Date(entry.dueDate),
                 status: client_1.TaskStatus.NOT_STARTED,
                 priority,
@@ -179,6 +180,7 @@ let TasksService = class TasksService {
                 take,
                 include: {
                     locality: { select: { id: true, name: true, code: true } },
+                    specialty: { select: { id: true, name: true, color: true } },
                     taskTemplate: { select: { id: true, title: true, phaseId: true } },
                     assignedTo: { select: { id: true, name: true, email: true } },
                     assignedElo: { include: { eloRole: { select: { id: true, code: true, name: true } } } },
@@ -208,6 +210,7 @@ let TasksService = class TasksService {
             include: {
                 taskTemplate: { include: { phase: true, specialty: true, eloRole: true } },
                 locality: true,
+                specialty: { select: { id: true, name: true, color: true } },
                 assignedTo: { select: { id: true, name: true, email: true } },
                 assignedElo: { include: { eloRole: { select: { id: true, code: true, name: true } } } },
                 responsibles: {
@@ -468,6 +471,7 @@ let TasksService = class TasksService {
         const targetLocalityId = payload.localityId?.trim() || instance.localityId;
         this.assertCanAssignInTaskScope({
             localityId: targetLocalityId,
+            specialtyId: instance.specialtyId ?? instance.taskTemplate?.specialtyId ?? null,
             taskTemplate: { specialtyId: instance.taskTemplate?.specialtyId ?? null },
             eloRoleId: instance.eloRoleId ?? null,
             assignedElo: instance.assignedElo,
@@ -729,7 +733,7 @@ let TasksService = class TasksService {
         const taskWhere = { localityId };
         const constraints = this.getScopeConstraints(user);
         if (constraints.specialtyId) {
-            taskWhere.taskTemplate = { specialtyId: constraints.specialtyId };
+            taskWhere.OR = [{ specialtyId: null }, { specialtyId: constraints.specialtyId }];
         }
         const tasks = await this.prisma.taskInstance.findMany({
             where: taskWhere,
@@ -779,7 +783,7 @@ let TasksService = class TasksService {
         const reportsCount = await this.prisma.report.count();
         const taskWhere = {};
         if (constraints.specialtyId) {
-            taskWhere.taskTemplate = { specialtyId: constraints.specialtyId };
+            taskWhere.OR = [{ specialtyId: null }, { specialtyId: constraints.specialtyId }];
         }
         const tasks = await this.prisma.taskInstance.findMany({
             where: taskWhere,
@@ -1335,6 +1339,8 @@ let TasksService = class TasksService {
             ...instance,
             localityName: instance.localityName ?? instance.locality?.name ?? null,
             localityCode: instance.localityCode ?? instance.locality?.code ?? null,
+            specialtyId: instance.specialtyId ?? instance.taskTemplate?.specialtyId ?? null,
+            specialtyName: instance.specialty?.name ?? instance.taskTemplate?.specialty?.name ?? null,
             isLate: this.isLate(instance),
             blockedByIds: instance.blockedByIdsJson ?? null,
             hasAssignee: !this.isTaskUnassigned(instance),
@@ -1474,7 +1480,7 @@ let TasksService = class TasksService {
         if (constraints.localityId && constraints.localityId !== localityId) {
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         }
-        if (constraints.specialtyId && constraints.specialtyId !== specialtyId) {
+        if (constraints.specialtyId && specialtyId && constraints.specialtyId !== specialtyId) {
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         }
     }
@@ -1504,7 +1510,7 @@ let TasksService = class TasksService {
                     and.push({ localityId: profile.localityId });
                 const groupOr = [];
                 if (profile.groupSpecialtyId) {
-                    groupOr.push({ taskTemplate: { specialtyId: profile.groupSpecialtyId } });
+                    groupOr.push({ OR: [{ specialtyId: null }, { specialtyId: profile.groupSpecialtyId }] });
                 }
                 if (profile.groupEloRoleId) {
                     groupOr.push({ eloRoleId: profile.groupEloRoleId });
@@ -1529,7 +1535,7 @@ let TasksService = class TasksService {
                 and.push({ localityId: profile.localityId });
             const groupOr = [];
             if (profile.groupSpecialtyId) {
-                groupOr.push({ taskTemplate: { specialtyId: profile.groupSpecialtyId } });
+                groupOr.push({ OR: [{ specialtyId: null }, { specialtyId: profile.groupSpecialtyId }] });
             }
             if (profile.groupEloRoleId) {
                 groupOr.push({ eloRoleId: profile.groupEloRoleId });
@@ -1548,7 +1554,7 @@ let TasksService = class TasksService {
         if (user.localityId) {
             const groupOr = [];
             if (user.specialtyId) {
-                groupOr.push({ taskTemplate: { specialtyId: user.specialtyId } });
+                groupOr.push({ OR: [{ specialtyId: null }, { specialtyId: user.specialtyId }] });
             }
             if (user.eloRoleId) {
                 groupOr.push({ eloRoleId: user.eloRoleId });
@@ -1573,6 +1579,12 @@ let TasksService = class TasksService {
         }
         return false;
     }
+    matchesTaskSpecialty(instance, specialtyId) {
+        if (!specialtyId)
+            return false;
+        const taskSpecialtyId = instance?.specialtyId ?? instance?.taskTemplate?.specialtyId ?? null;
+        return !taskSpecialtyId || taskSpecialtyId === specialtyId;
+    }
     assertTaskViewAccess(instance, user) {
         if (!user?.id)
             return;
@@ -1584,9 +1596,7 @@ let TasksService = class TasksService {
                 return;
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         }
-        const specialtyMatch = profile.groupSpecialtyId
-            ? instance.taskTemplate?.specialtyId === profile.groupSpecialtyId
-            : false;
+        const specialtyMatch = this.matchesTaskSpecialty(instance, profile.groupSpecialtyId);
         const eloRoleMatch = profile.groupEloRoleId
             ? instance.eloRoleId === profile.groupEloRoleId ||
                 instance.assignedElo?.eloRoleId === profile.groupEloRoleId
@@ -1642,9 +1652,7 @@ let TasksService = class TasksService {
             if (profile.localityId && instance.localityId !== profile.localityId) {
                 (0, http_error_1.throwError)('RBAC_FORBIDDEN');
             }
-            const specialtyMatch = profile.groupSpecialtyId
-                ? instance.taskTemplate?.specialtyId === profile.groupSpecialtyId
-                : false;
+            const specialtyMatch = this.matchesTaskSpecialty(instance, profile.groupSpecialtyId);
             const eloRoleMatch = profile.groupEloRoleId
                 ? instance.eloRoleId === profile.groupEloRoleId ||
                     instance.assignedElo?.eloRoleId === profile.groupEloRoleId
@@ -1653,6 +1661,13 @@ let TasksService = class TasksService {
                 return;
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         }
+        (0, http_error_1.throwError)('RBAC_FORBIDDEN');
+    }
+    assertDeleteAccess(user) {
+        if (!user?.id)
+            (0, http_error_1.throwError)('RBAC_FORBIDDEN');
+        if ((0, role_access_1.hasAnyRole)(user, [role_access_1.ROLE_COORDENACAO_CIPAVD, role_access_1.ROLE_TI]))
+            return;
         (0, http_error_1.throwError)('RBAC_FORBIDDEN');
     }
     async resolveTaskResponsibleIds(localityId, input, user) {
@@ -1735,6 +1750,72 @@ let TasksService = class TasksService {
         });
         return this.mapTaskInstance(updated, user?.executiveHidePii);
     }
+    async updateTaskSpecialty(id, specialtyId, user) {
+        const instance = await this.prisma.taskInstance.findUnique({
+            where: { id },
+            include: {
+                taskTemplate: { select: { specialtyId: true } },
+                assignedElo: { select: { id: true, eloRoleId: true } },
+                responsibles: { select: { userId: true } },
+            },
+        });
+        if (!instance)
+            (0, http_error_1.throwError)('NOT_FOUND');
+        this.assertTaskOperateAccess(instance, user);
+        this.assertConstraints(instance.localityId, specialtyId, user);
+        if (specialtyId) {
+            const existing = await this.prisma.specialty.findUnique({
+                where: { id: specialtyId },
+                select: { id: true },
+            });
+            if (!existing)
+                (0, http_error_1.throwError)('NOT_FOUND');
+        }
+        const updated = await this.prisma.taskInstance.update({
+            where: { id },
+            data: { specialtyId },
+            include: { specialty: { select: { id: true, name: true, color: true } } },
+        });
+        await this.audit.log({
+            userId: user?.id,
+            resource: 'task_instances',
+            action: 'update_specialty',
+            entityId: id,
+            localityId: instance.localityId,
+            diffJson: { specialtyId },
+        });
+        return this.mapTaskInstance(updated, user?.executiveHidePii);
+    }
+    async deleteTaskInstance(id, user) {
+        const existing = await this.prisma.taskInstance.findUnique({
+            where: { id },
+            include: {
+                taskTemplate: { select: { title: true } },
+            },
+        });
+        if (!existing)
+            (0, http_error_1.throwError)('NOT_FOUND');
+        this.assertDeleteAccess(user);
+        await this.prisma.$transaction([
+            this.prisma.taskCommentRead.deleteMany({ where: { taskInstanceId: id } }),
+            this.prisma.taskComment.deleteMany({ where: { taskInstanceId: id } }),
+            this.prisma.taskResponsible.deleteMany({ where: { taskInstanceId: id } }),
+            this.prisma.report.deleteMany({ where: { taskInstanceId: id } }),
+            this.prisma.taskInstance.delete({ where: { id } }),
+        ]);
+        await this.audit.log({
+            userId: user?.id,
+            resource: 'task_instances',
+            action: 'delete',
+            entityId: id,
+            localityId: existing.localityId,
+            diffJson: {
+                title: existing.taskTemplate?.title ?? null,
+                localityId: existing.localityId,
+            },
+        });
+        return { ok: true };
+    }
     async hasBlockingDependencies(blockedByIds) {
         if (!Array.isArray(blockedByIds) || blockedByIds.length === 0)
             return false;
@@ -1750,6 +1831,8 @@ let TasksService = class TasksService {
             andClauses.push({ localityId: filters.localityId });
         if (filters.eloRoleId)
             andClauses.push({ eloRoleId: filters.eloRoleId });
+        if (filters.specialtyId)
+            andClauses.push({ specialtyId: filters.specialtyId });
         if (filters.status)
             andClauses.push({ status: filters.status });
         const assigneeIds = (filters.assigneeIds ?? '')
@@ -1797,6 +1880,7 @@ let TasksService = class TasksService {
             include: {
                 taskTemplate: { include: { phase: true, specialty: true, eloRole: true } },
                 locality: true,
+                specialty: { select: { id: true, name: true, color: true } },
                 assignedTo: { select: { id: true, name: true, email: true } },
                 assignedElo: { include: { eloRole: { select: { id: true, code: true, name: true } } } },
                 responsibles: {

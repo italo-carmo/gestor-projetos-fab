@@ -7,6 +7,7 @@ import { RbacUser } from '../rbac/rbac.types';
 import { throwError } from '../common/http-error';
 import { sanitizeText } from '../common/sanitize';
 import { parsePagination } from '../common/pagination';
+import { hasAnyRole, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from '../rbac/role-access';
 
 @Injectable()
 export class MeetingsService {
@@ -265,6 +266,39 @@ export class MeetingsService {
     return result;
   }
 
+  async delete(id: string, user?: RbacUser) {
+    const existing = await this.prisma.meeting.findUnique({
+      where: { id },
+      select: { id: true, scope: true, localityId: true },
+    });
+    if (!existing) throwError('NOT_FOUND');
+
+    this.assertDeleteAccess(user);
+
+    const [, deleted] = await this.prisma.$transaction([
+      this.prisma.taskInstance.updateMany({
+        where: { meetingId: id },
+        data: { meetingId: null },
+      }),
+      this.prisma.meeting.delete({ where: { id } }),
+    ]);
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'meetings',
+      action: 'delete',
+      entityId: id,
+      localityId: existing.localityId ?? undefined,
+      diffJson: {
+        scope: existing.scope,
+        localityId: existing.localityId ?? null,
+        meetingType: deleted.meetingType,
+      },
+    });
+
+    return { ok: true };
+  }
+
   private getScopeConstraints(user?: RbacUser) {
     if (!user) return {};
     return {
@@ -278,5 +312,11 @@ export class MeetingsService {
     if (localityId != null && localityId !== constraints.localityId) {
       throwError('RBAC_FORBIDDEN');
     }
+  }
+
+  private assertDeleteAccess(user?: RbacUser) {
+    if (!user?.id) throwError('RBAC_FORBIDDEN');
+    if (hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_TI])) return;
+    throwError('RBAC_FORBIDDEN');
   }
 }

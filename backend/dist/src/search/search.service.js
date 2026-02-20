@@ -13,6 +13,7 @@ exports.SearchService = void 0;
 const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../prisma/prisma.service");
 const executive_1 = require("../common/executive");
+const role_access_1 = require("../rbac/role-access");
 let SearchService = class SearchService {
     prisma;
     constructor(prisma) {
@@ -23,26 +24,33 @@ let SearchService = class SearchService {
         if (!query) {
             return { tasks: [], notices: [], meetings: [], localities: [], documents: [] };
         }
+        const constraints = this.getScopeConstraints(user);
         const taskWhere = {
             taskTemplate: { title: { contains: query, mode: 'insensitive' } },
         };
-        if (user?.localityId)
-            taskWhere.localityId = user.localityId;
+        if (constraints.localityId)
+            taskWhere.localityId = constraints.localityId;
+        if (constraints.specialtyId) {
+            taskWhere.AND = [
+                ...(taskWhere.AND ?? []),
+                { OR: [{ specialtyId: null }, { specialtyId: constraints.specialtyId }] },
+            ];
+        }
         const noticeWhere = {
             OR: [
                 { title: { contains: query, mode: 'insensitive' } },
                 { body: { contains: query, mode: 'insensitive' } },
             ],
         };
-        if (user?.localityId) {
+        if (constraints.localityId) {
             noticeWhere.AND = [
-                { OR: [{ localityId: null }, { localityId: user.localityId }] },
+                { OR: [{ localityId: null }, { localityId: constraints.localityId }] },
             ];
         }
-        if (user?.specialtyId) {
+        if (constraints.specialtyId) {
             noticeWhere.AND = [
                 ...(noticeWhere.AND ?? []),
-                { OR: [{ specialtyId: null }, { specialtyId: user.specialtyId }] },
+                { OR: [{ specialtyId: null }, { specialtyId: constraints.specialtyId }] },
             ];
         }
         const meetingWhere = {
@@ -50,8 +58,8 @@ let SearchService = class SearchService {
                 { agenda: { contains: query, mode: 'insensitive' } },
             ],
         };
-        if (user?.localityId) {
-            meetingWhere.AND = [{ OR: [{ localityId: null }, { localityId: user.localityId }] }];
+        if (constraints.localityId) {
+            meetingWhere.AND = [{ OR: [{ localityId: null }, { localityId: constraints.localityId }] }];
         }
         const localityWhere = {
             OR: [
@@ -59,16 +67,16 @@ let SearchService = class SearchService {
                 { code: { contains: query, mode: 'insensitive' } },
             ],
         };
-        if (user?.localityId)
-            localityWhere.id = user.localityId;
+        if (constraints.localityId)
+            localityWhere.id = constraints.localityId;
         const documentWhere = {
             OR: [
                 { title: { contains: query, mode: 'insensitive' } },
                 { sourcePath: { contains: query, mode: 'insensitive' } },
             ],
         };
-        if (user?.localityId) {
-            documentWhere.AND = [{ OR: [{ localityId: null }, { localityId: user.localityId }] }];
+        if (constraints.localityId) {
+            documentWhere.AND = [{ OR: [{ localityId: null }, { localityId: constraints.localityId }] }];
         }
         const [tasks, notices, meetings, localities, documents] = await this.prisma.$transaction([
             this.prisma.taskInstance.findMany({
@@ -131,6 +139,26 @@ let SearchService = class SearchService {
             })),
         };
         return user?.executiveHidePii ? (0, executive_1.sanitizeForExecutive)(payload) : payload;
+    }
+    getScopeConstraints(user) {
+        if (!user)
+            return {};
+        const profile = (0, role_access_1.resolveAccessProfile)(user);
+        if (profile.ti || profile.nationalCommission)
+            return {};
+        if (profile.localityAdmin) {
+            return { localityId: profile.localityId ?? undefined, specialtyId: undefined };
+        }
+        if (profile.specialtyAdmin) {
+            return {
+                localityId: profile.localityId ?? undefined,
+                specialtyId: profile.groupSpecialtyId ?? undefined,
+            };
+        }
+        return {
+            localityId: user.localityId ?? undefined,
+            specialtyId: user.specialtyId ?? undefined,
+        };
     }
 };
 exports.SearchService = SearchService;

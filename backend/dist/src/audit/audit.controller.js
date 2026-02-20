@@ -15,22 +15,26 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AuditController = void 0;
 const common_1 = require("@nestjs/common");
 const jwt_auth_guard_1 = require("../auth/jwt-auth.guard");
-const require_permission_decorator_1 = require("../rbac/require-permission.decorator");
+const current_user_decorator_1 = require("../common/current-user.decorator");
+const http_error_1 = require("../common/http-error");
 const rbac_guard_1 = require("../rbac/rbac.guard");
+const role_access_1 = require("../rbac/role-access");
 const audit_service_1 = require("./audit.service");
 let AuditController = class AuditController {
     audit;
     constructor(audit) {
         this.audit = audit;
     }
-    list(resource, userId, localityId, entityId, from, to, page, pageSize) {
+    list(resource, userId, localityId, entityId, from, to, page, pageSize, user) {
+        if (!(0, role_access_1.hasAnyRole)(user, [role_access_1.ROLE_COORDENACAO_CIPAVD, role_access_1.ROLE_TI])) {
+            (0, http_error_1.throwError)('RBAC_FORBIDDEN');
+        }
         return this.audit.list({ resource, userId, localityId, entityId, from, to, page, pageSize });
     }
 };
 exports.AuditController = AuditController;
 __decorate([
     (0, common_1.Get)(),
-    (0, require_permission_decorator_1.RequirePermission)('audit_logs', 'view'),
     __param(0, (0, common_1.Query)('resource')),
     __param(1, (0, common_1.Query)('userId')),
     __param(2, (0, common_1.Query)('localityId')),
@@ -39,8 +43,9 @@ __decorate([
     __param(5, (0, common_1.Query)('to')),
     __param(6, (0, common_1.Query)('page')),
     __param(7, (0, common_1.Query)('pageSize')),
+    __param(8, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, Object, Object, Object, Object, Object, Object, Object]),
+    __metadata("design:paramtypes", [Object, Object, Object, Object, Object, Object, Object, Object, Object]),
     __metadata("design:returntype", void 0)
 ], AuditController.prototype, "list", null);
 exports.AuditController = AuditController = __decorate([

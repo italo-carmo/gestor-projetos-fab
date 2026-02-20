@@ -50,6 +50,23 @@ const prisma_service_1 = require("../prisma/prisma.service");
 const http_error_1 = require("../common/http-error");
 const audit_service_1 = require("../audit/audit.service");
 const fab_ldap_service_1 = require("../ldap/fab-ldap.service");
+const role_access_1 = require("./role-access");
+const LOCALITY_REQUIRED_ROLE_NAMES = new Set([
+    'admin especialidade local',
+    'gsd localidade',
+    'admin localidade',
+    'administracao local',
+]);
+const SPECIALTY_REQUIRED_ROLE_NAMES = new Set([
+    'admin especialidade local',
+    'admin especialidade nacional',
+]);
+function roleRequiresLocality(roleName) {
+    return LOCALITY_REQUIRED_ROLE_NAMES.has((0, role_access_1.normalizeRoleName)(roleName));
+}
+function roleRequiresSpecialty(roleName) {
+    return SPECIALTY_REQUIRED_ROLE_NAMES.has((0, role_access_1.normalizeRoleName)(roleName));
+}
 let RbacService = class RbacService {
     prisma;
     audit;
@@ -397,10 +414,21 @@ let RbacService = class RbacService {
                 id: true,
                 email: true,
                 name: true,
+                localityId: true,
+                specialtyId: true,
+                eloRoleId: true,
             },
         });
+        const targetLocalityId = payload.localityId !== undefined ? payload.localityId : (existing?.localityId ?? null);
+        if (roleRequiresLocality(role.name) && !targetLocalityId) {
+            (0, http_error_1.throwError)('USER_LOCAL_ROLE_REQUIRES_LOCALITY');
+        }
+        const targetSpecialtyId = payload.specialtyId !== undefined ? payload.specialtyId : (existing?.specialtyId ?? null);
+        const targetEloRoleId = payload.eloRoleId !== undefined ? payload.eloRoleId : (existing?.eloRoleId ?? null);
+        if (roleRequiresSpecialty(role.name) && !targetSpecialtyId && !targetEloRoleId) {
+            (0, http_error_1.throwError)('USER_SPECIALTY_ROLE_REQUIRES_SPECIALTY');
+        }
         const uniqueEmail = await this.resolveUniqueEmail(preferredEmail, uid, existing?.id);
-        const roleReplacement = Boolean(payload.replaceExistingRoles);
         const user = existing
             ? await this.prisma.user.update({
                 where: { id: existing.id },
@@ -426,15 +454,11 @@ let RbacService = class RbacService {
                     eloRoleId: payload.eloRoleId ?? null,
                 },
             });
-        if (roleReplacement) {
-            await this.prisma.userRole.deleteMany({
-                where: { userId: user.id },
-            });
-        }
-        await this.prisma.userRole.upsert({
-            where: { userId_roleId: { userId: user.id, roleId: role.id } },
-            update: {},
-            create: { userId: user.id, roleId: role.id },
+        await this.prisma.userRole.deleteMany({
+            where: { userId: user.id },
+        });
+        await this.prisma.userRole.create({
+            data: { userId: user.id, roleId: role.id },
         });
         const userWithRoles = await this.prisma.user.findUnique({
             where: { id: user.id },
@@ -457,7 +481,7 @@ let RbacService = class RbacService {
                 uid,
                 roleId: role.id,
                 roleName: role.name,
-                replaceExistingRoles: roleReplacement,
+                replaceExistingRoles: true,
                 localityId: payload.localityId ?? null,
                 specialtyId: payload.specialtyId ?? null,
                 eloRoleId: payload.eloRoleId ?? null,
@@ -547,6 +571,10 @@ let RbacService = class RbacService {
                 scope: rp.permission.scope,
             })),
         }));
+        const normalizedRoles = new Set(roles.map((role) => (0, role_access_1.normalizeRoleName)(role.name)));
+        const hasNationalScope = normalizedRoles.has((0, role_access_1.normalizeRoleName)(role_access_1.ROLE_TI)) ||
+            normalizedRoles.has((0, role_access_1.normalizeRoleName)(role_access_1.ROLE_COORDENACAO_CIPAVD)) ||
+            normalizedRoles.has((0, role_access_1.normalizeRoleName)(role_access_1.ROLE_COMANDANTE_COMGEP));
         const moduleAccessOverrides = user.moduleAccessOverrides.map((item) => ({
             resource: item.resource,
             enabled: item.enabled,
@@ -569,7 +597,7 @@ let RbacService = class RbacService {
             id: user.id,
             name: user.name,
             email: user.email,
-            localityId: user.localityId,
+            localityId: hasNationalScope ? null : user.localityId,
             specialtyId: user.specialtyId,
             eloRoleId: user.eloRoleId,
             executiveHidePii: user.executiveHidePii || executiveFromRole,

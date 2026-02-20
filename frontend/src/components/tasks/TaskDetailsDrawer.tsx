@@ -18,12 +18,15 @@ import {
   useAddTaskComment,
   useAssignTask,
   useAuditLogs,
+  useDeleteTask,
   useEloRoles,
   useMarkTaskCommentsSeen,
   useMeetings,
+  useSpecialties,
   useTaskAssignees,
   useTaskComments,
   useUpdateTaskEloRole,
+  useUpdateTaskSpecialty,
   useUpdateTaskMeeting,
   useUpdateTaskProgress,
   useUpdateTaskStatus,
@@ -32,6 +35,7 @@ import {
 import { useToast } from '../../app/toast';
 import { parseApiError } from '../../app/apiErrors';
 import { can } from '../../app/rbac';
+import { hasAnyRole, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from '../../app/roleAccess';
 import { StatusChip } from '../chips/StatusChip';
 import { ProgressInline } from '../chips/ProgressInline';
 import { DueBadge } from '../chips/DueBadge';
@@ -53,12 +57,15 @@ export type TaskDetailsDrawerProps = {
   task: any | null;
   open: boolean;
   onClose: () => void;
+  onDeleted?: (id: string) => void;
   user: any | undefined;
   localities?: { id: string; name: string }[];
   loading?: boolean;
 };
 
-export function TaskDetailsDrawer({ task, open, onClose, user, localities = [], loading = false }: TaskDetailsDrawerProps) {
+const APP_HEADER_HEIGHT = 76;
+
+export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, localities = [], loading = false }: TaskDetailsDrawerProps) {
   const [tab, setTab] = useState(0);
   const [selectedLocalityId, setSelectedLocalityId] = useState('');
   const [selectedAssigneeValue, setSelectedAssigneeValue] = useState('');
@@ -70,15 +77,20 @@ export function TaskDetailsDrawer({ task, open, onClose, user, localities = [], 
   const addComment = useAddTaskComment();
   const markCommentsSeen = useMarkTaskCommentsSeen();
   const uploadReport = useUploadReport();
+  const deleteTask = useDeleteTask();
 
   const canUpdate = can(user, 'task_instances', 'update');
   const canAssign = can(user, 'task_instances', 'assign');
+  const canDelete = hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]) && canUpdate;
   const meetingsQuery = useMeetings({});
   const meetings = meetingsQuery.data?.items ?? [];
   const updateTaskMeeting = useUpdateTaskMeeting();
   const eloRolesQuery = useEloRoles();
   const eloRoles = eloRolesQuery.data?.items ?? [];
   const updateTaskEloRole = useUpdateTaskEloRole();
+  const specialtiesQuery = useSpecialties();
+  const specialties = specialtiesQuery.data?.items ?? [];
+  const updateTaskSpecialty = useUpdateTaskSpecialty();
   const assigneesQuery = useTaskAssignees(selectedLocalityId);
   const assigneeOptions = assigneesQuery.data?.items ?? [];
   const commentsQuery = useTaskComments(task?.id ?? '');
@@ -205,6 +217,17 @@ export function TaskDetailsDrawer({ task, open, onClose, user, localities = [], 
     }
   };
 
+  const handleSpecialtyChange = async (specialtyId: string) => {
+    if (!task) return;
+    try {
+      await updateTaskSpecialty.mutateAsync({ id: task.id, specialtyId: specialtyId || null });
+      toast.push({ message: 'Especialidade atualizada', severity: 'success' });
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({ message: payload.message ?? 'Erro ao atualizar', severity: 'error' });
+    }
+  };
+
   const handleAddComment = async () => {
     if (!task) return;
     const text = commentText.trim();
@@ -224,8 +247,33 @@ export function TaskDetailsDrawer({ task, open, onClose, user, localities = [], 
     return 'Relatório obrigatório para concluir';
   }, [task?.reportRequired]);
 
+  const handleDelete = async () => {
+    if (!task || !canDelete) return;
+    if (!window.confirm('Deseja excluir esta tarefa? Esta ação será registrada em auditoria.')) return;
+    try {
+      await deleteTask.mutateAsync(task.id);
+      toast.push({ message: 'Tarefa excluída', severity: 'success' });
+      onDeleted?.(task.id);
+      onClose();
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({ message: payload.message ?? 'Erro ao excluir tarefa', severity: 'error' });
+    }
+  };
+
   return (
-    <Drawer anchor="right" open={open} onClose={onClose} PaperProps={{ sx: { width: { xs: '100%', md: 520 } } }}>
+    <Drawer
+      anchor="right"
+      open={open}
+      onClose={onClose}
+      PaperProps={{
+        sx: {
+          width: { xs: '100%', md: 520 },
+          mt: `${APP_HEADER_HEIGHT}px`,
+          height: `calc(100% - ${APP_HEADER_HEIGHT}px)`,
+        },
+      }}
+    >
       <Box p={3} display="flex" flexDirection="column" height="100%" data-testid="task-drawer">
         {task ? (
           <>
@@ -337,6 +385,26 @@ export function TaskDetailsDrawer({ task, open, onClose, user, localities = [], 
                 )}
                 <Box>
                   <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                    Especialidade (opcional)
+                  </Typography>
+                  <TextField
+                    select
+                    size="small"
+                    fullWidth
+                    value={task.specialtyId ?? ''}
+                    onChange={(e) => handleSpecialtyChange(e.target.value)}
+                    disabled={!canUpdate}
+                  >
+                    <MenuItem value="">Todas as especialidades</MenuItem>
+                    {specialties.map((s: any) => (
+                      <MenuItem key={s.id} value={s.id}>
+                        {s.name}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
                     Vinculada à reunião
                   </Typography>
                   <TextField
@@ -397,6 +465,16 @@ export function TaskDetailsDrawer({ task, open, onClose, user, localities = [], 
                   <Button variant="text" disabled={!canUpdate} data-testid="task-save">
                     Salvar
                   </Button>
+                  {canDelete && (
+                    <Button
+                      variant="outlined"
+                      color="error"
+                      onClick={handleDelete}
+                      disabled={deleteTask.isPending}
+                    >
+                      Excluir
+                    </Button>
+                  )}
                 </Stack>
                 <EntityDocumentLinksManager
                   entityType="TASK_INSTANCE"

@@ -101,7 +101,14 @@ function App() {
                 />
                 <Route path="/elos" element={<ElosPage />} />
                 <Route path="/org-chart" element={<OrgChartPage />} />
-                <Route path="/audit" element={<AuditPage />} />
+                <Route
+                  path="/audit"
+                  element={
+                    <RequireRoleAccess allow={(user) => hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_TI])}>
+                      <AuditPage />
+                    </RequireRoleAccess>
+                  }
+                />
                 <Route path="/admin/rbac" element={<AdminRbacPage />} />
                 <Route path="/admin/elo-roles" element={<EloRolesPage />} />
                 <Route path="/admin/postos" element={<PostosPage />} />

@@ -80,7 +80,7 @@ let BiController = class BiController {
         return this.bi.deleteResponses(body);
     }
     assertBiAccess(user) {
-        if (!(0, role_access_1.isNationalCommissionMember)(user)) {
+        if (!(0, role_access_1.hasAnyRole)(user, [role_access_1.ROLE_COORDENACAO_CIPAVD, role_access_1.ROLE_COMANDANTE_COMGEP, role_access_1.ROLE_TI])) {
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         }
     }

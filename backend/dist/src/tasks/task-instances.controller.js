@@ -23,6 +23,7 @@ const task_comment_dto_1 = require("./dto/task-comment.dto");
 const task_elo_role_dto_1 = require("./dto/task-elo-role.dto");
 const task_meeting_dto_1 = require("./dto/task-meeting.dto");
 const task_progress_dto_1 = require("./dto/task-progress.dto");
+const task_specialty_dto_1 = require("./dto/task-specialty.dto");
 const task_status_dto_1 = require("./dto/task-status.dto");
 const tasks_service_1 = require("./tasks.service");
 let TaskInstancesController = class TaskInstancesController {
@@ -33,7 +34,7 @@ let TaskInstancesController = class TaskInstancesController {
     listAssignees(localityId, user) {
         return this.tasks.listAssignees(localityId, user);
     }
-    list(localityId, phaseId, status, assigneeId, assigneeIds, dueFrom, dueTo, meetingId, eloRoleId, page, pageSize, user) {
+    list(localityId, phaseId, status, assigneeId, assigneeIds, dueFrom, dueTo, meetingId, eloRoleId, specialtyId, page, pageSize, user) {
         return this.tasks.listTaskInstances({
             localityId,
             phaseId,
@@ -44,6 +45,7 @@ let TaskInstancesController = class TaskInstancesController {
             dueTo,
             meetingId,
             eloRoleId,
+            specialtyId,
             page,
             pageSize,
         }, user);
@@ -72,11 +74,17 @@ let TaskInstancesController = class TaskInstancesController {
     updateEloRole(id, dto, user) {
         return this.tasks.updateTaskEloRole(id, dto.eloRoleId ?? null, user);
     }
+    updateSpecialty(id, dto, user) {
+        return this.tasks.updateTaskSpecialty(id, dto.specialtyId ?? null, user);
+    }
     batchAssign(body, user) {
         return this.tasks.batchAssign(body.ids ?? [], body.assignedToId ?? null, body.assigneeIds ?? [], user);
     }
     batchStatus(body, user) {
         return this.tasks.batchStatus(body.ids ?? [], body.status, user);
+    }
+    remove(id, user) {
+        return this.tasks.deleteTaskInstance(id, user);
     }
     gantt(localityId, from, to, user) {
         return this.tasks.getGantt({ localityId, from, to }, user);
@@ -110,11 +118,12 @@ __decorate([
     __param(6, (0, common_1.Query)('dueTo')),
     __param(7, (0, common_1.Query)('meetingId')),
     __param(8, (0, common_1.Query)('eloRoleId')),
-    __param(9, (0, common_1.Query)('page')),
-    __param(10, (0, common_1.Query)('pageSize')),
-    __param(11, (0, current_user_decorator_1.CurrentUser)()),
+    __param(9, (0, common_1.Query)('specialtyId')),
+    __param(10, (0, common_1.Query)('page')),
+    __param(11, (0, common_1.Query)('pageSize')),
+    __param(12, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, Object, Object, Object, Object, Object, Object, Object, Object, Object, Object, Object]),
+    __metadata("design:paramtypes", [Object, Object, Object, Object, Object, Object, Object, Object, Object, Object, Object, Object, Object]),
     __metadata("design:returntype", void 0)
 ], TaskInstancesController.prototype, "list", null);
 __decorate([
@@ -196,6 +205,16 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], TaskInstancesController.prototype, "updateEloRole", null);
 __decorate([
+    (0, common_1.Put)(':id/specialty'),
+    (0, require_permission_decorator_1.RequirePermission)('task_instances', 'update'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)()),
+    __param(2, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, task_specialty_dto_1.TaskSpecialtyDto, Object]),
+    __metadata("design:returntype", void 0)
+], TaskInstancesController.prototype, "updateSpecialty", null);
+__decorate([
     (0, common_1.Put)('batch/assign'),
     (0, require_permission_decorator_1.RequirePermission)('task_instances', 'assign'),
     __param(0, (0, common_1.Body)()),
@@ -213,6 +232,15 @@ __decorate([
     __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", void 0)
 ], TaskInstancesController.prototype, "batchStatus", null);
+__decorate([
+    (0, common_1.Delete)(':id'),
+    (0, require_permission_decorator_1.RequirePermission)('task_instances', 'update'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", void 0)
+], TaskInstancesController.prototype, "remove", null);
 __decorate([
     (0, common_1.Get)('gantt'),
     (0, require_permission_decorator_1.RequirePermission)('gantt', 'view'),

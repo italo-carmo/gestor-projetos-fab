@@ -21,10 +21,10 @@ export class SearchService {
     };
     if (constraints.localityId) taskWhere.localityId = constraints.localityId;
     if (constraints.specialtyId) {
-      taskWhere.taskTemplate = {
-        ...taskWhere.taskTemplate,
-        specialtyId: constraints.specialtyId,
-      };
+      taskWhere.AND = [
+        ...(taskWhere.AND ?? []),
+        { OR: [{ specialtyId: null }, { specialtyId: constraints.specialtyId }] },
+      ];
     }
 
     const noticeWhere: any = {

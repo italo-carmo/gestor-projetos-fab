@@ -50,8 +50,12 @@ let MeetingsController = class MeetingsController {
         this.assertMeetingsAccess(user);
         return this.meetings.generateTasks(id, dto, user);
     }
+    remove(id, user) {
+        this.assertMeetingsAccess(user);
+        return this.meetings.delete(id, user);
+    }
     assertMeetingsAccess(user) {
-        if (!(0, role_access_1.isNationalCommissionMember)(user)) {
+        if (!(0, role_access_1.hasNationalManagementScope)(user)) {
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         }
     }
@@ -111,6 +115,15 @@ __decorate([
     __metadata("design:paramtypes", [String, generate_meeting_tasks_dto_1.GenerateMeetingTasksDto, Object]),
     __metadata("design:returntype", void 0)
 ], MeetingsController.prototype, "generateTasks", null);
+__decorate([
+    (0, common_1.Delete)(':id'),
+    (0, require_permission_decorator_1.RequirePermission)('meetings', 'update'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", void 0)
+], MeetingsController.prototype, "remove", null);
 exports.MeetingsController = MeetingsController = __decorate([
     (0, common_1.Controller)('meetings'),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, rbac_guard_1.RbacGuard),

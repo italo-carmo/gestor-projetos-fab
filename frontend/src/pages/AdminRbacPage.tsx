@@ -459,6 +459,13 @@ export function AdminRbacPage() {
                 </TextField>
                 <Button
                   variant="contained"
+                  sx={{
+                    color: '#fff',
+                    fontWeight: 700,
+                    '&.Mui-disabled': {
+                      color: 'rgba(255,255,255,0.85)',
+                    },
+                  }}
                   onClick={() => {
                     void handleCreateFromLdap();
                   }}

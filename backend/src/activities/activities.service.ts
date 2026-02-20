@@ -11,7 +11,7 @@ import { AuditService } from '../audit/audit.service';
 import type { RbacUser } from '../rbac/rbac.types';
 import { sanitizeText } from '../common/sanitize';
 import { parsePagination } from '../common/pagination';
-import { resolveAccessProfile } from '../rbac/role-access';
+import { hasAnyRole, resolveAccessProfile, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from '../rbac/role-access';
 
 const activityPhotosDir = path.resolve(process.cwd(), 'storage', 'activity-reports');
 const scheduleLogoCandidates = [
@@ -31,6 +31,7 @@ export class ActivitiesService {
   async list(
     filters: {
       localityId?: string;
+      specialtyId?: string;
       status?: string;
       q?: string;
       page?: string;
@@ -40,6 +41,7 @@ export class ActivitiesService {
   ) {
     const andClauses: Prisma.ActivityWhereInput[] = [];
     if (filters.localityId) andClauses.push({ localityId: filters.localityId });
+    if (filters.specialtyId) andClauses.push({ specialtyId: filters.specialtyId });
     if (filters.status) andClauses.push({ status: filters.status as ActivityStatus });
     if (filters.q) {
       andClauses.push({
@@ -67,6 +69,7 @@ export class ActivitiesService {
         take,
         include: {
           locality: { select: { id: true, code: true, name: true } },
+          specialty: { select: { id: true, name: true, color: true } },
           createdBy: { select: { id: true, name: true } },
           responsibles: {
             include: {
@@ -103,6 +106,7 @@ export class ActivitiesService {
       title: string;
       description?: string | null;
       localityId?: string | null;
+      specialtyId?: string | null;
       eventDate?: string | null;
       reportRequired?: boolean;
       responsibleUserIds?: string[];
@@ -110,7 +114,8 @@ export class ActivitiesService {
     user?: RbacUser,
   ) {
     const localityId = payload.localityId ?? user?.localityId ?? null;
-    this.assertLocalityConstraint(localityId, user);
+    const specialtyId = payload.specialtyId ?? null;
+    this.assertScopeConstraint(localityId, specialtyId, user);
     const responsibleUserIds = await this.resolveActivityResponsibleIds(
       localityId,
       payload.responsibleUserIds ?? [],
@@ -122,6 +127,7 @@ export class ActivitiesService {
         title: sanitizeText(payload.title),
         description: payload.description ? sanitizeText(payload.description) : null,
         localityId,
+        specialtyId,
         eventDate: payload.eventDate ? new Date(payload.eventDate) : null,
         reportRequired: payload.reportRequired ?? false,
         createdById: user?.id ?? null,
@@ -137,6 +143,7 @@ export class ActivitiesService {
       },
       include: {
         locality: { select: { id: true, code: true, name: true } },
+        specialty: { select: { id: true, name: true, color: true } },
         createdBy: { select: { id: true, name: true } },
         responsibles: {
           include: {
@@ -171,6 +178,7 @@ export class ActivitiesService {
       title?: string;
       description?: string | null;
       localityId?: string | null;
+      specialtyId?: string | null;
       eventDate?: string | null;
       reportRequired?: boolean;
       responsibleUserIds?: string[];
@@ -187,7 +195,8 @@ export class ActivitiesService {
     this.assertActivityOperateAccess(existing, user);
 
     const localityId = payload.localityId === undefined ? existing.localityId : payload.localityId;
-    this.assertLocalityConstraint(localityId, user);
+    const specialtyId = payload.specialtyId === undefined ? ((existing as any).specialtyId ?? null) : payload.specialtyId;
+    this.assertScopeConstraint(localityId, specialtyId, user);
     const responsibleUserIds = await this.resolveActivityResponsibleIds(
       localityId,
       payload.responsibleUserIds ??
@@ -205,6 +214,7 @@ export class ActivitiesService {
             ? null
             : sanitizeText(payload.description),
         localityId,
+        specialtyId,
         eventDate: payload.eventDate === undefined
           ? undefined
           : payload.eventDate === null
@@ -225,6 +235,7 @@ export class ActivitiesService {
       },
       include: {
         locality: { select: { id: true, code: true, name: true } },
+        specialty: { select: { id: true, name: true, color: true } },
         createdBy: { select: { id: true, name: true } },
         responsibles: {
           include: {
@@ -284,6 +295,7 @@ export class ActivitiesService {
       data: { status },
       include: {
         locality: { select: { id: true, code: true, name: true } },
+        specialty: { select: { id: true, name: true, color: true } },
         createdBy: { select: { id: true, name: true } },
         responsibles: {
           include: {
@@ -312,12 +324,70 @@ export class ActivitiesService {
     return this.mapActivity(updated, user?.executiveHidePii);
   }
 
+  async delete(id: string, user?: RbacUser) {
+    const existing = await this.prisma.activity.findUnique({
+      where: { id },
+      include: {
+        report: {
+          include: {
+            photos: {
+              select: { id: true, storageKey: true, fileUrl: true },
+            },
+          },
+        },
+      },
+    });
+    if (!existing) throwError('NOT_FOUND');
+
+    this.assertDeleteAccess(user);
+
+    const photos = existing.report?.photos ?? [];
+
+    await this.prisma.$transaction(async (tx) => {
+      if (existing.report) {
+        await tx.activityReportPhoto.deleteMany({ where: { reportId: existing.report.id } });
+        await tx.activityReport.delete({ where: { id: existing.report.id } });
+      }
+      await tx.activity.delete({ where: { id } });
+    });
+
+    // Best-effort cleanup of report photo files.
+    for (const photo of photos) {
+      const storageKey = photo.storageKey ?? path.basename(photo.fileUrl ?? '');
+      if (!storageKey) continue;
+      const filePath = path.join(activityPhotosDir, storageKey);
+      try {
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      } catch {
+        // File cleanup failure must not block the operation.
+      }
+    }
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'activities',
+      action: 'delete',
+      entityId: id,
+      localityId: existing.localityId ?? undefined,
+      diffJson: {
+        title: existing.title,
+        localityId: existing.localityId ?? null,
+        specialtyId: existing.specialtyId ?? null,
+      },
+    });
+
+    return { ok: true };
+  }
+
   async listComments(id: string, user?: RbacUser) {
     const activity = await this.prisma.activity.findUnique({
       where: { id },
       select: {
         id: true,
         localityId: true,
+        specialtyId: true,
         responsibles: {
           select: {
             userId: true,
@@ -365,6 +435,7 @@ export class ActivitiesService {
       select: {
         id: true,
         localityId: true,
+        specialtyId: true,
         responsibles: {
           select: {
             userId: true,
@@ -415,6 +486,7 @@ export class ActivitiesService {
       select: {
         id: true,
         localityId: true,
+        specialtyId: true,
         responsibles: { select: { userId: true } },
       },
     });
@@ -446,6 +518,7 @@ export class ActivitiesService {
           },
         },
         locality: { select: { id: true, code: true, name: true } },
+        specialty: { select: { id: true, name: true, color: true } },
       },
     });
     if (!activity) throwError('NOT_FOUND');
@@ -462,6 +535,7 @@ export class ActivitiesService {
         title: activity.title,
         eventDate: activity.eventDate,
         locality: activity.locality,
+        specialty: activity.specialty,
       },
       items: items.map((item) => this.mapScheduleItem(item)),
     };
@@ -481,7 +555,7 @@ export class ActivitiesService {
   ) {
     const activity = await this.prisma.activity.findUnique({
       where: { id: activityId },
-      select: { id: true, localityId: true, responsibles: { select: { userId: true } } },
+      select: { id: true, localityId: true, specialtyId: true, responsibles: { select: { userId: true } } },
     });
     if (!activity) throwError('NOT_FOUND');
     this.assertActivityOperateAccess(activity, user);
@@ -525,7 +599,7 @@ export class ActivitiesService {
   ) {
     const activity = await this.prisma.activity.findUnique({
       where: { id: activityId },
-      select: { id: true, localityId: true, responsibles: { select: { userId: true } } },
+      select: { id: true, localityId: true, specialtyId: true, responsibles: { select: { userId: true } } },
     });
     if (!activity) throwError('NOT_FOUND');
     this.assertActivityOperateAccess(activity, user);
@@ -574,7 +648,7 @@ export class ActivitiesService {
   async deleteScheduleItem(activityId: string, itemId: string, user?: RbacUser) {
     const activity = await this.prisma.activity.findUnique({
       where: { id: activityId },
-      select: { id: true, localityId: true, responsibles: { select: { userId: true } } },
+      select: { id: true, localityId: true, specialtyId: true, responsibles: { select: { userId: true } } },
     });
     if (!activity) throwError('NOT_FOUND');
     this.assertActivityOperateAccess(activity, user);
@@ -610,6 +684,7 @@ export class ActivitiesService {
           },
         },
         locality: { select: { id: true, code: true, name: true } },
+        specialty: { select: { id: true, name: true, color: true } },
         visitScheduleItems: {
           orderBy: [{ startTime: 'asc' }, { createdAt: 'asc' }],
         },
@@ -652,6 +727,7 @@ export class ActivitiesService {
 
     writeLine('Atividade', activity.title);
     writeLine('Localidade', activity.locality ? `${activity.locality.name} (${activity.locality.code})` : 'Não vinculada');
+    writeLine('Especialidade', activity.specialty?.name ?? 'Todas as especialidades');
     writeLine('Data da visita', activity.eventDate ? this.formatDate(activity.eventDate) : 'Não informada');
 
     doc.font('Helvetica-Bold').fontSize(12).text('Programação', { underline: true });
@@ -765,6 +841,7 @@ export class ActivitiesService {
       where: { id: activityId },
       include: {
         locality: { select: { id: true, code: true, name: true } },
+        specialty: { select: { id: true, name: true, color: true } },
         createdBy: { select: { id: true, name: true } },
         responsibles: {
           include: {
@@ -1008,6 +1085,7 @@ export class ActivitiesService {
           },
         },
         locality: { select: { id: true, code: true, name: true } },
+        specialty: { select: { id: true, name: true, color: true } },
         createdBy: { select: { id: true, name: true } },
         report: {
           include: {
@@ -1052,6 +1130,7 @@ export class ActivitiesService {
 
     writeLine('Atividade', activity.title);
     writeLine('Localidade', activity.locality ? `${activity.locality.name} (${activity.locality.code})` : 'Não vinculada');
+    writeLine('Especialidade', activity.specialty?.name ?? 'Todas as especialidades');
     writeLine('Data da atividade', this.formatDate(report.date));
     writeLine('Local', report.location);
     writeLine('Responsável', report.responsible);
@@ -1282,11 +1361,38 @@ export class ActivitiesService {
       .trim();
   }
 
-  private assertLocalityConstraint(localityId: string | null | undefined, user?: RbacUser) {
-    if (!user) return;
+  private getScopeConstraints(user?: RbacUser) {
+    if (!user) return {};
     const profile = resolveAccessProfile(user);
-    if (profile.ti || profile.nationalCommission) return;
-    if (user.localityId && localityId && user.localityId !== localityId) {
+    if (profile.ti || profile.nationalCommission) return {};
+    if (profile.localityAdmin) {
+      return {
+        localityId: profile.localityId ?? undefined,
+        specialtyId: undefined,
+      };
+    }
+    if (profile.specialtyAdmin) {
+      return {
+        localityId: profile.localityId ?? undefined,
+        specialtyId: profile.groupSpecialtyId ?? undefined,
+      };
+    }
+    return {
+      localityId: user.localityId ?? undefined,
+      specialtyId: user.specialtyId ?? undefined,
+    };
+  }
+
+  private assertScopeConstraint(
+    localityId: string | null | undefined,
+    specialtyId: string | null | undefined,
+    user?: RbacUser,
+  ) {
+    const constraints = this.getScopeConstraints(user);
+    if (constraints.localityId && localityId && constraints.localityId !== localityId) {
+      throwError('RBAC_FORBIDDEN');
+    }
+    if (constraints.specialtyId && specialtyId && constraints.specialtyId !== specialtyId) {
       throwError('RBAC_FORBIDDEN');
     }
   }
@@ -1313,7 +1419,9 @@ export class ActivitiesService {
       if (profile.localityId) and.push({ localityId: profile.localityId });
       const groupOr: Prisma.ActivityWhereInput[] = [];
       if (profile.groupSpecialtyId) {
-        groupOr.push({ responsibles: { some: { user: { specialtyId: profile.groupSpecialtyId } } } });
+        groupOr.push({
+          OR: [{ specialtyId: null }, { specialtyId: profile.groupSpecialtyId }],
+        });
       }
       if (profile.groupEloRoleId) {
         groupOr.push({ responsibles: { some: { user: { eloRoleId: profile.groupEloRoleId } } } });
@@ -1329,7 +1437,9 @@ export class ActivitiesService {
     if (user.localityId) {
       const groupOr: Prisma.ActivityWhereInput[] = [];
       if (user.specialtyId) {
-        groupOr.push({ responsibles: { some: { user: { specialtyId: user.specialtyId } } } });
+        groupOr.push({
+          OR: [{ specialtyId: null }, { specialtyId: user.specialtyId }],
+        });
       }
       if (user.eloRoleId) {
         groupOr.push({ responsibles: { some: { user: { eloRoleId: user.eloRoleId } } } });
@@ -1350,14 +1460,25 @@ export class ActivitiesService {
   }
 
   private hasActivityGroupMatch(activity: any, specialtyId?: string | null, eloRoleId?: string | null) {
-    if (!Array.isArray(activity?.responsibles)) return false;
-    return activity.responsibles.some((entry: any) => {
-      const responsibleUser = entry?.user;
-      if (!responsibleUser) return false;
-      if (specialtyId && responsibleUser.specialtyId === specialtyId) return true;
-      if (eloRoleId && responsibleUser.eloRoleId === eloRoleId) return true;
-      return false;
-    });
+    let specialtyMatch = false;
+    if (specialtyId) {
+      if (activity?.specialtyId === undefined) {
+        // Backward-compatible fallback for records loaded without specialtyId.
+        specialtyMatch = Array.isArray(activity?.responsibles)
+          ? activity.responsibles.some((entry: any) => entry?.user?.specialtyId === specialtyId)
+          : false;
+      } else {
+        const activitySpecialtyId = activity.specialtyId as string | null;
+        specialtyMatch = !activitySpecialtyId || activitySpecialtyId === specialtyId;
+      }
+    }
+
+    let eloMatch = false;
+    if (eloRoleId && Array.isArray(activity?.responsibles)) {
+      eloMatch = activity.responsibles.some((entry: any) => entry?.user?.eloRoleId === eloRoleId);
+    }
+
+    return specialtyMatch || eloMatch;
   }
 
   private assertActivityViewAccess(activity: any, user?: RbacUser) {
@@ -1398,6 +1519,12 @@ export class ActivitiesService {
     }
   }
 
+  private assertDeleteAccess(user?: RbacUser) {
+    if (!user?.id) throwError('RBAC_FORBIDDEN');
+    if (hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_TI])) return;
+    throwError('RBAC_FORBIDDEN');
+  }
+
   private async resolveActivityResponsibleIds(
     localityId: string | null | undefined,
     responsibleUserIds: string[],
@@ -1417,7 +1544,7 @@ export class ActivitiesService {
 
     const users = await this.prisma.user.findMany({
       where: { id: { in: normalized }, isActive: true },
-      select: { id: true, localityId: true },
+      select: { id: true, localityId: true, specialtyId: true },
     });
     if (users.length !== normalized.length) {
       throwError('VALIDATION_ERROR', { reason: 'ACTIVITY_RESPONSIBLE_INVALID' });
@@ -1428,7 +1555,7 @@ export class ActivitiesService {
       throwError('VALIDATION_ERROR', { reason: 'ACTIVITY_RESPONSIBLE_LOCALITY_MISMATCH' });
     }
 
-    this.assertLocalityConstraint(localityId, user);
+    this.assertScopeConstraint(localityId, null, user);
     return users.map((candidate) => candidate.id);
   }
 

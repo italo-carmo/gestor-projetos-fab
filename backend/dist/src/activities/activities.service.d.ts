@@ -10,6 +10,7 @@ export declare class ActivitiesService {
     constructor(prisma: PrismaService, audit: AuditService, config: ConfigService);
     list(filters: {
         localityId?: string;
+        specialtyId?: string;
         status?: string;
         q?: string;
         page?: string;
@@ -24,6 +25,7 @@ export declare class ActivitiesService {
         title: string;
         description?: string | null;
         localityId?: string | null;
+        specialtyId?: string | null;
         eventDate?: string | null;
         reportRequired?: boolean;
         responsibleUserIds?: string[];
@@ -32,11 +34,15 @@ export declare class ActivitiesService {
         title?: string;
         description?: string | null;
         localityId?: string | null;
+        specialtyId?: string | null;
         eventDate?: string | null;
         reportRequired?: boolean;
         responsibleUserIds?: string[];
     }, user?: RbacUser): Promise<any>;
     updateStatus(id: string, status: ActivityStatus, user?: RbacUser): Promise<any>;
+    delete(id: string, user?: RbacUser): Promise<{
+        ok: boolean;
+    }>;
     listComments(id: string, user?: RbacUser): Promise<{
         items: {
             id: any;
@@ -79,6 +85,11 @@ export declare class ActivitiesService {
                 id: string;
                 name: string;
                 code: string;
+            } | null;
+            specialty: {
+                id: string;
+                name: string;
+                color: string | null;
             } | null;
         };
         items: {
@@ -202,12 +213,14 @@ export declare class ActivitiesService {
     private formatDuration;
     private sanitizeRequiredText;
     private sanitizeCommentText;
-    private assertLocalityConstraint;
+    private getScopeConstraints;
+    private assertScopeConstraint;
     private buildActivityAccessWhere;
     private isActivityResponsible;
     private hasActivityGroupMatch;
     private assertActivityViewAccess;
     private assertActivityOperateAccess;
+    private assertDeleteAccess;
     private resolveActivityResponsibleIds;
     private invalidateSignature;
     private formatDate;

@@ -57,6 +57,7 @@ export declare class MeetingsService {
                 };
             } & {
                 id: string;
+                specialtyId: string | null;
                 eloRoleId: string | null;
                 createdAt: Date;
                 updatedAt: Date;
@@ -215,6 +216,7 @@ export declare class MeetingsService {
     }, user?: RbacUser): Promise<{
         items: {
             id: string;
+            specialtyId: string | null;
             eloRoleId: string | null;
             createdAt: Date;
             updatedAt: Date;
@@ -234,6 +236,10 @@ export declare class MeetingsService {
             assignedEloId: string | null;
         }[];
     }>;
+    delete(id: string, user?: RbacUser): Promise<{
+        ok: boolean;
+    }>;
     private getScopeConstraints;
     private assertLocality;
+    private assertDeleteAccess;
 }

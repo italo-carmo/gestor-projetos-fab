@@ -132,6 +132,7 @@ export function CalendarPage() {
         task={selectedTask}
         open={Boolean(selectedTaskId)}
         onClose={() => setSelectedTaskId(null)}
+        onDeleted={() => setSelectedTaskId(null)}
         user={me}
         localities={localities}
         loading={Boolean(selectedTaskId) && !selectedTaskFromList && selectedTaskQuery.isLoading}

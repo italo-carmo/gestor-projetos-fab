@@ -27,12 +27,14 @@ import {
   useActivities,
   useCreateActivityScheduleItem,
   useCreateActivity,
+  useDeleteActivity,
   useDeleteActivityScheduleItem,
   useDeleteActivityReportPhoto,
   useExportActivitySchedulePdf,
   useExportActivityReportPdf,
   useLocalities,
   useMe,
+  useSpecialties,
   useSignActivityReport,
   useMarkActivityCommentsSeen,
   useUpdateActivityScheduleItem,
@@ -42,6 +44,7 @@ import {
   useUpsertActivityReport,
 } from '../api/hooks';
 import { parseApiError } from '../app/apiErrors';
+import { hasAnyRole, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from '../app/roleAccess';
 import { useToast } from '../app/toast';
 import { can } from '../app/rbac';
 import { EmptyState } from '../components/states/EmptyState';
@@ -84,14 +87,18 @@ export function ActivitiesPage() {
 
   const [statusFilter, setStatusFilter] = useState('');
   const [localityFilter, setLocalityFilter] = useState('');
+  const [specialtyFilter, setSpecialtyFilter] = useState('');
   const [search, setSearch] = useState('');
 
   const { data: localitiesData } = useLocalities();
   const localities = localitiesData?.items ?? [];
+  const { data: specialtiesData } = useSpecialties();
+  const specialties = specialtiesData?.items ?? [];
 
   const activitiesQuery = useActivities({
     status: statusFilter || undefined,
     localityId: localityFilter || undefined,
+    specialtyId: specialtyFilter || undefined,
     q: search || undefined,
   });
 
@@ -103,6 +110,7 @@ export function ActivitiesPage() {
   const [drawerTab, setDrawerTab] = useState<ActivityDrawerTab>('activity');
 
   const createActivity = useCreateActivity();
+  const deleteActivity = useDeleteActivity();
   const updateActivity = useUpdateActivity();
   const updateActivityStatus = useUpdateActivityStatus();
   const commentsQuery = useActivityComments(selectedId ?? '');
@@ -141,6 +149,7 @@ export function ActivitiesPage() {
     title: '',
     description: '',
     localityId: '',
+    specialtyId: '',
     eventDate: '',
     reportRequired: false,
   });
@@ -151,6 +160,7 @@ export function ActivitiesPage() {
       title: selected.title ?? '',
       description: selected.description ?? '',
       localityId: selected.localityId ?? '',
+      specialtyId: selected.specialtyId ?? '',
       eventDate: selected.eventDate ? String(selected.eventDate).slice(0, 10) : '',
       reportRequired: Boolean(selected.reportRequired),
     });
@@ -194,6 +204,7 @@ export function ActivitiesPage() {
   const canView = !me ? true : can(me, 'task_instances', 'view');
   const canCreate = can(me, 'task_instances', 'create');
   const canUpdate = can(me, 'task_instances', 'update');
+  const canDelete = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]) && canUpdate;
   const canEditReport = can(me, 'reports', 'create');
   const canSign = can(me, 'reports', 'approve');
   const canUpload = can(me, 'reports', 'upload');
@@ -209,6 +220,7 @@ export function ActivitiesPage() {
         title: activityForm.title,
         description: activityForm.description || null,
         localityId: activityForm.localityId || null,
+        specialtyId: activityForm.specialtyId || null,
         eventDate: activityForm.eventDate || null,
         reportRequired: activityForm.reportRequired,
       });
@@ -230,6 +242,7 @@ export function ActivitiesPage() {
           title: activityForm.title,
           description: activityForm.description || null,
           localityId: activityForm.localityId || null,
+          specialtyId: activityForm.specialtyId || null,
           eventDate: activityForm.eventDate || null,
           reportRequired: activityForm.reportRequired,
         },
@@ -237,6 +250,19 @@ export function ActivitiesPage() {
       toast.push({ message: 'Atividade atualizada', severity: 'success' });
     } catch (error) {
       toast.push({ message: parseApiError(error).message ?? 'Erro ao atualizar atividade', severity: 'error' });
+    }
+  };
+
+  const handleDeleteActivity = async () => {
+    if (!selected || !canDelete) return;
+    if (!window.confirm('Deseja excluir esta atividade? Esta ação será registrada em auditoria.')) return;
+    try {
+      await deleteActivity.mutateAsync(selected.id);
+      toast.push({ message: 'Atividade excluída', severity: 'success' });
+      setSelectedId(null);
+      setDrawerOpen(false);
+    } catch (error) {
+      toast.push({ message: parseApiError(error).message ?? 'Erro ao excluir atividade', severity: 'error' });
     }
   };
 
@@ -393,6 +419,7 @@ export function ActivitiesPage() {
       title: '',
       description: '',
       localityId: '',
+      specialtyId: '',
       eventDate: '',
       reportRequired: false,
     });
@@ -449,6 +476,21 @@ export function ActivitiesPage() {
                 </MenuItem>
               ))}
             </TextField>
+            <TextField
+              select
+              size="small"
+              label="Especialidade"
+              value={specialtyFilter}
+              onChange={(e) => setSpecialtyFilter(e.target.value)}
+              sx={{ minWidth: 220 }}
+            >
+              <MenuItem value="">Todas</MenuItem>
+              {specialties.map((s: any) => (
+                <MenuItem key={s.id} value={s.id}>
+                  {s.name}
+                </MenuItem>
+              ))}
+            </TextField>
           </Stack>
         </CardContent>
       </Card>
@@ -465,6 +507,7 @@ export function ActivitiesPage() {
                   <TableRow sx={{ bgcolor: 'primary.main' }}>
                     <TableCell sx={{ color: 'white', fontWeight: 600 }}>Atividade</TableCell>
                     <TableCell sx={{ color: 'white', fontWeight: 600 }}>Localidade</TableCell>
+                    <TableCell sx={{ color: 'white', fontWeight: 600 }}>Especialidade</TableCell>
                     <TableCell sx={{ color: 'white', fontWeight: 600 }}>Data</TableCell>
                     <TableCell sx={{ color: 'white', fontWeight: 600 }}>Status</TableCell>
                     <TableCell sx={{ color: 'white', fontWeight: 600 }}>Comentários</TableCell>
@@ -487,6 +530,7 @@ export function ActivitiesPage() {
                     >
                       <TableCell>{item.title}</TableCell>
                       <TableCell>{item.locality?.name ?? '-'}</TableCell>
+                      <TableCell>{item.specialty?.name ?? 'Todas'}</TableCell>
                       <TableCell>{item.eventDate ? new Date(item.eventDate).toLocaleDateString('pt-BR') : '-'}</TableCell>
                       <TableCell>{ACTIVITY_STATUS_LABELS[item.status] ?? item.status}</TableCell>
                       <TableCell>
@@ -529,9 +573,22 @@ export function ActivitiesPage() {
             <Typography variant="h6">
               {isCreateMode ? 'Nova atividade' : selected ? 'Detalhes da atividade' : 'Detalhes da atividade'}
             </Typography>
-            <Button size="small" onClick={() => setDrawerOpen(false)}>
-              Fechar
-            </Button>
+            <Stack direction="row" spacing={1}>
+              {!isCreateMode && selected && canDelete && (
+                <Button
+                  size="small"
+                  color="error"
+                  variant="outlined"
+                  onClick={handleDeleteActivity}
+                  disabled={deleteActivity.isPending}
+                >
+                  Excluir
+                </Button>
+              )}
+              <Button size="small" onClick={() => setDrawerOpen(false)}>
+                Fechar
+              </Button>
+            </Stack>
           </Stack>
 
           {!isCreateMode && selected && (
@@ -571,6 +628,21 @@ export function ActivitiesPage() {
                   {localities.map((l: any) => (
                     <MenuItem key={l.id} value={l.id}>
                       {l.name}
+                    </MenuItem>
+                  ))}
+                </TextField>
+                <TextField
+                  select
+                  size="small"
+                  label="Especialidade"
+                  value={activityForm.specialtyId}
+                  onChange={(e) => setActivityForm({ ...activityForm, specialtyId: e.target.value })}
+                  sx={{ minWidth: 220 }}
+                >
+                  <MenuItem value="">Todas as especialidades</MenuItem>
+                  {specialties.map((s: any) => (
+                    <MenuItem key={s.id} value={s.id}>
+                      {s.name}
                     </MenuItem>
                   ))}
                 </TextField>

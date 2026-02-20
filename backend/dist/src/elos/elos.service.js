@@ -313,7 +313,7 @@ let ElosService = class ElosService {
     getScopeConstraints(user) {
         if (!user)
             return {};
-        if ((0, role_access_1.isNationalCommissionMember)(user))
+        if ((0, role_access_1.hasNationalManagementScope)(user))
             return {};
         return {
             localityId: user.localityId ?? undefined,
@@ -326,7 +326,7 @@ let ElosService = class ElosService {
         }
     }
     assertCanManageOrgChart(user) {
-        if (!(0, role_access_1.isNationalCommissionMember)(user)) {
+        if (!(0, role_access_1.hasNationalManagementScope)(user)) {
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         }
     }

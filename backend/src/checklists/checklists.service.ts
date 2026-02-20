@@ -100,20 +100,22 @@ export class ChecklistsService {
       ? await this.prisma.activity.findMany({
           where: {
             localityId: { in: localityIds },
-            ...(selectedSpecialtyId || selectedEloRoleId
+            ...(selectedSpecialtyId
+              ? {
+                  OR: [{ specialtyId: null }, { specialtyId: selectedSpecialtyId }],
+                }
+              : {}),
+            ...(selectedEloRoleId
               ? {
                   responsibles: {
                     some: {
-                      user: {
-                        ...(selectedSpecialtyId ? { specialtyId: selectedSpecialtyId } : {}),
-                        ...(selectedEloRoleId ? { eloRoleId: selectedEloRoleId } : {}),
-                      },
+                      user: { eloRoleId: selectedEloRoleId },
                     },
                   },
                 }
               : {}),
           },
-          select: { title: true, localityId: true, status: true },
+          select: { title: true, localityId: true, status: true, specialtyId: true },
         })
       : [];
 
@@ -335,14 +337,20 @@ export class ChecklistsService {
     const taskInstances = await this.prisma.taskInstance.findMany({
       where: {
         localityId: { in: localityIds },
-        ...(selectedEloRoleId
+        ...(selectedSpecialtyId || selectedEloRoleId
           ? {
-              OR: [{ eloRoleId: selectedEloRoleId }, { taskTemplate: { eloRoleId: selectedEloRoleId } }],
+              AND: [
+                ...(selectedSpecialtyId
+                  ? [{ OR: [{ specialtyId: null }, { specialtyId: selectedSpecialtyId }] }]
+                  : []),
+                ...(selectedEloRoleId
+                  ? [{ OR: [{ eloRoleId: selectedEloRoleId }, { taskTemplate: { eloRoleId: selectedEloRoleId } }] }]
+                  : []),
+              ],
             }
           : {}),
         taskTemplate: {
           ...(filters.phaseId ? { phaseId: filters.phaseId } : {}),
-          ...(selectedSpecialtyId ? { specialtyId: selectedSpecialtyId } : {}),
         },
       },
       select: {
@@ -361,20 +369,22 @@ export class ChecklistsService {
     const activities = await this.prisma.activity.findMany({
       where: {
         localityId: { in: localityIds },
-        ...(selectedSpecialtyId || selectedEloRoleId
+        ...(selectedSpecialtyId
+          ? {
+              OR: [{ specialtyId: null }, { specialtyId: selectedSpecialtyId }],
+            }
+          : {}),
+        ...(selectedEloRoleId
           ? {
               responsibles: {
                 some: {
-                  user: {
-                    ...(selectedSpecialtyId ? { specialtyId: selectedSpecialtyId } : {}),
-                    ...(selectedEloRoleId ? { eloRoleId: selectedEloRoleId } : {}),
-                  },
+                  user: { eloRoleId: selectedEloRoleId },
                 },
               },
             }
           : {}),
       },
-      select: { title: true, localityId: true, status: true },
+      select: { title: true, localityId: true, status: true, specialtyId: true },
     });
 
     const templateById = new Map<string, string>();

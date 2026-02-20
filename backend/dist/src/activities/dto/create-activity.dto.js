@@ -15,6 +15,7 @@ class CreateActivityDto {
     title;
     description;
     localityId;
+    specialtyId;
     eventDate;
     reportRequired;
     responsibleUserIds;
@@ -35,6 +36,11 @@ __decorate([
     (0, class_validator_1.IsString)(),
     __metadata("design:type", Object)
 ], CreateActivityDto.prototype, "localityId", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", Object)
+], CreateActivityDto.prototype, "specialtyId", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsDateString)(),

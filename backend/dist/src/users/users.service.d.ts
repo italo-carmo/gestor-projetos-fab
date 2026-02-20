@@ -229,7 +229,10 @@ export declare class UsersService {
     }[]>;
     update(id: string, payload: {
         eloRoleId?: string | null;
-    }): import("@prisma/client").Prisma.Prisma__UserClient<{
+        localityId?: string | null;
+        specialtyId?: string | null;
+        roleId?: string | null;
+    }): Promise<{
         id: string;
         specialtyId: string | null;
         eloRoleId: string | null;
@@ -248,5 +251,9 @@ export declare class UsersService {
         email: string;
         ldapUid: string | null;
         localityId: string | null;
-    }, never, import("@prisma/client/runtime/client").DefaultArgs, import("@prisma/client").Prisma.PrismaClientOptions>;
+    } | null>;
+    removeRole(userId: string, roleId: string): Promise<{
+        ok: boolean;
+        removed: number;
+    }>;
 }

@@ -17,6 +17,7 @@ const audit_service_1 = require("../audit/audit.service");
 const http_error_1 = require("../common/http-error");
 const sanitize_1 = require("../common/sanitize");
 const pagination_1 = require("../common/pagination");
+const role_access_1 = require("../rbac/role-access");
 let NoticesService = class NoticesService {
     prisma;
     audit;
@@ -168,6 +169,22 @@ let NoticesService = class NoticesService {
     getScopeConstraints(user) {
         if (!user)
             return {};
+        const profile = (0, role_access_1.resolveAccessProfile)(user);
+        if (profile.ti || profile.nationalCommission) {
+            return {};
+        }
+        if (profile.localityAdmin) {
+            return {
+                localityId: profile.localityId ?? undefined,
+                specialtyId: undefined,
+            };
+        }
+        if (profile.specialtyAdmin) {
+            return {
+                localityId: profile.localityId ?? undefined,
+                specialtyId: profile.groupSpecialtyId ?? undefined,
+            };
+        }
         return {
             localityId: user.localityId ?? undefined,
             specialtyId: user.specialtyId ?? undefined,

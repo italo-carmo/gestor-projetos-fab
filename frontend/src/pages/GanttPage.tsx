@@ -215,6 +215,7 @@ export function GanttPage() {
         task={selectedTask}
         open={Boolean(selectedTaskId)}
         onClose={() => setSelectedTaskId(null)}
+        onDeleted={() => setSelectedTaskId(null)}
         user={me}
         localities={localities}
       />

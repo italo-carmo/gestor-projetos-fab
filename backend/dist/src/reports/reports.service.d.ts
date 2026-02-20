@@ -59,6 +59,7 @@ export declare class ReportsService {
         approved: boolean;
     }>;
     private isTaskResponsible;
+    private matchesTaskSpecialty;
     private assertTaskOperateAccess;
     private assertTaskViewAccess;
 }

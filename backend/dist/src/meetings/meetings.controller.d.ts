@@ -48,6 +48,7 @@ export declare class MeetingsController {
                 };
             } & {
                 id: string;
+                specialtyId: string | null;
                 eloRoleId: string | null;
                 createdAt: Date;
                 updatedAt: Date;
@@ -174,6 +175,7 @@ export declare class MeetingsController {
     generateTasks(id: string, dto: GenerateMeetingTasksDto, user: RbacUser): Promise<{
         items: {
             id: string;
+            specialtyId: string | null;
             eloRoleId: string | null;
             createdAt: Date;
             updatedAt: Date;
@@ -192,6 +194,9 @@ export declare class MeetingsController {
             assignedToId: string | null;
             assignedEloId: string | null;
         }[];
+    }>;
+    remove(id: string, user: RbacUser): Promise<{
+        ok: boolean;
     }>;
     private assertMeetingsAccess;
 }

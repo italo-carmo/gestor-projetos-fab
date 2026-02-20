@@ -11,7 +11,7 @@ import type { Request, Response } from 'express';
 export declare class ActivitiesController {
     private readonly activities;
     constructor(activities: ActivitiesService);
-    list(localityId: string | undefined, status: string | undefined, q: string | undefined, page: string | undefined, pageSize: string | undefined, user: RbacUser): Promise<{
+    list(localityId: string | undefined, specialtyId: string | undefined, status: string | undefined, q: string | undefined, page: string | undefined, pageSize: string | undefined, user: RbacUser): Promise<{
         items: any[];
         page: number;
         pageSize: number;
@@ -20,6 +20,9 @@ export declare class ActivitiesController {
     create(dto: CreateActivityDto, user: RbacUser): Promise<any>;
     update(id: string, dto: UpdateActivityDto, user: RbacUser): Promise<any>;
     updateStatus(id: string, dto: UpdateActivityStatusDto, user: RbacUser): Promise<any>;
+    remove(id: string, user: RbacUser): Promise<{
+        ok: boolean;
+    }>;
     comments(id: string, user: RbacUser): Promise<{
         items: {
             id: any;
@@ -62,6 +65,11 @@ export declare class ActivitiesController {
                 id: string;
                 name: string;
                 code: string;
+            } | null;
+            specialty: {
+                id: string;
+                name: string;
+                color: string | null;
             } | null;
         };
         items: {

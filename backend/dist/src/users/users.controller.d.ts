@@ -44,5 +44,9 @@ export declare class UsersController {
         email: string;
         ldapUid: string | null;
         localityId: string | null;
+    } | null>;
+    removeRole(id: string, roleId: string): Promise<{
+        ok: boolean;
+        removed: number;
     }>;
 }

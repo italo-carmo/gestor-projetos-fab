@@ -15,6 +15,10 @@ export class UpdateActivityDto {
   localityId?: string | null;
 
   @IsOptional()
+  @IsString()
+  specialtyId?: string | null;
+
+  @IsOptional()
   @IsDateString()
   eventDate?: string | null;
 

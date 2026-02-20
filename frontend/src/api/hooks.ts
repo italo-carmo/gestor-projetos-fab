@@ -177,6 +177,7 @@ export function useCreateActivity() {
       title: string;
       description?: string | null;
       localityId?: string | null;
+      specialtyId?: string | null;
       eventDate?: string | null;
       reportRequired?: boolean;
     }) => (await api.post("/activities", payload)).data,
@@ -193,6 +194,7 @@ export function useUpdateActivity() {
         title?: string;
         description?: string | null;
         localityId?: string | null;
+        specialtyId?: string | null;
         eventDate?: string | null;
         reportRequired?: boolean;
       };
@@ -207,6 +209,14 @@ export function useUpdateActivityStatus() {
     mutationFn: async (args: { id: string; status: string }) =>
       (await api.put(`/activities/${args.id}/status`, { status: args.status }))
         .data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["activities"] }),
+  });
+}
+
+export function useDeleteActivity() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await api.delete(`/activities/${id}`)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["activities"] }),
   });
 }
@@ -456,6 +466,32 @@ export function useUpdateTaskEloRole() {
         })
       ).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["tasks"] }),
+  });
+}
+
+export function useUpdateTaskSpecialty() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; specialtyId: string | null }) =>
+      (
+        await api.put(`/task-instances/${args.id}/specialty`, {
+          specialtyId: args.specialtyId,
+        })
+      ).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["tasks"] }),
+  });
+}
+
+export function useDeleteTask() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await api.delete(`/task-instances/${id}`)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      qc.invalidateQueries({ queryKey: ["gantt"] });
+      qc.invalidateQueries({ queryKey: ["calendar"] });
+      qc.invalidateQueries({ queryKey: ["meetings"] });
+    },
   });
 }
 
@@ -851,6 +887,19 @@ export function useUpdateMeeting() {
     mutationFn: async (args: { id: string; payload: any }) =>
       (await api.put(`/meetings/${args.id}`, args.payload)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["meetings"] }),
+  });
+}
+
+export function useDeleteMeeting() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await api.delete(`/meetings/${id}`)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["meetings"] });
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      qc.invalidateQueries({ queryKey: ["gantt"] });
+      qc.invalidateQueries({ queryKey: ["calendar"] });
+    },
   });
 }
 

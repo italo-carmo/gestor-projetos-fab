@@ -134,6 +134,12 @@ let ReportsService = class ReportsService {
         }
         return false;
     }
+    matchesTaskSpecialty(instance, specialtyId) {
+        if (!specialtyId)
+            return false;
+        const taskSpecialtyId = instance?.specialtyId ?? instance?.taskTemplate?.specialtyId ?? null;
+        return !taskSpecialtyId || taskSpecialtyId === specialtyId;
+    }
     assertTaskOperateAccess(instance, user) {
         if (!user?.id)
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
@@ -155,9 +161,7 @@ let ReportsService = class ReportsService {
                 return;
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         }
-        const specialtyMatch = profile.groupSpecialtyId
-            ? instance.taskTemplate?.specialtyId === profile.groupSpecialtyId
-            : false;
+        const specialtyMatch = this.matchesTaskSpecialty(instance, profile.groupSpecialtyId);
         const eloRoleMatch = profile.groupEloRoleId
             ? instance.eloRoleId === profile.groupEloRoleId ||
                 instance.assignedElo?.eloRoleId === profile.groupEloRoleId

@@ -13,6 +13,9 @@ exports.UpdateUserDto = void 0;
 const class_validator_1 = require("class-validator");
 class UpdateUserDto {
     eloRoleId;
+    localityId;
+    specialtyId;
+    roleId;
 }
 exports.UpdateUserDto = UpdateUserDto;
 __decorate([
@@ -22,4 +25,25 @@ __decorate([
     (0, class_validator_1.MinLength)(3),
     __metadata("design:type", Object)
 ], UpdateUserDto.prototype, "eloRoleId", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.ValidateIf)((_o, v) => v != null),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.MinLength)(3),
+    __metadata("design:type", Object)
+], UpdateUserDto.prototype, "localityId", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.ValidateIf)((_o, v) => v != null),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.MinLength)(3),
+    __metadata("design:type", Object)
+], UpdateUserDto.prototype, "specialtyId", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.ValidateIf)((_o, v) => v != null),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.MinLength)(3),
+    __metadata("design:type", Object)
+], UpdateUserDto.prototype, "roleId", void 0);
 //# sourceMappingURL=update-user.dto.js.map

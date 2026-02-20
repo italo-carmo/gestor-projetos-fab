@@ -7,10 +7,12 @@ export declare const ROLE_ADMIN_ESPECIALIDADE_LOCAL = "Admin Especialidade Local
 export declare const ROLE_ADMIN_ESPECIALIDADE_NACIONAL = "Admin Especialidade Nacional";
 export declare const ROLE_ADMIN_LOCALIDADE = "Admin Localidade";
 export declare const ROLE_ADMINISTRACAO_LOCAL = "Administra\u00E7\u00E3o Local";
+export declare function normalizeRoleName(roleName: string | null | undefined): string;
 export declare function hasRole(user: RbacUser | undefined, roleName: string): boolean;
 export declare function hasAnyRole(user: RbacUser | undefined, roleNames: string[]): boolean;
 export declare function isNationalCommissionMember(user: RbacUser | undefined): boolean;
 export declare function isTiUser(user: RbacUser | undefined): boolean;
+export declare function hasNationalManagementScope(user: RbacUser | undefined): boolean;
 export declare function isLocalityAdmin(user: RbacUser | undefined): boolean;
 export declare function isSpecialtyAdmin(user: RbacUser | undefined): boolean;
 export declare function isNationalSpecialtyAdmin(user: RbacUser | undefined): boolean;

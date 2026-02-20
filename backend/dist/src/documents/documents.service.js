@@ -15,10 +15,13 @@ const client_1 = require("@prisma/client");
 const prisma_service_1 = require("../prisma/prisma.service");
 const http_error_1 = require("../common/http-error");
 const pagination_1 = require("../common/pagination");
+const audit_service_1 = require("../audit/audit.service");
 let DocumentsService = class DocumentsService {
     prisma;
-    constructor(prisma) {
+    audit;
+    constructor(prisma, audit) {
         this.prisma = prisma;
+        this.audit = audit;
     }
     async list(filters, user) {
         const where = {};
@@ -147,7 +150,7 @@ let DocumentsService = class DocumentsService {
             tree,
         };
     }
-    async createSubcategory(payload, _user) {
+    async createSubcategory(payload, user) {
         const category = payload.category;
         const name = payload.name?.trim();
         const normalizedParentId = payload.parentId === undefined ||
@@ -194,13 +197,24 @@ let DocumentsService = class DocumentsService {
                 parentId: normalizedParentId,
             },
         });
+        await this.audit.log({
+            userId: user?.id,
+            resource: 'documents',
+            action: 'create_subcategory',
+            entityId: created.id,
+            diffJson: {
+                category: created.category,
+                name: created.name,
+                parentId: created.parentId,
+            },
+        });
         return {
             ...created,
             documentCount: 0,
             totalDocumentCount: 0,
         };
     }
-    async updateSubcategory(id, payload, _user) {
+    async updateSubcategory(id, payload, user) {
         const current = await this.prisma.documentSubcategory.findUnique({
             where: { id },
             select: { id: true, category: true, name: true, parentId: true },
@@ -254,15 +268,26 @@ let DocumentsService = class DocumentsService {
                 parentId: nextParentId,
             });
         }
-        return this.prisma.documentSubcategory.update({
+        const updated = await this.prisma.documentSubcategory.update({
             where: { id },
             data: {
                 name: nextName,
                 parentId: nextParentId,
             },
         });
+        await this.audit.log({
+            userId: user?.id,
+            resource: 'documents',
+            action: 'update_subcategory',
+            entityId: id,
+            diffJson: {
+                name: updated.name,
+                parentId: updated.parentId,
+            },
+        });
+        return updated;
     }
-    async deleteSubcategory(id, _user) {
+    async deleteSubcategory(id, user) {
         const current = await this.prisma.documentSubcategory.findUnique({
             where: { id },
             select: { id: true },
@@ -279,6 +304,16 @@ let DocumentsService = class DocumentsService {
                 where: { id: { in: ids } },
             }),
         ]);
+        await this.audit.log({
+            userId: user?.id,
+            resource: 'documents',
+            action: 'delete_subcategory',
+            entityId: id,
+            diffJson: {
+                deletedFolders: deleted.count,
+                unlinkedDocuments: unlinked.count,
+            },
+        });
         return {
             deletedFolders: deleted.count,
             unlinkedDocuments: unlinked.count,
@@ -370,6 +405,19 @@ let DocumentsService = class DocumentsService {
                 subcategoryId: nextSubcategoryId,
             },
             include: this.documentInclude(),
+        });
+        await this.audit.log({
+            userId: user?.id,
+            resource: 'documents',
+            action: 'update_document',
+            entityId: id,
+            localityId: updated.localityId ?? undefined,
+            diffJson: {
+                title: updated.title,
+                category: updated.category,
+                localityId: updated.localityId ?? null,
+                subcategoryId: updated.subcategoryId ?? null,
+            },
         });
         return this.mapDocumentWithAccess(updated, user);
     }
@@ -468,6 +516,18 @@ let DocumentsService = class DocumentsService {
                 label,
             },
         });
+        await this.audit.log({
+            userId: user?.id,
+            resource: 'documents',
+            action: 'create_link',
+            entityId: link.id,
+            localityId: document.localityId ?? undefined,
+            diffJson: {
+                documentId: link.documentId,
+                entityType: link.entityType,
+                entityId: link.entityId,
+            },
+        });
         const [enriched] = await this.enrichLinks([link]);
         return {
             ...enriched,
@@ -521,6 +581,18 @@ let DocumentsService = class DocumentsService {
                 label: nextLabel,
             },
         });
+        await this.audit.log({
+            userId: user?.id,
+            resource: 'documents',
+            action: 'update_link',
+            entityId: id,
+            localityId: nextDocument.localityId ?? undefined,
+            diffJson: {
+                documentId: updated.documentId,
+                entityType: updated.entityType,
+                entityId: updated.entityId,
+            },
+        });
         const [enriched] = await this.enrichLinks([updated]);
         return {
             ...enriched,
@@ -540,6 +612,18 @@ let DocumentsService = class DocumentsService {
             (0, http_error_1.throwError)('NOT_FOUND');
         this.assertDocumentScope(existing.document, user);
         await this.prisma.documentLink.delete({ where: { id } });
+        await this.audit.log({
+            userId: user?.id,
+            resource: 'documents',
+            action: 'delete_link',
+            entityId: id,
+            localityId: existing.document.localityId ?? undefined,
+            diffJson: {
+                documentId: existing.documentId,
+                entityType: existing.entityType,
+                entityId: existing.entityId,
+            },
+        });
         return { success: true };
     }
     async listLinkCandidates(filters, user) {
@@ -561,18 +645,24 @@ let DocumentsService = class DocumentsService {
         }
         if (entityType === client_1.DocumentLinkEntity.TASK_INSTANCE) {
             const where = {};
+            const andClauses = [];
             if (this.shouldApplyLocalityScope(user))
                 where.localityId = user?.localityId;
             if (user?.specialtyId) {
-                where.taskTemplate = { specialtyId: user.specialtyId };
+                andClauses.push({ OR: [{ specialtyId: null }, { specialtyId: user.specialtyId }] });
             }
             if (q) {
-                where.OR = [
-                    { taskTemplate: { title: { contains: q, mode: 'insensitive' } } },
-                    { locality: { name: { contains: q, mode: 'insensitive' } } },
-                    { locality: { code: { contains: q, mode: 'insensitive' } } },
-                    { id: { contains: q, mode: 'insensitive' } },
-                ];
+                andClauses.push({
+                    OR: [
+                        { taskTemplate: { title: { contains: q, mode: 'insensitive' } } },
+                        { locality: { name: { contains: q, mode: 'insensitive' } } },
+                        { locality: { code: { contains: q, mode: 'insensitive' } } },
+                        { id: { contains: q, mode: 'insensitive' } },
+                    ],
+                });
+            }
+            if (andClauses.length > 0) {
+                where.AND = andClauses;
             }
             const rows = await this.prisma.taskInstance.findMany({
                 where,
@@ -1033,6 +1123,7 @@ let DocumentsService = class DocumentsService {
 exports.DocumentsService = DocumentsService;
 exports.DocumentsService = DocumentsService = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [prisma_service_1.PrismaService])
+    __metadata("design:paramtypes", [prisma_service_1.PrismaService,
+        audit_service_1.AuditService])
 ], DocumentsService);
 //# sourceMappingURL=documents.service.js.map

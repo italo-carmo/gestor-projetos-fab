@@ -51,13 +51,14 @@ export class ActivitiesController {
   @RequirePermission('task_instances', 'view')
   list(
     @Query('localityId') localityId: string | undefined,
+    @Query('specialtyId') specialtyId: string | undefined,
     @Query('status') status: string | undefined,
     @Query('q') q: string | undefined,
     @Query('page') page: string | undefined,
     @Query('pageSize') pageSize: string | undefined,
     @CurrentUser() user: RbacUser,
   ) {
-    return this.activities.list({ localityId, status, q, page, pageSize }, user);
+    return this.activities.list({ localityId, specialtyId, status, q, page, pageSize }, user);
   }
 
   @Post()
@@ -76,6 +77,12 @@ export class ActivitiesController {
   @RequirePermission('task_instances', 'update')
   updateStatus(@Param('id') id: string, @Body() dto: UpdateActivityStatusDto, @CurrentUser() user: RbacUser) {
     return this.activities.updateStatus(id, dto.status as any, user);
+  }
+
+  @Delete(':id')
+  @RequirePermission('task_instances', 'update')
+  remove(@Param('id') id: string, @CurrentUser() user: RbacUser) {
+    return this.activities.delete(id, user);
   }
 
   @Get(':id/comments')

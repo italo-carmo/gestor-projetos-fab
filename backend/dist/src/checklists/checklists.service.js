@@ -16,6 +16,7 @@ const prisma_service_1 = require("../prisma/prisma.service");
 const http_error_1 = require("../common/http-error");
 const sanitize_1 = require("../common/sanitize");
 const audit_service_1 = require("../audit/audit.service");
+const role_access_1 = require("../rbac/role-access");
 let ChecklistsService = class ChecklistsService {
     prisma;
     audit;
@@ -95,10 +96,28 @@ let ChecklistsService = class ChecklistsService {
                 select: { taskTemplateId: true, localityId: true, status: true },
             })
             : [];
+        const selectedEloRoleId = filters.eloRoleId ?? constraints.eloRoleId;
+        const selectedSpecialtyId = filters.specialtyId ?? constraints.specialtyId;
         const activities = activityChecklistKeys.size > 0 && localityIds.length > 0
             ? await this.prisma.activity.findMany({
-                where: { localityId: { in: localityIds } },
-                select: { title: true, localityId: true, status: true },
+                where: {
+                    localityId: { in: localityIds },
+                    ...(selectedSpecialtyId
+                        ? {
+                            OR: [{ specialtyId: null }, { specialtyId: selectedSpecialtyId }],
+                        }
+                        : {}),
+                    ...(selectedEloRoleId
+                        ? {
+                            responsibles: {
+                                some: {
+                                    user: { eloRoleId: selectedEloRoleId },
+                                },
+                            },
+                        }
+                        : {}),
+                },
+                select: { title: true, localityId: true, status: true, specialtyId: true },
             })
             : [];
         const instanceByTemplateLocality = new Map();
@@ -169,7 +188,7 @@ let ChecklistsService = class ChecklistsService {
         return { items, localities };
     }
     async create(payload, user) {
-        this.assertConstraints(payload.specialtyId ?? null, user);
+        this.assertConstraints(payload.specialtyId ?? null, payload.eloRoleId ?? null, user);
         const title = (0, sanitize_1.sanitizeText)(payload.title).trim();
         const existing = await this.prisma.checklist.findFirst({
             where: {
@@ -208,7 +227,7 @@ let ChecklistsService = class ChecklistsService {
         const checklist = await this.prisma.checklist.findUnique({ where: { id: checklistId } });
         if (!checklist)
             (0, http_error_1.throwError)('NOT_FOUND');
-        this.assertConstraints(checklist.specialtyId ?? null, user);
+        this.assertConstraints(checklist.specialtyId ?? null, checklist.eloRoleId ?? null, user);
         const created = await this.prisma.checklistItem.create({
             data: {
                 checklistId,
@@ -231,15 +250,36 @@ let ChecklistsService = class ChecklistsService {
     getScopeConstraints(user) {
         if (!user)
             return {};
+        const profile = (0, role_access_1.resolveAccessProfile)(user);
+        if (profile.ti || profile.nationalCommission) {
+            return {};
+        }
+        if (profile.localityAdmin) {
+            return {
+                localityId: profile.localityId ?? undefined,
+                specialtyId: undefined,
+                eloRoleId: undefined,
+            };
+        }
+        if (profile.specialtyAdmin) {
+            return {
+                localityId: profile.localityId ?? undefined,
+                specialtyId: profile.groupSpecialtyId ?? undefined,
+                eloRoleId: profile.groupEloRoleId ?? undefined,
+            };
+        }
         return {
             localityId: user.localityId ?? undefined,
             specialtyId: user.specialtyId ?? undefined,
             eloRoleId: user.eloRoleId ?? undefined,
         };
     }
-    assertConstraints(specialtyId, user) {
+    assertConstraints(specialtyId, eloRoleId, user) {
         const constraints = this.getScopeConstraints(user);
         if (constraints.specialtyId && constraints.specialtyId !== specialtyId) {
+            (0, http_error_1.throwError)('RBAC_FORBIDDEN');
+        }
+        if (constraints.eloRoleId && constraints.eloRoleId !== eloRoleId) {
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         }
     }
@@ -277,14 +317,20 @@ let ChecklistsService = class ChecklistsService {
         const taskInstances = await this.prisma.taskInstance.findMany({
             where: {
                 localityId: { in: localityIds },
-                ...(selectedEloRoleId
+                ...(selectedSpecialtyId || selectedEloRoleId
                     ? {
-                        OR: [{ eloRoleId: selectedEloRoleId }, { taskTemplate: { eloRoleId: selectedEloRoleId } }],
+                        AND: [
+                            ...(selectedSpecialtyId
+                                ? [{ OR: [{ specialtyId: null }, { specialtyId: selectedSpecialtyId }] }]
+                                : []),
+                            ...(selectedEloRoleId
+                                ? [{ OR: [{ eloRoleId: selectedEloRoleId }, { taskTemplate: { eloRoleId: selectedEloRoleId } }] }]
+                                : []),
+                        ],
                     }
                     : {}),
                 taskTemplate: {
                     ...(filters.phaseId ? { phaseId: filters.phaseId } : {}),
-                    ...(selectedSpecialtyId ? { specialtyId: selectedSpecialtyId } : {}),
                 },
             },
             select: {
@@ -302,8 +348,22 @@ let ChecklistsService = class ChecklistsService {
         const activities = await this.prisma.activity.findMany({
             where: {
                 localityId: { in: localityIds },
+                ...(selectedSpecialtyId
+                    ? {
+                        OR: [{ specialtyId: null }, { specialtyId: selectedSpecialtyId }],
+                    }
+                    : {}),
+                ...(selectedEloRoleId
+                    ? {
+                        responsibles: {
+                            some: {
+                                user: { eloRoleId: selectedEloRoleId },
+                            },
+                        },
+                    }
+                    : {}),
             },
-            select: { title: true, localityId: true, status: true },
+            select: { title: true, localityId: true, status: true, specialtyId: true },
         });
         const templateById = new Map();
         const taskStatusByTemplateLocality = new Map();

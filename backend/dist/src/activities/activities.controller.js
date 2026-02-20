@@ -46,8 +46,8 @@ let ActivitiesController = class ActivitiesController {
     constructor(activities) {
         this.activities = activities;
     }
-    list(localityId, status, q, page, pageSize, user) {
-        return this.activities.list({ localityId, status, q, page, pageSize }, user);
+    list(localityId, specialtyId, status, q, page, pageSize, user) {
+        return this.activities.list({ localityId, specialtyId, status, q, page, pageSize }, user);
     }
     create(dto, user) {
         return this.activities.create(dto, user);
@@ -57,6 +57,9 @@ let ActivitiesController = class ActivitiesController {
     }
     updateStatus(id, dto, user) {
         return this.activities.updateStatus(id, dto.status, user);
+    }
+    remove(id, user) {
+        return this.activities.delete(id, user);
     }
     comments(id, user) {
         return this.activities.listComments(id, user);
@@ -133,13 +136,14 @@ __decorate([
     (0, common_1.Get)(),
     (0, require_permission_decorator_1.RequirePermission)('task_instances', 'view'),
     __param(0, (0, common_1.Query)('localityId')),
-    __param(1, (0, common_1.Query)('status')),
-    __param(2, (0, common_1.Query)('q')),
-    __param(3, (0, common_1.Query)('page')),
-    __param(4, (0, common_1.Query)('pageSize')),
-    __param(5, (0, current_user_decorator_1.CurrentUser)()),
+    __param(1, (0, common_1.Query)('specialtyId')),
+    __param(2, (0, common_1.Query)('status')),
+    __param(3, (0, common_1.Query)('q')),
+    __param(4, (0, common_1.Query)('page')),
+    __param(5, (0, common_1.Query)('pageSize')),
+    __param(6, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, Object, Object, Object, Object, Object]),
+    __metadata("design:paramtypes", [Object, Object, Object, Object, Object, Object, Object]),
     __metadata("design:returntype", void 0)
 ], ActivitiesController.prototype, "list", null);
 __decorate([
@@ -171,6 +175,15 @@ __decorate([
     __metadata("design:paramtypes", [String, update_activity_status_dto_1.UpdateActivityStatusDto, Object]),
     __metadata("design:returntype", void 0)
 ], ActivitiesController.prototype, "updateStatus", null);
+__decorate([
+    (0, common_1.Delete)(':id'),
+    (0, require_permission_decorator_1.RequirePermission)('task_instances', 'update'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", void 0)
+], ActivitiesController.prototype, "remove", null);
 __decorate([
     (0, common_1.Get)(':id/comments'),
     (0, require_permission_decorator_1.RequirePermission)('task_instances', 'view'),

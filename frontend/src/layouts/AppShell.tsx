@@ -127,7 +127,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       return isBiRole && can(me, 'dashboard', 'view');
     }
     if (item.to === '/audit') {
-      return can(me, 'audit_logs', 'view');
+      return hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]);
     }
     if (item.to === '/notices') {
       return can(me, 'notices', 'view');

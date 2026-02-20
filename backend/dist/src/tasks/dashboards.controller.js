@@ -30,7 +30,7 @@ let DashboardsController = class DashboardsController {
         return this.tasks.getLocalityProgress(id, user);
     }
     national(user) {
-        if (!(0, role_access_1.isNationalCommissionMember)(user)) {
+        if (!(0, role_access_1.hasNationalManagementScope)(user)) {
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         }
         return this.tasks.getDashboardNational(user);

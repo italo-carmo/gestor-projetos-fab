@@ -141,6 +141,12 @@ export class ReportsService {
     return false;
   }
 
+  private matchesTaskSpecialty(instance: any, specialtyId?: string | null) {
+    if (!specialtyId) return false;
+    const taskSpecialtyId = instance?.specialtyId ?? instance?.taskTemplate?.specialtyId ?? null;
+    return !taskSpecialtyId || taskSpecialtyId === specialtyId;
+  }
+
   private assertTaskOperateAccess(instance: any, user?: RbacUser) {
     if (!user?.id) throwError('RBAC_FORBIDDEN');
     const profile = resolveAccessProfile(user);
@@ -160,9 +166,7 @@ export class ReportsService {
       throwError('RBAC_FORBIDDEN');
     }
 
-    const specialtyMatch = profile.groupSpecialtyId
-      ? instance.taskTemplate?.specialtyId === profile.groupSpecialtyId
-      : false;
+    const specialtyMatch = this.matchesTaskSpecialty(instance, profile.groupSpecialtyId);
     const eloRoleMatch = profile.groupEloRoleId
       ? instance.eloRoleId === profile.groupEloRoleId ||
         instance.assignedElo?.eloRoleId === profile.groupEloRoleId

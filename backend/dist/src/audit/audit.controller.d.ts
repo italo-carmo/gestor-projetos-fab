@@ -1,8 +1,9 @@
+import type { RbacUser } from '../rbac/rbac.types';
 import { AuditService } from './audit.service';
 export declare class AuditController {
     private readonly audit;
     constructor(audit: AuditService);
-    list(resource: string | undefined, userId: string | undefined, localityId: string | undefined, entityId: string | undefined, from: string | undefined, to: string | undefined, page: string | undefined, pageSize: string | undefined): Promise<{
+    list(resource: string | undefined, userId: string | undefined, localityId: string | undefined, entityId: string | undefined, from: string | undefined, to: string | undefined, page: string | undefined, pageSize: string | undefined, user: RbacUser): Promise<{
         items: ({
             user: {
                 id: string;

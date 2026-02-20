@@ -107,7 +107,7 @@ let DocumentsController = class DocumentsController {
         return res.download(filePath, document.fileName);
     }
     assertDocumentsAccess(user) {
-        if (!(0, role_access_1.hasRole)(user, role_access_1.ROLE_COORDENACAO_CIPAVD)) {
+        if (!(0, role_access_1.hasAnyRole)(user, [role_access_1.ROLE_COORDENACAO_CIPAVD, role_access_1.ROLE_TI])) {
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         }
     }
