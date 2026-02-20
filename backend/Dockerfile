@@ -12,4 +12,4 @@ RUN npm install --omit=dev --fetch-retries=8 --fetch-retry-mintimeout=20000 --fe
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/prisma ./prisma
 EXPOSE 3000
-CMD ["node", "dist/main"]
+CMD ["node", "dist/src/main"]
