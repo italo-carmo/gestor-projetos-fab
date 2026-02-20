@@ -11,5 +11,6 @@ COPY package.json package-lock.json ./
 RUN npm install --omit=dev --fetch-retries=8 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=120000
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/prisma ./prisma
+RUN npx prisma generate
 EXPOSE 3000
 CMD ["node", "dist/src/main"]
