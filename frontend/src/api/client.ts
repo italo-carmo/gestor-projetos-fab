@@ -1,7 +1,23 @@
 import axios from "axios";
 
+const configuredBaseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim();
+const isLocalHostPattern = /^(https?:\/\/)?(localhost|127\.0\.0\.1|::1)(:\d+)?$/i;
+
+const shouldForceRelativeApiBase = () => {
+  if (typeof window === "undefined") return false;
+  const isBrowserLocalHost = ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
+  if (isBrowserLocalHost) return false;
+  return Boolean(configuredBaseUrl && isLocalHostPattern.test(configuredBaseUrl));
+};
+
+const apiBaseUrl = shouldForceRelativeApiBase()
+  ? "/api"
+  : configuredBaseUrl && configuredBaseUrl.length > 0
+    ? configuredBaseUrl
+    : "/api";
+
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000",
+  baseURL: apiBaseUrl,
 });
 
 api.interceptors.request.use((config) => {
