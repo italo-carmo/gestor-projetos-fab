@@ -230,10 +230,7 @@ export function useUpsertActivityReport() {
         date: string;
         location: string;
         responsible: string;
-        missionSupport: string;
-        introduction: string;
-        missionObjectives: string;
-        executionSchedule: string;
+        activityAnalysis: string;
         activitiesPerformed: string;
         participantsCount: number;
         participantsCharacteristics: string;
@@ -1452,6 +1449,7 @@ export function useDeleteBiSurveyResponses() {
       allFiltered?: boolean;
       from?: string;
       to?: string;
+      mission?: string;
       om?: string;
       posto?: string;
       postoGraduacao?: string;

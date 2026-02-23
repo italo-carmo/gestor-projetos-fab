@@ -47,6 +47,9 @@ export function DashboardNationalPage() {
   if (dashboardQuery.isError) return <ErrorState error={dashboardQuery.error} onRetry={() => dashboardQuery.refetch()} />;
 
   const items = (dashboardQuery.data?.items ?? []) as NationalLocalityItem[];
+  const smifLocalities = [...items]
+    .sort((a, b) => a.localityName.localeCompare(b.localityName, 'pt-BR'))
+    .slice(0, 8);
   const totals = dashboardQuery.data?.totals ?? { late: 0, blocked: 0, unassigned: 0, recruitsFemale: 0, reportsProduced: 0 };
   const lateItems = (dashboardQuery.data?.lateItems ?? []) as NationalTaskItem[];
   const unassignedItems = (dashboardQuery.data?.unassignedItems ?? []) as NationalTaskItem[];
@@ -55,8 +58,8 @@ export function DashboardNationalPage() {
   const detailTitle = detailView === 'late' ? 'Detalhes de tarefas atrasadas' : 'Detalhes de tarefas sem responsável';
 
   const kpiCards = [
-    { label: 'Cobertura', value: `${items.length}/${items.length} localidades`, icon: <TargetIcon sx={{ fontSize: 28 }} />, bg: '#E8F8EF' },
-    { label: 'Alcance', value: `${totals.recruitsFemale ?? 0} pessoas`, icon: <PeopleIcon sx={{ fontSize: 28 }} />, bg: '#E8F2FF' },
+    { label: 'Cobertura', value: `${smifLocalities.length}/${smifLocalities.length} localidades`, icon: <TargetIcon sx={{ fontSize: 28 }} />, bg: '#E8F8EF' },
+    { label: 'Recrutas femininas', value: '0', icon: <PeopleIcon sx={{ fontSize: 28 }} />, bg: '#E8F2FF' },
     { label: 'Relatórios', value: `${totals.reportsProduced ?? 0} produzidos`, icon: <DescriptionIcon sx={{ fontSize: 28 }} />, bg: '#FFF6E1' },
     { label: 'Satisfação', value: '—', icon: <StarIcon sx={{ fontSize: 28 }} />, bg: '#E8F8EF' },
   ];
@@ -64,10 +67,10 @@ export function DashboardNationalPage() {
   return (
     <Box>
       <Typography variant="h4" gutterBottom fontWeight={700}>
-        Indicadores de Desempenho
+        Visão Nacional
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Metas e acompanhamento — visão Brasil
+        Painel consolidado de acompanhamento nacional.
       </Typography>
       <Grid container spacing={2} alignItems="stretch">
         {kpiCards.map((kpi) => (
@@ -166,7 +169,7 @@ export function DashboardNationalPage() {
               <Typography variant="h6" gutterBottom>
                 Localidades
               </Typography>
-              {items.length === 0 ? (
+              {smifLocalities.length === 0 ? (
                 <EmptyState title="Sem dados" description="Nenhuma localidade encontrada." />
               ) : (
                 <TableContainer sx={{ width: '100%', overflowX: 'auto' }}>
@@ -175,7 +178,7 @@ export function DashboardNationalPage() {
                       <TableRow sx={{ bgcolor: 'primary.main' }}>
                         <TableCell sx={{ color: 'white', fontWeight: 600 }}>Localidade / GSD</TableCell>
                         <TableCell sx={{ color: 'white', fontWeight: 600 }}>% Geral</TableCell>
-                        <TableCell sx={{ color: 'white', fontWeight: 600 }}>Recrutas</TableCell>
+                        <TableCell sx={{ color: 'white', fontWeight: 600 }}>Recrutas femininas</TableCell>
                         <TableCell sx={{ color: 'white', fontWeight: 600 }}>Comandante</TableCell>
                         <TableCell sx={{ color: 'white', fontWeight: 600 }}>Visita</TableCell>
                         <TableCell sx={{ color: 'white', fontWeight: 600 }}>Atrasadas</TableCell>
@@ -185,7 +188,7 @@ export function DashboardNationalPage() {
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {items.map((loc) => (
+                      {smifLocalities.map((loc) => (
                         <TableRow key={loc.localityId} hover>
                           <TableCell>
                             <Typography variant="body2" fontWeight={600}>{loc.localityName}</Typography>
@@ -194,7 +197,7 @@ export function DashboardNationalPage() {
                             )}
                           </TableCell>
                           <TableCell>{Math.round(loc.progress)}%</TableCell>
-                          <TableCell>{loc.recruitsFemaleCountCurrent ?? 0}</TableCell>
+                          <TableCell>0</TableCell>
                           <TableCell>{loc.commanderName ?? '—'}</TableCell>
                           <TableCell>{loc.visitDate ? new Date(loc.visitDate).toLocaleDateString('pt-BR') : '—'}</TableCell>
                           <TableCell>{loc.late}</TableCell>

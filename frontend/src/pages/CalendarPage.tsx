@@ -78,10 +78,10 @@ export function CalendarPage() {
         Calendário
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Visualize tarefas por mês, semana ou dia. Clique em um evento para ver detalhes.
+        Visualização compacta para enxergar o mês completo sem rolagem excessiva.
       </Typography>
-      <Card sx={{ mb: 2 }}>
-        <CardContent sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
+      <Card sx={{ mb: 1.5 }}>
+        <CardContent sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.2, alignItems: 'center', py: 1.4 }}>
           <TextField
             size="small"
             type="number"
@@ -117,11 +117,11 @@ export function CalendarPage() {
         </Card>
       ) : (
         <Card sx={{ overflow: 'hidden' }}>
-          <Box sx={{ p: 2 }}>
+          <Box sx={{ p: 1.2 }}>
             <CalendarView
               events={events}
               onSelect={(id) => setSelectedTaskId(id)}
-              height={640}
+              height={540}
               date={year === new Date().getFullYear() ? new Date() : new Date(year, 0, 1)}
             />
           </Box>

@@ -53,7 +53,8 @@ type CombineMode = "AND" | "OR";
 type DeleteConfirmMode = "SELECTED" | "FILTERED";
 
 type DashboardFilters = {
-  om: string[];
+  mission: string[];
+  om?: string[];
   posto: string[];
   postoGraduacao: string[];
   autodeclara: string[];
@@ -159,7 +160,7 @@ function getPercentLabel(value: number) {
 function buildCsv(items: BiResponseRow[]) {
   const header = [
     "Data",
-    "OM",
+    "Missao",
     "Posto/Graduacao",
     "Posto",
     "Autodeclaracao",
@@ -266,7 +267,7 @@ export function BiSurveyDashboardPage() {
   const [filters, setFilters] = useState({
     from: "",
     to: "",
-    om: "",
+    mission: "",
     posto: "",
     postoGraduacao: "",
     autodeclara: "",
@@ -279,7 +280,7 @@ export function BiSurveyDashboardPage() {
     () => ({
       from: filters.from || undefined,
       to: filters.to || undefined,
-      om: filters.om || undefined,
+      mission: filters.mission || undefined,
       posto: filters.posto || undefined,
       postoGraduacao: filters.postoGraduacao || undefined,
       autodeclara: filters.autodeclara || undefined,
@@ -352,7 +353,7 @@ export function BiSurveyDashboardPage() {
     setFilters({
       from: "",
       to: "",
-      om: "",
+      mission: "",
       posto: "",
       postoGraduacao: "",
       autodeclara: "",
@@ -558,6 +559,37 @@ export function BiSurveyDashboardPage() {
 
       <Card sx={{ mb: 2, ...cardSx }}>
         <CardContent>
+          <Typography variant="subtitle1" fontWeight={700}>
+            Contexto da Missão
+          </Typography>
+          <Typography variant="body2" sx={{ color: BI_PALETTE.muted, mt: 0.6 }}>
+            Esta visão consolida respostas por missão. Use este recorte antes dos gráficos para evitar comparação entre questionários de missões diferentes.
+          </Typography>
+          <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ mt: 1.2 }}>
+            <Chip
+              size="small"
+              variant="outlined"
+              label={`Missão atual: ${filters.mission || "Todas"}`}
+              sx={{ borderColor: alpha(BI_PALETTE.primary, 0.4), color: BI_PALETTE.primaryDark }}
+            />
+            <Chip
+              size="small"
+              variant="outlined"
+              label={`Respostas no recorte: ${dashboard.kpis.totalResponses}`}
+              sx={{ borderColor: alpha(BI_PALETTE.accent, 0.45), color: BI_PALETTE.accent }}
+            />
+            <Chip
+              size="small"
+              variant="outlined"
+              label={`Base total: ${dashboard.kpis.totalRowsInDb}`}
+              sx={{ borderColor: alpha(BI_PALETTE.primaryMid, 0.4), color: BI_PALETTE.primaryMid }}
+            />
+          </Stack>
+        </CardContent>
+      </Card>
+
+      <Card sx={{ mb: 2, ...cardSx }}>
+        <CardContent>
           <Stack
             direction={{ xs: "column", lg: "row" }}
             spacing={1.2}
@@ -672,12 +704,12 @@ export function BiSurveyDashboardPage() {
             <TextField
               select
               size="small"
-              label="OM"
-              value={filters.om}
-              onChange={(event) => updateFilter("om", event.target.value)}
+              label="Missão"
+              value={filters.mission}
+              onChange={(event) => updateFilter("mission", event.target.value)}
             >
               <MenuItem value="">Todas</MenuItem>
-              {(dashboard.filters.om ?? []).map((item) => (
+              {(dashboard.filters.mission ?? dashboard.filters.om ?? []).map((item) => (
                 <MenuItem key={item} value={item}>
                   {item}
                 </MenuItem>
@@ -831,7 +863,7 @@ export function BiSurveyDashboardPage() {
               <strong>{dashboard.insights.mostCommonType?.type ?? "-"}</strong>
             </Typography>
             <Typography variant="body2">
-              OM com maior taxa:{" "}
+              Missão com maior taxa:{" "}
               <strong>{dashboard.insights.riskiestOm?.om ?? "-"}</strong>
             </Typography>
           </CardContent>
@@ -847,10 +879,10 @@ export function BiSurveyDashboardPage() {
         <Card sx={cardSx}>
           <CardContent>
             <Typography variant="subtitle1" fontWeight={700} gutterBottom>
-              OE/OM Percentual ({metricMode === "PERCENT" ? "%" : "Qtd"})
+              Missão Percentual ({metricMode === "PERCENT" ? "%" : "Qtd"})
             </Typography>
             <Typography variant="caption" sx={chartCaptionSx}>
-              Clique em uma barra para filtrar a OM.
+              Clique em uma barra para filtrar a missão.
             </Typography>
             <ResponsiveContainer width="100%" height={300}>
               <BarChart
@@ -860,7 +892,7 @@ export function BiSurveyDashboardPage() {
                 }) => {
                   const payload = state.activePayload?.[0]?.payload;
                   if (payload?.om) {
-                    updateFilter("om", payload.om);
+                    updateFilter("mission", payload.om);
                   }
                 }}
                 margin={{ top: 14, right: 16, left: 0, bottom: 0 }}
@@ -1026,10 +1058,10 @@ export function BiSurveyDashboardPage() {
         <Card sx={cardSx}>
           <CardContent>
             <Typography variant="subtitle1" fontWeight={700} gutterBottom>
-              Violencias por OM ({metricMode === "PERCENT" ? "%" : "Qtd"})
+              Violencias por missão ({metricMode === "PERCENT" ? "%" : "Qtd"})
             </Typography>
             <Typography variant="caption" sx={chartCaptionSx}>
-              Equivalente ao cruzamento por OM/tipo do arquivo original.
+              Equivalente ao cruzamento por missão/tipo do arquivo original.
             </Typography>
             <ResponsiveContainer width="100%" height={300}>
               <BarChart
@@ -1041,7 +1073,7 @@ export function BiSurveyDashboardPage() {
                   const payload = state.activePayload?.[0]?.payload;
                   const om = payload?.om;
                   if (typeof om === "string" && om.trim()) {
-                    updateFilter("om", om);
+                    updateFilter("mission", om);
                   }
                 }}
               >
@@ -1099,7 +1131,7 @@ export function BiSurveyDashboardPage() {
         <Card sx={cardSx}>
           <CardContent>
             <Typography variant="subtitle1" fontWeight={700} gutterBottom>
-              Distribuicao por OM ({metricMode === "PERCENT" ? "%" : "Qtd"})
+              Distribuicao por missão ({metricMode === "PERCENT" ? "%" : "Qtd"})
             </Typography>
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={dashboard.charts.omDistribution}>
@@ -1330,7 +1362,7 @@ export function BiSurveyDashboardPage() {
                     Data
                   </TableCell>
                   <TableCell sx={tableHeaderCellSx}>
-                    OM
+                    Missão
                   </TableCell>
                   <TableCell sx={tableHeaderCellSx}>
                     Posto/Graduacao

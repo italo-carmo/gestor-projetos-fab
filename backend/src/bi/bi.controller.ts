@@ -39,6 +39,7 @@ export class BiController {
   dashboard(
     @Query('from') from: string | undefined,
     @Query('to') to: string | undefined,
+    @Query('mission') mission: string | undefined,
     @Query('om') om: string | undefined,
     @Query('posto') posto: string | undefined,
     @Query('postoGraduacao') postoGraduacao: string | undefined,
@@ -52,6 +53,7 @@ export class BiController {
     return this.bi.dashboard({
       from,
       to,
+      mission,
       om,
       posto,
       postoGraduacao,
@@ -67,6 +69,7 @@ export class BiController {
   listResponses(
     @Query('from') from: string | undefined,
     @Query('to') to: string | undefined,
+    @Query('mission') mission: string | undefined,
     @Query('om') om: string | undefined,
     @Query('posto') posto: string | undefined,
     @Query('postoGraduacao') postoGraduacao: string | undefined,
@@ -83,6 +86,7 @@ export class BiController {
     return this.bi.listResponses({
       from,
       to,
+      mission,
       om,
       posto,
       postoGraduacao,
@@ -159,6 +163,7 @@ export class BiController {
       allFiltered?: boolean;
       from?: string;
       to?: string;
+      mission?: string;
       om?: string;
       posto?: string;
       postoGraduacao?: string;
@@ -175,7 +180,13 @@ export class BiController {
   }
 
   private assertBiAccess(user: RbacUser) {
-    if (!hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI])) {
+    if (
+      !hasAnyRole(user, [
+        ROLE_COORDENACAO_CIPAVD,
+        ROLE_COMANDANTE_COMGEP,
+        ROLE_TI,
+      ])
+    ) {
       throwError('RBAC_FORBIDDEN');
     }
   }

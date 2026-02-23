@@ -61,13 +61,13 @@ const drawerExpandedWidth = 284;
 const drawerCollapsedWidth = 92;
 
 const navItems = [
-  { label: 'Painel Nacional', to: '/dashboard/national', icon: <DashboardIcon fontSize="small" /> },
+  { label: 'Painel de Comando', to: '/dashboard/national', icon: <DashboardIcon fontSize="small" /> },
   { label: 'Painel Exec.', to: '/dashboard/executive', icon: <DashboardIcon fontSize="small" /> },
   { label: 'BI Pesquisas', to: '/dashboard/bi', icon: <InsightsRoundedIcon fontSize="small" /> },
-  { label: 'Atividades', to: '/activities', icon: <EventNoteIcon fontSize="small" /> },
+  { label: 'Atividades de Campo', to: '/activities', icon: <EventNoteIcon fontSize="small" /> },
   { label: 'Tarefas', to: '/tasks', icon: <TaskIcon fontSize="small" /> },
   { label: 'Modelos de tarefa', to: '/templates', icon: <TaskIcon fontSize="small" /> },
-  { label: 'Acervo', to: '/documents', icon: <FolderOpenIcon fontSize="small" /> },
+  { label: 'Comunicação Social', to: '/documents', icon: <FolderOpenIcon fontSize="small" /> },
   { label: 'Cronograma', to: '/gantt', icon: <TimelineIcon fontSize="small" /> },
   { label: 'Calendário', to: '/calendar', icon: <CalendarMonthIcon fontSize="small" /> },
   { label: 'Reuniões', to: '/meetings', icon: <GroupsIcon fontSize="small" /> },
@@ -366,7 +366,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                       >
                         <ListItemText
                           primary={doc.title}
-                          secondary={doc.localityName ? `Acervo • ${doc.localityName}` : 'Acervo'}
+                          secondary={doc.localityName ? `Comunicação Social • ${doc.localityName}` : 'Comunicação Social'}
                         />
                       </ListItemButton>
                     ))}

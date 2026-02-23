@@ -108,7 +108,7 @@ function EventCard({ event }: { event: any }) {
 export function CalendarView({
   events,
   onSelect,
-  height = 640,
+  height = 540,
   date,
 }: {
   events: CalendarEventInput[];
@@ -136,8 +136,8 @@ export function CalendarView({
         '& .rbc-calendar': { fontFamily: 'inherit' },
         '& .rbc-toolbar': {
           flexWrap: 'wrap',
-          gap: 1,
-          mb: 2,
+          gap: 0.8,
+          mb: 1.1,
           '& button': {
             borderRadius: 1.3,
             textTransform: 'none',
@@ -148,11 +148,11 @@ export function CalendarView({
             backgroundColor: 'rgba(12, 101, 126, 0.14)',
           },
         },
-        '& .rbc-toolbar-label': { fontWeight: 800, fontSize: 18 },
+        '& .rbc-toolbar-label': { fontWeight: 800, fontSize: 16 },
         '& .rbc-header': {
-          padding: '10px 4px',
+          padding: '7px 4px',
           fontWeight: 700,
-          fontSize: 12,
+          fontSize: 11,
           color: '#234454',
           background: 'rgba(12, 101, 126, 0.05)',
         },
@@ -163,11 +163,11 @@ export function CalendarView({
         },
         '& .rbc-today': { backgroundColor: 'rgba(12, 101, 126, 0.08)' },
         '& .rbc-off-range-bg': { backgroundColor: '#F6FAFC' },
-        '& .rbc-date-cell': { padding: '4px 8px 2px' },
+        '& .rbc-date-cell': { padding: '2px 6px 1px' },
         '& .rbc-event': {
           borderRadius: 8,
           padding: 0,
-          minHeight: 34,
+          minHeight: 28,
           border: 'none',
           boxShadow: '0 5px 10px rgba(13, 42, 56, 0.1)',
         },

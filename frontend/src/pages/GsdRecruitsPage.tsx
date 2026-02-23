@@ -80,6 +80,7 @@ export function GsdRecruitsPage() {
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
         Atualize o quantitativo de recrutas da localidade. Cada alteração gera histórico diário e alimenta os gráficos e totais do sistema.
+        O acesso às atividades é aberto já filtrado pela GSD selecionada.
       </Typography>
 
       <Card>
@@ -122,6 +123,14 @@ export function GsdRecruitsPage() {
                       </Button>
                       <Button size="small" component={Link} to="/recruits-history" sx={{ ml: 0.5 }}>
                         Ver histórico
+                      </Button>
+                      <Button
+                        size="small"
+                        component={Link}
+                        to={`/activities?localityId=${loc.id}`}
+                        sx={{ ml: 0.5 }}
+                      >
+                        Ver atividades da GSD
                       </Button>
                     </TableCell>
                   </TableRow>

@@ -1,4 +1,10 @@
-import { IsDateString, IsInt, IsString, Min } from 'class-validator';
+import {
+  IsDateString,
+  IsInt,
+  IsOptional,
+  IsString,
+  Min,
+} from 'class-validator';
 
 export class UpsertActivityReportDto {
   @IsDateString()
@@ -11,16 +17,23 @@ export class UpsertActivityReportDto {
   responsible: string;
 
   @IsString()
-  missionSupport: string;
+  activityAnalysis: string;
 
+  @IsOptional()
   @IsString()
-  introduction: string;
+  missionSupport?: string;
 
+  @IsOptional()
   @IsString()
-  missionObjectives: string;
+  introduction?: string;
 
+  @IsOptional()
   @IsString()
-  executionSchedule: string;
+  missionObjectives?: string;
+
+  @IsOptional()
+  @IsString()
+  executionSchedule?: string;
 
   @IsString()
   activitiesPerformed: string;

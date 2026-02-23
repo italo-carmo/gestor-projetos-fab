@@ -1,4 +1,5 @@
 import {
+  Badge,
   Box,
   Button,
   Card,
@@ -6,6 +7,7 @@ import {
   Chip,
   Divider,
   Drawer,
+  IconButton,
   MenuItem,
   Stack,
   Tab,
@@ -16,8 +18,10 @@ import {
   TableRow,
   Tabs,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material';
+import PhotoCameraOutlinedIcon from '@mui/icons-material/PhotoCameraOutlined';
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
@@ -50,17 +54,13 @@ import { can } from '../app/rbac';
 import { EmptyState } from '../components/states/EmptyState';
 import { ErrorState } from '../components/states/ErrorState';
 import { SkeletonState } from '../components/states/SkeletonState';
-import { EntityDocumentLinksManager } from '../components/documents/EntityDocumentLinksManager';
 import { ACTIVITY_STATUS_LABELS, ActivityStatus } from '../constants/enums';
 
 const blankReport = {
   date: '',
   location: '',
   responsible: '',
-  missionSupport: '',
-  introduction: '',
-  missionObjectives: '',
-  executionSchedule: '',
+  activityAnalysis: '',
   activitiesPerformed: '',
   participantsCount: 0,
   participantsCharacteristics: '',
@@ -78,15 +78,17 @@ const blankScheduleItem = {
   participants: '',
 };
 
-type ActivityDrawerTab = 'activity' | 'schedule' | 'report' | 'documents';
+type ActivityDrawerTab = 'activity' | 'schedule' | 'report';
 
 export function ActivitiesPage() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const activityIdFromUrl = searchParams.get('activityId') ?? '';
+  const localityIdFromUrl = searchParams.get('localityId') ?? '';
+  const tabFromUrl = searchParams.get('tab') === 'schedule' ? 'schedule' : 'activity';
   const toast = useToast();
 
   const [statusFilter, setStatusFilter] = useState('');
-  const [localityFilter, setLocalityFilter] = useState('');
+  const [localityFilter, setLocalityFilter] = useState(localityIdFromUrl);
   const [specialtyFilter, setSpecialtyFilter] = useState('');
   const [search, setSearch] = useState('');
 
@@ -107,7 +109,7 @@ export function ActivitiesPage() {
   const [drawerOpen, setDrawerOpen] = useState(Boolean(activityIdFromUrl));
   const [isCreateMode, setIsCreateMode] = useState(false);
   const [commentText, setCommentText] = useState('');
-  const [drawerTab, setDrawerTab] = useState<ActivityDrawerTab>('activity');
+  const [drawerTab, setDrawerTab] = useState<ActivityDrawerTab>(tabFromUrl);
 
   const createActivity = useCreateActivity();
   const deleteActivity = useDeleteActivity();
@@ -145,6 +147,26 @@ export function ActivitiesPage() {
     void markCommentsSeen.mutateAsync(selectedId).catch(() => {});
   }, [selectedId]);
 
+  useEffect(() => {
+    if (localityIdFromUrl && localityIdFromUrl !== localityFilter) {
+      setLocalityFilter(localityIdFromUrl);
+    }
+  }, [localityFilter, localityIdFromUrl]);
+
+  useEffect(() => {
+    if (!activityIdFromUrl) return;
+    if (activityIdFromUrl !== selectedId) {
+      setSelectedId(activityIdFromUrl);
+      setDrawerOpen(true);
+      setIsCreateMode(false);
+    } else if (!drawerOpen) {
+      setDrawerOpen(true);
+    }
+    if (tabFromUrl === 'schedule') {
+      setDrawerTab('schedule');
+    }
+  }, [activityIdFromUrl, drawerOpen, selectedId, tabFromUrl]);
+
   const [activityForm, setActivityForm] = useState({
     title: '',
     description: '',
@@ -179,10 +201,7 @@ export function ActivitiesPage() {
       date: selected.report.date ? String(selected.report.date).slice(0, 10) : '',
       location: selected.report.location ?? '',
       responsible: selected.report.responsible ?? '',
-      missionSupport: selected.report.missionSupport ?? '',
-      introduction: selected.report.introduction ?? '',
-      missionObjectives: selected.report.missionObjectives ?? '',
-      executionSchedule: selected.report.executionSchedule ?? '',
+      activityAnalysis: selected.report.activityAnalysis ?? selected.report.missionSupport ?? '',
       activitiesPerformed: selected.report.activitiesPerformed ?? '',
       participantsCount: Number(selected.report.participantsCount ?? 0),
       participantsCharacteristics: selected.report.participantsCharacteristics ?? '',
@@ -196,10 +215,6 @@ export function ActivitiesPage() {
     setScheduleForm(blankScheduleItem);
     setEditingScheduleId(null);
   }, [selectedId, isCreateMode]);
-
-  useEffect(() => {
-    setDrawerTab('activity');
-  }, [selectedId, isCreateMode, drawerOpen]);
 
   const canView = !me ? true : can(me, 'task_instances', 'view');
   const canCreate = can(me, 'task_instances', 'create');
@@ -401,6 +416,35 @@ export function ActivitiesPage() {
     }
   };
 
+  const syncUrlState = (activityId?: string, tab: ActivityDrawerTab = 'activity') => {
+    const next = new URLSearchParams(searchParams);
+    if (localityFilter) next.set('localityId', localityFilter);
+    else next.delete('localityId');
+
+    if (activityId) {
+      next.set('activityId', activityId);
+      if (tab === 'schedule') next.set('tab', tab);
+      else next.delete('tab');
+    } else {
+      next.delete('activityId');
+      next.delete('tab');
+    }
+    setSearchParams(next, { replace: true });
+  };
+
+  const openActivityDrawer = (activityId: string, tab: ActivityDrawerTab = 'activity') => {
+    setSelectedId(activityId);
+    setIsCreateMode(false);
+    setDrawerTab(tab);
+    setDrawerOpen(true);
+    syncUrlState(activityId, tab);
+  };
+
+  const closeDrawer = () => {
+    setDrawerOpen(false);
+    syncUrlState(undefined);
+  };
+
   if (!canView) {
     return <ErrorState error={{ message: 'Acesso negado' }} />;
   }
@@ -425,12 +469,13 @@ export function ActivitiesPage() {
     });
     setReportForm(blankReport);
     setDrawerOpen(true);
+    syncUrlState(undefined);
   };
 
   return (
     <Box>
       <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
-        <Typography variant="h4">Atividades Externas</Typography>
+        <Typography variant="h4">Atividades de Campo</Typography>
         <Button variant="contained" onClick={openCreateDrawer} disabled={!canCreate}>
           Nova atividade
         </Button>
@@ -466,7 +511,14 @@ export function ActivitiesPage() {
               size="small"
               label="Localidade"
               value={localityFilter}
-              onChange={(e) => setLocalityFilter(e.target.value)}
+              onChange={(e) => {
+                const value = e.target.value;
+                setLocalityFilter(value);
+                const next = new URLSearchParams(searchParams);
+                if (value) next.set('localityId', value);
+                else next.delete('localityId');
+                setSearchParams(next, { replace: true });
+              }}
               sx={{ minWidth: 220 }}
             >
               <MenuItem value="">Todas</MenuItem>
@@ -498,7 +550,7 @@ export function ActivitiesPage() {
       <Stack spacing={2}>
         <Card>
           <CardContent>
-            <Typography variant="h6" sx={{ mb: 1 }}>Lista de atividades</Typography>
+            <Typography variant="h6" sx={{ mb: 1 }}>Atividades de Campo</Typography>
             {items.length === 0 ? (
               <EmptyState title="Nenhuma atividade" description="Cadastre uma nova atividade externa." />
             ) : (
@@ -508,10 +560,13 @@ export function ActivitiesPage() {
                     <TableCell sx={{ color: 'white', fontWeight: 600 }}>Atividade</TableCell>
                     <TableCell sx={{ color: 'white', fontWeight: 600 }}>Localidade</TableCell>
                     <TableCell sx={{ color: 'white', fontWeight: 600 }}>Especialidade</TableCell>
+                    <TableCell sx={{ color: 'white', fontWeight: 600 }}>Responsável</TableCell>
                     <TableCell sx={{ color: 'white', fontWeight: 600 }}>Data</TableCell>
                     <TableCell sx={{ color: 'white', fontWeight: 600 }}>Status</TableCell>
                     <TableCell sx={{ color: 'white', fontWeight: 600 }}>Comentários</TableCell>
+                    <TableCell sx={{ color: 'white', fontWeight: 600 }}>Fotos</TableCell>
                     <TableCell sx={{ color: 'white', fontWeight: 600 }}>Relatório</TableCell>
+                    <TableCell sx={{ color: 'white', fontWeight: 600 }}>Ações</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -520,17 +575,17 @@ export function ActivitiesPage() {
                       key={item.id}
                       hover
                       selected={!isCreateMode && selectedId === item.id}
-                      onClick={() => {
-                        setSelectedId(item.id);
-                        setIsCreateMode(false);
-                        setDrawerTab('activity');
-                        setDrawerOpen(true);
-                      }}
+                      onClick={() => openActivityDrawer(item.id, 'activity')}
                       sx={{ cursor: 'pointer' }}
                     >
                       <TableCell>{item.title}</TableCell>
                       <TableCell>{item.locality?.name ?? '-'}</TableCell>
                       <TableCell>{item.specialty?.name ?? 'Todas'}</TableCell>
+                      <TableCell>
+                        {Array.isArray(item.responsibleUsers) && item.responsibleUsers.length > 0
+                          ? item.responsibleUsers.map((user: any) => user.name).join(', ')
+                          : '—'}
+                      </TableCell>
                       <TableCell>{item.eventDate ? new Date(item.eventDate).toLocaleDateString('pt-BR') : '-'}</TableCell>
                       <TableCell>{ACTIVITY_STATUS_LABELS[item.status] ?? item.status}</TableCell>
                       <TableCell>
@@ -543,6 +598,23 @@ export function ActivitiesPage() {
                         )}
                       </TableCell>
                       <TableCell>
+                        <Tooltip title={(item.report?.photos?.length ?? 0) > 0 ? 'Abrir relatório e fotos' : 'Sem fotos'}>
+                          <span>
+                            <IconButton
+                              size="small"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                openActivityDrawer(item.id, 'report');
+                              }}
+                            >
+                              <Badge badgeContent={item.report?.photos?.length ?? 0} color="primary">
+                                <PhotoCameraOutlinedIcon fontSize="small" />
+                              </Badge>
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                      </TableCell>
+                      <TableCell>
                         {item.report ? (
                           <Chip
                             size="small"
@@ -552,6 +624,18 @@ export function ActivitiesPage() {
                         ) : (
                           <Chip size="small" label="Sem relatório" />
                         )}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          size="small"
+                          variant="text"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openActivityDrawer(item.id, 'schedule');
+                          }}
+                        >
+                          Cronograma
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -565,7 +649,7 @@ export function ActivitiesPage() {
       <Drawer
         anchor="right"
         open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
+        onClose={closeDrawer}
         PaperProps={{ sx: { width: { xs: '100%', md: 620 } } }}
       >
         <Box p={3} sx={{ height: '100%', overflowY: 'auto' }}>
@@ -585,7 +669,7 @@ export function ActivitiesPage() {
                   Excluir
                 </Button>
               )}
-              <Button size="small" onClick={() => setDrawerOpen(false)}>
+              <Button size="small" onClick={closeDrawer}>
                 Fechar
               </Button>
             </Stack>
@@ -594,7 +678,10 @@ export function ActivitiesPage() {
           {!isCreateMode && selected && (
             <Tabs
               value={drawerTab}
-              onChange={(_, value: ActivityDrawerTab) => setDrawerTab(value)}
+              onChange={(_, value: ActivityDrawerTab) => {
+                setDrawerTab(value);
+                if (selected?.id) syncUrlState(selected.id, value);
+              }}
               variant="scrollable"
               allowScrollButtonsMobile
               sx={{ mb: 2 }}
@@ -602,7 +689,6 @@ export function ActivitiesPage() {
               <Tab value="activity" label="Dados da atividade" />
               <Tab value="schedule" label="Cronograma" />
               <Tab value="report" label="Relatório" />
-              <Tab value="documents" label="Documentos" />
             </Tabs>
           )}
 
@@ -712,6 +798,19 @@ export function ActivitiesPage() {
                   </Button>
                 )}
               </Stack>
+
+              {!isCreateMode && selected && (
+                <Box sx={{ mt: 1 }}>
+                  <Typography variant="caption" color="text.secondary">
+                    Responsáveis
+                  </Typography>
+                  <Typography variant="body2">
+                    {Array.isArray(selected.responsibleUsers) && selected.responsibleUsers.length > 0
+                      ? selected.responsibleUsers.map((user: any) => user.name).join(', ')
+                      : 'Não definido'}
+                  </Typography>
+                </Box>
+              )}
 
               {!isCreateMode && selected && (
                 <>
@@ -966,36 +1065,9 @@ export function ActivitiesPage() {
 
                 <TextField
                   size="small"
-                  label="Amparo da missão"
-                  value={reportForm.missionSupport}
-                  onChange={(e) => setReportForm({ ...reportForm, missionSupport: e.target.value })}
-                  multiline
-                  minRows={2}
-                  fullWidth
-                />
-                <TextField
-                  size="small"
-                  label="Introdução"
-                  value={reportForm.introduction}
-                  onChange={(e) => setReportForm({ ...reportForm, introduction: e.target.value })}
-                  multiline
-                  minRows={2}
-                  fullWidth
-                />
-                <TextField
-                  size="small"
-                  label="Objetivos da missão"
-                  value={reportForm.missionObjectives}
-                  onChange={(e) => setReportForm({ ...reportForm, missionObjectives: e.target.value })}
-                  multiline
-                  minRows={2}
-                  fullWidth
-                />
-                <TextField
-                  size="small"
-                  label="Cronograma de execução"
-                  value={reportForm.executionSchedule}
-                  onChange={(e) => setReportForm({ ...reportForm, executionSchedule: e.target.value })}
+                  label="Análise da atividade"
+                  value={reportForm.activityAnalysis}
+                  onChange={(e) => setReportForm({ ...reportForm, activityAnalysis: e.target.value })}
                   multiline
                   minRows={2}
                   fullWidth
@@ -1147,14 +1219,6 @@ export function ActivitiesPage() {
             </>
           )}
 
-          {!isCreateMode && selected && drawerTab === 'documents' && (
-            <EntityDocumentLinksManager
-              entityType="ACTIVITY"
-              entityId={selected.id}
-              canManage={canUpdate}
-              title="Documentos da atividade"
-            />
-          )}
         </Box>
       </Drawer>
     </Box>

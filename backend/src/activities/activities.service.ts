@@ -781,10 +781,11 @@ export class ActivitiesService {
       date: string;
       location: string;
       responsible: string;
-      missionSupport: string;
-      introduction: string;
-      missionObjectives: string;
-      executionSchedule: string;
+      activityAnalysis: string;
+      missionSupport?: string;
+      introduction?: string;
+      missionObjectives?: string;
+      executionSchedule?: string;
       activitiesPerformed: string;
       participantsCount: number;
       participantsCharacteristics: string;
@@ -805,10 +806,10 @@ export class ActivitiesService {
       date: new Date(payload.date),
       location: sanitizeText(payload.location),
       responsible: sanitizeText(payload.responsible),
-      missionSupport: sanitizeText(payload.missionSupport),
-      introduction: sanitizeText(payload.introduction),
-      missionObjectives: sanitizeText(payload.missionObjectives),
-      executionSchedule: sanitizeText(payload.executionSchedule),
+      missionSupport: sanitizeText(payload.activityAnalysis),
+      introduction: sanitizeText(payload.introduction ?? ''),
+      missionObjectives: sanitizeText(payload.missionObjectives ?? ''),
+      executionSchedule: sanitizeText(payload.executionSchedule ?? ''),
       activitiesPerformed: sanitizeText(payload.activitiesPerformed),
       participantsCount: payload.participantsCount,
       participantsCharacteristics: sanitizeText(payload.participantsCharacteristics),
@@ -986,9 +987,6 @@ export class ActivitiesService {
       !report.location ||
       !report.responsible ||
       !report.missionSupport ||
-      !report.introduction ||
-      !report.missionObjectives ||
-      !report.executionSchedule ||
       !report.activitiesPerformed ||
       !report.participantsCharacteristics ||
       !report.conclusion ||
@@ -1009,10 +1007,7 @@ export class ActivitiesService {
         date: report.date.toISOString(),
         location: report.location,
         responsible: report.responsible,
-        missionSupport: report.missionSupport,
-        introduction: report.introduction,
-        missionObjectives: report.missionObjectives,
-        executionSchedule: report.executionSchedule,
+        activityAnalysis: report.missionSupport,
         activitiesPerformed: report.activitiesPerformed,
         participantsCount: report.participantsCount,
         participantsCharacteristics: report.participantsCharacteristics,
@@ -1134,10 +1129,7 @@ export class ActivitiesService {
     writeLine('Data da atividade', this.formatDate(report.date));
     writeLine('Local', report.location);
     writeLine('Responsável', report.responsible);
-    writeLine('Amparo da missão', report.missionSupport);
-    writeLine('Introdução', report.introduction);
-    writeLine('Objetivos da missão', report.missionObjectives);
-    writeLine('Cronograma de execução', report.executionSchedule);
+    writeLine('Análise da atividade', report.missionSupport);
     writeLine('Atividades realizadas', report.activitiesPerformed);
     writeLine('Participantes (número)', String(report.participantsCount));
     writeLine('Participantes (características)', report.participantsCharacteristics);
@@ -1271,6 +1263,7 @@ export class ActivitiesService {
       report: activity.report
         ? {
             ...activity.report,
+            activityAnalysis: activity.report.missionSupport ?? '',
             hasSignature: Boolean(activity.report.signedAt && activity.report.signatureHash),
           }
         : null,

@@ -10,6 +10,7 @@ import type { RbacUser } from '../rbac/rbac.types';
 type SurveyFilters = {
   from?: string;
   to?: string;
+  mission?: string;
   om?: string;
   posto?: string;
   postoGraduacao?: string;
@@ -435,10 +436,11 @@ export class BiService {
       }
     }
 
-    const omSorted = [...om].sort((a, b) => this.sortOm(a, b));
+    const missionSorted = [...om].sort((a, b) => this.sortOm(a, b));
 
     return {
-      om: omSorted,
+      mission: missionSorted,
+      om: missionSorted,
       posto: [...posto].sort((a, b) => a.localeCompare(b, 'pt-BR')),
       postoGraduacao: [...postoGraduacao].sort((a, b) =>
         a.localeCompare(b, 'pt-BR'),
@@ -631,7 +633,8 @@ export class BiService {
       conditions.push({ submittedAt: dateFilter });
     }
 
-    if (filters.om?.trim()) conditions.push({ om: filters.om.trim() });
+    const mission = filters.mission?.trim() || filters.om?.trim();
+    if (mission) conditions.push({ om: mission });
     if (filters.posto?.trim()) conditions.push({ posto: filters.posto.trim() });
     if (filters.postoGraduacao?.trim()) {
       conditions.push({ postoGraduacao: filters.postoGraduacao.trim() });

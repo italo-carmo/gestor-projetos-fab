@@ -180,7 +180,7 @@ export function ChecklistsPage() {
 
   return (
     <Box>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={2} mb={2}>
+      <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1.2} mb={1.2}>
         <Box>
           <Typography variant="h4" fontWeight={700}>
             Checklist por fase
@@ -210,12 +210,12 @@ export function ChecklistsPage() {
         </Stack>
       </Stack>
 
-      <Card sx={{ mb: 2, borderRadius: 2, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
-        <CardContent>
-          <Alert severity="info" sx={{ mb: 2 }}>
+      <Card sx={{ mb: 1.2, borderRadius: 2, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
+        <CardContent sx={{ py: 1.5 }}>
+          <Alert severity="info" sx={{ mb: 1.2 }}>
             Este checklist é automático: os checks são renderizados pelo andamento real de tarefas e atividades de cada localidade.
           </Alert>
-          <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" sx={{ mb: 2 }}>
+          <Stack direction="row" spacing={1.2} alignItems="center" flexWrap="wrap" sx={{ mb: 1.2 }}>
             <Typography variant="caption" color="text.secondary">
               Legenda:
             </Typography>
@@ -238,7 +238,7 @@ export function ChecklistsPage() {
               label="Atualização automática: concluído quando tarefa/atividade for finalizada"
             />
           </Stack>
-          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems="center" flexWrap="wrap">
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} alignItems="center" flexWrap="wrap">
             <TextField
               select
               size="small"
@@ -359,14 +359,14 @@ export function ChecklistsPage() {
           <Card
             key={checklist.id}
             sx={{
-              mb: 2,
+              mb: 1.2,
               borderRadius: 2,
               boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
               overflow: 'hidden',
             }}
           >
-            <CardContent sx={{ pb: 0 }}>
-              <Stack direction="row" alignItems="center" flexWrap="wrap" gap={1} mb={2}>
+            <CardContent sx={{ pb: 0.6, pt: 1.3 }}>
+              <Stack direction="row" alignItems="center" flexWrap="wrap" gap={0.8} mb={1.2}>
                 <Typography variant="h6" fontWeight={600}>
                   {checklist.title}
                 </Typography>
@@ -388,7 +388,7 @@ export function ChecklistsPage() {
                 )}
               </Stack>
 
-              <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 2 }}>
+              <Stack direction="row" alignItems="center" spacing={1.2} sx={{ mb: 1.1 }}>
                 <Typography variant="body2" color="text.secondary">
                   <strong>{completedLocalities}</strong> de <strong>{totalLocalities}</strong> localidades concluíram todos os itens
                 </Typography>
@@ -413,7 +413,7 @@ export function ChecklistsPage() {
                 </Typography>
               ) : viewByLocality ? (
                 <Box sx={{ overflowX: 'auto' }}>
-                <Table size="small" sx={{ '& th, & td': { borderBottom: '1px solid', borderColor: 'divider' } }}>
+                <Table size="small" sx={{ '& th, & td': { borderBottom: '1px solid', borderColor: 'divider', py: 0.5, px: 0.75 } }}>
                   <TableHead>
                     <TableRow>
                       <TableCell sx={{ fontWeight: 600, width: 180, position: 'sticky', left: 0, bgcolor: 'background.paper', zIndex: 1 }}>
@@ -455,7 +455,7 @@ export function ChecklistsPage() {
                 </Box>
               ) : (
                 <Box sx={{ overflowX: 'auto' }}>
-                <Table size="small" sx={{ '& th, & td': { borderBottom: '1px solid', borderColor: 'divider' } }}>
+                <Table size="small" sx={{ '& th, & td': { borderBottom: '1px solid', borderColor: 'divider', py: 0.5, px: 0.75 } }}>
                   <TableHead>
                     <TableRow>
                       <TableCell sx={{ fontWeight: 600, minWidth: 220, position: 'sticky', left: 0, bgcolor: 'background.paper', zIndex: 1 }}>

@@ -664,7 +664,7 @@ export function DocumentsPage() {
       <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" gap={1} mb={1}>
         <Box>
           <Typography variant="h4" fontWeight={700}>
-            Acervo de Documentos
+            Comunicação Social
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
             Estrutura em pastas e subpastas (multi-nivel), com navegacao tipo drive e vinculos detalhados por arquivo.
@@ -775,7 +775,7 @@ export function DocumentsPage() {
                   setCurrentFolderId('');
                 }}
               >
-                Acervo
+                Comunicação Social
               </Link>
               {category && (
                 <Link
@@ -963,7 +963,7 @@ export function DocumentsPage() {
         <CardContent>
           <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" mb={1.2}>
             <Typography variant="subtitle1" fontWeight={700}>
-              {category ? `Arquivos em ${selectedPathLabel}` : 'Selecione uma categoria para navegar no acervo'}
+              {category ? `Arquivos em ${selectedPathLabel}` : 'Selecione uma categoria para navegar na Comunicação Social'}
             </Typography>
             {!category && (
               <Typography variant="caption" color="text.secondary">
