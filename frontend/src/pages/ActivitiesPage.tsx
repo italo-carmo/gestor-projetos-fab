@@ -66,6 +66,13 @@ const blankReport = {
   closingDate: '',
 };
 
+const drawerActionButtonSx = {
+  minHeight: 34,
+  px: 1.75,
+  borderRadius: 1.5,
+  whiteSpace: 'nowrap',
+} as const;
+
 type ActivityDrawerTab = 'activity' | 'report';
 
 export function ActivitiesPage() {
@@ -754,12 +761,20 @@ export function ActivitiesPage() {
                 )}
 
                 {isCreateMode ? (
-                  <Button variant="contained" onClick={handleCreate} disabled={!canCreate || createActivity.isPending}>
+                  <Button
+                    variant="contained"
+                    size="small"
+                    sx={drawerActionButtonSx}
+                    onClick={handleCreate}
+                    disabled={!canCreate || createActivity.isPending}
+                  >
                     Criar atividade
                   </Button>
                 ) : (
                   <Button
                     variant="outlined"
+                    size="small"
+                    sx={drawerActionButtonSx}
                     onClick={handleSaveActivity}
                     disabled={!selected || !canUpdate || updateActivity.isPending}
                   >
@@ -1014,18 +1029,38 @@ export function ActivitiesPage() {
                 </Box>
 
                 <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
-                  <Button variant="contained" onClick={handleSaveReport} disabled={!canEditReport || upsertReport.isPending}>
+                  <Button
+                    variant="contained"
+                    size="small"
+                    sx={drawerActionButtonSx}
+                    onClick={handleSaveReport}
+                    disabled={!canEditReport || upsertReport.isPending}
+                  >
                     Salvar relatório
                   </Button>
-                  <Button variant="outlined" onClick={handleSign} disabled={!canSign || signReport.isPending}>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    sx={drawerActionButtonSx}
+                    onClick={handleSign}
+                    disabled={!canSign || signReport.isPending}
+                  >
                     Assinar digitalmente
                   </Button>
-                  <Button variant="outlined" onClick={handleExportPdf} disabled={!canDownload || exportPdf.isPending}>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    sx={drawerActionButtonSx}
+                    onClick={handleExportPdf}
+                    disabled={!canDownload || exportPdf.isPending}
+                  >
                     Exportar PDF assinado
                   </Button>
                   <Button
-                    variant="text"
+                    variant="outlined"
                     color="success"
+                    size="small"
+                    sx={drawerActionButtonSx}
                     onClick={() => handleStatusChange('DONE')}
                     disabled={!canUpdate || updateActivityStatus.isPending}
                   >
