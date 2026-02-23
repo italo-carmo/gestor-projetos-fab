@@ -73,14 +73,14 @@ export function CalendarPage() {
   if (calendarQuery.isError) return <ErrorState error={calendarQuery.error} onRetry={() => calendarQuery.refetch()} />;
 
   return (
-    <Box>
-      <Typography variant="h4" gutterBottom fontWeight={700}>
+    <Box sx={{ pb: 0.2 }}>
+      <Typography variant="h4" gutterBottom fontWeight={700} sx={{ mb: 0.5 }}>
         Calendário
       </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
         Visualização compacta para enxergar o mês completo sem rolagem excessiva.
       </Typography>
-      <Card sx={{ mb: 1.5 }}>
+      <Card sx={{ mb: 1 }}>
         <CardContent sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.2, alignItems: 'center', py: 1.4 }}>
           <TextField
             size="small"
@@ -117,11 +117,18 @@ export function CalendarPage() {
         </Card>
       ) : (
         <Card sx={{ overflow: 'hidden' }}>
-          <Box sx={{ p: { xs: 0.7, md: 0.9 } }}>
+          <Box
+            sx={{
+              p: { xs: 0.7, md: 0.9 },
+              height: { xs: 'calc(100vh - 320px)', md: 'calc(100vh - 290px)' },
+              minHeight: 500,
+              maxHeight: 560,
+            }}
+          >
             <CalendarView
               events={events}
               onSelect={(id) => setSelectedTaskId(id)}
-              height={500}
+              height="100%"
               date={year === new Date().getFullYear() ? new Date() : new Date(year, 0, 1)}
             />
           </Box>

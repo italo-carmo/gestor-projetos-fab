@@ -116,12 +116,12 @@ function EventCard({ event }: { event: any }) {
 export function CalendarView({
   events,
   onSelect,
-  height = 500,
+  height = 520,
   date,
 }: {
   events: CalendarEventInput[];
   onSelect: (id: string) => void;
-  height?: number;
+  height?: number | string;
   date?: Date;
 }) {
   const rbcEvents = events.map((e) => {
