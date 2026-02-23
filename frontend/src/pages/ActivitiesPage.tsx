@@ -739,14 +739,14 @@ export function ActivitiesPage() {
 
           {(isCreateMode || drawerTab === 'activity') && (
             <>
-              <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
-                <TextField
-                  size="small"
-                  label="Título"
-                  value={activityForm.title}
-                  onChange={(e) => setActivityForm({ ...activityForm, title: e.target.value })}
-                  fullWidth
-                />
+              <TextField
+                size="small"
+                label="Título"
+                value={activityForm.title}
+                onChange={(e) => setActivityForm({ ...activityForm, title: e.target.value })}
+                fullWidth
+              />
+              <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} sx={{ mt: 1 }}>
                 <TextField
                   select
                   size="small"
@@ -777,6 +777,8 @@ export function ActivitiesPage() {
                     </MenuItem>
                   ))}
                 </TextField>
+              </Stack>
+              <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} sx={{ mt: 1 }}>
                 <TextField
                   select
                   size="small"

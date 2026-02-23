@@ -117,7 +117,7 @@ export function CalendarPage() {
         </Card>
       ) : (
         <Card sx={{ overflow: 'hidden' }}>
-          <Box sx={{ p: 1.2 }}>
+          <Box sx={{ p: { xs: 0.7, md: 0.9 } }}>
             <CalendarView
               events={events}
               onSelect={(id) => setSelectedTaskId(id)}

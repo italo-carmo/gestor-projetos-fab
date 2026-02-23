@@ -66,7 +66,7 @@ function EventCard({ event }: { event: any }) {
   return (
     <Box
       sx={{
-        px: 0.85,
+        px: 0.7,
         py: 0.4,
         borderRadius: 1.2,
         border: `1px solid ${dotColor}`,
@@ -152,6 +152,8 @@ export function CalendarView({
             borderRadius: 1.3,
             textTransform: 'none',
             fontWeight: 700,
+            fontSize: 12,
+            padding: '4px 8px',
             borderColor: 'rgba(17, 66, 89, 0.24)',
           },
           '& button.rbc-active': {
@@ -160,9 +162,9 @@ export function CalendarView({
         },
         '& .rbc-toolbar-label': { fontWeight: 800, fontSize: 16 },
         '& .rbc-header': {
-          padding: '6px 2px',
+          padding: '5px 1px',
           fontWeight: 700,
-          fontSize: 10,
+          fontSize: 9.5,
           color: '#234454',
           background: 'rgba(12, 101, 126, 0.05)',
         },
@@ -173,7 +175,7 @@ export function CalendarView({
         },
         '& .rbc-today': { backgroundColor: 'rgba(12, 101, 126, 0.08)' },
         '& .rbc-off-range-bg': { backgroundColor: '#F6FAFC' },
-        '& .rbc-date-cell': { padding: '2px 4px 1px', fontSize: 11 },
+        '& .rbc-date-cell': { padding: '2px 3px 1px', fontSize: 10.5 },
         '& .rbc-event': {
           borderRadius: 8,
           padding: 0,
@@ -185,8 +187,8 @@ export function CalendarView({
         },
         '& .rbc-event:focus': { outline: '2px solid #0C657E' },
         '& .rbc-month-view .rbc-row-segment': {
-          paddingLeft: 4,
-          paddingRight: 4,
+          paddingLeft: 2,
+          paddingRight: 2,
         },
         '& .rbc-month-view .rbc-row-segment .rbc-event': {
           display: 'flex',
@@ -198,8 +200,12 @@ export function CalendarView({
           borderLeft: 'none !important',
         },
         '& .rbc-month-view .rbc-event-content': {
-          width: 'auto',
+          width: '100%',
           minWidth: 0,
+        },
+        '& .rbc-month-row, & .rbc-row-content, & .rbc-row': {
+          minWidth: 0,
+          overflow: 'hidden',
         },
         '& .rbc-month-view .rbc-event-label': {
           display: 'none',
