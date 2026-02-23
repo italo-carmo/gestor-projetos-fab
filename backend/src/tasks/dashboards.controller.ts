@@ -21,17 +21,23 @@ export class DashboardsController {
 
   @Get('dashboard/national')
   @RequirePermission('dashboard', 'view')
-  national(@CurrentUser() user: RbacUser) {
+  national(
+    @Query('localityId') localityId: string | undefined,
+    @CurrentUser() user: RbacUser,
+  ) {
     if (!hasNationalManagementScope(user)) {
       throwError('RBAC_FORBIDDEN');
     }
-    return this.tasks.getDashboardNational(user);
+    return this.tasks.getDashboardNational(user, localityId);
   }
 
   @Get('dashboard/recruits')
   @RequirePermission('dashboard', 'view')
-  recruits(@CurrentUser() user: RbacUser) {
-    return this.tasks.getDashboardRecruits(user);
+  recruits(
+    @Query('localityId') localityId: string | undefined,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.tasks.getDashboardRecruits(user, localityId);
   }
 
   @Get('dashboard/executive')
@@ -42,8 +48,9 @@ export class DashboardsController {
     @Query('phaseId') phaseId: string | undefined,
     @Query('threshold') threshold: string | undefined,
     @Query('command') command: string | undefined,
+    @Query('localityId') localityId: string | undefined,
     @CurrentUser() user: RbacUser,
   ) {
-    return this.tasks.getDashboardExecutive({ from, to, phaseId, threshold, command }, user);
+    return this.tasks.getDashboardExecutive({ from, to, phaseId, threshold, command, localityId }, user);
   }
 }

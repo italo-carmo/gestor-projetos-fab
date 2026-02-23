@@ -20,9 +20,10 @@ export class ChecklistsController {
     @Query('phaseId') phaseId: string | undefined,
     @Query('specialtyId') specialtyId: string | undefined,
     @Query('eloRoleId') eloRoleId: string | undefined,
+    @Query('localityId') localityId: string | undefined,
     @CurrentUser() user: RbacUser,
   ) {
-    return this.checklists.list({ phaseId, specialtyId, eloRoleId }, user);
+    return this.checklists.list({ phaseId, specialtyId, eloRoleId, localityId }, user);
   }
 
   @Post()
@@ -49,4 +50,3 @@ export class ChecklistItemStatusController {
     return this.checklists.updateStatuses(dto.updates, user);
   }
 }
-

@@ -62,6 +62,31 @@ export class FabLdapService {
     }
   }
 
+  async lookupByEmail(email: string): Promise<FabLdapProfile | null> {
+    const normalizedEmail = String(email ?? '').trim().toLowerCase();
+    if (!normalizedEmail) {
+      throwError('VALIDATION_ERROR', { reason: 'LDAP_EMAIL_REQUIRED' });
+    }
+
+    const client = this.createClient();
+
+    try {
+      await this.bindForLookup(client);
+      const filter = `(mail=${this.escapeFilterValue(normalizedEmail)})`;
+      const { searchEntries } = await client.search(this.getBaseDn(), {
+        scope: 'sub',
+        filter,
+        attributes: ['uid', 'cn', 'displayName', 'mail', 'fabom', 'givenName', 'sn'],
+      });
+      if (!searchEntries.length) return null;
+      return this.mapEntry(searchEntries[0] as LdapEntry, normalizedEmail);
+    } catch (error) {
+      this.handleLdapError(error, { invalidCredentials: false });
+    } finally {
+      await client.unbind().catch(() => undefined);
+    }
+  }
+
   private createClient() {
     return new Client({
       url: this.getLdapUrl(),

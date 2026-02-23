@@ -3,7 +3,7 @@ import TargetIcon from '@mui/icons-material/GpsFixed';
 import PeopleIcon from '@mui/icons-material/Groups';
 import DescriptionIcon from '@mui/icons-material/Description';
 import StarIcon from '@mui/icons-material/Star';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useState } from 'react';
 import { useDashboardNational } from '../api/hooks';
 import { SkeletonState } from '../components/states/SkeletonState';
@@ -39,8 +39,10 @@ type NationalTaskItem = {
 };
 
 export function DashboardNationalPage() {
+  const [params] = useSearchParams();
+  const localityId = params.get('localityId') ?? '';
   const [detailView, setDetailView] = useState<NationalDetailView | null>(null);
-  const dashboardQuery = useDashboardNational({});
+  const dashboardQuery = useDashboardNational({ localityId: localityId || undefined });
   const qc = useQueryClient();
 
   if (dashboardQuery.isLoading) return <SkeletonState />;

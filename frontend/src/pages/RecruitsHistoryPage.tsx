@@ -12,7 +12,7 @@ import {
   Typography,
 } from '@mui/material';
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useDashboardRecruits } from '../api/hooks';
 import { EmptyState } from '../components/states/EmptyState';
 import { ErrorState } from '../components/states/ErrorState';
@@ -31,7 +31,9 @@ import {
 } from 'recharts';
 
 export function RecruitsHistoryPage() {
-  const recruitsQuery = useDashboardRecruits();
+  const [params] = useSearchParams();
+  const localityId = params.get('localityId') ?? '';
+  const recruitsQuery = useDashboardRecruits({ localityId: localityId || undefined });
   const [selectedLocalityId, setSelectedLocalityId] = useState<string>('');
   const data = recruitsQuery.data;
   const currentPerLocality = data?.currentPerLocality ?? [];

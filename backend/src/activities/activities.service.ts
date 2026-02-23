@@ -12,6 +12,7 @@ import type { RbacUser } from '../rbac/rbac.types';
 import { sanitizeText } from '../common/sanitize';
 import { parsePagination } from '../common/pagination';
 import { hasAnyRole, resolveAccessProfile, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from '../rbac/role-access';
+import { isTargetLocalityName } from '../common/priority-localities';
 
 const activityPhotosDir = path.resolve(process.cwd(), 'storage', 'activity-reports');
 const scheduleLogoCandidates = [
@@ -39,7 +40,14 @@ export class ActivitiesService {
     },
     user?: RbacUser,
   ) {
+    const { page, pageSize, skip, take } = parsePagination(filters.page, filters.pageSize);
+    const targetLocalityIds = await this.getTargetLocalityIds();
+    if (targetLocalityIds.length === 0) {
+      return { items: [], page, pageSize, total: 0 };
+    }
+
     const andClauses: Prisma.ActivityWhereInput[] = [];
+    andClauses.push({ localityId: { in: targetLocalityIds } });
     if (filters.localityId) andClauses.push({ localityId: filters.localityId });
     if (filters.specialtyId) andClauses.push({ specialtyId: filters.specialtyId });
     if (filters.status) andClauses.push({ status: filters.status as ActivityStatus });
@@ -58,8 +66,6 @@ export class ActivitiesService {
     }
     const where: Prisma.ActivityWhereInput =
       andClauses.length > 0 ? { AND: andClauses } : {};
-
-    const { page, pageSize, skip, take } = parsePagination(filters.page, filters.pageSize);
 
     const [items, total] = await this.prisma.$transaction([
       this.prisma.activity.findMany({
@@ -1352,6 +1358,13 @@ export class ActivitiesService {
       .replace(/[<>]/g, '')
       .replace(/\r\n/g, '\n')
       .trim();
+  }
+
+  private async getTargetLocalityIds() {
+    const localities = await this.prisma.locality.findMany({
+      select: { id: true, name: true },
+    });
+    return localities.filter((locality) => isTargetLocalityName(locality.name)).map((locality) => locality.id);
   }
 
   private getScopeConstraints(user?: RbacUser) {

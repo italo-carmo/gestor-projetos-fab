@@ -23,6 +23,7 @@ import { ActivitiesModule } from './activities/activities.module';
 import { DocumentsModule } from './documents/documents.module';
 import { BiModule } from './bi/bi.module';
 import { FabLdapModule } from './ldap/fab-ldap.module';
+import { MissionsModule } from './missions/missions.module';
 
 @Module({
   imports: [
@@ -53,6 +54,7 @@ import { FabLdapModule } from './ldap/fab-ldap.module';
     DocumentsModule,
     BiModule,
     FabLdapModule,
+    MissionsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

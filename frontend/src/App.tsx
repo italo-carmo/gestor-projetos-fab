@@ -24,6 +24,7 @@ import { AuditPage } from './pages/AuditPage';
 import { TaskTemplatesPage } from './pages/TaskTemplatesPage';
 import { DocumentsPage } from './pages/DocumentsPage';
 import { BiSurveyDashboardPage } from './pages/BiSurveyDashboardPage';
+import { MissionsPage } from './pages/MissionsPage';
 import { RequireAuth } from './app/RequireAuth';
 import { RequireRoleAccess } from './app/RequireRoleAccess';
 import {
@@ -75,6 +76,16 @@ function App() {
                 />
                 <Route path="/dashboard/locality/:id" element={<DashboardLocalityPage />} />
                 <Route path="/tasks" element={<TasksPage />} />
+                <Route
+                  path="/missions"
+                  element={
+                    <RequireRoleAccess
+                      allow={(user) => hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP])}
+                    >
+                      <MissionsPage />
+                    </RequireRoleAccess>
+                  }
+                />
                 <Route path="/activities" element={<ActivitiesPage />} />
                 <Route path="/gantt" element={<GanttPage />} />
                 <Route path="/calendar" element={<CalendarPage />} />

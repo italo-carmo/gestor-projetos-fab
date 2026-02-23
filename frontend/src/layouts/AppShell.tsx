@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
   AppBar,
@@ -15,6 +15,7 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
+  MenuItem,
   Popover,
   TextField,
   Tooltip,
@@ -38,6 +39,7 @@ import AccountTreeIcon from '@mui/icons-material/AccountTree';
 import ContactPhoneIcon from '@mui/icons-material/ContactPhone';
 import HistoryIcon from '@mui/icons-material/History';
 import EventNoteIcon from '@mui/icons-material/EventNote';
+import FlagRoundedIcon from '@mui/icons-material/FlagRounded';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import LogoutIcon from '@mui/icons-material/Logout';
 import ChevronLeftRoundedIcon from '@mui/icons-material/ChevronLeftRounded';
@@ -54,7 +56,9 @@ import {
   ROLE_COORDENACAO_CIPAVD,
   ROLE_TI,
 } from '../app/roleAccess';
-import { useMe, useSearch } from '../api/hooks';
+import { useLocalities, useMe, useSearch } from '../api/hooks';
+import { GLOBAL_LOCALITY_STORAGE_KEY } from '../api/client';
+import { isTargetLocalityName } from '../constants/localities';
 import { MEETING_STATUS_LABELS, NOTICE_PRIORITY_LABELS } from '../constants/enums';
 
 const drawerExpandedWidth = 284;
@@ -64,6 +68,7 @@ const navItems = [
   { label: 'Painel de Comando', to: '/dashboard/national', icon: <DashboardIcon fontSize="small" /> },
   { label: 'Painel Exec.', to: '/dashboard/executive', icon: <DashboardIcon fontSize="small" /> },
   { label: 'BI Pesquisas', to: '/dashboard/bi', icon: <InsightsRoundedIcon fontSize="small" /> },
+  { label: 'Missões', to: '/missions', icon: <FlagRoundedIcon fontSize="small" /> },
   { label: 'Atividades de Campo', to: '/activities', icon: <EventNoteIcon fontSize="small" /> },
   { label: 'Tarefas', to: '/tasks', icon: <TaskIcon fontSize="small" /> },
   { label: 'Modelos de tarefa', to: '/templates', icon: <TaskIcon fontSize="small" /> },
@@ -86,7 +91,7 @@ const navItems = [
 
 export function AppShell({ children }: { children: ReactNode }) {
   const location = useLocation();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('lg'));
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -96,7 +101,22 @@ export function AppShell({ children }: { children: ReactNode }) {
   const searchQuery = useSearch(debounced);
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const { data: me } = useMe();
+  const localitiesQuery = useLocalities();
   const currentRoleLabel = me?.roles?.[0]?.name ?? 'Sem papel';
+  const canUseGlobalLocalityFilter = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP]);
+  const availableGlobalLocalities = useMemo(
+    () =>
+      ((localitiesQuery.data?.items ?? []) as any[])
+        .filter((locality: any) => isTargetLocalityName(locality?.name))
+        .filter((locality: any) => Number(locality?.recruitsFemaleCountCurrent ?? 0) > 0)
+        .map((locality: any) => ({ id: String(locality.id), name: String(locality.name) })),
+    [localitiesQuery.data?.items],
+  );
+  const localityNameById = useMemo(
+    () => new Map(availableGlobalLocalities.map((locality) => [locality.id, locality.name])),
+    [availableGlobalLocalities],
+  );
+  const globalLocalityId = searchParams.get('localityId') ?? '';
   const contextFromQuery = searchParams.get('localityId');
   const localityFromPath = location.pathname.startsWith('/dashboard/locality/') ? location.pathname.split('/').pop() : null;
   const contextLocality = contextFromQuery ?? localityFromPath;
@@ -125,6 +145,9 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
     if (item.to === '/dashboard/bi') {
       return isBiRole && can(me, 'dashboard', 'view');
+    }
+    if (item.to === '/missions') {
+      return hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP]);
     }
     if (item.to === '/audit') {
       return hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]);
@@ -171,6 +194,20 @@ export function AppShell({ children }: { children: ReactNode }) {
     return true;
   });
 
+  useEffect(() => {
+    if (!canUseGlobalLocalityFilter) return;
+    const stored = localStorage.getItem(GLOBAL_LOCALITY_STORAGE_KEY)?.trim() ?? '';
+    const fromUrl = searchParams.get('localityId') ?? '';
+    if (fromUrl) {
+      localStorage.setItem(GLOBAL_LOCALITY_STORAGE_KEY, fromUrl);
+      return;
+    }
+    if (!stored) return;
+    const next = new URLSearchParams(searchParams);
+    next.set('localityId', stored);
+    setSearchParams(next, { replace: true });
+  }, [canUseGlobalLocalityFilter, searchParams, setSearchParams]);
+
   const drawer = useMemo(
     () => (
       <Box sx={{ p: sidebarCollapsed ? 1 : 2, pt: sidebarCollapsed ? 1.2 : 2.4 }}>
@@ -202,7 +239,11 @@ export function AppShell({ children }: { children: ReactNode }) {
               <ListItemButton
                 key={item.to}
                 component={Link}
-                to={item.to}
+                to={
+                  canUseGlobalLocalityFilter && globalLocalityId
+                    ? `${item.to}?localityId=${encodeURIComponent(globalLocalityId)}`
+                    : item.to
+                }
                 selected={selected}
                 onClick={() => setMobileOpen(false)}
                 sx={{ justifyContent: sidebarCollapsed ? 'center' : 'flex-start', px: sidebarCollapsed ? 1 : undefined }}
@@ -228,7 +269,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </List>
       </Box>
     ),
-    [isMobile, location.pathname, sidebarCollapsed, visibleNavItems],
+    [canUseGlobalLocalityFilter, globalLocalityId, isMobile, location.pathname, sidebarCollapsed, visibleNavItems],
   );
 
   const canSeeDocuments = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]);
@@ -380,8 +421,36 @@ export function AppShell({ children }: { children: ReactNode }) {
               </Popover>
             </Box>
           )}
+          {canUseGlobalLocalityFilter && (
+            <TextField
+              select
+              size="small"
+              label="Filtro global"
+              value={globalLocalityId}
+              onChange={(event) => {
+                const value = event.target.value;
+                const next = new URLSearchParams(searchParams);
+                if (value) {
+                  next.set('localityId', value);
+                  localStorage.setItem(GLOBAL_LOCALITY_STORAGE_KEY, value);
+                } else {
+                  next.delete('localityId');
+                  localStorage.removeItem(GLOBAL_LOCALITY_STORAGE_KEY);
+                }
+                setSearchParams(next);
+              }}
+              sx={{ minWidth: 220, display: { xs: 'none', md: 'inline-flex' } }}
+            >
+              <MenuItem value="">Brasil</MenuItem>
+              {availableGlobalLocalities.map((locality) => (
+                <MenuItem key={locality.id} value={locality.id}>
+                  {locality.name}
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
           <Chip
-            label={contextLocality ? `Localidade ${contextLocality}` : 'Contexto Brasil'}
+            label={contextLocality ? `Localidade ${localityNameById.get(contextLocality) ?? contextLocality}` : 'Contexto Brasil'}
             size="small"
             sx={{ display: { xs: 'none', md: 'inline-flex' }, bgcolor: alpha('#0C657E', 0.08), color: '#0A4A5E' }}
           />

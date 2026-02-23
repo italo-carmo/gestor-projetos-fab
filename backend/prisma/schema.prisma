@@ -37,6 +37,8 @@ model User {
   taskComments     TaskComment[]  @relation("TaskCommentAuthor")
   taskCommentReads TaskCommentRead[]
   createdActivities Activity[]    @relation("ActivityCreator")
+  createdMissions  Mission[]     @relation("MissionCreator")
+  missionParticipations MissionParticipant[]
   activityResponsibilities ActivityResponsible[] @relation("ActivityResponsibleUser")
   activityResponsibilityAssignments ActivityResponsible[] @relation("ActivityResponsibleAssigner")
   activityComments ActivityComment[] @relation("ActivityCommentAuthor")
@@ -142,6 +144,7 @@ model Locality {
   users                      User[]
   taskInstances              TaskInstance[]
   activities                 Activity[]
+  missions                   Mission[]
   meetings                   Meeting[]
   recruitsHistory            RecruitsHistory[]
   notices                    Notice[]
@@ -179,6 +182,61 @@ model Activity {
   @@index([specialtyId])
   @@index([status])
   @@index([eventDate])
+}
+
+model Mission {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  localityId  String
+  startDate   DateTime
+  endDate     DateTime
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  locality    Locality @relation(fields: [localityId], references: [id])
+  createdBy   User?    @relation("MissionCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  participants MissionParticipant[]
+  scheduleItems MissionScheduleItem[]
+
+  @@index([localityId, startDate])
+  @@index([startDate, endDate])
+}
+
+model MissionParticipant {
+  id        String   @id @default(cuid())
+  missionId String
+  userId    String?
+  ldapUid   String?
+  cpf       String?
+  email     String?
+  name      String
+  fabom     String?
+  createdAt DateTime @default(now())
+
+  mission   Mission  @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([missionId, createdAt])
+  @@index([userId])
+}
+
+model MissionScheduleItem {
+  id              String   @id @default(cuid())
+  missionId       String
+  title           String
+  startAt         DateTime
+  durationMinutes Int
+  location        String
+  responsible     String
+  participants    String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  mission         Mission  @relation(fields: [missionId], references: [id], onDelete: Cascade)
+
+  @@index([missionId, startAt])
 }
 
 model ActivityVisitScheduleItem {

@@ -6,6 +6,7 @@ import { throwError } from '../common/http-error';
 import { sanitizeText } from '../common/sanitize';
 import { AuditService } from '../audit/audit.service';
 import { resolveAccessProfile } from '../rbac/role-access';
+import { isTargetLocalityName } from '../common/priority-localities';
 
 @Injectable()
 export class ChecklistsService {
@@ -14,11 +15,13 @@ export class ChecklistsService {
     private readonly audit: AuditService,
   ) {}
 
-  async list(filters: { phaseId?: string; specialtyId?: string; eloRoleId?: string }, user?: RbacUser) {
+  async list(filters: { phaseId?: string; specialtyId?: string; eloRoleId?: string; localityId?: string }, user?: RbacUser) {
     const constraints = this.getScopeConstraints(user);
 
     const localityWhere: Prisma.LocalityWhereInput = {};
+    if (filters.localityId) localityWhere.id = filters.localityId;
     if (constraints.localityId) localityWhere.id = constraints.localityId;
+    localityWhere.recruitsFemaleCountCurrent = { gt: 0 };
 
     const checklistWhere: Prisma.ChecklistWhereInput = {};
     if (filters.phaseId) checklistWhere.phaseId = filters.phaseId;
@@ -27,7 +30,7 @@ export class ChecklistsService {
     if (constraints.eloRoleId) checklistWhere.eloRoleId = constraints.eloRoleId;
     if (filters.eloRoleId) checklistWhere.eloRoleId = filters.eloRoleId;
 
-    const [localities, checklists] = await this.prisma.$transaction([
+    const [localitiesRaw, checklists] = await this.prisma.$transaction([
       this.prisma.locality.findMany({ where: localityWhere, orderBy: { name: 'asc' } }),
       this.prisma.checklist.findMany({
         where: checklistWhere,
@@ -40,6 +43,7 @@ export class ChecklistsService {
         orderBy: { createdAt: 'desc' },
       }),
     ]);
+    const localities = localitiesRaw.filter((locality) => isTargetLocalityName(locality.name));
 
     if (checklists.length === 0) {
       const autoItems = await this.buildAutomaticChecklistItems(localities, filters, constraints);

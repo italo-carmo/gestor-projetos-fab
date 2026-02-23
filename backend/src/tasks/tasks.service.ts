@@ -7,6 +7,7 @@ import { RbacUser } from '../rbac/rbac.types';
 import { hasAnyRole, resolveAccessProfile, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from '../rbac/role-access';
 import { sanitizeForExecutive } from '../common/executive';
 import { sanitizeText } from '../common/sanitize';
+import { isTargetLocalityName } from '../common/priority-localities';
 
 @Injectable()
 export class TasksService {
@@ -203,7 +204,12 @@ export class TasksService {
     page?: string;
     pageSize?: string;
   }, user?: RbacUser) {
-    const { where } = this.buildTaskWhere(filters, user);
+    const allowedLocalityIds = await this.getTargetLocalityIds();
+    if (allowedLocalityIds.length === 0) {
+      const { page, pageSize } = this.parsePagination(filters.page, filters.pageSize);
+      return { items: [], page, pageSize, total: 0 };
+    }
+    const { where } = this.buildTaskWhere({ ...filters, allowedLocalityIds }, user);
     if (filters.meetingId) where.meetingId = filters.meetingId;
     if (filters.eloRoleId) where.eloRoleId = filters.eloRoleId;
 
@@ -780,7 +786,12 @@ export class TasksService {
   }
 
   async getGantt(params: { localityId?: string; from?: string; to?: string }, user?: RbacUser) {
+    const allowedLocalityIds = await this.getTargetLocalityIds();
+    if (allowedLocalityIds.length === 0) {
+      return { items: [] };
+    }
     const andClauses: Prisma.TaskInstanceWhereInput[] = [];
+    andClauses.push({ localityId: { in: allowedLocalityIds } });
     if (params.localityId) andClauses.push({ localityId: params.localityId });
     if (params.from || params.to) {
       const dueDate: Prisma.DateTimeFilter = {};
@@ -812,11 +823,16 @@ export class TasksService {
   }
 
   async getCalendar(year: number, localityId?: string, user?: RbacUser) {
+    const allowedLocalityIds = await this.getTargetLocalityIds();
+    if (allowedLocalityIds.length === 0) {
+      return { items: [] };
+    }
     const start = new Date(Date.UTC(year, 0, 1));
     const end = new Date(Date.UTC(year + 1, 0, 1));
 
     const andClauses: Prisma.TaskInstanceWhereInput[] = [
       { dueDate: { gte: start, lt: end } },
+      { localityId: { in: allowedLocalityIds } },
     ];
     if (localityId) andClauses.push({ localityId });
     const accessWhere = this.buildTaskAccessWhere(user, 'view');
@@ -877,14 +893,18 @@ export class TasksService {
     };
   }
 
-  async getDashboardNational(user?: RbacUser) {
+  async getDashboardNational(user?: RbacUser, localityId?: string) {
     const where: Prisma.LocalityWhereInput = {};
     const constraints = this.getScopeConstraints(user);
-    if (constraints.localityId) {
+    if (constraints.localityId && localityId && constraints.localityId !== localityId) {
+      where.id = '__none__';
+    } else if (constraints.localityId) {
       where.id = constraints.localityId;
+    } else if (localityId) {
+      where.id = localityId;
     }
 
-    const localities = await this.prisma.locality.findMany({
+    const rawLocalities = await this.prisma.locality.findMany({
       where,
       select: {
         id: true,
@@ -898,6 +918,7 @@ export class TasksService {
         notes: true,
       },
     });
+    const localities = rawLocalities.filter((locality) => isTargetLocalityName(locality.name));
     const reportsCount = await this.prisma.report.count();
     const taskWhere: Prisma.TaskInstanceWhereInput = {};
     if (constraints.specialtyId) {
@@ -908,8 +929,9 @@ export class TasksService {
       where: taskWhere,
       include: { locality: true, taskTemplate: true },
     });
-    const statusById = new Map(tasks.map((task) => [task.id, task.status]));
     const localityById = new Map(localities.map((locality) => [locality.id, locality]));
+    const filteredTasks = tasks.filter((task) => localityById.has(task.localityId));
+    const statusById = new Map(filteredTasks.map((task) => [task.id, task.status]));
 
     const mapNationalTaskDetail = (task: (typeof tasks)[number]) => {
       const locality = localityById.get(task.localityId);
@@ -934,7 +956,7 @@ export class TasksService {
     };
 
     const perLocality = localities.map((locality) => {
-      const localityTasks = tasks.filter((task) => task.localityId === locality.id);
+      const localityTasks = filteredTasks.filter((task) => task.localityId === locality.id);
       const late = localityTasks.filter((task) => this.isLate(task)).length;
       const blocked = localityTasks.filter((task) =>
         this.isBlocked(task.blockedByIdsJson as string[] | null | undefined, statusById),
@@ -962,15 +984,15 @@ export class TasksService {
     });
 
     const totalRecruits = localities.reduce((acc, l) => acc + (l.recruitsFemaleCountCurrent ?? 0), 0);
-    const lateItems = tasks
+    const lateItems = filteredTasks
       .filter((task) => this.isLate(task))
       .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())
       .map((task) => mapNationalTaskDetail(task));
-    const unassignedItems = tasks
+    const unassignedItems = filteredTasks
       .filter((task) => this.isTaskUnassigned(task))
       .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())
       .map((task) => mapNationalTaskDetail(task));
-    const riskTasks = tasks
+    const riskTasks = filteredTasks
       .filter(
         (task) =>
           this.isLate(task) ||
@@ -998,14 +1020,20 @@ export class TasksService {
     };
   }
 
-  async getDashboardRecruits(user?: RbacUser) {
+  async getDashboardRecruits(user?: RbacUser, localityId?: string) {
     const localityWhere: Prisma.LocalityWhereInput = {};
     const profile = resolveAccessProfile(user);
     const hasNationalRecruitScope = profile.ti || profile.nationalCommission;
     const constraints = this.getScopeConstraints(user);
-    if (!hasNationalRecruitScope && constraints.localityId) localityWhere.id = constraints.localityId;
+    if (constraints.localityId && localityId && constraints.localityId !== localityId) {
+      localityWhere.id = '__none__';
+    } else if (!hasNationalRecruitScope && constraints.localityId) {
+      localityWhere.id = constraints.localityId;
+    } else if (localityId) {
+      localityWhere.id = localityId;
+    }
 
-    const [localities, history] = await this.prisma.$transaction([
+    const [localitiesRaw, history] = await this.prisma.$transaction([
       this.prisma.locality.findMany({
         where: localityWhere,
         orderBy: { name: 'asc' },
@@ -1019,6 +1047,9 @@ export class TasksService {
         orderBy: { date: 'asc' },
       }),
     ]);
+    const localities = localitiesRaw.filter((locality) => isTargetLocalityName(locality.name));
+    const localityIds = new Set(localities.map((locality) => locality.id));
+    const filteredHistory = history.filter((entry) => localityIds.has(entry.localityId));
 
     const currentPerLocality = localities.map((loc) => ({
       localityId: loc.id,
@@ -1029,7 +1060,7 @@ export class TasksService {
 
     const aggregateByMonth: { month: string; value: number }[] = [];
     const monthMap = new Map<string, number>();
-    for (const entry of history) {
+    for (const entry of filteredHistory) {
       const monthKey = entry.date.toISOString().slice(0, 7);
       monthMap.set(monthKey, (monthMap.get(monthKey) ?? 0) + entry.recruitsFemaleCount);
     }
@@ -1038,7 +1069,7 @@ export class TasksService {
     }
 
     const byLocalityMap = new Map<string, { date: string; value: number }[]>();
-    for (const entry of history) {
+    for (const entry of filteredHistory) {
       const key = entry.localityId;
       if (!byLocalityMap.has(key)) byLocalityMap.set(key, []);
       byLocalityMap.get(key)!.push({
@@ -1062,7 +1093,7 @@ export class TasksService {
   }
 
   async getDashboardExecutive(
-    params: { from?: string; to?: string; phaseId?: string; threshold?: string; command?: string },
+    params: { from?: string; to?: string; phaseId?: string; threshold?: string; command?: string; localityId?: string },
     user?: RbacUser,
   ) {
     const from = params.from ? new Date(params.from) : new Date(Date.now() - 56 * 24 * 60 * 60 * 1000);
@@ -1075,11 +1106,15 @@ export class TasksService {
     }
 
     const constraints = this.getScopeConstraints(user);
-    if (constraints.localityId) {
+    if (constraints.localityId && params.localityId && constraints.localityId !== params.localityId) {
+      localityWhere.id = '__none__';
+    } else if (constraints.localityId) {
       localityWhere.id = constraints.localityId;
+    } else if (params.localityId) {
+      localityWhere.id = params.localityId;
     }
 
-    const [localities, tasks, phases, reports, recruitsHistory] = await this.prisma.$transaction([
+    const [localitiesRaw, tasks, phases, reports, recruitsHistory] = await this.prisma.$transaction([
       this.prisma.locality.findMany({ where: localityWhere, orderBy: { name: 'asc' } }),
       this.prisma.taskInstance.findMany({
         where: {
@@ -1092,6 +1127,7 @@ export class TasksService {
       this.prisma.report.findMany({ include: { taskInstance: true } }),
       this.prisma.recruitsHistory.findMany({ orderBy: { date: 'asc' } }),
     ]);
+    const localities = localitiesRaw.filter((locality) => isTargetLocalityName(locality.name));
 
     const localityIds = localities.map((loc) => loc.id);
     const filteredTasks = tasks.filter((task) => localityIds.includes(task.localityId));
@@ -1314,6 +1350,7 @@ export class TasksService {
 
     const recruitsByLocality = new Map<string, { date: string; value: number }[]>();
     for (const entry of recruitsHistory) {
+      if (!localityIds.includes(entry.localityId)) continue;
       const key = entry.localityId;
       if (!recruitsByLocality.has(key)) recruitsByLocality.set(key, []);
       recruitsByLocality.get(key)!.push({
@@ -1324,6 +1361,7 @@ export class TasksService {
 
     const recruitsAggregate: { date: string; value: number }[] = [];
     for (const entry of recruitsHistory) {
+      if (!localityIds.includes(entry.localityId)) continue;
       const dateKey = entry.date.toISOString().slice(0, 10);
       const existing = recruitsAggregate.find((item) => item.date === dateKey);
       if (existing) existing.value += entry.recruitsFemaleCount;
@@ -2058,6 +2096,7 @@ export class TasksService {
 
   private buildTaskWhere(filters: {
     localityId?: string;
+    allowedLocalityIds?: string[];
     phaseId?: string;
     status?: string;
     assigneeId?: string;
@@ -2070,6 +2109,13 @@ export class TasksService {
   }, user?: RbacUser) {
     const andClauses: Prisma.TaskInstanceWhereInput[] = [];
 
+    if (Array.isArray(filters.allowedLocalityIds)) {
+      if (filters.allowedLocalityIds.length === 0) {
+        andClauses.push({ localityId: '__none__' });
+      } else {
+        andClauses.push({ localityId: { in: filters.allowedLocalityIds } });
+      }
+    }
     if (filters.localityId) andClauses.push({ localityId: filters.localityId });
     if (filters.eloRoleId) andClauses.push({ eloRoleId: filters.eloRoleId });
     if (filters.specialtyId) andClauses.push({ specialtyId: filters.specialtyId });
@@ -2118,6 +2164,7 @@ export class TasksService {
 
   async listTaskInstancesForExport(filters: {
     localityId?: string;
+    allowedLocalityIds?: string[];
     phaseId?: string;
     status?: string;
     assigneeId?: string;
@@ -2126,7 +2173,9 @@ export class TasksService {
     dueTo?: string;
     specialtyId?: string;
   }, user?: RbacUser) {
-    const { where } = this.buildTaskWhere(filters, user);
+    const allowedLocalityIds = await this.getTargetLocalityIds();
+    if (allowedLocalityIds.length === 0) return [];
+    const { where } = this.buildTaskWhere({ ...filters, allowedLocalityIds }, user);
 
     const items = await this.prisma.taskInstance.findMany({
       where,
@@ -2156,5 +2205,12 @@ export class TasksService {
     const pageSize = Math.min(100, Math.max(10, Number(pageSizeRaw ?? 20) || 20));
     const skip = (page - 1) * pageSize;
     return { page, pageSize, skip, take: pageSize };
+  }
+
+  private async getTargetLocalityIds() {
+    const localities = await this.prisma.locality.findMany({
+      select: { id: true, name: true },
+    });
+    return localities.filter((locality) => isTargetLocalityName(locality.name)).map((locality) => locality.id);
   }
 }

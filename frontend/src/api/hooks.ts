@@ -43,6 +43,185 @@ export function useActivities(filters: Record<string, any>) {
   });
 }
 
+export function useMissions(filters: Record<string, any>) {
+  return useQuery({
+    queryKey: qk.missions(filters),
+    queryFn: async () => (await api.get('/missions', { params: filters })).data,
+    staleTime: 10_000,
+  });
+}
+
+export function useMission(id: string, enabled = true) {
+  return useQuery({
+    queryKey: qk.mission(id || ''),
+    queryFn: async () => (await api.get(`/missions/${id}`)).data,
+    enabled: Boolean(id) && enabled,
+    staleTime: 10_000,
+  });
+}
+
+export function useCreateMission() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      title: string;
+      description?: string | null;
+      localityId: string;
+      startDate: string;
+      endDate: string;
+    }) => (await api.post('/missions', payload)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['missions'] }),
+  });
+}
+
+export function useUpdateMission() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      payload: {
+        title?: string;
+        description?: string | null;
+        localityId?: string;
+        startDate?: string;
+        endDate?: string;
+      };
+    }) => (await api.put(`/missions/${args.id}`, args.payload)).data,
+    onSuccess: (_data, args) => {
+      qc.invalidateQueries({ queryKey: ['missions'] });
+      qc.invalidateQueries({ queryKey: qk.mission(args.id) });
+    },
+  });
+}
+
+export function useDeleteMission() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await api.delete(`/missions/${id}`)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['missions'] });
+    },
+  });
+}
+
+export function useLookupMissionLdapParticipant(query: string) {
+  return useQuery({
+    queryKey: ['missions', 'ldap', query],
+    queryFn: async () => (await api.get('/missions/ldap-participant', { params: { q: query } })).data,
+    enabled: query.trim().length >= 3,
+    staleTime: 5_000,
+  });
+}
+
+export function useAddMissionParticipantFromLdap() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; identifier: string }) =>
+      (await api.post(`/missions/${args.id}/participants/ldap`, { identifier: args.identifier })).data,
+    onSuccess: (_data, args) => {
+      qc.invalidateQueries({ queryKey: ['missions'] });
+      qc.invalidateQueries({ queryKey: qk.mission(args.id) });
+    },
+  });
+}
+
+export function useRemoveMissionParticipant() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; participantId: string }) =>
+      (await api.delete(`/missions/${args.id}/participants/${args.participantId}`)).data,
+    onSuccess: (_data, args) => {
+      qc.invalidateQueries({ queryKey: ['missions'] });
+      qc.invalidateQueries({ queryKey: qk.mission(args.id) });
+    },
+  });
+}
+
+export function useMissionSchedule(missionId: string) {
+  return useQuery({
+    queryKey: qk.missionSchedule(missionId || ''),
+    queryFn: async () => (await api.get(`/missions/${missionId}/schedule`)).data,
+    enabled: Boolean(missionId),
+    staleTime: 5_000,
+  });
+}
+
+export function useCreateMissionScheduleItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      payload: {
+        title: string;
+        startAt: string;
+        durationMinutes: number;
+        location: string;
+        responsible: string;
+        participants: string;
+      };
+    }) => (await api.post(`/missions/${args.id}/schedule`, args.payload)).data,
+    onSuccess: (_data, args) => {
+      qc.invalidateQueries({ queryKey: qk.missionSchedule(args.id) });
+      qc.invalidateQueries({ queryKey: ['missions'] });
+      qc.invalidateQueries({ queryKey: qk.mission(args.id) });
+    },
+  });
+}
+
+export function useUpdateMissionScheduleItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      itemId: string;
+      payload: {
+        title?: string;
+        startAt?: string;
+        durationMinutes?: number;
+        location?: string;
+        responsible?: string;
+        participants?: string;
+      };
+    }) => (await api.put(`/missions/${args.id}/schedule/${args.itemId}`, args.payload)).data,
+    onSuccess: (_data, args) => {
+      qc.invalidateQueries({ queryKey: qk.missionSchedule(args.id) });
+      qc.invalidateQueries({ queryKey: ['missions'] });
+      qc.invalidateQueries({ queryKey: qk.mission(args.id) });
+    },
+  });
+}
+
+export function useDeleteMissionScheduleItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; itemId: string }) =>
+      (await api.delete(`/missions/${args.id}/schedule/${args.itemId}`)).data,
+    onSuccess: (_data, args) => {
+      qc.invalidateQueries({ queryKey: qk.missionSchedule(args.id) });
+      qc.invalidateQueries({ queryKey: ['missions'] });
+      qc.invalidateQueries({ queryKey: qk.mission(args.id) });
+    },
+  });
+}
+
+export function useExportMissionSchedulePdf() {
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const response = await api.get(`/missions/${id}/schedule/pdf`, { responseType: 'blob' });
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `cronograma-missao-${id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      return true;
+    },
+  });
+}
+
 export function useActivityComments(activityId: string) {
   return useQuery({
     queryKey: qk.activityComments(activityId || ""),
@@ -178,6 +357,7 @@ export function useCreateActivity() {
       description?: string | null;
       localityId?: string | null;
       specialtyId?: string | null;
+      responsibleUserIds?: string[];
       eventDate?: string | null;
       reportRequired?: boolean;
     }) => (await api.post("/activities", payload)).data,
@@ -195,6 +375,7 @@ export function useUpdateActivity() {
         description?: string | null;
         localityId?: string | null;
         specialtyId?: string | null;
+        responsibleUserIds?: string[];
         eventDate?: string | null;
         reportRequired?: boolean;
       };
@@ -1131,7 +1312,7 @@ export function useUpdateLocality() {
       (await api.put(`/localities/${args.id}`, args.payload)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.localities });
-      qc.invalidateQueries({ queryKey: qk.dashboardRecruits });
+      qc.invalidateQueries({ queryKey: ['dashboardRecruits'] });
       qc.invalidateQueries({ queryKey: ["dashboardNational"] });
       qc.invalidateQueries({ queryKey: ["dashboardExecutive"] });
     },
@@ -1152,7 +1333,7 @@ export function useUpdateLocalityRecruits() {
       ).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.localities });
-      qc.invalidateQueries({ queryKey: qk.dashboardRecruits });
+      qc.invalidateQueries({ queryKey: ['dashboardRecruits'] });
       qc.invalidateQueries({ queryKey: ["dashboardNational"] });
       qc.invalidateQueries({ queryKey: ["dashboardExecutive"] });
     },
@@ -1382,10 +1563,10 @@ export function useExecutiveDashboard(filters: Record<string, any>) {
   });
 }
 
-export function useDashboardRecruits(enabled = true) {
+export function useDashboardRecruits(filters: Record<string, any> = {}, enabled = true) {
   return useQuery({
-    queryKey: qk.dashboardRecruits,
-    queryFn: async () => (await api.get("/dashboard/recruits")).data,
+    queryKey: qk.dashboardRecruits(filters),
+    queryFn: async () => (await api.get("/dashboard/recruits", { params: filters })).data,
     enabled,
     staleTime: 15_000,
   });

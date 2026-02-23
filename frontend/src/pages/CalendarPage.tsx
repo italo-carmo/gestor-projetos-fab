@@ -8,6 +8,7 @@ import { EmptyState } from '../components/states/EmptyState';
 import { CalendarView } from '../components/calendar/CalendarView';
 import { TaskDetailsDrawer } from '../components/tasks/TaskDetailsDrawer';
 import { TASK_STATUS_LABELS } from '../constants/enums';
+import { isTargetLocalityName } from '../constants/localities';
 
 export function CalendarPage() {
   const [year, setYear] = useState<number>(new Date().getFullYear());
@@ -17,7 +18,7 @@ export function CalendarPage() {
   const localityId = params.get('localityId') ?? '';
 
   const calendarQuery = useCalendarYear(year, { localityId: localityId || undefined });
-  const dashboardQuery = useDashboardNational({});
+  const dashboardQuery = useDashboardNational({ localityId: localityId || undefined });
   const tasksQuery = useTasks({
     dueFrom: `${year}-01-01`,
     dueTo: `${year}-12-31`,
@@ -28,7 +29,12 @@ export function CalendarPage() {
   const localities = (dashboardQuery.data?.items ?? []).map((loc: any) => ({
     id: loc.localityId,
     name: loc.localityName,
-  })).filter((loc: any) => String(loc.id ?? '').trim() && String(loc.name ?? '').trim());
+  })).filter(
+    (loc: any) =>
+      String(loc.id ?? '').trim() &&
+      String(loc.name ?? '').trim() &&
+      isTargetLocalityName(loc.name),
+  );
   const localityMap = new Map(localities.map((l: any) => [l.id, l.name]));
 
   const templateMap = new Map((templatesQuery.data?.items ?? []).map((t: any) => [t.id, t]));
@@ -120,9 +126,9 @@ export function CalendarPage() {
           <Box
             sx={{
               p: { xs: 0.7, md: 0.9 },
-              height: { xs: 'calc(100vh - 320px)', md: 'calc(100vh - 290px)' },
-              minHeight: 500,
-              maxHeight: 560,
+              height: { xs: 'calc(100vh - 312px)', md: 'calc(100vh - 276px)' },
+              minHeight: 510,
+              maxHeight: 576,
             }}
           >
             <CalendarView

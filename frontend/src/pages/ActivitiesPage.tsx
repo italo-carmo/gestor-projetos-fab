@@ -18,23 +18,19 @@ import {
   TableRow,
   Tabs,
   TextField,
-  Tooltip,
   Typography,
 } from '@mui/material';
-import PhotoCameraOutlinedIcon from '@mui/icons-material/PhotoCameraOutlined';
+import CheckBoxRoundedIcon from '@mui/icons-material/CheckBoxRounded';
+import CheckBoxOutlineBlankRoundedIcon from '@mui/icons-material/CheckBoxOutlineBlankRounded';
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   useActivityComments,
-  useActivitySchedule,
   useAddActivityComment,
   useActivities,
-  useCreateActivityScheduleItem,
   useCreateActivity,
   useDeleteActivity,
-  useDeleteActivityScheduleItem,
   useDeleteActivityReportPhoto,
-  useExportActivitySchedulePdf,
   useExportActivityReportPdf,
   useLocalities,
   useMe,
@@ -42,7 +38,6 @@ import {
   useUsers,
   useSignActivityReport,
   useMarkActivityCommentsSeen,
-  useUpdateActivityScheduleItem,
   useUpdateActivity,
   useUpdateActivityStatus,
   useUploadActivityReportPhoto,
@@ -56,6 +51,7 @@ import { EmptyState } from '../components/states/EmptyState';
 import { ErrorState } from '../components/states/ErrorState';
 import { SkeletonState } from '../components/states/SkeletonState';
 import { ACTIVITY_STATUS_LABELS, ActivityStatus } from '../constants/enums';
+import { isTargetLocalityName } from '../constants/localities';
 
 const blankReport = {
   date: '',
@@ -70,22 +66,13 @@ const blankReport = {
   closingDate: '',
 };
 
-const blankScheduleItem = {
-  title: '',
-  startTime: '',
-  durationMinutes: 60,
-  location: '',
-  responsible: '',
-  participants: '',
-};
-
-type ActivityDrawerTab = 'activity' | 'schedule' | 'report';
+type ActivityDrawerTab = 'activity' | 'report';
 
 export function ActivitiesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const activityIdFromUrl = searchParams.get('activityId') ?? '';
   const localityIdFromUrl = searchParams.get('localityId') ?? '';
-  const tabFromUrl = searchParams.get('tab') === 'schedule' ? 'schedule' : 'activity';
+  const tabFromUrl = searchParams.get('tab') === 'report' ? 'report' : 'activity';
   const toast = useToast();
 
   const [statusFilter, setStatusFilter] = useState('');
@@ -104,7 +91,9 @@ export function ActivitiesPage() {
     () =>
       localities.filter(
         (locality: any) =>
-          String(locality?.id ?? '').trim() && String(locality?.name ?? '').trim(),
+          String(locality?.id ?? '').trim() &&
+          String(locality?.name ?? '').trim() &&
+          isTargetLocalityName(locality?.name),
       ),
     [localities],
   );
@@ -128,13 +117,8 @@ export function ActivitiesPage() {
   const updateActivity = useUpdateActivity();
   const updateActivityStatus = useUpdateActivityStatus();
   const commentsQuery = useActivityComments(selectedId ?? '');
-  const scheduleQuery = useActivitySchedule(selectedId ?? '');
   const addComment = useAddActivityComment();
   const markCommentsSeen = useMarkActivityCommentsSeen();
-  const createScheduleItem = useCreateActivityScheduleItem();
-  const updateScheduleItem = useUpdateActivityScheduleItem();
-  const deleteScheduleItem = useDeleteActivityScheduleItem();
-  const exportSchedulePdf = useExportActivitySchedulePdf();
   const upsertReport = useUpsertActivityReport();
   const signReport = useSignActivityReport();
   const uploadPhoto = useUploadActivityReportPhoto();
@@ -182,8 +166,8 @@ export function ActivitiesPage() {
     } else if (!drawerOpen) {
       setDrawerOpen(true);
     }
-    if (tabFromUrl === 'schedule') {
-      setDrawerTab('schedule');
+    if (tabFromUrl === 'report') {
+      setDrawerTab('report');
     }
   }, [activityIdFromUrl, drawerOpen, selectedId, tabFromUrl]);
 
@@ -211,8 +195,6 @@ export function ActivitiesPage() {
   }, [selected]);
 
   const [reportForm, setReportForm] = useState(blankReport);
-  const [scheduleForm, setScheduleForm] = useState(blankScheduleItem);
-  const [editingScheduleId, setEditingScheduleId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!selected?.report) {
@@ -232,11 +214,6 @@ export function ActivitiesPage() {
       closingDate: selected.report.closingDate ? String(selected.report.closingDate).slice(0, 10) : '',
     });
   }, [selected]);
-
-  useEffect(() => {
-    setScheduleForm(blankScheduleItem);
-    setEditingScheduleId(null);
-  }, [selectedId, isCreateMode]);
 
   const canView = !me ? true : can(me, 'task_instances', 'view');
   const canCreate = can(me, 'task_instances', 'create');
@@ -378,88 +355,6 @@ export function ActivitiesPage() {
     }
   };
 
-  const handleSaveScheduleItem = async () => {
-    if (!selected) return;
-    if (!scheduleForm.title.trim()) {
-      toast.push({ message: 'Informe a atividade do cronograma', severity: 'warning' });
-      return;
-    }
-    if (!scheduleForm.startTime) {
-      toast.push({ message: 'Informe o horário', severity: 'warning' });
-      return;
-    }
-    try {
-      if (editingScheduleId) {
-        await updateScheduleItem.mutateAsync({
-          id: selected.id,
-          itemId: editingScheduleId,
-          payload: {
-            title: scheduleForm.title,
-            startTime: scheduleForm.startTime,
-            durationMinutes: Number(scheduleForm.durationMinutes) || 0,
-            location: scheduleForm.location,
-            responsible: scheduleForm.responsible,
-            participants: scheduleForm.participants,
-          },
-        });
-        toast.push({ message: 'Item do cronograma atualizado', severity: 'success' });
-      } else {
-        await createScheduleItem.mutateAsync({
-          id: selected.id,
-          payload: {
-            title: scheduleForm.title,
-            startTime: scheduleForm.startTime,
-            durationMinutes: Number(scheduleForm.durationMinutes) || 0,
-            location: scheduleForm.location,
-            responsible: scheduleForm.responsible,
-            participants: scheduleForm.participants,
-          },
-        });
-        toast.push({ message: 'Item do cronograma adicionado', severity: 'success' });
-      }
-      setScheduleForm(blankScheduleItem);
-      setEditingScheduleId(null);
-    } catch (error) {
-      toast.push({ message: parseApiError(error).message ?? 'Erro ao salvar item do cronograma', severity: 'error' });
-    }
-  };
-
-  const handleEditScheduleItem = (item: any) => {
-    setEditingScheduleId(item.id);
-    setScheduleForm({
-      title: item.title ?? '',
-      startTime: item.startTime ?? '',
-      durationMinutes: Number(item.durationMinutes ?? 60),
-      location: item.location ?? '',
-      responsible: item.responsible ?? '',
-      participants: item.participants ?? '',
-    });
-  };
-
-  const handleDeleteScheduleItem = async (itemId: string) => {
-    if (!selected) return;
-    if (!window.confirm('Remover este item do cronograma?')) return;
-    try {
-      await deleteScheduleItem.mutateAsync({ id: selected.id, itemId });
-      if (editingScheduleId === itemId) {
-        setEditingScheduleId(null);
-        setScheduleForm(blankScheduleItem);
-      }
-      toast.push({ message: 'Item do cronograma removido', severity: 'success' });
-    } catch (error) {
-      toast.push({ message: parseApiError(error).message ?? 'Erro ao remover item', severity: 'error' });
-    }
-  };
-
-  const handleExportSchedulePdf = async () => {
-    if (!selected) return;
-    try {
-      await exportSchedulePdf.mutateAsync(selected.id);
-    } catch (error) {
-      toast.push({ message: parseApiError(error).message ?? 'Erro ao exportar cronograma em PDF', severity: 'error' });
-    }
-  };
-
   const syncUrlState = (activityId?: string, tab: ActivityDrawerTab = 'activity') => {
     const next = new URLSearchParams(searchParams);
     if (localityFilter) next.set('localityId', localityFilter);
@@ -467,7 +362,7 @@ export function ActivitiesPage() {
 
     if (activityId) {
       next.set('activityId', activityId);
-      if (tab === 'schedule') next.set('tab', tab);
+      if (tab === 'report') next.set('tab', tab);
       else next.delete('tab');
     } else {
       next.delete('activityId');
@@ -609,9 +504,7 @@ export function ActivitiesPage() {
                     <TableCell sx={{ color: 'white', fontWeight: 600 }}>Data</TableCell>
                     <TableCell sx={{ color: 'white', fontWeight: 600 }}>Status</TableCell>
                     <TableCell sx={{ color: 'white', fontWeight: 600 }}>Comentários</TableCell>
-                    <TableCell sx={{ color: 'white', fontWeight: 600 }}>Fotos</TableCell>
                     <TableCell sx={{ color: 'white', fontWeight: 600 }}>Relatório</TableCell>
-                    <TableCell sx={{ color: 'white', fontWeight: 600 }}>Ações</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -634,53 +527,62 @@ export function ActivitiesPage() {
                       <TableCell>{item.eventDate ? new Date(item.eventDate).toLocaleDateString('pt-BR') : '-'}</TableCell>
                       <TableCell>{ACTIVITY_STATUS_LABELS[item.status] ?? item.status}</TableCell>
                       <TableCell>
-                        {(item.comments?.total ?? 0) === 0 ? (
-                          <Chip size="small" label="Sem comentários" />
-                        ) : item.comments?.hasUnread ? (
-                          <Chip size="small" color="warning" label={`Novo (${item.comments.unread})`} />
-                        ) : (
-                          <Chip size="small" color="info" label={`${item.comments.total}`} />
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Tooltip title={(item.report?.photos?.length ?? 0) > 0 ? 'Abrir relatório e fotos' : 'Sem fotos'}>
-                          <span>
-                            <IconButton
-                              size="small"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                openActivityDrawer(item.id, 'report');
-                              }}
-                            >
-                              <Badge badgeContent={item.report?.photos?.length ?? 0} color="primary">
-                                <PhotoCameraOutlinedIcon fontSize="small" />
-                              </Badge>
-                            </IconButton>
-                          </span>
-                        </Tooltip>
-                      </TableCell>
-                      <TableCell>
-                        {item.report ? (
-                          <Chip
-                            size="small"
-                            color={item.report.hasSignature ? 'success' : 'warning'}
-                            label={item.report.hasSignature ? 'Assinado' : 'Pendente assinatura'}
-                          />
-                        ) : (
-                          <Chip size="small" label="Sem relatório" />
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Button
+                        <IconButton
                           size="small"
-                          variant="text"
                           onClick={(event) => {
                             event.stopPropagation();
-                            openActivityDrawer(item.id, 'schedule');
+                            openActivityDrawer(item.id, 'activity');
                           }}
                         >
-                          Cronograma
-                        </Button>
+                          <Badge
+                            overlap="rectangular"
+                            badgeContent={0}
+                            sx={{
+                              '& .MuiBadge-badge': {
+                                display: 'none',
+                              },
+                            }}
+                          >
+                            <Box
+                              sx={{
+                                minWidth: 26,
+                                height: 20,
+                                px: 0.8,
+                                borderRadius: 999,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: 12,
+                                fontWeight: 700,
+                                border: '1px solid',
+                                borderColor: item.comments?.hasUnread ? '#C56A2B' : '#C9D7E6',
+                                bgcolor: item.comments?.hasUnread ? '#FFF3E8' : '#F7FAFC',
+                                color: item.comments?.hasUnread ? '#9A4B14' : '#44566C',
+                              }}
+                            >
+                              {item.comments?.total ?? 0}
+                            </Box>
+                          </Badge>
+                        </IconButton>
+                      </TableCell>
+                      <TableCell>
+                        <IconButton
+                          size="small"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openActivityDrawer(item.id, 'report');
+                          }}
+                          aria-label="Abrir relatório"
+                        >
+                          {item.report ? (
+                            <CheckBoxRoundedIcon
+                              color={item.report.hasSignature ? 'success' : 'primary'}
+                              fontSize="small"
+                            />
+                          ) : (
+                            <CheckBoxOutlineBlankRoundedIcon fontSize="small" />
+                          )}
+                        </IconButton>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -732,7 +634,6 @@ export function ActivitiesPage() {
               sx={{ mb: 2 }}
             >
               <Tab value="activity" label="Dados da atividade" />
-              <Tab value="schedule" label="Cronograma" />
               <Tab value="report" label="Relatório" />
             </Tabs>
           )}
@@ -943,158 +844,6 @@ export function ActivitiesPage() {
                   </Stack>
                 </>
               )}
-            </>
-          )}
-
-          {!isCreateMode && selected && drawerTab === 'schedule' && (
-            <>
-              <Typography variant="h6" sx={{ mb: 1 }}>
-                Cronograma da Visita
-              </Typography>
-
-              <Stack spacing={1}>
-                <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
-                  <TextField
-                    size="small"
-                    label="Atividade"
-                    value={scheduleForm.title}
-                    onChange={(e) => setScheduleForm({ ...scheduleForm, title: e.target.value })}
-                    fullWidth
-                  />
-                  <TextField
-                    size="small"
-                    type="time"
-                    label="Horário"
-                    value={scheduleForm.startTime}
-                    onChange={(e) => setScheduleForm({ ...scheduleForm, startTime: e.target.value })}
-                    InputLabelProps={{ shrink: true }}
-                    sx={{ minWidth: 150 }}
-                  />
-                  <TextField
-                    size="small"
-                    type="number"
-                    label="Duração (min)"
-                    value={scheduleForm.durationMinutes}
-                    onChange={(e) =>
-                      setScheduleForm({ ...scheduleForm, durationMinutes: Number(e.target.value) || 0 })
-                    }
-                    inputProps={{ min: 1 }}
-                    sx={{ minWidth: 150 }}
-                  />
-                </Stack>
-
-                <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
-                  <TextField
-                    size="small"
-                    label="Local (texto livre)"
-                    value={scheduleForm.location}
-                    onChange={(e) => setScheduleForm({ ...scheduleForm, location: e.target.value })}
-                    fullWidth
-                  />
-                  <TextField
-                    size="small"
-                    label="Responsável"
-                    value={scheduleForm.responsible}
-                    onChange={(e) => setScheduleForm({ ...scheduleForm, responsible: e.target.value })}
-                    fullWidth
-                  />
-                </Stack>
-
-                <TextField
-                  size="small"
-                  label="Participantes (texto livre)"
-                  value={scheduleForm.participants}
-                  onChange={(e) => setScheduleForm({ ...scheduleForm, participants: e.target.value })}
-                  multiline
-                  minRows={2}
-                  fullWidth
-                />
-
-                <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
-                  <Button
-                    variant="contained"
-                    onClick={handleSaveScheduleItem}
-                    disabled={!canUpdate || createScheduleItem.isPending || updateScheduleItem.isPending}
-                  >
-                    {editingScheduleId ? 'Atualizar item' : 'Adicionar item'}
-                  </Button>
-                  {editingScheduleId && (
-                    <Button
-                      variant="text"
-                      onClick={() => {
-                        setEditingScheduleId(null);
-                        setScheduleForm(blankScheduleItem);
-                      }}
-                    >
-                      Cancelar edição
-                    </Button>
-                  )}
-                  <Button
-                    variant="outlined"
-                    onClick={handleExportSchedulePdf}
-                    disabled={!canDownload || exportSchedulePdf.isPending}
-                  >
-                    Exportar cronograma em PDF
-                  </Button>
-                </Stack>
-
-                {scheduleQuery.isLoading ? (
-                  <Typography variant="body2" color="text.secondary">
-                    Carregando cronograma...
-                  </Typography>
-                ) : (scheduleQuery.data?.items ?? []).length === 0 ? (
-                  <Typography variant="body2" color="text.secondary">
-                    Nenhum item no cronograma desta visita.
-                  </Typography>
-                ) : (
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow sx={{ bgcolor: 'primary.main' }}>
-                        <TableCell sx={{ color: 'white', fontWeight: 600 }}>Horário</TableCell>
-                        <TableCell sx={{ color: 'white', fontWeight: 600 }}>Duração</TableCell>
-                        <TableCell sx={{ color: 'white', fontWeight: 600 }}>Atividade</TableCell>
-                        <TableCell sx={{ color: 'white', fontWeight: 600 }}>Local</TableCell>
-                        <TableCell sx={{ color: 'white', fontWeight: 600 }}>Responsável</TableCell>
-                        <TableCell sx={{ color: 'white', fontWeight: 600 }}>Participantes</TableCell>
-                        <TableCell sx={{ color: 'white', fontWeight: 600 }}>Ações</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {(scheduleQuery.data?.items ?? []).map((item: any) => (
-                        <TableRow key={item.id} hover>
-                          <TableCell>{item.startTime}</TableCell>
-                          <TableCell>{item.durationMinutes} min</TableCell>
-                          <TableCell>{item.title}</TableCell>
-                          <TableCell>{item.location}</TableCell>
-                          <TableCell>{item.responsible}</TableCell>
-                          <TableCell sx={{ maxWidth: 180, whiteSpace: 'pre-wrap' }}>{item.participants}</TableCell>
-                          <TableCell>
-                            <Stack direction="row" spacing={0.5}>
-                              <Button
-                                size="small"
-                                variant="text"
-                                onClick={() => handleEditScheduleItem(item)}
-                                disabled={!canUpdate}
-                              >
-                                Editar
-                              </Button>
-                              <Button
-                                size="small"
-                                variant="text"
-                                color="error"
-                                onClick={() => handleDeleteScheduleItem(item.id)}
-                                disabled={!canUpdate || deleteScheduleItem.isPending}
-                              >
-                                Remover
-                              </Button>
-                            </Stack>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </Stack>
             </>
           )}
 

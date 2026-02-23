@@ -59,6 +59,7 @@ export function DashboardExecutivePage() {
   const to = params.get('to') ?? '';
   const threshold = params.get('threshold') ?? '70';
   const command = params.get('command') ?? '';
+  const localityId = params.get('localityId') ?? '';
 
   const filters = useMemo(
     () => ({
@@ -66,8 +67,9 @@ export function DashboardExecutivePage() {
       to: to || undefined,
       threshold: threshold || undefined,
       command: command || undefined,
+      localityId: localityId || undefined,
     }),
-    [from, to, threshold, command],
+    [from, to, threshold, command, localityId],
   );
 
   const dashboardQuery = useExecutiveDashboard(filters);

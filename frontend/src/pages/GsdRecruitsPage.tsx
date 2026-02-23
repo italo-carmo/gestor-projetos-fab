@@ -26,7 +26,7 @@ import { SkeletonState } from '../components/states/SkeletonState';
 export function GsdRecruitsPage() {
   const { data: me, isLoading: meLoading } = useMe();
   const canViewRecruits = can(me, 'dashboard', 'view');
-  const recruitsQuery = useDashboardRecruits(canViewRecruits);
+  const recruitsQuery = useDashboardRecruits({}, canViewRecruits);
   const updateLocalityRecruits = useUpdateLocalityRecruits();
   const toast = useToast();
 
