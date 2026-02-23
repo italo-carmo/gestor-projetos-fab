@@ -4,6 +4,11 @@ import {
   Card,
   CardContent,
   Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
   Divider,
   Drawer,
   IconButton,
@@ -91,6 +96,7 @@ export function MissionsPage() {
   const [ldapIdentifier, setLdapIdentifier] = useState('');
   const [scheduleForm, setScheduleForm] = useState(blankScheduleForm);
   const [editingScheduleItemId, setEditingScheduleItemId] = useState<string | null>(null);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
   const lookupQuery = useLookupMissionLdapParticipant(ldapIdentifier);
 
@@ -163,6 +169,7 @@ export function MissionsPage() {
     setIsCreateMode(false);
     setEditingScheduleItemId(null);
     setScheduleForm(blankScheduleForm);
+    setConfirmDeleteOpen(false);
 
     const next = new URLSearchParams(params);
     next.delete('missionId');
@@ -214,11 +221,11 @@ export function MissionsPage() {
 
   const handleDeleteMission = async () => {
     if (!selectedMission) return;
-    if (!window.confirm('Deseja remover esta missão?')) return;
 
     try {
       await deleteMission.mutateAsync(selectedMission.id);
       toast.push({ message: 'Missão removida.', severity: 'success' });
+      setConfirmDeleteOpen(false);
       closeDrawer();
     } catch (error) {
       toast.push({ message: parseApiError(error).message ?? 'Erro ao remover missão.', severity: 'error' });
@@ -411,7 +418,12 @@ export function MissionsPage() {
             <Typography variant="h6">{isCreateMode ? 'Nova missão' : 'Detalhes da missão'}</Typography>
             <Stack direction="row" spacing={1}>
               {!isCreateMode && selectedMission && (
-                <Button color="error" variant="outlined" onClick={handleDeleteMission} disabled={deleteMission.isPending}>
+                <Button
+                  color="error"
+                  variant="outlined"
+                  onClick={() => setConfirmDeleteOpen(true)}
+                  disabled={deleteMission.isPending}
+                >
                   Excluir
                 </Button>
               )}
@@ -706,6 +718,24 @@ export function MissionsPage() {
           )}
         </Box>
       </Drawer>
+
+      <Dialog open={confirmDeleteOpen} onClose={() => setConfirmDeleteOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Excluir missão</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Confirma a exclusão definitiva da missão <strong>{selectedMission?.title ?? ''}</strong>?
+            Esta ação também remove participantes e itens de cronograma vinculados.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDeleteOpen(false)} disabled={deleteMission.isPending}>
+            Cancelar
+          </Button>
+          <Button color="error" variant="contained" onClick={handleDeleteMission} disabled={deleteMission.isPending}>
+            Sim, excluir missão
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

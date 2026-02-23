@@ -569,7 +569,7 @@ export class MissionsService {
 
     if (!mission) throwError('NOT_FOUND');
 
-    const doc = new PDFDocument({ margin: 48, size: 'A4' });
+    const doc = new PDFDocument({ margin: 32, size: 'A4', layout: 'landscape' });
     const chunks: Buffer[] = [];
     const done = new Promise<Buffer>((resolve, reject) => {
       doc.on('data', (chunk) => chunks.push(chunk as Buffer));
@@ -577,80 +577,330 @@ export class MissionsService {
       doc.on('error', reject);
     });
 
-    const logoPath = this.findScheduleLogoPath();
-    if (logoPath) {
-      const logoY = doc.y;
-      try {
-        doc.image(logoPath, (doc.page.width - 150) / 2, logoY, {
-          fit: [150, 150],
-          align: 'center',
-        });
-        doc.y = logoY + 160;
-      } catch {
-        doc.y = logoY + 8;
-      }
-    }
-
-    const writeLine = (label: string, value: string) => {
-      doc.font('Helvetica-Bold').fontSize(10).text(label);
-      doc.moveDown(0.2);
-      doc.font('Helvetica').fontSize(11).text(value || '-', { align: 'left' });
-      doc.moveDown(0.7);
+    const palette = {
+      brandDark: '#123A63',
+      brand: '#0C657E',
+      paper: '#F8FBFF',
+      card: '#EEF4FB',
+      cardBorder: '#D2E0F0',
+      tableHeader: '#1F4F7A',
+      tableHeaderText: '#FFFFFF',
+      sectionBg: '#E3EDF9',
+      sectionBorder: '#BCD1E8',
+      rowOdd: '#FFFFFF',
+      rowEven: '#F6F9FD',
+      rowBorder: '#D7E1EC',
+      text: '#0F172A',
+      muted: '#4B5563',
     };
 
-    doc.font('Helvetica-Bold').fontSize(16).text('Cronograma da Missão', { align: 'center' });
-    doc.moveDown(1);
+    const tableX = doc.page.margins.left;
+    const contentWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+    const tableBottomLimit = doc.page.height - doc.page.margins.bottom - 16;
+    let cursorY = doc.page.margins.top;
+    let pageNumber = 1;
+    let isFirstPage = true;
 
-    writeLine('Missão', mission.title);
-    writeLine('Localidade', mission.locality ? `${mission.locality.name} (${mission.locality.code})` : '-');
-    writeLine('Período', `${this.formatDate(mission.startDate)} a ${this.formatDate(mission.endDate)}`);
-    writeLine('Descrição', mission.description ?? '-');
-
+    const logoPath = this.findScheduleLogoPath();
+    const missionTitle = mission.title || 'Missão sem título';
+    const missionLocality = mission.locality ? `${mission.locality.name} (${mission.locality.code})` : '-';
+    const missionPeriod = `${this.formatDate(mission.startDate)} a ${this.formatDate(mission.endDate)}`;
+    const missionDescription = mission.description?.trim() || '-';
     const participantsLabel =
       mission.participants.length > 0
         ? mission.participants
             .map((participant) => participant.name || participant.email || participant.cpf || 'Participante')
             .join(', ')
         : 'Nenhum participante cadastrado';
-    writeLine('Participantes', participantsLabel);
 
-    doc.font('Helvetica-Bold').fontSize(12).text('Programação', { underline: true });
-    doc.moveDown(0.4);
-
-    if (mission.scheduleItems.length === 0) {
-      doc.font('Helvetica').fontSize(11).text('Nenhum item de cronograma cadastrado para esta missão.');
-    } else {
-      mission.scheduleItems.forEach((item, index) => {
-        if (doc.y > doc.page.height - 150) {
-          doc.addPage();
-        }
-
-        const rowY = doc.y;
-        doc
-          .roundedRect(doc.page.margins.left, rowY, doc.page.width - doc.page.margins.left - doc.page.margins.right, 104, 6)
-          .fillAndStroke('#F5F8FC', '#D7E0EC');
-
-        const blockStart = rowY + 10;
-        doc.fillColor('#111827');
-        doc.font('Helvetica-Bold').fontSize(11).text(
-          `${index + 1}. ${this.formatTime(item.startAt)} • ${this.formatDuration(item.durationMinutes)}`,
-          doc.page.margins.left + 10,
-          blockStart,
+    const drawPageFooter = () => {
+      doc
+        .font('Helvetica')
+        .fontSize(8)
+        .fillColor(palette.muted)
+        .text(
+          `Página ${pageNumber} • Gerado em ${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date())}`,
+          tableX,
+          doc.page.height - doc.page.margins.bottom + 4,
+          { width: contentWidth, align: 'right' },
         );
+    };
+
+    const drawCoverHeader = () => {
+      const headerHeight = 84;
+      doc
+        .roundedRect(tableX, cursorY, contentWidth, headerHeight, 12)
+        .fillAndStroke(palette.brandDark, palette.brandDark);
+
+      if (logoPath) {
+        try {
+          doc.image(logoPath, tableX + 16, cursorY + 17, { fit: [48, 48] });
+        } catch {
+          // no-op
+        }
+      }
+
+      const textStartX = tableX + 78;
+      doc
+        .font('Helvetica-Bold')
+        .fontSize(18)
+        .fillColor('#FFFFFF')
+        .text('Quadro de Trabalho Semanal', textStartX, cursorY + 16, {
+          width: contentWidth - (textStartX - tableX) - 16,
+        });
+      doc
+        .font('Helvetica')
+        .fontSize(10)
+        .fillColor('#E6EEF7')
+        .text('Cronograma operacional da missão • Comissão de Iniciação', textStartX, cursorY + 40, {
+          width: contentWidth - (textStartX - tableX) - 16,
+        });
+      doc
+        .font('Helvetica-Bold')
+        .fontSize(12)
+        .fillColor('#FFFFFF')
+        .text(missionTitle, textStartX, cursorY + 57, {
+          width: contentWidth - (textStartX - tableX) - 16,
+        });
+
+      cursorY += headerHeight + 12;
+    };
+
+    const drawMetaCards = () => {
+      const gap = 8;
+      const cardHeight = 58;
+      const infoCards = [
+        { label: 'Localidade', value: missionLocality },
+        { label: 'Período', value: missionPeriod },
+        { label: 'Participantes', value: String(mission.participants.length) },
+      ];
+      const cardWidth = (contentWidth - gap * (infoCards.length - 1)) / infoCards.length;
+
+      let x = tableX;
+      for (const card of infoCards) {
+        doc
+          .roundedRect(x, cursorY, cardWidth, cardHeight, 8)
+          .fillAndStroke(palette.card, palette.cardBorder);
+        doc
+          .font('Helvetica-Bold')
+          .fontSize(9)
+          .fillColor(palette.muted)
+          .text(card.label, x + 10, cursorY + 9, { width: cardWidth - 20 });
+        doc
+          .font('Helvetica-Bold')
+          .fontSize(11)
+          .fillColor(palette.text)
+          .text(card.value || '-', x + 10, cursorY + 25, { width: cardWidth - 20, height: 24 });
+        x += cardWidth + gap;
+      }
+
+      cursorY += cardHeight + 10;
+
+      const descriptionHeight = 52;
+      doc
+        .roundedRect(tableX, cursorY, contentWidth, descriptionHeight, 8)
+        .fillAndStroke(palette.paper, palette.cardBorder);
+      doc
+        .font('Helvetica-Bold')
+        .fontSize(9)
+        .fillColor(palette.muted)
+        .text('Descrição', tableX + 10, cursorY + 8, { width: contentWidth - 20 });
+      doc
+        .font('Helvetica')
+        .fontSize(10)
+        .fillColor(palette.text)
+        .text(missionDescription, tableX + 10, cursorY + 22, {
+          width: contentWidth - 20,
+          height: 20,
+        });
+
+      cursorY += descriptionHeight + 8;
+
+      const participantsHeight = Math.max(
+        40,
+        doc.heightOfString(participantsLabel, { width: contentWidth - 20, align: 'left' }) + 20,
+      );
+      doc
+        .roundedRect(tableX, cursorY, contentWidth, participantsHeight, 8)
+        .fillAndStroke(palette.paper, palette.cardBorder);
+      doc
+        .font('Helvetica-Bold')
+        .fontSize(9)
+        .fillColor(palette.muted)
+        .text('Participantes', tableX + 10, cursorY + 8, { width: contentWidth - 20 });
+      doc
+        .font('Helvetica')
+        .fontSize(9.5)
+        .fillColor(palette.text)
+        .text(participantsLabel, tableX + 10, cursorY + 22, { width: contentWidth - 20 });
+
+      cursorY += participantsHeight + 12;
+    };
+
+    const drawContinuationHeader = () => {
+      const barHeight = 36;
+      doc
+        .roundedRect(tableX, cursorY, contentWidth, barHeight, 8)
+        .fillAndStroke(palette.brandDark, palette.brandDark);
+      doc
+        .font('Helvetica-Bold')
+        .fontSize(12)
+        .fillColor('#FFFFFF')
+        .text(`Quadro de Trabalho Semanal • ${missionTitle}`, tableX + 12, cursorY + 11, {
+          width: contentWidth - 24,
+        });
+      cursorY += barHeight + 10;
+    };
+
+    const columnDefs = [
+      { key: 'day', label: 'Dia', width: 92, align: 'left' as const },
+      { key: 'time', label: 'Horário', width: 82, align: 'left' as const },
+      { key: 'duration', label: 'Duração', width: 64, align: 'center' as const },
+      { key: 'activity', label: 'Atividade', width: 228, align: 'left' as const },
+      { key: 'location', label: 'Local', width: 102, align: 'left' as const },
+      { key: 'responsible', label: 'Responsável', width: 102, align: 'left' as const },
+      { key: 'participants', label: 'Participantes', width: 0, align: 'left' as const },
+    ];
+    const fixedWidth = columnDefs.slice(0, -1).reduce((acc, col) => acc + col.width, 0);
+    columnDefs[columnDefs.length - 1].width = contentWidth - fixedWidth;
+
+    const drawTableHeader = () => {
+      const headerHeight = 27;
+      doc
+        .rect(tableX, cursorY, contentWidth, headerHeight)
+        .fillAndStroke(palette.tableHeader, palette.tableHeader);
+      let x = tableX;
+      for (const col of columnDefs) {
+        doc
+          .font('Helvetica-Bold')
+          .fontSize(9.5)
+          .fillColor(palette.tableHeaderText)
+          .text(col.label, x + 6, cursorY + 9, {
+            width: col.width - 12,
+            align: col.align,
+          });
+        x += col.width;
+      }
+      cursorY += headerHeight;
+    };
+
+    const openNewPage = (forceTableHeader = true) => {
+      if (!isFirstPage) {
+        drawPageFooter();
+        doc.addPage();
+        pageNumber += 1;
+      }
+      cursorY = doc.page.margins.top;
+      if (isFirstPage) {
+        drawCoverHeader();
+        drawMetaCards();
+      } else {
+        drawContinuationHeader();
+      }
+      if (forceTableHeader) drawTableHeader();
+      isFirstPage = false;
+    };
+
+    const ensureRowFits = (rowHeight: number) => {
+      if (cursorY + rowHeight <= tableBottomLimit) return;
+      openNewPage(true);
+    };
+
+    const drawWeekSection = (label: string) => {
+      const sectionHeight = 22;
+      ensureRowFits(sectionHeight);
+      doc
+        .rect(tableX, cursorY, contentWidth, sectionHeight)
+        .fillAndStroke(palette.sectionBg, palette.sectionBorder);
+      doc
+        .font('Helvetica-Bold')
+        .fontSize(9.5)
+        .fillColor(palette.brandDark)
+        .text(label, tableX + 8, cursorY + 7, { width: contentWidth - 16 });
+      cursorY += sectionHeight;
+    };
+
+    const drawScheduleRow = (rowIndex: number, row: Record<string, string>) => {
+      const textPaddingX = 6;
+      const textPaddingY = 5;
+      const minHeight = 28;
+
+      let rowHeight = minHeight;
+      for (const col of columnDefs) {
+        const value = String(row[col.key] ?? '-');
+        const height = doc
+          .font('Helvetica')
+          .fontSize(8.8)
+          .heightOfString(value, {
+            width: col.width - textPaddingX * 2,
+            align: col.align,
+          });
+        rowHeight = Math.max(rowHeight, height + textPaddingY * 2);
+      }
+
+      ensureRowFits(rowHeight);
+
+      const background = rowIndex % 2 === 0 ? palette.rowOdd : palette.rowEven;
+      doc.rect(tableX, cursorY, contentWidth, rowHeight).fillAndStroke(background, palette.rowBorder);
+
+      let x = tableX;
+      for (const col of columnDefs) {
         doc
           .font('Helvetica')
-          .fontSize(10)
-          .text(`Atividade: ${item.title}`, doc.page.margins.left + 10, blockStart + 18, {
-            width: doc.page.width - doc.page.margins.left - doc.page.margins.right - 20,
-          })
-          .text(`Local: ${item.location}`, { width: doc.page.width - doc.page.margins.left - doc.page.margins.right - 20 })
-          .text(`Responsável: ${item.responsible}`, { width: doc.page.width - doc.page.margins.left - doc.page.margins.right - 20 })
-          .text(`Participantes: ${item.participants}`, {
-            width: doc.page.width - doc.page.margins.left - doc.page.margins.right - 20,
+          .fontSize(8.8)
+          .fillColor(palette.text)
+          .text(String(row[col.key] ?? '-'), x + textPaddingX, cursorY + textPaddingY, {
+            width: col.width - textPaddingX * 2,
+            align: col.align,
           });
-        doc.y = rowY + 114;
+        x += col.width;
+      }
+
+      cursorY += rowHeight;
+    };
+
+    openNewPage(true);
+
+    if (mission.scheduleItems.length === 0) {
+      doc
+        .font('Helvetica')
+        .fontSize(11)
+        .fillColor(palette.muted)
+        .text('Nenhum item de cronograma cadastrado para esta missão.', tableX, cursorY + 12, {
+          width: contentWidth,
+          align: 'center',
+        });
+    } else {
+      let weekCursor = '';
+      let rowIndex = 0;
+
+      mission.scheduleItems.forEach((item) => {
+        const weekStart = this.getWeekStartDate(item.startAt);
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekStart.getDate() + 6);
+        const weekKey = weekStart.toISOString().slice(0, 10);
+        if (weekKey !== weekCursor) {
+          weekCursor = weekKey;
+          drawWeekSection(
+            `Semana de ${this.formatDateNoYear(weekStart)} a ${this.formatDateNoYear(weekEnd)}`,
+          );
+        }
+
+        const endAt = new Date(item.startAt.getTime() + item.durationMinutes * 60_000);
+        drawScheduleRow(rowIndex, {
+          day: this.formatWeekdayDate(item.startAt),
+          time: `${this.formatTime(item.startAt)} - ${this.formatTime(endAt)}`,
+          duration: this.formatDuration(item.durationMinutes),
+          activity: item.title || '-',
+          location: item.location || '-',
+          responsible: item.responsible || '-',
+          participants: item.participants || '-',
+        });
+        rowIndex += 1;
       });
     }
+
+    drawPageFooter();
 
     doc.end();
     const buffer = await done;
@@ -704,6 +954,29 @@ export class MissionsService {
       }
     }
     return null;
+  }
+
+  private getWeekStartDate(value: Date) {
+    const date = new Date(value);
+    const day = (date.getDay() + 6) % 7; // Monday = 0
+    date.setDate(date.getDate() - day);
+    date.setHours(0, 0, 0, 0);
+    return date;
+  }
+
+  private formatDateNoYear(value: Date) {
+    return new Intl.DateTimeFormat('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+    }).format(value);
+  }
+
+  private formatWeekdayDate(value: Date) {
+    const weekday = new Intl.DateTimeFormat('pt-BR', { weekday: 'short' })
+      .format(value)
+      .replace('.', '')
+      .toUpperCase();
+    return `${weekday} ${this.formatDateNoYear(value)}`;
   }
 
   private formatDuration(minutes: number) {
