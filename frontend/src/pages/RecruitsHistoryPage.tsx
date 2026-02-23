@@ -11,7 +11,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useDashboardRecruits } from '../api/hooks';
 import { EmptyState } from '../components/states/EmptyState';
@@ -36,9 +36,32 @@ export function RecruitsHistoryPage() {
   const recruitsQuery = useDashboardRecruits({ localityId: localityId || undefined });
   const [selectedLocalityId, setSelectedLocalityId] = useState<string>('');
   const data = recruitsQuery.data;
-  const currentPerLocality = data?.currentPerLocality ?? [];
+  const currentPerLocality = useMemo(
+    () =>
+      (data?.currentPerLocality ?? []).filter(
+        (loc: any) => Number(loc?.recruitsFemaleCountCurrent ?? 0) > 0,
+      ),
+    [data?.currentPerLocality],
+  );
   const aggregateByMonth = data?.aggregateByMonth ?? [];
-  const byLocality = data?.byLocality ?? [];
+  const byLocality = useMemo(() => {
+    const visibleLocalityIds = new Set(
+      currentPerLocality.map((loc: any) => String(loc.localityId)),
+    );
+    return (data?.byLocality ?? []).filter((loc: any) =>
+      visibleLocalityIds.has(String(loc.localityId)),
+    );
+  }, [currentPerLocality, data?.byLocality]);
+
+  useEffect(() => {
+    if (!selectedLocalityId) return;
+    const stillAvailable = byLocality.some(
+      (loc: any) => String(loc.localityId) === selectedLocalityId,
+    );
+    if (!stillAvailable) {
+      setSelectedLocalityId('');
+    }
+  }, [byLocality, selectedLocalityId]);
 
   const selectedSeries = useMemo(() => {
     if (!selectedLocalityId) return [];
@@ -69,7 +92,7 @@ export function RecruitsHistoryPage() {
           {currentPerLocality.length === 0 ? (
             <EmptyState
               title="Sem dados"
-              description="Nenhuma localidade no seu escopo ou ainda sem registro de recrutas."
+              description="Nenhuma localidade no seu escopo com recrutas maior que zero."
             />
           ) : (
             <>

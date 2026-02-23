@@ -17,6 +17,15 @@ const apiBaseUrl = shouldForceRelativeApiBase()
     ? configuredBaseUrl
     : "/api";
 
+const resolveGlobalLocalityIdFromUrl = () => {
+  if (typeof window === "undefined") return "";
+  try {
+    return new URLSearchParams(window.location.search).get("localityId")?.trim() ?? "";
+  } catch {
+    return "";
+  }
+};
+
 export const api = axios.create({
   baseURL: apiBaseUrl,
 });
@@ -41,7 +50,7 @@ api.interceptors.request.use((config) => {
   const token = localStorage.getItem("accessToken");
   if (token) config.headers.Authorization = `Bearer ${token}`;
 
-  const localityId = localStorage.getItem(GLOBAL_LOCALITY_STORAGE_KEY)?.trim();
+  const localityId = resolveGlobalLocalityIdFromUrl();
   const url = String(config.url ?? "");
   if (!localityId || !shouldAttachGlobalLocality(url, config.method)) {
     return config;

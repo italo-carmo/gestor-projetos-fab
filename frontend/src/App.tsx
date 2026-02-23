@@ -80,7 +80,9 @@ function App() {
                   path="/missions"
                   element={
                     <RequireRoleAccess
-                      allow={(user) => hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP])}
+                      allow={(user) =>
+                        hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI])
+                      }
                     >
                       <MissionsPage />
                     </RequireRoleAccess>

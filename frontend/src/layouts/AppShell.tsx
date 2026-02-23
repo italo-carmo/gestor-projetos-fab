@@ -103,7 +103,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { data: me } = useMe();
   const localitiesQuery = useLocalities();
   const currentRoleLabel = me?.roles?.[0]?.name ?? 'Sem papel';
-  const canUseGlobalLocalityFilter = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP]);
+  const canUseGlobalLocalityFilter = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI]);
   const availableGlobalLocalities = useMemo(
     () =>
       ((localitiesQuery.data?.items ?? []) as any[])
@@ -147,7 +147,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       return isBiRole && can(me, 'dashboard', 'view');
     }
     if (item.to === '/missions') {
-      return hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP]);
+      return hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI]);
     }
     if (item.to === '/audit') {
       return hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]);
@@ -195,17 +195,25 @@ export function AppShell({ children }: { children: ReactNode }) {
   });
 
   useEffect(() => {
-    if (!canUseGlobalLocalityFilter) return;
-    const stored = localStorage.getItem(GLOBAL_LOCALITY_STORAGE_KEY)?.trim() ?? '';
-    const fromUrl = searchParams.get('localityId') ?? '';
+    const fromUrl = (searchParams.get('localityId') ?? '').trim();
+
+    if (!canUseGlobalLocalityFilter) {
+      localStorage.removeItem(GLOBAL_LOCALITY_STORAGE_KEY);
+      if (fromUrl) {
+        const next = new URLSearchParams(searchParams);
+        next.delete('localityId');
+        setSearchParams(next, { replace: true });
+      }
+      return;
+    }
+
     if (fromUrl) {
       localStorage.setItem(GLOBAL_LOCALITY_STORAGE_KEY, fromUrl);
       return;
     }
-    if (!stored) return;
-    const next = new URLSearchParams(searchParams);
-    next.set('localityId', stored);
-    setSearchParams(next, { replace: true });
+
+    // Sem valor na URL => sem filtro global ativo (evita filtro "fantasma" por localStorage antigo).
+    localStorage.removeItem(GLOBAL_LOCALITY_STORAGE_KEY);
   }, [canUseGlobalLocalityFilter, searchParams, setSearchParams]);
 
   const drawer = useMemo(
@@ -441,7 +449,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               }}
               sx={{ minWidth: 220, display: { xs: 'none', md: 'inline-flex' } }}
             >
-              <MenuItem value="">Brasil</MenuItem>
+              <MenuItem value="">Sem filtro</MenuItem>
               {availableGlobalLocalities.map((locality) => (
                 <MenuItem key={locality.id} value={locality.id}>
                   {locality.name}

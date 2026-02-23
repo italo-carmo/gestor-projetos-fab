@@ -7,7 +7,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { throwError } from '../common/http-error';
 import { AuditService } from '../audit/audit.service';
 import type { RbacUser } from '../rbac/rbac.types';
-import { hasAnyRole, ROLE_COMANDANTE_COMGEP, ROLE_COORDENACAO_CIPAVD } from '../rbac/role-access';
+import { hasAnyRole, ROLE_COMANDANTE_COMGEP, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from '../rbac/role-access';
 import { sanitizeText } from '../common/sanitize';
 import { parsePagination } from '../common/pagination';
 import { FabLdapService } from '../ldap/fab-ldap.service';
@@ -660,7 +660,7 @@ export class MissionsService {
   }
 
   private assertMissionAccess(user?: RbacUser) {
-    if (hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP])) {
+    if (hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI])) {
       return;
     }
     throwError('RBAC_FORBIDDEN');
