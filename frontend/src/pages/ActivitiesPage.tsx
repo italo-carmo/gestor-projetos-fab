@@ -22,7 +22,7 @@ import {
   Typography,
 } from '@mui/material';
 import PhotoCameraOutlinedIcon from '@mui/icons-material/PhotoCameraOutlined';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   useActivityComments,
@@ -39,6 +39,7 @@ import {
   useLocalities,
   useMe,
   useSpecialties,
+  useUsers,
   useSignActivityReport,
   useMarkActivityCommentsSeen,
   useUpdateActivityScheduleItem,
@@ -96,6 +97,17 @@ export function ActivitiesPage() {
   const localities = localitiesData?.items ?? [];
   const { data: specialtiesData } = useSpecialties();
   const specialties = specialtiesData?.items ?? [];
+  const usersQuery = useUsers();
+  const allUsers = usersQuery.data?.items ?? [];
+
+  const selectableLocalities = useMemo(
+    () =>
+      localities.filter(
+        (locality: any) =>
+          String(locality?.id ?? '').trim() && String(locality?.name ?? '').trim(),
+      ),
+    [localities],
+  );
 
   const activitiesQuery = useActivities({
     status: statusFilter || undefined,
@@ -154,6 +166,14 @@ export function ActivitiesPage() {
   }, [localityFilter, localityIdFromUrl]);
 
   useEffect(() => {
+    if (!localityFilter) return;
+    const exists = selectableLocalities.some((locality: any) => locality.id === localityFilter);
+    if (!exists) {
+      setLocalityFilter('');
+    }
+  }, [localityFilter, selectableLocalities]);
+
+  useEffect(() => {
     if (!activityIdFromUrl) return;
     if (activityIdFromUrl !== selectedId) {
       setSelectedId(activityIdFromUrl);
@@ -172,6 +192,7 @@ export function ActivitiesPage() {
     description: '',
     localityId: '',
     specialtyId: '',
+    responsibleUserId: '',
     eventDate: '',
     reportRequired: false,
   });
@@ -183,6 +204,7 @@ export function ActivitiesPage() {
       description: selected.description ?? '',
       localityId: selected.localityId ?? '',
       specialtyId: selected.specialtyId ?? '',
+      responsibleUserId: selected.responsibleUsers?.[0]?.id ?? '',
       eventDate: selected.eventDate ? String(selected.eventDate).slice(0, 10) : '',
       reportRequired: Boolean(selected.reportRequired),
     });
@@ -225,6 +247,26 @@ export function ActivitiesPage() {
   const canUpload = can(me, 'reports', 'upload');
   const canDownload = can(me, 'reports', 'download');
 
+  const responsibleOptions = useMemo(() => {
+    const filtered = allUsers.filter((user: any) => {
+      if (!String(user?.id ?? '').trim() || !String(user?.name ?? '').trim()) return false;
+      if (activityForm.localityId && user.localityId && user.localityId !== activityForm.localityId) return false;
+      if (activityForm.specialtyId && user.specialtyId && user.specialtyId !== activityForm.specialtyId) return false;
+      return true;
+    });
+
+    const selectedResponsible = selected?.responsibleUsers?.[0];
+    if (
+      selectedResponsible?.id &&
+      selectedResponsible?.name &&
+      !filtered.some((user: any) => user.id === selectedResponsible.id)
+    ) {
+      filtered.push({ id: selectedResponsible.id, name: selectedResponsible.name });
+    }
+
+    return filtered.sort((a: any, b: any) => String(a.name).localeCompare(String(b.name), 'pt-BR'));
+  }, [activityForm.localityId, activityForm.specialtyId, allUsers, selected?.responsibleUsers]);
+
   const handleCreate = async () => {
     if (!activityForm.title.trim()) {
       toast.push({ message: 'Informe o título da atividade', severity: 'warning' });
@@ -236,6 +278,7 @@ export function ActivitiesPage() {
         description: activityForm.description || null,
         localityId: activityForm.localityId || null,
         specialtyId: activityForm.specialtyId || null,
+        responsibleUserIds: activityForm.responsibleUserId ? [activityForm.responsibleUserId] : [],
         eventDate: activityForm.eventDate || null,
         reportRequired: activityForm.reportRequired,
       });
@@ -258,6 +301,7 @@ export function ActivitiesPage() {
           description: activityForm.description || null,
           localityId: activityForm.localityId || null,
           specialtyId: activityForm.specialtyId || null,
+          responsibleUserIds: activityForm.responsibleUserId ? [activityForm.responsibleUserId] : [],
           eventDate: activityForm.eventDate || null,
           reportRequired: activityForm.reportRequired,
         },
@@ -464,6 +508,7 @@ export function ActivitiesPage() {
       description: '',
       localityId: '',
       specialtyId: '',
+      responsibleUserId: '',
       eventDate: '',
       reportRequired: false,
     });
@@ -522,7 +567,7 @@ export function ActivitiesPage() {
               sx={{ minWidth: 220 }}
             >
               <MenuItem value="">Todas</MenuItem>
-              {localities.map((l: any) => (
+              {selectableLocalities.map((l: any) => (
                 <MenuItem key={l.id} value={l.id}>
                   {l.name}
                 </MenuItem>
@@ -711,7 +756,7 @@ export function ActivitiesPage() {
                   sx={{ minWidth: 220 }}
                 >
                   <MenuItem value="">Não vinculada</MenuItem>
-                  {localities.map((l: any) => (
+                  {selectableLocalities.map((l: any) => (
                     <MenuItem key={l.id} value={l.id}>
                       {l.name}
                     </MenuItem>
@@ -729,6 +774,22 @@ export function ActivitiesPage() {
                   {specialties.map((s: any) => (
                     <MenuItem key={s.id} value={s.id}>
                       {s.name}
+                    </MenuItem>
+                  ))}
+                </TextField>
+                <TextField
+                  select
+                  size="small"
+                  label="Responsável"
+                  value={activityForm.responsibleUserId}
+                  onChange={(e) => setActivityForm({ ...activityForm, responsibleUserId: e.target.value })}
+                  sx={{ minWidth: 240 }}
+                  disabled={usersQuery.isLoading}
+                >
+                  <MenuItem value="">Sem responsável</MenuItem>
+                  {responsibleOptions.map((user: any) => (
+                    <MenuItem key={user.id} value={user.id}>
+                      {user.name}
                     </MenuItem>
                   ))}
                 </TextField>
@@ -752,6 +813,11 @@ export function ActivitiesPage() {
                 onChange={(e) => setActivityForm({ ...activityForm, description: e.target.value })}
                 sx={{ mt: 1 }}
               />
+              {usersQuery.isError && (
+                <Typography variant="caption" color="warning.main" sx={{ mt: 0.5, display: 'block' }}>
+                  Não foi possível carregar a lista completa de responsáveis no momento.
+                </Typography>
+              )}
 
               <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
                 <TextField

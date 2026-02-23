@@ -28,7 +28,7 @@ export function CalendarPage() {
   const localities = (dashboardQuery.data?.items ?? []).map((loc: any) => ({
     id: loc.localityId,
     name: loc.localityName,
-  }));
+  })).filter((loc: any) => String(loc.id ?? '').trim() && String(loc.name ?? '').trim());
   const localityMap = new Map(localities.map((l: any) => [l.id, l.name]));
 
   const templateMap = new Map((templatesQuery.data?.items ?? []).map((t: any) => [t.id, t]));
@@ -121,7 +121,7 @@ export function CalendarPage() {
             <CalendarView
               events={events}
               onSelect={(id) => setSelectedTaskId(id)}
-              height={540}
+              height={500}
               date={year === new Date().getFullYear() ? new Date() : new Date(year, 0, 1)}
             />
           </Box>

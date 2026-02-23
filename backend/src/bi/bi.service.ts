@@ -62,6 +62,52 @@ const OM_PRIORITY: Record<string, number> = {
   EEAR: 4,
 };
 
+type SurveyQuestionDefinition = {
+  id: string;
+  label: string;
+  extractValues: (row: {
+    sufferedViolenceRaw: string | null;
+    violenceTypes: string[];
+    postoGraduacao: string | null;
+    om: string | null;
+    posto: string | null;
+    autodeclara: string | null;
+  }) => string[];
+};
+
+const SURVEY_QUESTION_DEFINITIONS: SurveyQuestionDefinition[] = [
+  {
+    id: 'suffered',
+    label: 'Voce ja sofreu violencia?',
+    extractValues: (row) => (row.sufferedViolenceRaw ? [row.sufferedViolenceRaw] : []),
+  },
+  {
+    id: 'violenceTypes',
+    label: 'Qual tipo de violencia voce sofreu?',
+    extractValues: (row) => row.violenceTypes ?? [],
+  },
+  {
+    id: 'postoGraduacao',
+    label: 'Posto / Graduacao',
+    extractValues: (row) => (row.postoGraduacao ? [row.postoGraduacao] : []),
+  },
+  {
+    id: 'mission',
+    label: 'OM / Missao',
+    extractValues: (row) => (row.om ? [row.om] : []),
+  },
+  {
+    id: 'posto',
+    label: 'Posto',
+    extractValues: (row) => (row.posto ? [row.posto] : []),
+  },
+  {
+    id: 'autodeclara',
+    label: 'Como voce se autodeclara?',
+    extractValues: (row) => (row.autodeclara ? [row.autodeclara] : []),
+  },
+];
+
 @Injectable()
 export class BiService {
   constructor(private readonly prisma: PrismaService) {}
@@ -215,6 +261,86 @@ export class BiService {
       page,
       pageSize,
       total,
+    };
+  }
+
+  async listQuestions(filters: SurveyFilters) {
+    const mission = filters.mission?.trim() || filters.om?.trim() || null;
+    const baseWhere = this.buildWhere(filters);
+    const where: Prisma.BiSurveyResponseWhereInput = mission
+      ? Object.keys(baseWhere).length > 0
+        ? { AND: [baseWhere, { om: mission }] }
+        : { om: mission }
+      : baseWhere;
+
+    const rows = await this.prisma.biSurveyResponse.findMany({
+      where,
+      select: {
+        sufferedViolenceRaw: true,
+        violenceTypes: true,
+        postoGraduacao: true,
+        om: true,
+        posto: true,
+        autodeclara: true,
+      },
+    });
+
+    const totalResponses = rows.length;
+
+    const items = SURVEY_QUESTION_DEFINITIONS.map((question) => {
+      const normalizedValuesByRow = rows.map((row) =>
+        question.extractValues(row).map((value) =>
+          this.normalizeQuestionAnswer(question.id, value),
+        ),
+      );
+
+      const answeredCount = normalizedValuesByRow.reduce((acc, rowValues) => {
+        const hasValue = rowValues.some((value) => value.length > 0);
+        return hasValue ? acc + 1 : acc;
+      }, 0);
+      const emptyCount = totalResponses - answeredCount;
+      const answerRatePercent =
+        totalResponses > 0
+          ? Number(((answeredCount / totalResponses) * 100).toFixed(2))
+          : 0;
+
+      const counter = new Map<string, number>();
+      for (const rowValues of normalizedValuesByRow) {
+        for (const value of rowValues) {
+          if (!value) continue;
+          counter.set(value, (counter.get(value) ?? 0) + 1);
+        }
+      }
+
+      const topAnswers = [...counter.entries()]
+        .sort((a, b) => {
+          if (b[1] !== a[1]) return b[1] - a[1];
+          return a[0].localeCompare(b[0], 'pt-BR');
+        })
+        .slice(0, 5)
+        .map(([label, count]) => ({
+          label,
+          count,
+          percent:
+            answeredCount > 0
+              ? Number(((count / answeredCount) * 100).toFixed(2))
+              : 0,
+        }));
+
+      return {
+        id: question.id,
+        label: question.label,
+        answeredCount,
+        emptyCount,
+        answerRatePercent,
+        topAnswers,
+      };
+    });
+
+    return {
+      mission,
+      totalResponses,
+      items,
     };
   }
 
@@ -691,6 +817,19 @@ export class BiService {
     const normalized = this.normalize(value ?? 'AND');
     if (normalized === 'OR') return 'OR';
     return 'AND';
+  }
+
+  private normalizeQuestionAnswer(questionId: string, rawValue: string) {
+    const value = String(rawValue ?? '').trim();
+    if (!value) return '';
+
+    if (questionId === 'suffered') {
+      const normalized = this.normalize(value);
+      if (['SIM', 'S', 'TRUE', 'YES'].includes(normalized)) return 'Sim';
+      if (['NAO', 'NÃO', 'N', 'FALSE', 'NO'].includes(normalized)) return 'Nao';
+    }
+
+    return value;
   }
 
   private extractRows(buffer: Buffer, format: BiImportFormat) {

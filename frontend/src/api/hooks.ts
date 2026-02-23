@@ -1418,6 +1418,16 @@ export function useBiSurveyResponses(filters: Record<string, any>) {
   });
 }
 
+export function useBiSurveyQuestions(filters: Record<string, any>, enabled = true) {
+  return useQuery({
+    queryKey: qk.biSurveyQuestions(filters),
+    queryFn: async () =>
+      (await api.get("/bi/surveys/questions", { params: filters })).data,
+    enabled,
+    staleTime: 10_000,
+  });
+}
+
 export function useBiSurveyImports(filters: Record<string, any>) {
   return useQuery({
     queryKey: qk.biSurveyImports(filters),

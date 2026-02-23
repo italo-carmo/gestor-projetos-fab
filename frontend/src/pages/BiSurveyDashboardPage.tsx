@@ -7,6 +7,7 @@ import {
   CardContent,
   Checkbox,
   Chip,
+  LinearProgress,
   MenuItem,
   Stack,
   Table,
@@ -38,6 +39,7 @@ import {
   useBiSurveyDashboard,
   useDeleteBiSurveyResponses,
   useBiSurveyImports,
+  useBiSurveyQuestions,
   useBiSurveyResponses,
   useImportBiSurvey,
 } from "../api/hooks";
@@ -137,6 +139,27 @@ type BiResponseRow = {
   sufferedViolenceRaw?: string | null;
   sufferedViolence?: boolean | null;
   violenceTypes?: string[];
+};
+
+type MissionQuestionAnswer = {
+  label: string;
+  count: number;
+  percent: number;
+};
+
+type MissionQuestionItem = {
+  id: string;
+  label: string;
+  answeredCount: number;
+  emptyCount: number;
+  answerRatePercent: number;
+  topAnswers: MissionQuestionAnswer[];
+};
+
+type MissionQuestionsResponse = {
+  mission: string | null;
+  totalResponses: number;
+  items: MissionQuestionItem[];
 };
 
 type PagedResponse<T> = {
@@ -297,6 +320,10 @@ export function BiSurveyDashboardPage() {
     page,
     pageSize: 25,
   });
+  const missionQuestionsQuery = useBiSurveyQuestions(
+    dashboardFilters,
+    Boolean(filters.mission),
+  );
   const importsQuery = useBiSurveyImports({ page: 1, pageSize: 6 });
   const importMutation = useImportBiSurvey();
   const deleteResponsesMutation = useDeleteBiSurveyResponses();
@@ -304,6 +331,9 @@ export function BiSurveyDashboardPage() {
   const dashboard = dashboardQuery.data as BiDashboardResponse | undefined;
   const responses = responsesQuery.data as
     | PagedResponse<BiResponseRow>
+    | undefined;
+  const missionQuestions = missionQuestionsQuery.data as
+    | MissionQuestionsResponse
     | undefined;
   const imports = importsQuery.data as
     | PagedResponse<{
@@ -585,6 +615,137 @@ export function BiSurveyDashboardPage() {
               sx={{ borderColor: alpha(BI_PALETTE.primaryMid, 0.4), color: BI_PALETTE.primaryMid }}
             />
           </Stack>
+        </CardContent>
+      </Card>
+
+      <Card
+        sx={{
+          mb: 2,
+          ...cardSx,
+          borderColor: alpha(BI_PALETTE.primaryDark, 0.28),
+          background: `linear-gradient(165deg, #FFFFFF 0%, ${alpha(BI_PALETTE.primarySoft, 0.08)} 100%)`,
+        }}
+      >
+        <CardContent>
+          <Stack
+            direction={{ xs: "column", md: "row" }}
+            justifyContent="space-between"
+            alignItems={{ md: "center" }}
+            gap={1}
+            mb={1}
+          >
+            <Typography variant="subtitle1" fontWeight={700}>
+              Perguntas da missão selecionada
+            </Typography>
+            <Chip
+              size="small"
+              variant="outlined"
+              label={
+                filters.mission
+                  ? `Missao: ${filters.mission}`
+                  : "Selecione uma missao no filtro"
+              }
+              sx={{
+                borderColor: alpha(BI_PALETTE.primary, 0.4),
+                color: BI_PALETTE.primaryDark,
+              }}
+            />
+          </Stack>
+
+          {!filters.mission ? (
+            <Alert severity="info" sx={{ mt: 0.8 }}>
+              Selecione uma missão para visualizar as perguntas e o nível de preenchimento desta base.
+            </Alert>
+          ) : missionQuestionsQuery.isLoading ? (
+            <Box sx={{ mt: 1 }}>
+              <Typography variant="body2" sx={{ color: BI_PALETTE.muted, mb: 0.8 }}>
+                Carregando perguntas da missão...
+              </Typography>
+              <LinearProgress />
+            </Box>
+          ) : missionQuestionsQuery.isError ? (
+            <Alert severity="error" sx={{ mt: 0.8 }}>
+              Não foi possível carregar as perguntas desta missão.
+            </Alert>
+          ) : (missionQuestions?.items.length ?? 0) === 0 ? (
+            <Alert severity="warning" sx={{ mt: 0.8 }}>
+              Sem perguntas encontradas para os filtros atuais.
+            </Alert>
+          ) : (
+            <Box
+              display="grid"
+              gridTemplateColumns={{ xs: "1fr", md: "repeat(2, minmax(0, 1fr))" }}
+              gap={1}
+              sx={{ mt: 1 }}
+            >
+              {(missionQuestions?.items ?? []).map((question) => (
+                <Box
+                  key={question.id}
+                  sx={{
+                    p: 1.2,
+                    borderRadius: 2,
+                    border: `1px solid ${alpha(BI_PALETTE.primary, 0.18)}`,
+                    bgcolor: "#FFFFFF",
+                  }}
+                >
+                  <Typography variant="body2" fontWeight={700} sx={{ mb: 0.8 }}>
+                    {question.label}
+                  </Typography>
+                  <LinearProgress
+                    variant="determinate"
+                    value={question.answerRatePercent}
+                    sx={{
+                      height: 8,
+                      borderRadius: 999,
+                      bgcolor: alpha(BI_PALETTE.primarySoft, 0.3),
+                      "& .MuiLinearProgress-bar": { bgcolor: BI_PALETTE.primaryMid },
+                    }}
+                  />
+                  <Stack direction="row" spacing={0.8} sx={{ mt: 0.8, mb: 0.6 }} flexWrap="wrap">
+                    <Chip
+                      size="small"
+                      label={`Respondidas: ${question.answeredCount}`}
+                      sx={{ bgcolor: alpha(BI_PALETTE.success, 0.15), color: BI_PALETTE.success }}
+                    />
+                    <Chip
+                      size="small"
+                      label={`Em branco: ${question.emptyCount}`}
+                      sx={{ bgcolor: alpha(BI_PALETTE.warning, 0.2), color: "#8E6200" }}
+                    />
+                    <Chip
+                      size="small"
+                      variant="outlined"
+                      label={`${question.answerRatePercent.toFixed(1)}% preenchimento`}
+                      sx={{
+                        borderColor: alpha(BI_PALETTE.primary, 0.28),
+                        color: BI_PALETTE.primaryDark,
+                      }}
+                    />
+                  </Stack>
+                  {question.topAnswers.length > 0 ? (
+                    <Stack direction="row" spacing={0.8} flexWrap="wrap">
+                      {question.topAnswers.slice(0, 3).map((answer) => (
+                        <Chip
+                          key={`${question.id}-${answer.label}`}
+                          size="small"
+                          variant="outlined"
+                          label={`${answer.label} (${answer.count})`}
+                          sx={{
+                            borderColor: alpha(BI_PALETTE.primaryMid, 0.36),
+                            color: BI_PALETTE.primaryMid,
+                          }}
+                        />
+                      ))}
+                    </Stack>
+                  ) : (
+                    <Typography variant="caption" sx={{ color: BI_PALETTE.muted }}>
+                      Sem respostas registradas nesta pergunta para o recorte atual.
+                    </Typography>
+                  )}
+                </Box>
+              ))}
+            </Box>
+          )}
         </CardContent>
       </Card>
 

@@ -100,6 +100,38 @@ export class BiController {
     });
   }
 
+  @Get('surveys/questions')
+  @RequirePermission('dashboard', 'view')
+  listQuestions(
+    @Query('from') from: string | undefined,
+    @Query('to') to: string | undefined,
+    @Query('mission') mission: string | undefined,
+    @Query('om') om: string | undefined,
+    @Query('posto') posto: string | undefined,
+    @Query('postoGraduacao') postoGraduacao: string | undefined,
+    @Query('autodeclara') autodeclara: string | undefined,
+    @Query('suffered') suffered: string | undefined,
+    @Query('violenceType') violenceType: string | undefined,
+    @Query('q') q: string | undefined,
+    @Query('combineMode') combineMode: string | undefined,
+    @CurrentUser() user: RbacUser,
+  ) {
+    this.assertBiAccess(user);
+    return this.bi.listQuestions({
+      from,
+      to,
+      mission,
+      om,
+      posto,
+      postoGraduacao,
+      autodeclara,
+      suffered,
+      violenceType,
+      q,
+      combineMode,
+    });
+  }
+
   @Get('surveys/imports')
   @RequirePermission('dashboard', 'view')
   listImports(

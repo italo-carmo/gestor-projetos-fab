@@ -67,21 +67,29 @@ function EventCard({ event }: { event: any }) {
     <Box
       sx={{
         px: 0.85,
-        py: 0.55,
+        py: 0.4,
         borderRadius: 1.2,
         border: `1px solid ${dotColor}`,
         bgcolor: bg,
-        display: 'inline-flex',
+        display: 'flex',
         flexDirection: 'column',
-        gap: 0.2,
-        maxWidth: '100%',
+        gap: 0.15,
+        width: '100%',
+        minWidth: 0,
       }}
     >
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.55, minWidth: 0 }}>
         <Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: dotColor, flex: '0 0 auto' }} />
         <Typography
           variant="caption"
-          sx={{ fontWeight: 700, lineHeight: 1.1, display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+          sx={{
+            fontWeight: 700,
+            lineHeight: 1.05,
+            display: 'block',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
         >
           {event.title}
         </Typography>
@@ -90,7 +98,7 @@ function EventCard({ event }: { event: any }) {
         <Typography
           variant="caption"
           sx={{
-            lineHeight: 1.05,
+            lineHeight: 1,
             opacity: 0.86,
             display: 'block',
             whiteSpace: 'nowrap',
@@ -108,7 +116,7 @@ function EventCard({ event }: { event: any }) {
 export function CalendarView({
   events,
   onSelect,
-  height = 540,
+  height = 500,
   date,
 }: {
   events: CalendarEventInput[];
@@ -133,6 +141,8 @@ export function CalendarView({
     <Box
       sx={{
         height,
+        width: '100%',
+        overflowX: 'hidden',
         '& .rbc-calendar': { fontFamily: 'inherit' },
         '& .rbc-toolbar': {
           flexWrap: 'wrap',
@@ -150,9 +160,9 @@ export function CalendarView({
         },
         '& .rbc-toolbar-label': { fontWeight: 800, fontSize: 16 },
         '& .rbc-header': {
-          padding: '7px 4px',
+          padding: '6px 2px',
           fontWeight: 700,
-          fontSize: 11,
+          fontSize: 10,
           color: '#234454',
           background: 'rgba(12, 101, 126, 0.05)',
         },
@@ -163,13 +173,15 @@ export function CalendarView({
         },
         '& .rbc-today': { backgroundColor: 'rgba(12, 101, 126, 0.08)' },
         '& .rbc-off-range-bg': { backgroundColor: '#F6FAFC' },
-        '& .rbc-date-cell': { padding: '2px 6px 1px' },
+        '& .rbc-date-cell': { padding: '2px 4px 1px', fontSize: 11 },
         '& .rbc-event': {
           borderRadius: 8,
           padding: 0,
-          minHeight: 28,
+          minHeight: 24,
           border: 'none',
           boxShadow: '0 5px 10px rgba(13, 42, 56, 0.1)',
+          width: '100%',
+          maxWidth: '100%',
         },
         '& .rbc-event:focus': { outline: '2px solid #0C657E' },
         '& .rbc-month-view .rbc-row-segment': {
@@ -177,8 +189,8 @@ export function CalendarView({
           paddingRight: 4,
         },
         '& .rbc-month-view .rbc-row-segment .rbc-event': {
-          display: 'inline-flex',
-          width: 'auto',
+          display: 'flex',
+          width: '100%',
           maxWidth: '100%',
           margin: '2px 0',
           boxShadow: 'none',
