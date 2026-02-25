@@ -486,7 +486,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 localStorage.setItem(ACTIVE_ROLE_STORAGE_KEY, nextRoleId);
                 window.location.reload();
               }}
-              sx={{ minWidth: 220, display: { xs: 'none', md: 'inline-flex' } }}
+              sx={{ minWidth: { xs: 150, md: 220 }, display: 'inline-flex' }}
             >
               {(me?.roles ?? []).map((role: any) => (
                 <MenuItem key={String(role.id)} value={String(role.id)}>
