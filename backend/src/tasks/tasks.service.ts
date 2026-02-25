@@ -603,15 +603,6 @@ export class TasksService {
       throwError('REPORT_REQUIRED');
     }
 
-    if (status === TaskStatus.IN_PROGRESS) {
-      const blocked = await this.hasBlockingDependencies(
-        instance.blockedByIdsJson as string[] | null | undefined,
-      );
-      if (blocked) {
-        throwError('TASK_BLOCKED');
-      }
-    }
-
     const progressPercent = this.applyProgressRules(
       status,
       instance.progressPercent,
@@ -1525,6 +1516,33 @@ export class TasksService {
     },
     user?: RbacUser,
   ) {
+    const allowedLocalityIds = await this.getTargetLocalityIds();
+    if (allowedLocalityIds.length === 0) {
+      return user?.executiveHidePii
+        ? sanitizeForExecutive({
+            progress: { overall: 0, byPhase: [], byLocality: [] },
+            localityAboveThreshold: [],
+            late: { total: 0, trend: [], items: [] },
+            unassigned: { total: 0, byCommand: [], byLocality: [], items: [] },
+            blocked: { total: 0, byLocality: [], items: [] },
+            leadTime: [],
+            reportsCompliance: { approved: 0, pending: 0, total: 0, pendingItems: [] },
+            recruits: { aggregate: [], byLocality: [] },
+            risk: { top10: [] },
+          })
+        : {
+            progress: { overall: 0, byPhase: [], byLocality: [] },
+            localityAboveThreshold: [],
+            late: { total: 0, trend: [], items: [] },
+            unassigned: { total: 0, byCommand: [], byLocality: [], items: [] },
+            blocked: { total: 0, byLocality: [], items: [] },
+            leadTime: [],
+            reportsCompliance: { approved: 0, pending: 0, total: 0, pendingItems: [] },
+            recruits: { aggregate: [], byLocality: [] },
+            risk: { top10: [] },
+          };
+    }
+
     const from = params.from
       ? new Date(params.from)
       : new Date(Date.now() - 56 * 24 * 60 * 60 * 1000);
@@ -1549,6 +1567,18 @@ export class TasksService {
       localityWhere.id = params.localityId;
     }
 
+    const taskWhereClauses: Prisma.TaskInstanceWhereInput[] = [
+      { localityId: { in: allowedLocalityIds } },
+      { createdAt: { gte: from, lte: to } },
+    ];
+    if (params.phaseId) {
+      taskWhereClauses.push({ taskTemplate: { phaseId: params.phaseId } });
+    }
+    const accessWhere = this.buildTaskAccessWhere(user, 'view');
+    if (Object.keys(accessWhere).length > 0) {
+      taskWhereClauses.push(accessWhere);
+    }
+
     const [localitiesRaw, tasks, phases, reports, recruitsHistory] =
       await this.prisma.$transaction([
         this.prisma.locality.findMany({
@@ -1556,12 +1586,7 @@ export class TasksService {
           orderBy: { name: 'asc' },
         }),
         this.prisma.taskInstance.findMany({
-          where: {
-            createdAt: { gte: from, lte: to },
-            ...(params.phaseId
-              ? { taskTemplate: { phaseId: params.phaseId } }
-              : {}),
-          },
+          where: { AND: taskWhereClauses },
           include: { taskTemplate: { include: { phase: true } } },
         }),
         this.prisma.phase.findMany({ orderBy: { order: 'asc' } }),
@@ -1926,12 +1951,6 @@ export class TasksService {
     const riskScores = localities.map((locality) => {
       const localityTasks = tasksByLocalityId.get(locality.id) ?? [];
       const late = localityTasks.filter((task) => this.isLate(task)).length;
-      const blocked = localityTasks.filter((task) =>
-        this.isBlocked(
-          task.blockedByIdsJson as string[] | null | undefined,
-          statusById,
-        ),
-      ).length;
       const unassignedCount = localityTasks.filter((task) =>
         this.isTaskUnassigned(task),
       ).length;
@@ -1941,8 +1960,7 @@ export class TasksService {
           task.status === TaskStatus.DONE &&
           !approvedReports.has(task.id),
       ).length;
-      const score =
-        late * 2 + blocked * 2 + unassignedCount + reportPending * 2;
+      const score = late * 2 + unassignedCount + reportPending * 2;
       return {
         localityId: locality.id,
         localityCode: locality.code,
@@ -1950,7 +1968,6 @@ export class TasksService {
         score,
         breakdown: {
           late,
-          blocked,
           unassigned: unassignedCount,
           reportPending,
         },

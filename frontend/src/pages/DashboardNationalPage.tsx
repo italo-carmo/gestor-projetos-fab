@@ -24,7 +24,6 @@ type NationalLocalityItem = {
   visitDate?: string | null;
   late: number;
   unassigned: number;
-  blocked: number;
 };
 type NationalTaskItem = {
   taskId: string;
@@ -34,7 +33,6 @@ type NationalTaskItem = {
   dueDate?: string | Date | null;
   status: string;
   isLate?: boolean;
-  isBlocked?: boolean;
 };
 
 export function DashboardNationalPage() {
@@ -51,7 +49,7 @@ export function DashboardNationalPage() {
   const smifLocalities = [...items]
     .sort((a, b) => a.localityName.localeCompare(b.localityName, 'pt-BR'))
     .slice(0, 8);
-  const totals = dashboardQuery.data?.totals ?? { late: 0, blocked: 0, unassigned: 0, recruitsFemale: 0, reportsProduced: 0 };
+  const totals = dashboardQuery.data?.totals ?? { late: 0, unassigned: 0, recruitsFemale: 0, reportsProduced: 0 };
   const lateItems = (dashboardQuery.data?.lateItems ?? []) as NationalTaskItem[];
   const unassignedItems = (dashboardQuery.data?.unassignedItems ?? []) as NationalTaskItem[];
   const riskTasks = ((dashboardQuery.data?.riskTasks ?? []) as NationalTaskItem[]).slice(0, 5);
@@ -118,7 +116,6 @@ export function DashboardNationalPage() {
           label={`Sem responsável: ${totals.unassigned}`}
           color={totals.unassigned > 0 ? 'warning' : 'default'}
         />
-        <Chip size="small" label={`Bloqueadas: ${totals.blocked}`} color={totals.blocked > 0 ? 'warning' : 'default'} />
       </Box>
       {detailView && (
         <Card sx={{ mt: 2 }}>
@@ -153,7 +150,7 @@ export function DashboardNationalPage() {
                         <DueBadge dueDate={task.dueDate} status={task.status} />
                       </TableCell>
                       <TableCell>
-                        <StatusChip status={task.status} isLate={task.isLate} blocked={task.isBlocked} />
+                        <StatusChip status={task.status} isLate={task.isLate} />
                       </TableCell>
                       <TableCell>
                         <Link to={`/tasks?taskId=${task.taskId}`}>Abrir tarefa</Link>
@@ -188,7 +185,6 @@ export function DashboardNationalPage() {
                         <TableCell sx={{ color: 'white', fontWeight: 600 }}>Visita</TableCell>
                         <TableCell sx={{ color: 'white', fontWeight: 600 }}>Atrasadas</TableCell>
                         <TableCell sx={{ color: 'white', fontWeight: 600 }}>Sem resp.</TableCell>
-                        <TableCell sx={{ color: 'white', fontWeight: 600 }}>Bloqueadas</TableCell>
                         <TableCell sx={{ color: 'white', fontWeight: 600 }}>Abrir</TableCell>
                       </TableRow>
                     </TableHead>
@@ -207,7 +203,6 @@ export function DashboardNationalPage() {
                           <TableCell>{loc.visitDate ? new Date(loc.visitDate).toLocaleDateString('pt-BR') : '—'}</TableCell>
                           <TableCell>{loc.late}</TableCell>
                           <TableCell>{loc.unassigned}</TableCell>
-                          <TableCell>{loc.blocked}</TableCell>
                           <TableCell>
                             <Link
                               to={`/dashboard/locality/${loc.localityId}`}
@@ -248,7 +243,7 @@ export function DashboardNationalPage() {
                       <CardContent>
                         <Typography variant="subtitle2">{task.title ?? 'Tarefa'}</Typography>
                         <Box display="flex" gap={1} flexWrap="wrap" mt={1}>
-                          <StatusChip status={task.status} isLate={task.isLate} blocked={task.isBlocked} />
+                          <StatusChip status={task.status} isLate={task.isLate} />
                           <DueBadge dueDate={task.dueDate} />
                           {task.localityCode && <Chip size="small" label={task.localityCode} variant="outlined" />}
                         </Box>

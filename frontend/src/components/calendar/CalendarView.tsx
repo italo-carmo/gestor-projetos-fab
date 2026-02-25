@@ -46,7 +46,7 @@ const STATUS_BG: Record<string, string> = {
   DONE: '#E8F5E9',
   IN_PROGRESS: '#E3F2FD',
   STARTED: '#E3F2FD',
-  BLOCKED: '#FFEBEE',
+  BLOCKED: '#E3F2FD',
   NOT_STARTED: '#ECEFF1',
 };
 
@@ -54,7 +54,7 @@ const STATUS_BORDER: Record<string, string> = {
   DONE: '#2E7D32',
   IN_PROGRESS: '#1565C0',
   STARTED: '#1565C0',
-  BLOCKED: '#C62828',
+  BLOCKED: '#1565C0',
   NOT_STARTED: '#607D8B',
 };
 

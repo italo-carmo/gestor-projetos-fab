@@ -30,7 +30,6 @@ type DetailView =
   | { type: 'progress' }
   | { type: 'late' }
   | { type: 'unassigned' }
-  | { type: 'blocked' }
   | { type: 'lateWeek'; week: string }
   | { type: 'threshold'; phaseId: string }
   | { type: 'leadTime'; phaseId: string }
@@ -85,7 +84,6 @@ export function DashboardExecutivePage() {
   const riskTop10 = data?.risk?.top10 ?? [];
   const lateItems = data?.late?.items ?? [];
   const unassignedItems = data?.unassigned?.items ?? [];
-  const blockedItems = data?.blocked?.items ?? [];
   const pendingReportItems = data?.reportsCompliance?.pendingItems ?? [];
   const trend = data?.late?.trend ?? [];
   const thresholdByPhase = data?.localityAboveThreshold ?? [];
@@ -94,12 +92,11 @@ export function DashboardExecutivePage() {
   const progressByLocality = data?.progress?.byLocality ?? [];
 
   const downloadCsv = () => {
-    const headers = ['localityCode', 'score', 'late', 'blocked', 'unassigned', 'reportPending'];
+    const headers = ['localityCode', 'score', 'late', 'unassigned', 'reportPending'];
     const rows = riskTop10.map((item: any) => [
       item.localityCode,
       item.score,
       item.breakdown?.late ?? 0,
-      item.breakdown?.blocked ?? 0,
       item.breakdown?.unassigned ?? 0,
       item.breakdown?.reportPending ?? 0,
     ]);
@@ -188,11 +185,6 @@ export function DashboardExecutivePage() {
     return lateItems.filter((item: any) => item.localityId === selectedRiskItem.localityId);
   }, [selectedRiskItem, lateItems]);
 
-  const riskLocalityBlockedItems = useMemo(() => {
-    if (!selectedRiskItem) return [];
-    return blockedItems.filter((item: any) => item.localityId === selectedRiskItem.localityId);
-  }, [selectedRiskItem, blockedItems]);
-
   const riskLocalityUnassignedItems = useMemo(() => {
     if (!selectedRiskItem) return [];
     return unassignedItems.filter((item: any) => item.localityId === selectedRiskItem.localityId);
@@ -208,7 +200,6 @@ export function DashboardExecutivePage() {
     const breakdown = selectedRiskItem.breakdown ?? {};
     const factors = [
       { key: 'late', label: 'Tarefas atrasadas', count: Number(breakdown.late ?? 0), weight: 2 },
-      { key: 'blocked', label: 'Tarefas bloqueadas', count: Number(breakdown.blocked ?? 0), weight: 2 },
       { key: 'unassigned', label: 'Sem responsável', count: Number(breakdown.unassigned ?? 0), weight: 1 },
       { key: 'reportPending', label: 'Relatórios pendentes', count: Number(breakdown.reportPending ?? 0), weight: 2 },
     ];
@@ -320,7 +311,7 @@ export function DashboardExecutivePage() {
         </CardContent>
       </Card>
 
-      <Box display="grid" gridTemplateColumns={{ xs: '1fr', md: 'repeat(4, 1fr)' }} gap={2} mb={2}>
+      <Box display="grid" gridTemplateColumns={{ xs: '1fr', md: 'repeat(3, 1fr)' }} gap={2} mb={2}>
         <Card
           sx={{ cursor: 'pointer' }}
           onClick={() => setDetailView({ type: 'progress' })}
@@ -354,18 +345,6 @@ export function DashboardExecutivePage() {
             <Typography variant="h4">{data.unassigned?.total ?? 0}</Typography>
             <Typography variant="caption" color="text.secondary">
               Clique para listar pendências
-            </Typography>
-          </CardContent>
-        </Card>
-        <Card
-          sx={{ cursor: 'pointer' }}
-          onClick={() => setDetailView({ type: 'blocked' })}
-        >
-          <CardContent>
-            <Typography variant="overline">Bloqueadas</Typography>
-            <Typography variant="h4">{data.blocked?.total ?? 0}</Typography>
-            <Typography variant="caption" color="text.secondary">
-              Clique para ver bloqueios
             </Typography>
           </CardContent>
         </Card>
@@ -489,7 +468,7 @@ export function DashboardExecutivePage() {
             <Box component="table" width="100%" sx={{ borderCollapse: 'collapse' }}>
               <Box component="thead">
                 <Box component="tr">
-                  {['Localidade', 'Score', 'Atraso', 'Bloqueadas', 'Sem resp.', 'Relatório pend.'].map((header) => (
+                  {['Localidade', 'Score', 'Atraso', 'Sem resp.', 'Relatório pend.'].map((header) => (
                     <Box key={header} component="th" sx={{ textAlign: 'left', pb: 1 }}>
                       {header}
                     </Box>
@@ -518,9 +497,6 @@ export function DashboardExecutivePage() {
                       </Box>
                       <Box component="td" sx={{ py: 1 }}>
                         {item.breakdown?.late ?? 0}
-                      </Box>
-                      <Box component="td" sx={{ py: 1 }}>
-                        {item.breakdown?.blocked ?? 0}
                       </Box>
                       <Box component="td" sx={{ py: 1 }}>
                         {item.breakdown?.unassigned ?? 0}
@@ -656,25 +632,6 @@ export function DashboardExecutivePage() {
             </Stack>
           )}
 
-          {detailView?.type === 'blocked' && (
-            <Stack spacing={2}>
-              <Typography variant="subtitle1">Tarefas bloqueadas ({blockedItems.length})</Typography>
-              <Stack direction="row" spacing={1} flexWrap="wrap">
-                {(data.blocked?.byLocality ?? []).slice(0, 12).map((entry: any) => (
-                  <Chip key={entry.localityId} label={`${entry.localityCode || entry.localityName}: ${entry.count}`} />
-                ))}
-              </Stack>
-              <Divider />
-              {blockedItems.length === 0 ? (
-                <Typography variant="body2" color="text.secondary">
-                  Não há tarefas bloqueadas para os filtros atuais.
-                </Typography>
-              ) : (
-                renderTaskTable(blockedItems)
-              )}
-            </Stack>
-          )}
-
           {detailView?.type === 'lateWeek' && (
             <Stack spacing={2}>
               <Typography variant="subtitle1">
@@ -795,13 +752,12 @@ export function DashboardExecutivePage() {
               <Stack direction="row" spacing={1} flexWrap="wrap">
                 <Chip label={`Score: ${selectedRiskItem?.score ?? 0}`} color="warning" />
                 <Chip label={`Atraso: ${selectedRiskItem?.breakdown?.late ?? 0}`} />
-                <Chip label={`Bloqueadas: ${selectedRiskItem?.breakdown?.blocked ?? 0}`} />
                 <Chip label={`Sem resp.: ${selectedRiskItem?.breakdown?.unassigned ?? 0}`} />
                 <Chip label={`Relatório pend.: ${selectedRiskItem?.breakdown?.reportPending ?? 0}`} />
                 {selectedRiskItem?.commandName && <Chip label={`Comando: ${selectedRiskItem.commandName}`} variant="outlined" />}
               </Stack>
               <Typography variant="body2" color="text.secondary">
-                Motivo da posição: o score soma o volume de pendências, com peso maior para atrasos, bloqueios e relatórios pendentes.
+                Motivo da posição: o score soma o volume de pendências, com peso maior para atrasos e relatórios pendentes.
               </Typography>
               <Table size="small">
                 <TableHead>
@@ -835,14 +791,6 @@ export function DashboardExecutivePage() {
                 </Typography>
               ) : (
                 renderTaskTable(riskLocalityLateItems)
-              )}
-              <Typography variant="subtitle2">Bloqueadas ({riskLocalityBlockedItems.length})</Typography>
-              {riskLocalityBlockedItems.length === 0 ? (
-                <Typography variant="body2" color="text.secondary">
-                  Nenhuma tarefa bloqueada para os filtros atuais.
-                </Typography>
-              ) : (
-                renderTaskTable(riskLocalityBlockedItems)
               )}
               <Typography variant="subtitle2">Sem responsável ({riskLocalityUnassignedItems.length})</Typography>
               {riskLocalityUnassignedItems.length === 0 ? (

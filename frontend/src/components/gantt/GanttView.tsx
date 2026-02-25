@@ -15,7 +15,7 @@ const STATUS_COLORS: Record<string, { bg: string; progress: string }> = {
   IN_PROGRESS: { bg: '#0B4DA1', progress: '#4F7BC2' },
   STARTED: { bg: '#0B4DA1', progress: '#4F7BC2' },
   NOT_STARTED: { bg: '#78909C', progress: '#90A4AE' },
-  BLOCKED: { bg: '#C62828', progress: '#EF5350' },
+  BLOCKED: { bg: '#0B4DA1', progress: '#4F7BC2' },
   LATE: { bg: '#E65100', progress: '#FF9800' },
 };
 

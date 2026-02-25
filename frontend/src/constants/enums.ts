@@ -3,7 +3,6 @@ export const TaskStatus = [
   'STARTED',
   'IN_PROGRESS',
   'DONE',
-  'BLOCKED',
 ] as const;
 
 /** Rótulos em português para exibição nos selects de status */
@@ -11,7 +10,7 @@ export const TASK_STATUS_LABELS: Record<string, string> = {
   NOT_STARTED: 'Não iniciada',
   STARTED: 'Iniciada',
   IN_PROGRESS: 'Em andamento',
-  BLOCKED: 'Bloqueada',
+  BLOCKED: 'Em andamento',
   DONE: 'Concluída',
 };
 

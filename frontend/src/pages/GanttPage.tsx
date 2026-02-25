@@ -165,7 +165,7 @@ export function GanttPage() {
             onChange={(e) => updateParam('status', e.target.value)}
           >
             <MenuItem value="">Todos</MenuItem>
-            {['NOT_STARTED', 'STARTED', 'IN_PROGRESS', 'BLOCKED', 'DONE'].map((s) => (
+            {['NOT_STARTED', 'STARTED', 'IN_PROGRESS', 'DONE'].map((s) => (
               <MenuItem key={s} value={s}>
                 {TASK_STATUS_LABELS[s] ?? s}
               </MenuItem>

@@ -1,4 +1,4 @@
-import { Box, Button, MenuItem, Stack, TextField } from '@mui/material';
+import { Box, Button, MenuItem, TextField } from '@mui/material';
 import { TASK_STATUS_LABELS } from '../../constants/enums';
 
 export type FiltersBarProps = {
@@ -58,7 +58,16 @@ export function FiltersBar(props: FiltersBarProps) {
     (Array.isArray(value) ? value : value.split(',')).map((entry) => entry.trim()).filter(Boolean);
 
   return (
-    <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems="center" flexWrap="wrap">
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: { xs: 'column', md: 'row' },
+        flexWrap: 'wrap',
+        alignItems: { xs: 'stretch', md: 'flex-end' },
+        columnGap: 2,
+        rowGap: 2,
+      }}
+    >
       {onSearchChange && (
         <TextField
           size="small"
@@ -116,7 +125,7 @@ export function FiltersBar(props: FiltersBarProps) {
           SelectProps={{ inputProps: { 'data-testid': 'filter-status' } }}
         >
           <MenuItem value="">Todos</MenuItem>
-          {['NOT_STARTED', 'STARTED', 'IN_PROGRESS', 'BLOCKED', 'DONE'].map((s) => (
+          {['NOT_STARTED', 'STARTED', 'IN_PROGRESS', 'DONE'].map((s) => (
             <MenuItem key={s} value={s}>
               {TASK_STATUS_LABELS[s] ?? s}
             </MenuItem>
@@ -211,6 +220,6 @@ export function FiltersBar(props: FiltersBarProps) {
           Limpar
         </Button>
       )}
-    </Stack>
+    </Box>
   );
 }

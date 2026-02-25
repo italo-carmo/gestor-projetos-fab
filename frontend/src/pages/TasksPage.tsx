@@ -334,7 +334,7 @@ export function TasksPage() {
                   sx={{ minWidth: 160 }}
                 >
                   <MenuItem value="">-</MenuItem>
-                  {['NOT_STARTED', 'STARTED', 'IN_PROGRESS', 'BLOCKED', 'DONE'].map((s) => (
+                  {['NOT_STARTED', 'STARTED', 'IN_PROGRESS', 'DONE'].map((s) => (
                     <MenuItem key={s} value={s}>
                       {TASK_STATUS_LABELS[s] ?? s}
                     </MenuItem>
@@ -465,7 +465,6 @@ export function TasksPage() {
                       <StatusChip
                         status={params.row.status}
                         isLate={params.row.isLate}
-                        blocked={params.row.blockedByIds?.length > 0}
                       />
                     ),
                   },
@@ -535,7 +534,7 @@ export function TasksPage() {
           }}
           gap={2}
         >
-          {['NOT_STARTED', 'STARTED', 'IN_PROGRESS', 'BLOCKED', 'DONE'].map((column) => (
+          {['NOT_STARTED', 'STARTED', 'IN_PROGRESS', 'DONE'].map((column) => (
             <Card key={column}>
               <CardContent>
                 <Typography variant="h6" gutterBottom>

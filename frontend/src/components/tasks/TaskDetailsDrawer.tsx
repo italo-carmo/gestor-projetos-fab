@@ -314,7 +314,7 @@ export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, locali
             <Stack spacing={1}>
               <Typography variant="h5">{taskTitleDraft.trim() || resolveTaskTitle(task)}</Typography>
               <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-                <StatusChip status={task.status} isLate={task.isLate} blocked={task.blockedByIds?.length > 0} />
+                <StatusChip status={task.status} isLate={task.isLate} />
                 <DueBadge dueDate={task.dueDate} status={task.status} />
               </Stack>
               {reportRequiredLabel && (
@@ -497,9 +497,6 @@ export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, locali
                 <Stack direction="row" spacing={1}>
                   <Button variant="outlined" onClick={() => handleStatus('IN_PROGRESS')} disabled={!canManageTaskData}>
                     Iniciar
-                  </Button>
-                  <Button variant="outlined" onClick={() => handleStatus('BLOCKED')} disabled={!canManageTaskData}>
-                    Bloquear
                   </Button>
                   <Button variant="contained" onClick={() => handleStatus('DONE')} disabled={!canManageTaskData} data-testid="task-mark-done">
                     Concluir
