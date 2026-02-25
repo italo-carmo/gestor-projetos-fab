@@ -7,6 +7,8 @@ export const ROLE_GSD_LOCALIDADE = 'GSD Localidade';
 
 type MePayload = {
   roles?: Array<{ id?: string; name?: string }>;
+  activeRole?: { id?: string; name?: string } | null;
+  activeRoleId?: string | null;
   permissions?: Array<{ resource: string; action: string; scope?: string }>;
 };
 
@@ -19,8 +21,12 @@ export function normalizeRoleName(roleName: string | null | undefined) {
 }
 
 export function hasRole(user: MePayload | undefined, roleName: string) {
-  if (!user?.roles) return false;
   const expected = normalizeRoleName(roleName);
+  const activeRoleName = user?.activeRole?.name;
+  if (activeRoleName) {
+    return normalizeRoleName(activeRoleName) === expected;
+  }
+  if (!user?.roles) return false;
   return user.roles.some((role) => normalizeRoleName(role.name) === expected);
 }
 

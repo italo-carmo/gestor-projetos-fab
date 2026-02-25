@@ -428,14 +428,17 @@ export class ElosService {
     }
 
     await this.prisma.userRole.upsert({
-      where: { userId },
+      where: {
+        userId_roleId: {
+          userId,
+          roleId: commissionRole.id,
+        },
+      },
       create: {
         userId,
         roleId: commissionRole.id,
       },
-      update: {
-        roleId: commissionRole.id,
-      },
+      update: {},
     });
 
     await this.audit.log({
@@ -512,11 +515,14 @@ export class ElosService {
     }
 
     const commissionRole = await this.getCommissionRoleOrFail();
-    const membership = await this.prisma.userRole.findUnique({
-      where: { userId },
-      select: { roleId: true },
+    const membership = await this.prisma.userRole.findFirst({
+      where: {
+        userId,
+        roleId: commissionRole.id,
+      },
+      select: { id: true },
     });
-    if (!membership || membership.roleId !== commissionRole.id) {
+    if (!membership) {
       throwError('NOT_FOUND');
     }
 

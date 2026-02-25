@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useToast } from '../app/toast';
 import { parseApiError } from '../app/apiErrors';
 import { resolveHomePath } from '../app/roleAccess';
-import { api } from '../api/client';
+import { ACTIVE_ROLE_STORAGE_KEY, api } from '../api/client';
 import { useLogin } from '../api/hooks';
 
 export function LoginPage() {
@@ -23,6 +23,7 @@ export function LoginPage() {
       const data = await loginMutation.mutateAsync({ login: normalizedLogin, password });
       if (data?.accessToken) localStorage.setItem('accessToken', data.accessToken);
       if (data?.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
+      localStorage.removeItem(ACTIVE_ROLE_STORAGE_KEY);
       const me = (await api.get('/auth/me')).data;
       toast.push({ message: 'Login realizado', severity: 'success' });
       navigate(resolveHomePath(me));

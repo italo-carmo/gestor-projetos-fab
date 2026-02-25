@@ -1,4 +1,4 @@
-import { IsOptional, IsString, MinLength, ValidateIf } from 'class-validator';
+import { IsArray, IsOptional, IsString, MinLength, ValidateIf } from 'class-validator';
 
 export class UpdateUserDto {
   @IsOptional()
@@ -24,4 +24,11 @@ export class UpdateUserDto {
   @IsString()
   @MinLength(3)
   roleId?: string | null;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateIf((_o, v) => v != null)
+  @IsString({ each: true })
+  @MinLength(3, { each: true })
+  roleIds?: string[];
 }

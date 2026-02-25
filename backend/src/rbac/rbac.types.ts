@@ -1,5 +1,14 @@
 import { PermissionScope } from '@prisma/client';
 
+export type RbacRole = {
+  id: string;
+  name: string;
+  wildcard: boolean;
+  permissions: { resource: string; action: string; scope: PermissionScope }[];
+  constraintsTemplateJson?: Record<string, unknown> | null;
+  flagsJson?: Record<string, unknown> | null;
+};
+
 export type PermissionRequirement = {
   resource: string;
   action: string;
@@ -16,12 +25,7 @@ export type RbacUser = {
   executiveHidePii: boolean;
   permissions: { resource: string; action: string; scope: PermissionScope }[];
   moduleAccessOverrides: { resource: string; enabled: boolean }[];
-  roles: {
-    id: string;
-    name: string;
-    wildcard: boolean;
-    permissions: { resource: string; action: string; scope: PermissionScope }[];
-    constraintsTemplateJson?: Record<string, unknown> | null;
-    flagsJson?: Record<string, unknown> | null;
-  }[];
+  roles: RbacRole[];
+  allRoles?: RbacRole[];
+  activeRoleId?: string | null;
 };

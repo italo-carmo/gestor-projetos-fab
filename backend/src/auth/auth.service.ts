@@ -149,8 +149,10 @@ export class AuthService {
     return { accessToken, refreshToken: newRefreshToken };
   }
 
-  async me(userId: string) {
-    const access = await this.rbac.getUserAccess(userId);
+  async me(userId: string, activeRoleId?: string) {
+    const access = await this.rbac.getUserAccess(userId, activeRoleId);
+    const allRoles = access.allRoles ?? access.roles;
+    const activeRole = access.roles[0] ?? null;
 
     return {
       id: access.id,
@@ -159,10 +161,17 @@ export class AuthService {
       localityId: access.localityId ?? null,
       executive_hide_pii: access.executiveHidePii,
       elo_role_id: access.eloRoleId ?? null,
-      roles: access.roles.map((role) => ({
+      roles: allRoles.map((role) => ({
         id: role.id,
         name: role.name,
       })),
+      activeRoleId: activeRole?.id ?? null,
+      activeRole: activeRole
+        ? {
+            id: activeRole.id,
+            name: activeRole.name,
+          }
+        : null,
       permissions: access.permissions,
       scopes: [],
       flags: {

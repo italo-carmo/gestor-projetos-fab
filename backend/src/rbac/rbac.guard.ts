@@ -17,7 +17,11 @@ export class RbacGuard implements CanActivate {
       throwError('RBAC_FORBIDDEN');
     }
 
-    const access = await this.rbac.getUserAccess(userId);
+    const requestedRoleHeader = request.headers?.['x-active-role-id'];
+    const requestedRoleId = Array.isArray(requestedRoleHeader)
+      ? String(requestedRoleHeader[0] ?? '').trim()
+      : String(requestedRoleHeader ?? '').trim();
+    const access = await this.rbac.getUserAccess(userId, requestedRoleId || undefined);
     request.rbacUser = access;
 
     if (!requirement) {

@@ -25,6 +25,7 @@ export class UsersController {
       localityId: dto.localityId,
       specialtyId: dto.specialtyId,
       roleId: dto.roleId,
+      roleIds: dto.roleIds,
     });
   }
 

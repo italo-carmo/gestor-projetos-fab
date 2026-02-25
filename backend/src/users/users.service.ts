@@ -93,6 +93,7 @@ export class UsersService {
         eloRoleId: true,
         eloRole: { select: { id: true, code: true, name: true } },
         roles: {
+          orderBy: { role: { name: 'asc' } },
           select: {
             role: {
               select: {
@@ -114,6 +115,7 @@ export class UsersService {
       localityId?: string | null;
       specialtyId?: string | null;
       roleId?: string | null;
+      roleIds?: string[];
     },
   ) {
     const existingUser = await this.prisma.user.findUnique({
@@ -139,30 +141,54 @@ export class UsersService {
       throwError('NOT_FOUND');
     }
 
-    let targetRoleName: string | null = null;
-    if (payload.roleId !== undefined && payload.roleId !== null) {
-      const roleExists = await this.prisma.role.findUnique({
-        where: { id: payload.roleId },
-        select: { id: true, name: true },
-      });
-      if (!roleExists) {
-        throwError('NOT_FOUND');
+    const requestedRoleIdsRaw =
+      payload.roleIds !== undefined
+        ? payload.roleIds
+        : payload.roleId !== undefined
+          ? payload.roleId
+            ? [payload.roleId]
+            : []
+          : undefined;
+
+    let targetRoleNames: string[] = [];
+    let requestedRoleIds: string[] | undefined = undefined;
+    if (requestedRoleIdsRaw !== undefined) {
+      requestedRoleIds = Array.from(
+        new Set(
+          requestedRoleIdsRaw
+            .map((value) => String(value ?? '').trim())
+            .filter(Boolean),
+        ),
+      );
+
+      if (requestedRoleIds.length > 0) {
+        const roleRecords = await this.prisma.role.findMany({
+          where: { id: { in: requestedRoleIds } },
+          select: { id: true, name: true },
+        });
+        if (roleRecords.length !== requestedRoleIds.length) {
+          throwError('NOT_FOUND');
+        }
+        targetRoleNames = roleRecords.map((item) => item.name);
       }
-      targetRoleName = roleExists.name;
     } else {
-      targetRoleName = existingUser.roles[0]?.role?.name ?? null;
+      targetRoleNames = existingUser.roles.map((item) => item.role.name);
     }
 
     const targetLocalityId =
       payload.localityId !== undefined ? payload.localityId : existingUser.localityId;
-    if (roleRequiresLocality(targetRoleName) && !targetLocalityId) {
+    if (targetRoleNames.some((roleName) => roleRequiresLocality(roleName)) && !targetLocalityId) {
       throwError('USER_LOCAL_ROLE_REQUIRES_LOCALITY');
     }
     const targetSpecialtyId =
       payload.specialtyId !== undefined ? payload.specialtyId : existingUser.specialtyId;
     const targetEloRoleId =
       payload.eloRoleId !== undefined ? payload.eloRoleId : existingUser.eloRoleId;
-    if (roleRequiresSpecialty(targetRoleName) && !targetSpecialtyId && !targetEloRoleId) {
+    if (
+      targetRoleNames.some((roleName) => roleRequiresSpecialty(roleName)) &&
+      !targetSpecialtyId &&
+      !targetEloRoleId
+    ) {
       throwError('USER_SPECIALTY_ROLE_REQUIRES_SPECIALTY');
     }
 
@@ -179,17 +205,18 @@ export class UsersService {
         },
       });
 
-      if (payload.roleId !== undefined) {
+      if (requestedRoleIds !== undefined) {
         await tx.userRole.deleteMany({
           where: { userId: id },
         });
 
-        if (payload.roleId) {
-          await tx.userRole.create({
-            data: {
+        if (requestedRoleIds.length > 0) {
+          await tx.userRole.createMany({
+            data: requestedRoleIds.map((roleId) => ({
               userId: id,
-              roleId: payload.roleId,
-            },
+              roleId,
+            })),
+            skipDuplicates: true,
           });
         }
       }
@@ -207,6 +234,7 @@ export class UsersService {
         eloRoleId: true,
         eloRole: { select: { id: true, code: true, name: true } },
         roles: {
+          orderBy: { role: { name: 'asc' } },
           select: {
             role: {
               select: {

@@ -56,7 +56,7 @@ import {
   ROLE_TI,
 } from '../app/roleAccess';
 import { useLocalities, useMe, useSearch } from '../api/hooks';
-import { GLOBAL_LOCALITY_STORAGE_KEY } from '../api/client';
+import { ACTIVE_ROLE_STORAGE_KEY, GLOBAL_LOCALITY_STORAGE_KEY } from '../api/client';
 import { selectTargetLocalities } from '../constants/localities';
 import { MEETING_STATUS_LABELS, NOTICE_PRIORITY_LABELS } from '../constants/enums';
 
@@ -101,7 +101,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const { data: me } = useMe();
   const localitiesQuery = useLocalities();
-  const currentRoleLabel = me?.roles?.[0]?.name ?? 'Sem papel';
+  const currentRoleLabel = me?.activeRole?.name ?? me?.roles?.[0]?.name ?? 'Sem papel';
+  const activeRoleId = me?.activeRole?.id ?? me?.activeRoleId ?? me?.roles?.[0]?.id ?? '';
   const canUseGlobalLocalityFilter = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI]);
   const availableGlobalLocalities = useMemo(
     () =>
@@ -124,6 +125,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const handleLogout = () => {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
+    localStorage.removeItem(ACTIVE_ROLE_STORAGE_KEY);
     window.location.assign('/login');
   };
 
@@ -212,6 +214,24 @@ export function AppShell({ children }: { children: ReactNode }) {
     // Sem valor na URL => sem filtro global ativo (evita filtro "fantasma" por localStorage antigo).
     localStorage.removeItem(GLOBAL_LOCALITY_STORAGE_KEY);
   }, [canUseGlobalLocalityFilter, searchParams, setSearchParams]);
+
+  useEffect(() => {
+    const roles = (me?.roles ?? []) as Array<{ id?: string | null }>;
+    if (!roles.length) {
+      localStorage.removeItem(ACTIVE_ROLE_STORAGE_KEY);
+      return;
+    }
+    const roleIds = new Set(roles.map((role) => String(role.id ?? '').trim()).filter(Boolean));
+    const desiredRoleId = String(me?.activeRole?.id ?? me?.activeRoleId ?? roles[0]?.id ?? '').trim();
+    const storedRoleId = localStorage.getItem(ACTIVE_ROLE_STORAGE_KEY)?.trim() ?? '';
+
+    if (storedRoleId && !roleIds.has(storedRoleId)) {
+      localStorage.removeItem(ACTIVE_ROLE_STORAGE_KEY);
+    }
+    if (desiredRoleId && desiredRoleId !== storedRoleId) {
+      localStorage.setItem(ACTIVE_ROLE_STORAGE_KEY, desiredRoleId);
+    }
+  }, [me]);
 
   const drawer = useMemo(
     () => (
@@ -450,6 +470,27 @@ export function AppShell({ children }: { children: ReactNode }) {
               {availableGlobalLocalities.map((locality) => (
                 <MenuItem key={locality.id} value={locality.id}>
                   {locality.name}
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
+          {(me?.roles?.length ?? 0) > 1 && (
+            <TextField
+              select
+              size="small"
+              label="Papel ativo"
+              value={activeRoleId}
+              onChange={(event) => {
+                const nextRoleId = String(event.target.value ?? '').trim();
+                if (!nextRoleId) return;
+                localStorage.setItem(ACTIVE_ROLE_STORAGE_KEY, nextRoleId);
+                window.location.reload();
+              }}
+              sx={{ minWidth: 220, display: { xs: 'none', md: 'inline-flex' } }}
+            >
+              {(me?.roles ?? []).map((role: any) => (
+                <MenuItem key={String(role.id)} value={String(role.id)}>
+                  {String(role.name)}
                 </MenuItem>
               ))}
             </TextField>

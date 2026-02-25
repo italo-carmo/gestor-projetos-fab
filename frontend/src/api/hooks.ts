@@ -923,6 +923,7 @@ export function useUpdateUser() {
       localityId?: string | null;
       specialtyId?: string | null;
       roleId?: string | null;
+      roleIds?: string[];
     }) => {
       const { id, ...payload } = args;
       return (await api.patch(`/users/${id}`, payload)).data;
@@ -995,7 +996,8 @@ export function useUpsertLdapUser() {
   return useMutation({
     mutationFn: async (args: {
       uid: string;
-      roleId: string;
+      roleId?: string;
+      roleIds?: string[];
       localityId?: string | null;
       specialtyId?: string | null;
       eloRoleId?: string | null;

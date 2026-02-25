@@ -1,5 +1,5 @@
 import { Transform } from 'class-transformer';
-import { IsBoolean, IsOptional, IsString, MinLength, ValidateIf } from 'class-validator';
+import { IsArray, IsBoolean, IsOptional, IsString, MinLength, ValidateIf } from 'class-validator';
 
 const trimText = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim() : value;
@@ -17,9 +17,20 @@ export class UpsertLdapUserDto {
   uid!: string;
 
   @Transform(trimText)
+  @IsOptional()
+  @ValidateIf((_o, v) => v !== null && v !== undefined && String(v).trim().length > 0)
   @IsString()
   @MinLength(3)
-  roleId!: string;
+  roleId?: string;
+
+  @IsOptional()
+  @IsArray()
+  @Transform(({ value }: { value: unknown }) =>
+    Array.isArray(value) ? value.map((item) => String(item ?? '').trim()).filter(Boolean) : value,
+  )
+  @IsString({ each: true })
+  @MinLength(3, { each: true })
+  roleIds?: string[];
 
   @IsOptional()
   @IsBoolean()

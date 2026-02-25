@@ -3,6 +3,7 @@ import axios from "axios";
 const configuredBaseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim();
 const isLocalHostPattern = /^(https?:\/\/)?(localhost|127\.0\.0\.1|::1)(:\d+)?$/i;
 export const GLOBAL_LOCALITY_STORAGE_KEY = "globalLocalityId";
+export const ACTIVE_ROLE_STORAGE_KEY = "activeRoleId";
 
 const shouldForceRelativeApiBase = () => {
   if (typeof window === "undefined") return false;
@@ -49,6 +50,10 @@ const shouldAttachGlobalLocality = (url: string, method?: string) => {
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("accessToken");
   if (token) config.headers.Authorization = `Bearer ${token}`;
+  const activeRoleId = localStorage.getItem(ACTIVE_ROLE_STORAGE_KEY)?.trim();
+  if (activeRoleId) {
+    config.headers["x-active-role-id"] = activeRoleId;
+  }
 
   const localityId = resolveGlobalLocalityIdFromUrl();
   const url = String(config.url ?? "");

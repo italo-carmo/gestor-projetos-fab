@@ -22,7 +22,6 @@ import {
   Typography,
 } from '@mui/material';
 import EditRoundedIcon from '@mui/icons-material/EditRounded';
-import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import { can } from '../app/rbac';
 import {
   useLocalities,
@@ -108,7 +107,7 @@ export function AdminRbacPage() {
   const upsertLdapUser = useUpsertLdapUser();
 
   const [editingUser, setEditingUser] = useState<UserItem | null>(null);
-  const [editRoleId, setEditRoleId] = useState('');
+  const [editRoleIds, setEditRoleIds] = useState<string[]>([]);
   const [editLocalityId, setEditLocalityId] = useState('');
   const [editSpecialtyId, setEditSpecialtyId] = useState('');
   const [removeTarget, setRemoveTarget] = useState<{
@@ -119,7 +118,7 @@ export function AdminRbacPage() {
   } | null>(null);
 
   const [ldapUid, setLdapUid] = useState('');
-  const [ldapRoleId, setLdapRoleId] = useState('');
+  const [ldapRoleIds, setLdapRoleIds] = useState<string[]>([]);
   const [ldapLocalityId, setLdapLocalityId] = useState('');
   const [ldapSpecialtyId, setLdapSpecialtyId] = useState('');
   const [ldapPreview, setLdapPreview] = useState<LdapLookupResponse['user'] | null>(null);
@@ -164,24 +163,24 @@ export function AdminRbacPage() {
     () => new Map(specialties.map((specialty) => [specialty.id, specialty])),
     [specialties],
   );
-  const selectedEditRole = useMemo(
-    () => roles.find((role) => role.id === editRoleId) ?? null,
-    [editRoleId, roles],
+  const selectedEditRoles = useMemo(
+    () => roles.filter((role) => editRoleIds.includes(role.id)),
+    [editRoleIds, roles],
   );
-  const selectedLdapRole = useMemo(
-    () => roles.find((role) => role.id === ldapRoleId) ?? null,
-    [ldapRoleId, roles],
+  const selectedLdapRoles = useMemo(
+    () => roles.filter((role) => ldapRoleIds.includes(role.id)),
+    [ldapRoleIds, roles],
   );
-  const editRoleNeedsLocality = roleRequiresLocality(selectedEditRole?.name);
-  const ldapRoleNeedsLocality = roleRequiresLocality(selectedLdapRole?.name);
-  const editRoleNeedsSpecialty = roleRequiresSpecialty(selectedEditRole?.name);
-  const ldapRoleNeedsSpecialty = roleRequiresSpecialty(selectedLdapRole?.name);
+  const editRoleNeedsLocality = selectedEditRoles.some((role) => roleRequiresLocality(role.name));
+  const ldapRoleNeedsLocality = selectedLdapRoles.some((role) => roleRequiresLocality(role.name));
+  const editRoleNeedsSpecialty = selectedEditRoles.some((role) => roleRequiresSpecialty(role.name));
+  const ldapRoleNeedsSpecialty = selectedLdapRoles.some((role) => roleRequiresSpecialty(role.name));
   const filteredUsers = useMemo(() => {
     const nameTerm = nameFilter.trim().toLowerCase();
     const cpfTerm = cpfFilter.trim().toLowerCase();
 
     return users.filter((user) => {
-      const role = getUserRoles(user)[0] ?? null;
+      const rolesByUser = getUserRoles(user);
 
       if (nameTerm && !String(user.name ?? '').toLowerCase().includes(nameTerm)) {
         return false;
@@ -191,7 +190,7 @@ export function AdminRbacPage() {
         return false;
       }
 
-      if (roleFilterId && role?.id !== roleFilterId) {
+      if (roleFilterId && !rolesByUser.some((role) => role.id === roleFilterId)) {
         return false;
       }
 
@@ -206,17 +205,17 @@ export function AdminRbacPage() {
   }, [cpfFilter, localityFilterId, nameFilter, roleFilterId, users]);
 
   const openEditModal = (user: UserItem) => {
-    const primaryRole = getUserRoles(user)[0];
+    const rolesByUser = getUserRoles(user);
     setEditingUser(user);
-    setEditRoleId(primaryRole?.id ?? '');
+    setEditRoleIds(rolesByUser.map((role) => role.id));
     setEditLocalityId(user.localityId ?? '');
     setEditSpecialtyId(user.specialtyId ?? '');
   };
 
   const handleSaveUser = async () => {
     if (!editingUser) return;
-    if (!editRoleId) {
-      toast.push({ message: 'Selecione um papel para salvar.', severity: 'warning' });
+    if (editRoleIds.length === 0) {
+      toast.push({ message: 'Selecione ao menos um papel para salvar.', severity: 'warning' });
       return;
     }
     if (editRoleNeedsLocality && !editLocalityId) {
@@ -237,7 +236,7 @@ export function AdminRbacPage() {
     try {
       await updateUser.mutateAsync({
         id: editingUser.id,
-        roleId: editRoleId,
+        roleIds: editRoleIds,
         localityId: editLocalityId || null,
         specialtyId: editSpecialtyId || null,
       });
@@ -297,8 +296,8 @@ export function AdminRbacPage() {
       toast.push({ message: 'Busque o usuário no LDAP antes de salvar.', severity: 'warning' });
       return;
     }
-    if (!ldapRoleId) {
-      toast.push({ message: 'Selecione o papel do usuário.', severity: 'warning' });
+    if (ldapRoleIds.length === 0) {
+      toast.push({ message: 'Selecione ao menos um papel do usuário.', severity: 'warning' });
       return;
     }
     if (ldapRoleNeedsLocality && !ldapLocalityId) {
@@ -319,14 +318,14 @@ export function AdminRbacPage() {
     try {
       await upsertLdapUser.mutateAsync({
         uid: ldapPreview.uid,
-        roleId: ldapRoleId,
+        roleIds: ldapRoleIds,
         localityId: ldapLocalityId || null,
         specialtyId: ldapSpecialtyId || null,
-        replaceExistingRoles: true,
+        replaceExistingRoles: false,
       });
       toast.push({ message: 'Usuário LDAP vinculado com sucesso.', severity: 'success' });
       setLdapUid('');
-      setLdapRoleId('');
+      setLdapRoleIds([]);
       setLdapLocalityId('');
       setLdapSpecialtyId('');
       setLdapPreview(null);
@@ -403,13 +402,24 @@ export function AdminRbacPage() {
               <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.2}>
                 <TextField
                   select
+                  SelectProps={{
+                    multiple: true,
+                    renderValue: (selected) =>
+                      (selected as string[])
+                        .map((id) => roles.find((role) => role.id === id)?.name ?? id)
+                        .join(', '),
+                  }}
                   size="small"
-                  label="Papel"
-                  value={ldapRoleId}
-                  onChange={(event) => setLdapRoleId(event.target.value)}
+                  label="Papéis"
+                  value={ldapRoleIds}
+                  onChange={(event) => {
+                    const next = event.target.value;
+                    setLdapRoleIds(
+                      Array.isArray(next) ? next.map((value) => String(value)) : [],
+                    );
+                  }}
                   sx={{ minWidth: 230 }}
                 >
-                  <MenuItem value="">Selecionar</MenuItem>
                   {roles.map((role) => (
                     <MenuItem key={role.id} value={role.id}>
                       {role.name}
@@ -473,7 +483,7 @@ export function AdminRbacPage() {
                   disabled={
                     upsertLdapUser.isPending ||
                     !ldapPreview ||
-                    !ldapRoleId ||
+                    ldapRoleIds.length === 0 ||
                     (ldapRoleNeedsLocality && !ldapLocalityId) ||
                     (ldapRoleNeedsSpecialty && !ldapSpecialtyId)
                   }
@@ -584,7 +594,6 @@ export function AdminRbacPage() {
                   )}
                   {filteredUsers.map((user) => {
                     const rolesByUser = getUserRoles(user);
-                    const primaryRole = rolesByUser[0];
                     const localityName = user.localityId
                       ? (localityById.get(user.localityId)?.name ?? user.localityId)
                       : 'Sem localidade';
@@ -601,42 +610,40 @@ export function AdminRbacPage() {
                         </TableCell>
                         <TableCell>{user.ldapUid || user.email}</TableCell>
                         <TableCell>
-                          <Chip
-                            size="small"
-                            label={primaryRole?.name ?? '-'}
-                            color="primary"
-                            variant="filled"
-                          />
+                          <Stack direction="row" spacing={0.6} useFlexGap flexWrap="wrap">
+                            {rolesByUser.map((role) => (
+                              <Chip
+                                key={`${user.id}:${role.id}`}
+                                size="small"
+                                label={role.name}
+                                color="primary"
+                                variant="filled"
+                                onDelete={
+                                  canUpdateUsers
+                                    ? () =>
+                                        setRemoveTarget({
+                                          userId: user.id,
+                                          userName: user.name,
+                                          roleId: role.id,
+                                          roleName: role.name,
+                                        })
+                                    : undefined
+                                }
+                              />
+                            ))}
+                          </Stack>
                         </TableCell>
                         <TableCell>{localityName}</TableCell>
                         <TableCell>{specialtyName}</TableCell>
                         <TableCell>
-                          <Stack direction="row" spacing={0.2}>
-                            <IconButton
-                              size="small"
-                              color="primary"
-                              disabled={!canUpdateUsers}
-                              onClick={() => openEditModal(user)}
-                            >
-                              <EditRoundedIcon fontSize="small" />
-                            </IconButton>
-                            <IconButton
-                              size="small"
-                              color="error"
-                              disabled={!canUpdateUsers || !primaryRole?.id}
-                              onClick={() => {
-                                if (!primaryRole?.id) return;
-                                setRemoveTarget({
-                                  userId: user.id,
-                                  userName: user.name,
-                                  roleId: primaryRole.id,
-                                  roleName: primaryRole.name,
-                                });
-                              }}
-                            >
-                              <DeleteOutlineRoundedIcon fontSize="small" />
-                            </IconButton>
-                          </Stack>
+                          <IconButton
+                            size="small"
+                            color="primary"
+                            disabled={!canUpdateUsers}
+                            onClick={() => openEditModal(user)}
+                          >
+                            <EditRoundedIcon fontSize="small" />
+                          </IconButton>
                         </TableCell>
                       </TableRow>
                     );
@@ -657,7 +664,7 @@ export function AdminRbacPage() {
         <DialogTitle>Editar usuário</DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ mb: 1.8 }}>
-            Atualize o papel e a localidade do usuário selecionado.
+            Atualize os papéis e os dados do usuário selecionado.
           </DialogContentText>
 
           <Stack spacing={1.4}>
@@ -669,10 +676,22 @@ export function AdminRbacPage() {
             />
             <TextField
               select
+              SelectProps={{
+                multiple: true,
+                renderValue: (selected) =>
+                  (selected as string[])
+                    .map((id) => roles.find((role) => role.id === id)?.name ?? id)
+                    .join(', '),
+              }}
               size="small"
-              label="Papel"
-              value={editRoleId}
-              onChange={(event) => setEditRoleId(event.target.value)}
+              label="Papéis"
+              value={editRoleIds}
+              onChange={(event) => {
+                const next = event.target.value;
+                setEditRoleIds(
+                  Array.isArray(next) ? next.map((value) => String(value)) : [],
+                );
+              }}
             >
               {roles.map((role) => (
                 <MenuItem key={role.id} value={role.id}>
@@ -731,6 +750,7 @@ export function AdminRbacPage() {
             }}
             disabled={
               updateUser.isPending ||
+              editRoleIds.length === 0 ||
               (editRoleNeedsLocality && !editLocalityId) ||
               (editRoleNeedsSpecialty && !editSpecialtyId)
             }

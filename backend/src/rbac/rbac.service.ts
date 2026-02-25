@@ -58,11 +58,12 @@ export class RbacService {
     private readonly fabLdap: FabLdapService,
   ) {}
 
-  async getUserAccess(userId: string): Promise<RbacUser> {
+  async getUserAccess(userId: string, activeRoleId?: string | null): Promise<RbacUser> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       include: {
         roles: {
+          orderBy: { role: { name: 'asc' } },
           include: {
             role: {
               include: {
@@ -81,7 +82,7 @@ export class RbacService {
       throwError('RBAC_FORBIDDEN');
     }
 
-    return this.buildAccessFromUser(user);
+    return this.buildAccessFromUser(user, activeRoleId);
   }
 
   async listRoles() {
@@ -447,7 +448,8 @@ export class RbacService {
   async upsertLdapUser(
     payload: {
       uid: string;
-      roleId: string;
+      roleId?: string;
+      roleIds?: string[];
       localityId?: string | null;
       specialtyId?: string | null;
       eloRoleId?: string | null;
@@ -460,8 +462,22 @@ export class RbacService {
       throwError('VALIDATION_ERROR', { reason: 'LDAP_UID_REQUIRED' });
     }
 
-    const role = await this.prisma.role.findUnique({ where: { id: payload.roleId } });
-    if (!role) {
+    const selectedRoleIds = Array.from(
+      new Set(
+        [payload.roleId, ...(Array.isArray(payload.roleIds) ? payload.roleIds : [])]
+          .map((value) => String(value ?? '').trim())
+          .filter(Boolean),
+      ),
+    );
+    if (!selectedRoleIds.length) {
+      throwError('VALIDATION_ERROR', { reason: 'ROLE_REQUIRED' });
+    }
+
+    const roles = await this.prisma.role.findMany({
+      where: { id: { in: selectedRoleIds } },
+      select: { id: true, name: true },
+    });
+    if (roles.length !== selectedRoleIds.length) {
       throwError('NOT_FOUND');
     }
     const profile = await this.fabLdap.lookupByUid(uid);
@@ -488,14 +504,18 @@ export class RbacService {
 
     const targetLocalityId =
       payload.localityId !== undefined ? payload.localityId : (existing?.localityId ?? null);
-    if (roleRequiresLocality(role.name) && !targetLocalityId) {
+    if (roles.some((role) => roleRequiresLocality(role.name)) && !targetLocalityId) {
       throwError('USER_LOCAL_ROLE_REQUIRES_LOCALITY');
     }
     const targetSpecialtyId =
       payload.specialtyId !== undefined ? payload.specialtyId : (existing?.specialtyId ?? null);
     const targetEloRoleId =
       payload.eloRoleId !== undefined ? payload.eloRoleId : (existing?.eloRoleId ?? null);
-    if (roleRequiresSpecialty(role.name) && !targetSpecialtyId && !targetEloRoleId) {
+    if (
+      roles.some((role) => roleRequiresSpecialty(role.name)) &&
+      !targetSpecialtyId &&
+      !targetEloRoleId
+    ) {
       throwError('USER_SPECIALTY_ROLE_REQUIRES_SPECIALTY');
     }
 
@@ -529,18 +549,23 @@ export class RbacService {
           },
         });
 
-    await this.prisma.userRole.deleteMany({
-      where: { userId: user.id },
-    });
+    const replaceExistingRoles = Boolean(payload.replaceExistingRoles);
+    if (replaceExistingRoles) {
+      await this.prisma.userRole.deleteMany({
+        where: { userId: user.id },
+      });
+    }
 
-    await this.prisma.userRole.create({
-      data: { userId: user.id, roleId: role.id },
+    await this.prisma.userRole.createMany({
+      data: selectedRoleIds.map((roleId) => ({ userId: user.id, roleId })),
+      skipDuplicates: true,
     });
 
     const userWithRoles = await this.prisma.user.findUnique({
       where: { id: user.id },
       include: {
         roles: {
+          orderBy: { role: { name: 'asc' } },
           include: {
             role: {
               select: { id: true, name: true },
@@ -557,9 +582,9 @@ export class RbacService {
       entityId: user.id,
       diffJson: {
         uid,
-        roleId: role.id,
-        roleName: role.name,
-        replaceExistingRoles: true,
+        roleIds: roles.map((item) => item.id),
+        roleNames: roles.map((item) => item.name),
+        replaceExistingRoles,
         localityId: payload.localityId ?? null,
         specialtyId: payload.specialtyId ?? null,
         eloRoleId: payload.eloRoleId ?? null,
@@ -639,19 +664,31 @@ export class RbacService {
     throwError('VALIDATION_ERROR', { reason: 'MISSING_PARAMS' });
   }
 
-  private async buildAccessFromUser(user: UserAccessPayload): Promise<RbacUser> {
-    const roles = user.roles.map((userRole) => ({
-      id: userRole.role.id,
-      name: userRole.role.name,
-      wildcard: userRole.role.wildcard,
-      constraintsTemplateJson: userRole.role.constraintsTemplateJson as Record<string, unknown> | null,
-      flagsJson: userRole.role.flagsJson as Record<string, unknown> | null,
-      permissions: userRole.role.permissions.map((rp) => ({
-        resource: rp.permission.resource,
-        action: rp.permission.action,
-        scope: rp.permission.scope,
-      })),
-    }));
+  private async buildAccessFromUser(
+    user: UserAccessPayload,
+    requestedActiveRoleId?: string | null,
+  ): Promise<RbacUser> {
+    const allRoles = user.roles
+      .map((userRole) => ({
+        id: userRole.role.id,
+        name: userRole.role.name,
+        wildcard: userRole.role.wildcard,
+        constraintsTemplateJson: userRole.role.constraintsTemplateJson as Record<string, unknown> | null,
+        flagsJson: userRole.role.flagsJson as Record<string, unknown> | null,
+        permissions: userRole.role.permissions.map((rp) => ({
+          resource: rp.permission.resource,
+          action: rp.permission.action,
+          scope: rp.permission.scope,
+        })),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+    const requestedRoleId = String(requestedActiveRoleId ?? '').trim();
+    const activeRole =
+      (requestedRoleId && allRoles.find((role) => role.id === requestedRoleId)) ??
+      allRoles[0] ??
+      null;
+    const roles = activeRole ? [activeRole] : [];
+
     const normalizedRoles = new Set(roles.map((role) => normalizeRoleName(role.name)));
     const hasNationalScope =
       normalizedRoles.has(normalizeRoleName(ROLE_TI)) ||
@@ -700,6 +737,8 @@ export class RbacService {
       permissions,
       moduleAccessOverrides,
       roles,
+      allRoles,
+      activeRoleId: activeRole?.id ?? null,
     };
   }
 
