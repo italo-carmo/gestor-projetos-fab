@@ -683,10 +683,10 @@ export class RbacService {
       }))
       .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
     const requestedRoleId = String(requestedActiveRoleId ?? '').trim();
-    const activeRole =
-      (requestedRoleId && allRoles.find((role) => role.id === requestedRoleId)) ??
-      allRoles[0] ??
-      null;
+    const requestedRole = requestedRoleId
+      ? allRoles.find((role) => role.id === requestedRoleId)
+      : undefined;
+    const activeRole = requestedRole ?? allRoles[0] ?? null;
     const roles = activeRole ? [activeRole] : [];
 
     const normalizedRoles = new Set(roles.map((role) => normalizeRoleName(role.name)));
