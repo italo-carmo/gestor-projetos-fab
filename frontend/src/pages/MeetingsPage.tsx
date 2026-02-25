@@ -50,7 +50,7 @@ import { ErrorState } from '../components/states/ErrorState';
 import { SkeletonState } from '../components/states/SkeletonState';
 import { useToast } from '../app/toast';
 import { parseApiError } from '../app/apiErrors';
-import { hasAnyRole, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from '../app/roleAccess';
+import { hasAnyRole, ROLE_COMANDANTE_COMGEP, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from '../app/roleAccess';
 import { can } from '../app/rbac';
 import { MeetingStatus, MEETING_STATUS_LABELS, MeetingType, MEETING_TYPE_LABELS, TaskPriority, TASK_PRIORITY_LABELS } from '../constants/enums';
 
@@ -305,6 +305,8 @@ export function MeetingsPage() {
   const canCreate = can(me, 'meetings', 'create');
   const canUpdate = can(me, 'meetings', 'update');
   const canGenerate = can(me, 'tasks', 'generate_from_meeting');
+  const canManageTaskDataByRole = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI]);
+  const canUpdateLinkedTask = can(me, 'task_instances', 'update') && canManageTaskDataByRole;
   const canDelete = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]) && canUpdate;
 
   const getTaskOptionLabel = (t: any) =>
@@ -723,7 +725,9 @@ export function MeetingsPage() {
                 <Autocomplete
                   size="small"
                   value={linkTaskValue}
+                  disabled={!canUpdateLinkedTask || updateTaskMeeting.isPending}
                   onChange={(_e, newValue: any) => {
+                    if (!canUpdateLinkedTask) return;
                     setLinkTaskValue(null);
                     if (newValue) {
                       updateTaskMeeting

@@ -11,14 +11,25 @@ import { AuditService } from '../audit/audit.service';
 import type { RbacUser } from '../rbac/rbac.types';
 import { sanitizeText } from '../common/sanitize';
 import { parsePagination } from '../common/pagination';
-import { hasAnyRole, resolveAccessProfile, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from '../rbac/role-access';
+import { resolveAccessProfile } from '../rbac/role-access';
 import { selectTargetLocalities } from '../common/priority-localities';
 
-const activityPhotosDir = path.resolve(process.cwd(), 'storage', 'activity-reports');
+const activityPhotosDir = path.resolve(
+  process.cwd(),
+  'storage',
+  'activity-reports',
+);
 const scheduleLogoCandidates = [
   path.resolve(process.cwd(), 'frontend', 'public', 'brand', 'cipavd-7.png'),
   path.resolve(process.cwd(), 'public', 'brand', 'cipavd-7.png'),
-  path.resolve(process.cwd(), '..', 'frontend', 'public', 'brand', 'cipavd-7.png'),
+  path.resolve(
+    process.cwd(),
+    '..',
+    'frontend',
+    'public',
+    'brand',
+    'cipavd-7.png',
+  ),
 ];
 
 @Injectable()
@@ -40,7 +51,10 @@ export class ActivitiesService {
     },
     user?: RbacUser,
   ) {
-    const { page, pageSize, skip, take } = parsePagination(filters.page, filters.pageSize);
+    const { page, pageSize, skip, take } = parsePagination(
+      filters.page,
+      filters.pageSize,
+    );
     const targetLocalityIds = await this.getTargetLocalityIds();
     if (targetLocalityIds.length === 0) {
       return { items: [], page, pageSize, total: 0 };
@@ -49,8 +63,10 @@ export class ActivitiesService {
     const andClauses: Prisma.ActivityWhereInput[] = [];
     andClauses.push({ localityId: { in: targetLocalityIds } });
     if (filters.localityId) andClauses.push({ localityId: filters.localityId });
-    if (filters.specialtyId) andClauses.push({ specialtyId: filters.specialtyId });
-    if (filters.status) andClauses.push({ status: filters.status as ActivityStatus });
+    if (filters.specialtyId)
+      andClauses.push({ specialtyId: filters.specialtyId });
+    if (filters.status)
+      andClauses.push({ status: filters.status as ActivityStatus });
     if (filters.q) {
       andClauses.push({
         OR: [
@@ -79,14 +95,28 @@ export class ActivitiesService {
           createdBy: { select: { id: true, name: true } },
           responsibles: {
             include: {
-              user: { select: { id: true, name: true, email: true, localityId: true, specialtyId: true, eloRoleId: true } },
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                  localityId: true,
+                  specialtyId: true,
+                  eloRoleId: true,
+                },
+              },
             },
             orderBy: [{ createdAt: 'asc' }],
           },
           report: {
             include: {
               photos: {
-                select: { id: true, fileName: true, fileUrl: true, createdAt: true },
+                select: {
+                  id: true,
+                  fileName: true,
+                  fileUrl: true,
+                  createdAt: true,
+                },
                 orderBy: { createdAt: 'asc' },
               },
               signedBy: { select: { id: true, name: true, email: true } },
@@ -97,10 +127,15 @@ export class ActivitiesService {
       this.prisma.activity.count({ where }),
     ]);
 
-    const withCommentSummary = await this.attachActivityCommentSummary(items, user);
+    const withCommentSummary = await this.attachActivityCommentSummary(
+      items,
+      user,
+    );
 
     return {
-      items: withCommentSummary.map((item: any) => this.mapActivity(item, user?.executiveHidePii)),
+      items: withCommentSummary.map((item: any) =>
+        this.mapActivity(item, user?.executiveHidePii),
+      ),
       page,
       pageSize,
       total,
@@ -131,7 +166,9 @@ export class ActivitiesService {
     const created = await this.prisma.activity.create({
       data: {
         title: sanitizeText(payload.title),
-        description: payload.description ? sanitizeText(payload.description) : null,
+        description: payload.description
+          ? sanitizeText(payload.description)
+          : null,
         localityId,
         specialtyId,
         eventDate: payload.eventDate ? new Date(payload.eventDate) : null,
@@ -153,13 +190,29 @@ export class ActivitiesService {
         createdBy: { select: { id: true, name: true } },
         responsibles: {
           include: {
-            user: { select: { id: true, name: true, email: true, localityId: true, specialtyId: true, eloRoleId: true } },
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                localityId: true,
+                specialtyId: true,
+                eloRoleId: true,
+              },
+            },
           },
           orderBy: [{ createdAt: 'asc' }],
         },
         report: {
           include: {
-            photos: { select: { id: true, fileName: true, fileUrl: true, createdAt: true } },
+            photos: {
+              select: {
+                id: true,
+                fileName: true,
+                fileUrl: true,
+                createdAt: true,
+              },
+            },
             signedBy: { select: { id: true, name: true, email: true } },
           },
         },
@@ -172,7 +225,10 @@ export class ActivitiesService {
       action: 'create',
       entityId: created.id,
       localityId: created.localityId ?? undefined,
-      diffJson: { title: created.title, reportRequired: created.reportRequired },
+      diffJson: {
+        title: created.title,
+        reportRequired: created.reportRequired,
+      },
     });
 
     return this.mapActivity(created, user?.executiveHidePii);
@@ -200,8 +256,14 @@ export class ActivitiesService {
     if (!existing) throwError('NOT_FOUND');
     this.assertActivityOperateAccess(existing, user);
 
-    const localityId = payload.localityId === undefined ? existing.localityId : payload.localityId;
-    const specialtyId = payload.specialtyId === undefined ? ((existing as any).specialtyId ?? null) : payload.specialtyId;
+    const localityId =
+      payload.localityId === undefined
+        ? existing.localityId
+        : payload.localityId;
+    const specialtyId =
+      payload.specialtyId === undefined
+        ? ((existing as any).specialtyId ?? null)
+        : payload.specialtyId;
     this.assertScopeConstraint(localityId, specialtyId, user);
     const responsibleUserIds = await this.resolveActivityResponsibleIds(
       localityId,
@@ -214,18 +276,20 @@ export class ActivitiesService {
       where: { id },
       data: {
         title: payload.title ? sanitizeText(payload.title) : undefined,
-        description: payload.description === undefined
-          ? undefined
-          : payload.description === null
-            ? null
-            : sanitizeText(payload.description),
+        description:
+          payload.description === undefined
+            ? undefined
+            : payload.description === null
+              ? null
+              : sanitizeText(payload.description),
         localityId,
         specialtyId,
-        eventDate: payload.eventDate === undefined
-          ? undefined
-          : payload.eventDate === null
-            ? null
-            : new Date(payload.eventDate),
+        eventDate:
+          payload.eventDate === undefined
+            ? undefined
+            : payload.eventDate === null
+              ? null
+              : new Date(payload.eventDate),
         reportRequired: payload.reportRequired ?? undefined,
         responsibles: {
           deleteMany: {},
@@ -245,13 +309,29 @@ export class ActivitiesService {
         createdBy: { select: { id: true, name: true } },
         responsibles: {
           include: {
-            user: { select: { id: true, name: true, email: true, localityId: true, specialtyId: true, eloRoleId: true } },
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                localityId: true,
+                specialtyId: true,
+                eloRoleId: true,
+              },
+            },
           },
           orderBy: [{ createdAt: 'asc' }],
         },
         report: {
           include: {
-            photos: { select: { id: true, fileName: true, fileUrl: true, createdAt: true } },
+            photos: {
+              select: {
+                id: true,
+                fileName: true,
+                fileUrl: true,
+                createdAt: true,
+              },
+            },
             signedBy: { select: { id: true, name: true, email: true } },
           },
         },
@@ -305,13 +385,29 @@ export class ActivitiesService {
         createdBy: { select: { id: true, name: true } },
         responsibles: {
           include: {
-            user: { select: { id: true, name: true, email: true, localityId: true, specialtyId: true, eloRoleId: true } },
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                localityId: true,
+                specialtyId: true,
+                eloRoleId: true,
+              },
+            },
           },
           orderBy: [{ createdAt: 'asc' }],
         },
         report: {
           include: {
-            photos: { select: { id: true, fileName: true, fileUrl: true, createdAt: true } },
+            photos: {
+              select: {
+                id: true,
+                fileName: true,
+                fileUrl: true,
+                createdAt: true,
+              },
+            },
             signedBy: { select: { id: true, name: true, email: true } },
           },
         },
@@ -351,7 +447,9 @@ export class ActivitiesService {
 
     await this.prisma.$transaction(async (tx) => {
       if (existing.report) {
-        await tx.activityReportPhoto.deleteMany({ where: { reportId: existing.report.id } });
+        await tx.activityReportPhoto.deleteMany({
+          where: { reportId: existing.report.id },
+        });
         await tx.activityReport.delete({ where: { id: existing.report.id } });
       }
       await tx.activity.delete({ where: { id } });
@@ -415,16 +513,24 @@ export class ActivitiesService {
         ? this.prisma.activityCommentRead.findUnique({
             where: { activityId_userId: { activityId: id, userId: user.id } },
           })
-        : this.prisma.activityCommentRead.findFirst({ where: { activityId: id, userId: '__none__' } }),
+        : this.prisma.activityCommentRead.findFirst({
+            where: { activityId: id, userId: '__none__' },
+          }),
     ]);
 
     const seenAt = readState?.seenAt ?? null;
     const unread = user?.id
-      ? comments.filter((comment) => comment.authorId !== user.id && (!seenAt || comment.createdAt > seenAt)).length
+      ? comments.filter(
+          (comment) =>
+            comment.authorId !== user.id &&
+            (!seenAt || comment.createdAt > seenAt),
+        ).length
       : 0;
 
     return {
-      items: comments.map((comment) => this.mapComment(comment, user?.executiveHidePii)),
+      items: comments.map((comment) =>
+        this.mapComment(comment, user?.executiveHidePii),
+      ),
       summary: {
         total: comments.length,
         unread,
@@ -455,7 +561,10 @@ export class ActivitiesService {
 
     const normalized = this.sanitizeCommentText(text);
     if (!normalized) {
-      throwError('VALIDATION_ERROR', { field: 'text', reason: 'COMMENT_REQUIRED' });
+      throwError('VALIDATION_ERROR', {
+        field: 'text',
+        reason: 'COMMENT_REQUIRED',
+      });
     }
 
     const created = await this.prisma.activityComment.create({
@@ -561,7 +670,12 @@ export class ActivitiesService {
   ) {
     const activity = await this.prisma.activity.findUnique({
       where: { id: activityId },
-      select: { id: true, localityId: true, specialtyId: true, responsibles: { select: { userId: true } } },
+      select: {
+        id: true,
+        localityId: true,
+        specialtyId: true,
+        responsibles: { select: { userId: true } },
+      },
     });
     if (!activity) throwError('NOT_FOUND');
     this.assertActivityOperateAccess(activity, user);
@@ -573,8 +687,14 @@ export class ActivitiesService {
         startTime: this.normalizeScheduleTime(payload.startTime),
         durationMinutes: this.normalizeDurationMinutes(payload.durationMinutes),
         location: this.sanitizeRequiredText(payload.location, 'location'),
-        responsible: this.sanitizeRequiredText(payload.responsible, 'responsible'),
-        participants: this.sanitizeRequiredText(payload.participants, 'participants'),
+        responsible: this.sanitizeRequiredText(
+          payload.responsible,
+          'responsible',
+        ),
+        participants: this.sanitizeRequiredText(
+          payload.participants,
+          'participants',
+        ),
       },
     });
 
@@ -605,7 +725,12 @@ export class ActivitiesService {
   ) {
     const activity = await this.prisma.activity.findUnique({
       where: { id: activityId },
-      select: { id: true, localityId: true, specialtyId: true, responsibles: { select: { userId: true } } },
+      select: {
+        id: true,
+        localityId: true,
+        specialtyId: true,
+        responsibles: { select: { userId: true } },
+      },
     });
     if (!activity) throwError('NOT_FOUND');
     this.assertActivityOperateAccess(activity, user);
@@ -619,15 +744,21 @@ export class ActivitiesService {
       where: { id: itemId },
       data: {
         title:
-          payload.title === undefined ? undefined : this.sanitizeRequiredText(payload.title, 'title'),
+          payload.title === undefined
+            ? undefined
+            : this.sanitizeRequiredText(payload.title, 'title'),
         startTime:
-          payload.startTime === undefined ? undefined : this.normalizeScheduleTime(payload.startTime),
+          payload.startTime === undefined
+            ? undefined
+            : this.normalizeScheduleTime(payload.startTime),
         durationMinutes:
           payload.durationMinutes === undefined
             ? undefined
             : this.normalizeDurationMinutes(payload.durationMinutes),
         location:
-          payload.location === undefined ? undefined : this.sanitizeRequiredText(payload.location, 'location'),
+          payload.location === undefined
+            ? undefined
+            : this.sanitizeRequiredText(payload.location, 'location'),
         responsible:
           payload.responsible === undefined
             ? undefined
@@ -651,10 +782,19 @@ export class ActivitiesService {
     return this.mapScheduleItem(updated);
   }
 
-  async deleteScheduleItem(activityId: string, itemId: string, user?: RbacUser) {
+  async deleteScheduleItem(
+    activityId: string,
+    itemId: string,
+    user?: RbacUser,
+  ) {
     const activity = await this.prisma.activity.findUnique({
       where: { id: activityId },
-      select: { id: true, localityId: true, specialtyId: true, responsibles: { select: { userId: true } } },
+      select: {
+        id: true,
+        localityId: true,
+        specialtyId: true,
+        responsibles: { select: { userId: true } },
+      },
     });
     if (!activity) throwError('NOT_FOUND');
     this.assertActivityOperateAccess(activity, user);
@@ -665,7 +805,9 @@ export class ActivitiesService {
     });
     if (!existing) throwError('NOT_FOUND');
 
-    await this.prisma.activityVisitScheduleItem.delete({ where: { id: itemId } });
+    await this.prisma.activityVisitScheduleItem.delete({
+      where: { id: itemId },
+    });
 
     await this.audit.log({
       userId: user?.id,
@@ -724,23 +866,48 @@ export class ActivitiesService {
     const writeLine = (label: string, value: string) => {
       doc.font('Helvetica-Bold').fontSize(10).text(label);
       doc.moveDown(0.2);
-      doc.font('Helvetica').fontSize(11).text(value || '-', { align: 'left' });
+      doc
+        .font('Helvetica')
+        .fontSize(11)
+        .text(value || '-', { align: 'left' });
       doc.moveDown(0.7);
     };
 
-    doc.font('Helvetica-Bold').fontSize(16).text('Cronograma da Visita', { align: 'center' });
+    doc
+      .font('Helvetica-Bold')
+      .fontSize(16)
+      .text('Cronograma da Visita', { align: 'center' });
     doc.moveDown(1);
 
     writeLine('Atividade', activity.title);
-    writeLine('Localidade', activity.locality ? `${activity.locality.name} (${activity.locality.code})` : 'Não vinculada');
-    writeLine('Especialidade', activity.specialty?.name ?? 'Todas as especialidades');
-    writeLine('Data da visita', activity.eventDate ? this.formatDate(activity.eventDate) : 'Não informada');
+    writeLine(
+      'Localidade',
+      activity.locality
+        ? `${activity.locality.name} (${activity.locality.code})`
+        : 'Não vinculada',
+    );
+    writeLine(
+      'Especialidade',
+      activity.specialty?.name ?? 'Todas as especialidades',
+    );
+    writeLine(
+      'Data da visita',
+      activity.eventDate
+        ? this.formatDate(activity.eventDate)
+        : 'Não informada',
+    );
 
-    doc.font('Helvetica-Bold').fontSize(12).text('Programação', { underline: true });
+    doc
+      .font('Helvetica-Bold')
+      .fontSize(12)
+      .text('Programação', { underline: true });
     doc.moveDown(0.4);
 
     if (activity.visitScheduleItems.length === 0) {
-      doc.font('Helvetica').fontSize(11).text('Nenhum item de cronograma cadastrado para esta visita.');
+      doc
+        .font('Helvetica')
+        .fontSize(11)
+        .text('Nenhum item de cronograma cadastrado para esta visita.');
     } else {
       activity.visitScheduleItems.forEach((item, index) => {
         if (doc.y > doc.page.height - 150) {
@@ -749,26 +916,60 @@ export class ActivitiesService {
 
         const rowY = doc.y;
         doc
-          .roundedRect(doc.page.margins.left, rowY, doc.page.width - doc.page.margins.left - doc.page.margins.right, 96, 6)
+          .roundedRect(
+            doc.page.margins.left,
+            rowY,
+            doc.page.width - doc.page.margins.left - doc.page.margins.right,
+            96,
+            6,
+          )
           .fillAndStroke('#F5F8FC', '#D7E0EC');
 
         const blockStart = rowY + 10;
         doc.fillColor('#111827');
-        doc.font('Helvetica-Bold').fontSize(11).text(
-          `${index + 1}. ${item.startTime} • ${this.formatDuration(item.durationMinutes)}`,
-          doc.page.margins.left + 10,
-          blockStart,
-        );
+        doc
+          .font('Helvetica-Bold')
+          .fontSize(11)
+          .text(
+            `${index + 1}. ${item.startTime} • ${this.formatDuration(item.durationMinutes)}`,
+            doc.page.margins.left + 10,
+            blockStart,
+          );
         doc
           .font('Helvetica')
           .fontSize(10)
-          .text(`Atividade: ${item.title}`, doc.page.margins.left + 10, blockStart + 18, {
-            width: doc.page.width - doc.page.margins.left - doc.page.margins.right - 20,
+          .text(
+            `Atividade: ${item.title}`,
+            doc.page.margins.left + 10,
+            blockStart + 18,
+            {
+              width:
+                doc.page.width -
+                doc.page.margins.left -
+                doc.page.margins.right -
+                20,
+            },
+          )
+          .text(`Local: ${item.location}`, {
+            width:
+              doc.page.width -
+              doc.page.margins.left -
+              doc.page.margins.right -
+              20,
           })
-          .text(`Local: ${item.location}`, { width: doc.page.width - doc.page.margins.left - doc.page.margins.right - 20 })
-          .text(`Responsável: ${item.responsible}`, { width: doc.page.width - doc.page.margins.left - doc.page.margins.right - 20 })
+          .text(`Responsável: ${item.responsible}`, {
+            width:
+              doc.page.width -
+              doc.page.margins.left -
+              doc.page.margins.right -
+              20,
+          })
           .text(`Participantes: ${item.participants}`, {
-            width: doc.page.width - doc.page.margins.left - doc.page.margins.right - 20,
+            width:
+              doc.page.width -
+              doc.page.margins.left -
+              doc.page.margins.right -
+              20,
           });
         doc.y = rowY + 106;
       });
@@ -776,7 +977,9 @@ export class ActivitiesService {
 
     doc.end();
     const buffer = await done;
-    const sanitizedTitle = activity.title.replace(/[^a-zA-Z0-9-_]+/g, '_').slice(0, 60);
+    const sanitizedTitle = activity.title
+      .replace(/[^a-zA-Z0-9-_]+/g, '_')
+      .slice(0, 60);
     const fileName = `cronograma_visita_${sanitizedTitle || activity.id}.pdf`;
     return { fileName, buffer };
   }
@@ -818,7 +1021,9 @@ export class ActivitiesService {
       executionSchedule: sanitizeText(payload.executionSchedule ?? ''),
       activitiesPerformed: sanitizeText(payload.activitiesPerformed),
       participantsCount: payload.participantsCount,
-      participantsCharacteristics: sanitizeText(payload.participantsCharacteristics),
+      participantsCharacteristics: sanitizeText(
+        payload.participantsCharacteristics,
+      ),
       conclusion: sanitizeText(payload.conclusion),
       city: sanitizeText(payload.city),
       closingDate: new Date(payload.closingDate),
@@ -852,7 +1057,16 @@ export class ActivitiesService {
         createdBy: { select: { id: true, name: true } },
         responsibles: {
           include: {
-            user: { select: { id: true, name: true, email: true, localityId: true, specialtyId: true, eloRoleId: true } },
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                localityId: true,
+                specialtyId: true,
+                eloRoleId: true,
+              },
+            },
           },
           orderBy: [{ createdAt: 'asc' }],
         },
@@ -932,7 +1146,11 @@ export class ActivitiesService {
     return created;
   }
 
-  async removeReportPhoto(activityId: string, photoId: string, user?: RbacUser) {
+  async removeReportPhoto(
+    activityId: string,
+    photoId: string,
+    user?: RbacUser,
+  ) {
     const activity = await this.prisma.activity.findUnique({
       where: { id: activityId },
       include: { report: true, responsibles: { select: { userId: true } } },
@@ -1021,7 +1239,11 @@ export class ActivitiesService {
         city: report.city,
         closingDate: report.closingDate.toISOString(),
       },
-      photos: report.photos.map((p: any) => ({ id: p.id, fileName: p.fileName, checksum: p.checksum ?? null })),
+      photos: report.photos.map((p: any) => ({
+        id: p.id,
+        fileName: p.fileName,
+        checksum: p.checksum ?? null,
+      })),
       signer: {
         userId: user.id,
         signedAt: signedAt.toISOString(),
@@ -1034,7 +1256,9 @@ export class ActivitiesService {
       this.config.get<string>('ACTIVITY_SIGNATURE_SECRET') ??
       this.config.get<string>('JWT_ACCESS_SECRET') ??
       'smif-activity-signature';
-    const signatureHash = createHmac('sha256', secret).update(payloadHash).digest('hex');
+    const signatureHash = createHmac('sha256', secret)
+      .update(payloadHash)
+      .digest('hex');
 
     const updated = await this.prisma.activityReport.update({
       where: { id: report.id },
@@ -1048,7 +1272,9 @@ export class ActivitiesService {
       },
       include: {
         signedBy: { select: { id: true, name: true, email: true } },
-        photos: { select: { id: true, fileName: true, fileUrl: true, createdAt: true } },
+        photos: {
+          select: { id: true, fileName: true, fileUrl: true, createdAt: true },
+        },
       },
     });
 
@@ -1122,34 +1348,58 @@ export class ActivitiesService {
     const writeLine = (label: string, value: string) => {
       doc.font('Helvetica-Bold').fontSize(10).text(label);
       doc.moveDown(0.2);
-      doc.font('Helvetica').fontSize(11).text(value || '-', { align: 'justify' });
+      doc
+        .font('Helvetica')
+        .fontSize(11)
+        .text(value || '-', { align: 'justify' });
       doc.moveDown(0.8);
     };
 
-    doc.font('Helvetica-Bold').fontSize(16).text('Relatório de Atividade', { align: 'center' });
+    doc
+      .font('Helvetica-Bold')
+      .fontSize(16)
+      .text('Relatório de Atividade', { align: 'center' });
     doc.moveDown(0.8);
 
     writeLine('Atividade', activity.title);
-    writeLine('Localidade', activity.locality ? `${activity.locality.name} (${activity.locality.code})` : 'Não vinculada');
-    writeLine('Especialidade', activity.specialty?.name ?? 'Todas as especialidades');
+    writeLine(
+      'Localidade',
+      activity.locality
+        ? `${activity.locality.name} (${activity.locality.code})`
+        : 'Não vinculada',
+    );
+    writeLine(
+      'Especialidade',
+      activity.specialty?.name ?? 'Todas as especialidades',
+    );
     writeLine('Data da atividade', this.formatDate(report.date));
     writeLine('Local', report.location);
     writeLine('Responsável', report.responsible);
     writeLine('Análise da atividade', report.missionSupport);
     writeLine('Atividades realizadas', report.activitiesPerformed);
     writeLine('Participantes (número)', String(report.participantsCount));
-    writeLine('Participantes (características)', report.participantsCharacteristics);
+    writeLine(
+      'Participantes (características)',
+      report.participantsCharacteristics,
+    );
     writeLine('Conclusão', report.conclusion);
     writeLine('Cidade', report.city);
     writeLine('Data (fechamento)', this.formatDate(report.closingDate));
 
-    doc.font('Helvetica-Bold').fontSize(12).text('Assinatura Digital', { underline: true });
+    doc
+      .font('Helvetica-Bold')
+      .fontSize(12)
+      .text('Assinatura Digital', { underline: true });
     doc.moveDown(0.4);
     if (report.signedAt && report.signatureHash) {
       doc.font('Helvetica').fontSize(11).text('Status: ASSINADO');
       doc.text(`Assinado em: ${this.formatDateTime(report.signedAt)}`);
-      doc.text(`Assinado por: ${report.signedBy?.name ?? report.signedById ?? 'N/A'}`);
-      doc.text(`Algoritmo: ${report.signatureAlgorithm ?? 'HMAC-SHA256'} v${report.signatureVersion ?? 1}`);
+      doc.text(
+        `Assinado por: ${report.signedBy?.name ?? report.signedById ?? 'N/A'}`,
+      );
+      doc.text(
+        `Algoritmo: ${report.signatureAlgorithm ?? 'HMAC-SHA256'} v${report.signatureVersion ?? 1}`,
+      );
       doc.text(`Hash da assinatura: ${report.signatureHash}`);
       doc.text(`Hash do conteúdo: ${report.signaturePayloadHash ?? '-'}`);
     } else {
@@ -1158,7 +1408,10 @@ export class ActivitiesService {
 
     if (report.photos.length > 0) {
       doc.addPage();
-      doc.font('Helvetica-Bold').fontSize(14).text('Imagens da atividade', { align: 'left' });
+      doc
+        .font('Helvetica-Bold')
+        .fontSize(14)
+        .text('Imagens da atividade', { align: 'left' });
       doc.moveDown(0.6);
 
       for (const photo of report.photos) {
@@ -1167,18 +1420,23 @@ export class ActivitiesService {
         const filePath = path.join(activityPhotosDir, storageKey);
         if (fs.existsSync(filePath)) {
           try {
-            const availableWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+            const availableWidth =
+              doc.page.width - doc.page.margins.left - doc.page.margins.right;
             doc.image(filePath, {
               fit: [availableWidth, 220],
               align: 'center',
             });
             doc.moveDown(0.8);
           } catch {
-            doc.font('Helvetica-Oblique').text('  (Não foi possível renderizar esta imagem no PDF)');
+            doc
+              .font('Helvetica-Oblique')
+              .text('  (Não foi possível renderizar esta imagem no PDF)');
             doc.moveDown(0.6);
           }
         } else {
-          doc.font('Helvetica-Oblique').text('  (Arquivo de imagem não encontrado no armazenamento)');
+          doc
+            .font('Helvetica-Oblique')
+            .text('  (Arquivo de imagem não encontrado no armazenamento)');
           doc.moveDown(0.6);
         }
       }
@@ -1187,7 +1445,9 @@ export class ActivitiesService {
     doc.end();
 
     const buffer = await done;
-    const sanitizedTitle = activity.title.replace(/[^a-zA-Z0-9-_]+/g, '_').slice(0, 60);
+    const sanitizedTitle = activity.title
+      .replace(/[^a-zA-Z0-9-_]+/g, '_')
+      .slice(0, 60);
     const fileName = `relatorio_atividade_${sanitizedTitle || activity.id}.pdf`;
     return { fileName, buffer };
   }
@@ -1213,10 +1473,15 @@ export class ActivitiesService {
     ]);
 
     const seenAtByActivity = new Map<string, Date>();
-    for (const read of reads) seenAtByActivity.set(read.activityId, read.seenAt);
+    for (const read of reads)
+      seenAtByActivity.set(read.activityId, read.seenAt);
 
-    const summaryByActivity = new Map<string, { total: number; unread: number; lastCommentAt: Date | null }>();
-    for (const id of ids) summaryByActivity.set(id, { total: 0, unread: 0, lastCommentAt: null });
+    const summaryByActivity = new Map<
+      string,
+      { total: number; unread: number; lastCommentAt: Date | null }
+    >();
+    for (const id of ids)
+      summaryByActivity.set(id, { total: 0, unread: 0, lastCommentAt: null });
 
     for (const comment of comments) {
       const current = summaryByActivity.get(comment.activityId) ?? {
@@ -1238,7 +1503,11 @@ export class ActivitiesService {
     }
 
     return items.map((item) => {
-      const summary = summaryByActivity.get(item.id) ?? { total: 0, unread: 0, lastCommentAt: null };
+      const summary = summaryByActivity.get(item.id) ?? {
+        total: 0,
+        unread: 0,
+        lastCommentAt: null,
+      };
       return {
         ...item,
         comments: {
@@ -1259,7 +1528,10 @@ export class ActivitiesService {
           .filter(Boolean)
           .map((user: any) => ({
             id: user.id,
-            name: user.name ?? user.email ?? `Usuário ${String(user.id).slice(0, 8)}`,
+            name:
+              user.name ??
+              user.email ??
+              `Usuário ${String(user.id).slice(0, 8)}`,
             email: user.email ?? null,
           }))
       : [];
@@ -1270,7 +1542,9 @@ export class ActivitiesService {
         ? {
             ...activity.report,
             activityAnalysis: activity.report.missionSupport ?? '',
-            hasSignature: Boolean(activity.report.signedAt && activity.report.signatureHash),
+            hasSignature: Boolean(
+              activity.report.signedAt && activity.report.signatureHash,
+            ),
           }
         : null,
     };
@@ -1292,7 +1566,7 @@ export class ActivitiesService {
           : null,
       authorName: executiveHidePii
         ? 'Usuário interno'
-        : comment.author?.name ?? comment.author?.email ?? 'Usuário',
+        : (comment.author?.name ?? comment.author?.email ?? 'Usuário'),
     };
   }
 
@@ -1314,7 +1588,10 @@ export class ActivitiesService {
   private normalizeScheduleTime(value: string) {
     const normalized = String(value ?? '').trim();
     if (!/^([01]\d|2[0-3]):([0-5]\d)$/.test(normalized)) {
-      throwError('VALIDATION_ERROR', { field: 'startTime', reason: 'TIME_INVALID' });
+      throwError('VALIDATION_ERROR', {
+        field: 'startTime',
+        reason: 'TIME_INVALID',
+      });
     }
     return normalized;
   }
@@ -1322,7 +1599,10 @@ export class ActivitiesService {
   private normalizeDurationMinutes(value: number) {
     const parsed = Number(value);
     if (!Number.isFinite(parsed) || parsed < 1) {
-      throwError('VALIDATION_ERROR', { field: 'durationMinutes', reason: 'DURATION_INVALID' });
+      throwError('VALIDATION_ERROR', {
+        field: 'durationMinutes',
+        reason: 'DURATION_INVALID',
+      });
     }
     return Math.round(parsed);
   }
@@ -1362,7 +1642,12 @@ export class ActivitiesService {
 
   private async getTargetLocalityIds() {
     const localities = await this.prisma.locality.findMany({
-      select: { id: true, name: true, recruitsFemaleCountCurrent: true, updatedAt: true },
+      select: {
+        id: true,
+        name: true,
+        recruitsFemaleCountCurrent: true,
+        updatedAt: true,
+      },
     });
     return selectTargetLocalities(localities).map((locality) => locality.id);
   }
@@ -1395,10 +1680,18 @@ export class ActivitiesService {
     user?: RbacUser,
   ) {
     const constraints = this.getScopeConstraints(user);
-    if (constraints.localityId && localityId && constraints.localityId !== localityId) {
+    if (
+      constraints.localityId &&
+      localityId &&
+      constraints.localityId !== localityId
+    ) {
       throwError('RBAC_FORBIDDEN');
     }
-    if (constraints.specialtyId && specialtyId && constraints.specialtyId !== specialtyId) {
+    if (
+      constraints.specialtyId &&
+      specialtyId &&
+      constraints.specialtyId !== specialtyId
+    ) {
       throwError('RBAC_FORBIDDEN');
     }
   }
@@ -1411,8 +1704,8 @@ export class ActivitiesService {
     const profile = resolveAccessProfile(user);
 
     if (mode === 'operate') {
-      if (profile.ti) return {};
-      return { responsibles: { some: { userId: user.id } } };
+      if (profile.ti || profile.nationalCommission) return {};
+      return { id: '__forbidden__' };
     }
 
     if (profile.ti || profile.nationalCommission) return {};
@@ -1426,11 +1719,18 @@ export class ActivitiesService {
       const groupOr: Prisma.ActivityWhereInput[] = [];
       if (profile.groupSpecialtyId) {
         groupOr.push({
-          OR: [{ specialtyId: null }, { specialtyId: profile.groupSpecialtyId }],
+          OR: [
+            { specialtyId: null },
+            { specialtyId: profile.groupSpecialtyId },
+          ],
         });
       }
       if (profile.groupEloRoleId) {
-        groupOr.push({ responsibles: { some: { user: { eloRoleId: profile.groupEloRoleId } } } });
+        groupOr.push({
+          responsibles: {
+            some: { user: { eloRoleId: profile.groupEloRoleId } },
+          },
+        });
       }
       if (groupOr.length > 0) and.push({ OR: groupOr });
       if (and.length === 0) return { id: '__forbidden__' };
@@ -1448,7 +1748,9 @@ export class ActivitiesService {
         });
       }
       if (user.eloRoleId) {
-        groupOr.push({ responsibles: { some: { user: { eloRoleId: user.eloRoleId } } } });
+        groupOr.push({
+          responsibles: { some: { user: { eloRoleId: user.eloRoleId } } },
+        });
       }
       if (groupOr.length > 0) {
         viewerOr.push({ localityId: user.localityId, OR: groupOr });
@@ -1460,28 +1762,39 @@ export class ActivitiesService {
   private isActivityResponsible(activity: any, user?: RbacUser) {
     if (!user?.id) return false;
     if (Array.isArray(activity?.responsibles)) {
-      return activity.responsibles.some((entry: any) => entry.userId === user.id);
+      return activity.responsibles.some(
+        (entry: any) => entry.userId === user.id,
+      );
     }
     return false;
   }
 
-  private hasActivityGroupMatch(activity: any, specialtyId?: string | null, eloRoleId?: string | null) {
+  private hasActivityGroupMatch(
+    activity: any,
+    specialtyId?: string | null,
+    eloRoleId?: string | null,
+  ) {
     let specialtyMatch = false;
     if (specialtyId) {
       if (activity?.specialtyId === undefined) {
         // Backward-compatible fallback for records loaded without specialtyId.
         specialtyMatch = Array.isArray(activity?.responsibles)
-          ? activity.responsibles.some((entry: any) => entry?.user?.specialtyId === specialtyId)
+          ? activity.responsibles.some(
+              (entry: any) => entry?.user?.specialtyId === specialtyId,
+            )
           : false;
       } else {
         const activitySpecialtyId = activity.specialtyId as string | null;
-        specialtyMatch = !activitySpecialtyId || activitySpecialtyId === specialtyId;
+        specialtyMatch =
+          !activitySpecialtyId || activitySpecialtyId === specialtyId;
       }
     }
 
     let eloMatch = false;
     if (eloRoleId && Array.isArray(activity?.responsibles)) {
-      eloMatch = activity.responsibles.some((entry: any) => entry?.user?.eloRoleId === eloRoleId);
+      eloMatch = activity.responsibles.some(
+        (entry: any) => entry?.user?.eloRoleId === eloRoleId,
+      );
     }
 
     return specialtyMatch || eloMatch;
@@ -1493,7 +1806,8 @@ export class ActivitiesService {
     if (profile.ti || profile.nationalCommission) return;
 
     if (profile.localityAdmin) {
-      if (!profile.localityId || activity.localityId === profile.localityId) return;
+      if (!profile.localityId || activity.localityId === profile.localityId)
+        return;
       throwError('RBAC_FORBIDDEN');
     }
 
@@ -1501,7 +1815,14 @@ export class ActivitiesService {
       if (profile.localityId && activity.localityId !== profile.localityId) {
         throwError('RBAC_FORBIDDEN');
       }
-      if (this.hasActivityGroupMatch(activity, profile.groupSpecialtyId, profile.groupEloRoleId)) return;
+      if (
+        this.hasActivityGroupMatch(
+          activity,
+          profile.groupSpecialtyId,
+          profile.groupEloRoleId,
+        )
+      )
+        return;
       throwError('RBAC_FORBIDDEN');
     }
 
@@ -1516,18 +1837,17 @@ export class ActivitiesService {
     throwError('RBAC_FORBIDDEN');
   }
 
-  private assertActivityOperateAccess(activity: any, user?: RbacUser) {
+  private assertActivityOperateAccess(_activity: any, user?: RbacUser) {
     if (!user?.id) throwError('RBAC_FORBIDDEN');
     const profile = resolveAccessProfile(user);
-    if (profile.ti) return;
-    if (!this.isActivityResponsible(activity, user)) {
-      throwError('RBAC_FORBIDDEN');
-    }
+    if (profile.ti || profile.nationalCommission) return;
+    throwError('RBAC_FORBIDDEN');
   }
 
   private assertDeleteAccess(user?: RbacUser) {
     if (!user?.id) throwError('RBAC_FORBIDDEN');
-    if (hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_TI])) return;
+    const profile = resolveAccessProfile(user);
+    if (profile.ti || profile.nationalCommission) return;
     throwError('RBAC_FORBIDDEN');
   }
 
@@ -1545,7 +1865,10 @@ export class ActivitiesService {
     );
     if (normalized.length === 0) return [];
     if (!localityId) {
-      throwError('VALIDATION_ERROR', { field: 'localityId', reason: 'REQUIRED_FOR_RESPONSIBLES' });
+      throwError('VALIDATION_ERROR', {
+        field: 'localityId',
+        reason: 'REQUIRED_FOR_RESPONSIBLES',
+      });
     }
 
     const users = await this.prisma.user.findMany({
@@ -1553,12 +1876,18 @@ export class ActivitiesService {
       select: { id: true, localityId: true, specialtyId: true },
     });
     if (users.length !== normalized.length) {
-      throwError('VALIDATION_ERROR', { reason: 'ACTIVITY_RESPONSIBLE_INVALID' });
+      throwError('VALIDATION_ERROR', {
+        reason: 'ACTIVITY_RESPONSIBLE_INVALID',
+      });
     }
 
-    const mismatched = users.some((candidate) => candidate.localityId !== localityId);
+    const mismatched = users.some(
+      (candidate) => candidate.localityId !== localityId,
+    );
     if (mismatched) {
-      throwError('VALIDATION_ERROR', { reason: 'ACTIVITY_RESPONSIBLE_LOCALITY_MISMATCH' });
+      throwError('VALIDATION_ERROR', {
+        reason: 'ACTIVITY_RESPONSIBLE_LOCALITY_MISMATCH',
+      });
     }
 
     this.assertScopeConstraint(localityId, null, user);
@@ -1580,7 +1909,9 @@ export class ActivitiesService {
   }
 
   private formatDate(value: Date) {
-    return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' }).format(value);
+    return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' }).format(
+      value,
+    );
   }
 
   private formatDateTime(value: Date) {

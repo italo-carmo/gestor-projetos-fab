@@ -35,7 +35,7 @@ import {
 import { useToast } from '../../app/toast';
 import { parseApiError } from '../../app/apiErrors';
 import { can } from '../../app/rbac';
-import { hasAnyRole, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from '../../app/roleAccess';
+import { hasAnyRole, ROLE_COMANDANTE_COMGEP, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from '../../app/roleAccess';
 import { StatusChip } from '../chips/StatusChip';
 import { ProgressInline } from '../chips/ProgressInline';
 import { DueBadge } from '../chips/DueBadge';
@@ -79,9 +79,11 @@ export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, locali
   const uploadReport = useUploadReport();
   const deleteTask = useDeleteTask();
 
+  const canManageByRole = hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI]);
   const canUpdate = can(user, 'task_instances', 'update');
-  const canAssign = can(user, 'task_instances', 'assign');
-  const canDelete = hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]) && canUpdate;
+  const canAssign = can(user, 'task_instances', 'assign') && canManageByRole;
+  const canManageTaskData = canUpdate && canManageByRole;
+  const canDelete = canManageTaskData;
   const meetingsQuery = useMeetings({});
   const meetings = meetingsQuery.data?.items ?? [];
   const updateTaskMeeting = useUpdateTaskMeeting();
@@ -306,7 +308,7 @@ export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, locali
                   size="small"
                   value={task.status}
                   onChange={(e) => handleStatus(e.target.value)}
-                  disabled={!canUpdate}
+                  disabled={!canManageTaskData}
                   data-testid="task-status"
                 >
                   {TaskStatus.map((status) => (
@@ -326,7 +328,7 @@ export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, locali
                     value={task.progressPercent ?? 0}
                     onChange={(e) => handleProgress(Number(e.target.value))}
                     inputProps={{ min: 0, max: 100 }}
-                    disabled={!canUpdate}
+                    disabled={!canManageTaskData}
                     sx={{ mt: 1, maxWidth: 120 }}
                     data-testid="task-progress"
                   />
@@ -393,7 +395,7 @@ export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, locali
                     fullWidth
                     value={task.specialtyId ?? ''}
                     onChange={(e) => handleSpecialtyChange(e.target.value)}
-                    disabled={!canUpdate}
+                    disabled={!canManageTaskData}
                   >
                     <MenuItem value="">Todas as especialidades</MenuItem>
                     {specialties.map((s: any) => (
@@ -413,7 +415,7 @@ export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, locali
                     fullWidth
                     value={task.meetingId ?? ''}
                     onChange={(e) => handleMeetingChange(e.target.value)}
-                    disabled={!canUpdate}
+                    disabled={!canManageTaskData}
                   >
                     <MenuItem value="">Nenhuma</MenuItem>
                     {meetings.map((m: any) => (
@@ -442,7 +444,7 @@ export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, locali
                     fullWidth
                     value={task.eloRoleId ?? ''}
                     onChange={(e) => handleEloRoleChange(e.target.value)}
-                    disabled={!canUpdate}
+                    disabled={!canManageTaskData}
                   >
                     <MenuItem value="">Nenhum</MenuItem>
                     {eloRoles.map((r: any) => (
@@ -453,16 +455,16 @@ export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, locali
                   </TextField>
                 </Box>
                 <Stack direction="row" spacing={1}>
-                  <Button variant="outlined" onClick={() => handleStatus('IN_PROGRESS')} disabled={!canUpdate}>
+                  <Button variant="outlined" onClick={() => handleStatus('IN_PROGRESS')} disabled={!canManageTaskData}>
                     Iniciar
                   </Button>
-                  <Button variant="outlined" onClick={() => handleStatus('BLOCKED')} disabled={!canUpdate}>
+                  <Button variant="outlined" onClick={() => handleStatus('BLOCKED')} disabled={!canManageTaskData}>
                     Bloquear
                   </Button>
-                  <Button variant="contained" onClick={() => handleStatus('DONE')} disabled={!canUpdate} data-testid="task-mark-done">
+                  <Button variant="contained" onClick={() => handleStatus('DONE')} disabled={!canManageTaskData} data-testid="task-mark-done">
                     Concluir
                   </Button>
-                  <Button variant="text" disabled={!canUpdate} data-testid="task-save">
+                  <Button variant="text" disabled={!canManageTaskData} data-testid="task-save">
                     Salvar
                   </Button>
                   {canDelete && (
@@ -479,7 +481,7 @@ export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, locali
                 <EntityDocumentLinksManager
                   entityType="TASK_INSTANCE"
                   entityId={task.id}
-                  canManage={canUpdate}
+                  canManage={canManageTaskData}
                   title="Documentos da tarefa"
                 />
               </Stack>
@@ -494,7 +496,7 @@ export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, locali
                   minRows={2}
                   value={commentText}
                   onChange={(event) => setCommentText(event.target.value)}
-                  disabled={!canUpdate}
+                  disabled={!canManageTaskData}
                   placeholder="Escreva pendências, orientações, alinhamentos e observações..."
                 />
                 <Box display="flex" justifyContent="flex-end">
@@ -502,7 +504,7 @@ export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, locali
                     variant="contained"
                     size="small"
                     onClick={handleAddComment}
-                    disabled={!canUpdate || !commentText.trim() || addComment.isPending}
+                    disabled={!canManageTaskData || !commentText.trim() || addComment.isPending}
                   >
                     Comentar
                   </Button>
@@ -533,7 +535,7 @@ export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, locali
                 <Typography variant="body2" color="text.secondary">
                   Upload de relatório
                 </Typography>
-                <Button variant="outlined" component="label" disabled={!canUpdate}>
+                <Button variant="outlined" component="label" disabled={!canManageTaskData}>
                   Selecionar arquivo
                   <input
                     hidden

@@ -1,13 +1,22 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, TaskAssigneeType, TaskPriority, TaskStatus } from '@prisma/client';
+import {
+  Prisma,
+  TaskAssigneeType,
+  TaskPriority,
+  TaskStatus,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { throwError } from '../common/http-error';
 import { AuditService } from '../audit/audit.service';
 import { RbacUser } from '../rbac/rbac.types';
-import { hasAnyRole, resolveAccessProfile, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from '../rbac/role-access';
+import { resolveAccessProfile } from '../rbac/role-access';
 import { sanitizeForExecutive } from '../common/executive';
 import { sanitizeText } from '../common/sanitize';
-import { createTargetLocalityAliasMap, groupTargetLocalities, selectTargetLocalities } from '../common/priority-localities';
+import {
+  createTargetLocalityAliasMap,
+  groupTargetLocalities,
+  selectTargetLocalities,
+} from '../common/priority-localities';
 
 @Injectable()
 export class TasksService {
@@ -23,11 +32,17 @@ export class TasksService {
   ) {}
 
   async listPhases() {
-    const phases = await this.prisma.phase.findMany({ orderBy: { order: 'asc' } });
+    const phases = await this.prisma.phase.findMany({
+      orderBy: { order: 'asc' },
+    });
     return phases.map((phase) => this.mapPhase(phase));
   }
 
-  async updatePhase(id: string, payload: { displayName?: string | null }, user?: RbacUser) {
+  async updatePhase(
+    id: string,
+    payload: { displayName?: string | null },
+    user?: RbacUser,
+  ) {
     const existing = await this.prisma.phase.findUnique({ where: { id } });
     if (!existing) throwError('NOT_FOUND');
 
@@ -61,10 +76,16 @@ export class TasksService {
     });
   }
 
-  async createTaskTemplate(data: Prisma.TaskTemplateCreateInput, user?: RbacUser) {
+  async createTaskTemplate(
+    data: Prisma.TaskTemplateCreateInput,
+    user?: RbacUser,
+  ) {
     const payload = data as any;
     const phaseId = payload.phase?.connect?.id as string | undefined;
-    const specialtyId = payload.specialty?.connect?.id as string | null | undefined;
+    const specialtyId = payload.specialty?.connect?.id as
+      | string
+      | null
+      | undefined;
     const eloRoleId = payload.eloRole?.connect?.id as string | null | undefined;
     const title = String(payload.title ?? '').trim();
 
@@ -99,7 +120,9 @@ export class TasksService {
   }
 
   async cloneTaskTemplate(id: string, user?: RbacUser) {
-    const template = await this.prisma.taskTemplate.findUnique({ where: { id } });
+    const template = await this.prisma.taskTemplate.findUnique({
+      where: { id },
+    });
     if (!template) throwError('NOT_FOUND');
 
     const cloned = await this.prisma.taskTemplate.create({
@@ -125,18 +148,25 @@ export class TasksService {
     return cloned;
   }
 
-  async generateInstances(templateId: string, payload: {
-    localities: { localityId: string; dueDate: string }[];
-    reportRequired?: boolean;
-    priority?: TaskPriority | string;
-    meetingId?: string | null;
-    assignedToId?: string | null;
-    assigneeIds?: string[];
-  }, user?: RbacUser) {
-    const template = await this.prisma.taskTemplate.findUnique({ where: { id: templateId } });
+  async generateInstances(
+    templateId: string,
+    payload: {
+      localities: { localityId: string; dueDate: string }[];
+      reportRequired?: boolean;
+      priority?: TaskPriority | string;
+      meetingId?: string | null;
+      assignedToId?: string | null;
+      assigneeIds?: string[];
+    },
+    user?: RbacUser,
+  ) {
+    const template = await this.prisma.taskTemplate.findUnique({
+      where: { id: templateId },
+    });
     if (!template) throwError('NOT_FOUND');
 
-    const reportRequired = payload.reportRequired ?? template.reportRequiredDefault;
+    const reportRequired =
+      payload.reportRequired ?? template.reportRequiredDefault;
     const priority = (payload.priority as TaskPriority) ?? TaskPriority.MEDIUM;
     const responsibleIds = Array.from(
       new Set(
@@ -145,7 +175,10 @@ export class TasksService {
           .filter(Boolean),
       ),
     );
-    if (payload.assignedToId && !responsibleIds.includes(payload.assignedToId)) {
+    if (
+      payload.assignedToId &&
+      !responsibleIds.includes(payload.assignedToId)
+    ) {
       responsibleIds.push(payload.assignedToId);
     }
 
@@ -190,30 +223,42 @@ export class TasksService {
     return { items: created };
   }
 
-  async listTaskInstances(filters: {
-    localityId?: string;
-    phaseId?: string;
-    status?: string;
-    assigneeId?: string;
-    assigneeIds?: string;
-    dueFrom?: string;
-    dueTo?: string;
-    meetingId?: string;
-    eloRoleId?: string;
-    specialtyId?: string;
-    page?: string;
-    pageSize?: string;
-  }, user?: RbacUser) {
+  async listTaskInstances(
+    filters: {
+      localityId?: string;
+      phaseId?: string;
+      status?: string;
+      assigneeId?: string;
+      assigneeIds?: string;
+      dueFrom?: string;
+      dueTo?: string;
+      meetingId?: string;
+      eloRoleId?: string;
+      specialtyId?: string;
+      page?: string;
+      pageSize?: string;
+    },
+    user?: RbacUser,
+  ) {
     const allowedLocalityIds = await this.getTargetLocalityIds();
     if (allowedLocalityIds.length === 0) {
-      const { page, pageSize } = this.parsePagination(filters.page, filters.pageSize);
+      const { page, pageSize } = this.parsePagination(
+        filters.page,
+        filters.pageSize,
+      );
       return { items: [], page, pageSize, total: 0 };
     }
-    const { where } = this.buildTaskWhere({ ...filters, allowedLocalityIds }, user);
+    const { where } = this.buildTaskWhere(
+      { ...filters, allowedLocalityIds },
+      user,
+    );
     if (filters.meetingId) where.meetingId = filters.meetingId;
     if (filters.eloRoleId) where.eloRoleId = filters.eloRoleId;
 
-    const { page, pageSize, skip, take } = this.parsePagination(filters.page, filters.pageSize);
+    const { page, pageSize, skip, take } = this.parsePagination(
+      filters.page,
+      filters.pageSize,
+    );
 
     const [items, total] = await this.prisma.$transaction([
       this.prisma.taskInstance.findMany({
@@ -226,10 +271,23 @@ export class TasksService {
           specialty: { select: { id: true, name: true, color: true } },
           taskTemplate: { select: { id: true, title: true, phaseId: true } },
           assignedTo: { select: { id: true, name: true, email: true } },
-          assignedElo: { include: { eloRole: { select: { id: true, code: true, name: true } } } },
+          assignedElo: {
+            include: {
+              eloRole: { select: { id: true, code: true, name: true } },
+            },
+          },
           responsibles: {
             include: {
-              user: { select: { id: true, name: true, email: true, localityId: true, specialtyId: true, eloRoleId: true } },
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                  localityId: true,
+                  specialtyId: true,
+                  eloRoleId: true,
+                },
+              },
             },
             orderBy: [{ createdAt: 'asc' }],
           },
@@ -243,7 +301,9 @@ export class TasksService {
     const withCommentSummary = await this.attachTaskCommentSummary(items, user);
 
     return {
-      items: withCommentSummary.map((item) => this.mapTaskInstance(item, user?.executiveHidePii)),
+      items: withCommentSummary.map((item) =>
+        this.mapTaskInstance(item, user?.executiveHidePii),
+      ),
       page,
       pageSize,
       total,
@@ -254,14 +314,29 @@ export class TasksService {
     const instance = await this.prisma.taskInstance.findUnique({
       where: { id },
       include: {
-        taskTemplate: { include: { phase: true, specialty: true, eloRole: true } },
+        taskTemplate: {
+          include: { phase: true, specialty: true, eloRole: true },
+        },
         locality: true,
         specialty: { select: { id: true, name: true, color: true } },
         assignedTo: { select: { id: true, name: true, email: true } },
-        assignedElo: { include: { eloRole: { select: { id: true, code: true, name: true } } } },
+        assignedElo: {
+          include: {
+            eloRole: { select: { id: true, code: true, name: true } },
+          },
+        },
         responsibles: {
           include: {
-            user: { select: { id: true, name: true, email: true, localityId: true, specialtyId: true, eloRoleId: true } },
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                localityId: true,
+                specialtyId: true,
+                eloRoleId: true,
+              },
+            },
           },
           orderBy: [{ createdAt: 'asc' }],
         },
@@ -273,7 +348,10 @@ export class TasksService {
 
     this.assertTaskViewAccess(instance, user);
 
-    const [withCommentSummary] = await this.attachTaskCommentSummary([instance], user);
+    const [withCommentSummary] = await this.attachTaskCommentSummary(
+      [instance],
+      user,
+    );
     return this.mapTaskInstance(withCommentSummary, user?.executiveHidePii);
   }
 
@@ -297,18 +375,28 @@ export class TasksService {
       }),
       user?.id
         ? this.prisma.taskCommentRead.findUnique({
-            where: { taskInstanceId_userId: { taskInstanceId: id, userId: user.id } },
+            where: {
+              taskInstanceId_userId: { taskInstanceId: id, userId: user.id },
+            },
           })
-        : this.prisma.taskCommentRead.findFirst({ where: { taskInstanceId: id, userId: '__none__' } }),
+        : this.prisma.taskCommentRead.findFirst({
+            where: { taskInstanceId: id, userId: '__none__' },
+          }),
     ]);
 
     const seenAt = readState?.seenAt ?? null;
     const unread = user?.id
-      ? comments.filter((comment) => comment.authorId !== user.id && (!seenAt || comment.createdAt > seenAt)).length
+      ? comments.filter(
+          (comment) =>
+            comment.authorId !== user.id &&
+            (!seenAt || comment.createdAt > seenAt),
+        ).length
       : 0;
 
     return {
-      items: comments.map((comment) => this.mapTaskComment(comment, user?.executiveHidePii)),
+      items: comments.map((comment) =>
+        this.mapTaskComment(comment, user?.executiveHidePii),
+      ),
       summary: {
         total: comments.length,
         unread,
@@ -333,7 +421,10 @@ export class TasksService {
 
     const normalized = this.sanitizeCommentText(text);
     if (!normalized) {
-      throwError('VALIDATION_ERROR', { field: 'text', reason: 'COMMENT_REQUIRED' });
+      throwError('VALIDATION_ERROR', {
+        field: 'text',
+        reason: 'COMMENT_REQUIRED',
+      });
     }
 
     const created = await this.prisma.taskComment.create({
@@ -398,7 +489,11 @@ export class TasksService {
     if (!instance) throwError('NOT_FOUND');
     this.assertTaskOperateAccess(instance, user);
 
-    if (status === TaskStatus.DONE && instance.reportRequired && instance.reports.length === 0) {
+    if (
+      status === TaskStatus.DONE &&
+      instance.reportRequired &&
+      instance.reports.length === 0
+    ) {
       throwError('REPORT_REQUIRED');
     }
 
@@ -411,7 +506,10 @@ export class TasksService {
       }
     }
 
-    const progressPercent = this.applyProgressRules(status, instance.progressPercent);
+    const progressPercent = this.applyProgressRules(
+      status,
+      instance.progressPercent,
+    );
 
     const updated = await this.prisma.taskInstance.update({
       where: { id },
@@ -471,12 +569,22 @@ export class TasksService {
     const [locality, users, elos] = await this.prisma.$transaction([
       this.prisma.locality.findUnique({
         where: { id: localityId },
-        select: { id: true, name: true, commandName: true, commanderName: true },
+        select: {
+          id: true,
+          name: true,
+          commandName: true,
+          commanderName: true,
+        },
       }),
       this.prisma.user.findMany({
         where: { localityId, isActive: true },
         orderBy: { name: 'asc' },
-        select: { id: true, name: true, email: true, eloRole: { select: { name: true, code: true } } },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          eloRole: { select: { name: true, code: true } },
+        },
       }),
       this.prisma.elo.findMany({
         where: { localityId },
@@ -487,7 +595,12 @@ export class TasksService {
 
     if (!locality) throwError('NOT_FOUND');
 
-    const items: Array<{ type: string; id: string; label: string; subtitle?: string }> = [];
+    const items: Array<{
+      type: string;
+      id: string;
+      label: string;
+      subtitle?: string;
+    }> = [];
 
     for (const u of users) {
       items.push({
@@ -538,7 +651,12 @@ export class TasksService {
       assigneeIds?: string[];
       assignedToId?: string | null;
       localityId?: string | null;
-      assigneeType?: 'USER' | 'ELO' | 'LOCALITY_COMMAND' | 'LOCALITY_COMMANDER' | null;
+      assigneeType?:
+        | 'USER'
+        | 'ELO'
+        | 'LOCALITY_COMMAND'
+        | 'LOCALITY_COMMANDER'
+        | null;
       assigneeId?: string | null;
     },
     user?: RbacUser,
@@ -558,8 +676,11 @@ export class TasksService {
     this.assertCanAssignInTaskScope(
       {
         localityId: targetLocalityId,
-        specialtyId: instance.specialtyId ?? instance.taskTemplate?.specialtyId ?? null,
-        taskTemplate: { specialtyId: instance.taskTemplate?.specialtyId ?? null },
+        specialtyId:
+          instance.specialtyId ?? instance.taskTemplate?.specialtyId ?? null,
+        taskTemplate: {
+          specialtyId: instance.taskTemplate?.specialtyId ?? null,
+        },
         eloRoleId: instance.eloRoleId ?? null,
         assignedElo: instance.assignedElo,
       },
@@ -576,7 +697,13 @@ export class TasksService {
     if (selection.type === TaskAssigneeType.USER && selection.id) {
       const targetUser = await this.prisma.user.findUnique({
         where: { id: selection.id },
-        select: { id: true, localityId: true, specialtyId: true, eloRoleId: true, isActive: true },
+        select: {
+          id: true,
+          localityId: true,
+          specialtyId: true,
+          eloRoleId: true,
+          isActive: true,
+        },
       });
       if (!targetUser) throwError('NOT_FOUND');
       if (!targetUser.isActive) throwError('RBAC_FORBIDDEN');
@@ -588,7 +715,12 @@ export class TasksService {
     } else if (selection.type === TaskAssigneeType.ELO && selection.id) {
       const targetElo = await this.prisma.elo.findUnique({
         where: { id: selection.id },
-        select: { id: true, localityId: true, name: true, eloRole: { select: { name: true, code: true } } },
+        select: {
+          id: true,
+          localityId: true,
+          name: true,
+          eloRole: { select: { name: true, code: true } },
+        },
       });
       if (!targetElo) throwError('NOT_FOUND');
       if (targetElo.localityId !== targetLocalityId) {
@@ -603,7 +735,9 @@ export class TasksService {
       });
       externalAssigneeName = locality?.commandName?.trim() ?? null;
       externalAssigneeRole = externalAssigneeName ? 'GSD / Comando' : null;
-      assigneeType = externalAssigneeName ? TaskAssigneeType.LOCALITY_COMMAND : null;
+      assigneeType = externalAssigneeName
+        ? TaskAssigneeType.LOCALITY_COMMAND
+        : null;
     } else if (selection.type === TaskAssigneeType.LOCALITY_COMMANDER) {
       const locality = await this.prisma.locality.findUnique({
         where: { id: targetLocalityId },
@@ -611,7 +745,9 @@ export class TasksService {
       });
       externalAssigneeName = locality?.commanderName?.trim() ?? null;
       externalAssigneeRole = externalAssigneeName ? 'Comandante' : null;
-      assigneeType = externalAssigneeName ? TaskAssigneeType.LOCALITY_COMMANDER : null;
+      assigneeType = externalAssigneeName
+        ? TaskAssigneeType.LOCALITY_COMMANDER
+        : null;
     }
 
     const keepMeeting =
@@ -653,10 +789,23 @@ export class TasksService {
       },
       include: {
         assignedTo: { select: { id: true, name: true, email: true } },
-        assignedElo: { include: { eloRole: { select: { id: true, code: true, name: true } } } },
+        assignedElo: {
+          include: {
+            eloRole: { select: { id: true, code: true, name: true } },
+          },
+        },
         responsibles: {
           include: {
-            user: { select: { id: true, name: true, email: true, localityId: true, specialtyId: true, eloRoleId: true } },
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                localityId: true,
+                specialtyId: true,
+                eloRoleId: true,
+              },
+            },
           },
           orderBy: [{ createdAt: 'asc' }],
         },
@@ -683,7 +832,12 @@ export class TasksService {
     return this.mapTaskInstance(updated, user?.executiveHidePii);
   }
 
-  async batchAssign(ids: string[], assignedToId: string | null, assigneeIds: string[] = [], user?: RbacUser) {
+  async batchAssign(
+    ids: string[],
+    assignedToId: string | null,
+    assigneeIds: string[] = [],
+    user?: RbacUser,
+  ) {
     const instances = await this.prisma.taskInstance.findMany({
       where: { id: { in: ids } },
       include: {
@@ -729,7 +883,9 @@ export class TasksService {
       const localityResponsibleIds = users
         .filter((candidate) => candidate.localityId === instance.localityId)
         .map((candidate) => candidate.id);
-      await this.prisma.taskResponsible.deleteMany({ where: { taskInstanceId: instance.id } });
+      await this.prisma.taskResponsible.deleteMany({
+        where: { taskInstanceId: instance.id },
+      });
       if (localityResponsibleIds.length > 0) {
         await this.prisma.taskResponsible.createMany({
           data: localityResponsibleIds.map((userId) => ({
@@ -765,7 +921,11 @@ export class TasksService {
 
     for (const instance of instances) {
       this.assertTaskOperateAccess(instance, user);
-      if (status === TaskStatus.DONE && instance.reportRequired && instance.reports.length === 0) {
+      if (
+        status === TaskStatus.DONE &&
+        instance.reportRequired &&
+        instance.reports.length === 0
+      ) {
         throwError('REPORT_REQUIRED');
       }
     }
@@ -785,7 +945,10 @@ export class TasksService {
     return { updated: ids.length };
   }
 
-  async getGantt(params: { localityId?: string; from?: string; to?: string }, user?: RbacUser) {
+  async getGantt(
+    params: { localityId?: string; from?: string; to?: string },
+    user?: RbacUser,
+  ) {
     const allowedLocalityIds = await this.getTargetLocalityIds();
     if (allowedLocalityIds.length === 0) {
       return { items: [] };
@@ -819,7 +982,11 @@ export class TasksService {
         },
       },
     });
-    return { items: items.map((item) => this.mapTaskInstance(item, user?.executiveHidePii)) };
+    return {
+      items: items.map((item) =>
+        this.mapTaskInstance(item, user?.executiveHidePii),
+      ),
+    };
   }
 
   async getCalendar(year: number, localityId?: string, user?: RbacUser) {
@@ -859,7 +1026,10 @@ export class TasksService {
     const taskWhere: Prisma.TaskInstanceWhereInput = { localityId };
     const constraints = this.getScopeConstraints(user);
     if (constraints.specialtyId) {
-      taskWhere.OR = [{ specialtyId: null }, { specialtyId: constraints.specialtyId }];
+      taskWhere.OR = [
+        { specialtyId: null },
+        { specialtyId: constraints.specialtyId },
+      ];
     }
 
     const tasks = await this.prisma.taskInstance.findMany({
@@ -876,15 +1046,18 @@ export class TasksService {
       byPhase.set(phaseName, entry);
     }
 
-    const phaseEntries = Array.from(byPhase.entries()).map(([phaseName, stats]) => ({
-      phaseName,
-      progress: stats.count === 0 ? 0 : stats.total / stats.count,
-    }));
+    const phaseEntries = Array.from(byPhase.entries()).map(
+      ([phaseName, stats]) => ({
+        phaseName,
+        progress: stats.count === 0 ? 0 : stats.total / stats.count,
+      }),
+    );
 
     const overallProgress =
       phaseEntries.length === 0
         ? 0
-        : phaseEntries.reduce((acc, entry) => acc + entry.progress, 0) / phaseEntries.length;
+        : phaseEntries.reduce((acc, entry) => acc + entry.progress, 0) /
+          phaseEntries.length;
 
     return {
       localityId,
@@ -896,7 +1069,11 @@ export class TasksService {
   async getDashboardNational(user?: RbacUser, localityId?: string) {
     const where: Prisma.LocalityWhereInput = {};
     const constraints = this.getScopeConstraints(user);
-    if (constraints.localityId && localityId && constraints.localityId !== localityId) {
+    if (
+      constraints.localityId &&
+      localityId &&
+      constraints.localityId !== localityId
+    ) {
       where.id = '__none__';
     } else if (constraints.localityId) {
       where.id = constraints.localityId;
@@ -925,18 +1102,30 @@ export class TasksService {
     const reportsCount = await this.prisma.report.count();
     const taskWhere: Prisma.TaskInstanceWhereInput = {};
     if (constraints.specialtyId) {
-      taskWhere.OR = [{ specialtyId: null }, { specialtyId: constraints.specialtyId }];
+      taskWhere.OR = [
+        { specialtyId: null },
+        { specialtyId: constraints.specialtyId },
+      ];
     }
 
     const tasks = await this.prisma.taskInstance.findMany({
       where: taskWhere,
       include: { locality: true, taskTemplate: true },
     });
-    const localityById = new Map(localities.map((locality) => [locality.id, locality]));
-    const filteredTasks = tasks.filter((task) => aliasByLocalityId.has(task.localityId));
-    const statusById = new Map(filteredTasks.map((task) => [task.id, task.status]));
+    const localityById = new Map(
+      localities.map((locality) => [locality.id, locality]),
+    );
+    const filteredTasks = tasks.filter((task) =>
+      aliasByLocalityId.has(task.localityId),
+    );
+    const statusById = new Map(
+      filteredTasks.map((task) => [task.id, task.status]),
+    );
     const canonicalLocalityIdByTaskId = new Map<string, string>();
-    const tasksByLocalityId = new Map<string, (typeof filteredTasks)[number][]>();
+    const tasksByLocalityId = new Map<
+      string,
+      (typeof filteredTasks)[number][]
+    >();
     for (const task of filteredTasks) {
       const canonicalId = aliasByLocalityId.get(task.localityId);
       if (!canonicalId) continue;
@@ -947,11 +1136,15 @@ export class TasksService {
     }
 
     const mapNationalTaskDetail = (task: (typeof tasks)[number]) => {
-      const canonicalId = canonicalLocalityIdByTaskId.get(task.id) ?? task.localityId;
+      const canonicalId =
+        canonicalLocalityIdByTaskId.get(task.id) ?? task.localityId;
       const locality = localityById.get(canonicalId);
       const isLate = this.isLate(task);
       const isUnassigned = this.isTaskUnassigned(task);
-      const isBlocked = this.isBlocked(task.blockedByIdsJson as string[] | null | undefined, statusById);
+      const isBlocked = this.isBlocked(
+        task.blockedByIdsJson as string[] | null | undefined,
+        statusById,
+      );
       return {
         taskId: task.id,
         title: task.taskTemplate?.title ?? 'Tarefa',
@@ -973,11 +1166,17 @@ export class TasksService {
       const localityTasks = tasksByLocalityId.get(locality.id) ?? [];
       const late = localityTasks.filter((task) => this.isLate(task)).length;
       const blocked = localityTasks.filter((task) =>
-        this.isBlocked(task.blockedByIdsJson as string[] | null | undefined, statusById),
+        this.isBlocked(
+          task.blockedByIdsJson as string[] | null | undefined,
+          statusById,
+        ),
       ).length;
-      const unassigned = localityTasks.filter((task) => this.isTaskUnassigned(task)).length;
+      const unassigned = localityTasks.filter((task) =>
+        this.isTaskUnassigned(task),
+      ).length;
       const progress = localityTasks.length
-        ? localityTasks.reduce((acc, task) => acc + task.progressPercent, 0) / localityTasks.length
+        ? localityTasks.reduce((acc, task) => acc + task.progressPercent, 0) /
+          localityTasks.length
         : 0;
 
       return {
@@ -986,8 +1185,12 @@ export class TasksService {
         localityName: locality.name,
         recruitsFemaleCountCurrent: locality.recruitsFemaleCountCurrent ?? 0,
         commanderName: locality.commanderName ?? null,
-        individualMeetingDate: locality.individualMeetingDate ? locality.individualMeetingDate.toISOString().slice(0, 10) : null,
-        visitDate: locality.visitDate ? locality.visitDate.toISOString().slice(0, 10) : null,
+        individualMeetingDate: locality.individualMeetingDate
+          ? locality.individualMeetingDate.toISOString().slice(0, 10)
+          : null,
+        visitDate: locality.visitDate
+          ? locality.visitDate.toISOString().slice(0, 10)
+          : null,
         commandName: locality.commandName ?? null,
         notes: locality.notes ?? null,
         progress,
@@ -997,7 +1200,10 @@ export class TasksService {
       };
     });
 
-    const totalRecruits = localities.reduce((acc, l) => acc + (l.recruitsFemaleCountCurrent ?? 0), 0);
+    const totalRecruits = localities.reduce(
+      (acc, l) => acc + (l.recruitsFemaleCountCurrent ?? 0),
+      0,
+    );
     const lateItems = filteredTasks
       .filter((task) => this.isLate(task))
       .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())
@@ -1011,7 +1217,10 @@ export class TasksService {
         (task) =>
           this.isLate(task) ||
           this.isTaskUnassigned(task) ||
-          this.isBlocked(task.blockedByIdsJson as string[] | null | undefined, statusById),
+          this.isBlocked(
+            task.blockedByIdsJson as string[] | null | undefined,
+            statusById,
+          ),
       )
       .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())
       .slice(0, 10)
@@ -1039,7 +1248,11 @@ export class TasksService {
     const profile = resolveAccessProfile(user);
     const hasNationalRecruitScope = profile.ti || profile.nationalCommission;
     const constraints = this.getScopeConstraints(user);
-    if (constraints.localityId && localityId && constraints.localityId !== localityId) {
+    if (
+      constraints.localityId &&
+      localityId &&
+      constraints.localityId !== localityId
+    ) {
       localityWhere.id = '__none__';
     } else if (!hasNationalRecruitScope && constraints.localityId) {
       localityWhere.id = constraints.localityId;
@@ -1051,7 +1264,13 @@ export class TasksService {
       this.prisma.locality.findMany({
         where: localityWhere,
         orderBy: { name: 'asc' },
-        select: { id: true, name: true, code: true, recruitsFemaleCountCurrent: true, updatedAt: true },
+        select: {
+          id: true,
+          name: true,
+          code: true,
+          recruitsFemaleCountCurrent: true,
+          updatedAt: true,
+        },
       }),
       this.prisma.recruitsHistory.findMany({
         where:
@@ -1064,8 +1283,13 @@ export class TasksService {
     const localityGroups = groupTargetLocalities(localitiesRaw);
     const localities = localityGroups.map((group) => group.canonical);
     const { aliasByLocalityId } = createTargetLocalityAliasMap(localityGroups);
-    const filteredHistory = history.filter((entry) => aliasByLocalityId.has(entry.localityId));
-    const normalizedHistoryMap = new Map<string, { localityId: string; date: string; value: number }>();
+    const filteredHistory = history.filter((entry) =>
+      aliasByLocalityId.has(entry.localityId),
+    );
+    const normalizedHistoryMap = new Map<
+      string,
+      { localityId: string; date: string; value: number }
+    >();
     for (const entry of filteredHistory) {
       const canonicalId = aliasByLocalityId.get(entry.localityId);
       if (!canonicalId) continue;
@@ -1073,10 +1297,16 @@ export class TasksService {
       const key = `${canonicalId}:${dateKey}`;
       const current = normalizedHistoryMap.get(key);
       if (!current || entry.recruitsFemaleCount > current.value) {
-        normalizedHistoryMap.set(key, { localityId: canonicalId, date: dateKey, value: entry.recruitsFemaleCount });
+        normalizedHistoryMap.set(key, {
+          localityId: canonicalId,
+          date: dateKey,
+          value: entry.recruitsFemaleCount,
+        });
       }
     }
-    const normalizedHistory = Array.from(normalizedHistoryMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+    const normalizedHistory = Array.from(normalizedHistoryMap.values()).sort(
+      (a, b) => a.date.localeCompare(b.date),
+    );
 
     const currentPerLocality = localities.map((loc) => ({
       localityId: loc.id,
@@ -1105,12 +1335,14 @@ export class TasksService {
       });
     }
     const localityById = new Map(localities.map((l) => [l.id, l]));
-    const byLocality = Array.from(byLocalityMap.entries()).map(([localityId, series]) => ({
-      localityId,
-      localityName: localityById.get(localityId)?.name ?? localityId,
-      code: localityById.get(localityId)?.code ?? '',
-      series,
-    }));
+    const byLocality = Array.from(byLocalityMap.entries()).map(
+      ([localityId, series]) => ({
+        localityId,
+        localityName: localityById.get(localityId)?.name ?? localityId,
+        code: localityById.get(localityId)?.code ?? '',
+        series,
+      }),
+    );
 
     return {
       currentPerLocality,
@@ -1120,10 +1352,19 @@ export class TasksService {
   }
 
   async getDashboardExecutive(
-    params: { from?: string; to?: string; phaseId?: string; threshold?: string; command?: string; localityId?: string },
+    params: {
+      from?: string;
+      to?: string;
+      phaseId?: string;
+      threshold?: string;
+      command?: string;
+      localityId?: string;
+    },
     user?: RbacUser,
   ) {
-    const from = params.from ? new Date(params.from) : new Date(Date.now() - 56 * 24 * 60 * 60 * 1000);
+    const from = params.from
+      ? new Date(params.from)
+      : new Date(Date.now() - 56 * 24 * 60 * 60 * 1000);
     const to = params.to ? new Date(params.to) : new Date();
     const threshold = Number(params.threshold ?? 70);
 
@@ -1133,7 +1374,11 @@ export class TasksService {
     }
 
     const constraints = this.getScopeConstraints(user);
-    if (constraints.localityId && params.localityId && constraints.localityId !== params.localityId) {
+    if (
+      constraints.localityId &&
+      params.localityId &&
+      constraints.localityId !== params.localityId
+    ) {
       localityWhere.id = '__none__';
     } else if (constraints.localityId) {
       localityWhere.id = constraints.localityId;
@@ -1141,28 +1386,43 @@ export class TasksService {
       localityWhere.id = params.localityId;
     }
 
-    const [localitiesRaw, tasks, phases, reports, recruitsHistory] = await this.prisma.$transaction([
-      this.prisma.locality.findMany({ where: localityWhere, orderBy: { name: 'asc' } }),
-      this.prisma.taskInstance.findMany({
-        where: {
-          createdAt: { gte: from, lte: to },
-          ...(params.phaseId ? { taskTemplate: { phaseId: params.phaseId } } : {}),
-        },
-        include: { taskTemplate: { include: { phase: true } } },
-      }),
-      this.prisma.phase.findMany({ orderBy: { order: 'asc' } }),
-      this.prisma.report.findMany({ include: { taskInstance: true } }),
-      this.prisma.recruitsHistory.findMany({ orderBy: { date: 'asc' } }),
-    ]);
+    const [localitiesRaw, tasks, phases, reports, recruitsHistory] =
+      await this.prisma.$transaction([
+        this.prisma.locality.findMany({
+          where: localityWhere,
+          orderBy: { name: 'asc' },
+        }),
+        this.prisma.taskInstance.findMany({
+          where: {
+            createdAt: { gte: from, lte: to },
+            ...(params.phaseId
+              ? { taskTemplate: { phaseId: params.phaseId } }
+              : {}),
+          },
+          include: { taskTemplate: { include: { phase: true } } },
+        }),
+        this.prisma.phase.findMany({ orderBy: { order: 'asc' } }),
+        this.prisma.report.findMany({ include: { taskInstance: true } }),
+        this.prisma.recruitsHistory.findMany({ orderBy: { date: 'asc' } }),
+      ]);
     const localityGroups = groupTargetLocalities(localitiesRaw);
     const localities = localityGroups.map((group) => group.canonical);
     const { aliasByLocalityId } = createTargetLocalityAliasMap(localityGroups);
     const localityIds = localities.map((loc) => loc.id);
-    const filteredTasks = tasks.filter((task) => aliasByLocalityId.has(task.localityId));
-    const localityById = new Map(localities.map((locality) => [locality.id, locality]));
-    const statusById = new Map(filteredTasks.map((task) => [task.id, task.status]));
+    const filteredTasks = tasks.filter((task) =>
+      aliasByLocalityId.has(task.localityId),
+    );
+    const localityById = new Map(
+      localities.map((locality) => [locality.id, locality]),
+    );
+    const statusById = new Map(
+      filteredTasks.map((task) => [task.id, task.status]),
+    );
     const canonicalLocalityIdByTaskId = new Map<string, string>();
-    const tasksByLocalityId = new Map<string, (typeof filteredTasks)[number][]>();
+    const tasksByLocalityId = new Map<
+      string,
+      (typeof filteredTasks)[number][]
+    >();
     for (const task of filteredTasks) {
       const canonicalId = aliasByLocalityId.get(task.localityId);
       if (!canonicalId) continue;
@@ -1174,10 +1434,14 @@ export class TasksService {
     const dayMs = 1000 * 60 * 60 * 24;
 
     const mapExecutiveTaskItem = (task: any) => {
-      const canonicalId = canonicalLocalityIdByTaskId.get(task.id) ?? task.localityId;
+      const canonicalId =
+        canonicalLocalityIdByTaskId.get(task.id) ?? task.localityId;
       const locality = localityById.get(canonicalId);
       const late = this.isLate(task);
-      const blocked = this.isBlocked(task.blockedByIdsJson as string[] | null | undefined, statusById);
+      const blocked = this.isBlocked(
+        task.blockedByIdsJson as string[] | null | undefined,
+        statusById,
+      );
       return {
         taskId: task.id,
         title: task.taskTemplate?.title ?? 'Tarefa',
@@ -1192,23 +1456,38 @@ export class TasksService {
         progressPercent: task.progressPercent,
         reportRequired: task.reportRequired,
         isLate: late,
-        daysLate: late ? Math.max(1, Math.ceil((Date.now() - task.dueDate.getTime()) / dayMs)) : 0,
+        daysLate: late
+          ? Math.max(
+              1,
+              Math.ceil((Date.now() - task.dueDate.getTime()) / dayMs),
+            )
+          : 0,
         isUnassigned: this.isTaskUnassigned(task),
         isBlocked: blocked,
       };
     };
 
     const progressByPhase = phases.map((phase) => {
-      const phaseTasks = filteredTasks.filter((task) => task.taskTemplate.phaseId === phase.id);
+      const phaseTasks = filteredTasks.filter(
+        (task) => task.taskTemplate.phaseId === phase.id,
+      );
       const avg = phaseTasks.length
-        ? phaseTasks.reduce((acc, task) => acc + task.progressPercent, 0) / phaseTasks.length
+        ? phaseTasks.reduce((acc, task) => acc + task.progressPercent, 0) /
+          phaseTasks.length
         : 0;
-      return { phaseId: phase.id, phaseName: phase.name, progress: Math.round(avg) };
+      return {
+        phaseId: phase.id,
+        phaseName: phase.name,
+        progress: Math.round(avg),
+      };
     });
 
     const overallProgress =
       progressByPhase.length > 0
-        ? Math.round(progressByPhase.reduce((acc, entry) => acc + entry.progress, 0) / progressByPhase.length)
+        ? Math.round(
+            progressByPhase.reduce((acc, entry) => acc + entry.progress, 0) /
+              progressByPhase.length,
+          )
         : 0;
 
     const localityProgressByPhase = phases.map((phase) => {
@@ -1217,7 +1496,8 @@ export class TasksService {
           (task) => task.taskTemplate.phaseId === phase.id,
         );
         const avg = phaseTasks.length
-          ? phaseTasks.reduce((acc, task) => acc + task.progressPercent, 0) / phaseTasks.length
+          ? phaseTasks.reduce((acc, task) => acc + task.progressPercent, 0) /
+            phaseTasks.length
           : 0;
         return {
           localityId: locality.id,
@@ -1238,7 +1518,9 @@ export class TasksService {
         threshold,
         localitiesAboveCount: localitiesAbove.length,
         localitiesBelowCount: localitiesBelow.length,
-        percentLocalitiesAbove: localities.length ? Math.round((localitiesAbove.length / localities.length) * 100) : 0,
+        percentLocalitiesAbove: localities.length
+          ? Math.round((localitiesAbove.length / localities.length) * 100)
+          : 0,
         localitiesAbove,
         localitiesBelow,
       };
@@ -1248,7 +1530,8 @@ export class TasksService {
       .map((locality) => {
         const localityTasks = tasksByLocalityId.get(locality.id) ?? [];
         const avg = localityTasks.length
-          ? localityTasks.reduce((acc, task) => acc + task.progressPercent, 0) / localityTasks.length
+          ? localityTasks.reduce((acc, task) => acc + task.progressPercent, 0) /
+            localityTasks.length
           : 0;
         return {
           localityId: locality.id,
@@ -1260,22 +1543,45 @@ export class TasksService {
       })
       .sort((a, b) => b.progress - a.progress);
 
-    const lateTasks = filteredTasks.filter((task) => task.status !== TaskStatus.DONE && task.dueDate < new Date());
+    const lateTasks = filteredTasks.filter(
+      (task) => task.status !== TaskStatus.DONE && task.dueDate < new Date(),
+    );
     const lateTaskItems = lateTasks
       .slice()
       .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())
       .map((task) => mapExecutiveTaskItem(task));
 
-    const weeklyTrend: Array<{ week: string; late: number; localities: Array<{ localityId: string; localityCode: string; localityName: string; count: number }> }> = [];
+    const weeklyTrend: Array<{
+      week: string;
+      late: number;
+      localities: Array<{
+        localityId: string;
+        localityCode: string;
+        localityName: string;
+        count: number;
+      }>;
+    }> = [];
     for (let i = 7; i >= 0; i -= 1) {
       const start = new Date(Date.now() - i * 7 * 24 * 60 * 60 * 1000);
       const end = new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000);
       const weekItems = filteredTasks.filter(
-        (task) => task.dueDate >= start && task.dueDate < end && task.status !== TaskStatus.DONE,
+        (task) =>
+          task.dueDate >= start &&
+          task.dueDate < end &&
+          task.status !== TaskStatus.DONE,
       );
-      const byLocality = new Map<string, { localityId: string; localityCode: string; localityName: string; count: number }>();
+      const byLocality = new Map<
+        string,
+        {
+          localityId: string;
+          localityCode: string;
+          localityName: string;
+          count: number;
+        }
+      >();
       for (const task of weekItems) {
-        const canonicalId = canonicalLocalityIdByTaskId.get(task.id) ?? task.localityId;
+        const canonicalId =
+          canonicalLocalityIdByTaskId.get(task.id) ?? task.localityId;
         const locality = localityById.get(canonicalId);
         const key = locality?.id ?? canonicalId;
         const current = byLocality.get(key);
@@ -1299,7 +1605,9 @@ export class TasksService {
       });
     }
 
-    const unassigned = filteredTasks.filter((task) => this.isTaskUnassigned(task));
+    const unassigned = filteredTasks.filter((task) =>
+      this.isTaskUnassigned(task),
+    );
     const unassignedTaskItems = unassigned
       .slice()
       .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())
@@ -1307,10 +1615,17 @@ export class TasksService {
     const unassignedByCommand = new Map<string, number>();
     const unassignedByLocality = new Map<
       string,
-      { localityId: string; localityCode: string; localityName: string; commandName: string; count: number }
+      {
+        localityId: string;
+        localityCode: string;
+        localityName: string;
+        commandName: string;
+        count: number;
+      }
     >();
     for (const task of unassigned) {
-      const canonicalId = canonicalLocalityIdByTaskId.get(task.id) ?? task.localityId;
+      const canonicalId =
+        canonicalLocalityIdByTaskId.get(task.id) ?? task.localityId;
       const locality = localityById.get(canonicalId);
       const key = locality?.commandName ?? 'Sem comando';
       unassignedByCommand.set(key, (unassignedByCommand.get(key) ?? 0) + 1);
@@ -1331,14 +1646,24 @@ export class TasksService {
     }
 
     const blockedTasks = filteredTasks.filter((task) =>
-      this.isBlocked(task.blockedByIdsJson as string[] | null | undefined, statusById),
+      this.isBlocked(
+        task.blockedByIdsJson as string[] | null | undefined,
+        statusById,
+      ),
     );
     const blockedByLocality = new Map<
       string,
-      { localityId: string; localityCode: string; localityName: string; commandName: string; count: number }
+      {
+        localityId: string;
+        localityCode: string;
+        localityName: string;
+        commandName: string;
+        count: number;
+      }
     >();
     for (const task of blockedTasks) {
-      const canonicalId = canonicalLocalityIdByTaskId.get(task.id) ?? task.localityId;
+      const canonicalId =
+        canonicalLocalityIdByTaskId.get(task.id) ?? task.localityId;
       const locality = localityById.get(canonicalId);
       const localityKey = locality?.id ?? canonicalId;
       const current = blockedByLocality.get(localityKey);
@@ -1357,17 +1682,28 @@ export class TasksService {
 
     const leadTimesByPhase = phases.map((phase) => {
       const doneTasks = filteredTasks.filter(
-        (task) => task.taskTemplate.phaseId === phase.id && task.status === TaskStatus.DONE,
+        (task) =>
+          task.taskTemplate.phaseId === phase.id &&
+          task.status === TaskStatus.DONE,
       );
       const avgDays = doneTasks.length
-        ? doneTasks.reduce((acc, task) => acc + (task.updatedAt.getTime() - task.createdAt.getTime()), 0) /
+        ? doneTasks.reduce(
+            (acc, task) =>
+              acc + (task.updatedAt.getTime() - task.createdAt.getTime()),
+            0,
+          ) /
           doneTasks.length /
           (1000 * 60 * 60 * 24)
         : 0;
       const sampleTasks = doneTasks
         .map((task) => ({
           ...mapExecutiveTaskItem(task),
-          leadDays: Number(((task.updatedAt.getTime() - task.createdAt.getTime()) / dayMs).toFixed(1)),
+          leadDays: Number(
+            (
+              (task.updatedAt.getTime() - task.createdAt.getTime()) /
+              dayMs
+            ).toFixed(1),
+          ),
         }))
         .sort((a, b) => b.leadDays - a.leadDays)
         .slice(0, 12);
@@ -1380,17 +1716,26 @@ export class TasksService {
       };
     });
 
-    const reportRequiredTasks = filteredTasks.filter((task) => task.reportRequired && task.status === TaskStatus.DONE);
-    const approvedReports = new Set(
-      reports.filter((report) => report.approved).map((report) => report.taskInstanceId),
+    const reportRequiredTasks = filteredTasks.filter(
+      (task) => task.reportRequired && task.status === TaskStatus.DONE,
     );
-    const complianceApproved = reportRequiredTasks.filter((task) => approvedReports.has(task.id)).length;
+    const approvedReports = new Set(
+      reports
+        .filter((report) => report.approved)
+        .map((report) => report.taskInstanceId),
+    );
+    const complianceApproved = reportRequiredTasks.filter((task) =>
+      approvedReports.has(task.id),
+    ).length;
     const compliancePending = reportRequiredTasks.length - complianceApproved;
     const reportPendingItems = reportRequiredTasks
       .filter((task) => !approvedReports.has(task.id))
       .map((task) => mapExecutiveTaskItem(task));
 
-    const recruitsByLocality = new Map<string, { date: string; value: number }[]>();
+    const recruitsByLocality = new Map<
+      string,
+      { date: string; value: number }[]
+    >();
     for (const entry of recruitsHistory) {
       const key = aliasByLocalityId.get(entry.localityId);
       if (!key || !localityIds.includes(key)) continue;
@@ -1408,26 +1753,44 @@ export class TasksService {
       const dateKey = entry.date.toISOString().slice(0, 10);
       const existing = recruitsAggregate.find((item) => item.date === dateKey);
       if (existing) existing.value += entry.recruitsFemaleCount;
-      else recruitsAggregate.push({ date: dateKey, value: entry.recruitsFemaleCount });
+      else
+        recruitsAggregate.push({
+          date: dateKey,
+          value: entry.recruitsFemaleCount,
+        });
     }
 
     const riskScores = localities.map((locality) => {
       const localityTasks = tasksByLocalityId.get(locality.id) ?? [];
       const late = localityTasks.filter((task) => this.isLate(task)).length;
       const blocked = localityTasks.filter((task) =>
-        this.isBlocked(task.blockedByIdsJson as string[] | null | undefined, statusById),
+        this.isBlocked(
+          task.blockedByIdsJson as string[] | null | undefined,
+          statusById,
+        ),
       ).length;
-      const unassignedCount = localityTasks.filter((task) => this.isTaskUnassigned(task)).length;
+      const unassignedCount = localityTasks.filter((task) =>
+        this.isTaskUnassigned(task),
+      ).length;
       const reportPending = localityTasks.filter(
-        (task) => task.reportRequired && task.status === TaskStatus.DONE && !approvedReports.has(task.id),
+        (task) =>
+          task.reportRequired &&
+          task.status === TaskStatus.DONE &&
+          !approvedReports.has(task.id),
       ).length;
-      const score = late * 2 + blocked * 2 + unassignedCount + reportPending * 2;
+      const score =
+        late * 2 + blocked * 2 + unassignedCount + reportPending * 2;
       return {
         localityId: locality.id,
         localityCode: locality.code,
         commandName: locality.commandName ?? '',
         score,
-        breakdown: { late, blocked, unassigned: unassignedCount, reportPending },
+        breakdown: {
+          late,
+          blocked,
+          unassigned: unassignedCount,
+          reportPending,
+        },
       };
     });
 
@@ -1445,16 +1808,22 @@ export class TasksService {
       },
       unassigned: {
         total: unassigned.length,
-        byCommand: Array.from(unassignedByCommand.entries()).map(([commandName, count]) => ({
-          commandName,
-          count,
-        })),
-        byLocality: Array.from(unassignedByLocality.values()).sort((a, b) => b.count - a.count),
+        byCommand: Array.from(unassignedByCommand.entries()).map(
+          ([commandName, count]) => ({
+            commandName,
+            count,
+          }),
+        ),
+        byLocality: Array.from(unassignedByLocality.values()).sort(
+          (a, b) => b.count - a.count,
+        ),
         items: unassignedTaskItems,
       },
       blocked: {
         total: blockedTasks.length,
-        byLocality: Array.from(blockedByLocality.values()).sort((a, b) => b.count - a.count),
+        byLocality: Array.from(blockedByLocality.values()).sort(
+          (a, b) => b.count - a.count,
+        ),
         items: blockedTasks
           .slice()
           .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())
@@ -1469,10 +1838,12 @@ export class TasksService {
       },
       recruits: {
         aggregate: recruitsAggregate,
-        byLocality: Array.from(recruitsByLocality.entries()).map(([localityId, series]) => ({
-          localityId,
-          series,
-        })),
+        byLocality: Array.from(recruitsByLocality.entries()).map(
+          ([localityId, series]) => ({
+            localityId,
+            series,
+          }),
+        ),
       },
       risk: {
         top10: riskScores.sort((a, b) => b.score - a.score).slice(0, 10),
@@ -1491,10 +1862,16 @@ export class TasksService {
   }
 
   private isLate(instance: { dueDate: Date; status: TaskStatus }) {
-    return instance.status !== TaskStatus.DONE && instance.dueDate.getTime() < Date.now();
+    return (
+      instance.status !== TaskStatus.DONE &&
+      instance.dueDate.getTime() < Date.now()
+    );
   }
 
-  private isBlocked(blockedByIds?: string[] | null, statusById?: Map<string, TaskStatus>) {
+  private isBlocked(
+    blockedByIds?: string[] | null,
+    statusById?: Map<string, TaskStatus>,
+  ) {
     if (!Array.isArray(blockedByIds) || blockedByIds.length === 0) return false;
     if (!statusById) return true;
     return blockedByIds.some((id) => statusById.get(id) !== TaskStatus.DONE);
@@ -1509,18 +1886,31 @@ export class TasksService {
     const hasResponsibleUsers =
       Array.isArray(task.responsibles) &&
       task.responsibles.some((entry) => Boolean(entry?.userId));
-    return !task.assignedToId && !task.assignedEloId && !task.externalAssigneeName && !hasResponsibleUsers;
+    return (
+      !task.assignedToId &&
+      !task.assignedEloId &&
+      !task.externalAssigneeName &&
+      !hasResponsibleUsers
+    );
   }
 
   private normalizeAssigneeSelection(payload: {
     assigneeIds?: string[];
     assignedToId?: string | null;
-    assigneeType?: 'USER' | 'ELO' | 'LOCALITY_COMMAND' | 'LOCALITY_COMMANDER' | null;
+    assigneeType?:
+      | 'USER'
+      | 'ELO'
+      | 'LOCALITY_COMMAND'
+      | 'LOCALITY_COMMANDER'
+      | null;
     assigneeId?: string | null;
   }): { type: TaskAssigneeType | null; id: string | null } {
     if (payload.assigneeType) {
       if (payload.assigneeType === 'USER' || payload.assigneeType === 'ELO') {
-        return { type: payload.assigneeType, id: payload.assigneeId?.trim() || null };
+        return {
+          type: payload.assigneeType,
+          id: payload.assigneeId?.trim() || null,
+        };
       }
       return { type: payload.assigneeType, id: null };
     }
@@ -1555,9 +1945,13 @@ export class TasksService {
     ]);
 
     const seenAtByTask = new Map<string, Date>();
-    for (const read of reads) seenAtByTask.set(read.taskInstanceId, read.seenAt);
+    for (const read of reads)
+      seenAtByTask.set(read.taskInstanceId, read.seenAt);
 
-    const summaryByTask = new Map<string, { total: number; unread: number; lastCommentAt: Date | null }>();
+    const summaryByTask = new Map<
+      string,
+      { total: number; unread: number; lastCommentAt: Date | null }
+    >();
     for (const id of ids) {
       summaryByTask.set(id, { total: 0, unread: 0, lastCommentAt: null });
     }
@@ -1582,7 +1976,11 @@ export class TasksService {
     }
 
     return items.map((item) => {
-      const summary = summaryByTask.get(item.id) ?? { total: 0, unread: 0, lastCommentAt: null };
+      const summary = summaryByTask.get(item.id) ?? {
+        total: 0,
+        unread: 0,
+        lastCommentAt: null,
+      };
       return {
         ...item,
         comments: {
@@ -1603,7 +2001,10 @@ export class TasksService {
           .filter(Boolean)
           .map((user: any) => ({
             id: user.id,
-            name: user.name ?? user.email ?? `Usuário ${String(user.id).slice(0, 8)}`,
+            name:
+              user.name ??
+              user.email ??
+              `Usuário ${String(user.id).slice(0, 8)}`,
             email: user.email ?? null,
           }))
       : [];
@@ -1611,15 +2012,19 @@ export class TasksService {
       ...instance,
       localityName: instance.localityName ?? instance.locality?.name ?? null,
       localityCode: instance.localityCode ?? instance.locality?.code ?? null,
-      specialtyId: instance.specialtyId ?? instance.taskTemplate?.specialtyId ?? null,
-      specialtyName: instance.specialty?.name ?? instance.taskTemplate?.specialty?.name ?? null,
+      specialtyId:
+        instance.specialtyId ?? instance.taskTemplate?.specialtyId ?? null,
+      specialtyName:
+        instance.specialty?.name ??
+        instance.taskTemplate?.specialty?.name ??
+        null,
       isLate: this.isLate(instance),
       blockedByIds: (instance.blockedByIdsJson as string[] | null) ?? null,
       hasAssignee: !this.isTaskUnassigned(instance),
       responsibleUsers: executiveHidePii ? [] : responsibleUsers,
       assignee: executiveHidePii ? null : assignee,
-      assigneeLabel: executiveHidePii ? null : assignee?.label ?? null,
-    } as any;
+      assigneeLabel: executiveHidePii ? null : (assignee?.label ?? null),
+    };
 
     delete mapped.blockedByIdsJson;
     delete mapped.responsibles;
@@ -1652,7 +2057,7 @@ export class TasksService {
           : null,
       authorName: executiveHidePii
         ? 'Usuário interno'
-        : comment.author?.name ?? comment.author?.email ?? 'Usuário',
+        : (comment.author?.name ?? comment.author?.email ?? 'Usuário'),
     };
   }
 
@@ -1663,16 +2068,17 @@ export class TasksService {
       .trim();
   }
 
-  private resolveAssignee(instance: any): { type: string; id: string | null; name: string; label: string } | null {
+  private resolveAssignee(
+    instance: any,
+  ): { type: string; id: string | null; name: string; label: string } | null {
     const responsibleUsers = Array.isArray(instance.responsibles)
-      ? instance.responsibles
-          .map((entry: any) => entry?.user)
-          .filter(Boolean)
+      ? instance.responsibles.map((entry: any) => entry?.user).filter(Boolean)
       : [];
 
     if (responsibleUsers.length > 1) {
       const labels = responsibleUsers.map(
-        (user: any) => user.name || user.email || `Usuário ${String(user.id).slice(0, 8)}`,
+        (user: any) =>
+          user.name || user.email || `Usuário ${String(user.id).slice(0, 8)}`,
       );
       return {
         type: 'USERS',
@@ -1685,7 +2091,9 @@ export class TasksService {
     if (responsibleUsers.length === 1) {
       const responsible = responsibleUsers[0];
       const name =
-        responsible.name || responsible.email || `Usuário ${String(responsible.id).slice(0, 8)}`;
+        responsible.name ||
+        responsible.email ||
+        `Usuário ${String(responsible.id).slice(0, 8)}`;
       return {
         type: TaskAssigneeType.USER,
         id: responsible.id,
@@ -1695,7 +2103,10 @@ export class TasksService {
     }
 
     if (instance.assignedTo) {
-      const name = instance.assignedTo.name || instance.assignedTo.email || `Usuário ${String(instance.assignedTo.id).slice(0, 8)}`;
+      const name =
+        instance.assignedTo.name ||
+        instance.assignedTo.email ||
+        `Usuário ${String(instance.assignedTo.id).slice(0, 8)}`;
       return {
         type: TaskAssigneeType.USER,
         id: instance.assignedTo.id,
@@ -1705,7 +2116,10 @@ export class TasksService {
     }
 
     if (instance.assignedElo) {
-      const role = instance.assignedElo.eloRole?.name ?? instance.assignedElo.eloRole?.code ?? 'Elo';
+      const role =
+        instance.assignedElo.eloRole?.name ??
+        instance.assignedElo.eloRole?.code ??
+        'Elo';
       const name = instance.assignedElo.name || 'Elo';
       return {
         type: TaskAssigneeType.ELO,
@@ -1729,7 +2143,14 @@ export class TasksService {
     return null;
   }
 
-  private mapPhase(phase: { id: string; name: string; displayName: string | null; order: number; createdAt: Date; updatedAt: Date }) {
+  private mapPhase(phase: {
+    id: string;
+    name: string;
+    displayName: string | null;
+    order: number;
+    createdAt: Date;
+    updatedAt: Date;
+  }) {
     const fallback = this.phaseLabelByCode[phase.name] ?? phase.name;
     const display = phase.displayName?.trim();
     return {
@@ -1763,12 +2184,20 @@ export class TasksService {
     };
   }
 
-  private assertConstraints(localityId: string, specialtyId: string | null, user?: RbacUser) {
+  private assertConstraints(
+    localityId: string,
+    specialtyId: string | null,
+    user?: RbacUser,
+  ) {
     const constraints = this.getScopeConstraints(user);
     if (constraints.localityId && constraints.localityId !== localityId) {
       throwError('RBAC_FORBIDDEN');
     }
-    if (constraints.specialtyId && specialtyId && constraints.specialtyId !== specialtyId) {
+    if (
+      constraints.specialtyId &&
+      specialtyId &&
+      constraints.specialtyId !== specialtyId
+    ) {
       throwError('RBAC_FORBIDDEN');
     }
   }
@@ -1781,13 +2210,8 @@ export class TasksService {
     const profile = resolveAccessProfile(user);
 
     if (mode === 'operate') {
-      if (profile.ti) return {};
-      return {
-        OR: [
-          { assignedToId: user.id },
-          { responsibles: { some: { userId: user.id } } },
-        ],
-      };
+      if (profile.ti || profile.nationalCommission) return {};
+      return { id: '__forbidden__' };
     }
 
     if (mode === 'assign') {
@@ -1800,7 +2224,12 @@ export class TasksService {
         if (profile.localityId) and.push({ localityId: profile.localityId });
         const groupOr: Prisma.TaskInstanceWhereInput[] = [];
         if (profile.groupSpecialtyId) {
-          groupOr.push({ OR: [{ specialtyId: null }, { specialtyId: profile.groupSpecialtyId }] });
+          groupOr.push({
+            OR: [
+              { specialtyId: null },
+              { specialtyId: profile.groupSpecialtyId },
+            ],
+          });
         }
         if (profile.groupEloRoleId) {
           groupOr.push({ eloRoleId: profile.groupEloRoleId });
@@ -1822,7 +2251,12 @@ export class TasksService {
       if (profile.localityId) and.push({ localityId: profile.localityId });
       const groupOr: Prisma.TaskInstanceWhereInput[] = [];
       if (profile.groupSpecialtyId) {
-        groupOr.push({ OR: [{ specialtyId: null }, { specialtyId: profile.groupSpecialtyId }] });
+        groupOr.push({
+          OR: [
+            { specialtyId: null },
+            { specialtyId: profile.groupSpecialtyId },
+          ],
+        });
       }
       if (profile.groupEloRoleId) {
         groupOr.push({ eloRoleId: profile.groupEloRoleId });
@@ -1840,7 +2274,9 @@ export class TasksService {
     if (user.localityId) {
       const groupOr: Prisma.TaskInstanceWhereInput[] = [];
       if (user.specialtyId) {
-        groupOr.push({ OR: [{ specialtyId: null }, { specialtyId: user.specialtyId }] });
+        groupOr.push({
+          OR: [{ specialtyId: null }, { specialtyId: user.specialtyId }],
+        });
       }
       if (user.eloRoleId) {
         groupOr.push({ eloRoleId: user.eloRoleId });
@@ -1860,14 +2296,17 @@ export class TasksService {
     if (!user?.id) return false;
     if (instance?.assignedToId === user.id) return true;
     if (Array.isArray(instance?.responsibles)) {
-      return instance.responsibles.some((entry: any) => (entry?.userId ?? entry?.user?.id) === user.id);
+      return instance.responsibles.some(
+        (entry: any) => (entry?.userId ?? entry?.user?.id) === user.id,
+      );
     }
     return false;
   }
 
   private matchesTaskSpecialty(instance: any, specialtyId?: string | null) {
     if (!specialtyId) return false;
-    const taskSpecialtyId = instance?.specialtyId ?? instance?.taskTemplate?.specialtyId ?? null;
+    const taskSpecialtyId =
+      instance?.specialtyId ?? instance?.taskTemplate?.specialtyId ?? null;
     return !taskSpecialtyId || taskSpecialtyId === specialtyId;
   }
 
@@ -1877,11 +2316,15 @@ export class TasksService {
     if (profile.ti || profile.nationalCommission) return;
 
     if (profile.localityAdmin) {
-      if (!profile.localityId || instance.localityId === profile.localityId) return;
+      if (!profile.localityId || instance.localityId === profile.localityId)
+        return;
       throwError('RBAC_FORBIDDEN');
     }
 
-    const specialtyMatch = this.matchesTaskSpecialty(instance, profile.groupSpecialtyId);
+    const specialtyMatch = this.matchesTaskSpecialty(
+      instance,
+      profile.groupSpecialtyId,
+    );
     const eloRoleMatch = profile.groupEloRoleId
       ? instance.eloRoleId === profile.groupEloRoleId ||
         instance.assignedElo?.eloRoleId === profile.groupEloRoleId
@@ -1896,58 +2339,41 @@ export class TasksService {
     }
 
     if (this.isTaskResponsibleUser(instance, user)) return;
-    if (user.localityId && instance.localityId === user.localityId && (specialtyMatch || eloRoleMatch)) return;
+    if (
+      user.localityId &&
+      instance.localityId === user.localityId &&
+      (specialtyMatch || eloRoleMatch)
+    )
+      return;
 
     throwError('RBAC_FORBIDDEN');
   }
 
-  private assertTaskOperateAccess(instance: any, user?: RbacUser) {
-    if (!user?.id) throwError('RBAC_FORBIDDEN');
-    const profile = resolveAccessProfile(user);
-    if (profile.ti) return;
-    if (!this.isTaskResponsibleUser(instance, user)) {
-      throwError('RBAC_FORBIDDEN');
-    }
-  }
-
-  private assertCanAssignInLocality(localityId: string, user?: RbacUser) {
+  private assertTaskOperateAccess(_instance: any, user?: RbacUser) {
     if (!user?.id) throwError('RBAC_FORBIDDEN');
     const profile = resolveAccessProfile(user);
     if (profile.ti || profile.nationalCommission) return;
-    if (profile.localityAdmin && profile.localityId === localityId) return;
-    if (profile.specialtyAdmin && profile.localityId === localityId) return;
     throwError('RBAC_FORBIDDEN');
   }
 
-  private assertCanAssignInTaskScope(instance: any, user?: RbacUser) {
+  private assertCanAssignInLocality(_localityId: string, user?: RbacUser) {
     if (!user?.id) throwError('RBAC_FORBIDDEN');
     const profile = resolveAccessProfile(user);
     if (profile.ti || profile.nationalCommission) return;
+    throwError('RBAC_FORBIDDEN');
+  }
 
-    if (profile.localityAdmin) {
-      if (!profile.localityId || instance.localityId === profile.localityId) return;
-      throwError('RBAC_FORBIDDEN');
-    }
-
-    if (profile.specialtyAdmin) {
-      if (profile.localityId && instance.localityId !== profile.localityId) {
-        throwError('RBAC_FORBIDDEN');
-      }
-      const specialtyMatch = this.matchesTaskSpecialty(instance, profile.groupSpecialtyId);
-      const eloRoleMatch = profile.groupEloRoleId
-        ? instance.eloRoleId === profile.groupEloRoleId ||
-          instance.assignedElo?.eloRoleId === profile.groupEloRoleId
-        : false;
-      if (specialtyMatch || eloRoleMatch) return;
-      throwError('RBAC_FORBIDDEN');
-    }
-
+  private assertCanAssignInTaskScope(_instance: any, user?: RbacUser) {
+    if (!user?.id) throwError('RBAC_FORBIDDEN');
+    const profile = resolveAccessProfile(user);
+    if (profile.ti || profile.nationalCommission) return;
     throwError('RBAC_FORBIDDEN');
   }
 
   private assertDeleteAccess(user?: RbacUser) {
     if (!user?.id) throwError('RBAC_FORBIDDEN');
-    if (hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_TI])) return;
+    const profile = resolveAccessProfile(user);
+    if (profile.ti || profile.nationalCommission) return;
     throwError('RBAC_FORBIDDEN');
   }
 
@@ -1985,9 +2411,13 @@ export class TasksService {
       throwError('VALIDATION_ERROR', { reason: 'TASK_RESPONSIBLE_INVALID' });
     }
 
-    const mismatched = users.some((candidate) => candidate.localityId !== localityId);
+    const mismatched = users.some(
+      (candidate) => candidate.localityId !== localityId,
+    );
     if (mismatched) {
-      throwError('VALIDATION_ERROR', { reason: 'TASK_RESPONSIBLE_LOCALITY_MISMATCH' });
+      throwError('VALIDATION_ERROR', {
+        reason: 'TASK_RESPONSIBLE_LOCALITY_MISMATCH',
+      });
     }
 
     // Guardrail: actor must be allowed to assign in this locality.
@@ -1995,7 +2425,11 @@ export class TasksService {
     return users.map((candidate) => candidate.id);
   }
 
-  async updateTaskMeeting(id: string, meetingId: string | null, user?: RbacUser) {
+  async updateTaskMeeting(
+    id: string,
+    meetingId: string | null,
+    user?: RbacUser,
+  ) {
     const instance = await this.prisma.taskInstance.findUnique({
       where: { id },
       include: {
@@ -2010,7 +2444,9 @@ export class TasksService {
     const updated = await this.prisma.taskInstance.update({
       where: { id },
       data: { meetingId },
-      include: { meeting: { select: { id: true, datetime: true, scope: true } } },
+      include: {
+        meeting: { select: { id: true, datetime: true, scope: true } },
+      },
     });
 
     await this.audit.log({
@@ -2025,7 +2461,11 @@ export class TasksService {
     return this.mapTaskInstance(updated, user?.executiveHidePii);
   }
 
-  async updateTaskEloRole(id: string, eloRoleId: string | null, user?: RbacUser) {
+  async updateTaskEloRole(
+    id: string,
+    eloRoleId: string | null,
+    user?: RbacUser,
+  ) {
     const instance = await this.prisma.taskInstance.findUnique({
       where: { id },
       include: {
@@ -2055,7 +2495,11 @@ export class TasksService {
     return this.mapTaskInstance(updated, user?.executiveHidePii);
   }
 
-  async updateTaskSpecialty(id: string, specialtyId: string | null, user?: RbacUser) {
+  async updateTaskSpecialty(
+    id: string,
+    specialtyId: string | null,
+    user?: RbacUser,
+  ) {
     const instance = await this.prisma.taskInstance.findUnique({
       where: { id },
       include: {
@@ -2137,19 +2581,22 @@ export class TasksService {
     return blockers.some((blocker) => blocker.status !== TaskStatus.DONE);
   }
 
-  private buildTaskWhere(filters: {
-    localityId?: string;
-    allowedLocalityIds?: string[];
-    phaseId?: string;
-    status?: string;
-    assigneeId?: string;
-    assigneeIds?: string;
-    dueFrom?: string;
-    dueTo?: string;
-    meetingId?: string;
-    eloRoleId?: string;
-    specialtyId?: string;
-  }, user?: RbacUser) {
+  private buildTaskWhere(
+    filters: {
+      localityId?: string;
+      allowedLocalityIds?: string[];
+      phaseId?: string;
+      status?: string;
+      assigneeId?: string;
+      assigneeIds?: string;
+      dueFrom?: string;
+      dueTo?: string;
+      meetingId?: string;
+      eloRoleId?: string;
+      specialtyId?: string;
+    },
+    user?: RbacUser,
+  ) {
     const andClauses: Prisma.TaskInstanceWhereInput[] = [];
 
     if (Array.isArray(filters.allowedLocalityIds)) {
@@ -2161,8 +2608,10 @@ export class TasksService {
     }
     if (filters.localityId) andClauses.push({ localityId: filters.localityId });
     if (filters.eloRoleId) andClauses.push({ eloRoleId: filters.eloRoleId });
-    if (filters.specialtyId) andClauses.push({ specialtyId: filters.specialtyId });
-    if (filters.status) andClauses.push({ status: filters.status as TaskStatus });
+    if (filters.specialtyId)
+      andClauses.push({ specialtyId: filters.specialtyId });
+    if (filters.status)
+      andClauses.push({ status: filters.status as TaskStatus });
 
     const assigneeIds = (filters.assigneeIds ?? '')
       .split(',')
@@ -2205,32 +2654,53 @@ export class TasksService {
     return { where };
   }
 
-  async listTaskInstancesForExport(filters: {
-    localityId?: string;
-    allowedLocalityIds?: string[];
-    phaseId?: string;
-    status?: string;
-    assigneeId?: string;
-    assigneeIds?: string;
-    dueFrom?: string;
-    dueTo?: string;
-    specialtyId?: string;
-  }, user?: RbacUser) {
+  async listTaskInstancesForExport(
+    filters: {
+      localityId?: string;
+      allowedLocalityIds?: string[];
+      phaseId?: string;
+      status?: string;
+      assigneeId?: string;
+      assigneeIds?: string;
+      dueFrom?: string;
+      dueTo?: string;
+      specialtyId?: string;
+    },
+    user?: RbacUser,
+  ) {
     const allowedLocalityIds = await this.getTargetLocalityIds();
     if (allowedLocalityIds.length === 0) return [];
-    const { where } = this.buildTaskWhere({ ...filters, allowedLocalityIds }, user);
+    const { where } = this.buildTaskWhere(
+      { ...filters, allowedLocalityIds },
+      user,
+    );
 
     const items = await this.prisma.taskInstance.findMany({
       where,
       include: {
-        taskTemplate: { include: { phase: true, specialty: true, eloRole: true } },
+        taskTemplate: {
+          include: { phase: true, specialty: true, eloRole: true },
+        },
         locality: true,
         specialty: { select: { id: true, name: true, color: true } },
         assignedTo: { select: { id: true, name: true, email: true } },
-        assignedElo: { include: { eloRole: { select: { id: true, code: true, name: true } } } },
+        assignedElo: {
+          include: {
+            eloRole: { select: { id: true, code: true, name: true } },
+          },
+        },
         responsibles: {
           include: {
-            user: { select: { id: true, name: true, email: true, localityId: true, specialtyId: true, eloRoleId: true } },
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                localityId: true,
+                specialtyId: true,
+                eloRoleId: true,
+              },
+            },
           },
           orderBy: [{ createdAt: 'asc' }],
         },
@@ -2240,19 +2710,29 @@ export class TasksService {
       orderBy: { dueDate: 'asc' },
     });
 
-    return items.map((item) => this.mapTaskInstance(item, user?.executiveHidePii));
+    return items.map((item) =>
+      this.mapTaskInstance(item, user?.executiveHidePii),
+    );
   }
 
   private parsePagination(pageRaw?: string, pageSizeRaw?: string) {
     const page = Math.max(1, Number(pageRaw ?? 1) || 1);
-    const pageSize = Math.min(100, Math.max(10, Number(pageSizeRaw ?? 20) || 20));
+    const pageSize = Math.min(
+      100,
+      Math.max(10, Number(pageSizeRaw ?? 20) || 20),
+    );
     const skip = (page - 1) * pageSize;
     return { page, pageSize, skip, take: pageSize };
   }
 
   private async getTargetLocalityIds() {
     const localities = await this.prisma.locality.findMany({
-      select: { id: true, name: true, recruitsFemaleCountCurrent: true, updatedAt: true },
+      select: {
+        id: true,
+        name: true,
+        recruitsFemaleCountCurrent: true,
+        updatedAt: true,
+      },
     });
     return selectTargetLocalities(localities).map((locality) => locality.id);
   }

@@ -14,6 +14,7 @@ import { ProgressInline } from '../components/chips/ProgressInline';
 import { TaskDetailsDrawer } from '../components/tasks/TaskDetailsDrawer';
 import { api } from '../api/client';
 import { can } from '../app/rbac';
+import { hasAnyRole, ROLE_COMANDANTE_COMGEP, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from '../app/roleAccess';
 import { DataGrid } from '@mui/x-data-grid';
 import type { GridColDef, GridRowSelectionModel } from '@mui/x-data-grid';
 import { ptBR as dataGridPtBR } from '@mui/x-data-grid/locales';
@@ -81,6 +82,9 @@ export function TasksPage() {
   );
 
   const tasksQuery = useTasks(taskFilters);
+  const canManageTaskDataByRole = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI]);
+  const canManageTaskAssignments = can(me, 'task_instances', 'assign') && canManageTaskDataByRole;
+  const canManageTaskData = can(me, 'task_instances', 'update') && canManageTaskDataByRole;
   const canViewUsers = can(me, 'users', 'view');
   const usersQuery = useUsers(canViewUsers);
   const phasesQuery = usePhases();
@@ -259,7 +263,7 @@ export function TasksPage() {
               <Typography variant="subtitle2">
                 Selecionadas: {selectedIds.length}
               </Typography>
-              {can(me, 'task_instances', 'assign') && (
+              {canManageTaskAssignments && (
                 <TextField
                   select
                   size="small"
@@ -277,7 +281,7 @@ export function TasksPage() {
                   ))}
                 </TextField>
               )}
-              {can(me, 'task_instances', 'update') && (
+              {canManageTaskData && (
                 <TextField
                   select
                   size="small"
@@ -299,7 +303,7 @@ export function TasksPage() {
                 disabled={
                   !selectedIds.length ||
                   !batchAssignee ||
-                  !can(me, 'task_instances', 'assign')
+                  !canManageTaskAssignments
                 }
                 onClick={async () => {
                   try {
@@ -319,7 +323,7 @@ export function TasksPage() {
               </Button>
               <Button
                 variant="outlined"
-                disabled={!selectedIds.length || !batchStatus || !can(me, 'task_instances', 'update')}
+                disabled={!selectedIds.length || !batchStatus || !canManageTaskData}
                 onClick={async () => {
                   try {
                     await batchStatusMutation.mutateAsync({ ids: selectedIds.map(String), status: batchStatus });

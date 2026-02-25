@@ -44,7 +44,7 @@ import {
   useUpsertActivityReport,
 } from '../api/hooks';
 import { parseApiError } from '../app/apiErrors';
-import { hasAnyRole, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from '../app/roleAccess';
+import { hasAnyRole, ROLE_COMANDANTE_COMGEP, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from '../app/roleAccess';
 import { useToast } from '../app/toast';
 import { can } from '../app/rbac';
 import { EmptyState } from '../components/states/EmptyState';
@@ -223,12 +223,14 @@ export function ActivitiesPage() {
 
   const canView = !me ? true : can(me, 'task_instances', 'view');
   const canCreate = can(me, 'task_instances', 'create');
-  const canUpdate = can(me, 'task_instances', 'update');
-  const canDelete = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]) && canUpdate;
-  const canEditReport = can(me, 'reports', 'create');
-  const canSign = can(me, 'reports', 'approve');
-  const canUpload = can(me, 'reports', 'upload');
-  const canDownload = can(me, 'reports', 'download');
+  const canManageActivityDataByRole = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI]);
+  const canUpdate = can(me, 'task_instances', 'update') && canManageActivityDataByRole;
+  const canDelete = canUpdate;
+  const canEditReport = can(me, 'reports', 'create') && canManageActivityDataByRole;
+  const canSign = can(me, 'reports', 'approve') && canManageActivityDataByRole;
+  const canUpload = can(me, 'reports', 'upload') && canManageActivityDataByRole;
+  const canDownload = can(me, 'reports', 'download') && canManageActivityDataByRole;
+  const canEditActivityForm = isCreateMode ? canCreate : canUpdate;
 
   const responsibleOptions = useMemo(() => {
     const filtered = allUsers.filter((user: any) => {
@@ -275,7 +277,7 @@ export function ActivitiesPage() {
   };
 
   const handleSaveActivity = async () => {
-    if (!selected) return;
+    if (!selected || !canUpdate) return;
     try {
       await updateActivity.mutateAsync({
         id: selected.id,
@@ -309,7 +311,7 @@ export function ActivitiesPage() {
   };
 
   const handleStatusChange = async (status: string) => {
-    if (!selected) return;
+    if (!selected || !canUpdate) return;
     try {
       await updateActivityStatus.mutateAsync({ id: selected.id, status });
       toast.push({ message: 'Status atualizado', severity: 'success' });
@@ -320,7 +322,7 @@ export function ActivitiesPage() {
   };
 
   const handleSaveReport = async () => {
-    if (!selected) return;
+    if (!selected || !canEditReport) return;
     try {
       await upsertReport.mutateAsync({ id: selected.id, payload: reportForm });
       toast.push({ message: 'Relatório salvo', severity: 'success' });
@@ -330,7 +332,7 @@ export function ActivitiesPage() {
   };
 
   const handleSign = async () => {
-    if (!selected) return;
+    if (!selected || !canSign) return;
     try {
       await signReport.mutateAsync(selected.id);
       toast.push({ message: 'Relatório assinado digitalmente', severity: 'success' });
@@ -340,7 +342,7 @@ export function ActivitiesPage() {
   };
 
   const handleExportPdf = async () => {
-    if (!selected) return;
+    if (!selected || !canDownload) return;
     try {
       await exportPdf.mutateAsync(selected.id);
     } catch (error) {
@@ -349,7 +351,7 @@ export function ActivitiesPage() {
   };
 
   const handleAddComment = async () => {
-    if (!selected) return;
+    if (!selected || !canUpdate) return;
     const text = commentText.trim();
     if (!text) return;
     try {
@@ -652,6 +654,7 @@ export function ActivitiesPage() {
                 value={activityForm.title}
                 onChange={(e) => setActivityForm({ ...activityForm, title: e.target.value })}
                 fullWidth
+                disabled={!canEditActivityForm}
               />
               <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} sx={{ mt: 1 }}>
                 <TextField
@@ -661,6 +664,7 @@ export function ActivitiesPage() {
                   value={activityForm.localityId}
                   onChange={(e) => setActivityForm({ ...activityForm, localityId: e.target.value })}
                   sx={{ minWidth: 220 }}
+                  disabled={!canEditActivityForm}
                 >
                   <MenuItem value="">Não vinculada</MenuItem>
                   {selectableLocalities.map((l: any) => (
@@ -676,6 +680,7 @@ export function ActivitiesPage() {
                   value={activityForm.specialtyId}
                   onChange={(e) => setActivityForm({ ...activityForm, specialtyId: e.target.value })}
                   sx={{ minWidth: 220 }}
+                  disabled={!canEditActivityForm}
                 >
                   <MenuItem value="">Todas as especialidades</MenuItem>
                   {specialties.map((s: any) => (
@@ -693,7 +698,7 @@ export function ActivitiesPage() {
                   value={activityForm.responsibleUserId}
                   onChange={(e) => setActivityForm({ ...activityForm, responsibleUserId: e.target.value })}
                   sx={{ minWidth: 240 }}
-                  disabled={usersQuery.isLoading}
+                  disabled={usersQuery.isLoading || !canEditActivityForm}
                 >
                   <MenuItem value="">Sem responsável</MenuItem>
                   {responsibleOptions.map((user: any) => (
@@ -710,6 +715,7 @@ export function ActivitiesPage() {
                   onChange={(e) => setActivityForm({ ...activityForm, eventDate: e.target.value })}
                   InputLabelProps={{ shrink: true }}
                   sx={{ minWidth: 200 }}
+                  disabled={!canEditActivityForm}
                 />
               </Stack>
               <TextField
@@ -721,6 +727,7 @@ export function ActivitiesPage() {
                 value={activityForm.description}
                 onChange={(e) => setActivityForm({ ...activityForm, description: e.target.value })}
                 sx={{ mt: 1 }}
+                disabled={!canEditActivityForm}
               />
               {usersQuery.isError && (
                 <Typography variant="caption" color="warning.main" sx={{ mt: 0.5, display: 'block' }}>
@@ -736,6 +743,7 @@ export function ActivitiesPage() {
                   value={activityForm.reportRequired ? 'true' : 'false'}
                   onChange={(e) => setActivityForm({ ...activityForm, reportRequired: e.target.value === 'true' })}
                   sx={{ minWidth: 220 }}
+                  disabled={!canEditActivityForm}
                 >
                   <MenuItem value="true">Sim</MenuItem>
                   <MenuItem value="false">Não</MenuItem>
@@ -877,6 +885,7 @@ export function ActivitiesPage() {
                     onChange={(e) => setReportForm({ ...reportForm, date: e.target.value })}
                     InputLabelProps={{ shrink: true }}
                     fullWidth
+                    disabled={!canEditReport}
                   />
                   <TextField
                     size="small"
@@ -884,6 +893,7 @@ export function ActivitiesPage() {
                     value={reportForm.location}
                     onChange={(e) => setReportForm({ ...reportForm, location: e.target.value })}
                     fullWidth
+                    disabled={!canEditReport}
                   />
                   <TextField
                     size="small"
@@ -891,6 +901,7 @@ export function ActivitiesPage() {
                     value={reportForm.responsible}
                     onChange={(e) => setReportForm({ ...reportForm, responsible: e.target.value })}
                     fullWidth
+                    disabled={!canEditReport}
                   />
                 </Stack>
 
@@ -902,6 +913,7 @@ export function ActivitiesPage() {
                   multiline
                   minRows={2}
                   fullWidth
+                  disabled={!canEditReport}
                 />
                 <TextField
                   size="small"
@@ -911,6 +923,7 @@ export function ActivitiesPage() {
                   multiline
                   minRows={3}
                   fullWidth
+                  disabled={!canEditReport}
                 />
 
                 <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
@@ -924,6 +937,7 @@ export function ActivitiesPage() {
                     }
                     inputProps={{ min: 0 }}
                     sx={{ minWidth: 220 }}
+                    disabled={!canEditReport}
                   />
                   <TextField
                     size="small"
@@ -933,6 +947,7 @@ export function ActivitiesPage() {
                       setReportForm({ ...reportForm, participantsCharacteristics: e.target.value })
                     }
                     fullWidth
+                    disabled={!canEditReport}
                   />
                 </Stack>
 
@@ -944,6 +959,7 @@ export function ActivitiesPage() {
                   multiline
                   minRows={2}
                   fullWidth
+                  disabled={!canEditReport}
                 />
 
                 <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
@@ -953,6 +969,7 @@ export function ActivitiesPage() {
                     value={reportForm.city}
                     onChange={(e) => setReportForm({ ...reportForm, city: e.target.value })}
                     fullWidth
+                    disabled={!canEditReport}
                   />
                   <TextField
                     size="small"
@@ -962,6 +979,7 @@ export function ActivitiesPage() {
                     onChange={(e) => setReportForm({ ...reportForm, closingDate: e.target.value })}
                     InputLabelProps={{ shrink: true }}
                     fullWidth
+                    disabled={!canEditReport}
                   />
                 </Stack>
 
