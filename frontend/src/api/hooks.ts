@@ -730,6 +730,20 @@ export function useBatchStatusTasks() {
   });
 }
 
+export function useBatchDeleteTasks() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { ids: string[] }) =>
+      (await api.post("/task-instances/batch/delete", args)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      qc.invalidateQueries({ queryKey: ["gantt"] });
+      qc.invalidateQueries({ queryKey: ["calendar"] });
+      qc.invalidateQueries({ queryKey: ["meetings"] });
+    },
+  });
+}
+
 export function useGantt(filters: Record<string, any>) {
   return useQuery({
     queryKey: qk.gantt(filters),

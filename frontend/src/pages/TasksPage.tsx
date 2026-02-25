@@ -2,7 +2,7 @@ import { Box, Button, Card, CardContent, Link, MenuItem, Stack, Tab, Tabs, TextF
 import { format } from 'date-fns';
 import { useEffect, useMemo, useState } from 'react';
 import { Link as RouterLink, useSearchParams } from 'react-router-dom';
-import { useLocalities, useEloRoles, usePhases, useTaskTemplates, useTasks, useMe, useBatchAssignTasks, useBatchStatusTasks, useUsers } from '../api/hooks';
+import { useLocalities, useEloRoles, usePhases, useTaskTemplates, useTasks, useMe, useBatchAssignTasks, useBatchDeleteTasks, useBatchStatusTasks, useUsers } from '../api/hooks';
 import { useDebounce } from '../app/useDebounce';
 import { FiltersBar } from '../components/filters/FiltersBar';
 import { SkeletonState } from '../components/states/SkeletonState';
@@ -22,6 +22,7 @@ import { useToast } from '../app/toast';
 import { parseApiError } from '../app/apiErrors';
 import { TASK_STATUS_LABELS } from '../constants/enums';
 import { selectTargetLocalities } from '../constants/localities';
+import { ConfirmDialog } from '../components/dialogs/ConfirmDialog';
 
 function resolveTaskTitle(task: any) {
   const raw =
@@ -165,12 +166,34 @@ export function TasksPage() {
     if (taskIdFromUrl && taskIdFromUrl !== selectedTaskId) setSelectedTaskId(taskIdFromUrl);
   }, [taskIdFromUrl, selectedTaskId]);
   const [selectionModel, setSelectionModel] = useState<GridRowSelectionModel>(() => ({ type: 'include', ids: new Set() }));
-  const selectedIds = selectionModel?.type === 'include' && selectionModel?.ids ? Array.from(selectionModel.ids) : [];
   const safeRows = Array.isArray(filteredItems) ? filteredItems.filter((r: any) => r != null && r.id != null) : [];
+  const selectedIds = useMemo(() => {
+    if (!selectionModel || typeof selectionModel !== 'object' || !('type' in selectionModel) || !('ids' in selectionModel)) {
+      return [];
+    }
+
+    const idsRaw = (selectionModel as any).ids;
+    const ids = idsRaw instanceof Set
+      ? Array.from(idsRaw).map(String)
+      : Array.isArray(idsRaw)
+        ? idsRaw.map(String)
+        : [];
+
+    if ((selectionModel as any).type === 'include') {
+      return ids;
+    }
+
+    const excluded = new Set(ids);
+    return safeRows
+      .map((row: any) => String(row.id))
+      .filter((id) => !excluded.has(id));
+  }, [selectionModel, safeRows]);
   const [batchAssignee, setBatchAssignee] = useState('');
   const [batchStatus, setBatchStatus] = useState('');
+  const [batchDeleteOpen, setBatchDeleteOpen] = useState(false);
   const batchAssign = useBatchAssignTasks();
   const batchStatusMutation = useBatchStatusTasks();
+  const batchDeleteMutation = useBatchDeleteTasks();
 
   const updateParam = (key: string, value: string) => {
     const next = new URLSearchParams(params);
@@ -189,6 +212,26 @@ export function TasksPage() {
 
   const clearFilters = () => {
     setParams({});
+  };
+
+  const clearSelection = () => {
+    setSelectionModel({ type: 'include', ids: new Set() });
+  };
+
+  const handleBatchDelete = async () => {
+    if (!selectedIds.length) return;
+    try {
+      await batchDeleteMutation.mutateAsync({ ids: selectedIds.map(String) });
+      toast.push({ message: `${selectedIds.length} tarefa(s) excluída(s).`, severity: 'success' });
+      if (selectedTaskId && selectedIds.includes(selectedTaskId)) {
+        setSelectedTaskId(null);
+      }
+      clearSelection();
+      setBatchDeleteOpen(false);
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({ message: payload.message ?? 'Erro ao excluir tarefas selecionadas.', severity: 'error' });
+    }
   };
 
   if (tasksQuery.isLoading) {
@@ -336,6 +379,14 @@ export function TasksPage() {
               >
                 Status em massa
               </Button>
+              <Button
+                variant="contained"
+                color="error"
+                disabled={!selectedIds.length || !canManageTaskData}
+                onClick={() => setBatchDeleteOpen(true)}
+              >
+                Excluir selecionadas
+              </Button>
             </Stack>
             <Box sx={{ height: 520 }}>
               <DataGrid
@@ -448,8 +499,21 @@ export function TasksPage() {
                 checkboxSelection
                 rowSelectionModel={selectionModel}
                 onRowSelectionModelChange={(newModel) => {
-                  if (newModel && typeof newModel === 'object' && 'type' in newModel && 'ids' in newModel && newModel.ids instanceof Set) {
-                    setSelectionModel(newModel as GridRowSelectionModel);
+                  if (Array.isArray(newModel)) {
+                    setSelectionModel({ type: 'include', ids: new Set(newModel.map(String)) } as GridRowSelectionModel);
+                    return;
+                  }
+                  if (newModel && typeof newModel === 'object' && 'type' in newModel && 'ids' in newModel) {
+                    const idsRaw = (newModel as any).ids;
+                    const normalizedIds = idsRaw instanceof Set
+                      ? new Set(Array.from(idsRaw).map(String))
+                      : Array.isArray(idsRaw)
+                        ? new Set(idsRaw.map(String))
+                        : new Set();
+                    setSelectionModel({
+                      type: (newModel as any).type === 'exclude' ? 'exclude' : 'include',
+                      ids: normalizedIds,
+                    } as GridRowSelectionModel);
                   }
                 }}
                 onRowClick={(params) => setSelectedTaskId(params.row.id)}
@@ -525,6 +589,21 @@ export function TasksPage() {
         onDeleted={() => setSelectedTaskId(null)}
         user={me}
         localities={localities}
+      />
+
+      <ConfirmDialog
+        open={batchDeleteOpen}
+        onCancel={() => setBatchDeleteOpen(false)}
+        onConfirm={() => {
+          void handleBatchDelete();
+        }}
+        title="Excluir tarefas selecionadas"
+        message="Confirma a exclusão em lote das tarefas selecionadas?"
+        highlightText={`${selectedIds.length} tarefa(s)`}
+        note="Esta ação não pode ser desfeita."
+        confirmLabel={batchDeleteMutation.isPending ? 'Excluindo...' : 'Excluir selecionadas'}
+        severity="error"
+        confirmLoading={batchDeleteMutation.isPending}
       />
     </Box>
   );

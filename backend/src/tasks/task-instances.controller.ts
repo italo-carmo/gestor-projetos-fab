@@ -130,6 +130,12 @@ export class TaskInstancesController {
     return this.tasks.batchStatus(body.ids ?? [], body.status as any, user);
   }
 
+  @Post('batch/delete')
+  @RequirePermission('task_instances', 'update')
+  batchDelete(@Body() body: { ids: string[] }, @CurrentUser() user: RbacUser) {
+    return this.tasks.batchDeleteTaskInstances(body.ids ?? [], user);
+  }
+
   @Delete(':id')
   @RequirePermission('task_instances', 'update')
   remove(@Param('id') id: string, @CurrentUser() user: RbacUser) {

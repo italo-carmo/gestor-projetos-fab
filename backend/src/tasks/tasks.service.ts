@@ -1051,6 +1051,63 @@ export class TasksService {
     return { updated: ids.length };
   }
 
+  async batchDeleteTaskInstances(ids: string[], user?: RbacUser) {
+    const normalizedIds = Array.from(
+      new Set(
+        (ids ?? [])
+          .map((value) => String(value ?? '').trim())
+          .filter(Boolean),
+      ),
+    );
+    if (!normalizedIds.length) {
+      return { deleted: 0 };
+    }
+
+    const existing = await this.prisma.taskInstance.findMany({
+      where: { id: { in: normalizedIds } },
+      select: {
+        id: true,
+        localityId: true,
+        taskTemplate: { select: { title: true } },
+      },
+    });
+    if (!existing.length) {
+      return { deleted: 0 };
+    }
+
+    this.assertDeleteAccess(user);
+
+    await this.prisma.$transaction([
+      this.prisma.taskCommentRead.deleteMany({
+        where: { taskInstanceId: { in: normalizedIds } },
+      }),
+      this.prisma.taskComment.deleteMany({
+        where: { taskInstanceId: { in: normalizedIds } },
+      }),
+      this.prisma.taskResponsible.deleteMany({
+        where: { taskInstanceId: { in: normalizedIds } },
+      }),
+      this.prisma.report.deleteMany({
+        where: { taskInstanceId: { in: normalizedIds } },
+      }),
+      this.prisma.taskInstance.deleteMany({
+        where: { id: { in: normalizedIds } },
+      }),
+    ]);
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'task_instances',
+      action: 'batch_delete',
+      diffJson: {
+        count: existing.length,
+        ids: existing.map((item) => item.id),
+      },
+    });
+
+    return { deleted: existing.length };
+  }
+
   async getGantt(
     params: { localityId?: string; from?: string; to?: string },
     user?: RbacUser,
