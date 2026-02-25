@@ -120,20 +120,17 @@ node scripts/generate-client.ts full
 ```
 
 ## Deploy (produção)
-1) Build e subir stack:
-```bash
-docker compose -f docker-compose.prod.yml up -d --build
-```
+Produção atual (servidor `172.16.31.178`) não usa fluxo Docker deste repositório.
 
-2) Aplicar migrations e seed (uma vez):
-```bash
-npm run prisma:migrate
-npm run seed:demo
-```
+Use o tutorial oficial:
+- [`DEPLOY_PRODUCAO.md`](./DEPLOY_PRODUCAO.md)
 
-3) Acessos:
-- App: `http://localhost:8080`
-- API: `http://localhost:8080/api`
+Resumo:
+1) atualizar `/home/sddm/gestor-projetos-fab` via `git pull`
+2) sincronizar para `/opt/gestao-projetos`
+3) build backend/frontend em `/opt/gestao-projetos`
+4) reiniciar `cipavd-backend.service` e `nginx`
+5) validar `/health` e `index.html` publicado
 
 ## Backup/Restore (Postgres)
 Backup:

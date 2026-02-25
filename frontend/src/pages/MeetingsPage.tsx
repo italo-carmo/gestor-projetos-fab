@@ -45,6 +45,7 @@ import {
 } from '../api/hooks';
 import { FiltersBar } from '../components/filters/FiltersBar';
 import { EntityDocumentLinksManager } from '../components/documents/EntityDocumentLinksManager';
+import { ConfirmDialog } from '../components/dialogs/ConfirmDialog';
 import { EmptyState } from '../components/states/EmptyState';
 import { ErrorState } from '../components/states/ErrorState';
 import { SkeletonState } from '../components/states/SkeletonState';
@@ -107,6 +108,7 @@ export function MeetingsPage() {
   const allTasks = tasksQuery.data?.items ?? [];
 
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [selectedMeeting, setSelectedMeeting] = useState<any | null>(null);
   const [form, setForm] = useState({
     datetime: '',
@@ -314,10 +316,15 @@ export function MeetingsPage() {
 
   const handleDeleteMeeting = async () => {
     if (!selectedMeeting || !canDelete) return;
-    if (!window.confirm('Deseja excluir esta reunião? Esta ação será registrada em auditoria.')) return;
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleConfirmDeleteMeeting = async () => {
+    if (!selectedMeeting || !canDelete) return;
     try {
       await deleteMeeting.mutateAsync(selectedMeeting.id);
       toast.push({ message: 'Reunião excluída', severity: 'success' });
+      setDeleteConfirmOpen(false);
       setSelectedMeeting(null);
       setDrawerOpen(false);
     } catch (error) {
@@ -521,7 +528,15 @@ export function MeetingsPage() {
         </Card>
       )}
 
-      <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)} PaperProps={{ sx: { width: { xs: '100%', md: 520 } } }}>
+      <Drawer
+        anchor="right"
+        open={drawerOpen}
+        onClose={() => {
+          setDeleteConfirmOpen(false);
+          setDrawerOpen(false);
+        }}
+        PaperProps={{ sx: { width: { xs: '100%', md: 520 } } }}
+      >
         <Box p={3} display="flex" flexDirection="column" gap={2} height="100%">
           <Typography variant="h5">{selectedMeeting ? 'Detalhes da reunião' : 'Nova reunião'}</Typography>
           <TextField
@@ -639,7 +654,13 @@ export function MeetingsPage() {
                 Excluir
               </Button>
             )}
-            <Button variant="text" onClick={() => setDrawerOpen(false)}>
+            <Button
+              variant="text"
+              onClick={() => {
+                setDeleteConfirmOpen(false);
+                setDrawerOpen(false);
+              }}
+            >
               Fechar
             </Button>
             {selectedMeeting && canGenerate && (
@@ -934,6 +955,19 @@ export function MeetingsPage() {
           </Stack>
         </Box>
       </Drawer>
+
+      <ConfirmDialog
+        open={deleteConfirmOpen}
+        onCancel={() => setDeleteConfirmOpen(false)}
+        onConfirm={handleConfirmDeleteMeeting}
+        title="Excluir reunião"
+        message="Deseja excluir esta reunião?"
+        highlightText={selectedMeeting?.scope ?? 'Reunião selecionada'}
+        note="Esta ação será registrada em auditoria e não pode ser desfeita."
+        confirmLabel="Excluir reunião"
+        severity="error"
+        confirmLoading={deleteMeeting.isPending}
+      />
     </Box>
   );
 }

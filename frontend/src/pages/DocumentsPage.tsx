@@ -53,6 +53,7 @@ import {
 import { EmptyState } from '../components/states/EmptyState';
 import { ErrorState } from '../components/states/ErrorState';
 import { SkeletonState } from '../components/states/SkeletonState';
+import { ConfirmDialog } from '../components/dialogs/ConfirmDialog';
 import { useToast } from '../app/toast';
 import { parseApiError } from '../app/apiErrors';
 
@@ -196,6 +197,7 @@ export function DocumentsPage() {
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
   const [moveDocIds, setMoveDocIds] = useState<string[]>([]);
+  const [folderDeleteTarget, setFolderDeleteTarget] = useState<DocumentSubcategory | null>(null);
   const [moveForm, setMoveForm] = useState({
     category: '',
     subcategoryId: '',
@@ -618,12 +620,13 @@ export function DocumentsPage() {
     return map;
   }, [allSubcategories]);
 
-  const handleDeleteFolder = async (folder: DocumentSubcategory) => {
-    const scopeCount = folder.totalDocumentCount ?? folder.documentCount ?? 0;
-    const ok = window.confirm(
-      `Excluir a subpasta "${folder.name}" e subpastas filhas? ${scopeCount} documento(s) serao movidos para a raiz da categoria.`,
-    );
-    if (!ok) return;
+  const handleDeleteFolder = (folder: DocumentSubcategory) => {
+    setFolderDeleteTarget(folder);
+  };
+
+  const handleConfirmDeleteFolder = async () => {
+    if (!folderDeleteTarget) return;
+    const folder = folderDeleteTarget;
 
     try {
       await deleteSubcategory.mutateAsync(folder.id);
@@ -631,6 +634,7 @@ export function DocumentsPage() {
       if (currentFolderId && deletedScope.has(currentFolderId)) {
         setCurrentFolderId(folder.parentId ?? '');
       }
+      setFolderDeleteTarget(null);
       toast.push({ message: 'Subpasta excluida com sucesso.', severity: 'success' });
     } catch (error) {
       const payload = parseApiError(error);
@@ -906,7 +910,7 @@ export function DocumentsPage() {
                                     color="error"
                                     onClick={(event) => {
                                       event.stopPropagation();
-                                      void handleDeleteFolder(folder);
+                                      handleDeleteFolder(folder);
                                     }}
                                   >
                                     <DeleteOutlineRoundedIcon fontSize="inherit" />
@@ -1608,6 +1612,21 @@ export function DocumentsPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <ConfirmDialog
+        open={Boolean(folderDeleteTarget)}
+        onCancel={() => setFolderDeleteTarget(null)}
+        onConfirm={() => {
+          void handleConfirmDeleteFolder();
+        }}
+        title="Excluir subpasta"
+        message="Excluir esta subpasta e subpastas filhas?"
+        highlightText={folderDeleteTarget?.name ?? ''}
+        note={`${folderDeleteTarget ? folderDeleteTarget.totalDocumentCount ?? folderDeleteTarget.documentCount ?? 0 : 0} documento(s) serão movidos para a raiz da categoria.`}
+        confirmLabel="Excluir subpasta"
+        severity="error"
+        confirmLoading={deleteSubcategory.isPending}
+      />
     </Box>
   );
 }

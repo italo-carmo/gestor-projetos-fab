@@ -40,6 +40,7 @@ import {
 import { EmptyState } from "../components/states/EmptyState";
 import { ErrorState } from "../components/states/ErrorState";
 import { SkeletonState } from "../components/states/SkeletonState";
+import { ConfirmDialog } from "../components/dialogs/ConfirmDialog";
 
 type SocialCommunicationArticle = {
   id: string;
@@ -100,6 +101,7 @@ export function SocialCommunicationPage() {
   const [previewing, setPreviewing] = useState<SocialCommunicationArticle | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<SocialCommunicationArticle | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<SocialCommunicationArticle | null>(null);
   const [resolvedUrl, setResolvedUrl] = useState("");
   const [form, setForm] = useState({
     url: "",
@@ -189,10 +191,15 @@ export function SocialCommunicationPage() {
     }
   };
 
-  const handleDelete = async (item: SocialCommunicationArticle) => {
-    if (!window.confirm(`Excluir a materia "${item.title}"?`)) return;
+  const handleDelete = (item: SocialCommunicationArticle) => {
+    setDeleteTarget(item);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
     try {
-      await deleteArticle.mutateAsync(item.id);
+      await deleteArticle.mutateAsync(deleteTarget.id);
+      setDeleteTarget(null);
       toast.push({ message: "Materia removida", severity: "success" });
     } catch (error) {
       const payload = parseApiError(error);
@@ -382,7 +389,7 @@ export function SocialCommunicationPage() {
                     sx={{ bgcolor: "rgba(255,255,255,0.92)" }}
                     onClick={(event) => {
                       event.stopPropagation();
-                      void handleDelete(item);
+                      handleDelete(item);
                     }}
                   >
                     <DeleteOutlineRoundedIcon fontSize="small" />
@@ -523,6 +530,21 @@ export function SocialCommunicationPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          void handleConfirmDelete();
+        }}
+        title="Excluir materia"
+        message="Deseja remover esta materia da Comunicacao Social?"
+        highlightText={deleteTarget?.title ?? ""}
+        note="A exclusão é permanente e será registrada em auditoria."
+        confirmLabel="Excluir materia"
+        severity="error"
+        confirmLoading={deleteArticle.isPending}
+      />
 
     </Box>
   );

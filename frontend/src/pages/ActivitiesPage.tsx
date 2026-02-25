@@ -50,6 +50,7 @@ import { can } from '../app/rbac';
 import { EmptyState } from '../components/states/EmptyState';
 import { ErrorState } from '../components/states/ErrorState';
 import { SkeletonState } from '../components/states/SkeletonState';
+import { ConfirmDialog } from '../components/dialogs/ConfirmDialog';
 import { ACTIVITY_STATUS_LABELS, ActivityStatus } from '../constants/enums';
 import { selectTargetLocalities } from '../constants/localities';
 
@@ -117,6 +118,7 @@ export function ActivitiesPage() {
   const [isCreateMode, setIsCreateMode] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [drawerTab, setDrawerTab] = useState<ActivityDrawerTab>(tabFromUrl);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   const createActivity = useCreateActivity();
   const deleteActivity = useDeleteActivity();
@@ -299,10 +301,15 @@ export function ActivitiesPage() {
 
   const handleDeleteActivity = async () => {
     if (!selected || !canDelete) return;
-    if (!window.confirm('Deseja excluir esta atividade? Esta ação será registrada em auditoria.')) return;
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleConfirmDeleteActivity = async () => {
+    if (!selected || !canDelete) return;
     try {
       await deleteActivity.mutateAsync(selected.id);
       toast.push({ message: 'Atividade excluída', severity: 'success' });
+      setDeleteConfirmOpen(false);
       setSelectedId(null);
       setDrawerOpen(false);
     } catch (error) {
@@ -389,6 +396,7 @@ export function ActivitiesPage() {
 
   const closeDrawer = () => {
     setDrawerOpen(false);
+    setDeleteConfirmOpen(false);
     syncUrlState(undefined);
   };
 
@@ -1090,6 +1098,19 @@ export function ActivitiesPage() {
 
         </Box>
       </Drawer>
+
+      <ConfirmDialog
+        open={deleteConfirmOpen}
+        onCancel={() => setDeleteConfirmOpen(false)}
+        onConfirm={handleConfirmDeleteActivity}
+        title="Excluir atividade"
+        message="Deseja excluir esta atividade?"
+        highlightText={selected?.title ?? ''}
+        note="Esta ação será registrada em auditoria e não pode ser desfeita."
+        confirmLabel="Excluir atividade"
+        severity="error"
+        confirmLoading={deleteActivity.isPending}
+      />
     </Box>
   );
 }

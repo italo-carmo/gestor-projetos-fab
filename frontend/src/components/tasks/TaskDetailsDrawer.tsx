@@ -1,10 +1,6 @@
 import {
   Box,
   Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   Divider,
   Drawer,
   Link,
@@ -47,6 +43,7 @@ import { DueBadge } from '../chips/DueBadge';
 import { EntityDocumentLinksManager } from '../documents/EntityDocumentLinksManager';
 import { TaskStatus, TASK_STATUS_LABELS } from '../../constants/enums';
 import { formatDate } from '../../app/date';
+import { ConfirmDialog } from '../dialogs/ConfirmDialog';
 
 function resolveTaskTitle(task: any) {
   const raw =
@@ -630,70 +627,18 @@ export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, locali
               </Stack>
             )}
 
-            <Dialog
+            <ConfirmDialog
               open={confirmDeleteOpen}
-              onClose={() => setConfirmDeleteOpen(false)}
-              maxWidth="xs"
-              fullWidth
-              PaperProps={{
-                sx: {
-                  borderRadius: 3,
-                  overflow: 'hidden',
-                  border: '1px solid #E3EAF3',
-                  boxShadow: '0 18px 44px rgba(7, 26, 43, 0.22)',
-                },
-              }}
-            >
-              <Box
-                sx={{
-                  px: 2.2,
-                  py: 1.1,
-                  background: 'linear-gradient(135deg, #0C657E 0%, #0A5471 100%)',
-                }}
-              >
-                <Typography variant="caption" sx={{ color: '#E8F4FA', fontWeight: 700, letterSpacing: 0.4 }}>
-                  CONFIRMAÇÃO
-                </Typography>
-              </Box>
-              <DialogTitle sx={{ pb: 1 }}>Excluir tarefa</DialogTitle>
-              <DialogContent sx={{ pt: '4px !important' }}>
-                <Typography variant="body2" sx={{ color: '#1F2D3D' }}>
-                  Você tem certeza que deseja excluir esta tarefa?
-                </Typography>
-                <Box
-                  sx={{
-                    mt: 1.1,
-                    p: 1.2,
-                    borderRadius: 1.6,
-                    border: '1px solid #E3EAF3',
-                    backgroundColor: '#F8FBFD',
-                  }}
-                >
-                  <Typography variant="subtitle2" sx={{ color: '#0C657E' }}>
-                    {taskTitleDraft.trim() || resolveTaskTitle(task)}
-                  </Typography>
-                </Box>
-                <Typography variant="caption" sx={{ mt: 1.2, display: 'block', color: 'text.secondary' }}>
-                  Esta ação será registrada em auditoria e não pode ser desfeita.
-                </Typography>
-              </DialogContent>
-              <DialogActions sx={{ px: 2.2, pb: 2 }}>
-                <Button
-                  onClick={() => setConfirmDeleteOpen(false)}
-                  disabled={deleteTask.isPending}
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  variant="contained"
-                  color="error"
-                  onClick={handleConfirmDelete}
-                  disabled={deleteTask.isPending}
-                >
-                  Excluir tarefa
-                </Button>
-              </DialogActions>
-            </Dialog>
+              onCancel={() => setConfirmDeleteOpen(false)}
+              onConfirm={handleConfirmDelete}
+              title="Excluir tarefa"
+              message="Você tem certeza que deseja excluir esta tarefa?"
+              highlightText={taskTitleDraft.trim() || resolveTaskTitle(task)}
+              note="Esta ação será registrada em auditoria e não pode ser desfeita."
+              confirmLabel="Excluir tarefa"
+              severity="error"
+              confirmLoading={deleteTask.isPending}
+            />
 
           </>
         ) : (

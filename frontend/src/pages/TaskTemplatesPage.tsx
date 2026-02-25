@@ -164,9 +164,6 @@ export function TaskTemplatesPage() {
     }
   };
 
-  if (templatesQuery.isLoading) return <SkeletonState />;
-  if (templatesQuery.isError) return <ErrorState error={templatesQuery.error} onRetry={() => templatesQuery.refetch()} />;
-
   const templates = templatesQuery.data?.items ?? [];
   const templatesToRender = useMemo(() => {
     if (showDuplicates) return templates;
@@ -201,6 +198,9 @@ export function TaskTemplatesPage() {
   const phases = phasesQuery.data?.items ?? [];
   const localities = localitiesQuery.data?.items ?? [];
   const canEditTemplate = can(me, 'task_templates', 'update') && hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI]);
+
+  if (templatesQuery.isLoading) return <SkeletonState />;
+  if (templatesQuery.isError) return <ErrorState error={templatesQuery.error} onRetry={() => templatesQuery.refetch()} />;
 
   return (
     <Box>

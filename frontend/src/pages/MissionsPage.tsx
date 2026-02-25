@@ -4,11 +4,6 @@ import {
   Card,
   CardContent,
   Chip,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogContentText,
-  DialogTitle,
   Divider,
   Drawer,
   IconButton,
@@ -46,6 +41,7 @@ import {
 } from '../api/hooks';
 import { parseApiError } from '../app/apiErrors';
 import { useToast } from '../app/toast';
+import { ConfirmDialog } from '../components/dialogs/ConfirmDialog';
 import { EmptyState } from '../components/states/EmptyState';
 import { ErrorState } from '../components/states/ErrorState';
 import { SkeletonState } from '../components/states/SkeletonState';
@@ -97,6 +93,7 @@ export function MissionsPage() {
   const [scheduleForm, setScheduleForm] = useState(blankScheduleForm);
   const [editingScheduleItemId, setEditingScheduleItemId] = useState<string | null>(null);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [scheduleDeleteTarget, setScheduleDeleteTarget] = useState<{ id: string; title: string } | null>(null);
 
   const lookupQuery = useLookupMissionLdapParticipant(ldapIdentifier);
 
@@ -169,6 +166,7 @@ export function MissionsPage() {
     setEditingScheduleItemId(null);
     setScheduleForm(blankScheduleForm);
     setConfirmDeleteOpen(false);
+    setScheduleDeleteTarget(null);
 
     const next = new URLSearchParams(params);
     next.delete('missionId');
@@ -290,17 +288,22 @@ export function MissionsPage() {
     }
   };
 
-  const handleDeleteScheduleItem = async (itemId: string) => {
+  const handleDeleteScheduleItem = (itemId: string, itemTitle: string) => {
+    setScheduleDeleteTarget({ id: itemId, title: itemTitle });
+  };
+
+  const handleConfirmDeleteScheduleItem = async () => {
     if (!selectedMission) return;
-    if (!window.confirm('Remover este item do cronograma?')) return;
+    if (!scheduleDeleteTarget) return;
 
     try {
-      await deleteScheduleItem.mutateAsync({ id: selectedMission.id, itemId });
+      await deleteScheduleItem.mutateAsync({ id: selectedMission.id, itemId: scheduleDeleteTarget.id });
       toast.push({ message: 'Item removido.', severity: 'success' });
-      if (editingScheduleItemId === itemId) {
+      if (editingScheduleItemId === scheduleDeleteTarget.id) {
         setEditingScheduleItemId(null);
         setScheduleForm(blankScheduleForm);
       }
+      setScheduleDeleteTarget(null);
     } catch (error) {
       toast.push({ message: parseApiError(error).message ?? 'Erro ao remover item.', severity: 'error' });
     }
@@ -700,7 +703,7 @@ export function MissionsPage() {
                                   >
                                     <EditOutlinedIcon fontSize="small" />
                                   </IconButton>
-                                  <IconButton size="small" color="error" onClick={() => handleDeleteScheduleItem(item.id)}>
+                                  <IconButton size="small" color="error" onClick={() => handleDeleteScheduleItem(item.id, item.title ?? 'Item de cronograma')}>
                                     <DeleteOutlineIcon fontSize="small" />
                                   </IconButton>
                                 </TableCell>
@@ -718,23 +721,31 @@ export function MissionsPage() {
         </Box>
       </Drawer>
 
-      <Dialog open={confirmDeleteOpen} onClose={() => setConfirmDeleteOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>Excluir missão</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Confirma a exclusão definitiva da missão <strong>{selectedMission?.title ?? ''}</strong>?
-            Esta ação também remove participantes e itens de cronograma vinculados.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setConfirmDeleteOpen(false)} disabled={deleteMission.isPending}>
-            Cancelar
-          </Button>
-          <Button color="error" variant="contained" onClick={handleDeleteMission} disabled={deleteMission.isPending}>
-            Sim, excluir missão
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        onCancel={() => setConfirmDeleteOpen(false)}
+        onConfirm={handleDeleteMission}
+        title="Excluir missão"
+        message="Confirma a exclusão definitiva desta missão?"
+        highlightText={selectedMission?.title ?? ''}
+        note="Esta ação também remove participantes e itens de cronograma vinculados."
+        confirmLabel="Excluir missão"
+        severity="error"
+        confirmLoading={deleteMission.isPending}
+      />
+
+      <ConfirmDialog
+        open={Boolean(scheduleDeleteTarget)}
+        onCancel={() => setScheduleDeleteTarget(null)}
+        onConfirm={handleConfirmDeleteScheduleItem}
+        title="Excluir item do cronograma"
+        message="Deseja remover este item do cronograma?"
+        highlightText={scheduleDeleteTarget?.title ?? ''}
+        note="A exclusão é permanente."
+        confirmLabel="Excluir item"
+        severity="error"
+        confirmLoading={deleteScheduleItem.isPending}
+      />
     </Box>
   );
 }

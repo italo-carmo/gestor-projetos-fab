@@ -37,6 +37,7 @@ import {
 } from '../api/hooks';
 import { parseApiError } from '../app/apiErrors';
 import { useToast } from '../app/toast';
+import { ConfirmDialog } from '../components/dialogs/ConfirmDialog';
 
 type RoleItem = { id: string; name: string };
 type LocalityItem = { id: string; name: string; code: string };
@@ -743,33 +744,20 @@ export function AdminRbacPage() {
         </DialogActions>
       </Dialog>
 
-      <Dialog
+      <ConfirmDialog
         open={Boolean(removeTarget)}
-        onClose={() => setRemoveTarget(null)}
-        fullWidth
-        maxWidth="xs"
-      >
-        <DialogTitle>Remover permissão</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Confirma remover o papel <strong>{removeTarget?.roleName}</strong> do usuário{' '}
-            <strong>{removeTarget?.userName}</strong>?
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setRemoveTarget(null)}>Cancelar</Button>
-          <Button
-            color="error"
-            variant="contained"
-            onClick={() => {
-              void handleRemovePermission();
-            }}
-            disabled={removeUserRole.isPending}
-          >
-            {removeUserRole.isPending ? 'Removendo...' : 'Remover'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        onCancel={() => setRemoveTarget(null)}
+        onConfirm={() => {
+          void handleRemovePermission();
+        }}
+        title="Remover permissão"
+        message="Confirma remover este papel do usuário selecionado?"
+        highlightText={removeTarget ? `${removeTarget.roleName} -> ${removeTarget.userName}` : ''}
+        note="A remoção entra em vigor imediatamente."
+        confirmLabel={removeUserRole.isPending ? 'Removendo...' : 'Remover'}
+        severity="error"
+        confirmLoading={removeUserRole.isPending}
+      />
     </Box>
   );
 }
