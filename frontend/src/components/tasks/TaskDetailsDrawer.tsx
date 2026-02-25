@@ -1,6 +1,10 @@
 import {
   Box,
   Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Divider,
   Drawer,
   Link,
@@ -72,6 +76,7 @@ export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, locali
   const [selectedAssigneeValue, setSelectedAssigneeValue] = useState('');
   const [commentText, setCommentText] = useState('');
   const [taskTitleDraft, setTaskTitleDraft] = useState('');
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const toast = useToast();
   const updateStatus = useUpdateTaskStatus();
   const updateProgress = useUpdateTaskProgress();
@@ -128,6 +133,7 @@ export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, locali
       setSelectedAssigneeValue('');
       setCommentText('');
       setTaskTitleDraft('');
+      setConfirmDeleteOpen(false);
       return;
     }
     setSelectedLocalityId(task.localityId ?? '');
@@ -275,9 +281,14 @@ export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, locali
 
   const handleDelete = async () => {
     if (!task || !canDelete) return;
-    if (!window.confirm('Deseja excluir esta tarefa? Esta ação será registrada em auditoria.')) return;
+    setConfirmDeleteOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!task || !canDelete) return;
     try {
       await deleteTask.mutateAsync(task.id);
+      setConfirmDeleteOpen(false);
       toast.push({ message: 'Tarefa excluída', severity: 'success' });
       onDeleted?.(task.id);
       onClose();
@@ -618,6 +629,71 @@ export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, locali
                 ))}
               </Stack>
             )}
+
+            <Dialog
+              open={confirmDeleteOpen}
+              onClose={() => setConfirmDeleteOpen(false)}
+              maxWidth="xs"
+              fullWidth
+              PaperProps={{
+                sx: {
+                  borderRadius: 3,
+                  overflow: 'hidden',
+                  border: '1px solid #E3EAF3',
+                  boxShadow: '0 18px 44px rgba(7, 26, 43, 0.22)',
+                },
+              }}
+            >
+              <Box
+                sx={{
+                  px: 2.2,
+                  py: 1.1,
+                  background: 'linear-gradient(135deg, #0C657E 0%, #0A5471 100%)',
+                }}
+              >
+                <Typography variant="caption" sx={{ color: '#E8F4FA', fontWeight: 700, letterSpacing: 0.4 }}>
+                  CONFIRMAÇÃO
+                </Typography>
+              </Box>
+              <DialogTitle sx={{ pb: 1 }}>Excluir tarefa</DialogTitle>
+              <DialogContent sx={{ pt: '4px !important' }}>
+                <Typography variant="body2" sx={{ color: '#1F2D3D' }}>
+                  Você tem certeza que deseja excluir esta tarefa?
+                </Typography>
+                <Box
+                  sx={{
+                    mt: 1.1,
+                    p: 1.2,
+                    borderRadius: 1.6,
+                    border: '1px solid #E3EAF3',
+                    backgroundColor: '#F8FBFD',
+                  }}
+                >
+                  <Typography variant="subtitle2" sx={{ color: '#0C657E' }}>
+                    {taskTitleDraft.trim() || resolveTaskTitle(task)}
+                  </Typography>
+                </Box>
+                <Typography variant="caption" sx={{ mt: 1.2, display: 'block', color: 'text.secondary' }}>
+                  Esta ação será registrada em auditoria e não pode ser desfeita.
+                </Typography>
+              </DialogContent>
+              <DialogActions sx={{ px: 2.2, pb: 2 }}>
+                <Button
+                  onClick={() => setConfirmDeleteOpen(false)}
+                  disabled={deleteTask.isPending}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  variant="contained"
+                  color="error"
+                  onClick={handleConfirmDelete}
+                  disabled={deleteTask.isPending}
+                >
+                  Excluir tarefa
+                </Button>
+              </DialogActions>
+            </Dialog>
 
           </>
         ) : (
