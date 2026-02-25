@@ -141,6 +141,7 @@ export class ChecklistsService {
     }
     const activityByTitleLocality = new Map<string, ActivityStatus[]>();
     for (const activity of activities) {
+      if (!activity.localityId) continue;
       const normalizedTitle = this.normalizeChecklistActivityTitle(activity.title);
       if (!activityChecklistKeys.has(normalizedTitle)) continue;
       const canonicalId = aliasByLocalityId.get(activity.localityId) ?? activity.localityId;
@@ -427,6 +428,7 @@ export class ChecklistsService {
 
     const activityStatusByTitleLocality = new Map<string, ActivityStatus[]>();
     for (const activity of activities) {
+      if (!activity.localityId) continue;
       const titleKey = this.normalizeChecklistActivityTitle(activity.title);
       const canonicalId = canonicalByAliasId.get(activity.localityId) ?? activity.localityId;
       const key = `${titleKey}:${canonicalId}`;
