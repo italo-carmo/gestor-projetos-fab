@@ -60,7 +60,12 @@ export function DashboardNationalPage() {
 
   const kpiCards = [
     { label: 'Cobertura', value: `${smifLocalities.length}/${smifLocalities.length} localidades`, icon: <TargetIcon sx={{ fontSize: 28 }} />, bg: '#E8F8EF' },
-    { label: 'Recrutas femininas', value: '0', icon: <PeopleIcon sx={{ fontSize: 28 }} />, bg: '#E8F2FF' },
+    {
+      label: 'Recrutas femininas',
+      value: String(totals.recruitsFemale ?? 0),
+      icon: <PeopleIcon sx={{ fontSize: 28 }} />,
+      bg: '#E8F2FF',
+    },
     { label: 'Relatórios', value: `${totals.reportsProduced ?? 0} produzidos`, icon: <DescriptionIcon sx={{ fontSize: 28 }} />, bg: '#FFF6E1' },
   ];
 
@@ -197,7 +202,7 @@ export function DashboardNationalPage() {
                             )}
                           </TableCell>
                           <TableCell>{Math.round(loc.progress)}%</TableCell>
-                          <TableCell>0</TableCell>
+                          <TableCell>{loc.recruitsFemaleCountCurrent ?? 0}</TableCell>
                           <TableCell>{loc.commanderName ?? '—'}</TableCell>
                           <TableCell>{loc.visitDate ? new Date(loc.visitDate).toLocaleDateString('pt-BR') : '—'}</TableCell>
                           <TableCell>{loc.late}</TableCell>
