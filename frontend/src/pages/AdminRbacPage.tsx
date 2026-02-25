@@ -130,9 +130,9 @@ export function AdminRbacPage() {
 
   const users = useMemo(
     () =>
-      ((usersQuery.data?.items ?? []) as UserItem[]).sort((a, b) =>
-        a.name.localeCompare(b.name, 'pt-BR'),
-      ),
+      ((usersQuery.data?.items ?? []) as UserItem[])
+        .filter((user) => getUserRoles(user).length > 0)
+        .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')),
     [usersQuery.data?.items],
   );
   const roles = useMemo(
@@ -584,7 +584,7 @@ export function AdminRbacPage() {
                   )}
                   {filteredUsers.map((user) => {
                     const rolesByUser = getUserRoles(user);
-                    const primaryRole = rolesByUser[0] ?? null;
+                    const primaryRole = rolesByUser[0];
                     const localityName = user.localityId
                       ? (localityById.get(user.localityId)?.name ?? user.localityId)
                       : 'Sem localidade';
@@ -601,16 +601,12 @@ export function AdminRbacPage() {
                         </TableCell>
                         <TableCell>{user.ldapUid || user.email}</TableCell>
                         <TableCell>
-                          {!primaryRole ? (
-                            <Chip size="small" label="Sem papel" variant="outlined" />
-                          ) : (
-                            <Chip
-                              size="small"
-                              label={primaryRole.name}
-                              color="primary"
-                              variant="filled"
-                            />
-                          )}
+                          <Chip
+                            size="small"
+                            label={primaryRole?.name ?? '-'}
+                            color="primary"
+                            variant="filled"
+                          />
                         </TableCell>
                         <TableCell>{localityName}</TableCell>
                         <TableCell>{specialtyName}</TableCell>
@@ -627,9 +623,9 @@ export function AdminRbacPage() {
                             <IconButton
                               size="small"
                               color="error"
-                              disabled={!canUpdateUsers || !primaryRole}
+                              disabled={!canUpdateUsers || !primaryRole?.id}
                               onClick={() => {
-                                if (!primaryRole) return;
+                                if (!primaryRole?.id) return;
                                 setRemoveTarget({
                                   userId: user.id,
                                   userName: user.name,
