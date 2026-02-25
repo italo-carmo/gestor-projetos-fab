@@ -44,6 +44,7 @@ const DONE_COLOR = '#2e7d32';
 const PENDING_COLOR = '#9e9e9e';
 const IN_PROGRESS_COLOR = '#ed6c02';
 const CHECKLIST_TABLE_STICKY_TOP = 76;
+const CHECKLIST_HEADER_BG = '#17394B';
 
 function StatusIcon({ status, localityName }: { status: string; localityName: string }) {
   const label = CHECKLIST_ITEM_STATUS_LABELS[status] ?? status;
@@ -414,7 +415,7 @@ export function ChecklistsPage() {
                   Nenhum item do tipo selecionado neste checklist.
                 </Typography>
               ) : viewByLocality ? (
-                <Box sx={{ overflowX: 'auto' }}>
+                <Box sx={{ width: '100%' }}>
                 <Table size="small" sx={{ '& th, & td': { borderBottom: '1px solid', borderColor: 'divider', py: 0.5, px: 0.75 } }}>
                   <TableHead>
                     <TableRow>
@@ -425,8 +426,9 @@ export function ChecklistsPage() {
                           position: 'sticky',
                           top: CHECKLIST_TABLE_STICKY_TOP,
                           left: 0,
-                          bgcolor: 'background.paper',
-                          zIndex: 4,
+                          bgcolor: CHECKLIST_HEADER_BG,
+                          color: '#fff',
+                          zIndex: 8,
                         }}
                       >
                         Localidade
@@ -440,8 +442,9 @@ export function ChecklistsPage() {
                             minWidth: 44,
                             position: 'sticky',
                             top: CHECKLIST_TABLE_STICKY_TOP,
-                            bgcolor: 'background.paper',
-                            zIndex: 3,
+                            bgcolor: CHECKLIST_HEADER_BG,
+                            color: '#fff',
+                            zIndex: 7,
                           }}
                         >
                           <Tooltip title={item.title}>
@@ -457,7 +460,7 @@ export function ChecklistsPage() {
                   <TableBody>
                     {localities.map((loc: any) => (
                       <TableRow key={loc.id} hover>
-                        <TableCell sx={{ fontWeight: 500, position: 'sticky', left: 0, bgcolor: 'background.paper', zIndex: 1 }}>
+                        <TableCell sx={{ fontWeight: 500, position: 'sticky', left: 0, bgcolor: 'background.paper', zIndex: 2 }}>
                           {loc.name}
                         </TableCell>
                         {filteredItems.map((item: any) => {
@@ -477,7 +480,7 @@ export function ChecklistsPage() {
                 </Table>
                 </Box>
               ) : (
-                <Box sx={{ overflowX: 'auto' }}>
+                <Box sx={{ width: '100%' }}>
                 <Table size="small" sx={{ '& th, & td': { borderBottom: '1px solid', borderColor: 'divider', py: 0.5, px: 0.75 } }}>
                   <TableHead>
                     <TableRow>
@@ -488,8 +491,9 @@ export function ChecklistsPage() {
                           position: 'sticky',
                           top: CHECKLIST_TABLE_STICKY_TOP,
                           left: 0,
-                          bgcolor: 'background.paper',
-                          zIndex: 4,
+                          bgcolor: CHECKLIST_HEADER_BG,
+                          color: '#fff',
+                          zIndex: 8,
                         }}
                       >
                         Item
@@ -503,8 +507,9 @@ export function ChecklistsPage() {
                             minWidth: 52,
                             position: 'sticky',
                             top: CHECKLIST_TABLE_STICKY_TOP,
-                            bgcolor: 'background.paper',
-                            zIndex: 3,
+                            bgcolor: CHECKLIST_HEADER_BG,
+                            color: '#fff',
+                            zIndex: 7,
                           }}
                         >
                           <Tooltip title={loc.name}>
@@ -519,7 +524,7 @@ export function ChecklistsPage() {
                   <TableBody>
                     {filteredItems.map((item: any) => (
                       <TableRow key={item.id} hover>
-                        <TableCell sx={{ fontWeight: 500, position: 'sticky', left: 0, bgcolor: 'background.paper', zIndex: 1 }}>
+                        <TableCell sx={{ fontWeight: 500, position: 'sticky', left: 0, bgcolor: 'background.paper', zIndex: 2 }}>
                           <Stack direction="row" spacing={1} alignItems="center">
                             <Typography variant="body2" fontWeight={500}>
                               {item.title}
