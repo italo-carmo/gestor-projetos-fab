@@ -57,6 +57,27 @@ export class TaskInstancesController {
     }, user);
   }
 
+  @Put('batch/assign')
+  @RequirePermission('task_instances', 'assign')
+  batchAssign(
+    @Body() body: { ids: string[]; assignedToId: string | null; assigneeIds?: string[] },
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.tasks.batchAssign(body.ids ?? [], body.assignedToId ?? null, body.assigneeIds ?? [], user);
+  }
+
+  @Put('batch/status')
+  @RequirePermission('task_instances', 'update')
+  batchStatus(@Body() body: { ids: string[]; status: string }, @CurrentUser() user: RbacUser) {
+    return this.tasks.batchStatus(body.ids ?? [], body.status as any, user);
+  }
+
+  @Post('batch/delete')
+  @RequirePermission('task_instances', 'update')
+  batchDelete(@Body() body: { ids: string[] }, @CurrentUser() user: RbacUser) {
+    return this.tasks.batchDeleteTaskInstances(body.ids ?? [], user);
+  }
+
   @Get(':id/comments')
   @RequirePermission('task_instances', 'view')
   comments(@Param('id') id: string, @CurrentUser() user: RbacUser) {
@@ -113,27 +134,6 @@ export class TaskInstancesController {
   @RequirePermission('task_instances', 'update')
   updateSpecialty(@Param('id') id: string, @Body() dto: TaskSpecialtyDto, @CurrentUser() user: RbacUser) {
     return this.tasks.updateTaskSpecialty(id, dto.specialtyId ?? null, user);
-  }
-
-  @Put('batch/assign')
-  @RequirePermission('task_instances', 'assign')
-  batchAssign(
-    @Body() body: { ids: string[]; assignedToId: string | null; assigneeIds?: string[] },
-    @CurrentUser() user: RbacUser,
-  ) {
-    return this.tasks.batchAssign(body.ids ?? [], body.assignedToId ?? null, body.assigneeIds ?? [], user);
-  }
-
-  @Put('batch/status')
-  @RequirePermission('task_instances', 'update')
-  batchStatus(@Body() body: { ids: string[]; status: string }, @CurrentUser() user: RbacUser) {
-    return this.tasks.batchStatus(body.ids ?? [], body.status as any, user);
-  }
-
-  @Post('batch/delete')
-  @RequirePermission('task_instances', 'update')
-  batchDelete(@Body() body: { ids: string[] }, @CurrentUser() user: RbacUser) {
-    return this.tasks.batchDeleteTaskInstances(body.ids ?? [], user);
   }
 
   @Delete(':id')
