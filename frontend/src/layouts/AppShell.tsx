@@ -10,7 +10,6 @@ import {
   Divider,
   Drawer,
   IconButton,
-  InputAdornment,
   List,
   ListItemButton,
   ListItemIcon,
@@ -62,6 +61,7 @@ import { MEETING_STATUS_LABELS, NOTICE_PRIORITY_LABELS } from '../constants/enum
 
 const drawerExpandedWidth = 284;
 const drawerCollapsedWidth = 92;
+const headerHeight = 84;
 
 const navItems = [
   { label: 'Painel de Comando', to: '/dashboard/national', icon: <DashboardIcon fontSize="small" /> },
@@ -310,7 +310,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <Box sx={{ display: 'flex', minHeight: '100vh' }}>
       <CssBaseline />
       <AppBar position="fixed" sx={{ zIndex: theme.zIndex.drawer + 1 }}>
-        <Toolbar sx={{ minHeight: 76, gap: 1.2 }}>
+        <Toolbar sx={{ minHeight: headerHeight, gap: 1.2 }}>
           {isMobile && (
             <IconButton edge="start" onClick={() => setMobileOpen((v) => !v)} sx={{ mr: 0.3, color: 'text.primary' }}>
               <MenuIcon />
@@ -350,98 +350,108 @@ export function AppShell({ children }: { children: ReactNode }) {
           </Box>
           <Box sx={{ flexGrow: 1 }} />
           {can(me, 'search', 'view') && (
-            <Box sx={{ display: { xs: 'none', lg: 'block' }, mr: 1.2 }}>
-              <TextField
-                size="small"
-                placeholder="Busca global"
-                value={globalQuery}
-                onChange={(e) => setGlobalQuery(e.target.value)}
-                onFocus={(e) => setAnchorEl(e.currentTarget)}
-                sx={{ minWidth: 330 }}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon sx={{ color: 'text.secondary', fontSize: 18 }} />
-                    </InputAdornment>
-                  ),
-                }}
-              />
+            <Box sx={{ mr: 0.6 }}>
+              <Tooltip title="Busca global">
+                <IconButton
+                  onClick={(event) => setAnchorEl(event.currentTarget)}
+                  sx={{
+                    border: `1px solid ${alpha('#114259', 0.2)}`,
+                    bgcolor: alpha('#FFFFFF', 0.45),
+                  }}
+                >
+                  <SearchIcon sx={{ fontSize: 20 }} />
+                </IconButton>
+              </Tooltip>
               <Popover
-                open={Boolean(anchorEl) && Boolean(debounced)}
+                open={Boolean(anchorEl)}
                 anchorEl={anchorEl}
                 onClose={() => setAnchorEl(null)}
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
                 PaperProps={{
                   sx: {
                     borderRadius: 2,
-                    width: 360,
+                    width: 380,
                     border: `1px solid ${alpha('#114259', 0.16)}`,
                     boxShadow: '0 16px 32px rgba(10, 37, 51, 0.12)',
                   },
                 }}
               >
                 <Box sx={{ p: 1.2 }}>
-                  <Typography variant="caption" sx={{ px: 1.2, color: 'text.secondary' }}>
+                  <TextField
+                    size="small"
+                    placeholder="Buscar no sistema..."
+                    autoFocus
+                    value={globalQuery}
+                    onChange={(e) => setGlobalQuery(e.target.value)}
+                    fullWidth
+                  />
+                  <Typography variant="caption" sx={{ px: 0.4, pt: 1.2, pb: 0.6, color: 'text.secondary', display: 'block' }}>
                     Resultados
                   </Typography>
-                  <List dense>
-                    {(searchQuery.data?.tasks ?? []).map((task: any) => (
-                      <ListItemButton
-                        key={task.id}
-                        component={Link}
-                        to={`/tasks?q=${encodeURIComponent(task.title)}`}
-                        onClick={() => setAnchorEl(null)}
-                      >
-                        <ListItemText primary={task.title} secondary={task.localityName ?? task.localityId} />
-                      </ListItemButton>
-                    ))}
-                    {(searchQuery.data?.notices ?? []).map((notice: any) => (
-                      <ListItemButton key={notice.id} component={Link} to="/notices" onClick={() => setAnchorEl(null)}>
-                        <ListItemText
-                          primary={notice.title}
-                          secondary={`Aviso ${NOTICE_PRIORITY_LABELS[notice.priority] ?? notice.priority}`}
-                        />
-                      </ListItemButton>
-                    ))}
-                    {canSeeMeetings && (searchQuery.data?.meetings ?? []).map((meeting: any) => (
-                      <ListItemButton key={meeting.id} component={Link} to="/meetings" onClick={() => setAnchorEl(null)}>
-                        <ListItemText
-                          primary={
-                            meeting.scope ? (meeting.scope.length > 35 ? `${meeting.scope.slice(0, 35)}…` : meeting.scope) : 'Reunião'
-                          }
-                          secondary={MEETING_STATUS_LABELS[meeting.status] ?? meeting.status}
-                        />
-                      </ListItemButton>
-                    ))}
-                    {(searchQuery.data?.localities ?? []).map((loc: any) => (
-                      <ListItemButton
-                        key={loc.id}
-                        component={Link}
-                        to={`/dashboard/locality/${loc.id}`}
-                        onClick={() => setAnchorEl(null)}
-                      >
-                        <ListItemText primary={loc.name} secondary={loc.code} />
-                      </ListItemButton>
-                    ))}
-                    {canSeeDocuments && (searchQuery.data?.documents ?? []).map((doc: any) => (
-                      <ListItemButton
-                        key={doc.id}
-                        component={Link}
-                        to={`/documents?q=${encodeURIComponent(doc.title)}`}
-                        onClick={() => setAnchorEl(null)}
-                      >
-                        <ListItemText
-                          primary={doc.title}
-                          secondary={doc.localityName ? `Comunicação Social • ${doc.localityName}` : 'Comunicação Social'}
-                        />
-                      </ListItemButton>
-                    ))}
-                    {totalSearchResults === 0 && (
-                      <Typography variant="body2" color="text.secondary" sx={{ px: 1.3, py: 1 }}>
-                        Nenhum resultado.
-                      </Typography>
-                    )}
-                  </List>
+                  {!debounced ? (
+                    <Typography variant="body2" color="text.secondary" sx={{ px: 0.4, pb: 0.8 }}>
+                      Digite para buscar tarefas, avisos, reuniões, localidades e documentos.
+                    </Typography>
+                  ) : (
+                    <List dense>
+                      {(searchQuery.data?.tasks ?? []).map((task: any) => (
+                        <ListItemButton
+                          key={task.id}
+                          component={Link}
+                          to={`/tasks?q=${encodeURIComponent(task.title)}`}
+                          onClick={() => setAnchorEl(null)}
+                        >
+                          <ListItemText primary={task.title} secondary={task.localityName ?? task.localityId} />
+                        </ListItemButton>
+                      ))}
+                      {(searchQuery.data?.notices ?? []).map((notice: any) => (
+                        <ListItemButton key={notice.id} component={Link} to="/notices" onClick={() => setAnchorEl(null)}>
+                          <ListItemText
+                            primary={notice.title}
+                            secondary={`Aviso ${NOTICE_PRIORITY_LABELS[notice.priority] ?? notice.priority}`}
+                          />
+                        </ListItemButton>
+                      ))}
+                      {canSeeMeetings && (searchQuery.data?.meetings ?? []).map((meeting: any) => (
+                        <ListItemButton key={meeting.id} component={Link} to="/meetings" onClick={() => setAnchorEl(null)}>
+                          <ListItemText
+                            primary={
+                              meeting.scope ? (meeting.scope.length > 35 ? `${meeting.scope.slice(0, 35)}…` : meeting.scope) : 'Reunião'
+                            }
+                            secondary={MEETING_STATUS_LABELS[meeting.status] ?? meeting.status}
+                          />
+                        </ListItemButton>
+                      ))}
+                      {(searchQuery.data?.localities ?? []).map((loc: any) => (
+                        <ListItemButton
+                          key={loc.id}
+                          component={Link}
+                          to={`/dashboard/locality/${loc.id}`}
+                          onClick={() => setAnchorEl(null)}
+                        >
+                          <ListItemText primary={loc.name} secondary={loc.code} />
+                        </ListItemButton>
+                      ))}
+                      {canSeeDocuments && (searchQuery.data?.documents ?? []).map((doc: any) => (
+                        <ListItemButton
+                          key={doc.id}
+                          component={Link}
+                          to={`/documents?q=${encodeURIComponent(doc.title)}`}
+                          onClick={() => setAnchorEl(null)}
+                        >
+                          <ListItemText
+                            primary={doc.title}
+                            secondary={doc.localityName ? `Comunicação Social • ${doc.localityName}` : 'Comunicação Social'}
+                          />
+                        </ListItemButton>
+                      ))}
+                      {totalSearchResults === 0 && (
+                        <Typography variant="body2" color="text.secondary" sx={{ px: 0.4, py: 0.8 }}>
+                          Nenhum resultado.
+                        </Typography>
+                      )}
+                    </List>
+                  )}
                 </Box>
               </Popover>
             </Box>
@@ -543,8 +553,8 @@ export function AppShell({ children }: { children: ReactNode }) {
             '& .MuiDrawer-paper': {
               width: { xs: drawerExpandedWidth, lg: sidebarWidth },
               boxSizing: 'border-box',
-              top: { lg: 76 },
-              height: { lg: 'calc(100% - 76px)' },
+              top: { lg: headerHeight },
+              height: { lg: `calc(100% - ${headerHeight}px)` },
               overflowX: 'hidden',
               transition: theme.transitions.create('width', { duration: theme.transitions.duration.shorter }),
             },
@@ -555,8 +565,8 @@ export function AppShell({ children }: { children: ReactNode }) {
       </Box>
 
       <Box component="main" sx={{ flexGrow: 1, px: { xs: 1.5, md: 3 }, pb: 3.5 }}>
-        <Toolbar sx={{ minHeight: 82 }} />
-        <Box className="page-enter" sx={{ maxWidth: 1650, mx: 'auto' }}>
+        <Toolbar sx={{ minHeight: headerHeight + 8 }} />
+        <Box className="page-enter" sx={{ maxWidth: 1650, mx: 'auto', pt: { xs: 1.2, md: 1.8 } }}>
           {children}
         </Box>
       </Box>
