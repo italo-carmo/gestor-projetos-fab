@@ -12,6 +12,7 @@ import {
   useOrgChart,
   useOrgChartCandidates,
   useRemoveOrgChartCommissionMember,
+  useUpdateOrgChartCommissionMember,
   useUpdateOrgChartAssignment,
 } from '../api/hooks';
 import { parseApiError } from '../app/apiErrors';
@@ -35,12 +36,20 @@ export function OrgChartPage() {
   const commissionMembersQuery = useOrgChartCommissionMembers({});
   const addCommissionMember = useAddOrgChartCommissionMember();
   const removeCommissionMember = useRemoveOrgChartCommissionMember();
+  const updateCommissionMember = useUpdateOrgChartCommissionMember();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [commissionDrawerOpen, setCommissionDrawerOpen] = useState(false);
+  const [commissionEditOpen, setCommissionEditOpen] = useState(false);
   const [candidateSearch, setCandidateSearch] = useState('');
   const [commissionSearch, setCommissionSearch] = useState('');
   const [commissionCandidateSearch, setCommissionCandidateSearch] = useState('');
   const [commissionDeleteTarget, setCommissionDeleteTarget] = useState<any | null>(null);
+  const [commissionEditForm, setCommissionEditForm] = useState({
+    userId: '',
+    warName: '',
+    functionText: '',
+    phone: '',
+  });
   const [form, setForm] = useState<{
     id: string;
     localityId: string;
@@ -224,6 +233,44 @@ export function OrgChartPage() {
     }
   };
 
+  const formatCommissionPhone = (value: string) => {
+    const digits = String(value ?? '')
+      .replace(/\D/g, '')
+      .slice(0, 11);
+    if (!digits) return '';
+    if (digits.length <= 2) return `(${digits}`;
+    if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  };
+
+  const openEditCommissionMember = (member: any) => {
+    setCommissionEditForm({
+      userId: String(member.id ?? ''),
+      warName: String(member.warName ?? member.name ?? ''),
+      functionText: String(member.functionText ?? ''),
+      phone: String(member.phone ?? ''),
+    });
+    setCommissionEditOpen(true);
+  };
+
+  const handleSaveCommissionMember = async () => {
+    if (!commissionEditForm.userId) return;
+    try {
+      await updateCommissionMember.mutateAsync({
+        userId: commissionEditForm.userId,
+        payload: {
+          functionText: commissionEditForm.functionText.trim() || null,
+          phone: commissionEditForm.phone.trim() || null,
+        },
+      });
+      toast.push({ message: 'Dados da comissão atualizados.', severity: 'success' });
+      setCommissionEditOpen(false);
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({ message: payload.message ?? 'Erro ao atualizar dados da comissão.', severity: 'error' });
+    }
+  };
+
   return (
     <Box>
       <Typography variant="h4" gutterBottom>
@@ -282,20 +329,30 @@ export function OrgChartPage() {
                         <Typography variant="body2" color="text.secondary">
                           {member.email ?? 'Sem e-mail'}
                         </Typography>
-                        {member.ldapUid && (
-                          <Typography variant="caption" color="text.secondary">
-                            UID FAB: {member.ldapUid}
+                        {member.functionText && (
+                          <Typography variant="body2" color="text.secondary">
+                            Função: {member.functionText}
+                          </Typography>
+                        )}
+                        {member.phone && (
+                          <Typography variant="body2" color="text.secondary">
+                            Telefone: {member.phone}
                           </Typography>
                         )}
                       </Box>
                       {canManage && (
-                        <Button
-                          size="small"
-                          color="error"
-                          onClick={() => setCommissionDeleteTarget(member)}
-                        >
-                          Retirar da comissão
-                        </Button>
+                        <Stack direction="row" spacing={1}>
+                          <Button size="small" variant="outlined" onClick={() => openEditCommissionMember(member)}>
+                            Editar dados
+                          </Button>
+                          <Button
+                            size="small"
+                            color="error"
+                            onClick={() => setCommissionDeleteTarget(member)}
+                          >
+                            Retirar da comissão
+                          </Button>
+                        </Stack>
                       )}
                     </Stack>
                   </CardContent>
@@ -466,6 +523,59 @@ export function OrgChartPage() {
               variant="contained"
               onClick={handleSave}
               disabled={createAssignment.isPending || updateAssignment.isPending}
+            >
+              Salvar
+            </Button>
+          </Stack>
+        </Box>
+      </Drawer>
+
+      <Drawer
+        anchor="right"
+        open={commissionEditOpen}
+        onClose={() => setCommissionEditOpen(false)}
+        PaperProps={{ sx: { width: { xs: '100%', md: 420 } } }}
+      >
+        <Box p={3} display="flex" flexDirection="column" gap={1.5}>
+          <Typography variant="h6">Editar dados do membro da comissão</Typography>
+          <Typography variant="body2" color="text.secondary">
+            Nome de guerra: {commissionEditForm.warName || '—'}
+          </Typography>
+          <TextField
+            size="small"
+            label="Função"
+            placeholder="Ex: Presidente da Comissão"
+            value={commissionEditForm.functionText}
+            onChange={(e) =>
+              setCommissionEditForm((prev) => ({
+                ...prev,
+                functionText: e.target.value,
+              }))
+            }
+          />
+          <TextField
+            size="small"
+            label="Telefone"
+            placeholder="(00) 00000-0000"
+            value={commissionEditForm.phone}
+            onChange={(e) =>
+              setCommissionEditForm((prev) => ({
+                ...prev,
+                phone: formatCommissionPhone(e.target.value),
+              }))
+            }
+            inputProps={{ maxLength: 15 }}
+          />
+          <Stack direction="row" justifyContent="flex-end" spacing={1}>
+            <Button variant="text" onClick={() => setCommissionEditOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="contained"
+              onClick={() => {
+                void handleSaveCommissionMember();
+              }}
+              disabled={updateCommissionMember.isPending}
             >
               Salvar
             </Button>

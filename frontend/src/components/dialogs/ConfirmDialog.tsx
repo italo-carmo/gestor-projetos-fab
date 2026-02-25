@@ -31,16 +31,30 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
-  const gradientBySeverity: Record<'primary' | 'error' | 'warning', string> = {
-    primary: 'linear-gradient(135deg, #0C657E 0%, #0A5471 100%)',
-    error: 'linear-gradient(135deg, #9D1C2E 0%, #6F1322 100%)',
-    warning: 'linear-gradient(135deg, #9A5A06 0%, #734205 100%)',
+  const toneBySeverity: Record<'primary' | 'error' | 'warning', { bg: string; border: string; icon: string; button: string; buttonHover: string }> = {
+    primary: {
+      bg: '#F3F7FB',
+      border: '#D9E4EF',
+      icon: '#3F6D8F',
+      button: '#3F6D8F',
+      buttonHover: '#355D7A',
+    },
+    error: {
+      bg: '#FDF5F6',
+      border: '#F0DADF',
+      icon: '#9A5D68',
+      button: '#9A5D68',
+      buttonHover: '#86505A',
+    },
+    warning: {
+      bg: '#FFF8EF',
+      border: '#F2E0C7',
+      icon: '#8E7240',
+      button: '#8E7240',
+      buttonHover: '#785F35',
+    },
   };
-  const confirmColorBySeverity: Record<'primary' | 'error' | 'warning', 'primary' | 'error' | 'warning'> = {
-    primary: 'primary',
-    error: 'error',
-    warning: 'warning',
-  };
+  const tone = toneBySeverity[severity];
 
   return (
     <Dialog
@@ -61,14 +75,15 @@ export function ConfirmDialog({
         sx={{
           px: 2.2,
           py: 1.1,
-          background: gradientBySeverity[severity],
+          backgroundColor: tone.bg,
+          borderBottom: `1px solid ${tone.border}`,
           display: 'flex',
           alignItems: 'center',
           gap: 1,
         }}
       >
-        <WarningAmberRoundedIcon sx={{ color: '#E8F4FA', fontSize: 18 }} />
-        <Typography variant="caption" sx={{ color: '#E8F4FA', fontWeight: 700, letterSpacing: 0.4 }}>
+        <WarningAmberRoundedIcon sx={{ color: tone.icon, fontSize: 18 }} />
+        <Typography variant="caption" sx={{ color: '#4A5968', fontWeight: 700, letterSpacing: 0.4 }}>
           CONFIRMACAO
         </Typography>
       </Box>
@@ -105,8 +120,13 @@ export function ConfirmDialog({
         <Button
           onClick={onConfirm}
           variant="contained"
-          color={confirmColorBySeverity[severity]}
           disabled={confirmLoading || disableConfirm}
+          sx={{
+            backgroundColor: tone.button,
+            '&:hover': {
+              backgroundColor: tone.buttonHover,
+            },
+          }}
         >
           {confirmLabel}
         </Button>

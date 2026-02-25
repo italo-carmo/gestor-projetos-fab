@@ -1346,6 +1346,8 @@ export function useAddOrgChartCommissionMember() {
       (await api.post('/org-chart/commission-members', payload)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['orgChart'] });
+      qc.invalidateQueries({ queryKey: ['orgChart', 'commissionMembers'] });
+      qc.invalidateQueries({ queryKey: ['orgChart', 'commissionCandidates'] });
       qc.invalidateQueries({ queryKey: ['users'] });
       qc.invalidateQueries({ queryKey: qk.me });
     },
@@ -1359,8 +1361,23 @@ export function useRemoveOrgChartCommissionMember() {
       (await api.delete(`/org-chart/commission-members/${userId}`)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['orgChart'] });
+      qc.invalidateQueries({ queryKey: ['orgChart', 'commissionMembers'] });
+      qc.invalidateQueries({ queryKey: ['orgChart', 'commissionCandidates'] });
       qc.invalidateQueries({ queryKey: ['users'] });
       qc.invalidateQueries({ queryKey: qk.me });
+    },
+  });
+}
+
+export function useUpdateOrgChartCommissionMember() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { userId: string; payload: { functionText?: string | null; phone?: string | null } }) =>
+      (await api.put(`/org-chart/commission-members/${args.userId}`, args.payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['orgChart'] });
+      qc.invalidateQueries({ queryKey: ['orgChart', 'commissionMembers'] });
+      qc.invalidateQueries({ queryKey: ['users'] });
     },
   });
 }

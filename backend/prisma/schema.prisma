@@ -21,6 +21,8 @@ model User {
   localityId       String?
   specialtyId      String?
   eloRoleId        String?        // Responsável por este elo (ex: Psicologia a nível Brasil)
+  commissionFunction String?
+  commissionPhone    String?
   flagsJson        Json?
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt

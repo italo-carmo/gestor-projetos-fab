@@ -10,6 +10,7 @@ import { UpdateEloDto } from './dto/update-elo.dto';
 import { CreateOrgChartAssignmentDto } from './dto/create-org-chart-assignment.dto';
 import { UpdateOrgChartAssignmentDto } from './dto/update-org-chart-assignment.dto';
 import { ManageOrgChartCommissionMemberDto } from './dto/manage-org-chart-commission-member.dto';
+import { UpdateOrgChartCommissionMemberDto } from './dto/update-org-chart-commission-member.dto';
 
 @Controller('elos')
 @UseGuards(JwtAuthGuard, RbacGuard)
@@ -107,6 +108,16 @@ export class OrgChartController {
     @CurrentUser() user: RbacUser,
   ) {
     return this.elos.removeCommissionMember({ userId }, user);
+  }
+
+  @Put('commission-members/:userId')
+  @RequirePermission('org_chart', 'view')
+  updateCommissionMember(
+    @Param('userId') userId: string,
+    @Body() dto: UpdateOrgChartCommissionMemberDto,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.elos.updateCommissionMember({ userId, ...dto }, user);
   }
 
   @Post('assignments')

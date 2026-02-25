@@ -355,6 +355,8 @@ export class ElosService {
         name: true,
         email: true,
         ldapUid: true,
+        commissionFunction: true,
+        commissionPhone: true,
       },
       orderBy: [{ name: 'asc' }],
       take: 400,
@@ -367,6 +369,8 @@ export class ElosService {
         warName: item.name,
         email: item.email,
         ldapUid: item.ldapUid,
+        functionText: item.commissionFunction ?? null,
+        phone: item.commissionPhone ?? null,
       })),
     };
   }
@@ -489,6 +493,77 @@ export class ElosService {
     return {
       ok: true,
       removed: deleted.count,
+    };
+  }
+
+  async updateCommissionMember(
+    payload: {
+      userId: string;
+      functionText?: string | null;
+      phone?: string | null;
+    },
+    user?: RbacUser,
+  ) {
+    this.assertCanManageOrgChart(user);
+
+    const userId = String(payload.userId ?? '').trim();
+    if (!userId) {
+      throwError('VALIDATION_ERROR', { reason: 'USER_ID_REQUIRED' });
+    }
+
+    const commissionRole = await this.getCommissionRoleOrFail();
+    const membership = await this.prisma.userRole.findUnique({
+      where: { userId },
+      select: { roleId: true },
+    });
+    if (!membership || membership.roleId !== commissionRole.id) {
+      throwError('NOT_FOUND');
+    }
+
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        commissionFunction:
+          payload.functionText === undefined
+            ? undefined
+            : payload.functionText && payload.functionText.trim()
+              ? sanitizeText(payload.functionText.trim())
+              : null,
+        commissionPhone:
+          payload.phone === undefined
+            ? undefined
+            : this.maskCommissionPhone(payload.phone),
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        commissionFunction: true,
+        commissionPhone: true,
+      },
+    });
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'org_chart',
+      action: 'commission_member_update',
+      entityId: userId,
+      diffJson: {
+        functionText: updated.commissionFunction ?? null,
+        phone: updated.commissionPhone ?? null,
+      },
+    });
+
+    return {
+      ok: true,
+      item: {
+        id: updated.id,
+        name: updated.name,
+        warName: updated.name,
+        email: updated.email,
+        functionText: updated.commissionFunction ?? null,
+        phone: updated.commissionPhone ?? null,
+      },
     };
   }
 
@@ -628,6 +703,16 @@ export class ElosService {
     const nameKey = String(name ?? '').trim().toLowerCase();
     const emailKey = String(email ?? '').trim().toLowerCase();
     return `${localityId}:${eloRoleId}:${nameKey}:${emailKey}`;
+  }
+
+  private maskCommissionPhone(raw: string | null | undefined) {
+    const digits = String(raw ?? '')
+      .replace(/\D/g, '')
+      .slice(0, 11);
+    if (!digits) return null;
+    if (digits.length <= 2) return `(${digits}`;
+    if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
   }
 
   private mapElo(item: any, executiveHidePii?: boolean) {
