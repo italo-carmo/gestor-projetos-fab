@@ -342,6 +342,14 @@ export function TasksPage() {
                 rows={safeRows}
                 getRowId={(row) => String(row.id)}
                 localeText={dataGridPtBR.components.MuiDataGrid.defaultProps.localeText}
+                sx={{
+                  '& .MuiDataGrid-row': {
+                    cursor: 'pointer',
+                  },
+                  '& .MuiDataGrid-cellCheckbox': {
+                    cursor: 'default',
+                  },
+                }}
                 columns={[
                   {
                     field: 'title',
