@@ -173,6 +173,9 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (item.to === '/activities') {
       return can(me, 'task_instances', 'view');
     }
+    if (item.to === '/calendar') {
+      return isNationalManager && can(me, 'calendar', 'view');
+    }
     if (item.to === '/meetings') {
       return canSeeCommissionTiBoards && can(me, 'meetings', 'view');
     }

@@ -91,7 +91,14 @@ function App() {
                 />
                 <Route path="/activities" element={<ActivitiesPage />} />
                 <Route path="/gantt" element={<GanttPage />} />
-                <Route path="/calendar" element={<CalendarPage />} />
+                <Route
+                  path="/calendar"
+                  element={
+                    <RequireRoleAccess allow={(user) => hasNationalManagementScope(user)}>
+                      <CalendarPage />
+                    </RequireRoleAccess>
+                  }
+                />
                 <Route
                   path="/meetings"
                   element={
