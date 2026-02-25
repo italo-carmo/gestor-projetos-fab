@@ -25,6 +25,7 @@ import { TaskTemplatesPage } from './pages/TaskTemplatesPage';
 import { DocumentsPage } from './pages/DocumentsPage';
 import { BiSurveyDashboardPage } from './pages/BiSurveyDashboardPage';
 import { MissionsPage } from './pages/MissionsPage';
+import { SocialCommunicationPage } from './pages/SocialCommunicationPage';
 import { RequireAuth } from './app/RequireAuth';
 import { RequireRoleAccess } from './app/RequireRoleAccess';
 import {
@@ -104,6 +105,7 @@ function App() {
                 <Route path="/notices" element={<NoticesPage />} />
                 <Route path="/checklists" element={<ChecklistsPage />} />
                 <Route path="/templates" element={<TaskTemplatesPage />} />
+                <Route path="/social-communication" element={<SocialCommunicationPage />} />
                 <Route
                   path="/documents"
                   element={

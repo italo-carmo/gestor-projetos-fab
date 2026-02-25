@@ -40,7 +40,7 @@ import ContactPhoneIcon from '@mui/icons-material/ContactPhone';
 import HistoryIcon from '@mui/icons-material/History';
 import EventNoteIcon from '@mui/icons-material/EventNote';
 import FlagRoundedIcon from '@mui/icons-material/FlagRounded';
-import FolderOpenIcon from '@mui/icons-material/FolderOpen';
+import NewspaperRoundedIcon from '@mui/icons-material/NewspaperRounded';
 import LogoutIcon from '@mui/icons-material/Logout';
 import ChevronLeftRoundedIcon from '@mui/icons-material/ChevronLeftRounded';
 import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
@@ -50,7 +50,6 @@ import { useDebounce } from '../app/useDebounce';
 import { can } from '../app/rbac';
 import {
   hasAnyRole,
-  hasRole,
   hasNationalManagementScope,
   ROLE_COMANDANTE_COMGEP,
   ROLE_COORDENACAO_CIPAVD,
@@ -72,7 +71,7 @@ const navItems = [
   { label: 'Atividades de Campo', to: '/activities', icon: <EventNoteIcon fontSize="small" /> },
   { label: 'Tarefas', to: '/tasks', icon: <TaskIcon fontSize="small" /> },
   { label: 'Modelos de tarefa', to: '/templates', icon: <TaskIcon fontSize="small" /> },
-  { label: 'Comunicação Social', to: '/documents', icon: <FolderOpenIcon fontSize="small" /> },
+  { label: 'Comunicação Social', to: '/social-communication', icon: <NewspaperRoundedIcon fontSize="small" /> },
   { label: 'Cronograma', to: '/gantt', icon: <TimelineIcon fontSize="small" /> },
   { label: 'Calendário', to: '/calendar', icon: <CalendarMonthIcon fontSize="small" /> },
   { label: 'Reuniões', to: '/meetings', icon: <GroupsIcon fontSize="small" /> },
@@ -129,7 +128,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   };
 
   const visibleNavItems = navItems.filter((item) => {
-    const isCoordCipavd = hasRole(me, ROLE_COORDENACAO_CIPAVD);
     const isNationalManager = hasNationalManagementScope(me);
     const isBiRole = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI]);
 
@@ -166,8 +164,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (item.to === '/templates') {
       return can(me, 'task_templates', 'view');
     }
-    if (item.to === '/documents') {
-      return (isCoordCipavd || hasRole(me, ROLE_TI)) && can(me, 'search', 'view');
+    if (item.to === '/social-communication') {
+      return true;
     }
     if (item.to === '/activities') {
       return can(me, 'task_instances', 'view');

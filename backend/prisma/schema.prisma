@@ -38,6 +38,7 @@ model User {
   taskCommentReads TaskCommentRead[]
   createdActivities Activity[]    @relation("ActivityCreator")
   createdMissions  Mission[]     @relation("MissionCreator")
+  createdSocialCommunicationArticles SocialCommunicationArticle[] @relation("SocialCommunicationArticleCreator")
   missionParticipations MissionParticipant[]
   activityResponsibilities ActivityResponsible[] @relation("ActivityResponsibleUser")
   activityResponsibilityAssignments ActivityResponsible[] @relation("ActivityResponsibleAssigner")
@@ -671,6 +672,23 @@ model Notice {
   specialty    Specialty?     @relation(fields: [specialtyId], references: [id])
 
   @@index([localityId, specialtyId, dueDate])
+}
+
+model SocialCommunicationArticle {
+  id            String    @id @default(cuid())
+  sourceUrl     String
+  title         String
+  coverImageUrl String?
+  summary       String?
+  publishedAt   DateTime?
+  createdById   String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  createdBy     User?     @relation("SocialCommunicationArticleCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([publishedAt])
 }
 
 model Checklist {

@@ -1041,6 +1041,63 @@ export function usePinNotice() {
   });
 }
 
+/** Social communication */
+export function useSocialCommunication(filters: Record<string, any>) {
+  return useQuery({
+    queryKey: qk.socialCommunication(filters),
+    queryFn: async () =>
+      (await api.get("/social-communication", { params: filters })).data,
+    staleTime: 10_000,
+  });
+}
+
+export function useResolveSocialCommunicationMetadata() {
+  return useMutation({
+    mutationFn: async (url: string) =>
+      (await api.post("/social-communication/metadata", { url })).data,
+  });
+}
+
+export function useCreateSocialCommunicationArticle() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      url: string;
+      title?: string;
+      coverImageUrl?: string | null;
+      summary?: string | null;
+      publishedAt?: string | null;
+    }) => (await api.post("/social-communication", payload)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["socialCommunication"] }),
+  });
+}
+
+export function useUpdateSocialCommunicationArticle() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      payload: {
+        url?: string;
+        title?: string;
+        coverImageUrl?: string | null;
+        summary?: string | null;
+        publishedAt?: string | null;
+      };
+    }) => (await api.put(`/social-communication/${args.id}`, args.payload)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["socialCommunication"] }),
+  });
+}
+
+export function useDeleteSocialCommunicationArticle() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      (await api.delete(`/social-communication/${id}`)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["socialCommunication"] }),
+  });
+}
+
 /** Meetings */
 export function useMeetings(filters: Record<string, any>) {
   return useQuery({
