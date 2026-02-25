@@ -1,5 +1,4 @@
 import {
-  Alert,
   Box,
   Button,
   Card,
@@ -11,7 +10,6 @@ import {
   DialogContent,
   DialogTitle,
   IconButton,
-  Link,
   Stack,
   TextField,
   Typography,
@@ -402,59 +400,35 @@ export function SocialCommunicationPage() {
         fullWidth
         maxWidth="lg"
       >
-        <DialogTitle sx={{ pr: 6 }}>
-          {previewing?.title}
-          <IconButton
-            onClick={() => setPreviewing(null)}
-            sx={{ position: "absolute", top: 8, right: 8 }}
-          >
-            <CloseRoundedIcon />
-          </IconButton>
-        </DialogTitle>
         {previewing && (
-          <DialogContent dividers sx={{ p: 0 }}>
-            {previewing.coverImageUrl && (
+          <DialogContent dividers sx={{ p: 0, position: "relative" }}>
+            <IconButton
+              onClick={() => setPreviewing(null)}
+              sx={{
+                position: "absolute",
+                top: 8,
+                right: 8,
+                zIndex: 2,
+                bgcolor: "rgba(255,255,255,0.9)",
+                "&:hover": { bgcolor: "rgba(255,255,255,1)" },
+              }}
+            >
+              <CloseRoundedIcon />
+            </IconButton>
+            <Box
+              sx={{
+                border: "1px solid rgba(17,66,89,0.16)",
+                borderRadius: 0,
+                overflow: "hidden",
+                height: { xs: "75vh", md: "78vh" },
+              }}
+            >
               <Box
-                component="img"
-                src={previewing.coverImageUrl}
-                alt={previewing.title}
-                sx={{ width: "100%", maxHeight: 240, objectFit: "cover" }}
+                component="iframe"
+                title={previewing.title}
+                src={previewing.sourceUrl}
+                sx={{ width: "100%", height: "100%", border: 0, bgcolor: "#fff" }}
               />
-            )}
-            <Box px={{ xs: 2, md: 3 }} py={2}>
-              {previewing.summary && (
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.2 }}>
-                  {previewing.summary}
-                </Typography>
-              )}
-              <Alert severity="info" sx={{ mb: 1.4 }}>
-                Se a materia nao abrir abaixo, acesse direto no portal de origem.
-                {" "}
-                <Link
-                  href={previewing.sourceUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  underline="hover"
-                  sx={{ ml: 0.5 }}
-                >
-                  Abrir em nova aba
-                </Link>
-              </Alert>
-              <Box
-                sx={{
-                  border: "1px solid rgba(17,66,89,0.16)",
-                  borderRadius: 2,
-                  overflow: "hidden",
-                  height: { xs: "55vh", md: "70vh" },
-                }}
-              >
-                <Box
-                  component="iframe"
-                  title={previewing.title}
-                  src={previewing.sourceUrl}
-                  sx={{ width: "100%", height: "100%", border: 0, bgcolor: "#fff" }}
-                />
-              </Box>
             </Box>
           </DialogContent>
         )}
