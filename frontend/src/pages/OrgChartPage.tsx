@@ -2,17 +2,22 @@ import { Box, Button, Card, CardContent, Chip, Drawer, MenuItem, Stack, TextFiel
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
+  useAddOrgChartCommissionMember,
   useCreateOrgChartAssignment,
   useDeleteOrgChartAssignment,
   useEloRoles,
   useMe,
+  useOrgChartCommissionCandidates,
+  useOrgChartCommissionMembers,
   useOrgChart,
   useOrgChartCandidates,
+  useRemoveOrgChartCommissionMember,
   useUpdateOrgChartAssignment,
 } from '../api/hooks';
 import { parseApiError } from '../app/apiErrors';
-import { hasNationalManagementScope } from '../app/roleAccess';
+import { hasAnyRole, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from '../app/roleAccess';
 import { useToast } from '../app/toast';
+import { ConfirmDialog } from '../components/dialogs/ConfirmDialog';
 import { EmptyState } from '../components/states/EmptyState';
 import { ErrorState } from '../components/states/ErrorState';
 import { SkeletonState } from '../components/states/SkeletonState';
@@ -22,13 +27,20 @@ export function OrgChartPage() {
   const search = params.get('q') ?? '';
   const toast = useToast();
   const { data: me } = useMe();
-  const canManage = hasNationalManagementScope(me);
+  const canManage = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]);
   const eloRolesQuery = useEloRoles();
   const createAssignment = useCreateOrgChartAssignment();
   const updateAssignment = useUpdateOrgChartAssignment();
   const deleteAssignment = useDeleteOrgChartAssignment();
+  const commissionMembersQuery = useOrgChartCommissionMembers({});
+  const addCommissionMember = useAddOrgChartCommissionMember();
+  const removeCommissionMember = useRemoveOrgChartCommissionMember();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [commissionDrawerOpen, setCommissionDrawerOpen] = useState(false);
   const [candidateSearch, setCandidateSearch] = useState('');
+  const [commissionSearch, setCommissionSearch] = useState('');
+  const [commissionCandidateSearch, setCommissionCandidateSearch] = useState('');
+  const [commissionDeleteTarget, setCommissionDeleteTarget] = useState<any | null>(null);
   const [form, setForm] = useState<{
     id: string;
     localityId: string;
@@ -65,6 +77,12 @@ export function OrgChartPage() {
     },
     drawerOpen && canManage && Boolean(form.localityId && form.eloRoleId),
   );
+  const commissionCandidatesQuery = useOrgChartCommissionCandidates(
+    {
+      q: commissionCandidateSearch || undefined,
+    },
+    commissionDrawerOpen && canManage,
+  );
 
   const updateParam = (value: string) => {
     const next = new URLSearchParams(params);
@@ -77,6 +95,14 @@ export function OrgChartPage() {
   if (orgQuery.isError) return <ErrorState error={orgQuery.error} onRetry={() => orgQuery.refetch()} />;
 
   const items = orgQuery.data?.items ?? [];
+  const commissionMembersRaw = (commissionMembersQuery.data?.items ?? []) as any[];
+  const commissionMembers = commissionSearch
+    ? commissionMembersRaw.filter((item: any) =>
+        [item.warName ?? item.name, item.email, item.ldapUid]
+          .map((value: unknown) => String(value ?? '').toLowerCase())
+          .some((value) => value.includes(commissionSearch.toLowerCase())),
+      )
+    : commissionMembersRaw;
   const eloRoles = eloRolesQuery.data?.items ?? [];
   const localityOptions: Array<{ id: string; name: string }> = Array.from(
     new Map<string, { id: string; name: string }>(
@@ -175,11 +201,110 @@ export function OrgChartPage() {
     }
   };
 
+  const handleAddCommissionMember = async (userId: string) => {
+    if (!userId) return;
+    try {
+      await addCommissionMember.mutateAsync({ userId });
+      toast.push({ message: 'Usuário incluído na Comissão CIPAVD.', severity: 'success' });
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({ message: payload.message ?? 'Erro ao incluir usuário na comissão.', severity: 'error' });
+    }
+  };
+
+  const handleConfirmRemoveCommissionMember = async () => {
+    if (!commissionDeleteTarget?.id) return;
+    try {
+      await removeCommissionMember.mutateAsync(String(commissionDeleteTarget.id));
+      toast.push({ message: 'Usuário removido da Comissão CIPAVD.', severity: 'success' });
+      setCommissionDeleteTarget(null);
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({ message: payload.message ?? 'Erro ao remover usuário da comissão.', severity: 'error' });
+    }
+  };
+
   return (
     <Box>
       <Typography variant="h4" gutterBottom>
         Organograma
       </Typography>
+
+      <Card sx={{ mb: 2.2 }}>
+        <CardContent>
+          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.2 }}>
+            <Box>
+              <Typography variant="h6">Organograma da Comissão CIPAVD</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Integrantes com o papel de Coordenação CIPAVD.
+              </Typography>
+            </Box>
+            {canManage && (
+              <Button size="small" variant="outlined" onClick={() => setCommissionDrawerOpen(true)}>
+                Incluir usuário
+              </Button>
+            )}
+          </Stack>
+
+          <TextField
+            size="small"
+            label="Buscar na comissão"
+            value={commissionSearch}
+            onChange={(e) => setCommissionSearch(e.target.value)}
+            sx={{ mb: 1.5, minWidth: 280 }}
+          />
+
+          {commissionMembersQuery.isLoading ? (
+            <Typography variant="body2" color="text.secondary">
+              Carregando membros da comissão...
+            </Typography>
+          ) : commissionMembersQuery.isError ? (
+            <Typography variant="body2" color="error.main">
+              Não foi possível carregar os membros da comissão.
+            </Typography>
+          ) : commissionMembers.length === 0 ? (
+            <Typography variant="body2" color="text.secondary">
+              Nenhum membro da comissão encontrado.
+            </Typography>
+          ) : (
+            <Stack spacing={1.2}>
+              {commissionMembers.map((member: any) => (
+                <Card key={member.id} variant="outlined">
+                  <CardContent sx={{ py: 1.4, '&:last-child': { pb: 1.4 } }}>
+                    <Stack
+                      direction={{ xs: 'column', md: 'row' }}
+                      justifyContent="space-between"
+                      alignItems={{ xs: 'flex-start', md: 'center' }}
+                      gap={1}
+                    >
+                      <Box>
+                        <Typography variant="subtitle2">{member.warName ?? member.name ?? '—'}</Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {member.email ?? 'Sem e-mail'}
+                        </Typography>
+                        {member.ldapUid && (
+                          <Typography variant="caption" color="text.secondary">
+                            UID FAB: {member.ldapUid}
+                          </Typography>
+                        )}
+                      </Box>
+                      {canManage && (
+                        <Button
+                          size="small"
+                          color="error"
+                          onClick={() => setCommissionDeleteTarget(member)}
+                        >
+                          Retirar da comissão
+                        </Button>
+                      )}
+                    </Stack>
+                  </CardContent>
+                </Card>
+              ))}
+            </Stack>
+          )}
+        </CardContent>
+      </Card>
 
       <TextField
         size="small"
@@ -347,6 +472,94 @@ export function OrgChartPage() {
           </Stack>
         </Box>
       </Drawer>
+
+      <Drawer
+        anchor="right"
+        open={commissionDrawerOpen}
+        onClose={() => setCommissionDrawerOpen(false)}
+        PaperProps={{ sx: { width: { xs: '100%', md: 480 } } }}
+      >
+        <Box p={3} display="flex" flexDirection="column" gap={1.5}>
+          <Typography variant="h6">Incluir na Comissão CIPAVD</Typography>
+          <Typography variant="body2" color="text.secondary">
+            Selecionar um usuário abaixo atribui o papel de Coordenação CIPAVD.
+          </Typography>
+
+          <TextField
+            size="small"
+            label="Buscar usuário por nome/e-mail/UID"
+            value={commissionCandidateSearch}
+            onChange={(e) => setCommissionCandidateSearch(e.target.value)}
+          />
+
+          <Box sx={{ maxHeight: 'calc(100vh - 240px)', overflowY: 'auto', pr: 0.5 }}>
+            <Stack spacing={1}>
+              {(commissionCandidatesQuery.data?.items ?? []).map((candidate: any) => (
+                <Card key={candidate.id} variant="outlined">
+                  <CardContent sx={{ py: 1.2, '&:last-child': { pb: 1.2 } }}>
+                    <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1}>
+                      <Box sx={{ minWidth: 0 }}>
+                        <Typography variant="subtitle2" noWrap title={candidate.name}>
+                          {candidate.name}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" noWrap title={candidate.email}>
+                          {candidate.email}
+                        </Typography>
+                        {candidate.ldapUid && (
+                          <Typography variant="caption" color="text.secondary">
+                            UID FAB: {candidate.ldapUid}
+                          </Typography>
+                        )}
+                      </Box>
+                      <Button
+                        size="small"
+                        variant="contained"
+                        onClick={() => {
+                          void handleAddCommissionMember(candidate.id);
+                        }}
+                        disabled={addCommissionMember.isPending}
+                      >
+                        Incluir
+                      </Button>
+                    </Stack>
+                  </CardContent>
+                </Card>
+              ))}
+              {commissionCandidatesQuery.isLoading && (
+                <Typography variant="body2" color="text.secondary">
+                  Carregando candidatos...
+                </Typography>
+              )}
+              {!commissionCandidatesQuery.isLoading && (commissionCandidatesQuery.data?.items ?? []).length === 0 && (
+                <Typography variant="body2" color="text.secondary">
+                  Nenhum candidato encontrado.
+                </Typography>
+              )}
+            </Stack>
+          </Box>
+
+          <Stack direction="row" justifyContent="flex-end">
+            <Button variant="text" onClick={() => setCommissionDrawerOpen(false)}>
+              Fechar
+            </Button>
+          </Stack>
+        </Box>
+      </Drawer>
+
+      <ConfirmDialog
+        open={Boolean(commissionDeleteTarget)}
+        onCancel={() => setCommissionDeleteTarget(null)}
+        onConfirm={() => {
+          void handleConfirmRemoveCommissionMember();
+        }}
+        title="Retirar da Comissão CIPAVD"
+        message="Deseja retirar este usuário da Comissão CIPAVD?"
+        highlightText={commissionDeleteTarget?.warName ?? commissionDeleteTarget?.name ?? ''}
+        note="A remoção do papel é aplicada imediatamente."
+        confirmLabel="Retirar da comissão"
+        severity="error"
+        confirmLoading={removeCommissionMember.isPending}
+      />
     </Box>
   );
 }

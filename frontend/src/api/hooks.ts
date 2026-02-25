@@ -1263,6 +1263,23 @@ export function useOrgChart(filters: Record<string, any>) {
   });
 }
 
+export function useOrgChartCommissionMembers(filters: Record<string, any>) {
+  return useQuery({
+    queryKey: qk.orgChartCommissionMembers(filters),
+    queryFn: async () => (await api.get('/org-chart/commission-members', { params: filters })).data,
+    staleTime: 15_000,
+  });
+}
+
+export function useOrgChartCommissionCandidates(filters: Record<string, any>, enabled = true) {
+  return useQuery({
+    queryKey: qk.orgChartCommissionCandidates(filters),
+    queryFn: async () => (await api.get('/org-chart/commission-candidates', { params: filters })).data,
+    enabled,
+    staleTime: 10_000,
+  });
+}
+
 export function useOrgChartCandidates(filters: Record<string, any>, enabled = true) {
   return useQuery({
     queryKey: ['orgChart', 'candidates', filters],
@@ -1318,6 +1335,32 @@ export function useDeleteOrgChartAssignment() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['orgChart'] });
       qc.invalidateQueries({ queryKey: ['elos'] });
+    },
+  });
+}
+
+export function useAddOrgChartCommissionMember() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: { userId: string }) =>
+      (await api.post('/org-chart/commission-members', payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['orgChart'] });
+      qc.invalidateQueries({ queryKey: ['users'] });
+      qc.invalidateQueries({ queryKey: qk.me });
+    },
+  });
+}
+
+export function useRemoveOrgChartCommissionMember() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (userId: string) =>
+      (await api.delete(`/org-chart/commission-members/${userId}`)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['orgChart'] });
+      qc.invalidateQueries({ queryKey: ['users'] });
+      qc.invalidateQueries({ queryKey: qk.me });
     },
   });
 }

@@ -6,7 +6,13 @@ import { throwError } from '../common/http-error';
 import { sanitizeText } from '../common/sanitize';
 import { AuditService } from '../audit/audit.service';
 import { parsePagination } from '../common/pagination';
-import { hasNationalManagementScope } from '../rbac/role-access';
+import {
+  hasAnyRole,
+  hasNationalManagementScope,
+  normalizeRoleName,
+  ROLE_COORDENACAO_CIPAVD,
+  ROLE_TI,
+} from '../rbac/role-access';
 
 @Injectable()
 export class ElosService {
@@ -322,6 +328,170 @@ export class ElosService {
     return { items };
   }
 
+  async listCommissionMembers(filters: { q?: string }, _user?: RbacUser) {
+    const commissionRole = await this.getCommissionRole();
+    if (!commissionRole) return { items: [] };
+
+    const where: Prisma.UserWhereInput = {
+      isActive: true,
+      roles: {
+        some: {
+          roleId: commissionRole.id,
+        },
+      },
+    };
+    if (filters.q) {
+      where.OR = [
+        { name: { contains: filters.q, mode: 'insensitive' } },
+        { email: { contains: filters.q, mode: 'insensitive' } },
+        { ldapUid: { contains: filters.q, mode: 'insensitive' } },
+      ];
+    }
+
+    const items = await this.prisma.user.findMany({
+      where,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        ldapUid: true,
+      },
+      orderBy: [{ name: 'asc' }],
+      take: 400,
+    });
+
+    return {
+      items: items.map((item) => ({
+        id: item.id,
+        name: item.name,
+        warName: item.name,
+        email: item.email,
+        ldapUid: item.ldapUid,
+      })),
+    };
+  }
+
+  async listCommissionCandidates(filters: { q?: string }, _user?: RbacUser) {
+    const commissionRole = await this.getCommissionRole();
+    if (!commissionRole) return { items: [] };
+
+    const where: Prisma.UserWhereInput = {
+      isActive: true,
+      roles: {
+        none: {
+          roleId: commissionRole.id,
+        },
+      },
+    };
+    if (filters.q) {
+      where.OR = [
+        { name: { contains: filters.q, mode: 'insensitive' } },
+        { email: { contains: filters.q, mode: 'insensitive' } },
+        { ldapUid: { contains: filters.q, mode: 'insensitive' } },
+      ];
+    }
+
+    const items = await this.prisma.user.findMany({
+      where,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        ldapUid: true,
+      },
+      orderBy: [{ name: 'asc' }],
+      take: 400,
+    });
+
+    return { items };
+  }
+
+  async addCommissionMember(payload: { userId: string }, user?: RbacUser) {
+    this.assertCanManageOrgChart(user);
+
+    const userId = String(payload.userId ?? '').trim();
+    if (!userId) {
+      throwError('VALIDATION_ERROR', { reason: 'USER_ID_REQUIRED' });
+    }
+
+    const commissionRole = await this.getCommissionRoleOrFail();
+    const target = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, isActive: true, name: true, email: true },
+    });
+    if (!target || !target.isActive) {
+      throwError('NOT_FOUND');
+    }
+
+    await this.prisma.userRole.upsert({
+      where: { userId },
+      create: {
+        userId,
+        roleId: commissionRole.id,
+      },
+      update: {
+        roleId: commissionRole.id,
+      },
+    });
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'org_chart',
+      action: 'commission_member_add',
+      entityId: userId,
+      diffJson: {
+        roleId: commissionRole.id,
+        roleName: commissionRole.name,
+      },
+    });
+
+    return {
+      ok: true,
+      user: {
+        id: target.id,
+        name: target.name,
+        warName: target.name,
+        email: target.email,
+      },
+    };
+  }
+
+  async removeCommissionMember(payload: { userId: string }, user?: RbacUser) {
+    this.assertCanManageOrgChart(user);
+
+    const userId = String(payload.userId ?? '').trim();
+    if (!userId) {
+      throwError('VALIDATION_ERROR', { reason: 'USER_ID_REQUIRED' });
+    }
+
+    const commissionRole = await this.getCommissionRoleOrFail();
+    const deleted = await this.prisma.userRole.deleteMany({
+      where: {
+        userId,
+        roleId: commissionRole.id,
+      },
+    });
+    if (!deleted.count) {
+      throwError('NOT_FOUND');
+    }
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'org_chart',
+      action: 'commission_member_remove',
+      entityId: userId,
+      diffJson: {
+        roleId: commissionRole.id,
+        roleName: commissionRole.name,
+      },
+    });
+
+    return {
+      ok: true,
+      removed: deleted.count,
+    };
+  }
+
   async createOrgChartAssignment(
     payload: {
       localityId: string;
@@ -396,9 +566,30 @@ export class ElosService {
   }
 
   private assertCanManageOrgChart(user?: RbacUser) {
-    if (!hasNationalManagementScope(user)) {
+    if (!hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_TI])) {
       throwError('RBAC_FORBIDDEN');
     }
+  }
+
+  private async getCommissionRole() {
+    const roles = await this.prisma.role.findMany({
+      select: {
+        id: true,
+        name: true,
+      },
+    });
+    const role = roles.find(
+      (item) => normalizeRoleName(item.name) === normalizeRoleName(ROLE_COORDENACAO_CIPAVD),
+    );
+    return role ?? null;
+  }
+
+  private async getCommissionRoleOrFail() {
+    const role = await this.getCommissionRole();
+    if (!role) {
+      throwError('NOT_FOUND');
+    }
+    return role;
   }
 
   private async assertUserMatchesAssignment(userId: string, localityId: string, eloRoleId: string) {

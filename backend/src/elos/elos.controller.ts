@@ -9,6 +9,7 @@ import { CreateEloDto } from './dto/create-elo.dto';
 import { UpdateEloDto } from './dto/update-elo.dto';
 import { CreateOrgChartAssignmentDto } from './dto/create-org-chart-assignment.dto';
 import { UpdateOrgChartAssignmentDto } from './dto/update-org-chart-assignment.dto';
+import { ManageOrgChartCommissionMemberDto } from './dto/manage-org-chart-commission-member.dto';
 
 @Controller('elos')
 @UseGuards(JwtAuthGuard, RbacGuard)
@@ -70,6 +71,42 @@ export class OrgChartController {
     @CurrentUser() user: RbacUser,
   ) {
     return this.elos.listOrgChartCandidates({ localityId, eloRoleId, q }, user);
+  }
+
+  @Get('commission-members')
+  @RequirePermission('org_chart', 'view')
+  commissionMembers(
+    @Query('q') q: string | undefined,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.elos.listCommissionMembers({ q }, user);
+  }
+
+  @Get('commission-candidates')
+  @RequirePermission('org_chart', 'view')
+  commissionCandidates(
+    @Query('q') q: string | undefined,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.elos.listCommissionCandidates({ q }, user);
+  }
+
+  @Post('commission-members')
+  @RequirePermission('org_chart', 'view')
+  addCommissionMember(
+    @Body() dto: ManageOrgChartCommissionMemberDto,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.elos.addCommissionMember(dto, user);
+  }
+
+  @Delete('commission-members/:userId')
+  @RequirePermission('org_chart', 'view')
+  removeCommissionMember(
+    @Param('userId') userId: string,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.elos.removeCommissionMember({ userId }, user);
   }
 
   @Post('assignments')
