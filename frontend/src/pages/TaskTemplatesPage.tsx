@@ -14,13 +14,14 @@ import {
 } from '@mui/material';
 import { addDays } from 'date-fns';
 import { useMemo, useState } from 'react';
-import { useCreateTaskTemplate, useEloRoles, useGenerateInstances, useLocalities, usePhases, useTaskTemplates, useCloneTaskTemplate, useMe } from '../api/hooks';
+import { useCreateTaskTemplate, useEloRoles, useGenerateInstances, useLocalities, usePhases, useTaskTemplates, useCloneTaskTemplate, useMe, useUpdateTaskTemplate } from '../api/hooks';
 import { EmptyState } from '../components/states/EmptyState';
 import { ErrorState } from '../components/states/ErrorState';
 import { SkeletonState } from '../components/states/SkeletonState';
 import { useToast } from '../app/toast';
 import { parseApiError } from '../app/apiErrors';
 import { can } from '../app/rbac';
+import { hasAnyRole, ROLE_COMANDANTE_COMGEP, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from '../app/roleAccess';
 import { TASK_PRIORITY_LABELS } from '../constants/enums';
 
 export function TaskTemplatesPage() {
@@ -32,6 +33,7 @@ export function TaskTemplatesPage() {
   const eloRolesQuery = useEloRoles();
   const eloRoles = eloRolesQuery.data?.items ?? [];
   const createTemplate = useCreateTaskTemplate();
+  const updateTemplate = useUpdateTaskTemplate();
   const cloneTemplate = useCloneTaskTemplate();
   const generateInstances = useGenerateInstances();
 
@@ -39,6 +41,7 @@ export function TaskTemplatesPage() {
   const [generateOpen, setGenerateOpen] = useState(false);
   const [showDuplicates, setShowDuplicates] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<any | null>(null);
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [form, setForm] = useState({
     title: '',
     description: '',
@@ -57,6 +60,7 @@ export function TaskTemplatesPage() {
   });
 
   const openCreate = () => {
+    setEditingTemplateId(null);
     setForm({
       title: '',
       description: '',
@@ -65,6 +69,20 @@ export function TaskTemplatesPage() {
       eloRoleId: '',
       appliesToAllLocalities: false,
       reportRequiredDefault: false,
+    });
+    setDrawerOpen(true);
+  };
+
+  const openEdit = (template: any) => {
+    setEditingTemplateId(template.id);
+    setForm({
+      title: template.title ?? '',
+      description: template.description ?? '',
+      phaseId: template.phaseId ?? '',
+      specialtyId: template.specialtyId ?? '',
+      eloRoleId: template.eloRoleId ?? '',
+      appliesToAllLocalities: Boolean(template.appliesToAllLocalities),
+      reportRequiredDefault: Boolean(template.reportRequiredDefault),
     });
     setDrawerOpen(true);
   };
@@ -81,9 +99,9 @@ export function TaskTemplatesPage() {
     setGenerateOpen(true);
   };
 
-  const handleCreate = async () => {
+  const handleSaveTemplate = async () => {
     try {
-      await createTemplate.mutateAsync({
+      const payload = {
         title: form.title,
         description: form.description || null,
         phaseId: form.phaseId,
@@ -91,12 +109,24 @@ export function TaskTemplatesPage() {
         eloRoleId: form.eloRoleId || null,
         appliesToAllLocalities: form.appliesToAllLocalities,
         reportRequiredDefault: form.reportRequiredDefault,
-      });
-      toast.push({ message: 'Template criado', severity: 'success' });
+      };
+
+      if (editingTemplateId) {
+        await updateTemplate.mutateAsync({ id: editingTemplateId, payload });
+        toast.push({ message: 'Template atualizado', severity: 'success' });
+      } else {
+        await createTemplate.mutateAsync(payload);
+        toast.push({ message: 'Template criado', severity: 'success' });
+      }
+
+      setEditingTemplateId(null);
       setDrawerOpen(false);
     } catch (error) {
-      const payload = parseApiError(error);
-      toast.push({ message: payload.message ?? 'Erro ao criar modelo', severity: 'error' });
+      const parsed = parseApiError(error);
+      toast.push({
+        message: parsed.message ?? (editingTemplateId ? 'Erro ao atualizar modelo' : 'Erro ao criar modelo'),
+        severity: 'error',
+      });
     }
   };
 
@@ -170,6 +200,7 @@ export function TaskTemplatesPage() {
   const hiddenDuplicates = Math.max(0, templates.length - templatesToRender.length);
   const phases = phasesQuery.data?.items ?? [];
   const localities = localitiesQuery.data?.items ?? [];
+  const canEditTemplate = can(me, 'task_templates', 'update') && hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI]);
 
   return (
     <Box>
@@ -233,6 +264,11 @@ export function TaskTemplatesPage() {
                       {template.reportRequiredDefault ? 'Sim' : 'Não'}
                     </Box>
                     <Box component="td" sx={{ py: 1 }}>
+                      {canEditTemplate && (
+                        <Button size="small" onClick={() => openEdit(template)}>
+                          Editar
+                        </Button>
+                      )}
                       <Button size="small" onClick={() => openGenerate(template)}>
                         Gerar instâncias
                       </Button>
@@ -250,7 +286,7 @@ export function TaskTemplatesPage() {
 
       <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)} PaperProps={{ sx: { width: { xs: '100%', md: 420 } } }}>
         <Box p={3} display="flex" flexDirection="column" gap={2}>
-          <Typography variant="h5">Novo template</Typography>
+          <Typography variant="h5">{editingTemplateId ? 'Editar template' : 'Novo template'}</Typography>
           <TextField size="small" label="Título" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
           <TextField
             size="small"
@@ -314,8 +350,12 @@ export function TaskTemplatesPage() {
             label="Aplicar a todas localidades"
           />
           <Stack direction="row" spacing={1}>
-            <Button variant="contained" onClick={handleCreate}>
-              Salvar
+            <Button
+              variant="contained"
+              onClick={handleSaveTemplate}
+              disabled={createTemplate.isPending || updateTemplate.isPending}
+            >
+              {editingTemplateId ? 'Salvar alterações' : 'Salvar'}
             </Button>
             <Button variant="text" onClick={() => setDrawerOpen(false)}>
               Cancelar

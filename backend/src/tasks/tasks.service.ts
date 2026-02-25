@@ -119,6 +119,112 @@ export class TasksService {
     return created;
   }
 
+  async updateTaskTemplate(
+    id: string,
+    payload: {
+      title?: string;
+      description?: string | null;
+      phaseId?: string;
+      specialtyId?: string | null;
+      eloRoleId?: string | null;
+      appliesToAllLocalities?: boolean;
+      reportRequiredDefault?: boolean;
+    },
+    user?: RbacUser,
+  ) {
+    this.assertTemplateManageAccess(user);
+
+    const existing = await this.prisma.taskTemplate.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        phaseId: true,
+        specialtyId: true,
+        eloRoleId: true,
+        appliesToAllLocalities: true,
+        reportRequiredDefault: true,
+      },
+    });
+    if (!existing) throwError('NOT_FOUND');
+
+    const normalizedTitle =
+      payload.title === undefined
+        ? existing.title
+        : sanitizeText(payload.title);
+    if (!normalizedTitle) {
+      throwError('VALIDATION_ERROR', { field: 'title', reason: 'required' });
+    }
+
+    const normalizedDescription =
+      payload.description === undefined
+        ? existing.description
+        : payload.description === null
+          ? null
+        : sanitizeText(payload.description);
+    const phaseId = payload.phaseId ?? existing.phaseId;
+    const specialtyId =
+      payload.specialtyId === undefined
+        ? existing.specialtyId
+        : payload.specialtyId;
+    const eloRoleId =
+      payload.eloRoleId === undefined ? existing.eloRoleId : payload.eloRoleId;
+    const appliesToAllLocalities =
+      payload.appliesToAllLocalities ?? existing.appliesToAllLocalities;
+    const reportRequiredDefault =
+      payload.reportRequiredDefault ?? existing.reportRequiredDefault;
+
+    const duplicate = await this.prisma.taskTemplate.findFirst({
+      where: {
+        id: { not: id },
+        title: { equals: normalizedTitle, mode: 'insensitive' },
+        phaseId,
+        specialtyId,
+        eloRoleId,
+      },
+      select: { id: true },
+    });
+    if (duplicate) {
+      throwError('CONFLICT_UNIQUE', {
+        resource: 'task_templates',
+        field: 'title+phaseId+specialtyId+eloRoleId',
+        existingId: duplicate.id,
+      });
+    }
+
+    const updated = await this.prisma.taskTemplate.update({
+      where: { id },
+      data: {
+        title: normalizedTitle,
+        description: normalizedDescription,
+        phaseId,
+        specialtyId,
+        eloRoleId,
+        appliesToAllLocalities,
+        reportRequiredDefault,
+      },
+    });
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'task_templates',
+      action: 'update',
+      entityId: updated.id,
+      localityId: user?.localityId ?? undefined,
+      diffJson: {
+        title: updated.title,
+        phaseId: updated.phaseId,
+        specialtyId: updated.specialtyId ?? null,
+        eloRoleId: updated.eloRoleId ?? null,
+        reportRequiredDefault: updated.reportRequiredDefault,
+        appliesToAllLocalities: updated.appliesToAllLocalities,
+      },
+    });
+
+    return updated;
+  }
+
   async cloneTaskTemplate(id: string, user?: RbacUser) {
     const template = await this.prisma.taskTemplate.findUnique({
       where: { id },
@@ -2371,6 +2477,13 @@ export class TasksService {
   }
 
   private assertDeleteAccess(user?: RbacUser) {
+    if (!user?.id) throwError('RBAC_FORBIDDEN');
+    const profile = resolveAccessProfile(user);
+    if (profile.ti || profile.nationalCommission) return;
+    throwError('RBAC_FORBIDDEN');
+  }
+
+  private assertTemplateManageAccess(user?: RbacUser) {
     if (!user?.id) throwError('RBAC_FORBIDDEN');
     const profile = resolveAccessProfile(user);
     if (profile.ti || profile.nationalCommission) return;

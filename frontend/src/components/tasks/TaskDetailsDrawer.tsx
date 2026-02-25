@@ -30,6 +30,7 @@ import {
   useUpdateTaskMeeting,
   useUpdateTaskProgress,
   useUpdateTaskStatus,
+  useUpdateTaskTemplate,
   useUploadReport,
 } from '../../api/hooks';
 import { useToast } from '../../app/toast';
@@ -70,6 +71,7 @@ export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, locali
   const [selectedLocalityId, setSelectedLocalityId] = useState('');
   const [selectedAssigneeValue, setSelectedAssigneeValue] = useState('');
   const [commentText, setCommentText] = useState('');
+  const [taskTitleDraft, setTaskTitleDraft] = useState('');
   const toast = useToast();
   const updateStatus = useUpdateTaskStatus();
   const updateProgress = useUpdateTaskProgress();
@@ -78,6 +80,7 @@ export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, locali
   const markCommentsSeen = useMarkTaskCommentsSeen();
   const uploadReport = useUploadReport();
   const deleteTask = useDeleteTask();
+  const updateTaskTemplate = useUpdateTaskTemplate();
 
   const canManageByRole = hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI]);
   const canUpdate = can(user, 'task_instances', 'update');
@@ -124,11 +127,13 @@ export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, locali
       setSelectedLocalityId('');
       setSelectedAssigneeValue('');
       setCommentText('');
+      setTaskTitleDraft('');
       return;
     }
     setSelectedLocalityId(task.localityId ?? '');
     setSelectedAssigneeValue(assigneeValueFromTask(task));
     setCommentText('');
+    setTaskTitleDraft(resolveTaskTitle(task));
   }, [task?.id, task?.localityId, task?.assignedToId, task?.assignedEloId, task?.assigneeType]);
 
   useEffect(() => {
@@ -244,6 +249,25 @@ export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, locali
     }
   };
 
+  const handleSaveTitle = async () => {
+    if (!task || !canManageTaskData) return;
+    const templateId = String(task.taskTemplateId ?? task.taskTemplate?.id ?? '').trim();
+    const nextTitle = taskTitleDraft.trim();
+    if (!templateId || !nextTitle) return;
+    try {
+      await updateTaskTemplate.mutateAsync({
+        id: templateId,
+        payload: {
+          title: nextTitle,
+        },
+      });
+      toast.push({ message: 'Título atualizado', severity: 'success' });
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({ message: payload.message ?? 'Erro ao atualizar título', severity: 'error' });
+    }
+  };
+
   const reportRequiredLabel = useMemo(() => {
     if (!task?.reportRequired) return null;
     return 'Relatório obrigatório para concluir';
@@ -280,7 +304,7 @@ export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, locali
         {task ? (
           <>
             <Stack spacing={1}>
-              <Typography variant="h5">{resolveTaskTitle(task)}</Typography>
+              <Typography variant="h5">{taskTitleDraft.trim() || resolveTaskTitle(task)}</Typography>
               <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
                 <StatusChip status={task.status} isLate={task.isLate} blocked={task.blockedByIds?.length > 0} />
                 <DueBadge dueDate={task.dueDate} status={task.status} />
@@ -302,6 +326,14 @@ export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, locali
 
             {tab === 0 && (
               <Stack spacing={2}>
+                <TextField
+                  size="small"
+                  label="Título da tarefa"
+                  value={taskTitleDraft}
+                  onChange={(e) => setTaskTitleDraft(e.target.value)}
+                  disabled={!canManageTaskData || updateTaskTemplate.isPending}
+                  helperText="A alteração atualiza o título do modelo vinculado."
+                />
                 <TextField
                   select
                   label="Status"
@@ -464,7 +496,17 @@ export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, locali
                   <Button variant="contained" onClick={() => handleStatus('DONE')} disabled={!canManageTaskData} data-testid="task-mark-done">
                     Concluir
                   </Button>
-                  <Button variant="text" disabled={!canManageTaskData} data-testid="task-save">
+                  <Button
+                    variant="text"
+                    onClick={handleSaveTitle}
+                    disabled={
+                      !canManageTaskData ||
+                      updateTaskTemplate.isPending ||
+                      !taskTitleDraft.trim() ||
+                      taskTitleDraft.trim() === resolveTaskTitle(task)
+                    }
+                    data-testid="task-save"
+                  >
                     Salvar
                   </Button>
                   {canDelete && (

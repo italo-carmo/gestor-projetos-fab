@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../common/current-user.decorator';
 import { RequirePermission } from '../rbac/require-permission.decorator';
@@ -6,6 +6,7 @@ import { RbacGuard } from '../rbac/rbac.guard';
 import type { RbacUser } from '../rbac/rbac.types';
 import { GenerateInstancesDto } from './dto/generate-instances.dto';
 import { TaskTemplateDto } from './dto/task-template.dto';
+import { UpdateTaskTemplateDto } from './dto/update-task-template.dto';
 import { TasksService } from './tasks.service';
 
 @Controller('task-templates')
@@ -32,6 +33,24 @@ export class TaskTemplatesController {
       appliesToAllLocalities: dto.appliesToAllLocalities,
       reportRequiredDefault: dto.reportRequiredDefault,
     }, user);
+  }
+
+  @Put(':id')
+  @RequirePermission('task_templates', 'update')
+  update(@Param('id') id: string, @Body() dto: UpdateTaskTemplateDto, @CurrentUser() user: RbacUser) {
+    return this.tasks.updateTaskTemplate(
+      id,
+      {
+        title: dto.title,
+        description: dto.description,
+        phaseId: dto.phaseId,
+        specialtyId: dto.specialtyId,
+        eloRoleId: dto.eloRoleId,
+        appliesToAllLocalities: dto.appliesToAllLocalities,
+        reportRequiredDefault: dto.reportRequiredDefault,
+      },
+      user,
+    );
   }
 
   @Post(':id/generate-instances')

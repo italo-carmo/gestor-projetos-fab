@@ -809,6 +809,31 @@ export function useCloneTaskTemplate() {
   });
 }
 
+export function useUpdateTaskTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      payload: {
+        title?: string;
+        description?: string | null;
+        phaseId?: string;
+        specialtyId?: string | null;
+        eloRoleId?: string | null;
+        appliesToAllLocalities?: boolean;
+        reportRequiredDefault?: boolean;
+      };
+    }) => (await api.put(`/task-templates/${args.id}`, args.payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.taskTemplates });
+      qc.invalidateQueries({ queryKey: ['tasks'] });
+      qc.invalidateQueries({ queryKey: ['gantt'] });
+      qc.invalidateQueries({ queryKey: ['calendar'] });
+      qc.invalidateQueries({ queryKey: ['meetings'] });
+    },
+  });
+}
+
 export function useGenerateInstances() {
   const qc = useQueryClient();
   return useMutation({
