@@ -154,7 +154,7 @@ export class TaskInstancesController {
   }
 
   @Get('calendar')
-  @RequirePermission('calendar', 'view')
+  @RequirePermission('task_instances', 'view')
   calendar(
     @Query('year') year: string,
     @Query('localityId') localityId: string | undefined,
