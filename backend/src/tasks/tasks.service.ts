@@ -1221,6 +1221,25 @@ export class TasksService {
   }
 
   async getDashboardNational(user?: RbacUser, localityId?: string) {
+    const allowedLocalityIds = await this.getTargetLocalityIds();
+    if (allowedLocalityIds.length === 0) {
+      return {
+        items: [],
+        totals: {
+          localities: 0,
+          late: 0,
+          blocked: 0,
+          unassigned: 0,
+          recruitsFemale: 0,
+          reportsProduced: 0,
+        },
+        lateItems: [],
+        unassignedItems: [],
+        riskTasks: [],
+        executive_hide_pii: user?.executiveHidePii ?? false,
+      };
+    }
+
     const where: Prisma.LocalityWhereInput = {};
     const constraints = this.getScopeConstraints(user);
     if (
@@ -1235,8 +1254,13 @@ export class TasksService {
       where.id = localityId;
     }
 
+    const localityWhere: Prisma.LocalityWhereInput =
+      Object.keys(where).length > 0
+        ? { AND: [where, { id: { in: allowedLocalityIds } }] }
+        : { id: { in: allowedLocalityIds } };
+
     const rawLocalities = await this.prisma.locality.findMany({
-      where,
+      where: localityWhere,
       select: {
         id: true,
         name: true,
@@ -1253,14 +1277,30 @@ export class TasksService {
     const localityGroups = groupTargetLocalities(rawLocalities);
     const localities = localityGroups.map((group) => group.canonical);
     const { aliasByLocalityId } = createTargetLocalityAliasMap(localityGroups);
+    const localityAliasIds = Array.from(aliasByLocalityId.keys());
     const reportsCount = await this.prisma.report.count();
-    const taskWhere: Prisma.TaskInstanceWhereInput = {};
+    const taskWhereClauses: Prisma.TaskInstanceWhereInput[] = [];
+    if (localityAliasIds.length === 0) {
+      taskWhereClauses.push({ localityId: '__none__' });
+    } else {
+      taskWhereClauses.push({ localityId: { in: localityAliasIds } });
+    }
     if (constraints.specialtyId) {
-      taskWhere.OR = [
+      taskWhereClauses.push({
+        OR: [
         { specialtyId: null },
         { specialtyId: constraints.specialtyId },
-      ];
+        ],
+      });
     }
+    const accessWhere = this.buildTaskAccessWhere(user, 'view');
+    if (Object.keys(accessWhere).length > 0) {
+      taskWhereClauses.push(accessWhere);
+    }
+    const taskWhere: Prisma.TaskInstanceWhereInput =
+      taskWhereClauses.length === 1
+        ? taskWhereClauses[0]
+        : { AND: taskWhereClauses };
 
     const tasks = await this.prisma.taskInstance.findMany({
       where: taskWhere,
@@ -1370,11 +1410,7 @@ export class TasksService {
       .filter(
         (task) =>
           this.isLate(task) ||
-          this.isTaskUnassigned(task) ||
-          this.isBlocked(
-            task.blockedByIdsJson as string[] | null | undefined,
-            statusById,
-          ),
+          this.isTaskUnassigned(task),
       )
       .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())
       .slice(0, 10)

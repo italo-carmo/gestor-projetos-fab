@@ -132,6 +132,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const visibleNavItems = navItems.filter((item) => {
     const isNationalManager = hasNationalManagementScope(me);
     const isBiRole = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI]);
+    const canSeeCommissionTiBoards = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]);
 
     if (item.to === '/dashboard/national') {
       return isNationalManager && can(me, 'dashboard', 'view');
@@ -152,7 +153,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       return hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]);
     }
     if (item.to === '/notices') {
-      return can(me, 'notices', 'view');
+      return canSeeCommissionTiBoards && can(me, 'notices', 'view');
     }
     if (item.to === '/checklists') {
       return can(me, 'checklists', 'view');
@@ -173,7 +174,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       return can(me, 'task_instances', 'view');
     }
     if (item.to === '/meetings') {
-      return isNationalManager && can(me, 'meetings', 'view');
+      return canSeeCommissionTiBoards && can(me, 'meetings', 'view');
     }
     if (item.to === '/gsd-recruits') {
       return can(me, 'localities', 'view') || (can(me, 'dashboard', 'view') && Boolean(me?.localityId));
@@ -298,10 +299,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
 
   const canSeeDocuments = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]);
-  const canSeeMeetings = hasNationalManagementScope(me);
+  const canSeeNotices = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]) && can(me, 'notices', 'view');
+  const canSeeMeetings = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]) && can(me, 'meetings', 'view');
   const totalSearchResults =
     (searchQuery.data?.tasks?.length ?? 0) +
-    (searchQuery.data?.notices?.length ?? 0) +
+    (canSeeNotices ? (searchQuery.data?.notices?.length ?? 0) : 0) +
     (canSeeMeetings ? (searchQuery.data?.meetings?.length ?? 0) : 0) +
     (searchQuery.data?.localities?.length ?? 0) +
     (canSeeDocuments ? (searchQuery.data?.documents?.length ?? 0) : 0);
@@ -404,7 +406,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                           <ListItemText primary={task.title} secondary={task.localityName ?? task.localityId} />
                         </ListItemButton>
                       ))}
-                      {(searchQuery.data?.notices ?? []).map((notice: any) => (
+                      {canSeeNotices && (searchQuery.data?.notices ?? []).map((notice: any) => (
                         <ListItemButton key={notice.id} component={Link} to="/notices" onClick={() => setAnchorEl(null)}>
                           <ListItemText
                             primary={notice.title}

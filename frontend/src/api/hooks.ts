@@ -669,6 +669,8 @@ export function useDeleteTask() {
       qc.invalidateQueries({ queryKey: ["gantt"] });
       qc.invalidateQueries({ queryKey: ["calendar"] });
       qc.invalidateQueries({ queryKey: ["meetings"] });
+      qc.invalidateQueries({ queryKey: ["dashboardNational"] });
+      qc.invalidateQueries({ queryKey: ["dashboardExecutive"] });
     },
   });
 }
@@ -740,6 +742,8 @@ export function useBatchDeleteTasks() {
       qc.invalidateQueries({ queryKey: ["gantt"] });
       qc.invalidateQueries({ queryKey: ["calendar"] });
       qc.invalidateQueries({ queryKey: ["meetings"] });
+      qc.invalidateQueries({ queryKey: ["dashboardNational"] });
+      qc.invalidateQueries({ queryKey: ["dashboardExecutive"] });
     },
   });
 }
