@@ -12,7 +12,6 @@ import { DueBadge } from '../components/chips/DueBadge';
 import { StatusChip } from '../components/chips/StatusChip';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
-import { selectTargetLocalities } from '../constants/localities';
 
 type NationalDetailView = 'late' | 'unassigned';
 type NationalLocalityItem = {
@@ -48,7 +47,7 @@ export function DashboardNationalPage() {
   if (dashboardQuery.isLoading) return <SkeletonState />;
   if (dashboardQuery.isError) return <ErrorState error={dashboardQuery.error} onRetry={() => dashboardQuery.refetch()} />;
 
-  const items = selectTargetLocalities((dashboardQuery.data?.items ?? []) as NationalLocalityItem[]);
+  const items = (dashboardQuery.data?.items ?? []) as NationalLocalityItem[];
   const smifLocalities = [...items]
     .sort((a, b) => a.localityName.localeCompare(b.localityName, 'pt-BR'))
     .slice(0, 8);
