@@ -11,7 +11,7 @@ import { hasAnyRole, ROLE_COMANDANTE_COMGEP, ROLE_COORDENACAO_CIPAVD, ROLE_TI } 
 import { sanitizeText } from '../common/sanitize';
 import { parsePagination } from '../common/pagination';
 import { FabLdapService } from '../ldap/fab-ldap.service';
-import { isTargetLocalityName } from '../common/priority-localities';
+import { selectTargetLocalities } from '../common/priority-localities';
 
 const scheduleLogoCandidates = [
   path.resolve(process.cwd(), 'frontend', 'public', 'brand', 'cipavd-7.png'),
@@ -918,9 +918,9 @@ export class MissionsService {
 
   private async getTargetLocalityIds() {
     const localities = await this.prisma.locality.findMany({
-      select: { id: true, name: true },
+      select: { id: true, name: true, recruitsFemaleCountCurrent: true, updatedAt: true },
     });
-    return localities.filter((locality) => isTargetLocalityName(locality.name)).map((locality) => locality.id);
+    return selectTargetLocalities(localities).map((locality) => locality.id);
   }
 
   private sanitizeRequiredText(value: string, field: string) {

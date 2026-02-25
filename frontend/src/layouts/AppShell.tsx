@@ -58,7 +58,7 @@ import {
 } from '../app/roleAccess';
 import { useLocalities, useMe, useSearch } from '../api/hooks';
 import { GLOBAL_LOCALITY_STORAGE_KEY } from '../api/client';
-import { isTargetLocalityName } from '../constants/localities';
+import { selectTargetLocalities } from '../constants/localities';
 import { MEETING_STATUS_LABELS, NOTICE_PRIORITY_LABELS } from '../constants/enums';
 
 const drawerExpandedWidth = 284;
@@ -106,8 +106,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const canUseGlobalLocalityFilter = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI]);
   const availableGlobalLocalities = useMemo(
     () =>
-      ((localitiesQuery.data?.items ?? []) as any[])
-        .filter((locality: any) => isTargetLocalityName(locality?.name))
+      selectTargetLocalities((localitiesQuery.data?.items ?? []) as any[])
         .filter((locality: any) => Number(locality?.recruitsFemaleCountCurrent ?? 0) > 0)
         .map((locality: any) => ({ id: String(locality.id), name: String(locality.name) })),
     [localitiesQuery.data?.items],

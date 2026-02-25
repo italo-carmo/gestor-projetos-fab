@@ -49,7 +49,7 @@ import { useToast } from '../app/toast';
 import { EmptyState } from '../components/states/EmptyState';
 import { ErrorState } from '../components/states/ErrorState';
 import { SkeletonState } from '../components/states/SkeletonState';
-import { isTargetLocalityName } from '../constants/localities';
+import { selectTargetLocalities } from '../constants/localities';
 
 const blankMissionForm = {
   title: '',
@@ -102,8 +102,7 @@ export function MissionsPage() {
 
   const localityOptions = useMemo(
     () =>
-      ((localitiesQuery.data?.items ?? []) as any[])
-        .filter((locality: any) => isTargetLocalityName(locality?.name))
+      selectTargetLocalities((localitiesQuery.data?.items ?? []) as any[])
         .filter((locality: any) => Number(locality?.recruitsFemaleCountCurrent ?? 0) > 0)
         .map((locality: any) => ({ id: String(locality.id), name: String(locality.name) }))
         .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')),

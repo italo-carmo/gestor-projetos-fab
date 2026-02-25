@@ -20,7 +20,7 @@ import { ptBR as dataGridPtBR } from '@mui/x-data-grid/locales';
 import { useToast } from '../app/toast';
 import { parseApiError } from '../app/apiErrors';
 import { TASK_STATUS_LABELS } from '../constants/enums';
-import { isTargetLocalityName } from '../constants/localities';
+import { selectTargetLocalities } from '../constants/localities';
 
 function resolveTaskTitle(task: any) {
   const raw =
@@ -100,11 +100,10 @@ export function TasksPage() {
 
   const localitiesData = (localitiesQuery.data?.items ?? []) as any[];
   const localities = localitiesData.length > 0
-    ? localitiesData.map((loc: any) => ({
+    ? selectTargetLocalities(localitiesData).map((loc: any) => ({
         id: String(loc.id),
         name: String(loc.name ?? loc.code ?? loc.id),
       }))
-        .filter((loc) => isTargetLocalityName(loc.name))
     : Array.from(
         new Map<string, { id: string; name: string }>(
           items.map((task: any) => [

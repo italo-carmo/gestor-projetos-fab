@@ -6,7 +6,7 @@ import { throwError } from '../common/http-error';
 import { sanitizeText } from '../common/sanitize';
 import { AuditService } from '../audit/audit.service';
 import { resolveAccessProfile } from '../rbac/role-access';
-import { isTargetLocalityName } from '../common/priority-localities';
+import { createTargetLocalityAliasMap, groupTargetLocalities } from '../common/priority-localities';
 
 @Injectable()
 export class ChecklistsService {
@@ -43,10 +43,19 @@ export class ChecklistsService {
         orderBy: { createdAt: 'desc' },
       }),
     ]);
-    const localities = localitiesRaw.filter((locality) => isTargetLocalityName(locality.name));
+    const localityGroups = groupTargetLocalities(localitiesRaw);
+    const localities = localityGroups.map((group) => group.canonical);
+    const { aliasByLocalityId, aliasIdsByCanonicalId } = createTargetLocalityAliasMap(localityGroups);
+    const localityIds = localities.map((locality) => locality.id);
+    const aliasLocalityIds = Array.from(aliasByLocalityId.keys());
 
     if (checklists.length === 0) {
-      const autoItems = await this.buildAutomaticChecklistItems(localities, filters, constraints);
+      const autoItems = await this.buildAutomaticChecklistItems(
+        localities,
+        filters,
+        constraints,
+        aliasIdsByCanonicalId,
+      );
       const localityProgress = localities.map((locality) => {
         if (autoItems.length === 0) return { localityId: locality.id, percent: 0 };
         const doneCount = autoItems.filter(
@@ -76,7 +85,6 @@ export class ChecklistsService {
       };
     }
 
-    const localityIds = localities.map((l) => l.id);
     const templateIds = checklists.flatMap((c) =>
       c.items.filter((i) => i.taskTemplateId).map((i) => i.taskTemplateId as string),
     );
@@ -92,7 +100,7 @@ export class ChecklistsService {
       ? await this.prisma.taskInstance.findMany({
           where: {
             taskTemplateId: { in: templateIds },
-            localityId: localityIds.length ? { in: localityIds } : undefined,
+            localityId: aliasLocalityIds.length ? { in: aliasLocalityIds } : undefined,
           },
           select: { taskTemplateId: true, localityId: true, status: true },
         })
@@ -103,7 +111,7 @@ export class ChecklistsService {
     const activities = activityChecklistKeys.size > 0 && localityIds.length > 0
       ? await this.prisma.activity.findMany({
           where: {
-            localityId: { in: localityIds },
+            localityId: { in: aliasLocalityIds },
             ...(selectedSpecialtyId
               ? {
                   OR: [{ specialtyId: null }, { specialtyId: selectedSpecialtyId }],
@@ -125,7 +133,8 @@ export class ChecklistsService {
 
     const instanceByTemplateLocality = new Map<string, TaskStatus[]>();
     for (const instance of taskInstances) {
-      const key = `${instance.taskTemplateId}:${instance.localityId}`;
+      const canonicalId = aliasByLocalityId.get(instance.localityId) ?? instance.localityId;
+      const key = `${instance.taskTemplateId}:${canonicalId}`;
       const list = instanceByTemplateLocality.get(key) ?? [];
       list.push(instance.status);
       instanceByTemplateLocality.set(key, list);
@@ -134,7 +143,8 @@ export class ChecklistsService {
     for (const activity of activities) {
       const normalizedTitle = this.normalizeChecklistActivityTitle(activity.title);
       if (!activityChecklistKeys.has(normalizedTitle)) continue;
-      const key = `${normalizedTitle}:${activity.localityId}`;
+      const canonicalId = aliasByLocalityId.get(activity.localityId) ?? activity.localityId;
+      const key = `${normalizedTitle}:${canonicalId}`;
       const list = activityByTitleLocality.get(key) ?? [];
       list.push(activity.status);
       activityByTitleLocality.set(key, list);
@@ -331,9 +341,21 @@ export class ChecklistsService {
     localities: Array<{ id: string; name: string }>,
     filters: { phaseId?: string; specialtyId?: string; eloRoleId?: string },
     constraints: { localityId?: string; specialtyId?: string; eloRoleId?: string },
+    aliasIdsByCanonicalId?: Map<string, string[]>,
   ) {
-    const localityIds = localities.map((locality) => locality.id);
-    if (localityIds.length === 0) return [];
+    const canonicalLocalityIds = localities.map((locality) => locality.id);
+    if (canonicalLocalityIds.length === 0) return [];
+    const localityIds = aliasIdsByCanonicalId
+      ? Array.from(new Set(canonicalLocalityIds.flatMap((id) => aliasIdsByCanonicalId.get(id) ?? [id])))
+      : canonicalLocalityIds;
+    const canonicalByAliasId = new Map<string, string>();
+    if (aliasIdsByCanonicalId) {
+      for (const [canonicalId, aliases] of aliasIdsByCanonicalId.entries()) {
+        for (const aliasId of aliases) {
+          canonicalByAliasId.set(aliasId, canonicalId);
+        }
+      }
+    }
 
     const selectedEloRoleId = filters.eloRoleId ?? constraints.eloRoleId;
     const selectedSpecialtyId = filters.specialtyId ?? constraints.specialtyId;
@@ -396,7 +418,8 @@ export class ChecklistsService {
     for (const instance of taskInstances) {
       if (!instance.taskTemplateId || !instance.taskTemplate?.title) continue;
       templateById.set(instance.taskTemplateId, instance.taskTemplate.title);
-      const key = `${instance.taskTemplateId}:${instance.localityId}`;
+      const canonicalId = canonicalByAliasId.get(instance.localityId) ?? instance.localityId;
+      const key = `${instance.taskTemplateId}:${canonicalId}`;
       const list = taskStatusByTemplateLocality.get(key) ?? [];
       list.push(instance.status);
       taskStatusByTemplateLocality.set(key, list);
@@ -405,7 +428,8 @@ export class ChecklistsService {
     const activityStatusByTitleLocality = new Map<string, ActivityStatus[]>();
     for (const activity of activities) {
       const titleKey = this.normalizeChecklistActivityTitle(activity.title);
-      const key = `${titleKey}:${activity.localityId}`;
+      const canonicalId = canonicalByAliasId.get(activity.localityId) ?? activity.localityId;
+      const key = `${titleKey}:${canonicalId}`;
       const list = activityStatusByTitleLocality.get(key) ?? [];
       list.push(activity.status);
       activityStatusByTitleLocality.set(key, list);

@@ -38,10 +38,12 @@ import { useToast } from '../app/toast';
 import { can } from '../app/rbac';
 import { api } from '../api/client';
 import { CHECKLIST_ITEM_STATUS_LABELS } from '../constants/enums';
+import { selectTargetLocalities } from '../constants/localities';
 
 const DONE_COLOR = '#2e7d32';
 const PENDING_COLOR = '#9e9e9e';
 const IN_PROGRESS_COLOR = '#ed6c02';
+const CHECKLIST_TABLE_STICKY_TOP = 76;
 
 function StatusIcon({ status, localityName }: { status: string; localityName: string }) {
   const label = CHECKLIST_ITEM_STATUS_LABELS[status] ?? status;
@@ -115,7 +117,7 @@ export function ChecklistsPage() {
   const specialties = (specialtiesQuery.data?.items ?? []) as any[];
   const phaseMap = new Map<string, string>(phases.map((p: any) => [String(p.id), String(p.name)]));
   const specialtyMap = new Map<string, string>(specialties.map((s: any) => [String(s.id), String(s.name)]));
-  const localities = data.localities ?? [];
+  const localities = selectTargetLocalities((data.localities ?? []) as any[]);
   const checklists = data.items ?? [];
 
   const checklistsToRender = useMemo(() => {
@@ -362,7 +364,7 @@ export function ChecklistsPage() {
               mb: 1.2,
               borderRadius: 2,
               boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
-              overflow: 'hidden',
+              overflow: 'visible',
             }}
           >
             <CardContent sx={{ pb: 0.6, pt: 1.3 }}>
@@ -416,11 +418,32 @@ export function ChecklistsPage() {
                 <Table size="small" sx={{ '& th, & td': { borderBottom: '1px solid', borderColor: 'divider', py: 0.5, px: 0.75 } }}>
                   <TableHead>
                     <TableRow>
-                      <TableCell sx={{ fontWeight: 600, width: 180, position: 'sticky', left: 0, bgcolor: 'background.paper', zIndex: 1 }}>
+                      <TableCell
+                        sx={{
+                          fontWeight: 600,
+                          width: 180,
+                          position: 'sticky',
+                          top: CHECKLIST_TABLE_STICKY_TOP,
+                          left: 0,
+                          bgcolor: 'background.paper',
+                          zIndex: 4,
+                        }}
+                      >
                         Localidade
                       </TableCell>
                       {filteredItems.map((item: any) => (
-                        <TableCell key={item.id} align="center" sx={{ fontWeight: 600, minWidth: 44 }}>
+                        <TableCell
+                          key={item.id}
+                          align="center"
+                          sx={{
+                            fontWeight: 600,
+                            minWidth: 44,
+                            position: 'sticky',
+                            top: CHECKLIST_TABLE_STICKY_TOP,
+                            bgcolor: 'background.paper',
+                            zIndex: 3,
+                          }}
+                        >
                           <Tooltip title={item.title}>
                             <Typography variant="caption" noWrap sx={{ maxWidth: 80, display: 'block' }}>
                               {item.title.slice(0, 12)}
@@ -458,11 +481,32 @@ export function ChecklistsPage() {
                 <Table size="small" sx={{ '& th, & td': { borderBottom: '1px solid', borderColor: 'divider', py: 0.5, px: 0.75 } }}>
                   <TableHead>
                     <TableRow>
-                      <TableCell sx={{ fontWeight: 600, minWidth: 220, position: 'sticky', left: 0, bgcolor: 'background.paper', zIndex: 1 }}>
+                      <TableCell
+                        sx={{
+                          fontWeight: 600,
+                          minWidth: 220,
+                          position: 'sticky',
+                          top: CHECKLIST_TABLE_STICKY_TOP,
+                          left: 0,
+                          bgcolor: 'background.paper',
+                          zIndex: 4,
+                        }}
+                      >
                         Item
                       </TableCell>
                       {localities.map((loc: any) => (
-                        <TableCell key={loc.id} align="center" sx={{ fontWeight: 600, minWidth: 52 }}>
+                        <TableCell
+                          key={loc.id}
+                          align="center"
+                          sx={{
+                            fontWeight: 600,
+                            minWidth: 52,
+                            position: 'sticky',
+                            top: CHECKLIST_TABLE_STICKY_TOP,
+                            bgcolor: 'background.paper',
+                            zIndex: 3,
+                          }}
+                        >
                           <Tooltip title={loc.name}>
                             <Typography variant="caption" noWrap sx={{ maxWidth: 72, display: 'block' }}>
                               {loc.name.length > 10 ? loc.name.slice(0, 9) + '…' : loc.name}

@@ -8,7 +8,7 @@ import { EmptyState } from '../components/states/EmptyState';
 import { GanttView } from '../components/gantt/GanttView';
 import { TaskDetailsDrawer } from '../components/tasks/TaskDetailsDrawer';
 import { TASK_STATUS_LABELS } from '../constants/enums';
-import { isTargetLocalityName } from '../constants/localities';
+import { selectTargetLocalities } from '../constants/localities';
 
 export function GanttPage() {
   const [params, setParams] = useSearchParams();
@@ -40,10 +40,10 @@ export function GanttPage() {
 
   const templateMap = new Map<string, any>(((templatesQuery.data?.items ?? []) as any[]).map((t: any) => [t.id, t]));
 
-  const localities = ((localitiesQuery.data?.items ?? []) as any[]).map((loc: any) => ({
+  const localities = selectTargetLocalities((localitiesQuery.data?.items ?? []) as any[]).map((loc: any) => ({
     id: loc.id,
     name: loc.name ?? loc.code ?? loc.id,
-  })).filter((loc) => isTargetLocalityName(loc.name));
+  }));
   const localityNameMap = new Map(localities.map((l: any) => [l.id, l.name]));
 
   const phases = ((phasesQuery.data?.items ?? []) as any[]).map((phase: any) => ({

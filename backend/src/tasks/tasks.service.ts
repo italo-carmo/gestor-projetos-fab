@@ -7,7 +7,7 @@ import { RbacUser } from '../rbac/rbac.types';
 import { hasAnyRole, resolveAccessProfile, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from '../rbac/role-access';
 import { sanitizeForExecutive } from '../common/executive';
 import { sanitizeText } from '../common/sanitize';
-import { isTargetLocalityName } from '../common/priority-localities';
+import { createTargetLocalityAliasMap, groupTargetLocalities, selectTargetLocalities } from '../common/priority-localities';
 
 @Injectable()
 export class TasksService {
@@ -916,9 +916,12 @@ export class TasksService {
         visitDate: true,
         commandName: true,
         notes: true,
+        updatedAt: true,
       },
     });
-    const localities = rawLocalities.filter((locality) => isTargetLocalityName(locality.name));
+    const localityGroups = groupTargetLocalities(rawLocalities);
+    const localities = localityGroups.map((group) => group.canonical);
+    const { aliasByLocalityId } = createTargetLocalityAliasMap(localityGroups);
     const reportsCount = await this.prisma.report.count();
     const taskWhere: Prisma.TaskInstanceWhereInput = {};
     if (constraints.specialtyId) {
@@ -930,18 +933,29 @@ export class TasksService {
       include: { locality: true, taskTemplate: true },
     });
     const localityById = new Map(localities.map((locality) => [locality.id, locality]));
-    const filteredTasks = tasks.filter((task) => localityById.has(task.localityId));
+    const filteredTasks = tasks.filter((task) => aliasByLocalityId.has(task.localityId));
     const statusById = new Map(filteredTasks.map((task) => [task.id, task.status]));
+    const canonicalLocalityIdByTaskId = new Map<string, string>();
+    const tasksByLocalityId = new Map<string, (typeof filteredTasks)[number][]>();
+    for (const task of filteredTasks) {
+      const canonicalId = aliasByLocalityId.get(task.localityId);
+      if (!canonicalId) continue;
+      canonicalLocalityIdByTaskId.set(task.id, canonicalId);
+      const list = tasksByLocalityId.get(canonicalId) ?? [];
+      list.push(task);
+      tasksByLocalityId.set(canonicalId, list);
+    }
 
     const mapNationalTaskDetail = (task: (typeof tasks)[number]) => {
-      const locality = localityById.get(task.localityId);
+      const canonicalId = canonicalLocalityIdByTaskId.get(task.id) ?? task.localityId;
+      const locality = localityById.get(canonicalId);
       const isLate = this.isLate(task);
       const isUnassigned = this.isTaskUnassigned(task);
       const isBlocked = this.isBlocked(task.blockedByIdsJson as string[] | null | undefined, statusById);
       return {
         taskId: task.id,
         title: task.taskTemplate?.title ?? 'Tarefa',
-        localityId: task.localityId,
+        localityId: canonicalId,
         localityCode: locality?.code ?? '',
         localityName: locality?.name ?? '',
         phaseId: task.taskTemplate?.phaseId ?? null,
@@ -956,7 +970,7 @@ export class TasksService {
     };
 
     const perLocality = localities.map((locality) => {
-      const localityTasks = filteredTasks.filter((task) => task.localityId === locality.id);
+      const localityTasks = tasksByLocalityId.get(locality.id) ?? [];
       const late = localityTasks.filter((task) => this.isLate(task)).length;
       const blocked = localityTasks.filter((task) =>
         this.isBlocked(task.blockedByIdsJson as string[] | null | undefined, statusById),
@@ -1037,7 +1051,7 @@ export class TasksService {
       this.prisma.locality.findMany({
         where: localityWhere,
         orderBy: { name: 'asc' },
-        select: { id: true, name: true, code: true, recruitsFemaleCountCurrent: true },
+        select: { id: true, name: true, code: true, recruitsFemaleCountCurrent: true, updatedAt: true },
       }),
       this.prisma.recruitsHistory.findMany({
         where:
@@ -1047,9 +1061,22 @@ export class TasksService {
         orderBy: { date: 'asc' },
       }),
     ]);
-    const localities = localitiesRaw.filter((locality) => isTargetLocalityName(locality.name));
-    const localityIds = new Set(localities.map((locality) => locality.id));
-    const filteredHistory = history.filter((entry) => localityIds.has(entry.localityId));
+    const localityGroups = groupTargetLocalities(localitiesRaw);
+    const localities = localityGroups.map((group) => group.canonical);
+    const { aliasByLocalityId } = createTargetLocalityAliasMap(localityGroups);
+    const filteredHistory = history.filter((entry) => aliasByLocalityId.has(entry.localityId));
+    const normalizedHistoryMap = new Map<string, { localityId: string; date: string; value: number }>();
+    for (const entry of filteredHistory) {
+      const canonicalId = aliasByLocalityId.get(entry.localityId);
+      if (!canonicalId) continue;
+      const dateKey = entry.date.toISOString().slice(0, 10);
+      const key = `${canonicalId}:${dateKey}`;
+      const current = normalizedHistoryMap.get(key);
+      if (!current || entry.recruitsFemaleCount > current.value) {
+        normalizedHistoryMap.set(key, { localityId: canonicalId, date: dateKey, value: entry.recruitsFemaleCount });
+      }
+    }
+    const normalizedHistory = Array.from(normalizedHistoryMap.values()).sort((a, b) => a.date.localeCompare(b.date));
 
     const currentPerLocality = localities.map((loc) => ({
       localityId: loc.id,
@@ -1060,21 +1087,21 @@ export class TasksService {
 
     const aggregateByMonth: { month: string; value: number }[] = [];
     const monthMap = new Map<string, number>();
-    for (const entry of filteredHistory) {
-      const monthKey = entry.date.toISOString().slice(0, 7);
-      monthMap.set(monthKey, (monthMap.get(monthKey) ?? 0) + entry.recruitsFemaleCount);
+    for (const entry of normalizedHistory) {
+      const monthKey = entry.date.slice(0, 7);
+      monthMap.set(monthKey, (monthMap.get(monthKey) ?? 0) + entry.value);
     }
     for (const [month, value] of Array.from(monthMap.entries()).sort()) {
       aggregateByMonth.push({ month, value });
     }
 
     const byLocalityMap = new Map<string, { date: string; value: number }[]>();
-    for (const entry of filteredHistory) {
+    for (const entry of normalizedHistory) {
       const key = entry.localityId;
       if (!byLocalityMap.has(key)) byLocalityMap.set(key, []);
       byLocalityMap.get(key)!.push({
-        date: entry.date.toISOString().slice(0, 10),
-        value: entry.recruitsFemaleCount,
+        date: entry.date,
+        value: entry.value,
       });
     }
     const localityById = new Map(localities.map((l) => [l.id, l]));
@@ -1127,16 +1154,28 @@ export class TasksService {
       this.prisma.report.findMany({ include: { taskInstance: true } }),
       this.prisma.recruitsHistory.findMany({ orderBy: { date: 'asc' } }),
     ]);
-    const localities = localitiesRaw.filter((locality) => isTargetLocalityName(locality.name));
-
+    const localityGroups = groupTargetLocalities(localitiesRaw);
+    const localities = localityGroups.map((group) => group.canonical);
+    const { aliasByLocalityId } = createTargetLocalityAliasMap(localityGroups);
     const localityIds = localities.map((loc) => loc.id);
-    const filteredTasks = tasks.filter((task) => localityIds.includes(task.localityId));
+    const filteredTasks = tasks.filter((task) => aliasByLocalityId.has(task.localityId));
     const localityById = new Map(localities.map((locality) => [locality.id, locality]));
     const statusById = new Map(filteredTasks.map((task) => [task.id, task.status]));
+    const canonicalLocalityIdByTaskId = new Map<string, string>();
+    const tasksByLocalityId = new Map<string, (typeof filteredTasks)[number][]>();
+    for (const task of filteredTasks) {
+      const canonicalId = aliasByLocalityId.get(task.localityId);
+      if (!canonicalId) continue;
+      canonicalLocalityIdByTaskId.set(task.id, canonicalId);
+      const list = tasksByLocalityId.get(canonicalId) ?? [];
+      list.push(task);
+      tasksByLocalityId.set(canonicalId, list);
+    }
     const dayMs = 1000 * 60 * 60 * 24;
 
     const mapExecutiveTaskItem = (task: any) => {
-      const locality = localityById.get(task.localityId);
+      const canonicalId = canonicalLocalityIdByTaskId.get(task.id) ?? task.localityId;
+      const locality = localityById.get(canonicalId);
       const late = this.isLate(task);
       const blocked = this.isBlocked(task.blockedByIdsJson as string[] | null | undefined, statusById);
       return {
@@ -1144,7 +1183,7 @@ export class TasksService {
         title: task.taskTemplate?.title ?? 'Tarefa',
         phaseId: task.taskTemplate?.phaseId ?? null,
         phaseName: task.taskTemplate?.phase?.name ?? '',
-        localityId: task.localityId,
+        localityId: canonicalId,
         localityCode: locality?.code ?? '',
         localityName: locality?.name ?? '',
         dueDate: task.dueDate,
@@ -1174,8 +1213,8 @@ export class TasksService {
 
     const localityProgressByPhase = phases.map((phase) => {
       const perLocality = localities.map((locality) => {
-        const phaseTasks = filteredTasks.filter(
-          (task) => task.localityId === locality.id && task.taskTemplate.phaseId === phase.id,
+        const phaseTasks = (tasksByLocalityId.get(locality.id) ?? []).filter(
+          (task) => task.taskTemplate.phaseId === phase.id,
         );
         const avg = phaseTasks.length
           ? phaseTasks.reduce((acc, task) => acc + task.progressPercent, 0) / phaseTasks.length
@@ -1207,7 +1246,7 @@ export class TasksService {
 
     const progressByLocality = localities
       .map((locality) => {
-        const localityTasks = filteredTasks.filter((task) => task.localityId === locality.id);
+        const localityTasks = tasksByLocalityId.get(locality.id) ?? [];
         const avg = localityTasks.length
           ? localityTasks.reduce((acc, task) => acc + task.progressPercent, 0) / localityTasks.length
           : 0;
@@ -1236,8 +1275,9 @@ export class TasksService {
       );
       const byLocality = new Map<string, { localityId: string; localityCode: string; localityName: string; count: number }>();
       for (const task of weekItems) {
-        const locality = localityById.get(task.localityId);
-        const key = locality?.id ?? task.localityId;
+        const canonicalId = canonicalLocalityIdByTaskId.get(task.id) ?? task.localityId;
+        const locality = localityById.get(canonicalId);
+        const key = locality?.id ?? canonicalId;
         const current = byLocality.get(key);
         if (current) {
           current.count += 1;
@@ -1270,11 +1310,12 @@ export class TasksService {
       { localityId: string; localityCode: string; localityName: string; commandName: string; count: number }
     >();
     for (const task of unassigned) {
-      const locality = localityById.get(task.localityId);
+      const canonicalId = canonicalLocalityIdByTaskId.get(task.id) ?? task.localityId;
+      const locality = localityById.get(canonicalId);
       const key = locality?.commandName ?? 'Sem comando';
       unassignedByCommand.set(key, (unassignedByCommand.get(key) ?? 0) + 1);
 
-      const localityKey = locality?.id ?? task.localityId;
+      const localityKey = locality?.id ?? canonicalId;
       const current = unassignedByLocality.get(localityKey);
       if (current) {
         current.count += 1;
@@ -1297,8 +1338,9 @@ export class TasksService {
       { localityId: string; localityCode: string; localityName: string; commandName: string; count: number }
     >();
     for (const task of blockedTasks) {
-      const locality = localityById.get(task.localityId);
-      const localityKey = locality?.id ?? task.localityId;
+      const canonicalId = canonicalLocalityIdByTaskId.get(task.id) ?? task.localityId;
+      const locality = localityById.get(canonicalId);
+      const localityKey = locality?.id ?? canonicalId;
       const current = blockedByLocality.get(localityKey);
       if (current) {
         current.count += 1;
@@ -1350,8 +1392,8 @@ export class TasksService {
 
     const recruitsByLocality = new Map<string, { date: string; value: number }[]>();
     for (const entry of recruitsHistory) {
-      if (!localityIds.includes(entry.localityId)) continue;
-      const key = entry.localityId;
+      const key = aliasByLocalityId.get(entry.localityId);
+      if (!key || !localityIds.includes(key)) continue;
       if (!recruitsByLocality.has(key)) recruitsByLocality.set(key, []);
       recruitsByLocality.get(key)!.push({
         date: entry.date.toISOString().slice(0, 10),
@@ -1361,7 +1403,8 @@ export class TasksService {
 
     const recruitsAggregate: { date: string; value: number }[] = [];
     for (const entry of recruitsHistory) {
-      if (!localityIds.includes(entry.localityId)) continue;
+      const canonicalId = aliasByLocalityId.get(entry.localityId);
+      if (!canonicalId || !localityIds.includes(canonicalId)) continue;
       const dateKey = entry.date.toISOString().slice(0, 10);
       const existing = recruitsAggregate.find((item) => item.date === dateKey);
       if (existing) existing.value += entry.recruitsFemaleCount;
@@ -1369,7 +1412,7 @@ export class TasksService {
     }
 
     const riskScores = localities.map((locality) => {
-      const localityTasks = filteredTasks.filter((task) => task.localityId === locality.id);
+      const localityTasks = tasksByLocalityId.get(locality.id) ?? [];
       const late = localityTasks.filter((task) => this.isLate(task)).length;
       const blocked = localityTasks.filter((task) =>
         this.isBlocked(task.blockedByIdsJson as string[] | null | undefined, statusById),
@@ -2209,8 +2252,8 @@ export class TasksService {
 
   private async getTargetLocalityIds() {
     const localities = await this.prisma.locality.findMany({
-      select: { id: true, name: true },
+      select: { id: true, name: true, recruitsFemaleCountCurrent: true, updatedAt: true },
     });
-    return localities.filter((locality) => isTargetLocalityName(locality.name)).map((locality) => locality.id);
+    return selectTargetLocalities(localities).map((locality) => locality.id);
   }
 }

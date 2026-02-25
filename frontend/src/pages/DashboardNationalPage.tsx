@@ -2,7 +2,6 @@ import { Box, Button, Card, CardContent, Chip, Grid, Table, TableBody, TableCell
 import TargetIcon from '@mui/icons-material/GpsFixed';
 import PeopleIcon from '@mui/icons-material/Groups';
 import DescriptionIcon from '@mui/icons-material/Description';
-import StarIcon from '@mui/icons-material/Star';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useState } from 'react';
 import { useDashboardNational } from '../api/hooks';
@@ -13,6 +12,7 @@ import { DueBadge } from '../components/chips/DueBadge';
 import { StatusChip } from '../components/chips/StatusChip';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
+import { selectTargetLocalities } from '../constants/localities';
 
 type NationalDetailView = 'late' | 'unassigned';
 type NationalLocalityItem = {
@@ -48,7 +48,7 @@ export function DashboardNationalPage() {
   if (dashboardQuery.isLoading) return <SkeletonState />;
   if (dashboardQuery.isError) return <ErrorState error={dashboardQuery.error} onRetry={() => dashboardQuery.refetch()} />;
 
-  const items = (dashboardQuery.data?.items ?? []) as NationalLocalityItem[];
+  const items = selectTargetLocalities((dashboardQuery.data?.items ?? []) as NationalLocalityItem[]);
   const smifLocalities = [...items]
     .sort((a, b) => a.localityName.localeCompare(b.localityName, 'pt-BR'))
     .slice(0, 8);
@@ -63,7 +63,6 @@ export function DashboardNationalPage() {
     { label: 'Cobertura', value: `${smifLocalities.length}/${smifLocalities.length} localidades`, icon: <TargetIcon sx={{ fontSize: 28 }} />, bg: '#E8F8EF' },
     { label: 'Recrutas femininas', value: '0', icon: <PeopleIcon sx={{ fontSize: 28 }} />, bg: '#E8F2FF' },
     { label: 'Relatórios', value: `${totals.reportsProduced ?? 0} produzidos`, icon: <DescriptionIcon sx={{ fontSize: 28 }} />, bg: '#FFF6E1' },
-    { label: 'Satisfação', value: '—', icon: <StarIcon sx={{ fontSize: 28 }} />, bg: '#E8F8EF' },
   ];
 
   return (
@@ -76,7 +75,7 @@ export function DashboardNationalPage() {
       </Typography>
       <Grid container spacing={2} alignItems="stretch">
         {kpiCards.map((kpi) => (
-          <Grid key={kpi.label} size={{ xs: 12, sm: 6, md: 3 }} sx={{ display: 'flex' }}>
+          <Grid key={kpi.label} size={{ xs: 12, sm: 6, md: 4 }} sx={{ display: 'flex' }}>
             <Card
               sx={{
                 background: kpi.bg,

@@ -8,7 +8,7 @@ import { EmptyState } from '../components/states/EmptyState';
 import { CalendarView } from '../components/calendar/CalendarView';
 import { TaskDetailsDrawer } from '../components/tasks/TaskDetailsDrawer';
 import { TASK_STATUS_LABELS } from '../constants/enums';
-import { isTargetLocalityName } from '../constants/localities';
+import { selectTargetLocalities } from '../constants/localities';
 
 export function CalendarPage() {
   const [year, setYear] = useState<number>(new Date().getFullYear());
@@ -26,14 +26,15 @@ export function CalendarPage() {
   });
   const templatesQuery = useTaskTemplates();
 
-  const localities = (dashboardQuery.data?.items ?? []).map((loc: any) => ({
-    id: loc.localityId,
-    name: loc.localityName,
-  })).filter(
+  const localities = selectTargetLocalities(
+    (dashboardQuery.data?.items ?? []).map((loc: any) => ({
+      id: loc.localityId,
+      name: loc.localityName,
+    })),
+  ).filter(
     (loc: any) =>
       String(loc.id ?? '').trim() &&
-      String(loc.name ?? '').trim() &&
-      isTargetLocalityName(loc.name),
+      String(loc.name ?? '').trim(),
   );
   const localityMap = new Map(localities.map((l: any) => [l.id, l.name]));
 

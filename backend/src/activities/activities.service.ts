@@ -12,7 +12,7 @@ import type { RbacUser } from '../rbac/rbac.types';
 import { sanitizeText } from '../common/sanitize';
 import { parsePagination } from '../common/pagination';
 import { hasAnyRole, resolveAccessProfile, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from '../rbac/role-access';
-import { isTargetLocalityName } from '../common/priority-localities';
+import { selectTargetLocalities } from '../common/priority-localities';
 
 const activityPhotosDir = path.resolve(process.cwd(), 'storage', 'activity-reports');
 const scheduleLogoCandidates = [
@@ -1362,9 +1362,9 @@ export class ActivitiesService {
 
   private async getTargetLocalityIds() {
     const localities = await this.prisma.locality.findMany({
-      select: { id: true, name: true },
+      select: { id: true, name: true, recruitsFemaleCountCurrent: true, updatedAt: true },
     });
-    return localities.filter((locality) => isTargetLocalityName(locality.name)).map((locality) => locality.id);
+    return selectTargetLocalities(localities).map((locality) => locality.id);
   }
 
   private getScopeConstraints(user?: RbacUser) {

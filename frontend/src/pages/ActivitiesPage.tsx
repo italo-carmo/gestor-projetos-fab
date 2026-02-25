@@ -51,7 +51,7 @@ import { EmptyState } from '../components/states/EmptyState';
 import { ErrorState } from '../components/states/ErrorState';
 import { SkeletonState } from '../components/states/SkeletonState';
 import { ACTIVITY_STATUS_LABELS, ActivityStatus } from '../constants/enums';
-import { isTargetLocalityName } from '../constants/localities';
+import { selectTargetLocalities } from '../constants/localities';
 
 const blankReport = {
   date: '',
@@ -96,11 +96,10 @@ export function ActivitiesPage() {
 
   const selectableLocalities = useMemo(
     () =>
-      localities.filter(
+      selectTargetLocalities(localities as any[]).filter(
         (locality: any) =>
           String(locality?.id ?? '').trim() &&
-          String(locality?.name ?? '').trim() &&
-          isTargetLocalityName(locality?.name),
+          String(locality?.name ?? '').trim(),
       ),
     [localities],
   );
