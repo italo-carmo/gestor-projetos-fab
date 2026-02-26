@@ -402,6 +402,42 @@ export function useDeleteActivity() {
   });
 }
 
+export function useBatchDeleteActivities() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { ids: string[] }) =>
+      (await api.post('/activities/batch/delete', args)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['activities'] }),
+  });
+}
+
+export function useBatchUpdateActivityStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { ids: string[]; status: string }) =>
+      (await api.put('/activities/batch/status', args)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['activities'] }),
+  });
+}
+
+export function useBatchUpdateActivitySpecialty() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { ids: string[]; specialtyId: string | null }) =>
+      (await api.put('/activities/batch/specialty', args)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['activities'] }),
+  });
+}
+
+export function useBatchUpdateActivityResponsible() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { ids: string[]; responsibleUserId: string | null }) =>
+      (await api.put('/activities/batch/responsible', args)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['activities'] }),
+  });
+}
+
 export function useUpsertActivityReport() {
   const qc = useQueryClient();
   return useMutation({

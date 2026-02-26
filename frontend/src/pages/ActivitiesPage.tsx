@@ -4,6 +4,7 @@ import {
   Button,
   Card,
   CardContent,
+  Checkbox,
   Chip,
   Divider,
   Drawer,
@@ -28,6 +29,10 @@ import {
   useActivityComments,
   useAddActivityComment,
   useActivities,
+  useBatchDeleteActivities,
+  useBatchUpdateActivityResponsible,
+  useBatchUpdateActivitySpecialty,
+  useBatchUpdateActivityStatus,
   useCreateActivity,
   useDeleteActivity,
   useDeleteActivityReportPhoto,
@@ -119,11 +124,20 @@ export function ActivitiesPage() {
   const [commentText, setCommentText] = useState('');
   const [drawerTab, setDrawerTab] = useState<ActivityDrawerTab>(tabFromUrl);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [batchDeleteConfirmOpen, setBatchDeleteConfirmOpen] = useState(false);
+  const [batchStatus, setBatchStatus] = useState('');
+  const [batchSpecialtyId, setBatchSpecialtyId] = useState('');
+  const [batchResponsibleUserId, setBatchResponsibleUserId] = useState('');
 
   const createActivity = useCreateActivity();
   const deleteActivity = useDeleteActivity();
   const updateActivity = useUpdateActivity();
   const updateActivityStatus = useUpdateActivityStatus();
+  const batchDeleteActivities = useBatchDeleteActivities();
+  const batchUpdateActivityStatus = useBatchUpdateActivityStatus();
+  const batchUpdateActivitySpecialty = useBatchUpdateActivitySpecialty();
+  const batchUpdateActivityResponsible = useBatchUpdateActivityResponsible();
   const commentsQuery = useActivityComments(selectedId ?? '');
   const addComment = useAddActivityComment();
   const markCommentsSeen = useMarkActivityCommentsSeen();
@@ -134,6 +148,23 @@ export function ActivitiesPage() {
   const exportPdf = useExportActivityReportPdf();
 
   const items = activitiesQuery.data?.items ?? [];
+  const selectedIdsSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const selectedActivities = useMemo(
+    () => items.filter((item: any) => selectedIdsSet.has(String(item.id))),
+    [items, selectedIdsSet],
+  );
+  const selectedLocalityIds = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          selectedActivities
+            .map((item: any) => String(item.localityId ?? '').trim())
+            .filter(Boolean),
+        ),
+      ),
+    [selectedActivities],
+  );
+  const allVisibleSelected = items.length > 0 && selectedIds.length === items.length;
 
   useEffect(() => {
     if (activitiesQuery.isLoading) return;
@@ -150,6 +181,12 @@ export function ActivitiesPage() {
     setCommentText('');
     void markCommentsSeen.mutateAsync(selectedId).catch(() => {});
   }, [selectedId]);
+
+  useEffect(() => {
+    setSelectedIds((prev) =>
+      prev.filter((id) => items.some((item: any) => String(item.id) === String(id))),
+    );
+  }, [items]);
 
   useEffect(() => {
     if (localityIdFromUrl && localityIdFromUrl !== localityFilter) {
@@ -233,6 +270,8 @@ export function ActivitiesPage() {
   const canUpload = can(me, 'reports', 'upload') && canManageActivityDataByRole;
   const canDownload = can(me, 'reports', 'download') && canManageActivityDataByRole;
   const canEditActivityForm = isCreateMode ? canCreate : canUpdate;
+  const canManageBatch = can(me, 'task_instances', 'update') && hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]);
+  const canBatchAssignResponsible = selectedLocalityIds.length <= 1;
 
   const responsibleOptions = useMemo(() => {
     const filtered = allUsers.filter((user: any) => {
@@ -253,6 +292,15 @@ export function ActivitiesPage() {
 
     return filtered.sort((a: any, b: any) => String(a.name).localeCompare(String(b.name), 'pt-BR'));
   }, [activityForm.localityId, activityForm.specialtyId, allUsers, selected?.responsibleUsers]);
+
+  const batchResponsibleOptions = useMemo(() => {
+    const filtered = allUsers.filter((user: any) => {
+      if (!String(user?.id ?? '').trim() || !String(user?.name ?? '').trim()) return false;
+      if (selectedLocalityIds.length === 1 && user.localityId !== selectedLocalityIds[0]) return false;
+      return true;
+    });
+    return filtered.sort((a: any, b: any) => String(a.name).localeCompare(String(b.name), 'pt-BR'));
+  }, [allUsers, selectedLocalityIds]);
 
   const handleCreate = async () => {
     if (!activityForm.title.trim()) {
@@ -325,6 +373,87 @@ export function ActivitiesPage() {
     } catch (error) {
       const payload = parseApiError(error);
       toast.push({ message: payload.message ?? 'Erro ao atualizar status', severity: 'error' });
+    }
+  };
+
+  const toggleSelectAll = () => {
+    if (allVisibleSelected) {
+      setSelectedIds([]);
+      return;
+    }
+    setSelectedIds(items.map((item: any) => String(item.id)));
+  };
+
+  const toggleRowSelection = (id: string) => {
+    setSelectedIds((prev) => {
+      if (prev.includes(id)) return prev.filter((entry) => entry !== id);
+      return [...prev, id];
+    });
+  };
+
+  const handleBatchStatusApply = async () => {
+    if (!canManageBatch || !selectedIds.length || !batchStatus) return;
+    const count = selectedIds.length;
+    try {
+      await batchUpdateActivityStatus.mutateAsync({ ids: selectedIds, status: batchStatus });
+      toast.push({ message: `${count} atividade(s) atualizada(s) com novo status.`, severity: 'success' });
+      setBatchStatus('');
+      setSelectedIds([]);
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({ message: payload.message ?? 'Erro ao atualizar status em lote.', severity: 'error' });
+    }
+  };
+
+  const handleBatchSpecialtyApply = async () => {
+    if (!canManageBatch || !selectedIds.length) return;
+    const count = selectedIds.length;
+    try {
+      await batchUpdateActivitySpecialty.mutateAsync({
+        ids: selectedIds,
+        specialtyId: batchSpecialtyId || null,
+      });
+      toast.push({ message: `${count} atividade(s) atualizada(s) com nova especialidade.`, severity: 'success' });
+      setBatchSpecialtyId('');
+      setSelectedIds([]);
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({ message: payload.message ?? 'Erro ao atualizar especialidade em lote.', severity: 'error' });
+    }
+  };
+
+  const handleBatchResponsibleApply = async () => {
+    if (!canManageBatch || !selectedIds.length || !canBatchAssignResponsible) return;
+    const count = selectedIds.length;
+    try {
+      await batchUpdateActivityResponsible.mutateAsync({
+        ids: selectedIds,
+        responsibleUserId: batchResponsibleUserId || null,
+      });
+      toast.push({ message: `${count} atividade(s) atualizada(s) com novo responsável.`, severity: 'success' });
+      setBatchResponsibleUserId('');
+      setSelectedIds([]);
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({ message: payload.message ?? 'Erro ao atualizar responsável em lote.', severity: 'error' });
+    }
+  };
+
+  const handleBatchDeleteConfirm = async () => {
+    if (!canManageBatch || !selectedIds.length) return;
+    const count = selectedIds.length;
+    try {
+      await batchDeleteActivities.mutateAsync({ ids: selectedIds });
+      toast.push({ message: `${count} atividade(s) excluída(s).`, severity: 'success' });
+      setBatchDeleteConfirmOpen(false);
+      setSelectedIds([]);
+      if (selectedId && selectedIdsSet.has(selectedId)) {
+        setSelectedId(null);
+        setDrawerOpen(false);
+      }
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({ message: payload.message ?? 'Erro ao excluir atividades selecionadas.', severity: 'error' });
     }
   };
 
@@ -506,6 +635,111 @@ export function ActivitiesPage() {
       <Stack spacing={2}>
         <Card>
           <CardContent>
+            {canManageBatch && (
+              <Stack
+                direction={{ xs: 'column', lg: 'row' }}
+                spacing={1}
+                alignItems={{ xs: 'stretch', lg: 'center' }}
+                sx={{ mb: 2 }}
+              >
+                <Chip
+                  size="small"
+                  label={`Selecionadas: ${selectedIds.length}`}
+                  color={selectedIds.length > 0 ? 'primary' : 'default'}
+                  variant={selectedIds.length > 0 ? 'filled' : 'outlined'}
+                />
+                <TextField
+                  select
+                  size="small"
+                  label="Status em massa"
+                  value={batchStatus}
+                  onChange={(e) => setBatchStatus(e.target.value)}
+                  sx={{ minWidth: 200 }}
+                  disabled={!selectedIds.length}
+                >
+                  <MenuItem value="">Selecionar</MenuItem>
+                  {ActivityStatus.map((status) => (
+                    <MenuItem key={status} value={status}>
+                      {ACTIVITY_STATUS_LABELS[status] ?? status}
+                    </MenuItem>
+                  ))}
+                </TextField>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={handleBatchStatusApply}
+                  disabled={!selectedIds.length || !batchStatus || batchUpdateActivityStatus.isPending}
+                >
+                  Aplicar status
+                </Button>
+                <TextField
+                  select
+                  size="small"
+                  label="Especialidade em massa"
+                  value={batchSpecialtyId}
+                  onChange={(e) => setBatchSpecialtyId(e.target.value)}
+                  sx={{ minWidth: 220 }}
+                  disabled={!selectedIds.length}
+                >
+                  <MenuItem value="">Todas as especialidades</MenuItem>
+                  {specialties.map((specialty: any) => (
+                    <MenuItem key={specialty.id} value={specialty.id}>
+                      {specialty.name}
+                    </MenuItem>
+                  ))}
+                </TextField>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={handleBatchSpecialtyApply}
+                  disabled={!selectedIds.length || batchUpdateActivitySpecialty.isPending}
+                >
+                  Aplicar especialidade
+                </Button>
+                <TextField
+                  select
+                  size="small"
+                  label="Responsável em massa"
+                  value={batchResponsibleUserId}
+                  onChange={(e) => setBatchResponsibleUserId(e.target.value)}
+                  sx={{ minWidth: 240 }}
+                  disabled={!selectedIds.length || !canBatchAssignResponsible}
+                  helperText={
+                    !canBatchAssignResponsible
+                      ? 'Selecione atividades da mesma localidade.'
+                      : undefined
+                  }
+                >
+                  <MenuItem value="">Sem responsável</MenuItem>
+                  {batchResponsibleOptions.map((user: any) => (
+                    <MenuItem key={user.id} value={user.id}>
+                      {user.name}
+                    </MenuItem>
+                  ))}
+                </TextField>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={handleBatchResponsibleApply}
+                  disabled={
+                    !selectedIds.length ||
+                    !canBatchAssignResponsible ||
+                    batchUpdateActivityResponsible.isPending
+                  }
+                >
+                  Aplicar responsável
+                </Button>
+                <Button
+                  color="error"
+                  variant="outlined"
+                  size="small"
+                  onClick={() => setBatchDeleteConfirmOpen(true)}
+                  disabled={!selectedIds.length || batchDeleteActivities.isPending}
+                >
+                  Excluir selecionadas
+                </Button>
+              </Stack>
+            )}
             <Typography variant="h6" sx={{ mb: 1 }}>Atividades de Campo</Typography>
             {items.length === 0 ? (
               <EmptyState title="Nenhuma atividade" description="Cadastre uma nova atividade externa." />
@@ -513,6 +747,17 @@ export function ActivitiesPage() {
               <Table size="small">
                 <TableHead>
                   <TableRow sx={{ bgcolor: 'primary.main' }}>
+                    {canManageBatch && (
+                      <TableCell padding="checkbox" sx={{ color: 'white' }}>
+                        <Checkbox
+                          size="small"
+                          checked={allVisibleSelected}
+                          indeterminate={selectedIds.length > 0 && !allVisibleSelected}
+                          onChange={toggleSelectAll}
+                          sx={{ color: 'white', '&.Mui-checked': { color: 'white' }, '&.MuiCheckbox-indeterminate': { color: 'white' } }}
+                        />
+                      </TableCell>
+                    )}
                     <TableCell sx={{ color: 'white', fontWeight: 600 }}>Atividade</TableCell>
                     <TableCell sx={{ color: 'white', fontWeight: 600 }}>Localidade</TableCell>
                     <TableCell sx={{ color: 'white', fontWeight: 600 }}>Especialidade</TableCell>
@@ -532,6 +777,15 @@ export function ActivitiesPage() {
                       onClick={() => openActivityDrawer(item.id, 'activity')}
                       sx={{ cursor: 'pointer' }}
                     >
+                      {canManageBatch && (
+                        <TableCell padding="checkbox" onClick={(event) => event.stopPropagation()}>
+                          <Checkbox
+                            size="small"
+                            checked={selectedIdsSet.has(String(item.id))}
+                            onChange={() => toggleRowSelection(String(item.id))}
+                          />
+                        </TableCell>
+                      )}
                       <TableCell>{item.title}</TableCell>
                       <TableCell>{item.locality?.name ?? '-'}</TableCell>
                       <TableCell>{item.specialty?.name ?? 'Todas'}</TableCell>
@@ -1098,6 +1352,19 @@ export function ActivitiesPage() {
 
         </Box>
       </Drawer>
+
+      <ConfirmDialog
+        open={batchDeleteConfirmOpen}
+        onCancel={() => setBatchDeleteConfirmOpen(false)}
+        onConfirm={handleBatchDeleteConfirm}
+        title="Excluir atividades selecionadas"
+        message="Deseja realmente excluir todas as atividades selecionadas?"
+        highlightText={`${selectedIds.length} atividade(s)`}
+        note="Esta ação será registrada em auditoria e não pode ser desfeita."
+        confirmLabel="Excluir selecionadas"
+        severity="error"
+        confirmLoading={batchDeleteActivities.isPending}
+      />
 
       <ConfirmDialog
         open={deleteConfirmOpen}

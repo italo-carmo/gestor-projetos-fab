@@ -485,6 +485,241 @@ export class ActivitiesService {
     return { ok: true };
   }
 
+  async batchUpdateStatus(
+    ids: string[],
+    status: ActivityStatus,
+    user?: RbacUser,
+  ) {
+    this.assertActivityOperateAccess(null, user);
+    const normalizedIds = this.normalizeActivityIds(ids);
+    if (!normalizedIds.length) return { updated: 0 };
+
+    if (!Object.values(ActivityStatus).includes(status)) {
+      throwError('VALIDATION_ERROR', {
+        field: 'status',
+        reason: 'INVALID',
+      });
+    }
+
+    const existing = await this.prisma.activity.findMany({
+      where: { id: { in: normalizedIds } },
+      select: {
+        id: true,
+        localityId: true,
+        reportRequired: true,
+        report: {
+          select: {
+            id: true,
+            signedAt: true,
+            signatureHash: true,
+          },
+        },
+      },
+    });
+    if (!existing.length) return { updated: 0 };
+
+    for (const activity of existing) {
+      this.assertActivityOperateAccess(activity, user);
+      if (status === ActivityStatus.DONE && activity.reportRequired) {
+        if (!activity.report) {
+          throwError('ACTIVITY_REPORT_REQUIRED');
+        }
+        if (!activity.report.signedAt || !activity.report.signatureHash) {
+          throwError('ACTIVITY_REPORT_SIGNATURE_REQUIRED');
+        }
+      }
+    }
+
+    const targetIds = existing.map((item) => item.id);
+    await this.prisma.activity.updateMany({
+      where: { id: { in: targetIds } },
+      data: { status },
+    });
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'activities',
+      action: 'batch_update_status',
+      diffJson: {
+        count: targetIds.length,
+        status,
+        ids: targetIds,
+      },
+    });
+
+    return { updated: targetIds.length };
+  }
+
+  async batchUpdateSpecialty(
+    ids: string[],
+    specialtyId: string | null,
+    user?: RbacUser,
+  ) {
+    this.assertActivityOperateAccess(null, user);
+    const normalizedIds = this.normalizeActivityIds(ids);
+    if (!normalizedIds.length) return { updated: 0 };
+
+    if (specialtyId) {
+      const specialty = await this.prisma.specialty.findUnique({
+        where: { id: specialtyId },
+        select: { id: true },
+      });
+      if (!specialty) throwError('NOT_FOUND');
+    }
+
+    const existing = await this.prisma.activity.findMany({
+      where: { id: { in: normalizedIds } },
+      select: {
+        id: true,
+        localityId: true,
+      },
+    });
+    if (!existing.length) return { updated: 0 };
+
+    for (const activity of existing) {
+      this.assertActivityOperateAccess(activity, user);
+      this.assertScopeConstraint(activity.localityId, specialtyId, user);
+    }
+
+    const targetIds = existing.map((item) => item.id);
+    await this.prisma.activity.updateMany({
+      where: { id: { in: targetIds } },
+      data: { specialtyId },
+    });
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'activities',
+      action: 'batch_update_specialty',
+      diffJson: {
+        count: targetIds.length,
+        specialtyId: specialtyId ?? null,
+        ids: targetIds,
+      },
+    });
+
+    return { updated: targetIds.length };
+  }
+
+  async batchUpdateResponsible(
+    ids: string[],
+    responsibleUserId: string | null,
+    user?: RbacUser,
+  ) {
+    this.assertActivityOperateAccess(null, user);
+    const normalizedIds = this.normalizeActivityIds(ids);
+    if (!normalizedIds.length) return { updated: 0 };
+
+    const existing = await this.prisma.activity.findMany({
+      where: { id: { in: normalizedIds } },
+      select: {
+        id: true,
+        localityId: true,
+      },
+    });
+    if (!existing.length) return { updated: 0 };
+
+    const responsibleByActivityId = new Map<string, string[]>();
+    for (const activity of existing) {
+      this.assertActivityOperateAccess(activity, user);
+      const resolved = responsibleUserId
+        ? await this.resolveActivityResponsibleIds(
+            activity.localityId,
+            [responsibleUserId],
+            user,
+          )
+        : [];
+      responsibleByActivityId.set(activity.id, resolved);
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const activity of existing) {
+        await tx.activityResponsible.deleteMany({
+          where: { activityId: activity.id },
+        });
+
+        const responsibleIds = responsibleByActivityId.get(activity.id) ?? [];
+        if (responsibleIds.length > 0) {
+          await tx.activityResponsible.createMany({
+            data: responsibleIds.map((candidateId) => ({
+              activityId: activity.id,
+              userId: candidateId,
+              assignedById: user?.id ?? null,
+            })),
+            skipDuplicates: true,
+          });
+        }
+      }
+    });
+
+    const targetIds = existing.map((item) => item.id);
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'activities',
+      action: 'batch_update_responsible',
+      diffJson: {
+        count: targetIds.length,
+        responsibleUserId: responsibleUserId ?? null,
+        ids: targetIds,
+      },
+    });
+
+    return { updated: targetIds.length };
+  }
+
+  async batchDelete(ids: string[], user?: RbacUser) {
+    this.assertDeleteAccess(user);
+    const normalizedIds = this.normalizeActivityIds(ids);
+    if (!normalizedIds.length) return { deleted: 0 };
+
+    const existing = await this.prisma.activity.findMany({
+      where: { id: { in: normalizedIds } },
+      select: {
+        id: true,
+        report: {
+          select: {
+            photos: {
+              select: { storageKey: true, fileUrl: true },
+            },
+          },
+        },
+      },
+    });
+    if (!existing.length) return { deleted: 0 };
+
+    const targetIds = existing.map((item) => item.id);
+    const photos = existing.flatMap((item) => item.report?.photos ?? []);
+
+    await this.prisma.activity.deleteMany({
+      where: { id: { in: targetIds } },
+    });
+
+    for (const photo of photos) {
+      const storageKey = photo.storageKey ?? path.basename(photo.fileUrl ?? '');
+      if (!storageKey) continue;
+      const filePath = path.join(activityPhotosDir, storageKey);
+      try {
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      } catch {
+        // File cleanup failure must not block the operation.
+      }
+    }
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'activities',
+      action: 'batch_delete',
+      diffJson: {
+        count: targetIds.length,
+        ids: targetIds,
+      },
+    });
+
+    return { deleted: targetIds.length };
+  }
+
   async listComments(id: string, user?: RbacUser) {
     const activity = await this.prisma.activity.findUnique({
       where: { id },
@@ -1638,6 +1873,16 @@ export class ActivitiesService {
       .replace(/[<>]/g, '')
       .replace(/\r\n/g, '\n')
       .trim();
+  }
+
+  private normalizeActivityIds(ids: string[]) {
+    return Array.from(
+      new Set(
+        (ids ?? [])
+          .map((value) => String(value ?? '').trim())
+          .filter(Boolean),
+      ),
+    );
   }
 
   private async getTargetLocalityIds() {

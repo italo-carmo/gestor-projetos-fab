@@ -73,6 +73,54 @@ export class ActivitiesController {
     return this.activities.update(id, dto, user);
   }
 
+  @Put('batch/status')
+  @RequirePermission('task_instances', 'update')
+  batchStatus(
+    @Body() body: { ids: string[]; status: string },
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.activities.batchUpdateStatus(
+      body.ids ?? [],
+      body.status as any,
+      user,
+    );
+  }
+
+  @Put('batch/specialty')
+  @RequirePermission('task_instances', 'update')
+  batchSpecialty(
+    @Body() body: { ids: string[]; specialtyId: string | null },
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.activities.batchUpdateSpecialty(
+      body.ids ?? [],
+      body.specialtyId ?? null,
+      user,
+    );
+  }
+
+  @Put('batch/responsible')
+  @RequirePermission('task_instances', 'update')
+  batchResponsible(
+    @Body() body: { ids: string[]; responsibleUserId: string | null },
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.activities.batchUpdateResponsible(
+      body.ids ?? [],
+      body.responsibleUserId ?? null,
+      user,
+    );
+  }
+
+  @Post('batch/delete')
+  @RequirePermission('task_instances', 'update')
+  batchDelete(
+    @Body() body: { ids: string[] },
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.activities.batchDelete(body.ids ?? [], user);
+  }
+
   @Put(':id/status')
   @RequirePermission('task_instances', 'update')
   updateStatus(@Param('id') id: string, @Body() dto: UpdateActivityStatusDto, @CurrentUser() user: RbacUser) {
