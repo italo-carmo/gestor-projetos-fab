@@ -475,7 +475,7 @@ export function SocialCommunicationPage() {
                     ? toApiUrl(previewing.contentProxyPath)
                     : previewing.sourceUrl
                 }
-                sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
+                sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
                 referrerPolicy="no-referrer"
                 sx={{
                   width: "100%",

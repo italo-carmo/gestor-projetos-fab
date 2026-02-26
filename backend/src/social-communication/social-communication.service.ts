@@ -298,12 +298,31 @@ export class SocialCommunicationService {
     const normalizedUrl = this.normalizeUrl(url, 'url');
     this.assertProxySignature('asset', normalizedUrl, exp, sig);
     const payload = await this.fetchRemoteAsset(normalizedUrl);
+    const contentTypeLower = payload.contentType.toLowerCase();
+    const isCss =
+      contentTypeLower.includes('text/css') ||
+      /\.css(?:$|[?#])/i.test(payload.sourceUrl);
+    const isJavascript =
+      contentTypeLower.includes('javascript') ||
+      contentTypeLower.includes('ecmascript') ||
+      /\.m?js(?:$|[?#])/i.test(payload.sourceUrl);
 
-    if (payload.contentType.toLowerCase().includes('text/css')) {
+    if (isCss) {
       const css = payload.buffer.toString('utf-8');
       const rewritten = this.rewriteCssForProxy(css, payload.sourceUrl);
       return {
         ...payload,
+        contentType: 'text/css; charset=utf-8',
+        buffer: Buffer.from(rewritten, 'utf-8'),
+      };
+    }
+
+    if (isJavascript) {
+      const js = payload.buffer.toString('utf-8');
+      const rewritten = this.rewriteJavascriptForProxy(js, payload.sourceUrl);
+      return {
+        ...payload,
+        contentType: 'application/javascript; charset=utf-8',
         buffer: Buffer.from(rewritten, 'utf-8'),
       };
     }
@@ -556,6 +575,7 @@ export class SocialCommunicationService {
   private rewriteLinkTag(tag: string, baseUrl: string) {
     const attrs = this.parseTagAttributes(tag);
     const rel = String(attrs.rel ?? '').toLowerCase();
+    const as = String(attrs.as ?? '').toLowerCase();
 
     if (this.shouldDropLinkTag(rel)) {
       return '';
@@ -586,6 +606,11 @@ export class SocialCommunicationService {
     if (stylesheetRel && !attrs.href && cssCandidate) {
       const proxied = this.resolveProxyAssetValue(cssCandidate, baseUrl);
       nextTag = this.ensureTagAttribute(nextTag, 'href', proxied);
+    }
+    if (rel.includes('preload') && as === 'style') {
+      // Apply preload style sheets immediately to avoid unstyled documents.
+      nextTag = this.rewriteTagAttribute(nextTag, 'rel', () => 'stylesheet');
+      nextTag = this.removeTagAttribute(nextTag, 'as');
     }
 
     nextTag = this.removeTagAttribute(nextTag, 'integrity');
@@ -710,6 +735,51 @@ export class SocialCommunicationService {
         const nextValue = this.resolveProxyAssetValue(value, baseUrl);
         if (nextValue === value) return full;
         return `@import url("${nextValue}")`;
+      },
+    );
+
+    return output;
+  }
+
+  private rewriteJavascriptForProxy(js: string, baseUrl: string) {
+    let output = js;
+
+    output = output.replace(
+      /(\bfrom\s*)(['"])([^'"]+)\2/g,
+      (full: string, prefix: string, quote: string, value: string) => {
+        const nextValue = this.resolveProxyAssetValue(value, baseUrl);
+        if (nextValue === value) return full;
+        return `${prefix}${quote}${nextValue}${quote}`;
+      },
+    );
+
+    output = output.replace(
+      /(\bimport\s*\(\s*)(['"])([^'"]+)\2(\s*\))/g,
+      (
+        full: string,
+        prefix: string,
+        quote: string,
+        value: string,
+        suffix: string,
+      ) => {
+        const nextValue = this.resolveProxyAssetValue(value, baseUrl);
+        if (nextValue === value) return full;
+        return `${prefix}${quote}${nextValue}${quote}${suffix}`;
+      },
+    );
+
+    output = output.replace(
+      /(\bimportScripts\s*\(\s*)(['"])([^'"]+)\2(\s*[,)\n])/g,
+      (
+        full: string,
+        prefix: string,
+        quote: string,
+        value: string,
+        suffix: string,
+      ) => {
+        const nextValue = this.resolveProxyAssetValue(value, baseUrl);
+        if (nextValue === value) return full;
+        return `${prefix}${quote}${nextValue}${quote}${suffix}`;
       },
     );
 

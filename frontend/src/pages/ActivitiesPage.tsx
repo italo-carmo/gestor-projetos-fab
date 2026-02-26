@@ -49,7 +49,13 @@ import {
   useUpsertActivityReport,
 } from '../api/hooks';
 import { parseApiError } from '../app/apiErrors';
-import { hasAnyRole, ROLE_COMANDANTE_COMGEP, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from '../app/roleAccess';
+import {
+  hasAnyRole,
+  ROLE_COMANDANTE_COMGEP,
+  ROLE_COMISSAO_CIPAVD,
+  ROLE_COORDENACAO_CIPAVD,
+  ROLE_TI,
+} from '../app/roleAccess';
 import { useToast } from '../app/toast';
 import { can } from '../app/rbac';
 import { EmptyState } from '../components/states/EmptyState';
@@ -261,9 +267,14 @@ export function ActivitiesPage() {
   }, [selected]);
 
   const canView = !me ? true : can(me, 'task_instances', 'view');
-  const canCreate = can(me, 'task_instances', 'create');
-  const canManageActivityDataByRole = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI]);
-  const canUpdate = can(me, 'task_instances', 'update') && canManageActivityDataByRole;
+  const canManageActivityDataByRole = hasAnyRole(me, [
+    ROLE_COORDENACAO_CIPAVD,
+    ROLE_COMISSAO_CIPAVD,
+    ROLE_COMANDANTE_COMGEP,
+    ROLE_TI,
+  ]);
+  const canCreate = canManageActivityDataByRole;
+  const canUpdate = canManageActivityDataByRole;
   const canDelete = canUpdate;
   const canEditReport = can(me, 'reports', 'create') && canManageActivityDataByRole;
   const canSign = can(me, 'reports', 'approve') && canManageActivityDataByRole;
