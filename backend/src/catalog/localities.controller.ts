@@ -48,6 +48,11 @@ export class LocalitiesController {
   async update(@Param('id') id: string, @Body() dto: UpdateLocalityDto, @CurrentUser() user: RbacUser) {
     this.assertLocalityAccess(id, user);
     this.assertRecruitsMutationAccess(id, user, dto.recruitsFemaleCountCurrent);
+    const currentLocality = await this.prisma.locality.findUnique({
+      where: { id },
+      select: { recruitsFemaleCountCurrent: true },
+    });
+    if (!currentLocality) throwError('NOT_FOUND');
 
     const updated = await this.prisma.locality.update({
       where: { id },
@@ -63,22 +68,12 @@ export class LocalitiesController {
       },
     });
     if (dto.recruitsFemaleCountCurrent !== undefined && dto.recruitsFemaleCountCurrent !== null) {
-      const today = new Date();
-      today.setUTCHours(0, 0, 0, 0);
-      await this.prisma.recruitsHistory.upsert({
-        where: {
-          localityId_date: { localityId: id, date: today },
-        },
-        create: {
-          localityId: id,
-          date: today,
-          recruitsFemaleCount: dto.recruitsFemaleCountCurrent,
-          turnoverCount: 0,
-        },
-        update: {
-          recruitsFemaleCount: dto.recruitsFemaleCountCurrent,
-        },
-      });
+      await this.registerRecruitsHistory(
+        id,
+        dto.recruitsFemaleCountCurrent,
+        currentLocality.recruitsFemaleCountCurrent ?? 0,
+        null,
+      );
     }
     return updated;
   }
@@ -91,6 +86,12 @@ export class LocalitiesController {
     @CurrentUser() user: RbacUser,
   ) {
     this.assertRecruitsMutationAccess(id, user, dto.recruitsFemaleCountCurrent);
+    const currentLocality = await this.prisma.locality.findUnique({
+      where: { id },
+      select: { recruitsFemaleCountCurrent: true },
+    });
+    if (!currentLocality) throwError('NOT_FOUND');
+    const previousCount = currentLocality.recruitsFemaleCountCurrent ?? 0;
 
     const updated = await this.prisma.locality.update({
       where: { id },
@@ -99,22 +100,13 @@ export class LocalitiesController {
       },
     });
 
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
-    await this.prisma.recruitsHistory.upsert({
-      where: {
-        localityId_date: { localityId: id, date: today },
-      },
-      create: {
-        localityId: id,
-        date: today,
-        recruitsFemaleCount: dto.recruitsFemaleCountCurrent,
-        turnoverCount: 0,
-      },
-      update: {
-        recruitsFemaleCount: dto.recruitsFemaleCountCurrent,
-      },
-    });
+    await this.registerRecruitsHistory(
+      id,
+      dto.recruitsFemaleCountCurrent,
+      previousCount,
+      dto.dismissalReason ?? null,
+      true,
+    );
 
     return updated;
   }
@@ -144,5 +136,44 @@ export class LocalitiesController {
     if (!canEditRecruitsByRole(user, localityId)) {
       throwError('RBAC_FORBIDDEN');
     }
+  }
+
+  private async registerRecruitsHistory(
+    localityId: string,
+    nextCount: number,
+    previousCount: number,
+    dismissalReason?: string | null,
+    enforceDismissalReason = false,
+  ) {
+    const normalizedReason = dismissalReason
+      ? sanitizeText(String(dismissalReason)).trim()
+      : '';
+    const turnoverCount = Math.max(0, previousCount - nextCount);
+    if (enforceDismissalReason && turnoverCount > 0 && !normalizedReason) {
+      throwError('VALIDATION_ERROR', {
+        field: 'dismissalReason',
+        reason: 'DISMISSAL_REASON_REQUIRED',
+      });
+    }
+
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    await (this.prisma.recruitsHistory as any).upsert({
+      where: {
+        localityId_date: { localityId, date: today },
+      },
+      create: {
+        localityId,
+        date: today,
+        recruitsFemaleCount: nextCount,
+        turnoverCount,
+        dismissalReason: turnoverCount > 0 ? normalizedReason || null : null,
+      },
+      update: {
+        recruitsFemaleCount: nextCount,
+        turnoverCount,
+        dismissalReason: turnoverCount > 0 ? normalizedReason || null : null,
+      },
+    });
   }
 }

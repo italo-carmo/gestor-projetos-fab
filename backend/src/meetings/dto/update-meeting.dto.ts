@@ -23,6 +23,10 @@ export class UpdateMeetingDto {
 
   @IsOptional()
   @IsString()
+  location?: string | null;
+
+  @IsOptional()
+  @IsString()
   agenda?: string | null;
 
   @IsOptional()

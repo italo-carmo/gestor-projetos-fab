@@ -3,7 +3,7 @@ import { Gantt, ViewMode } from 'gantt-task-react';
 import type { Task } from 'gantt-task-react';
 import 'gantt-task-react/dist/index.css';
 import { addDays, format, parseISO, startOfMonth } from 'date-fns';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { TASK_STATUS_LABELS } from '../../constants/enums';
 
@@ -35,6 +35,8 @@ function getTaskStyles(status: string, isLate?: boolean) {
 
 export type GanttItem = {
   id: string;
+  itemType?: 'task' | 'activity';
+  entityId?: string;
   localityId?: string;
   taskTitle?: string;
   taskTemplate?: { title?: string; phaseId?: string; phase?: { name?: string; displayName?: string } | null } | null;
@@ -87,7 +89,7 @@ function TooltipPt({ task }: { task: Task }) {
 
 function TaskListHeaderPt({
   headerHeight,
-  rowWidth: _rowWidth,
+  rowWidth,
   fontFamily,
   fontSize,
 }: {
@@ -96,6 +98,7 @@ function TaskListHeaderPt({
   fontFamily: string;
   fontSize: string;
 }) {
+  void rowWidth;
   return (
     <Box
       sx={{
@@ -131,10 +134,10 @@ function TaskListHeaderPt({
 
 function TaskListTablePt({
   rowHeight,
-  rowWidth: _rowWidth,
+  rowWidth,
   fontFamily,
   fontSize,
-  locale: _locale,
+  locale,
   tasks,
   selectedTaskId,
   setSelectedTask,
@@ -149,6 +152,8 @@ function TaskListTablePt({
   setSelectedTask: (taskId: string) => void;
   onExpanderClick: (task: Task) => void;
 }) {
+  void rowWidth;
+  void locale;
   return (
     <Box sx={{ fontFamily, fontSize }}>
       {tasks.map((task) => {
@@ -194,9 +199,13 @@ export function GanttView({
   viewMode = 'Week',
 }: {
   items: GanttItem[];
-  onSelect: (id: string) => void;
+  onSelect: (item: { id: string; entityId: string; itemType: 'task' | 'activity' }) => void;
   viewMode?: 'Day' | 'Week' | 'Month';
 }) {
+  const itemById = useMemo(
+    () => new Map(items.map((item) => [item.id, item])),
+    [items],
+  );
   const tasks: Task[] = useMemo(() => {
     return items.map((item) => {
       const due = typeof item.dueDate === 'string' ? parseISO(item.dueDate) : new Date(item.dueDate);
@@ -206,7 +215,9 @@ export function GanttView({
         String(item.phaseName ?? item.taskTemplate?.phase?.displayName ?? item.taskTemplate?.phase?.name ?? '').trim() ||
         'Sem fase';
       const locality = item.localityName ?? '—';
-      const name = `${phase} | ${title} — ${locality}`;
+      const itemType = item.itemType ?? 'task';
+      const prefix = itemType === 'activity' ? 'Atividade' : phase;
+      const name = `${prefix} | ${title} — ${locality}`;
 
       return {
         id: item.id,
@@ -229,8 +240,6 @@ export function GanttView({
     return startOfMonth(min);
   }, [tasks]);
 
-  if (!items.length) return null;
-
   const ganttHeight = Math.min(620, Math.max(320, tasks.length * 44 + 90));
   const columnWidth = viewMode === 'Day' ? 70 : viewMode === 'Week' ? 88 : 130;
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -249,7 +258,7 @@ export function GanttView({
   };
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (event.button !== 0) return;
+    if (event.button !== 0 && event.button !== 1) return;
     const target = event.target as HTMLElement;
     if (
       target.closest('button, a, input, textarea, [role="button"]') ||
@@ -292,6 +301,39 @@ export function GanttView({
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
   };
+
+  useEffect(() => {
+    if (viewMode !== 'Week' || !rootRef.current) return;
+
+    const root = rootRef.current;
+    const hideWeekLabels = () => {
+      const labels = root.querySelectorAll<SVGTextElement>('svg text');
+      labels.forEach((label) => {
+        const text = String(label.textContent ?? '').trim();
+        if (/^W\d{1,2}$/i.test(text)) {
+          label.style.display = 'none';
+        }
+      });
+    };
+
+    hideWeekLabels();
+    const observer = new MutationObserver(() => hideWeekLabels());
+    observer.observe(root, { childList: true, subtree: true, characterData: true });
+
+    return () => observer.disconnect();
+  }, [viewMode, tasks.length]);
+
+  const handleSelect = (task: Task) => {
+    const item = itemById.get(task.id);
+    const itemType = item?.itemType ?? 'task';
+    onSelect({
+      id: task.id,
+      entityId: String(item?.entityId ?? item?.id ?? task.id),
+      itemType,
+    });
+  };
+
+  if (!items.length) return null;
 
   return (
     <Box
@@ -348,14 +390,14 @@ export function GanttView({
             didDragRef.current = false;
             return;
           }
-          onSelect(task.id);
+          handleSelect(task);
         }}
         onDoubleClick={(task) => {
           if (didDragRef.current) {
             didDragRef.current = false;
             return;
           }
-          onSelect(task.id);
+          handleSelect(task);
         }}
       />
     </Box>

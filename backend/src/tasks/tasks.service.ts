@@ -1780,11 +1780,22 @@ export class TasksService {
 
     const items = await this.prisma.taskInstance.findMany({
       where,
+      orderBy: [{ dueDate: 'asc' }, { createdAt: 'asc' }],
       include: { taskTemplate: { include: { phase: true } } },
     });
 
+    const uniqueByCalendarKey = new Map<string, (typeof items)[number]>();
+    for (const item of items) {
+      const groupKey = String(item.groupKey ?? '').trim();
+      const calendarKey = groupKey ? `group:${groupKey}` : `task:${item.id}`;
+      if (!uniqueByCalendarKey.has(calendarKey)) {
+        uniqueByCalendarKey.set(calendarKey, item);
+      }
+    }
+    const dedupedItems = Array.from(uniqueByCalendarKey.values());
+
     return {
-      items: items.map((item) => ({
+      items: dedupedItems.map((item) => ({
         taskInstanceId: item.id,
         date: item.dueDate,
         title: `[${item.taskTemplate.phase.name}] ${item.taskTemplate.title}`,
@@ -2076,9 +2087,16 @@ export class TasksService {
       .filter((activity) => !hasResponsible(activity))
       .sort(sortByEventDate)
       .map((activity) => mapNationalActivityDetail(activity));
+    const isOpenActivity = (
+      activity: (typeof filteredActivities)[number],
+    ): boolean =>
+      activity.status !== ActivityStatus.DONE &&
+      activity.status !== ActivityStatus.CANCELLED;
     const riskTasks = filteredActivities
       .filter(
-        (activity) => isLateActivity(activity) || !hasResponsible(activity),
+        (activity) =>
+          isOpenActivity(activity) &&
+          (isLateActivity(activity) || !hasResponsible(activity)),
       )
       .sort(sortByEventDate)
       .slice(0, 10)
@@ -2121,7 +2139,7 @@ export class TasksService {
       localityWhere.id = localityId;
     }
 
-    const [localitiesRaw, history] = await this.prisma.$transaction([
+    const [localitiesRaw, historyRaw] = await this.prisma.$transaction([
       this.prisma.locality.findMany({
         where: localityWhere,
         orderBy: { name: 'asc' },
@@ -2141,6 +2159,14 @@ export class TasksService {
         orderBy: { date: 'asc' },
       }),
     ]);
+    const history = historyRaw as Array<{
+      localityId: string;
+      date: Date;
+      recruitsFemaleCount: number;
+      turnoverCount: number;
+      dismissalReason?: string | null;
+      createdAt: Date;
+    }>;
     const localityGroups = groupTargetLocalities(localitiesRaw);
     const localities = localityGroups.map((group) => group.canonical);
     const { aliasByLocalityId } = createTargetLocalityAliasMap(localityGroups);
@@ -2149,7 +2175,14 @@ export class TasksService {
     );
     const normalizedHistoryMap = new Map<
       string,
-      { localityId: string; date: string; value: number }
+      {
+        localityId: string;
+        date: string;
+        value: number;
+        turnoverCount: number;
+        dismissalReason: string | null;
+        createdAt: string;
+      }
     >();
     for (const entry of filteredHistory) {
       const canonicalId = aliasByLocalityId.get(entry.localityId);
@@ -2157,11 +2190,20 @@ export class TasksService {
       const dateKey = entry.date.toISOString().slice(0, 10);
       const key = `${canonicalId}:${dateKey}`;
       const current = normalizedHistoryMap.get(key);
-      if (!current || entry.recruitsFemaleCount > current.value) {
+      const entryCreatedAt = entry.createdAt.toISOString();
+      if (
+        !current ||
+        entryCreatedAt > current.createdAt ||
+        (entryCreatedAt === current.createdAt &&
+          entry.recruitsFemaleCount > current.value)
+      ) {
         normalizedHistoryMap.set(key, {
           localityId: canonicalId,
           date: dateKey,
           value: entry.recruitsFemaleCount,
+          turnoverCount: entry.turnoverCount ?? 0,
+          dismissalReason: entry.dismissalReason ?? null,
+          createdAt: entryCreatedAt,
         });
       }
     }
@@ -2186,13 +2228,23 @@ export class TasksService {
       aggregateByMonth.push({ month, value });
     }
 
-    const byLocalityMap = new Map<string, { date: string; value: number }[]>();
+    const byLocalityMap = new Map<
+      string,
+      Array<{
+        date: string;
+        value: number;
+        turnoverCount: number;
+        dismissalReason: string | null;
+      }>
+    >();
     for (const entry of normalizedHistory) {
       const key = entry.localityId;
       if (!byLocalityMap.has(key)) byLocalityMap.set(key, []);
       byLocalityMap.get(key)!.push({
         date: entry.date,
         value: entry.value,
+        turnoverCount: entry.turnoverCount,
+        dismissalReason: entry.dismissalReason,
       });
     }
     const localityById = new Map(localities.map((l) => [l.id, l]));
@@ -2204,11 +2256,23 @@ export class TasksService {
         series,
       }),
     );
+    const historyLog = normalizedHistory
+      .map((entry) => ({
+        localityId: entry.localityId,
+        localityName: localityById.get(entry.localityId)?.name ?? entry.localityId,
+        code: localityById.get(entry.localityId)?.code ?? '',
+        date: entry.date,
+        recruitsFemaleCount: entry.value,
+        turnoverCount: entry.turnoverCount,
+        dismissalReason: entry.dismissalReason,
+      }))
+      .sort((a, b) => b.date.localeCompare(a.date));
 
     return {
       currentPerLocality,
       aggregateByMonth,
       byLocality,
+      historyLog,
     };
   }
 

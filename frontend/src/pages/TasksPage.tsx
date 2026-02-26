@@ -700,7 +700,7 @@ export function TasksPage() {
             phases={phases}
             eloRoles={eloRoles}
             assignees={assignees}
-            desktopColumns={5}
+            desktopColumns={4}
             onClear={clearFilters}
           />
         </CardContent>

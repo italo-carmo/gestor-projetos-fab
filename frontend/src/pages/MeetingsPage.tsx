@@ -441,26 +441,39 @@ export function MeetingsPage() {
                 borderLeft: `4px solid ${meeting.status === 'PLANNED' ? '#1976d2' : meeting.status === 'HELD' ? '#2e7d32' : '#c62828'}`,
               }}
             >
-              <CardContent>
-                <Stack spacing={1}>
-                  <Typography variant="subtitle1">{format(new Date(meeting.datetime), 'dd/MM/yyyy HH:mm')}</Typography>
-                  <Chip
-                    size="small"
-                    label={MEETING_STATUS_LABELS[meeting.status] ?? meeting.status}
-                    color={STATUS_CHIP_COLOR[meeting.status] ?? 'default'}
-                  />
-                  <Typography variant="body2" color="text.secondary">
+              <CardContent sx={{ py: 1.25, px: 1.5, '&:last-child': { pb: 1.25 } }}>
+                <Stack spacing={0.6}>
+                  <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, lineHeight: 1.25 }}>
+                      {format(new Date(meeting.datetime), 'dd/MM/yyyy HH:mm')}
+                    </Typography>
+                    <Chip
+                      size="small"
+                      label={MEETING_STATUS_LABELS[meeting.status] ?? meeting.status}
+                      color={STATUS_CHIP_COLOR[meeting.status] ?? 'default'}
+                      sx={{ height: 22 }}
+                    />
+                  </Stack>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{
+                      lineHeight: 1.25,
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden',
+                    }}
+                    title={meeting.scope || 'Sem escopo'}
+                  >
                     {meeting.scope || 'Sem escopo'}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {meeting.agenda ?? 'Sem pauta'}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography variant="caption" color="text.secondary" noWrap>
                     {meeting.meetingType === 'ONLINE'
-                      ? 'Online'
+                      ? `Online${meeting.meetingLink ? ` • ${meeting.meetingLink}` : ''}`
                       : meeting.location ?? meeting.locality?.name ?? '—'}
                   </Typography>
-                  <Button variant="text" onClick={() => openEdit(meeting)}>
+                  <Button size="small" sx={{ alignSelf: 'flex-start', minHeight: 24, px: 0.5 }} variant="text" onClick={() => openEdit(meeting)}>
                     Ver detalhes
                   </Button>
                 </Stack>

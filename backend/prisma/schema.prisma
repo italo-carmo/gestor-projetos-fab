@@ -781,6 +781,7 @@ model RecruitsHistory {
   date                DateTime
   recruitsFemaleCount Int
   turnoverCount       Int
+  dismissalReason     String?
   createdAt           DateTime  @default(now())
 
   locality            Locality  @relation(fields: [localityId], references: [id])

@@ -1683,10 +1683,12 @@ export function useUpdateLocalityRecruits() {
     mutationFn: async (args: {
       id: string;
       recruitsFemaleCountCurrent: number;
+      dismissalReason?: string | null;
     }) =>
       (
         await api.put(`/localities/${args.id}/recruits`, {
           recruitsFemaleCountCurrent: args.recruitsFemaleCountCurrent,
+          dismissalReason: args.dismissalReason ?? null,
         })
       ).data,
     onSuccess: () => {

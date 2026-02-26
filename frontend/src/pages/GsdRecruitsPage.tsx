@@ -44,6 +44,12 @@ import {
 
 type RecruitsTab = 'gestao' | 'historico';
 
+function formatHistoryDate(value: string) {
+  const [year, month, day] = String(value ?? '').split('-');
+  if (!year || !month || !day) return value;
+  return `${day}/${month}/${year}`;
+}
+
 export function GsdRecruitsPage() {
   const { data: me, isLoading: meLoading } = useMe();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -76,6 +82,7 @@ export function GsdRecruitsPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selected, setSelected] = useState<any | null>(null);
   const [formRecruitsCount, setFormRecruitsCount] = useState<string>('');
+  const [formDismissalReason, setFormDismissalReason] = useState<string>('');
 
   const data = recruitsQuery.data;
   const managementItems = (data?.currentPerLocality ?? []).map((loc: any) => ({
@@ -109,6 +116,17 @@ export function GsdRecruitsPage() {
     );
     return locality?.series ?? [];
   }, [historyByLocality, selectedHistoryLocalityId]);
+  const historyLog = data?.historyLog ?? [];
+  const historySelectedLog = useMemo(() => {
+    if (!selectedHistoryLocalityId) return historyLog;
+    return historyLog.filter(
+      (entry: any) => String(entry.localityId) === selectedHistoryLocalityId,
+    );
+  }, [historyLog, selectedHistoryLocalityId]);
+  const historyRowsForTable = useMemo(
+    () => historySelectedLog,
+    [historySelectedLog],
+  );
 
   const historyTotalCurrent = historyCurrentPerLocality.reduce(
     (acc: number, loc: any) => acc + (loc.recruitsFemaleCountCurrent ?? 0),
@@ -163,6 +181,7 @@ export function GsdRecruitsPage() {
     if (!canEditRecruitsCount(me, locality.id)) return;
     setSelected(locality);
     setFormRecruitsCount(String(locality.recruitsFemaleCountCurrent ?? ''));
+    setFormDismissalReason('');
     setDrawerOpen(true);
   };
 
@@ -177,11 +196,21 @@ export function GsdRecruitsPage() {
       });
       return;
     }
+    const previousValue = Number(selected.recruitsFemaleCountCurrent ?? 0);
+    const isDismissal = value < previousValue;
+    if (isDismissal && !formDismissalReason.trim()) {
+      toast.push({
+        message: 'Informe o motivo da baixa/desligamento.',
+        severity: 'warning',
+      });
+      return;
+    }
 
     try {
       await updateLocalityRecruits.mutateAsync({
         id: selected.id,
         recruitsFemaleCountCurrent: value,
+        dismissalReason: isDismissal ? formDismissalReason.trim() : null,
       });
       toast.push({
         message: 'Número de recrutas atualizado com histórico.',
@@ -203,6 +232,12 @@ export function GsdRecruitsPage() {
     next.set('localityId', localityId);
     setSearchParams(next, { replace: true });
   };
+  const parsedFormCount = Number(formRecruitsCount);
+  const selectedCurrentCount = Number(selected?.recruitsFemaleCountCurrent ?? 0);
+  const isDismissalChange =
+    Boolean(selected) &&
+    Number.isFinite(parsedFormCount) &&
+    parsedFormCount < selectedCurrentCount;
 
   return (
     <Box>
@@ -463,6 +498,76 @@ export function GsdRecruitsPage() {
                 </Card>
               )}
 
+              <Card sx={{ mt: 2 }}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    Histórico consultável de alterações
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    Quantidade por época e motivo de desligamento (quando houver baixa).
+                  </Typography>
+                  {historyRowsForTable.length === 0 ? (
+                    <Typography variant="body2" color="text.secondary">
+                      Sem registros para o filtro/localidade selecionado.
+                    </Typography>
+                  ) : (
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow sx={{ bgcolor: 'primary.main' }}>
+                          <TableCell sx={{ color: 'white', fontWeight: 600 }}>
+                            Data
+                          </TableCell>
+                          <TableCell sx={{ color: 'white', fontWeight: 600 }}>
+                            Localidade
+                          </TableCell>
+                          <TableCell sx={{ color: 'white', fontWeight: 600 }} align="right">
+                            Quantidade
+                          </TableCell>
+                          <TableCell sx={{ color: 'white', fontWeight: 600 }} align="right">
+                            Baixas
+                          </TableCell>
+                          <TableCell sx={{ color: 'white', fontWeight: 600 }}>
+                            Motivo do desligamento
+                          </TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {historyRowsForTable.map((entry: any, index: number) => (
+                          <TableRow key={`${entry.localityId}:${entry.date}:${index}`} hover>
+                            <TableCell>{formatHistoryDate(entry.date)}</TableCell>
+                            <TableCell>
+                              <Typography variant="body2" fontWeight={600}>
+                                {entry.localityName}
+                              </Typography>
+                              {entry.code && (
+                                <Typography variant="caption" color="text.secondary">
+                                  {entry.code}
+                                </Typography>
+                              )}
+                            </TableCell>
+                            <TableCell align="right">
+                              {entry.recruitsFemaleCount ?? 0}
+                            </TableCell>
+                            <TableCell align="right">
+                              {entry.turnoverCount ?? 0}
+                            </TableCell>
+                            <TableCell>
+                              <Typography
+                                variant="body2"
+                                color="text.secondary"
+                                sx={{ whiteSpace: 'pre-wrap' }}
+                              >
+                                {entry.dismissalReason || '—'}
+                              </Typography>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </CardContent>
+              </Card>
+
               {historyCurrentPerLocality.length > 0 &&
                 historyAggregateByMonth.length === 0 &&
                 historyByLocality.length === 0 && (
@@ -502,13 +607,35 @@ export function GsdRecruitsPage() {
                 type="number"
                 label="Recrutas femininos"
                 value={formRecruitsCount}
-                onChange={(e) => setFormRecruitsCount(e.target.value)}
+                onChange={(e) => {
+                  const nextValue = e.target.value;
+                  setFormRecruitsCount(nextValue);
+                  const parsed = Number(nextValue);
+                  if (!Number.isFinite(parsed) || parsed >= selectedCurrentCount) {
+                    setFormDismissalReason('');
+                  }
+                }}
                 fullWidth
                 inputProps={{ min: 0, step: 1 }}
               />
+              <TextField
+                size="small"
+                label="Motivo da baixa (desligamento)"
+                value={formDismissalReason}
+                onChange={(e) => setFormDismissalReason(e.target.value)}
+                fullWidth
+                multiline
+                minRows={2}
+                disabled={!isDismissalChange}
+                helperText={
+                  isDismissalChange
+                    ? 'Obrigatório quando houver redução da quantidade.'
+                    : 'Preenchido apenas quando a nova quantidade for menor que a atual.'
+                }
+              />
               <Typography variant="caption" color="text.secondary">
                 O sistema registra automaticamente o histórico da alteração na data
-                de hoje.
+                de hoje, incluindo motivo da baixa quando houver desligamento.
               </Typography>
             </>
           )}

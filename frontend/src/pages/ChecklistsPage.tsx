@@ -344,19 +344,26 @@ export function ChecklistsPage() {
         const filteredItems = itemSourceType
           ? items.filter((item: any) => item.sourceType === itemSourceType)
           : items;
-        const localityProgress = localities.map((locality: any) => {
-          if (filteredItems.length === 0) return { localityId: locality.id, percent: 0 };
-          const doneCount = filteredItems.filter(
-            (item: any) => item.statuses?.[locality.id] === 'DONE',
-          ).length;
-          return {
-            localityId: locality.id,
-            percent: Math.round((doneCount / filteredItems.length) * 100),
-          };
-        });
-        const completedLocalities = localityProgress.filter((p: any) => p.percent === 100).length;
-        const totalLocalities = localities.length;
-        const progressPercent = totalLocalities ? Math.round((completedLocalities / totalLocalities) * 100) : 0;
+        const statusSummary = filteredItems.reduce(
+          (acc: { total: number; done: number; inProgress: number; pending: number }, item: any) => {
+            for (const locality of localities) {
+              const status = item.statuses?.[locality.id] ?? 'NOT_STARTED';
+              acc.total += 1;
+              if (status === 'DONE') {
+                acc.done += 1;
+              } else if (status === 'IN_PROGRESS' || status === 'STARTED') {
+                acc.inProgress += 1;
+              } else {
+                acc.pending += 1;
+              }
+            }
+            return acc;
+          },
+          { total: 0, done: 0, inProgress: 0, pending: 0 },
+        );
+        const progressPercent = statusSummary.total
+          ? Math.round((statusSummary.done / statusSummary.total) * 100)
+          : 0;
 
         return (
           <Card
@@ -393,7 +400,7 @@ export function ChecklistsPage() {
 
               <Stack direction="row" alignItems="center" spacing={1.2} sx={{ mb: 1.1 }}>
                 <Typography variant="body2" color="text.secondary">
-                  <strong>{completedLocalities}</strong> de <strong>{totalLocalities}</strong> localidades concluíram todos os itens
+                  <strong>{statusSummary.done}</strong> de <strong>{statusSummary.total}</strong> itens concluídos
                 </Typography>
                 <LinearProgress
                   variant="determinate"
@@ -403,6 +410,9 @@ export function ChecklistsPage() {
                 />
                 <Typography variant="caption" color="text.secondary">
                   {progressPercent}%
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {statusSummary.inProgress} em andamento, {statusSummary.pending} pendentes
                 </Typography>
               </Stack>
 

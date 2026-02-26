@@ -378,16 +378,38 @@ export function MissionsPage() {
                   <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Período</TableCell>
                   <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Participantes</TableCell>
                   <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Itens de cronograma</TableCell>
-                  <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Ações</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {items.map((mission: any) => (
-                  <TableRow key={mission.id} hover>
+                  <TableRow
+                    key={mission.id}
+                    hover
+                    onClick={() => openMission(mission.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        openMission(mission.id);
+                      }
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    sx={{
+                      cursor: 'pointer',
+                      '&:hover .mission-title': {
+                        textDecoration: 'underline',
+                      },
+                    }}
+                  >
                     <TableCell>
-                      <Typography fontWeight={700}>{mission.title}</Typography>
+                      <Typography fontWeight={700} className="mission-title">
+                        {mission.title}
+                      </Typography>
                       <Typography variant="caption" color="text.secondary">
                         {mission.description || 'Sem descrição'}
+                      </Typography>
+                      <Typography variant="caption" color="primary.main" display="block">
+                        Clique para abrir detalhes
                       </Typography>
                     </TableCell>
                     <TableCell>{mission.locality?.name ?? '-'}</TableCell>
@@ -400,11 +422,6 @@ export function MissionsPage() {
                     </TableCell>
                     <TableCell>
                       <Chip label={String(mission.scheduleItemsCount ?? mission.scheduleItems?.length ?? 0)} size="small" />
-                    </TableCell>
-                    <TableCell>
-                      <Button size="small" onClick={() => openMission(mission.id)}>
-                        Abrir
-                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}

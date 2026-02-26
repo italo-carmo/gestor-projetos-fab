@@ -34,21 +34,21 @@ export class MeetingsController {
   }
 
   @Post()
-  @RequirePermission('meetings', 'create')
+  @RequirePermission('meetings', 'view')
   create(@Body() dto: CreateMeetingDto, @CurrentUser() user: RbacUser) {
     this.assertMeetingsAccess(user);
     return this.meetings.create(dto, user);
   }
 
   @Put(':id')
-  @RequirePermission('meetings', 'update')
+  @RequirePermission('meetings', 'view')
   update(@Param('id') id: string, @Body() dto: UpdateMeetingDto, @CurrentUser() user: RbacUser) {
     this.assertMeetingsAccess(user);
     return this.meetings.update(id, dto, user);
   }
 
   @Post(':id/decisions')
-  @RequirePermission('meetings', 'update')
+  @RequirePermission('meetings', 'view')
   addDecision(@Param('id') id: string, @Body() dto: MeetingDecisionDto, @CurrentUser() user: RbacUser) {
     this.assertMeetingsAccess(user);
     return this.meetings.addDecision(id, dto.text, user);
@@ -62,7 +62,7 @@ export class MeetingsController {
   }
 
   @Delete(':id')
-  @RequirePermission('meetings', 'update')
+  @RequirePermission('meetings', 'view')
   remove(@Param('id') id: string, @CurrentUser() user: RbacUser) {
     this.assertMeetingsAccess(user);
     return this.meetings.delete(id, user);

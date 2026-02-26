@@ -1,7 +1,7 @@
 import { Box, Button, ButtonGroup, Card, CardContent, Chip, MenuItem, TextField, Typography } from '@mui/material';
 import { useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { useLocalities, useGantt, usePhases, useTaskTemplates, useMe } from '../api/hooks';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useActivities, useLocalities, useGantt, usePhases, useTaskTemplates, useMe } from '../api/hooks';
 import { SkeletonState } from '../components/states/SkeletonState';
 import { ErrorState } from '../components/states/ErrorState';
 import { EmptyState } from '../components/states/EmptyState';
@@ -10,8 +10,29 @@ import { TaskDetailsDrawer } from '../components/tasks/TaskDetailsDrawer';
 import { TASK_STATUS_LABELS } from '../constants/enums';
 import { selectTargetLocalities } from '../constants/localities';
 
+const ACTIVITY_PROGRESS_BY_STATUS: Record<string, number> = {
+  DONE: 100,
+  IN_PROGRESS: 60,
+  STARTED: 35,
+  NOT_STARTED: 0,
+};
+
+function toDateOrNull(value: string) {
+  const normalized = String(value ?? '').trim();
+  if (!normalized) return null;
+  const parsed = new Date(normalized);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function isInRange(date: Date, fromDate: Date | null, toDate: Date | null) {
+  if (fromDate && date < fromDate) return false;
+  if (toDate && date > toDate) return false;
+  return true;
+}
+
 export function GanttPage() {
   const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'Day' | 'Week' | 'Month'>('Week');
   const { data: me } = useMe();
@@ -34,6 +55,11 @@ export function GanttPage() {
   );
 
   const ganttQuery = useGantt(filters);
+  const activitiesQuery = useActivities({
+    localityId: localityId || undefined,
+    status: status || undefined,
+    pageSize: '500',
+  });
   const localitiesQuery = useLocalities();
   const phasesQuery = usePhases();
   const templatesQuery = useTaskTemplates();
@@ -95,6 +121,8 @@ export function GanttPage() {
     const template = task.taskTemplate ?? templateMap.get(task.taskTemplateId) ?? null;
     return {
       ...task,
+      itemType: 'task' as const,
+      entityId: String(task.id),
       taskTemplate: template,
       taskTitle: resolveTaskTitle(task),
       phaseName: resolveTaskPhaseName(task, template),
@@ -102,7 +130,7 @@ export function GanttPage() {
     };
   });
 
-  const groupedItems = useMemo(() => {
+  const groupedTaskItems = useMemo(() => {
     const filtered = baseItems
       .filter((task: any) => (phaseId ? task.taskTemplate?.phaseId === phaseId : true))
       .filter((task: any) => (status ? task.status === status : true));
@@ -136,6 +164,8 @@ export function GanttPage() {
         const task = group[0];
         rows.push({
           ...task,
+          itemType: 'task',
+          entityId: String(task.id),
           id: String(task.id),
           primaryTaskId: String(task.id),
           groupedTaskIds: [String(task.id)],
@@ -178,6 +208,8 @@ export function GanttPage() {
 
       rows.push({
         ...primary,
+        itemType: 'task',
+        entityId: String(primary.id),
         id: String(primary.id),
         primaryTaskId: String(primary.id),
         groupedTaskIds: taskIds,
@@ -197,8 +229,45 @@ export function GanttPage() {
     return rows;
   }, [baseItems, phaseId, status]);
 
+  const dateFrom = useMemo(() => (from ? toDateOrNull(`${from}T00:00:00`) : null), [from]);
+  const dateTo = useMemo(() => (to ? toDateOrNull(`${to}T23:59:59.999`) : null), [to]);
+
+  const activityItems = useMemo(() => {
+    if (phaseId) return [];
+
+    return ((activitiesQuery.data?.items ?? []) as any[])
+      .map((activity: any) => {
+        const eventDate = toDateOrNull(activity?.eventDate ?? activity?.createdAt ?? '');
+        if (!eventDate) return null;
+        if (!isInRange(eventDate, dateFrom, dateTo)) return null;
+
+        const resolvedStatus = String(activity?.status ?? 'NOT_STARTED');
+        return {
+          id: `activity:${String(activity.id)}`,
+          entityId: String(activity.id),
+          itemType: 'activity' as const,
+          taskTitle: String(activity?.title ?? '').trim() || 'Atividade sem título',
+          phaseName: 'Atividade',
+          localityId: String(activity?.localityId ?? ''),
+          localityName: String(activity?.locality?.name ?? '').trim() || '—',
+          dueDate: eventDate.toISOString(),
+          progressPercent: ACTIVITY_PROGRESS_BY_STATUS[resolvedStatus] ?? 0,
+          status: resolvedStatus,
+          isLate: resolvedStatus !== 'DONE' && eventDate.getTime() < Date.now(),
+        };
+      })
+      .filter(Boolean);
+  }, [activitiesQuery.data?.items, dateFrom, dateTo, phaseId]);
+
+  const allItems = useMemo(() => {
+    return [...groupedTaskItems, ...activityItems].sort(
+      (a: any, b: any) =>
+        new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime(),
+    );
+  }, [activityItems, groupedTaskItems]);
+
   const selectedTask =
-    groupedItems.find((item: any) => item.id === selectedTaskId) ?? null;
+    groupedTaskItems.find((item: any) => item.id === selectedTaskId) ?? null;
 
   const updateParam = (key: string, value: string) => {
     const next = new URLSearchParams(params);
@@ -207,8 +276,9 @@ export function GanttPage() {
     setParams(next);
   };
 
-  if (ganttQuery.isLoading) return <SkeletonState />;
+  if (ganttQuery.isLoading || activitiesQuery.isLoading) return <SkeletonState />;
   if (ganttQuery.isError) return <ErrorState error={ganttQuery.error} onRetry={() => ganttQuery.refetch()} />;
+  if (activitiesQuery.isError) return <ErrorState error={activitiesQuery.error} onRetry={() => activitiesQuery.refetch()} />;
 
   return (
     <Box>
@@ -216,7 +286,7 @@ export function GanttPage() {
         Cronograma (Gantt)
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Visão de tarefas ao longo do tempo. Clique em uma barra para ver detalhes.
+        Visão de tarefas e atividades ao longo do tempo. Clique em uma barra para abrir os detalhes.
       </Typography>
       <Card sx={{ mb: 2 }}>
         <CardContent sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: 'repeat(5, 1fr)' } }}>
@@ -281,8 +351,8 @@ export function GanttPage() {
         </CardContent>
       </Card>
 
-      {groupedItems.length === 0 ? (
-        <EmptyState title="Sem tarefas" description="Nenhum item para o período selecionado. Ajuste os filtros ou datas." />
+      {allItems.length === 0 ? (
+        <EmptyState title="Sem itens" description="Nenhuma tarefa ou atividade para o período selecionado. Ajuste os filtros ou datas." />
       ) : (
         <Card>
           <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -293,19 +363,36 @@ export function GanttPage() {
                 <Button variant={viewMode === 'Week' ? 'contained' : 'outlined'} onClick={() => setViewMode('Week')}>Semana</Button>
                 <Button variant={viewMode === 'Month' ? 'contained' : 'outlined'} onClick={() => setViewMode('Month')}>Mês</Button>
               </ButtonGroup>
-              <Chip size="small" label={`${groupedItems.length} tarefas`} variant="outlined" />
+              <Chip
+                size="small"
+                label={`${groupedTaskItems.length} tarefas • ${activityItems.length} atividades`}
+                variant="outlined"
+              />
               <Typography variant="caption" color="text.secondary">
-                Dica: clique e arraste no gráfico para navegar pelos meses (também funciona com rolagem).
+                Dica: clique e arraste no gráfico (botão esquerdo ou botão do meio/mão) para navegar.
               </Typography>
             </Box>
-            <GanttView items={groupedItems} onSelect={(id) => setSelectedTaskId(id)} viewMode={viewMode} />
+            <GanttView
+              items={allItems}
+              onSelect={(item) => {
+                if (item.itemType === 'activity') {
+                  const next = new URLSearchParams();
+                  if (localityId) next.set('localityId', localityId);
+                  next.set('activityId', item.entityId);
+                  navigate(`/activities?${next.toString()}`);
+                  return;
+                }
+                setSelectedTaskId(item.entityId);
+              }}
+              viewMode={viewMode}
+            />
           </Box>
         </Card>
       )}
 
       <TaskDetailsDrawer
         task={selectedTask}
-        open={Boolean(selectedTaskId)}
+        open={Boolean(selectedTask)}
         onClose={() => setSelectedTaskId(null)}
         onDeleted={() => setSelectedTaskId(null)}
         user={me}

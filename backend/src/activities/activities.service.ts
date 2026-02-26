@@ -154,6 +154,7 @@ export class ActivitiesService {
     },
     user?: RbacUser,
   ) {
+    this.assertActivityOperateAccess(null, user);
     const localityId = payload.localityId ?? user?.localityId ?? null;
     const specialtyId = payload.specialtyId ?? null;
     this.assertScopeConstraint(localityId, specialtyId, user);
