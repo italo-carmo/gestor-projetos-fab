@@ -104,8 +104,23 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const { data: me } = useMe();
   const localitiesQuery = useLocalities();
+  const roleOptions = useMemo(
+    () =>
+      Array.from(
+        new Map(
+          ((me?.roles ?? []) as Array<{ id?: string | null; name?: string | null }>)
+            .map((role) => {
+              const id = String(role?.id ?? '').trim();
+              const name = canonicalRoleName(role?.name ?? '');
+              return id ? [id, { id, name }] : null;
+            })
+            .filter((entry): entry is [string, { id: string; name: string }] => Boolean(entry)),
+        ).values(),
+      ),
+    [me?.roles],
+  );
   const currentRoleLabel = canonicalRoleName(me?.activeRole?.name ?? me?.roles?.[0]?.name ?? 'Sem papel');
-  const activeRoleId = me?.activeRole?.id ?? me?.activeRoleId ?? me?.roles?.[0]?.id ?? '';
+  const activeRoleId = me?.activeRole?.id ?? me?.activeRoleId ?? roleOptions[0]?.id ?? '';
   const canUseGlobalLocalityFilter = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI]);
   const availableGlobalLocalities = useMemo(
     () =>
@@ -492,7 +507,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               ))}
             </TextField>
           )}
-          {(me?.roles?.length ?? 0) > 1 && (
+          {roleOptions.length > 0 && (
             <TextField
               select
               size="small"
@@ -504,11 +519,12 @@ export function AppShell({ children }: { children: ReactNode }) {
                 localStorage.setItem(ACTIVE_ROLE_STORAGE_KEY, nextRoleId);
                 window.location.reload();
               }}
-              sx={{ minWidth: { xs: 150, md: 220 }, display: 'inline-flex' }}
+              disabled={roleOptions.length < 2}
+              sx={{ minWidth: { xs: 120, sm: 140, md: 180 }, maxWidth: { md: 220 }, display: 'inline-flex' }}
             >
-              {(me?.roles ?? []).map((role: any) => (
-                <MenuItem key={String(role.id)} value={String(role.id)}>
-                  {canonicalRoleName(role.name)}
+              {roleOptions.map((role) => (
+                <MenuItem key={role.id} value={role.id}>
+                  {role.name}
                 </MenuItem>
               ))}
             </TextField>
