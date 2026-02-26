@@ -693,7 +693,7 @@ export class RbacService {
     const requestedRole = requestedRoleId
       ? allRoles.find((role) => role.id === requestedRoleId)
       : undefined;
-    const activeRole = requestedRole ?? allRoles[0] ?? null;
+    const activeRole = requestedRole ?? this.pickDefaultActiveRole(allRoles);
     const roles = activeRole ? [activeRole] : [];
 
     const normalizedRoles = new Set(roles.map((role) => normalizeRoleName(role.name)));
@@ -780,6 +780,39 @@ export class RbacService {
       }
     }
     return Array.from(map.values());
+  }
+
+  private pickDefaultActiveRole(roles: Array<RbacUser['roles'][number]>) {
+    if (!roles.length) return null;
+
+    const priorityOrder = new Map<string, number>([
+      [normalizeRoleName(ROLE_TI), 0],
+      [normalizeRoleName(ROLE_COMISSAO_CIPAVD), 1],
+      [normalizeRoleName(ROLE_COORDENACAO_CIPAVD), 2],
+      [normalizeRoleName(ROLE_COMANDANTE_COMGEP), 3],
+    ]);
+
+    const sorted = [...roles].sort((a, b) => {
+      const priorityA = priorityOrder.get(normalizeRoleName(a.name)) ?? Number.MAX_SAFE_INTEGER;
+      const priorityB = priorityOrder.get(normalizeRoleName(b.name)) ?? Number.MAX_SAFE_INTEGER;
+      if (priorityA !== priorityB) {
+        return priorityA - priorityB;
+      }
+
+      if (a.wildcard !== b.wildcard) {
+        return a.wildcard ? -1 : 1;
+      }
+
+      const permissionCountA = this.dedupePermissions(a.permissions).length;
+      const permissionCountB = this.dedupePermissions(b.permissions).length;
+      if (permissionCountA !== permissionCountB) {
+        return permissionCountB - permissionCountA;
+      }
+
+      return a.name.localeCompare(b.name, 'pt-BR');
+    });
+
+    return sorted[0] ?? null;
   }
 
   private applyModuleAccessOverrides(
