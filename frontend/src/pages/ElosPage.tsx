@@ -3,29 +3,39 @@ import {
   Button,
   Card,
   CardContent,
+  Checkbox,
   Drawer,
+  FormControlLabel,
   MenuItem,
   Stack,
   TextField,
   Typography,
-} from '@mui/material';
-import { useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { useCreateElo, useDeleteElo, useEloRoles, useElos, useLocalities, useUpdateElo, useMe } from '../api/hooks';
-import { FiltersBar } from '../components/filters/FiltersBar';
-import { EmptyState } from '../components/states/EmptyState';
-import { ErrorState } from '../components/states/ErrorState';
-import { SkeletonState } from '../components/states/SkeletonState';
-import { useToast } from '../app/toast';
-import { parseApiError } from '../app/apiErrors';
-import { can } from '../app/rbac';
+} from "@mui/material";
+import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import {
+  useCreateElo,
+  useDeleteElo,
+  useEloRoles,
+  useElos,
+  useLocalities,
+  useUpdateElo,
+  useMe,
+} from "../api/hooks";
+import { FiltersBar } from "../components/filters/FiltersBar";
+import { EmptyState } from "../components/states/EmptyState";
+import { ErrorState } from "../components/states/ErrorState";
+import { SkeletonState } from "../components/states/SkeletonState";
+import { useToast } from "../app/toast";
+import { parseApiError } from "../app/apiErrors";
+import { can } from "../app/rbac";
 
 export function ElosPage() {
   const [params, setParams] = useSearchParams();
   const toast = useToast();
   const { data: me } = useMe();
-  const localityId = params.get('localityId') ?? '';
-  const roleType = params.get('roleType') ?? '';
+  const localityId = params.get("localityId") ?? "";
+  const roleType = params.get("roleType") ?? "";
 
   const filters = useMemo(
     () => ({
@@ -44,7 +54,8 @@ export function ElosPage() {
   const gradMasterByLocalityId = useMemo(() => {
     const map = new Map<string, string>();
     (elosAllQuery.data?.items ?? []).forEach((elo: any) => {
-      if (elo.eloRole?.code === 'GRAD_MASTER' && elo.localityId) map.set(elo.localityId, elo.name ?? '');
+      if (elo.eloRole?.code === "GRAD_MASTER" && elo.localityId)
+        map.set(elo.localityId, elo.name ?? "");
     });
     return map;
   }, [elosAllQuery.data?.items]);
@@ -54,16 +65,57 @@ export function ElosPage() {
   const deleteElo = useDeleteElo();
 
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [showAllLocalities, setShowAllLocalities] = useState(false);
   const [editing, setEditing] = useState<any | null>(null);
   const [form, setForm] = useState({
-    localityId: '',
-    eloRoleId: '',
-    name: '',
-    rank: '',
-    phone: '',
-    email: '',
-    om: '',
+    localityId: "",
+    eloRoleId: "",
+    name: "",
+    rank: "",
+    phone: "",
+    email: "",
+    om: "",
   });
+
+  const allLocalities = localitiesQuery.data?.items ?? [];
+  const localitiesWithRecruits = useMemo(
+    () =>
+      allLocalities.filter(
+        (locality: any) =>
+          Number(locality?.recruitsFemaleCountCurrent ?? 0) > 0,
+      ),
+    [allLocalities],
+  );
+
+  const selectableLocalities = useMemo(() => {
+    const base = showAllLocalities ? allLocalities : localitiesWithRecruits;
+    const byId = new Map<string, any>();
+
+    for (const locality of base) {
+      const id = String(locality?.id ?? "").trim();
+      if (!id) continue;
+      byId.set(id, locality);
+    }
+
+    for (const preservedId of [localityId, form.localityId]) {
+      const id = String(preservedId ?? "").trim();
+      if (!id || byId.has(id)) continue;
+      const found = allLocalities.find(
+        (locality: any) => String(locality?.id ?? "") === id,
+      );
+      if (found) byId.set(id, found);
+    }
+
+    return Array.from(byId.values()).sort((a: any, b: any) =>
+      String(a?.name ?? "").localeCompare(String(b?.name ?? ""), "pt-BR"),
+    );
+  }, [
+    allLocalities,
+    form.localityId,
+    localityId,
+    localitiesWithRecruits,
+    showAllLocalities,
+  ]);
 
   const updateParam = (key: string, value: string) => {
     const next = new URLSearchParams(params);
@@ -77,13 +129,13 @@ export function ElosPage() {
   const openCreate = () => {
     setEditing(null);
     setForm({
-      localityId: '',
-      eloRoleId: eloRoles[0]?.id ?? '',
-      name: '',
-      rank: '',
-      phone: '',
-      email: '',
-      om: '',
+      localityId: "",
+      eloRoleId: eloRoles[0]?.id ?? "",
+      name: "",
+      rank: "",
+      phone: "",
+      email: "",
+      om: "",
     });
     setDrawerOpen(true);
   };
@@ -92,12 +144,12 @@ export function ElosPage() {
     setEditing(elo);
     setForm({
       localityId: elo.localityId,
-      eloRoleId: elo.eloRoleId ?? elo.eloRole?.id ?? '',
-      name: elo.name ?? '',
-      rank: elo.rank ?? '',
-      phone: elo.phone ?? '',
-      email: elo.email ?? '',
-      om: elo.om ?? '',
+      eloRoleId: elo.eloRoleId ?? elo.eloRole?.id ?? "",
+      name: elo.name ?? "",
+      rank: elo.rank ?? "",
+      phone: elo.phone ?? "",
+      email: elo.email ?? "",
+      om: elo.om ?? "",
     });
     setDrawerOpen(true);
   };
@@ -115,38 +167,52 @@ export function ElosPage() {
       };
       if (editing) {
         await updateElo.mutateAsync({ id: editing.id, payload });
-        toast.push({ message: 'Elo atualizado', severity: 'success' });
+        toast.push({ message: "Elo atualizado", severity: "success" });
       } else {
         await createElo.mutateAsync(payload);
-        toast.push({ message: 'Elo criado', severity: 'success' });
+        toast.push({ message: "Elo criado", severity: "success" });
       }
       setDrawerOpen(false);
     } catch (error) {
       const payload = parseApiError(error);
-      toast.push({ message: payload.message ?? 'Erro ao salvar elo', severity: 'error' });
+      toast.push({
+        message: payload.message ?? "Erro ao salvar elo",
+        severity: "error",
+      });
     }
   };
 
   const handleDelete = async (id: string) => {
     try {
       await deleteElo.mutateAsync(id);
-      toast.push({ message: 'Elo removido', severity: 'success' });
+      toast.push({ message: "Elo removido", severity: "success" });
     } catch (error) {
       const payload = parseApiError(error);
-      toast.push({ message: payload.message ?? 'Erro ao remover elo', severity: 'error' });
+      toast.push({
+        message: payload.message ?? "Erro ao remover elo",
+        severity: "error",
+      });
     }
   };
 
   if (elosQuery.isLoading) return <SkeletonState />;
-  if (elosQuery.isError) return <ErrorState error={elosQuery.error} onRetry={() => elosQuery.refetch()} />;
+  if (elosQuery.isError)
+    return (
+      <ErrorState error={elosQuery.error} onRetry={() => elosQuery.refetch()} />
+    );
 
-  const canCreate = can(me, 'elos', 'create');
-  const canUpdate = can(me, 'elos', 'update');
-  const canDelete = can(me, 'elos', 'delete');
+  const canCreate = can(me, "elos", "create");
+  const canUpdate = can(me, "elos", "update");
+  const canDelete = can(me, "elos", "delete");
 
   return (
     <Box>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
+      <Stack
+        direction="row"
+        justifyContent="space-between"
+        alignItems="center"
+        mb={2}
+      >
         <Typography variant="h4">Elos</Typography>
         {canCreate && (
           <Button variant="contained" onClick={openCreate}>
@@ -159,17 +225,33 @@ export function ElosPage() {
         <CardContent>
           <FiltersBar
             localityId={localityId}
-            onLocalityChange={(value) => updateParam('localityId', value)}
-            localities={(localitiesQuery.data?.items ?? []).map((l: any) => ({ id: l.id, name: l.name }))}
+            onLocalityChange={(value) => updateParam("localityId", value)}
+            localities={selectableLocalities.map((l: any) => ({
+              id: l.id,
+              name: l.name,
+            }))}
             onClear={clearFilters}
           />
-          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} mt={2}>
+          <Stack direction={{ xs: "column", md: "row" }} spacing={2} mt={2}>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  size="small"
+                  checked={showAllLocalities}
+                  onChange={(event) =>
+                    setShowAllLocalities(event.target.checked)
+                  }
+                />
+              }
+              label="Mostrar todas as localidades"
+              sx={{ mr: 0 }}
+            />
             <TextField
               select
               size="small"
               label="Tipo de elo"
               value={roleType}
-              onChange={(e) => updateParam('roleType', e.target.value)}
+              onChange={(e) => updateParam("roleType", e.target.value)}
               sx={{ minWidth: 180 }}
             >
               <MenuItem value="">Todos</MenuItem>
@@ -184,17 +266,37 @@ export function ElosPage() {
       </Card>
 
       {(elosQuery.data?.items ?? []).length === 0 && (
-        <EmptyState title="Nenhum elo cadastrado" description="Cadastre os contatos das localidades." />
+        <EmptyState
+          title="Nenhum elo cadastrado"
+          description="Cadastre os contatos das localidades."
+        />
       )}
 
       {(elosQuery.data?.items ?? []).length > 0 && (
         <Card>
           <CardContent>
-            <Box component="table" width="100%" sx={{ borderCollapse: 'collapse' }}>
+            <Box
+              component="table"
+              width="100%"
+              sx={{ borderCollapse: "collapse" }}
+            >
               <Box component="thead">
                 <Box component="tr">
-                  {['Localidade', 'Graduado Master', 'Papel', 'Nome', 'OM', 'Telefone', 'Email', 'Ações'].map((header) => (
-                    <Box key={header} component="th" sx={{ textAlign: 'left', pb: 1 }}>
+                  {[
+                    "Localidade",
+                    "Graduado Master",
+                    "Papel",
+                    "Nome",
+                    "OM",
+                    "Telefone",
+                    "Email",
+                    "Ações",
+                  ].map((header) => (
+                    <Box
+                      key={header}
+                      component="th"
+                      sx={{ textAlign: "left", pb: 1 }}
+                    >
                       {header}
                     </Box>
                   ))}
@@ -202,27 +304,31 @@ export function ElosPage() {
               </Box>
               <Box component="tbody">
                 {(elosQuery.data?.items ?? []).map((elo: any) => (
-                  <Box key={elo.id} component="tr" sx={{ borderTop: '1px solid #E6ECF5' }}>
+                  <Box
+                    key={elo.id}
+                    component="tr"
+                    sx={{ borderTop: "1px solid #E6ECF5" }}
+                  >
                     <Box component="td" sx={{ py: 1 }}>
                       {elo.locality?.name ?? elo.localityId}
                     </Box>
                     <Box component="td" sx={{ py: 1 }}>
-                      {gradMasterByLocalityId.get(elo.localityId) ?? '—'}
+                      {gradMasterByLocalityId.get(elo.localityId) ?? "—"}
                     </Box>
                     <Box component="td" sx={{ py: 1 }}>
-                      {elo.eloRole?.name ?? elo.eloRole?.code ?? '—'}
+                      {elo.eloRole?.name ?? elo.eloRole?.code ?? "—"}
                     </Box>
                     <Box component="td" sx={{ py: 1 }}>
                       {elo.name}
                     </Box>
                     <Box component="td" sx={{ py: 1 }}>
-                      {elo.om ?? '-'}
+                      {elo.om ?? "-"}
                     </Box>
                     <Box component="td" sx={{ py: 1 }}>
-                      {elo.phone ?? '-'}
+                      {elo.phone ?? "-"}
                     </Box>
                     <Box component="td" sx={{ py: 1 }}>
-                      {elo.email ?? '-'}
+                      {elo.email ?? "-"}
                     </Box>
                     <Box component="td" sx={{ py: 1 }}>
                       {canUpdate && (
@@ -231,7 +337,11 @@ export function ElosPage() {
                         </Button>
                       )}
                       {canDelete && (
-                        <Button size="small" color="error" onClick={() => handleDelete(elo.id)}>
+                        <Button
+                          size="small"
+                          color="error"
+                          onClick={() => handleDelete(elo.id)}
+                        >
                           Excluir
                         </Button>
                       )}
@@ -244,9 +354,16 @@ export function ElosPage() {
         </Card>
       )}
 
-      <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)} PaperProps={{ sx: { width: { xs: '100%', md: 420 } } }}>
+      <Drawer
+        anchor="right"
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        PaperProps={{ sx: { width: { xs: "100%", md: 420 } } }}
+      >
         <Box p={3} display="flex" flexDirection="column" gap={2}>
-          <Typography variant="h5">{editing ? 'Editar elo' : 'Novo elo'}</Typography>
+          <Typography variant="h5">
+            {editing ? "Editar elo" : "Novo elo"}
+          </Typography>
           <TextField
             select
             size="small"
@@ -254,7 +371,7 @@ export function ElosPage() {
             value={form.localityId}
             onChange={(e) => setForm({ ...form, localityId: e.target.value })}
           >
-            {(localitiesQuery.data?.items ?? []).map((l: any) => (
+            {selectableLocalities.map((l: any) => (
               <MenuItem key={l.id} value={l.id}>
                 {l.name}
               </MenuItem>
@@ -274,11 +391,36 @@ export function ElosPage() {
               </MenuItem>
             ))}
           </TextField>
-          <TextField size="small" label="Nome" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          <TextField size="small" label="Posto/Grad" value={form.rank} onChange={(e) => setForm({ ...form, rank: e.target.value })} />
-          <TextField size="small" label="Telefone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-          <TextField size="small" label="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-          <TextField size="small" label="OM" value={form.om} onChange={(e) => setForm({ ...form, om: e.target.value })} />
+          <TextField
+            size="small"
+            label="Nome"
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+          />
+          <TextField
+            size="small"
+            label="Posto/Grad"
+            value={form.rank}
+            onChange={(e) => setForm({ ...form, rank: e.target.value })}
+          />
+          <TextField
+            size="small"
+            label="Telefone"
+            value={form.phone}
+            onChange={(e) => setForm({ ...form, phone: e.target.value })}
+          />
+          <TextField
+            size="small"
+            label="Email"
+            value={form.email}
+            onChange={(e) => setForm({ ...form, email: e.target.value })}
+          />
+          <TextField
+            size="small"
+            label="OM"
+            value={form.om}
+            onChange={(e) => setForm({ ...form, om: e.target.value })}
+          />
           <Stack direction="row" spacing={1}>
             <Button variant="contained" onClick={handleSave}>
               Salvar
@@ -292,4 +434,3 @@ export function ElosPage() {
     </Box>
   );
 }
-
