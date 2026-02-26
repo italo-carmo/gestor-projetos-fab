@@ -1118,7 +1118,13 @@ export function CpcaCasesPage() {
         anchor="right"
         open={drawerOpen}
         onClose={closeDrawer}
-        PaperProps={{ sx: { width: { xs: '100%', md: 900 } } }}
+        PaperProps={{
+          sx: {
+            width: { xs: '100%', md: 900 },
+            top: 84,
+            height: 'calc(100% - 84px)',
+          },
+        }}
       >
         <Box p={3} sx={{ height: '100%', overflowY: 'auto' }}>
           <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}>
