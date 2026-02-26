@@ -11,7 +11,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   useCreateElo,
@@ -154,6 +154,15 @@ export function ElosPage() {
     uniqueLocalities,
   ]);
 
+  const updateParam = useCallback((key: string, value: string) => {
+    const next = new URLSearchParams(params);
+    if (value) next.set(key, value);
+    else next.delete(key);
+    setParams(next);
+  }, [params, setParams]);
+
+  const clearFilters = useCallback(() => setParams({}), [setParams]);
+
   useEffect(() => {
     if (showAllLocalities || !localityId) return;
     const exists = localitiesWithRecruits.some(
@@ -162,16 +171,7 @@ export function ElosPage() {
     if (!exists) {
       updateParam("localityId", "");
     }
-  }, [localityId, localitiesWithRecruits, showAllLocalities]);
-
-  const updateParam = (key: string, value: string) => {
-    const next = new URLSearchParams(params);
-    if (value) next.set(key, value);
-    else next.delete(key);
-    setParams(next);
-  };
-
-  const clearFilters = () => setParams({});
+  }, [localityId, localitiesWithRecruits, showAllLocalities, updateParam]);
 
   const openCreate = () => {
     setEditing(null);
@@ -242,12 +242,6 @@ export function ElosPage() {
     }
   };
 
-  if (elosQuery.isLoading) return <SkeletonState />;
-  if (elosQuery.isError)
-    return (
-      <ErrorState error={elosQuery.error} onRetry={() => elosQuery.refetch()} />
-    );
-
   const canCreate = can(me, "elos", "create");
   const canUpdate = can(me, "elos", "update");
   const canDelete = can(me, "elos", "delete");
@@ -261,6 +255,12 @@ export function ElosPage() {
       localityIds.has(String(elo?.localityId ?? "")),
     );
   }, [elosQuery.data?.items, localitiesWithRecruits, showAllLocalities]);
+
+  if (elosQuery.isLoading) return <SkeletonState />;
+  if (elosQuery.isError)
+    return (
+      <ErrorState error={elosQuery.error} onRetry={() => elosQuery.refetch()} />
+    );
 
   return (
     <Box>

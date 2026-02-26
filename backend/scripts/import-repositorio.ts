@@ -541,6 +541,7 @@ async function upsertCatalog() {
     'Psicologia',
     'Serviço Social',
     'Jurídico',
+    'Doutrina',
     'Comunicação Social',
     'Estatística',
   ];

@@ -311,6 +311,14 @@ export class SocialCommunicationService {
     return payload;
   }
 
+  async getPublicPage(url: string, exp: string, sig: string) {
+    const normalizedUrl = this.normalizeUrl(url, 'url');
+    this.assertProxySignature('page', normalizedUrl, exp, sig);
+    const payload = await this.fetchRemoteHtml(normalizedUrl);
+    const html = this.rewriteHtmlForProxy(payload.html, payload.sourceUrl);
+    return { html };
+  }
+
   private assertEditorAccess(user?: RbacUser) {
     if (
       !hasAnyRole(user, [
@@ -345,8 +353,16 @@ export class SocialCommunicationService {
     )}&exp=${signature.exp}&sig=${encodeURIComponent(signature.sig)}`;
   }
 
+  private buildPageProxyPath(url: string) {
+    const normalizedUrl = this.normalizeUrl(url, 'url');
+    const signature = this.createProxySignature('page', normalizedUrl);
+    return `/social-communication/proxy/page?url=${encodeURIComponent(
+      normalizedUrl,
+    )}&exp=${signature.exp}&sig=${encodeURIComponent(signature.sig)}`;
+  }
+
   private createProxySignature(
-    type: 'content' | 'cover' | 'asset',
+    type: 'content' | 'cover' | 'asset' | 'page',
     value: string,
   ) {
     const exp = Date.now() + 1000 * 60 * 60 * 12;
@@ -358,7 +374,7 @@ export class SocialCommunicationService {
   }
 
   private assertProxySignature(
-    type: 'content' | 'cover' | 'asset',
+    type: 'content' | 'cover' | 'asset' | 'page',
     value: string,
     expRaw: string,
     sig: string,
@@ -486,6 +502,9 @@ export class SocialCommunicationService {
     output = output.replace(/<link\b[^>]*>/gi, (tag) =>
       this.rewriteLinkTag(tag, baseUrl),
     );
+    output = output.replace(/<a\b[^>]*>/gi, (tag) =>
+      this.rewriteAnchorTag(tag, baseUrl),
+    );
     output = output.replace(
       /<style\b[^>]*>([\s\S]*?)<\/style>/gi,
       (fullTag: string, cssContent: string) => {
@@ -521,36 +540,75 @@ export class SocialCommunicationService {
   }
 
   private rewriteScriptTag(tag: string, baseUrl: string) {
-    return this.rewriteTagAttribute(tag, 'src', (value) =>
+    let nextTag = this.rewriteTagAttribute(tag, 'src', (value) =>
       this.resolveProxyAssetValue(value, baseUrl),
     );
+    nextTag = this.rewriteTagAttribute(nextTag, 'data-src', (value) =>
+      this.resolveProxyAssetValue(value, baseUrl),
+    );
+    nextTag = this.rewriteTagAttribute(nextTag, 'data-href', (value) =>
+      this.resolveProxyAssetValue(value, baseUrl),
+    );
+    nextTag = this.removeTagAttribute(nextTag, 'integrity');
+    return nextTag;
   }
 
   private rewriteLinkTag(tag: string, baseUrl: string) {
     const attrs = this.parseTagAttributes(tag);
     const rel = String(attrs.rel ?? '').toLowerCase();
 
-    if (!this.shouldRewriteLinkTag(rel)) {
-      return tag;
+    if (this.shouldDropLinkTag(rel)) {
+      return '';
     }
 
-    return this.rewriteTagAttribute(tag, 'href', (value) =>
+    let nextTag = this.rewriteTagAttribute(tag, 'href', (value) =>
       this.resolveProxyAssetValue(value, baseUrl),
+    );
+    nextTag = this.rewriteTagAttribute(nextTag, 'src', (value) =>
+      this.resolveProxyAssetValue(value, baseUrl),
+    );
+    nextTag = this.rewriteTagAttribute(nextTag, 'data-href', (value) =>
+      this.resolveProxyAssetValue(value, baseUrl),
+    );
+    nextTag = this.rewriteTagAttribute(nextTag, 'data-src', (value) =>
+      this.resolveProxyAssetValue(value, baseUrl),
+    );
+    nextTag = this.rewriteTagAttribute(nextTag, 'imagesrcset', (value) =>
+      this.rewriteSrcset(value, baseUrl),
+    );
+    nextTag = this.rewriteTagAttribute(nextTag, 'srcset', (value) =>
+      this.rewriteSrcset(value, baseUrl),
+    );
+
+    // Some sites lazy-load CSS via data-src/data-href; set href directly to avoid style loss.
+    const stylesheetRel = rel.includes('stylesheet');
+    const cssCandidate = attrs.href || attrs['data-href'] || attrs['data-src'];
+    if (stylesheetRel && !attrs.href && cssCandidate) {
+      const proxied = this.resolveProxyAssetValue(cssCandidate, baseUrl);
+      nextTag = this.ensureTagAttribute(nextTag, 'href', proxied);
+    }
+
+    nextTag = this.removeTagAttribute(nextTag, 'integrity');
+    return nextTag;
+  }
+
+  private rewriteAnchorTag(tag: string, baseUrl: string) {
+    return this.rewriteTagAttribute(tag, 'href', (value) =>
+      this.resolveProxyNavigationValue(value, baseUrl),
     );
   }
 
-  private shouldRewriteLinkTag(rel: string) {
+  private shouldDropLinkTag(rel: string) {
     if (!rel.trim()) return false;
     return [
-      'stylesheet',
-      'preload',
-      'modulepreload',
-      'prefetch',
-      'manifest',
-      'icon',
-      'apple-touch-icon',
-      'mask-icon',
-      'shortcut',
+      'canonical',
+      'alternate',
+      'amphtml',
+      'shortlink',
+      'preconnect',
+      'dns-prefetch',
+      'pingback',
+      'author',
     ].some((value) => rel.includes(value));
   }
 
@@ -599,6 +657,27 @@ export class SocialCommunicationService {
     );
   }
 
+  private removeTagAttribute(tag: string, attribute: string) {
+    const escapedAttribute = attribute.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const quotedRegex = new RegExp(
+      `\\s+${escapedAttribute}\\s*=\\s*(?:"[^"]*"|'[^']*')`,
+      'gi',
+    );
+    const unquotedRegex = new RegExp(
+      `\\s+${escapedAttribute}\\s*=\\s*[^\\s"'=<>\\\`]+`,
+      'gi',
+    );
+    return tag.replace(quotedRegex, '').replace(unquotedRegex, '');
+  }
+
+  private ensureTagAttribute(tag: string, attribute: string, value: string) {
+    const escapedAttribute = attribute.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const attrRegex = new RegExp(`\\b${escapedAttribute}\\s*=`, 'i');
+    if (attrRegex.test(tag)) return tag;
+    const normalizedValue = value.replace(/"/g, '&quot;');
+    return tag.replace(/>$/, ` ${attribute}="${normalizedValue}">`);
+  }
+
   private rewriteSrcset(srcset: string, baseUrl: string) {
     const entries = srcset
       .split(',')
@@ -641,6 +720,21 @@ export class SocialCommunicationService {
     const resolved = this.resolveResourceUrl(value, baseUrl);
     if (!resolved) return value;
     return this.buildAssetProxyPath(resolved);
+  }
+
+  private resolveProxyNavigationValue(value: string, baseUrl: string) {
+    const resolved = this.resolveResourceUrl(value, baseUrl);
+    if (!resolved) return value;
+    if (this.isLikelyBinaryAsset(resolved)) {
+      return this.buildAssetProxyPath(resolved);
+    }
+    return this.buildPageProxyPath(resolved);
+  }
+
+  private isLikelyBinaryAsset(url: string) {
+    return /\.(pdf|csv|txt|xml|json|zip|rar|7z|gz|doc|docx|xls|xlsx|ppt|pptx|jpg|jpeg|png|gif|webp|svg|ico|mp3|wav|ogg|mp4|webm|mov|avi)(?:$|[?#])/i.test(
+      url,
+    );
   }
 
   private resolveResourceUrl(value: string, baseUrl: string) {

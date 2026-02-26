@@ -58,4 +58,17 @@ export class SocialCommunicationProxyController {
     res.setHeader('Cache-Control', 'public, max-age=3600');
     return res.send(payload.buffer);
   }
+
+  @Get('page')
+  async page(
+    @Query('url') url: string,
+    @Query('exp') exp: string,
+    @Query('sig') sig: string,
+    @Res() res: Response,
+  ) {
+    const payload = await this.socialCommunication.getPublicPage(url, exp, sig);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=600');
+    return res.send(payload.html);
+  }
 }
