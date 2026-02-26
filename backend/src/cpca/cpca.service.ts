@@ -145,65 +145,84 @@ export class CpcaService {
       accusedDefenseEnsured: payload.accusedDefenseEnsured ?? false,
     });
 
-    const created = await complaintModel.create({
-      data: {
-        caseNumber: await this.generateCaseNumber(locality.code ?? 'OM'),
-        localityId,
-        complaintType: payload.complaintType,
-        notifierType: payload.notifierType ?? 'VITIMA',
-        status,
-        procedureType,
-        incidentDate: payload.incidentDate ? new Date(payload.incidentDate) : null,
-        aggressorRank: this.cleanText(payload.aggressorRank),
-        aggressorGender: payload.aggressorGender,
-        victimRank: this.cleanText(payload.victimRank),
-        victimGender: payload.victimGender,
-        evidenceCount: payload.evidenceCount ?? 0,
-        evidenceSummary: this.cleanOptional(payload.evidenceSummary),
-        confidentialityTermSigned: payload.confidentialityTermSigned ?? false,
-        confidentialityHandlingNotes: this.cleanOptional(payload.confidentialityHandlingNotes),
-        cpcaMembersExcludedFromInquiry: payload.cpcaMembersExcludedFromInquiry ?? true,
-        immediateProtectionMeasures: this.cleanOptional(payload.immediateProtectionMeasures),
-        privateSupportActions: this.cleanOptional(payload.privateSupportActions),
-        psychologicalSupportProvided: payload.psychologicalSupportProvided ?? false,
-        medicalSupportProvided: payload.medicalSupportProvided ?? false,
-        socialSupportProvided: payload.socialSupportProvided ?? false,
-        legalSupportProvided: payload.legalSupportProvided ?? false,
-        contactRestrictionApplied: payload.contactRestrictionApplied ?? false,
-        preliminaryAnalysis: this.cleanOptional(payload.preliminaryAnalysis),
-        preliminaryReportGenerated: payload.preliminaryReportGenerated ?? false,
-        preliminaryReportDate: payload.preliminaryReportDate ? new Date(payload.preliminaryReportDate) : null,
-        procedureReference: this.cleanOptional(payload.procedureReference),
-        procedureNotes: this.cleanOptional(payload.procedureNotes),
-        womenLedHandlingPrioritized:
-          payload.womenLedHandlingPrioritized === undefined ? null : payload.womenLedHandlingPrioritized,
-        victimAccusedSeparationEvaluated: payload.victimAccusedSeparationEvaluated ?? false,
-        victimAccusedSeparationApplied: payload.victimAccusedSeparationApplied ?? false,
-        accusedDefenseEnsured: payload.accusedDefenseEnsured ?? false,
-        outcomeSummary: this.cleanOptional(payload.outcomeSummary),
-        notifierFeedbackSummary: this.cleanOptional(payload.notifierFeedbackSummary),
-        victimFeedbackSummary: this.cleanOptional(payload.victimFeedbackSummary),
-        notifierFeedbackDate: payload.notifierFeedbackDate
-          ? new Date(payload.notifierFeedbackDate)
-          : null,
-        victimFeedbackDate: payload.victimFeedbackDate
-          ? new Date(payload.victimFeedbackDate)
-          : null,
-        retaliationRisk: payload.retaliationRisk ?? false,
-        retaliationNotes: this.cleanOptional(payload.retaliationNotes),
-        outsourcedAccused: payload.outsourcedAccused ?? false,
-        contractorReferralDate: payload.contractorReferralDate
-          ? new Date(payload.contractorReferralDate)
-          : null,
-        contractorFollowUpNotes: this.cleanOptional(payload.contractorFollowUpNotes),
-        archivedAt: null,
-        createdById: actorId,
-        updatedById: actorId,
-      },
-      include: {
-        locality: { select: { id: true, code: true, name: true } },
-      },
-    });
+    const createData = {
+      localityId,
+      complaintType: payload.complaintType,
+      notifierType: payload.notifierType ?? 'VITIMA',
+      status,
+      procedureType,
+      incidentDate: payload.incidentDate ? new Date(payload.incidentDate) : null,
+      aggressorRank: this.cleanText(payload.aggressorRank),
+      aggressorGender: payload.aggressorGender,
+      victimRank: this.cleanText(payload.victimRank),
+      victimGender: payload.victimGender,
+      evidenceCount: payload.evidenceCount ?? 0,
+      evidenceSummary: this.cleanOptional(payload.evidenceSummary),
+      confidentialityTermSigned: payload.confidentialityTermSigned ?? false,
+      confidentialityHandlingNotes: this.cleanOptional(payload.confidentialityHandlingNotes),
+      cpcaMembersExcludedFromInquiry: payload.cpcaMembersExcludedFromInquiry ?? true,
+      immediateProtectionMeasures: this.cleanOptional(payload.immediateProtectionMeasures),
+      privateSupportActions: this.cleanOptional(payload.privateSupportActions),
+      psychologicalSupportProvided: payload.psychologicalSupportProvided ?? false,
+      medicalSupportProvided: payload.medicalSupportProvided ?? false,
+      socialSupportProvided: payload.socialSupportProvided ?? false,
+      legalSupportProvided: payload.legalSupportProvided ?? false,
+      contactRestrictionApplied: payload.contactRestrictionApplied ?? false,
+      preliminaryAnalysis: this.cleanOptional(payload.preliminaryAnalysis),
+      preliminaryReportGenerated: payload.preliminaryReportGenerated ?? false,
+      preliminaryReportDate: payload.preliminaryReportDate ? new Date(payload.preliminaryReportDate) : null,
+      procedureReference: this.cleanOptional(payload.procedureReference),
+      procedureNotes: this.cleanOptional(payload.procedureNotes),
+      womenLedHandlingPrioritized:
+        payload.womenLedHandlingPrioritized === undefined ? null : payload.womenLedHandlingPrioritized,
+      victimAccusedSeparationEvaluated: payload.victimAccusedSeparationEvaluated ?? false,
+      victimAccusedSeparationApplied: payload.victimAccusedSeparationApplied ?? false,
+      accusedDefenseEnsured: payload.accusedDefenseEnsured ?? false,
+      outcomeSummary: this.cleanOptional(payload.outcomeSummary),
+      notifierFeedbackSummary: this.cleanOptional(payload.notifierFeedbackSummary),
+      victimFeedbackSummary: this.cleanOptional(payload.victimFeedbackSummary),
+      notifierFeedbackDate: payload.notifierFeedbackDate
+        ? new Date(payload.notifierFeedbackDate)
+        : null,
+      victimFeedbackDate: payload.victimFeedbackDate
+        ? new Date(payload.victimFeedbackDate)
+        : null,
+      retaliationRisk: payload.retaliationRisk ?? false,
+      retaliationNotes: this.cleanOptional(payload.retaliationNotes),
+      outsourcedAccused: payload.outsourcedAccused ?? false,
+      contractorReferralDate: payload.contractorReferralDate
+        ? new Date(payload.contractorReferralDate)
+        : null,
+      contractorFollowUpNotes: this.cleanOptional(payload.contractorFollowUpNotes),
+      archivedAt: null,
+      createdById: actorId,
+      updatedById: actorId,
+    } as const;
+
+    let created: any = null;
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const nextCaseNumber = await this.generateCaseNumber(locality.code ?? 'OM');
+      try {
+        created = await complaintModel.create({
+          data: {
+            caseNumber: nextCaseNumber,
+            ...createData,
+          },
+          include: {
+            locality: { select: { id: true, code: true, name: true } },
+          },
+        });
+        break;
+      } catch (error) {
+        if (this.isCaseNumberConflict(error)) {
+          continue;
+        }
+        throw error;
+      }
+    }
+    if (!created) {
+      throwError('VALIDATION_ERROR', { reason: 'CASE_NUMBER_GENERATION_FAILED' });
+    }
 
     await historyModel.create({
       data: {
@@ -677,19 +696,40 @@ export class CpcaService {
       .replace(/[^A-Za-z0-9]/g, '')
       .toUpperCase()
       .slice(0, 6) || 'OM';
+    const prefix = `CPCA-${year}-${localityToken}-`;
+    const pattern = new RegExp(`^${prefix}(\\d{5})$`);
 
-    for (let i = 0; i < 5; i += 1) {
-      const suffix = `${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 90 + 10)}`;
-      const candidate = `CPCA-${year}-${localityToken}-${suffix}`;
-      const exists = await complaintModel.findUnique({
-        where: { caseNumber: candidate },
-        select: { id: true },
-      });
-      if (!exists) return candidate;
+    const existing = await complaintModel.findMany({
+      where: {
+        caseNumber: { startsWith: prefix },
+      },
+      select: { caseNumber: true },
+    });
+
+    let maxSequence = 0;
+    for (const item of existing ?? []) {
+      const match = pattern.exec(String(item.caseNumber ?? ''));
+      if (!match) continue;
+      const value = Number.parseInt(match[1], 10);
+      if (Number.isFinite(value) && value > maxSequence) {
+        maxSequence = value;
+      }
     }
 
-    throwError('VALIDATION_ERROR', {
-      reason: 'CASE_NUMBER_GENERATION_FAILED',
-    });
+    const nextSequence = String(maxSequence + 1).padStart(5, '0');
+    return `${prefix}${nextSequence}`;
+  }
+
+  private isCaseNumberConflict(error: unknown) {
+    const code = String((error as any)?.code ?? '');
+    if (code !== 'P2002') return false;
+    const target = (error as any)?.meta?.target;
+    if (Array.isArray(target)) {
+      return target.includes('caseNumber');
+    }
+    if (typeof target === 'string') {
+      return target.includes('caseNumber');
+    }
+    return true;
   }
 }
