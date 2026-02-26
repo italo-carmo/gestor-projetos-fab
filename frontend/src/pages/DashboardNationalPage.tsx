@@ -25,12 +25,12 @@ type NationalLocalityItem = {
   late: number;
   unassigned: number;
 };
-type NationalTaskItem = {
-  taskId: string;
+type NationalActivityItem = {
+  activityId: string;
   title: string;
   localityCode?: string | null;
   localityName?: string | null;
-  dueDate?: string | Date | null;
+  eventDate?: string | Date | null;
   status: string;
   isLate?: boolean;
 };
@@ -50,11 +50,14 @@ export function DashboardNationalPage() {
     .sort((a, b) => a.localityName.localeCompare(b.localityName, 'pt-BR'))
     .slice(0, 8);
   const totals = dashboardQuery.data?.totals ?? { late: 0, unassigned: 0, recruitsFemale: 0, reportsProduced: 0 };
-  const lateItems = (dashboardQuery.data?.lateItems ?? []) as NationalTaskItem[];
-  const unassignedItems = (dashboardQuery.data?.unassignedItems ?? []) as NationalTaskItem[];
-  const riskTasks = ((dashboardQuery.data?.riskTasks ?? []) as NationalTaskItem[]).slice(0, 5);
+  const lateItems = (dashboardQuery.data?.lateItems ?? []) as NationalActivityItem[];
+  const unassignedItems = (dashboardQuery.data?.unassignedItems ?? []) as NationalActivityItem[];
+  const riskTasks = ((dashboardQuery.data?.riskTasks ?? []) as NationalActivityItem[]).slice(0, 5);
   const detailItems = detailView === 'late' ? lateItems : detailView === 'unassigned' ? unassignedItems : [];
-  const detailTitle = detailView === 'late' ? 'Detalhes de tarefas atrasadas' : 'Detalhes de tarefas sem responsável';
+  const detailTitle =
+    detailView === 'late'
+      ? 'Detalhes de atividades atrasadas'
+      : 'Detalhes de atividades sem responsável';
 
   const kpiCards = [
     { label: 'Cobertura', value: `${smifLocalities.length}/${smifLocalities.length} localidades`, icon: <TargetIcon sx={{ fontSize: 28 }} />, bg: '#E8F8EF' },
@@ -105,7 +108,7 @@ export function DashboardNationalPage() {
           clickable
           variant={detailView === 'late' ? 'filled' : 'outlined'}
           onClick={() => setDetailView('late')}
-          label={`Tarefas atrasadas: ${totals.late}`}
+          label={`Atividades atrasadas: ${totals.late}`}
           color={totals.late > 0 ? 'error' : 'default'}
         />
         <Chip
@@ -128,7 +131,7 @@ export function DashboardNationalPage() {
             </Box>
             {detailItems.length === 0 ? (
               <Typography variant="body2" color="text.secondary">
-                Não há tarefas para este indicador.
+                Não há atividades para este indicador.
               </Typography>
             ) : (
               <Table size="small">
@@ -142,18 +145,18 @@ export function DashboardNationalPage() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {detailItems.map((task) => (
-                    <TableRow key={task.taskId} hover>
-                      <TableCell>{task.title}</TableCell>
-                      <TableCell>{task.localityCode || task.localityName || '—'}</TableCell>
+                  {detailItems.map((activity) => (
+                    <TableRow key={activity.activityId} hover>
+                      <TableCell>{activity.title}</TableCell>
+                      <TableCell>{activity.localityCode || activity.localityName || '—'}</TableCell>
                       <TableCell>
-                        <DueBadge dueDate={task.dueDate} status={task.status} />
+                        <DueBadge dueDate={activity.eventDate} status={activity.status} />
                       </TableCell>
                       <TableCell>
-                        <StatusChip status={task.status} isLate={task.isLate} />
+                        <StatusChip status={activity.status} isLate={activity.isLate} />
                       </TableCell>
                       <TableCell>
-                        <Link to={`/tasks?taskId=${task.taskId}`}>Abrir tarefa</Link>
+                        <Link to={`/activities?activityId=${activity.activityId}`}>Abrir atividade</Link>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -238,14 +241,20 @@ export function DashboardNationalPage() {
                 </Typography>
               ) : (
                 <Box display="grid" gap={1}>
-                  {riskTasks.map((task) => (
-                    <Card key={task.taskId} variant="outlined">
+                  {riskTasks.map((activity) => (
+                    <Card key={activity.activityId} variant="outlined">
                       <CardContent>
-                        <Typography variant="subtitle2">{task.title ?? 'Tarefa'}</Typography>
+                        <Typography variant="subtitle2">{activity.title ?? 'Atividade'}</Typography>
                         <Box display="flex" gap={1} flexWrap="wrap" mt={1}>
-                          <StatusChip status={task.status} isLate={task.isLate} />
-                          <DueBadge dueDate={task.dueDate} />
-                          {task.localityCode && <Chip size="small" label={task.localityCode} variant="outlined" />}
+                          <StatusChip status={activity.status} isLate={activity.isLate} />
+                          <DueBadge dueDate={activity.eventDate} />
+                          {activity.localityCode && (
+                            <Chip
+                              size="small"
+                              label={activity.localityCode}
+                              variant="outlined"
+                            />
+                          )}
                         </Box>
                       </CardContent>
                     </Card>

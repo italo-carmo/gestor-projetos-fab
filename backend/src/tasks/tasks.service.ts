@@ -1491,96 +1491,143 @@ export class TasksService {
     const localities = localityGroups.map((group) => group.canonical);
     const { aliasByLocalityId } = createTargetLocalityAliasMap(localityGroups);
     const localityAliasIds = Array.from(aliasByLocalityId.keys());
-    const reportsCount = await this.prisma.report.count();
-    const taskWhereClauses: Prisma.TaskInstanceWhereInput[] = [];
+    const activityWhereClauses: Prisma.ActivityWhereInput[] = [];
     if (localityAliasIds.length === 0) {
-      taskWhereClauses.push({ localityId: '__none__' });
+      activityWhereClauses.push({ localityId: '__none__' });
     } else {
-      taskWhereClauses.push({ localityId: { in: localityAliasIds } });
+      activityWhereClauses.push({ localityId: { in: localityAliasIds } });
     }
     if (constraints.specialtyId) {
-      taskWhereClauses.push({
+      activityWhereClauses.push({
         OR: [{ specialtyId: null }, { specialtyId: constraints.specialtyId }],
       });
     }
-    const accessWhere = this.buildTaskAccessWhere(user, 'view');
-    if (Object.keys(accessWhere).length > 0) {
-      taskWhereClauses.push(accessWhere);
-    }
-    const taskWhere: Prisma.TaskInstanceWhereInput =
-      taskWhereClauses.length === 1
-        ? taskWhereClauses[0]
-        : { AND: taskWhereClauses };
+    const activityWhere: Prisma.ActivityWhereInput =
+      activityWhereClauses.length === 1
+        ? activityWhereClauses[0]
+        : { AND: activityWhereClauses };
 
-    const tasks = await this.prisma.taskInstance.findMany({
-      where: taskWhere,
-      include: { locality: true, taskTemplate: true },
+    const activities = await this.prisma.activity.findMany({
+      where: activityWhere,
+      include: {
+        locality: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+          },
+        },
+        specialty: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        responsibles: {
+          select: {
+            userId: true,
+          },
+        },
+        report: {
+          select: {
+            id: true,
+            signedAt: true,
+            signatureHash: true,
+          },
+        },
+      },
     });
     const localityById = new Map(
       localities.map((locality) => [locality.id, locality]),
     );
-    const filteredTasks = tasks.filter((task) =>
-      aliasByLocalityId.has(task.localityId),
+    const filteredActivities = activities.filter((activity) =>
+      activity.localityId ? aliasByLocalityId.has(activity.localityId) : false,
     );
-    const statusById = new Map(
-      filteredTasks.map((task) => [task.id, task.status]),
-    );
-    const canonicalLocalityIdByTaskId = new Map<string, string>();
-    const tasksByLocalityId = new Map<
+    const canonicalLocalityIdByActivityId = new Map<string, string>();
+    const activitiesByLocalityId = new Map<
       string,
-      (typeof filteredTasks)[number][]
+      (typeof filteredActivities)[number][]
     >();
-    for (const task of filteredTasks) {
-      const canonicalId = aliasByLocalityId.get(task.localityId);
+    for (const activity of filteredActivities) {
+      const canonicalId = aliasByLocalityId.get(activity.localityId ?? '');
       if (!canonicalId) continue;
-      canonicalLocalityIdByTaskId.set(task.id, canonicalId);
-      const list = tasksByLocalityId.get(canonicalId) ?? [];
-      list.push(task);
-      tasksByLocalityId.set(canonicalId, list);
+      canonicalLocalityIdByActivityId.set(activity.id, canonicalId);
+      const list = activitiesByLocalityId.get(canonicalId) ?? [];
+      list.push(activity);
+      activitiesByLocalityId.set(canonicalId, list);
     }
+    const now = Date.now();
+    const progressWeightByStatus: Record<ActivityStatus, number> = {
+      [ActivityStatus.NOT_STARTED]: 0,
+      [ActivityStatus.IN_PROGRESS]: 50,
+      [ActivityStatus.DONE]: 100,
+      [ActivityStatus.CANCELLED]: 100,
+    };
+    const isLateActivity = (
+      activity: (typeof filteredActivities)[number],
+    ): boolean => {
+      if (!activity.eventDate) return false;
+      if (
+        activity.status === ActivityStatus.DONE ||
+        activity.status === ActivityStatus.CANCELLED
+      ) {
+        return false;
+      }
+      return activity.eventDate.getTime() < now;
+    };
+    const hasResponsible = (
+      activity: (typeof filteredActivities)[number],
+    ): boolean =>
+      Array.isArray(activity.responsibles) &&
+      activity.responsibles.some((entry) => Boolean(entry?.userId));
+    const hasSignedReport = (
+      activity: (typeof filteredActivities)[number],
+    ): boolean =>
+      Boolean(activity.report?.signedAt && activity.report?.signatureHash);
 
-    const mapNationalTaskDetail = (task: (typeof tasks)[number]) => {
+    const mapNationalActivityDetail = (
+      activity: (typeof filteredActivities)[number],
+    ) => {
       const canonicalId =
-        canonicalLocalityIdByTaskId.get(task.id) ?? task.localityId;
+        canonicalLocalityIdByActivityId.get(activity.id) ??
+        activity.localityId ??
+        '';
       const locality = localityById.get(canonicalId);
-      const isLate = this.isLate(task);
-      const isUnassigned = this.isTaskUnassigned(task);
-      const isBlocked = this.isBlocked(
-        task.blockedByIdsJson as string[] | null | undefined,
-        statusById,
-      );
+      const isLate = isLateActivity(activity);
       return {
-        taskId: task.id,
-        title: task.taskTemplate?.title ?? 'Tarefa',
+        activityId: activity.id,
+        title: activity.title ?? 'Atividade',
         localityId: canonicalId,
         localityCode: locality?.code ?? '',
         localityName: locality?.name ?? '',
-        phaseId: task.taskTemplate?.phaseId ?? null,
-        dueDate: task.dueDate,
-        status: task.status,
-        priority: task.priority,
-        progressPercent: task.progressPercent,
+        specialtyId: activity.specialtyId ?? null,
+        specialtyName: activity.specialty?.name ?? '',
+        eventDate: activity.eventDate ?? null,
+        createdAt: activity.createdAt,
+        status: activity.status,
+        reportRequired: activity.reportRequired,
+        hasSignedReport: hasSignedReport(activity),
         isLate,
-        isUnassigned,
-        isBlocked,
+        isUnassigned: !hasResponsible(activity),
       };
     };
 
     const perLocality = localities.map((locality) => {
-      const localityTasks = tasksByLocalityId.get(locality.id) ?? [];
-      const late = localityTasks.filter((task) => this.isLate(task)).length;
-      const blocked = localityTasks.filter((task) =>
-        this.isBlocked(
-          task.blockedByIdsJson as string[] | null | undefined,
-          statusById,
-        ),
+      const localityActivities = activitiesByLocalityId.get(locality.id) ?? [];
+      const late = localityActivities.filter((activity) =>
+        isLateActivity(activity),
       ).length;
-      const unassigned = localityTasks.filter((task) =>
-        this.isTaskUnassigned(task),
+      const unassigned = localityActivities.filter(
+        (activity) => !hasResponsible(activity),
       ).length;
-      const progress = localityTasks.length
-        ? localityTasks.reduce((acc, task) => acc + task.progressPercent, 0) /
-          localityTasks.length
+      const progress = localityActivities.length
+        ? Math.round(
+            localityActivities.reduce(
+              (acc, activity) =>
+                acc + progressWeightByStatus[activity.status],
+              0,
+            ) / localityActivities.length,
+          )
         : 0;
 
       return {
@@ -1599,7 +1646,7 @@ export class TasksService {
         notes: locality.notes ?? null,
         progress,
         late,
-        blocked,
+        blocked: 0,
         unassigned,
       };
     });
@@ -1608,19 +1655,32 @@ export class TasksService {
       (acc, l) => acc + (l.recruitsFemaleCountCurrent ?? 0),
       0,
     );
-    const lateItems = filteredTasks
-      .filter((task) => this.isLate(task))
-      .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())
-      .map((task) => mapNationalTaskDetail(task));
-    const unassignedItems = filteredTasks
-      .filter((task) => this.isTaskUnassigned(task))
-      .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())
-      .map((task) => mapNationalTaskDetail(task));
-    const riskTasks = filteredTasks
-      .filter((task) => this.isLate(task) || this.isTaskUnassigned(task))
-      .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())
+    const sortByEventDate = (
+      a: (typeof filteredActivities)[number],
+      b: (typeof filteredActivities)[number],
+    ) => {
+      const left = (a.eventDate ?? a.createdAt).getTime();
+      const right = (b.eventDate ?? b.createdAt).getTime();
+      return left - right;
+    };
+    const lateItems = filteredActivities
+      .filter((activity) => isLateActivity(activity))
+      .sort(sortByEventDate)
+      .map((activity) => mapNationalActivityDetail(activity));
+    const unassignedItems = filteredActivities
+      .filter((activity) => !hasResponsible(activity))
+      .sort(sortByEventDate)
+      .map((activity) => mapNationalActivityDetail(activity));
+    const riskTasks = filteredActivities
+      .filter(
+        (activity) => isLateActivity(activity) || !hasResponsible(activity),
+      )
+      .sort(sortByEventDate)
       .slice(0, 10)
-      .map((task) => mapNationalTaskDetail(task));
+      .map((activity) => mapNationalActivityDetail(activity));
+    const reportsCount = filteredActivities.filter((activity) =>
+      Boolean(activity.report?.id),
+    ).length;
 
     return {
       items: perLocality,

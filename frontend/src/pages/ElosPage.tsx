@@ -29,7 +29,10 @@ import { SkeletonState } from "../components/states/SkeletonState";
 import { useToast } from "../app/toast";
 import { parseApiError } from "../app/apiErrors";
 import { can } from "../app/rbac";
-import { normalizeLocalityName } from "../constants/localities";
+import {
+  normalizeLocalityName,
+  selectTargetLocalities,
+} from "../constants/localities";
 
 export function ElosPage() {
   const [params, setParams] = useSearchParams();
@@ -80,37 +83,7 @@ export function ElosPage() {
 
   const allLocalities = localitiesQuery.data?.items ?? [];
   const uniqueLocalities = useMemo(() => {
-    const byNormalizedName = new Map<string, any>();
-
-    for (const locality of allLocalities) {
-      const id = String(locality?.id ?? "").trim();
-      if (!id) continue;
-
-      const normalizedName =
-        normalizeLocalityName(locality?.name) || `id:${id}`;
-      const current = byNormalizedName.get(normalizedName);
-      if (!current) {
-        byNormalizedName.set(normalizedName, locality);
-        continue;
-      }
-
-      const currentRecruits = Number(current?.recruitsFemaleCountCurrent ?? 0);
-      const nextRecruits = Number(locality?.recruitsFemaleCountCurrent ?? 0);
-      if (nextRecruits > currentRecruits) {
-        byNormalizedName.set(normalizedName, locality);
-        continue;
-      }
-
-      if (nextRecruits === currentRecruits) {
-        const currentUpdated = new Date(current?.updatedAt ?? 0).getTime();
-        const nextUpdated = new Date(locality?.updatedAt ?? 0).getTime();
-        if (nextUpdated > currentUpdated) {
-          byNormalizedName.set(normalizedName, locality);
-        }
-      }
-    }
-
-    return Array.from(byNormalizedName.values()).sort((a: any, b: any) =>
+    return selectTargetLocalities(allLocalities as any[]).sort((a: any, b: any) =>
       String(a?.name ?? "").localeCompare(String(b?.name ?? ""), "pt-BR"),
     );
   }, [allLocalities]);
@@ -249,11 +222,23 @@ export function ElosPage() {
     const items = elosQuery.data?.items ?? [];
     if (showAllLocalities) return items;
     const localityIds = new Set(
-      localitiesWithRecruits.map((locality: any) => String(locality?.id ?? "")),
+      localitiesWithRecruits.map((locality: any) =>
+        String(locality?.id ?? "").trim(),
+      ),
     );
-    return items.filter((elo: any) =>
-      localityIds.has(String(elo?.localityId ?? "")),
+    const localityNameKeys = new Set(
+      localitiesWithRecruits
+        .map((locality: any) => normalizeLocalityName(locality?.name))
+        .filter(Boolean),
     );
+    return items.filter((elo: any) => {
+      const eloLocalityId = String(elo?.localityId ?? "").trim();
+      if (eloLocalityId && localityIds.has(eloLocalityId)) return true;
+      const eloLocalityNameKey = normalizeLocalityName(elo?.locality?.name);
+      return Boolean(
+        eloLocalityNameKey && localityNameKeys.has(eloLocalityNameKey),
+      );
+    });
   }, [elosQuery.data?.items, localitiesWithRecruits, showAllLocalities]);
 
   if (elosQuery.isLoading) return <SkeletonState />;
