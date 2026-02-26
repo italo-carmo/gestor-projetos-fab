@@ -5,6 +5,7 @@ export const ROLE_COMISSAO_CIPAVD = 'Comissão CIPAVD';
 export const ROLE_COMGEP = 'COMGEP';
 export const ROLE_COMANDANTE_COMGEP = ROLE_COMGEP;
 export const ROLE_TI = 'TI';
+export const ROLE_CPCA = 'CPCA';
 export const ROLE_GSD_LOCALIDADE = 'GSD Localidade';
 
 const COMGEP_ROLE_ALIASES = new Set(['comgep', 'comandante comgep']);
@@ -73,6 +74,7 @@ export function canEditRecruitsCount(
 
 export function resolveHomePath(user: MePayload | undefined) {
   if (hasNationalManagementScope(user)) return '/dashboard/national';
+  if (can(user, 'cpca_cases', 'view')) return '/cpca-cases';
   if (can(user, 'task_instances', 'view')) return '/activities';
   return '/dashboard/executive';
 }

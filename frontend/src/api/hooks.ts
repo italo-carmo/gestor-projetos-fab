@@ -1608,6 +1608,60 @@ export function useAuditLogs(filters: Record<string, any>) {
   });
 }
 
+/** CPCA cases */
+export function useCpcaCases(filters: Record<string, any>, enabled = true) {
+  return useQuery({
+    queryKey: qk.cpcaCases(filters),
+    queryFn: async () => (await api.get("/cpca-cases", { params: filters })).data,
+    enabled,
+    staleTime: 10_000,
+  });
+}
+
+export function useCpcaCase(id: string, enabled = true) {
+  return useQuery({
+    queryKey: qk.cpcaCase(id || ""),
+    queryFn: async () => (await api.get(`/cpca-cases/${id}`)).data,
+    enabled: Boolean(id) && enabled,
+    staleTime: 10_000,
+  });
+}
+
+export function useCreateCpcaCase() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: Record<string, any>) =>
+      (await api.post("/cpca-cases", payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cpcaCases"] });
+    },
+  });
+}
+
+export function useUpdateCpcaCase() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; payload: Record<string, any> }) =>
+      (await api.put(`/cpca-cases/${args.id}`, args.payload)).data,
+    onSuccess: (_data, args) => {
+      qc.invalidateQueries({ queryKey: ["cpcaCases"] });
+      qc.invalidateQueries({ queryKey: qk.cpcaCase(args.id) });
+    },
+  });
+}
+
+export function useAddCpcaCaseComment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; text: string }) =>
+      (await api.post(`/cpca-cases/${args.id}/comments`, { text: args.text })).data,
+    onSuccess: (_data, args) => {
+      qc.invalidateQueries({ queryKey: ["cpcaCases"] });
+      qc.invalidateQueries({ queryKey: qk.cpcaCase(args.id) });
+    },
+  });
+}
+
 export function useLocalities(enabled = true) {
   return useQuery({
     queryKey: qk.localities,

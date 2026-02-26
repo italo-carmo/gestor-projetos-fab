@@ -50,6 +50,10 @@ model User {
   auditLogs        AuditLog[]
   meetingParticipations MeetingParticipant[]
   biSurveyImportBatches BiSurveyImportBatch[]
+  cpcaCasesCreated CpcComplaintCase[] @relation("CpcComplaintCaseCreatedBy")
+  cpcaCasesUpdated CpcComplaintCase[] @relation("CpcComplaintCaseUpdatedBy")
+  cpcaCaseComments CpcComplaintComment[] @relation("CpcComplaintCommentAuthor")
+  cpcaCaseStatusChanges CpcComplaintStatusHistory[] @relation("CpcComplaintStatusChangedBy")
 }
 
 model UserModuleAccessOverride {
@@ -155,6 +159,7 @@ model Locality {
   checklistItemStatuses      ChecklistItemStatus[]
   kpiValues                  KpiValue[]
   auditLogs                  AuditLog[]
+  cpcaCases                  CpcComplaintCase[]
 }
 
 model Activity {
@@ -789,6 +794,99 @@ model RecruitsHistory {
   @@unique([localityId, date])
 }
 
+model CpcComplaintCase {
+  id                              String             @id @default(cuid())
+  caseNumber                      String             @unique
+  localityId                      String
+  complaintType                   CpcComplaintType
+  notifierType                    CpcNotifierType    @default(VITIMA)
+  status                          CpcComplaintStatus @default(RECEIVED)
+  procedureType                   CpcProcedureType   @default(NOT_DEFINED)
+  incidentDate                    DateTime?
+  reportedAt                      DateTime           @default(now())
+  aggressorRank                   String
+  aggressorGender                 CpcGender
+  victimRank                      String
+  victimGender                    CpcGender
+  evidenceCount                   Int                @default(0)
+  evidenceSummary                 String?
+  confidentialityTermSigned       Boolean            @default(false)
+  confidentialityHandlingNotes    String?
+  cpcaMembersExcludedFromInquiry  Boolean            @default(true)
+  immediateProtectionMeasures     String?
+  privateSupportActions           String?
+  psychologicalSupportProvided    Boolean            @default(false)
+  medicalSupportProvided          Boolean            @default(false)
+  socialSupportProvided           Boolean            @default(false)
+  legalSupportProvided            Boolean            @default(false)
+  contactRestrictionApplied       Boolean            @default(false)
+  preliminaryAnalysis             String?
+  preliminaryReportGenerated      Boolean            @default(false)
+  preliminaryReportDate           DateTime?
+  procedureReference              String?
+  procedureNotes                  String?
+  womenLedHandlingPrioritized     Boolean?
+  victimAccusedSeparationEvaluated Boolean           @default(false)
+  victimAccusedSeparationApplied  Boolean            @default(false)
+  accusedDefenseEnsured           Boolean            @default(false)
+  outcomeSummary                  String?
+  notifierFeedbackSummary         String?
+  victimFeedbackSummary           String?
+  notifierFeedbackDate            DateTime?
+  victimFeedbackDate              DateTime?
+  retaliationRisk                 Boolean            @default(false)
+  retaliationNotes                String?
+  outsourcedAccused               Boolean            @default(false)
+  contractorReferralDate          DateTime?
+  contractorFollowUpNotes         String?
+  archivedAt                      DateTime?
+  createdById                     String
+  updatedById                     String?
+  createdAt                       DateTime           @default(now())
+  updatedAt                       DateTime           @updatedAt
+
+  locality                        Locality           @relation(fields: [localityId], references: [id])
+  createdBy                       User               @relation("CpcComplaintCaseCreatedBy", fields: [createdById], references: [id])
+  updatedBy                       User?              @relation("CpcComplaintCaseUpdatedBy", fields: [updatedById], references: [id])
+  comments                        CpcComplaintComment[]
+  statusHistory                   CpcComplaintStatusHistory[]
+
+  @@index([localityId, status])
+  @@index([complaintType, status])
+  @@index([procedureType])
+  @@index([reportedAt])
+}
+
+model CpcComplaintComment {
+  id              String            @id @default(cuid())
+  complaintCaseId String
+  text            String
+  createdById     String
+  createdAt       DateTime          @default(now())
+
+  complaintCase   CpcComplaintCase  @relation(fields: [complaintCaseId], references: [id], onDelete: Cascade)
+  createdBy       User              @relation("CpcComplaintCommentAuthor", fields: [createdById], references: [id])
+
+  @@index([complaintCaseId, createdAt])
+}
+
+model CpcComplaintStatusHistory {
+  id              String             @id @default(cuid())
+  complaintCaseId String
+  fromStatus      CpcComplaintStatus?
+  toStatus        CpcComplaintStatus
+  fromProcedure   CpcProcedureType?
+  toProcedure     CpcProcedureType
+  note            String?
+  changedById     String
+  changedAt       DateTime           @default(now())
+
+  complaintCase   CpcComplaintCase   @relation(fields: [complaintCaseId], references: [id], onDelete: Cascade)
+  changedBy       User               @relation("CpcComplaintStatusChangedBy", fields: [changedById], references: [id])
+
+  @@index([complaintCaseId, changedAt])
+}
+
 model AuditLog {
   id        String   @id @default(cuid())
   userId    String?
@@ -934,6 +1032,41 @@ enum ChecklistItemStatusType {
   NOT_STARTED
   IN_PROGRESS
   DONE
+}
+
+enum CpcComplaintType {
+  MORAL
+  SEXUAL
+}
+
+enum CpcNotifierType {
+  VITIMA
+  TESTEMUNHA
+  TERCEIRO
+}
+
+enum CpcComplaintStatus {
+  RECEIVED
+  PROTECTION_MEASURES
+  PRELIMINARY_ANALYSIS
+  PROCEDURE_DEFINED
+  INVESTIGATION
+  CONCLUDED
+  ARCHIVED
+}
+
+enum CpcProcedureType {
+  NOT_DEFINED
+  PATD
+  SINDICANCIA
+  PAD
+  IPM
+}
+
+enum CpcGender {
+  MASCULINO
+  FEMININO
+  NAO_INFORMADO
 }
 
 enum PermissionScope {

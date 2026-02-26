@@ -10,6 +10,7 @@ import { FabLdapService } from '../ldap/fab-ldap.service';
 import {
   canonicalRoleName,
   ROLE_COMISSAO_CIPAVD,
+  ROLE_CPCA,
   normalizeRoleName,
   ROLE_COMANDANTE_COMGEP,
   ROLE_COORDENACAO_CIPAVD,
@@ -37,6 +38,7 @@ const LOCALITY_REQUIRED_ROLE_NAMES = new Set([
   'gsd localidade',
   'admin localidade',
   'administracao local',
+  'cpca',
 ]);
 
 const SPECIALTY_REQUIRED_ROLE_NAMES = new Set([
@@ -790,6 +792,7 @@ export class RbacService {
       [normalizeRoleName(ROLE_COMISSAO_CIPAVD), 1],
       [normalizeRoleName(ROLE_COORDENACAO_CIPAVD), 2],
       [normalizeRoleName(ROLE_COMANDANTE_COMGEP), 3],
+      [normalizeRoleName(ROLE_CPCA), 4],
     ]);
 
     const sorted = [...roles].sort((a, b) => {

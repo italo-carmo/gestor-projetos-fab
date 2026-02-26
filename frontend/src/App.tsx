@@ -25,12 +25,14 @@ import { DocumentsPage } from './pages/DocumentsPage';
 import { BiSurveyDashboardPage } from './pages/BiSurveyDashboardPage';
 import { MissionsPage } from './pages/MissionsPage';
 import { SocialCommunicationPage } from './pages/SocialCommunicationPage';
+import { CpcaCasesPage } from './pages/CpcaCasesPage';
 import { RequireAuth } from './app/RequireAuth';
 import { RequireRoleAccess } from './app/RequireRoleAccess';
 import {
   hasAnyRole,
   hasNationalManagementScope,
   ROLE_COMANDANTE_COMGEP,
+  ROLE_CPCA,
   resolveHomePath,
   ROLE_COORDENACAO_CIPAVD,
   ROLE_TI,
@@ -83,6 +85,18 @@ function App() {
                 />
                 <Route path="/dashboard/locality/:id" element={<DashboardLocalityPage />} />
                 <Route path="/tasks" element={<TasksPage />} />
+                <Route
+                  path="/cpca-cases"
+                  element={
+                    <RequireRoleAccess
+                      allow={(user) =>
+                        hasAnyRole(user, [ROLE_CPCA, ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP])
+                      }
+                    >
+                      <CpcaCasesPage />
+                    </RequireRoleAccess>
+                  }
+                />
                 <Route
                   path="/missions"
                   element={

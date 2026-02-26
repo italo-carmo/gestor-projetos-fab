@@ -46,4 +46,6 @@ export const qk = {
   biSurveyResponses: (filters: Record<string, any>) => ["biSurvey", "responses", filters] as const,
   biSurveyImports: (filters: Record<string, any>) => ["biSurvey", "imports", filters] as const,
   biSurveyQuestions: (filters: Record<string, any>) => ["biSurvey", "questions", filters] as const,
+  cpcaCases: (filters: Record<string, any>) => ["cpcaCases", filters] as const,
+  cpcaCase: (id: string) => ["cpcaCase", id] as const,
 };

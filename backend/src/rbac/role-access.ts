@@ -5,6 +5,7 @@ export const ROLE_COMISSAO_CIPAVD = 'Comissão CIPAVD';
 export const ROLE_COMGEP = 'COMGEP';
 export const ROLE_COMANDANTE_COMGEP = ROLE_COMGEP;
 export const ROLE_TI = 'TI';
+export const ROLE_CPCA = 'CPCA';
 export const ROLE_GSD_LOCALIDADE = 'GSD Localidade';
 export const ROLE_ADMIN_ESPECIALIDADE_LOCAL = 'Admin Especialidade Local';
 export const ROLE_ADMIN_ESPECIALIDADE_NACIONAL = 'Admin Especialidade Nacional';
@@ -121,4 +122,8 @@ export function canEditRecruitsByRole(
     return true;
   }
   return false;
+}
+
+export function hasCpcaWorkflowAccess(user: RbacUser | undefined) {
+  return hasAnyRole(user, [ROLE_CPCA, ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP]);
 }

@@ -25,6 +25,7 @@ import { BiModule } from './bi/bi.module';
 import { FabLdapModule } from './ldap/fab-ldap.module';
 import { MissionsModule } from './missions/missions.module';
 import { SocialCommunicationModule } from './social-communication/social-communication.module';
+import { CpcaModule } from './cpca/cpca.module';
 
 @Module({
   imports: [
@@ -57,6 +58,7 @@ import { SocialCommunicationModule } from './social-communication/social-communi
     FabLdapModule,
     MissionsModule,
     SocialCommunicationModule,
+    CpcaModule,
   ],
   controllers: [AppController],
   providers: [AppService],

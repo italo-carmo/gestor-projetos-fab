@@ -44,6 +44,7 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import ChevronLeftRoundedIcon from '@mui/icons-material/ChevronLeftRounded';
 import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
 import InsightsRoundedIcon from '@mui/icons-material/InsightsRounded';
+import PolicyRoundedIcon from '@mui/icons-material/PolicyRounded';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { useDebounce } from '../app/useDebounce';
 import { can } from '../app/rbac';
@@ -52,6 +53,7 @@ import {
   hasAnyRole,
   hasNationalManagementScope,
   ROLE_COMANDANTE_COMGEP,
+  ROLE_CPCA,
   ROLE_COORDENACAO_CIPAVD,
   ROLE_TI,
 } from '../app/roleAccess';
@@ -68,6 +70,7 @@ const navItems = [
   { label: 'Painel de Comando', to: '/dashboard/national', icon: <DashboardIcon fontSize="small" /> },
   { label: 'Painel Exec.', to: '/dashboard/executive', icon: <DashboardIcon fontSize="small" /> },
   { label: 'BI Pesquisas', to: '/dashboard/bi', icon: <InsightsRoundedIcon fontSize="small" /> },
+  { label: 'CPCA Denúncias', to: '/cpca-cases', icon: <PolicyRoundedIcon fontSize="small" /> },
   { label: 'Missões', to: '/missions', icon: <FlagRoundedIcon fontSize="small" /> },
   { label: 'Atividades de Campo', to: '/activities', icon: <EventNoteIcon fontSize="small" /> },
   { label: 'Tarefas', to: '/tasks', icon: <TaskIcon fontSize="small" /> },
@@ -148,6 +151,9 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
     if (item.to === '/missions') {
       return hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI]);
+    }
+    if (item.to === '/cpca-cases') {
+      return hasAnyRole(me, [ROLE_CPCA, ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP]) && can(me, 'cpca_cases', 'view');
     }
     if (item.to === '/audit') {
       return hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]);
