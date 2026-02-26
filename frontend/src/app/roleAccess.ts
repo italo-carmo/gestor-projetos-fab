@@ -1,6 +1,7 @@
 import { can } from './rbac';
 
 export const ROLE_COORDENACAO_CIPAVD = 'Coordenação CIPAVD';
+export const ROLE_COMISSAO_CIPAVD = 'Comissão CIPAVD';
 export const ROLE_COMANDANTE_COMGEP = 'Comandante COMGEP';
 export const ROLE_TI = 'TI';
 export const ROLE_GSD_LOCALIDADE = 'GSD Localidade';
@@ -38,6 +39,7 @@ export function hasAnyRole(user: MePayload | undefined, roleNames: string[]) {
 export function isNationalCommissionMember(user: MePayload | undefined) {
   return hasAnyRole(user, [
     ROLE_COORDENACAO_CIPAVD,
+    ROLE_COMISSAO_CIPAVD,
     ROLE_COMANDANTE_COMGEP,
   ]);
 }
@@ -51,7 +53,8 @@ export function canEditRecruitsCount(
   targetLocalityId: string,
 ) {
   if (!user) return false;
-  if (hasRole(user, ROLE_COORDENACAO_CIPAVD)) return true;
+  if (hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_COMISSAO_CIPAVD]))
+    return true;
   if (hasRole(user, ROLE_GSD_LOCALIDADE) && user.localityId === targetLocalityId) return true;
   return false;
 }
