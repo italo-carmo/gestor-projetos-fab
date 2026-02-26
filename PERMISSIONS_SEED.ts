@@ -2967,6 +2967,11 @@ export const ROLE_SUGGESTIONS: Record<string, SeedRolePermission[]> = {
       "scope": "NATIONAL"
     },
     {
+      "resource": "localities",
+      "action": "view",
+      "scope": "NATIONAL"
+    },
+    {
       "resource": "meetings",
       "action": "view",
       "scope": "NATIONAL"
