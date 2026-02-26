@@ -11,7 +11,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   useCreateElo,
@@ -29,6 +29,7 @@ import { SkeletonState } from "../components/states/SkeletonState";
 import { useToast } from "../app/toast";
 import { parseApiError } from "../app/apiErrors";
 import { can } from "../app/rbac";
+import { normalizeLocalityName } from "../constants/localities";
 
 export function ElosPage() {
   const [params, setParams] = useSearchParams();
@@ -78,17 +79,53 @@ export function ElosPage() {
   });
 
   const allLocalities = localitiesQuery.data?.items ?? [];
+  const uniqueLocalities = useMemo(() => {
+    const byNormalizedName = new Map<string, any>();
+
+    for (const locality of allLocalities) {
+      const id = String(locality?.id ?? "").trim();
+      if (!id) continue;
+
+      const normalizedName =
+        normalizeLocalityName(locality?.name) || `id:${id}`;
+      const current = byNormalizedName.get(normalizedName);
+      if (!current) {
+        byNormalizedName.set(normalizedName, locality);
+        continue;
+      }
+
+      const currentRecruits = Number(current?.recruitsFemaleCountCurrent ?? 0);
+      const nextRecruits = Number(locality?.recruitsFemaleCountCurrent ?? 0);
+      if (nextRecruits > currentRecruits) {
+        byNormalizedName.set(normalizedName, locality);
+        continue;
+      }
+
+      if (nextRecruits === currentRecruits) {
+        const currentUpdated = new Date(current?.updatedAt ?? 0).getTime();
+        const nextUpdated = new Date(locality?.updatedAt ?? 0).getTime();
+        if (nextUpdated > currentUpdated) {
+          byNormalizedName.set(normalizedName, locality);
+        }
+      }
+    }
+
+    return Array.from(byNormalizedName.values()).sort((a: any, b: any) =>
+      String(a?.name ?? "").localeCompare(String(b?.name ?? ""), "pt-BR"),
+    );
+  }, [allLocalities]);
+
   const localitiesWithRecruits = useMemo(
     () =>
-      allLocalities.filter(
+      uniqueLocalities.filter(
         (locality: any) =>
           Number(locality?.recruitsFemaleCountCurrent ?? 0) > 0,
       ),
-    [allLocalities],
+    [uniqueLocalities],
   );
 
   const selectableLocalities = useMemo(() => {
-    const base = showAllLocalities ? allLocalities : localitiesWithRecruits;
+    const base = showAllLocalities ? uniqueLocalities : localitiesWithRecruits;
     const byId = new Map<string, any>();
 
     for (const locality of base) {
@@ -100,7 +137,7 @@ export function ElosPage() {
     for (const preservedId of [localityId, form.localityId]) {
       const id = String(preservedId ?? "").trim();
       if (!id || byId.has(id)) continue;
-      const found = allLocalities.find(
+      const found = uniqueLocalities.find(
         (locality: any) => String(locality?.id ?? "") === id,
       );
       if (found) byId.set(id, found);
@@ -110,12 +147,22 @@ export function ElosPage() {
       String(a?.name ?? "").localeCompare(String(b?.name ?? ""), "pt-BR"),
     );
   }, [
-    allLocalities,
     form.localityId,
     localityId,
     localitiesWithRecruits,
     showAllLocalities,
+    uniqueLocalities,
   ]);
+
+  useEffect(() => {
+    if (showAllLocalities || !localityId) return;
+    const exists = localitiesWithRecruits.some(
+      (locality: any) => String(locality?.id ?? "") === localityId,
+    );
+    if (!exists) {
+      updateParam("localityId", "");
+    }
+  }, [localityId, localitiesWithRecruits, showAllLocalities]);
 
   const updateParam = (key: string, value: string) => {
     const next = new URLSearchParams(params);
@@ -204,6 +251,16 @@ export function ElosPage() {
   const canCreate = can(me, "elos", "create");
   const canUpdate = can(me, "elos", "update");
   const canDelete = can(me, "elos", "delete");
+  const renderedItems = useMemo(() => {
+    const items = elosQuery.data?.items ?? [];
+    if (showAllLocalities) return items;
+    const localityIds = new Set(
+      localitiesWithRecruits.map((locality: any) => String(locality?.id ?? "")),
+    );
+    return items.filter((elo: any) =>
+      localityIds.has(String(elo?.localityId ?? "")),
+    );
+  }, [elosQuery.data?.items, localitiesWithRecruits, showAllLocalities]);
 
   return (
     <Box>
@@ -265,14 +322,14 @@ export function ElosPage() {
         </CardContent>
       </Card>
 
-      {(elosQuery.data?.items ?? []).length === 0 && (
+      {renderedItems.length === 0 && (
         <EmptyState
           title="Nenhum elo cadastrado"
           description="Cadastre os contatos das localidades."
         />
       )}
 
-      {(elosQuery.data?.items ?? []).length > 0 && (
+      {renderedItems.length > 0 && (
         <Card>
           <CardContent>
             <Box
@@ -303,7 +360,7 @@ export function ElosPage() {
                 </Box>
               </Box>
               <Box component="tbody">
-                {(elosQuery.data?.items ?? []).map((elo: any) => (
+                {renderedItems.map((elo: any) => (
                   <Box
                     key={elo.id}
                     component="tr"
