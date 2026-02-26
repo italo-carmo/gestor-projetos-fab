@@ -81,6 +81,19 @@ const GENDER_OPTIONS = [
   { value: 'NAO_INFORMADO', label: 'Não informado' },
 ];
 
+const STEP_STATUS_OPTIONS: Record<number, string[]> = {
+  0: ['RECEIVED', 'PROTECTION_MEASURES'],
+  1: ['PROTECTION_MEASURES', 'PRELIMINARY_ANALYSIS'],
+  2: ['PRELIMINARY_ANALYSIS', 'PROCEDURE_DEFINED', 'INVESTIGATION'],
+  3: ['INVESTIGATION', 'CONCLUDED', 'ARCHIVED'],
+};
+
+const SEPARATION_OPTIONS = [
+  { value: 'NAO_AVALIADA', label: 'Não avaliada' },
+  { value: 'AVALIADA_NAO_APLICADA', label: 'Avaliada e não aplicada' },
+  { value: 'APLICADA', label: 'Aplicada' },
+];
+
 const STEP_DEFS = [
   {
     title: '1) Notificação e provas',
@@ -148,6 +161,12 @@ const defaultForm = {
 function toNullable(value: string) {
   const normalized = String(value ?? '').trim();
   return normalized ? normalized : null;
+}
+
+function statusOptionsForStep(step: number, currentStatus: string) {
+  const allowed = new Set(STEP_STATUS_OPTIONS[step] ?? []);
+  if (currentStatus) allowed.add(currentStatus);
+  return STATUS_OPTIONS.filter((item) => allowed.has(item.value));
 }
 
 export function CpcaCasesPage() {
@@ -357,11 +376,10 @@ export function CpcaCasesPage() {
       legalSupportProvided: Boolean(form.legalSupportProvided),
       contactRestrictionApplied: Boolean(form.contactRestrictionApplied),
       preliminaryAnalysis: toNullable(form.preliminaryAnalysis),
-      preliminaryReportGenerated: Boolean(form.preliminaryReportGenerated),
+      preliminaryReportGenerated: Boolean(toNullable(form.preliminaryReportDate)),
       preliminaryReportDate: toNullable(form.preliminaryReportDate),
       procedureReference: toNullable(form.procedureReference),
       procedureNotes: toNullable(form.procedureNotes),
-      womenLedHandlingPrioritized: Boolean(form.womenLedHandlingPrioritized),
       victimAccusedSeparationEvaluated: Boolean(form.victimAccusedSeparationEvaluated),
       victimAccusedSeparationApplied: Boolean(form.victimAccusedSeparationApplied),
       accusedDefenseEnsured: Boolean(form.accusedDefenseEnsured),
@@ -671,11 +689,11 @@ export function CpcaCasesPage() {
             <TextField
               select
               size="small"
-              label="Status"
+              label="Status da triagem/apuração"
               value={form.status}
               onChange={(e) => setForm((prev) => ({ ...prev, status: e.target.value }))}
             >
-              {STATUS_OPTIONS.map((item) => (
+              {statusOptionsForStep(2, form.status).map((item) => (
                 <MenuItem key={item.value} value={item.value}>
                   {item.label}
                 </MenuItem>
@@ -716,17 +734,6 @@ export function CpcaCasesPage() {
           />
 
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={form.preliminaryReportGenerated}
-                  onChange={(e) =>
-                    setForm((prev) => ({ ...prev, preliminaryReportGenerated: e.target.checked }))
-                  }
-                />
-              }
-              label="Relatório preliminar elaborado"
-            />
             <TextField
               size="small"
               type="date"
@@ -734,9 +741,12 @@ export function CpcaCasesPage() {
               InputLabelProps={{ shrink: true }}
               value={form.preliminaryReportDate}
               onChange={(e) =>
-                setForm((prev) => ({ ...prev, preliminaryReportDate: e.target.value }))
+                setForm((prev) => ({
+                  ...prev,
+                  preliminaryReportDate: e.target.value,
+                  preliminaryReportGenerated: Boolean(e.target.value),
+                }))
               }
-              disabled={!form.preliminaryReportGenerated}
               sx={{ minWidth: 220 }}
             />
           </Stack>
@@ -760,6 +770,58 @@ export function CpcaCasesPage() {
           sx={{
             display: 'grid',
             gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' },
+            gap: 1.2,
+          }}
+        >
+          <TextField
+            select
+            size="small"
+            label="Status de conclusão"
+            value={form.status}
+            onChange={(e) => setForm((prev) => ({ ...prev, status: e.target.value }))}
+          >
+            {statusOptionsForStep(3, form.status)
+              .filter((item) => !isCreateMode || !['CONCLUDED', 'ARCHIVED'].includes(item.value))
+              .map((item) => (
+              <MenuItem key={item.value} value={item.value}>
+                {item.label}
+              </MenuItem>
+              ))}
+          </TextField>
+
+          <TextField
+            select
+            size="small"
+            label="Medida de separação vítima/acusado"
+            value={
+              form.victimAccusedSeparationApplied
+                ? 'APLICADA'
+                : form.victimAccusedSeparationEvaluated
+                  ? 'AVALIADA_NAO_APLICADA'
+                  : 'NAO_AVALIADA'
+            }
+            onChange={(e) => {
+              const value = e.target.value;
+              setForm((prev) => ({
+                ...prev,
+                victimAccusedSeparationEvaluated:
+                  value === 'AVALIADA_NAO_APLICADA' || value === 'APLICADA',
+                victimAccusedSeparationApplied: value === 'APLICADA',
+              }));
+            }}
+          >
+            {SEPARATION_OPTIONS.map((item) => (
+              <MenuItem key={item.value} value={item.value}>
+                {item.label}
+              </MenuItem>
+            ))}
+          </TextField>
+        </Box>
+
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' },
             gap: 0.8,
           }}
         >
@@ -773,42 +835,6 @@ export function CpcaCasesPage() {
               />
             }
             label="Ampla defesa e contraditório assegurados"
-          />
-
-          <FormControlLabel
-            control={
-              <Switch
-                checked={form.victimAccusedSeparationEvaluated}
-                onChange={(e) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    victimAccusedSeparationEvaluated: e.target.checked,
-                    victimAccusedSeparationApplied: e.target.checked
-                      ? prev.victimAccusedSeparationApplied
-                      : false,
-                  }))
-                }
-              />
-            }
-            label="Separação vítima/acusado avaliada"
-          />
-
-          <FormControlLabel
-            control={
-              <Switch
-                checked={form.victimAccusedSeparationApplied}
-                onChange={(e) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    victimAccusedSeparationApplied: e.target.checked,
-                    victimAccusedSeparationEvaluated: e.target.checked
-                      ? true
-                      : prev.victimAccusedSeparationEvaluated,
-                  }))
-                }
-              />
-            }
-            label="Separação vítima/acusado aplicada"
           />
 
           <FormControlLabel

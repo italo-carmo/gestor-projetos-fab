@@ -125,7 +125,14 @@ export class CpcaService {
 
     const status = payload.status ?? 'RECEIVED';
     const procedureType = payload.procedureType ?? 'NOT_DEFINED';
+    if (status === 'CONCLUDED' || status === 'ARCHIVED') {
+      throwError('VALIDATION_ERROR', {
+        field: 'status',
+        reason: 'INITIAL_STATUS_MUST_BE_OPEN',
+      });
+    }
     this.assertIcaConsistency({
+      status,
       complaintType: payload.complaintType,
       confidentialityTermSigned: payload.confidentialityTermSigned ?? false,
       preliminaryReportGenerated: payload.preliminaryReportGenerated ?? false,
@@ -134,6 +141,8 @@ export class CpcaService {
       victimAccusedSeparationApplied: payload.victimAccusedSeparationApplied ?? false,
       outsourcedAccused: payload.outsourcedAccused ?? false,
       contractorReferralDate: payload.contractorReferralDate,
+      outcomeSummary: payload.outcomeSummary,
+      accusedDefenseEnsured: payload.accusedDefenseEnsured ?? false,
     });
 
     const created = await complaintModel.create({
@@ -187,7 +196,7 @@ export class CpcaService {
           ? new Date(payload.contractorReferralDate)
           : null,
         contractorFollowUpNotes: this.cleanOptional(payload.contractorFollowUpNotes),
-        archivedAt: status === 'ARCHIVED' ? new Date() : null,
+        archivedAt: null,
         createdById: actorId,
         updatedById: actorId,
       },
@@ -245,6 +254,8 @@ export class CpcaService {
         victimAccusedSeparationApplied: true,
         outsourcedAccused: true,
         contractorReferralDate: true,
+        accusedDefenseEnsured: true,
+        outcomeSummary: true,
       },
     });
     if (!current) throwError('NOT_FOUND');
@@ -257,6 +268,7 @@ export class CpcaService {
 
     const nextStatus = payload.status ?? current.status;
     const nextProcedure = payload.procedureType ?? current.procedureType;
+    this.assertStatusTransition(current.status, nextStatus);
     const nextComplaintType = payload.complaintType ?? current.complaintType;
     const nextConfidentialityTermSigned =
       payload.confidentialityTermSigned ?? current.confidentialityTermSigned;
@@ -279,8 +291,15 @@ export class CpcaService {
         : payload.contractorReferralDate
           ? new Date(payload.contractorReferralDate)
           : null;
+    const nextAccusedDefenseEnsured =
+      payload.accusedDefenseEnsured ?? current.accusedDefenseEnsured;
+    const nextOutcomeSummary =
+      payload.outcomeSummary === undefined
+        ? current.outcomeSummary
+        : this.cleanOptional(payload.outcomeSummary);
 
     this.assertIcaConsistency({
+      status: nextStatus,
       complaintType: nextComplaintType,
       confidentialityTermSigned: nextConfidentialityTermSigned,
       preliminaryReportGenerated: nextPreliminaryReportGenerated,
@@ -289,6 +308,8 @@ export class CpcaService {
       victimAccusedSeparationApplied: nextVictimAccusedSeparationApplied,
       outsourcedAccused: nextOutsourcedAccused,
       contractorReferralDate: nextContractorReferralDate,
+      outcomeSummary: nextOutcomeSummary,
+      accusedDefenseEnsured: nextAccusedDefenseEnsured,
     });
 
     const updated = await complaintModel.update({
@@ -559,6 +580,7 @@ export class CpcaService {
   }
 
   private assertIcaConsistency(input: {
+    status: string;
     complaintType: string;
     confidentialityTermSigned: boolean | null | undefined;
     preliminaryReportGenerated: boolean | null | undefined;
@@ -567,6 +589,8 @@ export class CpcaService {
     victimAccusedSeparationApplied: boolean | null | undefined;
     outsourcedAccused: boolean | null | undefined;
     contractorReferralDate: Date | string | null | undefined;
+    outcomeSummary: string | null | undefined;
+    accusedDefenseEnsured: boolean | null | undefined;
   }) {
     if (input.complaintType === 'SEXUAL' && !Boolean(input.confidentialityTermSigned)) {
       throwError('VALIDATION_ERROR', {
@@ -596,6 +620,45 @@ export class CpcaService {
       throwError('VALIDATION_ERROR', {
         field: 'outsourcedAccused',
         reason: 'CONTRACTOR_REFERRAL_REQUIRES_OUTSOURCED_FLAG',
+      });
+    }
+
+    if (input.status === 'CONCLUDED' || input.status === 'ARCHIVED') {
+      if (!this.cleanOptional(input.outcomeSummary)) {
+        throwError('VALIDATION_ERROR', {
+          field: 'outcomeSummary',
+          reason: 'OUTCOME_SUMMARY_REQUIRED_FOR_CLOSURE',
+        });
+      }
+      if (!Boolean(input.accusedDefenseEnsured)) {
+        throwError('VALIDATION_ERROR', {
+          field: 'accusedDefenseEnsured',
+          reason: 'DEFENSE_CONFIRMATION_REQUIRED_FOR_CLOSURE',
+        });
+      }
+    }
+  }
+
+  private assertStatusTransition(currentStatus: string, nextStatus: string) {
+    if (!nextStatus || currentStatus === nextStatus) return;
+
+    const allowed: Record<string, string[]> = {
+      RECEIVED: ['PROTECTION_MEASURES', 'PRELIMINARY_ANALYSIS'],
+      PROTECTION_MEASURES: ['PRELIMINARY_ANALYSIS'],
+      PRELIMINARY_ANALYSIS: ['PROCEDURE_DEFINED', 'INVESTIGATION'],
+      PROCEDURE_DEFINED: ['INVESTIGATION', 'CONCLUDED'],
+      INVESTIGATION: ['CONCLUDED'],
+      CONCLUDED: ['ARCHIVED'],
+      ARCHIVED: [],
+    };
+
+    const nextAllowed = allowed[currentStatus] ?? [];
+    if (!nextAllowed.includes(nextStatus)) {
+      throwError('VALIDATION_ERROR', {
+        field: 'status',
+        reason: 'INVALID_STATUS_TRANSITION',
+        from: currentStatus,
+        to: nextStatus,
       });
     }
   }
