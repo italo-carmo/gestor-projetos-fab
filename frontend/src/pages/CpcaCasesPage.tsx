@@ -235,6 +235,37 @@ export function CpcaCasesPage() {
   const rankOptions: string[] = (postosQuery.data?.items ?? []).map((item: any) =>
     String(item.name),
   );
+  const hasStep1Progress = Boolean(
+    toNullable(form.incidentDate) ||
+      toNullable(form.aggressorRank) ||
+      toNullable(form.victimRank) ||
+      Number(form.evidenceCount ?? 0) > 0 ||
+      toNullable(form.evidenceSummary),
+  );
+  const hasStep2Progress = Boolean(
+    toNullable(form.immediateProtectionMeasures) ||
+      form.psychologicalSupportProvided ||
+      form.medicalSupportProvided ||
+      form.socialSupportProvided ||
+      form.legalSupportProvided ||
+      form.contactRestrictionApplied ||
+      form.confidentialityTermSigned,
+  );
+  const hasStep3Progress = Boolean(
+    toNullable(form.preliminaryAnalysis) ||
+      toNullable(form.procedureReference) ||
+      toNullable(form.preliminaryReportDate) ||
+      toNullable(form.procedureNotes) ||
+      form.procedureType !== 'NOT_DEFINED',
+  );
+  const dataUnlockedStep = hasStep3Progress ? 3 : hasStep2Progress ? 2 : hasStep1Progress ? 1 : 0;
+  const statusUnlockedStep = (() => {
+    if (['INVESTIGATION', 'CONCLUDED', 'ARCHIVED'].includes(form.status)) return 3;
+    if (['PRELIMINARY_ANALYSIS', 'PROCEDURE_DEFINED'].includes(form.status)) return 2;
+    if (form.status === 'PROTECTION_MEASURES') return 1;
+    return 0;
+  })();
+  const maxUnlockedStep = Math.max(dataUnlockedStep, statusUnlockedStep);
 
   useEffect(() => {
     if (!isCreateMode || !drawerOpen) return;
@@ -300,6 +331,41 @@ export function CpcaCasesPage() {
       statusChangeNote: '',
     });
   }, [isCreateMode, selectedCaseQuery.data]);
+
+  useEffect(() => {
+    if (!drawerOpen) return;
+
+    setActiveStep((prev) => Math.min(prev, maxUnlockedStep));
+
+    if (!isCreateMode) return;
+
+    const autoStatusByStep = [
+      'RECEIVED',
+      'PROTECTION_MEASURES',
+      'PRELIMINARY_ANALYSIS',
+      'INVESTIGATION',
+    ] as const;
+    const targetStatus = autoStatusByStep[dataUnlockedStep];
+
+    setForm((prev) => {
+      if (prev.status === 'CONCLUDED' || prev.status === 'ARCHIVED') {
+        return prev;
+      }
+      const rank: Record<string, number> = {
+        RECEIVED: 0,
+        PROTECTION_MEASURES: 1,
+        PRELIMINARY_ANALYSIS: 2,
+        PROCEDURE_DEFINED: 2,
+        INVESTIGATION: 3,
+        CONCLUDED: 4,
+        ARCHIVED: 5,
+      };
+      if ((rank[targetStatus] ?? 0) > (rank[prev.status] ?? 0)) {
+        return { ...prev, status: targetStatus };
+      }
+      return prev;
+    });
+  }, [dataUnlockedStep, drawerOpen, isCreateMode, maxUnlockedStep]);
 
   if (meLoading) return <SkeletonState />;
   if (!canAccessByRole) {
@@ -1185,7 +1251,11 @@ export function CpcaCasesPage() {
                     <Stepper nonLinear activeStep={activeStep} sx={{ minWidth: 760 }}>
                       {STEP_DEFS.map((step, index) => (
                         <Step key={step.title}>
-                          <StepButton color="inherit" onClick={() => setActiveStep(index)}>
+                          <StepButton
+                            color="inherit"
+                            disabled={index > maxUnlockedStep}
+                            onClick={() => setActiveStep(index)}
+                          >
                             {step.title}
                           </StepButton>
                         </Step>
@@ -1199,6 +1269,11 @@ export function CpcaCasesPage() {
                   <Typography variant="body2" color="text.secondary" mb={1.5}>
                     {STEP_DEFS[activeStep].subtitle}
                   </Typography>
+                  {activeStep < STEP_DEFS.length - 1 && activeStep >= maxUnlockedStep && (
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.2 }}>
+                      Preencha ao menos um campo útil desta etapa para liberar a próxima e atualizar o status.
+                    </Typography>
+                  )}
 
                   {renderStepContent()}
 
@@ -1221,7 +1296,9 @@ export function CpcaCasesPage() {
                             Math.min(STEP_DEFS.length - 1, prev + 1),
                           )
                         }
-                        disabled={activeStep === STEP_DEFS.length - 1}
+                        disabled={
+                          activeStep === STEP_DEFS.length - 1 || activeStep >= maxUnlockedStep
+                        }
                       >
                         Próxima etapa
                       </Button>
