@@ -5,6 +5,7 @@ import {
   CardActionArea,
   CardContent,
   Chip,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -20,7 +21,7 @@ import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import LanguageRoundedIcon from "@mui/icons-material/LanguageRounded";
 import NewspaperRoundedIcon from "@mui/icons-material/NewspaperRounded";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { parseApiError } from "../app/apiErrors";
 import { api } from "../api/client";
 import {
@@ -110,6 +111,7 @@ export function SocialCommunicationPage() {
 
   const [previewing, setPreviewing] =
     useState<SocialCommunicationArticle | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<SocialCommunicationArticle | null>(
     null,
@@ -124,6 +126,14 @@ export function SocialCommunicationPage() {
     summary: "",
     publishedAt: "",
   });
+
+  useEffect(() => {
+    if (!previewing) {
+      setPreviewLoading(false);
+      return;
+    }
+    setPreviewLoading(true);
+  }, [previewing]);
 
   const openCreate = () => {
     setEditing(null);
@@ -465,8 +475,53 @@ export function SocialCommunicationPage() {
                 borderRadius: 0,
                 overflow: "hidden",
                 height: { xs: "75vh", md: "78vh" },
+                position: "relative",
               }}
             >
+              {previewLoading && (
+                <Box
+                  sx={{
+                    position: "absolute",
+                    inset: 0,
+                    zIndex: 1,
+                    display: "grid",
+                    placeItems: "center",
+                    background:
+                      "linear-gradient(180deg, rgba(249,252,255,0.97) 0%, rgba(235,244,250,0.97) 100%)",
+                  }}
+                >
+                  <Stack spacing={1.5} alignItems="center">
+                    <Box
+                      sx={{
+                        width: 56,
+                        height: 56,
+                        borderRadius: "50%",
+                        bgcolor: "rgba(17,66,89,0.1)",
+                        color: "#114259",
+                        display: "grid",
+                        placeItems: "center",
+                      }}
+                    >
+                      <AutoAwesomeRoundedIcon fontSize="small" />
+                    </Box>
+                    <CircularProgress
+                      size={28}
+                      thickness={5}
+                      sx={{ color: "#114259" }}
+                    />
+                    <Typography
+                      variant="body2"
+                      fontWeight={600}
+                      sx={{ color: "#114259" }}
+                    >
+                      Carregando matéria...
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Aguarde alguns segundos.
+                    </Typography>
+                  </Stack>
+                </Box>
+              )}
               <Box
                 component="iframe"
                 title={previewing.title}
@@ -477,6 +532,8 @@ export function SocialCommunicationPage() {
                 }
                 sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
                 referrerPolicy="no-referrer"
+                onLoad={() => setPreviewLoading(false)}
+                onError={() => setPreviewLoading(false)}
                 sx={{
                   width: "100%",
                   height: "100%",
