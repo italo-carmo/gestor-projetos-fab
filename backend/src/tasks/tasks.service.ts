@@ -263,6 +263,7 @@ export class TasksService {
     templateId: string,
     payload: {
       localities: { localityId: string; dueDate: string }[];
+      reportRequired?: boolean;
       priority?: TaskPriority | string;
       meetingId?: string | null;
       assignedToId?: string | null;
@@ -275,6 +276,8 @@ export class TasksService {
     });
     if (!template) throwError('NOT_FOUND');
 
+    const reportRequired =
+      payload.reportRequired ?? template.reportRequiredDefault;
     const priority = (payload.priority as TaskPriority) ?? TaskPriority.MEDIUM;
     const groupKey = payload.localities.length > 1 ? randomUUID() : null;
     const responsibleIds = Array.from(
@@ -304,7 +307,7 @@ export class TasksService {
             progressPercent: 0,
             assignedToId: payload.assignedToId ?? null,
             assigneeType: payload.assignedToId ? TaskAssigneeType.USER : null,
-            reportRequired: false,
+            reportRequired,
             groupKey,
             meetingId: payload.meetingId ?? null,
             eloRoleId: template.eloRoleId ?? null,

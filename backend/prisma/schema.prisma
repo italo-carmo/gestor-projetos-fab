@@ -358,6 +358,8 @@ model TaskInstance {
   id              String        @id @default(cuid())
   taskTemplateId  String
   localityId      String
+  groupKey        String?
+  titleOverride   String?
   specialtyId     String?
   meetingId       String?
   eloRoleId       String?
@@ -393,6 +395,7 @@ model TaskInstance {
   @@index([meetingId])
   @@index([eloRoleId])
   @@index([assignedEloId])
+  @@index([groupKey])
 }
 
 model TaskResponsible {
@@ -442,6 +445,7 @@ model Meeting {
   scope           String        @default("")  // texto livre: o que será tratado na reunião
   status          MeetingStatus
   meetingType     MeetingType   @default(PRESENCIAL)
+  location        String?
   meetingLink     String?
   agenda          String?
   localityId      String?
