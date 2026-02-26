@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import { AuditService } from '../audit/audit.service';
 import { throwError } from '../common/http-error';
 import { sanitizeText } from '../common/sanitize';
@@ -24,6 +26,7 @@ export class SocialCommunicationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly config: ConfigService,
   ) {}
 
   async list(filters: { q?: string }) {
@@ -36,13 +39,21 @@ export class SocialCommunicationService {
       ];
     }
 
-    const items = await this.prisma.socialCommunicationArticle.findMany({
+    const rows = await this.prisma.socialCommunicationArticle.findMany({
       where,
       include: {
         createdBy: { select: { id: true, name: true } },
       },
       orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
     });
+
+    const items = rows.map((item) => ({
+      ...item,
+      contentProxyPath: this.buildContentProxyPath(item.id),
+      coverProxyPath: item.coverImageUrl
+        ? this.buildCoverProxyPath(item.id)
+        : null,
+    }));
 
     return { items };
   }
@@ -69,9 +80,17 @@ export class SocialCommunicationService {
           payload.title ?? metadata.title ?? this.buildFallbackTitle(sourceUrl),
           'title',
         ),
-        coverImageUrl: this.resolveCoverUrl(payload.coverImageUrl ?? metadata.coverImageUrl ?? null, sourceUrl),
-        summary: this.normalizeOptionalText(payload.summary ?? metadata.summary ?? null),
-        publishedAt: this.parseOptionalDate(payload.publishedAt ?? metadata.publishedAt ?? null, 'publishedAt'),
+        coverImageUrl: this.resolveCoverUrl(
+          payload.coverImageUrl ?? metadata.coverImageUrl ?? null,
+          sourceUrl,
+        ),
+        summary: this.normalizeOptionalText(
+          payload.summary ?? metadata.summary ?? null,
+        ),
+        publishedAt: this.parseOptionalDate(
+          payload.publishedAt ?? metadata.publishedAt ?? null,
+          'publishedAt',
+        ),
         createdById: user?.id ?? null,
       },
       include: {
@@ -106,43 +125,61 @@ export class SocialCommunicationService {
   ) {
     this.assertEditorAccess(user);
 
-    const existing = await this.prisma.socialCommunicationArticle.findUnique({ where: { id } });
+    const existing = await this.prisma.socialCommunicationArticle.findUnique({
+      where: { id },
+    });
     if (!existing) throwError('NOT_FOUND');
 
     const sourceUrl = payload.url
       ? this.normalizeUrl(payload.url, 'url')
       : existing.sourceUrl;
     const sourceUrlChanged = sourceUrl !== existing.sourceUrl;
-    const metadata: MetadataExtraction = sourceUrlChanged ? await this.extractMetadataSafe(sourceUrl) : {};
+    const metadata: MetadataExtraction = sourceUrlChanged
+      ? await this.extractMetadataSafe(sourceUrl)
+      : {};
 
-    const title = payload.title !== undefined
-      ? this.normalizeRequiredText(payload.title, 'title')
-      : sourceUrlChanged
-        ? this.normalizeRequiredText(
-          metadata.title ?? existing.title ?? this.buildFallbackTitle(sourceUrl),
-          'title',
-        )
-        : undefined;
+    const title =
+      payload.title !== undefined
+        ? this.normalizeRequiredText(payload.title, 'title')
+        : sourceUrlChanged
+          ? this.normalizeRequiredText(
+              metadata.title ??
+                existing.title ??
+                this.buildFallbackTitle(sourceUrl),
+              'title',
+            )
+          : undefined;
 
     let coverImageUrl: string | null | undefined;
     if (payload.coverImageUrl !== undefined) {
       coverImageUrl = this.resolveCoverUrl(payload.coverImageUrl, sourceUrl);
     } else if (sourceUrlChanged) {
       coverImageUrl =
-        this.resolveCoverUrl(metadata.coverImageUrl ?? null, sourceUrl) ?? existing.coverImageUrl ?? null;
+        this.resolveCoverUrl(metadata.coverImageUrl ?? null, sourceUrl) ??
+        existing.coverImageUrl ??
+        null;
     }
 
-    const summary = payload.summary !== undefined
-      ? this.normalizeOptionalText(payload.summary)
-      : sourceUrlChanged
-        ? this.normalizeOptionalText(metadata.summary ?? existing.summary ?? null)
-        : undefined;
+    const summary =
+      payload.summary !== undefined
+        ? this.normalizeOptionalText(payload.summary)
+        : sourceUrlChanged
+          ? this.normalizeOptionalText(
+              metadata.summary ?? existing.summary ?? null,
+            )
+          : undefined;
 
-    const publishedAt = payload.publishedAt !== undefined
-      ? this.parseOptionalDate(payload.publishedAt, 'publishedAt')
-      : sourceUrlChanged
-        ? this.parseOptionalDate(metadata.publishedAt ?? null, 'publishedAt') ?? existing.publishedAt ?? null
-        : undefined;
+    const publishedAt =
+      payload.publishedAt !== undefined
+        ? this.parseOptionalDate(payload.publishedAt, 'publishedAt')
+        : sourceUrlChanged
+          ? (this.parseOptionalDate(
+              metadata.publishedAt ?? null,
+              'publishedAt',
+            ) ??
+            existing.publishedAt ??
+            null)
+          : undefined;
 
     const updated = await this.prisma.socialCommunicationArticle.update({
       where: { id },
@@ -175,7 +212,9 @@ export class SocialCommunicationService {
   async remove(id: string, user?: RbacUser) {
     this.assertEditorAccess(user);
 
-    const existing = await this.prisma.socialCommunicationArticle.findUnique({ where: { id } });
+    const existing = await this.prisma.socialCommunicationArticle.findUnique({
+      where: { id },
+    });
     if (!existing) throwError('NOT_FOUND');
 
     await this.prisma.socialCommunicationArticle.delete({ where: { id } });
@@ -208,19 +247,381 @@ export class SocialCommunicationService {
     return {
       url: sourceUrl,
       title,
-      coverImageUrl: this.resolveCoverUrl(metadata.coverImageUrl ?? null, sourceUrl),
+      coverImageUrl: this.resolveCoverUrl(
+        metadata.coverImageUrl ?? null,
+        sourceUrl,
+      ),
       summary: this.normalizeOptionalText(metadata.summary ?? null),
-      publishedAt: this.parseOptionalDate(metadata.publishedAt ?? null, 'publishedAt')?.toISOString() ?? null,
+      publishedAt:
+        this.parseOptionalDate(
+          metadata.publishedAt ?? null,
+          'publishedAt',
+        )?.toISOString() ?? null,
     };
   }
 
+  async getPublicContent(articleId: string, exp: string, sig: string) {
+    const normalizedId = sanitizeText(articleId);
+    if (!normalizedId) {
+      throwError('NOT_FOUND');
+    }
+    this.assertProxySignature('content', normalizedId, exp, sig);
+
+    const article = await this.prisma.socialCommunicationArticle.findUnique({
+      where: { id: normalizedId },
+      select: { id: true, sourceUrl: true },
+    });
+    if (!article) throwError('NOT_FOUND');
+
+    const payload = await this.fetchRemoteHtml(article.sourceUrl);
+    const html = this.rewriteHtmlForProxy(payload.html, payload.sourceUrl);
+    return { html };
+  }
+
+  async getPublicCover(articleId: string, exp: string, sig: string) {
+    const normalizedId = sanitizeText(articleId);
+    if (!normalizedId) {
+      throwError('NOT_FOUND');
+    }
+    this.assertProxySignature('cover', normalizedId, exp, sig);
+
+    const article = await this.prisma.socialCommunicationArticle.findUnique({
+      where: { id: normalizedId },
+      select: { coverImageUrl: true },
+    });
+    if (!article?.coverImageUrl) throwError('NOT_FOUND');
+
+    return this.fetchRemoteAsset(article.coverImageUrl, 'image/*,*/*;q=0.8');
+  }
+
+  async getPublicAsset(url: string, exp: string, sig: string) {
+    const normalizedUrl = this.normalizeUrl(url, 'url');
+    this.assertProxySignature('asset', normalizedUrl, exp, sig);
+    const payload = await this.fetchRemoteAsset(normalizedUrl);
+
+    if (payload.contentType.toLowerCase().includes('text/css')) {
+      const css = payload.buffer.toString('utf-8');
+      const rewritten = this.rewriteCssForProxy(css, payload.sourceUrl);
+      return {
+        ...payload,
+        buffer: Buffer.from(rewritten, 'utf-8'),
+      };
+    }
+
+    return payload;
+  }
+
   private assertEditorAccess(user?: RbacUser) {
-    if (!hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI])) {
+    if (
+      !hasAnyRole(user, [
+        ROLE_COORDENACAO_CIPAVD,
+        ROLE_COMANDANTE_COMGEP,
+        ROLE_TI,
+      ])
+    ) {
       throwError('RBAC_FORBIDDEN');
     }
   }
 
-  private normalizeRequiredText(value: string | null | undefined, field: string) {
+  private buildContentProxyPath(articleId: string) {
+    const signature = this.createProxySignature('content', articleId);
+    return `/social-communication/proxy/content?articleId=${encodeURIComponent(
+      articleId,
+    )}&exp=${signature.exp}&sig=${encodeURIComponent(signature.sig)}`;
+  }
+
+  private buildCoverProxyPath(articleId: string) {
+    const signature = this.createProxySignature('cover', articleId);
+    return `/social-communication/proxy/cover?articleId=${encodeURIComponent(
+      articleId,
+    )}&exp=${signature.exp}&sig=${encodeURIComponent(signature.sig)}`;
+  }
+
+  private buildAssetProxyPath(url: string) {
+    const normalizedUrl = this.normalizeUrl(url, 'url');
+    const signature = this.createProxySignature('asset', normalizedUrl);
+    return `/social-communication/proxy/asset?url=${encodeURIComponent(
+      normalizedUrl,
+    )}&exp=${signature.exp}&sig=${encodeURIComponent(signature.sig)}`;
+  }
+
+  private createProxySignature(
+    type: 'content' | 'cover' | 'asset',
+    value: string,
+  ) {
+    const exp = Date.now() + 1000 * 60 * 60 * 12;
+    const payload = `${type}|${value}|${exp}`;
+    return {
+      exp: String(exp),
+      sig: this.signProxyPayload(payload),
+    };
+  }
+
+  private assertProxySignature(
+    type: 'content' | 'cover' | 'asset',
+    value: string,
+    expRaw: string,
+    sig: string,
+  ) {
+    const exp = Number.parseInt(String(expRaw ?? '').trim(), 10);
+    if (!Number.isFinite(exp) || exp <= Date.now()) {
+      throwError('RBAC_FORBIDDEN');
+    }
+
+    const expectedSig = this.signProxyPayload(`${type}|${value}|${exp}`);
+    if (!this.safeEqual(expectedSig, String(sig ?? '').trim())) {
+      throwError('RBAC_FORBIDDEN');
+    }
+  }
+
+  private signProxyPayload(payload: string) {
+    return createHmac('sha256', this.getProxySecret())
+      .update(payload)
+      .digest('base64url');
+  }
+
+  private safeEqual(a: string, b: string) {
+    const left = Buffer.from(a);
+    const right = Buffer.from(b);
+    if (left.length !== right.length) return false;
+    return timingSafeEqual(left, right);
+  }
+
+  private getProxySecret() {
+    return (
+      this.config.get<string>('SOCIAL_COMM_PROXY_SECRET') ||
+      this.config.get<string>('JWT_SECRET') ||
+      'cipavd-social-communication-proxy'
+    );
+  }
+
+  private async fetchRemoteHtml(sourceUrl: string) {
+    const response = await this.fetchRemote(sourceUrl, {
+      acceptHeader:
+        'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      timeoutMs: 10000,
+      maxBytes: 3_000_000,
+    });
+    if (!response.ok) throwError('NOT_FOUND');
+
+    const contentType = (response.headers.get('content-type') ?? '')
+      .toLowerCase()
+      .trim();
+    if (!contentType.includes('text/html')) throwError('NOT_FOUND');
+
+    return {
+      html: await response.text(),
+      sourceUrl: response.url || sourceUrl,
+    };
+  }
+
+  private async fetchRemoteAsset(
+    sourceUrl: string,
+    acceptHeader = 'image/*,text/css,*/*;q=0.5',
+  ) {
+    const response = await this.fetchRemote(sourceUrl, {
+      acceptHeader,
+      timeoutMs: 10000,
+      maxBytes: 8_000_000,
+    });
+    if (!response.ok) throwError('NOT_FOUND');
+
+    const contentType =
+      response.headers.get('content-type') ?? 'application/octet-stream';
+    const buffer = Buffer.from(await response.arrayBuffer());
+    return {
+      buffer,
+      contentType,
+      sourceUrl: response.url || sourceUrl,
+    };
+  }
+
+  private async fetchRemote(
+    sourceUrl: string,
+    options: { acceptHeader: string; timeoutMs: number; maxBytes: number },
+  ) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), options.timeoutMs);
+    try {
+      const response = await fetch(sourceUrl, {
+        method: 'GET',
+        redirect: 'follow',
+        signal: controller.signal,
+        headers: {
+          'user-agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome Safari',
+          accept: options.acceptHeader,
+        },
+      });
+
+      const contentLength = Number.parseInt(
+        response.headers.get('content-length') ?? '',
+        10,
+      );
+      if (Number.isFinite(contentLength) && contentLength > options.maxBytes) {
+        throwError('VALIDATION_ERROR', { reason: 'payload_too_large' });
+      }
+
+      return response;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  private rewriteHtmlForProxy(html: string, baseUrl: string) {
+    let output = html;
+    output = output.replace(/<script\b[\s\S]*?<\/script>/gi, '');
+    output = output.replace(/<iframe\b[\s\S]*?<\/iframe>/gi, '');
+    output = output.replace(
+      /<meta[^>]+http-equiv\s*=\s*["']?(?:refresh|content-security-policy)["']?[^>]*>/gi,
+      '',
+    );
+    output = output.replace(
+      /<(img|source|video|audio|track|embed)\b[^>]*>/gi,
+      (tag) => this.rewriteMediaTag(tag, baseUrl),
+    );
+    output = output.replace(/<link\b[^>]*>/gi, (tag) =>
+      this.rewriteStylesheetTag(tag, baseUrl),
+    );
+    return output;
+  }
+
+  private rewriteMediaTag(tag: string, baseUrl: string) {
+    let nextTag = tag;
+    nextTag = this.rewriteTagAttribute(nextTag, 'src', (value) =>
+      this.resolveProxyAssetValue(value, baseUrl),
+    );
+    nextTag = this.rewriteTagAttribute(nextTag, 'poster', (value) =>
+      this.resolveProxyAssetValue(value, baseUrl),
+    );
+    nextTag = this.rewriteTagAttribute(nextTag, 'srcset', (value) =>
+      this.rewriteSrcset(value, baseUrl),
+    );
+    nextTag = this.rewriteTagAttribute(nextTag, 'data-src', (value) =>
+      this.resolveProxyAssetValue(value, baseUrl),
+    );
+    nextTag = this.rewriteTagAttribute(nextTag, 'data-srcset', (value) =>
+      this.rewriteSrcset(value, baseUrl),
+    );
+    return nextTag;
+  }
+
+  private rewriteStylesheetTag(tag: string, baseUrl: string) {
+    if (!/rel\s*=\s*["'][^"']*stylesheet[^"']*["']/i.test(tag)) return tag;
+    return this.rewriteTagAttribute(tag, 'href', (value) =>
+      this.resolveProxyAssetValue(value, baseUrl),
+    );
+  }
+
+  private rewriteTagAttribute(
+    tag: string,
+    attribute: string,
+    mapValue: (value: string) => string,
+  ) {
+    const escapedAttribute = attribute.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const quotedRegex = new RegExp(
+      `(^|\\s)(${escapedAttribute}\\s*=\\s*)(["'])([^"']*)\\3`,
+      'i',
+    );
+    if (quotedRegex.test(tag)) {
+      return tag.replace(
+        quotedRegex,
+        (
+          _,
+          leadingSpace: string,
+          prefix: string,
+          quote: string,
+          value: string,
+        ) => {
+          const nextValue = mapValue(value);
+          return `${leadingSpace}${prefix}${quote}${nextValue}${quote}`;
+        },
+      );
+    }
+
+    const unquotedRegex = new RegExp(
+      `(^|\\s)(${escapedAttribute}\\s*=\\s*)([^\\s"'=<>\\\`]+)`,
+      'i',
+    );
+    return tag.replace(
+      unquotedRegex,
+      (_, leadingSpace: string, prefix: string, value: string) => {
+        const nextValue = mapValue(value);
+        return `${leadingSpace}${prefix}"${nextValue}"`;
+      },
+    );
+  }
+
+  private rewriteSrcset(srcset: string, baseUrl: string) {
+    const entries = srcset
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+
+    const rewritten = entries.map((entry) => {
+      const [rawUrl, ...descriptorParts] = entry.split(/\s+/);
+      const nextUrl = this.resolveProxyAssetValue(rawUrl, baseUrl);
+      const descriptor = descriptorParts.join(' ').trim();
+      return descriptor ? `${nextUrl} ${descriptor}` : nextUrl;
+    });
+
+    return rewritten.join(', ');
+  }
+
+  private rewriteCssForProxy(css: string, baseUrl: string) {
+    let output = css.replace(
+      /url\(\s*(['"]?)([^"')]+)\1\s*\)/gi,
+      (full: string, _quote: string, value: string) => {
+        const nextValue = this.resolveProxyAssetValue(value, baseUrl);
+        if (nextValue === value) return full;
+        return `url("${nextValue}")`;
+      },
+    );
+
+    output = output.replace(
+      /@import\s+(?:url\(\s*)?(['"]?)([^"')\s]+)\1\s*\)?/gi,
+      (full: string, _quote: string, value: string) => {
+        const nextValue = this.resolveProxyAssetValue(value, baseUrl);
+        if (nextValue === value) return full;
+        return `@import url("${nextValue}")`;
+      },
+    );
+
+    return output;
+  }
+
+  private resolveProxyAssetValue(value: string, baseUrl: string) {
+    const resolved = this.resolveResourceUrl(value, baseUrl);
+    if (!resolved) return value;
+    return this.buildAssetProxyPath(resolved);
+  }
+
+  private resolveResourceUrl(value: string, baseUrl: string) {
+    const normalized = sanitizeText(value ?? '');
+    if (!normalized) return null;
+    const lowered = normalized.toLowerCase();
+    if (
+      lowered.startsWith('data:') ||
+      lowered.startsWith('blob:') ||
+      lowered.startsWith('javascript:') ||
+      lowered.startsWith('#')
+    ) {
+      return null;
+    }
+
+    try {
+      const resolved = new URL(normalized, baseUrl);
+      if (!['http:', 'https:'].includes(resolved.protocol)) return null;
+      return resolved.toString();
+    } catch {
+      return null;
+    }
+  }
+
+  private normalizeRequiredText(
+    value: string | null | undefined,
+    field: string,
+  ) {
     const normalized = sanitizeText(value ?? '');
     if (!normalized) {
       throwError('VALIDATION_ERROR', { field, reason: 'required' });
@@ -275,7 +676,10 @@ export class SocialCommunicationService {
     }
   }
 
-  private parseOptionalDate(value: string | null | undefined, field: string): Date | null | undefined {
+  private parseOptionalDate(
+    value: string | null | undefined,
+    field: string,
+  ): Date | null | undefined {
     if (value === undefined) return undefined;
     if (value === null) return null;
     const normalized = sanitizeText(value);
@@ -296,7 +700,9 @@ export class SocialCommunicationService {
     }
   }
 
-  private async extractMetadataSafe(sourceUrl: string): Promise<MetadataExtraction> {
+  private async extractMetadataSafe(
+    sourceUrl: string,
+  ): Promise<MetadataExtraction> {
     try {
       return await this.extractMetadata(sourceUrl);
     } catch {
@@ -304,7 +710,9 @@ export class SocialCommunicationService {
     }
   }
 
-  private async extractMetadata(sourceUrl: string): Promise<MetadataExtraction> {
+  private async extractMetadata(
+    sourceUrl: string,
+  ): Promise<MetadataExtraction> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 6500);
 
@@ -316,7 +724,8 @@ export class SocialCommunicationService {
         headers: {
           'user-agent':
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome Safari',
-          accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          accept:
+            'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         },
       });
 
@@ -379,7 +788,8 @@ export class SocialCommunicationService {
 
   private parseTagAttributes(tag: string) {
     const attrs: Record<string, string> = {};
-    const attrRegex = /([^\s=/>]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/g;
+    const attrRegex =
+      /([^\s=/>]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/g;
     let match: RegExpExecArray | null;
     while ((match = attrRegex.exec(tag)) !== null) {
       const name = (match[1] ?? '').trim().toLowerCase();

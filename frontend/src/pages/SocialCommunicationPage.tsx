@@ -22,6 +22,7 @@ import LanguageRoundedIcon from "@mui/icons-material/LanguageRounded";
 import NewspaperRoundedIcon from "@mui/icons-material/NewspaperRounded";
 import { useMemo, useState } from "react";
 import { parseApiError } from "../app/apiErrors";
+import { api } from "../api/client";
 import {
   hasAnyRole,
   ROLE_COMANDANTE_COMGEP,
@@ -47,8 +48,10 @@ type SocialCommunicationArticle = {
   sourceUrl: string;
   title: string;
   coverImageUrl?: string | null;
+  coverProxyPath?: string | null;
   summary?: string | null;
   publishedAt?: string | null;
+  contentProxyPath?: string | null;
   createdAt: string;
   updatedAt: string;
   createdBy?: { id: string; name: string } | null;
@@ -76,6 +79,16 @@ function sourceHost(url: string) {
   }
 }
 
+function toApiUrl(path: string) {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const baseUrl = String(api.defaults.baseURL ?? "/api");
+  if (/^https?:\/\//i.test(baseUrl)) {
+    return `${baseUrl.replace(/\/$/, "")}${normalizedPath}`;
+  }
+  const normalizedBase = `/${baseUrl.replace(/^\/+/, "").replace(/\/$/, "")}`;
+  return `${normalizedBase}${normalizedPath}`;
+}
+
 export function SocialCommunicationPage() {
   const toast = useToast();
   const { data: me } = useMe();
@@ -87,10 +100,7 @@ export function SocialCommunicationPage() {
   ]);
 
   const [search, setSearch] = useState("");
-  const filters = useMemo(
-    () => ({ q: search.trim() || undefined }),
-    [search],
-  );
+  const filters = useMemo(() => ({ q: search.trim() || undefined }), [search]);
 
   const query = useSocialCommunication(filters);
   const createArticle = useCreateSocialCommunicationArticle();
@@ -98,10 +108,14 @@ export function SocialCommunicationPage() {
   const deleteArticle = useDeleteSocialCommunicationArticle();
   const resolveMetadata = useResolveSocialCommunicationMetadata();
 
-  const [previewing, setPreviewing] = useState<SocialCommunicationArticle | null>(null);
+  const [previewing, setPreviewing] =
+    useState<SocialCommunicationArticle | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
-  const [editing, setEditing] = useState<SocialCommunicationArticle | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<SocialCommunicationArticle | null>(null);
+  const [editing, setEditing] = useState<SocialCommunicationArticle | null>(
+    null,
+  );
+  const [deleteTarget, setDeleteTarget] =
+    useState<SocialCommunicationArticle | null>(null);
   const [resolvedUrl, setResolvedUrl] = useState("");
   const [form, setForm] = useState({
     url: "",
@@ -149,7 +163,8 @@ export function SocialCommunicationPage() {
         ...prev,
         url: metadata.url ?? prev.url,
         title: prev.title.trim() || metadata.title || "",
-        coverImageUrl: prev.coverImageUrl.trim() || metadata.coverImageUrl || "",
+        coverImageUrl:
+          prev.coverImageUrl.trim() || metadata.coverImageUrl || "",
         summary: prev.summary.trim() || metadata.summary || "",
         publishedAt: prev.publishedAt || toInputDate(metadata.publishedAt),
       }));
@@ -305,26 +320,36 @@ export function SocialCommunicationPage() {
                 },
               }}
             >
-              <CardActionArea onClick={() => setPreviewing(item)} sx={{ alignItems: "stretch" }}>
+              <CardActionArea
+                onClick={() => setPreviewing(item)}
+                sx={{ alignItems: "stretch" }}
+              >
                 <Box
                   sx={{
                     height: 156,
-                    background: "linear-gradient(140deg, #114259 0%, #4D86A0 100%)",
+                    background:
+                      "linear-gradient(140deg, #114259 0%, #4D86A0 100%)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                     overflow: "hidden",
                   }}
                 >
-                  {item.coverImageUrl ? (
+                  {item.coverProxyPath || item.coverImageUrl ? (
                     <Box
                       component="img"
-                      src={item.coverImageUrl}
+                      src={
+                        item.coverProxyPath
+                          ? toApiUrl(item.coverProxyPath)
+                          : (item.coverImageUrl ?? undefined)
+                      }
                       alt={item.title}
                       sx={{ width: "100%", height: "100%", objectFit: "cover" }}
                     />
                   ) : (
-                    <NewspaperRoundedIcon sx={{ color: "white", fontSize: 38 }} />
+                    <NewspaperRoundedIcon
+                      sx={{ color: "white", fontSize: 38 }}
+                    />
                   )}
                 </Box>
                 <CardContent sx={{ minHeight: 165 }}>
@@ -356,11 +381,23 @@ export function SocialCommunicationPage() {
                       {item.summary}
                     </Typography>
                   )}
-                  <Stack direction="row" spacing={0.8} alignItems="center" flexWrap="wrap" useFlexGap>
-                    <Chip label={sourceHost(item.sourceUrl)} size="small" variant="outlined" />
+                  <Stack
+                    direction="row"
+                    spacing={0.8}
+                    alignItems="center"
+                    flexWrap="wrap"
+                    useFlexGap
+                  >
+                    <Chip
+                      label={sourceHost(item.sourceUrl)}
+                      size="small"
+                      variant="outlined"
+                    />
                     {(item.publishedAt || item.createdAt) && (
                       <Chip
-                        label={toDisplayDate(item.publishedAt ?? item.createdAt)}
+                        label={toDisplayDate(
+                          item.publishedAt ?? item.createdAt,
+                        )}
                         size="small"
                       />
                     )}
@@ -433,15 +470,30 @@ export function SocialCommunicationPage() {
               <Box
                 component="iframe"
                 title={previewing.title}
-                src={previewing.sourceUrl}
-                sx={{ width: "100%", height: "100%", border: 0, bgcolor: "#fff" }}
+                src={
+                  previewing.contentProxyPath
+                    ? toApiUrl(previewing.contentProxyPath)
+                    : previewing.sourceUrl
+                }
+                sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+                sx={{
+                  width: "100%",
+                  height: "100%",
+                  border: 0,
+                  bgcolor: "#fff",
+                }}
               />
             </Box>
           </DialogContent>
         )}
       </Dialog>
 
-      <Dialog open={editorOpen} onClose={() => setEditorOpen(false)} fullWidth maxWidth="sm">
+      <Dialog
+        open={editorOpen}
+        onClose={() => setEditorOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
         <DialogTitle>{editing ? "Editar materia" : "Nova materia"}</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={1.5} mt={0.5}>
@@ -458,9 +510,14 @@ export function SocialCommunicationPage() {
               }}
               placeholder="https://..."
             />
-            <Stack direction="row" justifyContent="space-between" alignItems="center">
+            <Stack
+              direction="row"
+              justifyContent="space-between"
+              alignItems="center"
+            >
               <Typography variant="caption" color="text.secondary">
-                O sistema tenta preencher titulo e capa automaticamente pelo link.
+                O sistema tenta preencher titulo e capa automaticamente pelo
+                link.
               </Typography>
               <Button
                 size="small"
@@ -487,7 +544,10 @@ export function SocialCommunicationPage() {
               size="small"
               value={form.coverImageUrl}
               onChange={(event) =>
-                setForm((prev) => ({ ...prev, coverImageUrl: event.target.value }))
+                setForm((prev) => ({
+                  ...prev,
+                  coverImageUrl: event.target.value,
+                }))
               }
               placeholder="https://..."
             />
@@ -508,7 +568,10 @@ export function SocialCommunicationPage() {
               InputLabelProps={{ shrink: true }}
               value={form.publishedAt}
               onChange={(event) =>
-                setForm((prev) => ({ ...prev, publishedAt: event.target.value }))
+                setForm((prev) => ({
+                  ...prev,
+                  publishedAt: event.target.value,
+                }))
               }
             />
           </Stack>
@@ -545,7 +608,6 @@ export function SocialCommunicationPage() {
         severity="error"
         confirmLoading={deleteArticle.isPending}
       />
-
     </Box>
   );
 }
