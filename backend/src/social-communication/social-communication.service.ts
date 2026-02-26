@@ -367,7 +367,9 @@ export class SocialCommunicationService {
   private buildAssetProxyPath(url: string) {
     const normalizedUrl = this.normalizeUrl(url, 'url');
     const signature = this.createProxySignature('asset', normalizedUrl);
-    return `/social-communication/proxy/asset?url=${encodeURIComponent(
+    // Use a relative path so requests remain under the same /api proxy base
+    // regardless of deployment path (e.g. /api/social-communication/...).
+    return `asset?url=${encodeURIComponent(
       normalizedUrl,
     )}&exp=${signature.exp}&sig=${encodeURIComponent(signature.sig)}`;
   }
@@ -375,7 +377,8 @@ export class SocialCommunicationService {
   private buildPageProxyPath(url: string) {
     const normalizedUrl = this.normalizeUrl(url, 'url');
     const signature = this.createProxySignature('page', normalizedUrl);
-    return `/social-communication/proxy/page?url=${encodeURIComponent(
+    // Keep article navigations inside the proxied context.
+    return `page?url=${encodeURIComponent(
       normalizedUrl,
     )}&exp=${signature.exp}&sig=${encodeURIComponent(signature.sig)}`;
   }
