@@ -470,18 +470,32 @@ export class SocialCommunicationService {
 
   private rewriteHtmlForProxy(html: string, baseUrl: string) {
     let output = html;
-    output = output.replace(/<script\b[\s\S]*?<\/script>/gi, '');
     output = output.replace(/<iframe\b[\s\S]*?<\/iframe>/gi, '');
+    output = output.replace(/<base\b[^>]*>/gi, '');
     output = output.replace(
       /<meta[^>]+http-equiv\s*=\s*["']?(?:refresh|content-security-policy)["']?[^>]*>/gi,
       '',
+    );
+    output = output.replace(/<script\b[^>]*>/gi, (tag) =>
+      this.rewriteScriptTag(tag, baseUrl),
     );
     output = output.replace(
       /<(img|source|video|audio|track|embed)\b[^>]*>/gi,
       (tag) => this.rewriteMediaTag(tag, baseUrl),
     );
     output = output.replace(/<link\b[^>]*>/gi, (tag) =>
-      this.rewriteStylesheetTag(tag, baseUrl),
+      this.rewriteLinkTag(tag, baseUrl),
+    );
+    output = output.replace(
+      /<style\b[^>]*>([\s\S]*?)<\/style>/gi,
+      (fullTag: string, cssContent: string) => {
+        const rewrittenCss = this.rewriteCssForProxy(cssContent, baseUrl);
+        return fullTag.replace(cssContent, rewrittenCss);
+      },
+    );
+    output = output.replace(
+      /<[^>]*\sstyle\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)[^>]*>/gi,
+      (tag) => this.rewriteStyleAttribute(tag, baseUrl),
     );
     return output;
   }
@@ -506,10 +520,43 @@ export class SocialCommunicationService {
     return nextTag;
   }
 
-  private rewriteStylesheetTag(tag: string, baseUrl: string) {
-    if (!/rel\s*=\s*["'][^"']*stylesheet[^"']*["']/i.test(tag)) return tag;
+  private rewriteScriptTag(tag: string, baseUrl: string) {
+    return this.rewriteTagAttribute(tag, 'src', (value) =>
+      this.resolveProxyAssetValue(value, baseUrl),
+    );
+  }
+
+  private rewriteLinkTag(tag: string, baseUrl: string) {
+    const attrs = this.parseTagAttributes(tag);
+    const rel = String(attrs.rel ?? '').toLowerCase();
+
+    if (!this.shouldRewriteLinkTag(rel)) {
+      return tag;
+    }
+
     return this.rewriteTagAttribute(tag, 'href', (value) =>
       this.resolveProxyAssetValue(value, baseUrl),
+    );
+  }
+
+  private shouldRewriteLinkTag(rel: string) {
+    if (!rel.trim()) return false;
+    return [
+      'stylesheet',
+      'preload',
+      'modulepreload',
+      'prefetch',
+      'manifest',
+      'icon',
+      'apple-touch-icon',
+      'mask-icon',
+      'shortcut',
+    ].some((value) => rel.includes(value));
+  }
+
+  private rewriteStyleAttribute(tag: string, baseUrl: string) {
+    return this.rewriteTagAttribute(tag, 'style', (value) =>
+      this.rewriteCssForProxy(value, baseUrl),
     );
   }
 
