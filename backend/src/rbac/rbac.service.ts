@@ -429,13 +429,13 @@ export class RbacService {
     return this.getUserModuleAccess(userId);
   }
 
-  async lookupLdapUser(uid: string) {
-    const normalizedUid = String(uid ?? '').trim();
-    if (!normalizedUid) {
+  async lookupLdapUser(identifier: string) {
+    const normalizedIdentifier = this.normalizeLdapIdentifier(identifier);
+    if (!normalizedIdentifier) {
       throwError('VALIDATION_ERROR', { reason: 'LDAP_UID_REQUIRED' });
     }
 
-    const profile = await this.fabLdap.lookupByUid(normalizedUid);
+    const profile = await this.lookupLdapByIdentifier(normalizedIdentifier);
     if (!profile) {
       throwError('NOT_FOUND');
     }
@@ -463,8 +463,8 @@ export class RbacService {
     },
     actorUserId?: string,
   ) {
-    const uid = String(payload.uid ?? '').trim();
-    if (!uid) {
+    const identifier = this.normalizeLdapIdentifier(payload.uid);
+    if (!identifier) {
       throwError('VALIDATION_ERROR', { reason: 'LDAP_UID_REQUIRED' });
     }
 
@@ -486,10 +486,11 @@ export class RbacService {
     if (roles.length !== selectedRoleIds.length) {
       throwError('NOT_FOUND');
     }
-    const profile = await this.fabLdap.lookupByUid(uid);
+    const profile = await this.lookupLdapByIdentifier(identifier);
     if (!profile) {
-      throwError('VALIDATION_ERROR', { reason: 'LDAP_USER_NOT_FOUND', uid });
+      throwError('VALIDATION_ERROR', { reason: 'LDAP_USER_NOT_FOUND', uid: identifier });
     }
+    const uid = profile.uid;
 
     const preferredEmail = this.normalizeEmail(profile.email) ?? `${uid}@fab.intraer`;
     const preferredName = profile.name?.trim() || `Militar ${uid}`;
@@ -806,6 +807,22 @@ export class RbacService {
   private normalizeEmail(email: string | null | undefined) {
     const value = String(email ?? '').trim().toLowerCase();
     return value || null;
+  }
+
+  private normalizeLdapIdentifier(identifier: string | null | undefined) {
+    return String(identifier ?? '').trim();
+  }
+
+  private normalizeUidForLookup(identifier: string) {
+    const onlyDigits = identifier.replace(/\D/g, '');
+    return onlyDigits || identifier;
+  }
+
+  private async lookupLdapByIdentifier(identifier: string) {
+    if (identifier.includes('@')) {
+      return this.fabLdap.lookupByEmail(identifier);
+    }
+    return this.fabLdap.lookupByUid(this.normalizeUidForLookup(identifier));
   }
 
   private async resolveUniqueEmail(

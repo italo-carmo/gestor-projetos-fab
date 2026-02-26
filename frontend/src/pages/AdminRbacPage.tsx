@@ -270,7 +270,7 @@ export function AdminRbacPage() {
   const handleLookupLdap = async () => {
     const uid = ldapUid.trim();
     if (!uid) {
-      toast.push({ message: 'Informe o CPF/UID FAB.', severity: 'warning' });
+      toast.push({ message: 'Informe o CPF/UID FAB ou e-mail.', severity: 'warning' });
       return;
     }
     try {
@@ -369,7 +369,7 @@ export function AdminRbacPage() {
               <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.2} sx={{ mb: 1.4 }}>
                 <TextField
                   size="small"
-                  label="CPF/UID FAB"
+                  label="CPF/UID FAB ou e-mail"
                   value={ldapUid}
                   onChange={(event) => setLdapUid(event.target.value)}
                   sx={{ minWidth: 230 }}

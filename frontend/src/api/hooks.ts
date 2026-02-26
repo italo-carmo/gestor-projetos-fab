@@ -1174,8 +1174,8 @@ export function useRbacSimulate(params: { userId?: string; roleId?: string }) {
 
 export function useLookupLdapUser() {
   return useMutation({
-    mutationFn: async (uid: string) =>
-      (await api.get("/admin/rbac/ldap-user", { params: { uid } })).data,
+    mutationFn: async (identifier: string) =>
+      (await api.get("/admin/rbac/ldap-user", { params: { uid: identifier } })).data,
   });
 }
 
