@@ -76,7 +76,6 @@ const navItems = [
   { label: 'Calendário', to: '/calendar', icon: <CalendarMonthIcon fontSize="small" /> },
   { label: 'Reuniões', to: '/meetings', icon: <GroupsIcon fontSize="small" /> },
   { label: 'GSD e Recrutas', to: '/gsd-recruits', icon: <PeopleIcon fontSize="small" /> },
-  { label: 'Histórico de recrutas', to: '/recruits-history', icon: <PeopleIcon fontSize="small" /> },
   { label: 'Avisos', to: '/notices', icon: <CampaignIcon fontSize="small" /> },
   { label: 'Checklists', to: '/checklists', icon: <ChecklistIcon fontSize="small" /> },
   { label: 'Elos', to: '/elos', icon: <ContactPhoneIcon fontSize="small" /> },
@@ -180,10 +179,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       return canSeeCommissionTiBoards && can(me, 'meetings', 'view');
     }
     if (item.to === '/gsd-recruits') {
-      return can(me, 'localities', 'view') || (can(me, 'dashboard', 'view') && Boolean(me?.localityId));
-    }
-    if (item.to === '/recruits-history') {
-      return can(me, 'dashboard', 'view');
+      return can(me, 'localities', 'view') || can(me, 'dashboard', 'view');
     }
     if (item.to === '/admin/elo-roles') {
       return can(me, 'elo_roles', 'view');

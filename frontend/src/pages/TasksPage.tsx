@@ -1,8 +1,8 @@
-import { Box, Button, Card, CardContent, Link, MenuItem, Stack, Tab, Tabs, TextField, Typography } from '@mui/material';
-import { format } from 'date-fns';
+import { Autocomplete, Box, Button, Card, CardContent, Chip, Divider, Drawer, FormControlLabel, Link, MenuItem, Stack, Switch, Tab, Tabs, TextField, Typography } from '@mui/material';
+import { addDays, format } from 'date-fns';
 import { useEffect, useMemo, useState } from 'react';
 import { Link as RouterLink, useSearchParams } from 'react-router-dom';
-import { useLocalities, useEloRoles, usePhases, useTaskTemplates, useTasks, useMe, useBatchAssignTasks, useBatchDeleteTasks, useBatchStatusTasks, useUsers } from '../api/hooks';
+import { useLocalities, useEloRoles, usePhases, useTaskTemplates, useTasks, useMe, useBatchAssignTasks, useBatchDeleteTasks, useBatchStatusTasks, useUsers, useGenerateInstances } from '../api/hooks';
 import { useDebounce } from '../app/useDebounce';
 import { FiltersBar } from '../components/filters/FiltersBar';
 import { SkeletonState } from '../components/states/SkeletonState';
@@ -20,7 +20,7 @@ import type { GridColDef, GridRowSelectionModel } from '@mui/x-data-grid';
 import { ptBR as dataGridPtBR } from '@mui/x-data-grid/locales';
 import { useToast } from '../app/toast';
 import { parseApiError } from '../app/apiErrors';
-import { TASK_STATUS_LABELS } from '../constants/enums';
+import { TASK_PRIORITY_LABELS, TASK_STATUS_LABELS } from '../constants/enums';
 import { selectTargetLocalities } from '../constants/localities';
 import { ConfirmDialog } from '../components/dialogs/ConfirmDialog';
 
@@ -52,6 +52,7 @@ export function TasksPage() {
   const [tab, setTab] = useState(0);
   const { data: me } = useMe();
   const toast = useToast();
+  const defaultBaseDate = format(new Date(), 'yyyy-MM-dd');
 
   const search = params.get('q') ?? '';
   const debouncedSearch = useDebounce(search, 300);
@@ -86,6 +87,7 @@ export function TasksPage() {
   const canManageTaskDataByRole = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI]);
   const canManageTaskAssignments = can(me, 'task_instances', 'assign') && canManageTaskDataByRole;
   const canManageTaskData = can(me, 'task_instances', 'update') && canManageTaskDataByRole;
+  const canGenerateTaskInstances = can(me, 'task_templates', 'create') && canManageTaskDataByRole;
   const canViewUsers = can(me, 'users', 'view');
   const usersQuery = useUsers(canViewUsers);
   const phasesQuery = usePhases();
@@ -194,6 +196,44 @@ export function TasksPage() {
   const batchAssign = useBatchAssignTasks();
   const batchStatusMutation = useBatchStatusTasks();
   const batchDeleteMutation = useBatchDeleteTasks();
+  const generateInstances = useGenerateInstances();
+
+  const [createDrawerOpen, setCreateDrawerOpen] = useState(false);
+  const [createTemplateId, setCreateTemplateId] = useState('');
+  const [createBaseDate, setCreateBaseDate] = useState(defaultBaseDate);
+  const [createPriority, setCreatePriority] = useState('MEDIUM');
+  const [createReportRequired, setCreateReportRequired] = useState(false);
+  const [createLocalityIds, setCreateLocalityIds] = useState<string[]>([]);
+  const [createOffsets, setCreateOffsets] = useState<Record<string, number>>({});
+  const [createCustomOffsets, setCreateCustomOffsets] = useState(false);
+  const [createAssignedToId, setCreateAssignedToId] = useState('');
+  const [createAssigneeIds, setCreateAssigneeIds] = useState<string[]>([]);
+
+  const resetCreateForm = () => {
+    setCreateTemplateId('');
+    setCreateBaseDate(defaultBaseDate);
+    setCreatePriority('MEDIUM');
+    setCreateReportRequired(false);
+    setCreateLocalityIds([]);
+    setCreateOffsets({});
+    setCreateCustomOffsets(false);
+    setCreateAssignedToId('');
+    setCreateAssigneeIds([]);
+  };
+
+  const openCreateDrawer = () => {
+    resetCreateForm();
+    setCreateDrawerOpen(true);
+  };
+
+  const selectedCreateLocalities = localities.filter((locality) =>
+    createLocalityIds.includes(locality.id),
+  );
+
+  const createTemplate = useMemo(
+    () => (templatesQuery.data?.items ?? []).find((template: any) => template.id === createTemplateId) ?? null,
+    [createTemplateId, templatesQuery.data?.items],
+  );
 
   const updateParam = (key: string, value: string) => {
     const next = new URLSearchParams(params);
@@ -234,6 +274,55 @@ export function TasksPage() {
     }
   };
 
+  const handleCreateTasks = async () => {
+    if (!canGenerateTaskInstances) return;
+    if (!createTemplateId) {
+      toast.push({ message: 'Selecione o modelo da tarefa.', severity: 'warning' });
+      return;
+    }
+    if (!createBaseDate) {
+      toast.push({ message: 'Informe a data base de prazo.', severity: 'warning' });
+      return;
+    }
+    if (!createLocalityIds.length) {
+      toast.push({ message: 'Selecione ao menos uma localidade.', severity: 'warning' });
+      return;
+    }
+
+    const base = new Date(`${createBaseDate}T00:00:00`);
+    if (Number.isNaN(base.getTime())) {
+      toast.push({ message: 'Data base inválida.', severity: 'warning' });
+      return;
+    }
+
+    try {
+      const response = await generateInstances.mutateAsync({
+        id: createTemplateId,
+        payload: {
+          localities: createLocalityIds.map((id) => ({
+            localityId: id,
+            dueDate: addDays(base, createCustomOffsets ? (createOffsets[id] ?? 0) : 0).toISOString(),
+          })),
+          priority: createPriority,
+          reportRequired: createReportRequired,
+          assignedToId: createAssignedToId || null,
+          assigneeIds: createAssigneeIds,
+        },
+      });
+      const firstCreatedId = response?.items?.[0]?.id;
+      if (firstCreatedId) setSelectedTaskId(String(firstCreatedId));
+      setCreateDrawerOpen(false);
+      resetCreateForm();
+      toast.push({
+        message: `${createLocalityIds.length} tarefa(s) criada(s) com sucesso.`,
+        severity: 'success',
+      });
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({ message: payload.message ?? 'Erro ao criar tarefas.', severity: 'error' });
+    }
+  };
+
   if (tasksQuery.isLoading) {
     return <SkeletonState />;
   }
@@ -246,18 +335,25 @@ export function TasksPage() {
     <Box>
       <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
         <Typography variant="h4">Tarefas</Typography>
-        {can(me, 'task_instances', 'export') && (
-          <Button
-            variant="outlined"
-            onClick={() => {
-              const query = new URLSearchParams(taskFilters as any).toString();
-              const base = api.defaults.baseURL ?? '';
-              window.open(`${base}/exports/tasks.csv?${query}`, '_blank');
-            }}
-          >
-            Exportar CSV
-          </Button>
-        )}
+        <Stack direction="row" spacing={1}>
+          {canGenerateTaskInstances && (
+            <Button variant="contained" onClick={openCreateDrawer}>
+              Nova tarefa
+            </Button>
+          )}
+          {can(me, 'task_instances', 'export') && (
+            <Button
+              variant="outlined"
+              onClick={() => {
+                const query = new URLSearchParams(taskFilters as any).toString();
+                const base = api.defaults.baseURL ?? '';
+                window.open(`${base}/exports/tasks.csv?${query}`, '_blank');
+              }}
+            >
+              Exportar CSV
+            </Button>
+          )}
+        </Stack>
       </Stack>
       <Card sx={{ mb: 2 }}>
         <CardContent>
@@ -589,6 +685,282 @@ export function TasksPage() {
         user={me}
         localities={localities}
       />
+
+      <Drawer
+        anchor="right"
+        open={createDrawerOpen}
+        onClose={() => setCreateDrawerOpen(false)}
+        PaperProps={{ sx: { width: { xs: '100%', md: 540 } } }}
+      >
+        <Box p={3} sx={{ height: '100%', overflowY: 'auto' }}>
+          <Stack spacing={2}>
+            <Box>
+              <Typography variant="h6">Nova tarefa</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Crie tarefas para uma ou várias localidades de uma vez usando um modelo existente.
+              </Typography>
+            </Box>
+
+            <TextField
+              select
+              size="small"
+              label="Modelo da tarefa"
+              value={createTemplateId}
+              onChange={(event) => {
+                const nextTemplateId = String(event.target.value ?? '');
+                setCreateTemplateId(nextTemplateId);
+                const template = (templatesQuery.data?.items ?? []).find((item: any) => item.id === nextTemplateId);
+                setCreateReportRequired(Boolean(template?.reportRequiredDefault));
+              }}
+            >
+              <MenuItem value="">Selecionar modelo</MenuItem>
+              {(templatesQuery.data?.items ?? []).map((template: any) => (
+                <MenuItem key={template.id} value={template.id}>
+                  {template.title}
+                </MenuItem>
+              ))}
+            </TextField>
+
+            {createTemplate && (
+              <Box sx={{ p: 1.4, border: '1px solid #DEE7F2', borderRadius: 2, bgcolor: '#F8FBFF' }}>
+                <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+                  {createTemplate.title}
+                </Typography>
+                <Stack direction="row" spacing={0.8} flexWrap="wrap">
+                  <Chip
+                    size="small"
+                    variant="outlined"
+                    label={`Fase: ${phaseMap.get(createTemplate.phaseId) ?? 'Não definida'}`}
+                  />
+                  <Chip
+                    size="small"
+                    variant="outlined"
+                    label={`Relatório padrão: ${createTemplate.reportRequiredDefault ? 'Sim' : 'Não'}`}
+                  />
+                </Stack>
+              </Box>
+            )}
+
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
+              <TextField
+                size="small"
+                type="date"
+                label="Prazo base"
+                value={createBaseDate}
+                onChange={(event) => setCreateBaseDate(event.target.value)}
+                InputLabelProps={{ shrink: true }}
+                fullWidth
+              />
+              <TextField
+                select
+                size="small"
+                label="Prioridade"
+                value={createPriority}
+                onChange={(event) => setCreatePriority(event.target.value)}
+                fullWidth
+              >
+                {['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'].map((priority) => (
+                  <MenuItem key={priority} value={priority}>
+                    {TASK_PRIORITY_LABELS[priority] ?? priority}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Stack>
+
+            <Autocomplete
+              multiple
+              disableCloseOnSelect
+              options={localities}
+              value={selectedCreateLocalities}
+              getOptionLabel={(option) => option.name}
+              isOptionEqualToValue={(option, value) => option.id === value.id}
+              onChange={(_, options) => {
+                const ids = options.map((option) => option.id);
+                setCreateLocalityIds(ids);
+                setCreateOffsets((prev) =>
+                  ids.reduce((acc: Record<string, number>, id: string) => {
+                    acc[id] = prev[id] ?? 0;
+                    return acc;
+                  }, {}),
+                );
+              }}
+              renderTags={(value, getTagProps) =>
+                value.map((option, index) => (
+                  <Chip
+                    {...getTagProps({ index })}
+                    key={option.id}
+                    label={option.name}
+                    size="small"
+                    variant="outlined"
+                  />
+                ))
+              }
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  size="small"
+                  label="Localidades"
+                  placeholder={createLocalityIds.length ? '' : 'Selecione uma ou mais localidades'}
+                />
+              )}
+            />
+
+            <Stack direction="row" spacing={1}>
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={() => {
+                  const ids = localities.map((locality) => locality.id);
+                  setCreateLocalityIds(ids);
+                  setCreateOffsets(ids.reduce((acc: Record<string, number>, id: string) => {
+                    acc[id] = 0;
+                    return acc;
+                  }, {}));
+                }}
+              >
+                Selecionar todas
+              </Button>
+              <Button
+                size="small"
+                onClick={() => {
+                  setCreateLocalityIds([]);
+                  setCreateOffsets({});
+                }}
+              >
+                Limpar seleção
+              </Button>
+            </Stack>
+
+            <FormControlLabel
+              control={(
+                <Switch
+                  size="small"
+                  checked={createCustomOffsets}
+                  onChange={(event) => setCreateCustomOffsets(event.target.checked)}
+                />
+              )}
+              label="Definir prazo individual por localidade"
+            />
+
+            {createCustomOffsets && createLocalityIds.length > 0 && (
+              <Box sx={{ p: 1.4, border: '1px dashed #CAD7E5', borderRadius: 2 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                  Ajuste os dias para mais (+) ou para menos (-) em relação ao prazo base.
+                </Typography>
+                <Stack spacing={1}>
+                  {selectedCreateLocalities.map((locality) => (
+                    <TextField
+                      key={locality.id}
+                      size="small"
+                      type="number"
+                      label={locality.name}
+                      value={createOffsets[locality.id] ?? 0}
+                      onChange={(event) => {
+                        const value = Number(event.target.value);
+                        setCreateOffsets((prev) => ({ ...prev, [locality.id]: Number.isFinite(value) ? value : 0 }));
+                      }}
+                      inputProps={{ step: 1 }}
+                    />
+                  ))}
+                </Stack>
+              </Box>
+            )}
+
+            <Divider />
+
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
+              <TextField
+                select
+                size="small"
+                label="Responsável principal"
+                value={createAssignedToId}
+                onChange={(event) => {
+                  const value = String(event.target.value ?? '');
+                  setCreateAssignedToId(value);
+                  if (value && !createAssigneeIds.includes(value)) {
+                    setCreateAssigneeIds((prev) => [...prev, value]);
+                  }
+                }}
+                fullWidth
+                disabled={!canManageTaskAssignments || me?.executive_hide_pii}
+              >
+                <MenuItem value="">Sem responsável</MenuItem>
+                {assignees.map((assignee) => (
+                  <MenuItem key={assignee.id} value={assignee.id}>
+                    {assignee.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+
+              <TextField
+                select
+                size="small"
+                label="Relatório obrigatório"
+                value={createReportRequired ? 'true' : 'false'}
+                onChange={(event) => setCreateReportRequired(event.target.value === 'true')}
+                fullWidth
+              >
+                <MenuItem value="true">Sim</MenuItem>
+                <MenuItem value="false">Não</MenuItem>
+              </TextField>
+            </Stack>
+
+            <Autocomplete
+              multiple
+              options={assignees}
+              value={assignees.filter((assignee) => createAssigneeIds.includes(assignee.id))}
+              getOptionLabel={(option) => option.name}
+              isOptionEqualToValue={(option, value) => option.id === value.id}
+              onChange={(_, options) => {
+                const ids = options.map((option) => option.id);
+                setCreateAssigneeIds(ids);
+                if (createAssignedToId && !ids.includes(createAssignedToId)) {
+                  setCreateAssignedToId('');
+                }
+              }}
+              disabled={!canManageTaskAssignments || me?.executive_hide_pii}
+              renderTags={(value, getTagProps) =>
+                value.map((option, index) => (
+                  <Chip
+                    {...getTagProps({ index })}
+                    key={option.id}
+                    label={option.name}
+                    size="small"
+                    variant="outlined"
+                  />
+                ))
+              }
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  size="small"
+                  label="Demais responsáveis (opcional)"
+                  placeholder="Selecione usuários"
+                />
+              )}
+            />
+
+            <Stack direction="row" spacing={1} justifyContent="flex-end">
+              <Button onClick={() => setCreateDrawerOpen(false)}>
+                Cancelar
+              </Button>
+              <Button
+                variant="contained"
+                onClick={handleCreateTasks}
+                disabled={
+                  !canGenerateTaskInstances ||
+                  !createTemplateId ||
+                  !createBaseDate ||
+                  createLocalityIds.length === 0 ||
+                  generateInstances.isPending
+                }
+              >
+                {generateInstances.isPending ? 'Criando...' : 'Criar tarefas'}
+              </Button>
+            </Stack>
+          </Stack>
+        </Box>
+      </Drawer>
 
       <ConfirmDialog
         open={batchDeleteOpen}

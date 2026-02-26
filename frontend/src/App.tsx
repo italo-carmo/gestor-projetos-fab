@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { AppShell } from './layouts/AppShell';
 import { DashboardNationalPage } from './pages/DashboardNationalPage';
 import { DashboardLocalityPage } from './pages/DashboardLocalityPage';
@@ -18,7 +18,6 @@ import { NoticesPage } from './pages/NoticesPage';
 import { ChecklistsPage } from './pages/ChecklistsPage';
 import { ElosPage } from './pages/ElosPage';
 import { GsdRecruitsPage } from './pages/GsdRecruitsPage';
-import { RecruitsHistoryPage } from './pages/RecruitsHistoryPage';
 import { OrgChartPage } from './pages/OrgChartPage';
 import { AuditPage } from './pages/AuditPage';
 import { TaskTemplatesPage } from './pages/TaskTemplatesPage';
@@ -41,6 +40,13 @@ import { useMe } from './api/hooks';
 function HomeRedirect() {
   const { data } = useMe();
   return <Navigate to={resolveHomePath(data)} replace />;
+}
+
+function RecruitsHistoryRedirect() {
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  params.set('tab', 'historico');
+  return <Navigate to={`/gsd-recruits?${params.toString()}`} replace />;
 }
 
 function App() {
@@ -108,7 +114,7 @@ function App() {
                   }
                 />
                 <Route path="/gsd-recruits" element={<GsdRecruitsPage />} />
-                <Route path="/recruits-history" element={<RecruitsHistoryPage />} />
+                <Route path="/recruits-history" element={<RecruitsHistoryRedirect />} />
                 <Route path="/notices" element={<NoticesPage />} />
                 <Route path="/checklists" element={<ChecklistsPage />} />
                 <Route path="/templates" element={<TaskTemplatesPage />} />

@@ -636,109 +636,123 @@ export function ActivitiesPage() {
         <Card>
           <CardContent>
             {canManageBatch && (
-              <Stack
-                direction={{ xs: 'column', lg: 'row' }}
-                spacing={1}
-                alignItems={{ xs: 'stretch', lg: 'center' }}
-                sx={{ mb: 2 }}
+              <Box
+                sx={{
+                  mb: 2,
+                  p: 1.4,
+                  borderRadius: 2,
+                  border: '1px solid #DBE4EF',
+                  bgcolor: '#F8FBFF',
+                }}
               >
-                <Chip
-                  size="small"
-                  label={`Selecionadas: ${selectedIds.length}`}
-                  color={selectedIds.length > 0 ? 'primary' : 'default'}
-                  variant={selectedIds.length > 0 ? 'filled' : 'outlined'}
-                />
-                <TextField
-                  select
-                  size="small"
-                  label="Status em massa"
-                  value={batchStatus}
-                  onChange={(e) => setBatchStatus(e.target.value)}
-                  sx={{ minWidth: 200 }}
-                  disabled={!selectedIds.length}
-                >
-                  <MenuItem value="">Selecionar</MenuItem>
-                  {ActivityStatus.map((status) => (
-                    <MenuItem key={status} value={status}>
-                      {ACTIVITY_STATUS_LABELS[status] ?? status}
-                    </MenuItem>
-                  ))}
-                </TextField>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  onClick={handleBatchStatusApply}
-                  disabled={!selectedIds.length || !batchStatus || batchUpdateActivityStatus.isPending}
-                >
-                  Aplicar status
-                </Button>
-                <TextField
-                  select
-                  size="small"
-                  label="Especialidade em massa"
-                  value={batchSpecialtyId}
-                  onChange={(e) => setBatchSpecialtyId(e.target.value)}
-                  sx={{ minWidth: 220 }}
-                  disabled={!selectedIds.length}
-                >
-                  <MenuItem value="">Todas as especialidades</MenuItem>
-                  {specialties.map((specialty: any) => (
-                    <MenuItem key={specialty.id} value={specialty.id}>
-                      {specialty.name}
-                    </MenuItem>
-                  ))}
-                </TextField>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  onClick={handleBatchSpecialtyApply}
-                  disabled={!selectedIds.length || batchUpdateActivitySpecialty.isPending}
-                >
-                  Aplicar especialidade
-                </Button>
-                <TextField
-                  select
-                  size="small"
-                  label="Responsável em massa"
-                  value={batchResponsibleUserId}
-                  onChange={(e) => setBatchResponsibleUserId(e.target.value)}
-                  sx={{ minWidth: 240 }}
-                  disabled={!selectedIds.length || !canBatchAssignResponsible}
-                  helperText={
-                    !canBatchAssignResponsible
-                      ? 'Selecione atividades da mesma localidade.'
-                      : undefined
-                  }
-                >
-                  <MenuItem value="">Sem responsável</MenuItem>
-                  {batchResponsibleOptions.map((user: any) => (
-                    <MenuItem key={user.id} value={user.id}>
-                      {user.name}
-                    </MenuItem>
-                  ))}
-                </TextField>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  onClick={handleBatchResponsibleApply}
-                  disabled={
-                    !selectedIds.length ||
-                    !canBatchAssignResponsible ||
-                    batchUpdateActivityResponsible.isPending
-                  }
-                >
-                  Aplicar responsável
-                </Button>
-                <Button
-                  color="error"
-                  variant="outlined"
-                  size="small"
-                  onClick={() => setBatchDeleteConfirmOpen(true)}
-                  disabled={!selectedIds.length || batchDeleteActivities.isPending}
-                >
-                  Excluir selecionadas
-                </Button>
-              </Stack>
+                <Stack spacing={1}>
+                  <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>
+                    <Chip
+                      size="small"
+                      label={`Selecionadas: ${selectedIds.length}`}
+                      color={selectedIds.length > 0 ? 'primary' : 'default'}
+                      variant={selectedIds.length > 0 ? 'filled' : 'outlined'}
+                    />
+                    {!canBatchAssignResponsible && selectedIds.length > 0 && (
+                      <Typography variant="caption" color="text.secondary">
+                        Responsável em massa exige atividades da mesma localidade.
+                      </Typography>
+                    )}
+                  </Stack>
+
+                  <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                    <TextField
+                      select
+                      size="small"
+                      label="Status"
+                      value={batchStatus}
+                      onChange={(e) => setBatchStatus(e.target.value)}
+                      sx={{ width: { xs: '100%', sm: 170 } }}
+                      disabled={!selectedIds.length}
+                    >
+                      <MenuItem value="">Selecionar</MenuItem>
+                      {ActivityStatus.map((status) => (
+                        <MenuItem key={status} value={status}>
+                          {ACTIVITY_STATUS_LABELS[status] ?? status}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      sx={{ minHeight: 36, px: 1.4, whiteSpace: 'nowrap' }}
+                      onClick={handleBatchStatusApply}
+                      disabled={!selectedIds.length || !batchStatus || batchUpdateActivityStatus.isPending}
+                    >
+                      Aplicar status
+                    </Button>
+                    <TextField
+                      select
+                      size="small"
+                      label="Especialidade"
+                      value={batchSpecialtyId}
+                      onChange={(e) => setBatchSpecialtyId(e.target.value)}
+                      sx={{ width: { xs: '100%', sm: 210 } }}
+                      disabled={!selectedIds.length}
+                    >
+                      <MenuItem value="">Todas</MenuItem>
+                      {specialties.map((specialty: any) => (
+                        <MenuItem key={specialty.id} value={specialty.id}>
+                          {specialty.name}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      sx={{ minHeight: 36, px: 1.4, whiteSpace: 'nowrap' }}
+                      onClick={handleBatchSpecialtyApply}
+                      disabled={!selectedIds.length || batchUpdateActivitySpecialty.isPending}
+                    >
+                      Aplicar especialidade
+                    </Button>
+                    <TextField
+                      select
+                      size="small"
+                      label="Responsável"
+                      value={batchResponsibleUserId}
+                      onChange={(e) => setBatchResponsibleUserId(e.target.value)}
+                      sx={{ width: { xs: '100%', sm: 240 } }}
+                      disabled={!selectedIds.length || !canBatchAssignResponsible}
+                    >
+                      <MenuItem value="">Sem responsável</MenuItem>
+                      {batchResponsibleOptions.map((user: any) => (
+                        <MenuItem key={user.id} value={user.id}>
+                          {user.name}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      sx={{ minHeight: 36, px: 1.4, whiteSpace: 'nowrap' }}
+                      onClick={handleBatchResponsibleApply}
+                      disabled={
+                        !selectedIds.length ||
+                        !canBatchAssignResponsible ||
+                        batchUpdateActivityResponsible.isPending
+                      }
+                    >
+                      Aplicar responsável
+                    </Button>
+                    <Button
+                      color="error"
+                      variant="outlined"
+                      size="small"
+                      sx={{ minHeight: 36, px: 1.4, whiteSpace: 'nowrap' }}
+                      onClick={() => setBatchDeleteConfirmOpen(true)}
+                      disabled={!selectedIds.length || batchDeleteActivities.isPending}
+                    >
+                      Excluir selecionadas
+                    </Button>
+                  </Stack>
+                </Stack>
+              </Box>
             )}
             <Typography variant="h6" sx={{ mb: 1 }}>Atividades de Campo</Typography>
             {items.length === 0 ? (
