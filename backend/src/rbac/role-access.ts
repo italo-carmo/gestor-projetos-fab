@@ -1,7 +1,9 @@
 import type { RbacUser } from './rbac.types';
 
 export const ROLE_COORDENACAO_CIPAVD = 'Coordenação CIPAVD';
-export const ROLE_COMANDANTE_COMGEP = 'Comandante COMGEP';
+export const ROLE_COMISSAO_CIPAVD = 'Comissão CIPAVD';
+export const ROLE_COMGEP = 'COMGEP';
+export const ROLE_COMANDANTE_COMGEP = ROLE_COMGEP;
 export const ROLE_TI = 'TI';
 export const ROLE_GSD_LOCALIDADE = 'GSD Localidade';
 export const ROLE_ADMIN_ESPECIALIDADE_LOCAL = 'Admin Especialidade Local';
@@ -9,12 +11,23 @@ export const ROLE_ADMIN_ESPECIALIDADE_NACIONAL = 'Admin Especialidade Nacional';
 export const ROLE_ADMIN_LOCALIDADE = 'Admin Localidade';
 export const ROLE_ADMINISTRACAO_LOCAL = 'Administração Local';
 
+const COMGEP_ROLE_ALIASES = new Set(['comgep', 'comandante comgep']);
+
 export function normalizeRoleName(roleName: string | null | undefined) {
-  return String(roleName ?? '')
+  const normalized = String(roleName ?? '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase();
+  if (COMGEP_ROLE_ALIASES.has(normalized)) return 'comgep';
+  return normalized;
+}
+
+export function canonicalRoleName(roleName: string | null | undefined) {
+  const normalized = normalizeRoleName(roleName);
+  if (normalized === 'comgep') return ROLE_COMGEP;
+  return String(roleName ?? '').replace(/\s+/g, ' ').trim();
 }
 
 export function hasRole(user: RbacUser | undefined, roleName: string) {
@@ -31,6 +44,7 @@ export function hasAnyRole(user: RbacUser | undefined, roleNames: string[]) {
 export function isNationalCommissionMember(user: RbacUser | undefined) {
   return hasAnyRole(user, [
     ROLE_COORDENACAO_CIPAVD,
+    ROLE_COMISSAO_CIPAVD,
     ROLE_COMANDANTE_COMGEP,
   ]);
 }
@@ -100,7 +114,9 @@ export function canEditRecruitsByRole(
   targetLocalityId: string,
 ) {
   if (!user) return false;
-  if (hasRole(user, ROLE_COORDENACAO_CIPAVD)) return true;
+  if (hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_COMISSAO_CIPAVD])) {
+    return true;
+  }
   if (hasRole(user, ROLE_GSD_LOCALIDADE) && user.localityId === targetLocalityId) {
     return true;
   }

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { throwError } from '../common/http-error';
+import { canonicalRoleName } from '../rbac/role-access';
 
 const LOCALITY_REQUIRED_ROLE_NAMES = new Set([
   'admin especialidade local',
@@ -33,6 +34,22 @@ function roleRequiresSpecialty(roleName: string | null | undefined) {
 @Injectable()
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private toRoleResponse(role: { id: string; name: string }) {
+    return {
+      id: role.id,
+      name: canonicalRoleName(role.name),
+    };
+  }
+
+  private mapUserRoles<T extends { roles: Array<{ role: { id: string; name: string } }> }>(user: T) {
+    return {
+      ...user,
+      roles: user.roles.map((item) => ({
+        role: this.toRoleResponse(item.role),
+      })),
+    };
+  }
 
   private readonly authInclude = {
     roles: {
@@ -81,8 +98,8 @@ export class UsersService {
     });
   }
 
-  list() {
-    return this.prisma.user.findMany({
+  async list() {
+    const users = await this.prisma.user.findMany({
       select: {
         id: true,
         name: true,
@@ -106,6 +123,7 @@ export class UsersService {
       },
       orderBy: { name: 'asc' },
     });
+    return users.map((user) => this.mapUserRoles(user));
   }
 
   async update(
@@ -222,7 +240,7 @@ export class UsersService {
       }
     });
 
-    return this.prisma.user.findUnique({
+    const user = await this.prisma.user.findUnique({
       where: { id },
       select: {
         id: true,
@@ -246,6 +264,7 @@ export class UsersService {
         },
       },
     });
+    return user ? this.mapUserRoles(user) : null;
   }
 
   async removeRole(userId: string, roleId: string) {

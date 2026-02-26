@@ -8,6 +8,8 @@ import { AuditService } from '../audit/audit.service';
 import { RbacUser } from './rbac.types';
 import { FabLdapService } from '../ldap/fab-ldap.service';
 import {
+  canonicalRoleName,
+  ROLE_COMISSAO_CIPAVD,
   normalizeRoleName,
   ROLE_COMANDANTE_COMGEP,
   ROLE_COORDENACAO_CIPAVD,
@@ -86,7 +88,11 @@ export class RbacService {
   }
 
   async listRoles() {
-    return this.prisma.role.findMany({ orderBy: { name: 'asc' } });
+    const roles = await this.prisma.role.findMany({ orderBy: { name: 'asc' } });
+    return roles.map((role) => ({
+      ...role,
+      name: canonicalRoleName(role.name),
+    }));
   }
 
   async createRole(data: Prisma.RoleCreateInput) {
@@ -188,7 +194,7 @@ export class RbacService {
       version: '1.0',
       exportedAt: new Date().toISOString(),
       roles: roles.map((role) => ({
-        name: role.name,
+        name: canonicalRoleName(role.name),
         description: role.description ?? undefined,
         isSystemRole: role.isSystemRole,
         wildcard: role.wildcard,
@@ -603,7 +609,7 @@ export class RbacService {
             eloRoleId: userWithRoles.eloRoleId,
             roles: userWithRoles.roles.map((item) => ({
               id: item.role.id,
-              name: item.role.name,
+              name: canonicalRoleName(item.role.name),
             })),
           }
         : null,
@@ -671,7 +677,7 @@ export class RbacService {
     const allRoles = user.roles
       .map((userRole) => ({
         id: userRole.role.id,
-        name: userRole.role.name,
+        name: canonicalRoleName(userRole.role.name),
         wildcard: userRole.role.wildcard,
         constraintsTemplateJson: userRole.role.constraintsTemplateJson as Record<string, unknown> | null,
         flagsJson: userRole.role.flagsJson as Record<string, unknown> | null,
@@ -693,6 +699,7 @@ export class RbacService {
     const hasNationalScope =
       normalizedRoles.has(normalizeRoleName(ROLE_TI)) ||
       normalizedRoles.has(normalizeRoleName(ROLE_COORDENACAO_CIPAVD)) ||
+      normalizedRoles.has(normalizeRoleName(ROLE_COMISSAO_CIPAVD)) ||
       normalizedRoles.has(normalizeRoleName(ROLE_COMANDANTE_COMGEP));
     const moduleAccessOverrides = user.moduleAccessOverrides.map((item) => ({
       resource: item.resource,

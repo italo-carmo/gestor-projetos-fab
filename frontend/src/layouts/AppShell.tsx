@@ -48,6 +48,7 @@ import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { useDebounce } from '../app/useDebounce';
 import { can } from '../app/rbac';
 import {
+  canonicalRoleName,
   hasAnyRole,
   hasNationalManagementScope,
   ROLE_COMANDANTE_COMGEP,
@@ -100,7 +101,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const { data: me } = useMe();
   const localitiesQuery = useLocalities();
-  const currentRoleLabel = me?.activeRole?.name ?? me?.roles?.[0]?.name ?? 'Sem papel';
+  const currentRoleLabel = canonicalRoleName(me?.activeRole?.name ?? me?.roles?.[0]?.name ?? 'Sem papel');
   const activeRoleId = me?.activeRole?.id ?? me?.activeRoleId ?? me?.roles?.[0]?.id ?? '';
   const canUseGlobalLocalityFilter = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI]);
   const availableGlobalLocalities = useMemo(
@@ -501,7 +502,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             >
               {(me?.roles ?? []).map((role: any) => (
                 <MenuItem key={String(role.id)} value={String(role.id)}>
-                  {String(role.name)}
+                  {canonicalRoleName(role.name)}
                 </MenuItem>
               ))}
             </TextField>

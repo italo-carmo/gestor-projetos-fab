@@ -2950,7 +2950,7 @@ export const ROLE_SUGGESTIONS: Record<string, SeedRolePermission[]> = {
       "scope": "LOCALITY_SPECIALTY"
     }
   ],
-  "Comandante COMGEP": [
+  "COMGEP": [
     {
       "resource": "kpis",
       "action": "view",
@@ -2990,7 +2990,7 @@ export async function seedRbac(prisma: PrismaClient) {
     { name: "Coordenação CIPAVD", description: "Coordenação nacional do programa", isSystemRole: true },
     { name: "Admin Especialidade Local", description: "Administra especialidade dentro da localidade", isSystemRole: true },
     { name: "GSD Localidade", description: "Gestão local do programa", isSystemRole: true },
-    { name: "Comandante COMGEP", description: "Visão executiva/gerencial (sem PII)", isSystemRole: true },
+    { name: "COMGEP", description: "Visão executiva/gerencial (sem PII)", isSystemRole: true },
   ];
 
   for (const r of systemRoles) {

@@ -2,9 +2,12 @@ import { can } from './rbac';
 
 export const ROLE_COORDENACAO_CIPAVD = 'Coordenação CIPAVD';
 export const ROLE_COMISSAO_CIPAVD = 'Comissão CIPAVD';
-export const ROLE_COMANDANTE_COMGEP = 'Comandante COMGEP';
+export const ROLE_COMGEP = 'COMGEP';
+export const ROLE_COMANDANTE_COMGEP = ROLE_COMGEP;
 export const ROLE_TI = 'TI';
 export const ROLE_GSD_LOCALIDADE = 'GSD Localidade';
+
+const COMGEP_ROLE_ALIASES = new Set(['comgep', 'comandante comgep']);
 
 type MePayload = {
   roles?: Array<{ id?: string; name?: string }>;
@@ -14,11 +17,20 @@ type MePayload = {
 };
 
 export function normalizeRoleName(roleName: string | null | undefined) {
-  return String(roleName ?? '')
+  const normalized = String(roleName ?? '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase();
+  if (COMGEP_ROLE_ALIASES.has(normalized)) return 'comgep';
+  return normalized;
+}
+
+export function canonicalRoleName(roleName: string | null | undefined) {
+  const normalized = normalizeRoleName(roleName);
+  if (normalized === 'comgep') return ROLE_COMGEP;
+  return String(roleName ?? '').replace(/\s+/g, ' ').trim();
 }
 
 export function hasRole(user: MePayload | undefined, roleName: string) {

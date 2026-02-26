@@ -613,7 +613,7 @@
       ]
     },
     {
-      "name": "Comandante COMGEP",
+      "name": "COMGEP",
       "isSystemRole": true,
       "wildcard": false,
       "flags": {
