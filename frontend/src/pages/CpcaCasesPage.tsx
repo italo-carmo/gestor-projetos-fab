@@ -393,8 +393,11 @@ export function CpcaCasesPage() {
       outsourcedAccused: Boolean(form.outsourcedAccused),
       contractorReferralDate: toNullable(form.contractorReferralDate),
       contractorFollowUpNotes: toNullable(form.contractorFollowUpNotes),
-      statusChangeNote: toNullable(form.statusChangeNote),
     };
+
+    if (!isCreateMode) {
+      payload.statusChangeNote = toNullable(form.statusChangeNote);
+    }
 
     try {
       if (isCreateMode) {
