@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Param, Post, Put, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Put,
+  UseGuards,
+} from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../common/current-user.decorator';
 import { RequirePermission } from '../rbac/require-permission.decorator';
@@ -24,20 +32,29 @@ export class TaskTemplatesController {
   @Post()
   @RequirePermission('task_templates', 'create')
   create(@Body() dto: TaskTemplateDto, @CurrentUser() user: RbacUser) {
-    return this.tasks.createTaskTemplate({
-      title: dto.title,
-      description: dto.description ?? null,
-      phase: { connect: { id: dto.phaseId } },
-      specialty: dto.specialtyId ? { connect: { id: dto.specialtyId } } : undefined,
-      eloRole: dto.eloRoleId ? { connect: { id: dto.eloRoleId } } : undefined,
-      appliesToAllLocalities: dto.appliesToAllLocalities,
-      reportRequiredDefault: dto.reportRequiredDefault,
-    }, user);
+    return this.tasks.createTaskTemplate(
+      {
+        title: dto.title,
+        description: dto.description ?? null,
+        phase: { connect: { id: dto.phaseId } },
+        specialty: dto.specialtyId
+          ? { connect: { id: dto.specialtyId } }
+          : undefined,
+        eloRole: dto.eloRoleId ? { connect: { id: dto.eloRoleId } } : undefined,
+        appliesToAllLocalities: dto.appliesToAllLocalities,
+        reportRequiredDefault: dto.reportRequiredDefault,
+      },
+      user,
+    );
   }
 
   @Put(':id')
   @RequirePermission('task_templates', 'update')
-  update(@Param('id') id: string, @Body() dto: UpdateTaskTemplateDto, @CurrentUser() user: RbacUser) {
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateTaskTemplateDto,
+    @CurrentUser() user: RbacUser,
+  ) {
     return this.tasks.updateTaskTemplate(
       id,
       {
@@ -64,7 +81,6 @@ export class TaskTemplatesController {
       id,
       {
         localities: dto.localities,
-        reportRequired: dto.reportRequired,
         priority: dto.priority,
         meetingId: dto.meetingId ?? null,
         assignedToId: dto.assignedToId ?? null,

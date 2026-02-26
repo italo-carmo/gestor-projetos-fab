@@ -1,12 +1,8 @@
-import { IsArray, IsBoolean, IsOptional, IsString } from 'class-validator';
+import { IsArray, IsOptional, IsString } from 'class-validator';
 
 export class GenerateInstancesDto {
   @IsArray()
   localities: { localityId: string; dueDate: string }[];
-
-  @IsOptional()
-  @IsBoolean()
-  reportRequired?: boolean;
 
   @IsOptional()
   @IsString()

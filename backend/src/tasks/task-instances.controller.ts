@@ -1,4 +1,14 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Put,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../common/current-user.decorator';
 import { RequirePermission } from '../rbac/require-permission.decorator';
@@ -11,6 +21,8 @@ import { TaskMeetingDto } from './dto/task-meeting.dto';
 import { TaskProgressDto } from './dto/task-progress.dto';
 import { TaskSpecialtyDto } from './dto/task-specialty.dto';
 import { TaskStatusDto } from './dto/task-status.dto';
+import { CreateTaskInstanceDto } from './dto/create-task-instance.dto';
+import { TaskTitleDto } from './dto/task-title.dto';
 import { TasksService } from './tasks.service';
 
 @Controller('task-instances')
@@ -20,7 +32,10 @@ export class TaskInstancesController {
 
   @Get('assignees')
   @RequirePermission('task_instances', 'assign')
-  listAssignees(@Query('localityId') localityId: string | undefined, @CurrentUser() user: RbacUser) {
+  listAssignees(
+    @Query('localityId') localityId: string | undefined,
+    @CurrentUser() user: RbacUser,
+  ) {
     return this.tasks.listAssignees(localityId, user);
   }
 
@@ -41,35 +56,82 @@ export class TaskInstancesController {
     @Query('pageSize') pageSize: string | undefined,
     @CurrentUser() user: RbacUser,
   ) {
-    return this.tasks.listTaskInstances({
-      localityId,
-      phaseId,
-      status,
-      assigneeId,
-      assigneeIds,
-      dueFrom,
-      dueTo,
-      meetingId,
-      eloRoleId,
-      specialtyId,
-      page,
-      pageSize,
-    }, user);
+    return this.tasks.listTaskInstances(
+      {
+        localityId,
+        phaseId,
+        status,
+        assigneeId,
+        assigneeIds,
+        dueFrom,
+        dueTo,
+        meetingId,
+        eloRoleId,
+        specialtyId,
+        page,
+        pageSize,
+      },
+      user,
+    );
+  }
+
+  @Post()
+  @RequirePermission('task_instances', 'update')
+  create(@Body() dto: CreateTaskInstanceDto, @CurrentUser() user: RbacUser) {
+    return this.tasks.createTaskInstancesManual(
+      {
+        title: dto.title,
+        description: dto.description ?? null,
+        phaseId: dto.phaseId,
+        dueDate: dto.dueDate,
+        priority: dto.priority,
+        localityIds: dto.localityIds ?? [],
+        assignedToId: dto.assignedToId ?? null,
+        assigneeIds: dto.assigneeIds ?? [],
+      },
+      user,
+    );
   }
 
   @Put('batch/assign')
   @RequirePermission('task_instances', 'assign')
   batchAssign(
-    @Body() body: { ids: string[]; assignedToId: string | null; assigneeIds?: string[] },
+    @Body()
+    body: {
+      ids: string[];
+      assignedToId: string | null;
+      assigneeIds?: string[];
+    },
     @CurrentUser() user: RbacUser,
   ) {
-    return this.tasks.batchAssign(body.ids ?? [], body.assignedToId ?? null, body.assigneeIds ?? [], user);
+    return this.tasks.batchAssign(
+      body.ids ?? [],
+      body.assignedToId ?? null,
+      body.assigneeIds ?? [],
+      user,
+    );
   }
 
   @Put('batch/status')
   @RequirePermission('task_instances', 'update')
-  batchStatus(@Body() body: { ids: string[]; status: string }, @CurrentUser() user: RbacUser) {
+  batchStatus(
+    @Body() body: { ids: string[]; status: string },
+    @CurrentUser() user: RbacUser,
+  ) {
     return this.tasks.batchStatus(body.ids ?? [], body.status as any, user);
+  }
+
+  @Put('batch/progress')
+  @RequirePermission('task_instances', 'update')
+  batchProgress(
+    @Body() body: { ids: string[]; progressPercent: number },
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.tasks.batchProgress(
+      body.ids ?? [],
+      Number(body.progressPercent),
+      user,
+    );
   }
 
   @Post('batch/delete')
@@ -86,7 +148,11 @@ export class TaskInstancesController {
 
   @Post(':id/comments')
   @RequirePermission('task_instances', 'update')
-  addComment(@Param('id') id: string, @Body() dto: TaskCommentDto, @CurrentUser() user: RbacUser) {
+  addComment(
+    @Param('id') id: string,
+    @Body() dto: TaskCommentDto,
+    @CurrentUser() user: RbacUser,
+  ) {
     return this.tasks.addComment(id, dto.text, user);
   }
 
@@ -98,7 +164,11 @@ export class TaskInstancesController {
 
   @Put(':id/status')
   @RequirePermission('task_instances', 'update')
-  updateStatus(@Param('id') id: string, @Body() dto: TaskStatusDto, @CurrentUser() user: RbacUser) {
+  updateStatus(
+    @Param('id') id: string,
+    @Body() dto: TaskStatusDto,
+    @CurrentUser() user: RbacUser,
+  ) {
     return this.tasks.updateStatus(id, dto.status as any, user);
   }
 
@@ -112,27 +182,53 @@ export class TaskInstancesController {
     return this.tasks.updateProgress(id, dto.progressPercent, user);
   }
 
+  @Put(':id/title')
+  @RequirePermission('task_instances', 'update')
+  updateTitle(
+    @Param('id') id: string,
+    @Body() dto: TaskTitleDto,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.tasks.updateTaskTitle(id, dto.title, user);
+  }
+
   @Put(':id/assign')
   @RequirePermission('task_instances', 'assign')
-  assign(@Param('id') id: string, @Body() dto: TaskAssignDto, @CurrentUser() user: RbacUser) {
+  assign(
+    @Param('id') id: string,
+    @Body() dto: TaskAssignDto,
+    @CurrentUser() user: RbacUser,
+  ) {
     return this.tasks.assignTask(id, dto, user);
   }
 
   @Put(':id/meeting')
   @RequirePermission('task_instances', 'update')
-  updateMeeting(@Param('id') id: string, @Body() dto: TaskMeetingDto, @CurrentUser() user: RbacUser) {
+  updateMeeting(
+    @Param('id') id: string,
+    @Body() dto: TaskMeetingDto,
+    @CurrentUser() user: RbacUser,
+  ) {
     return this.tasks.updateTaskMeeting(id, dto.meetingId ?? null, user);
   }
 
   @Put(':id/elo-role')
   @RequirePermission('task_instances', 'update')
-  updateEloRole(@Param('id') id: string, @Body() dto: TaskEloRoleDto, @CurrentUser() user: RbacUser) {
+  updateEloRole(
+    @Param('id') id: string,
+    @Body() dto: TaskEloRoleDto,
+    @CurrentUser() user: RbacUser,
+  ) {
     return this.tasks.updateTaskEloRole(id, dto.eloRoleId ?? null, user);
   }
 
   @Put(':id/specialty')
   @RequirePermission('task_instances', 'update')
-  updateSpecialty(@Param('id') id: string, @Body() dto: TaskSpecialtyDto, @CurrentUser() user: RbacUser) {
+  updateSpecialty(
+    @Param('id') id: string,
+    @Body() dto: TaskSpecialtyDto,
+    @CurrentUser() user: RbacUser,
+  ) {
     return this.tasks.updateTaskSpecialty(id, dto.specialtyId ?? null, user);
   }
 

@@ -5,10 +5,8 @@ import {
   Card,
   CardContent,
   Chip,
-  Checkbox,
   Divider,
   Drawer,
-  FormControlLabel,
   MenuItem,
   Stack,
   Step,
@@ -51,7 +49,13 @@ import { ErrorState } from '../components/states/ErrorState';
 import { SkeletonState } from '../components/states/SkeletonState';
 import { useToast } from '../app/toast';
 import { parseApiError } from '../app/apiErrors';
-import { hasAnyRole, ROLE_COMANDANTE_COMGEP, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from '../app/roleAccess';
+import {
+  hasAnyRole,
+  ROLE_COMANDANTE_COMGEP,
+  ROLE_COMISSAO_CIPAVD,
+  ROLE_COORDENACAO_CIPAVD,
+  ROLE_TI,
+} from '../app/roleAccess';
 import { can } from '../app/rbac';
 import { MeetingStatus, MEETING_STATUS_LABELS, MeetingType, MEETING_TYPE_LABELS, TaskPriority, TASK_PRIORITY_LABELS } from '../constants/enums';
 
@@ -65,6 +69,10 @@ const STATUS_CHIP_COLOR: Record<string, 'default' | 'primary' | 'success' | 'err
   HELD: 'success',
   CANCELLED: 'error',
 };
+
+function readMultiSelectValue(value: string | string[]) {
+  return Array.isArray(value) ? value : value.split(',').filter(Boolean);
+}
 
 export function MeetingsPage() {
   const [params, setParams] = useSearchParams();
@@ -115,6 +123,7 @@ export function MeetingsPage() {
     scope: '',
     status: 'PLANNED',
     meetingType: 'PRESENCIAL',
+    location: '',
     meetingLink: '',
     localityId: '',
     agenda: '',
@@ -132,7 +141,6 @@ export function MeetingsPage() {
     phaseId: '',
     specialtyId: '',
     priority: 'MEDIUM',
-    reportRequired: false,
     assigneeId: '',
     baseDueDate: '',
     selectedLocalities: [] as string[],
@@ -184,6 +192,7 @@ export function MeetingsPage() {
       scope: '',
       status: 'PLANNED',
       meetingType: 'PRESENCIAL',
+      location: '',
       meetingLink: '',
       localityId: '',
       agenda: '',
@@ -200,6 +209,7 @@ export function MeetingsPage() {
       scope: meeting.scope ?? '',
       status: meeting.status ?? 'PLANNED',
       meetingType: meeting.meetingType ?? 'PRESENCIAL',
+      location: meeting.location ?? meeting.locality?.name ?? '',
       meetingLink: meeting.meetingLink ?? '',
       localityId: meeting.localityId ?? '',
       agenda: meeting.agenda ?? '',
@@ -209,14 +219,17 @@ export function MeetingsPage() {
   };
 
   const handleSave = async () => {
+    if (selectedMeeting && !canUpdate) return;
+    if (!selectedMeeting && !canCreate) return;
     try {
       const payload = {
         datetime: new Date(form.datetime).toISOString(),
         scope: form.scope.trim(),
         status: form.status,
         meetingType: form.meetingType,
+        location: form.meetingType === 'PRESENCIAL' ? form.location.trim() || null : null,
         meetingLink: form.meetingType === 'ONLINE' ? form.meetingLink.trim() || null : null,
-        localityId: form.meetingType === 'PRESENCIAL' ? form.localityId || null : null,
+        localityId: null,
         agenda: form.agenda || null,
         participantIds: form.participantIds,
       };
@@ -255,7 +268,6 @@ export function MeetingsPage() {
       phaseId: '',
       specialtyId: '',
       priority: 'MEDIUM',
-      reportRequired: false,
       assigneeId: '',
       baseDueDate: '',
       selectedLocalities: [],
@@ -284,7 +296,6 @@ export function MeetingsPage() {
         description: wizardPayload.templateId ? undefined : wizardPayload.description,
         phaseId: wizardPayload.templateId ? undefined : wizardPayload.phaseId,
         specialtyId: wizardPayload.specialtyId || null,
-        reportRequired: wizardPayload.reportRequired,
         priority: wizardPayload.priority,
         assigneeId: wizardPayload.assigneeId || null,
         localities: wizardPayload.localities,
@@ -304,12 +315,27 @@ export function MeetingsPage() {
   const meetings = meetingsQuery.data?.items ?? [];
   const localities = localitiesQuery.data?.items ?? [];
 
-  const canCreate = can(me, 'meetings', 'create');
-  const canUpdate = can(me, 'meetings', 'update');
+  const canManageMeetingsByRole = hasAnyRole(me, [
+    ROLE_COORDENACAO_CIPAVD,
+    ROLE_COMISSAO_CIPAVD,
+    ROLE_COMANDANTE_COMGEP,
+    ROLE_TI,
+  ]);
+  const canCreate =
+    canManageMeetingsByRole &&
+    (can(me, 'meetings', 'create') || can(me, 'meetings', 'view'));
+  const canUpdate =
+    canManageMeetingsByRole &&
+    (can(me, 'meetings', 'update') || can(me, 'meetings', 'view'));
   const canGenerate = can(me, 'tasks', 'generate_from_meeting');
-  const canManageTaskDataByRole = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI]);
+  const canManageTaskDataByRole = hasAnyRole(me, [
+    ROLE_COORDENACAO_CIPAVD,
+    ROLE_COMISSAO_CIPAVD,
+    ROLE_COMANDANTE_COMGEP,
+    ROLE_TI,
+  ]);
   const canUpdateLinkedTask = can(me, 'task_instances', 'update') && canManageTaskDataByRole;
-  const canDelete = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]) && canUpdate;
+  const canDelete = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_COMISSAO_CIPAVD, ROLE_TI]);
 
   const getTaskOptionLabel = (t: any) =>
     (t.taskTemplate?.title ?? t.title ?? 'Tarefa') + ' - ' + format(new Date(t.dueDate), 'dd/MM/yyyy');
@@ -430,7 +456,9 @@ export function MeetingsPage() {
                     {meeting.agenda ?? 'Sem pauta'}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    {meeting.meetingType === 'ONLINE' ? 'Online' : meeting.locality?.name ?? '—'}
+                    {meeting.meetingType === 'ONLINE'
+                      ? 'Online'
+                      : meeting.location ?? meeting.locality?.name ?? '—'}
                   </Typography>
                   <Button variant="text" onClick={() => openEdit(meeting)}>
                     Ver detalhes
@@ -478,7 +506,9 @@ export function MeetingsPage() {
                     <TableCell>{MEETING_TYPE_LABELS[meeting.meetingType] ?? meeting.meetingType}</TableCell>
                     <TableCell sx={{ maxWidth: 200 }}>
                       <Typography variant="body2" noWrap>
-                        {meeting.meetingType === 'ONLINE' ? (meeting.meetingLink || '—') : (meeting.locality?.name ?? '—')}
+                        {meeting.meetingType === 'ONLINE'
+                          ? (meeting.meetingLink || '—')
+                          : (meeting.location ?? meeting.locality?.name ?? '—')}
                       </Typography>
                     </TableCell>
                     <TableCell>
@@ -588,20 +618,13 @@ export function MeetingsPage() {
           </TextField>
           {form.meetingType === 'PRESENCIAL' && (
             <TextField
-              select
               size="small"
-              label="Localidade"
-              value={form.localityId}
-              onChange={(e) => setForm({ ...form, localityId: e.target.value })}
+              label="Local"
+              value={form.location}
+              onChange={(e) => setForm({ ...form, location: e.target.value })}
+              placeholder="Ex.: Sala de briefing, COMGEP, Auditório"
               disabled={Boolean(selectedMeeting) && !canUpdate}
-            >
-              <MenuItem value="">Selecione</MenuItem>
-              {localities.map((l: any) => (
-                <MenuItem key={l.id} value={l.id}>
-                  {l.name}
-                </MenuItem>
-              ))}
-            </TextField>
+            />
           )}
           {form.meetingType === 'ONLINE' && (
             <TextField
@@ -628,7 +651,12 @@ export function MeetingsPage() {
             label="Participantes"
             SelectProps={{ multiple: true }}
             value={form.participantIds}
-            onChange={(e) => setForm({ ...form, participantIds: e.target.value as string[] })}
+            onChange={(e) =>
+              setForm({
+                ...form,
+                participantIds: readMultiSelectValue(e.target.value),
+              })
+            }
             disabled={Boolean(selectedMeeting) && !canUpdate}
             helperText="Usuários do sistema (logins existentes)"
           >
@@ -639,7 +667,7 @@ export function MeetingsPage() {
             ))}
           </TextField>
           <Stack direction="row" spacing={1}>
-            {(canCreate || canUpdate) && (
+            {((selectedMeeting && canUpdate) || (!selectedMeeting && canCreate)) && (
               <Button variant="contained" onClick={handleSave}>
                 Salvar
               </Button>
@@ -754,7 +782,14 @@ export function MeetingsPage() {
                       updateTaskMeeting
                         .mutateAsync({ id: newValue.id, meetingId: selectedMeeting.id })
                         .then(() => toast.push({ message: 'Tarefa vinculada à reunião', severity: 'success' }))
-                        .catch((err) => toast.push({ message: parseApiError(err).message, severity: 'error' }));
+                        .catch((err) =>
+                          toast.push({
+                            message:
+                              parseApiError(err).message ??
+                              'Não foi possível vincular a tarefa à reunião.',
+                            severity: 'error',
+                          }),
+                        );
                     }
                   }}
                   options={allTasks.filter(
@@ -872,7 +907,7 @@ export function MeetingsPage() {
                 onChange={(e) =>
                   setWizardPayload({
                     ...wizardPayload,
-                    selectedLocalities: e.target.value as string[],
+                    selectedLocalities: readMultiSelectValue(e.target.value),
                   })
                 }
               >
@@ -918,15 +953,6 @@ export function MeetingsPage() {
                   </MenuItem>
                 ))}
               </TextField>
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={wizardPayload.reportRequired}
-                    onChange={(e) => setWizardPayload({ ...wizardPayload, reportRequired: e.target.checked })}
-                  />
-                }
-                label="Relatório obrigatório"
-              />
               <TextField
                 size="small"
                 label="Responsável (ID)"

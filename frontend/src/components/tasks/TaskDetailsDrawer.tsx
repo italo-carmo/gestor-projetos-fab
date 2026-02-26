@@ -1,6 +1,7 @@
 import {
   Box,
   Button,
+  Chip,
   Divider,
   Drawer,
   Link,
@@ -10,14 +11,17 @@ import {
   Tabs,
   TextField,
   Typography,
-} from '@mui/material';
-import { useEffect, useMemo, useState } from 'react';
-import { Link as RouterLink } from 'react-router-dom';
-import { format } from 'date-fns';
+} from "@mui/material";
+import { useEffect, useMemo, useState } from "react";
+import { Link as RouterLink } from "react-router-dom";
+import { format } from "date-fns";
 import {
   useAddTaskComment,
   useAssignTask,
   useAuditLogs,
+  useBatchDeleteTasks,
+  useBatchProgressTasks,
+  useBatchStatusTasks,
   useDeleteTask,
   useEloRoles,
   useMarkTaskCommentsSeen,
@@ -30,29 +34,36 @@ import {
   useUpdateTaskMeeting,
   useUpdateTaskProgress,
   useUpdateTaskStatus,
+  useUpdateTaskTitle,
   useUpdateTaskTemplate,
-  useUploadReport,
-} from '../../api/hooks';
-import { useToast } from '../../app/toast';
-import { parseApiError } from '../../app/apiErrors';
-import { can } from '../../app/rbac';
-import { hasAnyRole, ROLE_COMANDANTE_COMGEP, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from '../../app/roleAccess';
-import { StatusChip } from '../chips/StatusChip';
-import { ProgressInline } from '../chips/ProgressInline';
-import { DueBadge } from '../chips/DueBadge';
-import { EntityDocumentLinksManager } from '../documents/EntityDocumentLinksManager';
-import { TaskStatus, TASK_STATUS_LABELS } from '../../constants/enums';
-import { formatDate } from '../../app/date';
-import { ConfirmDialog } from '../dialogs/ConfirmDialog';
+} from "../../api/hooks";
+import { useToast } from "../../app/toast";
+import { parseApiError } from "../../app/apiErrors";
+import { can } from "../../app/rbac";
+import {
+  hasAnyRole,
+  ROLE_COMISSAO_CIPAVD,
+  ROLE_COMANDANTE_COMGEP,
+  ROLE_COORDENACAO_CIPAVD,
+  ROLE_TI,
+} from "../../app/roleAccess";
+import { StatusChip } from "../chips/StatusChip";
+import { ProgressInline } from "../chips/ProgressInline";
+import { DueBadge } from "../chips/DueBadge";
+import { EntityDocumentLinksManager } from "../documents/EntityDocumentLinksManager";
+import { TaskStatus, TASK_STATUS_LABELS } from "../../constants/enums";
+import { formatDate } from "../../app/date";
+import { ConfirmDialog } from "../dialogs/ConfirmDialog";
 
 function resolveTaskTitle(task: any) {
   const raw =
-    task?.taskTemplate?.title ??
     task?.title ??
+    task?.titleOverride ??
+    task?.taskTemplate?.title ??
     task?.taskTitle ??
-    '';
+    "";
   const normalized = String(raw).trim();
-  return normalized || 'Tarefa sem título';
+  return normalized || "Tarefa sem título";
 }
 
 export type TaskDetailsDrawerProps = {
@@ -62,31 +73,51 @@ export type TaskDetailsDrawerProps = {
   onDeleted?: (id: string) => void;
   user: any | undefined;
   localities?: { id: string; name: string }[];
+  linkedTaskIds?: string[];
+  linkedLocalities?: { id: string; name: string }[];
   loading?: boolean;
 };
 
-const APP_HEADER_HEIGHT = 76;
+const APP_HEADER_HEIGHT = 96;
 
-export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, localities = [], loading = false }: TaskDetailsDrawerProps) {
+export function TaskDetailsDrawer({
+  task,
+  open,
+  onClose,
+  onDeleted,
+  user,
+  localities = [],
+  linkedTaskIds = [],
+  linkedLocalities = [],
+  loading = false,
+}: TaskDetailsDrawerProps) {
   const [tab, setTab] = useState(0);
-  const [selectedLocalityId, setSelectedLocalityId] = useState('');
-  const [selectedAssigneeValue, setSelectedAssigneeValue] = useState('');
-  const [commentText, setCommentText] = useState('');
-  const [taskTitleDraft, setTaskTitleDraft] = useState('');
+  const [selectedLocalityId, setSelectedLocalityId] = useState("");
+  const [selectedAssigneeValue, setSelectedAssigneeValue] = useState("");
+  const [commentText, setCommentText] = useState("");
+  const [taskTitleDraft, setTaskTitleDraft] = useState("");
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const toast = useToast();
   const updateStatus = useUpdateTaskStatus();
   const updateProgress = useUpdateTaskProgress();
+  const batchStatusMutation = useBatchStatusTasks();
+  const batchProgressMutation = useBatchProgressTasks();
+  const batchDeleteTasks = useBatchDeleteTasks();
   const assignTask = useAssignTask();
   const addComment = useAddTaskComment();
   const markCommentsSeen = useMarkTaskCommentsSeen();
-  const uploadReport = useUploadReport();
   const deleteTask = useDeleteTask();
   const updateTaskTemplate = useUpdateTaskTemplate();
+  const updateTaskTitle = useUpdateTaskTitle();
 
-  const canManageByRole = hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI]);
-  const canUpdate = can(user, 'task_instances', 'update');
-  const canAssign = can(user, 'task_instances', 'assign') && canManageByRole;
+  const canManageByRole = hasAnyRole(user, [
+    ROLE_COORDENACAO_CIPAVD,
+    ROLE_COMISSAO_CIPAVD,
+    ROLE_COMANDANTE_COMGEP,
+    ROLE_TI,
+  ]);
+  const canUpdate = can(user, "task_instances", "update");
+  const canAssign = can(user, "task_instances", "assign") && canManageByRole;
   const canManageTaskData = canUpdate && canManageByRole;
   const canDelete = canManageTaskData;
   const meetingsQuery = useMeetings({});
@@ -100,44 +131,66 @@ export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, locali
   const updateTaskSpecialty = useUpdateTaskSpecialty();
   const assigneesQuery = useTaskAssignees(selectedLocalityId);
   const assigneeOptions = assigneesQuery.data?.items ?? [];
-  const commentsQuery = useTaskComments(task?.id ?? '');
+  const commentsQuery = useTaskComments(task?.id ?? "");
   const auditQuery = useAuditLogs(
     task
       ? {
-          resource: 'task_instances',
+          resource: "task_instances",
           entityId: task.id,
         }
       : {},
   );
+  const normalizedLinkedIds = useMemo(() => {
+    const ids = [task?.id, ...linkedTaskIds]
+      .map((value) => String(value ?? "").trim())
+      .filter(Boolean);
+    return Array.from(new Set(ids));
+  }, [task?.id, linkedTaskIds]);
+  const hasLinkedTasks = normalizedLinkedIds.length > 1;
+  const hasCustomTitle = Boolean(String(task?.titleOverride ?? "").trim());
+  const isManualTaskTemplate =
+    String(task?.taskTemplate?.title ?? "")
+      .trim()
+      .toLowerCase() === "tarefa manual";
+  const saveTitleByTaskInstance =
+    hasCustomTitle || isManualTaskTemplate || hasLinkedTasks;
 
   const assigneeValueFromTask = (taskItem: any) => {
-    if (taskItem?.assignee?.type === 'USER' && taskItem?.assignee?.id) {
+    if (taskItem?.assignee?.type === "USER" && taskItem?.assignee?.id) {
       return `USER:${taskItem.assignee.id}`;
     }
-    if (taskItem?.assignee?.type === 'ELO' && taskItem?.assignee?.id) {
+    if (taskItem?.assignee?.type === "ELO" && taskItem?.assignee?.id) {
       return `ELO:${taskItem.assignee.id}`;
     }
-    if (taskItem?.assignee?.type === 'LOCALITY_COMMAND') return 'LOCALITY_COMMAND';
-    if (taskItem?.assignee?.type === 'LOCALITY_COMMANDER') return 'LOCALITY_COMMANDER';
+    if (taskItem?.assignee?.type === "LOCALITY_COMMAND")
+      return "LOCALITY_COMMAND";
+    if (taskItem?.assignee?.type === "LOCALITY_COMMANDER")
+      return "LOCALITY_COMMANDER";
     if (taskItem?.assignedToId) return `USER:${taskItem.assignedToId}`;
     if (taskItem?.assignedEloId) return `ELO:${taskItem.assignedEloId}`;
-    return '';
+    return "";
   };
 
   useEffect(() => {
     if (!task) {
-      setSelectedLocalityId('');
-      setSelectedAssigneeValue('');
-      setCommentText('');
-      setTaskTitleDraft('');
+      setSelectedLocalityId("");
+      setSelectedAssigneeValue("");
+      setCommentText("");
+      setTaskTitleDraft("");
       setConfirmDeleteOpen(false);
       return;
     }
-    setSelectedLocalityId(task.localityId ?? '');
+    setSelectedLocalityId(task.localityId ?? "");
     setSelectedAssigneeValue(assigneeValueFromTask(task));
-    setCommentText('');
+    setCommentText("");
     setTaskTitleDraft(resolveTaskTitle(task));
-  }, [task?.id, task?.localityId, task?.assignedToId, task?.assignedEloId, task?.assigneeType]);
+  }, [
+    task?.id,
+    task?.localityId,
+    task?.assignedToId,
+    task?.assignedEloId,
+    task?.assigneeType,
+  ]);
 
   useEffect(() => {
     if (!open || !task?.id) return;
@@ -147,16 +200,24 @@ export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, locali
   const handleStatus = async (status: string) => {
     if (!task) return;
     try {
-      await updateStatus.mutateAsync({ id: task.id, status });
-      toast.push({ message: 'Status atualizado', severity: 'success' });
+      if (hasLinkedTasks) {
+        await batchStatusMutation.mutateAsync({
+          ids: normalizedLinkedIds,
+          status,
+        });
+      } else {
+        await updateStatus.mutateAsync({ id: task.id, status });
+      }
+      toast.push({ message: "Status atualizado", severity: "success" });
     } catch (error) {
       const payload = parseApiError(error);
-      if (payload.code === 'REPORT_REQUIRED') {
-        toast.push({ message: 'Relatório obrigatório para concluir', severity: 'warning' });
-      } else if (payload.code === 'RBAC_FORBIDDEN') {
-        toast.push({ message: 'Acesso negado', severity: 'error' });
+      if (payload.code === "RBAC_FORBIDDEN") {
+        toast.push({ message: "Acesso negado", severity: "error" });
       } else {
-        toast.push({ message: payload.message ?? 'Erro ao atualizar', severity: 'error' });
+        toast.push({
+          message: payload.message ?? "Erro ao atualizar",
+          severity: "error",
+        });
       }
     }
   };
@@ -164,14 +225,27 @@ export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, locali
   const handleProgress = async (value: number) => {
     if (!task) return;
     try {
-      await updateProgress.mutateAsync({ id: task.id, progressPercent: value });
-      toast.push({ message: 'Progresso atualizado', severity: 'success' });
+      if (hasLinkedTasks) {
+        await batchProgressMutation.mutateAsync({
+          ids: normalizedLinkedIds,
+          progressPercent: value,
+        });
+      } else {
+        await updateProgress.mutateAsync({
+          id: task.id,
+          progressPercent: value,
+        });
+      }
+      toast.push({ message: "Progresso atualizado", severity: "success" });
     } catch (error) {
       const payload = parseApiError(error);
-      if (payload.code === 'RBAC_FORBIDDEN') {
-        toast.push({ message: 'Acesso negado', severity: 'error' });
+      if (payload.code === "RBAC_FORBIDDEN") {
+        toast.push({ message: "Acesso negado", severity: "error" });
       } else {
-        toast.push({ message: payload.message ?? 'Erro ao atualizar', severity: 'error' });
+        toast.push({
+          message: payload.message ?? "Erro ao atualizar",
+          severity: "error",
+        });
       }
     }
   };
@@ -179,15 +253,20 @@ export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, locali
   const handleAssign = async (rawValue: string) => {
     if (!task) return;
     const value = rawValue.trim();
-    let assigneeType: 'USER' | 'ELO' | 'LOCALITY_COMMAND' | 'LOCALITY_COMMANDER' | null = null;
+    let assigneeType:
+      | "USER"
+      | "ELO"
+      | "LOCALITY_COMMAND"
+      | "LOCALITY_COMMANDER"
+      | null = null;
     let assigneeId: string | null = null;
-    if (value.startsWith('USER:')) {
-      assigneeType = 'USER';
-      assigneeId = value.slice('USER:'.length);
-    } else if (value.startsWith('ELO:')) {
-      assigneeType = 'ELO';
-      assigneeId = value.slice('ELO:'.length);
-    } else if (value === 'LOCALITY_COMMAND' || value === 'LOCALITY_COMMANDER') {
+    if (value.startsWith("USER:")) {
+      assigneeType = "USER";
+      assigneeId = value.slice("USER:".length);
+    } else if (value.startsWith("ELO:")) {
+      assigneeType = "ELO";
+      assigneeId = value.slice("ELO:".length);
+    } else if (value === "LOCALITY_COMMAND" || value === "LOCALITY_COMMANDER") {
       assigneeType = value;
     }
     try {
@@ -198,43 +277,67 @@ export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, locali
         assigneeId,
       });
       setSelectedAssigneeValue(value);
-      toast.push({ message: 'Responsável atualizado', severity: 'success' });
+      toast.push({ message: "Responsável atualizado", severity: "success" });
     } catch (error) {
       const payload = parseApiError(error);
-      toast.push({ message: payload.message ?? 'Erro ao atualizar', severity: 'error' });
+      toast.push({
+        message: payload.message ?? "Erro ao atualizar",
+        severity: "error",
+      });
     }
   };
 
   const handleMeetingChange = async (meetingId: string) => {
     if (!task) return;
     try {
-      await updateTaskMeeting.mutateAsync({ id: task.id, meetingId: meetingId || null });
-      toast.push({ message: 'Vínculo com reunião atualizado', severity: 'success' });
+      await updateTaskMeeting.mutateAsync({
+        id: task.id,
+        meetingId: meetingId || null,
+      });
+      toast.push({
+        message: "Vínculo com reunião atualizado",
+        severity: "success",
+      });
     } catch (error) {
       const payload = parseApiError(error);
-      toast.push({ message: payload.message ?? 'Erro ao atualizar', severity: 'error' });
+      toast.push({
+        message: payload.message ?? "Erro ao atualizar",
+        severity: "error",
+      });
     }
   };
 
   const handleEloRoleChange = async (eloRoleId: string) => {
     if (!task) return;
     try {
-      await updateTaskEloRole.mutateAsync({ id: task.id, eloRoleId: eloRoleId || null });
-      toast.push({ message: 'Elo atualizado', severity: 'success' });
+      await updateTaskEloRole.mutateAsync({
+        id: task.id,
+        eloRoleId: eloRoleId || null,
+      });
+      toast.push({ message: "Elo atualizado", severity: "success" });
     } catch (error) {
       const payload = parseApiError(error);
-      toast.push({ message: payload.message ?? 'Erro ao atualizar', severity: 'error' });
+      toast.push({
+        message: payload.message ?? "Erro ao atualizar",
+        severity: "error",
+      });
     }
   };
 
   const handleSpecialtyChange = async (specialtyId: string) => {
     if (!task) return;
     try {
-      await updateTaskSpecialty.mutateAsync({ id: task.id, specialtyId: specialtyId || null });
-      toast.push({ message: 'Especialidade atualizada', severity: 'success' });
+      await updateTaskSpecialty.mutateAsync({
+        id: task.id,
+        specialtyId: specialtyId || null,
+      });
+      toast.push({ message: "Especialidade atualizada", severity: "success" });
     } catch (error) {
       const payload = parseApiError(error);
-      toast.push({ message: payload.message ?? 'Erro ao atualizar', severity: 'error' });
+      toast.push({
+        message: payload.message ?? "Erro ao atualizar",
+        severity: "error",
+      });
     }
   };
 
@@ -244,37 +347,47 @@ export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, locali
     if (!text) return;
     try {
       await addComment.mutateAsync({ id: task.id, text });
-      setCommentText('');
-      toast.push({ message: 'Comentário registrado', severity: 'success' });
+      setCommentText("");
+      toast.push({ message: "Comentário registrado", severity: "success" });
     } catch (error) {
       const payload = parseApiError(error);
-      toast.push({ message: payload.message ?? 'Erro ao comentar', severity: 'error' });
+      toast.push({
+        message: payload.message ?? "Erro ao comentar",
+        severity: "error",
+      });
     }
   };
 
   const handleSaveTitle = async () => {
     if (!task || !canManageTaskData) return;
-    const templateId = String(task.taskTemplateId ?? task.taskTemplate?.id ?? '').trim();
     const nextTitle = taskTitleDraft.trim();
-    if (!templateId || !nextTitle) return;
+    if (!nextTitle) return;
     try {
-      await updateTaskTemplate.mutateAsync({
-        id: templateId,
-        payload: {
-          title: nextTitle,
-        },
-      });
-      toast.push({ message: 'Título atualizado', severity: 'success' });
+      if (saveTitleByTaskInstance) {
+        for (const id of normalizedLinkedIds) {
+          await updateTaskTitle.mutateAsync({ id, title: nextTitle });
+        }
+      } else {
+        const templateId = String(
+          task.taskTemplateId ?? task.taskTemplate?.id ?? "",
+        ).trim();
+        if (!templateId) return;
+        await updateTaskTemplate.mutateAsync({
+          id: templateId,
+          payload: {
+            title: nextTitle,
+          },
+        });
+      }
+      toast.push({ message: "Título atualizado", severity: "success" });
     } catch (error) {
       const payload = parseApiError(error);
-      toast.push({ message: payload.message ?? 'Erro ao atualizar título', severity: 'error' });
+      toast.push({
+        message: payload.message ?? "Erro ao atualizar título",
+        severity: "error",
+      });
     }
   };
-
-  const reportRequiredLabel = useMemo(() => {
-    if (!task?.reportRequired) return null;
-    return 'Relatório obrigatório para concluir';
-  }, [task?.reportRequired]);
 
   const handleDelete = async () => {
     if (!task || !canDelete) return;
@@ -284,14 +397,26 @@ export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, locali
   const handleConfirmDelete = async () => {
     if (!task || !canDelete) return;
     try {
-      await deleteTask.mutateAsync(task.id);
+      if (hasLinkedTasks) {
+        await batchDeleteTasks.mutateAsync({ ids: normalizedLinkedIds });
+      } else {
+        await deleteTask.mutateAsync(task.id);
+      }
       setConfirmDeleteOpen(false);
-      toast.push({ message: 'Tarefa excluída', severity: 'success' });
+      toast.push({
+        message: hasLinkedTasks
+          ? "Tarefas vinculadas excluídas"
+          : "Tarefa excluída",
+        severity: "success",
+      });
       onDeleted?.(task.id);
       onClose();
     } catch (error) {
       const payload = parseApiError(error);
-      toast.push({ message: payload.message ?? 'Erro ao excluir tarefa', severity: 'error' });
+      toast.push({
+        message: payload.message ?? "Erro ao excluir tarefa",
+        severity: "error",
+      });
     }
   };
 
@@ -302,32 +427,45 @@ export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, locali
       onClose={onClose}
       PaperProps={{
         sx: {
-          width: { xs: '100%', md: 520 },
+          width: { xs: "100%", md: 520 },
           mt: `${APP_HEADER_HEIGHT}px`,
           height: `calc(100% - ${APP_HEADER_HEIGHT}px)`,
         },
       }}
     >
-      <Box p={3} display="flex" flexDirection="column" height="100%" data-testid="task-drawer">
+      <Box
+        p={3}
+        display="flex"
+        flexDirection="column"
+        height="100%"
+        data-testid="task-drawer"
+      >
         {task ? (
           <>
             <Stack spacing={1}>
-              <Typography variant="h5">{taskTitleDraft.trim() || resolveTaskTitle(task)}</Typography>
-              <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+              <Typography variant="h5">
+                {taskTitleDraft.trim() || resolveTaskTitle(task)}
+              </Typography>
+              <Stack
+                direction="row"
+                spacing={1}
+                alignItems="center"
+                flexWrap="wrap"
+              >
                 <StatusChip status={task.status} isLate={task.isLate} />
                 <DueBadge dueDate={task.dueDate} status={task.status} />
               </Stack>
-              {reportRequiredLabel && (
-                <Typography variant="caption" color="warning.main">
-                  {reportRequiredLabel}
-                </Typography>
-              )}
             </Stack>
 
-            <Tabs value={tab} onChange={(_, value) => setTab(value)} sx={{ mt: 2 }}>
+            <Tabs
+              value={tab}
+              onChange={(_, value) => setTab(value)}
+              sx={{ mt: 2 }}
+            >
               <Tab label="Detalhes" />
-              <Tab label={`Comentários${task.comments?.hasUnread ? ' • novo' : ''}`} />
-              <Tab label="Anexos" />
+              <Tab
+                label={`Comentários${task.comments?.hasUnread ? " • novo" : ""}`}
+              />
               <Tab label="Histórico" />
             </Tabs>
             <Divider sx={{ my: 2 }} />
@@ -339,9 +477,39 @@ export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, locali
                   label="Título da tarefa"
                   value={taskTitleDraft}
                   onChange={(e) => setTaskTitleDraft(e.target.value)}
-                  disabled={!canManageTaskData || updateTaskTemplate.isPending}
-                  helperText="A alteração atualiza o título do modelo vinculado."
+                  disabled={
+                    !canManageTaskData ||
+                    updateTaskTemplate.isPending ||
+                    updateTaskTitle.isPending
+                  }
+                  helperText={
+                    saveTitleByTaskInstance
+                      ? "A alteração será aplicada para todas as localidades vinculadas."
+                      : "A alteração atualiza o título do modelo vinculado."
+                  }
                 />
+                {linkedLocalities.length > 0 && (
+                  <Box>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      display="block"
+                      gutterBottom
+                    >
+                      Localidades vinculadas ({linkedLocalities.length})
+                    </Typography>
+                    <Stack direction="row" spacing={0.8} flexWrap="wrap">
+                      {linkedLocalities.map((locality) => (
+                        <Chip
+                          key={locality.id}
+                          size="small"
+                          variant="outlined"
+                          label={locality.name}
+                        />
+                      ))}
+                    </Stack>
+                  </Box>
+                )}
                 <TextField
                   select
                   label="Status"
@@ -386,11 +554,19 @@ export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, locali
                   value={selectedLocalityId}
                   onChange={(e) => {
                     setSelectedLocalityId(e.target.value);
-                    setSelectedAssigneeValue('');
+                    setSelectedAssigneeValue("");
                   }}
                   disabled={!canAssign || user?.executive_hide_pii}
                 >
-                  {(localities.length ? localities : [{ id: task.localityId, name: task.localityName ?? 'Localidade atual' }]).map((loc) => (
+                  {(localities.length
+                    ? localities
+                    : [
+                        {
+                          id: task.localityId,
+                          name: task.localityName ?? "Localidade atual",
+                        },
+                      ]
+                  ).map((loc) => (
                     <MenuItem key={loc.id} value={loc.id}>
                       {loc.name}
                     </MenuItem>
@@ -402,20 +578,31 @@ export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, locali
                   label="Responsável"
                   value={selectedAssigneeValue}
                   onChange={(e) => handleAssign(e.target.value)}
-                  disabled={!canAssign || user?.executive_hide_pii || !selectedLocalityId}
+                  disabled={
+                    !canAssign ||
+                    user?.executive_hide_pii ||
+                    !selectedLocalityId
+                  }
                   data-testid="task-assign"
-                  helperText={selectedLocalityId ? 'Selecione usuário, elo, GSD ou comandante da localidade.' : 'Escolha uma localidade.'}
+                  helperText={
+                    selectedLocalityId
+                      ? "Selecione usuário, elo, GSD ou comandante da localidade."
+                      : "Escolha uma localidade."
+                  }
                 >
                   <MenuItem value="">Nenhum</MenuItem>
                   {assigneeOptions.map((option: any) => {
                     const optionValue =
-                      option.type === 'USER' || option.type === 'ELO'
+                      option.type === "USER" || option.type === "ELO"
                         ? `${option.type}:${option.id}`
                         : option.type;
                     return (
-                      <MenuItem key={`${option.type}:${option.id}`} value={optionValue}>
+                      <MenuItem
+                        key={`${option.type}:${option.id}`}
+                        value={optionValue}
+                      >
                         {option.label}
-                        {option.subtitle ? ` — ${option.subtitle}` : ''}
+                        {option.subtitle ? ` — ${option.subtitle}` : ""}
                       </MenuItem>
                     );
                   })}
@@ -426,14 +613,19 @@ export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, locali
                   </Typography>
                 )}
                 <Box>
-                  <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    display="block"
+                    gutterBottom
+                  >
                     Especialidade (opcional)
                   </Typography>
                   <TextField
                     select
                     size="small"
                     fullWidth
-                    value={task.specialtyId ?? ''}
+                    value={task.specialtyId ?? ""}
                     onChange={(e) => handleSpecialtyChange(e.target.value)}
                     disabled={!canManageTaskData}
                   >
@@ -446,21 +638,27 @@ export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, locali
                   </TextField>
                 </Box>
                 <Box>
-                  <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    display="block"
+                    gutterBottom
+                  >
                     Vinculada à reunião
                   </Typography>
                   <TextField
                     select
                     size="small"
                     fullWidth
-                    value={task.meetingId ?? ''}
+                    value={task.meetingId ?? ""}
                     onChange={(e) => handleMeetingChange(e.target.value)}
                     disabled={!canManageTaskData}
                   >
                     <MenuItem value="">Nenhuma</MenuItem>
                     {meetings.map((m: any) => (
                       <MenuItem key={m.id} value={m.id}>
-                        {format(new Date(m.datetime), 'dd/MM/yyyy HH:mm')} — {m.scope || 'Reunião'}
+                        {format(new Date(m.datetime), "dd/MM/yyyy HH:mm")} —{" "}
+                        {m.scope || "Reunião"}
                       </MenuItem>
                     ))}
                   </TextField>
@@ -468,21 +666,26 @@ export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, locali
                     <Link
                       component={RouterLink}
                       to={`/meetings?meetingId=${task.meeting.id}`}
-                      sx={{ mt: 1, display: 'inline-block', fontSize: 13 }}
+                      sx={{ mt: 1, display: "inline-block", fontSize: 13 }}
                     >
                       Ver reunião →
                     </Link>
                   )}
                 </Box>
                 <Box>
-                  <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    display="block"
+                    gutterBottom
+                  >
                     Elo (Psicologia, SSO, Jurídico, etc.)
                   </Typography>
                   <TextField
                     select
                     size="small"
                     fullWidth
-                    value={task.eloRoleId ?? ''}
+                    value={task.eloRoleId ?? ""}
                     onChange={(e) => handleEloRoleChange(e.target.value)}
                     disabled={!canManageTaskData}
                   >
@@ -495,10 +698,19 @@ export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, locali
                   </TextField>
                 </Box>
                 <Stack direction="row" spacing={1}>
-                  <Button variant="outlined" onClick={() => handleStatus('IN_PROGRESS')} disabled={!canManageTaskData}>
+                  <Button
+                    variant="outlined"
+                    onClick={() => handleStatus("IN_PROGRESS")}
+                    disabled={!canManageTaskData}
+                  >
                     Iniciar
                   </Button>
-                  <Button variant="contained" onClick={() => handleStatus('DONE')} disabled={!canManageTaskData} data-testid="task-mark-done">
+                  <Button
+                    variant="contained"
+                    onClick={() => handleStatus("DONE")}
+                    disabled={!canManageTaskData}
+                    data-testid="task-mark-done"
+                  >
                     Concluir
                   </Button>
                   <Button
@@ -507,6 +719,7 @@ export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, locali
                     disabled={
                       !canManageTaskData ||
                       updateTaskTemplate.isPending ||
+                      updateTaskTitle.isPending ||
                       !taskTitleDraft.trim() ||
                       taskTitleDraft.trim() === resolveTaskTitle(task)
                     }
@@ -519,7 +732,7 @@ export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, locali
                       variant="outlined"
                       color="error"
                       onClick={handleDelete}
-                      disabled={deleteTask.isPending}
+                      disabled={deleteTask.isPending || batchDeleteTasks.isPending}
                     >
                       Excluir
                     </Button>
@@ -551,7 +764,11 @@ export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, locali
                     variant="contained"
                     size="small"
                     onClick={handleAddComment}
-                    disabled={!canManageTaskData || !commentText.trim() || addComment.isPending}
+                    disabled={
+                      !canManageTaskData ||
+                      !commentText.trim() ||
+                      addComment.isPending
+                    }
                   >
                     Comentar
                   </Button>
@@ -564,11 +781,24 @@ export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, locali
                 )}
                 <Stack spacing={1.2}>
                   {(commentsQuery.data?.items ?? []).map((comment: any) => (
-                    <Box key={comment.id} sx={{ borderLeft: '3px solid #0C657E', pl: 1.2, py: 0.5, bgcolor: '#F8FBFD', borderRadius: 1 }}>
+                    <Box
+                      key={comment.id}
+                      sx={{
+                        borderLeft: "3px solid #0C657E",
+                        pl: 1.2,
+                        py: 0.5,
+                        bgcolor: "#F8FBFD",
+                        borderRadius: 1,
+                      }}
+                    >
                       <Typography variant="caption" color="text.secondary">
-                        {comment.authorName} • {new Date(comment.createdAt).toLocaleString('pt-BR')}
+                        {comment.authorName} •{" "}
+                        {new Date(comment.createdAt).toLocaleString("pt-BR")}
                       </Typography>
-                      <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+                      <Typography
+                        variant="body2"
+                        sx={{ whiteSpace: "pre-wrap" }}
+                      >
                         {comment.text}
                       </Typography>
                     </Box>
@@ -578,33 +808,6 @@ export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, locali
             )}
 
             {tab === 2 && (
-              <Stack spacing={2}>
-                <Typography variant="body2" color="text.secondary">
-                  Upload de relatório
-                </Typography>
-                <Button variant="outlined" component="label" disabled={!canManageTaskData}>
-                  Selecionar arquivo
-                  <input
-                    hidden
-                    type="file"
-                    onChange={async (event) => {
-                      if (!task || !event.target.files?.[0]) return;
-                      try {
-                        await uploadReport.mutateAsync({ taskInstanceId: task.id, file: event.target.files[0] });
-                        toast.push({ message: 'Relatório enviado', severity: 'success' });
-                      } catch (error) {
-                        const payload = parseApiError(error);
-                        toast.push({ message: payload.message ?? 'Erro ao enviar', severity: 'error' });
-                      } finally {
-                        event.target.value = '';
-                      }
-                    }}
-                  />
-                </Button>
-              </Stack>
-            )}
-
-            {tab === 3 && (
               <Stack spacing={1}>
                 {(auditQuery.data?.items ?? []).length === 0 && (
                   <Typography variant="body2" color="text.secondary">
@@ -612,12 +815,16 @@ export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, locali
                   </Typography>
                 )}
                 {(auditQuery.data?.items ?? []).map((log: any) => (
-                  <Box key={log.id} sx={{ border: '1px solid #E6ECF5', borderRadius: 2, p: 1 }}>
+                  <Box
+                    key={log.id}
+                    sx={{ border: "1px solid #E6ECF5", borderRadius: 2, p: 1 }}
+                  >
                     <Typography variant="caption" color="text.secondary">
-                      {new Date(log.createdAt).toLocaleString('pt-BR')}
+                      {new Date(log.createdAt).toLocaleString("pt-BR")}
                     </Typography>
                     <Typography variant="body2">
-                      {log.action} por {log.user?.name ?? log.userId ?? 'Sistema'}
+                      {log.action} por{" "}
+                      {log.user?.name ?? log.userId ?? "Sistema"}
                     </Typography>
                   </Box>
                 ))}
@@ -632,15 +839,22 @@ export function TaskDetailsDrawer({ task, open, onClose, onDeleted, user, locali
               message="Você tem certeza que deseja excluir esta tarefa?"
               highlightText={taskTitleDraft.trim() || resolveTaskTitle(task)}
               note="Esta ação será registrada em auditoria e não pode ser desfeita."
-              confirmLabel="Excluir tarefa"
+              confirmLabel={
+                deleteTask.isPending || batchDeleteTasks.isPending
+                  ? "Excluindo..."
+                  : "Excluir tarefa"
+              }
               severity="error"
-              confirmLoading={deleteTask.isPending}
+              confirmLoading={
+                deleteTask.isPending || batchDeleteTasks.isPending
+              }
             />
-
           </>
         ) : (
           <Typography variant="body2" color="text.secondary">
-            {loading ? 'Carregando detalhes da tarefa...' : 'Nenhuma tarefa selecionada.'}
+            {loading
+              ? "Carregando detalhes da tarefa..."
+              : "Nenhuma tarefa selecionada."}
           </Typography>
         )}
       </Box>
