@@ -1,4 +1,5 @@
 import {
+  Autocomplete,
   Box,
   Button,
   Chip,
@@ -35,6 +36,7 @@ import {
   useUpdateTaskProgress,
   useUpdateTaskStatus,
   useUpdateTaskTitle,
+  useUpdateTaskLocalities,
   useUpdateTaskTemplate,
 } from "../../api/hooks";
 import { useToast } from "../../app/toast";
@@ -96,6 +98,9 @@ export function TaskDetailsDrawer({
   const [selectedAssigneeValue, setSelectedAssigneeValue] = useState("");
   const [commentText, setCommentText] = useState("");
   const [taskTitleDraft, setTaskTitleDraft] = useState("");
+  const [linkedLocalityIdsDraft, setLinkedLocalityIdsDraft] = useState<
+    string[]
+  >([]);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const toast = useToast();
   const updateStatus = useUpdateTaskStatus();
@@ -109,6 +114,7 @@ export function TaskDetailsDrawer({
   const deleteTask = useDeleteTask();
   const updateTaskTemplate = useUpdateTaskTemplate();
   const updateTaskTitle = useUpdateTaskTitle();
+  const updateTaskLocalities = useUpdateTaskLocalities();
 
   const canManageByRole = hasAnyRole(user, [
     ROLE_COORDENACAO_CIPAVD,
@@ -154,6 +160,39 @@ export function TaskDetailsDrawer({
       .toLowerCase() === "tarefa manual";
   const saveTitleByTaskInstance =
     hasCustomTitle || isManualTaskTemplate || hasLinkedTasks;
+  const localityOptions = useMemo(() => {
+    const optionMap = new Map<string, { id: string; name: string }>();
+    linkedLocalities.forEach((locality) => {
+      const id = String(locality?.id ?? "").trim();
+      if (!id) return;
+      optionMap.set(id, {
+        id,
+        name: String(locality?.name ?? id),
+      });
+    });
+    localities.forEach((locality) => {
+      const id = String(locality?.id ?? "").trim();
+      if (!id) return;
+      if (!optionMap.has(id)) {
+        optionMap.set(id, {
+          id,
+          name: String(locality?.name ?? id),
+        });
+      }
+    });
+    if (task?.localityId) {
+      const id = String(task.localityId);
+      if (!optionMap.has(id)) {
+        optionMap.set(id, {
+          id,
+          name: String(task.localityName ?? "Localidade atual"),
+        });
+      }
+    }
+    return Array.from(optionMap.values()).sort((a, b) =>
+      a.name.localeCompare(b.name, "pt-BR"),
+    );
+  }, [linkedLocalities, localities, task?.localityId, task?.localityName]);
 
   const assigneeValueFromTask = (taskItem: any) => {
     if (taskItem?.assignee?.type === "USER" && taskItem?.assignee?.id) {
@@ -184,12 +223,23 @@ export function TaskDetailsDrawer({
     setSelectedAssigneeValue(assigneeValueFromTask(task));
     setCommentText("");
     setTaskTitleDraft(resolveTaskTitle(task));
+    const linkedIds = (
+      linkedLocalities.length > 0
+        ? linkedLocalities
+        : task.localityId
+          ? [{ id: String(task.localityId), name: String(task.localityName ?? "") }]
+          : []
+    )
+      .map((locality) => String(locality?.id ?? "").trim())
+      .filter(Boolean);
+    setLinkedLocalityIdsDraft(Array.from(new Set(linkedIds)));
   }, [
     task?.id,
     task?.localityId,
     task?.assignedToId,
     task?.assignedEloId,
     task?.assigneeType,
+    linkedLocalities,
   ]);
 
   useEffect(() => {
@@ -394,6 +444,38 @@ export function TaskDetailsDrawer({
     setConfirmDeleteOpen(true);
   };
 
+  const handleSaveLocalities = async () => {
+    if (!task || !canManageTaskData) return;
+    const nextLocalityIds = Array.from(
+      new Set(linkedLocalityIdsDraft.map((value) => String(value).trim())),
+    ).filter(Boolean);
+    if (!nextLocalityIds.length) {
+      toast.push({
+        message: "Selecione ao menos uma localidade.",
+        severity: "warning",
+      });
+      return;
+    }
+    try {
+      await updateTaskLocalities.mutateAsync({
+        id: task.id,
+        localityIds: nextLocalityIds,
+        sourceTaskIds: normalizedLinkedIds,
+      });
+      if (!nextLocalityIds.includes(selectedLocalityId)) {
+        setSelectedLocalityId(nextLocalityIds[0] ?? "");
+        setSelectedAssigneeValue("");
+      }
+      toast.push({ message: "Localidades atualizadas", severity: "success" });
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({
+        message: payload.message ?? "Erro ao atualizar localidades",
+        severity: "error",
+      });
+    }
+  };
+
   const handleConfirmDelete = async () => {
     if (!task || !canDelete) return;
     try {
@@ -498,16 +580,44 @@ export function TaskDetailsDrawer({
                     >
                       Localidades vinculadas ({linkedLocalities.length})
                     </Typography>
-                    <Stack direction="row" spacing={0.8} flexWrap="wrap">
-                      {linkedLocalities.map((locality) => (
-                        <Chip
-                          key={locality.id}
-                          size="small"
-                          variant="outlined"
-                          label={locality.name}
+                    <Autocomplete
+                      multiple
+                      size="small"
+                      options={localityOptions}
+                      value={localityOptions.filter((option) =>
+                        linkedLocalityIdsDraft.includes(option.id),
+                      )}
+                      getOptionLabel={(option) => option.name}
+                      isOptionEqualToValue={(option, value) =>
+                        option.id === value.id
+                      }
+                      onChange={(_, values) =>
+                        setLinkedLocalityIdsDraft(values.map((value) => value.id))
+                      }
+                      disabled={!canManageTaskData || updateTaskLocalities.isPending}
+                      renderTags={(value, getTagProps) =>
+                        value.map((option, index) => (
+                          <Chip
+                            {...getTagProps({ index })}
+                            key={option.id}
+                            size="small"
+                            variant="outlined"
+                            label={option.name}
+                          />
+                        ))
+                      }
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          placeholder="Selecione as localidades"
+                          helperText={
+                            canManageTaskData
+                              ? "Edite as localidades vinculadas desta tarefa."
+                              : "Somente Comissão e TI podem editar localidades."
+                          }
                         />
-                      ))}
-                    </Stack>
+                      )}
+                    />
                   </Box>
                 )}
                 <TextField
@@ -726,6 +836,17 @@ export function TaskDetailsDrawer({
                     data-testid="task-save"
                   >
                     Salvar
+                  </Button>
+                  <Button
+                    variant="text"
+                    onClick={handleSaveLocalities}
+                    disabled={
+                      !canManageTaskData ||
+                      updateTaskLocalities.isPending ||
+                      linkedLocalityIdsDraft.length === 0
+                    }
+                  >
+                    Salvar localidades
                   </Button>
                   {canDelete && (
                     <Button

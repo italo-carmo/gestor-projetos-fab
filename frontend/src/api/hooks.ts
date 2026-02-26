@@ -771,6 +771,31 @@ export function useUpdateTaskTitle() {
   });
 }
 
+export function useUpdateTaskLocalities() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      localityIds: string[];
+      sourceTaskIds?: string[];
+    }) =>
+      (
+        await api.put(`/task-instances/${args.id}/localities`, {
+          localityIds: args.localityIds,
+          sourceTaskIds: args.sourceTaskIds ?? [],
+        })
+      ).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      qc.invalidateQueries({ queryKey: ["gantt"] });
+      qc.invalidateQueries({ queryKey: ["calendar"] });
+      qc.invalidateQueries({ queryKey: ["meetings"] });
+      qc.invalidateQueries({ queryKey: ["dashboardNational"] });
+      qc.invalidateQueries({ queryKey: ["dashboardExecutive"] });
+    },
+  });
+}
+
 export function useDeleteTask() {
   const qc = useQueryClient();
   return useMutation({

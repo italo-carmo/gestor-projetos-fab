@@ -91,7 +91,7 @@ export function GanttPage() {
     return '—';
   };
 
-  let items = (ganttQuery.data?.items ?? []).map((task: any) => {
+  const baseItems = ((ganttQuery.data?.items ?? []) as any[]).map((task: any) => {
     const template = task.taskTemplate ?? templateMap.get(task.taskTemplateId) ?? null;
     return {
       ...task,
@@ -101,13 +101,104 @@ export function GanttPage() {
       localityName: resolveTaskLocalityName(task),
     };
   });
-  if (phaseId) {
-    items = items.filter((task: any) => task.taskTemplate?.phaseId === phaseId);
-  }
-  if (status) {
-    items = items.filter((task: any) => task.status === status);
-  }
-  const selectedTask = items.find((item: any) => item.id === selectedTaskId) ?? null;
+
+  const groupedItems = useMemo(() => {
+    const filtered = baseItems
+      .filter((task: any) => (phaseId ? task.taskTemplate?.phaseId === phaseId : true))
+      .filter((task: any) => (status ? task.status === status : true));
+
+    const groups = new Map<string, any[]>();
+    for (const task of filtered) {
+      const explicitGroupKey = String(task.groupKey ?? "").trim();
+      const createdDateKey =
+        String(task.createdAt ?? "").slice(0, 10) ||
+        String(task.dueDate ?? "").slice(0, 10);
+      const phaseKey = String(task.taskTemplate?.phaseId ?? "");
+      const templateKey = String(task.taskTemplateId ?? task.taskTemplate?.id ?? "");
+      const meetingKey = String(task.meetingId ?? "");
+      const specialtyKey = String(task.specialtyId ?? "");
+      const eloRoleKey = String(task.eloRoleId ?? "");
+      const titleKey = resolveTaskTitle(task).trim().toLowerCase();
+      const fallbackLegacyKey =
+        `legacy:${templateKey}|${titleKey}|${phaseKey}|${createdDateKey}|${meetingKey}|${specialtyKey}|${eloRoleKey}`;
+      const key = explicitGroupKey || fallbackLegacyKey;
+      const current = groups.get(key) ?? [];
+      current.push(task);
+      groups.set(key, current);
+    }
+
+    const rows: any[] = [];
+    for (const [key, group] of Array.from(groups.entries())) {
+      const uniqueLocalities = Array.from(
+        new Set(group.map((item: any) => String(item.localityId ?? ""))),
+      ).filter(Boolean);
+      if (key.startsWith("legacy:") && uniqueLocalities.length <= 1 && group.length <= 1) {
+        const task = group[0];
+        rows.push({
+          ...task,
+          id: String(task.id),
+          primaryTaskId: String(task.id),
+          groupedTaskIds: [String(task.id)],
+          groupedLocalities: [
+            {
+              id: String(task.localityId),
+              name: String(task.localityName ?? "—"),
+            },
+          ],
+          groupedLocalityCount: 1,
+        });
+        continue;
+      }
+
+      const ordered = [...group].sort(
+        (a: any, b: any) =>
+          new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime(),
+      );
+      const primary = ordered[0];
+      const taskIds = ordered.map((item: any) => String(item.id));
+      const localityEntries = ordered.map((item: any) => ({
+        id: String(item.localityId),
+        name: String(item.localityName ?? "—"),
+      }));
+      const dedupLocalityMap = new Map<string, { id: string; name: string }>();
+      localityEntries.forEach((entry) => {
+        if (!dedupLocalityMap.has(entry.id)) {
+          dedupLocalityMap.set(entry.id, entry);
+        }
+      });
+      const groupedLocalities = Array.from(dedupLocalityMap.values());
+      const hasMixedStatus =
+        new Set(ordered.map((item: any) => String(item.status))).size > 1;
+      const averageProgress = Math.round(
+        ordered.reduce(
+          (acc: number, item: any) => acc + Number(item.progressPercent ?? 0),
+          0,
+        ) / ordered.length,
+      );
+
+      rows.push({
+        ...primary,
+        id: String(primary.id),
+        primaryTaskId: String(primary.id),
+        groupedTaskIds: taskIds,
+        groupedLocalities,
+        groupedLocalityCount: groupedLocalities.length,
+        localityName:
+          groupedLocalities.length > 1
+            ? `${groupedLocalities.length} localidades`
+            : (groupedLocalities[0]?.name ?? "—"),
+        status: hasMixedStatus ? "IN_PROGRESS" : primary.status,
+        progressPercent: hasMixedStatus
+          ? averageProgress
+          : Number(primary.progressPercent ?? 0),
+      });
+    }
+
+    return rows;
+  }, [baseItems, phaseId, status]);
+
+  const selectedTask =
+    groupedItems.find((item: any) => item.id === selectedTaskId) ?? null;
 
   const updateParam = (key: string, value: string) => {
     const next = new URLSearchParams(params);
@@ -190,7 +281,7 @@ export function GanttPage() {
         </CardContent>
       </Card>
 
-      {items.length === 0 ? (
+      {groupedItems.length === 0 ? (
         <EmptyState title="Sem tarefas" description="Nenhum item para o período selecionado. Ajuste os filtros ou datas." />
       ) : (
         <Card>
@@ -202,12 +293,12 @@ export function GanttPage() {
                 <Button variant={viewMode === 'Week' ? 'contained' : 'outlined'} onClick={() => setViewMode('Week')}>Semana</Button>
                 <Button variant={viewMode === 'Month' ? 'contained' : 'outlined'} onClick={() => setViewMode('Month')}>Mês</Button>
               </ButtonGroup>
-              <Chip size="small" label={`${items.length} tarefas`} variant="outlined" />
+              <Chip size="small" label={`${groupedItems.length} tarefas`} variant="outlined" />
               <Typography variant="caption" color="text.secondary">
                 Dica: clique e arraste no gráfico para navegar pelos meses (também funciona com rolagem).
               </Typography>
             </Box>
-            <GanttView items={items} onSelect={(id) => setSelectedTaskId(id)} viewMode={viewMode} />
+            <GanttView items={groupedItems} onSelect={(id) => setSelectedTaskId(id)} viewMode={viewMode} />
           </Box>
         </Card>
       )}
@@ -219,6 +310,8 @@ export function GanttPage() {
         onDeleted={() => setSelectedTaskId(null)}
         user={me}
         localities={localities}
+        linkedTaskIds={selectedTask?.groupedTaskIds ?? []}
+        linkedLocalities={selectedTask?.groupedLocalities ?? []}
       />
     </Box>
   );

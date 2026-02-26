@@ -1114,6 +1114,411 @@ export class TasksService {
     return this.mapTaskInstance(updated, user?.executiveHidePii);
   }
 
+  async updateTaskLocalities(
+    id: string,
+    localityIdsRaw: string[],
+    sourceTaskIdsRaw: string[] = [],
+    user?: RbacUser,
+  ) {
+    const desiredLocalityIds = Array.from(
+      new Set(
+        (localityIdsRaw ?? [])
+          .map((value) => String(value ?? '').trim())
+          .filter(Boolean),
+      ),
+    );
+    if (!desiredLocalityIds.length) {
+      throwError('VALIDATION_ERROR', {
+        field: 'localityIds',
+        reason: 'required',
+      });
+    }
+
+    const baseInstance = await this.prisma.taskInstance.findUnique({
+      where: { id },
+      include: {
+        taskTemplate: { select: { id: true, specialtyId: true } },
+        assignedTo: { select: { id: true, localityId: true } },
+        assignedElo: { select: { id: true, localityId: true } },
+        responsibles: {
+          include: { user: { select: { id: true, localityId: true } } },
+          orderBy: [{ createdAt: 'asc' }],
+        },
+        meeting: { select: { id: true, localityId: true } },
+      },
+    });
+    if (!baseInstance) throwError('NOT_FOUND');
+    this.assertTaskOperateAccess(baseInstance, user);
+
+    const baseSpecialtyId =
+      baseInstance.specialtyId ?? baseInstance.taskTemplate?.specialtyId ?? null;
+    for (const localityId of desiredLocalityIds) {
+      this.assertConstraints(localityId, baseSpecialtyId, user);
+      this.assertCanAssignInLocality(localityId, user);
+    }
+
+    const sourceTaskIds = Array.from(
+      new Set(
+        [id, ...(sourceTaskIdsRaw ?? [])]
+          .map((value) => String(value ?? '').trim())
+          .filter(Boolean),
+      ),
+    );
+
+    let sourceInstances = sourceTaskIds.length > 1
+      ? await this.prisma.taskInstance.findMany({
+          where: { id: { in: sourceTaskIds } },
+          include: {
+            taskTemplate: { select: { specialtyId: true } },
+            assignedElo: { select: { id: true, eloRoleId: true } },
+            responsibles: { select: { userId: true } },
+          },
+        })
+      : [];
+
+    if (sourceInstances.length <= 1 && baseInstance.groupKey) {
+      sourceInstances = await this.prisma.taskInstance.findMany({
+        where: { groupKey: baseInstance.groupKey },
+        include: {
+          taskTemplate: { select: { specialtyId: true } },
+          assignedElo: { select: { id: true, eloRoleId: true } },
+          responsibles: { select: { userId: true } },
+        },
+      });
+    }
+
+    if (sourceInstances.length === 0) {
+      sourceInstances = [
+        {
+          ...baseInstance,
+          taskTemplate: {
+            specialtyId: baseInstance.taskTemplate?.specialtyId ?? null,
+          },
+          assignedElo: baseInstance.assignedElo
+            ? { id: baseInstance.assignedElo.id, eloRoleId: null }
+            : null,
+          responsibles: baseInstance.responsibles.map((entry) => ({
+            userId: entry.userId,
+          })),
+        } as any,
+      ];
+    }
+
+    for (const instance of sourceInstances) {
+      this.assertTaskOperateAccess(instance, user);
+      if (instance.taskTemplateId !== baseInstance.taskTemplateId) {
+        throwError('VALIDATION_ERROR', {
+          field: 'sourceTaskIds',
+          reason: 'TASK_LOCALITIES_GROUP_MISMATCH',
+        });
+      }
+    }
+
+    const primaryLocalityId = desiredLocalityIds.includes(baseInstance.localityId)
+      ? baseInstance.localityId
+      : desiredLocalityIds[0];
+
+    const localityRecords = await this.prisma.locality.findMany({
+      where: { id: { in: desiredLocalityIds } },
+      select: { id: true, commandName: true, commanderName: true },
+    });
+    if (localityRecords.length !== desiredLocalityIds.length) {
+      throwError('NOT_FOUND');
+    }
+    const localityById = new Map(
+      localityRecords.map((locality) => [locality.id, locality]),
+    );
+
+    const resolveAssignmentForLocality = (localityId: string) => {
+      const locality = localityById.get(localityId);
+      if (!locality) throwError('NOT_FOUND');
+
+      const assignedToId =
+        baseInstance.assignedToId &&
+        baseInstance.assignedTo?.localityId === localityId
+          ? baseInstance.assignedToId
+          : null;
+      const assignedEloId =
+        baseInstance.assignedEloId &&
+        baseInstance.assignedElo?.localityId === localityId
+          ? baseInstance.assignedEloId
+          : null;
+
+      const responsibles = (baseInstance.responsibles ?? [])
+        .filter((entry: any) => entry?.user?.localityId === localityId)
+        .map((entry: any) => String(entry.userId ?? '').trim())
+        .filter(Boolean);
+
+      if (assignedToId) {
+        return {
+          assignedToId,
+          assignedEloId: null,
+          assigneeType: TaskAssigneeType.USER as TaskAssigneeType | null,
+          externalAssigneeName: null as string | null,
+          externalAssigneeRole: null as string | null,
+          responsibles,
+          meetingId:
+            !baseInstance.meeting ||
+            !baseInstance.meeting.localityId ||
+            baseInstance.meeting.localityId === localityId
+              ? baseInstance.meetingId
+              : null,
+        };
+      }
+      if (assignedEloId) {
+        return {
+          assignedToId: null,
+          assignedEloId,
+          assigneeType: TaskAssigneeType.ELO as TaskAssigneeType | null,
+          externalAssigneeName: null as string | null,
+          externalAssigneeRole: null as string | null,
+          responsibles,
+          meetingId:
+            !baseInstance.meeting ||
+            !baseInstance.meeting.localityId ||
+            baseInstance.meeting.localityId === localityId
+              ? baseInstance.meetingId
+              : null,
+        };
+      }
+      if (baseInstance.assigneeType === TaskAssigneeType.LOCALITY_COMMAND) {
+        const name = locality.commandName?.trim() || null;
+        return {
+          assignedToId: null,
+          assignedEloId: null,
+          assigneeType: name ? TaskAssigneeType.LOCALITY_COMMAND : null,
+          externalAssigneeName: name,
+          externalAssigneeRole: name ? 'GSD / Comando' : null,
+          responsibles: [] as string[],
+          meetingId:
+            !baseInstance.meeting ||
+            !baseInstance.meeting.localityId ||
+            baseInstance.meeting.localityId === localityId
+              ? baseInstance.meetingId
+              : null,
+        };
+      }
+      if (baseInstance.assigneeType === TaskAssigneeType.LOCALITY_COMMANDER) {
+        const name = locality.commanderName?.trim() || null;
+        return {
+          assignedToId: null,
+          assignedEloId: null,
+          assigneeType: name ? TaskAssigneeType.LOCALITY_COMMANDER : null,
+          externalAssigneeName: name,
+          externalAssigneeRole: name ? 'Comandante' : null,
+          responsibles: [] as string[],
+          meetingId:
+            !baseInstance.meeting ||
+            !baseInstance.meeting.localityId ||
+            baseInstance.meeting.localityId === localityId
+              ? baseInstance.meetingId
+              : null,
+        };
+      }
+
+      return {
+        assignedToId: null,
+        assignedEloId: null,
+        assigneeType: null as TaskAssigneeType | null,
+        externalAssigneeName: null as string | null,
+        externalAssigneeRole: null as string | null,
+        responsibles: [] as string[],
+        meetingId:
+          !baseInstance.meeting ||
+          !baseInstance.meeting.localityId ||
+          baseInstance.meeting.localityId === localityId
+            ? baseInstance.meetingId
+            : null,
+      };
+    };
+
+    const nonPrimarySource = sourceInstances
+      .filter((instance) => instance.id !== baseInstance.id)
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+    const reusableByLocality = new Map<string, any>();
+    nonPrimarySource.forEach((instance) => {
+      if (!reusableByLocality.has(instance.localityId)) {
+        reusableByLocality.set(instance.localityId, instance);
+      }
+    });
+
+    const keptIds = new Set<string>([baseInstance.id]);
+    const keptLocalityIds = new Set<string>([primaryLocalityId]);
+    const missingLocalityIds: string[] = [];
+    const deletedIds = new Set<string>();
+
+    for (const localityId of desiredLocalityIds) {
+      if (localityId === primaryLocalityId) continue;
+      const reusable = reusableByLocality.get(localityId);
+      if (reusable) {
+        keptIds.add(reusable.id);
+        keptLocalityIds.add(localityId);
+        reusableByLocality.delete(localityId);
+      } else {
+        missingLocalityIds.push(localityId);
+      }
+    }
+
+    for (const instance of nonPrimarySource) {
+      if (!keptIds.has(instance.id)) deletedIds.add(instance.id);
+    }
+
+    const persisted = await this.prisma.$transaction(async (tx) => {
+      const createdIds: string[] = [];
+
+      if (baseInstance.localityId !== primaryLocalityId) {
+        const assignment = resolveAssignmentForLocality(primaryLocalityId);
+        await tx.taskInstance.update({
+          where: { id: baseInstance.id },
+          data: {
+            localityId: primaryLocalityId,
+            meetingId: assignment.meetingId,
+            assignedToId: assignment.assignedToId,
+            assignedEloId: assignment.assignedEloId,
+            assigneeType: assignment.assigneeType,
+            externalAssigneeName: assignment.externalAssigneeName,
+            externalAssigneeRole: assignment.externalAssigneeRole,
+            responsibles: {
+              deleteMany: {},
+              ...(assignment.responsibles.length > 0
+                ? {
+                    create: assignment.responsibles.map((userId) => ({
+                      userId,
+                      assignedById: user?.id ?? null,
+                    })),
+                  }
+                : {}),
+            },
+          },
+        });
+      }
+
+      for (const localityId of missingLocalityIds) {
+        const assignment = resolveAssignmentForLocality(localityId);
+        const created = await tx.taskInstance.create({
+          data: {
+            taskTemplateId: baseInstance.taskTemplateId,
+            localityId,
+            specialtyId: baseInstance.specialtyId,
+            dueDate: baseInstance.dueDate,
+            status: baseInstance.status,
+            priority: baseInstance.priority,
+            progressPercent: baseInstance.progressPercent,
+            reportRequired: baseInstance.reportRequired,
+            titleOverride: baseInstance.titleOverride,
+            meetingId: assignment.meetingId,
+            assignedToId: assignment.assignedToId,
+            assignedEloId: assignment.assignedEloId,
+            assigneeType: assignment.assigneeType,
+            externalAssigneeName: assignment.externalAssigneeName,
+            externalAssigneeRole: assignment.externalAssigneeRole,
+            groupKey: null,
+            eloRoleId: baseInstance.eloRoleId,
+            responsibles:
+              assignment.responsibles.length > 0
+                ? {
+                    create: assignment.responsibles.map((userId) => ({
+                      userId,
+                      assignedById: user?.id ?? null,
+                    })),
+                  }
+                : undefined,
+          },
+          select: { id: true },
+        });
+        createdIds.push(created.id);
+      }
+
+      const idsToDelete = Array.from(deletedIds);
+      if (idsToDelete.length > 0) {
+        await tx.taskCommentRead.deleteMany({
+          where: { taskInstanceId: { in: idsToDelete } },
+        });
+        await tx.taskComment.deleteMany({
+          where: { taskInstanceId: { in: idsToDelete } },
+        });
+        await tx.taskResponsible.deleteMany({
+          where: { taskInstanceId: { in: idsToDelete } },
+        });
+        await tx.report.deleteMany({
+          where: { taskInstanceId: { in: idsToDelete } },
+        });
+        await tx.taskInstance.deleteMany({
+          where: { id: { in: idsToDelete } },
+        });
+      }
+
+      const finalIds = Array.from(
+        new Set([baseInstance.id, ...Array.from(keptIds), ...createdIds]),
+      );
+      const nextGroupKey =
+        finalIds.length > 1
+          ? String(baseInstance.groupKey ?? '').trim() || randomUUID()
+          : null;
+      await tx.taskInstance.updateMany({
+        where: { id: { in: finalIds } },
+        data: { groupKey: nextGroupKey },
+      });
+
+      return { finalIds, nextGroupKey };
+    });
+
+    const updated = await this.prisma.taskInstance.findMany({
+      where: { id: { in: persisted.finalIds } },
+      orderBy: [{ dueDate: 'asc' }, { createdAt: 'asc' }],
+      include: {
+        locality: { select: { id: true, name: true, code: true } },
+        specialty: { select: { id: true, name: true, color: true } },
+        taskTemplate: { select: { id: true, title: true, phaseId: true } },
+        assignedTo: { select: { id: true, name: true, email: true } },
+        assignedElo: {
+          include: {
+            eloRole: { select: { id: true, code: true, name: true } },
+          },
+        },
+        responsibles: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                localityId: true,
+                specialtyId: true,
+                eloRoleId: true,
+              },
+            },
+          },
+          orderBy: [{ createdAt: 'asc' }],
+        },
+        meeting: { select: { id: true, datetime: true, scope: true } },
+        eloRole: { select: { id: true, code: true, name: true } },
+      },
+    });
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'task_instances',
+      action: 'update_localities',
+      entityId: id,
+      localityId: primaryLocalityId,
+      diffJson: {
+        sourceTaskIds: sourceTaskIds,
+        keptTaskIds: Array.from(keptIds),
+        deletedTaskIds: Array.from(deletedIds),
+        localityIds: desiredLocalityIds,
+        groupKey: persisted.nextGroupKey,
+      },
+    });
+
+    return {
+      primaryTaskId: id,
+      items: updated.map((item) =>
+        this.mapTaskInstance(item, user?.executiveHidePii),
+      ),
+    };
+  }
+
   async batchAssign(
     ids: string[],
     assignedToId: string | null,

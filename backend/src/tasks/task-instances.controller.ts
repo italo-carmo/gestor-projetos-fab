@@ -18,6 +18,7 @@ import { TaskAssignDto } from './dto/task-assign.dto';
 import { TaskCommentDto } from './dto/task-comment.dto';
 import { TaskEloRoleDto } from './dto/task-elo-role.dto';
 import { TaskMeetingDto } from './dto/task-meeting.dto';
+import { TaskLocalitiesDto } from './dto/task-localities.dto';
 import { TaskProgressDto } from './dto/task-progress.dto';
 import { TaskSpecialtyDto } from './dto/task-specialty.dto';
 import { TaskStatusDto } from './dto/task-status.dto';
@@ -200,6 +201,21 @@ export class TaskInstancesController {
     @CurrentUser() user: RbacUser,
   ) {
     return this.tasks.assignTask(id, dto, user);
+  }
+
+  @Put(':id/localities')
+  @RequirePermission('task_instances', 'update')
+  updateLocalities(
+    @Param('id') id: string,
+    @Body() dto: TaskLocalitiesDto,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.tasks.updateTaskLocalities(
+      id,
+      dto.localityIds ?? [],
+      dto.sourceTaskIds ?? [],
+      user,
+    );
   }
 
   @Put(':id/meeting')
