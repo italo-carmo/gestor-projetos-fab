@@ -10,6 +10,7 @@ import { CalendarPage } from './pages/CalendarPage';
 import { AdminRbacPage } from './pages/AdminRbacPage';
 import { EloRolesPage } from './pages/EloRolesPage';
 import { PostosPage } from './pages/PostosPage';
+import { OmsAdminPage } from './pages/OmsAdminPage';
 import { AdminPhasesPage } from './pages/AdminPhasesPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { LoginPage } from './pages/LoginPage';
@@ -103,7 +104,7 @@ function App() {
                   element={
                     <RequireRoleAccess
                       allow={(user) =>
-                        hasAnyRole(user, [ROLE_CPCA, ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP])
+                        hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI])
                       }
                     >
                       <CpcaStatsPage />
@@ -166,6 +167,14 @@ function App() {
                 />
                 <Route path="/admin/rbac" element={<AdminRbacPage />} />
                 <Route path="/admin/elo-roles" element={<EloRolesPage />} />
+                <Route
+                  path="/admin/oms"
+                  element={
+                    <RequireRoleAccess allow={(user) => hasAnyRole(user, [ROLE_TI])}>
+                      <OmsAdminPage />
+                    </RequireRoleAccess>
+                  }
+                />
                 <Route path="/admin/postos" element={<PostosPage />} />
                 <Route path="/admin/phases" element={<AdminPhasesPage />} />
                 <Route path="*" element={<NotFoundPage />} />

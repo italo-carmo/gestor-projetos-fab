@@ -1740,6 +1740,33 @@ export function useUpdateLocality() {
   });
 }
 
+export function useCreateLocality() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: Record<string, any>) =>
+      (await api.post('/localities', payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.localities });
+      qc.invalidateQueries({ queryKey: ['dashboardRecruits'] });
+      qc.invalidateQueries({ queryKey: ['dashboardNational'] });
+      qc.invalidateQueries({ queryKey: ['dashboardExecutive'] });
+    },
+  });
+}
+
+export function useDeleteLocality() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await api.delete(`/localities/${id}`)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.localities });
+      qc.invalidateQueries({ queryKey: ['dashboardRecruits'] });
+      qc.invalidateQueries({ queryKey: ['dashboardNational'] });
+      qc.invalidateQueries({ queryKey: ['dashboardExecutive'] });
+    },
+  });
+}
+
 export function useUpdateLocalityRecruits() {
   const qc = useQueryClient();
   return useMutation({

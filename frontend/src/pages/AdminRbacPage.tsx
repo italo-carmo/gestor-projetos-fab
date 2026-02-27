@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
+  Autocomplete,
   Box,
   Button,
   Card,
@@ -81,7 +82,8 @@ function roleRequiresLocality(roleName: string | null | undefined) {
     normalized === 'admin especialidade local' ||
     normalized === 'gsd localidade' ||
     normalized === 'admin localidade' ||
-    normalized === 'administracao local'
+    normalized === 'administracao local' ||
+    normalized === 'cpca'
   );
 }
 
@@ -426,27 +428,27 @@ export function AdminRbacPage() {
                     </MenuItem>
                   ))}
                 </TextField>
-                <TextField
-                  select
+                <Autocomplete
                   size="small"
-                  label="Localidade"
-                  value={ldapLocalityId}
-                  onChange={(event) => setLdapLocalityId(event.target.value)}
-                  sx={{ minWidth: 230 }}
-                  error={ldapRoleNeedsLocality && !ldapLocalityId}
-                  helperText={
-                    ldapRoleNeedsLocality && !ldapLocalityId
-                      ? 'Obrigatória para este papel.'
-                      : undefined
-                  }
-                >
-                  <MenuItem value="">Sem localidade</MenuItem>
-                  {localities.map((locality) => (
-                    <MenuItem key={locality.id} value={locality.id}>
-                      {locality.name}
-                    </MenuItem>
-                  ))}
-                </TextField>
+                  options={localities}
+                  value={localities.find((locality) => locality.id === ldapLocalityId) ?? null}
+                  onChange={(_event, value) => setLdapLocalityId(value?.id ?? '')}
+                  getOptionLabel={(option) => `${option.name} (${option.code})`}
+                  isOptionEqualToValue={(option, value) => option.id === value.id}
+                  sx={{ minWidth: 260 }}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Localidade"
+                      error={ldapRoleNeedsLocality && !ldapLocalityId}
+                      helperText={
+                        ldapRoleNeedsLocality && !ldapLocalityId
+                          ? 'Obrigatória para este papel.'
+                          : 'Digite para filtrar OMs.'
+                      }
+                    />
+                  )}
+                />
                 <TextField
                   select
                   size="small"
@@ -699,26 +701,26 @@ export function AdminRbacPage() {
                 </MenuItem>
               ))}
             </TextField>
-            <TextField
-              select
+            <Autocomplete
               size="small"
-              label="Localidade"
-              value={editLocalityId}
-              onChange={(event) => setEditLocalityId(event.target.value)}
-              error={editRoleNeedsLocality && !editLocalityId}
-              helperText={
-                editRoleNeedsLocality && !editLocalityId
-                  ? 'Localidade obrigatória para este papel.'
-                  : undefined
-              }
-            >
-              <MenuItem value="">Sem localidade</MenuItem>
-              {localities.map((locality) => (
-                <MenuItem key={locality.id} value={locality.id}>
-                  {locality.name}
-                </MenuItem>
-              ))}
-            </TextField>
+              options={localities}
+              value={localities.find((locality) => locality.id === editLocalityId) ?? null}
+              onChange={(_event, value) => setEditLocalityId(value?.id ?? '')}
+              getOptionLabel={(option) => `${option.name} (${option.code})`}
+              isOptionEqualToValue={(option, value) => option.id === value.id}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Localidade"
+                  error={editRoleNeedsLocality && !editLocalityId}
+                  helperText={
+                    editRoleNeedsLocality && !editLocalityId
+                      ? 'Localidade obrigatória para este papel.'
+                      : 'Digite para filtrar OMs.'
+                  }
+                />
+              )}
+            />
             <TextField
               select
               size="small"

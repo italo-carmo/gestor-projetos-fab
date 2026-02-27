@@ -32,6 +32,7 @@ import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import SettingsIcon from '@mui/icons-material/Settings';
 import GroupsIcon from '@mui/icons-material/Groups';
 import PeopleIcon from '@mui/icons-material/People';
+import BusinessIcon from '@mui/icons-material/Business';
 import CampaignIcon from '@mui/icons-material/Campaign';
 import ChecklistIcon from '@mui/icons-material/Checklist';
 import AccountTreeIcon from '@mui/icons-material/AccountTree';
@@ -50,8 +51,10 @@ import { useDebounce } from '../app/useDebounce';
 import { can } from '../app/rbac';
 import {
   canonicalRoleName,
+  hasRole,
   hasAnyRole,
   hasNationalManagementScope,
+  normalizeRoleName,
   ROLE_COMANDANTE_COMGEP,
   ROLE_CPCA,
   ROLE_COORDENACAO_CIPAVD,
@@ -87,6 +90,7 @@ const navItems = [
   { label: 'Organograma', to: '/org-chart', icon: <AccountTreeIcon fontSize="small" /> },
   { label: 'Auditoria', to: '/audit', icon: <HistoryIcon fontSize="small" /> },
   { label: 'Tipos de Elo', to: '/admin/elo-roles', icon: <ContactPhoneIcon fontSize="small" /> },
+  { label: 'OMs (CRUD)', to: '/admin/oms', icon: <BusinessIcon fontSize="small" /> },
   { label: 'Postos', to: '/admin/postos', icon: <ContactPhoneIcon fontSize="small" /> },
   { label: 'Fases', to: '/admin/phases', icon: <SettingsIcon fontSize="small" /> },
   { label: 'Admin RBAC', to: '/admin/rbac', icon: <SettingsIcon fontSize="small" /> },
@@ -152,6 +156,13 @@ export function AppShell({ children }: { children: ReactNode }) {
     const isNationalManager = hasNationalManagementScope(me);
     const isBiRole = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI]);
     const canSeeCommissionTiBoards = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]);
+    const activeRoleName = normalizeRoleName(me?.activeRole?.name ?? me?.roles?.[0]?.name);
+    const cpcaOnlyMode = activeRoleName === normalizeRoleName(ROLE_CPCA);
+
+    // Papel CPCA (OM): menu operacional restrito apenas ao fluxo de denúncias.
+    if (cpcaOnlyMode) {
+      return item.to === '/cpca-cases';
+    }
 
     if (item.to === '/dashboard/national') {
       return isNationalManager && can(me, 'dashboard', 'view');
@@ -172,7 +183,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       return hasAnyRole(me, [ROLE_CPCA, ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP]) && can(me, 'cpca_cases', 'view');
     }
     if (item.to === '/cpca-stats') {
-      return hasAnyRole(me, [ROLE_CPCA, ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP]) && can(me, 'cpca_cases', 'view');
+      return hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI]) && can(me, 'cpca_cases', 'view');
     }
     if (item.to === '/audit') {
       return hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]);
@@ -212,6 +223,9 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
     if (item.to === '/admin/postos') {
       return can(me, 'postos', 'view');
+    }
+    if (item.to === '/admin/oms') {
+      return hasRole(me, ROLE_TI) && can(me, 'localities', 'view');
     }
     if (item.to === '/admin/phases') {
       return can(me, 'phases', 'update');

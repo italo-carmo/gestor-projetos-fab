@@ -8,6 +8,7 @@ const LOCALITY_REQUIRED_ROLE_NAMES = new Set([
   'gsd localidade',
   'admin localidade',
   'administracao local',
+  'cpca',
 ]);
 
 const SPECIALTY_REQUIRED_ROLE_NAMES = new Set([
