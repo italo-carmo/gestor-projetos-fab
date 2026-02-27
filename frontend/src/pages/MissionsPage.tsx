@@ -92,7 +92,7 @@ export function MissionsPage() {
   const [ldapIdentifier, setLdapIdentifier] = useState('');
   const [scheduleForm, setScheduleForm] = useState(blankScheduleForm);
   const [editingScheduleItemId, setEditingScheduleItemId] = useState<string | null>(null);
-  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [missionDeleteTarget, setMissionDeleteTarget] = useState<{ id: string; title: string } | null>(null);
   const [scheduleDeleteTarget, setScheduleDeleteTarget] = useState<{ id: string; title: string } | null>(null);
 
   const lookupQuery = useLookupMissionLdapParticipant(ldapIdentifier);
@@ -165,7 +165,7 @@ export function MissionsPage() {
     setIsCreateMode(false);
     setEditingScheduleItemId(null);
     setScheduleForm(blankScheduleForm);
-    setConfirmDeleteOpen(false);
+    setMissionDeleteTarget(null);
     setScheduleDeleteTarget(null);
 
     const next = new URLSearchParams(params);
@@ -217,13 +217,15 @@ export function MissionsPage() {
   };
 
   const handleDeleteMission = async () => {
-    if (!selectedMission) return;
+    if (!missionDeleteTarget) return;
 
     try {
-      await deleteMission.mutateAsync(selectedMission.id);
+      await deleteMission.mutateAsync(missionDeleteTarget.id);
       toast.push({ message: 'Missão removida.', severity: 'success' });
-      setConfirmDeleteOpen(false);
-      closeDrawer();
+      if (selectedMission?.id === missionDeleteTarget.id) {
+        closeDrawer();
+      }
+      setMissionDeleteTarget(null);
     } catch (error) {
       toast.push({ message: parseApiError(error).message ?? 'Erro ao remover missão.', severity: 'error' });
     }
@@ -378,6 +380,7 @@ export function MissionsPage() {
                   <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Período</TableCell>
                   <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Participantes</TableCell>
                   <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Itens de cronograma</TableCell>
+                  <TableCell sx={{ color: '#fff', fontWeight: 700, width: 90 }}>Ações</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -423,6 +426,20 @@ export function MissionsPage() {
                     <TableCell>
                       <Chip label={String(mission.scheduleItemsCount ?? mission.scheduleItems?.length ?? 0)} size="small" />
                     </TableCell>
+                    <TableCell onClick={(event) => event.stopPropagation()}>
+                      <IconButton
+                        size="small"
+                        color="error"
+                        onClick={() =>
+                          setMissionDeleteTarget({
+                            id: String(mission.id),
+                            title: String(mission.title ?? 'Missão'),
+                          })
+                        }
+                      >
+                        <DeleteOutlineIcon fontSize="small" />
+                      </IconButton>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -440,7 +457,12 @@ export function MissionsPage() {
                 <Button
                   color="error"
                   variant="outlined"
-                  onClick={() => setConfirmDeleteOpen(true)}
+                  onClick={() =>
+                    setMissionDeleteTarget({
+                      id: String(selectedMission.id),
+                      title: String(selectedMission.title ?? 'Missão'),
+                    })
+                  }
                   disabled={deleteMission.isPending}
                 >
                   Excluir
@@ -739,12 +761,12 @@ export function MissionsPage() {
       </Drawer>
 
       <ConfirmDialog
-        open={confirmDeleteOpen}
-        onCancel={() => setConfirmDeleteOpen(false)}
+        open={Boolean(missionDeleteTarget)}
+        onCancel={() => setMissionDeleteTarget(null)}
         onConfirm={handleDeleteMission}
         title="Excluir missão"
         message="Confirma a exclusão definitiva desta missão?"
-        highlightText={selectedMission?.title ?? ''}
+        highlightText={missionDeleteTarget?.title ?? ''}
         note="Esta ação também remove participantes e itens de cronograma vinculados."
         confirmLabel="Excluir missão"
         severity="error"
