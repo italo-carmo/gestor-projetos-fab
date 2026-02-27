@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import type { ReactNode } from 'react';
+import { useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import {
   AppBar,
   Avatar,
@@ -20,35 +20,35 @@ import {
   Tooltip,
   Toolbar,
   Typography,
-} from '@mui/material';
-import { alpha, useTheme } from '@mui/material/styles';
-import useMediaQuery from '@mui/material/useMediaQuery';
-import MenuIcon from '@mui/icons-material/Menu';
-import SearchIcon from '@mui/icons-material/Search';
-import DashboardIcon from '@mui/icons-material/Dashboard';
-import TaskIcon from '@mui/icons-material/Task';
-import TimelineIcon from '@mui/icons-material/Timeline';
-import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
-import SettingsIcon from '@mui/icons-material/Settings';
-import GroupsIcon from '@mui/icons-material/Groups';
-import PeopleIcon from '@mui/icons-material/People';
-import BusinessIcon from '@mui/icons-material/Business';
-import CampaignIcon from '@mui/icons-material/Campaign';
-import ChecklistIcon from '@mui/icons-material/Checklist';
-import AccountTreeIcon from '@mui/icons-material/AccountTree';
-import ContactPhoneIcon from '@mui/icons-material/ContactPhone';
-import HistoryIcon from '@mui/icons-material/History';
-import EventNoteIcon from '@mui/icons-material/EventNote';
-import FlagRoundedIcon from '@mui/icons-material/FlagRounded';
-import NewspaperRoundedIcon from '@mui/icons-material/NewspaperRounded';
-import LogoutIcon from '@mui/icons-material/Logout';
-import ChevronLeftRoundedIcon from '@mui/icons-material/ChevronLeftRounded';
-import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
-import InsightsRoundedIcon from '@mui/icons-material/InsightsRounded';
-import PolicyRoundedIcon from '@mui/icons-material/PolicyRounded';
-import { Link, useLocation, useSearchParams } from 'react-router-dom';
-import { useDebounce } from '../app/useDebounce';
-import { can } from '../app/rbac';
+} from "@mui/material";
+import { alpha, useTheme } from "@mui/material/styles";
+import useMediaQuery from "@mui/material/useMediaQuery";
+import MenuIcon from "@mui/icons-material/Menu";
+import SearchIcon from "@mui/icons-material/Search";
+import DashboardIcon from "@mui/icons-material/Dashboard";
+import TaskIcon from "@mui/icons-material/Task";
+import TimelineIcon from "@mui/icons-material/Timeline";
+import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
+import SettingsIcon from "@mui/icons-material/Settings";
+import GroupsIcon from "@mui/icons-material/Groups";
+import PeopleIcon from "@mui/icons-material/People";
+import BusinessIcon from "@mui/icons-material/Business";
+import CampaignIcon from "@mui/icons-material/Campaign";
+import ChecklistIcon from "@mui/icons-material/Checklist";
+import AccountTreeIcon from "@mui/icons-material/AccountTree";
+import ContactPhoneIcon from "@mui/icons-material/ContactPhone";
+import HistoryIcon from "@mui/icons-material/History";
+import EventNoteIcon from "@mui/icons-material/EventNote";
+import FlagRoundedIcon from "@mui/icons-material/FlagRounded";
+import NewspaperRoundedIcon from "@mui/icons-material/NewspaperRounded";
+import LogoutIcon from "@mui/icons-material/Logout";
+import ChevronLeftRoundedIcon from "@mui/icons-material/ChevronLeftRounded";
+import ChevronRightRoundedIcon from "@mui/icons-material/ChevronRightRounded";
+import InsightsRoundedIcon from "@mui/icons-material/InsightsRounded";
+import PolicyRoundedIcon from "@mui/icons-material/PolicyRounded";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
+import { useDebounce } from "../app/useDebounce";
+import { can } from "../app/rbac";
 import {
   canonicalRoleName,
   hasRole,
@@ -59,188 +59,355 @@ import {
   ROLE_CPCA,
   ROLE_COORDENACAO_CIPAVD,
   ROLE_TI,
-} from '../app/roleAccess';
-import { useLocalities, useMe, useSearch } from '../api/hooks';
-import { ACTIVE_ROLE_STORAGE_KEY, GLOBAL_LOCALITY_STORAGE_KEY } from '../api/client';
-import { selectTargetLocalities } from '../constants/localities';
-import { MEETING_STATUS_LABELS, NOTICE_PRIORITY_LABELS } from '../constants/enums';
+} from "../app/roleAccess";
+import { useLocalities, useMe, useSearch } from "../api/hooks";
+import {
+  ACTIVE_ROLE_STORAGE_KEY,
+  GLOBAL_LOCALITY_STORAGE_KEY,
+} from "../api/client";
+import { selectTargetLocalities } from "../constants/localities";
+import {
+  MEETING_STATUS_LABELS,
+  NOTICE_PRIORITY_LABELS,
+} from "../constants/enums";
 
 const drawerExpandedWidth = 284;
 const drawerCollapsedWidth = 92;
 const headerHeight = 84;
 
 const navItems = [
-  { label: 'Painel de Comando', to: '/dashboard/national', icon: <DashboardIcon fontSize="small" /> },
-  { label: 'Painel Exec.', to: '/dashboard/executive', icon: <DashboardIcon fontSize="small" /> },
-  { label: 'BI Pesquisas', to: '/dashboard/bi', icon: <InsightsRoundedIcon fontSize="small" /> },
-  { label: 'CPCA Denúncias', to: '/cpca-cases', icon: <PolicyRoundedIcon fontSize="small" /> },
-  { label: 'CPCA Estatísticas', to: '/cpca-stats', icon: <InsightsRoundedIcon fontSize="small" /> },
-  { label: 'Missões', to: '/missions', icon: <FlagRoundedIcon fontSize="small" /> },
-  { label: 'Atividades de Campo', to: '/activities', icon: <EventNoteIcon fontSize="small" /> },
-  { label: 'Tarefas', to: '/tasks', icon: <TaskIcon fontSize="small" /> },
-  { label: 'Modelos de tarefa', to: '/templates', icon: <TaskIcon fontSize="small" /> },
-  { label: 'Comunicação Social', to: '/social-communication', icon: <NewspaperRoundedIcon fontSize="small" /> },
-  { label: 'Cronograma', to: '/gantt', icon: <TimelineIcon fontSize="small" /> },
-  { label: 'Calendário', to: '/calendar', icon: <CalendarMonthIcon fontSize="small" /> },
-  { label: 'Reuniões', to: '/meetings', icon: <GroupsIcon fontSize="small" /> },
-  { label: 'GSD e Recrutas', to: '/gsd-recruits', icon: <PeopleIcon fontSize="small" /> },
-  { label: 'Avisos', to: '/notices', icon: <CampaignIcon fontSize="small" /> },
-  { label: 'Checklists', to: '/checklists', icon: <ChecklistIcon fontSize="small" /> },
-  { label: 'Elos', to: '/elos', icon: <ContactPhoneIcon fontSize="small" /> },
-  { label: 'Organograma', to: '/org-chart', icon: <AccountTreeIcon fontSize="small" /> },
-  { label: 'Auditoria', to: '/audit', icon: <HistoryIcon fontSize="small" /> },
-  { label: 'Tipos de Elo', to: '/admin/elo-roles', icon: <ContactPhoneIcon fontSize="small" /> },
-  { label: 'OMs (CRUD)', to: '/admin/oms', icon: <BusinessIcon fontSize="small" /> },
-  { label: 'Postos', to: '/admin/postos', icon: <ContactPhoneIcon fontSize="small" /> },
-  { label: 'Fases', to: '/admin/phases', icon: <SettingsIcon fontSize="small" /> },
-  { label: 'Admin RBAC', to: '/admin/rbac', icon: <SettingsIcon fontSize="small" /> },
+  {
+    label: "Painel de Comando",
+    to: "/dashboard/national",
+    icon: <DashboardIcon fontSize="small" />,
+  },
+  {
+    label: "Painel Exec.",
+    to: "/dashboard/executive",
+    icon: <DashboardIcon fontSize="small" />,
+  },
+  {
+    label: "BI Pesquisas",
+    to: "/dashboard/bi",
+    icon: <InsightsRoundedIcon fontSize="small" />,
+  },
+  {
+    label: "CPCA Denúncias",
+    to: "/cpca-cases",
+    icon: <PolicyRoundedIcon fontSize="small" />,
+  },
+  {
+    label: "CPCA Estatísticas",
+    to: "/cpca-stats",
+    icon: <InsightsRoundedIcon fontSize="small" />,
+  },
+  {
+    label: "Missões",
+    to: "/missions",
+    icon: <FlagRoundedIcon fontSize="small" />,
+  },
+  {
+    label: "Atividades de Campo",
+    to: "/activities",
+    icon: <EventNoteIcon fontSize="small" />,
+  },
+  { label: "Tarefas", to: "/tasks", icon: <TaskIcon fontSize="small" /> },
+  {
+    label: "Modelos de tarefa",
+    to: "/templates",
+    icon: <TaskIcon fontSize="small" />,
+  },
+  {
+    label: "Comunicação Social",
+    to: "/social-communication",
+    icon: <NewspaperRoundedIcon fontSize="small" />,
+  },
+  {
+    label: "Cronograma",
+    to: "/gantt",
+    icon: <TimelineIcon fontSize="small" />,
+  },
+  {
+    label: "Calendário",
+    to: "/calendar",
+    icon: <CalendarMonthIcon fontSize="small" />,
+  },
+  { label: "Reuniões", to: "/meetings", icon: <GroupsIcon fontSize="small" /> },
+  {
+    label: "GSD e Recrutas",
+    to: "/gsd-recruits",
+    icon: <PeopleIcon fontSize="small" />,
+  },
+  { label: "Avisos", to: "/notices", icon: <CampaignIcon fontSize="small" /> },
+  {
+    label: "Checklists",
+    to: "/checklists",
+    icon: <ChecklistIcon fontSize="small" />,
+  },
+  { label: "Elos", to: "/elos", icon: <ContactPhoneIcon fontSize="small" /> },
+  {
+    label: "Organograma",
+    to: "/org-chart",
+    icon: <AccountTreeIcon fontSize="small" />,
+  },
+  { label: "Auditoria", to: "/audit", icon: <HistoryIcon fontSize="small" /> },
+  {
+    label: "Tipos de Elo",
+    to: "/admin/elo-roles",
+    icon: <ContactPhoneIcon fontSize="small" />,
+  },
+  {
+    label: "OMs (CRUD)",
+    to: "/admin/oms",
+    icon: <BusinessIcon fontSize="small" />,
+  },
+  {
+    label: "Postos",
+    to: "/admin/postos",
+    icon: <ContactPhoneIcon fontSize="small" />,
+  },
+  {
+    label: "Fases",
+    to: "/admin/phases",
+    icon: <SettingsIcon fontSize="small" />,
+  },
+  {
+    label: "Admin RBAC",
+    to: "/admin/rbac",
+    icon: <SettingsIcon fontSize="small" />,
+  },
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('lg'));
+  const isMobile = useMediaQuery(theme.breakpoints.down("lg"));
   const [mobileOpen, setMobileOpen] = useState(false);
   const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState(false);
-  const [globalQuery, setGlobalQuery] = useState('');
+  const [globalQuery, setGlobalQuery] = useState("");
   const debounced = useDebounce(globalQuery, 300);
   const searchQuery = useSearch(debounced);
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const { data: me } = useMe();
   const localitiesQuery = useLocalities();
-  const roleOptions = useMemo(
-    () =>
-      Array.from(
-        new Map(
-          ((me?.roles ?? []) as Array<{ id?: string | null; name?: string | null }>)
-            .map((role) => {
-              const id = String(role?.id ?? '').trim();
-              const name = canonicalRoleName(role?.name ?? '');
-              return id ? [id, { id, name }] : null;
-            })
-            .filter((entry): entry is [string, { id: string; name: string }] => Boolean(entry)),
-        ).values(),
-      ),
-    [me?.roles],
+  const roleOptions = useMemo(() => {
+    const optionsByKey = new Map<
+      string,
+      { id: string; name: string; roleId: string | null }
+    >();
+
+    for (const raw of (me?.roles ?? []) as Array<any>) {
+      const source = raw?.role ?? raw;
+      const roleId = String(source?.id ?? "").trim();
+      const roleName = canonicalRoleName(source?.name ?? raw?.name ?? "");
+      if (!roleName) continue;
+      const key = roleId || `name:${normalizeRoleName(roleName)}`;
+      if (!optionsByKey.has(key)) {
+        optionsByKey.set(key, {
+          id: key,
+          name: roleName,
+          roleId: roleId || null,
+        });
+      }
+    }
+
+    const activeRoleName = canonicalRoleName(me?.activeRole?.name ?? "");
+    const activeRoleId = String(
+      me?.activeRole?.id ?? me?.activeRoleId ?? "",
+    ).trim();
+    if (activeRoleName) {
+      const key = activeRoleId || `name:${normalizeRoleName(activeRoleName)}`;
+      if (!optionsByKey.has(key)) {
+        optionsByKey.set(key, {
+          id: key,
+          name: activeRoleName,
+          roleId: activeRoleId || null,
+        });
+      }
+    }
+
+    return Array.from(optionsByKey.values());
+  }, [me?.activeRole?.id, me?.activeRole?.name, me?.activeRoleId, me?.roles]);
+  const currentRoleLabel = canonicalRoleName(
+    me?.activeRole?.name ?? me?.roles?.[0]?.name ?? "Sem papel",
   );
-  const currentRoleLabel = canonicalRoleName(me?.activeRole?.name ?? me?.roles?.[0]?.name ?? 'Sem papel');
-  const activeRoleId = me?.activeRole?.id ?? me?.activeRoleId ?? roleOptions[0]?.id ?? '';
-  const canUseGlobalLocalityFilter = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI]);
+  const activeRoleId =
+    String(me?.activeRole?.id ?? me?.activeRoleId ?? "").trim() ||
+    roleOptions[0]?.id ||
+    "";
+  const selectedRoleOption =
+    roleOptions.find((role) => role.id === activeRoleId) ??
+    roleOptions[0] ??
+    null;
+  const selectedRoleValue = selectedRoleOption?.id ?? "";
+  const switchableRoleCount = roleOptions.filter((role) =>
+    Boolean(role.roleId),
+  ).length;
+  const canUseGlobalLocalityFilter = hasAnyRole(me, [
+    ROLE_COORDENACAO_CIPAVD,
+    ROLE_COMANDANTE_COMGEP,
+    ROLE_TI,
+  ]);
   const availableGlobalLocalities = useMemo(
     () =>
       selectTargetLocalities((localitiesQuery.data?.items ?? []) as any[])
-        .filter((locality: any) => Number(locality?.recruitsFemaleCountCurrent ?? 0) > 0)
-        .map((locality: any) => ({ id: String(locality.id), name: String(locality.name) })),
+        .filter(
+          (locality: any) =>
+            Number(locality?.recruitsFemaleCountCurrent ?? 0) > 0,
+        )
+        .map((locality: any) => ({
+          id: String(locality.id),
+          name: String(locality.name),
+        })),
     [localitiesQuery.data?.items],
   );
   const localityNameById = useMemo(
-    () => new Map(availableGlobalLocalities.map((locality) => [locality.id, locality.name])),
+    () =>
+      new Map(
+        availableGlobalLocalities.map((locality) => [
+          locality.id,
+          locality.name,
+        ]),
+      ),
     [availableGlobalLocalities],
   );
-  const globalLocalityId = searchParams.get('localityId') ?? '';
-  const contextFromQuery = searchParams.get('localityId');
-  const localityFromPath = location.pathname.startsWith('/dashboard/locality/') ? location.pathname.split('/').pop() : null;
+  const globalLocalityId = searchParams.get("localityId") ?? "";
+  const contextFromQuery = searchParams.get("localityId");
+  const localityFromPath = location.pathname.startsWith("/dashboard/locality/")
+    ? location.pathname.split("/").pop()
+    : null;
   const contextLocality = contextFromQuery ?? localityFromPath;
   const sidebarCollapsed = !isMobile && desktopSidebarCollapsed;
-  const sidebarWidth = sidebarCollapsed ? drawerCollapsedWidth : drawerExpandedWidth;
+  const sidebarWidth = sidebarCollapsed
+    ? drawerCollapsedWidth
+    : drawerExpandedWidth;
 
   const handleLogout = () => {
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("refreshToken");
     localStorage.removeItem(ACTIVE_ROLE_STORAGE_KEY);
-    window.location.assign('/login');
+    window.location.assign("/login");
   };
 
   const visibleNavItems = navItems.filter((item) => {
     const isNationalManager = hasNationalManagementScope(me);
-    const isBiRole = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI]);
-    const canSeeCommissionTiBoards = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]);
-    const activeRoleName = normalizeRoleName(me?.activeRole?.name ?? me?.roles?.[0]?.name);
+    const isBiRole = hasAnyRole(me, [
+      ROLE_COORDENACAO_CIPAVD,
+      ROLE_COMANDANTE_COMGEP,
+      ROLE_TI,
+    ]);
+    const canSeeCommissionTiBoards = hasAnyRole(me, [
+      ROLE_COORDENACAO_CIPAVD,
+      ROLE_TI,
+    ]);
+    const activeRoleName = normalizeRoleName(
+      me?.activeRole?.name ?? me?.roles?.[0]?.name,
+    );
     const cpcaOnlyMode = activeRoleName === normalizeRoleName(ROLE_CPCA);
 
     // Papel CPCA (OM): menu operacional restrito apenas ao fluxo de denúncias.
     if (cpcaOnlyMode) {
-      return item.to === '/cpca-cases';
+      return item.to === "/cpca-cases";
     }
 
-    if (item.to === '/dashboard/national') {
-      return isNationalManager && can(me, 'dashboard', 'view');
+    if (item.to === "/dashboard/national") {
+      return isNationalManager && can(me, "dashboard", "view");
     }
-    if (item.to === '/admin/rbac') {
-      return can(me, 'admin_rbac', 'export') || can(me, 'roles', 'view');
+    if (item.to === "/admin/rbac") {
+      return can(me, "admin_rbac", "export") || can(me, "roles", "view");
     }
-    if (item.to === '/dashboard/executive') {
-      return can(me, 'dashboard', 'view') && (me?.executive_hide_pii || can(me, 'roles', 'view'));
+    if (item.to === "/dashboard/executive") {
+      return (
+        can(me, "dashboard", "view") &&
+        (me?.executive_hide_pii || can(me, "roles", "view"))
+      );
     }
-    if (item.to === '/dashboard/bi') {
-      return isBiRole && can(me, 'dashboard', 'view');
+    if (item.to === "/dashboard/bi") {
+      return isBiRole && can(me, "dashboard", "view");
     }
-    if (item.to === '/missions') {
-      return hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI]);
+    if (item.to === "/missions") {
+      return hasAnyRole(me, [
+        ROLE_COORDENACAO_CIPAVD,
+        ROLE_COMANDANTE_COMGEP,
+        ROLE_TI,
+      ]);
     }
-    if (item.to === '/cpca-cases') {
-      return hasAnyRole(me, [ROLE_CPCA, ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI]) && can(me, 'cpca_cases', 'view');
+    if (item.to === "/cpca-cases") {
+      return (
+        hasAnyRole(me, [
+          ROLE_CPCA,
+          ROLE_COORDENACAO_CIPAVD,
+          ROLE_COMANDANTE_COMGEP,
+          ROLE_TI,
+        ]) && can(me, "cpca_cases", "view")
+      );
     }
-    if (item.to === '/cpca-stats') {
-      return hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI]) && can(me, 'cpca_cases', 'view');
+    if (item.to === "/cpca-stats") {
+      return (
+        hasAnyRole(me, [
+          ROLE_COORDENACAO_CIPAVD,
+          ROLE_COMANDANTE_COMGEP,
+          ROLE_TI,
+        ]) && can(me, "cpca_cases", "view")
+      );
     }
-    if (item.to === '/audit') {
+    if (item.to === "/audit") {
       return hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]);
     }
-    if (item.to === '/notices') {
-      return canSeeCommissionTiBoards && can(me, 'notices', 'view');
+    if (item.to === "/notices") {
+      return canSeeCommissionTiBoards && can(me, "notices", "view");
     }
-    if (item.to === '/checklists') {
-      return can(me, 'checklists', 'view');
+    if (item.to === "/checklists") {
+      return can(me, "checklists", "view");
     }
-    if (item.to === '/elos') {
-      return can(me, 'elos', 'view');
+    if (item.to === "/elos") {
+      return can(me, "elos", "view");
     }
-    if (item.to === '/org-chart') {
-      return can(me, 'org_chart', 'view');
+    if (item.to === "/org-chart") {
+      return can(me, "org_chart", "view");
     }
-    if (item.to === '/templates') {
-      return can(me, 'task_templates', 'view');
+    if (item.to === "/templates") {
+      return can(me, "task_templates", "view");
     }
-    if (item.to === '/social-communication') {
+    if (item.to === "/social-communication") {
       return true;
     }
-    if (item.to === '/activities') {
-      return can(me, 'task_instances', 'view');
+    if (item.to === "/activities") {
+      return can(me, "task_instances", "view");
     }
-    if (item.to === '/calendar') {
-      return isNationalManager && can(me, 'calendar', 'view');
+    if (item.to === "/calendar") {
+      return isNationalManager && can(me, "calendar", "view");
     }
-    if (item.to === '/meetings') {
-      return canSeeCommissionTiBoards && can(me, 'meetings', 'view');
+    if (item.to === "/meetings") {
+      return canSeeCommissionTiBoards && can(me, "meetings", "view");
     }
-    if (item.to === '/gsd-recruits') {
-      return can(me, 'localities', 'view') || can(me, 'dashboard', 'view');
+    if (item.to === "/gsd-recruits") {
+      return can(me, "localities", "view") || can(me, "dashboard", "view");
     }
-    if (item.to === '/admin/elo-roles') {
-      return can(me, 'elo_roles', 'view');
+    if (item.to === "/admin/elo-roles") {
+      return can(me, "elo_roles", "view");
     }
-    if (item.to === '/admin/postos') {
-      return can(me, 'postos', 'view');
+    if (item.to === "/admin/postos") {
+      return can(me, "postos", "view");
     }
-    if (item.to === '/admin/oms') {
-      return hasRole(me, ROLE_TI) && can(me, 'localities', 'view');
+    if (item.to === "/admin/oms") {
+      return hasRole(me, ROLE_TI) && can(me, "localities", "view");
     }
-    if (item.to === '/admin/phases') {
-      return can(me, 'phases', 'update');
+    if (item.to === "/admin/phases") {
+      return can(me, "phases", "update");
     }
     return true;
   });
 
   useEffect(() => {
-    const fromUrl = (searchParams.get('localityId') ?? '').trim();
+    const fromUrl = (searchParams.get("localityId") ?? "").trim();
 
     if (!canUseGlobalLocalityFilter) {
       localStorage.removeItem(GLOBAL_LOCALITY_STORAGE_KEY);
       if (fromUrl) {
         const next = new URLSearchParams(searchParams);
-        next.delete('localityId');
+        next.delete("localityId");
         setSearchParams(next, { replace: true });
       }
       return;
@@ -261,9 +428,14 @@ export function AppShell({ children }: { children: ReactNode }) {
       localStorage.removeItem(ACTIVE_ROLE_STORAGE_KEY);
       return;
     }
-    const roleIds = new Set(roles.map((role) => String(role.id ?? '').trim()).filter(Boolean));
-    const desiredRoleId = String(me?.activeRole?.id ?? me?.activeRoleId ?? roles[0]?.id ?? '').trim();
-    const storedRoleId = localStorage.getItem(ACTIVE_ROLE_STORAGE_KEY)?.trim() ?? '';
+    const roleIds = new Set(
+      roles.map((role) => String(role.id ?? "").trim()).filter(Boolean),
+    );
+    const desiredRoleId = String(
+      me?.activeRole?.id ?? me?.activeRoleId ?? roles[0]?.id ?? "",
+    ).trim();
+    const storedRoleId =
+      localStorage.getItem(ACTIVE_ROLE_STORAGE_KEY)?.trim() ?? "";
 
     if (storedRoleId && !roleIds.has(storedRoleId)) {
       localStorage.removeItem(ACTIVE_ROLE_STORAGE_KEY);
@@ -275,31 +447,57 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const drawer = useMemo(
     () => (
-      <Box sx={{ p: sidebarCollapsed ? 1 : 2, pt: sidebarCollapsed ? 1.2 : 2.4 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: sidebarCollapsed ? 'center' : 'space-between', pb: 0.7 }}>
+      <Box
+        sx={{ p: sidebarCollapsed ? 1 : 2, pt: sidebarCollapsed ? 1.2 : 2.4 }}
+      >
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: sidebarCollapsed ? "center" : "space-between",
+            pb: 0.7,
+          }}
+        >
           {!sidebarCollapsed && (
             <Typography
               variant="overline"
-              sx={{ display: 'block', px: 1.2, color: 'text.secondary', letterSpacing: '0.08em' }}
+              sx={{
+                display: "block",
+                px: 1.2,
+                color: "text.secondary",
+                letterSpacing: "0.08em",
+              }}
             >
               MÓDULOS
             </Typography>
           )}
           {!isMobile && (
-            <Tooltip title={sidebarCollapsed ? 'Expandir menu' : 'Contrair menu'} placement={sidebarCollapsed ? 'right' : 'bottom'}>
+            <Tooltip
+              title={sidebarCollapsed ? "Expandir menu" : "Contrair menu"}
+              placement={sidebarCollapsed ? "right" : "bottom"}
+            >
               <IconButton
                 size="small"
                 onClick={() => setDesktopSidebarCollapsed((value) => !value)}
-                sx={{ border: `1px solid ${alpha('#114259', 0.2)}`, bgcolor: alpha('#FFFFFF', 0.5) }}
+                sx={{
+                  border: `1px solid ${alpha("#114259", 0.2)}`,
+                  bgcolor: alpha("#FFFFFF", 0.5),
+                }}
               >
-                {sidebarCollapsed ? <ChevronRightRoundedIcon fontSize="small" /> : <ChevronLeftRoundedIcon fontSize="small" />}
+                {sidebarCollapsed ? (
+                  <ChevronRightRoundedIcon fontSize="small" />
+                ) : (
+                  <ChevronLeftRoundedIcon fontSize="small" />
+                )}
               </IconButton>
             </Tooltip>
           )}
         </Box>
         <List disablePadding>
           {visibleNavItems.map((item) => {
-            const selected = location.pathname === item.to || location.pathname.startsWith(`${item.to}/`);
+            const selected =
+              location.pathname === item.to ||
+              location.pathname.startsWith(`${item.to}/`);
             const button = (
               <ListItemButton
                 key={item.to}
@@ -311,22 +509,38 @@ export function AppShell({ children }: { children: ReactNode }) {
                 }
                 selected={selected}
                 onClick={() => setMobileOpen(false)}
-                sx={{ justifyContent: sidebarCollapsed ? 'center' : 'flex-start', px: sidebarCollapsed ? 1 : undefined }}
+                sx={{
+                  justifyContent: sidebarCollapsed ? "center" : "flex-start",
+                  px: sidebarCollapsed ? 1 : undefined,
+                }}
               >
-                <ListItemIcon sx={{ minWidth: sidebarCollapsed ? 0 : 34, color: selected ? 'primary.dark' : 'text.secondary' }}>
+                <ListItemIcon
+                  sx={{
+                    minWidth: sidebarCollapsed ? 0 : 34,
+                    color: selected ? "primary.dark" : "text.secondary",
+                  }}
+                >
                   {item.icon}
                 </ListItemIcon>
                 {!sidebarCollapsed && (
                   <ListItemText
                     primary={item.label}
-                    primaryTypographyProps={{ fontSize: 13.5, fontWeight: selected ? 700 : 600, lineHeight: 1.22 }}
+                    primaryTypographyProps={{
+                      fontSize: 13.5,
+                      fontWeight: selected ? 700 : 600,
+                      lineHeight: 1.22,
+                    }}
                   />
                 )}
               </ListItemButton>
             );
             if (!sidebarCollapsed) return button;
             return (
-              <Tooltip key={`tt-${item.to}`} title={item.label} placement="right">
+              <Tooltip
+                key={`tt-${item.to}`}
+                title={item.label}
+                placement="right"
+              >
                 {button}
               </Tooltip>
             );
@@ -334,12 +548,23 @@ export function AppShell({ children }: { children: ReactNode }) {
         </List>
       </Box>
     ),
-    [canUseGlobalLocalityFilter, globalLocalityId, isMobile, location.pathname, sidebarCollapsed, visibleNavItems],
+    [
+      canUseGlobalLocalityFilter,
+      globalLocalityId,
+      isMobile,
+      location.pathname,
+      sidebarCollapsed,
+      visibleNavItems,
+    ],
   );
 
   const canSeeDocuments = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]);
-  const canSeeNotices = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]) && can(me, 'notices', 'view');
-  const canSeeMeetings = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]) && can(me, 'meetings', 'view');
+  const canSeeNotices =
+    hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]) &&
+    can(me, "notices", "view");
+  const canSeeMeetings =
+    hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]) &&
+    can(me, "meetings", "view");
   const totalSearchResults =
     (searchQuery.data?.tasks?.length ?? 0) +
     (canSeeNotices ? (searchQuery.data?.notices?.length ?? 0) : 0) +
@@ -348,26 +573,37 @@ export function AppShell({ children }: { children: ReactNode }) {
     (canSeeDocuments ? (searchQuery.data?.documents?.length ?? 0) : 0);
 
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh' }}>
+    <Box sx={{ display: "flex", minHeight: "100vh" }}>
       <CssBaseline />
       <AppBar position="fixed" sx={{ zIndex: theme.zIndex.drawer + 1 }}>
         <Toolbar sx={{ minHeight: headerHeight, gap: 1.2 }}>
           {isMobile && (
-            <IconButton edge="start" onClick={() => setMobileOpen((v) => !v)} sx={{ mr: 0.3, color: 'text.primary' }}>
+            <IconButton
+              edge="start"
+              onClick={() => setMobileOpen((v) => !v)}
+              sx={{ mr: 0.3, color: "text.primary" }}
+            >
               <MenuIcon />
             </IconButton>
           )}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2, minWidth: 220 }}>
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 1.2,
+              minWidth: 220,
+            }}
+          >
             <Box
               sx={{
                 width: 40,
                 height: 40,
-                borderRadius: '50%',
+                borderRadius: "50%",
                 p: 0.4,
-                display: 'grid',
-                placeItems: 'center',
-                background: 'linear-gradient(135deg, #0C657E 10%, #C56A2B 90%)',
-                boxShadow: '0 10px 22px rgba(8, 54, 71, 0.22)',
+                display: "grid",
+                placeItems: "center",
+                background: "linear-gradient(135deg, #0C657E 10%, #C56A2B 90%)",
+                boxShadow: "0 10px 22px rgba(8, 54, 71, 0.22)",
               }}
             >
               <Avatar
@@ -376,28 +612,34 @@ export function AppShell({ children }: { children: ReactNode }) {
                 sx={{
                   width: 32,
                   height: 32,
-                  bgcolor: '#f8fafc',
+                  bgcolor: "#f8fafc",
                 }}
               />
             </Box>
             <Box>
-              <Typography variant="subtitle2" sx={{ fontWeight: 800, lineHeight: 1.1 }}>
+              <Typography
+                variant="subtitle2"
+                sx={{ fontWeight: 800, lineHeight: 1.1 }}
+              >
                 CIPAVD Gestão
               </Typography>
-              <Typography variant="caption" sx={{ color: 'text.secondary', lineHeight: 1.1 }}>
+              <Typography
+                variant="caption"
+                sx={{ color: "text.secondary", lineHeight: 1.1 }}
+              >
                 Comissão de Iniciação
               </Typography>
             </Box>
           </Box>
           <Box sx={{ flexGrow: 1 }} />
-          {can(me, 'search', 'view') && (
+          {can(me, "search", "view") && (
             <Box sx={{ mr: 0.6 }}>
               <Tooltip title="Busca global">
                 <IconButton
                   onClick={(event) => setAnchorEl(event.currentTarget)}
                   sx={{
-                    border: `1px solid ${alpha('#114259', 0.2)}`,
-                    bgcolor: alpha('#FFFFFF', 0.45),
+                    border: `1px solid ${alpha("#114259", 0.2)}`,
+                    bgcolor: alpha("#FFFFFF", 0.45),
                   }}
                 >
                   <SearchIcon sx={{ fontSize: 20 }} />
@@ -407,13 +649,13 @@ export function AppShell({ children }: { children: ReactNode }) {
                 open={Boolean(anchorEl)}
                 anchorEl={anchorEl}
                 onClose={() => setAnchorEl(null)}
-                anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+                anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
                 PaperProps={{
                   sx: {
                     borderRadius: 2,
                     width: 380,
-                    border: `1px solid ${alpha('#114259', 0.16)}`,
-                    boxShadow: '0 16px 32px rgba(10, 37, 51, 0.12)',
+                    border: `1px solid ${alpha("#114259", 0.16)}`,
+                    boxShadow: "0 16px 32px rgba(10, 37, 51, 0.12)",
                   },
                 }}
               >
@@ -426,12 +668,26 @@ export function AppShell({ children }: { children: ReactNode }) {
                     onChange={(e) => setGlobalQuery(e.target.value)}
                     fullWidth
                   />
-                  <Typography variant="caption" sx={{ px: 0.4, pt: 1.2, pb: 0.6, color: 'text.secondary', display: 'block' }}>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      px: 0.4,
+                      pt: 1.2,
+                      pb: 0.6,
+                      color: "text.secondary",
+                      display: "block",
+                    }}
+                  >
                     Resultados
                   </Typography>
                   {!debounced ? (
-                    <Typography variant="body2" color="text.secondary" sx={{ px: 0.4, pb: 0.8 }}>
-                      Digite para buscar tarefas, avisos, reuniões, localidades e documentos.
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ px: 0.4, pb: 0.8 }}
+                    >
+                      Digite para buscar tarefas, avisos, reuniões, localidades
+                      e documentos.
                     </Typography>
                   ) : (
                     <List dense>
@@ -442,27 +698,51 @@ export function AppShell({ children }: { children: ReactNode }) {
                           to={`/tasks?q=${encodeURIComponent(task.title)}`}
                           onClick={() => setAnchorEl(null)}
                         >
-                          <ListItemText primary={task.title} secondary={task.localityName ?? task.localityId} />
-                        </ListItemButton>
-                      ))}
-                      {canSeeNotices && (searchQuery.data?.notices ?? []).map((notice: any) => (
-                        <ListItemButton key={notice.id} component={Link} to="/notices" onClick={() => setAnchorEl(null)}>
                           <ListItemText
-                            primary={notice.title}
-                            secondary={`Aviso ${NOTICE_PRIORITY_LABELS[notice.priority] ?? notice.priority}`}
+                            primary={task.title}
+                            secondary={task.localityName ?? task.localityId}
                           />
                         </ListItemButton>
                       ))}
-                      {canSeeMeetings && (searchQuery.data?.meetings ?? []).map((meeting: any) => (
-                        <ListItemButton key={meeting.id} component={Link} to="/meetings" onClick={() => setAnchorEl(null)}>
-                          <ListItemText
-                            primary={
-                              meeting.scope ? (meeting.scope.length > 35 ? `${meeting.scope.slice(0, 35)}…` : meeting.scope) : 'Reunião'
-                            }
-                            secondary={MEETING_STATUS_LABELS[meeting.status] ?? meeting.status}
-                          />
-                        </ListItemButton>
-                      ))}
+                      {canSeeNotices &&
+                        (searchQuery.data?.notices ?? []).map((notice: any) => (
+                          <ListItemButton
+                            key={notice.id}
+                            component={Link}
+                            to="/notices"
+                            onClick={() => setAnchorEl(null)}
+                          >
+                            <ListItemText
+                              primary={notice.title}
+                              secondary={`Aviso ${NOTICE_PRIORITY_LABELS[notice.priority] ?? notice.priority}`}
+                            />
+                          </ListItemButton>
+                        ))}
+                      {canSeeMeetings &&
+                        (searchQuery.data?.meetings ?? []).map(
+                          (meeting: any) => (
+                            <ListItemButton
+                              key={meeting.id}
+                              component={Link}
+                              to="/meetings"
+                              onClick={() => setAnchorEl(null)}
+                            >
+                              <ListItemText
+                                primary={
+                                  meeting.scope
+                                    ? meeting.scope.length > 35
+                                      ? `${meeting.scope.slice(0, 35)}…`
+                                      : meeting.scope
+                                    : "Reunião"
+                                }
+                                secondary={
+                                  MEETING_STATUS_LABELS[meeting.status] ??
+                                  meeting.status
+                                }
+                              />
+                            </ListItemButton>
+                          ),
+                        )}
                       {(searchQuery.data?.localities ?? []).map((loc: any) => (
                         <ListItemButton
                           key={loc.id}
@@ -470,24 +750,36 @@ export function AppShell({ children }: { children: ReactNode }) {
                           to={`/dashboard/locality/${loc.id}`}
                           onClick={() => setAnchorEl(null)}
                         >
-                          <ListItemText primary={loc.name} secondary={loc.code} />
-                        </ListItemButton>
-                      ))}
-                      {canSeeDocuments && (searchQuery.data?.documents ?? []).map((doc: any) => (
-                        <ListItemButton
-                          key={doc.id}
-                          component={Link}
-                          to={`/documents?q=${encodeURIComponent(doc.title)}`}
-                          onClick={() => setAnchorEl(null)}
-                        >
                           <ListItemText
-                            primary={doc.title}
-                            secondary={doc.localityName ? `Comunicação Social • ${doc.localityName}` : 'Comunicação Social'}
+                            primary={loc.name}
+                            secondary={loc.code}
                           />
                         </ListItemButton>
                       ))}
+                      {canSeeDocuments &&
+                        (searchQuery.data?.documents ?? []).map((doc: any) => (
+                          <ListItemButton
+                            key={doc.id}
+                            component={Link}
+                            to={`/documents?q=${encodeURIComponent(doc.title)}`}
+                            onClick={() => setAnchorEl(null)}
+                          >
+                            <ListItemText
+                              primary={doc.title}
+                              secondary={
+                                doc.localityName
+                                  ? `Comunicação Social • ${doc.localityName}`
+                                  : "Comunicação Social"
+                              }
+                            />
+                          </ListItemButton>
+                        ))}
                       {totalSearchResults === 0 && (
-                        <Typography variant="body2" color="text.secondary" sx={{ px: 0.4, py: 0.8 }}>
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          sx={{ px: 0.4, py: 0.8 }}
+                        >
                           Nenhum resultado.
                         </Typography>
                       )}
@@ -507,15 +799,15 @@ export function AppShell({ children }: { children: ReactNode }) {
                 const value = event.target.value;
                 const next = new URLSearchParams(searchParams);
                 if (value) {
-                  next.set('localityId', value);
+                  next.set("localityId", value);
                   localStorage.setItem(GLOBAL_LOCALITY_STORAGE_KEY, value);
                 } else {
-                  next.delete('localityId');
+                  next.delete("localityId");
                   localStorage.removeItem(GLOBAL_LOCALITY_STORAGE_KEY);
                 }
                 setSearchParams(next);
               }}
-              sx={{ minWidth: 220, display: { xs: 'none', md: 'inline-flex' } }}
+              sx={{ minWidth: 220, display: { xs: "none", md: "inline-flex" } }}
             >
               <MenuItem value="">Sem filtro</MenuItem>
               {availableGlobalLocalities.map((locality) => (
@@ -530,15 +822,24 @@ export function AppShell({ children }: { children: ReactNode }) {
               select
               size="small"
               label="Papel ativo"
-              value={activeRoleId}
+              value={selectedRoleValue}
               onChange={(event) => {
-                const nextRoleId = String(event.target.value ?? '').trim();
+                const nextValue = String(event.target.value ?? "").trim();
+                if (!nextValue) return;
+                const option = roleOptions.find(
+                  (role) => role.id === nextValue,
+                );
+                const nextRoleId = String(option?.roleId ?? "").trim();
                 if (!nextRoleId) return;
                 localStorage.setItem(ACTIVE_ROLE_STORAGE_KEY, nextRoleId);
                 window.location.reload();
               }}
-              disabled={roleOptions.length < 2}
-              sx={{ minWidth: { xs: 120, sm: 140, md: 180 }, maxWidth: { md: 220 }, display: 'inline-flex' }}
+              disabled={switchableRoleCount < 2}
+              sx={{
+                minWidth: { xs: 120, sm: 140, md: 180 },
+                maxWidth: { md: 220 },
+                display: "inline-flex",
+              }}
             >
               {roleOptions.map((role) => (
                 <MenuItem key={role.id} value={role.id}>
@@ -548,20 +849,50 @@ export function AppShell({ children }: { children: ReactNode }) {
             </TextField>
           )}
           <Chip
-            label={contextLocality ? `Localidade ${localityNameById.get(contextLocality) ?? contextLocality}` : 'Contexto Brasil'}
+            label={
+              contextLocality
+                ? `Localidade ${localityNameById.get(contextLocality) ?? contextLocality}`
+                : "Contexto Brasil"
+            }
             size="small"
-            sx={{ display: { xs: 'none', md: 'inline-flex' }, bgcolor: alpha('#0C657E', 0.08), color: '#0A4A5E' }}
+            sx={{
+              display: { xs: "none", md: "inline-flex" },
+              bgcolor: alpha("#0C657E", 0.08),
+              color: "#0A4A5E",
+            }}
           />
-          <Divider orientation="vertical" flexItem sx={{ mx: 0.6, display: { xs: 'none', md: 'block' } }} />
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, pl: { xs: 0.2, md: 0 } }}>
-            <Avatar sx={{ width: 32, height: 32, bgcolor: alpha('#0C657E', 0.12), color: '#0A4D61', fontSize: 13 }}>
-              {(me?.name ?? 'U').slice(0, 1).toUpperCase()}
+          <Divider
+            orientation="vertical"
+            flexItem
+            sx={{ mx: 0.6, display: { xs: "none", md: "block" } }}
+          />
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+              pl: { xs: 0.2, md: 0 },
+            }}
+          >
+            <Avatar
+              sx={{
+                width: 32,
+                height: 32,
+                bgcolor: alpha("#0C657E", 0.12),
+                color: "#0A4D61",
+                fontSize: 13,
+              }}
+            >
+              {(me?.name ?? "U").slice(0, 1).toUpperCase()}
             </Avatar>
-            <Box sx={{ display: { xs: 'none', sm: 'grid' }, lineHeight: 1 }}>
+            <Box sx={{ display: { xs: "none", sm: "grid" }, lineHeight: 1 }}>
               <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                {me?.name ?? 'Usuário'}
+                {me?.name ?? "Usuário"}
               </Typography>
-              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
+              <Typography
+                variant="caption"
+                sx={{ color: "text.secondary", fontWeight: 600 }}
+              >
                 {currentRoleLabel}
               </Typography>
             </Box>
@@ -583,22 +914,26 @@ export function AppShell({ children }: { children: ReactNode }) {
         sx={{
           width: { lg: sidebarWidth },
           flexShrink: { lg: 0 },
-          transition: theme.transitions.create('width', { duration: theme.transitions.duration.shorter }),
+          transition: theme.transitions.create("width", {
+            duration: theme.transitions.duration.shorter,
+          }),
         }}
       >
         <Drawer
-          variant={isMobile ? 'temporary' : 'permanent'}
+          variant={isMobile ? "temporary" : "permanent"}
           open={isMobile ? mobileOpen : true}
           onClose={() => setMobileOpen(false)}
           ModalProps={{ keepMounted: true }}
           sx={{
-            '& .MuiDrawer-paper': {
+            "& .MuiDrawer-paper": {
               width: { xs: drawerExpandedWidth, lg: sidebarWidth },
-              boxSizing: 'border-box',
+              boxSizing: "border-box",
               top: { lg: headerHeight },
               height: { lg: `calc(100% - ${headerHeight}px)` },
-              overflowX: 'hidden',
-              transition: theme.transitions.create('width', { duration: theme.transitions.duration.shorter }),
+              overflowX: "hidden",
+              transition: theme.transitions.create("width", {
+                duration: theme.transitions.duration.shorter,
+              }),
             },
           }}
         >
@@ -606,9 +941,15 @@ export function AppShell({ children }: { children: ReactNode }) {
         </Drawer>
       </Box>
 
-      <Box component="main" sx={{ flexGrow: 1, px: { xs: 1.5, md: 3 }, pb: 3.5 }}>
+      <Box
+        component="main"
+        sx={{ flexGrow: 1, px: { xs: 1.5, md: 3 }, pb: 3.5 }}
+      >
         <Toolbar sx={{ minHeight: headerHeight + 8 }} />
-        <Box className="page-enter" sx={{ maxWidth: 1650, mx: 'auto', pt: { xs: 1.2, md: 1.8 } }}>
+        <Box
+          className="page-enter"
+          sx={{ maxWidth: 1650, mx: "auto", pt: { xs: 1.2, md: 1.8 } }}
+        >
           {children}
         </Box>
       </Box>
