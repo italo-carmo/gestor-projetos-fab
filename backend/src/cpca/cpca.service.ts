@@ -688,7 +688,6 @@ export class CpcaService {
     });
 
     const createData = {
-      localityId,
       complaintType: payload.complaintType,
       notifierType: payload.notifierType ?? 'VITIMA',
       status,
@@ -786,6 +785,7 @@ export class CpcaService {
         created = await complaintModel.create({
           data: {
             caseNumber: nextCaseNumber,
+            locality: { connect: { id: localityId } },
             ...createData,
           },
           include: {
@@ -920,7 +920,7 @@ export class CpcaService {
     const updated = await complaintModel.update({
       where: { id },
       data: {
-        localityId: nextLocalityId,
+        locality: { connect: { id: nextLocalityId } },
         complaintType: payload.complaintType,
         notifierType: payload.notifierType,
         status: payload.status,
