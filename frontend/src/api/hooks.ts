@@ -1627,6 +1627,15 @@ export function useCpcaCase(id: string, enabled = true) {
   });
 }
 
+export function useCpcaCaseStats(filters: Record<string, any>, enabled = true) {
+  return useQuery({
+    queryKey: qk.cpcaCaseStats(filters),
+    queryFn: async () => (await api.get("/cpca-cases/stats", { params: filters })).data,
+    enabled,
+    staleTime: 15_000,
+  });
+}
+
 export function useCreateCpcaCase() {
   const qc = useQueryClient();
   return useMutation({

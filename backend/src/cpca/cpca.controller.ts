@@ -32,6 +32,18 @@ export class CpcaController {
     return this.cpca.list({ localityId, status, complaintType, procedureType, q, page, pageSize }, user);
   }
 
+  @Get('stats')
+  @RequirePermission('cpca_cases', 'view')
+  stats(
+    @Query('localityId') localityId: string | undefined,
+    @Query('from') from: string | undefined,
+    @Query('to') to: string | undefined,
+    @CurrentUser() user: RbacUser,
+  ) {
+    this.assertProcessAccess(user);
+    return this.cpca.stats({ localityId, from, to }, user);
+  }
+
   @Get(':id')
   @RequirePermission('cpca_cases', 'view')
   getById(@Param('id') id: string, @CurrentUser() user: RbacUser) {

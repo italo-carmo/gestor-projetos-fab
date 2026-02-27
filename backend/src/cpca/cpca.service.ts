@@ -15,6 +15,41 @@ import type { RbacUser } from '../rbac/rbac.types';
 import { CreateCpcaCaseDto } from './dto/create-cpca-case.dto';
 import { UpdateCpcaCaseDto } from './dto/update-cpca-case.dto';
 
+const CPCA_STATUS_ORDER = [
+  'RECEIVED',
+  'PROTECTION_MEASURES',
+  'PRELIMINARY_ANALYSIS',
+  'PROCEDURE_DEFINED',
+  'INVESTIGATION',
+  'CONCLUDED',
+  'ARCHIVED',
+] as const;
+const CPCA_PROCEDURE_ORDER = [
+  'NOT_DEFINED',
+  'PATD',
+  'SINDICANCIA',
+  'PAD',
+  'IPM',
+] as const;
+const CPCA_COMPLAINT_TYPE_ORDER = ['MORAL', 'SEXUAL'] as const;
+const CPCA_OPEN_STATUS_SET = new Set<string>([
+  'RECEIVED',
+  'PROTECTION_MEASURES',
+  'PRELIMINARY_ANALYSIS',
+  'PROCEDURE_DEFINED',
+  'INVESTIGATION',
+]);
+const CPCA_TRIAGE_STATUS_SET = new Set<string>([
+  'RECEIVED',
+  'PROTECTION_MEASURES',
+  'PRELIMINARY_ANALYSIS',
+]);
+const CPCA_INVESTIGATION_STATUS_SET = new Set<string>([
+  'PROCEDURE_DEFINED',
+  'INVESTIGATION',
+]);
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 @Injectable()
 export class CpcaService {
   constructor(
@@ -82,6 +117,403 @@ export class CpcaService {
       page,
       pageSize,
       total,
+    };
+  }
+
+  async stats(
+    filters: {
+      localityId?: string;
+      from?: string;
+      to?: string;
+    },
+    user?: RbacUser,
+  ) {
+    const constraints = this.getScopeConstraints(user);
+    const where: any = {};
+
+    if (filters.localityId) where.localityId = filters.localityId;
+    if (constraints.localityId && filters.localityId && constraints.localityId !== filters.localityId) {
+      where.localityId = '__none__';
+    } else if (constraints.localityId) {
+      where.localityId = constraints.localityId;
+    }
+
+    const fromDate = this.parseDateBoundary(filters.from, 'from', false);
+    const toDate = this.parseDateBoundary(filters.to, 'to', true);
+    if (fromDate && toDate && fromDate.getTime() > toDate.getTime()) {
+      throwError('VALIDATION_ERROR', { field: 'from', reason: 'INVALID_DATE_RANGE' });
+    }
+    if (fromDate || toDate) {
+      where.reportedAt = {};
+      if (fromDate) where.reportedAt.gte = fromDate;
+      if (toDate) where.reportedAt.lte = toDate;
+    }
+
+    const complaintModel = (this.prisma as any).cpcComplaintCase;
+    const historyModel = (this.prisma as any).cpcComplaintStatusHistory;
+    const items = await complaintModel.findMany({
+      where,
+      select: {
+        id: true,
+        caseNumber: true,
+        localityId: true,
+        complaintType: true,
+        status: true,
+        procedureType: true,
+        reportedAt: true,
+        updatedAt: true,
+        archivedAt: true,
+        retaliationRisk: true,
+        aggressorRank: true,
+        victimRank: true,
+        locality: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    const statusCounter = new Map<string, number>(CPCA_STATUS_ORDER.map((status) => [status, 0]));
+    const procedureCounter = new Map<string, number>(CPCA_PROCEDURE_ORDER.map((proc) => [proc, 0]));
+    const complaintTypeCounter = new Map<string, number>(
+      CPCA_COMPLAINT_TYPE_ORDER.map((type) => [type, 0]),
+    );
+
+    if (!items.length) {
+      return {
+        filters: {
+          localityId: where.localityId ?? null,
+          from: fromDate ? fromDate.toISOString().slice(0, 10) : null,
+          to: toDate ? toDate.toISOString().slice(0, 10) : null,
+        },
+        generatedAt: new Date().toISOString(),
+        summary: {
+          totalCases: 0,
+          openCases: 0,
+          concludedCases: 0,
+          archivedCases: 0,
+          closureRatePercent: 0,
+          averageDaysToClosure: 0,
+          moralCases: 0,
+          sexualCases: 0,
+          retaliationRiskCases: 0,
+          triageOver7Days: 0,
+          investigationOver30Days: 0,
+          stalledOver30Days: 0,
+          stalledOver60Days: 0,
+          noUpdateOver14Days: 0,
+        },
+        statusDistribution: Array.from(statusCounter.entries()).map(([status, count]) => ({
+          status,
+          count,
+        })),
+        procedureDistribution: Array.from(procedureCounter.entries()).map(([procedureType, count]) => ({
+          procedureType,
+          count,
+        })),
+        complaintTypeDistribution: Array.from(complaintTypeCounter.entries()).map(
+          ([complaintType, count]) => ({
+            complaintType,
+            count,
+          }),
+        ),
+        monthlyTrend: [],
+        openByAgeBuckets: [
+          { bucket: '0-7', count: 0 },
+          { bucket: '8-14', count: 0 },
+          { bucket: '15-30', count: 0 },
+          { bucket: '31-60', count: 0 },
+          { bucket: '61+', count: 0 },
+        ],
+        topRiskLocalities: [],
+        topAggressorRanks: [],
+        topVictimRanks: [],
+        criticalOpenCases: [],
+      };
+    }
+
+    const caseIds = items.map((item: any) => item.id);
+    const closureTransitions = await historyModel.findMany({
+      where: {
+        complaintCaseId: { in: caseIds },
+        toStatus: { in: ['CONCLUDED', 'ARCHIVED'] },
+      },
+      select: {
+        complaintCaseId: true,
+        changedAt: true,
+      },
+      orderBy: { changedAt: 'asc' },
+    });
+    const closedAtByCaseId = new Map<string, Date>();
+    for (const entry of closureTransitions ?? []) {
+      const complaintCaseId = String(entry.complaintCaseId ?? '');
+      if (!complaintCaseId || closedAtByCaseId.has(complaintCaseId)) continue;
+      if (entry.changedAt instanceof Date && !Number.isNaN(entry.changedAt.getTime())) {
+        closedAtByCaseId.set(complaintCaseId, entry.changedAt);
+      }
+    }
+
+    const now = new Date();
+    const monthCounter = new Map<
+      string,
+      { month: string; total: number; moral: number; sexual: number; open: number }
+    >();
+    const localityCounter = new Map<
+      string,
+      {
+        localityId: string;
+        localityCode: string;
+        localityName: string;
+        totalCases: number;
+        openCases: number;
+        sexualCases: number;
+        retaliationRiskCases: number;
+        stalledOver30Days: number;
+        openDaysTotal: number;
+      }
+    >();
+    const aggressorRankCounter = new Map<string, number>();
+    const victimRankCounter = new Map<string, number>();
+    const openAgeBuckets = {
+      '0-7': 0,
+      '8-14': 0,
+      '15-30': 0,
+      '31-60': 0,
+      '61+': 0,
+    };
+    const criticalOpenCases: Array<{
+      caseId: string;
+      caseNumber: string;
+      localityId: string;
+      localityCode: string;
+      localityName: string;
+      status: string;
+      complaintType: string;
+      reportedAt: string;
+      openDays: number;
+      idleDays: number;
+      retaliationRisk: boolean;
+    }> = [];
+
+    let openCases = 0;
+    let concludedCases = 0;
+    let archivedCases = 0;
+    let retaliationRiskCases = 0;
+    let triageOver7Days = 0;
+    let investigationOver30Days = 0;
+    let stalledOver30Days = 0;
+    let stalledOver60Days = 0;
+    let noUpdateOver14Days = 0;
+    let closureDaysTotal = 0;
+    let closureSamples = 0;
+
+    for (const item of items) {
+      const status = String(item.status ?? '');
+      const procedureType = String(item.procedureType ?? '');
+      const complaintType = String(item.complaintType ?? '');
+
+      statusCounter.set(status, (statusCounter.get(status) ?? 0) + 1);
+      procedureCounter.set(procedureType, (procedureCounter.get(procedureType) ?? 0) + 1);
+      complaintTypeCounter.set(complaintType, (complaintTypeCounter.get(complaintType) ?? 0) + 1);
+
+      if (item.retaliationRisk) {
+        retaliationRiskCases += 1;
+      }
+
+      const month = item.reportedAt.toISOString().slice(0, 7);
+      const monthEntry = monthCounter.get(month) ?? {
+        month,
+        total: 0,
+        moral: 0,
+        sexual: 0,
+        open: 0,
+      };
+      monthEntry.total += 1;
+      if (complaintType === 'MORAL') monthEntry.moral += 1;
+      if (complaintType === 'SEXUAL') monthEntry.sexual += 1;
+
+      const localityEntry = localityCounter.get(item.localityId) ?? {
+        localityId: item.localityId,
+        localityCode: String(item.locality?.code ?? ''),
+        localityName: String(item.locality?.name ?? item.localityId),
+        totalCases: 0,
+        openCases: 0,
+        sexualCases: 0,
+        retaliationRiskCases: 0,
+        stalledOver30Days: 0,
+        openDaysTotal: 0,
+      };
+      localityEntry.totalCases += 1;
+      if (complaintType === 'SEXUAL') localityEntry.sexualCases += 1;
+      if (item.retaliationRisk) localityEntry.retaliationRiskCases += 1;
+
+      const aggressorRank = this.normalizeRankForStats(item.aggressorRank);
+      const victimRank = this.normalizeRankForStats(item.victimRank);
+      if (aggressorRank) {
+        aggressorRankCounter.set(aggressorRank, (aggressorRankCounter.get(aggressorRank) ?? 0) + 1);
+      }
+      if (victimRank) {
+        victimRankCounter.set(victimRank, (victimRankCounter.get(victimRank) ?? 0) + 1);
+      }
+
+      if (CPCA_OPEN_STATUS_SET.has(status)) {
+        openCases += 1;
+        monthEntry.open += 1;
+        localityEntry.openCases += 1;
+
+        const openDays = this.daysBetween(item.reportedAt, now);
+        localityEntry.openDaysTotal += openDays;
+
+        const idleDays = this.daysBetween(item.updatedAt ?? item.reportedAt, now);
+        if (idleDays > 14) {
+          noUpdateOver14Days += 1;
+        }
+        if (CPCA_TRIAGE_STATUS_SET.has(status) && openDays > 7) {
+          triageOver7Days += 1;
+        }
+        if (CPCA_INVESTIGATION_STATUS_SET.has(status) && openDays > 30) {
+          investigationOver30Days += 1;
+        }
+        if (openDays > 30) {
+          stalledOver30Days += 1;
+          localityEntry.stalledOver30Days += 1;
+        }
+        if (openDays > 60) {
+          stalledOver60Days += 1;
+        }
+
+        if (openDays <= 7) openAgeBuckets['0-7'] += 1;
+        else if (openDays <= 14) openAgeBuckets['8-14'] += 1;
+        else if (openDays <= 30) openAgeBuckets['15-30'] += 1;
+        else if (openDays <= 60) openAgeBuckets['31-60'] += 1;
+        else openAgeBuckets['61+'] += 1;
+
+        criticalOpenCases.push({
+          caseId: item.id,
+          caseNumber: item.caseNumber,
+          localityId: item.localityId,
+          localityCode: String(item.locality?.code ?? ''),
+          localityName: String(item.locality?.name ?? ''),
+          status,
+          complaintType,
+          reportedAt: item.reportedAt.toISOString(),
+          openDays,
+          idleDays,
+          retaliationRisk: Boolean(item.retaliationRisk),
+        });
+      } else {
+        if (status === 'CONCLUDED') concludedCases += 1;
+        if (status === 'ARCHIVED') archivedCases += 1;
+      }
+
+      const closedAt =
+        closedAtByCaseId.get(item.id) ??
+        (status === 'ARCHIVED'
+          ? item.archivedAt ?? item.updatedAt ?? null
+          : status === 'CONCLUDED'
+            ? item.updatedAt ?? null
+            : null);
+      if (closedAt instanceof Date && !Number.isNaN(closedAt.getTime())) {
+        closureDaysTotal += this.daysBetween(item.reportedAt, closedAt);
+        closureSamples += 1;
+      }
+
+      localityCounter.set(item.localityId, localityEntry);
+      monthCounter.set(month, monthEntry);
+    }
+
+    const totalCases = items.length;
+    const closedCases = concludedCases + archivedCases;
+    const topRiskLocalities = Array.from(localityCounter.values())
+      .map((entry) => {
+        const averageOpenDays = entry.openCases
+          ? Number((entry.openDaysTotal / entry.openCases).toFixed(1))
+          : 0;
+        const riskScore =
+          entry.openCases * 2 +
+          entry.retaliationRiskCases * 3 +
+          entry.stalledOver30Days +
+          entry.sexualCases;
+        return {
+          ...entry,
+          averageOpenDays,
+          riskScore,
+        };
+      })
+      .sort((a, b) => {
+        if (b.riskScore !== a.riskScore) return b.riskScore - a.riskScore;
+        if (b.openCases !== a.openCases) return b.openCases - a.openCases;
+        return a.localityName.localeCompare(b.localityName, 'pt-BR');
+      })
+      .slice(0, 12);
+    const sortedCriticalOpenCases = criticalOpenCases
+      .sort((a, b) => {
+        if (Number(b.retaliationRisk) !== Number(a.retaliationRisk)) {
+          return Number(b.retaliationRisk) - Number(a.retaliationRisk);
+        }
+        if (b.openDays !== a.openDays) return b.openDays - a.openDays;
+        return b.idleDays - a.idleDays;
+      })
+      .slice(0, 20);
+
+    return {
+      filters: {
+        localityId: where.localityId ?? null,
+        from: fromDate ? fromDate.toISOString().slice(0, 10) : null,
+        to: toDate ? toDate.toISOString().slice(0, 10) : null,
+      },
+      generatedAt: now.toISOString(),
+      summary: {
+        totalCases,
+        openCases,
+        concludedCases,
+        archivedCases,
+        closureRatePercent: totalCases ? Math.round((closedCases / totalCases) * 100) : 0,
+        averageDaysToClosure: closureSamples
+          ? Number((closureDaysTotal / closureSamples).toFixed(1))
+          : 0,
+        moralCases: complaintTypeCounter.get('MORAL') ?? 0,
+        sexualCases: complaintTypeCounter.get('SEXUAL') ?? 0,
+        retaliationRiskCases,
+        triageOver7Days,
+        investigationOver30Days,
+        stalledOver30Days,
+        stalledOver60Days,
+        noUpdateOver14Days,
+      },
+      statusDistribution: Array.from(statusCounter.entries()).map(([status, count]) => ({
+        status,
+        count,
+      })),
+      procedureDistribution: Array.from(procedureCounter.entries()).map(
+        ([procedureType, count]) => ({
+          procedureType,
+          count,
+        }),
+      ),
+      complaintTypeDistribution: Array.from(complaintTypeCounter.entries()).map(
+        ([complaintType, count]) => ({
+          complaintType,
+          count,
+        }),
+      ),
+      monthlyTrend: Array.from(monthCounter.values()).sort((a, b) =>
+        a.month.localeCompare(b.month),
+      ),
+      openByAgeBuckets: [
+        { bucket: '0-7', count: openAgeBuckets['0-7'] },
+        { bucket: '8-14', count: openAgeBuckets['8-14'] },
+        { bucket: '15-30', count: openAgeBuckets['15-30'] },
+        { bucket: '31-60', count: openAgeBuckets['31-60'] },
+        { bucket: '61+', count: openAgeBuckets['61+'] },
+      ],
+      topRiskLocalities,
+      topAggressorRanks: this.toTopRankDistribution(aggressorRankCounter, 10),
+      topVictimRanks: this.toTopRankDistribution(victimRankCounter, 10),
+      criticalOpenCases: sortedCriticalOpenCases,
     };
   }
 
@@ -596,6 +1028,48 @@ export class CpcaService {
     if (value === null) return null;
     const normalized = this.cleanText(value);
     return normalized || null;
+  }
+
+  private parseDateBoundary(
+    rawValue: string | undefined,
+    field: 'from' | 'to',
+    endOfDay: boolean,
+  ) {
+    const value = String(rawValue ?? '').trim();
+    if (!value) return null;
+
+    const normalized = value.length === 10 ? `${value}T00:00:00.000Z` : value;
+    const parsed = new Date(normalized);
+    if (Number.isNaN(parsed.getTime())) {
+      throwError('VALIDATION_ERROR', { field, reason: 'INVALID_DATE' });
+    }
+
+    if (endOfDay && value.length === 10) {
+      parsed.setUTCHours(23, 59, 59, 999);
+    }
+
+    return parsed;
+  }
+
+  private daysBetween(start: Date, end: Date) {
+    const diff = end.getTime() - start.getTime();
+    if (!Number.isFinite(diff) || diff <= 0) return 0;
+    return Math.ceil(diff / DAY_MS);
+  }
+
+  private normalizeRankForStats(value: string | null | undefined) {
+    const normalized = this.cleanText(String(value ?? ''));
+    return normalized ? normalized.toUpperCase() : null;
+  }
+
+  private toTopRankDistribution(counter: Map<string, number>, limit = 10) {
+    return Array.from(counter.entries())
+      .map(([rank, count]) => ({ rank, count }))
+      .sort((a, b) => {
+        if (b.count !== a.count) return b.count - a.count;
+        return a.rank.localeCompare(b.rank, 'pt-BR');
+      })
+      .slice(0, limit);
   }
 
   private assertIcaConsistency(input: {

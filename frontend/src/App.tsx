@@ -26,6 +26,7 @@ import { BiSurveyDashboardPage } from './pages/BiSurveyDashboardPage';
 import { MissionsPage } from './pages/MissionsPage';
 import { SocialCommunicationPage } from './pages/SocialCommunicationPage';
 import { CpcaCasesPage } from './pages/CpcaCasesPage';
+import { CpcaStatsPage } from './pages/CpcaStatsPage';
 import { RequireAuth } from './app/RequireAuth';
 import { RequireRoleAccess } from './app/RequireRoleAccess';
 import {
@@ -94,6 +95,18 @@ function App() {
                       }
                     >
                       <CpcaCasesPage />
+                    </RequireRoleAccess>
+                  }
+                />
+                <Route
+                  path="/cpca-stats"
+                  element={
+                    <RequireRoleAccess
+                      allow={(user) =>
+                        hasAnyRole(user, [ROLE_CPCA, ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP])
+                      }
+                    >
+                      <CpcaStatsPage />
                     </RequireRoleAccess>
                   }
                 />
