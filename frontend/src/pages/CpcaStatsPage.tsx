@@ -76,6 +76,14 @@ function buildDefaultFromDate() {
   return date.toISOString().slice(0, 10);
 }
 
+function translateMetricName(name: string | number) {
+  const normalized = String(name ?? '').trim().toLowerCase();
+  if (normalized === 'count') return 'Quantidade';
+  if (normalized === 'total') return 'Total';
+  if (normalized === 'open') return 'Abertos';
+  return String(name ?? '');
+}
+
 export function CpcaStatsPage() {
   const [params, setParams] = useSearchParams();
   const { data: me } = useMe();
@@ -288,8 +296,8 @@ export function CpcaStatsPage() {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="label" interval={0} angle={-20} textAnchor="end" height={70} />
                   <YAxis allowDecimals={false} />
-                  <RechartsTooltip />
-                  <Bar dataKey="count" fill="#0C657E" radius={[8, 8, 0, 0]} />
+                  <RechartsTooltip formatter={(value, name) => [value, translateMetricName(name)]} />
+                  <Bar dataKey="count" name="Quantidade" fill="#0C657E" radius={[8, 8, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </CardContent>
@@ -306,7 +314,7 @@ export function CpcaStatsPage() {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="month" />
                   <YAxis allowDecimals={false} />
-                  <RechartsTooltip />
+                  <RechartsTooltip formatter={(value, name) => [value, translateMetricName(name)]} />
                   <Line type="monotone" dataKey="moral" name="Moral" stroke="#0C657E" strokeWidth={2} dot={false} />
                   <Line type="monotone" dataKey="sexual" name="Sexual" stroke="#AD2F45" strokeWidth={2} dot={false} />
                   <Line type="monotone" dataKey="open" name="Abertos" stroke="#C56A2B" strokeWidth={2} dot={false} />
@@ -326,8 +334,8 @@ export function CpcaStatsPage() {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="label" interval={0} angle={-20} textAnchor="end" height={70} />
                   <YAxis allowDecimals={false} />
-                  <RechartsTooltip />
-                  <Bar dataKey="count" fill="#1D8A6C" radius={[8, 8, 0, 0]} />
+                  <RechartsTooltip formatter={(value, name) => [value, translateMetricName(name)]} />
+                  <Bar dataKey="count" name="Quantidade" fill="#1D8A6C" radius={[8, 8, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </CardContent>
@@ -344,8 +352,8 @@ export function CpcaStatsPage() {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="bucket" />
                   <YAxis allowDecimals={false} />
-                  <RechartsTooltip />
-                  <Bar dataKey="count" radius={[8, 8, 0, 0]}>
+                  <RechartsTooltip formatter={(value, name) => [value, translateMetricName(name)]} />
+                  <Bar dataKey="count" name="Quantidade" radius={[8, 8, 0, 0]}>
                     {openByAgeBuckets.map((entry, index) => (
                       <Cell key={entry.bucket} fill={CHART_COLORS[index % CHART_COLORS.length]} />
                     ))}
@@ -418,8 +426,8 @@ export function CpcaStatsPage() {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="label" />
                   <YAxis allowDecimals={false} />
-                  <RechartsTooltip />
-                  <Bar dataKey="count" fill="#4A67A1" radius={[8, 8, 0, 0]} />
+                  <RechartsTooltip formatter={(value, name) => [value, translateMetricName(name)]} />
+                  <Bar dataKey="count" name="Quantidade" fill="#4A67A1" radius={[8, 8, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
               <Typography variant="h6" gutterBottom sx={{ mt: 1.5 }}>
