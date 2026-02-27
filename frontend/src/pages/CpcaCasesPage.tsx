@@ -21,9 +21,9 @@ import {
   TableRow,
   TextField,
   Typography,
-} from '@mui/material';
-import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+} from "@mui/material";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   useAddCpcaCaseComment,
   useCpcaCase,
@@ -33,287 +33,347 @@ import {
   useMe,
   usePostos,
   useUpdateCpcaCase,
-} from '../api/hooks';
-import { parseApiError } from '../app/apiErrors';
+} from "../api/hooks";
+import { parseApiError } from "../app/apiErrors";
 import {
   hasAnyRole,
   ROLE_COMANDANTE_COMGEP,
   ROLE_COORDENACAO_CIPAVD,
   ROLE_CPCA,
   ROLE_TI,
-} from '../app/roleAccess';
-import { useToast } from '../app/toast';
-import { EmptyState } from '../components/states/EmptyState';
-import { ErrorState } from '../components/states/ErrorState';
-import { SkeletonState } from '../components/states/SkeletonState';
+} from "../app/roleAccess";
+import { useToast } from "../app/toast";
+import { EmptyState } from "../components/states/EmptyState";
+import { ErrorState } from "../components/states/ErrorState";
+import { SkeletonState } from "../components/states/SkeletonState";
 
 const STATUS_OPTIONS = [
-  { value: 'RECEIVED', label: 'Recebida' },
-  { value: 'PROTECTION_MEASURES', label: 'Acolhimento e proteção' },
-  { value: 'PRELIMINARY_ANALYSIS', label: 'Análise preliminar' },
-  { value: 'PROCEDURE_DEFINED', label: 'Procedimento instaurado' },
-  { value: 'INVESTIGATION', label: 'Em apuração' },
-  { value: 'CONCLUDED', label: 'Concluída' },
-  { value: 'ARCHIVED', label: 'Arquivada' },
+  { value: "RECEIVED", label: "Recebida" },
+  { value: "PROTECTION_MEASURES", label: "Acolhimento e proteção" },
+  { value: "PRELIMINARY_ANALYSIS", label: "Análise preliminar" },
+  { value: "PROCEDURE_DEFINED", label: "Procedimento instaurado" },
+  { value: "INVESTIGATION", label: "Em apuração" },
+  { value: "CONCLUDED", label: "Concluída" },
+  { value: "ARCHIVED", label: "Arquivada" },
 ];
 
 const COMPLAINT_TYPE_OPTIONS = [
-  { value: 'MORAL', label: 'Assédio moral' },
-  { value: 'SEXUAL', label: 'Assédio sexual' },
+  { value: "MORAL", label: "Assédio moral" },
+  { value: "SEXUAL", label: "Assédio sexual" },
 ];
 
 const NOTIFIER_TYPE_OPTIONS = [
-  { value: 'VITIMA', label: 'Vítima' },
-  { value: 'TESTEMUNHA', label: 'Testemunha' },
-  { value: 'TERCEIRO', label: 'Terceiro' },
+  { value: "VITIMA", label: "Vítima" },
+  { value: "TESTEMUNHA", label: "Testemunha" },
+  { value: "TERCEIRO", label: "Terceiro" },
 ];
 
 const PROCEDURE_OPTIONS = [
-  { value: 'NOT_DEFINED', label: 'Não definido' },
-  { value: 'PATD', label: 'PATD' },
-  { value: 'SINDICANCIA', label: 'Sindicância' },
-  { value: 'PAD', label: 'PAD' },
-  { value: 'IPM', label: 'IPM' },
-  { value: 'BOLETIM_OCORRENCIA', label: 'Boletim de ocorrência' },
-  { value: 'INQUERITO_CIVIL', label: 'Inquérito civil' },
-  { value: 'NAO_HOUVE', label: 'Não houve' },
-  { value: 'INQUERITO_POLICIAL_COMUM', label: 'Inquérito Policial Comum' },
-  { value: 'NOTICIA_FATO', label: 'Notícia de Fato' },
-  { value: 'CONSELHO_DISCIPLINA', label: 'Conselho de Disciplina' },
-  { value: 'CONSELHO_JUSTIFICACAO', label: 'Conselho de Justificação' },
+  { value: "NOT_DEFINED", label: "Não definido" },
+  { value: "PATD", label: "PATD" },
+  { value: "SINDICANCIA", label: "Sindicância" },
+  { value: "PAD", label: "PAD" },
+  { value: "IPM", label: "IPM" },
+  { value: "BOLETIM_OCORRENCIA", label: "Boletim de ocorrência" },
+  { value: "INQUERITO_CIVIL", label: "Inquérito civil" },
+  { value: "NAO_HOUVE", label: "Não houve" },
+  { value: "INQUERITO_POLICIAL_COMUM", label: "Inquérito Policial Comum" },
+  { value: "NOTICIA_FATO", label: "Notícia de Fato" },
+  { value: "CONSELHO_DISCIPLINA", label: "Conselho de Disciplina" },
+  { value: "CONSELHO_JUSTIFICACAO", label: "Conselho de Justificação" },
 ];
 
 const GENDER_OPTIONS = [
-  { value: 'MASCULINO', label: 'Masculino' },
-  { value: 'FEMININO', label: 'Feminino' },
-  { value: 'NAO_INFORMADO', label: 'Não informado' },
+  { value: "MASCULINO", label: "Masculino" },
+  { value: "FEMININO", label: "Feminino" },
+  { value: "NAO_INFORMADO", label: "Não informado" },
 ];
 
 const DETAILED_VIOLENCE_TYPE_OPTIONS = [
-  { value: 'ASSEDIO_MORAL', label: 'Assédio Moral' },
-  { value: 'ASSEDIO_SEXUAL', label: 'Assédio Sexual' },
-  { value: 'VIOLENCIA_DOMESTICA_FISICA', label: 'Violência doméstica - Física' },
-  { value: 'VIOLENCIA_DOMESTICA_PSICOLOGICA', label: 'Violência doméstica - Psicológica' },
-  { value: 'VIOLENCIA_DOMESTICA_MORAL', label: 'Violência doméstica - Moral' },
-  { value: 'VIOLENCIA_DOMESTICA_PATRIMONIAL', label: 'Violência doméstica - Patrimonial' },
-  { value: 'VIOLENCIA_DOMESTICA_SEXUAL', label: 'Violência doméstica - Sexual' },
+  { value: "ASSEDIO_MORAL", label: "Assédio Moral" },
+  { value: "ASSEDIO_SEXUAL", label: "Assédio Sexual" },
+  {
+    value: "VIOLENCIA_DOMESTICA_FISICA",
+    label: "Violência doméstica - Física",
+  },
+  {
+    value: "VIOLENCIA_DOMESTICA_PSICOLOGICA",
+    label: "Violência doméstica - Psicológica",
+  },
+  { value: "VIOLENCIA_DOMESTICA_MORAL", label: "Violência doméstica - Moral" },
+  {
+    value: "VIOLENCIA_DOMESTICA_PATRIMONIAL",
+    label: "Violência doméstica - Patrimonial",
+  },
+  {
+    value: "VIOLENCIA_DOMESTICA_SEXUAL",
+    label: "Violência doméstica - Sexual",
+  },
 ];
 
 const HARASSMENT_CONTEXT_OPTIONS = [
-  { value: 'PRESENCIAL', label: 'Presencial' },
-  { value: 'VIRTUAL', label: 'Virtual' },
+  { value: "PRESENCIAL", label: "Presencial" },
+  { value: "VIRTUAL", label: "Virtual" },
 ];
 
 const OCCURRENCE_LOCATION_OPTIONS = [
-  { value: 'INTERIOR_OM', label: 'Interior da OM' },
-  { value: 'EVENTO_EXTERNO_RELACIONADO_TRABALHO', label: 'Eventos externos relacionados ao trabalho' },
-  { value: 'EVENTO_EXTERNO_NAO_RELACIONADO_TRABALHO', label: 'Eventos externos não relacionados ao trabalho' },
-  { value: 'AMBIENTE_PESSOAL', label: 'Ambiente pessoal' },
-  { value: 'VIA_PUBLICA', label: 'Via pública' },
-  { value: 'TRANSPORTE_PUBLICO', label: 'Transporte Público' },
-  { value: 'TRANSPORTE_INSTITUCIONAL', label: 'Transporte Institucional' },
-  { value: 'RESIDENCIA_ACUSADOR', label: 'Residência do acusador' },
-  { value: 'APLICATIVOS_MENSAGERIA', label: 'Aplicativos de mensagens instantâneas (ex.: WhatsApp, Telegram)' },
-  { value: 'EMAIL', label: 'E-mail (institucional ou pessoal)' },
-  { value: 'REUNIAO_ONLINE_TRABALHO', label: 'Reuniões online de trabalho (ex.: Webex, Teams, Zoom, Meet)' },
-  { value: 'REDES_SOCIAIS', label: 'Redes sociais (posts, comentários ou mensagens privadas)' },
-  { value: 'RESIDENCIA_VITIMA_NOTICIANTE', label: 'Residência da vítima e/ou noticiante' },
+  { value: "INTERIOR_OM", label: "Interior da OM" },
+  {
+    value: "EVENTO_EXTERNO_RELACIONADO_TRABALHO",
+    label: "Eventos externos relacionados ao trabalho",
+  },
+  {
+    value: "EVENTO_EXTERNO_NAO_RELACIONADO_TRABALHO",
+    label: "Eventos externos não relacionados ao trabalho",
+  },
+  { value: "AMBIENTE_PESSOAL", label: "Ambiente pessoal" },
+  { value: "VIA_PUBLICA", label: "Via pública" },
+  { value: "TRANSPORTE_PUBLICO", label: "Transporte Público" },
+  { value: "TRANSPORTE_INSTITUCIONAL", label: "Transporte Institucional" },
+  { value: "RESIDENCIA_ACUSADOR", label: "Residência do acusador" },
+  {
+    value: "APLICATIVOS_MENSAGERIA",
+    label: "Aplicativos de mensagens instantâneas (ex.: WhatsApp, Telegram)",
+  },
+  { value: "EMAIL", label: "E-mail (institucional ou pessoal)" },
+  {
+    value: "REUNIAO_ONLINE_TRABALHO",
+    label: "Reuniões online de trabalho (ex.: Webex, Teams, Zoom, Meet)",
+  },
+  {
+    value: "REDES_SOCIAIS",
+    label: "Redes sociais (posts, comentários ou mensagens privadas)",
+  },
+  {
+    value: "RESIDENCIA_VITIMA_NOTICIANTE",
+    label: "Residência da vítima e/ou noticiante",
+  },
 ];
 
 const AGE_RANGE_OPTIONS = [
-  { value: '15_18', label: '15 a 18 anos' },
-  { value: '19_25', label: '19 a 25 anos' },
-  { value: '26_30', label: '26 a 30 anos' },
-  { value: '31_35', label: '31 a 35 anos' },
-  { value: '36_40', label: '36 a 40 anos' },
-  { value: '41_45', label: '41 a 45 anos' },
-  { value: '46_50', label: '46 a 50 anos' },
-  { value: '51_55', label: '51 a 55 anos' },
-  { value: 'MAIOR_55', label: 'Mais de 55 anos' },
+  { value: "15_18", label: "15 a 18 anos" },
+  { value: "19_25", label: "19 a 25 anos" },
+  { value: "26_30", label: "26 a 30 anos" },
+  { value: "31_35", label: "31 a 35 anos" },
+  { value: "36_40", label: "36 a 40 anos" },
+  { value: "41_45", label: "41 a 45 anos" },
+  { value: "46_50", label: "46 a 50 anos" },
+  { value: "51_55", label: "51 a 55 anos" },
+  { value: "MAIOR_55", label: "Mais de 55 anos" },
 ];
 
 const INCIDENT_FREQUENCY_OPTIONS = [
-  { value: 'UMA_VEZ', label: 'Uma vez' },
-  { value: 'DUAS_VEZES', label: 'Duas vezes' },
-  { value: 'TRES_VEZES', label: 'Três vezes' },
-  { value: 'QUATRO_VEZES', label: 'Quatro vezes' },
-  { value: 'CINCO_VEZES', label: 'Cinco vezes' },
-  { value: 'MAIOR_CINCO', label: 'Maior que cinco vezes' },
+  { value: "UMA_VEZ", label: "Uma vez" },
+  { value: "DUAS_VEZES", label: "Duas vezes" },
+  { value: "TRES_VEZES", label: "Três vezes" },
+  { value: "QUATRO_VEZES", label: "Quatro vezes" },
+  { value: "CINCO_VEZES", label: "Cinco vezes" },
+  { value: "MAIOR_CINCO", label: "Maior que cinco vezes" },
 ];
 
 const FUNCTIONAL_RELATION_OPTIONS = [
-  { value: 'SUPERIOR_HIERARQUICO', label: 'Superior hierárquico' },
-  { value: 'CHEFE_IMEDIATO', label: 'Chefe imediato' },
-  { value: 'SUBORDINADO', label: 'Subordinado' },
-  { value: 'SUBORDINADO_DIRETO', label: 'Subordinado direto' },
-  { value: 'MESMA_GRADUACAO', label: 'Mesma Graduação' },
-  { value: 'INSTRUTOR_PROFESSOR', label: 'Instrutor/Professor' },
-  { value: 'ALUNO', label: 'Aluno' },
-  { value: 'PRESTADOR_SERVICO', label: 'Prestador de serviço' },
-  { value: 'CONJUGE', label: 'Cônjuge' },
-  { value: 'OUTROS', label: 'Outros' },
-  { value: 'CIVIL', label: 'Civil' },
-  { value: 'CONJUGE_MILITAR', label: 'Cônjuge militar' },
-  { value: 'FAMILIAR', label: 'Familiar' },
+  { value: "SUPERIOR_HIERARQUICO", label: "Superior hierárquico" },
+  { value: "CHEFE_IMEDIATO", label: "Chefe imediato" },
+  { value: "SUBORDINADO", label: "Subordinado" },
+  { value: "SUBORDINADO_DIRETO", label: "Subordinado direto" },
+  { value: "MESMA_GRADUACAO", label: "Mesma Graduação" },
+  { value: "INSTRUTOR_PROFESSOR", label: "Instrutor/Professor" },
+  { value: "ALUNO", label: "Aluno" },
+  { value: "PRESTADOR_SERVICO", label: "Prestador de serviço" },
+  { value: "CONJUGE", label: "Cônjuge" },
+  { value: "OUTROS", label: "Outros" },
+  { value: "CIVIL", label: "Civil" },
+  { value: "CONJUGE_MILITAR", label: "Cônjuge militar" },
+  { value: "FAMILIAR", label: "Familiar" },
 ];
 
 const OCCURRENCE_FORM_OPTIONS = [
-  { value: 'HUMILHACAO_PUBLICA', label: 'Humilhação Pública' },
-  { value: 'EXCLUSAO_ISOLAMENTO', label: 'Exclusão/Isolamento' },
-  { value: 'AMEACAS_INTIMIDACAO', label: 'Ameaças/Intimidação' },
-  { value: 'CRITICAS_EXCESSIVAS', label: 'Críticas excessivas' },
-  { value: 'INJUSTICAS', label: 'Injustiças' },
-  { value: 'COMENTARIOS_SEXISTAS', label: 'Comentários sexistas' },
-  { value: 'CONTATO_FISICO_INDESEJADO', label: 'Contato físico indesejado' },
-  { value: 'TENTATIVA_CONTATO_FISICO_INDEVIDO', label: 'Tentativa de contato físico indevido' },
-  { value: 'CHANTAGEM_INTIMIDACAO_FAVOR_SEXUAL', label: 'Chantagem ou intimidação para obter favores sexuais' },
-  { value: 'VIOLENCIA_FISICA', label: 'Violência física' },
-  { value: 'VIOLENCIA_PSICOLOGICA', label: 'Violência psicológica' },
-  { value: 'VIOLENCIA_PATRIMONIAL', label: 'Violência patrimonial' },
-  { value: 'OUTROS', label: 'Outros' },
-  { value: 'VIOLENCIA_SEXUAL', label: 'Violência Sexual' },
-  { value: 'VIOLENCIA_MORAL', label: 'Violência Moral' },
-  { value: 'VIGILANCIA_EXCESSIVA', label: 'Vigilância Excessiva' },
-  { value: 'EXIBICAO_MATERIAL_PORNOGRAFICO', label: 'Exibição de Material Pornográfico' },
+  { value: "HUMILHACAO_PUBLICA", label: "Humilhação Pública" },
+  { value: "EXCLUSAO_ISOLAMENTO", label: "Exclusão/Isolamento" },
+  { value: "AMEACAS_INTIMIDACAO", label: "Ameaças/Intimidação" },
+  { value: "CRITICAS_EXCESSIVAS", label: "Críticas excessivas" },
+  { value: "INJUSTICAS", label: "Injustiças" },
+  { value: "COMENTARIOS_SEXISTAS", label: "Comentários sexistas" },
+  { value: "CONTATO_FISICO_INDESEJADO", label: "Contato físico indesejado" },
+  {
+    value: "TENTATIVA_CONTATO_FISICO_INDEVIDO",
+    label: "Tentativa de contato físico indevido",
+  },
+  {
+    value: "CHANTAGEM_INTIMIDACAO_FAVOR_SEXUAL",
+    label: "Chantagem ou intimidação para obter favores sexuais",
+  },
+  { value: "VIOLENCIA_FISICA", label: "Violência física" },
+  { value: "VIOLENCIA_PSICOLOGICA", label: "Violência psicológica" },
+  { value: "VIOLENCIA_PATRIMONIAL", label: "Violência patrimonial" },
+  { value: "OUTROS", label: "Outros" },
+  { value: "VIOLENCIA_SEXUAL", label: "Violência Sexual" },
+  { value: "VIOLENCIA_MORAL", label: "Violência Moral" },
+  { value: "VIGILANCIA_EXCESSIVA", label: "Vigilância Excessiva" },
+  {
+    value: "EXIBICAO_MATERIAL_PORNOGRAFICO",
+    label: "Exibição de Material Pornográfico",
+  },
 ];
 
 const PROCEDURE_CURRENT_SITUATION_OPTIONS = [
-  { value: 'EM_ANDAMENTO', label: 'Em andamento' },
-  { value: 'MEDIDA_DISCIPLINAR_APLICADA', label: 'Medida disciplinar aplicada' },
-  { value: 'OFERECIDA_DENUNCIA', label: 'Oferecida a denúncia' },
-  { value: 'ARQUIVADO_PELA_JUSTICA', label: 'Arquivado pela justiça' },
-  { value: 'CONDENADO_PELA_JUSTICA', label: 'Condenado pela Justiça' },
-  { value: 'TRANSFERENCIA_ACUSADO', label: 'Transferência do acusado' },
-  { value: 'TRANSFERENCIA_ACUSADOR', label: 'Transferência do acusador' },
-  { value: 'MEDIDA_PROTETIVA', label: 'Medida Protetiva' },
-  { value: 'OUTROS', label: 'Outros' },
-  { value: 'NAO_APLICAVEL', label: 'Não aplicável' },
+  { value: "EM_ANDAMENTO", label: "Em andamento" },
+  {
+    value: "MEDIDA_DISCIPLINAR_APLICADA",
+    label: "Medida disciplinar aplicada",
+  },
+  { value: "OFERECIDA_DENUNCIA", label: "Oferecida a denúncia" },
+  { value: "ARQUIVADO_PELA_JUSTICA", label: "Arquivado pela justiça" },
+  { value: "CONDENADO_PELA_JUSTICA", label: "Condenado pela Justiça" },
+  { value: "TRANSFERENCIA_ACUSADO", label: "Transferência do acusado" },
+  { value: "TRANSFERENCIA_ACUSADOR", label: "Transferência do acusador" },
+  { value: "MEDIDA_PROTETIVA", label: "Medida Protetiva" },
+  { value: "OUTROS", label: "Outros" },
+  { value: "NAO_APLICAVEL", label: "Não aplicável" },
 ];
 
 const RETALIATION_REPORTED_OPTIONS = [
-  { value: 'SIM', label: 'Sim' },
-  { value: 'NAO', label: 'Não' },
-  { value: 'NAO_INFORMADO', label: 'Não informado' },
+  { value: "SIM", label: "Sim" },
+  { value: "NAO", label: "Não" },
+  { value: "NAO_INFORMADO", label: "Não informado" },
 ];
 
 const RETALIATION_TARGET_OPTIONS = [
-  { value: 'VITIMA', label: 'Vítima' },
-  { value: 'TESTEMUNHAS', label: 'Testemunhas' },
-  { value: 'SINDICANTE', label: 'Sindicante' },
-  { value: 'ENCARREGADO_INQUERITO', label: 'Encarregado de inquérito' },
-  { value: 'NAO_OCORREU_RETALIACAO', label: 'Não ocorreu retaliação' },
+  { value: "VITIMA", label: "Vítima" },
+  { value: "TESTEMUNHAS", label: "Testemunhas" },
+  { value: "SINDICANTE", label: "Sindicante" },
+  { value: "ENCARREGADO_INQUERITO", label: "Encarregado de inquérito" },
+  { value: "NAO_OCORREU_RETALIACAO", label: "Não ocorreu retaliação" },
 ];
 
 const STEP_STATUS_OPTIONS: Record<number, string[]> = {
-  0: ['RECEIVED', 'PROTECTION_MEASURES'],
-  1: ['PROTECTION_MEASURES', 'PRELIMINARY_ANALYSIS'],
-  2: ['PRELIMINARY_ANALYSIS', 'PROCEDURE_DEFINED', 'INVESTIGATION'],
-  3: ['INVESTIGATION', 'CONCLUDED', 'ARCHIVED'],
+  0: ["RECEIVED", "PROTECTION_MEASURES"],
+  1: ["PROTECTION_MEASURES", "PRELIMINARY_ANALYSIS"],
+  2: ["PRELIMINARY_ANALYSIS", "PROCEDURE_DEFINED", "INVESTIGATION"],
+  3: ["INVESTIGATION", "CONCLUDED", "ARCHIVED"],
 };
 
 const SEPARATION_OPTIONS = [
-  { value: 'NAO_AVALIADA', label: 'Não avaliada' },
-  { value: 'AVALIADA_NAO_APLICADA', label: 'Avaliada e não aplicada' },
-  { value: 'APLICADA', label: 'Aplicada' },
+  { value: "NAO_AVALIADA", label: "Não avaliada" },
+  { value: "AVALIADA_NAO_APLICADA", label: "Avaliada e não aplicada" },
+  { value: "APLICADA", label: "Aplicada" },
 ];
 
 const STEP_DEFS = [
   {
-    title: '1) Notificação e provas',
-    subtitle: 'ICA Art. 47: registro inicial, dados genéricos e evidências.',
+    title: "1) Notificação e provas",
+    subtitle: "ICA Art. 47: registro inicial, dados genéricos e evidências.",
   },
   {
-    title: '2) Acolhimento e proteção',
-    subtitle: 'ICA Arts. 48 a 50: medidas imediatas e suporte à vítima.',
+    title: "2) Acolhimento e proteção",
+    subtitle: "ICA Arts. 48 a 50: medidas imediatas e suporte à vítima.",
   },
   {
-    title: '3) Triagem e apuração',
-    subtitle: 'ICA Art. 51: análise preliminar e procedimento cabível.',
+    title: "3) Triagem e apuração",
+    subtitle: "ICA Art. 51: análise preliminar e procedimento cabível.",
   },
   {
-    title: '4) Condução e encerramento',
-    subtitle: 'ICA Arts. 52 a 57: devolutivas, retaliação, defesa e conclusão.',
+    title: "4) Condução e encerramento",
+    subtitle: "ICA Arts. 52 a 57: devolutivas, retaliação, defesa e conclusão.",
   },
 ];
 
 const defaultForm = {
-  localityId: '',
-  complaintType: 'MORAL',
-  notifierType: 'VITIMA',
-  status: 'RECEIVED',
-  procedureType: 'NOT_DEFINED',
-  incidentDate: '',
-  aggressorRank: '',
-  aggressorGender: 'NAO_INFORMADO',
-  aggressorAgeRange: '',
-  victimRank: '',
-  victimGender: 'NAO_INFORMADO',
-  victimAgeRange: '',
-  detailedViolenceType: '',
-  harassmentContext: '',
-  occurrenceLocation: '',
-  incidentFrequency: '',
-  hierarchicalFunctionalRelation: '',
-  occurrenceForm: '',
-  procedureCurrentSituation: '',
+  localityId: "",
+  complaintType: "MORAL",
+  notifierType: "VITIMA",
+  status: "RECEIVED",
+  procedureType: "NOT_DEFINED",
+  incidentDate: "",
+  aggressorRank: "",
+  aggressorGender: "NAO_INFORMADO",
+  aggressorAgeRange: "",
+  victimRank: "",
+  victimGender: "NAO_INFORMADO",
+  victimAgeRange: "",
+  detailedViolenceType: "",
+  harassmentContext: "",
+  occurrenceLocation: "",
+  incidentFrequency: "",
+  hierarchicalFunctionalRelation: "",
+  occurrenceForm: "",
+  procedureCurrentSituation: "",
   evidenceCount: 0,
-  evidenceSummary: '',
+  evidenceSummary: "",
   confidentialityTermSigned: false,
-  confidentialityHandlingNotes: '',
+  confidentialityHandlingNotes: "",
   cpcaMembersExcludedFromInquiry: true,
-  immediateProtectionMeasures: '',
-  privateSupportActions: '',
+  immediateProtectionMeasures: "",
+  privateSupportActions: "",
   psychologicalSupportProvided: false,
   medicalSupportProvided: false,
   socialSupportProvided: false,
   legalSupportProvided: false,
   contactRestrictionApplied: false,
   preliminaryReportGenerated: false,
-  preliminaryReportDate: '',
-  procedureReference: '',
+  preliminaryReportDate: "",
+  procedureReference: "",
   womenLedHandlingPrioritized: false,
   victimAccusedSeparationEvaluated: false,
   victimAccusedSeparationApplied: false,
   accusedDefenseEnsured: false,
-  outcomeSummary: '',
-  notifierFeedbackSummary: '',
-  victimFeedbackSummary: '',
-  notifierFeedbackDate: '',
-  victimFeedbackDate: '',
+  outcomeSummary: "",
+  notifierFeedbackSummary: "",
+  victimFeedbackSummary: "",
+  notifierFeedbackDate: "",
+  victimFeedbackDate: "",
   retaliationRisk: false,
-  retaliationReported: 'NAO_INFORMADO',
-  retaliationAgainst: '',
-  retaliationNotes: '',
+  retaliationReported: "NAO_INFORMADO",
+  retaliationAgainst: "",
+  retaliationNotes: "",
   outsourcedAccused: false,
-  contractorReferralDate: '',
-  contractorFollowUpNotes: '',
-  statusChangeNote: '',
+  contractorReferralDate: "",
+  contractorFollowUpNotes: "",
+  statusChangeNote: "",
 };
 
 function formatOmLabel(locality: any) {
-  const code = String(locality?.code ?? '').trim();
-  const name = String(locality?.name ?? '').trim();
+  const code = String(locality?.code ?? "").trim();
+  const name = String(locality?.name ?? "").trim();
   if (code && name) return `${code} - ${name}`;
-  return code || name || '-';
+  return code || name || "-";
 }
 
 function toNullable(value: string) {
-  const normalized = String(value ?? '').trim();
+  const normalized = String(value ?? "").trim();
   return normalized ? normalized : null;
 }
 
 function inferMacroComplaintTypeFromDetailed(
   detailedViolenceType: string,
-): 'MORAL' | 'SEXUAL' | null {
-  const normalized = String(detailedViolenceType ?? '').trim();
+): "MORAL" | "SEXUAL" | null {
+  const normalized = String(detailedViolenceType ?? "").trim();
   if (!normalized) return null;
   if (
-    normalized === 'ASSEDIO_SEXUAL' ||
-    normalized === 'VIOLENCIA_DOMESTICA_SEXUAL'
+    normalized === "ASSEDIO_SEXUAL" ||
+    normalized === "VIOLENCIA_DOMESTICA_SEXUAL"
   ) {
-    return 'SEXUAL';
+    return "SEXUAL";
   }
-  return 'MORAL';
+  return "MORAL";
+}
+
+function getDetailedViolenceTypeLabel(value: string | null | undefined) {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) return null;
+  return (
+    DETAILED_VIOLENCE_TYPE_OPTIONS.find((item) => item.value === normalized)
+      ?.label ?? normalized
+  );
+}
+
+function getComplaintTypeLabel(value: string | null | undefined) {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) return null;
+  return (
+    COMPLAINT_TYPE_OPTIONS.find((item) => item.value === normalized)?.label ??
+    normalized
+  );
 }
 
 function statusOptionsForStep(step: number, currentStatus: string) {
@@ -334,21 +394,21 @@ export function CpcaCasesPage() {
     ROLE_TI,
   ]);
 
-  const q = params.get('q') ?? '';
-  const localityId = params.get('localityId') ?? '';
-  const status = params.get('status') ?? '';
-  const complaintType = params.get('complaintType') ?? '';
-  const procedureType = params.get('procedureType') ?? '';
+  const q = params.get("q") ?? "";
+  const localityId = params.get("localityId") ?? "";
+  const status = params.get("status") ?? "";
+  const detailedViolenceType = params.get("detailedViolenceType") ?? "";
+  const procedureType = params.get("procedureType") ?? "";
 
   const filters = useMemo(
     () => ({
       q: q || undefined,
       localityId: localityId || undefined,
       status: status || undefined,
-      complaintType: complaintType || undefined,
+      detailedViolenceType: detailedViolenceType || undefined,
       procedureType: procedureType || undefined,
     }),
-    [q, localityId, status, complaintType, procedureType],
+    [q, localityId, status, detailedViolenceType, procedureType],
   );
 
   const casesQuery = useCpcaCases(filters, canAccessByRole);
@@ -356,10 +416,10 @@ export function CpcaCasesPage() {
   const postosQuery = usePostos();
 
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [selectedId, setSelectedId] = useState('');
+  const [selectedId, setSelectedId] = useState("");
   const [isCreateMode, setIsCreateMode] = useState(false);
   const [form, setForm] = useState(defaultForm);
-  const [newComment, setNewComment] = useState('');
+  const [newComment, setNewComment] = useState("");
   const [activeStep, setActiveStep] = useState(0);
 
   const selectedCaseQuery = useCpcaCase(
@@ -380,6 +440,9 @@ export function CpcaCasesPage() {
     const next = new URLSearchParams(params);
     if (value) next.set(key, value);
     else next.delete(key);
+    if (key === "detailedViolenceType") {
+      next.delete("complaintType");
+    }
     setParams(next, { replace: true });
   };
 
@@ -389,48 +452,56 @@ export function CpcaCasesPage() {
   const localities = useMemo(
     () =>
       [...(localitiesQuery.data?.items ?? [])].sort((a: any, b: any) =>
-        formatOmLabel(a).localeCompare(formatOmLabel(b), 'pt-BR'),
+        formatOmLabel(a).localeCompare(formatOmLabel(b), "pt-BR"),
       ),
     [localitiesQuery.data?.items],
   );
-  const rankOptions: string[] = (postosQuery.data?.items ?? []).map((item: any) =>
-    String(item.name),
+  const rankOptions: string[] = (postosQuery.data?.items ?? []).map(
+    (item: any) => String(item.name),
   );
   const hasStep1Progress = Boolean(
     toNullable(form.incidentDate) ||
-      toNullable(form.aggressorRank) ||
-      toNullable(form.victimRank) ||
-      toNullable(form.detailedViolenceType) ||
-      toNullable(form.harassmentContext) ||
-      toNullable(form.occurrenceLocation) ||
-      toNullable(form.aggressorAgeRange) ||
-      toNullable(form.victimAgeRange) ||
-      toNullable(form.incidentFrequency) ||
-      toNullable(form.hierarchicalFunctionalRelation) ||
-      toNullable(form.occurrenceForm) ||
-      Number(form.evidenceCount ?? 0) > 0 ||
-      toNullable(form.evidenceSummary),
+    toNullable(form.aggressorRank) ||
+    toNullable(form.victimRank) ||
+    toNullable(form.detailedViolenceType) ||
+    toNullable(form.harassmentContext) ||
+    toNullable(form.occurrenceLocation) ||
+    toNullable(form.aggressorAgeRange) ||
+    toNullable(form.victimAgeRange) ||
+    toNullable(form.incidentFrequency) ||
+    toNullable(form.hierarchicalFunctionalRelation) ||
+    toNullable(form.occurrenceForm) ||
+    Number(form.evidenceCount ?? 0) > 0 ||
+    toNullable(form.evidenceSummary),
   );
   const hasStep2Progress = Boolean(
     toNullable(form.immediateProtectionMeasures) ||
-      form.psychologicalSupportProvided ||
-      form.medicalSupportProvided ||
-      form.socialSupportProvided ||
-      form.legalSupportProvided ||
-      form.contactRestrictionApplied ||
-      form.confidentialityTermSigned,
+    form.psychologicalSupportProvided ||
+    form.medicalSupportProvided ||
+    form.socialSupportProvided ||
+    form.legalSupportProvided ||
+    form.contactRestrictionApplied ||
+    form.confidentialityTermSigned,
   );
   const hasStep3Progress = Boolean(
     toNullable(form.procedureReference) ||
-      toNullable(form.preliminaryReportDate) ||
-      toNullable(form.procedureCurrentSituation) ||
-      form.procedureType !== 'NOT_DEFINED',
+    toNullable(form.preliminaryReportDate) ||
+    toNullable(form.procedureCurrentSituation) ||
+    form.procedureType !== "NOT_DEFINED",
   );
-  const dataUnlockedStep = hasStep3Progress ? 3 : hasStep2Progress ? 2 : hasStep1Progress ? 1 : 0;
+  const dataUnlockedStep = hasStep3Progress
+    ? 3
+    : hasStep2Progress
+      ? 2
+      : hasStep1Progress
+        ? 1
+        : 0;
   const statusUnlockedStep = (() => {
-    if (['INVESTIGATION', 'CONCLUDED', 'ARCHIVED'].includes(form.status)) return 3;
-    if (['PRELIMINARY_ANALYSIS', 'PROCEDURE_DEFINED'].includes(form.status)) return 2;
-    if (form.status === 'PROTECTION_MEASURES') return 1;
+    if (["INVESTIGATION", "CONCLUDED", "ARCHIVED"].includes(form.status))
+      return 3;
+    if (["PRELIMINARY_ANALYSIS", "PROCEDURE_DEFINED"].includes(form.status))
+      return 2;
+    if (form.status === "PROTECTION_MEASURES") return 1;
     return 0;
   })();
   const maxUnlockedStep = Math.max(dataUnlockedStep, statusUnlockedStep);
@@ -439,40 +510,49 @@ export function CpcaCasesPage() {
     if (!isCreateMode || !drawerOpen) return;
     setForm((prev) => ({
       ...prev,
-      localityId: isNationalScope ? prev.localityId : String(me?.localityId ?? ''),
+      localityId: isNationalScope
+        ? prev.localityId
+        : String(me?.localityId ?? ""),
     }));
   }, [drawerOpen, isCreateMode, isNationalScope, me?.localityId]);
 
   useEffect(() => {
     if (!selectedCaseQuery.data || isCreateMode) return;
     const item = selectedCaseQuery.data;
+    const inferredComplaintType = inferMacroComplaintTypeFromDetailed(
+      item.detailedViolenceType ?? "",
+    );
     setForm({
-      localityId: item.localityId ?? '',
-      complaintType: item.complaintType ?? 'MORAL',
-      notifierType: item.notifierType ?? 'VITIMA',
-      status: item.status ?? 'RECEIVED',
-      procedureType: item.procedureType ?? 'NOT_DEFINED',
-      incidentDate: item.incidentDate ? String(item.incidentDate).slice(0, 10) : '',
-      aggressorRank: item.aggressorRank ?? '',
-      aggressorGender: item.aggressorGender ?? 'NAO_INFORMADO',
-      aggressorAgeRange: item.aggressorAgeRange ?? '',
-      victimRank: item.victimRank ?? '',
-      victimGender: item.victimGender ?? 'NAO_INFORMADO',
-      victimAgeRange: item.victimAgeRange ?? '',
-      detailedViolenceType: item.detailedViolenceType ?? '',
-      harassmentContext: item.harassmentContext ?? '',
-      occurrenceLocation: item.occurrenceLocation ?? '',
-      incidentFrequency: item.incidentFrequency ?? '',
-      hierarchicalFunctionalRelation: item.hierarchicalFunctionalRelation ?? '',
-      occurrenceForm: item.occurrenceForm ?? '',
-      procedureCurrentSituation: item.procedureCurrentSituation ?? '',
+      localityId: item.localityId ?? "",
+      complaintType: inferredComplaintType ?? item.complaintType ?? "MORAL",
+      notifierType: item.notifierType ?? "VITIMA",
+      status: item.status ?? "RECEIVED",
+      procedureType: item.procedureType ?? "NOT_DEFINED",
+      incidentDate: item.incidentDate
+        ? String(item.incidentDate).slice(0, 10)
+        : "",
+      aggressorRank: item.aggressorRank ?? "",
+      aggressorGender: item.aggressorGender ?? "NAO_INFORMADO",
+      aggressorAgeRange: item.aggressorAgeRange ?? "",
+      victimRank: item.victimRank ?? "",
+      victimGender: item.victimGender ?? "NAO_INFORMADO",
+      victimAgeRange: item.victimAgeRange ?? "",
+      detailedViolenceType: item.detailedViolenceType ?? "",
+      harassmentContext: item.harassmentContext ?? "",
+      occurrenceLocation: item.occurrenceLocation ?? "",
+      incidentFrequency: item.incidentFrequency ?? "",
+      hierarchicalFunctionalRelation: item.hierarchicalFunctionalRelation ?? "",
+      occurrenceForm: item.occurrenceForm ?? "",
+      procedureCurrentSituation: item.procedureCurrentSituation ?? "",
       evidenceCount: Number(item.evidenceCount ?? 0),
-      evidenceSummary: item.evidenceSummary ?? '',
+      evidenceSummary: item.evidenceSummary ?? "",
       confidentialityTermSigned: Boolean(item.confidentialityTermSigned),
-      confidentialityHandlingNotes: item.confidentialityHandlingNotes ?? '',
-      cpcaMembersExcludedFromInquiry: Boolean(item.cpcaMembersExcludedFromInquiry ?? true),
-      immediateProtectionMeasures: item.immediateProtectionMeasures ?? '',
-      privateSupportActions: item.privateSupportActions ?? '',
+      confidentialityHandlingNotes: item.confidentialityHandlingNotes ?? "",
+      cpcaMembersExcludedFromInquiry: Boolean(
+        item.cpcaMembersExcludedFromInquiry ?? true,
+      ),
+      immediateProtectionMeasures: item.immediateProtectionMeasures ?? "",
+      privateSupportActions: item.privateSupportActions ?? "",
       psychologicalSupportProvided: Boolean(item.psychologicalSupportProvided),
       medicalSupportProvided: Boolean(item.medicalSupportProvided),
       socialSupportProvided: Boolean(item.socialSupportProvided),
@@ -481,32 +561,36 @@ export function CpcaCasesPage() {
       preliminaryReportGenerated: Boolean(item.preliminaryReportGenerated),
       preliminaryReportDate: item.preliminaryReportDate
         ? String(item.preliminaryReportDate).slice(0, 10)
-        : '',
-      procedureReference: item.procedureReference ?? '',
+        : "",
+      procedureReference: item.procedureReference ?? "",
       womenLedHandlingPrioritized: Boolean(item.womenLedHandlingPrioritized),
-      victimAccusedSeparationEvaluated: Boolean(item.victimAccusedSeparationEvaluated),
-      victimAccusedSeparationApplied: Boolean(item.victimAccusedSeparationApplied),
+      victimAccusedSeparationEvaluated: Boolean(
+        item.victimAccusedSeparationEvaluated,
+      ),
+      victimAccusedSeparationApplied: Boolean(
+        item.victimAccusedSeparationApplied,
+      ),
       accusedDefenseEnsured: Boolean(item.accusedDefenseEnsured),
-      outcomeSummary: item.outcomeSummary ?? '',
-      notifierFeedbackSummary: item.notifierFeedbackSummary ?? '',
-      victimFeedbackSummary: item.victimFeedbackSummary ?? '',
+      outcomeSummary: item.outcomeSummary ?? "",
+      notifierFeedbackSummary: item.notifierFeedbackSummary ?? "",
+      victimFeedbackSummary: item.victimFeedbackSummary ?? "",
       notifierFeedbackDate: item.notifierFeedbackDate
         ? String(item.notifierFeedbackDate).slice(0, 10)
-        : '',
+        : "",
       victimFeedbackDate: item.victimFeedbackDate
         ? String(item.victimFeedbackDate).slice(0, 10)
-        : '',
+        : "",
       retaliationRisk: Boolean(item.retaliationRisk),
       retaliationReported:
-        item.retaliationReported ?? (item.retaliationRisk ? 'SIM' : 'NAO'),
-      retaliationAgainst: item.retaliationAgainst ?? '',
-      retaliationNotes: item.retaliationNotes ?? '',
+        item.retaliationReported ?? (item.retaliationRisk ? "SIM" : "NAO"),
+      retaliationAgainst: item.retaliationAgainst ?? "",
+      retaliationNotes: item.retaliationNotes ?? "",
       outsourcedAccused: Boolean(item.outsourcedAccused),
       contractorReferralDate: item.contractorReferralDate
         ? String(item.contractorReferralDate).slice(0, 10)
-        : '',
-      contractorFollowUpNotes: item.contractorFollowUpNotes ?? '',
-      statusChangeNote: '',
+        : "",
+      contractorFollowUpNotes: item.contractorFollowUpNotes ?? "",
+      statusChangeNote: "",
     });
   }, [isCreateMode, selectedCaseQuery.data]);
 
@@ -518,15 +602,15 @@ export function CpcaCasesPage() {
     if (!isCreateMode) return;
 
     const autoStatusByStep = [
-      'RECEIVED',
-      'PROTECTION_MEASURES',
-      'PRELIMINARY_ANALYSIS',
-      'INVESTIGATION',
+      "RECEIVED",
+      "PROTECTION_MEASURES",
+      "PRELIMINARY_ANALYSIS",
+      "INVESTIGATION",
     ] as const;
     const targetStatus = autoStatusByStep[dataUnlockedStep];
 
     setForm((prev) => {
-      if (prev.status === 'CONCLUDED' || prev.status === 'ARCHIVED') {
+      if (prev.status === "CONCLUDED" || prev.status === "ARCHIVED") {
         return prev;
       }
       const rank: Record<string, number> = {
@@ -547,21 +631,26 @@ export function CpcaCasesPage() {
 
   if (meLoading) return <SkeletonState />;
   if (!canAccessByRole) {
-    return <ErrorState error={{ message: 'Acesso negado ao fluxo CPCA.' }} />;
+    return <ErrorState error={{ message: "Acesso negado ao fluxo CPCA." }} />;
   }
   if (casesQuery.isLoading) return <SkeletonState />;
   if (casesQuery.isError) {
-    return <ErrorState error={casesQuery.error} onRetry={() => casesQuery.refetch()} />;
+    return (
+      <ErrorState
+        error={casesQuery.error}
+        onRetry={() => casesQuery.refetch()}
+      />
+    );
   }
 
   const openCreate = () => {
     setIsCreateMode(true);
-    setSelectedId('');
+    setSelectedId("");
     setForm({
       ...defaultForm,
-      localityId: isNationalScope ? '' : String(me?.localityId ?? ''),
+      localityId: isNationalScope ? "" : String(me?.localityId ?? ""),
     });
-    setNewComment('');
+    setNewComment("");
     setActiveStep(0);
     setDrawerOpen(true);
   };
@@ -569,29 +658,32 @@ export function CpcaCasesPage() {
   const openDetails = (id: string) => {
     setIsCreateMode(false);
     setSelectedId(id);
-    setNewComment('');
+    setNewComment("");
     setActiveStep(0);
     setDrawerOpen(true);
   };
 
   const closeDrawer = () => {
     setDrawerOpen(false);
-    setSelectedId('');
+    setSelectedId("");
     setIsCreateMode(false);
     setForm(defaultForm);
-    setNewComment('');
+    setNewComment("");
     setActiveStep(0);
   };
 
   const saveCase = async () => {
     if (isNationalScope && !form.localityId) {
-      toast.push({ message: 'Selecione a OM da ocorrência.', severity: 'warning' });
+      toast.push({
+        message: "Selecione a OM da ocorrência.",
+        severity: "warning",
+      });
       return;
     }
     if (!form.aggressorRank || !form.victimRank) {
       toast.push({
-        message: 'Informe posto/graduação do acusado e da vítima/noticiante.',
-        severity: 'warning',
+        message: "Informe posto/graduação do acusado e da vítima/noticiante.",
+        severity: "warning",
       });
       return;
     }
@@ -601,9 +693,9 @@ export function CpcaCasesPage() {
     );
     const macroComplaintType = inferredComplaintType ?? form.complaintType;
     const retaliationRisk =
-      form.retaliationReported === 'SIM'
+      form.retaliationReported === "SIM"
         ? true
-        : form.retaliationReported === 'NAO'
+        : form.retaliationReported === "NAO"
           ? false
           : Boolean(form.retaliationRisk);
 
@@ -624,14 +716,20 @@ export function CpcaCasesPage() {
       harassmentContext: toNullable(form.harassmentContext),
       occurrenceLocation: toNullable(form.occurrenceLocation),
       incidentFrequency: toNullable(form.incidentFrequency),
-      hierarchicalFunctionalRelation: toNullable(form.hierarchicalFunctionalRelation),
+      hierarchicalFunctionalRelation: toNullable(
+        form.hierarchicalFunctionalRelation,
+      ),
       occurrenceForm: toNullable(form.occurrenceForm),
       procedureCurrentSituation: toNullable(form.procedureCurrentSituation),
       evidenceCount: Number(form.evidenceCount ?? 0),
       evidenceSummary: toNullable(form.evidenceSummary),
       confidentialityTermSigned: Boolean(form.confidentialityTermSigned),
-      confidentialityHandlingNotes: toNullable(form.confidentialityHandlingNotes),
-      cpcaMembersExcludedFromInquiry: Boolean(form.cpcaMembersExcludedFromInquiry),
+      confidentialityHandlingNotes: toNullable(
+        form.confidentialityHandlingNotes,
+      ),
+      cpcaMembersExcludedFromInquiry: Boolean(
+        form.cpcaMembersExcludedFromInquiry,
+      ),
       immediateProtectionMeasures: toNullable(form.immediateProtectionMeasures),
       privateSupportActions: toNullable(form.privateSupportActions),
       psychologicalSupportProvided: Boolean(form.psychologicalSupportProvided),
@@ -639,11 +737,17 @@ export function CpcaCasesPage() {
       socialSupportProvided: Boolean(form.socialSupportProvided),
       legalSupportProvided: Boolean(form.legalSupportProvided),
       contactRestrictionApplied: Boolean(form.contactRestrictionApplied),
-      preliminaryReportGenerated: Boolean(toNullable(form.preliminaryReportDate)),
+      preliminaryReportGenerated: Boolean(
+        toNullable(form.preliminaryReportDate),
+      ),
       preliminaryReportDate: toNullable(form.preliminaryReportDate),
       procedureReference: toNullable(form.procedureReference),
-      victimAccusedSeparationEvaluated: Boolean(form.victimAccusedSeparationEvaluated),
-      victimAccusedSeparationApplied: Boolean(form.victimAccusedSeparationApplied),
+      victimAccusedSeparationEvaluated: Boolean(
+        form.victimAccusedSeparationEvaluated,
+      ),
+      victimAccusedSeparationApplied: Boolean(
+        form.victimAccusedSeparationApplied,
+      ),
       accusedDefenseEnsured: Boolean(form.accusedDefenseEnsured),
       outcomeSummary: toNullable(form.outcomeSummary),
       notifierFeedbackSummary: toNullable(form.notifierFeedbackSummary),
@@ -666,17 +770,23 @@ export function CpcaCasesPage() {
     try {
       if (isCreateMode) {
         const created = await createCase.mutateAsync(payload);
-        toast.push({ message: `Caso ${created.caseNumber} criado.`, severity: 'success' });
+        toast.push({
+          message: `Caso ${created.caseNumber} criado.`,
+          severity: "success",
+        });
         setIsCreateMode(false);
         setSelectedId(created.id);
       } else if (selectedId) {
         await updateCase.mutateAsync({ id: selectedId, payload });
-        toast.push({ message: 'Caso atualizado com sucesso.', severity: 'success' });
+        toast.push({
+          message: "Caso atualizado com sucesso.",
+          severity: "success",
+        });
       }
     } catch (error) {
       toast.push({
-        message: parseApiError(error).message ?? 'Erro ao salvar caso CPCA.',
-        severity: 'error',
+        message: parseApiError(error).message ?? "Erro ao salvar caso CPCA.",
+        severity: "error",
       });
     }
   };
@@ -685,23 +795,28 @@ export function CpcaCasesPage() {
     if (!selectedId || !newComment.trim()) return;
     try {
       await addComment.mutateAsync({ id: selectedId, text: newComment.trim() });
-      setNewComment('');
-      toast.push({ message: 'Comentário registrado.', severity: 'success' });
+      setNewComment("");
+      toast.push({ message: "Comentário registrado.", severity: "success" });
     } catch (error) {
       toast.push({
-        message: parseApiError(error).message ?? 'Erro ao registrar comentário.',
-        severity: 'error',
+        message:
+          parseApiError(error).message ?? "Erro ao registrar comentário.",
+        severity: "error",
       });
     }
   };
 
   const renderStepContent = () => {
+    const complaintTypeForValidation =
+      inferMacroComplaintTypeFromDetailed(form.detailedViolenceType) ??
+      form.complaintType;
+
     if (activeStep === 0) {
       return (
         <Box
           sx={{
-            display: 'grid',
-            gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' },
+            display: "grid",
+            gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" },
             gap: 1.2,
           }}
         >
@@ -710,7 +825,9 @@ export function CpcaCasesPage() {
             size="small"
             label="OM"
             value={form.localityId}
-            onChange={(e) => setForm((prev) => ({ ...prev, localityId: e.target.value }))}
+            onChange={(e) =>
+              setForm((prev) => ({ ...prev, localityId: e.target.value }))
+            }
             disabled={!isNationalScope}
           >
             {isNationalScope && <MenuItem value="">Selecionar</MenuItem>}
@@ -724,25 +841,12 @@ export function CpcaCasesPage() {
           <TextField
             select
             size="small"
-            label="Tipo (macro)"
-            value={form.complaintType}
-            onChange={(e) => setForm((prev) => ({ ...prev, complaintType: e.target.value }))}
-          >
-            {COMPLAINT_TYPE_OPTIONS.map((item) => (
-              <MenuItem key={item.value} value={item.value}>
-                {item.label}
-              </MenuItem>
-            ))}
-          </TextField>
-
-          <TextField
-            select
-            size="small"
             label="Tipo de assédio ou violência"
             value={form.detailedViolenceType}
             onChange={(e) => {
               const nextDetailedType = e.target.value;
-              const inferred = inferMacroComplaintTypeFromDetailed(nextDetailedType);
+              const inferred =
+                inferMacroComplaintTypeFromDetailed(nextDetailedType);
               setForm((prev) => ({
                 ...prev,
                 detailedViolenceType: nextDetailedType,
@@ -763,7 +867,9 @@ export function CpcaCasesPage() {
             size="small"
             label="Noticiante"
             value={form.notifierType}
-            onChange={(e) => setForm((prev) => ({ ...prev, notifierType: e.target.value }))}
+            onChange={(e) =>
+              setForm((prev) => ({ ...prev, notifierType: e.target.value }))
+            }
           >
             {NOTIFIER_TYPE_OPTIONS.map((item) => (
               <MenuItem key={item.value} value={item.value}>
@@ -777,7 +883,12 @@ export function CpcaCasesPage() {
             size="small"
             label="Contexto do assédio"
             value={form.harassmentContext}
-            onChange={(e) => setForm((prev) => ({ ...prev, harassmentContext: e.target.value }))}
+            onChange={(e) =>
+              setForm((prev) => ({
+                ...prev,
+                harassmentContext: e.target.value,
+              }))
+            }
           >
             <MenuItem value="">Selecionar</MenuItem>
             {HARASSMENT_CONTEXT_OPTIONS.map((item) => (
@@ -793,7 +904,9 @@ export function CpcaCasesPage() {
             label="Data do fato"
             InputLabelProps={{ shrink: true }}
             value={form.incidentDate}
-            onChange={(e) => setForm((prev) => ({ ...prev, incidentDate: e.target.value }))}
+            onChange={(e) =>
+              setForm((prev) => ({ ...prev, incidentDate: e.target.value }))
+            }
           />
 
           <TextField
@@ -801,8 +914,13 @@ export function CpcaCasesPage() {
             size="small"
             label="Local da ocorrência"
             value={form.occurrenceLocation}
-            onChange={(e) => setForm((prev) => ({ ...prev, occurrenceLocation: e.target.value }))}
-            sx={{ gridColumn: { xs: '1 / -1', md: '1 / -1' } }}
+            onChange={(e) =>
+              setForm((prev) => ({
+                ...prev,
+                occurrenceLocation: e.target.value,
+              }))
+            }
+            sx={{ gridColumn: { xs: "1 / -1", md: "1 / -1" } }}
           >
             <MenuItem value="">Selecionar</MenuItem>
             {OCCURRENCE_LOCATION_OPTIONS.map((item) => (
@@ -817,7 +935,9 @@ export function CpcaCasesPage() {
             size="small"
             label="Posto/grad. acusado"
             value={form.aggressorRank}
-            onChange={(e) => setForm((prev) => ({ ...prev, aggressorRank: e.target.value }))}
+            onChange={(e) =>
+              setForm((prev) => ({ ...prev, aggressorRank: e.target.value }))
+            }
           >
             {rankOptions.map((rank: string) => (
               <MenuItem key={rank} value={rank}>
@@ -831,7 +951,9 @@ export function CpcaCasesPage() {
             size="small"
             label="Sexo do acusado"
             value={form.aggressorGender}
-            onChange={(e) => setForm((prev) => ({ ...prev, aggressorGender: e.target.value }))}
+            onChange={(e) =>
+              setForm((prev) => ({ ...prev, aggressorGender: e.target.value }))
+            }
           >
             {GENDER_OPTIONS.map((item) => (
               <MenuItem key={item.value} value={item.value}>
@@ -845,7 +967,12 @@ export function CpcaCasesPage() {
             size="small"
             label="Faixa etária do acusado"
             value={form.aggressorAgeRange}
-            onChange={(e) => setForm((prev) => ({ ...prev, aggressorAgeRange: e.target.value }))}
+            onChange={(e) =>
+              setForm((prev) => ({
+                ...prev,
+                aggressorAgeRange: e.target.value,
+              }))
+            }
           >
             <MenuItem value="">Selecionar</MenuItem>
             {AGE_RANGE_OPTIONS.map((item) => (
@@ -860,7 +987,9 @@ export function CpcaCasesPage() {
             size="small"
             label="Posto/grad. vítima/noticiante"
             value={form.victimRank}
-            onChange={(e) => setForm((prev) => ({ ...prev, victimRank: e.target.value }))}
+            onChange={(e) =>
+              setForm((prev) => ({ ...prev, victimRank: e.target.value }))
+            }
           >
             {rankOptions.map((rank: string) => (
               <MenuItem key={rank} value={rank}>
@@ -874,7 +1003,9 @@ export function CpcaCasesPage() {
             size="small"
             label="Sexo da vítima/noticiante"
             value={form.victimGender}
-            onChange={(e) => setForm((prev) => ({ ...prev, victimGender: e.target.value }))}
+            onChange={(e) =>
+              setForm((prev) => ({ ...prev, victimGender: e.target.value }))
+            }
           >
             {GENDER_OPTIONS.map((item) => (
               <MenuItem key={item.value} value={item.value}>
@@ -888,7 +1019,9 @@ export function CpcaCasesPage() {
             size="small"
             label="Faixa etária da vítima/noticiante"
             value={form.victimAgeRange}
-            onChange={(e) => setForm((prev) => ({ ...prev, victimAgeRange: e.target.value }))}
+            onChange={(e) =>
+              setForm((prev) => ({ ...prev, victimAgeRange: e.target.value }))
+            }
           >
             <MenuItem value="">Selecionar</MenuItem>
             {AGE_RANGE_OPTIONS.map((item) => (
@@ -903,7 +1036,12 @@ export function CpcaCasesPage() {
             size="small"
             label="Frequência dos fatos"
             value={form.incidentFrequency}
-            onChange={(e) => setForm((prev) => ({ ...prev, incidentFrequency: e.target.value }))}
+            onChange={(e) =>
+              setForm((prev) => ({
+                ...prev,
+                incidentFrequency: e.target.value,
+              }))
+            }
           >
             <MenuItem value="">Selecionar</MenuItem>
             {INCIDENT_FREQUENCY_OPTIONS.map((item) => (
@@ -919,9 +1057,12 @@ export function CpcaCasesPage() {
             label="Relação hierárquica/funcional"
             value={form.hierarchicalFunctionalRelation}
             onChange={(e) =>
-              setForm((prev) => ({ ...prev, hierarchicalFunctionalRelation: e.target.value }))
+              setForm((prev) => ({
+                ...prev,
+                hierarchicalFunctionalRelation: e.target.value,
+              }))
             }
-            sx={{ gridColumn: { xs: '1 / -1', md: '1 / -1' } }}
+            sx={{ gridColumn: { xs: "1 / -1", md: "1 / -1" } }}
           >
             <MenuItem value="">Selecionar</MenuItem>
             {FUNCTIONAL_RELATION_OPTIONS.map((item) => (
@@ -936,8 +1077,10 @@ export function CpcaCasesPage() {
             size="small"
             label="Forma de ocorrência"
             value={form.occurrenceForm}
-            onChange={(e) => setForm((prev) => ({ ...prev, occurrenceForm: e.target.value }))}
-            sx={{ gridColumn: { xs: '1 / -1', md: '1 / -1' } }}
+            onChange={(e) =>
+              setForm((prev) => ({ ...prev, occurrenceForm: e.target.value }))
+            }
+            sx={{ gridColumn: { xs: "1 / -1", md: "1 / -1" } }}
           >
             <MenuItem value="">Selecionar</MenuItem>
             {OCCURRENCE_FORM_OPTIONS.map((item) => (
@@ -953,7 +1096,10 @@ export function CpcaCasesPage() {
             label="Quantidade de evidências"
             value={form.evidenceCount}
             onChange={(e) =>
-              setForm((prev) => ({ ...prev, evidenceCount: Number(e.target.value) || 0 }))
+              setForm((prev) => ({
+                ...prev,
+                evidenceCount: Number(e.target.value) || 0,
+              }))
             }
             inputProps={{ min: 0 }}
           />
@@ -964,10 +1110,12 @@ export function CpcaCasesPage() {
             size="small"
             label="Resumo de evidências"
             value={form.evidenceSummary}
-            onChange={(e) => setForm((prev) => ({ ...prev, evidenceSummary: e.target.value }))}
+            onChange={(e) =>
+              setForm((prev) => ({ ...prev, evidenceSummary: e.target.value }))
+            }
             multiline
             minRows={6}
-            sx={{ gridColumn: { xs: '1 / -1', md: '1 / -1' } }}
+            sx={{ gridColumn: { xs: "1 / -1", md: "1 / -1" } }}
             helperText="Descreva contexto, canal, datas e material coletado (sem nomes)."
           />
         </Box>
@@ -982,23 +1130,31 @@ export function CpcaCasesPage() {
             label="Ações imediatas de acolhimento e proteção"
             value={form.immediateProtectionMeasures}
             onChange={(e) =>
-              setForm((prev) => ({ ...prev, immediateProtectionMeasures: e.target.value }))
+              setForm((prev) => ({
+                ...prev,
+                immediateProtectionMeasures: e.target.value,
+              }))
             }
             fullWidth
             multiline
             minRows={4}
           />
 
-          {form.complaintType === 'SEXUAL' && !form.confidentialityTermSigned && (
-            <Alert severity="warning">
-              Em assédio sexual, o termo de sigilo deve ser marcado antes de salvar.
-            </Alert>
-          )}
+          {complaintTypeForValidation === "SEXUAL" &&
+            !form.confidentialityTermSigned && (
+              <Alert severity="warning">
+                Em assédio sexual, o termo de sigilo deve ser marcado antes de
+                salvar.
+              </Alert>
+            )}
 
           <Box
             sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' },
+              display: "grid",
+              gridTemplateColumns: {
+                xs: "1fr",
+                md: "repeat(2, minmax(0, 1fr))",
+              },
               gap: 0.8,
             }}
           >
@@ -1021,7 +1177,10 @@ export function CpcaCasesPage() {
                 <Switch
                   checked={form.medicalSupportProvided}
                   onChange={(e) =>
-                    setForm((prev) => ({ ...prev, medicalSupportProvided: e.target.checked }))
+                    setForm((prev) => ({
+                      ...prev,
+                      medicalSupportProvided: e.target.checked,
+                    }))
                   }
                 />
               }
@@ -1032,7 +1191,10 @@ export function CpcaCasesPage() {
                 <Switch
                   checked={form.socialSupportProvided}
                   onChange={(e) =>
-                    setForm((prev) => ({ ...prev, socialSupportProvided: e.target.checked }))
+                    setForm((prev) => ({
+                      ...prev,
+                      socialSupportProvided: e.target.checked,
+                    }))
                   }
                 />
               }
@@ -1043,7 +1205,10 @@ export function CpcaCasesPage() {
                 <Switch
                   checked={form.legalSupportProvided}
                   onChange={(e) =>
-                    setForm((prev) => ({ ...prev, legalSupportProvided: e.target.checked }))
+                    setForm((prev) => ({
+                      ...prev,
+                      legalSupportProvided: e.target.checked,
+                    }))
                   }
                 />
               }
@@ -1054,7 +1219,10 @@ export function CpcaCasesPage() {
                 <Switch
                   checked={form.contactRestrictionApplied}
                   onChange={(e) =>
-                    setForm((prev) => ({ ...prev, contactRestrictionApplied: e.target.checked }))
+                    setForm((prev) => ({
+                      ...prev,
+                      contactRestrictionApplied: e.target.checked,
+                    }))
                   }
                 />
               }
@@ -1065,7 +1233,10 @@ export function CpcaCasesPage() {
                 <Switch
                   checked={form.confidentialityTermSigned}
                   onChange={(e) =>
-                    setForm((prev) => ({ ...prev, confidentialityTermSigned: e.target.checked }))
+                    setForm((prev) => ({
+                      ...prev,
+                      confidentialityTermSigned: e.target.checked,
+                    }))
                   }
                 />
               }
@@ -1081,8 +1252,11 @@ export function CpcaCasesPage() {
         <Stack spacing={1.2}>
           <Box
             sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' },
+              display: "grid",
+              gridTemplateColumns: {
+                xs: "1fr",
+                md: "repeat(2, minmax(0, 1fr))",
+              },
               gap: 1.2,
             }}
           >
@@ -1091,7 +1265,9 @@ export function CpcaCasesPage() {
               size="small"
               label="Status da triagem/apuração"
               value={form.status}
-              onChange={(e) => setForm((prev) => ({ ...prev, status: e.target.value }))}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, status: e.target.value }))
+              }
             >
               {statusOptionsForStep(2, form.status).map((item) => (
                 <MenuItem key={item.value} value={item.value}>
@@ -1105,12 +1281,14 @@ export function CpcaCasesPage() {
               size="small"
               label="Procedimento administrativo"
               value={form.procedureType}
-              onChange={(e) => setForm((prev) => ({ ...prev, procedureType: e.target.value }))}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, procedureType: e.target.value }))
+              }
             >
               {PROCEDURE_OPTIONS.map((item) => (
                 <MenuItem key={item.value} value={item.value}>
-                {item.label}
-              </MenuItem>
+                  {item.label}
+                </MenuItem>
               ))}
             </TextField>
 
@@ -1120,7 +1298,10 @@ export function CpcaCasesPage() {
               label="Situação atual do procedimento"
               value={form.procedureCurrentSituation}
               onChange={(e) =>
-                setForm((prev) => ({ ...prev, procedureCurrentSituation: e.target.value }))
+                setForm((prev) => ({
+                  ...prev,
+                  procedureCurrentSituation: e.target.value,
+                }))
               }
             >
               <MenuItem value="">Selecionar</MenuItem>
@@ -1136,11 +1317,16 @@ export function CpcaCasesPage() {
             size="small"
             label="Referência do processo"
             value={form.procedureReference}
-            onChange={(e) => setForm((prev) => ({ ...prev, procedureReference: e.target.value }))}
+            onChange={(e) =>
+              setForm((prev) => ({
+                ...prev,
+                procedureReference: e.target.value,
+              }))
+            }
             fullWidth
           />
 
-          <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
+          <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
             <TextField
               size="small"
               type="date"
@@ -1165,8 +1351,8 @@ export function CpcaCasesPage() {
       <Stack spacing={1.2}>
         <Box
           sx={{
-            display: 'grid',
-            gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' },
+            display: "grid",
+            gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" },
             gap: 1.2,
           }}
         >
@@ -1175,14 +1361,20 @@ export function CpcaCasesPage() {
             size="small"
             label="Status de conclusão"
             value={form.status}
-            onChange={(e) => setForm((prev) => ({ ...prev, status: e.target.value }))}
+            onChange={(e) =>
+              setForm((prev) => ({ ...prev, status: e.target.value }))
+            }
           >
             {statusOptionsForStep(3, form.status)
-              .filter((item) => !isCreateMode || !['CONCLUDED', 'ARCHIVED'].includes(item.value))
+              .filter(
+                (item) =>
+                  !isCreateMode ||
+                  !["CONCLUDED", "ARCHIVED"].includes(item.value),
+              )
               .map((item) => (
-              <MenuItem key={item.value} value={item.value}>
-                {item.label}
-              </MenuItem>
+                <MenuItem key={item.value} value={item.value}>
+                  {item.label}
+                </MenuItem>
               ))}
           </TextField>
 
@@ -1192,18 +1384,18 @@ export function CpcaCasesPage() {
             label="Medida de separação vítima/acusado"
             value={
               form.victimAccusedSeparationApplied
-                ? 'APLICADA'
+                ? "APLICADA"
                 : form.victimAccusedSeparationEvaluated
-                  ? 'AVALIADA_NAO_APLICADA'
-                  : 'NAO_AVALIADA'
+                  ? "AVALIADA_NAO_APLICADA"
+                  : "NAO_AVALIADA"
             }
             onChange={(e) => {
               const value = e.target.value;
               setForm((prev) => ({
                 ...prev,
                 victimAccusedSeparationEvaluated:
-                  value === 'AVALIADA_NAO_APLICADA' || value === 'APLICADA',
-                victimAccusedSeparationApplied: value === 'APLICADA',
+                  value === "AVALIADA_NAO_APLICADA" || value === "APLICADA",
+                victimAccusedSeparationApplied: value === "APLICADA",
               }));
             }}
           >
@@ -1217,8 +1409,8 @@ export function CpcaCasesPage() {
 
         <Box
           sx={{
-            display: 'grid',
-            gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' },
+            display: "grid",
+            gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" },
             gap: 0.8,
           }}
         >
@@ -1227,7 +1419,10 @@ export function CpcaCasesPage() {
               <Switch
                 checked={form.accusedDefenseEnsured}
                 onChange={(e) =>
-                  setForm((prev) => ({ ...prev, accusedDefenseEnsured: e.target.checked }))
+                  setForm((prev) => ({
+                    ...prev,
+                    accusedDefenseEnsured: e.target.checked,
+                  }))
                 }
               />
             }
@@ -1237,8 +1432,8 @@ export function CpcaCasesPage() {
 
         <Box
           sx={{
-            display: 'grid',
-            gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' },
+            display: "grid",
+            gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" },
             gap: 1.2,
           }}
         >
@@ -1252,8 +1447,8 @@ export function CpcaCasesPage() {
                 ...prev,
                 retaliationReported: e.target.value,
                 retaliationAgainst:
-                  e.target.value === 'NAO'
-                    ? 'NAO_OCORREU_RETALIACAO'
+                  e.target.value === "NAO"
+                    ? "NAO_OCORREU_RETALIACAO"
                     : prev.retaliationAgainst,
               }))
             }
@@ -1271,7 +1466,10 @@ export function CpcaCasesPage() {
             label="Ocorreu retaliação contra quem?"
             value={form.retaliationAgainst}
             onChange={(e) =>
-              setForm((prev) => ({ ...prev, retaliationAgainst: e.target.value }))
+              setForm((prev) => ({
+                ...prev,
+                retaliationAgainst: e.target.value,
+              }))
             }
           >
             <MenuItem value="">Selecionar</MenuItem>
@@ -1283,19 +1481,21 @@ export function CpcaCasesPage() {
           </TextField>
         </Box>
 
-        {form.retaliationReported === 'SIM' && (
+        {form.retaliationReported === "SIM" && (
           <TextField
             size="small"
             label="Observações sobre retaliação"
             value={form.retaliationNotes}
-            onChange={(e) => setForm((prev) => ({ ...prev, retaliationNotes: e.target.value }))}
+            onChange={(e) =>
+              setForm((prev) => ({ ...prev, retaliationNotes: e.target.value }))
+            }
             fullWidth
             multiline
             minRows={2}
           />
         )}
 
-        <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
+        <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
           <FormControlLabel
             control={
               <Switch
@@ -1306,10 +1506,10 @@ export function CpcaCasesPage() {
                     outsourcedAccused: e.target.checked,
                     contractorReferralDate: e.target.checked
                       ? prev.contractorReferralDate
-                      : '',
+                      : "",
                     contractorFollowUpNotes: e.target.checked
                       ? prev.contractorFollowUpNotes
-                      : '',
+                      : "",
                   }))
                 }
               />
@@ -1324,7 +1524,10 @@ export function CpcaCasesPage() {
             InputLabelProps={{ shrink: true }}
             value={form.contractorReferralDate}
             onChange={(e) =>
-              setForm((prev) => ({ ...prev, contractorReferralDate: e.target.value }))
+              setForm((prev) => ({
+                ...prev,
+                contractorReferralDate: e.target.value,
+              }))
             }
             disabled={!form.outsourcedAccused}
             sx={{ minWidth: 240 }}
@@ -1337,7 +1540,10 @@ export function CpcaCasesPage() {
             label="Acompanhamento do trâmite com contratante"
             value={form.contractorFollowUpNotes}
             onChange={(e) =>
-              setForm((prev) => ({ ...prev, contractorFollowUpNotes: e.target.value }))
+              setForm((prev) => ({
+                ...prev,
+                contractorFollowUpNotes: e.target.value,
+              }))
             }
             fullWidth
             multiline
@@ -1347,8 +1553,8 @@ export function CpcaCasesPage() {
 
         <Box
           sx={{
-            display: 'grid',
-            gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' },
+            display: "grid",
+            gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" },
             gap: 1.2,
           }}
         >
@@ -1359,7 +1565,10 @@ export function CpcaCasesPage() {
             InputLabelProps={{ shrink: true }}
             value={form.notifierFeedbackDate}
             onChange={(e) =>
-              setForm((prev) => ({ ...prev, notifierFeedbackDate: e.target.value }))
+              setForm((prev) => ({
+                ...prev,
+                notifierFeedbackDate: e.target.value,
+              }))
             }
           />
           <TextField
@@ -1369,7 +1578,10 @@ export function CpcaCasesPage() {
             InputLabelProps={{ shrink: true }}
             value={form.victimFeedbackDate}
             onChange={(e) =>
-              setForm((prev) => ({ ...prev, victimFeedbackDate: e.target.value }))
+              setForm((prev) => ({
+                ...prev,
+                victimFeedbackDate: e.target.value,
+              }))
             }
           />
         </Box>
@@ -1378,7 +1590,9 @@ export function CpcaCasesPage() {
           size="small"
           label="Síntese do resultado"
           value={form.outcomeSummary}
-          onChange={(e) => setForm((prev) => ({ ...prev, outcomeSummary: e.target.value }))}
+          onChange={(e) =>
+            setForm((prev) => ({ ...prev, outcomeSummary: e.target.value }))
+          }
           fullWidth
           multiline
           minRows={4}
@@ -1389,7 +1603,9 @@ export function CpcaCasesPage() {
             size="small"
             label="Justificativa da mudança de status/procedimento"
             value={form.statusChangeNote}
-            onChange={(e) => setForm((prev) => ({ ...prev, statusChangeNote: e.target.value }))}
+            onChange={(e) =>
+              setForm((prev) => ({ ...prev, statusChangeNote: e.target.value }))
+            }
             fullWidth
             multiline
             minRows={2}
@@ -1402,9 +1618,9 @@ export function CpcaCasesPage() {
   return (
     <Box>
       <Stack
-        direction={{ xs: 'column', md: 'row' }}
+        direction={{ xs: "column", md: "row" }}
         justifyContent="space-between"
-        alignItems={{ xs: 'stretch', md: 'center' }}
+        alignItems={{ xs: "stretch", md: "center" }}
         mb={2}
         gap={1.2}
       >
@@ -1423,41 +1639,47 @@ export function CpcaCasesPage() {
 
       <Card sx={{ mb: 2 }}>
         <CardContent>
-          <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} flexWrap="wrap">
+          <Stack
+            direction={{ xs: "column", md: "row" }}
+            spacing={1}
+            flexWrap="wrap"
+          >
             <TextField
               size="small"
               label="Número do caso"
               value={q}
-              onChange={(e) => updateParam('q', e.target.value)}
+              onChange={(e) => updateParam("q", e.target.value)}
               sx={{ minWidth: 200 }}
             />
             {isNationalScope && (
-                <TextField
-                  select
-                  size="small"
-                  label="OM"
-                  value={localityId}
-                  onChange={(e) => updateParam('localityId', e.target.value)}
-                  sx={{ minWidth: 220 }}
-                >
-                  <MenuItem value="">Todas</MenuItem>
-                  {localities.map((loc: any) => (
-                    <MenuItem key={loc.id} value={loc.id}>
-                      {formatOmLabel(loc)}
-                    </MenuItem>
-                  ))}
-                </TextField>
+              <TextField
+                select
+                size="small"
+                label="OM"
+                value={localityId}
+                onChange={(e) => updateParam("localityId", e.target.value)}
+                sx={{ minWidth: 220 }}
+              >
+                <MenuItem value="">Todas</MenuItem>
+                {localities.map((loc: any) => (
+                  <MenuItem key={loc.id} value={loc.id}>
+                    {formatOmLabel(loc)}
+                  </MenuItem>
+                ))}
+              </TextField>
             )}
             <TextField
               select
               size="small"
-              label="Tipo"
-              value={complaintType}
-              onChange={(e) => updateParam('complaintType', e.target.value)}
-              sx={{ minWidth: 170 }}
+              label="Tipo de assédio ou violência"
+              value={detailedViolenceType}
+              onChange={(e) =>
+                updateParam("detailedViolenceType", e.target.value)
+              }
+              sx={{ minWidth: 280 }}
             >
               <MenuItem value="">Todos</MenuItem>
-              {COMPLAINT_TYPE_OPTIONS.map((item) => (
+              {DETAILED_VIOLENCE_TYPE_OPTIONS.map((item) => (
                 <MenuItem key={item.value} value={item.value}>
                   {item.label}
                 </MenuItem>
@@ -1468,7 +1690,7 @@ export function CpcaCasesPage() {
               size="small"
               label="Status"
               value={status}
-              onChange={(e) => updateParam('status', e.target.value)}
+              onChange={(e) => updateParam("status", e.target.value)}
               sx={{ minWidth: 200 }}
             >
               <MenuItem value="">Todos</MenuItem>
@@ -1483,7 +1705,7 @@ export function CpcaCasesPage() {
               size="small"
               label="Procedimento administrativo"
               value={procedureType}
-              onChange={(e) => updateParam('procedureType', e.target.value)}
+              onChange={(e) => updateParam("procedureType", e.target.value)}
               sx={{ minWidth: 180 }}
             >
               <MenuItem value="">Todos</MenuItem>
@@ -1510,13 +1732,25 @@ export function CpcaCasesPage() {
           ) : (
             <Table size="small">
               <TableHead>
-                <TableRow sx={{ bgcolor: 'primary.main' }}>
-                  <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Caso</TableCell>
-                  <TableCell sx={{ color: '#fff', fontWeight: 700 }}>OM</TableCell>
-                  <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Tipo</TableCell>
-                  <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Status</TableCell>
-                  <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Procedimento administrativo</TableCell>
-                  <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Recebimento</TableCell>
+                <TableRow sx={{ bgcolor: "primary.main" }}>
+                  <TableCell sx={{ color: "#fff", fontWeight: 700 }}>
+                    Caso
+                  </TableCell>
+                  <TableCell sx={{ color: "#fff", fontWeight: 700 }}>
+                    OM
+                  </TableCell>
+                  <TableCell sx={{ color: "#fff", fontWeight: 700 }}>
+                    Tipo
+                  </TableCell>
+                  <TableCell sx={{ color: "#fff", fontWeight: 700 }}>
+                    Status
+                  </TableCell>
+                  <TableCell sx={{ color: "#fff", fontWeight: 700 }}>
+                    Procedimento administrativo
+                  </TableCell>
+                  <TableCell sx={{ color: "#fff", fontWeight: 700 }}>
+                    Recebimento
+                  </TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -1528,44 +1762,51 @@ export function CpcaCasesPage() {
                     tabIndex={0}
                     onClick={() => openDetails(item.id)}
                     onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
+                      if (event.key === "Enter" || event.key === " ") {
                         event.preventDefault();
                         openDetails(item.id);
                       }
                     }}
-                    sx={{ cursor: 'pointer' }}
+                    sx={{ cursor: "pointer" }}
                   >
                     <TableCell>
-                      <Typography fontWeight={700}>{item.caseNumber}</Typography>
+                      <Typography fontWeight={700}>
+                        {item.caseNumber}
+                      </Typography>
                       {item.lastCommentAt && (
                         <Typography variant="caption" color="text.secondary">
-                          Último comentário: {new Date(item.lastCommentAt).toLocaleString('pt-BR')}
+                          Último comentário:{" "}
+                          {new Date(item.lastCommentAt).toLocaleString("pt-BR")}
                         </Typography>
                       )}
                     </TableCell>
                     <TableCell>{formatOmLabel(item.locality)}</TableCell>
                     <TableCell>
-                      {COMPLAINT_TYPE_OPTIONS.find(
-                        (entry) => entry.value === item.complaintType,
-                      )?.label ?? item.complaintType}
+                      {getDetailedViolenceTypeLabel(
+                        item.detailedViolenceType,
+                      ) ??
+                        getComplaintTypeLabel(item.complaintType) ??
+                        "-"}
                     </TableCell>
                     <TableCell>
                       <Chip
                         size="small"
                         label={
-                          STATUS_OPTIONS.find((entry) => entry.value === item.status)?.label ??
-                          item.status
+                          STATUS_OPTIONS.find(
+                            (entry) => entry.value === item.status,
+                          )?.label ?? item.status
                         }
                       />
                     </TableCell>
                     <TableCell>
-                      {PROCEDURE_OPTIONS.find((entry) => entry.value === item.procedureType)
-                        ?.label ?? item.procedureType}
+                      {PROCEDURE_OPTIONS.find(
+                        (entry) => entry.value === item.procedureType,
+                      )?.label ?? item.procedureType}
                     </TableCell>
                     <TableCell>
                       {item.reportedAt
-                        ? new Date(item.reportedAt).toLocaleDateString('pt-BR')
-                        : '-'}
+                        ? new Date(item.reportedAt).toLocaleDateString("pt-BR")
+                        : "-"}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -1581,18 +1822,23 @@ export function CpcaCasesPage() {
         onClose={closeDrawer}
         PaperProps={{
           sx: {
-            width: { xs: '100%', md: 900 },
+            width: { xs: "100%", md: 900 },
             top: 84,
-            height: 'calc(100% - 84px)',
+            height: "calc(100% - 84px)",
           },
         }}
       >
-        <Box p={3} sx={{ height: '100%', overflowY: 'auto' }}>
-          <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}>
+        <Box p={3} sx={{ height: "100%", overflowY: "auto" }}>
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="center"
+            mb={1}
+          >
             <Typography variant="h6" fontWeight={700}>
               {isCreateMode
-                ? 'Nova notificação CPCA'
-                : `Caso ${selectedCaseQuery.data?.caseNumber ?? ''}`}
+                ? "Nova notificação CPCA"
+                : `Caso ${selectedCaseQuery.data?.caseNumber ?? ""}`}
             </Typography>
             <Button variant="text" onClick={closeDrawer}>
               Fechar
@@ -1600,21 +1846,28 @@ export function CpcaCasesPage() {
           </Stack>
 
           <Alert severity="warning" sx={{ mb: 2 }}>
-            Registrar apenas dados genéricos (sem nomes). Acesso restrito a CPCA, Coordenação
-            CIPAVD e COMGEP.
+            Registrar apenas dados genéricos (sem nomes). Acesso restrito a
+            CPCA, Coordenação CIPAVD e COMGEP.
           </Alert>
 
           {!isCreateMode && selectedCaseQuery.isLoading && <SkeletonState />}
           {!isCreateMode && selectedCaseQuery.isError && (
-            <ErrorState error={selectedCaseQuery.error} onRetry={() => selectedCaseQuery.refetch()} />
+            <ErrorState
+              error={selectedCaseQuery.error}
+              onRetry={() => selectedCaseQuery.refetch()}
+            />
           )}
 
           {(isCreateMode || selectedCaseQuery.data) && (
             <Stack spacing={2}>
               <Card>
                 <CardContent>
-                  <Box sx={{ overflowX: 'auto', pb: 0.5 }}>
-                    <Stepper nonLinear activeStep={activeStep} sx={{ minWidth: 760 }}>
+                  <Box sx={{ overflowX: "auto", pb: 0.5 }}>
+                    <Stepper
+                      nonLinear
+                      activeStep={activeStep}
+                      sx={{ minWidth: 760 }}
+                    >
                       {STEP_DEFS.map((step, index) => (
                         <Step key={step.title}>
                           <StepButton
@@ -1635,20 +1888,32 @@ export function CpcaCasesPage() {
                   <Typography variant="body2" color="text.secondary" mb={1.5}>
                     {STEP_DEFS[activeStep].subtitle}
                   </Typography>
-                  {activeStep < STEP_DEFS.length - 1 && activeStep >= maxUnlockedStep && (
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.2 }}>
-                      Preencha ao menos um campo útil desta etapa para liberar a próxima e atualizar o status.
-                    </Typography>
-                  )}
+                  {activeStep < STEP_DEFS.length - 1 &&
+                    activeStep >= maxUnlockedStep && (
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ display: "block", mb: 1.2 }}
+                      >
+                        Preencha ao menos um campo útil desta etapa para liberar
+                        a próxima e atualizar o status.
+                      </Typography>
+                    )}
 
                   {renderStepContent()}
 
                   <Divider sx={{ my: 2 }} />
 
-                  <Stack direction="row" justifyContent="space-between" alignItems="center">
+                  <Stack
+                    direction="row"
+                    justifyContent="space-between"
+                    alignItems="center"
+                  >
                     <Button
                       variant="outlined"
-                      onClick={() => setActiveStep((prev) => Math.max(0, prev - 1))}
+                      onClick={() =>
+                        setActiveStep((prev) => Math.max(0, prev - 1))
+                      }
                       disabled={activeStep === 0}
                     >
                       Etapa anterior
@@ -1663,7 +1928,8 @@ export function CpcaCasesPage() {
                           )
                         }
                         disabled={
-                          activeStep === STEP_DEFS.length - 1 || activeStep >= maxUnlockedStep
+                          activeStep === STEP_DEFS.length - 1 ||
+                          activeStep >= maxUnlockedStep
                         }
                       >
                         Próxima etapa
@@ -1673,7 +1939,9 @@ export function CpcaCasesPage() {
                         onClick={saveCase}
                         disabled={createCase.isPending || updateCase.isPending}
                       >
-                        {isCreateMode ? 'Criar notificação' : 'Salvar alterações'}
+                        {isCreateMode
+                          ? "Criar notificação"
+                          : "Salvar alterações"}
                       </Button>
                     </Stack>
                   </Stack>
@@ -1686,50 +1954,66 @@ export function CpcaCasesPage() {
                     <Typography variant="subtitle1" fontWeight={700} mb={1}>
                       Histórico de status e procedimento
                     </Typography>
-                    {(selectedCaseQuery.data.statusHistory ?? []).length === 0 ? (
+                    {(selectedCaseQuery.data.statusHistory ?? []).length ===
+                    0 ? (
                       <Typography variant="body2" color="text.secondary">
                         Sem mudanças registradas.
                       </Typography>
                     ) : (
                       <Stack spacing={1}>
-                        {(selectedCaseQuery.data.statusHistory ?? []).map((entry: any) => (
-                          <Box
-                            key={entry.id}
-                            sx={{
-                              border: '1px solid',
-                              borderColor: 'divider',
-                              borderRadius: 1,
-                              p: 1,
-                            }}
-                          >
-                            <Typography variant="body2">
-                              {STATUS_OPTIONS.find((item) => item.value === entry.fromStatus)
-                                ?.label ?? entry.fromStatus ?? 'Inicial'}
-                              {' -> '}
-                              {STATUS_OPTIONS.find((item) => item.value === entry.toStatus)
-                                ?.label ?? entry.toStatus}
-                              {' | '}
-                              {PROCEDURE_OPTIONS.find((item) => item.value === entry.fromProcedure)
-                                ?.label ?? entry.fromProcedure ?? 'Inicial'}
-                              {' -> '}
-                              {PROCEDURE_OPTIONS.find((item) => item.value === entry.toProcedure)
-                                ?.label ?? entry.toProcedure}
-                            </Typography>
-                            {entry.note && (
-                              <Typography
-                                variant="body2"
-                                color="text.secondary"
-                                sx={{ mt: 0.5, whiteSpace: 'pre-wrap' }}
-                              >
-                                {entry.note}
+                        {(selectedCaseQuery.data.statusHistory ?? []).map(
+                          (entry: any) => (
+                            <Box
+                              key={entry.id}
+                              sx={{
+                                border: "1px solid",
+                                borderColor: "divider",
+                                borderRadius: 1,
+                                p: 1,
+                              }}
+                            >
+                              <Typography variant="body2">
+                                {STATUS_OPTIONS.find(
+                                  (item) => item.value === entry.fromStatus,
+                                )?.label ??
+                                  entry.fromStatus ??
+                                  "Inicial"}
+                                {" -> "}
+                                {STATUS_OPTIONS.find(
+                                  (item) => item.value === entry.toStatus,
+                                )?.label ?? entry.toStatus}
+                                {" | "}
+                                {PROCEDURE_OPTIONS.find(
+                                  (item) => item.value === entry.fromProcedure,
+                                )?.label ??
+                                  entry.fromProcedure ??
+                                  "Inicial"}
+                                {" -> "}
+                                {PROCEDURE_OPTIONS.find(
+                                  (item) => item.value === entry.toProcedure,
+                                )?.label ?? entry.toProcedure}
                               </Typography>
-                            )}
-                            <Typography variant="caption" color="text.secondary">
-                              {entry.changedBy?.name ?? 'Usuário'} •{' '}
-                              {new Date(entry.changedAt).toLocaleString('pt-BR')}
-                            </Typography>
-                          </Box>
-                        ))}
+                              {entry.note && (
+                                <Typography
+                                  variant="body2"
+                                  color="text.secondary"
+                                  sx={{ mt: 0.5, whiteSpace: "pre-wrap" }}
+                                >
+                                  {entry.note}
+                                </Typography>
+                              )}
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                              >
+                                {entry.changedBy?.name ?? "Usuário"} •{" "}
+                                {new Date(entry.changedAt).toLocaleString(
+                                  "pt-BR",
+                                )}
+                              </Typography>
+                            </Box>
+                          ),
+                        )}
                       </Stack>
                     )}
                   </CardContent>
@@ -1748,25 +2032,35 @@ export function CpcaCasesPage() {
                       </Typography>
                     ) : (
                       <Stack spacing={1} sx={{ mb: 1.5 }}>
-                        {(selectedCaseQuery.data.comments ?? []).map((comment: any) => (
-                          <Box
-                            key={comment.id}
-                            sx={{
-                              border: '1px solid',
-                              borderColor: 'divider',
-                              borderRadius: 1,
-                              p: 1,
-                            }}
-                          >
-                            <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
-                              {comment.text}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              {comment.createdBy?.name ?? 'Usuário'} •{' '}
-                              {new Date(comment.createdAt).toLocaleString('pt-BR')}
-                            </Typography>
-                          </Box>
-                        ))}
+                        {(selectedCaseQuery.data.comments ?? []).map(
+                          (comment: any) => (
+                            <Box
+                              key={comment.id}
+                              sx={{
+                                border: "1px solid",
+                                borderColor: "divider",
+                                borderRadius: 1,
+                                p: 1,
+                              }}
+                            >
+                              <Typography
+                                variant="body2"
+                                sx={{ whiteSpace: "pre-wrap" }}
+                              >
+                                {comment.text}
+                              </Typography>
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                              >
+                                {comment.createdBy?.name ?? "Usuário"} •{" "}
+                                {new Date(comment.createdAt).toLocaleString(
+                                  "pt-BR",
+                                )}
+                              </Typography>
+                            </Box>
+                          ),
+                        )}
                       </Stack>
                     )}
                     <Divider sx={{ mb: 1 }} />

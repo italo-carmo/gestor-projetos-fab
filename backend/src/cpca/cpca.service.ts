@@ -70,6 +70,7 @@ export class CpcaService {
       localityId?: string;
       status?: string;
       complaintType?: string;
+      detailedViolenceType?: string;
       procedureType?: string;
       q?: string;
       page?: string;
@@ -81,7 +82,11 @@ export class CpcaService {
     const where: any = {};
 
     if (filters.localityId) where.localityId = filters.localityId;
-    if (constraints.localityId && filters.localityId && constraints.localityId !== filters.localityId) {
+    if (
+      constraints.localityId &&
+      filters.localityId &&
+      constraints.localityId !== filters.localityId
+    ) {
       where.localityId = '__none__';
     } else if (constraints.localityId) {
       where.localityId = constraints.localityId;
@@ -89,12 +94,17 @@ export class CpcaService {
 
     if (filters.status) where.status = filters.status;
     if (filters.complaintType) where.complaintType = filters.complaintType;
+    if (filters.detailedViolenceType)
+      where.detailedViolenceType = filters.detailedViolenceType;
     if (filters.procedureType) where.procedureType = filters.procedureType;
     if (filters.q) {
       where.caseNumber = { contains: filters.q.trim(), mode: 'insensitive' };
     }
 
-    const { page, pageSize, skip, take } = parsePagination(filters.page, filters.pageSize);
+    const { page, pageSize, skip, take } = parsePagination(
+      filters.page,
+      filters.pageSize,
+    );
 
     const complaintModel = (this.prisma as any).cpcComplaintCase;
 
@@ -140,7 +150,11 @@ export class CpcaService {
     const where: any = {};
 
     if (filters.localityId) where.localityId = filters.localityId;
-    if (constraints.localityId && filters.localityId && constraints.localityId !== filters.localityId) {
+    if (
+      constraints.localityId &&
+      filters.localityId &&
+      constraints.localityId !== filters.localityId
+    ) {
       where.localityId = '__none__';
     } else if (constraints.localityId) {
       where.localityId = constraints.localityId;
@@ -149,7 +163,10 @@ export class CpcaService {
     const fromDate = this.parseDateBoundary(filters.from, 'from', false);
     const toDate = this.parseDateBoundary(filters.to, 'to', true);
     if (fromDate && toDate && fromDate.getTime() > toDate.getTime()) {
-      throwError('VALIDATION_ERROR', { field: 'from', reason: 'INVALID_DATE_RANGE' });
+      throwError('VALIDATION_ERROR', {
+        field: 'from',
+        reason: 'INVALID_DATE_RANGE',
+      });
     }
     if (fromDate || toDate) {
       where.reportedAt = {};
@@ -173,7 +190,10 @@ export class CpcaService {
         archivedAt: true,
         retaliationRisk: true,
         aggressorRank: true,
+        aggressorAgeRange: true,
         victimRank: true,
+        victimAgeRange: true,
+        detailedViolenceType: true,
         locality: {
           select: {
             id: true,
@@ -184,11 +204,18 @@ export class CpcaService {
       },
     });
 
-    const statusCounter = new Map<string, number>(CPCA_STATUS_ORDER.map((status) => [status, 0]));
-    const procedureCounter = new Map<string, number>(CPCA_PROCEDURE_ORDER.map((proc) => [proc, 0]));
+    const statusCounter = new Map<string, number>(
+      CPCA_STATUS_ORDER.map((status) => [status, 0]),
+    );
+    const procedureCounter = new Map<string, number>(
+      CPCA_PROCEDURE_ORDER.map((proc) => [proc, 0]),
+    );
     const complaintTypeCounter = new Map<string, number>(
       CPCA_COMPLAINT_TYPE_ORDER.map((type) => [type, 0]),
     );
+    const detailedTypeCounter = new Map<string, number>();
+    const aggressorAgeRangeCounter = new Map<string, number>();
+    const victimAgeRangeCounter = new Map<string, number>();
 
     if (!items.length) {
       return {
@@ -214,20 +241,27 @@ export class CpcaService {
           stalledOver60Days: 0,
           noUpdateOver14Days: 0,
         },
-        statusDistribution: Array.from(statusCounter.entries()).map(([status, count]) => ({
-          status,
-          count,
-        })),
-        procedureDistribution: Array.from(procedureCounter.entries()).map(([procedureType, count]) => ({
-          procedureType,
-          count,
-        })),
-        complaintTypeDistribution: Array.from(complaintTypeCounter.entries()).map(
-          ([complaintType, count]) => ({
-            complaintType,
+        statusDistribution: Array.from(statusCounter.entries()).map(
+          ([status, count]) => ({
+            status,
             count,
           }),
         ),
+        procedureDistribution: Array.from(procedureCounter.entries()).map(
+          ([procedureType, count]) => ({
+            procedureType,
+            count,
+          }),
+        ),
+        complaintTypeDistribution: Array.from(
+          complaintTypeCounter.entries(),
+        ).map(([complaintType, count]) => ({
+          complaintType,
+          count,
+        })),
+        detailedTypeDistribution: [],
+        aggressorAgeRangeDistribution: [],
+        victimAgeRangeDistribution: [],
         monthlyTrend: [],
         openByAgeBuckets: [
           { bucket: '0-7', count: 0 },
@@ -259,7 +293,10 @@ export class CpcaService {
     for (const entry of closureTransitions ?? []) {
       const complaintCaseId = String(entry.complaintCaseId ?? '');
       if (!complaintCaseId || closedAtByCaseId.has(complaintCaseId)) continue;
-      if (entry.changedAt instanceof Date && !Number.isNaN(entry.changedAt.getTime())) {
+      if (
+        entry.changedAt instanceof Date &&
+        !Number.isNaN(entry.changedAt.getTime())
+      ) {
         closedAtByCaseId.set(complaintCaseId, entry.changedAt);
       }
     }
@@ -267,7 +304,13 @@ export class CpcaService {
     const now = new Date();
     const monthCounter = new Map<
       string,
-      { month: string; total: number; moral: number; sexual: number; open: number }
+      {
+        month: string;
+        total: number;
+        moral: number;
+        sexual: number;
+        open: number;
+      }
     >();
     const localityCounter = new Map<
       string,
@@ -300,6 +343,7 @@ export class CpcaService {
       localityName: string;
       status: string;
       complaintType: string;
+      detailedViolenceType: string;
       reportedAt: string;
       openDays: number;
       idleDays: number;
@@ -322,10 +366,37 @@ export class CpcaService {
       const status = String(item.status ?? '');
       const procedureType = String(item.procedureType ?? '');
       const complaintType = String(item.complaintType ?? '');
+      const detailedViolenceType = String(item.detailedViolenceType ?? '');
 
       statusCounter.set(status, (statusCounter.get(status) ?? 0) + 1);
-      procedureCounter.set(procedureType, (procedureCounter.get(procedureType) ?? 0) + 1);
-      complaintTypeCounter.set(complaintType, (complaintTypeCounter.get(complaintType) ?? 0) + 1);
+      procedureCounter.set(
+        procedureType,
+        (procedureCounter.get(procedureType) ?? 0) + 1,
+      );
+      complaintTypeCounter.set(
+        complaintType,
+        (complaintTypeCounter.get(complaintType) ?? 0) + 1,
+      );
+      if (detailedViolenceType) {
+        detailedTypeCounter.set(
+          detailedViolenceType,
+          (detailedTypeCounter.get(detailedViolenceType) ?? 0) + 1,
+        );
+      }
+      if (item.aggressorAgeRange) {
+        const key = String(item.aggressorAgeRange);
+        aggressorAgeRangeCounter.set(
+          key,
+          (aggressorAgeRangeCounter.get(key) ?? 0) + 1,
+        );
+      }
+      if (item.victimAgeRange) {
+        const key = String(item.victimAgeRange);
+        victimAgeRangeCounter.set(
+          key,
+          (victimAgeRangeCounter.get(key) ?? 0) + 1,
+        );
+      }
 
       if (item.retaliationRisk) {
         retaliationRiskCases += 1;
@@ -361,10 +432,16 @@ export class CpcaService {
       const aggressorRank = this.normalizeRankForStats(item.aggressorRank);
       const victimRank = this.normalizeRankForStats(item.victimRank);
       if (aggressorRank) {
-        aggressorRankCounter.set(aggressorRank, (aggressorRankCounter.get(aggressorRank) ?? 0) + 1);
+        aggressorRankCounter.set(
+          aggressorRank,
+          (aggressorRankCounter.get(aggressorRank) ?? 0) + 1,
+        );
       }
       if (victimRank) {
-        victimRankCounter.set(victimRank, (victimRankCounter.get(victimRank) ?? 0) + 1);
+        victimRankCounter.set(
+          victimRank,
+          (victimRankCounter.get(victimRank) ?? 0) + 1,
+        );
       }
 
       if (CPCA_OPEN_STATUS_SET.has(status)) {
@@ -375,7 +452,10 @@ export class CpcaService {
         const openDays = this.daysBetween(item.reportedAt, now);
         localityEntry.openDaysTotal += openDays;
 
-        const idleDays = this.daysBetween(item.updatedAt ?? item.reportedAt, now);
+        const idleDays = this.daysBetween(
+          item.updatedAt ?? item.reportedAt,
+          now,
+        );
         if (idleDays > 14) {
           noUpdateOver14Days += 1;
         }
@@ -407,6 +487,7 @@ export class CpcaService {
           localityName: String(item.locality?.name ?? ''),
           status,
           complaintType,
+          detailedViolenceType,
           reportedAt: item.reportedAt.toISOString(),
           openDays,
           idleDays,
@@ -420,9 +501,9 @@ export class CpcaService {
       const closedAt =
         closedAtByCaseId.get(item.id) ??
         (status === 'ARCHIVED'
-          ? item.archivedAt ?? item.updatedAt ?? null
+          ? (item.archivedAt ?? item.updatedAt ?? null)
           : status === 'CONCLUDED'
-            ? item.updatedAt ?? null
+            ? (item.updatedAt ?? null)
             : null);
       if (closedAt instanceof Date && !Number.isNaN(closedAt.getTime())) {
         closureDaysTotal += this.daysBetween(item.reportedAt, closedAt);
@@ -479,7 +560,9 @@ export class CpcaService {
         openCases,
         concludedCases,
         archivedCases,
-        closureRatePercent: totalCases ? Math.round((closedCases / totalCases) * 100) : 0,
+        closureRatePercent: totalCases
+          ? Math.round((closedCases / totalCases) * 100)
+          : 0,
         averageDaysToClosure: closureSamples
           ? Number((closureDaysTotal / closureSamples).toFixed(1))
           : 0,
@@ -492,10 +575,12 @@ export class CpcaService {
         stalledOver60Days,
         noUpdateOver14Days,
       },
-      statusDistribution: Array.from(statusCounter.entries()).map(([status, count]) => ({
-        status,
-        count,
-      })),
+      statusDistribution: Array.from(statusCounter.entries()).map(
+        ([status, count]) => ({
+          status,
+          count,
+        }),
+      ),
       procedureDistribution: Array.from(procedureCounter.entries()).map(
         ([procedureType, count]) => ({
           procedureType,
@@ -507,6 +592,18 @@ export class CpcaService {
           complaintType,
           count,
         }),
+      ),
+      detailedTypeDistribution: this.toSortedGenericDistribution(
+        detailedTypeCounter,
+        'detailedViolenceType',
+      ),
+      aggressorAgeRangeDistribution: this.toSortedGenericDistribution(
+        aggressorAgeRangeCounter,
+        'ageRange',
+      ),
+      victimAgeRangeDistribution: this.toSortedGenericDistribution(
+        victimAgeRangeCounter,
+        'ageRange',
       ),
       monthlyTrend: Array.from(monthCounter.values()).sort((a, b) =>
         a.month.localeCompare(b.month),
@@ -552,7 +649,10 @@ export class CpcaService {
   }
 
   async create(payload: CreateCpcaCaseDto, user?: RbacUser) {
-    const localityId = await this.resolveTargetLocalityId(payload.omId ?? payload.localityId, user);
+    const localityId = await this.resolveTargetLocalityId(
+      payload.omId ?? payload.localityId,
+      user,
+    );
     const actorId = this.requireUserId(user);
     const locality = await this.prisma.locality.findUnique({
       where: { id: localityId },
@@ -577,8 +677,10 @@ export class CpcaService {
       confidentialityTermSigned: payload.confidentialityTermSigned ?? false,
       preliminaryReportGenerated: payload.preliminaryReportGenerated ?? false,
       preliminaryReportDate: payload.preliminaryReportDate,
-      victimAccusedSeparationEvaluated: payload.victimAccusedSeparationEvaluated ?? false,
-      victimAccusedSeparationApplied: payload.victimAccusedSeparationApplied ?? false,
+      victimAccusedSeparationEvaluated:
+        payload.victimAccusedSeparationEvaluated ?? false,
+      victimAccusedSeparationApplied:
+        payload.victimAccusedSeparationApplied ?? false,
       outsourcedAccused: payload.outsourcedAccused ?? false,
       contractorReferralDate: payload.contractorReferralDate,
       outcomeSummary: payload.outcomeSummary,
@@ -591,7 +693,9 @@ export class CpcaService {
       notifierType: payload.notifierType ?? 'VITIMA',
       status,
       procedureType,
-      incidentDate: payload.incidentDate ? new Date(payload.incidentDate) : null,
+      incidentDate: payload.incidentDate
+        ? new Date(payload.incidentDate)
+        : null,
       aggressorRank: this.cleanText(payload.aggressorRank),
       aggressorGender: payload.aggressorGender,
       aggressorAgeRange: this.cleanOptional(payload.aggressorAgeRange),
@@ -602,36 +706,56 @@ export class CpcaService {
       harassmentContext: this.cleanOptional(payload.harassmentContext),
       occurrenceLocation: this.cleanOptional(payload.occurrenceLocation),
       incidentFrequency: this.cleanOptional(payload.incidentFrequency),
-      hierarchicalFunctionalRelation: this.cleanOptional(payload.hierarchicalFunctionalRelation),
+      hierarchicalFunctionalRelation: this.cleanOptional(
+        payload.hierarchicalFunctionalRelation,
+      ),
       occurrenceForm: this.cleanOptional(payload.occurrenceForm),
-      administrativeProcedure: this.cleanOptional(payload.administrativeProcedure),
-      procedureCurrentSituation: this.cleanOptional(payload.procedureCurrentSituation),
+      administrativeProcedure: this.cleanOptional(
+        payload.administrativeProcedure,
+      ),
+      procedureCurrentSituation: this.cleanOptional(
+        payload.procedureCurrentSituation,
+      ),
       retaliationReported: this.cleanOptional(payload.retaliationReported),
       retaliationAgainst: this.cleanOptional(payload.retaliationAgainst),
       evidenceCount: payload.evidenceCount ?? 0,
       evidenceSummary: this.cleanOptional(payload.evidenceSummary),
       confidentialityTermSigned: payload.confidentialityTermSigned ?? false,
-      confidentialityHandlingNotes: this.cleanOptional(payload.confidentialityHandlingNotes),
-      cpcaMembersExcludedFromInquiry: payload.cpcaMembersExcludedFromInquiry ?? true,
-      immediateProtectionMeasures: this.cleanOptional(payload.immediateProtectionMeasures),
+      confidentialityHandlingNotes: this.cleanOptional(
+        payload.confidentialityHandlingNotes,
+      ),
+      cpcaMembersExcludedFromInquiry:
+        payload.cpcaMembersExcludedFromInquiry ?? true,
+      immediateProtectionMeasures: this.cleanOptional(
+        payload.immediateProtectionMeasures,
+      ),
       privateSupportActions: this.cleanOptional(payload.privateSupportActions),
-      psychologicalSupportProvided: payload.psychologicalSupportProvided ?? false,
+      psychologicalSupportProvided:
+        payload.psychologicalSupportProvided ?? false,
       medicalSupportProvided: payload.medicalSupportProvided ?? false,
       socialSupportProvided: payload.socialSupportProvided ?? false,
       legalSupportProvided: payload.legalSupportProvided ?? false,
       contactRestrictionApplied: payload.contactRestrictionApplied ?? false,
       preliminaryAnalysis: this.cleanOptional(payload.preliminaryAnalysis),
       preliminaryReportGenerated: payload.preliminaryReportGenerated ?? false,
-      preliminaryReportDate: payload.preliminaryReportDate ? new Date(payload.preliminaryReportDate) : null,
+      preliminaryReportDate: payload.preliminaryReportDate
+        ? new Date(payload.preliminaryReportDate)
+        : null,
       procedureReference: this.cleanOptional(payload.procedureReference),
       procedureNotes: this.cleanOptional(payload.procedureNotes),
       womenLedHandlingPrioritized:
-        payload.womenLedHandlingPrioritized === undefined ? null : payload.womenLedHandlingPrioritized,
-      victimAccusedSeparationEvaluated: payload.victimAccusedSeparationEvaluated ?? false,
-      victimAccusedSeparationApplied: payload.victimAccusedSeparationApplied ?? false,
+        payload.womenLedHandlingPrioritized === undefined
+          ? null
+          : payload.womenLedHandlingPrioritized,
+      victimAccusedSeparationEvaluated:
+        payload.victimAccusedSeparationEvaluated ?? false,
+      victimAccusedSeparationApplied:
+        payload.victimAccusedSeparationApplied ?? false,
       accusedDefenseEnsured: payload.accusedDefenseEnsured ?? false,
       outcomeSummary: this.cleanOptional(payload.outcomeSummary),
-      notifierFeedbackSummary: this.cleanOptional(payload.notifierFeedbackSummary),
+      notifierFeedbackSummary: this.cleanOptional(
+        payload.notifierFeedbackSummary,
+      ),
       victimFeedbackSummary: this.cleanOptional(payload.victimFeedbackSummary),
       notifierFeedbackDate: payload.notifierFeedbackDate
         ? new Date(payload.notifierFeedbackDate)
@@ -645,7 +769,9 @@ export class CpcaService {
       contractorReferralDate: payload.contractorReferralDate
         ? new Date(payload.contractorReferralDate)
         : null,
-      contractorFollowUpNotes: this.cleanOptional(payload.contractorFollowUpNotes),
+      contractorFollowUpNotes: this.cleanOptional(
+        payload.contractorFollowUpNotes,
+      ),
       archivedAt: null,
       createdById: actorId,
       updatedById: actorId,
@@ -653,7 +779,9 @@ export class CpcaService {
 
     let created: any = null;
     for (let attempt = 0; attempt < 8; attempt += 1) {
-      const nextCaseNumber = await this.generateCaseNumber(locality.code ?? 'OM');
+      const nextCaseNumber = await this.generateCaseNumber(
+        locality.code ?? 'OM',
+      );
       try {
         created = await complaintModel.create({
           data: {
@@ -673,7 +801,9 @@ export class CpcaService {
       }
     }
     if (!created) {
-      throwError('VALIDATION_ERROR', { reason: 'CASE_NUMBER_GENERATION_FAILED' });
+      throwError('VALIDATION_ERROR', {
+        reason: 'CASE_NUMBER_GENERATION_FAILED',
+      });
     }
 
     await historyModel.create({
@@ -753,10 +883,13 @@ export class CpcaService {
           ? new Date(payload.preliminaryReportDate)
           : null;
     const nextVictimAccusedSeparationEvaluated =
-      payload.victimAccusedSeparationEvaluated ?? current.victimAccusedSeparationEvaluated;
+      payload.victimAccusedSeparationEvaluated ??
+      current.victimAccusedSeparationEvaluated;
     const nextVictimAccusedSeparationApplied =
-      payload.victimAccusedSeparationApplied ?? current.victimAccusedSeparationApplied;
-    const nextOutsourcedAccused = payload.outsourcedAccused ?? current.outsourcedAccused;
+      payload.victimAccusedSeparationApplied ??
+      current.victimAccusedSeparationApplied;
+    const nextOutsourcedAccused =
+      payload.outsourcedAccused ?? current.outsourcedAccused;
     const nextContractorReferralDate =
       payload.contractorReferralDate === undefined
         ? current.contractorReferralDate
@@ -792,14 +925,20 @@ export class CpcaService {
         notifierType: payload.notifierType,
         status: payload.status,
         procedureType: payload.procedureType,
-        incidentDate: payload.incidentDate ? new Date(payload.incidentDate) : undefined,
-        aggressorRank: payload.aggressorRank ? this.cleanText(payload.aggressorRank) : undefined,
+        incidentDate: payload.incidentDate
+          ? new Date(payload.incidentDate)
+          : undefined,
+        aggressorRank: payload.aggressorRank
+          ? this.cleanText(payload.aggressorRank)
+          : undefined,
         aggressorGender: payload.aggressorGender,
         aggressorAgeRange:
           payload.aggressorAgeRange !== undefined
             ? this.cleanOptional(payload.aggressorAgeRange)
             : undefined,
-        victimRank: payload.victimRank ? this.cleanText(payload.victimRank) : undefined,
+        victimRank: payload.victimRank
+          ? this.cleanText(payload.victimRank)
+          : undefined,
         victimGender: payload.victimGender,
         victimAgeRange:
           payload.victimAgeRange !== undefined
@@ -889,7 +1028,8 @@ export class CpcaService {
             ? this.cleanOptional(payload.procedureNotes)
             : undefined,
         womenLedHandlingPrioritized: payload.womenLedHandlingPrioritized,
-        victimAccusedSeparationEvaluated: payload.victimAccusedSeparationEvaluated,
+        victimAccusedSeparationEvaluated:
+          payload.victimAccusedSeparationEvaluated,
         victimAccusedSeparationApplied: payload.victimAccusedSeparationApplied,
         accusedDefenseEnsured: payload.accusedDefenseEnsured,
         outcomeSummary:
@@ -947,7 +1087,10 @@ export class CpcaService {
       },
     });
 
-    if (current.status !== nextStatus || current.procedureType !== nextProcedure) {
+    if (
+      current.status !== nextStatus ||
+      current.procedureType !== nextProcedure
+    ) {
       await historyModel.create({
         data: {
           complaintCaseId: id,
@@ -1042,7 +1185,13 @@ export class CpcaService {
       throwError('RBAC_FORBIDDEN');
     }
 
-    if (hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI])) {
+    if (
+      hasAnyRole(user, [
+        ROLE_COORDENACAO_CIPAVD,
+        ROLE_COMANDANTE_COMGEP,
+        ROLE_TI,
+      ])
+    ) {
       return {};
     }
 
@@ -1057,7 +1206,12 @@ export class CpcaService {
   }
 
   private hasWorkflowAccess(user?: RbacUser) {
-    return hasAnyRole(user, [ROLE_CPCA, ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI]);
+    return hasAnyRole(user, [
+      ROLE_CPCA,
+      ROLE_COORDENACAO_CIPAVD,
+      ROLE_COMANDANTE_COMGEP,
+      ROLE_TI,
+    ]);
   }
 
   private assertCaseAccess(localityId: string, user?: RbacUser) {
@@ -1067,7 +1221,10 @@ export class CpcaService {
     }
   }
 
-  private async resolveTargetLocalityId(localityIdRaw: string | undefined, user?: RbacUser) {
+  private async resolveTargetLocalityId(
+    localityIdRaw: string | undefined,
+    user?: RbacUser,
+  ) {
     const constraints = this.getScopeConstraints(user);
     const localityId = String(localityIdRaw ?? '').trim();
 
@@ -1141,6 +1298,18 @@ export class CpcaService {
       .slice(0, limit);
   }
 
+  private toSortedGenericDistribution(
+    counter: Map<string, number>,
+    key: string,
+  ) {
+    return Array.from(counter.entries())
+      .map(([value, count]) => ({ [key]: value, count }))
+      .sort((a: any, b: any) => {
+        if (b.count !== a.count) return b.count - a.count;
+        return String(a[key]).localeCompare(String(b[key]), 'pt-BR');
+      });
+  }
+
   private assertIcaConsistency(input: {
     status: string;
     complaintType: string;
@@ -1154,14 +1323,20 @@ export class CpcaService {
     outcomeSummary: string | null | undefined;
     accusedDefenseEnsured: boolean | null | undefined;
   }) {
-    if (input.complaintType === 'SEXUAL' && !Boolean(input.confidentialityTermSigned)) {
+    if (
+      input.complaintType === 'SEXUAL' &&
+      !Boolean(input.confidentialityTermSigned)
+    ) {
       throwError('VALIDATION_ERROR', {
         field: 'confidentialityTermSigned',
         reason: 'CONFIDENTIALITY_TERM_REQUIRED_FOR_SEXUAL',
       });
     }
 
-    if (input.preliminaryReportDate && !Boolean(input.preliminaryReportGenerated)) {
+    if (
+      input.preliminaryReportDate &&
+      !Boolean(input.preliminaryReportGenerated)
+    ) {
       throwError('VALIDATION_ERROR', {
         field: 'preliminaryReportGenerated',
         reason: 'PRELIMINARY_REPORT_DATE_REQUIRES_FLAG',
@@ -1235,10 +1410,11 @@ export class CpcaService {
   private async generateCaseNumber(localityCode: string) {
     const complaintModel = (this.prisma as any).cpcComplaintCase;
     const year = new Date().getUTCFullYear();
-    const localityToken = String(localityCode || 'OM')
-      .replace(/[^A-Za-z0-9]/g, '')
-      .toUpperCase()
-      .slice(0, 6) || 'OM';
+    const localityToken =
+      String(localityCode || 'OM')
+        .replace(/[^A-Za-z0-9]/g, '')
+        .toUpperCase()
+        .slice(0, 6) || 'OM';
     const prefix = `CPCA-${year}-${localityToken}-`;
     const pattern = new RegExp(`^${prefix}(\\d{5})$`);
 

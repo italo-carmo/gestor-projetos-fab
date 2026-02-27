@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Put,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../common/current-user.decorator';
 import { throwError } from '../common/http-error';
@@ -29,6 +38,7 @@ export class CpcaController {
     @Query('localityId') localityId: string | undefined,
     @Query('status') status: string | undefined,
     @Query('complaintType') complaintType: string | undefined,
+    @Query('detailedViolenceType') detailedViolenceType: string | undefined,
     @Query('procedureType') procedureType: string | undefined,
     @Query('q') q: string | undefined,
     @Query('page') page: string | undefined,
@@ -41,6 +51,7 @@ export class CpcaController {
         localityId: omId ?? localityId,
         status,
         complaintType,
+        detailedViolenceType,
         procedureType,
         q,
         page,
@@ -79,7 +90,11 @@ export class CpcaController {
 
   @Put(':id')
   @RequirePermission('cpca_cases', 'update')
-  update(@Param('id') id: string, @Body() dto: UpdateCpcaCaseDto, @CurrentUser() user: RbacUser) {
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateCpcaCaseDto,
+    @CurrentUser() user: RbacUser,
+  ) {
     this.assertProcessAccess(user);
     return this.cpca.update(id, dto, user);
   }
@@ -103,7 +118,14 @@ export class CpcaController {
   }
 
   private assertProcessAccess(user?: RbacUser) {
-    if (!hasAnyRole(user, [ROLE_CPCA, ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI])) {
+    if (
+      !hasAnyRole(user, [
+        ROLE_CPCA,
+        ROLE_COORDENACAO_CIPAVD,
+        ROLE_COMANDANTE_COMGEP,
+        ROLE_TI,
+      ])
+    ) {
       throwError('RBAC_FORBIDDEN');
     }
   }
