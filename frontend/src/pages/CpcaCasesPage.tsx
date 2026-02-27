@@ -137,11 +137,9 @@ const defaultForm = {
   socialSupportProvided: false,
   legalSupportProvided: false,
   contactRestrictionApplied: false,
-  preliminaryAnalysis: '',
   preliminaryReportGenerated: false,
   preliminaryReportDate: '',
   procedureReference: '',
-  procedureNotes: '',
   womenLedHandlingPrioritized: false,
   victimAccusedSeparationEvaluated: false,
   victimAccusedSeparationApplied: false,
@@ -268,10 +266,8 @@ export function CpcaCasesPage() {
       form.confidentialityTermSigned,
   );
   const hasStep3Progress = Boolean(
-    toNullable(form.preliminaryAnalysis) ||
-      toNullable(form.procedureReference) ||
+    toNullable(form.procedureReference) ||
       toNullable(form.preliminaryReportDate) ||
-      toNullable(form.procedureNotes) ||
       form.procedureType !== 'NOT_DEFINED',
   );
   const dataUnlockedStep = hasStep3Progress ? 3 : hasStep2Progress ? 2 : hasStep1Progress ? 1 : 0;
@@ -317,13 +313,11 @@ export function CpcaCasesPage() {
       socialSupportProvided: Boolean(item.socialSupportProvided),
       legalSupportProvided: Boolean(item.legalSupportProvided),
       contactRestrictionApplied: Boolean(item.contactRestrictionApplied),
-      preliminaryAnalysis: item.preliminaryAnalysis ?? '',
       preliminaryReportGenerated: Boolean(item.preliminaryReportGenerated),
       preliminaryReportDate: item.preliminaryReportDate
         ? String(item.preliminaryReportDate).slice(0, 10)
         : '',
       procedureReference: item.procedureReference ?? '',
-      procedureNotes: item.procedureNotes ?? '',
       womenLedHandlingPrioritized: Boolean(item.womenLedHandlingPrioritized),
       victimAccusedSeparationEvaluated: Boolean(item.victimAccusedSeparationEvaluated),
       victimAccusedSeparationApplied: Boolean(item.victimAccusedSeparationApplied),
@@ -457,11 +451,9 @@ export function CpcaCasesPage() {
       socialSupportProvided: Boolean(form.socialSupportProvided),
       legalSupportProvided: Boolean(form.legalSupportProvided),
       contactRestrictionApplied: Boolean(form.contactRestrictionApplied),
-      preliminaryAnalysis: toNullable(form.preliminaryAnalysis),
       preliminaryReportGenerated: Boolean(toNullable(form.preliminaryReportDate)),
       preliminaryReportDate: toNullable(form.preliminaryReportDate),
       procedureReference: toNullable(form.procedureReference),
-      procedureNotes: toNullable(form.procedureNotes),
       victimAccusedSeparationEvaluated: Boolean(form.victimAccusedSeparationEvaluated),
       victimAccusedSeparationApplied: Boolean(form.victimAccusedSeparationApplied),
       accusedDefenseEnsured: Boolean(form.accusedDefenseEnsured),
@@ -808,16 +800,6 @@ export function CpcaCasesPage() {
             fullWidth
           />
 
-          <TextField
-            size="small"
-            label="Análise preliminar"
-            value={form.preliminaryAnalysis}
-            onChange={(e) => setForm((prev) => ({ ...prev, preliminaryAnalysis: e.target.value }))}
-            fullWidth
-            multiline
-            minRows={4}
-          />
-
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
             <TextField
               size="small"
@@ -835,16 +817,6 @@ export function CpcaCasesPage() {
               sx={{ minWidth: 220 }}
             />
           </Stack>
-
-          <TextField
-            size="small"
-            label="Notas da apuração"
-            value={form.procedureNotes}
-            onChange={(e) => setForm((prev) => ({ ...prev, procedureNotes: e.target.value }))}
-            fullWidth
-            multiline
-            minRows={3}
-          />
         </Stack>
       );
     }
