@@ -40,6 +40,7 @@ import {
   ROLE_COMANDANTE_COMGEP,
   ROLE_COORDENACAO_CIPAVD,
   ROLE_CPCA,
+  ROLE_TI,
 } from '../app/roleAccess';
 import { useToast } from '../app/toast';
 import { EmptyState } from '../components/states/EmptyState';
@@ -158,6 +159,13 @@ const defaultForm = {
   statusChangeNote: '',
 };
 
+function formatOmLabel(locality: any) {
+  const code = String(locality?.code ?? '').trim();
+  const name = String(locality?.name ?? '').trim();
+  if (code && name) return `${code} - ${name}`;
+  return code || name || '-';
+}
+
 function toNullable(value: string) {
   const normalized = String(value ?? '').trim();
   return normalized ? normalized : null;
@@ -178,6 +186,7 @@ export function CpcaCasesPage() {
     ROLE_CPCA,
     ROLE_COORDENACAO_CIPAVD,
     ROLE_COMANDANTE_COMGEP,
+    ROLE_TI,
   ]);
 
   const q = params.get('q') ?? '';
@@ -219,6 +228,7 @@ export function CpcaCasesPage() {
   const isNationalScope = hasAnyRole(me, [
     ROLE_COORDENACAO_CIPAVD,
     ROLE_COMANDANTE_COMGEP,
+    ROLE_TI,
   ]);
 
   const updateParam = (key: string, value: string) => {
@@ -231,7 +241,13 @@ export function CpcaCasesPage() {
   const clearFilters = () => setParams({}, { replace: true });
 
   const items = casesQuery.data?.items ?? [];
-  const localities = localitiesQuery.data?.items ?? [];
+  const localities = useMemo(
+    () =>
+      [...(localitiesQuery.data?.items ?? [])].sort((a: any, b: any) =>
+        formatOmLabel(a).localeCompare(formatOmLabel(b), 'pt-BR'),
+      ),
+    [localitiesQuery.data?.items],
+  );
   const rankOptions: string[] = (postosQuery.data?.items ?? []).map((item: any) =>
     String(item.name),
   );
@@ -407,7 +423,7 @@ export function CpcaCasesPage() {
 
   const saveCase = async () => {
     if (isNationalScope && !form.localityId) {
-      toast.push({ message: 'Selecione a localidade da ocorrência.', severity: 'warning' });
+      toast.push({ message: 'Selecione a OM da ocorrência.', severity: 'warning' });
       return;
     }
     if (!form.aggressorRank || !form.victimRank) {
@@ -419,7 +435,7 @@ export function CpcaCasesPage() {
     }
 
     const payload: Record<string, any> = {
-      localityId: form.localityId || undefined,
+      omId: form.localityId || undefined,
       complaintType: form.complaintType,
       notifierType: form.notifierType,
       status: form.status,
@@ -510,7 +526,7 @@ export function CpcaCasesPage() {
           <TextField
             select
             size="small"
-            label="Localidade"
+            label="OM"
             value={form.localityId}
             onChange={(e) => setForm((prev) => ({ ...prev, localityId: e.target.value }))}
             disabled={!isNationalScope}
@@ -518,7 +534,7 @@ export function CpcaCasesPage() {
             {isNationalScope && <MenuItem value="">Selecionar</MenuItem>}
             {localities.map((loc: any) => (
               <MenuItem key={loc.id} value={loc.id}>
-                {loc.name}
+                {formatOmLabel(loc)}
               </MenuItem>
             ))}
           </TextField>
@@ -1066,21 +1082,21 @@ export function CpcaCasesPage() {
               sx={{ minWidth: 200 }}
             />
             {isNationalScope && (
-              <TextField
-                select
-                size="small"
-                label="Localidade"
-                value={localityId}
-                onChange={(e) => updateParam('localityId', e.target.value)}
-                sx={{ minWidth: 220 }}
-              >
-                <MenuItem value="">Todas</MenuItem>
-                {localities.map((loc: any) => (
-                  <MenuItem key={loc.id} value={loc.id}>
-                    {loc.name}
-                  </MenuItem>
-                ))}
-              </TextField>
+                <TextField
+                  select
+                  size="small"
+                  label="OM"
+                  value={localityId}
+                  onChange={(e) => updateParam('localityId', e.target.value)}
+                  sx={{ minWidth: 220 }}
+                >
+                  <MenuItem value="">Todas</MenuItem>
+                  {localities.map((loc: any) => (
+                    <MenuItem key={loc.id} value={loc.id}>
+                      {formatOmLabel(loc)}
+                    </MenuItem>
+                  ))}
+                </TextField>
             )}
             <TextField
               select
@@ -1177,7 +1193,7 @@ export function CpcaCasesPage() {
                         </Typography>
                       )}
                     </TableCell>
-                    <TableCell>{item.locality?.name ?? '-'}</TableCell>
+                    <TableCell>{formatOmLabel(item.locality)}</TableCell>
                     <TableCell>
                       {COMPLAINT_TYPE_OPTIONS.find(
                         (entry) => entry.value === item.complaintType,

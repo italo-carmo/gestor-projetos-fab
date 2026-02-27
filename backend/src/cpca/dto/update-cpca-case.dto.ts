@@ -19,6 +19,10 @@ import {
 export class UpdateCpcaCaseDto {
   @IsOptional()
   @IsString()
+  omId?: string;
+
+  @IsOptional()
+  @IsString()
   localityId?: string;
 
   @IsOptional()

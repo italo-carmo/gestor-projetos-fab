@@ -545,7 +545,7 @@ export class CpcaService {
   }
 
   async create(payload: CreateCpcaCaseDto, user?: RbacUser) {
-    const localityId = await this.resolveTargetLocalityId(payload.localityId, user);
+    const localityId = await this.resolveTargetLocalityId(payload.omId ?? payload.localityId, user);
     const actorId = this.requireUserId(user);
     const locality = await this.prisma.locality.findUnique({
       where: { id: localityId },
@@ -714,8 +714,9 @@ export class CpcaService {
 
     this.assertCaseAccess(current.localityId, user);
 
-    const nextLocalityId = payload.localityId
-      ? await this.resolveTargetLocalityId(payload.localityId, user)
+    const targetLocalityIdRaw = payload.omId ?? payload.localityId;
+    const nextLocalityId = targetLocalityIdRaw
+      ? await this.resolveTargetLocalityId(targetLocalityIdRaw, user)
       : current.localityId;
 
     const nextStatus = payload.status ?? current.status;

@@ -26,6 +26,10 @@ export const CPCA_GENDERS = ['MASCULINO', 'FEMININO', 'NAO_INFORMADO'] as const;
 export class CreateCpcaCaseDto {
   @IsOptional()
   @IsString()
+  omId?: string;
+
+  @IsOptional()
+  @IsString()
   localityId?: string;
 
   @IsIn(CPCA_COMPLAINT_TYPES)

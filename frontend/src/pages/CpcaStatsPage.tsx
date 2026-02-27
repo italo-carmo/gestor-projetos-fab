@@ -205,7 +205,7 @@ export function CpcaStatsPage() {
             CPCA - Estatísticas de Assédio
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Indicadores de risco, tempo de resposta e priorização por localidade para apoio ao comando.
+            Indicadores de risco, tempo de resposta e priorização por OM para apoio ao comando.
           </Typography>
         </Box>
         <Button component={Link} to="/cpca-cases" variant="outlined">
@@ -220,7 +220,7 @@ export function CpcaStatsPage() {
               <TextField
                 select
                 size="small"
-                label="Localidade"
+                label="OM"
                 value={localityId}
                 onChange={(event) => updateParam('localityId', event.target.value)}
                 sx={{ minWidth: 240 }}
@@ -362,10 +362,10 @@ export function CpcaStatsPage() {
           <Card sx={{ height: '100%' }}>
             <CardContent>
               <Typography variant="h6" gutterBottom>
-                Top localidades por risco operacional CPCA
+                Top OMs por risco operacional CPCA
               </Typography>
               {topRiskLocalities.length === 0 ? (
-                <EmptyState title="Sem dados" description="Nenhuma localidade com casos no recorte informado." />
+                <EmptyState title="Sem dados" description="Nenhuma OM com casos no recorte informado." />
               ) : (
                 <Table size="small">
                   <TableHead>
@@ -479,7 +479,7 @@ export function CpcaStatsPage() {
               <TableHead>
                 <TableRow>
                   <TableCell>Caso</TableCell>
-                  <TableCell>Localidade</TableCell>
+                  <TableCell>OM</TableCell>
                   <TableCell>Status</TableCell>
                   <TableCell>Tipo</TableCell>
                   <TableCell align="right">Dias em aberto</TableCell>

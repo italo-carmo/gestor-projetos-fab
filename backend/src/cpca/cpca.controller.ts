@@ -25,6 +25,7 @@ export class CpcaController {
   @Get()
   @RequirePermission('cpca_cases', 'view')
   list(
+    @Query('omId') omId: string | undefined,
     @Query('localityId') localityId: string | undefined,
     @Query('status') status: string | undefined,
     @Query('complaintType') complaintType: string | undefined,
@@ -35,19 +36,31 @@ export class CpcaController {
     @CurrentUser() user: RbacUser,
   ) {
     this.assertProcessAccess(user);
-    return this.cpca.list({ localityId, status, complaintType, procedureType, q, page, pageSize }, user);
+    return this.cpca.list(
+      {
+        localityId: omId ?? localityId,
+        status,
+        complaintType,
+        procedureType,
+        q,
+        page,
+        pageSize,
+      },
+      user,
+    );
   }
 
   @Get('stats')
   @RequirePermission('cpca_cases', 'view')
   stats(
+    @Query('omId') omId: string | undefined,
     @Query('localityId') localityId: string | undefined,
     @Query('from') from: string | undefined,
     @Query('to') to: string | undefined,
     @CurrentUser() user: RbacUser,
   ) {
     this.assertProcessAccess(user);
-    return this.cpca.stats({ localityId, from, to }, user);
+    return this.cpca.stats({ localityId: omId ?? localityId, from, to }, user);
   }
 
   @Get(':id')
