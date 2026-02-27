@@ -259,6 +259,47 @@ export class TasksService {
     return cloned;
   }
 
+  async deleteTaskTemplate(id: string, user?: RbacUser) {
+    this.assertTemplateManageAccess(user);
+
+    const template = await this.prisma.taskTemplate.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        title: true,
+        _count: {
+          select: {
+            instances: true,
+            checklistItems: true,
+          },
+        },
+      },
+    });
+    if (!template) throwError('NOT_FOUND');
+
+    const linkedInstances = template._count.instances ?? 0;
+    const linkedChecklistItems = template._count.checklistItems ?? 0;
+    if (linkedInstances > 0 || linkedChecklistItems > 0) {
+      throwError('TASK_TEMPLATE_IN_USE', {
+        linkedInstances,
+        linkedChecklistItems,
+      });
+    }
+
+    await this.prisma.taskTemplate.delete({ where: { id } });
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'task_templates',
+      action: 'delete',
+      entityId: id,
+      localityId: user?.localityId ?? undefined,
+      diffJson: { title: template.title },
+    });
+
+    return { ok: true };
+  }
+
   async generateInstances(
     templateId: string,
     payload: {

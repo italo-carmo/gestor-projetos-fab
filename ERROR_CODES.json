@@ -100,5 +100,9 @@
   "CHECKLIST_AUTOMATIC_ONLY": {
     "httpStatus": 409,
     "message": "Checklist é atualizado automaticamente por tarefas e atividades finalizadas."
+  },
+  "TASK_TEMPLATE_IN_USE": {
+    "httpStatus": 409,
+    "message": "Não é possível excluir o modelo porque ele já está vinculado a tarefas ou checklist."
   }
 }

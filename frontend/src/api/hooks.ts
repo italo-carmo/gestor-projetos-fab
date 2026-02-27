@@ -973,6 +973,22 @@ export function useCloneTaskTemplate() {
   });
 }
 
+export function useDeleteTaskTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      (await api.delete(`/task-templates/${id}`)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.taskTemplates });
+      qc.invalidateQueries({ queryKey: ['tasks'] });
+      qc.invalidateQueries({ queryKey: ['gantt'] });
+      qc.invalidateQueries({ queryKey: ['calendar'] });
+      qc.invalidateQueries({ queryKey: ['checklists'] });
+      qc.invalidateQueries({ queryKey: ['meetings'] });
+    },
+  });
+}
+
 export function useUpdateTaskTemplate() {
   const qc = useQueryClient();
   return useMutation({

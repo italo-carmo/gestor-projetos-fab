@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Post,
@@ -94,5 +95,11 @@ export class TaskTemplatesController {
   @RequirePermission('task_templates', 'create')
   clone(@Param('id') id: string, @CurrentUser() user: RbacUser) {
     return this.tasks.cloneTaskTemplate(id, user);
+  }
+
+  @Delete(':id')
+  @RequirePermission('task_templates', 'update')
+  remove(@Param('id') id: string, @CurrentUser() user: RbacUser) {
+    return this.tasks.deleteTaskTemplate(id, user);
   }
 }

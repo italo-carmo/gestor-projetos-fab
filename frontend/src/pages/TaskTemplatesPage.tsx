@@ -16,6 +16,7 @@ import { addDays } from "date-fns";
 import { useMemo, useState } from "react";
 import {
   useCreateTaskTemplate,
+  useDeleteTaskTemplate,
   useEloRoles,
   useGenerateInstances,
   useLocalities,
@@ -38,6 +39,7 @@ import {
   ROLE_TI,
 } from "../app/roleAccess";
 import { TASK_PRIORITY_LABELS } from "../constants/enums";
+import { ConfirmDialog } from "../components/dialogs/ConfirmDialog";
 
 export function TaskTemplatesPage() {
   const { data: me } = useMe();
@@ -50,6 +52,7 @@ export function TaskTemplatesPage() {
   const createTemplate = useCreateTaskTemplate();
   const updateTemplate = useUpdateTaskTemplate();
   const cloneTemplate = useCloneTaskTemplate();
+  const deleteTemplate = useDeleteTaskTemplate();
   const generateInstances = useGenerateInstances();
 
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -59,6 +62,10 @@ export function TaskTemplatesPage() {
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(
     null,
   );
+  const [deleteTarget, setDeleteTarget] = useState<{
+    id: string;
+    title: string;
+  } | null>(null);
   const [form, setForm] = useState({
     title: "",
     description: "",
@@ -188,6 +195,21 @@ export function TaskTemplatesPage() {
     }
   };
 
+  const handleDeleteTemplate = async () => {
+    if (!deleteTarget) return;
+    try {
+      await deleteTemplate.mutateAsync(deleteTarget.id);
+      toast.push({ message: "Modelo excluído", severity: "success" });
+      setDeleteTarget(null);
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({
+        message: payload.message ?? "Erro ao excluir modelo",
+        severity: "error",
+      });
+    }
+  };
+
   const templates = templatesQuery.data?.items ?? [];
   const templatesToRender = useMemo(() => {
     if (showDuplicates) return templates;
@@ -234,6 +256,7 @@ export function TaskTemplatesPage() {
   const canEditTemplate =
     can(me, "task_templates", "update") &&
     hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI]);
+  const canDeleteTemplate = canEditTemplate;
 
   if (templatesQuery.isLoading) return <SkeletonState />;
   if (templatesQuery.isError)
@@ -357,6 +380,20 @@ export function TaskTemplatesPage() {
                       >
                         Clonar
                       </Button>
+                      {canDeleteTemplate && (
+                        <Button
+                          size="small"
+                          color="error"
+                          onClick={() =>
+                            setDeleteTarget({
+                              id: String(template.id),
+                              title: String(template.title ?? "Modelo sem título"),
+                            })
+                          }
+                        >
+                          Excluir
+                        </Button>
+                      )}
                     </Box>
                   </Box>
                 ))}
@@ -571,6 +608,21 @@ export function TaskTemplatesPage() {
           </Stack>
         </Box>
       </Drawer>
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          void handleDeleteTemplate();
+        }}
+        title="Excluir modelo de tarefa"
+        message="Confirma a exclusão deste modelo?"
+        highlightText={deleteTarget?.title ?? ""}
+        note="Se o modelo já estiver vinculado a tarefas ou checklist, a exclusão será bloqueada."
+        confirmLabel={deleteTemplate.isPending ? "Excluindo..." : "Excluir"}
+        severity="error"
+        confirmLoading={deleteTemplate.isPending}
+      />
     </Box>
   );
 }
