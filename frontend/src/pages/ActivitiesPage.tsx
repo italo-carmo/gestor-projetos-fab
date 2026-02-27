@@ -1031,6 +1031,7 @@ export function ActivitiesPage() {
                       <Button
                         size="small"
                         variant="outlined"
+                        sx={drawerActionButtonSx}
                         disabled={!canEditActivityForm}
                         onClick={() => {
                           const ids = selectableLocalities.map((locality: any) => String(locality.id));
@@ -1045,6 +1046,7 @@ export function ActivitiesPage() {
                       </Button>
                       <Button
                         size="small"
+                        sx={drawerActionButtonSx}
                         disabled={!canEditActivityForm}
                         onClick={() =>
                           setActivityForm({

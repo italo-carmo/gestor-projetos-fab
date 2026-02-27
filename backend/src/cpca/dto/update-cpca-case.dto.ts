@@ -9,11 +9,22 @@ import {
   Min,
 } from 'class-validator';
 import {
+  CPCA_ADMIN_PROCEDURES,
+  CPCA_AGE_RANGES,
   CPCA_CASE_STATUSES,
   CPCA_COMPLAINT_TYPES,
+  CPCA_DETAILED_VIOLENCE_TYPES,
   CPCA_GENDERS,
+  CPCA_HARASSMENT_CONTEXTS,
+  CPCA_HIERARCHICAL_RELATIONS,
+  CPCA_INCIDENT_FREQUENCIES,
   CPCA_NOTIFIER_TYPES,
+  CPCA_OCCURRENCE_FORMS,
+  CPCA_OCCURRENCE_LOCATIONS,
+  CPCA_PROCEDURE_CURRENT_SITUATIONS,
   CPCA_PROCEDURE_TYPES,
+  CPCA_RETALIATION_AGAINST_OPTIONS,
+  CPCA_RETALIATION_REPORTED_OPTIONS,
 } from './create-cpca-case.dto';
 
 export class UpdateCpcaCaseDto {
@@ -55,6 +66,10 @@ export class UpdateCpcaCaseDto {
   aggressorGender?: (typeof CPCA_GENDERS)[number];
 
   @IsOptional()
+  @IsIn(CPCA_AGE_RANGES)
+  aggressorAgeRange?: (typeof CPCA_AGE_RANGES)[number];
+
+  @IsOptional()
   @IsString()
   @MaxLength(120)
   victimRank?: string;
@@ -62,6 +77,50 @@ export class UpdateCpcaCaseDto {
   @IsOptional()
   @IsIn(CPCA_GENDERS)
   victimGender?: (typeof CPCA_GENDERS)[number];
+
+  @IsOptional()
+  @IsIn(CPCA_AGE_RANGES)
+  victimAgeRange?: (typeof CPCA_AGE_RANGES)[number];
+
+  @IsOptional()
+  @IsIn(CPCA_DETAILED_VIOLENCE_TYPES)
+  detailedViolenceType?: (typeof CPCA_DETAILED_VIOLENCE_TYPES)[number];
+
+  @IsOptional()
+  @IsIn(CPCA_HARASSMENT_CONTEXTS)
+  harassmentContext?: (typeof CPCA_HARASSMENT_CONTEXTS)[number];
+
+  @IsOptional()
+  @IsIn(CPCA_OCCURRENCE_LOCATIONS)
+  occurrenceLocation?: (typeof CPCA_OCCURRENCE_LOCATIONS)[number];
+
+  @IsOptional()
+  @IsIn(CPCA_INCIDENT_FREQUENCIES)
+  incidentFrequency?: (typeof CPCA_INCIDENT_FREQUENCIES)[number];
+
+  @IsOptional()
+  @IsIn(CPCA_HIERARCHICAL_RELATIONS)
+  hierarchicalFunctionalRelation?: (typeof CPCA_HIERARCHICAL_RELATIONS)[number];
+
+  @IsOptional()
+  @IsIn(CPCA_OCCURRENCE_FORMS)
+  occurrenceForm?: (typeof CPCA_OCCURRENCE_FORMS)[number];
+
+  @IsOptional()
+  @IsIn(CPCA_ADMIN_PROCEDURES)
+  administrativeProcedure?: (typeof CPCA_ADMIN_PROCEDURES)[number];
+
+  @IsOptional()
+  @IsIn(CPCA_PROCEDURE_CURRENT_SITUATIONS)
+  procedureCurrentSituation?: (typeof CPCA_PROCEDURE_CURRENT_SITUATIONS)[number];
+
+  @IsOptional()
+  @IsIn(CPCA_RETALIATION_REPORTED_OPTIONS)
+  retaliationReported?: (typeof CPCA_RETALIATION_REPORTED_OPTIONS)[number];
+
+  @IsOptional()
+  @IsIn(CPCA_RETALIATION_AGAINST_OPTIONS)
+  retaliationAgainst?: (typeof CPCA_RETALIATION_AGAINST_OPTIONS)[number];
 
   @IsOptional()
   @IsInt()

@@ -824,8 +824,20 @@ model CpcComplaintCase {
   reportedAt                      DateTime           @default(now())
   aggressorRank                   String
   aggressorGender                 CpcGender
+  aggressorAgeRange               String?
   victimRank                      String
   victimGender                    CpcGender
+  victimAgeRange                  String?
+  detailedViolenceType            String?
+  harassmentContext               String?
+  occurrenceLocation              String?
+  incidentFrequency               String?
+  hierarchicalFunctionalRelation  String?
+  occurrenceForm                  String?
+  administrativeProcedure         String?
+  procedureCurrentSituation       String?
+  retaliationReported             String?
+  retaliationAgainst              String?
   evidenceCount                   Int                @default(0)
   evidenceSummary                 String?
   confidentialityTermSigned       Boolean            @default(false)

@@ -587,8 +587,20 @@ export class CpcaService {
       incidentDate: payload.incidentDate ? new Date(payload.incidentDate) : null,
       aggressorRank: this.cleanText(payload.aggressorRank),
       aggressorGender: payload.aggressorGender,
+      aggressorAgeRange: this.cleanOptional(payload.aggressorAgeRange),
       victimRank: this.cleanText(payload.victimRank),
       victimGender: payload.victimGender,
+      victimAgeRange: this.cleanOptional(payload.victimAgeRange),
+      detailedViolenceType: this.cleanOptional(payload.detailedViolenceType),
+      harassmentContext: this.cleanOptional(payload.harassmentContext),
+      occurrenceLocation: this.cleanOptional(payload.occurrenceLocation),
+      incidentFrequency: this.cleanOptional(payload.incidentFrequency),
+      hierarchicalFunctionalRelation: this.cleanOptional(payload.hierarchicalFunctionalRelation),
+      occurrenceForm: this.cleanOptional(payload.occurrenceForm),
+      administrativeProcedure: this.cleanOptional(payload.administrativeProcedure),
+      procedureCurrentSituation: this.cleanOptional(payload.procedureCurrentSituation),
+      retaliationReported: this.cleanOptional(payload.retaliationReported),
+      retaliationAgainst: this.cleanOptional(payload.retaliationAgainst),
       evidenceCount: payload.evidenceCount ?? 0,
       evidenceSummary: this.cleanOptional(payload.evidenceSummary),
       confidentialityTermSigned: payload.confidentialityTermSigned ?? false,
@@ -776,8 +788,56 @@ export class CpcaService {
         incidentDate: payload.incidentDate ? new Date(payload.incidentDate) : undefined,
         aggressorRank: payload.aggressorRank ? this.cleanText(payload.aggressorRank) : undefined,
         aggressorGender: payload.aggressorGender,
+        aggressorAgeRange:
+          payload.aggressorAgeRange !== undefined
+            ? this.cleanOptional(payload.aggressorAgeRange)
+            : undefined,
         victimRank: payload.victimRank ? this.cleanText(payload.victimRank) : undefined,
         victimGender: payload.victimGender,
+        victimAgeRange:
+          payload.victimAgeRange !== undefined
+            ? this.cleanOptional(payload.victimAgeRange)
+            : undefined,
+        detailedViolenceType:
+          payload.detailedViolenceType !== undefined
+            ? this.cleanOptional(payload.detailedViolenceType)
+            : undefined,
+        harassmentContext:
+          payload.harassmentContext !== undefined
+            ? this.cleanOptional(payload.harassmentContext)
+            : undefined,
+        occurrenceLocation:
+          payload.occurrenceLocation !== undefined
+            ? this.cleanOptional(payload.occurrenceLocation)
+            : undefined,
+        incidentFrequency:
+          payload.incidentFrequency !== undefined
+            ? this.cleanOptional(payload.incidentFrequency)
+            : undefined,
+        hierarchicalFunctionalRelation:
+          payload.hierarchicalFunctionalRelation !== undefined
+            ? this.cleanOptional(payload.hierarchicalFunctionalRelation)
+            : undefined,
+        occurrenceForm:
+          payload.occurrenceForm !== undefined
+            ? this.cleanOptional(payload.occurrenceForm)
+            : undefined,
+        administrativeProcedure:
+          payload.administrativeProcedure !== undefined
+            ? this.cleanOptional(payload.administrativeProcedure)
+            : undefined,
+        procedureCurrentSituation:
+          payload.procedureCurrentSituation !== undefined
+            ? this.cleanOptional(payload.procedureCurrentSituation)
+            : undefined,
+        retaliationReported:
+          payload.retaliationReported !== undefined
+            ? this.cleanOptional(payload.retaliationReported)
+            : undefined,
+        retaliationAgainst:
+          payload.retaliationAgainst !== undefined
+            ? this.cleanOptional(payload.retaliationAgainst)
+            : undefined,
         evidenceCount: payload.evidenceCount,
         evidenceSummary:
           payload.evidenceSummary !== undefined

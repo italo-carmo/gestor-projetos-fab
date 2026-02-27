@@ -82,6 +82,135 @@ const GENDER_OPTIONS = [
   { value: 'NAO_INFORMADO', label: 'Não informado' },
 ];
 
+const DETAILED_VIOLENCE_TYPE_OPTIONS = [
+  { value: 'ASSEDIO_MORAL', label: 'Assédio Moral' },
+  { value: 'ASSEDIO_SEXUAL', label: 'Assédio Sexual' },
+  { value: 'VIOLENCIA_DOMESTICA_FISICA', label: 'Violência doméstica - Física' },
+  { value: 'VIOLENCIA_DOMESTICA_PSICOLOGICA', label: 'Violência doméstica - Psicológica' },
+  { value: 'VIOLENCIA_DOMESTICA_MORAL', label: 'Violência doméstica - Moral' },
+  { value: 'VIOLENCIA_DOMESTICA_PATRIMONIAL', label: 'Violência doméstica - Patrimonial' },
+  { value: 'VIOLENCIA_DOMESTICA_SEXUAL', label: 'Violência doméstica - Sexual' },
+];
+
+const HARASSMENT_CONTEXT_OPTIONS = [
+  { value: 'PRESENCIAL', label: 'Presencial' },
+  { value: 'VIRTUAL', label: 'Virtual' },
+];
+
+const OCCURRENCE_LOCATION_OPTIONS = [
+  { value: 'INTERIOR_OM', label: 'Interior da OM' },
+  { value: 'EVENTO_EXTERNO_RELACIONADO_TRABALHO', label: 'Eventos externos relacionados ao trabalho' },
+  { value: 'EVENTO_EXTERNO_NAO_RELACIONADO_TRABALHO', label: 'Eventos externos não relacionados ao trabalho' },
+  { value: 'AMBIENTE_PESSOAL', label: 'Ambiente pessoal' },
+  { value: 'VIA_PUBLICA', label: 'Via pública' },
+  { value: 'TRANSPORTE_PUBLICO', label: 'Transporte Público' },
+  { value: 'TRANSPORTE_INSTITUCIONAL', label: 'Transporte Institucional' },
+  { value: 'RESIDENCIA_ACUSADOR', label: 'Residência do acusador' },
+  { value: 'APLICATIVOS_MENSAGERIA', label: 'Aplicativos de mensagens instantâneas (ex.: WhatsApp, Telegram)' },
+  { value: 'EMAIL', label: 'E-mail (institucional ou pessoal)' },
+  { value: 'REUNIAO_ONLINE_TRABALHO', label: 'Reuniões online de trabalho (ex.: Webex, Teams, Zoom, Meet)' },
+  { value: 'REDES_SOCIAIS', label: 'Redes sociais (posts, comentários ou mensagens privadas)' },
+  { value: 'RESIDENCIA_VITIMA_NOTICIANTE', label: 'Residência da vítima e/ou noticiante' },
+];
+
+const AGE_RANGE_OPTIONS = [
+  { value: '15_18', label: '15 a 18 anos' },
+  { value: '19_25', label: '19 a 25 anos' },
+  { value: '26_30', label: '26 a 30 anos' },
+  { value: '31_35', label: '31 a 35 anos' },
+  { value: '36_40', label: '36 a 40 anos' },
+  { value: '41_45', label: '41 a 45 anos' },
+  { value: '46_50', label: '46 a 50 anos' },
+  { value: '51_55', label: '51 a 55 anos' },
+  { value: 'MAIOR_55', label: 'Mais de 55 anos' },
+];
+
+const INCIDENT_FREQUENCY_OPTIONS = [
+  { value: 'UMA_VEZ', label: 'Uma vez' },
+  { value: 'DUAS_VEZES', label: 'Duas vezes' },
+  { value: 'TRES_VEZES', label: 'Três vezes' },
+  { value: 'QUATRO_VEZES', label: 'Quatro vezes' },
+  { value: 'CINCO_VEZES', label: 'Cinco vezes' },
+  { value: 'MAIOR_CINCO', label: 'Maior que cinco vezes' },
+];
+
+const FUNCTIONAL_RELATION_OPTIONS = [
+  { value: 'SUPERIOR_HIERARQUICO', label: 'Superior hierárquico' },
+  { value: 'CHEFE_IMEDIATO', label: 'Chefe imediato' },
+  { value: 'SUBORDINADO', label: 'Subordinado' },
+  { value: 'SUBORDINADO_DIRETO', label: 'Subordinado direto' },
+  { value: 'MESMA_GRADUACAO', label: 'Mesma Graduação' },
+  { value: 'INSTRUTOR_PROFESSOR', label: 'Instrutor/Professor' },
+  { value: 'ALUNO', label: 'Aluno' },
+  { value: 'PRESTADOR_SERVICO', label: 'Prestador de serviço' },
+  { value: 'CONJUGE', label: 'Cônjuge' },
+  { value: 'OUTROS', label: 'Outros' },
+  { value: 'CIVIL', label: 'Civil' },
+  { value: 'CONJUGE_MILITAR', label: 'Cônjuge militar' },
+  { value: 'FAMILIAR', label: 'Familiar' },
+];
+
+const OCCURRENCE_FORM_OPTIONS = [
+  { value: 'HUMILHACAO_PUBLICA', label: 'Humilhação Pública' },
+  { value: 'EXCLUSAO_ISOLAMENTO', label: 'Exclusão/Isolamento' },
+  { value: 'AMEACAS_INTIMIDACAO', label: 'Ameaças/Intimidação' },
+  { value: 'CRITICAS_EXCESSIVAS', label: 'Críticas excessivas' },
+  { value: 'INJUSTICAS', label: 'Injustiças' },
+  { value: 'COMENTARIOS_SEXISTAS', label: 'Comentários sexistas' },
+  { value: 'CONTATO_FISICO_INDESEJADO', label: 'Contato físico indesejado' },
+  { value: 'TENTATIVA_CONTATO_FISICO_INDEVIDO', label: 'Tentativa de contato físico indevido' },
+  { value: 'CHANTAGEM_INTIMIDACAO_FAVOR_SEXUAL', label: 'Chantagem ou intimidação para obter favores sexuais' },
+  { value: 'VIOLENCIA_FISICA', label: 'Violência física' },
+  { value: 'VIOLENCIA_PSICOLOGICA', label: 'Violência psicológica' },
+  { value: 'VIOLENCIA_PATRIMONIAL', label: 'Violência patrimonial' },
+  { value: 'OUTROS', label: 'Outros' },
+  { value: 'VIOLENCIA_SEXUAL', label: 'Violência Sexual' },
+  { value: 'VIOLENCIA_MORAL', label: 'Violência Moral' },
+  { value: 'VIGILANCIA_EXCESSIVA', label: 'Vigilância Excessiva' },
+  { value: 'EXIBICAO_MATERIAL_PORNOGRAFICO', label: 'Exibição de Material Pornográfico' },
+];
+
+const ADMIN_PROCEDURE_OPTIONS = [
+  { value: 'SINDICANCIA', label: 'Sindicância' },
+  { value: 'IPM', label: 'IPM' },
+  { value: 'PATD', label: 'PATD' },
+  { value: 'PAD', label: 'PAD' },
+  { value: 'BOLETIM_OCORRENCIA', label: 'Boletim de ocorrência' },
+  { value: 'INQUERITO_CIVIL', label: 'Inquérito civil' },
+  { value: 'NAO_HOUVE', label: 'Não houve' },
+  { value: 'INQUERITO_POLICIAL_COMUM', label: 'Inquérito Policial Comum' },
+  { value: 'NOTICIA_FATO', label: 'Notícia de Fato' },
+  { value: 'CONSELHO_DISCIPLINA', label: 'Conselho de Disciplina' },
+  { value: 'CONSELHO_JUSTIFICACAO', label: 'Conselho de Justificação' },
+];
+
+const PROCEDURE_CURRENT_SITUATION_OPTIONS = [
+  { value: 'EM_ANDAMENTO', label: 'Em andamento' },
+  { value: 'MEDIDA_DISCIPLINAR_APLICADA', label: 'Medida disciplinar aplicada' },
+  { value: 'OFERECIDA_DENUNCIA', label: 'Oferecida a denúncia' },
+  { value: 'ARQUIVADO_PELA_JUSTICA', label: 'Arquivado pela justiça' },
+  { value: 'CONDENADO_PELA_JUSTICA', label: 'Condenado pela Justiça' },
+  { value: 'TRANSFERENCIA_ACUSADO', label: 'Transferência do acusado' },
+  { value: 'TRANSFERENCIA_ACUSADOR', label: 'Transferência do acusador' },
+  { value: 'MEDIDA_PROTETIVA', label: 'Medida Protetiva' },
+  { value: 'OUTROS', label: 'Outros' },
+  { value: 'NAO_APLICAVEL', label: 'Não aplicável' },
+];
+
+const RETALIATION_REPORTED_OPTIONS = [
+  { value: 'SIM', label: 'Sim' },
+  { value: 'NAO', label: 'Não' },
+  { value: 'NAO_INFORMADO', label: 'Não informado' },
+];
+
+const RETALIATION_TARGET_OPTIONS = [
+  { value: 'VITIMA', label: 'Vítima' },
+  { value: 'TESTEMUNHAS', label: 'Testemunhas' },
+  { value: 'SINDICANTE', label: 'Sindicante' },
+  { value: 'ENCARREGADO_INQUERITO', label: 'Encarregado de inquérito' },
+  { value: 'NAO_OCORREU_RETALIACAO', label: 'Não ocorreu retaliação' },
+];
+
 const STEP_STATUS_OPTIONS: Record<number, string[]> = {
   0: ['RECEIVED', 'PROTECTION_MEASURES'],
   1: ['PROTECTION_MEASURES', 'PRELIMINARY_ANALYSIS'],
@@ -123,8 +252,18 @@ const defaultForm = {
   incidentDate: '',
   aggressorRank: '',
   aggressorGender: 'NAO_INFORMADO',
+  aggressorAgeRange: '',
   victimRank: '',
   victimGender: 'NAO_INFORMADO',
+  victimAgeRange: '',
+  detailedViolenceType: '',
+  harassmentContext: '',
+  occurrenceLocation: '',
+  incidentFrequency: '',
+  hierarchicalFunctionalRelation: '',
+  occurrenceForm: '',
+  administrativeProcedure: '',
+  procedureCurrentSituation: '',
   evidenceCount: 0,
   evidenceSummary: '',
   confidentialityTermSigned: false,
@@ -150,6 +289,8 @@ const defaultForm = {
   notifierFeedbackDate: '',
   victimFeedbackDate: '',
   retaliationRisk: false,
+  retaliationReported: 'NAO_INFORMADO',
+  retaliationAgainst: '',
   retaliationNotes: '',
   outsourcedAccused: false,
   contractorReferralDate: '',
@@ -167,6 +308,20 @@ function formatOmLabel(locality: any) {
 function toNullable(value: string) {
   const normalized = String(value ?? '').trim();
   return normalized ? normalized : null;
+}
+
+function inferMacroComplaintTypeFromDetailed(
+  detailedViolenceType: string,
+): 'MORAL' | 'SEXUAL' | null {
+  const normalized = String(detailedViolenceType ?? '').trim();
+  if (!normalized) return null;
+  if (
+    normalized === 'ASSEDIO_SEXUAL' ||
+    normalized === 'VIOLENCIA_DOMESTICA_SEXUAL'
+  ) {
+    return 'SEXUAL';
+  }
+  return 'MORAL';
 }
 
 function statusOptionsForStep(step: number, currentStatus: string) {
@@ -253,6 +408,14 @@ export function CpcaCasesPage() {
     toNullable(form.incidentDate) ||
       toNullable(form.aggressorRank) ||
       toNullable(form.victimRank) ||
+      toNullable(form.detailedViolenceType) ||
+      toNullable(form.harassmentContext) ||
+      toNullable(form.occurrenceLocation) ||
+      toNullable(form.aggressorAgeRange) ||
+      toNullable(form.victimAgeRange) ||
+      toNullable(form.incidentFrequency) ||
+      toNullable(form.hierarchicalFunctionalRelation) ||
+      toNullable(form.occurrenceForm) ||
       Number(form.evidenceCount ?? 0) > 0 ||
       toNullable(form.evidenceSummary),
   );
@@ -268,6 +431,8 @@ export function CpcaCasesPage() {
   const hasStep3Progress = Boolean(
     toNullable(form.procedureReference) ||
       toNullable(form.preliminaryReportDate) ||
+      toNullable(form.administrativeProcedure) ||
+      toNullable(form.procedureCurrentSituation) ||
       form.procedureType !== 'NOT_DEFINED',
   );
   const dataUnlockedStep = hasStep3Progress ? 3 : hasStep2Progress ? 2 : hasStep1Progress ? 1 : 0;
@@ -299,8 +464,18 @@ export function CpcaCasesPage() {
       incidentDate: item.incidentDate ? String(item.incidentDate).slice(0, 10) : '',
       aggressorRank: item.aggressorRank ?? '',
       aggressorGender: item.aggressorGender ?? 'NAO_INFORMADO',
+      aggressorAgeRange: item.aggressorAgeRange ?? '',
       victimRank: item.victimRank ?? '',
       victimGender: item.victimGender ?? 'NAO_INFORMADO',
+      victimAgeRange: item.victimAgeRange ?? '',
+      detailedViolenceType: item.detailedViolenceType ?? '',
+      harassmentContext: item.harassmentContext ?? '',
+      occurrenceLocation: item.occurrenceLocation ?? '',
+      incidentFrequency: item.incidentFrequency ?? '',
+      hierarchicalFunctionalRelation: item.hierarchicalFunctionalRelation ?? '',
+      occurrenceForm: item.occurrenceForm ?? '',
+      administrativeProcedure: item.administrativeProcedure ?? '',
+      procedureCurrentSituation: item.procedureCurrentSituation ?? '',
       evidenceCount: Number(item.evidenceCount ?? 0),
       evidenceSummary: item.evidenceSummary ?? '',
       confidentialityTermSigned: Boolean(item.confidentialityTermSigned),
@@ -332,6 +507,9 @@ export function CpcaCasesPage() {
         ? String(item.victimFeedbackDate).slice(0, 10)
         : '',
       retaliationRisk: Boolean(item.retaliationRisk),
+      retaliationReported:
+        item.retaliationReported ?? (item.retaliationRisk ? 'SIM' : 'NAO'),
+      retaliationAgainst: item.retaliationAgainst ?? '',
       retaliationNotes: item.retaliationNotes ?? '',
       outsourcedAccused: Boolean(item.outsourcedAccused),
       contractorReferralDate: item.contractorReferralDate
@@ -428,17 +606,38 @@ export function CpcaCasesPage() {
       return;
     }
 
+    const inferredComplaintType = inferMacroComplaintTypeFromDetailed(
+      form.detailedViolenceType,
+    );
+    const macroComplaintType = inferredComplaintType ?? form.complaintType;
+    const retaliationRisk =
+      form.retaliationReported === 'SIM'
+        ? true
+        : form.retaliationReported === 'NAO'
+          ? false
+          : Boolean(form.retaliationRisk);
+
     const payload: Record<string, any> = {
       omId: form.localityId || undefined,
-      complaintType: form.complaintType,
+      complaintType: macroComplaintType,
       notifierType: form.notifierType,
       status: form.status,
       procedureType: form.procedureType,
       incidentDate: toNullable(form.incidentDate),
       aggressorRank: form.aggressorRank,
       aggressorGender: form.aggressorGender,
+      aggressorAgeRange: toNullable(form.aggressorAgeRange),
       victimRank: form.victimRank,
       victimGender: form.victimGender,
+      victimAgeRange: toNullable(form.victimAgeRange),
+      detailedViolenceType: toNullable(form.detailedViolenceType),
+      harassmentContext: toNullable(form.harassmentContext),
+      occurrenceLocation: toNullable(form.occurrenceLocation),
+      incidentFrequency: toNullable(form.incidentFrequency),
+      hierarchicalFunctionalRelation: toNullable(form.hierarchicalFunctionalRelation),
+      occurrenceForm: toNullable(form.occurrenceForm),
+      administrativeProcedure: toNullable(form.administrativeProcedure),
+      procedureCurrentSituation: toNullable(form.procedureCurrentSituation),
       evidenceCount: Number(form.evidenceCount ?? 0),
       evidenceSummary: toNullable(form.evidenceSummary),
       confidentialityTermSigned: Boolean(form.confidentialityTermSigned),
@@ -462,7 +661,9 @@ export function CpcaCasesPage() {
       victimFeedbackSummary: toNullable(form.victimFeedbackSummary),
       notifierFeedbackDate: toNullable(form.notifierFeedbackDate),
       victimFeedbackDate: toNullable(form.victimFeedbackDate),
-      retaliationRisk: Boolean(form.retaliationRisk),
+      retaliationRisk,
+      retaliationReported: toNullable(form.retaliationReported),
+      retaliationAgainst: toNullable(form.retaliationAgainst),
       retaliationNotes: toNullable(form.retaliationNotes),
       outsourcedAccused: Boolean(form.outsourcedAccused),
       contractorReferralDate: toNullable(form.contractorReferralDate),
@@ -534,11 +735,34 @@ export function CpcaCasesPage() {
           <TextField
             select
             size="small"
-            label="Tipo"
+            label="Tipo (macro)"
             value={form.complaintType}
             onChange={(e) => setForm((prev) => ({ ...prev, complaintType: e.target.value }))}
           >
             {COMPLAINT_TYPE_OPTIONS.map((item) => (
+              <MenuItem key={item.value} value={item.value}>
+                {item.label}
+              </MenuItem>
+            ))}
+          </TextField>
+
+          <TextField
+            select
+            size="small"
+            label="Tipo de assédio ou violência"
+            value={form.detailedViolenceType}
+            onChange={(e) => {
+              const nextDetailedType = e.target.value;
+              const inferred = inferMacroComplaintTypeFromDetailed(nextDetailedType);
+              setForm((prev) => ({
+                ...prev,
+                detailedViolenceType: nextDetailedType,
+                complaintType: inferred ?? prev.complaintType,
+              }));
+            }}
+          >
+            <MenuItem value="">Selecionar</MenuItem>
+            {DETAILED_VIOLENCE_TYPE_OPTIONS.map((item) => (
               <MenuItem key={item.value} value={item.value}>
                 {item.label}
               </MenuItem>
@@ -560,6 +784,21 @@ export function CpcaCasesPage() {
           </TextField>
 
           <TextField
+            select
+            size="small"
+            label="Contexto do assédio"
+            value={form.harassmentContext}
+            onChange={(e) => setForm((prev) => ({ ...prev, harassmentContext: e.target.value }))}
+          >
+            <MenuItem value="">Selecionar</MenuItem>
+            {HARASSMENT_CONTEXT_OPTIONS.map((item) => (
+              <MenuItem key={item.value} value={item.value}>
+                {item.label}
+              </MenuItem>
+            ))}
+          </TextField>
+
+          <TextField
             size="small"
             type="date"
             label="Data do fato"
@@ -567,6 +806,22 @@ export function CpcaCasesPage() {
             value={form.incidentDate}
             onChange={(e) => setForm((prev) => ({ ...prev, incidentDate: e.target.value }))}
           />
+
+          <TextField
+            select
+            size="small"
+            label="Local da ocorrência"
+            value={form.occurrenceLocation}
+            onChange={(e) => setForm((prev) => ({ ...prev, occurrenceLocation: e.target.value }))}
+            sx={{ gridColumn: { xs: '1 / -1', md: '1 / -1' } }}
+          >
+            <MenuItem value="">Selecionar</MenuItem>
+            {OCCURRENCE_LOCATION_OPTIONS.map((item) => (
+              <MenuItem key={item.value} value={item.value}>
+                {item.label}
+              </MenuItem>
+            ))}
+          </TextField>
 
           <TextField
             select
@@ -599,6 +854,21 @@ export function CpcaCasesPage() {
           <TextField
             select
             size="small"
+            label="Faixa etária do acusado"
+            value={form.aggressorAgeRange}
+            onChange={(e) => setForm((prev) => ({ ...prev, aggressorAgeRange: e.target.value }))}
+          >
+            <MenuItem value="">Selecionar</MenuItem>
+            {AGE_RANGE_OPTIONS.map((item) => (
+              <MenuItem key={item.value} value={item.value}>
+                {item.label}
+              </MenuItem>
+            ))}
+          </TextField>
+
+          <TextField
+            select
+            size="small"
             label="Posto/grad. assediado"
             value={form.victimRank}
             onChange={(e) => setForm((prev) => ({ ...prev, victimRank: e.target.value }))}
@@ -618,6 +888,70 @@ export function CpcaCasesPage() {
             onChange={(e) => setForm((prev) => ({ ...prev, victimGender: e.target.value }))}
           >
             {GENDER_OPTIONS.map((item) => (
+              <MenuItem key={item.value} value={item.value}>
+                {item.label}
+              </MenuItem>
+            ))}
+          </TextField>
+
+          <TextField
+            select
+            size="small"
+            label="Faixa etária da vítima/noticiante"
+            value={form.victimAgeRange}
+            onChange={(e) => setForm((prev) => ({ ...prev, victimAgeRange: e.target.value }))}
+          >
+            <MenuItem value="">Selecionar</MenuItem>
+            {AGE_RANGE_OPTIONS.map((item) => (
+              <MenuItem key={item.value} value={item.value}>
+                {item.label}
+              </MenuItem>
+            ))}
+          </TextField>
+
+          <TextField
+            select
+            size="small"
+            label="Frequência dos fatos"
+            value={form.incidentFrequency}
+            onChange={(e) => setForm((prev) => ({ ...prev, incidentFrequency: e.target.value }))}
+          >
+            <MenuItem value="">Selecionar</MenuItem>
+            {INCIDENT_FREQUENCY_OPTIONS.map((item) => (
+              <MenuItem key={item.value} value={item.value}>
+                {item.label}
+              </MenuItem>
+            ))}
+          </TextField>
+
+          <TextField
+            select
+            size="small"
+            label="Relação hierárquica/funcional"
+            value={form.hierarchicalFunctionalRelation}
+            onChange={(e) =>
+              setForm((prev) => ({ ...prev, hierarchicalFunctionalRelation: e.target.value }))
+            }
+            sx={{ gridColumn: { xs: '1 / -1', md: '1 / -1' } }}
+          >
+            <MenuItem value="">Selecionar</MenuItem>
+            {FUNCTIONAL_RELATION_OPTIONS.map((item) => (
+              <MenuItem key={item.value} value={item.value}>
+                {item.label}
+              </MenuItem>
+            ))}
+          </TextField>
+
+          <TextField
+            select
+            size="small"
+            label="Forma de ocorrência"
+            value={form.occurrenceForm}
+            onChange={(e) => setForm((prev) => ({ ...prev, occurrenceForm: e.target.value }))}
+            sx={{ gridColumn: { xs: '1 / -1', md: '1 / -1' } }}
+          >
+            <MenuItem value="">Selecionar</MenuItem>
+            {OCCURRENCE_FORM_OPTIONS.map((item) => (
               <MenuItem key={item.value} value={item.value}>
                 {item.label}
               </MenuItem>
@@ -786,6 +1120,40 @@ export function CpcaCasesPage() {
             >
               {PROCEDURE_OPTIONS.map((item) => (
                 <MenuItem key={item.value} value={item.value}>
+                {item.label}
+              </MenuItem>
+              ))}
+            </TextField>
+
+            <TextField
+              select
+              size="small"
+              label="Procedimento administrativo"
+              value={form.administrativeProcedure}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, administrativeProcedure: e.target.value }))
+              }
+            >
+              <MenuItem value="">Selecionar</MenuItem>
+              {ADMIN_PROCEDURE_OPTIONS.map((item) => (
+                <MenuItem key={item.value} value={item.value}>
+                  {item.label}
+                </MenuItem>
+              ))}
+            </TextField>
+
+            <TextField
+              select
+              size="small"
+              label="Situação atual do procedimento"
+              value={form.procedureCurrentSituation}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, procedureCurrentSituation: e.target.value }))
+              }
+            >
+              <MenuItem value="">Selecionar</MenuItem>
+              {PROCEDURE_CURRENT_SITUATION_OPTIONS.map((item) => (
+                <MenuItem key={item.value} value={item.value}>
                   {item.label}
                 </MenuItem>
               ))}
@@ -893,19 +1261,57 @@ export function CpcaCasesPage() {
             }
             label="Ampla defesa e contraditório assegurados"
           />
-
-          <FormControlLabel
-            control={
-              <Switch
-                checked={form.retaliationRisk}
-                onChange={(e) => setForm((prev) => ({ ...prev, retaliationRisk: e.target.checked }))}
-              />
-            }
-            label="Sinal de retaliação"
-          />
         </Box>
 
-        {form.retaliationRisk && (
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' },
+            gap: 1.2,
+          }}
+        >
+          <TextField
+            select
+            size="small"
+            label="Houve relatos de retaliação?"
+            value={form.retaliationReported}
+            onChange={(e) =>
+              setForm((prev) => ({
+                ...prev,
+                retaliationReported: e.target.value,
+                retaliationAgainst:
+                  e.target.value === 'NAO'
+                    ? 'NAO_OCORREU_RETALIACAO'
+                    : prev.retaliationAgainst,
+              }))
+            }
+          >
+            {RETALIATION_REPORTED_OPTIONS.map((item) => (
+              <MenuItem key={item.value} value={item.value}>
+                {item.label}
+              </MenuItem>
+            ))}
+          </TextField>
+
+          <TextField
+            select
+            size="small"
+            label="Ocorreu retaliação contra quem?"
+            value={form.retaliationAgainst}
+            onChange={(e) =>
+              setForm((prev) => ({ ...prev, retaliationAgainst: e.target.value }))
+            }
+          >
+            <MenuItem value="">Selecionar</MenuItem>
+            {RETALIATION_TARGET_OPTIONS.map((item) => (
+              <MenuItem key={item.value} value={item.value}>
+                {item.label}
+              </MenuItem>
+            ))}
+          </TextField>
+        </Box>
+
+        {form.retaliationReported === 'SIM' && (
           <TextField
             size="small"
             label="Observações sobre retaliação"
