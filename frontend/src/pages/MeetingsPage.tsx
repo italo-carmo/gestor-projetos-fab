@@ -431,7 +431,12 @@ export function MeetingsPage() {
       {meetings.length === 0 && <EmptyState title="Nenhuma reunião" description="Crie uma reunião para começar." />}
 
       {meetings.length > 0 && tab === 0 && (
-        <Box display="grid" gridTemplateColumns={{ xs: '1fr', md: 'repeat(3, 1fr)' }} gap={2}>
+        <Box
+          display="grid"
+          gridTemplateColumns={{ xs: '1fr', md: 'repeat(3, 1fr)' }}
+          gap={2}
+          alignItems="stretch"
+        >
           {meetings.map((meeting: any) => (
             <Card
               key={meeting.id}
@@ -439,10 +444,21 @@ export function MeetingsPage() {
               sx={{
                 background: STATUS_BG[meeting.status] ?? '#F5F8FC',
                 borderLeft: `4px solid ${meeting.status === 'PLANNED' ? '#1976d2' : meeting.status === 'HELD' ? '#2e7d32' : '#c62828'}`,
+                height: '100%',
+                display: 'flex',
               }}
             >
-              <CardContent sx={{ py: 1.25, px: 1.5, '&:last-child': { pb: 1.25 } }}>
-                <Stack spacing={0.6}>
+              <CardContent
+                sx={{
+                  py: 1.25,
+                  px: 1.5,
+                  '&:last-child': { pb: 1.25 },
+                  display: 'flex',
+                  flexDirection: 'column',
+                  width: '100%',
+                }}
+              >
+                <Stack spacing={0.6} sx={{ flex: 1 }}>
                   <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1}>
                     <Typography variant="subtitle2" sx={{ fontWeight: 700, lineHeight: 1.25 }}>
                       {format(new Date(meeting.datetime), 'dd/MM/yyyy HH:mm')}
@@ -473,7 +489,12 @@ export function MeetingsPage() {
                       ? `Online${meeting.meetingLink ? ` • ${meeting.meetingLink}` : ''}`
                       : meeting.location ?? meeting.locality?.name ?? '—'}
                   </Typography>
-                  <Button size="small" sx={{ alignSelf: 'flex-start', minHeight: 24, px: 0.5 }} variant="text" onClick={() => openEdit(meeting)}>
+                  <Button
+                    size="small"
+                    sx={{ alignSelf: 'flex-start', minHeight: 24, px: 0.5, mt: 'auto' }}
+                    variant="text"
+                    onClick={() => openEdit(meeting)}
+                  >
                     Ver detalhes
                   </Button>
                 </Stack>
@@ -544,11 +565,23 @@ export function MeetingsPage() {
                   (meeting: any) => format(new Date(meeting.datetime), 'yyyy-MM-dd') === format(day, 'yyyy-MM-dd'),
                 );
                 return (
-                  <Box key={day.toISOString()} sx={{ border: '1px solid #E6ECF5', borderRadius: 2, p: 1 }}>
+                  <Box
+                    key={day.toISOString()}
+                    sx={{
+                      border: '1px solid #E6ECF5',
+                      borderRadius: 2,
+                      p: 1,
+                      minHeight: { xs: 124, md: 156 },
+                      maxHeight: { xs: 124, md: 156 },
+                      display: 'flex',
+                      flexDirection: 'column',
+                      overflow: 'hidden',
+                    }}
+                  >
                     <Typography variant="caption" color="text.secondary">
                       {format(day, 'dd/MM')}
                     </Typography>
-                    <Stack spacing={0.5} mt={1}>
+                    <Stack spacing={0.5} mt={1} sx={{ overflowY: 'auto', pr: 0.25 }}>
                       {dayMeetings.map((meeting: any) => (
                         <Chip
                           key={meeting.id}
@@ -559,6 +592,14 @@ export function MeetingsPage() {
                             cursor: 'pointer',
                             bgcolor: STATUS_BG[meeting.status],
                             borderLeft: `3px solid ${meeting.status === 'PLANNED' ? '#1976d2' : meeting.status === 'HELD' ? '#2e7d32' : '#c62828'}`,
+                            width: '100%',
+                            justifyContent: 'flex-start',
+                            '& .MuiChip-label': {
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              display: 'block',
+                            },
                           }}
                         />
                       ))}
