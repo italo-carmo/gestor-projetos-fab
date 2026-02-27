@@ -136,6 +136,7 @@ export function AdminRbacPage() {
   const users = useMemo(
     () =>
       ((usersQuery.data?.items ?? []) as UserItem[])
+        .filter((user) => String(user.ldapUid ?? '').trim().length > 0)
         .filter((user) => getUserRoles(user).length > 0)
         .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')),
     [usersQuery.data?.items],
@@ -368,7 +369,7 @@ export function AdminRbacPage() {
         Admin RBAC
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Gerencie papéis e localidade dos usuários de forma centralizada.
+        Gerencie papéis e localidade dos usuários LDAP de forma centralizada.
       </Typography>
 
       <Stack spacing={2.2}>

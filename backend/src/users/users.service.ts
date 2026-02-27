@@ -101,6 +101,10 @@ export class UsersService {
 
   async list() {
     const users = await this.prisma.user.findMany({
+      where: {
+        ldapUid: { not: null },
+        roles: { some: {} },
+      },
       select: {
         id: true,
         name: true,
@@ -124,7 +128,9 @@ export class UsersService {
       },
       orderBy: { name: 'asc' },
     });
-    return users.map((user) => this.mapUserRoles(user));
+    return users
+      .filter((user) => String(user.ldapUid ?? '').trim().length > 0)
+      .map((user) => this.mapUserRoles(user));
   }
 
   async update(
@@ -269,16 +275,59 @@ export class UsersService {
   }
 
   async removeRole(userId: string, roleId: string) {
-    const deleted = await this.prisma.userRole.deleteMany({
-      where: {
-        userId,
-        roleId,
-      },
-    });
+    return this.prisma.$transaction(async (tx) => {
+      const deleted = await tx.userRole.deleteMany({
+        where: {
+          userId,
+          roleId,
+        },
+      });
 
-    return {
-      ok: true,
-      removed: deleted.count,
-    };
+      const targetUser = await tx.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          ldapUid: true,
+          _count: {
+            select: { roles: true },
+          },
+        },
+      });
+
+      let userRemoved = false;
+      let userDeactivated = false;
+
+      if (
+        targetUser &&
+        targetUser._count.roles === 0 &&
+        String(targetUser.ldapUid ?? '').trim().length === 0
+      ) {
+        await tx.userModuleAccessOverride.deleteMany({ where: { userId } });
+        await tx.refreshToken.deleteMany({ where: { userId } });
+
+        try {
+          await tx.user.delete({ where: { id: userId } });
+          userRemoved = true;
+        } catch {
+          await tx.user.update({
+            where: { id: userId },
+            data: {
+              isActive: false,
+              localityId: null,
+              specialtyId: null,
+              eloRoleId: null,
+            },
+          });
+          userDeactivated = true;
+        }
+      }
+
+      return {
+        ok: true,
+        removed: deleted.count,
+        userRemoved,
+        userDeactivated,
+      };
+    });
   }
 }
