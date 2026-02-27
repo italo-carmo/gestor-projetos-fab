@@ -103,6 +103,6 @@
   },
   "TASK_TEMPLATE_IN_USE": {
     "httpStatus": 409,
-    "message": "Não é possível excluir o modelo porque ele já está vinculado a tarefas ou checklist."
+    "message": "Não é possível excluir o modelo porque ele já possui tarefas geradas."
   }
 }

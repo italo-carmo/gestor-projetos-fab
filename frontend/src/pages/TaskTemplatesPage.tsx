@@ -618,7 +618,7 @@ export function TaskTemplatesPage() {
         title="Excluir modelo de tarefa"
         message="Confirma a exclusão deste modelo?"
         highlightText={deleteTarget?.title ?? ""}
-        note="Se o modelo já estiver vinculado a tarefas ou checklist, a exclusão será bloqueada."
+        note="A exclusão só é bloqueada quando já existem tarefas geradas a partir deste modelo."
         confirmLabel={deleteTemplate.isPending ? "Excluindo..." : "Excluir"}
         severity="error"
         confirmLoading={deleteTemplate.isPending}

@@ -279,14 +279,21 @@ export class TasksService {
 
     const linkedInstances = template._count.instances ?? 0;
     const linkedChecklistItems = template._count.checklistItems ?? 0;
-    if (linkedInstances > 0 || linkedChecklistItems > 0) {
+    if (linkedInstances > 0) {
       throwError('TASK_TEMPLATE_IN_USE', {
         linkedInstances,
-        linkedChecklistItems,
       });
     }
 
-    await this.prisma.taskTemplate.delete({ where: { id } });
+    await this.prisma.$transaction(async (tx) => {
+      if (linkedChecklistItems > 0) {
+        await tx.checklistItem.deleteMany({
+          where: { taskTemplateId: id },
+        });
+      }
+
+      await tx.taskTemplate.delete({ where: { id } });
+    });
 
     await this.audit.log({
       userId: user?.id,
@@ -294,7 +301,10 @@ export class TasksService {
       action: 'delete',
       entityId: id,
       localityId: user?.localityId ?? undefined,
-      diffJson: { title: template.title },
+      diffJson: {
+        title: template.title,
+        removedChecklistLinks: linkedChecklistItems,
+      },
     });
 
     return { ok: true };
