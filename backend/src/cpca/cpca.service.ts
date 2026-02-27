@@ -772,8 +772,6 @@ export class CpcaService {
         payload.contractorFollowUpNotes,
       ),
       archivedAt: null,
-      createdById: actorId,
-      updatedById: actorId,
     } as const;
 
     let created: any = null;
@@ -786,6 +784,8 @@ export class CpcaService {
           data: {
             caseNumber: nextCaseNumber,
             locality: { connect: { id: localityId } },
+            createdBy: { connect: { id: actorId } },
+            updatedBy: { connect: { id: actorId } },
             ...createData,
           },
           include: {
@@ -1080,7 +1080,7 @@ export class CpcaService {
             : nextStatus === 'ARCHIVED'
               ? new Date()
               : undefined,
-        updatedById: actorId,
+        updatedBy: { connect: { id: actorId } },
       },
       include: {
         locality: { select: { id: true, code: true, name: true } },
