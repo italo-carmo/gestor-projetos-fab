@@ -92,6 +92,10 @@ function roleRequiresSpecialty(roleName: string | null | undefined) {
   return normalized === 'admin especialidade local' || normalized === 'admin especialidade nacional';
 }
 
+function roleIsCpca(roleName: string | null | undefined) {
+  return normalizeRoleName(roleName) === 'cpca';
+}
+
 export function AdminRbacPage() {
   const { data: me } = useMe();
   const toast = useToast();
@@ -175,6 +179,8 @@ export function AdminRbacPage() {
   );
   const editRoleNeedsLocality = selectedEditRoles.some((role) => roleRequiresLocality(role.name));
   const ldapRoleNeedsLocality = selectedLdapRoles.some((role) => roleRequiresLocality(role.name));
+  const editHasCpcaRole = selectedEditRoles.some((role) => roleIsCpca(role.name));
+  const ldapHasCpcaRole = selectedLdapRoles.some((role) => roleIsCpca(role.name));
   const editRoleNeedsSpecialty = selectedEditRoles.some((role) => roleRequiresSpecialty(role.name));
   const ldapRoleNeedsSpecialty = selectedLdapRoles.some((role) => roleRequiresSpecialty(role.name));
   const filteredUsers = useMemo(() => {
@@ -222,7 +228,9 @@ export function AdminRbacPage() {
     }
     if (editRoleNeedsLocality && !editLocalityId) {
       toast.push({
-        message: 'Este papel exige localidade obrigatória.',
+        message: editHasCpcaRole
+          ? 'Ao atribuir CPCA, selecione a OM obrigatória.'
+          : 'Este papel exige localidade obrigatória.',
         severity: 'warning',
       });
       return;
@@ -304,7 +312,9 @@ export function AdminRbacPage() {
     }
     if (ldapRoleNeedsLocality && !ldapLocalityId) {
       toast.push({
-        message: 'Este papel exige localidade obrigatória.',
+        message: ldapHasCpcaRole
+          ? 'Ao atribuir CPCA, selecione a OM obrigatória.'
+          : 'Este papel exige localidade obrigatória.',
         severity: 'warning',
       });
       return;
@@ -428,27 +438,31 @@ export function AdminRbacPage() {
                     </MenuItem>
                   ))}
                 </TextField>
-                <Autocomplete
-                  size="small"
-                  options={localities}
-                  value={localities.find((locality) => locality.id === ldapLocalityId) ?? null}
-                  onChange={(_event, value) => setLdapLocalityId(value?.id ?? '')}
-                  getOptionLabel={(option) => `${option.name} (${option.code})`}
-                  isOptionEqualToValue={(option, value) => option.id === value.id}
-                  sx={{ minWidth: 260 }}
-                  renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      label="Localidade"
-                      error={ldapRoleNeedsLocality && !ldapLocalityId}
-                      helperText={
-                        ldapRoleNeedsLocality && !ldapLocalityId
-                          ? 'Obrigatória para este papel.'
-                          : 'Digite para filtrar OMs.'
-                      }
-                    />
-                  )}
-                />
+                {ldapRoleNeedsLocality && (
+                  <Autocomplete
+                    size="small"
+                    options={localities}
+                    value={localities.find((locality) => locality.id === ldapLocalityId) ?? null}
+                    onChange={(_event, value) => setLdapLocalityId(value?.id ?? '')}
+                    getOptionLabel={(option) => `${option.name} (${option.code})`}
+                    isOptionEqualToValue={(option, value) => option.id === value.id}
+                    sx={{ minWidth: 260 }}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label={ldapHasCpcaRole ? 'OM (obrigatória para CPCA)' : 'OM / Localidade'}
+                        error={ldapRoleNeedsLocality && !ldapLocalityId}
+                        helperText={
+                          ldapRoleNeedsLocality && !ldapLocalityId
+                            ? ldapHasCpcaRole
+                              ? 'CPCA sempre deve estar vinculado a uma OM.'
+                              : 'Obrigatória para este papel.'
+                            : 'Digite para filtrar OMs.'
+                        }
+                      />
+                    )}
+                  />
+                )}
                 <TextField
                   select
                   size="small"
@@ -701,26 +715,30 @@ export function AdminRbacPage() {
                 </MenuItem>
               ))}
             </TextField>
-            <Autocomplete
-              size="small"
-              options={localities}
-              value={localities.find((locality) => locality.id === editLocalityId) ?? null}
-              onChange={(_event, value) => setEditLocalityId(value?.id ?? '')}
-              getOptionLabel={(option) => `${option.name} (${option.code})`}
-              isOptionEqualToValue={(option, value) => option.id === value.id}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label="Localidade"
-                  error={editRoleNeedsLocality && !editLocalityId}
-                  helperText={
-                    editRoleNeedsLocality && !editLocalityId
-                      ? 'Localidade obrigatória para este papel.'
-                      : 'Digite para filtrar OMs.'
-                  }
-                />
-              )}
-            />
+            {editRoleNeedsLocality && (
+              <Autocomplete
+                size="small"
+                options={localities}
+                value={localities.find((locality) => locality.id === editLocalityId) ?? null}
+                onChange={(_event, value) => setEditLocalityId(value?.id ?? '')}
+                getOptionLabel={(option) => `${option.name} (${option.code})`}
+                isOptionEqualToValue={(option, value) => option.id === value.id}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label={editHasCpcaRole ? 'OM (obrigatória para CPCA)' : 'OM / Localidade'}
+                    error={editRoleNeedsLocality && !editLocalityId}
+                    helperText={
+                      editRoleNeedsLocality && !editLocalityId
+                        ? editHasCpcaRole
+                          ? 'CPCA sempre deve estar vinculado a uma OM.'
+                          : 'Localidade obrigatória para este papel.'
+                        : 'Digite para filtrar OMs.'
+                    }
+                  />
+                )}
+              />
+            )}
             <TextField
               select
               size="small"
