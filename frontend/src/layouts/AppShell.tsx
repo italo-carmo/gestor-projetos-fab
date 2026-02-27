@@ -180,7 +180,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       return hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI]);
     }
     if (item.to === '/cpca-cases') {
-      return hasAnyRole(me, [ROLE_CPCA, ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP]) && can(me, 'cpca_cases', 'view');
+      return hasAnyRole(me, [ROLE_CPCA, ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI]) && can(me, 'cpca_cases', 'view');
     }
     if (item.to === '/cpca-stats') {
       return hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI]) && can(me, 'cpca_cases', 'view');

@@ -4,7 +4,13 @@ import { CurrentUser } from '../common/current-user.decorator';
 import { throwError } from '../common/http-error';
 import { RequirePermission } from '../rbac/require-permission.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
-import { hasAnyRole, ROLE_COMANDANTE_COMGEP, ROLE_COORDENACAO_CIPAVD, ROLE_CPCA } from '../rbac/role-access';
+import {
+  hasAnyRole,
+  ROLE_COMANDANTE_COMGEP,
+  ROLE_COORDENACAO_CIPAVD,
+  ROLE_CPCA,
+  ROLE_TI,
+} from '../rbac/role-access';
 import type { RbacUser } from '../rbac/rbac.types';
 import { AddCpcaCaseCommentDto } from './dto/add-cpca-case-comment.dto';
 import { CreateCpcaCaseDto } from './dto/create-cpca-case.dto';
@@ -84,7 +90,7 @@ export class CpcaController {
   }
 
   private assertProcessAccess(user?: RbacUser) {
-    if (!hasAnyRole(user, [ROLE_CPCA, ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP])) {
+    if (!hasAnyRole(user, [ROLE_CPCA, ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI])) {
       throwError('RBAC_FORBIDDEN');
     }
   }

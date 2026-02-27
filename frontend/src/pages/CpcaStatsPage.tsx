@@ -32,6 +32,7 @@ import {
   hasAnyRole,
   ROLE_COMANDANTE_COMGEP,
   ROLE_COORDENACAO_CIPAVD,
+  ROLE_TI,
 } from '../app/roleAccess';
 import { useCpcaCaseStats, useLocalities, useMe } from '../api/hooks';
 import { EmptyState } from '../components/states/EmptyState';
@@ -78,7 +79,7 @@ function buildDefaultFromDate() {
 export function CpcaStatsPage() {
   const [params, setParams] = useSearchParams();
   const { data: me } = useMe();
-  const isNationalScope = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP]);
+  const isNationalScope = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI]);
   const localitiesQuery = useLocalities(isNationalScope);
 
   const localityId = params.get('localityId') ?? '';
@@ -179,7 +180,7 @@ export function CpcaStatsPage() {
     {
       label: 'Tempo médio até fechamento',
       value: `${summary.averageDaysToClosure ?? 0} dias`,
-      hint: 'CONCLUDED + ARCHIVED',
+      hint: 'Concluídas + Arquivadas',
       bg: '#F2EEFF',
     },
     {

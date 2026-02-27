@@ -50,6 +50,9 @@ export function DashboardNationalPage() {
     localityId: localityId || undefined,
     from: cpcaFrom,
   });
+  const cpcaTotalQuery = useCpcaCaseStats({
+    localityId: localityId || undefined,
+  });
   const qc = useQueryClient();
 
   if (dashboardQuery.isLoading) return <SkeletonState />;
@@ -64,6 +67,7 @@ export function DashboardNationalPage() {
   const unassignedItems = (dashboardQuery.data?.unassignedItems ?? []) as NationalActivityItem[];
   const riskTasks = ((dashboardQuery.data?.riskTasks ?? []) as NationalActivityItem[]).slice(0, 5);
   const cpcaSummary = cpcaStatsQuery.data?.summary ?? {};
+  const cpcaTotalSummary = cpcaTotalQuery.data?.summary ?? {};
   const detailItems = detailView === 'late' ? lateItems : detailView === 'unassigned' ? unassignedItems : [];
   const detailTitle =
     detailView === 'late'
@@ -82,7 +86,12 @@ export function DashboardNationalPage() {
       bg: '#E8F2FF',
     },
     { label: 'Relatórios', value: `${totals.reportsProduced ?? 0} produzidos`, icon: <DescriptionIcon sx={{ fontSize: 28 }} />, bg: '#FFF6E1' },
-    { label: 'CPCA em aberto', value: String(cpcaSummary.openCases ?? 0), icon: <PolicyRoundedIcon sx={{ fontSize: 28 }} />, bg: '#FFECEF' },
+    {
+      label: 'Denúncias',
+      value: String(cpcaTotalSummary.totalCases ?? cpcaSummary.totalCases ?? 0),
+      icon: <PolicyRoundedIcon sx={{ fontSize: 28 }} />,
+      bg: '#FFECEF',
+    },
   ];
 
   return (

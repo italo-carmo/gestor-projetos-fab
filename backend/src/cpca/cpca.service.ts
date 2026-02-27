@@ -10,6 +10,7 @@ import {
   ROLE_COMANDANTE_COMGEP,
   ROLE_COORDENACAO_CIPAVD,
   ROLE_CPCA,
+  ROLE_TI,
 } from '../rbac/role-access';
 import type { RbacUser } from '../rbac/rbac.types';
 import { CreateCpcaCaseDto } from './dto/create-cpca-case.dto';
@@ -973,7 +974,7 @@ export class CpcaService {
       throwError('RBAC_FORBIDDEN');
     }
 
-    if (hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP])) {
+    if (hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI])) {
       return {};
     }
 
@@ -988,7 +989,7 @@ export class CpcaService {
   }
 
   private hasWorkflowAccess(user?: RbacUser) {
-    return hasAnyRole(user, [ROLE_CPCA, ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP]);
+    return hasAnyRole(user, [ROLE_CPCA, ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI]);
   }
 
   private assertCaseAccess(localityId: string, user?: RbacUser) {

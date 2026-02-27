@@ -92,7 +92,7 @@ function App() {
                   element={
                     <RequireRoleAccess
                       allow={(user) =>
-                        hasAnyRole(user, [ROLE_CPCA, ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP])
+                        hasAnyRole(user, [ROLE_CPCA, ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI])
                       }
                     >
                       <CpcaCasesPage />

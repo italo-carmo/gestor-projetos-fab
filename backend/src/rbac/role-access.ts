@@ -125,5 +125,5 @@ export function canEditRecruitsByRole(
 }
 
 export function hasCpcaWorkflowAccess(user: RbacUser | undefined) {
-  return hasAnyRole(user, [ROLE_CPCA, ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP]);
+  return hasAnyRole(user, [ROLE_CPCA, ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI]);
 }
