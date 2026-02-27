@@ -807,7 +807,11 @@ export function AppShell({ children }: { children: ReactNode }) {
                 }
                 setSearchParams(next);
               }}
-              sx={{ minWidth: 220, display: { xs: "none", md: "inline-flex" } }}
+              sx={{
+                minWidth: 160,
+                maxWidth: 190,
+                display: { xs: "none", xl: "inline-flex" },
+              }}
             >
               <MenuItem value="">Sem filtro</MenuItem>
               {availableGlobalLocalities.map((locality) => (
@@ -836,9 +840,10 @@ export function AppShell({ children }: { children: ReactNode }) {
               }}
               disabled={switchableRoleCount < 2}
               sx={{
-                minWidth: { xs: 120, sm: 140, md: 180 },
-                maxWidth: { md: 220 },
+                minWidth: { xs: 104, sm: 124, md: 142 },
+                maxWidth: { md: 176 },
                 display: "inline-flex",
+                flexShrink: 0,
               }}
             >
               {roleOptions.map((role) => (
@@ -856,7 +861,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             }
             size="small"
             sx={{
-              display: { xs: "none", md: "inline-flex" },
+              display: { xs: "none", xl: "inline-flex" },
               bgcolor: alpha("#0C657E", 0.08),
               color: "#0A4A5E",
             }}
