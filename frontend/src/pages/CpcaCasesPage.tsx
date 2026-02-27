@@ -74,6 +74,13 @@ const PROCEDURE_OPTIONS = [
   { value: 'SINDICANCIA', label: 'Sindicância' },
   { value: 'PAD', label: 'PAD' },
   { value: 'IPM', label: 'IPM' },
+  { value: 'BOLETIM_OCORRENCIA', label: 'Boletim de ocorrência' },
+  { value: 'INQUERITO_CIVIL', label: 'Inquérito civil' },
+  { value: 'NAO_HOUVE', label: 'Não houve' },
+  { value: 'INQUERITO_POLICIAL_COMUM', label: 'Inquérito Policial Comum' },
+  { value: 'NOTICIA_FATO', label: 'Notícia de Fato' },
+  { value: 'CONSELHO_DISCIPLINA', label: 'Conselho de Disciplina' },
+  { value: 'CONSELHO_JUSTIFICACAO', label: 'Conselho de Justificação' },
 ];
 
 const GENDER_OPTIONS = [
@@ -170,20 +177,6 @@ const OCCURRENCE_FORM_OPTIONS = [
   { value: 'EXIBICAO_MATERIAL_PORNOGRAFICO', label: 'Exibição de Material Pornográfico' },
 ];
 
-const ADMIN_PROCEDURE_OPTIONS = [
-  { value: 'SINDICANCIA', label: 'Sindicância' },
-  { value: 'IPM', label: 'IPM' },
-  { value: 'PATD', label: 'PATD' },
-  { value: 'PAD', label: 'PAD' },
-  { value: 'BOLETIM_OCORRENCIA', label: 'Boletim de ocorrência' },
-  { value: 'INQUERITO_CIVIL', label: 'Inquérito civil' },
-  { value: 'NAO_HOUVE', label: 'Não houve' },
-  { value: 'INQUERITO_POLICIAL_COMUM', label: 'Inquérito Policial Comum' },
-  { value: 'NOTICIA_FATO', label: 'Notícia de Fato' },
-  { value: 'CONSELHO_DISCIPLINA', label: 'Conselho de Disciplina' },
-  { value: 'CONSELHO_JUSTIFICACAO', label: 'Conselho de Justificação' },
-];
-
 const PROCEDURE_CURRENT_SITUATION_OPTIONS = [
   { value: 'EM_ANDAMENTO', label: 'Em andamento' },
   { value: 'MEDIDA_DISCIPLINAR_APLICADA', label: 'Medida disciplinar aplicada' },
@@ -262,7 +255,6 @@ const defaultForm = {
   incidentFrequency: '',
   hierarchicalFunctionalRelation: '',
   occurrenceForm: '',
-  administrativeProcedure: '',
   procedureCurrentSituation: '',
   evidenceCount: 0,
   evidenceSummary: '',
@@ -431,7 +423,6 @@ export function CpcaCasesPage() {
   const hasStep3Progress = Boolean(
     toNullable(form.procedureReference) ||
       toNullable(form.preliminaryReportDate) ||
-      toNullable(form.administrativeProcedure) ||
       toNullable(form.procedureCurrentSituation) ||
       form.procedureType !== 'NOT_DEFINED',
   );
@@ -474,7 +465,6 @@ export function CpcaCasesPage() {
       incidentFrequency: item.incidentFrequency ?? '',
       hierarchicalFunctionalRelation: item.hierarchicalFunctionalRelation ?? '',
       occurrenceForm: item.occurrenceForm ?? '',
-      administrativeProcedure: item.administrativeProcedure ?? '',
       procedureCurrentSituation: item.procedureCurrentSituation ?? '',
       evidenceCount: Number(item.evidenceCount ?? 0),
       evidenceSummary: item.evidenceSummary ?? '',
@@ -600,7 +590,7 @@ export function CpcaCasesPage() {
     }
     if (!form.aggressorRank || !form.victimRank) {
       toast.push({
-        message: 'Informe posto/graduação do assediador e do assediado.',
+        message: 'Informe posto/graduação do acusado e da vítima/noticiante.',
         severity: 'warning',
       });
       return;
@@ -636,7 +626,6 @@ export function CpcaCasesPage() {
       incidentFrequency: toNullable(form.incidentFrequency),
       hierarchicalFunctionalRelation: toNullable(form.hierarchicalFunctionalRelation),
       occurrenceForm: toNullable(form.occurrenceForm),
-      administrativeProcedure: toNullable(form.administrativeProcedure),
       procedureCurrentSituation: toNullable(form.procedureCurrentSituation),
       evidenceCount: Number(form.evidenceCount ?? 0),
       evidenceSummary: toNullable(form.evidenceSummary),
@@ -826,7 +815,7 @@ export function CpcaCasesPage() {
           <TextField
             select
             size="small"
-            label="Posto/grad. assediador"
+            label="Posto/grad. acusado"
             value={form.aggressorRank}
             onChange={(e) => setForm((prev) => ({ ...prev, aggressorRank: e.target.value }))}
           >
@@ -840,7 +829,7 @@ export function CpcaCasesPage() {
           <TextField
             select
             size="small"
-            label="Sexo assediador"
+            label="Sexo do acusado"
             value={form.aggressorGender}
             onChange={(e) => setForm((prev) => ({ ...prev, aggressorGender: e.target.value }))}
           >
@@ -869,7 +858,7 @@ export function CpcaCasesPage() {
           <TextField
             select
             size="small"
-            label="Posto/grad. assediado"
+            label="Posto/grad. vítima/noticiante"
             value={form.victimRank}
             onChange={(e) => setForm((prev) => ({ ...prev, victimRank: e.target.value }))}
           >
@@ -883,7 +872,7 @@ export function CpcaCasesPage() {
           <TextField
             select
             size="small"
-            label="Sexo assediado"
+            label="Sexo da vítima/noticiante"
             value={form.victimGender}
             onChange={(e) => setForm((prev) => ({ ...prev, victimGender: e.target.value }))}
           >
@@ -1114,7 +1103,7 @@ export function CpcaCasesPage() {
             <TextField
               select
               size="small"
-              label="Procedimento"
+              label="Procedimento administrativo"
               value={form.procedureType}
               onChange={(e) => setForm((prev) => ({ ...prev, procedureType: e.target.value }))}
             >
@@ -1122,23 +1111,6 @@ export function CpcaCasesPage() {
                 <MenuItem key={item.value} value={item.value}>
                 {item.label}
               </MenuItem>
-              ))}
-            </TextField>
-
-            <TextField
-              select
-              size="small"
-              label="Procedimento administrativo"
-              value={form.administrativeProcedure}
-              onChange={(e) =>
-                setForm((prev) => ({ ...prev, administrativeProcedure: e.target.value }))
-              }
-            >
-              <MenuItem value="">Selecionar</MenuItem>
-              {ADMIN_PROCEDURE_OPTIONS.map((item) => (
-                <MenuItem key={item.value} value={item.value}>
-                  {item.label}
-                </MenuItem>
               ))}
             </TextField>
 
@@ -1509,7 +1481,7 @@ export function CpcaCasesPage() {
             <TextField
               select
               size="small"
-              label="Procedimento"
+              label="Procedimento administrativo"
               value={procedureType}
               onChange={(e) => updateParam('procedureType', e.target.value)}
               sx={{ minWidth: 180 }}
@@ -1543,7 +1515,7 @@ export function CpcaCasesPage() {
                   <TableCell sx={{ color: '#fff', fontWeight: 700 }}>OM</TableCell>
                   <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Tipo</TableCell>
                   <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Status</TableCell>
-                  <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Procedimento</TableCell>
+                  <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Procedimento administrativo</TableCell>
                   <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Recebimento</TableCell>
                 </TableRow>
               </TableHead>
