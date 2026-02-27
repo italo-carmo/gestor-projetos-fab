@@ -160,6 +160,8 @@ model Locality {
   kpiValues                  KpiValue[]
   auditLogs                  AuditLog[]
   cpcaCases                  CpcComplaintCase[]
+  recruitDesignationsFrom    RecruitOmAssignment[] @relation("RecruitOmAssignmentSource")
+  recruitDesignationsTo      RecruitOmAssignment[] @relation("RecruitOmAssignmentDestination")
 }
 
 model Activity {
@@ -792,6 +794,22 @@ model RecruitsHistory {
   locality            Locality  @relation(fields: [localityId], references: [id])
 
   @@unique([localityId, date])
+}
+
+model RecruitOmAssignment {
+  id                   String   @id @default(cuid())
+  sourceLocalityId     String
+  destinationLocalityId String
+  assignedCount        Int
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  sourceLocality       Locality @relation("RecruitOmAssignmentSource", fields: [sourceLocalityId], references: [id], onDelete: Cascade)
+  destinationLocality  Locality @relation("RecruitOmAssignmentDestination", fields: [destinationLocalityId], references: [id], onDelete: Restrict)
+
+  @@unique([sourceLocalityId, destinationLocalityId])
+  @@index([sourceLocalityId])
+  @@index([destinationLocalityId])
 }
 
 model CpcComplaintCase {

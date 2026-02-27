@@ -1680,6 +1680,24 @@ export function useLocalities(enabled = true) {
   });
 }
 
+export function useOmsCatalog(enabled = true) {
+  return useQuery({
+    queryKey: qk.omsCatalog,
+    queryFn: async () => (await api.get("/localities/oms-catalog")).data,
+    enabled,
+    staleTime: 60_000,
+  });
+}
+
+export function useLocalityRecruitDesignations(localityId: string, enabled = true) {
+  return useQuery({
+    queryKey: qk.recruitDesignations(localityId || ""),
+    queryFn: async () => (await api.get(`/localities/${localityId}/recruit-designations`)).data,
+    enabled: Boolean(localityId) && enabled,
+    staleTime: 10_000,
+  });
+}
+
 export function useEloRoles() {
   return useQuery({
     queryKey: qk.eloRoles,
@@ -1783,6 +1801,27 @@ export function useUpdateLocalityRecruits() {
       ).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.localities });
+      qc.invalidateQueries({ queryKey: ["dashboardRecruits"] });
+      qc.invalidateQueries({ queryKey: ["dashboardNational"] });
+      qc.invalidateQueries({ queryKey: ["dashboardExecutive"] });
+    },
+  });
+}
+
+export function useUpdateLocalityRecruitDesignations() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      localityId: string;
+      items: Array<{ destinationLocalityId: string; assignedCount: number }>;
+    }) =>
+      (
+        await api.put(`/localities/${args.localityId}/recruit-designations`, {
+          items: args.items,
+        })
+      ).data,
+    onSuccess: (_data, args) => {
+      qc.invalidateQueries({ queryKey: qk.recruitDesignations(args.localityId) });
       qc.invalidateQueries({ queryKey: ["dashboardRecruits"] });
       qc.invalidateQueries({ queryKey: ["dashboardNational"] });
       qc.invalidateQueries({ queryKey: ["dashboardExecutive"] });

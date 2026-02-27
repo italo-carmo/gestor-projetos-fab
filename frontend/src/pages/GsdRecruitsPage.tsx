@@ -1,10 +1,14 @@
 import {
+  Alert,
+  Autocomplete,
   Box,
   Button,
   Card,
   CardContent,
+  Divider,
   Drawer,
   MenuItem,
+  Stack,
   Tab,
   Table,
   TableBody,
@@ -19,7 +23,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
   useDashboardRecruits,
+  useLocalityRecruitDesignations,
   useMe,
+  useOmsCatalog,
+  useUpdateLocalityRecruitDesignations,
   useUpdateLocalityRecruits,
 } from '../api/hooks';
 import { can } from '../app/rbac';
@@ -43,6 +50,17 @@ import {
 } from 'recharts';
 
 type RecruitsTab = 'gestao' | 'historico';
+const APP_HEADER_HEIGHT = 96;
+
+type DesignationFormRow = {
+  id: string;
+  destinationLocalityId: string;
+  assignedCount: string;
+};
+
+function createDesignationDraftId() {
+  return `draft-${Math.random().toString(36).slice(2, 10)}`;
+}
 
 function formatHistoryDate(value: string) {
   const [year, month, day] = String(value ?? '').split('-');
@@ -77,12 +95,20 @@ export function GsdRecruitsPage() {
   const selectedHistoryLocalityId = searchParams.get('localityId') ?? '';
 
   const recruitsQuery = useDashboardRecruits({}, canLoadRecruitsData);
+  const omsCatalogQuery = useOmsCatalog(canLoadRecruitsData);
   const updateLocalityRecruits = useUpdateLocalityRecruits();
+  const updateLocalityRecruitDesignations = useUpdateLocalityRecruitDesignations();
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selected, setSelected] = useState<any | null>(null);
   const [formRecruitsCount, setFormRecruitsCount] = useState<string>('');
   const [formDismissalReason, setFormDismissalReason] = useState<string>('');
+  const [designationRows, setDesignationRows] = useState<DesignationFormRow[]>([]);
+  const selectedLocalityId = String(selected?.id ?? '');
+  const recruitDesignationsQuery = useLocalityRecruitDesignations(
+    selectedLocalityId,
+    drawerOpen && Boolean(selectedLocalityId),
+  );
 
   const data = recruitsQuery.data;
   const managementItems = (data?.currentPerLocality ?? []).map((loc: any) => ({
@@ -134,6 +160,22 @@ export function GsdRecruitsPage() {
   );
 
   useEffect(() => {
+    if (!drawerOpen || !selectedLocalityId) return;
+    if (recruitDesignationsQuery.isLoading) return;
+    const rows = ((recruitDesignationsQuery.data?.items ?? []) as Array<any>).map((item) => ({
+      id: String(item.id ?? createDesignationDraftId()),
+      destinationLocalityId: String(item.destinationLocalityId ?? ''),
+      assignedCount: String(item.assignedCount ?? ''),
+    }));
+    setDesignationRows(rows);
+  }, [
+    drawerOpen,
+    recruitDesignationsQuery.data?.items,
+    recruitDesignationsQuery.isLoading,
+    selectedLocalityId,
+  ]);
+
+  useEffect(() => {
     if (!visibleTabs.length) return;
     if (activeTab === requestedTab) return;
 
@@ -182,11 +224,44 @@ export function GsdRecruitsPage() {
     setSelected(locality);
     setFormRecruitsCount(String(locality.recruitsFemaleCountCurrent ?? ''));
     setFormDismissalReason('');
+    setDesignationRows([]);
     setDrawerOpen(true);
+  };
+
+  const addDesignationRow = () => {
+    setDesignationRows((current) => [
+      ...current,
+      {
+        id: createDesignationDraftId(),
+        destinationLocalityId: '',
+        assignedCount: '',
+      },
+    ]);
+  };
+
+  const updateDesignationRow = (
+    rowId: string,
+    patch: Partial<Pick<DesignationFormRow, 'destinationLocalityId' | 'assignedCount'>>,
+  ) => {
+    setDesignationRows((current) =>
+      current.map((row) => (row.id === rowId ? { ...row, ...patch } : row)),
+    );
+  };
+
+  const removeDesignationRow = (rowId: string) => {
+    setDesignationRows((current) => current.filter((row) => row.id !== rowId));
   };
 
   const handleSave = async () => {
     if (!selected) return;
+    if (recruitDesignationsQuery.isError) {
+      toast.push({
+        message:
+          'Não foi possível validar a distribuição por OM. Reabra a edição e tente novamente.',
+        severity: 'warning',
+      });
+      return;
+    }
 
     const value = Number(formRecruitsCount);
     if (!Number.isInteger(value) || value < 0) {
@@ -206,14 +281,58 @@ export function GsdRecruitsPage() {
       return;
     }
 
+    const mergedDesignations = new Map<string, number>();
+    for (const row of designationRows) {
+      const destinationLocalityId = String(row.destinationLocalityId ?? '').trim();
+      const countRaw = String(row.assignedCount ?? '').trim();
+      const hasAnyContent = Boolean(destinationLocalityId || countRaw);
+      if (!hasAnyContent) continue;
+
+      const assignedCount = Number(countRaw);
+      if (!destinationLocalityId || !Number.isInteger(assignedCount) || assignedCount <= 0) {
+        toast.push({
+          message:
+            'Preencha cada linha da distribuição com OM e quantidade inteira maior que zero.',
+          severity: 'warning',
+        });
+        return;
+      }
+
+      mergedDesignations.set(
+        destinationLocalityId,
+        (mergedDesignations.get(destinationLocalityId) ?? 0) + assignedCount,
+      );
+    }
+    const designationPayload = Array.from(mergedDesignations.entries()).map(
+      ([destinationLocalityId, assignedCount]) => ({
+        destinationLocalityId,
+        assignedCount,
+      }),
+    );
+    const totalDesignated = designationPayload.reduce(
+      (acc, item) => acc + item.assignedCount,
+      0,
+    );
+    if (totalDesignated > value) {
+      toast.push({
+        message: 'Total designado para OMs não pode ser maior que o total de recrutas.',
+        severity: 'warning',
+      });
+      return;
+    }
+
     try {
+      await updateLocalityRecruitDesignations.mutateAsync({
+        localityId: selected.id,
+        items: designationPayload,
+      });
       await updateLocalityRecruits.mutateAsync({
         id: selected.id,
         recruitsFemaleCountCurrent: value,
         dismissalReason: isDismissal ? formDismissalReason.trim() : null,
       });
       toast.push({
-        message: 'Número de recrutas atualizado com histórico.',
+        message: 'Recrutas e distribuição por OM atualizados com sucesso.',
         severity: 'success',
       });
       setDrawerOpen(false);
@@ -232,8 +351,21 @@ export function GsdRecruitsPage() {
     next.set('localityId', localityId);
     setSearchParams(next, { replace: true });
   };
+  const omOptions = ((omsCatalogQuery.data?.items ?? []) as Array<any>).map((item) => ({
+    id: String(item.id),
+    code: String(item.code ?? ''),
+    name: String(item.name ?? item.id),
+  }));
   const parsedFormCount = Number(formRecruitsCount);
+  const targetCount =
+    Number.isInteger(parsedFormCount) && parsedFormCount >= 0 ? parsedFormCount : 0;
   const selectedCurrentCount = Number(selected?.recruitsFemaleCountCurrent ?? 0);
+  const totalDesignatedInForm = designationRows.reduce((acc, row) => {
+    const assignedCount = Number(row.assignedCount);
+    if (!Number.isInteger(assignedCount) || assignedCount <= 0) return acc;
+    return acc + assignedCount;
+  }, 0);
+  const hasDesignationOverflow = totalDesignatedInForm > targetCount;
   const isDismissalChange =
     Boolean(selected) &&
     Number.isFinite(parsedFormCount) &&
@@ -589,9 +721,21 @@ export function GsdRecruitsPage() {
         anchor="right"
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        PaperProps={{ sx: { width: { xs: '100%', md: 400 } } }}
+        PaperProps={{
+          sx: {
+            width: { xs: '100%', md: 620 },
+            mt: `${APP_HEADER_HEIGHT}px`,
+            height: `calc(100% - ${APP_HEADER_HEIGHT}px)`,
+          },
+        }}
       >
-        <Box p={3} display="flex" flexDirection="column" gap={2}>
+        <Box
+          p={3}
+          display="flex"
+          flexDirection="column"
+          gap={2}
+          sx={{ height: '100%', overflow: 'auto' }}
+        >
           <Typography variant="h6">Atualizar recrutas</Typography>
           {selected && (
             <>
@@ -625,18 +769,123 @@ export function GsdRecruitsPage() {
                 onChange={(e) => setFormDismissalReason(e.target.value)}
                 fullWidth
                 multiline
-                minRows={2}
-                disabled={!isDismissalChange}
+                minRows={4}
                 helperText={
                   isDismissalChange
-                    ? 'Obrigatório quando houver redução da quantidade.'
-                    : 'Preenchido apenas quando a nova quantidade for menor que a atual.'
+                    ? 'Obrigatório quando houver redução da quantidade. Campo de texto livre.'
+                    : 'Texto livre. Será considerado no histórico quando houver baixa.'
                 }
               />
               <Typography variant="caption" color="text.secondary">
                 O sistema registra automaticamente o histórico da alteração na data
                 de hoje, incluindo motivo da baixa quando houver desligamento.
               </Typography>
+              <Divider sx={{ my: 0.5 }} />
+              <Box>
+                <Stack
+                  direction={{ xs: 'column', sm: 'row' }}
+                  alignItems={{ xs: 'flex-start', sm: 'center' }}
+                  justifyContent="space-between"
+                  spacing={1}
+                  sx={{ mb: 1 }}
+                >
+                  <Box>
+                    <Typography variant="subtitle1" fontWeight={700}>
+                      Designação por OM pós-estágio
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Informe pares de quantidade e OM. Você pode incluir, editar e remover linhas.
+                    </Typography>
+                  </Box>
+                  <Button size="small" variant="outlined" onClick={addDesignationRow}>
+                    Adicionar OM
+                  </Button>
+                </Stack>
+
+                <Alert
+                  severity={hasDesignationOverflow ? 'error' : 'info'}
+                  sx={{ mb: 1.2 }}
+                >
+                  Designado: <strong>{totalDesignatedInForm}</strong> | Total de recrutas:{' '}
+                  <strong>{targetCount}</strong> | Pendente:{' '}
+                  <strong>{Math.max(0, targetCount - totalDesignatedInForm)}</strong>
+                </Alert>
+
+                {recruitDesignationsQuery.isLoading && (
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    Carregando distribuição atual...
+                  </Typography>
+                )}
+                {recruitDesignationsQuery.isError && (
+                  <Alert severity="warning" sx={{ mb: 1 }}>
+                    Não foi possível carregar a distribuição por OM desta localidade.
+                  </Alert>
+                )}
+
+                {designationRows.length === 0 && !recruitDesignationsQuery.isLoading && (
+                  <Typography variant="body2" color="text.secondary">
+                    Nenhuma OM vinculada ainda. Use "Adicionar OM" para começar.
+                  </Typography>
+                )}
+
+                <Stack spacing={1.2}>
+                  {designationRows.map((row) => (
+                    <Stack
+                      key={row.id}
+                      direction={{ xs: 'column', md: 'row' }}
+                      spacing={1}
+                      alignItems={{ xs: 'stretch', md: 'center' }}
+                    >
+                      <TextField
+                        size="small"
+                        type="number"
+                        label="Quantidade"
+                        value={row.assignedCount}
+                        onChange={(event) =>
+                          updateDesignationRow(row.id, {
+                            assignedCount: event.target.value,
+                          })
+                        }
+                        inputProps={{ min: 1, step: 1 }}
+                        sx={{ width: { xs: '100%', md: 130 } }}
+                      />
+                      <Autocomplete
+                        size="small"
+                        options={omOptions}
+                        value={
+                          omOptions.find((option) => option.id === row.destinationLocalityId) ??
+                          null
+                        }
+                        onChange={(_, option) =>
+                          updateDesignationRow(row.id, {
+                            destinationLocalityId: option?.id ?? '',
+                          })
+                        }
+                        getOptionLabel={(option) =>
+                          option.code ? `${option.name} (${option.code})` : option.name
+                        }
+                        isOptionEqualToValue={(option, value) => option.id === value.id}
+                        renderInput={(params) => (
+                          <TextField
+                            {...params}
+                            label="OM de destino"
+                            placeholder="Digite para filtrar"
+                          />
+                        )}
+                        sx={{ flex: 1 }}
+                      />
+                      <Button
+                        color="error"
+                        variant="text"
+                        onClick={() => removeDesignationRow(row.id)}
+                        sx={{ alignSelf: { xs: 'flex-end', md: 'center' } }}
+                      >
+                        Remover
+                      </Button>
+                    </Stack>
+                  ))}
+                </Stack>
+              </Box>
             </>
           )}
           <Box display="flex" gap={1} justifyContent="flex-end" sx={{ mt: 1 }}>
@@ -649,7 +898,10 @@ export function GsdRecruitsPage() {
               disabled={
                 !selected ||
                 !canEditRecruitsCount(me, selected.id) ||
-                updateLocalityRecruits.isPending
+                updateLocalityRecruits.isPending ||
+                updateLocalityRecruitDesignations.isPending ||
+                recruitDesignationsQuery.isLoading ||
+                hasDesignationOverflow
               }
             >
               Salvar
