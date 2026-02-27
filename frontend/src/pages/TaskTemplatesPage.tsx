@@ -333,7 +333,14 @@ export function TaskTemplatesPage() {
                     <Box
                       key={header}
                       component="th"
-                      sx={{ textAlign: "left", pb: 1 }}
+                      sx={{
+                        textAlign: "left",
+                        px: 1.2,
+                        py: 1.15,
+                        fontWeight: 700,
+                        color: "#FFFFFF",
+                        bgcolor: "rgb(23, 57, 75)",
+                      }}
                     >
                       {header}
                     </Box>

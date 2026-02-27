@@ -841,6 +841,16 @@ export function TasksPage() {
                   dataGridPtBR.components.MuiDataGrid.defaultProps.localeText
                 }
                 sx={{
+                  "& .MuiDataGrid-columnHeaders": {
+                    backgroundColor: "rgb(23, 57, 75)",
+                    color: "#FFFFFF",
+                  },
+                  "& .MuiDataGrid-columnHeaderTitle": {
+                    fontWeight: 700,
+                  },
+                  "& .MuiDataGrid-sortIcon, & .MuiDataGrid-menuIconButton": {
+                    color: "#FFFFFF",
+                  },
                   "& .MuiDataGrid-row": {
                     cursor: "pointer",
                   },

@@ -165,8 +165,8 @@ export function CalendarView({
           padding: '5px 1px',
           fontWeight: 700,
           fontSize: 9.5,
-          color: '#234454',
-          background: 'rgba(12, 101, 126, 0.05)',
+          color: '#FFFFFF',
+          background: 'rgb(23, 57, 75)',
         },
         '& .rbc-month-view': {
           borderRadius: 10,

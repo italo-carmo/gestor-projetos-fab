@@ -361,37 +361,87 @@ export function AuditPage() {
         />
       ) : (
         <Card
-          sx={{ borderRadius: 3, border: "1px solid", borderColor: "divider" }}
+          sx={{
+            borderRadius: "0 0 12px 12px",
+            border: "1px solid",
+            borderColor: "divider",
+          }}
         >
           <TableContainer sx={{ maxHeight: "68vh" }}>
             <Table stickyHeader size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 800, bgcolor: "grey.100" }}>
+                  <TableCell
+                    sx={{
+                      fontWeight: 800,
+                      bgcolor: "rgb(23, 57, 75)",
+                      color: "#FFFFFF",
+                    }}
+                  >
                     Data/Hora
                   </TableCell>
-                  <TableCell sx={{ fontWeight: 800, bgcolor: "grey.100" }}>
+                  <TableCell
+                    sx={{
+                      fontWeight: 800,
+                      bgcolor: "rgb(23, 57, 75)",
+                      color: "#FFFFFF",
+                    }}
+                  >
                     Recurso
                   </TableCell>
-                  <TableCell sx={{ fontWeight: 800, bgcolor: "grey.100" }}>
+                  <TableCell
+                    sx={{
+                      fontWeight: 800,
+                      bgcolor: "rgb(23, 57, 75)",
+                      color: "#FFFFFF",
+                    }}
+                  >
                     Ação
                   </TableCell>
-                  <TableCell sx={{ fontWeight: 800, bgcolor: "grey.100" }}>
+                  <TableCell
+                    sx={{
+                      fontWeight: 800,
+                      bgcolor: "rgb(23, 57, 75)",
+                      color: "#FFFFFF",
+                    }}
+                  >
                     Usuário
                   </TableCell>
-                  <TableCell sx={{ fontWeight: 800, bgcolor: "grey.100" }}>
+                  <TableCell
+                    sx={{
+                      fontWeight: 800,
+                      bgcolor: "rgb(23, 57, 75)",
+                      color: "#FFFFFF",
+                    }}
+                  >
                     Localidade
                   </TableCell>
-                  <TableCell sx={{ fontWeight: 800, bgcolor: "grey.100" }}>
+                  <TableCell
+                    sx={{
+                      fontWeight: 800,
+                      bgcolor: "rgb(23, 57, 75)",
+                      color: "#FFFFFF",
+                    }}
+                  >
                     Entidade
                   </TableCell>
                   <TableCell
-                    sx={{ fontWeight: 800, bgcolor: "grey.100", minWidth: 270 }}
+                    sx={{
+                      fontWeight: 800,
+                      bgcolor: "rgb(23, 57, 75)",
+                      color: "#FFFFFF",
+                      minWidth: 270,
+                    }}
                   >
                     Alterações
                   </TableCell>
                   <TableCell
-                    sx={{ fontWeight: 800, bgcolor: "grey.100", width: 90 }}
+                    sx={{
+                      fontWeight: 800,
+                      bgcolor: "rgb(23, 57, 75)",
+                      color: "#FFFFFF",
+                      width: 90,
+                    }}
                   >
                     Detalhe
                   </TableCell>

@@ -108,7 +108,8 @@ function TaskListHeaderPt({
         borderBottom: '1px solid rgba(0,0,0,0.12)',
         borderTop: '1px solid rgba(0,0,0,0.12)',
         borderLeft: '1px solid rgba(0,0,0,0.12)',
-        bgcolor: 'rgba(12, 101, 126, 0.08)',
+        bgcolor: 'rgb(23, 57, 75)',
+        color: '#FFFFFF',
         fontFamily,
         fontSize,
       }}
