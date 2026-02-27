@@ -99,6 +99,7 @@ const CHART_COLORS = [
   "#4A67A1",
   "#7B4DB4",
 ];
+const CHART_TICK_STYLE = { fontSize: 11 };
 
 function formatPercent(value: number) {
   const numeric = Number(value ?? 0);
@@ -299,7 +300,13 @@ export function CpcaStatsPage() {
   ];
 
   return (
-    <Box>
+    <Box
+      sx={{
+        "& .MuiTypography-h6": { fontSize: "1rem", fontWeight: 700 },
+        "& .MuiTypography-overline": { fontSize: "0.68rem" },
+        "& .MuiTableCell-root": { fontSize: "0.8rem" },
+      }}
+    >
       <Box
         display="flex"
         justifyContent="space-between"
@@ -309,7 +316,7 @@ export function CpcaStatsPage() {
         mb={2}
       >
         <Box>
-          <Typography variant="h4" fontWeight={700}>
+          <Typography variant="h5" fontWeight={700}>
             CPCA - Estatísticas de Assédio
           </Typography>
           <Typography variant="body2" color="text.secondary">
@@ -386,7 +393,7 @@ export function CpcaStatsPage() {
                 >
                   {card.label}
                 </Typography>
-                <Typography variant="h4" fontWeight={800} lineHeight={1.15}>
+                <Typography variant="h5" fontWeight={800} lineHeight={1.15}>
                   {card.value}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
@@ -414,8 +421,9 @@ export function CpcaStatsPage() {
                     angle={-20}
                     textAnchor="end"
                     height={70}
+                    tick={CHART_TICK_STYLE}
                   />
-                  <YAxis allowDecimals={false} />
+                  <YAxis allowDecimals={false} tick={CHART_TICK_STYLE} />
                   <RechartsTooltip
                     formatter={(value, name) => [
                       value,
@@ -442,8 +450,8 @@ export function CpcaStatsPage() {
               <ResponsiveContainer width="100%" height={280}>
                 <LineChart data={monthlyTrend}>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" />
-                  <YAxis allowDecimals={false} />
+                  <XAxis dataKey="month" tick={CHART_TICK_STYLE} />
+                  <YAxis allowDecimals={false} tick={CHART_TICK_STYLE} />
                   <RechartsTooltip
                     formatter={(value, name) => [
                       value,
@@ -494,8 +502,9 @@ export function CpcaStatsPage() {
                     angle={-20}
                     textAnchor="end"
                     height={70}
+                    tick={CHART_TICK_STYLE}
                   />
-                  <YAxis allowDecimals={false} />
+                  <YAxis allowDecimals={false} tick={CHART_TICK_STYLE} />
                   <RechartsTooltip
                     formatter={(value, name) => [
                       value,
@@ -522,8 +531,8 @@ export function CpcaStatsPage() {
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={openByAgeBuckets}>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="bucket" />
-                  <YAxis allowDecimals={false} />
+                  <XAxis dataKey="bucket" tick={CHART_TICK_STYLE} />
+                  <YAxis allowDecimals={false} tick={CHART_TICK_STYLE} />
                   <RechartsTooltip
                     formatter={(value, name) => [
                       value,
@@ -617,8 +626,9 @@ export function CpcaStatsPage() {
                       angle={-20}
                       textAnchor="end"
                       height={90}
+                      tick={CHART_TICK_STYLE}
                     />
-                    <YAxis allowDecimals={false} />
+                    <YAxis allowDecimals={false} tick={CHART_TICK_STYLE} />
                     <RechartsTooltip
                       formatter={(value, name) => [
                         value,
@@ -698,8 +708,9 @@ export function CpcaStatsPage() {
                       angle={-20}
                       textAnchor="end"
                       height={80}
+                      tick={CHART_TICK_STYLE}
                     />
-                    <YAxis allowDecimals={false} />
+                    <YAxis allowDecimals={false} tick={CHART_TICK_STYLE} />
                     <RechartsTooltip
                       formatter={(value, name) => [
                         value,
@@ -738,8 +749,9 @@ export function CpcaStatsPage() {
                       angle={-20}
                       textAnchor="end"
                       height={80}
+                      tick={CHART_TICK_STYLE}
                     />
-                    <YAxis allowDecimals={false} />
+                    <YAxis allowDecimals={false} tick={CHART_TICK_STYLE} />
                     <RechartsTooltip
                       formatter={(value, name) => [
                         value,
