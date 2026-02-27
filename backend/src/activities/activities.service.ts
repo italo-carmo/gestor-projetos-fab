@@ -147,6 +147,7 @@ export class ActivitiesService {
       title: string;
       description?: string | null;
       localityId?: string | null;
+      localityIds?: string[];
       specialtyId?: string | null;
       eventDate?: string | null;
       reportRequired?: boolean;
@@ -155,84 +156,134 @@ export class ActivitiesService {
     user?: RbacUser,
   ) {
     this.assertActivityOperateAccess(null, user);
-    const localityId = payload.localityId ?? user?.localityId ?? null;
+    const normalizedLocalityIds = Array.from(
+      new Set(
+        (payload.localityIds ?? [])
+          .map((value) => String(value ?? '').trim())
+          .filter(Boolean),
+      ),
+    );
+    const fallbackLocalityId = payload.localityId ?? user?.localityId ?? null;
+    const createLocalityIds =
+      normalizedLocalityIds.length > 0
+        ? normalizedLocalityIds
+        : [fallbackLocalityId];
     const specialtyId = payload.specialtyId ?? null;
-    this.assertScopeConstraint(localityId, specialtyId, user);
+    for (const localityId of createLocalityIds) {
+      this.assertScopeConstraint(localityId, specialtyId, user);
+    }
+
+    const normalizedResponsibleIds = Array.from(
+      new Set(
+        (payload.responsibleUserIds ?? [])
+          .map((value) => String(value ?? '').trim())
+          .filter(Boolean),
+      ),
+    );
+    if (createLocalityIds.length > 1 && normalizedResponsibleIds.length > 0) {
+      throwError('VALIDATION_ERROR', {
+        field: 'responsibleUserIds',
+        reason: 'ACTIVITY_RESPONSIBLE_SINGLE_LOCALITY_REQUIRED',
+      });
+    }
+
+    const singleLocalityId =
+      createLocalityIds.length === 1 ? createLocalityIds[0] : null;
     const responsibleUserIds = await this.resolveActivityResponsibleIds(
-      localityId,
-      payload.responsibleUserIds ?? [],
+      singleLocalityId,
+      normalizedResponsibleIds,
       user,
     );
 
-    const created = await this.prisma.activity.create({
-      data: {
-        title: sanitizeText(payload.title),
-        description: payload.description
-          ? sanitizeText(payload.description)
-          : null,
-        localityId,
-        specialtyId,
-        eventDate: payload.eventDate ? new Date(payload.eventDate) : null,
-        reportRequired: payload.reportRequired ?? false,
-        createdById: user?.id ?? null,
-        responsibles:
-          responsibleUserIds.length > 0
-            ? {
-                create: responsibleUserIds.map((userId) => ({
-                  userId,
-                  assignedById: user?.id ?? null,
-                })),
-              }
-            : undefined,
-      },
-      include: {
-        locality: { select: { id: true, code: true, name: true } },
-        specialty: { select: { id: true, name: true, color: true } },
-        createdBy: { select: { id: true, name: true } },
-        responsibles: {
+    const createdItems = await this.prisma.$transaction(
+      createLocalityIds.map((localityId) =>
+        this.prisma.activity.create({
+          data: {
+            title: sanitizeText(payload.title),
+            description: payload.description
+              ? sanitizeText(payload.description)
+              : null,
+            localityId,
+            specialtyId,
+            eventDate: payload.eventDate ? new Date(payload.eventDate) : null,
+            reportRequired: payload.reportRequired ?? false,
+            createdById: user?.id ?? null,
+            responsibles:
+              responsibleUserIds.length > 0
+                ? {
+                    create: responsibleUserIds.map((userId) => ({
+                      userId,
+                      assignedById: user?.id ?? null,
+                    })),
+                  }
+                : undefined,
+          },
           include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-                localityId: true,
-                specialtyId: true,
-                eloRoleId: true,
+            locality: { select: { id: true, code: true, name: true } },
+            specialty: { select: { id: true, name: true, color: true } },
+            createdBy: { select: { id: true, name: true } },
+            responsibles: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    name: true,
+                    email: true,
+                    localityId: true,
+                    specialtyId: true,
+                    eloRoleId: true,
+                  },
+                },
+              },
+              orderBy: [{ createdAt: 'asc' }],
+            },
+            report: {
+              include: {
+                photos: {
+                  select: {
+                    id: true,
+                    fileName: true,
+                    fileUrl: true,
+                    createdAt: true,
+                  },
+                },
+                signedBy: { select: { id: true, name: true, email: true } },
               },
             },
           },
-          orderBy: [{ createdAt: 'asc' }],
-        },
-        report: {
-          include: {
-            photos: {
-              select: {
-                id: true,
-                fileName: true,
-                fileUrl: true,
-                createdAt: true,
-              },
-            },
-            signedBy: { select: { id: true, name: true, email: true } },
-          },
-        },
-      },
-    });
+        }),
+      ),
+    );
 
-    await this.audit.log({
-      userId: user?.id,
-      resource: 'activities',
-      action: 'create',
-      entityId: created.id,
-      localityId: created.localityId ?? undefined,
-      diffJson: {
-        title: created.title,
-        reportRequired: created.reportRequired,
-      },
-    });
+    for (const created of createdItems) {
+      await this.audit.log({
+        userId: user?.id,
+        resource: 'activities',
+        action: 'create',
+        entityId: created.id,
+        localityId: created.localityId ?? undefined,
+        diffJson: {
+          title: created.title,
+          reportRequired: created.reportRequired,
+        },
+      });
+    }
 
-    return this.mapActivity(created, user?.executiveHidePii);
+    const mapped = createdItems.map((item) =>
+      this.mapActivity(item, user?.executiveHidePii),
+    );
+    const first = mapped[0] ?? null;
+    if (!first) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'ACTIVITY_CREATE_FAILED',
+      });
+    }
+    if (mapped.length === 1) return first;
+    return {
+      ...first,
+      createdCount: mapped.length,
+      createdIds: mapped.map((item) => item.id),
+    };
   }
 
   async update(

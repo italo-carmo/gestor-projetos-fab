@@ -1,4 +1,5 @@
 import {
+  Autocomplete,
   Badge,
   Box,
   Button,
@@ -226,6 +227,7 @@ export function ActivitiesPage() {
     title: '',
     description: '',
     localityId: '',
+    localityIds: [] as string[],
     specialtyId: '',
     responsibleUserId: '',
     eventDate: '',
@@ -238,6 +240,7 @@ export function ActivitiesPage() {
       title: selected.title ?? '',
       description: selected.description ?? '',
       localityId: selected.localityId ?? '',
+      localityIds: selected.localityId ? [selected.localityId] : [],
       specialtyId: selected.specialtyId ?? '',
       responsibleUserId: selected.responsibleUsers?.[0]?.id ?? '',
       eventDate: selected.eventDate ? String(selected.eventDate).slice(0, 10) : '',
@@ -283,11 +286,32 @@ export function ActivitiesPage() {
   const canEditActivityForm = isCreateMode ? canCreate : canUpdate;
   const canManageBatch = can(me, 'task_instances', 'update') && hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]);
   const canBatchAssignResponsible = selectedLocalityIds.length <= 1;
+  const canCreateAssignResponsible = !isCreateMode || activityForm.localityIds.length <= 1;
+  const effectiveResponsibleLocalityId =
+    isCreateMode && activityForm.localityIds.length === 1
+      ? activityForm.localityIds[0]
+      : isCreateMode
+        ? ''
+        : activityForm.localityId;
+  const createSelectedLocalities = useMemo(
+    () =>
+      selectableLocalities.filter((locality: any) =>
+        activityForm.localityIds.includes(String(locality.id)),
+      ),
+    [activityForm.localityIds, selectableLocalities],
+  );
+
+  useEffect(() => {
+    if (!isCreateMode) return;
+    if (activityForm.localityIds.length <= 1) return;
+    if (!activityForm.responsibleUserId) return;
+    setActivityForm((prev) => ({ ...prev, responsibleUserId: '' }));
+  }, [isCreateMode, activityForm.localityIds, activityForm.responsibleUserId]);
 
   const responsibleOptions = useMemo(() => {
     const filtered = allUsers.filter((user: any) => {
       if (!String(user?.id ?? '').trim() || !String(user?.name ?? '').trim()) return false;
-      if (activityForm.localityId && user.localityId && user.localityId !== activityForm.localityId) return false;
+      if (effectiveResponsibleLocalityId && user.localityId && user.localityId !== effectiveResponsibleLocalityId) return false;
       if (activityForm.specialtyId && user.specialtyId && user.specialtyId !== activityForm.specialtyId) return false;
       return true;
     });
@@ -302,7 +326,7 @@ export function ActivitiesPage() {
     }
 
     return filtered.sort((a: any, b: any) => String(a.name).localeCompare(String(b.name), 'pt-BR'));
-  }, [activityForm.localityId, activityForm.specialtyId, allUsers, selected?.responsibleUsers]);
+  }, [effectiveResponsibleLocalityId, activityForm.specialtyId, allUsers, selected?.responsibleUsers]);
 
   const batchResponsibleOptions = useMemo(() => {
     const filtered = allUsers.filter((user: any) => {
@@ -318,20 +342,40 @@ export function ActivitiesPage() {
       toast.push({ message: 'Informe o título da atividade', severity: 'warning' });
       return;
     }
+    if (activityForm.localityIds.length === 0) {
+      toast.push({ message: 'Selecione pelo menos uma localidade', severity: 'warning' });
+      return;
+    }
+    if (activityForm.localityIds.length > 1 && activityForm.responsibleUserId) {
+      toast.push({
+        message: 'Para múltiplas localidades, crie sem responsável e ajuste depois em cada atividade.',
+        severity: 'warning',
+      });
+      return;
+    }
     try {
       const created = await createActivity.mutateAsync({
         title: activityForm.title,
         description: activityForm.description || null,
         localityId: activityForm.localityId || null,
+        localityIds: activityForm.localityIds,
         specialtyId: activityForm.specialtyId || null,
         responsibleUserIds: activityForm.responsibleUserId ? [activityForm.responsibleUserId] : [],
         eventDate: activityForm.eventDate || null,
         reportRequired: activityForm.reportRequired,
       });
-      setSelectedId(created.id);
+      const firstId = String(created?.id ?? '');
+      if (firstId) setSelectedId(firstId);
       setIsCreateMode(false);
       setDrawerOpen(true);
-      toast.push({ message: 'Atividade criada', severity: 'success' });
+      const createdCount = Number(created?.createdCount ?? 1);
+      toast.push({
+        message:
+          createdCount > 1
+            ? `${createdCount} atividades criadas para as localidades selecionadas`
+            : 'Atividade criada',
+        severity: 'success',
+      });
     } catch (error) {
       toast.push({ message: parseApiError(error).message ?? 'Erro ao criar atividade', severity: 'error' });
     }
@@ -558,6 +602,7 @@ export function ActivitiesPage() {
       title: '',
       description: '',
       localityId: '',
+      localityIds: [],
       specialtyId: '',
       responsibleUserId: '',
       eventDate: '',
@@ -944,22 +989,99 @@ export function ActivitiesPage() {
                 disabled={!canEditActivityForm}
               />
               <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} sx={{ mt: 1 }}>
-                <TextField
-                  select
-                  size="small"
-                  label="Localidade"
-                  value={activityForm.localityId}
-                  onChange={(e) => setActivityForm({ ...activityForm, localityId: e.target.value })}
-                  sx={{ minWidth: 220 }}
-                  disabled={!canEditActivityForm}
-                >
-                  <MenuItem value="">Não vinculada</MenuItem>
-                  {selectableLocalities.map((l: any) => (
-                    <MenuItem key={l.id} value={l.id}>
-                      {l.name}
-                    </MenuItem>
-                  ))}
-                </TextField>
+                {isCreateMode ? (
+                  <Box sx={{ flex: 1, minWidth: 280 }}>
+                    <Autocomplete
+                      multiple
+                      disableCloseOnSelect
+                      options={selectableLocalities}
+                      value={createSelectedLocalities}
+                      getOptionLabel={(option) => option.name}
+                      isOptionEqualToValue={(option, value) => option.id === value.id}
+                      onChange={(_, options) => {
+                        const ids = options.map((option) => String(option.id));
+                        setActivityForm({
+                          ...activityForm,
+                          localityIds: ids,
+                          localityId: ids.length === 1 ? ids[0] : '',
+                        });
+                      }}
+                      disabled={!canEditActivityForm}
+                      renderTags={(value, getTagProps) =>
+                        value.map((option, index) => (
+                          <Chip
+                            {...getTagProps({ index })}
+                            key={option.id}
+                            label={option.name}
+                            size="small"
+                            variant="outlined"
+                          />
+                        ))
+                      }
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          size="small"
+                          label="Localidades"
+                          placeholder={activityForm.localityIds.length ? '' : 'Selecione uma ou mais localidades'}
+                        />
+                      )}
+                    />
+                    <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        disabled={!canEditActivityForm}
+                        onClick={() => {
+                          const ids = selectableLocalities.map((locality: any) => String(locality.id));
+                          setActivityForm({
+                            ...activityForm,
+                            localityIds: ids,
+                            localityId: '',
+                          });
+                        }}
+                      >
+                        Selecionar todas
+                      </Button>
+                      <Button
+                        size="small"
+                        disabled={!canEditActivityForm}
+                        onClick={() =>
+                          setActivityForm({
+                            ...activityForm,
+                            localityIds: [],
+                            localityId: '',
+                          })
+                        }
+                      >
+                        Limpar
+                      </Button>
+                      <Chip
+                        size="small"
+                        color={activityForm.localityIds.length > 0 ? 'primary' : 'default'}
+                        label={`${activityForm.localityIds.length} localidade(s)`}
+                        variant={activityForm.localityIds.length > 0 ? 'filled' : 'outlined'}
+                      />
+                    </Stack>
+                  </Box>
+                ) : (
+                  <TextField
+                    select
+                    size="small"
+                    label="Localidade"
+                    value={activityForm.localityId}
+                    onChange={(e) => setActivityForm({ ...activityForm, localityId: e.target.value })}
+                    sx={{ minWidth: 220 }}
+                    disabled={!canEditActivityForm}
+                  >
+                    <MenuItem value="">Não vinculada</MenuItem>
+                    {selectableLocalities.map((l: any) => (
+                      <MenuItem key={l.id} value={l.id}>
+                        {l.name}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                )}
                 <TextField
                   select
                   size="small"
@@ -977,6 +1099,11 @@ export function ActivitiesPage() {
                   ))}
                 </TextField>
               </Stack>
+              {isCreateMode && activityForm.localityIds.length > 1 && (
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                  Criação em lote ativa: será criada 1 atividade por localidade com os mesmos dados-base.
+                </Typography>
+              )}
               <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} sx={{ mt: 1 }}>
                 <TextField
                   select
@@ -985,7 +1112,7 @@ export function ActivitiesPage() {
                   value={activityForm.responsibleUserId}
                   onChange={(e) => setActivityForm({ ...activityForm, responsibleUserId: e.target.value })}
                   sx={{ minWidth: 240 }}
-                  disabled={usersQuery.isLoading || !canEditActivityForm}
+                  disabled={usersQuery.isLoading || !canEditActivityForm || !canCreateAssignResponsible}
                 >
                   <MenuItem value="">Sem responsável</MenuItem>
                   {responsibleOptions.map((user: any) => (
@@ -1005,6 +1132,11 @@ export function ActivitiesPage() {
                   disabled={!canEditActivityForm}
                 />
               </Stack>
+              {isCreateMode && !canCreateAssignResponsible && (
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                  Para múltiplas localidades, o responsável deve ser definido após a criação em cada atividade.
+                </Typography>
+              )}
               <TextField
                 size="small"
                 label="Descrição"

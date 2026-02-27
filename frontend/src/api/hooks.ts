@@ -376,6 +376,7 @@ export function useCreateActivity() {
       title: string;
       description?: string | null;
       localityId?: string | null;
+      localityIds?: string[];
       specialtyId?: string | null;
       responsibleUserIds?: string[];
       eventDate?: string | null;

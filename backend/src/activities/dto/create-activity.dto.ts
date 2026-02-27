@@ -14,6 +14,11 @@ export class CreateActivityDto {
   localityId?: string | null;
 
   @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  localityIds?: string[];
+
+  @IsOptional()
   @IsString()
   specialtyId?: string | null;
 
