@@ -842,14 +842,22 @@ export function TasksPage() {
                 }
                 sx={{
                   "& .MuiDataGrid-columnHeaders": {
-                    backgroundColor: "rgb(23, 57, 75)",
-                    color: "#FFFFFF",
+                    backgroundColor: "primary.main !important",
+                    color: "#FFFFFF !important",
+                  },
+                  "& .MuiDataGrid-columnHeader": {
+                    backgroundColor: "primary.main !important",
+                    color: "#FFFFFF !important",
                   },
                   "& .MuiDataGrid-columnHeaderTitle": {
                     fontWeight: 700,
+                    color: "#FFFFFF !important",
                   },
                   "& .MuiDataGrid-sortIcon, & .MuiDataGrid-menuIconButton": {
-                    color: "#FFFFFF",
+                    color: "#FFFFFF !important",
+                  },
+                  "& .MuiDataGrid-iconSeparator": {
+                    color: "rgba(255,255,255,0.45)",
                   },
                   "& .MuiDataGrid-row": {
                     cursor: "pointer",
