@@ -14,11 +14,17 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
+  useCreateOrgChartAssignment,
   useCreateElo,
+  useDeleteOrgChartAssignment,
   useDeleteElo,
   useEloRoles,
   useElos,
   useLocalities,
+  useOmsCatalog,
+  useOrgChart,
+  useOrgChartCandidates,
+  useUpdateOrgChartAssignment,
   useUpdateElo,
   useMe,
 } from "../api/hooks";
@@ -29,6 +35,7 @@ import { SkeletonState } from "../components/states/SkeletonState";
 import { useToast } from "../app/toast";
 import { parseApiError } from "../app/apiErrors";
 import { can } from "../app/rbac";
+import { hasAnyRole, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from "../app/roleAccess";
 import {
   normalizeLocalityName,
   selectTargetLocalities,
@@ -52,8 +59,13 @@ export function ElosPage() {
   const elosQuery = useElos(filters);
   const elosAllQuery = useElos({}); // para montar mapa graduado master por localidade
   const localitiesQuery = useLocalities();
+  const omsCatalogQuery = useOmsCatalog();
   const eloRolesQuery = useEloRoles();
   const createElo = useCreateElo();
+  const createOrgChartAssignment = useCreateOrgChartAssignment();
+  const updateOrgChartAssignment = useUpdateOrgChartAssignment();
+  const deleteOrgChartAssignment = useDeleteOrgChartAssignment();
+  const canManageOrgChart = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]);
 
   const gradMasterByLocalityId = useMemo(() => {
     const map = new Map<string, string>();
@@ -69,8 +81,21 @@ export function ElosPage() {
   const deleteElo = useDeleteElo();
 
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [orgDrawerOpen, setOrgDrawerOpen] = useState(false);
   const [showAllLocalities, setShowAllLocalities] = useState(false);
   const [editing, setEditing] = useState<any | null>(null);
+  const [orgCandidateSearch, setOrgCandidateSearch] = useState("");
+  const [orgEditingGroup, setOrgEditingGroup] = useState<any | null>(null);
+  const [orgForm, setOrgForm] = useState({
+    id: "",
+    localityId: "",
+    eloRoleId: "",
+    userId: "",
+    rank: "",
+    phone: "",
+    om: "",
+    autoFromUser: false,
+  });
   const [form, setForm] = useState({
     localityId: "",
     eloRoleId: "",
@@ -80,6 +105,19 @@ export function ElosPage() {
     email: "",
     om: "",
   });
+
+  const orgChartQuery = useOrgChart({
+    localityId: localityId || undefined,
+    roleType: roleType || undefined,
+  });
+  const orgChartCandidatesQuery = useOrgChartCandidates(
+    {
+      localityId: orgForm.localityId || undefined,
+      eloRoleId: orgForm.eloRoleId || undefined,
+      q: orgCandidateSearch || undefined,
+    },
+    orgDrawerOpen && canManageOrgChart && Boolean(orgForm.localityId && orgForm.eloRoleId),
+  );
 
   const allLocalities = localitiesQuery.data?.items ?? [];
   const uniqueLocalities = useMemo(() => {
@@ -96,6 +134,27 @@ export function ElosPage() {
       ),
     [uniqueLocalities],
   );
+
+  const omOptions = useMemo(() => {
+    const items = (omsCatalogQuery.data?.items ?? []) as any[];
+    const base = items.map((item) => ({
+      value: String(item.name ?? "").trim(),
+      label: String(item.code ?? "").trim()
+        ? `${String(item.code).trim()} - ${String(item.name ?? "").trim()}`
+        : String(item.name ?? "").trim(),
+    })).filter((item) => item.value);
+
+    const withCurrentValues = new Map(base.map((item) => [item.value, item]));
+    for (const fallback of [form.om, orgForm.om]) {
+      const value = String(fallback ?? "").trim();
+      if (value && !withCurrentValues.has(value)) {
+        withCurrentValues.set(value, { value, label: value });
+      }
+    }
+    return Array.from(withCurrentValues.values()).sort((a, b) =>
+      a.label.localeCompare(b.label, "pt-BR"),
+    );
+  }, [form.om, orgForm.om, omsCatalogQuery.data?.items]);
 
   const selectableLocalities = useMemo(() => {
     const base = showAllLocalities ? uniqueLocalities : localitiesWithRecruits;
@@ -174,6 +233,38 @@ export function ElosPage() {
     setDrawerOpen(true);
   };
 
+  const openOrgCreate = (group: any) => {
+    setOrgCandidateSearch("");
+    setOrgEditingGroup(group);
+    setOrgForm({
+      id: "",
+      localityId: group.localityId ?? "",
+      eloRoleId: eloRoles[0]?.id ?? "",
+      userId: "",
+      rank: "",
+      phone: "",
+      om: "",
+      autoFromUser: false,
+    });
+    setOrgDrawerOpen(true);
+  };
+
+  const openOrgEdit = (group: any, elo: any) => {
+    setOrgCandidateSearch("");
+    setOrgEditingGroup(group);
+    setOrgForm({
+      id: elo.id ?? "",
+      localityId: elo.localityId ?? group.localityId ?? "",
+      eloRoleId: elo.eloRoleId ?? elo.eloRole?.id ?? "",
+      userId: elo.systemUser?.id ?? "",
+      rank: elo.rank ?? "",
+      phone: elo.phone ?? "",
+      om: elo.om ?? "",
+      autoFromUser: Boolean(elo.autoFromUser),
+    });
+    setOrgDrawerOpen(true);
+  };
+
   const handleSave = async () => {
     try {
       const payload = {
@@ -215,9 +306,61 @@ export function ElosPage() {
     }
   };
 
+  const handleSaveOrgAssignment = async () => {
+    if (!orgForm.localityId || !orgForm.eloRoleId || !orgForm.userId) {
+      toast.push({
+        message: "Selecione localidade, função e usuário para o vínculo.",
+        severity: "warning",
+      });
+      return;
+    }
+
+    const payload = {
+      localityId: orgForm.localityId,
+      eloRoleId: orgForm.eloRoleId,
+      userId: orgForm.userId,
+      rank: orgForm.rank || null,
+      phone: orgForm.phone || null,
+      om: orgForm.om || null,
+    };
+
+    try {
+      if (!orgForm.id || orgForm.autoFromUser || orgForm.id.startsWith("auto-user-")) {
+        await createOrgChartAssignment.mutateAsync(payload);
+        toast.push({ message: "Vínculo criado no organograma.", severity: "success" });
+      } else {
+        await updateOrgChartAssignment.mutateAsync({ id: orgForm.id, payload });
+        toast.push({ message: "Vínculo do organograma atualizado.", severity: "success" });
+      }
+      setOrgDrawerOpen(false);
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({
+        message: payload.message ?? "Erro ao salvar vínculo do organograma.",
+        severity: "error",
+      });
+    }
+  };
+
+  const handleDeleteOrgAssignment = async () => {
+    if (!orgForm.id || orgForm.id.startsWith("auto-user-")) return;
+    try {
+      await deleteOrgChartAssignment.mutateAsync(orgForm.id);
+      toast.push({ message: "Vínculo removido do organograma.", severity: "success" });
+      setOrgDrawerOpen(false);
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({
+        message: payload.message ?? "Erro ao remover vínculo do organograma.",
+        severity: "error",
+      });
+    }
+  };
+
   const canCreate = can(me, "elos", "create");
   const canUpdate = can(me, "elos", "update");
   const canDelete = can(me, "elos", "delete");
+  const canViewOrgChart = can(me, "org_chart", "view");
   const renderedItems = useMemo(() => {
     const items = elosQuery.data?.items ?? [];
     if (showAllLocalities) return items;
@@ -240,6 +383,7 @@ export function ElosPage() {
       );
     });
   }, [elosQuery.data?.items, localitiesWithRecruits, showAllLocalities]);
+  const orgChartItems = (orgChartQuery.data?.items ?? []) as any[];
 
   if (elosQuery.isLoading) return <SkeletonState />;
   if (elosQuery.isError)
@@ -403,6 +547,89 @@ export function ElosPage() {
         </Card>
       )}
 
+      {canViewOrgChart && (
+        <Card sx={{ mt: 2 }}>
+          <CardContent>
+            <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}>
+              <Box>
+                <Typography variant="h6">Vínculos do Organograma</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Gestão operacional do organograma foi movida para Elos, mantendo os mesmos dados.
+                </Typography>
+              </Box>
+            </Stack>
+
+            {orgChartQuery.isLoading ? (
+              <Typography variant="body2" color="text.secondary">
+                Carregando vínculos do organograma...
+              </Typography>
+            ) : orgChartQuery.isError ? (
+              <Typography variant="body2" color="error.main">
+                Não foi possível carregar os vínculos do organograma.
+              </Typography>
+            ) : orgChartItems.length === 0 ? (
+              <Typography variant="body2" color="text.secondary">
+                Nenhum vínculo encontrado para os filtros atuais.
+              </Typography>
+            ) : (
+              <Stack spacing={2}>
+                {orgChartItems.map((group: any) => (
+                  <Card key={group.localityId ?? group.localityName} variant="outlined">
+                    <CardContent>
+                      <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}>
+                        <Typography variant="subtitle1">{group.localityName}</Typography>
+                        {canManageOrgChart && (
+                          <Button size="small" variant="outlined" onClick={() => openOrgCreate(group)}>
+                            Vincular usuário
+                          </Button>
+                        )}
+                      </Stack>
+                      <Stack direction={{ xs: "column", md: "row" }} spacing={2} flexWrap="wrap">
+                        {(group.elos ?? []).map((elo: any) => (
+                          <Card key={elo.id} variant="outlined" sx={{ minWidth: 220 }}>
+                            <CardContent>
+                              <Stack direction="row" justifyContent="space-between" alignItems="center">
+                                <Typography variant="subtitle2">{elo.name ?? "Contato"}</Typography>
+                              </Stack>
+                              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.8 }}>
+                                {elo.eloRole?.name ?? elo.eloRole?.code ?? "—"}
+                              </Typography>
+                              <Typography variant="body2" color="text.secondary">
+                                {elo.om ?? "-"}
+                              </Typography>
+                              {elo.phone && (
+                                <Typography variant="body2" color="text.secondary">
+                                  {elo.phone}
+                                </Typography>
+                              )}
+                              {elo.email && (
+                                <Typography variant="body2" color="text.secondary">
+                                  {elo.email}
+                                </Typography>
+                              )}
+                              {canManageOrgChart && (
+                                <Button
+                                  size="small"
+                                  variant="text"
+                                  sx={{ mt: 1 }}
+                                  onClick={() => openOrgEdit(group, elo)}
+                                >
+                                  {elo.autoFromUser ? "Adicionar ao organograma" : "Editar vínculo"}
+                                </Button>
+                              )}
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </Stack>
+                    </CardContent>
+                  </Card>
+                ))}
+              </Stack>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       <Drawer
         anchor="right"
         open={drawerOpen}
@@ -465,17 +692,138 @@ export function ElosPage() {
             onChange={(e) => setForm({ ...form, email: e.target.value })}
           />
           <TextField
+            select
             size="small"
-            label="OM"
+            label="OM (PM)"
             value={form.om}
             onChange={(e) => setForm({ ...form, om: e.target.value })}
-          />
+            helperText="Selecione uma OM cadastrada no CRUD de OMs."
+          >
+            <MenuItem value="">Selecionar</MenuItem>
+            {omOptions.map((option) => (
+              <MenuItem key={option.value} value={option.value}>
+                {option.label}
+              </MenuItem>
+            ))}
+          </TextField>
           <Stack direction="row" spacing={1}>
             <Button variant="contained" onClick={handleSave}>
               Salvar
             </Button>
             <Button variant="text" onClick={() => setDrawerOpen(false)}>
               Cancelar
+            </Button>
+          </Stack>
+        </Box>
+      </Drawer>
+
+      <Drawer
+        anchor="right"
+        open={orgDrawerOpen}
+        onClose={() => setOrgDrawerOpen(false)}
+        PaperProps={{ sx: { width: { xs: "100%", md: 440 } } }}
+      >
+        <Box p={3} display="flex" flexDirection="column" gap={2}>
+          <Typography variant="h6">
+            {orgForm.id && !orgForm.autoFromUser ? "Editar vínculo do organograma" : "Novo vínculo do organograma"}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Localidade: {orgEditingGroup?.localityName ?? "—"}
+          </Typography>
+
+          <TextField
+            select
+            size="small"
+            label="Localidade"
+            value={orgForm.localityId}
+            onChange={(e) => setOrgForm((prev) => ({ ...prev, localityId: e.target.value }))}
+          >
+            {selectableLocalities.map((loc: any) => (
+              <MenuItem key={loc.id} value={loc.id}>
+                {loc.name}
+              </MenuItem>
+            ))}
+          </TextField>
+
+          <TextField
+            select
+            size="small"
+            label="Função"
+            value={orgForm.eloRoleId}
+            onChange={(e) => setOrgForm((prev) => ({ ...prev, eloRoleId: e.target.value }))}
+          >
+            {eloRoles.map((role: any) => (
+              <MenuItem key={role.id} value={role.id}>
+                {role.name} ({role.code})
+              </MenuItem>
+            ))}
+          </TextField>
+
+          <TextField
+            size="small"
+            label="Buscar usuário"
+            value={orgCandidateSearch}
+            onChange={(e) => setOrgCandidateSearch(e.target.value)}
+          />
+
+          <TextField
+            select
+            size="small"
+            label="Usuário do sistema"
+            value={orgForm.userId}
+            onChange={(e) => setOrgForm((prev) => ({ ...prev, userId: e.target.value }))}
+            helperText="Somente usuários com função/localidade compatíveis."
+          >
+            {(orgChartCandidatesQuery.data?.items ?? []).map((item: any) => (
+              <MenuItem key={item.id} value={item.id}>
+                {item.name} - {item.email}
+              </MenuItem>
+            ))}
+          </TextField>
+
+          <TextField
+            size="small"
+            label="Posto/Graduação"
+            value={orgForm.rank}
+            onChange={(e) => setOrgForm((prev) => ({ ...prev, rank: e.target.value }))}
+          />
+          <TextField
+            size="small"
+            label="Telefone"
+            value={orgForm.phone}
+            onChange={(e) => setOrgForm((prev) => ({ ...prev, phone: e.target.value }))}
+          />
+          <TextField
+            select
+            size="small"
+            label="OM (PM)"
+            value={orgForm.om}
+            onChange={(e) => setOrgForm((prev) => ({ ...prev, om: e.target.value }))}
+            helperText="Selecione uma OM cadastrada no CRUD de OMs."
+          >
+            <MenuItem value="">Selecionar</MenuItem>
+            {omOptions.map((option) => (
+              <MenuItem key={option.value} value={option.value}>
+                {option.label}
+              </MenuItem>
+            ))}
+          </TextField>
+
+          <Stack direction="row" spacing={1} justifyContent="flex-end">
+            {orgForm.id && !orgForm.id.startsWith("auto-user-") && (
+              <Button color="error" onClick={handleDeleteOrgAssignment} disabled={deleteOrgChartAssignment.isPending}>
+                Remover
+              </Button>
+            )}
+            <Button variant="text" onClick={() => setOrgDrawerOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="contained"
+              onClick={handleSaveOrgAssignment}
+              disabled={createOrgChartAssignment.isPending || updateOrgChartAssignment.isPending}
+            >
+              Salvar
             </Button>
           </Stack>
         </Box>
