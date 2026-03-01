@@ -840,9 +840,15 @@ export class MissionsService {
 
     const openNewPage = (forceTableHeader = true) => {
       if (!isFirstPage) {
-        drawPageFooter();
-        doc.addPage();
-        pageNumber += 1;
+        // Só desenhar footer e criar nova página se houver conteúdo na página atual
+        if (cursorY > doc.page.margins.top) {
+          drawPageFooter();
+          doc.addPage();
+          pageNumber += 1;
+        } else {
+          // Se não há conteúdo, não criar nova página
+          return;
+        }
       }
       cursorY = doc.page.margins.top;
       if (isFirstPage) {
@@ -902,6 +908,7 @@ export class MissionsService {
       const textPaddingX = 5;
       const textPaddingY = 4;
       const minHeight = 22;
+      const lineGap = 2; // Espaçamento adicional entre linhas para melhor legibilidade
 
       let rowHeight = minHeight;
       for (const col of columnDefs) {
@@ -912,6 +919,7 @@ export class MissionsService {
           .heightOfString(value, {
             width: col.width - textPaddingX * 2,
             align: col.align,
+            lineGap: lineGap,
           });
         rowHeight = Math.max(rowHeight, height + textPaddingY * 2);
       }
@@ -930,6 +938,7 @@ export class MissionsService {
           .text(String(row[col.key] ?? '-'), x + textPaddingX, cursorY + textPaddingY, {
             width: col.width - textPaddingX * 2,
             align: col.align,
+            lineGap: lineGap,
           });
         x += col.width;
       }
@@ -1004,7 +1013,11 @@ export class MissionsService {
       });
     }
 
-    drawPageFooter();
+    // Só desenhar o footer se houver conteúdo na página atual
+    // Evitar página em branco ao final
+    if (cursorY > doc.page.margins.top) {
+      drawPageFooter();
+    }
 
     doc.end();
     const buffer = await done;
