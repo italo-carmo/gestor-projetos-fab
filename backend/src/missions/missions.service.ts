@@ -897,7 +897,7 @@ export class MissionsService {
     } else {
       let weekCursor = '';
       let rowIndex = 0;
-      let lastItemDate: Date | null = null;
+      let lastItemDate: string | null = null;
       let lastItemHour = -1;
 
       mission.scheduleItems.forEach((item) => {
@@ -915,9 +915,10 @@ export class MissionsService {
         }
 
         // Verificar se precisa adicionar divisória entre manhã e tarde
+        // Usar UTC para manter consistência com formatTime
         const itemDate = new Date(item.startAt);
-        const itemHour = itemDate.getHours();
-        const itemDateStr = itemDate.toDateString();
+        const itemHour = itemDate.getUTCHours();
+        const itemDateStr = `${itemDate.getUTCFullYear()}-${String(itemDate.getUTCMonth() + 1).padStart(2, '0')}-${String(itemDate.getUTCDate()).padStart(2, '0')}`;
         
         // Adicionar divisória quando:
         // 1. Primeiro item do dia e já é >= 12h
@@ -926,10 +927,10 @@ export class MissionsService {
         const shouldAddDivider =
           (!lastItemDate && itemHour >= 12) ||
           (lastItemDate &&
-            itemDateStr === lastItemDate.toDateString() &&
+            itemDateStr === lastItemDate &&
             lastItemHour < 12 &&
             itemHour >= 12) ||
-          (lastItemDate && itemDateStr !== lastItemDate.toDateString() && itemHour >= 12);
+          (lastItemDate && itemDateStr !== lastItemDate && itemHour >= 12);
         
         if (shouldAddDivider) {
           drawAfternoonDivider();
@@ -946,7 +947,7 @@ export class MissionsService {
           participants: item.participants || '-',
         });
         
-        lastItemDate = itemDate;
+        lastItemDate = itemDateStr;
         lastItemHour = itemHour;
         rowIndex += 1;
       });
@@ -1009,25 +1010,26 @@ export class MissionsService {
   }
 
   private getWeekStartDate(value: Date) {
+    // Usar UTC para manter consistência
     const date = new Date(value);
-    const day = (date.getDay() + 6) % 7; // Monday = 0
-    date.setDate(date.getDate() - day);
-    date.setHours(0, 0, 0, 0);
+    const day = (date.getUTCDay() + 6) % 7; // Monday = 0
+    date.setUTCDate(date.getUTCDate() - day);
+    date.setUTCHours(0, 0, 0, 0);
     return date;
   }
 
   private formatDateNoYear(value: Date) {
-    return new Intl.DateTimeFormat('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-    }).format(value);
+    // Usar UTC para manter consistência
+    const year = value.getUTCFullYear();
+    const month = String(value.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(value.getUTCDate()).padStart(2, '0');
+    return `${day}/${month}`;
   }
 
   private formatWeekdayDate(value: Date) {
-    const weekday = new Intl.DateTimeFormat('pt-BR', { weekday: 'short' })
-      .format(value)
-      .replace('.', '')
-      .toUpperCase();
+    // Usar UTC para manter consistência
+    const weekdays = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB'];
+    const weekday = weekdays[value.getUTCDay()];
     return `${weekday} ${this.formatDateNoYear(value)}`;
   }
 
@@ -1045,10 +1047,11 @@ export class MissionsService {
   }
 
   private formatTime(value: Date) {
-    // Garantir que usa o horário local, não UTC
-    const localDate = new Date(value);
-    const hours = localDate.getHours().toString().padStart(2, '0');
-    const minutes = localDate.getMinutes().toString().padStart(2, '0');
+    // O horário foi salvo como UTC pelo frontend (toISOString()),
+    // então precisamos usar getUTCHours() e getUTCMinutes() para
+    // preservar o horário original que o usuário digitou
+    const hours = value.getUTCHours().toString().padStart(2, '0');
+    const minutes = value.getUTCMinutes().toString().padStart(2, '0');
     return `${hours}:${minutes}`;
   }
 
