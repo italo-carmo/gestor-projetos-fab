@@ -424,7 +424,7 @@ export function MissionsPage() {
                 display: 'grid',
                 gridTemplateColumns: {
                   xs: 'repeat(2, minmax(0, 1fr))',
-                  md: 'repeat(4, minmax(0, 1fr))',
+                  md: 'repeat(6, minmax(0, 1fr))',
                 },
                 gap: 1.2,
                 mb: 1.6,
@@ -447,6 +447,30 @@ export function MissionsPage() {
                   <Typography variant="caption" color="text.secondary">Média por Missão</Typography>
                   <Typography variant="h5" fontWeight={700} color="primary.main">
                     {statisticsQuery.data.averageParticipantsPerMission.toFixed(1)}
+                  </Typography>
+                </CardContent>
+              </Card>
+              <Card variant="outlined" sx={{ bgcolor: 'background.default' }}>
+                <CardContent sx={{ py: 1.2, px: 1.4, '&:last-child': { pb: 1.2 } }}>
+                  <Typography variant="caption" color="text.secondary">Total de Dias de Missão</Typography>
+                  <Typography variant="h5" fontWeight={700} color="primary.main">
+                    {statisticsQuery.data.totalMissionDays}
+                  </Typography>
+                </CardContent>
+              </Card>
+              <Card variant="outlined" sx={{ bgcolor: 'background.default' }}>
+                <CardContent sx={{ py: 1.2, px: 1.4, '&:last-child': { pb: 1.2 } }}>
+                  <Typography variant="caption" color="text.secondary">Dias-Pessoa em Missão</Typography>
+                  <Typography variant="h5" fontWeight={700} color="primary.main">
+                    {statisticsQuery.data.totalParticipantDays}
+                  </Typography>
+                </CardContent>
+              </Card>
+              <Card variant="outlined" sx={{ bgcolor: 'background.default' }}>
+                <CardContent sx={{ py: 1.2, px: 1.4, '&:last-child': { pb: 1.2 } }}>
+                  <Typography variant="caption" color="text.secondary">Média de Dias por Missão</Typography>
+                  <Typography variant="h5" fontWeight={700} color="primary.main">
+                    {statisticsQuery.data.averageMissionDays.toFixed(1)}
                   </Typography>
                 </CardContent>
               </Card>
@@ -487,9 +511,41 @@ export function MissionsPage() {
                                 <Typography variant="caption" color="text.secondary" noWrap>{item.userEmail}</Typography>
                               )}
                             </Box>
-                            <Chip label={item.count} size="small" color="primary" />
+                            <Stack direction="row" spacing={0.5}>
+                              <Chip label={`${item.count} missões`} size="small" color="primary" />
+                              <Chip label={`${item.totalDays} dias`} size="small" variant="outlined" color="primary" />
+                            </Stack>
                           </Stack>
                           {index < statisticsQuery.data.missionsByUser.length - 1 && <Divider sx={{ mt: 1 }} />}
+                        </Box>
+                      ))}
+                    </Stack>
+                  </CardContent>
+                </Card>
+              )}
+
+              {statisticsQuery.data.usersByMissionDays.length > 0 && (
+                <Card variant="outlined">
+                  <CardContent sx={{ py: 1.4, px: 1.6 }}>
+                    <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+                      Usuários com Mais Dias em Missão
+                    </Typography>
+                    <Stack spacing={1} sx={{ mt: 0.8 }}>
+                      {statisticsQuery.data.usersByMissionDays.map((item: any, index: number) => (
+                        <Box key={item.userId}>
+                          <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1}>
+                            <Box sx={{ minWidth: 0, flex: 1 }}>
+                              <Typography variant="body2" fontWeight={600} noWrap>{item.userName}</Typography>
+                              {item.userEmail && (
+                                <Typography variant="caption" color="text.secondary" noWrap>{item.userEmail}</Typography>
+                              )}
+                            </Box>
+                            <Stack direction="row" spacing={0.5}>
+                              <Chip label={`${item.totalDays} dias`} size="small" color="secondary" />
+                              <Chip label={`${item.count} missões`} size="small" variant="outlined" color="secondary" />
+                            </Stack>
+                          </Stack>
+                          {index < statisticsQuery.data.usersByMissionDays.length - 1 && <Divider sx={{ mt: 1 }} />}
                         </Box>
                       ))}
                     </Stack>
@@ -510,7 +566,10 @@ export function MissionsPage() {
                             <Typography variant="body2" fontWeight={600} sx={{ minWidth: 0, flex: 1 }} noWrap>
                               {item.missionTitle}
                             </Typography>
-                            <Chip label={item.participantsCount} size="small" color="secondary" />
+                            <Stack direction="row" spacing={0.5}>
+                              <Chip label={`${item.participantsCount} participantes`} size="small" color="secondary" />
+                              <Chip label={`${item.missionDays} dias`} size="small" variant="outlined" color="secondary" />
+                            </Stack>
                           </Stack>
                           {index < statisticsQuery.data.participantsByMission.length - 1 && <Divider sx={{ mt: 1 }} />}
                         </Box>

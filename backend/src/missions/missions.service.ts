@@ -102,9 +102,13 @@ export class MissionsService {
       return {
         totalMissions: 0,
         totalParticipants: 0,
+        totalMissionDays: 0,
+        totalParticipantDays: 0,
         missionsByUser: [],
+        usersByMissionDays: [],
         participantsByMission: [],
         averageParticipantsPerMission: 0,
+        averageMissionDays: 0,
         missionsWithoutParticipants: 0,
         missionsWithMostParticipants: [],
       };
@@ -128,21 +132,37 @@ export class MissionsService {
     const totalParticipants = missions.reduce((acc, m) => acc + m.participants.length, 0);
     const averageParticipantsPerMission = totalMissions > 0 ? totalParticipants / totalMissions : 0;
     const missionsWithoutParticipants = missions.filter((m) => m.participants.length === 0).length;
+    const totalMissionDays = missions.reduce(
+      (acc, mission) => acc + this.calculateInclusiveDays(mission.startDate, mission.endDate),
+      0,
+    );
+    const averageMissionDays = totalMissions > 0 ? totalMissionDays / totalMissions : 0;
+    const totalParticipantDays = missions.reduce(
+      (acc, mission) =>
+        acc + this.calculateInclusiveDays(mission.startDate, mission.endDate) * mission.participants.length,
+      0,
+    );
 
     // Estatísticas por usuário (participantes que são usuários do sistema)
-    const userMissionCount = new Map<string, { userId: string; userName: string; userEmail: string; count: number }>();
+    const userMissionCount = new Map<
+      string,
+      { userId: string; userName: string; userEmail: string; count: number; totalDays: number }
+    >();
     for (const mission of missions) {
+      const missionDays = this.calculateInclusiveDays(mission.startDate, mission.endDate);
       for (const participant of mission.participants) {
         if (participant.userId) {
           const existing = userMissionCount.get(participant.userId);
           if (existing) {
             existing.count += 1;
+            existing.totalDays += missionDays;
           } else {
             userMissionCount.set(participant.userId, {
               userId: participant.userId,
               userName: participant.name || 'Sem nome',
               userEmail: participant.email || '',
               count: 1,
+              totalDays: missionDays,
             });
           }
         }
@@ -152,6 +172,9 @@ export class MissionsService {
     const missionsByUser = Array.from(userMissionCount.values())
       .sort((a, b) => b.count - a.count)
       .slice(0, 10);
+    const usersByMissionDays = Array.from(userMissionCount.values())
+      .sort((a, b) => b.totalDays - a.totalDays || b.count - a.count)
+      .slice(0, 10);
 
     // Estatísticas por missão
     const participantsByMission = missions
@@ -159,6 +182,7 @@ export class MissionsService {
         missionId: m.id,
         missionTitle: m.title,
         participantsCount: m.participants.length,
+        missionDays: this.calculateInclusiveDays(m.startDate, m.endDate),
       }))
       .sort((a, b) => b.participantsCount - a.participantsCount)
       .slice(0, 10);
@@ -176,9 +200,13 @@ export class MissionsService {
     return {
       totalMissions,
       totalParticipants,
+      totalMissionDays,
+      totalParticipantDays,
       missionsByUser,
+      usersByMissionDays,
       participantsByMission,
       averageParticipantsPerMission: Math.round(averageParticipantsPerMission * 10) / 10,
+      averageMissionDays: Math.round(averageMissionDays * 10) / 10,
       missionsWithoutParticipants,
       missionsWithMostParticipants,
     };
@@ -1274,5 +1302,17 @@ export class MissionsService {
     const digits = String(value ?? '').replace(/\D/g, '');
     if (digits.length === 11) return digits;
     return null;
+  }
+
+  private calculateInclusiveDays(startDate: Date, endDate: Date) {
+    const startUtc = Date.UTC(
+      startDate.getUTCFullYear(),
+      startDate.getUTCMonth(),
+      startDate.getUTCDate(),
+    );
+    const endUtc = Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth(), endDate.getUTCDate());
+    const diffMs = endUtc - startUtc;
+    const diffDays = Math.floor(diffMs / 86_400_000);
+    return Math.max(1, diffDays + 1);
   }
 }
