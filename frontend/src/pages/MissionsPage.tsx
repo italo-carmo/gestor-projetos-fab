@@ -271,8 +271,9 @@ export function MissionsPage() {
   const filteredUsers = useMemo(() => {
     if (!usersQuery.data?.items) return [];
     const searchTerm = userSearch.toLowerCase().trim();
-    if (!searchTerm) return usersQuery.data.items.slice(0, 50);
-    return usersQuery.data.items
+    const allUsers = (usersQuery.data.items as any[]).filter((user: any) => user?.id);
+    if (!searchTerm) return allUsers.slice(0, 50);
+    return allUsers
       .filter((user: any) => {
         const name = String(user.name ?? '').toLowerCase();
         const email = String(user.email ?? '').toLowerCase();
@@ -639,15 +640,15 @@ export function MissionsPage() {
                             size="small"
                             options={filteredUsers}
                             getOptionLabel={(option: any) => {
-                              if (!option) return '';
+                              if (!option || !option.id) return '';
                               const roles = option.roles?.map((r: any) => r.role?.name).filter(Boolean).join(', ') || '';
                               return `${option.name || ''}${option.email ? ` • ${option.email}` : ''}${roles ? ` • ${roles}` : ''}`;
                             }}
                             isOptionEqualToValue={(option: any, value: any) => {
-                              if (!option || !value) return false;
+                              if (!option || !value || !option.id || !value.id) return false;
                               return option.id === value.id;
                             }}
-                            value={filteredUsers.find((u: any) => u.id === selectedUserId) || null}
+                            value={filteredUsers.find((u: any) => u?.id === selectedUserId) || null}
                             onChange={(_, newValue: any) => setSelectedUserId(newValue?.id || null)}
                             inputValue={userSearch}
                             onInputChange={(_, newInputValue) => setUserSearch(newInputValue)}
@@ -659,12 +660,13 @@ export function MissionsPage() {
                               />
                             )}
                             renderOption={(props, option: any) => {
+                              if (!option || !option.id) return null;
                               const roles = option.roles?.map((r: any) => r.role?.name).filter(Boolean).join(', ') || '';
                               return (
                                 <li {...props} key={option.id}>
                                   <Stack>
                                     <Typography variant="body2" fontWeight={500}>
-                                      {option.name}
+                                      {option.name || 'Sem nome'}
                                     </Typography>
                                     <Typography variant="caption" color="text.secondary">
                                       {option.email || option.ldapUid || 'Sem contato'}
