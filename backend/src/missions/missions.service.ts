@@ -1012,22 +1012,12 @@ export class MissionsService {
       }
     };
 
-    const drawMorningDivider = () => {
+    const drawMorningDivider = (requiredContentHeight = 22) => {
       const dividerHeight = 20;
-      // Verificar se há espaço para a divisória + pelo menos uma linha mínima
-      const minRowHeight = 22;
       const safetyMargin = 15;
-      if (cursorY + dividerHeight + minRowHeight + safetyMargin > tableBottomLimit) {
-        // Só criar nova página se realmente não couber e houver conteúdo suficiente na página atual
-        // Exigir pelo menos 100px de conteúdo antes de criar nova página
-        const minContentHeight = 100;
-        if (cursorY > doc.page.margins.top + minContentHeight) {
-          openNewPage(true);
-        } else {
-          // Se não há espaço mas também não há conteúdo suficiente, não desenhar a divisória agora
-          // Ela será desenhada na próxima página quando houver espaço
-          return;
-        }
+      // Garante que a divisória não fique "órfã": deve caber ao menos 1 item após ela.
+      if (cursorY + dividerHeight + requiredContentHeight + safetyMargin > tableBottomLimit) {
+        openNewPage(true);
       }
       doc
         .rect(tableX, cursorY, contentWidth, dividerHeight)
@@ -1040,22 +1030,12 @@ export class MissionsService {
       cursorY += dividerHeight;
     };
 
-    const drawAfternoonDivider = () => {
+    const drawAfternoonDivider = (requiredContentHeight = 22) => {
       const dividerHeight = 20;
-      // Verificar se há espaço para a divisória + pelo menos uma linha mínima
-      const minRowHeight = 22;
       const safetyMargin = 15;
-      if (cursorY + dividerHeight + minRowHeight + safetyMargin > tableBottomLimit) {
-        // Só criar nova página se realmente não couber e houver conteúdo suficiente na página atual
-        // Exigir pelo menos 100px de conteúdo antes de criar nova página
-        const minContentHeight = 100;
-        if (cursorY > doc.page.margins.top + minContentHeight) {
-          openNewPage(true);
-        } else {
-          // Se não há espaço mas também não há conteúdo suficiente, não desenhar a divisória agora
-          // Ela será desenhada na próxima página quando houver espaço
-          return;
-        }
+      // Garante que a divisória não fique "órfã": deve caber ao menos 1 item após ela.
+      if (cursorY + dividerHeight + requiredContentHeight + safetyMargin > tableBottomLimit) {
+        openNewPage(true);
       }
       doc
         .rect(tableX, cursorY, contentWidth, dividerHeight)
@@ -1068,7 +1048,7 @@ export class MissionsService {
       cursorY += dividerHeight;
     };
 
-    const drawScheduleRow = (rowIndex: number, row: Record<string, string>) => {
+    const measureScheduleRowHeight = (row: Record<string, string>) => {
       const textPaddingX = 5;
       const textPaddingY = 4;
       const minHeight = 22;
@@ -1088,8 +1068,18 @@ export class MissionsService {
           });
         rowHeight = Math.max(rowHeight, height + textPaddingY * 2);
       }
+      return rowHeight + rowSpacing;
+    };
 
-      ensureRowFits(rowHeight + rowSpacing);
+    const drawScheduleRow = (rowIndex: number, row: Record<string, string>) => {
+      const textPaddingX = 5;
+      const textPaddingY = 4;
+      const lineGap = 3;
+      const rowSpacing = 1;
+      const measured = measureScheduleRowHeight(row);
+      const rowHeight = measured - rowSpacing;
+
+      ensureRowFits(measured);
 
       const background = rowIndex % 2 === 0 ? palette.rowOdd : palette.rowEven;
       doc.rect(tableX, cursorY, contentWidth, rowHeight).fillAndStroke(background, palette.rowBorder);
@@ -1132,6 +1122,17 @@ export class MissionsService {
         const itemDateParts = this.getDateTimePartsInTimeZone(item.startAt, missionTimeZone);
         const itemHour = Number(itemDateParts.hour);
         const itemDateStr = `${itemDateParts.year}-${itemDateParts.month}-${itemDateParts.day}`;
+        const endAt = new Date(item.startAt.getTime() + item.durationMinutes * 60_000);
+        const rowData = {
+          day: this.formatWeekdayDate(item.startAt, missionTimeZone),
+          time: `${this.formatTime(item.startAt, missionTimeZone)} - ${this.formatTime(endAt, missionTimeZone)}`,
+          duration: this.formatDuration(item.durationMinutes),
+          activity: item.title || '-',
+          location: item.location || '-',
+          responsible: item.responsible || '-',
+          participants: item.participants || '-',
+        };
+        const requiredRowHeight = measureScheduleRowHeight(rowData);
         
         // Adicionar divisória de MANHÃ quando:
         // 1. Primeiro item do dia e é < 12h
@@ -1153,23 +1154,14 @@ export class MissionsService {
           (lastItemDate && itemDateStr !== lastItemDate && itemHour >= 12);
         
         if (shouldAddMorningDivider) {
-          drawMorningDivider();
+          drawMorningDivider(requiredRowHeight);
         }
         
         if (shouldAddAfternoonDivider) {
-          drawAfternoonDivider();
+          drawAfternoonDivider(requiredRowHeight);
         }
 
-        const endAt = new Date(item.startAt.getTime() + item.durationMinutes * 60_000);
-        drawScheduleRow(rowIndex, {
-          day: this.formatWeekdayDate(item.startAt, missionTimeZone),
-          time: `${this.formatTime(item.startAt, missionTimeZone)} - ${this.formatTime(endAt, missionTimeZone)}`,
-          duration: this.formatDuration(item.durationMinutes),
-          activity: item.title || '-',
-          location: item.location || '-',
-          responsible: item.responsible || '-',
-          participants: item.participants || '-',
-        });
+        drawScheduleRow(rowIndex, rowData);
         
         lastItemDate = itemDateStr;
         lastItemHour = itemHour;
@@ -1185,8 +1177,15 @@ export class MissionsService {
 
     doc.end();
     const buffer = await done;
-    const sanitizedTitle = mission.title.replace(/[^a-zA-Z0-9-_]+/g, '_').slice(0, 60);
-    const fileName = `cronograma_missao_${sanitizedTitle || mission.id}.pdf`;
+    const sanitizedTitle = mission.title
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9]+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 60)
+      .toLowerCase();
+    const fileName = `cronograma-missao-${sanitizedTitle || mission.id}.pdf`;
     return { fileName, buffer };
   }
 

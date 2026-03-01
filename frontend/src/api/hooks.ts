@@ -260,7 +260,12 @@ export function useExportMissionSchedulePdf() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `cronograma-missao-${id}.pdf`;
+      const contentDisposition = String(response.headers?.["content-disposition"] ?? "");
+      const fileNameMatch =
+        /filename\*=(?:UTF-8'')?([^;]+)/i.exec(contentDisposition) ??
+        /filename="?([^"]+)"?/i.exec(contentDisposition);
+      const decodedName = fileNameMatch?.[1] ? decodeURIComponent(fileNameMatch[1].trim()) : "";
+      a.download = decodedName || `cronograma-missao-${id}.pdf`;
       document.body.appendChild(a);
       a.click();
       a.remove();
