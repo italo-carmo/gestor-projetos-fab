@@ -931,12 +931,12 @@ export class MissionsService {
     const openNewPage = (forceTableHeader = true) => {
       if (!isFirstPage) {
         // Só desenhar footer e criar nova página se houver conteúdo na página atual
-        if (cursorY > doc.page.margins.top) {
+        if (cursorY > doc.page.margins.top + 10) {
           drawPageFooter();
           doc.addPage();
           pageNumber += 1;
         } else {
-          // Se não há conteúdo, não criar nova página
+          // Se não há conteúdo suficiente, não criar nova página
           return;
         }
       }
@@ -953,9 +953,12 @@ export class MissionsService {
 
     const ensureRowFits = (rowHeight: number) => {
       // Adicionar margem de segurança para evitar quebras no meio de elementos
-      const safetyMargin = 5;
+      const safetyMargin = 10;
       if (cursorY + rowHeight + safetyMargin <= tableBottomLimit) return;
-      openNewPage(true);
+      // Só criar nova página se realmente não couber
+      if (cursorY > doc.page.margins.top + 20) {
+        openNewPage(true);
+      }
     };
 
     const drawMorningDivider = () => {
@@ -998,7 +1001,8 @@ export class MissionsService {
       const textPaddingX = 5;
       const textPaddingY = 4;
       const minHeight = 22;
-      const lineGap = 2; // Espaçamento adicional entre linhas para melhor legibilidade
+      const lineGap = 3; // Espaçamento adicional entre linhas para melhor legibilidade
+      const rowSpacing = 1; // Espaçamento vertical entre linhas da tabela
 
       let rowHeight = minHeight;
       for (const col of columnDefs) {
@@ -1014,7 +1018,7 @@ export class MissionsService {
         rowHeight = Math.max(rowHeight, height + textPaddingY * 2);
       }
 
-      ensureRowFits(rowHeight);
+      ensureRowFits(rowHeight + rowSpacing);
 
       const background = rowIndex % 2 === 0 ? palette.rowOdd : palette.rowEven;
       doc.rect(tableX, cursorY, contentWidth, rowHeight).fillAndStroke(background, palette.rowBorder);
@@ -1033,7 +1037,7 @@ export class MissionsService {
         x += col.width;
       }
 
-      cursorY += rowHeight;
+      cursorY += rowHeight + rowSpacing;
     };
 
     openNewPage(true);
@@ -1103,9 +1107,9 @@ export class MissionsService {
       });
     }
 
-    // Só desenhar o footer se houver conteúdo na página atual
+    // Só desenhar o footer se houver conteúdo suficiente na página atual
     // Evitar página em branco ao final
-    if (cursorY > doc.page.margins.top) {
+    if (cursorY > doc.page.margins.top + 20) {
       drawPageFooter();
     }
 

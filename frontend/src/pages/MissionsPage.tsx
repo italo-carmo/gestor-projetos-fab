@@ -828,14 +828,15 @@ export function MissionsPage() {
 
                       <Divider sx={{ my: 2 }} />
 
-                      <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 1.2 }}>
+                      <Stack direction="row" spacing={1.5} sx={{ mt: 1.2 }} useFlexGap flexWrap="wrap">
                         {validParticipants.map((participant: any) => (
                           <Chip
                             key={participant.id}
                             label={`${participant.name || 'Sem nome'}${participant.email ? ` • ${participant.email}` : participant.cpf ? ` • ${participant.cpf}` : ''}`}
                             onDelete={() => handleRemoveParticipant(participant.id)}
                             size="small"
-                            color={participant.userId ? 'primary' : 'default'}
+                            color="primary"
+                            sx={{ mb: 0.5 }}
                           />
                         ))}
                         {validParticipants.length === 0 && (
