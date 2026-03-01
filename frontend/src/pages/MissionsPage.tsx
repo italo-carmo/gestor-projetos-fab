@@ -7,7 +7,6 @@ import {
   Chip,
   Divider,
   Drawer,
-  Grid,
   IconButton,
   LinearProgress,
   MenuItem,
@@ -414,116 +413,115 @@ export function MissionsPage() {
         </Card>
       )}
       {statisticsQuery.data && (
-        <Grid container spacing={1.5} sx={{ mb: 2 }}>
-          <Grid item xs={12}>
-            <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
+        <Card variant="outlined" sx={{ mb: 2 }}>
+          <CardContent sx={{ p: 2 }}>
+            <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1.5 }}>
               Estatísticas de Missões
             </Typography>
-          </Grid>
-          <Grid item xs={6} sm={3}>
-            <Card variant="outlined" sx={{ height: '100%' }}>
-              <CardContent sx={{ pb: '16px !important' }}>
-                <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
-                  Total de Missões
-                </Typography>
-                <Typography variant="h5" fontWeight={700} color="primary.main">
-                  {statisticsQuery.data.totalMissions}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={6} sm={3}>
-            <Card variant="outlined" sx={{ height: '100%' }}>
-              <CardContent sx={{ pb: '16px !important' }}>
-                <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
-                  Total de Participantes
-                </Typography>
-                <Typography variant="h5" fontWeight={700} color="primary.main">
-                  {statisticsQuery.data.totalParticipants}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={6} sm={3}>
-            <Card variant="outlined" sx={{ height: '100%' }}>
-              <CardContent sx={{ pb: '16px !important' }}>
-                <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
-                  Média de Participantes
-                </Typography>
-                <Typography variant="h5" fontWeight={700} color="primary.main">
-                  {statisticsQuery.data.averageParticipantsPerMission.toFixed(1)}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={6} sm={3}>
-            <Card variant="outlined" sx={{ height: '100%' }}>
-              <CardContent sx={{ pb: '16px !important' }}>
-                <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
-                  Missões sem Participantes
-                </Typography>
-                <Typography variant="h5" fontWeight={700} color={statisticsQuery.data.missionsWithoutParticipants > 0 ? 'warning.main' : 'success.main'}>
-                  {statisticsQuery.data.missionsWithoutParticipants}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          {statisticsQuery.data.missionsByUser.length > 0 && (
-            <Grid item xs={12} md={6}>
-              <Card variant="outlined" sx={{ height: '100%' }}>
-                <CardContent>
-                  <Typography variant="subtitle2" fontWeight={700} gutterBottom>
-                    Usuários com Mais Missões
+
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: {
+                  xs: 'repeat(2, minmax(0, 1fr))',
+                  md: 'repeat(4, minmax(0, 1fr))',
+                },
+                gap: 1.2,
+                mb: 1.6,
+              }}
+            >
+              <Card variant="outlined" sx={{ bgcolor: 'background.default' }}>
+                <CardContent sx={{ py: 1.2, px: 1.4, '&:last-child': { pb: 1.2 } }}>
+                  <Typography variant="caption" color="text.secondary">Total de Missões</Typography>
+                  <Typography variant="h5" fontWeight={700} color="primary.main">{statisticsQuery.data.totalMissions}</Typography>
+                </CardContent>
+              </Card>
+              <Card variant="outlined" sx={{ bgcolor: 'background.default' }}>
+                <CardContent sx={{ py: 1.2, px: 1.4, '&:last-child': { pb: 1.2 } }}>
+                  <Typography variant="caption" color="text.secondary">Total de Participantes</Typography>
+                  <Typography variant="h5" fontWeight={700} color="primary.main">{statisticsQuery.data.totalParticipants}</Typography>
+                </CardContent>
+              </Card>
+              <Card variant="outlined" sx={{ bgcolor: 'background.default' }}>
+                <CardContent sx={{ py: 1.2, px: 1.4, '&:last-child': { pb: 1.2 } }}>
+                  <Typography variant="caption" color="text.secondary">Média por Missão</Typography>
+                  <Typography variant="h5" fontWeight={700} color="primary.main">
+                    {statisticsQuery.data.averageParticipantsPerMission.toFixed(1)}
                   </Typography>
-                  <Stack spacing={0.8} sx={{ mt: 1 }}>
-                    {statisticsQuery.data.missionsByUser.map((item: any, index: number) => (
-                      <Box key={item.userId}>
-                        <Stack direction="row" justifyContent="space-between" alignItems="center">
-                          <Box sx={{ flex: 1, minWidth: 0 }}>
-                            <Typography variant="body2" fontWeight={500} noWrap>
-                              {item.userName}
+                </CardContent>
+              </Card>
+              <Card variant="outlined" sx={{ bgcolor: 'background.default' }}>
+                <CardContent sx={{ py: 1.2, px: 1.4, '&:last-child': { pb: 1.2 } }}>
+                  <Typography variant="caption" color="text.secondary">Missões sem Participantes</Typography>
+                  <Typography
+                    variant="h5"
+                    fontWeight={700}
+                    color={statisticsQuery.data.missionsWithoutParticipants > 0 ? 'warning.main' : 'success.main'}
+                  >
+                    {statisticsQuery.data.missionsWithoutParticipants}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Box>
+
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+                gap: 1.2,
+              }}
+            >
+              {statisticsQuery.data.missionsByUser.length > 0 && (
+                <Card variant="outlined">
+                  <CardContent sx={{ py: 1.4, px: 1.6 }}>
+                    <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+                      Usuários com Mais Missões
+                    </Typography>
+                    <Stack spacing={1} sx={{ mt: 0.8 }}>
+                      {statisticsQuery.data.missionsByUser.map((item: any, index: number) => (
+                        <Box key={item.userId}>
+                          <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1}>
+                            <Box sx={{ minWidth: 0, flex: 1 }}>
+                              <Typography variant="body2" fontWeight={600} noWrap>{item.userName}</Typography>
+                              {item.userEmail && (
+                                <Typography variant="caption" color="text.secondary" noWrap>{item.userEmail}</Typography>
+                              )}
+                            </Box>
+                            <Chip label={item.count} size="small" color="primary" />
+                          </Stack>
+                          {index < statisticsQuery.data.missionsByUser.length - 1 && <Divider sx={{ mt: 1 }} />}
+                        </Box>
+                      ))}
+                    </Stack>
+                  </CardContent>
+                </Card>
+              )}
+
+              {statisticsQuery.data.participantsByMission.length > 0 && (
+                <Card variant="outlined">
+                  <CardContent sx={{ py: 1.4, px: 1.6 }}>
+                    <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+                      Missões com Mais Participantes
+                    </Typography>
+                    <Stack spacing={1} sx={{ mt: 0.8 }}>
+                      {statisticsQuery.data.participantsByMission.map((item: any, index: number) => (
+                        <Box key={item.missionId}>
+                          <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1}>
+                            <Typography variant="body2" fontWeight={600} sx={{ minWidth: 0, flex: 1 }} noWrap>
+                              {item.missionTitle}
                             </Typography>
-                            {item.userEmail && (
-                              <Typography variant="caption" color="text.secondary" display="block" noWrap>
-                                {item.userEmail}
-                              </Typography>
-                            )}
-                          </Box>
-                          <Chip label={item.count} size="small" color="primary" sx={{ ml: 1 }} />
-                        </Stack>
-                        {index < statisticsQuery.data.missionsByUser.length - 1 && <Divider sx={{ mt: 0.8 }} />}
-                      </Box>
-                    ))}
-                  </Stack>
-                </CardContent>
-              </Card>
-            </Grid>
-          )}
-          {statisticsQuery.data.participantsByMission.length > 0 && (
-            <Grid item xs={12} md={6}>
-              <Card variant="outlined" sx={{ height: '100%' }}>
-                <CardContent>
-                  <Typography variant="subtitle2" fontWeight={700} gutterBottom>
-                    Missões com Mais Participantes
-                  </Typography>
-                  <Stack spacing={0.8} sx={{ mt: 1 }}>
-                    {statisticsQuery.data.participantsByMission.map((item: any, index: number) => (
-                      <Box key={item.missionId}>
-                        <Stack direction="row" justifyContent="space-between" alignItems="center">
-                          <Typography variant="body2" fontWeight={500} sx={{ flex: 1, mr: 1 }} noWrap>
-                            {item.missionTitle}
-                          </Typography>
-                          <Chip label={item.participantsCount} size="small" color="secondary" />
-                        </Stack>
-                        {index < statisticsQuery.data.participantsByMission.length - 1 && <Divider sx={{ mt: 0.8 }} />}
-                      </Box>
-                    ))}
-                  </Stack>
-                </CardContent>
-              </Card>
-            </Grid>
-          )}
-        </Grid>
+                            <Chip label={item.participantsCount} size="small" color="secondary" />
+                          </Stack>
+                          {index < statisticsQuery.data.participantsByMission.length - 1 && <Divider sx={{ mt: 1 }} />}
+                        </Box>
+                      ))}
+                    </Stack>
+                  </CardContent>
+                </Card>
+              )}
+            </Box>
+          </CardContent>
+        </Card>
       )}
 
       <Card sx={{ mb: 2 }}>
@@ -879,7 +877,18 @@ export function MissionsPage() {
                         <Button
                           variant="outlined"
                           startIcon={<DownloadRoundedIcon />}
-                          onClick={() => exportSchedulePdf.mutateAsync(selectedMission.id)}
+                          onClick={async () => {
+                            try {
+                              await exportSchedulePdf.mutateAsync(selectedMission.id);
+                              toast.push({ message: 'PDF exportado com sucesso.', severity: 'success' });
+                            } catch (error) {
+                              const parsed = parseApiError(error);
+                              toast.push({
+                                message: parsed.message || 'Não foi possível exportar o PDF. Faça login novamente e tente de novo.',
+                                severity: 'error',
+                              });
+                            }
+                          }}
                           disabled={exportSchedulePdf.isPending}
                         >
                           Exportar PDF

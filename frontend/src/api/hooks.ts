@@ -252,6 +252,10 @@ export function useExportMissionSchedulePdf() {
       const response = await api.get(`/missions/${id}/schedule/pdf`, {
         responseType: "blob",
       });
+      const contentType = String(response.headers?.["content-type"] ?? "").toLowerCase();
+      if (!contentType.includes("application/pdf")) {
+        throw new Error("Não foi possível exportar o PDF. Faça login novamente e tente de novo.");
+      }
       const blob = new Blob([response.data], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -260,7 +264,8 @@ export function useExportMissionSchedulePdf() {
       document.body.appendChild(a);
       a.click();
       a.remove();
-      URL.revokeObjectURL(url);
+      // Evita que alguns navegadores cancelem o download por revogação imediata.
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
       return true;
     },
   });
