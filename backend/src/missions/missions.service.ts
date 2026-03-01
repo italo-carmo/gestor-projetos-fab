@@ -955,8 +955,8 @@ export class MissionsService {
       // Adicionar margem de segurança para evitar quebras no meio de elementos
       const safetyMargin = 10;
       if (cursorY + rowHeight + safetyMargin <= tableBottomLimit) return;
-      // Só criar nova página se realmente não couber
-      if (cursorY > doc.page.margins.top + 20) {
+      // Só criar nova página se realmente não couber e houver conteúdo suficiente na página atual
+      if (cursorY > doc.page.margins.top + 30) {
         openNewPage(true);
       }
     };
