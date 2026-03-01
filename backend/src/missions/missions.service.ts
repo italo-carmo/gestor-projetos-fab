@@ -645,21 +645,14 @@ export class MissionsService {
         .font('Helvetica-Bold')
         .fontSize(16)
         .fillColor('#FFFFFF')
-        .text('Quadro de Trabalho Semanal', textStartX, cursorY + 10, {
-          width: contentWidth - (textStartX - tableX) - 12,
-        });
-      doc
-        .font('Helvetica')
-        .fontSize(9)
-        .fillColor('#E6EEF7')
-        .text('Cronograma operacional da missão • Comissão de Iniciação', textStartX, cursorY + 28, {
+        .text('Cronograma da Missão', textStartX, cursorY + 10, {
           width: contentWidth - (textStartX - tableX) - 12,
         });
       doc
         .font('Helvetica-Bold')
         .fontSize(11)
         .fillColor('#FFFFFF')
-        .text(missionTitle, textStartX, cursorY + 42, {
+        .text(missionTitle, textStartX, cursorY + 32, {
           width: contentWidth - (textStartX - tableX) - 12,
         });
 
@@ -746,7 +739,7 @@ export class MissionsService {
         .font('Helvetica-Bold')
         .fontSize(11)
         .fillColor('#FFFFFF')
-        .text(`Quadro de Trabalho Semanal • ${missionTitle}`, tableX + 10, cursorY + 8, {
+        .text(`Cronograma da Missão • ${missionTitle}`, tableX + 10, cursorY + 8, {
           width: contentWidth - 20,
         });
       cursorY += barHeight + 8;
