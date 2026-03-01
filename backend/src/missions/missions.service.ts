@@ -801,22 +801,22 @@ export class MissionsService {
       openNewPage(true);
     };
 
-    const drawWeekSection = (label: string) => {
-      const sectionHeight = 20;
-      // Verificar se há espaço para a seção + pelo menos uma linha mínima
+    const drawMorningDivider = () => {
+      const dividerHeight = 20;
+      // Verificar se há espaço para a divisória + pelo menos uma linha mínima
       const minRowHeight = 22;
-      if (cursorY + sectionHeight + minRowHeight > tableBottomLimit) {
+      if (cursorY + dividerHeight + minRowHeight > tableBottomLimit) {
         openNewPage(true);
       }
       doc
-        .rect(tableX, cursorY, contentWidth, sectionHeight)
+        .rect(tableX, cursorY, contentWidth, dividerHeight)
         .fillAndStroke(palette.sectionBg, palette.sectionBorder);
       doc
         .font('Helvetica-Bold')
-        .fontSize(9)
+        .fontSize(8.5)
         .fillColor(palette.brandDark)
-        .text(label, tableX + 6, cursorY + 6, { width: contentWidth - 12 });
-      cursorY += sectionHeight;
+        .text('MANHÃ', tableX + 6, cursorY + 6, { width: contentWidth - 12 });
+      cursorY += dividerHeight;
     };
 
     const drawAfternoonDivider = () => {
@@ -888,36 +888,29 @@ export class MissionsService {
           align: 'center',
         });
     } else {
-      let weekCursor = '';
       let rowIndex = 0;
       let lastItemDate: string | null = null;
       let lastItemHour = -1;
 
       mission.scheduleItems.forEach((item) => {
-        const weekStart = this.getWeekStartDate(item.startAt);
-        const weekEnd = new Date(weekStart);
-        weekEnd.setDate(weekStart.getDate() + 6);
-        const weekKey = weekStart.toISOString().slice(0, 10);
-        if (weekKey !== weekCursor) {
-          weekCursor = weekKey;
-          drawWeekSection(
-            `Semana de ${this.formatDateNoYear(weekStart)} a ${this.formatDateNoYear(weekEnd)}`,
-          );
-          lastItemDate = null;
-          lastItemHour = -1;
-        }
-
         // Verificar se precisa adicionar divisória entre manhã e tarde
         // Usar UTC para manter consistência com formatTime
         const itemDate = new Date(item.startAt);
         const itemHour = itemDate.getUTCHours();
         const itemDateStr = `${itemDate.getUTCFullYear()}-${String(itemDate.getUTCMonth() + 1).padStart(2, '0')}-${String(itemDate.getUTCDate()).padStart(2, '0')}`;
         
-        // Adicionar divisória quando:
+        // Adicionar divisória de MANHÃ quando:
+        // 1. Primeiro item do dia e é < 12h
+        // 2. Mudou de dia e o novo item é < 12h
+        const shouldAddMorningDivider =
+          (!lastItemDate && itemHour < 12) ||
+          (lastItemDate && itemDateStr !== lastItemDate && itemHour < 12);
+        
+        // Adicionar divisória de TARDE quando:
         // 1. Primeiro item do dia e já é >= 12h
         // 2. Mesmo dia e passou de manhã (< 12h) para tarde (>= 12h)
         // 3. Mudou de dia e o novo item é >= 12h
-        const shouldAddDivider =
+        const shouldAddAfternoonDivider =
           (!lastItemDate && itemHour >= 12) ||
           (lastItemDate &&
             itemDateStr === lastItemDate &&
@@ -925,7 +918,11 @@ export class MissionsService {
             itemHour >= 12) ||
           (lastItemDate && itemDateStr !== lastItemDate && itemHour >= 12);
         
-        if (shouldAddDivider) {
+        if (shouldAddMorningDivider) {
+          drawMorningDivider();
+        }
+        
+        if (shouldAddAfternoonDivider) {
           drawAfternoonDivider();
         }
 
