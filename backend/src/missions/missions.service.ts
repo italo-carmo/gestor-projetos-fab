@@ -458,9 +458,9 @@ export class MissionsService {
         title: this.sanitizeRequiredText(payload.title, 'title'),
         startAt: this.parseRequiredDate(payload.startAt, 'startAt'),
         durationMinutes: this.normalizeDurationMinutes(payload.durationMinutes),
-        location: this.sanitizeRequiredText(payload.location, 'location'),
+        location: sanitizeText(payload.location ?? ''),
         responsible: this.sanitizeRequiredText(payload.responsible, 'responsible'),
-        participants: this.sanitizeRequiredText(payload.participants, 'participants'),
+        participants: sanitizeText(payload.participants ?? ''),
       },
     });
 
@@ -505,11 +505,11 @@ export class MissionsService {
         startAt: payload.startAt === undefined ? undefined : this.parseRequiredDate(payload.startAt, 'startAt'),
         durationMinutes:
           payload.durationMinutes === undefined ? undefined : this.normalizeDurationMinutes(payload.durationMinutes),
-        location: payload.location === undefined ? undefined : this.sanitizeRequiredText(payload.location, 'location'),
+        location: payload.location === undefined ? undefined : sanitizeText(payload.location ?? ''),
         responsible:
           payload.responsible === undefined ? undefined : this.sanitizeRequiredText(payload.responsible, 'responsible'),
         participants:
-          payload.participants === undefined ? undefined : this.sanitizeRequiredText(payload.participants, 'participants'),
+          payload.participants === undefined ? undefined : sanitizeText(payload.participants ?? ''),
       },
     });
 
