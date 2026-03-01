@@ -3,40 +3,20 @@ import {
   Button,
   Card,
   CardContent,
-  Chip,
-  Drawer,
   MenuItem,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
   TextField,
   Typography,
 } from '@mui/material';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Bar, BarChart, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useExecutiveDashboard, useMe } from '../api/hooks';
 import { can } from '../app/rbac';
 import { EmptyState } from '../components/states/EmptyState';
 import { ErrorState } from '../components/states/ErrorState';
 import { SkeletonState } from '../components/states/SkeletonState';
 import { ACTIVITY_STATUS_LABELS } from '../constants/enums';
-
-type DetailView =
-  | { type: 'late' }
-  | { type: 'unassigned' }
-  | { type: 'reports' }
-  | { type: 'risk'; localityId: string };
-
-function formatDate(value: string | Date | null | undefined) {
-  if (!value) return '-';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '-';
-  return date.toLocaleDateString('pt-BR');
-}
 
 function formatStatus(value: string | null | undefined) {
   if (!value) return '-';
@@ -46,7 +26,6 @@ function formatStatus(value: string | null | undefined) {
 export function DashboardExecutivePage() {
   const { data: me } = useMe();
   const [params, setParams] = useSearchParams();
-  const [detailView, setDetailView] = useState<DetailView | null>(null);
 
   const from = params.get('from') ?? '';
   const to = params.get('to') ?? '';
@@ -78,7 +57,7 @@ export function DashboardExecutivePage() {
     return (
       <Box>
         <Typography variant="h4" gutterBottom>
-          Dashboard Executivo
+          Painel de Comando - CIPAVD
         </Typography>
         <Typography variant="body2" color="text.secondary">
           Acesso restrito.
@@ -88,87 +67,90 @@ export function DashboardExecutivePage() {
   }
 
   if (dashboardQuery.isLoading) return <SkeletonState />;
-  if (dashboardQuery.isError) return <ErrorState error={dashboardQuery.error} onRetry={() => dashboardQuery.refetch()} />;
+  if (dashboardQuery.isError)
+    return (
+      <ErrorState
+        error={dashboardQuery.error}
+        onRetry={() => dashboardQuery.refetch()}
+      />
+    );
 
   const data = dashboardQuery.data;
-  if (!data) return <EmptyState title="Sem dados" description="Ajuste os filtros ou tente novamente." />;
+  if (!data)
+    return (
+      <EmptyState
+        title="Sem dados"
+        description="Ajuste os filtros ou tente novamente."
+      />
+    );
 
   const statusItems = data.status?.items ?? [];
-  const lateItems = data.late?.items ?? [];
-  const unassignedItems = data.unassigned?.items ?? [];
-  const pendingReportItems = data.reportsCompliance?.pendingItems ?? [];
-  const trend = data.late?.trend ?? [];
-  const riskTop10 = data.risk?.top10 ?? [];
   const byLocality = data.progress?.byLocality ?? [];
   const bySpecialty = data.specialties?.items ?? [];
 
+  const doneCount =
+    statusItems.find((item: any) => String(item.status) === 'DONE')?.count ?? 0;
+  const totalActivities = statusItems.reduce(
+    (acc: number, item: any) => acc + Number(item.count ?? 0),
+    0,
+  );
+  const closureRate = totalActivities
+    ? Math.round((doneCount / totalActivities) * 100)
+    : 0;
+
+  const approvedReports = Number(data.reportsCompliance?.approved ?? 0);
+  const pendingReports = Number(data.reportsCompliance?.pending ?? 0);
+  const totalReports = approvedReports + pendingReports;
+  const reportsComplianceRate = totalReports
+    ? Math.round((approvedReports / totalReports) * 100)
+    : 100;
+
   const localityOptions = [...byLocality].sort((a: any, b: any) =>
-    String(a.localityName ?? '').localeCompare(String(b.localityName ?? ''), 'pt-BR'),
+    String(a.localityName ?? '').localeCompare(
+      String(b.localityName ?? ''),
+      'pt-BR',
+    ),
   );
 
+  const topSpecialties = [...bySpecialty]
+    .sort((a: any, b: any) => Number(b.count ?? 0) - Number(a.count ?? 0))
+    .slice(0, 12);
+
+  const topLocalitiesByProgress = [...byLocality]
+    .sort((a: any, b: any) => Number(b.progress ?? 0) - Number(a.progress ?? 0))
+    .slice(0, 12);
+
   const downloadCsv = () => {
-    const headers = ['localityCode', 'score', 'late', 'unassigned', 'reportPending'];
-    const rows = riskTop10.map((item: any) => [
-      item.localityCode,
-      item.score,
-      item.breakdown?.late ?? 0,
-      item.breakdown?.unassigned ?? 0,
-      item.breakdown?.reportPending ?? 0,
-    ]);
+    const headers = ['localityCode', 'localityName', 'progress', 'specialtyName', 'specialtyCount'];
+    const rows = topLocalitiesByProgress.map((item: any, index: number) => {
+      const specialty = topSpecialties[index];
+      return [
+        item.localityCode ?? '',
+        item.localityName ?? '',
+        item.progress ?? 0,
+        specialty?.specialtyName ?? '',
+        specialty?.count ?? 0,
+      ];
+    });
     const csv = [headers.join(','), ...rows.map((row: any[]) => row.join(','))].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'executive-activities-dashboard.csv';
+    a.download = 'painel-cipavd-indicadores-positivos.csv';
     a.click();
     URL.revokeObjectURL(url);
   };
 
-  const selectedRiskItem =
-    detailView?.type === 'risk'
-      ? riskTop10.find((entry: any) => entry.localityId === detailView.localityId) ?? null
-      : null;
-
-  const riskLateItems = selectedRiskItem
-    ? lateItems.filter((item: any) => item.localityId === selectedRiskItem.localityId)
-    : [];
-  const riskUnassignedItems = selectedRiskItem
-    ? unassignedItems.filter((item: any) => item.localityId === selectedRiskItem.localityId)
-    : [];
-  const riskPendingReports = selectedRiskItem
-    ? pendingReportItems.filter((item: any) => item.localityId === selectedRiskItem.localityId)
-    : [];
-
-  const renderActivityTable = (items: any[]) => (
-    <Table size="small">
-      <TableHead>
-        <TableRow sx={{ bgcolor: 'primary.main' }}>
-          <TableCell sx={{ color: 'white', fontWeight: 700 }}>Atividade</TableCell>
-          <TableCell sx={{ color: 'white', fontWeight: 700 }}>Localidade</TableCell>
-          <TableCell sx={{ color: 'white', fontWeight: 700 }}>Especialidade</TableCell>
-          <TableCell sx={{ color: 'white', fontWeight: 700 }}>Data</TableCell>
-          <TableCell sx={{ color: 'white', fontWeight: 700 }}>Status</TableCell>
-        </TableRow>
-      </TableHead>
-      <TableBody>
-        {items.map((item: any) => (
-          <TableRow key={item.activityId} hover>
-            <TableCell>{item.title}</TableCell>
-            <TableCell>{item.localityCode || item.localityName || '-'}</TableCell>
-            <TableCell>{item.specialtyName || '-'}</TableCell>
-            <TableCell>{formatDate(item.eventDate || item.createdAt)}</TableCell>
-            <TableCell>{formatStatus(item.status)}</TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
-  );
-
   return (
     <Box>
       <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
-        <Typography variant="h4">Painel de Comando - CIPAVD</Typography>
+        <Box>
+          <Typography variant="h4">Painel de Comando - CIPAVD</Typography>
+          <Typography variant="body2" color="text.secondary">
+            Visão de entregas, produtividade e performance da comissão nas OM.
+          </Typography>
+        </Box>
         <Button variant="outlined" onClick={downloadCsv}>
           Exportar CSV
         </Button>
@@ -176,7 +158,12 @@ export function DashboardExecutivePage() {
 
       <Card sx={{ mb: 2 }}>
         <CardContent>
-          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} flexWrap="wrap" useFlexGap>
+          <Stack
+            direction={{ xs: 'column', md: 'row' }}
+            spacing={2}
+            flexWrap="wrap"
+            useFlexGap
+          >
             <TextField
               size="small"
               type="date"
@@ -233,107 +220,88 @@ export function DashboardExecutivePage() {
         </CardContent>
       </Card>
 
-      <Box display="grid" gridTemplateColumns={{ xs: '1fr', md: 'repeat(4, 1fr)' }} gap={2} mb={2}>
+      <Box
+        display="grid"
+        gridTemplateColumns={{ xs: '1fr', md: 'repeat(4, 1fr)' }}
+        gap={2}
+        mb={2}
+      >
         <Card>
           <CardContent>
-            <Typography variant="overline">Progresso médio</Typography>
-            <Typography variant="h4">{data.progress?.overall ?? 0}%</Typography>
+            <Typography variant="overline">Atividades concluídas</Typography>
+            <Typography variant="h4">{doneCount}</Typography>
             <Typography variant="caption" color="text.secondary">
-              Baseado no status das atividades
+              Entregas finalizadas no período
             </Typography>
           </CardContent>
         </Card>
-        <Card sx={{ cursor: 'pointer' }} onClick={() => setDetailView({ type: 'late' })}>
+        <Card>
           <CardContent>
-            <Typography variant="overline">Atividades atrasadas</Typography>
-            <Typography variant="h4">{data.late?.total ?? 0}</Typography>
+            <Typography variant="overline">Taxa de conclusão</Typography>
+            <Typography variant="h4">{closureRate}%</Typography>
             <Typography variant="caption" color="text.secondary">
-              Clique para detalhes
+              Concluídas sobre total de atividades
             </Typography>
           </CardContent>
         </Card>
-        <Card sx={{ cursor: 'pointer' }} onClick={() => setDetailView({ type: 'unassigned' })}>
+        <Card>
           <CardContent>
-            <Typography variant="overline">Sem responsável</Typography>
-            <Typography variant="h4">{data.unassigned?.total ?? 0}</Typography>
+            <Typography variant="overline">Relatórios aprovados</Typography>
+            <Typography variant="h4">{approvedReports}</Typography>
             <Typography variant="caption" color="text.secondary">
-              Clique para detalhes
+              Conformidade de relatórios: {reportsComplianceRate}%
             </Typography>
           </CardContent>
         </Card>
-        <Card sx={{ cursor: 'pointer' }} onClick={() => setDetailView({ type: 'reports' })}>
+        <Card>
           <CardContent>
-            <Typography variant="overline">Relatórios pendentes</Typography>
-            <Typography variant="h4">{data.reportsCompliance?.pending ?? 0}</Typography>
+            <Typography variant="overline">Localidades acima do padrão</Typography>
+            <Typography variant="h4">{data.localityAboveThreshold?.count ?? 0}</Typography>
             <Typography variant="caption" color="text.secondary">
-              Clique para detalhes
+              de {data.localityAboveThreshold?.total ?? 0} localidades no limiar
             </Typography>
           </CardContent>
         </Card>
       </Box>
 
-      <Box display="grid" gridTemplateColumns={{ xs: '1fr', md: 'repeat(2, 1fr)' }} gap={2} mb={2}>
+      <Box
+        display="grid"
+        gridTemplateColumns={{ xs: '1fr', md: 'repeat(2, 1fr)' }}
+        gap={2}
+        mb={2}
+      >
         <Card>
           <CardContent>
             <Typography variant="subtitle1" gutterBottom>
-              Status das atividades
+              Distribuição de atividades por status
             </Typography>
-            <ResponsiveContainer width="100%" height={260}>
+            <ResponsiveContainer width="100%" height={280}>
               <BarChart data={statusItems}>
                 <XAxis dataKey="status" tickFormatter={(value) => formatStatus(value)} />
                 <YAxis allowDecimals={false} />
-                <Tooltip formatter={(value: any) => [value, 'Quantidade']} labelFormatter={(value: any) => formatStatus(value)} />
+                <Tooltip
+                  formatter={(value: any) => [value, 'Quantidade']}
+                  labelFormatter={(value: any) => formatStatus(value)}
+                />
                 <Bar dataKey="count" fill="#0B4DA1" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent>
-            <Typography variant="subtitle1" gutterBottom>
-              Tendência de atraso (8 semanas)
-            </Typography>
-            <ResponsiveContainer width="100%" height={260}>
-              <LineChart data={trend}>
-                <XAxis dataKey="week" hide />
-                <YAxis allowDecimals={false} />
-                <Tooltip labelFormatter={(value) => formatDate(String(value))} formatter={(value: any) => [value, 'Atrasadas']} />
-                <Line type="monotone" dataKey="late" stroke="#2E7DFF" strokeWidth={2} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      </Box>
 
-      <Box display="grid" gridTemplateColumns={{ xs: '1fr', md: 'repeat(2, 1fr)' }} gap={2} mb={2}>
         <Card>
           <CardContent>
             <Typography variant="subtitle1" gutterBottom>
-              Progresso por localidade
+              Indicadores por especialidade
             </Typography>
-            <Stack direction="row" spacing={1} sx={{ mb: 1.5 }}>
-              <Chip label={`Acima do limiar: ${data.localityAboveThreshold?.count ?? 0}`} color="success" />
-              <Chip label={`Total: ${data.localityAboveThreshold?.total ?? 0}`} variant="outlined" />
-            </Stack>
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={[...byLocality].sort((a: any, b: any) => b.progress - a.progress).slice(0, 12)}>
-                <XAxis dataKey="localityCode" />
-                <YAxis />
-                <Tooltip formatter={(value: any) => [`${value}%`, 'Progresso']} />
-                <Bar dataKey="progress" fill="#114259" radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent>
-            <Typography variant="subtitle1" gutterBottom>
-              Atividades por especialidade
-            </Typography>
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={bySpecialty.slice(0, 12)} layout="vertical" margin={{ left: 30 }}>
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart
+                data={topSpecialties}
+                layout="vertical"
+                margin={{ left: 30 }}
+              >
                 <XAxis type="number" allowDecimals={false} />
-                <YAxis type="category" dataKey="specialtyName" width={140} />
+                <YAxis type="category" dataKey="specialtyName" width={150} />
                 <Tooltip formatter={(value: any) => [value, 'Atividades']} />
                 <Bar dataKey="count" fill="#4D86A0" radius={[0, 6, 6, 0]} />
               </BarChart>
@@ -345,152 +313,18 @@ export function DashboardExecutivePage() {
       <Card>
         <CardContent>
           <Typography variant="subtitle1" gutterBottom>
-            Top riscos (atividades)
+            Destaque de performance por localidade
           </Typography>
-          {riskTop10.length === 0 ? (
-            <Typography variant="body2" color="text.secondary">
-              Sem dados de risco para os filtros atuais.
-            </Typography>
-          ) : (
-            <Box component="table" width="100%" sx={{ borderCollapse: 'collapse' }}>
-              <Box component="thead">
-                <Box component="tr">
-                  {['Localidade', 'Score', 'Atrasadas', 'Sem resp.', 'Relatório pend.', 'Ação'].map((header) => (
-                    <Box key={header} component="th" sx={{ textAlign: 'left', pb: 1 }}>
-                      {header}
-                    </Box>
-                  ))}
-                </Box>
-              </Box>
-              <Box component="tbody">
-                {riskTop10.map((item: any) => (
-                  <Box key={item.localityId} component="tr" sx={{ borderTop: '1px solid #E6ECF5' }}>
-                    <Box component="td" sx={{ py: 1 }}>
-                      {item.localityCode || item.localityId}
-                    </Box>
-                    <Box component="td" sx={{ py: 1 }}>
-                      {item.score}
-                    </Box>
-                    <Box component="td" sx={{ py: 1 }}>
-                      {item.breakdown?.late ?? 0}
-                    </Box>
-                    <Box component="td" sx={{ py: 1 }}>
-                      {item.breakdown?.unassigned ?? 0}
-                    </Box>
-                    <Box component="td" sx={{ py: 1 }}>
-                      {item.breakdown?.reportPending ?? 0}
-                    </Box>
-                    <Box component="td" sx={{ py: 1 }}>
-                      <Button size="small" onClick={() => setDetailView({ type: 'risk', localityId: item.localityId })}>
-                        Detalhes
-                      </Button>
-                    </Box>
-                  </Box>
-                ))}
-              </Box>
-            </Box>
-          )}
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={topLocalitiesByProgress}>
+              <XAxis dataKey="localityCode" />
+              <YAxis />
+              <Tooltip formatter={(value: any) => [`${value}%`, 'Progresso']} />
+              <Bar dataKey="progress" fill="#114259" radius={[6, 6, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
         </CardContent>
       </Card>
-
-      <Drawer
-        anchor="right"
-        open={Boolean(detailView)}
-        onClose={() => setDetailView(null)}
-        PaperProps={{ sx: { width: { xs: '100%', md: 760 } } }}
-      >
-        <Box p={3} sx={{ height: '100%', overflowY: 'auto' }}>
-          <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
-            <Typography variant="h6">Detalhes</Typography>
-            <Button onClick={() => setDetailView(null)}>Fechar</Button>
-          </Stack>
-
-          {detailView?.type === 'late' && (
-            <Stack spacing={2}>
-              <Typography variant="subtitle1">Atividades atrasadas ({lateItems.length})</Typography>
-              {lateItems.length === 0 ? (
-                <Typography variant="body2" color="text.secondary">
-                  Sem atividades atrasadas para os filtros atuais.
-                </Typography>
-              ) : (
-                renderActivityTable(lateItems)
-              )}
-            </Stack>
-          )}
-
-          {detailView?.type === 'unassigned' && (
-            <Stack spacing={2}>
-              <Typography variant="subtitle1">Atividades sem responsável ({unassignedItems.length})</Typography>
-              {unassignedItems.length === 0 ? (
-                <Typography variant="body2" color="text.secondary">
-                  Sem pendências de responsável para os filtros atuais.
-                </Typography>
-              ) : (
-                renderActivityTable(unassignedItems)
-              )}
-            </Stack>
-          )}
-
-          {detailView?.type === 'reports' && (
-            <Stack spacing={2}>
-              <Typography variant="subtitle1">Relatórios pendentes ({pendingReportItems.length})</Typography>
-              <Typography variant="body2" color="text.secondary">
-                Aprovados: {data.reportsCompliance?.approved ?? 0} · Pendentes: {data.reportsCompliance?.pending ?? 0}
-              </Typography>
-              {pendingReportItems.length === 0 ? (
-                <Typography variant="body2" color="text.secondary">
-                  Sem relatórios pendentes para os filtros atuais.
-                </Typography>
-              ) : (
-                renderActivityTable(pendingReportItems)
-              )}
-            </Stack>
-          )}
-
-          {detailView?.type === 'risk' && (
-            <Stack spacing={2}>
-              <Typography variant="subtitle1">
-                Risco da localidade {selectedRiskItem?.localityCode || selectedRiskItem?.localityId || '-'}
-              </Typography>
-              {selectedRiskItem ? (
-                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                  <Chip label={`Score ${selectedRiskItem.score}`} color="warning" />
-                  <Chip label={`Atrasadas: ${selectedRiskItem.breakdown?.late ?? 0}`} />
-                  <Chip label={`Sem responsável: ${selectedRiskItem.breakdown?.unassigned ?? 0}`} />
-                  <Chip label={`Relatório pendente: ${selectedRiskItem.breakdown?.reportPending ?? 0}`} />
-                </Stack>
-              ) : null}
-
-              <Typography variant="subtitle2">Atividades atrasadas</Typography>
-              {riskLateItems.length === 0 ? (
-                <Typography variant="body2" color="text.secondary">
-                  Nenhuma atividade atrasada nessa localidade.
-                </Typography>
-              ) : (
-                renderActivityTable(riskLateItems)
-              )}
-
-              <Typography variant="subtitle2">Atividades sem responsável</Typography>
-              {riskUnassignedItems.length === 0 ? (
-                <Typography variant="body2" color="text.secondary">
-                  Nenhuma atividade sem responsável nessa localidade.
-                </Typography>
-              ) : (
-                renderActivityTable(riskUnassignedItems)
-              )}
-
-              <Typography variant="subtitle2">Relatórios pendentes</Typography>
-              {riskPendingReports.length === 0 ? (
-                <Typography variant="body2" color="text.secondary">
-                  Nenhuma pendência de relatório nessa localidade.
-                </Typography>
-              ) : (
-                renderActivityTable(riskPendingReports)
-              )}
-            </Stack>
-          )}
-        </Box>
-      </Drawer>
     </Box>
   );
 }
