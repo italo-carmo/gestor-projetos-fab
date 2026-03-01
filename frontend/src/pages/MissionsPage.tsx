@@ -667,18 +667,27 @@ export function MissionsPage() {
                               return `${option.name || ''}${option.email ? ` • ${option.email}` : ''}${roles ? ` • ${roles}` : ''}`;
                             }}
                             isOptionEqualToValue={(option: any, value: any) => {
-                              if (!option || !value || !option.id || !value.id) return false;
-                              return option.id === value.id;
+                              if (!option || !value) return false;
+                              if (!option.id || !value.id) return false;
+                              return String(option.id) === String(value.id);
                             }}
                             value={selectedUser}
                             onChange={(_, newValue: any) => {
-                              setSelectedUserId(newValue?.id || null);
-                              if (newValue) {
+                              if (newValue?.id) {
+                                setSelectedUserId(String(newValue.id));
                                 setUserSearch(newValue.name || '');
+                              } else {
+                                setSelectedUserId(null);
+                                setUserSearch('');
                               }
                             }}
                             inputValue={userSearch}
-                            onInputChange={(_, newInputValue) => setUserSearch(newInputValue)}
+                            onInputChange={(_, newInputValue) => {
+                              setUserSearch(newInputValue);
+                              if (!newInputValue) {
+                                setSelectedUserId(null);
+                              }
+                            }}
                             renderInput={(params) => (
                               <TextField
                                 {...params}
@@ -686,22 +695,6 @@ export function MissionsPage() {
                                 placeholder="Digite nome, e-mail ou CPF"
                               />
                             )}
-                            renderOption={(props, option: any) => {
-                              const roles = option.roles?.map((r: any) => r.role?.name).filter(Boolean).join(', ') || '';
-                              return (
-                                <li {...props}>
-                                  <Stack>
-                                    <Typography variant="body2" fontWeight={500}>
-                                      {option.name || 'Sem nome'}
-                                    </Typography>
-                                    <Typography variant="caption" color="text.secondary">
-                                      {option.email || option.ldapUid || 'Sem contato'}
-                                      {roles && ` • ${roles}`}
-                                    </Typography>
-                                  </Stack>
-                                </li>
-                              );
-                            }}
                             loading={usersQuery.isLoading}
                             noOptionsText={userSearch.trim() ? 'Nenhum usuário encontrado' : 'Digite para buscar'}
                             fullWidth
