@@ -627,48 +627,48 @@ export class MissionsService {
     };
 
     const drawCoverHeader = () => {
-      const headerHeight = 84;
+      const headerHeight = 64;
       doc
-        .roundedRect(tableX, cursorY, contentWidth, headerHeight, 12)
+        .roundedRect(tableX, cursorY, contentWidth, headerHeight, 10)
         .fillAndStroke(palette.brandDark, palette.brandDark);
 
       if (logoPath) {
         try {
-          doc.image(logoPath, tableX + 16, cursorY + 17, { fit: [48, 48] });
+          doc.image(logoPath, tableX + 12, cursorY + 10, { fit: [40, 40] });
         } catch {
           // no-op
         }
       }
 
-      const textStartX = tableX + 78;
+      const textStartX = tableX + 60;
       doc
         .font('Helvetica-Bold')
-        .fontSize(18)
+        .fontSize(16)
         .fillColor('#FFFFFF')
-        .text('Quadro de Trabalho Semanal', textStartX, cursorY + 16, {
-          width: contentWidth - (textStartX - tableX) - 16,
+        .text('Quadro de Trabalho Semanal', textStartX, cursorY + 10, {
+          width: contentWidth - (textStartX - tableX) - 12,
         });
       doc
         .font('Helvetica')
-        .fontSize(10)
+        .fontSize(9)
         .fillColor('#E6EEF7')
-        .text('Cronograma operacional da missão • Comissão de Iniciação', textStartX, cursorY + 40, {
-          width: contentWidth - (textStartX - tableX) - 16,
+        .text('Cronograma operacional da missão • Comissão de Iniciação', textStartX, cursorY + 28, {
+          width: contentWidth - (textStartX - tableX) - 12,
         });
       doc
         .font('Helvetica-Bold')
-        .fontSize(12)
+        .fontSize(11)
         .fillColor('#FFFFFF')
-        .text(missionTitle, textStartX, cursorY + 57, {
-          width: contentWidth - (textStartX - tableX) - 16,
+        .text(missionTitle, textStartX, cursorY + 42, {
+          width: contentWidth - (textStartX - tableX) - 12,
         });
 
-      cursorY += headerHeight + 12;
+      cursorY += headerHeight + 8;
     };
 
     const drawMetaCards = () => {
-      const gap = 8;
-      const cardHeight = 58;
+      const gap = 6;
+      const cardHeight = 42;
       const infoCards = [
         { label: 'Localidade', value: missionLocality },
         { label: 'Período', value: missionPeriod },
@@ -679,77 +679,77 @@ export class MissionsService {
       let x = tableX;
       for (const card of infoCards) {
         doc
-          .roundedRect(x, cursorY, cardWidth, cardHeight, 8)
+          .roundedRect(x, cursorY, cardWidth, cardHeight, 6)
           .fillAndStroke(palette.card, palette.cardBorder);
         doc
           .font('Helvetica-Bold')
-          .fontSize(9)
+          .fontSize(8)
           .fillColor(palette.muted)
-          .text(card.label, x + 10, cursorY + 9, { width: cardWidth - 20 });
+          .text(card.label, x + 8, cursorY + 6, { width: cardWidth - 16 });
         doc
           .font('Helvetica-Bold')
-          .fontSize(11)
+          .fontSize(10)
           .fillColor(palette.text)
-          .text(card.value || '-', x + 10, cursorY + 25, { width: cardWidth - 20, height: 24 });
+          .text(card.value || '-', x + 8, cursorY + 18, { width: cardWidth - 16, height: 18 });
         x += cardWidth + gap;
       }
 
-      cursorY += cardHeight + 10;
+      cursorY += cardHeight + 6;
 
-      const descriptionHeight = 52;
+      const descriptionHeight = 38;
       doc
-        .roundedRect(tableX, cursorY, contentWidth, descriptionHeight, 8)
+        .roundedRect(tableX, cursorY, contentWidth, descriptionHeight, 6)
         .fillAndStroke(palette.paper, palette.cardBorder);
       doc
         .font('Helvetica-Bold')
-        .fontSize(9)
+        .fontSize(8)
         .fillColor(palette.muted)
-        .text('Descrição', tableX + 10, cursorY + 8, { width: contentWidth - 20 });
+        .text('Descrição', tableX + 8, cursorY + 6, { width: contentWidth - 16 });
       doc
         .font('Helvetica')
-        .fontSize(10)
+        .fontSize(9)
         .fillColor(palette.text)
-        .text(missionDescription, tableX + 10, cursorY + 22, {
-          width: contentWidth - 20,
-          height: 20,
+        .text(missionDescription, tableX + 8, cursorY + 16, {
+          width: contentWidth - 16,
+          height: 16,
         });
 
-      cursorY += descriptionHeight + 8;
+      cursorY += descriptionHeight + 6;
 
       const participantsHeight = Math.max(
-        40,
-        doc.heightOfString(participantsLabel, { width: contentWidth - 20, align: 'left' }) + 20,
+        32,
+        doc.heightOfString(participantsLabel, { width: contentWidth - 16, align: 'left' }) + 16,
       );
       doc
-        .roundedRect(tableX, cursorY, contentWidth, participantsHeight, 8)
+        .roundedRect(tableX, cursorY, contentWidth, participantsHeight, 6)
         .fillAndStroke(palette.paper, palette.cardBorder);
       doc
         .font('Helvetica-Bold')
-        .fontSize(9)
+        .fontSize(8)
         .fillColor(palette.muted)
-        .text('Participantes', tableX + 10, cursorY + 8, { width: contentWidth - 20 });
+        .text('Participantes', tableX + 8, cursorY + 6, { width: contentWidth - 16 });
       doc
         .font('Helvetica')
-        .fontSize(9.5)
+        .fontSize(8.5)
         .fillColor(palette.text)
-        .text(participantsLabel, tableX + 10, cursorY + 22, { width: contentWidth - 20 });
+        .text(participantsLabel, tableX + 8, cursorY + 16, { width: contentWidth - 16 });
 
-      cursorY += participantsHeight + 12;
+      cursorY += participantsHeight + 8;
     };
 
     const drawContinuationHeader = () => {
-      const barHeight = 36;
+      const barHeight = 28;
       doc
-        .roundedRect(tableX, cursorY, contentWidth, barHeight, 8)
+        .roundedRect(tableX, cursorY, contentWidth, barHeight, 6)
         .fillAndStroke(palette.brandDark, palette.brandDark);
       doc
         .font('Helvetica-Bold')
-        .fontSize(12)
+        .fontSize(11)
         .fillColor('#FFFFFF')
-        .text(`Quadro de Trabalho Semanal • ${missionTitle}`, tableX + 12, cursorY + 11, {
-          width: contentWidth - 24,
+        .text(`Quadro de Trabalho Semanal • ${missionTitle}`, tableX + 10, cursorY + 8, {
+          width: contentWidth - 20,
         });
-      cursorY += barHeight + 10;
+      cursorY += barHeight + 8;
     };
 
     const columnDefs = [
@@ -765,7 +765,7 @@ export class MissionsService {
     columnDefs[columnDefs.length - 1].width = contentWidth - fixedWidth;
 
     const drawTableHeader = () => {
-      const headerHeight = 27;
+      const headerHeight = 22;
       doc
         .rect(tableX, cursorY, contentWidth, headerHeight)
         .fillAndStroke(palette.tableHeader, palette.tableHeader);
@@ -773,10 +773,10 @@ export class MissionsService {
       for (const col of columnDefs) {
         doc
           .font('Helvetica-Bold')
-          .fontSize(9.5)
+          .fontSize(9)
           .fillColor(palette.tableHeaderText)
-          .text(col.label, x + 6, cursorY + 9, {
-            width: col.width - 12,
+          .text(col.label, x + 5, cursorY + 7, {
+            width: col.width - 10,
             align: col.align,
           });
         x += col.width;
@@ -802,35 +802,59 @@ export class MissionsService {
     };
 
     const ensureRowFits = (rowHeight: number) => {
-      if (cursorY + rowHeight <= tableBottomLimit) return;
+      // Adicionar margem de segurança para evitar quebras no meio de elementos
+      const safetyMargin = 5;
+      if (cursorY + rowHeight + safetyMargin <= tableBottomLimit) return;
       openNewPage(true);
     };
 
     const drawWeekSection = (label: string) => {
-      const sectionHeight = 22;
-      ensureRowFits(sectionHeight);
+      const sectionHeight = 20;
+      // Verificar se há espaço para a seção + pelo menos uma linha mínima
+      const minRowHeight = 22;
+      if (cursorY + sectionHeight + minRowHeight > tableBottomLimit) {
+        openNewPage(true);
+      }
       doc
         .rect(tableX, cursorY, contentWidth, sectionHeight)
         .fillAndStroke(palette.sectionBg, palette.sectionBorder);
       doc
         .font('Helvetica-Bold')
-        .fontSize(9.5)
+        .fontSize(9)
         .fillColor(palette.brandDark)
-        .text(label, tableX + 8, cursorY + 7, { width: contentWidth - 16 });
+        .text(label, tableX + 6, cursorY + 6, { width: contentWidth - 12 });
       cursorY += sectionHeight;
     };
 
+    const drawAfternoonDivider = () => {
+      const dividerHeight = 20;
+      // Verificar se há espaço para a divisória + pelo menos uma linha mínima
+      const minRowHeight = 22;
+      if (cursorY + dividerHeight + minRowHeight > tableBottomLimit) {
+        openNewPage(true);
+      }
+      doc
+        .rect(tableX, cursorY, contentWidth, dividerHeight)
+        .fillAndStroke(palette.sectionBg, palette.sectionBorder);
+      doc
+        .font('Helvetica-Bold')
+        .fontSize(8.5)
+        .fillColor(palette.brandDark)
+        .text('TARDE', tableX + 6, cursorY + 6, { width: contentWidth - 12 });
+      cursorY += dividerHeight;
+    };
+
     const drawScheduleRow = (rowIndex: number, row: Record<string, string>) => {
-      const textPaddingX = 6;
-      const textPaddingY = 5;
-      const minHeight = 28;
+      const textPaddingX = 5;
+      const textPaddingY = 4;
+      const minHeight = 22;
 
       let rowHeight = minHeight;
       for (const col of columnDefs) {
         const value = String(row[col.key] ?? '-');
         const height = doc
           .font('Helvetica')
-          .fontSize(8.8)
+          .fontSize(8.5)
           .heightOfString(value, {
             width: col.width - textPaddingX * 2,
             align: col.align,
@@ -847,7 +871,7 @@ export class MissionsService {
       for (const col of columnDefs) {
         doc
           .font('Helvetica')
-          .fontSize(8.8)
+          .fontSize(8.5)
           .fillColor(palette.text)
           .text(String(row[col.key] ?? '-'), x + textPaddingX, cursorY + textPaddingY, {
             width: col.width - textPaddingX * 2,
@@ -873,6 +897,8 @@ export class MissionsService {
     } else {
       let weekCursor = '';
       let rowIndex = 0;
+      let lastItemDate: Date | null = null;
+      let lastItemHour = -1;
 
       mission.scheduleItems.forEach((item) => {
         const weekStart = this.getWeekStartDate(item.startAt);
@@ -884,6 +910,29 @@ export class MissionsService {
           drawWeekSection(
             `Semana de ${this.formatDateNoYear(weekStart)} a ${this.formatDateNoYear(weekEnd)}`,
           );
+          lastItemDate = null;
+          lastItemHour = -1;
+        }
+
+        // Verificar se precisa adicionar divisória entre manhã e tarde
+        const itemDate = new Date(item.startAt);
+        const itemHour = itemDate.getHours();
+        const itemDateStr = itemDate.toDateString();
+        
+        // Adicionar divisória quando:
+        // 1. Primeiro item do dia e já é >= 12h
+        // 2. Mesmo dia e passou de manhã (< 12h) para tarde (>= 12h)
+        // 3. Mudou de dia e o novo item é >= 12h
+        const shouldAddDivider =
+          (!lastItemDate && itemHour >= 12) ||
+          (lastItemDate &&
+            itemDateStr === lastItemDate.toDateString() &&
+            lastItemHour < 12 &&
+            itemHour >= 12) ||
+          (lastItemDate && itemDateStr !== lastItemDate.toDateString() && itemHour >= 12);
+        
+        if (shouldAddDivider) {
+          drawAfternoonDivider();
         }
 
         const endAt = new Date(item.startAt.getTime() + item.durationMinutes * 60_000);
@@ -896,6 +945,9 @@ export class MissionsService {
           responsible: item.responsible || '-',
           participants: item.participants || '-',
         });
+        
+        lastItemDate = itemDate;
+        lastItemHour = itemHour;
         rowIndex += 1;
       });
     }
@@ -993,11 +1045,11 @@ export class MissionsService {
   }
 
   private formatTime(value: Date) {
-    return new Intl.DateTimeFormat('pt-BR', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    }).format(value);
+    // Garantir que usa o horário local, não UTC
+    const localDate = new Date(value);
+    const hours = localDate.getHours().toString().padStart(2, '0');
+    const minutes = localDate.getMinutes().toString().padStart(2, '0');
+    return `${hours}:${minutes}`;
   }
 
   private extractCpf(value: string | null | undefined) {
