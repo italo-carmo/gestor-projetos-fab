@@ -5,6 +5,8 @@ import { RbacUser } from '../rbac/rbac.types';
 export declare class TasksService {
     private readonly prisma;
     private readonly audit;
+    private readonly manualTaskTemplateTitle;
+    private readonly manualTaskTemplateDescription;
     private readonly phaseLabelByCode;
     constructor(prisma: PrismaService, audit: AuditService);
     listPhases(): Promise<{
@@ -59,6 +61,26 @@ export declare class TasksService {
         appliesToAllLocalities: boolean;
         reportRequiredDefault: boolean;
     }>;
+    updateTaskTemplate(id: string, payload: {
+        title?: string;
+        description?: string | null;
+        phaseId?: string;
+        specialtyId?: string | null;
+        eloRoleId?: string | null;
+        appliesToAllLocalities?: boolean;
+        reportRequiredDefault?: boolean;
+    }, user?: RbacUser): Promise<{
+        id: string;
+        title: string;
+        phaseId: string;
+        specialtyId: string | null;
+        eloRoleId: string | null;
+        createdAt: Date;
+        updatedAt: Date;
+        description: string | null;
+        appliesToAllLocalities: boolean;
+        reportRequiredDefault: boolean;
+    }>;
     cloneTaskTemplate(id: string, user?: RbacUser): Promise<{
         id: string;
         title: string;
@@ -70,6 +92,9 @@ export declare class TasksService {
         description: string | null;
         appliesToAllLocalities: boolean;
         reportRequiredDefault: boolean;
+    }>;
+    deleteTaskTemplate(id: string, user?: RbacUser): Promise<{
+        ok: boolean;
     }>;
     generateInstances(templateId: string, payload: {
         localities: {
@@ -92,6 +117,42 @@ export declare class TasksService {
             localityId: string;
             status: import("@prisma/client").$Enums.TaskStatus;
             reportRequired: boolean;
+            groupKey: string | null;
+            titleOverride: string | null;
+            dueDate: Date;
+            priority: import("@prisma/client").$Enums.TaskPriority;
+            progressPercent: number;
+            assigneeType: import("@prisma/client").$Enums.TaskAssigneeType | null;
+            externalAssigneeName: string | null;
+            externalAssigneeRole: string | null;
+            blockedByIdsJson: Prisma.JsonValue | null;
+            meetingId: string | null;
+            assignedToId: string | null;
+            assignedEloId: string | null;
+        }[];
+    }>;
+    createTaskInstancesManual(payload: {
+        title: string;
+        description?: string | null;
+        phaseId: string;
+        dueDate: string;
+        priority?: TaskPriority | string;
+        localityIds: string[];
+        assignedToId?: string | null;
+        assigneeIds?: string[];
+    }, user?: RbacUser): Promise<{
+        items: {
+            id: string;
+            specialtyId: string | null;
+            eloRoleId: string | null;
+            createdAt: Date;
+            updatedAt: Date;
+            taskTemplateId: string;
+            localityId: string;
+            status: import("@prisma/client").$Enums.TaskStatus;
+            reportRequired: boolean;
+            groupKey: string | null;
+            titleOverride: string | null;
             dueDate: Date;
             priority: import("@prisma/client").$Enums.TaskPriority;
             progressPercent: number;
@@ -159,6 +220,7 @@ export declare class TasksService {
     }>;
     updateStatus(id: string, status: TaskStatus, user?: RbacUser): Promise<any>;
     updateProgress(id: string, progressPercent: number, user?: RbacUser): Promise<any>;
+    updateTaskTitle(id: string, title: string, user?: RbacUser): Promise<any>;
     listAssignees(localityIdRaw?: string, user?: RbacUser): Promise<{
         localityId: null;
         localityName: null;
@@ -180,11 +242,21 @@ export declare class TasksService {
         assigneeType?: 'USER' | 'ELO' | 'LOCALITY_COMMAND' | 'LOCALITY_COMMANDER' | null;
         assigneeId?: string | null;
     }, user?: RbacUser): Promise<any>;
+    updateTaskLocalities(id: string, localityIdsRaw: string[], sourceTaskIdsRaw?: string[], user?: RbacUser): Promise<{
+        primaryTaskId: string;
+        items: any[];
+    }>;
     batchAssign(ids: string[], assignedToId: string | null, assigneeIds?: string[], user?: RbacUser): Promise<{
         updated: number;
     }>;
     batchStatus(ids: string[], status: TaskStatus, user?: RbacUser): Promise<{
         updated: number;
+    }>;
+    batchProgress(ids: string[], progressPercent: number, user?: RbacUser): Promise<{
+        updated: number;
+    }>;
+    batchDeleteTaskInstances(ids: string[], user?: RbacUser): Promise<{
+        deleted: number;
     }>;
     getGantt(params: {
         localityId?: string;
@@ -208,7 +280,7 @@ export declare class TasksService {
             progress: number;
         }[];
     }>;
-    getDashboardNational(user?: RbacUser): Promise<{
+    getDashboardNational(user?: RbacUser, localityId?: string): Promise<{
         items: {
             localityId: string;
             localityCode: string;
@@ -233,53 +305,56 @@ export declare class TasksService {
             reportsProduced: number;
         };
         lateItems: {
-            taskId: string;
+            activityId: string;
             title: string;
             localityId: string;
             localityCode: string;
             localityName: string;
-            phaseId: string;
-            dueDate: Date;
-            status: import("@prisma/client").$Enums.TaskStatus;
-            priority: import("@prisma/client").$Enums.TaskPriority;
-            progressPercent: number;
+            specialtyId: string | null;
+            specialtyName: string;
+            eventDate: Date | null;
+            createdAt: Date;
+            status: import("@prisma/client").$Enums.ActivityStatus;
+            reportRequired: boolean;
+            hasSignedReport: boolean;
             isLate: boolean;
             isUnassigned: boolean;
-            isBlocked: boolean;
         }[];
         unassignedItems: {
-            taskId: string;
+            activityId: string;
             title: string;
             localityId: string;
             localityCode: string;
             localityName: string;
-            phaseId: string;
-            dueDate: Date;
-            status: import("@prisma/client").$Enums.TaskStatus;
-            priority: import("@prisma/client").$Enums.TaskPriority;
-            progressPercent: number;
+            specialtyId: string | null;
+            specialtyName: string;
+            eventDate: Date | null;
+            createdAt: Date;
+            status: import("@prisma/client").$Enums.ActivityStatus;
+            reportRequired: boolean;
+            hasSignedReport: boolean;
             isLate: boolean;
             isUnassigned: boolean;
-            isBlocked: boolean;
         }[];
         riskTasks: {
-            taskId: string;
+            activityId: string;
             title: string;
             localityId: string;
             localityCode: string;
             localityName: string;
-            phaseId: string;
-            dueDate: Date;
-            status: import("@prisma/client").$Enums.TaskStatus;
-            priority: import("@prisma/client").$Enums.TaskPriority;
-            progressPercent: number;
+            specialtyId: string | null;
+            specialtyName: string;
+            eventDate: Date | null;
+            createdAt: Date;
+            status: import("@prisma/client").$Enums.ActivityStatus;
+            reportRequired: boolean;
+            hasSignedReport: boolean;
             isLate: boolean;
             isUnassigned: boolean;
-            isBlocked: boolean;
         }[];
         executive_hide_pii: boolean;
     }>;
-    getDashboardRecruits(user?: RbacUser): Promise<{
+    getDashboardRecruits(user?: RbacUser, localityId?: string): Promise<{
         currentPerLocality: {
             localityId: string;
             localityName: string;
@@ -297,7 +372,18 @@ export declare class TasksService {
             series: {
                 date: string;
                 value: number;
+                turnoverCount: number;
+                dismissalReason: string | null;
             }[];
+        }[];
+        historyLog: {
+            localityId: string;
+            localityName: string;
+            code: string;
+            date: string;
+            recruitsFemaleCount: number;
+            turnoverCount: number;
+            dismissalReason: string | null;
         }[];
     }>;
     getDashboardExecutive(params: {
@@ -306,42 +392,63 @@ export declare class TasksService {
         phaseId?: string;
         threshold?: string;
         command?: string;
+        localityId?: string;
     }, user?: RbacUser): Promise<{
+        summary: {
+            totalActivities: number;
+            completedActivities: number;
+            completionPercent: number;
+            lateActivities: number;
+            unassignedActivities: number;
+            reportPending: number;
+            reportApproved: number;
+            reportTotal: number;
+        };
+        status: {
+            items: {
+                status: "CANCELLED" | "DONE" | "NOT_STARTED" | "IN_PROGRESS";
+                count: number;
+            }[];
+        };
         progress: {
             overall: number;
-            byPhase: {
-                phaseId: string;
-                phaseName: import("@prisma/client").$Enums.PhaseName;
-                progress: number;
-            }[];
             byLocality: {
                 localityId: string;
                 localityCode: string;
                 localityName: string;
+                commandName: string;
                 progress: number;
-                tasksCount: number;
+                activitiesCount: number;
+                done: number;
+                late: number;
+                unassigned: number;
+                reportPending: number;
             }[];
         };
         localityAboveThreshold: {
-            phaseId: string;
-            phaseName: import("@prisma/client").$Enums.PhaseName;
             threshold: number;
-            localitiesAboveCount: number;
-            localitiesBelowCount: number;
-            percentLocalitiesAbove: number;
-            localitiesAbove: {
+            count: number;
+            total: number;
+            items: {
                 localityId: string;
                 localityCode: string;
                 localityName: string;
+                commandName: string;
                 progress: number;
+                activitiesCount: number;
+                done: number;
+                late: number;
+                unassigned: number;
+                reportPending: number;
             }[];
-            localitiesBelow: {
-                localityId: string;
-                localityCode: string;
-                localityName: string;
-                progress: number;
+        };
+        specialties: {
+            items: {
+                specialtyId: string | null;
+                specialtyName: string;
+                count: number;
             }[];
-        }[];
+        };
         late: {
             total: number;
             trend: {
@@ -355,30 +462,26 @@ export declare class TasksService {
                 }>;
             }[];
             items: {
-                taskId: any;
-                title: any;
-                phaseId: any;
-                phaseName: any;
-                localityId: any;
+                activityId: string;
+                title: string;
+                specialtyId: string | null;
+                specialtyName: string;
+                localityId: string;
                 localityCode: string;
                 localityName: string;
-                dueDate: any;
-                status: any;
-                priority: any;
-                progressPercent: any;
-                reportRequired: any;
+                commandName: string;
+                eventDate: Date | null;
+                createdAt: Date;
+                status: import("@prisma/client").$Enums.ActivityStatus;
+                reportRequired: boolean;
+                hasSignedReport: boolean;
                 isLate: boolean;
                 daysLate: number;
                 isUnassigned: boolean;
-                isBlocked: boolean;
             }[];
         };
         unassigned: {
             total: number;
-            byCommand: {
-                commandName: string;
-                count: number;
-            }[];
             byLocality: {
                 localityId: string;
                 localityCode: string;
@@ -387,111 +490,45 @@ export declare class TasksService {
                 count: number;
             }[];
             items: {
-                taskId: any;
-                title: any;
-                phaseId: any;
-                phaseName: any;
-                localityId: any;
-                localityCode: string;
-                localityName: string;
-                dueDate: any;
-                status: any;
-                priority: any;
-                progressPercent: any;
-                reportRequired: any;
-                isLate: boolean;
-                daysLate: number;
-                isUnassigned: boolean;
-                isBlocked: boolean;
-            }[];
-        };
-        blocked: {
-            total: number;
-            byLocality: {
+                activityId: string;
+                title: string;
+                specialtyId: string | null;
+                specialtyName: string;
                 localityId: string;
                 localityCode: string;
                 localityName: string;
                 commandName: string;
-                count: number;
-            }[];
-            items: {
-                taskId: any;
-                title: any;
-                phaseId: any;
-                phaseName: any;
-                localityId: any;
-                localityCode: string;
-                localityName: string;
-                dueDate: any;
-                status: any;
-                priority: any;
-                progressPercent: any;
-                reportRequired: any;
+                eventDate: Date | null;
+                createdAt: Date;
+                status: import("@prisma/client").$Enums.ActivityStatus;
+                reportRequired: boolean;
+                hasSignedReport: boolean;
                 isLate: boolean;
                 daysLate: number;
                 isUnassigned: boolean;
-                isBlocked: boolean;
             }[];
         };
-        leadTime: {
-            phaseId: string;
-            phaseName: import("@prisma/client").$Enums.PhaseName;
-            avgLeadDays: number;
-            doneCount: number;
-            sampleTasks: {
-                leadDays: number;
-                taskId: any;
-                title: any;
-                phaseId: any;
-                phaseName: any;
-                localityId: any;
-                localityCode: string;
-                localityName: string;
-                dueDate: any;
-                status: any;
-                priority: any;
-                progressPercent: any;
-                reportRequired: any;
-                isLate: boolean;
-                daysLate: number;
-                isUnassigned: boolean;
-                isBlocked: boolean;
-            }[];
-        }[];
         reportsCompliance: {
             approved: number;
             pending: number;
             total: number;
             pendingItems: {
-                taskId: any;
-                title: any;
-                phaseId: any;
-                phaseName: any;
-                localityId: any;
+                activityId: string;
+                title: string;
+                specialtyId: string | null;
+                specialtyName: string;
+                localityId: string;
                 localityCode: string;
                 localityName: string;
-                dueDate: any;
-                status: any;
-                priority: any;
-                progressPercent: any;
-                reportRequired: any;
+                commandName: string;
+                eventDate: Date | null;
+                createdAt: Date;
+                status: import("@prisma/client").$Enums.ActivityStatus;
+                reportRequired: boolean;
+                hasSignedReport: boolean;
                 isLate: boolean;
                 daysLate: number;
                 isUnassigned: boolean;
-                isBlocked: boolean;
-            }[];
-        };
-        recruits: {
-            aggregate: {
-                date: string;
-                value: number;
-            }[];
-            byLocality: {
-                localityId: string;
-                series: {
-                    date: string;
-                    value: number;
-                }[];
             }[];
         };
         risk: {
@@ -502,7 +539,6 @@ export declare class TasksService {
                 score: number;
                 breakdown: {
                     late: number;
-                    blocked: number;
                     unassigned: number;
                     reportPending: number;
                 };
@@ -515,6 +551,7 @@ export declare class TasksService {
     private isTaskUnassigned;
     private normalizeAssigneeSelection;
     private attachTaskCommentSummary;
+    private resolveManualTaskTemplate;
     private mapTaskInstance;
     private mapTaskComment;
     private sanitizeCommentText;
@@ -530,6 +567,7 @@ export declare class TasksService {
     private assertCanAssignInLocality;
     private assertCanAssignInTaskScope;
     private assertDeleteAccess;
+    private assertTemplateManageAccess;
     private resolveTaskResponsibleIds;
     updateTaskMeeting(id: string, meetingId: string | null, user?: RbacUser): Promise<any>;
     updateTaskEloRole(id: string, eloRoleId: string | null, user?: RbacUser): Promise<any>;
@@ -541,6 +579,7 @@ export declare class TasksService {
     private buildTaskWhere;
     listTaskInstancesForExport(filters: {
         localityId?: string;
+        allowedLocalityIds?: string[];
         phaseId?: string;
         status?: string;
         assigneeId?: string;
@@ -550,4 +589,5 @@ export declare class TasksService {
         specialtyId?: string;
     }, user?: RbacUser): Promise<any[]>;
     private parsePagination;
+    private getTargetLocalityIds;
 }

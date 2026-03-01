@@ -13,11 +13,13 @@ exports.UsersService = void 0;
 const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../prisma/prisma.service");
 const http_error_1 = require("../common/http-error");
+const role_access_1 = require("../rbac/role-access");
 const LOCALITY_REQUIRED_ROLE_NAMES = new Set([
     'admin especialidade local',
     'gsd localidade',
     'admin localidade',
     'administracao local',
+    'cpca',
 ]);
 const SPECIALTY_REQUIRED_ROLE_NAMES = new Set([
     'admin especialidade local',
@@ -40,6 +42,20 @@ let UsersService = class UsersService {
     prisma;
     constructor(prisma) {
         this.prisma = prisma;
+    }
+    toRoleResponse(role) {
+        return {
+            id: role.id,
+            name: (0, role_access_1.canonicalRoleName)(role.name),
+        };
+    }
+    mapUserRoles(user) {
+        return {
+            ...user,
+            roles: user.roles.map((item) => ({
+                role: this.toRoleResponse(item.role),
+            })),
+        };
     }
     authInclude = {
         roles: {
@@ -82,8 +98,12 @@ let UsersService = class UsersService {
             include: this.authInclude,
         });
     }
-    list() {
-        return this.prisma.user.findMany({
+    async list() {
+        const users = await this.prisma.user.findMany({
+            where: {
+                ldapUid: { not: null },
+                roles: { some: {} },
+            },
             select: {
                 id: true,
                 name: true,
@@ -94,6 +114,7 @@ let UsersService = class UsersService {
                 eloRoleId: true,
                 eloRole: { select: { id: true, code: true, name: true } },
                 roles: {
+                    orderBy: { role: { name: 'asc' } },
                     select: {
                         role: {
                             select: {
@@ -106,6 +127,9 @@ let UsersService = class UsersService {
             },
             orderBy: { name: 'asc' },
         });
+        return users
+            .filter((user) => String(user.ldapUid ?? '').trim().length > 0)
+            .map((user) => this.mapUserRoles(user));
     }
     async update(id, payload) {
         const existingUser = await this.prisma.user.findUnique({
@@ -130,27 +154,42 @@ let UsersService = class UsersService {
         if (!existingUser) {
             (0, http_error_1.throwError)('NOT_FOUND');
         }
-        let targetRoleName = null;
-        if (payload.roleId !== undefined && payload.roleId !== null) {
-            const roleExists = await this.prisma.role.findUnique({
-                where: { id: payload.roleId },
-                select: { id: true, name: true },
-            });
-            if (!roleExists) {
-                (0, http_error_1.throwError)('NOT_FOUND');
+        const requestedRoleIdsRaw = payload.roleIds !== undefined
+            ? payload.roleIds
+            : payload.roleId !== undefined
+                ? payload.roleId
+                    ? [payload.roleId]
+                    : []
+                : undefined;
+        let targetRoleNames = [];
+        let requestedRoleIds = undefined;
+        if (requestedRoleIdsRaw !== undefined) {
+            requestedRoleIds = Array.from(new Set(requestedRoleIdsRaw
+                .map((value) => String(value ?? '').trim())
+                .filter(Boolean)));
+            if (requestedRoleIds.length > 0) {
+                const roleRecords = await this.prisma.role.findMany({
+                    where: { id: { in: requestedRoleIds } },
+                    select: { id: true, name: true },
+                });
+                if (roleRecords.length !== requestedRoleIds.length) {
+                    (0, http_error_1.throwError)('NOT_FOUND');
+                }
+                targetRoleNames = roleRecords.map((item) => item.name);
             }
-            targetRoleName = roleExists.name;
         }
         else {
-            targetRoleName = existingUser.roles[0]?.role?.name ?? null;
+            targetRoleNames = existingUser.roles.map((item) => item.role.name);
         }
         const targetLocalityId = payload.localityId !== undefined ? payload.localityId : existingUser.localityId;
-        if (roleRequiresLocality(targetRoleName) && !targetLocalityId) {
+        if (targetRoleNames.some((roleName) => roleRequiresLocality(roleName)) && !targetLocalityId) {
             (0, http_error_1.throwError)('USER_LOCAL_ROLE_REQUIRES_LOCALITY');
         }
         const targetSpecialtyId = payload.specialtyId !== undefined ? payload.specialtyId : existingUser.specialtyId;
         const targetEloRoleId = payload.eloRoleId !== undefined ? payload.eloRoleId : existingUser.eloRoleId;
-        if (roleRequiresSpecialty(targetRoleName) && !targetSpecialtyId && !targetEloRoleId) {
+        if (targetRoleNames.some((roleName) => roleRequiresSpecialty(roleName)) &&
+            !targetSpecialtyId &&
+            !targetEloRoleId) {
             (0, http_error_1.throwError)('USER_SPECIALTY_ROLE_REQUIRES_SPECIALTY');
         }
         await this.prisma.$transaction(async (tx) => {
@@ -162,21 +201,22 @@ let UsersService = class UsersService {
                     localityId: payload.localityId !== undefined ? payload.localityId : undefined,
                 },
             });
-            if (payload.roleId !== undefined) {
+            if (requestedRoleIds !== undefined) {
                 await tx.userRole.deleteMany({
                     where: { userId: id },
                 });
-                if (payload.roleId) {
-                    await tx.userRole.create({
-                        data: {
+                if (requestedRoleIds.length > 0) {
+                    await tx.userRole.createMany({
+                        data: requestedRoleIds.map((roleId) => ({
                             userId: id,
-                            roleId: payload.roleId,
-                        },
+                            roleId,
+                        })),
+                        skipDuplicates: true,
                     });
                 }
             }
         });
-        return this.prisma.user.findUnique({
+        const user = await this.prisma.user.findUnique({
             where: { id },
             select: {
                 id: true,
@@ -188,6 +228,7 @@ let UsersService = class UsersService {
                 eloRoleId: true,
                 eloRole: { select: { id: true, code: true, name: true } },
                 roles: {
+                    orderBy: { role: { name: 'asc' } },
                     select: {
                         role: {
                             select: {
@@ -199,18 +240,57 @@ let UsersService = class UsersService {
                 },
             },
         });
+        return user ? this.mapUserRoles(user) : null;
     }
     async removeRole(userId, roleId) {
-        const deleted = await this.prisma.userRole.deleteMany({
-            where: {
-                userId,
-                roleId,
-            },
+        return this.prisma.$transaction(async (tx) => {
+            const deleted = await tx.userRole.deleteMany({
+                where: {
+                    userId,
+                    roleId,
+                },
+            });
+            const targetUser = await tx.user.findUnique({
+                where: { id: userId },
+                select: {
+                    id: true,
+                    ldapUid: true,
+                    _count: {
+                        select: { roles: true },
+                    },
+                },
+            });
+            let userRemoved = false;
+            let userDeactivated = false;
+            if (targetUser &&
+                targetUser._count.roles === 0 &&
+                String(targetUser.ldapUid ?? '').trim().length === 0) {
+                await tx.userModuleAccessOverride.deleteMany({ where: { userId } });
+                await tx.refreshToken.deleteMany({ where: { userId } });
+                try {
+                    await tx.user.delete({ where: { id: userId } });
+                    userRemoved = true;
+                }
+                catch {
+                    await tx.user.update({
+                        where: { id: userId },
+                        data: {
+                            isActive: false,
+                            localityId: null,
+                            specialtyId: null,
+                            eloRoleId: null,
+                        },
+                    });
+                    userDeactivated = true;
+                }
+            }
+            return {
+                ok: true,
+                removed: deleted.count,
+                userRemoved,
+                userDeactivated,
+            };
         });
-        return {
-            ok: true,
-            removed: deleted.count,
-        };
     }
 };
 exports.UsersService = UsersService;

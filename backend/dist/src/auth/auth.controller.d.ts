@@ -36,6 +36,11 @@ export declare class AuthController {
             id: string;
             name: string;
         }[];
+        activeRoleId: string;
+        activeRole: {
+            id: string;
+            name: string;
+        } | null;
         permissions: {
             resource: string;
             action: string;

@@ -78,7 +78,7 @@ __decorate([
 ], MeetingsController.prototype, "list", null);
 __decorate([
     (0, common_1.Post)(),
-    (0, require_permission_decorator_1.RequirePermission)('meetings', 'create'),
+    (0, require_permission_decorator_1.RequirePermission)('meetings', 'view'),
     __param(0, (0, common_1.Body)()),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
@@ -87,7 +87,7 @@ __decorate([
 ], MeetingsController.prototype, "create", null);
 __decorate([
     (0, common_1.Put)(':id'),
-    (0, require_permission_decorator_1.RequirePermission)('meetings', 'update'),
+    (0, require_permission_decorator_1.RequirePermission)('meetings', 'view'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),
@@ -97,7 +97,7 @@ __decorate([
 ], MeetingsController.prototype, "update", null);
 __decorate([
     (0, common_1.Post)(':id/decisions'),
-    (0, require_permission_decorator_1.RequirePermission)('meetings', 'update'),
+    (0, require_permission_decorator_1.RequirePermission)('meetings', 'view'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),
@@ -117,7 +117,7 @@ __decorate([
 ], MeetingsController.prototype, "generateTasks", null);
 __decorate([
     (0, common_1.Delete)(':id'),
-    (0, require_permission_decorator_1.RequirePermission)('meetings', 'update'),
+    (0, require_permission_decorator_1.RequirePermission)('meetings', 'view'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),

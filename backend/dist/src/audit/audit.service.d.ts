@@ -48,6 +48,8 @@ export declare class AuditService {
                 loginFailedCount: number;
                 lockUntil: Date | null;
                 localityId: string | null;
+                commissionFunction: string | null;
+                commissionPhone: string | null;
             } | null;
             locality: {
                 id: string;

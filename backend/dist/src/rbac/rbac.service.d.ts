@@ -13,12 +13,12 @@ export declare class RbacService {
     private readonly audit;
     private readonly fabLdap;
     constructor(prisma: PrismaService, audit: AuditService, fabLdap: FabLdapService);
-    getUserAccess(userId: string): Promise<RbacUser>;
+    getUserAccess(userId: string, activeRoleId?: string | null): Promise<RbacUser>;
     listRoles(): Promise<{
+        name: string;
         id: string;
         createdAt: Date;
         updatedAt: Date;
-        name: string;
         description: string | null;
         isSystemRole: boolean;
         wildcard: boolean;
@@ -146,7 +146,7 @@ export declare class RbacService {
             overridden: number;
         };
     }>;
-    lookupLdapUser(uid: string): Promise<{
+    lookupLdapUser(identifier: string): Promise<{
         user: {
             uid: string;
             dn: string;
@@ -157,7 +157,8 @@ export declare class RbacService {
     }>;
     upsertLdapUser(payload: {
         uid: string;
-        roleId: string;
+        roleId?: string;
+        roleIds?: string[];
         localityId?: string | null;
         specialtyId?: string | null;
         eloRoleId?: string | null;
@@ -204,8 +205,12 @@ export declare class RbacService {
     private listPermissionEntries;
     private listPermissionResources;
     private dedupePermissions;
+    private pickDefaultActiveRole;
     private applyModuleAccessOverrides;
     private normalizeEmail;
+    private normalizeLdapIdentifier;
+    private normalizeUidForLookup;
+    private lookupLdapByIdentifier;
     private resolveUniqueEmail;
     private createTemporaryPasswordHash;
 }

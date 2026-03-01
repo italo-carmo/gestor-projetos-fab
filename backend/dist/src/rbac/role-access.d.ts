@@ -1,13 +1,17 @@
 import type { RbacUser } from './rbac.types';
 export declare const ROLE_COORDENACAO_CIPAVD = "Coordena\u00E7\u00E3o CIPAVD";
-export declare const ROLE_COMANDANTE_COMGEP = "Comandante COMGEP";
+export declare const ROLE_COMISSAO_CIPAVD = "Comiss\u00E3o CIPAVD";
+export declare const ROLE_COMGEP = "COMGEP";
+export declare const ROLE_COMANDANTE_COMGEP = "COMGEP";
 export declare const ROLE_TI = "TI";
+export declare const ROLE_CPCA = "CPCA";
 export declare const ROLE_GSD_LOCALIDADE = "GSD Localidade";
 export declare const ROLE_ADMIN_ESPECIALIDADE_LOCAL = "Admin Especialidade Local";
 export declare const ROLE_ADMIN_ESPECIALIDADE_NACIONAL = "Admin Especialidade Nacional";
 export declare const ROLE_ADMIN_LOCALIDADE = "Admin Localidade";
 export declare const ROLE_ADMINISTRACAO_LOCAL = "Administra\u00E7\u00E3o Local";
 export declare function normalizeRoleName(roleName: string | null | undefined): string;
+export declare function canonicalRoleName(roleName: string | null | undefined): string;
 export declare function hasRole(user: RbacUser | undefined, roleName: string): boolean;
 export declare function hasAnyRole(user: RbacUser | undefined, roleNames: string[]): boolean;
 export declare function isNationalCommissionMember(user: RbacUser | undefined): boolean;
@@ -30,3 +34,4 @@ export declare function resolveAccessProfile(user: RbacUser | undefined): {
     isAdminLike: boolean;
 };
 export declare function canEditRecruitsByRole(user: RbacUser | undefined, targetLocalityId: string): boolean;
+export declare function hasCpcaWorkflowAccess(user: RbacUser | undefined): boolean;

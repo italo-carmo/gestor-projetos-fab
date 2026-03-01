@@ -4,6 +4,7 @@ import type { RbacUser } from '../rbac/rbac.types';
 type SurveyFilters = {
     from?: string;
     to?: string;
+    mission?: string;
     om?: string;
     posto?: string;
     postoGraduacao?: string;
@@ -80,14 +81,14 @@ export declare class BiService {
             createdAt: Date;
             updatedAt: Date;
             posto: string | null;
+            violenceTypes: string[];
+            postoGraduacao: string | null;
+            autodeclara: string | null;
             batchId: string | null;
             submittedAt: Date | null;
             sufferedViolenceRaw: string | null;
             sufferedViolence: boolean | null;
-            violenceTypes: string[];
-            postoGraduacao: string | null;
             om: string | null;
-            autodeclara: string | null;
             extraColumn: string | null;
             rawPayload: Prisma.JsonValue | null;
             sourceRow: number | null;
@@ -96,6 +97,22 @@ export declare class BiService {
         page: number;
         pageSize: number;
         total: number;
+    }>;
+    listQuestions(filters: SurveyFilters): Promise<{
+        mission: string | null;
+        totalResponses: number;
+        items: {
+            id: string;
+            label: string;
+            answeredCount: number;
+            emptyCount: number;
+            answerRatePercent: number;
+            topAnswers: {
+                label: string;
+                count: number;
+                percent: number;
+            }[];
+        }[];
     }>;
     deleteResponses(payload: SurveyFilters & {
         ids?: string[];
@@ -116,6 +133,7 @@ export declare class BiService {
             averageTypesPerVictim: number;
         };
         filters: {
+            mission: string[];
             om: string[];
             posto: string[];
             postoGraduacao: string[];
@@ -214,6 +232,7 @@ export declare class BiService {
     private sortOm;
     private buildWhere;
     private parseCombineMode;
+    private normalizeQuestionAnswer;
     private extractRows;
     private resolveHeaderMap;
     private parseDataRow;

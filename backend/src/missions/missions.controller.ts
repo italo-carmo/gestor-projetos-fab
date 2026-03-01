@@ -9,6 +9,7 @@ import { UpdateMissionDto } from './dto/update-mission.dto';
 import { CreateMissionScheduleItemDto } from './dto/create-mission-schedule-item.dto';
 import { UpdateMissionScheduleItemDto } from './dto/update-mission-schedule-item.dto';
 import { MissionLdapParticipantDto } from './dto/mission-ldap-participant.dto';
+import { MissionUserParticipantDto } from './dto/mission-user-participant.dto';
 import type { Response } from 'express';
 
 @Controller('missions')
@@ -62,6 +63,15 @@ export class MissionsController {
     @CurrentUser() user: RbacUser,
   ) {
     return this.missions.addParticipantFromLdap(id, dto.identifier, user);
+  }
+
+  @Post(':id/participants/user')
+  addParticipantFromUser(
+    @Param('id') id: string,
+    @Body() dto: MissionUserParticipantDto,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.missions.addParticipantFromUser(id, dto.userId, user);
   }
 
   @Delete(':id/participants/:participantId')

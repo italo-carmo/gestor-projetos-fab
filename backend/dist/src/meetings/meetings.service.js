@@ -45,7 +45,11 @@ let MeetingsService = class MeetingsService {
         }
         const constraints = this.getScopeConstraints(user);
         if (constraints.localityId) {
-            const andArr = Array.isArray(where.AND) ? where.AND : (where.AND ? [where.AND] : []);
+            const andArr = Array.isArray(where.AND)
+                ? where.AND
+                : where.AND
+                    ? [where.AND]
+                    : [];
             where.AND = [
                 ...andArr,
                 {
@@ -60,7 +64,11 @@ let MeetingsService = class MeetingsService {
                 orderBy: { datetime: 'desc' },
                 include: {
                     locality: true,
-                    participants: { include: { user: { select: { id: true, name: true, email: true } } } },
+                    participants: {
+                        include: {
+                            user: { select: { id: true, name: true, email: true } },
+                        },
+                    },
                     decisions: true,
                     tasks: {
                         include: { taskTemplate: true },
@@ -76,11 +84,16 @@ let MeetingsService = class MeetingsService {
     }
     async create(payload, user) {
         const meetingType = payload.meetingType ?? client_1.MeetingType.PRESENCIAL;
-        if (meetingType === client_1.MeetingType.PRESENCIAL && !payload.localityId) {
-            (0, http_error_1.throwError)('VALIDATION_ERROR', { reason: 'LOCALITY_REQUIRED_FOR_PRESENCIAL' });
+        const location = payload.location?.trim() || null;
+        if (meetingType === client_1.MeetingType.PRESENCIAL && !location) {
+            (0, http_error_1.throwError)('VALIDATION_ERROR', {
+                reason: 'LOCATION_REQUIRED_FOR_PRESENCIAL',
+            });
         }
         if (meetingType === client_1.MeetingType.ONLINE && !payload.meetingLink?.trim()) {
-            (0, http_error_1.throwError)('VALIDATION_ERROR', { reason: 'MEETING_LINK_REQUIRED_FOR_ONLINE' });
+            (0, http_error_1.throwError)('VALIDATION_ERROR', {
+                reason: 'MEETING_LINK_REQUIRED_FOR_ONLINE',
+            });
         }
         this.assertLocality(payload.localityId ?? null, user);
         const created = await this.prisma.meeting.create({
@@ -89,6 +102,7 @@ let MeetingsService = class MeetingsService {
                 scope: (0, sanitize_1.sanitizeText)(payload.scope ?? '') || '',
                 status: payload.status,
                 meetingType,
+                location: location ? (0, sanitize_1.sanitizeText)(location) : null,
                 meetingLink: payload.meetingLink?.trim() || null,
                 agenda: payload.agenda ? (0, sanitize_1.sanitizeText)(payload.agenda) : null,
                 localityId: payload.localityId ?? null,
@@ -98,7 +112,9 @@ let MeetingsService = class MeetingsService {
             },
             include: {
                 locality: true,
-                participants: { include: { user: { select: { id: true, name: true, email: true } } } },
+                participants: {
+                    include: { user: { select: { id: true, name: true, email: true } } },
+                },
             },
         });
         await this.audit.log({
@@ -117,26 +133,46 @@ let MeetingsService = class MeetingsService {
             (0, http_error_1.throwError)('NOT_FOUND');
         const meetingType = payload.meetingType ?? existing.meetingType;
         const localityId = payload.localityId ?? existing.localityId ?? null;
-        const meetingLink = payload.meetingLink !== undefined ? payload.meetingLink?.trim() || null : existing.meetingLink;
-        if (meetingType === client_1.MeetingType.PRESENCIAL && !localityId) {
-            (0, http_error_1.throwError)('VALIDATION_ERROR', { reason: 'LOCALITY_REQUIRED_FOR_PRESENCIAL' });
+        const location = payload.location !== undefined
+            ? payload.location?.trim() || null
+            : existing.location?.trim() || null;
+        const meetingLink = payload.meetingLink !== undefined
+            ? payload.meetingLink?.trim() || null
+            : existing.meetingLink;
+        if (meetingType === client_1.MeetingType.PRESENCIAL && !location) {
+            (0, http_error_1.throwError)('VALIDATION_ERROR', {
+                reason: 'LOCATION_REQUIRED_FOR_PRESENCIAL',
+            });
         }
         if (meetingType === client_1.MeetingType.ONLINE && !meetingLink) {
-            (0, http_error_1.throwError)('VALIDATION_ERROR', { reason: 'MEETING_LINK_REQUIRED_FOR_ONLINE' });
+            (0, http_error_1.throwError)('VALIDATION_ERROR', {
+                reason: 'MEETING_LINK_REQUIRED_FOR_ONLINE',
+            });
         }
         this.assertLocality(localityId, user);
         if (payload.participantIds !== undefined) {
-            await this.prisma.meetingParticipant.deleteMany({ where: { meetingId: id } });
+            await this.prisma.meetingParticipant.deleteMany({
+                where: { meetingId: id },
+            });
         }
         const updated = await this.prisma.meeting.update({
             where: { id },
             data: {
                 datetime: payload.datetime ? new Date(payload.datetime) : undefined,
-                scope: payload.scope !== undefined ? ((0, sanitize_1.sanitizeText)(payload.scope) || '') : undefined,
+                scope: payload.scope !== undefined
+                    ? (0, sanitize_1.sanitizeText)(payload.scope) || ''
+                    : undefined,
                 status: payload.status ? payload.status : undefined,
-                meetingType: payload.meetingType ? payload.meetingType : undefined,
+                meetingType: payload.meetingType
+                    ? payload.meetingType
+                    : undefined,
+                location: payload.location !== undefined ? (location ? (0, sanitize_1.sanitizeText)(location) : null) : undefined,
                 meetingLink: payload.meetingLink !== undefined ? meetingLink : undefined,
-                agenda: payload.agenda ? (0, sanitize_1.sanitizeText)(payload.agenda) : payload.agenda === null ? null : undefined,
+                agenda: payload.agenda
+                    ? (0, sanitize_1.sanitizeText)(payload.agenda)
+                    : payload.agenda === null
+                        ? null
+                        : undefined,
                 localityId: payload.localityId !== undefined ? localityId : undefined,
                 participants: payload.participantIds?.length
                     ? { create: payload.participantIds.map((userId) => ({ userId })) }
@@ -144,7 +180,9 @@ let MeetingsService = class MeetingsService {
             },
             include: {
                 locality: true,
-                participants: { include: { user: { select: { id: true, name: true, email: true } } } },
+                participants: {
+                    include: { user: { select: { id: true, name: true, email: true } } },
+                },
             },
         });
         await this.audit.log({
@@ -158,7 +196,9 @@ let MeetingsService = class MeetingsService {
         return updated;
     }
     async addDecision(meetingId, text, user) {
-        const meeting = await this.prisma.meeting.findUnique({ where: { id: meetingId } });
+        const meeting = await this.prisma.meeting.findUnique({
+            where: { id: meetingId },
+        });
         if (!meeting)
             (0, http_error_1.throwError)('NOT_FOUND');
         this.assertLocality(meeting.localityId ?? null, user);
@@ -179,19 +219,25 @@ let MeetingsService = class MeetingsService {
         return created;
     }
     async generateTasks(meetingId, payload, user) {
-        const meeting = await this.prisma.meeting.findUnique({ where: { id: meetingId } });
+        const meeting = await this.prisma.meeting.findUnique({
+            where: { id: meetingId },
+        });
         if (!meeting)
             (0, http_error_1.throwError)('NOT_FOUND');
         this.assertLocality(meeting.localityId ?? null, user);
         let templateId = payload.templateId;
         if (!templateId) {
             if (!payload.title || !payload.phaseId) {
-                (0, http_error_1.throwError)('VALIDATION_ERROR', { hint: 'title e phaseId são obrigatórios para template ad-hoc' });
+                (0, http_error_1.throwError)('VALIDATION_ERROR', {
+                    hint: 'title e phaseId são obrigatórios para template ad-hoc',
+                });
             }
             const createdTemplate = await this.prisma.taskTemplate.create({
                 data: {
                     title: (0, sanitize_1.sanitizeText)(payload.title),
-                    description: payload.description ? (0, sanitize_1.sanitizeText)(payload.description) : null,
+                    description: payload.description
+                        ? (0, sanitize_1.sanitizeText)(payload.description)
+                        : null,
                     phaseId: payload.phaseId,
                     specialtyId: payload.specialtyId ?? null,
                     appliesToAllLocalities: false,

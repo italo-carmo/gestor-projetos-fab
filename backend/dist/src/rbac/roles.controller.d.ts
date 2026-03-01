@@ -6,10 +6,10 @@ export declare class RolesController {
     constructor(rbac: RbacService);
     list(): Promise<{
         items: {
+            name: string;
             id: string;
             createdAt: Date;
             updatedAt: Date;
-            name: string;
             description: string | null;
             isSystemRole: boolean;
             wildcard: boolean;

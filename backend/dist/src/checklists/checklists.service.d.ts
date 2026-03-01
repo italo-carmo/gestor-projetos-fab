@@ -9,6 +9,7 @@ export declare class ChecklistsService {
         phaseId?: string;
         specialtyId?: string;
         eloRoleId?: string;
+        localityId?: string;
     }, user?: RbacUser): Promise<{
         items: {
             id: string;

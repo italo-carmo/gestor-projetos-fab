@@ -30,7 +30,11 @@ let AuthController = class AuthController {
         return this.auth.refresh(refreshToken);
     }
     me(req) {
-        return this.auth.me(req.user?.userId ?? '');
+        const activeRoleHeader = req.headers?.['x-active-role-id'];
+        const activeRoleId = Array.isArray(activeRoleHeader)
+            ? String(activeRoleHeader[0] ?? '').trim()
+            : String(activeRoleHeader ?? '').trim();
+        return this.auth.me(req.user?.userId ?? '', activeRoleId || undefined);
     }
 };
 exports.AuthController = AuthController;

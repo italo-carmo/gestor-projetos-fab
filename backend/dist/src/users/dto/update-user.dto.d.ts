@@ -3,4 +3,5 @@ export declare class UpdateUserDto {
     localityId?: string | null;
     specialtyId?: string | null;
     roleId?: string | null;
+    roleIds?: string[];
 }

@@ -73,6 +73,38 @@ const OM_PRIORITY = {
     AFA: 3,
     EEAR: 4,
 };
+const SURVEY_QUESTION_DEFINITIONS = [
+    {
+        id: 'suffered',
+        label: 'Voce ja sofreu violencia?',
+        extractValues: (row) => (row.sufferedViolenceRaw ? [row.sufferedViolenceRaw] : []),
+    },
+    {
+        id: 'violenceTypes',
+        label: 'Qual tipo de violencia voce sofreu?',
+        extractValues: (row) => row.violenceTypes ?? [],
+    },
+    {
+        id: 'postoGraduacao',
+        label: 'Posto / Graduacao',
+        extractValues: (row) => (row.postoGraduacao ? [row.postoGraduacao] : []),
+    },
+    {
+        id: 'mission',
+        label: 'OM / Missao',
+        extractValues: (row) => (row.om ? [row.om] : []),
+    },
+    {
+        id: 'posto',
+        label: 'Posto',
+        extractValues: (row) => (row.posto ? [row.posto] : []),
+    },
+    {
+        id: 'autodeclara',
+        label: 'Como voce se autodeclara?',
+        extractValues: (row) => (row.autodeclara ? [row.autodeclara] : []),
+    },
+];
 let BiService = class BiService {
     prisma;
     constructor(prisma) {
@@ -199,6 +231,73 @@ let BiService = class BiService {
             page,
             pageSize,
             total,
+        };
+    }
+    async listQuestions(filters) {
+        const mission = filters.mission?.trim() || filters.om?.trim() || null;
+        const baseWhere = this.buildWhere(filters);
+        const where = mission
+            ? Object.keys(baseWhere).length > 0
+                ? { AND: [baseWhere, { om: mission }] }
+                : { om: mission }
+            : baseWhere;
+        const rows = await this.prisma.biSurveyResponse.findMany({
+            where,
+            select: {
+                sufferedViolenceRaw: true,
+                violenceTypes: true,
+                postoGraduacao: true,
+                om: true,
+                posto: true,
+                autodeclara: true,
+            },
+        });
+        const totalResponses = rows.length;
+        const items = SURVEY_QUESTION_DEFINITIONS.map((question) => {
+            const normalizedValuesByRow = rows.map((row) => question.extractValues(row).map((value) => this.normalizeQuestionAnswer(question.id, value)));
+            const answeredCount = normalizedValuesByRow.reduce((acc, rowValues) => {
+                const hasValue = rowValues.some((value) => value.length > 0);
+                return hasValue ? acc + 1 : acc;
+            }, 0);
+            const emptyCount = totalResponses - answeredCount;
+            const answerRatePercent = totalResponses > 0
+                ? Number(((answeredCount / totalResponses) * 100).toFixed(2))
+                : 0;
+            const counter = new Map();
+            for (const rowValues of normalizedValuesByRow) {
+                for (const value of rowValues) {
+                    if (!value)
+                        continue;
+                    counter.set(value, (counter.get(value) ?? 0) + 1);
+                }
+            }
+            const topAnswers = [...counter.entries()]
+                .sort((a, b) => {
+                if (b[1] !== a[1])
+                    return b[1] - a[1];
+                return a[0].localeCompare(b[0], 'pt-BR');
+            })
+                .slice(0, 5)
+                .map(([label, count]) => ({
+                label,
+                count,
+                percent: answeredCount > 0
+                    ? Number(((count / answeredCount) * 100).toFixed(2))
+                    : 0,
+            }));
+            return {
+                id: question.id,
+                label: question.label,
+                answeredCount,
+                emptyCount,
+                answerRatePercent,
+                topAnswers,
+            };
+        });
+        return {
+            mission,
+            totalResponses,
+            items,
         };
     }
     async deleteResponses(payload) {
@@ -366,9 +465,10 @@ let BiService = class BiService {
                     violenceTypes.add(type.trim());
             }
         }
-        const omSorted = [...om].sort((a, b) => this.sortOm(a, b));
+        const missionSorted = [...om].sort((a, b) => this.sortOm(a, b));
         return {
-            om: omSorted,
+            mission: missionSorted,
+            om: missionSorted,
             posto: [...posto].sort((a, b) => a.localeCompare(b, 'pt-BR')),
             postoGraduacao: [...postoGraduacao].sort((a, b) => a.localeCompare(b, 'pt-BR')),
             autodeclara: [...autodeclara].sort((a, b) => a.localeCompare(b, 'pt-BR')),
@@ -509,8 +609,9 @@ let BiService = class BiService {
             }
             conditions.push({ submittedAt: dateFilter });
         }
-        if (filters.om?.trim())
-            conditions.push({ om: filters.om.trim() });
+        const mission = filters.mission?.trim() || filters.om?.trim();
+        if (mission)
+            conditions.push({ om: mission });
         if (filters.posto?.trim())
             conditions.push({ posto: filters.posto.trim() });
         if (filters.postoGraduacao?.trim()) {
@@ -562,6 +663,19 @@ let BiService = class BiService {
         if (normalized === 'OR')
             return 'OR';
         return 'AND';
+    }
+    normalizeQuestionAnswer(questionId, rawValue) {
+        const value = String(rawValue ?? '').trim();
+        if (!value)
+            return '';
+        if (questionId === 'suffered') {
+            const normalized = this.normalize(value);
+            if (['SIM', 'S', 'TRUE', 'YES'].includes(normalized))
+                return 'Sim';
+            if (['NAO', 'NÃO', 'N', 'FALSE', 'NO'].includes(normalized))
+                return 'Nao';
+        }
+        return value;
     }
     extractRows(buffer, format) {
         let workbook;

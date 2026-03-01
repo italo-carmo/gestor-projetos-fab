@@ -1,6 +1,7 @@
 import type { RbacUser } from '../rbac/rbac.types';
 import { GenerateInstancesDto } from './dto/generate-instances.dto';
 import { TaskTemplateDto } from './dto/task-template.dto';
+import { UpdateTaskTemplateDto } from './dto/update-task-template.dto';
 import { TasksService } from './tasks.service';
 export declare class TaskTemplatesController {
     private readonly tasks;
@@ -37,6 +38,18 @@ export declare class TaskTemplatesController {
         appliesToAllLocalities: boolean;
         reportRequiredDefault: boolean;
     }>;
+    update(id: string, dto: UpdateTaskTemplateDto, user: RbacUser): Promise<{
+        id: string;
+        title: string;
+        phaseId: string;
+        specialtyId: string | null;
+        eloRoleId: string | null;
+        createdAt: Date;
+        updatedAt: Date;
+        description: string | null;
+        appliesToAllLocalities: boolean;
+        reportRequiredDefault: boolean;
+    }>;
     generateInstances(id: string, dto: GenerateInstancesDto, user: RbacUser): Promise<{
         items: {
             id: string;
@@ -48,6 +61,8 @@ export declare class TaskTemplatesController {
             localityId: string;
             status: import("@prisma/client").$Enums.TaskStatus;
             reportRequired: boolean;
+            groupKey: string | null;
+            titleOverride: string | null;
             dueDate: Date;
             priority: import("@prisma/client").$Enums.TaskPriority;
             progressPercent: number;
@@ -71,5 +86,8 @@ export declare class TaskTemplatesController {
         description: string | null;
         appliesToAllLocalities: boolean;
         reportRequiredDefault: boolean;
+    }>;
+    remove(id: string, user: RbacUser): Promise<{
+        ok: boolean;
     }>;
 }

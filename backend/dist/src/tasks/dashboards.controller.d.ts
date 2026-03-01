@@ -11,7 +11,7 @@ export declare class DashboardsController {
             progress: number;
         }[];
     }>;
-    national(user: RbacUser): Promise<{
+    national(localityId: string | undefined, user: RbacUser): Promise<{
         items: {
             localityId: string;
             localityCode: string;
@@ -36,53 +36,56 @@ export declare class DashboardsController {
             reportsProduced: number;
         };
         lateItems: {
-            taskId: string;
+            activityId: string;
             title: string;
             localityId: string;
             localityCode: string;
             localityName: string;
-            phaseId: string;
-            dueDate: Date;
-            status: import("@prisma/client").$Enums.TaskStatus;
-            priority: import("@prisma/client").$Enums.TaskPriority;
-            progressPercent: number;
+            specialtyId: string | null;
+            specialtyName: string;
+            eventDate: Date | null;
+            createdAt: Date;
+            status: import("@prisma/client").$Enums.ActivityStatus;
+            reportRequired: boolean;
+            hasSignedReport: boolean;
             isLate: boolean;
             isUnassigned: boolean;
-            isBlocked: boolean;
         }[];
         unassignedItems: {
-            taskId: string;
+            activityId: string;
             title: string;
             localityId: string;
             localityCode: string;
             localityName: string;
-            phaseId: string;
-            dueDate: Date;
-            status: import("@prisma/client").$Enums.TaskStatus;
-            priority: import("@prisma/client").$Enums.TaskPriority;
-            progressPercent: number;
+            specialtyId: string | null;
+            specialtyName: string;
+            eventDate: Date | null;
+            createdAt: Date;
+            status: import("@prisma/client").$Enums.ActivityStatus;
+            reportRequired: boolean;
+            hasSignedReport: boolean;
             isLate: boolean;
             isUnassigned: boolean;
-            isBlocked: boolean;
         }[];
         riskTasks: {
-            taskId: string;
+            activityId: string;
             title: string;
             localityId: string;
             localityCode: string;
             localityName: string;
-            phaseId: string;
-            dueDate: Date;
-            status: import("@prisma/client").$Enums.TaskStatus;
-            priority: import("@prisma/client").$Enums.TaskPriority;
-            progressPercent: number;
+            specialtyId: string | null;
+            specialtyName: string;
+            eventDate: Date | null;
+            createdAt: Date;
+            status: import("@prisma/client").$Enums.ActivityStatus;
+            reportRequired: boolean;
+            hasSignedReport: boolean;
             isLate: boolean;
             isUnassigned: boolean;
-            isBlocked: boolean;
         }[];
         executive_hide_pii: boolean;
     }>;
-    recruits(user: RbacUser): Promise<{
+    recruits(localityId: string | undefined, user: RbacUser): Promise<{
         currentPerLocality: {
             localityId: string;
             localityName: string;
@@ -100,45 +103,76 @@ export declare class DashboardsController {
             series: {
                 date: string;
                 value: number;
+                turnoverCount: number;
+                dismissalReason: string | null;
             }[];
         }[];
+        historyLog: {
+            localityId: string;
+            localityName: string;
+            code: string;
+            date: string;
+            recruitsFemaleCount: number;
+            turnoverCount: number;
+            dismissalReason: string | null;
+        }[];
     }>;
-    executive(from: string | undefined, to: string | undefined, phaseId: string | undefined, threshold: string | undefined, command: string | undefined, user: RbacUser): Promise<{
+    executive(from: string | undefined, to: string | undefined, phaseId: string | undefined, threshold: string | undefined, command: string | undefined, localityId: string | undefined, user: RbacUser): Promise<{
+        summary: {
+            totalActivities: number;
+            completedActivities: number;
+            completionPercent: number;
+            lateActivities: number;
+            unassignedActivities: number;
+            reportPending: number;
+            reportApproved: number;
+            reportTotal: number;
+        };
+        status: {
+            items: {
+                status: "CANCELLED" | "DONE" | "NOT_STARTED" | "IN_PROGRESS";
+                count: number;
+            }[];
+        };
         progress: {
             overall: number;
-            byPhase: {
-                phaseId: string;
-                phaseName: import("@prisma/client").$Enums.PhaseName;
-                progress: number;
-            }[];
             byLocality: {
                 localityId: string;
                 localityCode: string;
                 localityName: string;
+                commandName: string;
                 progress: number;
-                tasksCount: number;
+                activitiesCount: number;
+                done: number;
+                late: number;
+                unassigned: number;
+                reportPending: number;
             }[];
         };
         localityAboveThreshold: {
-            phaseId: string;
-            phaseName: import("@prisma/client").$Enums.PhaseName;
             threshold: number;
-            localitiesAboveCount: number;
-            localitiesBelowCount: number;
-            percentLocalitiesAbove: number;
-            localitiesAbove: {
+            count: number;
+            total: number;
+            items: {
                 localityId: string;
                 localityCode: string;
                 localityName: string;
+                commandName: string;
                 progress: number;
+                activitiesCount: number;
+                done: number;
+                late: number;
+                unassigned: number;
+                reportPending: number;
             }[];
-            localitiesBelow: {
-                localityId: string;
-                localityCode: string;
-                localityName: string;
-                progress: number;
+        };
+        specialties: {
+            items: {
+                specialtyId: string | null;
+                specialtyName: string;
+                count: number;
             }[];
-        }[];
+        };
         late: {
             total: number;
             trend: {
@@ -152,30 +186,26 @@ export declare class DashboardsController {
                 }[];
             }[];
             items: {
-                taskId: any;
-                title: any;
-                phaseId: any;
-                phaseName: any;
-                localityId: any;
+                activityId: string;
+                title: string;
+                specialtyId: string | null;
+                specialtyName: string;
+                localityId: string;
                 localityCode: string;
                 localityName: string;
-                dueDate: any;
-                status: any;
-                priority: any;
-                progressPercent: any;
-                reportRequired: any;
+                commandName: string;
+                eventDate: Date | null;
+                createdAt: Date;
+                status: import("@prisma/client").$Enums.ActivityStatus;
+                reportRequired: boolean;
+                hasSignedReport: boolean;
                 isLate: boolean;
                 daysLate: number;
                 isUnassigned: boolean;
-                isBlocked: boolean;
             }[];
         };
         unassigned: {
             total: number;
-            byCommand: {
-                commandName: string;
-                count: number;
-            }[];
             byLocality: {
                 localityId: string;
                 localityCode: string;
@@ -184,111 +214,45 @@ export declare class DashboardsController {
                 count: number;
             }[];
             items: {
-                taskId: any;
-                title: any;
-                phaseId: any;
-                phaseName: any;
-                localityId: any;
-                localityCode: string;
-                localityName: string;
-                dueDate: any;
-                status: any;
-                priority: any;
-                progressPercent: any;
-                reportRequired: any;
-                isLate: boolean;
-                daysLate: number;
-                isUnassigned: boolean;
-                isBlocked: boolean;
-            }[];
-        };
-        blocked: {
-            total: number;
-            byLocality: {
+                activityId: string;
+                title: string;
+                specialtyId: string | null;
+                specialtyName: string;
                 localityId: string;
                 localityCode: string;
                 localityName: string;
                 commandName: string;
-                count: number;
-            }[];
-            items: {
-                taskId: any;
-                title: any;
-                phaseId: any;
-                phaseName: any;
-                localityId: any;
-                localityCode: string;
-                localityName: string;
-                dueDate: any;
-                status: any;
-                priority: any;
-                progressPercent: any;
-                reportRequired: any;
+                eventDate: Date | null;
+                createdAt: Date;
+                status: import("@prisma/client").$Enums.ActivityStatus;
+                reportRequired: boolean;
+                hasSignedReport: boolean;
                 isLate: boolean;
                 daysLate: number;
                 isUnassigned: boolean;
-                isBlocked: boolean;
             }[];
         };
-        leadTime: {
-            phaseId: string;
-            phaseName: import("@prisma/client").$Enums.PhaseName;
-            avgLeadDays: number;
-            doneCount: number;
-            sampleTasks: {
-                leadDays: number;
-                taskId: any;
-                title: any;
-                phaseId: any;
-                phaseName: any;
-                localityId: any;
-                localityCode: string;
-                localityName: string;
-                dueDate: any;
-                status: any;
-                priority: any;
-                progressPercent: any;
-                reportRequired: any;
-                isLate: boolean;
-                daysLate: number;
-                isUnassigned: boolean;
-                isBlocked: boolean;
-            }[];
-        }[];
         reportsCompliance: {
             approved: number;
             pending: number;
             total: number;
             pendingItems: {
-                taskId: any;
-                title: any;
-                phaseId: any;
-                phaseName: any;
-                localityId: any;
+                activityId: string;
+                title: string;
+                specialtyId: string | null;
+                specialtyName: string;
+                localityId: string;
                 localityCode: string;
                 localityName: string;
-                dueDate: any;
-                status: any;
-                priority: any;
-                progressPercent: any;
-                reportRequired: any;
+                commandName: string;
+                eventDate: Date | null;
+                createdAt: Date;
+                status: import("@prisma/client").$Enums.ActivityStatus;
+                reportRequired: boolean;
+                hasSignedReport: boolean;
                 isLate: boolean;
                 daysLate: number;
                 isUnassigned: boolean;
-                isBlocked: boolean;
-            }[];
-        };
-        recruits: {
-            aggregate: {
-                date: string;
-                value: number;
-            }[];
-            byLocality: {
-                localityId: string;
-                series: {
-                    date: string;
-                    value: number;
-                }[];
             }[];
         };
         risk: {
@@ -299,7 +263,6 @@ export declare class DashboardsController {
                 score: number;
                 breakdown: {
                     late: number;
-                    blocked: number;
                     unassigned: number;
                     reportPending: number;
                 };

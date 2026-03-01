@@ -3,9 +3,12 @@ import { TaskAssignDto } from './dto/task-assign.dto';
 import { TaskCommentDto } from './dto/task-comment.dto';
 import { TaskEloRoleDto } from './dto/task-elo-role.dto';
 import { TaskMeetingDto } from './dto/task-meeting.dto';
+import { TaskLocalitiesDto } from './dto/task-localities.dto';
 import { TaskProgressDto } from './dto/task-progress.dto';
 import { TaskSpecialtyDto } from './dto/task-specialty.dto';
 import { TaskStatusDto } from './dto/task-status.dto';
+import { CreateTaskInstanceDto } from './dto/create-task-instance.dto';
+import { TaskTitleDto } from './dto/task-title.dto';
 import { TasksService } from './tasks.service';
 export declare class TaskInstancesController {
     private readonly tasks;
@@ -29,6 +32,55 @@ export declare class TaskInstancesController {
         page: number;
         pageSize: number;
         total: number;
+    }>;
+    create(dto: CreateTaskInstanceDto, user: RbacUser): Promise<{
+        items: {
+            id: string;
+            specialtyId: string | null;
+            eloRoleId: string | null;
+            createdAt: Date;
+            updatedAt: Date;
+            taskTemplateId: string;
+            localityId: string;
+            status: import("@prisma/client").$Enums.TaskStatus;
+            reportRequired: boolean;
+            groupKey: string | null;
+            titleOverride: string | null;
+            dueDate: Date;
+            priority: import("@prisma/client").$Enums.TaskPriority;
+            progressPercent: number;
+            assigneeType: import("@prisma/client").$Enums.TaskAssigneeType | null;
+            externalAssigneeName: string | null;
+            externalAssigneeRole: string | null;
+            blockedByIdsJson: import("@prisma/client/runtime/client").JsonValue | null;
+            meetingId: string | null;
+            assignedToId: string | null;
+            assignedEloId: string | null;
+        }[];
+    }>;
+    batchAssign(body: {
+        ids: string[];
+        assignedToId: string | null;
+        assigneeIds?: string[];
+    }, user: RbacUser): Promise<{
+        updated: number;
+    }>;
+    batchStatus(body: {
+        ids: string[];
+        status: string;
+    }, user: RbacUser): Promise<{
+        updated: number;
+    }>;
+    batchProgress(body: {
+        ids: string[];
+        progressPercent: number;
+    }, user: RbacUser): Promise<{
+        updated: number;
+    }>;
+    batchDelete(body: {
+        ids: string[];
+    }, user: RbacUser): Promise<{
+        deleted: number;
     }>;
     comments(id: string, user: RbacUser): Promise<{
         items: {
@@ -65,23 +117,15 @@ export declare class TaskInstancesController {
     }>;
     updateStatus(id: string, dto: TaskStatusDto, user: RbacUser): Promise<any>;
     updateProgress(id: string, dto: TaskProgressDto, user: RbacUser): Promise<any>;
+    updateTitle(id: string, dto: TaskTitleDto, user: RbacUser): Promise<any>;
     assign(id: string, dto: TaskAssignDto, user: RbacUser): Promise<any>;
+    updateLocalities(id: string, dto: TaskLocalitiesDto, user: RbacUser): Promise<{
+        primaryTaskId: string;
+        items: any[];
+    }>;
     updateMeeting(id: string, dto: TaskMeetingDto, user: RbacUser): Promise<any>;
     updateEloRole(id: string, dto: TaskEloRoleDto, user: RbacUser): Promise<any>;
     updateSpecialty(id: string, dto: TaskSpecialtyDto, user: RbacUser): Promise<any>;
-    batchAssign(body: {
-        ids: string[];
-        assignedToId: string | null;
-        assigneeIds?: string[];
-    }, user: RbacUser): Promise<{
-        updated: number;
-    }>;
-    batchStatus(body: {
-        ids: string[];
-        status: string;
-    }, user: RbacUser): Promise<{
-        updated: number;
-    }>;
     remove(id: string, user: RbacUser): Promise<{
         ok: boolean;
     }>;

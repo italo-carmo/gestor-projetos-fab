@@ -31,7 +31,7 @@ export declare class AuthService {
         accessToken: string;
         refreshToken: string;
     }>;
-    me(userId: string): Promise<{
+    me(userId: string, activeRoleId?: string): Promise<{
         id: string;
         email: string;
         name: string;
@@ -42,6 +42,11 @@ export declare class AuthService {
             id: string;
             name: string;
         }[];
+        activeRoleId: string;
+        activeRole: {
+            id: string;
+            name: string;
+        } | null;
         permissions: {
             resource: string;
             action: string;

@@ -56,6 +56,7 @@ const LOCALITY_REQUIRED_ROLE_NAMES = new Set([
     'gsd localidade',
     'admin localidade',
     'administracao local',
+    'cpca',
 ]);
 const SPECIALTY_REQUIRED_ROLE_NAMES = new Set([
     'admin especialidade local',
@@ -76,11 +77,12 @@ let RbacService = class RbacService {
         this.audit = audit;
         this.fabLdap = fabLdap;
     }
-    async getUserAccess(userId) {
+    async getUserAccess(userId, activeRoleId) {
         const user = await this.prisma.user.findUnique({
             where: { id: userId },
             include: {
                 roles: {
+                    orderBy: { role: { name: 'asc' } },
                     include: {
                         role: {
                             include: {
@@ -97,10 +99,14 @@ let RbacService = class RbacService {
         if (!user) {
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         }
-        return this.buildAccessFromUser(user);
+        return this.buildAccessFromUser(user, activeRoleId);
     }
     async listRoles() {
-        return this.prisma.role.findMany({ orderBy: { name: 'asc' } });
+        const roles = await this.prisma.role.findMany({ orderBy: { name: 'asc' } });
+        return roles.map((role) => ({
+            ...role,
+            name: (0, role_access_1.canonicalRoleName)(role.name),
+        }));
     }
     async createRole(data) {
         return this.prisma.role.create({ data });
@@ -184,7 +190,7 @@ let RbacService = class RbacService {
             version: '1.0',
             exportedAt: new Date().toISOString(),
             roles: roles.map((role) => ({
-                name: role.name,
+                name: (0, role_access_1.canonicalRoleName)(role.name),
                 description: role.description ?? undefined,
                 isSystemRole: role.isSystemRole,
                 wildcard: role.wildcard,
@@ -372,12 +378,12 @@ let RbacService = class RbacService {
         });
         return this.getUserModuleAccess(userId);
     }
-    async lookupLdapUser(uid) {
-        const normalizedUid = String(uid ?? '').trim();
-        if (!normalizedUid) {
+    async lookupLdapUser(identifier) {
+        const normalizedIdentifier = this.normalizeLdapIdentifier(identifier);
+        if (!normalizedIdentifier) {
             (0, http_error_1.throwError)('VALIDATION_ERROR', { reason: 'LDAP_UID_REQUIRED' });
         }
-        const profile = await this.fabLdap.lookupByUid(normalizedUid);
+        const profile = await this.lookupLdapByIdentifier(normalizedIdentifier);
         if (!profile) {
             (0, http_error_1.throwError)('NOT_FOUND');
         }
@@ -392,18 +398,28 @@ let RbacService = class RbacService {
         };
     }
     async upsertLdapUser(payload, actorUserId) {
-        const uid = String(payload.uid ?? '').trim();
-        if (!uid) {
+        const identifier = this.normalizeLdapIdentifier(payload.uid);
+        if (!identifier) {
             (0, http_error_1.throwError)('VALIDATION_ERROR', { reason: 'LDAP_UID_REQUIRED' });
         }
-        const role = await this.prisma.role.findUnique({ where: { id: payload.roleId } });
-        if (!role) {
+        const selectedRoleIds = Array.from(new Set([payload.roleId, ...(Array.isArray(payload.roleIds) ? payload.roleIds : [])]
+            .map((value) => String(value ?? '').trim())
+            .filter(Boolean)));
+        if (!selectedRoleIds.length) {
+            (0, http_error_1.throwError)('VALIDATION_ERROR', { reason: 'ROLE_REQUIRED' });
+        }
+        const roles = await this.prisma.role.findMany({
+            where: { id: { in: selectedRoleIds } },
+            select: { id: true, name: true },
+        });
+        if (roles.length !== selectedRoleIds.length) {
             (0, http_error_1.throwError)('NOT_FOUND');
         }
-        const profile = await this.fabLdap.lookupByUid(uid);
+        const profile = await this.lookupLdapByIdentifier(identifier);
         if (!profile) {
-            (0, http_error_1.throwError)('VALIDATION_ERROR', { reason: 'LDAP_USER_NOT_FOUND', uid });
+            (0, http_error_1.throwError)('VALIDATION_ERROR', { reason: 'LDAP_USER_NOT_FOUND', uid: identifier });
         }
+        const uid = profile.uid;
         const preferredEmail = this.normalizeEmail(profile.email) ?? `${uid}@fab.intraer`;
         const preferredName = profile.name?.trim() || `Militar ${uid}`;
         const existing = await this.prisma.user.findFirst({
@@ -420,12 +436,14 @@ let RbacService = class RbacService {
             },
         });
         const targetLocalityId = payload.localityId !== undefined ? payload.localityId : (existing?.localityId ?? null);
-        if (roleRequiresLocality(role.name) && !targetLocalityId) {
+        if (roles.some((role) => roleRequiresLocality(role.name)) && !targetLocalityId) {
             (0, http_error_1.throwError)('USER_LOCAL_ROLE_REQUIRES_LOCALITY');
         }
         const targetSpecialtyId = payload.specialtyId !== undefined ? payload.specialtyId : (existing?.specialtyId ?? null);
         const targetEloRoleId = payload.eloRoleId !== undefined ? payload.eloRoleId : (existing?.eloRoleId ?? null);
-        if (roleRequiresSpecialty(role.name) && !targetSpecialtyId && !targetEloRoleId) {
+        if (roles.some((role) => roleRequiresSpecialty(role.name)) &&
+            !targetSpecialtyId &&
+            !targetEloRoleId) {
             (0, http_error_1.throwError)('USER_SPECIALTY_ROLE_REQUIRES_SPECIALTY');
         }
         const uniqueEmail = await this.resolveUniqueEmail(preferredEmail, uid, existing?.id);
@@ -454,16 +472,21 @@ let RbacService = class RbacService {
                     eloRoleId: payload.eloRoleId ?? null,
                 },
             });
-        await this.prisma.userRole.deleteMany({
-            where: { userId: user.id },
-        });
-        await this.prisma.userRole.create({
-            data: { userId: user.id, roleId: role.id },
+        const replaceExistingRoles = Boolean(payload.replaceExistingRoles);
+        if (replaceExistingRoles) {
+            await this.prisma.userRole.deleteMany({
+                where: { userId: user.id },
+            });
+        }
+        await this.prisma.userRole.createMany({
+            data: selectedRoleIds.map((roleId) => ({ userId: user.id, roleId })),
+            skipDuplicates: true,
         });
         const userWithRoles = await this.prisma.user.findUnique({
             where: { id: user.id },
             include: {
                 roles: {
+                    orderBy: { role: { name: 'asc' } },
                     include: {
                         role: {
                             select: { id: true, name: true },
@@ -479,9 +502,9 @@ let RbacService = class RbacService {
             entityId: user.id,
             diffJson: {
                 uid,
-                roleId: role.id,
-                roleName: role.name,
-                replaceExistingRoles: true,
+                roleIds: roles.map((item) => item.id),
+                roleNames: roles.map((item) => item.name),
+                replaceExistingRoles,
                 localityId: payload.localityId ?? null,
                 specialtyId: payload.specialtyId ?? null,
                 eloRoleId: payload.eloRoleId ?? null,
@@ -499,7 +522,7 @@ let RbacService = class RbacService {
                     eloRoleId: userWithRoles.eloRoleId,
                     roles: userWithRoles.roles.map((item) => ({
                         id: item.role.id,
-                        name: item.role.name,
+                        name: (0, role_access_1.canonicalRoleName)(item.role.name),
                     })),
                 }
                 : null,
@@ -558,10 +581,11 @@ let RbacService = class RbacService {
         }
         (0, http_error_1.throwError)('VALIDATION_ERROR', { reason: 'MISSING_PARAMS' });
     }
-    async buildAccessFromUser(user) {
-        const roles = user.roles.map((userRole) => ({
+    async buildAccessFromUser(user, requestedActiveRoleId) {
+        const allRoles = user.roles
+            .map((userRole) => ({
             id: userRole.role.id,
-            name: userRole.role.name,
+            name: (0, role_access_1.canonicalRoleName)(userRole.role.name),
             wildcard: userRole.role.wildcard,
             constraintsTemplateJson: userRole.role.constraintsTemplateJson,
             flagsJson: userRole.role.flagsJson,
@@ -570,10 +594,18 @@ let RbacService = class RbacService {
                 action: rp.permission.action,
                 scope: rp.permission.scope,
             })),
-        }));
+        }))
+            .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+        const requestedRoleId = String(requestedActiveRoleId ?? '').trim();
+        const requestedRole = requestedRoleId
+            ? allRoles.find((role) => role.id === requestedRoleId)
+            : undefined;
+        const activeRole = requestedRole ?? this.pickDefaultActiveRole(allRoles);
+        const roles = activeRole ? [activeRole] : [];
         const normalizedRoles = new Set(roles.map((role) => (0, role_access_1.normalizeRoleName)(role.name)));
         const hasNationalScope = normalizedRoles.has((0, role_access_1.normalizeRoleName)(role_access_1.ROLE_TI)) ||
             normalizedRoles.has((0, role_access_1.normalizeRoleName)(role_access_1.ROLE_COORDENACAO_CIPAVD)) ||
+            normalizedRoles.has((0, role_access_1.normalizeRoleName)(role_access_1.ROLE_COMISSAO_CIPAVD)) ||
             normalizedRoles.has((0, role_access_1.normalizeRoleName)(role_access_1.ROLE_COMANDANTE_COMGEP));
         const moduleAccessOverrides = user.moduleAccessOverrides.map((item) => ({
             resource: item.resource,
@@ -604,6 +636,8 @@ let RbacService = class RbacService {
             permissions,
             moduleAccessOverrides,
             roles,
+            allRoles,
+            activeRoleId: activeRole?.id ?? null,
         };
     }
     async listPermissionEntries(where) {
@@ -635,6 +669,34 @@ let RbacService = class RbacService {
         }
         return Array.from(map.values());
     }
+    pickDefaultActiveRole(roles) {
+        if (!roles.length)
+            return null;
+        const priorityOrder = new Map([
+            [(0, role_access_1.normalizeRoleName)(role_access_1.ROLE_TI), 0],
+            [(0, role_access_1.normalizeRoleName)(role_access_1.ROLE_COMISSAO_CIPAVD), 1],
+            [(0, role_access_1.normalizeRoleName)(role_access_1.ROLE_COORDENACAO_CIPAVD), 2],
+            [(0, role_access_1.normalizeRoleName)(role_access_1.ROLE_COMANDANTE_COMGEP), 3],
+            [(0, role_access_1.normalizeRoleName)(role_access_1.ROLE_CPCA), 4],
+        ]);
+        const sorted = [...roles].sort((a, b) => {
+            const priorityA = priorityOrder.get((0, role_access_1.normalizeRoleName)(a.name)) ?? Number.MAX_SAFE_INTEGER;
+            const priorityB = priorityOrder.get((0, role_access_1.normalizeRoleName)(b.name)) ?? Number.MAX_SAFE_INTEGER;
+            if (priorityA !== priorityB) {
+                return priorityA - priorityB;
+            }
+            if (a.wildcard !== b.wildcard) {
+                return a.wildcard ? -1 : 1;
+            }
+            const permissionCountA = this.dedupePermissions(a.permissions).length;
+            const permissionCountB = this.dedupePermissions(b.permissions).length;
+            if (permissionCountA !== permissionCountB) {
+                return permissionCountB - permissionCountA;
+            }
+            return a.name.localeCompare(b.name, 'pt-BR');
+        });
+        return sorted[0] ?? null;
+    }
     applyModuleAccessOverrides(basePermissions, overrides, catalogPermissions) {
         const disabledResources = new Set(overrides.filter((item) => !item.enabled).map((item) => item.resource));
         const enabledResources = new Set(overrides.filter((item) => item.enabled).map((item) => item.resource));
@@ -645,6 +707,19 @@ let RbacService = class RbacService {
     normalizeEmail(email) {
         const value = String(email ?? '').trim().toLowerCase();
         return value || null;
+    }
+    normalizeLdapIdentifier(identifier) {
+        return String(identifier ?? '').trim();
+    }
+    normalizeUidForLookup(identifier) {
+        const onlyDigits = identifier.replace(/\D/g, '');
+        return onlyDigits || identifier;
+    }
+    async lookupLdapByIdentifier(identifier) {
+        if (identifier.includes('@')) {
+            return this.fabLdap.lookupByEmail(identifier);
+        }
+        return this.fabLdap.lookupByUid(this.normalizeUidForLookup(identifier));
     }
     async resolveUniqueEmail(preferredEmail, uid, excludeUserId) {
         const base = this.normalizeEmail(preferredEmail) ?? `${uid}@fab.intraer`;

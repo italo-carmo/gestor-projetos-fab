@@ -50,6 +50,7 @@ let AdminRbacController = class AdminRbacController {
         return this.rbac.upsertLdapUser({
             uid: dto.uid,
             roleId: dto.roleId,
+            roleIds: dto.roleIds,
             localityId: dto.localityId,
             specialtyId: dto.specialtyId,
             eloRoleId: dto.eloRoleId,

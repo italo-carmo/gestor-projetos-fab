@@ -17,6 +17,7 @@ class UpdateMeetingDto {
     status;
     meetingType;
     meetingLink;
+    location;
     agenda;
     localityId;
     participantIds;
@@ -47,6 +48,11 @@ __decorate([
     (0, class_validator_1.IsString)(),
     __metadata("design:type", Object)
 ], UpdateMeetingDto.prototype, "meetingLink", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", Object)
+], UpdateMeetingDto.prototype, "location", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),

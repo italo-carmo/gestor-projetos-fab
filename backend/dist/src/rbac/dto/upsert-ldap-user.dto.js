@@ -22,6 +22,7 @@ const trimUuidNullable = ({ value }) => {
 class UpsertLdapUserDto {
     uid;
     roleId;
+    roleIds;
     replaceExistingRoles;
     localityId;
     specialtyId;
@@ -36,10 +37,20 @@ __decorate([
 ], UpsertLdapUserDto.prototype, "uid", void 0);
 __decorate([
     (0, class_transformer_1.Transform)(trimText),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.ValidateIf)((_o, v) => v !== null && v !== undefined && String(v).trim().length > 0),
     (0, class_validator_1.IsString)(),
     (0, class_validator_1.MinLength)(3),
     __metadata("design:type", String)
 ], UpsertLdapUserDto.prototype, "roleId", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsArray)(),
+    (0, class_transformer_1.Transform)(({ value }) => Array.isArray(value) ? value.map((item) => String(item ?? '').trim()).filter(Boolean) : value),
+    (0, class_validator_1.IsString)({ each: true }),
+    (0, class_validator_1.MinLength)(3, { each: true }),
+    __metadata("design:type", Array)
+], UpsertLdapUserDto.prototype, "roleIds", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsBoolean)(),

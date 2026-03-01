@@ -1,7 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ROLE_ADMINISTRACAO_LOCAL = exports.ROLE_ADMIN_LOCALIDADE = exports.ROLE_ADMIN_ESPECIALIDADE_NACIONAL = exports.ROLE_ADMIN_ESPECIALIDADE_LOCAL = exports.ROLE_GSD_LOCALIDADE = exports.ROLE_TI = exports.ROLE_COMANDANTE_COMGEP = exports.ROLE_COORDENACAO_CIPAVD = void 0;
+exports.ROLE_ADMINISTRACAO_LOCAL = exports.ROLE_ADMIN_LOCALIDADE = exports.ROLE_ADMIN_ESPECIALIDADE_NACIONAL = exports.ROLE_ADMIN_ESPECIALIDADE_LOCAL = exports.ROLE_GSD_LOCALIDADE = exports.ROLE_CPCA = exports.ROLE_TI = exports.ROLE_COMANDANTE_COMGEP = exports.ROLE_COMGEP = exports.ROLE_COMISSAO_CIPAVD = exports.ROLE_COORDENACAO_CIPAVD = void 0;
 exports.normalizeRoleName = normalizeRoleName;
+exports.canonicalRoleName = canonicalRoleName;
 exports.hasRole = hasRole;
 exports.hasAnyRole = hasAnyRole;
 exports.isNationalCommissionMember = isNationalCommissionMember;
@@ -13,20 +14,35 @@ exports.isNationalSpecialtyAdmin = isNationalSpecialtyAdmin;
 exports.isLocalSpecialtyAdmin = isLocalSpecialtyAdmin;
 exports.resolveAccessProfile = resolveAccessProfile;
 exports.canEditRecruitsByRole = canEditRecruitsByRole;
+exports.hasCpcaWorkflowAccess = hasCpcaWorkflowAccess;
 exports.ROLE_COORDENACAO_CIPAVD = 'Coordenação CIPAVD';
-exports.ROLE_COMANDANTE_COMGEP = 'Comandante COMGEP';
+exports.ROLE_COMISSAO_CIPAVD = 'Comissão CIPAVD';
+exports.ROLE_COMGEP = 'COMGEP';
+exports.ROLE_COMANDANTE_COMGEP = exports.ROLE_COMGEP;
 exports.ROLE_TI = 'TI';
+exports.ROLE_CPCA = 'CPCA';
 exports.ROLE_GSD_LOCALIDADE = 'GSD Localidade';
 exports.ROLE_ADMIN_ESPECIALIDADE_LOCAL = 'Admin Especialidade Local';
 exports.ROLE_ADMIN_ESPECIALIDADE_NACIONAL = 'Admin Especialidade Nacional';
 exports.ROLE_ADMIN_LOCALIDADE = 'Admin Localidade';
 exports.ROLE_ADMINISTRACAO_LOCAL = 'Administração Local';
+const COMGEP_ROLE_ALIASES = new Set(['comgep', 'comandante comgep']);
 function normalizeRoleName(roleName) {
-    return String(roleName ?? '')
+    const normalized = String(roleName ?? '')
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '')
+        .replace(/\s+/g, ' ')
         .trim()
         .toLowerCase();
+    if (COMGEP_ROLE_ALIASES.has(normalized))
+        return 'comgep';
+    return normalized;
+}
+function canonicalRoleName(roleName) {
+    const normalized = normalizeRoleName(roleName);
+    if (normalized === 'comgep')
+        return exports.ROLE_COMGEP;
+    return String(roleName ?? '').replace(/\s+/g, ' ').trim();
 }
 function hasRole(user, roleName) {
     if (!user)
@@ -42,6 +58,7 @@ function hasAnyRole(user, roleNames) {
 function isNationalCommissionMember(user) {
     return hasAnyRole(user, [
         exports.ROLE_COORDENACAO_CIPAVD,
+        exports.ROLE_COMISSAO_CIPAVD,
         exports.ROLE_COMANDANTE_COMGEP,
     ]);
 }
@@ -99,11 +116,15 @@ function resolveAccessProfile(user) {
 function canEditRecruitsByRole(user, targetLocalityId) {
     if (!user)
         return false;
-    if (hasRole(user, exports.ROLE_COORDENACAO_CIPAVD))
+    if (hasAnyRole(user, [exports.ROLE_COORDENACAO_CIPAVD, exports.ROLE_COMISSAO_CIPAVD])) {
         return true;
+    }
     if (hasRole(user, exports.ROLE_GSD_LOCALIDADE) && user.localityId === targetLocalityId) {
         return true;
     }
     return false;
+}
+function hasCpcaWorkflowAccess(user) {
+    return hasAnyRole(user, [exports.ROLE_CPCA, exports.ROLE_COORDENACAO_CIPAVD, exports.ROLE_COMANDANTE_COMGEP, exports.ROLE_TI]);
 }
 //# sourceMappingURL=role-access.js.map

@@ -56,6 +56,8 @@ export declare class MeetingsController {
                 localityId: string;
                 status: import("@prisma/client").$Enums.TaskStatus;
                 reportRequired: boolean;
+                groupKey: string | null;
+                titleOverride: string | null;
                 dueDate: Date;
                 priority: import("@prisma/client").$Enums.TaskPriority;
                 progressPercent: number;
@@ -82,6 +84,7 @@ export declare class MeetingsController {
             localityId: string | null;
             status: import("@prisma/client").$Enums.MeetingStatus;
             meetingType: import("@prisma/client").$Enums.MeetingType;
+            location: string | null;
             meetingLink: string | null;
             agenda: string | null;
             participantsJson: import("@prisma/client/runtime/client").JsonValue | null;
@@ -124,6 +127,7 @@ export declare class MeetingsController {
         localityId: string | null;
         status: import("@prisma/client").$Enums.MeetingStatus;
         meetingType: import("@prisma/client").$Enums.MeetingType;
+        location: string | null;
         meetingLink: string | null;
         agenda: string | null;
         participantsJson: import("@prisma/client/runtime/client").JsonValue | null;
@@ -162,6 +166,7 @@ export declare class MeetingsController {
         localityId: string | null;
         status: import("@prisma/client").$Enums.MeetingStatus;
         meetingType: import("@prisma/client").$Enums.MeetingType;
+        location: string | null;
         meetingLink: string | null;
         agenda: string | null;
         participantsJson: import("@prisma/client/runtime/client").JsonValue | null;
@@ -183,6 +188,8 @@ export declare class MeetingsController {
             localityId: string;
             status: import("@prisma/client").$Enums.TaskStatus;
             reportRequired: boolean;
+            groupKey: string | null;
+            titleOverride: string | null;
             dueDate: Date;
             priority: import("@prisma/client").$Enums.TaskPriority;
             progressPercent: number;

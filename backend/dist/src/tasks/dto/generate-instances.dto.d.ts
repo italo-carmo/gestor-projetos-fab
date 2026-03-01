@@ -3,7 +3,6 @@ export declare class GenerateInstancesDto {
         localityId: string;
         dueDate: string;
     }[];
-    reportRequired?: boolean;
     priority?: string;
     meetingId?: string | null;
     assignedToId?: string | null;

@@ -132,6 +132,22 @@ export function useAddMissionParticipantFromLdap() {
   });
 }
 
+export function useAddMissionParticipantFromUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; userId: string }) =>
+      (
+        await api.post(`/missions/${args.id}/participants/user`, {
+          userId: args.userId,
+        })
+      ).data,
+    onSuccess: (_data, args) => {
+      qc.invalidateQueries({ queryKey: ["missions"] });
+      qc.invalidateQueries({ queryKey: qk.mission(args.id) });
+    },
+  });
+}
+
 export function useRemoveMissionParticipant() {
   const qc = useQueryClient();
   return useMutation({

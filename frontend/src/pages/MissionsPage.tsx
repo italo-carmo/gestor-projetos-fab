@@ -1,4 +1,5 @@
 import {
+  Autocomplete,
   Box,
   Button,
   Card,
@@ -9,6 +10,8 @@ import {
   IconButton,
   MenuItem,
   Stack,
+  Tab,
+  Tabs,
   Table,
   TableBody,
   TableCell,
@@ -26,6 +29,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   useAddMissionParticipantFromLdap,
+  useAddMissionParticipantFromUser,
   useCreateMission,
   useCreateMissionScheduleItem,
   useDeleteMission,
@@ -38,6 +42,7 @@ import {
   useRemoveMissionParticipant,
   useUpdateMission,
   useUpdateMissionScheduleItem,
+  useUsers,
 } from '../api/hooks';
 import { parseApiError } from '../app/apiErrors';
 import { useToast } from '../app/toast';
@@ -79,8 +84,10 @@ export function MissionsPage() {
   const createMission = useCreateMission();
   const updateMission = useUpdateMission();
   const deleteMission = useDeleteMission();
-  const addParticipant = useAddMissionParticipantFromLdap();
+  const addParticipantLdap = useAddMissionParticipantFromLdap();
+  const addParticipantUser = useAddMissionParticipantFromUser();
   const removeParticipant = useRemoveMissionParticipant();
+  const usersQuery = useUsers();
   const createScheduleItem = useCreateMissionScheduleItem();
   const updateScheduleItem = useUpdateMissionScheduleItem();
   const deleteScheduleItem = useDeleteMissionScheduleItem();
@@ -90,6 +97,9 @@ export function MissionsPage() {
   const [isCreateMode, setIsCreateMode] = useState(false);
   const [missionForm, setMissionForm] = useState(blankMissionForm);
   const [ldapIdentifier, setLdapIdentifier] = useState('');
+  const [participantTab, setParticipantTab] = useState(0);
+  const [userSearch, setUserSearch] = useState('');
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [scheduleForm, setScheduleForm] = useState(blankScheduleForm);
   const [editingScheduleItemId, setEditingScheduleItemId] = useState<string | null>(null);
   const [missionDeleteTarget, setMissionDeleteTarget] = useState<{ id: string; title: string } | null>(null);
@@ -231,18 +241,46 @@ export function MissionsPage() {
     }
   };
 
-  const handleAddParticipant = async () => {
+  const handleAddParticipantLdap = async () => {
     if (!selectedMission) return;
     if (!ldapIdentifier.trim()) return;
 
     try {
-      await addParticipant.mutateAsync({ id: selectedMission.id, identifier: ldapIdentifier.trim() });
+      await addParticipantLdap.mutateAsync({ id: selectedMission.id, identifier: ldapIdentifier.trim() });
       toast.push({ message: 'Participante adicionado.', severity: 'success' });
       setLdapIdentifier('');
     } catch (error) {
       toast.push({ message: parseApiError(error).message ?? 'Erro ao adicionar participante.', severity: 'error' });
     }
   };
+
+  const handleAddParticipantUser = async () => {
+    if (!selectedMission) return;
+    if (!selectedUserId) return;
+
+    try {
+      await addParticipantUser.mutateAsync({ id: selectedMission.id, userId: selectedUserId });
+      toast.push({ message: 'Participante adicionado.', severity: 'success' });
+      setSelectedUserId(null);
+      setUserSearch('');
+    } catch (error) {
+      toast.push({ message: parseApiError(error).message ?? 'Erro ao adicionar participante.', severity: 'error' });
+    }
+  };
+
+  const filteredUsers = useMemo(() => {
+    if (!usersQuery.data?.items) return [];
+    const searchTerm = userSearch.toLowerCase().trim();
+    if (!searchTerm) return usersQuery.data.items.slice(0, 50);
+    return usersQuery.data.items
+      .filter((user: any) => {
+        const name = String(user.name ?? '').toLowerCase();
+        const email = String(user.email ?? '').toLowerCase();
+        const ldapUid = String(user.ldapUid ?? '').toLowerCase();
+        return name.includes(searchTerm) || email.includes(searchTerm) || ldapUid.includes(searchTerm);
+      })
+      .slice(0, 50);
+  }, [usersQuery.data?.items, userSearch]);
 
   const handleRemoveParticipant = async (participantId: string) => {
     if (!selectedMission) return;
@@ -552,31 +590,102 @@ export function MissionsPage() {
                 <>
                   <Card sx={{ mb: 2 }}>
                     <CardContent>
-                      <Typography variant="subtitle1" fontWeight={700} mb={1.2}>
-                        Participantes (LDAP)
+                      <Typography variant="subtitle1" fontWeight={700} mb={1.5}>
+                        Participantes
                       </Typography>
-                      <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} alignItems={{ xs: 'stretch', md: 'center' }}>
-                        <TextField
-                          size="small"
-                          label="CPF ou e-mail"
-                          value={ldapIdentifier}
-                          onChange={(event) => setLdapIdentifier(event.target.value)}
-                          fullWidth
-                        />
-                        <Button
-                          variant="outlined"
-                          startIcon={<PersonAddAlt1RoundedIcon />}
-                          onClick={handleAddParticipant}
-                          disabled={!ldapIdentifier.trim() || addParticipant.isPending}
-                        >
-                          Adicionar
-                        </Button>
-                      </Stack>
-                      {lookupQuery.data?.item && (
-                        <Typography variant="caption" color="text.secondary" display="block" mt={0.8}>
-                          LDAP: {lookupQuery.data.item.name || lookupQuery.data.item.uid} ({lookupQuery.data.item.email || 'sem e-mail'})
-                        </Typography>
+
+                      <Tabs value={participantTab} onChange={(_, newValue) => setParticipantTab(newValue)} sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}>
+                        <Tab label="LDAP" />
+                        <Tab label="Usuários do Sistema" />
+                      </Tabs>
+
+                      {participantTab === 0 && (
+                        <Stack spacing={1.5}>
+                          <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} alignItems={{ xs: 'stretch', md: 'center' }}>
+                            <TextField
+                              size="small"
+                              label="CPF ou e-mail"
+                              value={ldapIdentifier}
+                              onChange={(event) => setLdapIdentifier(event.target.value)}
+                              fullWidth
+                              placeholder="Digite CPF ou e-mail do LDAP"
+                            />
+                            <Button
+                              variant="outlined"
+                              startIcon={<PersonAddAlt1RoundedIcon />}
+                              onClick={handleAddParticipantLdap}
+                              disabled={!ldapIdentifier.trim() || addParticipantLdap.isPending}
+                              sx={{ minWidth: 120 }}
+                            >
+                              Adicionar
+                            </Button>
+                          </Stack>
+                          {lookupQuery.data?.item && (
+                            <Box sx={{ p: 1, bgcolor: 'action.hover', borderRadius: 1 }}>
+                              <Typography variant="caption" color="text.secondary" display="block">
+                                <strong>LDAP:</strong> {lookupQuery.data.item.name || lookupQuery.data.item.uid}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                {lookupQuery.data.item.email || 'sem e-mail'}
+                              </Typography>
+                            </Box>
+                          )}
+                        </Stack>
                       )}
+
+                      {participantTab === 1 && (
+                        <Stack spacing={1.5}>
+                          <Autocomplete
+                            size="small"
+                            options={filteredUsers}
+                            getOptionLabel={(option: any) => {
+                              const roles = option.roles?.map((r: any) => r.role?.name).filter(Boolean).join(', ') || '';
+                              return `${option.name}${option.email ? ` • ${option.email}` : ''}${roles ? ` • ${roles}` : ''}`;
+                            }}
+                            value={filteredUsers.find((u: any) => u.id === selectedUserId) || null}
+                            onChange={(_, newValue: any) => setSelectedUserId(newValue?.id || null)}
+                            inputValue={userSearch}
+                            onInputChange={(_, newInputValue) => setUserSearch(newInputValue)}
+                            renderInput={(params) => (
+                              <TextField
+                                {...params}
+                                label="Buscar usuário"
+                                placeholder="Digite nome, e-mail ou CPF"
+                              />
+                            )}
+                            renderOption={(props, option: any) => {
+                              const roles = option.roles?.map((r: any) => r.role?.name).filter(Boolean).join(', ') || '';
+                              return (
+                                <Box component="li" {...props} key={option.id}>
+                                  <Stack>
+                                    <Typography variant="body2" fontWeight={500}>
+                                      {option.name}
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary">
+                                      {option.email || option.ldapUid || 'Sem contato'}
+                                      {roles && ` • ${roles}`}
+                                    </Typography>
+                                  </Stack>
+                                </Box>
+                              );
+                            }}
+                            loading={usersQuery.isLoading}
+                            noOptionsText={userSearch.trim() ? 'Nenhum usuário encontrado' : 'Digite para buscar'}
+                            fullWidth
+                          />
+                          <Button
+                            variant="outlined"
+                            startIcon={<PersonAddAlt1RoundedIcon />}
+                            onClick={handleAddParticipantUser}
+                            disabled={!selectedUserId || addParticipantUser.isPending}
+                            fullWidth
+                          >
+                            Adicionar Participante
+                          </Button>
+                        </Stack>
+                      )}
+
+                      <Divider sx={{ my: 2 }} />
 
                       <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 1.2 }}>
                         {(selectedMission.participants ?? []).map((participant: any) => (
@@ -585,6 +694,7 @@ export function MissionsPage() {
                             label={`${participant.name}${participant.email ? ` • ${participant.email}` : participant.cpf ? ` • ${participant.cpf}` : ''}`}
                             onDelete={() => handleRemoveParticipant(participant.id)}
                             size="small"
+                            color={participant.userId ? 'primary' : 'default'}
                           />
                         ))}
                         {(selectedMission.participants ?? []).length === 0 && (

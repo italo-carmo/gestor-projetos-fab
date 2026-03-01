@@ -17,6 +17,7 @@ const http_error_1 = require("../common/http-error");
 const sanitize_1 = require("../common/sanitize");
 const audit_service_1 = require("../audit/audit.service");
 const role_access_1 = require("../rbac/role-access");
+const priority_localities_1 = require("../common/priority-localities");
 let ChecklistsService = class ChecklistsService {
     prisma;
     audit;
@@ -27,8 +28,11 @@ let ChecklistsService = class ChecklistsService {
     async list(filters, user) {
         const constraints = this.getScopeConstraints(user);
         const localityWhere = {};
+        if (filters.localityId)
+            localityWhere.id = filters.localityId;
         if (constraints.localityId)
             localityWhere.id = constraints.localityId;
+        localityWhere.recruitsFemaleCountCurrent = { gt: 0 };
         const checklistWhere = {};
         if (filters.phaseId)
             checklistWhere.phaseId = filters.phaseId;
@@ -40,7 +44,7 @@ let ChecklistsService = class ChecklistsService {
             checklistWhere.eloRoleId = constraints.eloRoleId;
         if (filters.eloRoleId)
             checklistWhere.eloRoleId = filters.eloRoleId;
-        const [localities, checklists] = await this.prisma.$transaction([
+        const [localitiesRaw, checklists] = await this.prisma.$transaction([
             this.prisma.locality.findMany({ where: localityWhere, orderBy: { name: 'asc' } }),
             this.prisma.checklist.findMany({
                 where: checklistWhere,
@@ -53,8 +57,13 @@ let ChecklistsService = class ChecklistsService {
                 orderBy: { createdAt: 'desc' },
             }),
         ]);
+        const localityGroups = (0, priority_localities_1.groupTargetLocalities)(localitiesRaw);
+        const localities = localityGroups.map((group) => group.canonical);
+        const { aliasByLocalityId, aliasIdsByCanonicalId } = (0, priority_localities_1.createTargetLocalityAliasMap)(localityGroups);
+        const localityIds = localities.map((locality) => locality.id);
+        const aliasLocalityIds = Array.from(aliasByLocalityId.keys());
         if (checklists.length === 0) {
-            const autoItems = await this.buildAutomaticChecklistItems(localities, filters, constraints);
+            const autoItems = await this.buildAutomaticChecklistItems(localities, filters, constraints, aliasIdsByCanonicalId);
             const localityProgress = localities.map((locality) => {
                 if (autoItems.length === 0)
                     return { localityId: locality.id, percent: 0 };
@@ -82,7 +91,6 @@ let ChecklistsService = class ChecklistsService {
                 localities,
             };
         }
-        const localityIds = localities.map((l) => l.id);
         const templateIds = checklists.flatMap((c) => c.items.filter((i) => i.taskTemplateId).map((i) => i.taskTemplateId));
         const activityChecklistKeys = new Set(checklists.flatMap((c) => c.items
             .filter((i) => !i.taskTemplateId)
@@ -91,7 +99,7 @@ let ChecklistsService = class ChecklistsService {
             ? await this.prisma.taskInstance.findMany({
                 where: {
                     taskTemplateId: { in: templateIds },
-                    localityId: localityIds.length ? { in: localityIds } : undefined,
+                    localityId: aliasLocalityIds.length ? { in: aliasLocalityIds } : undefined,
                 },
                 select: { taskTemplateId: true, localityId: true, status: true },
             })
@@ -101,7 +109,7 @@ let ChecklistsService = class ChecklistsService {
         const activities = activityChecklistKeys.size > 0 && localityIds.length > 0
             ? await this.prisma.activity.findMany({
                 where: {
-                    localityId: { in: localityIds },
+                    localityId: { in: aliasLocalityIds },
                     ...(selectedSpecialtyId
                         ? {
                             OR: [{ specialtyId: null }, { specialtyId: selectedSpecialtyId }],
@@ -122,17 +130,21 @@ let ChecklistsService = class ChecklistsService {
             : [];
         const instanceByTemplateLocality = new Map();
         for (const instance of taskInstances) {
-            const key = `${instance.taskTemplateId}:${instance.localityId}`;
+            const canonicalId = aliasByLocalityId.get(instance.localityId) ?? instance.localityId;
+            const key = `${instance.taskTemplateId}:${canonicalId}`;
             const list = instanceByTemplateLocality.get(key) ?? [];
             list.push(instance.status);
             instanceByTemplateLocality.set(key, list);
         }
         const activityByTitleLocality = new Map();
         for (const activity of activities) {
+            if (!activity.localityId)
+                continue;
             const normalizedTitle = this.normalizeChecklistActivityTitle(activity.title);
             if (!activityChecklistKeys.has(normalizedTitle))
                 continue;
-            const key = `${normalizedTitle}:${activity.localityId}`;
+            const canonicalId = aliasByLocalityId.get(activity.localityId) ?? activity.localityId;
+            const key = `${normalizedTitle}:${canonicalId}`;
             const list = activityByTitleLocality.get(key) ?? [];
             list.push(activity.status);
             activityByTitleLocality.set(key, list);
@@ -308,10 +320,21 @@ let ChecklistsService = class ChecklistsService {
     normalizeChecklistActivityTitle(value) {
         return (value ?? '').trim().toLocaleLowerCase('pt-BR');
     }
-    async buildAutomaticChecklistItems(localities, filters, constraints) {
-        const localityIds = localities.map((locality) => locality.id);
-        if (localityIds.length === 0)
+    async buildAutomaticChecklistItems(localities, filters, constraints, aliasIdsByCanonicalId) {
+        const canonicalLocalityIds = localities.map((locality) => locality.id);
+        if (canonicalLocalityIds.length === 0)
             return [];
+        const localityIds = aliasIdsByCanonicalId
+            ? Array.from(new Set(canonicalLocalityIds.flatMap((id) => aliasIdsByCanonicalId.get(id) ?? [id])))
+            : canonicalLocalityIds;
+        const canonicalByAliasId = new Map();
+        if (aliasIdsByCanonicalId) {
+            for (const [canonicalId, aliases] of aliasIdsByCanonicalId.entries()) {
+                for (const aliasId of aliases) {
+                    canonicalByAliasId.set(aliasId, canonicalId);
+                }
+            }
+        }
         const selectedEloRoleId = filters.eloRoleId ?? constraints.eloRoleId;
         const selectedSpecialtyId = filters.specialtyId ?? constraints.specialtyId;
         const taskInstances = await this.prisma.taskInstance.findMany({
@@ -371,15 +394,19 @@ let ChecklistsService = class ChecklistsService {
             if (!instance.taskTemplateId || !instance.taskTemplate?.title)
                 continue;
             templateById.set(instance.taskTemplateId, instance.taskTemplate.title);
-            const key = `${instance.taskTemplateId}:${instance.localityId}`;
+            const canonicalId = canonicalByAliasId.get(instance.localityId) ?? instance.localityId;
+            const key = `${instance.taskTemplateId}:${canonicalId}`;
             const list = taskStatusByTemplateLocality.get(key) ?? [];
             list.push(instance.status);
             taskStatusByTemplateLocality.set(key, list);
         }
         const activityStatusByTitleLocality = new Map();
         for (const activity of activities) {
+            if (!activity.localityId)
+                continue;
             const titleKey = this.normalizeChecklistActivityTitle(activity.title);
-            const key = `${titleKey}:${activity.localityId}`;
+            const canonicalId = canonicalByAliasId.get(activity.localityId) ?? activity.localityId;
+            const key = `${titleKey}:${canonicalId}`;
             const list = activityStatusByTitleLocality.get(key) ?? [];
             list.push(activity.status);
             activityStatusByTitleLocality.set(key, list);

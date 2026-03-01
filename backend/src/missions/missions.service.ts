@@ -379,6 +379,67 @@ export class MissionsService {
     return created;
   }
 
+  async addParticipantFromUser(missionId: string, userId: string, user?: RbacUser) {
+    this.assertMissionAccess(user);
+
+    const mission = await this.prisma.mission.findUnique({
+      where: { id: missionId },
+      include: { participants: true },
+    });
+    if (!mission) throwError('NOT_FOUND');
+
+    const systemUser = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        ldapUid: true,
+      },
+    });
+    if (!systemUser) throwError('NOT_FOUND');
+
+    const duplicate = mission.participants.find(
+      (participant) =>
+        participant.userId === userId ||
+        (systemUser.ldapUid && participant.ldapUid === systemUser.ldapUid) ||
+        (systemUser.email && participant.email?.toLowerCase() === systemUser.email.toLowerCase()),
+    );
+    if (duplicate) {
+      return duplicate;
+    }
+
+    const cpf = this.extractCpf(systemUser.ldapUid);
+
+    const created = await this.prisma.missionParticipant.create({
+      data: {
+        missionId,
+        userId: systemUser.id,
+        ldapUid: systemUser.ldapUid,
+        cpf,
+        email: systemUser.email,
+        name: systemUser.name,
+        fabom: null,
+      },
+      include: { user: { select: { id: true, name: true, email: true } } },
+    });
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'missions',
+      action: 'add_participant',
+      entityId: missionId,
+      localityId: mission.localityId,
+      diffJson: {
+        participantId: created.id,
+        participantUserId: created.userId,
+        participantEmail: created.email,
+      },
+    });
+
+    return created;
+  }
+
   async removeParticipant(missionId: string, participantId: string, user?: RbacUser) {
     this.assertMissionAccess(user);
 

@@ -20,6 +20,7 @@ const require_permission_decorator_1 = require("../rbac/require-permission.decor
 const rbac_guard_1 = require("../rbac/rbac.guard");
 const generate_instances_dto_1 = require("./dto/generate-instances.dto");
 const task_template_dto_1 = require("./dto/task-template.dto");
+const update_task_template_dto_1 = require("./dto/update-task-template.dto");
 const tasks_service_1 = require("./tasks.service");
 let TaskTemplatesController = class TaskTemplatesController {
     tasks;
@@ -35,8 +36,21 @@ let TaskTemplatesController = class TaskTemplatesController {
             title: dto.title,
             description: dto.description ?? null,
             phase: { connect: { id: dto.phaseId } },
-            specialty: dto.specialtyId ? { connect: { id: dto.specialtyId } } : undefined,
+            specialty: dto.specialtyId
+                ? { connect: { id: dto.specialtyId } }
+                : undefined,
             eloRole: dto.eloRoleId ? { connect: { id: dto.eloRoleId } } : undefined,
+            appliesToAllLocalities: dto.appliesToAllLocalities,
+            reportRequiredDefault: dto.reportRequiredDefault,
+        }, user);
+    }
+    update(id, dto, user) {
+        return this.tasks.updateTaskTemplate(id, {
+            title: dto.title,
+            description: dto.description,
+            phaseId: dto.phaseId,
+            specialtyId: dto.specialtyId,
+            eloRoleId: dto.eloRoleId,
             appliesToAllLocalities: dto.appliesToAllLocalities,
             reportRequiredDefault: dto.reportRequiredDefault,
         }, user);
@@ -44,7 +58,6 @@ let TaskTemplatesController = class TaskTemplatesController {
     generateInstances(id, dto, user) {
         return this.tasks.generateInstances(id, {
             localities: dto.localities,
-            reportRequired: dto.reportRequired,
             priority: dto.priority,
             meetingId: dto.meetingId ?? null,
             assignedToId: dto.assignedToId ?? null,
@@ -53,6 +66,9 @@ let TaskTemplatesController = class TaskTemplatesController {
     }
     clone(id, user) {
         return this.tasks.cloneTaskTemplate(id, user);
+    }
+    remove(id, user) {
+        return this.tasks.deleteTaskTemplate(id, user);
     }
 };
 exports.TaskTemplatesController = TaskTemplatesController;
@@ -73,6 +89,16 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], TaskTemplatesController.prototype, "create", null);
 __decorate([
+    (0, common_1.Put)(':id'),
+    (0, require_permission_decorator_1.RequirePermission)('task_templates', 'update'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)()),
+    __param(2, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, update_task_template_dto_1.UpdateTaskTemplateDto, Object]),
+    __metadata("design:returntype", void 0)
+], TaskTemplatesController.prototype, "update", null);
+__decorate([
     (0, common_1.Post)(':id/generate-instances'),
     (0, require_permission_decorator_1.RequirePermission)('task_templates', 'create'),
     __param(0, (0, common_1.Param)('id')),
@@ -91,6 +117,15 @@ __decorate([
     __metadata("design:paramtypes", [String, Object]),
     __metadata("design:returntype", void 0)
 ], TaskTemplatesController.prototype, "clone", null);
+__decorate([
+    (0, common_1.Delete)(':id'),
+    (0, require_permission_decorator_1.RequirePermission)('task_templates', 'update'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", void 0)
+], TaskTemplatesController.prototype, "remove", null);
 exports.TaskTemplatesController = TaskTemplatesController = __decorate([
     (0, common_1.Controller)('task-templates'),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, rbac_guard_1.RbacGuard),

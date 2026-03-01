@@ -6,7 +6,7 @@ import { ChecklistsService } from './checklists.service';
 export declare class ChecklistsController {
     private readonly checklists;
     constructor(checklists: ChecklistsService);
-    list(phaseId: string | undefined, specialtyId: string | undefined, eloRoleId: string | undefined, user: RbacUser): Promise<{
+    list(phaseId: string | undefined, specialtyId: string | undefined, eloRoleId: string | undefined, localityId: string | undefined, user: RbacUser): Promise<{
         items: {
             id: string;
             title: string;

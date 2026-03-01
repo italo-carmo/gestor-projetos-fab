@@ -2,6 +2,8 @@ import { PrismaService } from '../prisma/prisma.service';
 export declare class UsersService {
     private readonly prisma;
     constructor(prisma: PrismaService);
+    private toRoleResponse;
+    private mapUserRoles;
     private readonly authInclude;
     findByEmail(email: string): import("@prisma/client").Prisma.Prisma__UserClient<({
         roles: ({
@@ -53,6 +55,8 @@ export declare class UsersService {
         loginFailedCount: number;
         lockUntil: Date | null;
         localityId: string | null;
+        commissionFunction: string | null;
+        commissionPhone: string | null;
     }) | null, null, import("@prisma/client/runtime/client").DefaultArgs, import("@prisma/client").Prisma.PrismaClientOptions>;
     findByLdapUid(ldapUid: string): import("@prisma/client").Prisma.Prisma__UserClient<({
         roles: ({
@@ -104,6 +108,8 @@ export declare class UsersService {
         loginFailedCount: number;
         lockUntil: Date | null;
         localityId: string | null;
+        commissionFunction: string | null;
+        commissionPhone: string | null;
     }) | null, null, import("@prisma/client/runtime/client").DefaultArgs, import("@prisma/client").Prisma.PrismaClientOptions>;
     findForAuth(identifier: string): import("@prisma/client").Prisma.Prisma__UserClient<({
         roles: ({
@@ -155,6 +161,8 @@ export declare class UsersService {
         loginFailedCount: number;
         lockUntil: Date | null;
         localityId: string | null;
+        commissionFunction: string | null;
+        commissionPhone: string | null;
     }) | null, null, import("@prisma/client/runtime/client").DefaultArgs, import("@prisma/client").Prisma.PrismaClientOptions>;
     findById(id: string): import("@prisma/client").Prisma.Prisma__UserClient<({
         roles: ({
@@ -206,8 +214,10 @@ export declare class UsersService {
         loginFailedCount: number;
         lockUntil: Date | null;
         localityId: string | null;
+        commissionFunction: string | null;
+        commissionPhone: string | null;
     }) | null, null, import("@prisma/client/runtime/client").DefaultArgs, import("@prisma/client").Prisma.PrismaClientOptions>;
-    list(): import("@prisma/client").Prisma.PrismaPromise<{
+    list(): Promise<({
         id: string;
         specialtyId: string | null;
         eloRoleId: string | null;
@@ -226,13 +236,21 @@ export declare class UsersService {
         email: string;
         ldapUid: string | null;
         localityId: string | null;
-    }[]>;
+    } & {
+        roles: {
+            role: {
+                id: string;
+                name: string;
+            };
+        }[];
+    })[]>;
     update(id: string, payload: {
         eloRoleId?: string | null;
         localityId?: string | null;
         specialtyId?: string | null;
         roleId?: string | null;
-    }): Promise<{
+        roleIds?: string[];
+    }): Promise<({
         id: string;
         specialtyId: string | null;
         eloRoleId: string | null;
@@ -251,9 +269,18 @@ export declare class UsersService {
         email: string;
         ldapUid: string | null;
         localityId: string | null;
-    } | null>;
+    } & {
+        roles: {
+            role: {
+                id: string;
+                name: string;
+            };
+        }[];
+    }) | null>;
     removeRole(userId: string, roleId: string): Promise<{
         ok: boolean;
         removed: number;
+        userRemoved: boolean;
+        userDeactivated: boolean;
     }>;
 }

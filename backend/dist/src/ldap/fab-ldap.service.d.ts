@@ -11,6 +11,7 @@ export declare class FabLdapService {
     constructor(config: ConfigService);
     authenticate(uid: string, password: string): Promise<FabLdapProfile>;
     lookupByUid(uid: string): Promise<FabLdapProfile | null>;
+    lookupByEmail(email: string): Promise<FabLdapProfile | null>;
     private createClient;
     private bindForLookup;
     private searchByUid;

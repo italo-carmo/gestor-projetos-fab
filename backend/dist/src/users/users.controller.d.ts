@@ -4,7 +4,7 @@ export declare class UsersController {
     private readonly users;
     constructor(users: UsersService);
     list(): Promise<{
-        items: {
+        items: ({
             id: string;
             specialtyId: string | null;
             eloRoleId: string | null;
@@ -23,9 +23,16 @@ export declare class UsersController {
             email: string;
             ldapUid: string | null;
             localityId: string | null;
-        }[];
+        } & {
+            roles: {
+                role: {
+                    id: string;
+                    name: string;
+                };
+            }[];
+        })[];
     }>;
-    update(id: string, dto: UpdateUserDto): Promise<{
+    update(id: string, dto: UpdateUserDto): Promise<({
         id: string;
         specialtyId: string | null;
         eloRoleId: string | null;
@@ -44,9 +51,18 @@ export declare class UsersController {
         email: string;
         ldapUid: string | null;
         localityId: string | null;
-    } | null>;
+    } & {
+        roles: {
+            role: {
+                id: string;
+                name: string;
+            };
+        }[];
+    }) | null>;
     removeRole(id: string, roleId: string): Promise<{
         ok: boolean;
         removed: number;
+        userRemoved: boolean;
+        userDeactivated: boolean;
     }>;
 }

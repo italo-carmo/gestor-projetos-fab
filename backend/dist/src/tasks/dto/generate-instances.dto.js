@@ -13,7 +13,6 @@ exports.GenerateInstancesDto = void 0;
 const class_validator_1 = require("class-validator");
 class GenerateInstancesDto {
     localities;
-    reportRequired;
     priority;
     meetingId;
     assignedToId;
@@ -24,11 +23,6 @@ __decorate([
     (0, class_validator_1.IsArray)(),
     __metadata("design:type", Array)
 ], GenerateInstancesDto.prototype, "localities", void 0);
-__decorate([
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsBoolean)(),
-    __metadata("design:type", Boolean)
-], GenerateInstancesDto.prototype, "reportRequired", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),

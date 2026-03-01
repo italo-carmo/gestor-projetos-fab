@@ -4,6 +4,7 @@ export declare class UpdateMeetingDto {
     status?: string;
     meetingType?: string;
     meetingLink?: string | null;
+    location?: string | null;
     agenda?: string | null;
     localityId?: string | null;
     participantIds?: string[];

@@ -29,17 +29,17 @@ let DashboardsController = class DashboardsController {
     progress(id, user) {
         return this.tasks.getLocalityProgress(id, user);
     }
-    national(user) {
+    national(localityId, user) {
         if (!(0, role_access_1.hasNationalManagementScope)(user)) {
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         }
-        return this.tasks.getDashboardNational(user);
+        return this.tasks.getDashboardNational(user, localityId);
     }
-    recruits(user) {
-        return this.tasks.getDashboardRecruits(user);
+    recruits(localityId, user) {
+        return this.tasks.getDashboardRecruits(user, localityId);
     }
-    executive(from, to, phaseId, threshold, command, user) {
-        return this.tasks.getDashboardExecutive({ from, to, phaseId, threshold, command }, user);
+    executive(from, to, phaseId, threshold, command, localityId, user) {
+        return this.tasks.getDashboardExecutive({ from, to, phaseId, threshold, command, localityId }, user);
     }
 };
 exports.DashboardsController = DashboardsController;
@@ -55,17 +55,19 @@ __decorate([
 __decorate([
     (0, common_1.Get)('dashboard/national'),
     (0, require_permission_decorator_1.RequirePermission)('dashboard', 'view'),
-    __param(0, (0, current_user_decorator_1.CurrentUser)()),
+    __param(0, (0, common_1.Query)('localityId')),
+    __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
+    __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", void 0)
 ], DashboardsController.prototype, "national", null);
 __decorate([
     (0, common_1.Get)('dashboard/recruits'),
     (0, require_permission_decorator_1.RequirePermission)('dashboard', 'view'),
-    __param(0, (0, current_user_decorator_1.CurrentUser)()),
+    __param(0, (0, common_1.Query)('localityId')),
+    __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
+    __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", void 0)
 ], DashboardsController.prototype, "recruits", null);
 __decorate([
@@ -76,9 +78,10 @@ __decorate([
     __param(2, (0, common_1.Query)('phaseId')),
     __param(3, (0, common_1.Query)('threshold')),
     __param(4, (0, common_1.Query)('command')),
-    __param(5, (0, current_user_decorator_1.CurrentUser)()),
+    __param(5, (0, common_1.Query)('localityId')),
+    __param(6, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, Object, Object, Object, Object, Object]),
+    __metadata("design:paramtypes", [Object, Object, Object, Object, Object, Object, Object]),
     __metadata("design:returntype", void 0)
 ], DashboardsController.prototype, "executive", null);
 exports.DashboardsController = DashboardsController = __decorate([

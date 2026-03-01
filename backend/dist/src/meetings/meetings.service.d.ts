@@ -65,6 +65,8 @@ export declare class MeetingsService {
                 localityId: string;
                 status: import("@prisma/client").$Enums.TaskStatus;
                 reportRequired: boolean;
+                groupKey: string | null;
+                titleOverride: string | null;
                 dueDate: Date;
                 priority: import("@prisma/client").$Enums.TaskPriority;
                 progressPercent: number;
@@ -91,6 +93,7 @@ export declare class MeetingsService {
             localityId: string | null;
             status: import("@prisma/client").$Enums.MeetingStatus;
             meetingType: import("@prisma/client").$Enums.MeetingType;
+            location: string | null;
             meetingLink: string | null;
             agenda: string | null;
             participantsJson: Prisma.JsonValue | null;
@@ -105,6 +108,7 @@ export declare class MeetingsService {
         status: string;
         meetingType?: string;
         meetingLink?: string | null;
+        location?: string | null;
         agenda?: string | null;
         localityId?: string | null;
         participantIds?: string[];
@@ -142,6 +146,7 @@ export declare class MeetingsService {
         localityId: string | null;
         status: import("@prisma/client").$Enums.MeetingStatus;
         meetingType: import("@prisma/client").$Enums.MeetingType;
+        location: string | null;
         meetingLink: string | null;
         agenda: string | null;
         participantsJson: Prisma.JsonValue | null;
@@ -152,6 +157,7 @@ export declare class MeetingsService {
         status?: string;
         meetingType?: string;
         meetingLink?: string | null;
+        location?: string | null;
         agenda?: string | null;
         localityId?: string | null;
         participantIds?: string[];
@@ -189,6 +195,7 @@ export declare class MeetingsService {
         localityId: string | null;
         status: import("@prisma/client").$Enums.MeetingStatus;
         meetingType: import("@prisma/client").$Enums.MeetingType;
+        location: string | null;
         meetingLink: string | null;
         agenda: string | null;
         participantsJson: Prisma.JsonValue | null;
@@ -224,6 +231,8 @@ export declare class MeetingsService {
             localityId: string;
             status: import("@prisma/client").$Enums.TaskStatus;
             reportRequired: boolean;
+            groupKey: string | null;
+            titleOverride: string | null;
             dueDate: Date;
             priority: import("@prisma/client").$Enums.TaskPriority;
             progressPercent: number;

@@ -27,8 +27,8 @@ let ChecklistsController = class ChecklistsController {
     constructor(checklists) {
         this.checklists = checklists;
     }
-    list(phaseId, specialtyId, eloRoleId, user) {
-        return this.checklists.list({ phaseId, specialtyId, eloRoleId }, user);
+    list(phaseId, specialtyId, eloRoleId, localityId, user) {
+        return this.checklists.list({ phaseId, specialtyId, eloRoleId, localityId }, user);
     }
     create(dto, user) {
         return this.checklists.create(dto, user);
@@ -44,9 +44,10 @@ __decorate([
     __param(0, (0, common_1.Query)('phaseId')),
     __param(1, (0, common_1.Query)('specialtyId')),
     __param(2, (0, common_1.Query)('eloRoleId')),
-    __param(3, (0, current_user_decorator_1.CurrentUser)()),
+    __param(3, (0, common_1.Query)('localityId')),
+    __param(4, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, Object, Object, Object]),
+    __metadata("design:paramtypes", [Object, Object, Object, Object, Object]),
     __metadata("design:returntype", void 0)
 ], ChecklistsController.prototype, "list", null);
 __decorate([

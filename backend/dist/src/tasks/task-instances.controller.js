@@ -22,9 +22,12 @@ const task_assign_dto_1 = require("./dto/task-assign.dto");
 const task_comment_dto_1 = require("./dto/task-comment.dto");
 const task_elo_role_dto_1 = require("./dto/task-elo-role.dto");
 const task_meeting_dto_1 = require("./dto/task-meeting.dto");
+const task_localities_dto_1 = require("./dto/task-localities.dto");
 const task_progress_dto_1 = require("./dto/task-progress.dto");
 const task_specialty_dto_1 = require("./dto/task-specialty.dto");
 const task_status_dto_1 = require("./dto/task-status.dto");
+const create_task_instance_dto_1 = require("./dto/create-task-instance.dto");
+const task_title_dto_1 = require("./dto/task-title.dto");
 const tasks_service_1 = require("./tasks.service");
 let TaskInstancesController = class TaskInstancesController {
     tasks;
@@ -50,6 +53,30 @@ let TaskInstancesController = class TaskInstancesController {
             pageSize,
         }, user);
     }
+    create(dto, user) {
+        return this.tasks.createTaskInstancesManual({
+            title: dto.title,
+            description: dto.description ?? null,
+            phaseId: dto.phaseId,
+            dueDate: dto.dueDate,
+            priority: dto.priority,
+            localityIds: dto.localityIds ?? [],
+            assignedToId: dto.assignedToId ?? null,
+            assigneeIds: dto.assigneeIds ?? [],
+        }, user);
+    }
+    batchAssign(body, user) {
+        return this.tasks.batchAssign(body.ids ?? [], body.assignedToId ?? null, body.assigneeIds ?? [], user);
+    }
+    batchStatus(body, user) {
+        return this.tasks.batchStatus(body.ids ?? [], body.status, user);
+    }
+    batchProgress(body, user) {
+        return this.tasks.batchProgress(body.ids ?? [], Number(body.progressPercent), user);
+    }
+    batchDelete(body, user) {
+        return this.tasks.batchDeleteTaskInstances(body.ids ?? [], user);
+    }
     comments(id, user) {
         return this.tasks.listComments(id, user);
     }
@@ -65,8 +92,14 @@ let TaskInstancesController = class TaskInstancesController {
     updateProgress(id, dto, user) {
         return this.tasks.updateProgress(id, dto.progressPercent, user);
     }
+    updateTitle(id, dto, user) {
+        return this.tasks.updateTaskTitle(id, dto.title, user);
+    }
     assign(id, dto, user) {
         return this.tasks.assignTask(id, dto, user);
+    }
+    updateLocalities(id, dto, user) {
+        return this.tasks.updateTaskLocalities(id, dto.localityIds ?? [], dto.sourceTaskIds ?? [], user);
     }
     updateMeeting(id, dto, user) {
         return this.tasks.updateTaskMeeting(id, dto.meetingId ?? null, user);
@@ -76,12 +109,6 @@ let TaskInstancesController = class TaskInstancesController {
     }
     updateSpecialty(id, dto, user) {
         return this.tasks.updateTaskSpecialty(id, dto.specialtyId ?? null, user);
-    }
-    batchAssign(body, user) {
-        return this.tasks.batchAssign(body.ids ?? [], body.assignedToId ?? null, body.assigneeIds ?? [], user);
-    }
-    batchStatus(body, user) {
-        return this.tasks.batchStatus(body.ids ?? [], body.status, user);
     }
     remove(id, user) {
         return this.tasks.deleteTaskInstance(id, user);
@@ -126,6 +153,51 @@ __decorate([
     __metadata("design:paramtypes", [Object, Object, Object, Object, Object, Object, Object, Object, Object, Object, Object, Object, Object]),
     __metadata("design:returntype", void 0)
 ], TaskInstancesController.prototype, "list", null);
+__decorate([
+    (0, common_1.Post)(),
+    (0, require_permission_decorator_1.RequirePermission)('task_instances', 'update'),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [create_task_instance_dto_1.CreateTaskInstanceDto, Object]),
+    __metadata("design:returntype", void 0)
+], TaskInstancesController.prototype, "create", null);
+__decorate([
+    (0, common_1.Put)('batch/assign'),
+    (0, require_permission_decorator_1.RequirePermission)('task_instances', 'assign'),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", void 0)
+], TaskInstancesController.prototype, "batchAssign", null);
+__decorate([
+    (0, common_1.Put)('batch/status'),
+    (0, require_permission_decorator_1.RequirePermission)('task_instances', 'update'),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", void 0)
+], TaskInstancesController.prototype, "batchStatus", null);
+__decorate([
+    (0, common_1.Put)('batch/progress'),
+    (0, require_permission_decorator_1.RequirePermission)('task_instances', 'update'),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", void 0)
+], TaskInstancesController.prototype, "batchProgress", null);
+__decorate([
+    (0, common_1.Post)('batch/delete'),
+    (0, require_permission_decorator_1.RequirePermission)('task_instances', 'update'),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", void 0)
+], TaskInstancesController.prototype, "batchDelete", null);
 __decorate([
     (0, common_1.Get)(':id/comments'),
     (0, require_permission_decorator_1.RequirePermission)('task_instances', 'view'),
@@ -175,6 +247,16 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], TaskInstancesController.prototype, "updateProgress", null);
 __decorate([
+    (0, common_1.Put)(':id/title'),
+    (0, require_permission_decorator_1.RequirePermission)('task_instances', 'update'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)()),
+    __param(2, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, task_title_dto_1.TaskTitleDto, Object]),
+    __metadata("design:returntype", void 0)
+], TaskInstancesController.prototype, "updateTitle", null);
+__decorate([
     (0, common_1.Put)(':id/assign'),
     (0, require_permission_decorator_1.RequirePermission)('task_instances', 'assign'),
     __param(0, (0, common_1.Param)('id')),
@@ -184,6 +266,16 @@ __decorate([
     __metadata("design:paramtypes", [String, task_assign_dto_1.TaskAssignDto, Object]),
     __metadata("design:returntype", void 0)
 ], TaskInstancesController.prototype, "assign", null);
+__decorate([
+    (0, common_1.Put)(':id/localities'),
+    (0, require_permission_decorator_1.RequirePermission)('task_instances', 'update'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)()),
+    __param(2, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, task_localities_dto_1.TaskLocalitiesDto, Object]),
+    __metadata("design:returntype", void 0)
+], TaskInstancesController.prototype, "updateLocalities", null);
 __decorate([
     (0, common_1.Put)(':id/meeting'),
     (0, require_permission_decorator_1.RequirePermission)('task_instances', 'update'),
@@ -215,24 +307,6 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], TaskInstancesController.prototype, "updateSpecialty", null);
 __decorate([
-    (0, common_1.Put)('batch/assign'),
-    (0, require_permission_decorator_1.RequirePermission)('task_instances', 'assign'),
-    __param(0, (0, common_1.Body)()),
-    __param(1, (0, current_user_decorator_1.CurrentUser)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, Object]),
-    __metadata("design:returntype", void 0)
-], TaskInstancesController.prototype, "batchAssign", null);
-__decorate([
-    (0, common_1.Put)('batch/status'),
-    (0, require_permission_decorator_1.RequirePermission)('task_instances', 'update'),
-    __param(0, (0, common_1.Body)()),
-    __param(1, (0, current_user_decorator_1.CurrentUser)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, Object]),
-    __metadata("design:returntype", void 0)
-], TaskInstancesController.prototype, "batchStatus", null);
-__decorate([
     (0, common_1.Delete)(':id'),
     (0, require_permission_decorator_1.RequirePermission)('task_instances', 'update'),
     __param(0, (0, common_1.Param)('id')),
@@ -254,7 +328,7 @@ __decorate([
 ], TaskInstancesController.prototype, "gantt", null);
 __decorate([
     (0, common_1.Get)('calendar'),
-    (0, require_permission_decorator_1.RequirePermission)('calendar', 'view'),
+    (0, require_permission_decorator_1.RequirePermission)('task_instances', 'view'),
     __param(0, (0, common_1.Query)('year')),
     __param(1, (0, common_1.Query)('localityId')),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),
