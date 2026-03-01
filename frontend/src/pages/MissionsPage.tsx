@@ -393,58 +393,75 @@ export function MissionsPage() {
         </Button>
       </Stack>
 
-      {statisticsQuery.data && (
-        <Grid container spacing={2} sx={{ mb: 2 }}>
-          <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Typography variant="body2" color="text.secondary" gutterBottom>
-                  Total de Missões
-                </Typography>
-                <Typography variant="h4" fontWeight={700} color="primary.main">
-                  {statisticsQuery.data.totalMissions}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Typography variant="body2" color="text.secondary" gutterBottom>
-                  Total de Participantes
-                </Typography>
-                <Typography variant="h4" fontWeight={700} color="primary.main">
-                  {statisticsQuery.data.totalParticipants}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Typography variant="body2" color="text.secondary" gutterBottom>
-                  Média de Participantes
-                </Typography>
-                <Typography variant="h4" fontWeight={700} color="primary.main">
-                  {statisticsQuery.data.averageParticipantsPerMission.toFixed(1)}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Typography variant="body2" color="text.secondary" gutterBottom>
-                  Missões sem Participantes
-                </Typography>
-                <Typography variant="h4" fontWeight={700} color={statisticsQuery.data.missionsWithoutParticipants > 0 ? 'warning.main' : 'success.main'}>
-                  {statisticsQuery.data.missionsWithoutParticipants}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-      )}
+      <Card sx={{ mb: 2 }}>
+        <CardContent>
+          <Typography variant="subtitle1" fontWeight={700} mb={2}>
+            Estatísticas de Missões
+          </Typography>
+          {statisticsQuery.isLoading && (
+            <Box sx={{ py: 2 }}>
+              <LinearProgress />
+            </Box>
+          )}
+          {statisticsQuery.isError && (
+            <Typography variant="body2" color="error" sx={{ py: 1 }}>
+              Erro ao carregar estatísticas.
+            </Typography>
+          )}
+          {statisticsQuery.data && (
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6} md={3}>
+                <Card variant="outlined">
+                  <CardContent>
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                      Total de Missões
+                    </Typography>
+                    <Typography variant="h4" fontWeight={700} color="primary.main">
+                      {statisticsQuery.data.totalMissions}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Card variant="outlined">
+                  <CardContent>
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                      Total de Participantes
+                    </Typography>
+                    <Typography variant="h4" fontWeight={700} color="primary.main">
+                      {statisticsQuery.data.totalParticipants}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Card variant="outlined">
+                  <CardContent>
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                      Média de Participantes
+                    </Typography>
+                    <Typography variant="h4" fontWeight={700} color="primary.main">
+                      {statisticsQuery.data.averageParticipantsPerMission.toFixed(1)}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Card variant="outlined">
+                  <CardContent>
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                      Missões sem Participantes
+                    </Typography>
+                    <Typography variant="h4" fontWeight={700} color={statisticsQuery.data.missionsWithoutParticipants > 0 ? 'warning.main' : 'success.main'}>
+                      {statisticsQuery.data.missionsWithoutParticipants}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+            </Grid>
+          )}
+        </CardContent>
+      </Card>
 
       {statisticsQuery.data && (statisticsQuery.data.missionsByUser.length > 0 || statisticsQuery.data.participantsByMission.length > 0) && (
         <Grid container spacing={2} sx={{ mb: 2 }}>
