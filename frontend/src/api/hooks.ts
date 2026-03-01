@@ -51,6 +51,14 @@ export function useMissions(filters: Record<string, any>) {
   });
 }
 
+export function useMissionStatistics() {
+  return useQuery({
+    queryKey: ["missions", "statistics"],
+    queryFn: async () => (await api.get("/missions/statistics")).data,
+    staleTime: 30_000,
+  });
+}
+
 export function useMission(id: string, enabled = true) {
   return useQuery({
     queryKey: qk.mission(id || ""),
