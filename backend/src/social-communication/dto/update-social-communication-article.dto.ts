@@ -1,4 +1,4 @@
-import { IsDateString, IsOptional, IsString, IsUrl } from 'class-validator';
+import { IsArray, IsDateString, IsOptional, IsString, IsUrl } from 'class-validator';
 
 export class UpdateSocialCommunicationArticleDto {
   @IsOptional()
@@ -20,4 +20,9 @@ export class UpdateSocialCommunicationArticleDto {
   @IsOptional()
   @IsDateString()
   publishedAt?: string | null;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  tags?: string[];
 }

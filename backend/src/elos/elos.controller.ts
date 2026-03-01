@@ -10,6 +10,7 @@ import { UpdateEloDto } from './dto/update-elo.dto';
 import { CreateOrgChartAssignmentDto } from './dto/create-org-chart-assignment.dto';
 import { UpdateOrgChartAssignmentDto } from './dto/update-org-chart-assignment.dto';
 import { ManageOrgChartCommissionMemberDto } from './dto/manage-org-chart-commission-member.dto';
+import { ReorderOrgChartCommissionMembersDto } from './dto/reorder-org-chart-commission-members.dto';
 import { UpdateOrgChartCommissionMemberDto } from './dto/update-org-chart-commission-member.dto';
 
 @Controller('elos')
@@ -108,6 +109,15 @@ export class OrgChartController {
     @CurrentUser() user: RbacUser,
   ) {
     return this.elos.removeCommissionMember({ userId }, user);
+  }
+
+  @Put('commission-members/reorder')
+  @RequirePermission('org_chart', 'view')
+  reorderCommissionMembers(
+    @Body() dto: ReorderOrgChartCommissionMembersDto,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.elos.reorderCommissionMembers(dto, user);
   }
 
   @Put('commission-members/:userId')

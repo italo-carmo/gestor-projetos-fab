@@ -1,10 +1,11 @@
-import { Box, Button, Card, CardContent, Drawer, Stack, TextField, Typography } from '@mui/material';
-import { useState } from 'react';
+import { Box, Button, Card, CardContent, Chip, Drawer, Stack, TextField, Typography } from '@mui/material';
+import { useEffect, useState } from 'react';
 import {
   useAddOrgChartCommissionMember,
   useMe,
   useOrgChartCommissionCandidates,
   useOrgChartCommissionMembers,
+  useReorderOrgChartCommissionMembers,
   useRemoveOrgChartCommissionMember,
   useUpdateOrgChartCommissionMember,
 } from '../api/hooks';
@@ -24,17 +25,21 @@ export function OrgChartPage() {
   const addCommissionMember = useAddOrgChartCommissionMember();
   const removeCommissionMember = useRemoveOrgChartCommissionMember();
   const updateCommissionMember = useUpdateOrgChartCommissionMember();
+  const reorderCommissionMembers = useReorderOrgChartCommissionMembers();
 
   const [commissionDrawerOpen, setCommissionDrawerOpen] = useState(false);
   const [commissionEditOpen, setCommissionEditOpen] = useState(false);
   const [commissionSearch, setCommissionSearch] = useState('');
   const [commissionCandidateSearch, setCommissionCandidateSearch] = useState('');
   const [commissionDeleteTarget, setCommissionDeleteTarget] = useState<any | null>(null);
+  const [draggingMemberId, setDraggingMemberId] = useState('');
+  const [orderedMembers, setOrderedMembers] = useState<any[]>([]);
   const [commissionEditForm, setCommissionEditForm] = useState({
     userId: '',
     warName: '',
     functionText: '',
     phone: '',
+    seniority: '',
   });
 
   const commissionCandidatesQuery = useOrgChartCommissionCandidates(
@@ -48,13 +53,18 @@ export function OrgChartPage() {
   }
 
   const commissionMembersRaw = (commissionMembersQuery.data?.items ?? []) as any[];
+  useEffect(() => {
+    setOrderedMembers(commissionMembersRaw);
+  }, [commissionMembersRaw]);
+
+  const canReorder = canManage && !commissionSearch.trim();
   const commissionMembers = commissionSearch
-    ? commissionMembersRaw.filter((item: any) =>
+    ? orderedMembers.filter((item: any) =>
         [item.warName ?? item.name, item.email, item.ldapUid]
           .map((value: unknown) => String(value ?? '').toLowerCase())
           .some((value) => value.includes(commissionSearch.toLowerCase())),
       )
-    : commissionMembersRaw;
+    : orderedMembers;
 
   const handleAddCommissionMember = async (userId: string) => {
     if (!userId) return;
@@ -95,6 +105,10 @@ export function OrgChartPage() {
       warName: String(member.warName ?? member.name ?? ''),
       functionText: String(member.functionText ?? ''),
       phone: String(member.phone ?? ''),
+      seniority:
+        member.seniority === null || member.seniority === undefined
+          ? ''
+          : String(member.seniority),
     });
     setCommissionEditOpen(true);
   };
@@ -107,6 +121,9 @@ export function OrgChartPage() {
         payload: {
           functionText: commissionEditForm.functionText.trim() || null,
           phone: commissionEditForm.phone.trim() || null,
+          seniority: commissionEditForm.seniority
+            ? Number(commissionEditForm.seniority)
+            : null,
         },
       });
       toast.push({ message: 'Dados da comissão atualizados.', severity: 'success' });
@@ -115,6 +132,35 @@ export function OrgChartPage() {
       const payload = parseApiError(error);
       toast.push({ message: payload.message ?? 'Erro ao atualizar dados da comissão.', severity: 'error' });
     }
+  };
+
+  const applyReorder = async (nextMembers: any[]) => {
+    try {
+      await reorderCommissionMembers.mutateAsync({
+        userIds: nextMembers.map((item: any) => String(item.id)),
+      });
+      toast.push({ message: 'Ordem de antiguidade atualizada.', severity: 'success' });
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({
+        message: payload.message ?? 'Erro ao salvar nova ordem de antiguidade.',
+        severity: 'error',
+      });
+      void commissionMembersQuery.refetch();
+    }
+  };
+
+  const moveMember = (targetId: string) => {
+    if (!canReorder || !draggingMemberId || draggingMemberId === targetId) return;
+    const fromIndex = orderedMembers.findIndex((item: any) => item.id === draggingMemberId);
+    const toIndex = orderedMembers.findIndex((item: any) => item.id === targetId);
+    if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return;
+    const next = [...orderedMembers];
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, moved);
+    setOrderedMembers(next);
+    setDraggingMemberId('');
+    void applyReorder(next);
   };
 
   return (
@@ -131,6 +177,9 @@ export function OrgChartPage() {
               <Typography variant="body2" color="text.secondary">
                 Nesta tela ficam apenas os integrantes da Comissão CIPAVD.
               </Typography>
+              <Typography variant="caption" color="text.secondary">
+                A ordem de antiguidade é do menor para o maior número.
+              </Typography>
             </Box>
             {canManage && (
               <Button size="small" variant="outlined" onClick={() => setCommissionDrawerOpen(true)}>
@@ -146,6 +195,13 @@ export function OrgChartPage() {
             onChange={(e) => setCommissionSearch(e.target.value)}
             sx={{ mb: 1.5, minWidth: 280 }}
           />
+          {canManage && (
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+              {canReorder
+                ? 'Arraste os cards para reordenar a antiguidade.'
+                : 'Limpe a busca para habilitar o arraste e reordenar a antiguidade.'}
+            </Typography>
+          )}
 
           {commissionMembers.length === 0 ? (
             <Typography variant="body2" color="text.secondary">
@@ -154,7 +210,25 @@ export function OrgChartPage() {
           ) : (
             <Stack spacing={1.2}>
               {commissionMembers.map((member: any) => (
-                <Card key={member.id} variant="outlined">
+                <Card
+                  key={member.id}
+                  variant="outlined"
+                  draggable={canReorder}
+                  onDragStart={() => setDraggingMemberId(String(member.id))}
+                  onDragOver={(e) => {
+                    if (!canReorder) return;
+                    e.preventDefault();
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    moveMember(String(member.id));
+                  }}
+                  onDragEnd={() => setDraggingMemberId('')}
+                  sx={{
+                    cursor: canReorder ? 'grab' : 'default',
+                    opacity: draggingMemberId === String(member.id) ? 0.75 : 1,
+                  }}
+                >
                   <CardContent sx={{ py: 1.4, '&:last-child': { pb: 1.4 } }}>
                     <Stack
                       direction={{ xs: 'column', md: 'row' }}
@@ -164,6 +238,13 @@ export function OrgChartPage() {
                     >
                       <Box>
                         <Typography variant="subtitle2">{member.warName ?? member.name ?? '—'}</Typography>
+                        <Chip
+                          size="small"
+                          label={`Antiguidade ${member.seniority ?? '—'}`}
+                          sx={{ mt: 0.6, mb: 0.4 }}
+                          color="primary"
+                          variant="outlined"
+                        />
                         <Typography variant="body2" color="text.secondary">
                           {member.email ?? 'Sem e-mail'}
                         </Typography>
@@ -236,6 +317,21 @@ export function OrgChartPage() {
               }))
             }
             inputProps={{ maxLength: 15 }}
+          />
+          <TextField
+            size="small"
+            type="number"
+            label="Antiguidade"
+            placeholder="Ex: 1"
+            value={commissionEditForm.seniority}
+            onChange={(e) =>
+              setCommissionEditForm((prev) => ({
+                ...prev,
+                seniority: e.target.value.replace(/\D/g, ''),
+              }))
+            }
+            inputProps={{ min: 1 }}
+            helperText="Ordem no organograma: 1 = mais antigo."
           />
           <Stack direction="row" justifyContent="flex-end" spacing={1}>
             <Button variant="text" onClick={() => setCommissionEditOpen(false)}>

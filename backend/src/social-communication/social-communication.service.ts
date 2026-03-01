@@ -29,14 +29,18 @@ export class SocialCommunicationService {
     private readonly config: ConfigService,
   ) {}
 
-  async list(filters: { q?: string }) {
+  async list(filters: { q?: string; tags?: string[] }) {
     const where: Prisma.SocialCommunicationArticleWhereInput = {};
+    const normalizedTags = this.normalizeTags(filters.tags);
     if (filters.q) {
       where.OR = [
         { title: { contains: filters.q, mode: 'insensitive' } },
         { summary: { contains: filters.q, mode: 'insensitive' } },
         { sourceUrl: { contains: filters.q, mode: 'insensitive' } },
       ];
+    }
+    if (normalizedTags && normalizedTags.length > 0) {
+      where.tags = { hasSome: normalizedTags };
     }
 
     const rows = await this.prisma.socialCommunicationArticle.findMany({
@@ -65,6 +69,7 @@ export class SocialCommunicationService {
       coverImageUrl?: string | null;
       summary?: string | null;
       publishedAt?: string | null;
+      tags?: string[];
     },
     user?: RbacUser,
   ) {
@@ -87,6 +92,7 @@ export class SocialCommunicationService {
         summary: this.normalizeOptionalText(
           payload.summary ?? metadata.summary ?? null,
         ),
+        tags: this.normalizeTags(payload.tags) ?? [],
         publishedAt: this.parseOptionalDate(
           payload.publishedAt ?? metadata.publishedAt ?? null,
           'publishedAt',
@@ -120,6 +126,7 @@ export class SocialCommunicationService {
       coverImageUrl?: string | null;
       summary?: string | null;
       publishedAt?: string | null;
+      tags?: string[];
     },
     user?: RbacUser,
   ) {
@@ -180,6 +187,8 @@ export class SocialCommunicationService {
             existing.publishedAt ??
             null)
           : undefined;
+    const tags =
+      payload.tags !== undefined ? (this.normalizeTags(payload.tags) ?? []) : undefined;
 
     const updated = await this.prisma.socialCommunicationArticle.update({
       where: { id },
@@ -189,6 +198,7 @@ export class SocialCommunicationService {
         coverImageUrl,
         summary,
         publishedAt,
+        tags,
       },
       include: {
         createdBy: { select: { id: true, name: true } },
@@ -848,6 +858,20 @@ export class SocialCommunicationService {
     if (value === undefined) return undefined;
     const normalized = sanitizeText(value);
     return normalized || null;
+  }
+
+  private normalizeTags(values: string[] | null | undefined) {
+    if (values === undefined || values === null) return undefined;
+    const seen = new Set<string>();
+    const normalized: string[] = [];
+    for (const value of values) {
+      const clean = sanitizeText(value ?? '').toLowerCase();
+      if (!clean || seen.has(clean)) continue;
+      seen.add(clean);
+      normalized.push(clean);
+      if (normalized.length >= 30) break;
+    }
+    return normalized;
   }
 
   private normalizeUrl(value: string | null | undefined, field: string) {

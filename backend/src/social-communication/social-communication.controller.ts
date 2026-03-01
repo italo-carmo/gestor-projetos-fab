@@ -14,8 +14,12 @@ export class SocialCommunicationController {
   constructor(private readonly socialCommunication: SocialCommunicationService) {}
 
   @Get()
-  list(@Query('q') q: string | undefined) {
-    return this.socialCommunication.list({ q });
+  list(
+    @Query('q') q: string | undefined,
+    @Query('tag') tag: string | string[] | undefined,
+  ) {
+    const tags = Array.isArray(tag) ? tag : tag ? [tag] : undefined;
+    return this.socialCommunication.list({ q, tags });
   }
 
   @Post('metadata')

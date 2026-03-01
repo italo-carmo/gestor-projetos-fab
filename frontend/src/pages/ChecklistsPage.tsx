@@ -27,7 +27,7 @@ import AddIcon from '@mui/icons-material/Add';
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import RadioButtonUncheckedRoundedIcon from '@mui/icons-material/RadioButtonUncheckedRounded';
 import ScheduleRoundedIcon from '@mui/icons-material/ScheduleRounded';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useChecklists, usePhases, useSpecialties, useEloRoles, useCreateChecklist, useMe } from '../api/hooks';
 import { EmptyState } from '../components/states/EmptyState';
@@ -82,7 +82,14 @@ export function ChecklistsPage() {
   const phaseId = params.get('phaseId') ?? '';
   const specialtyId = params.get('specialtyId') ?? '';
   const eloRoleId = params.get('eloRoleId') ?? '';
-  const itemSourceType = params.get('itemSourceType') ?? '';
+  const itemSourceType = params.get('itemSourceType') ?? 'ACTIVITY';
+
+  useEffect(() => {
+    if (params.get('itemSourceType')) return;
+    const next = new URLSearchParams(params);
+    next.set('itemSourceType', 'ACTIVITY');
+    setParams(next, { replace: true });
+  }, [params, setParams]);
 
   const filters = useMemo(
     () => ({
@@ -111,7 +118,11 @@ export function ChecklistsPage() {
     setParams(next);
   };
 
-  const clearFilters = () => setParams({});
+  const clearFilters = () => {
+    const next = new URLSearchParams();
+    next.set('itemSourceType', 'ACTIVITY');
+    setParams(next);
+  };
 
   const data = checklistsQuery.data ?? { items: [], localities: [] };
   const phases = (phasesQuery.data?.items ?? []) as any[];
@@ -292,10 +303,14 @@ export function ChecklistsPage() {
               size="small"
               label="Tipo de item"
               value={itemSourceType}
-              onChange={(e) => updateParam('itemSourceType', e.target.value)}
+              onChange={(e) => {
+                const next = new URLSearchParams(params);
+                next.set('itemSourceType', e.target.value);
+                setParams(next);
+              }}
               sx={{ minWidth: 170 }}
             >
-              <MenuItem value="">Todos</MenuItem>
+              <MenuItem value="ALL">Todos</MenuItem>
               <MenuItem value="TASK">Somente tarefas</MenuItem>
               <MenuItem value="ACTIVITY">Somente atividades</MenuItem>
             </TextField>
@@ -341,7 +356,7 @@ export function ChecklistsPage() {
 
       {filteredByPhase.map((checklist: any) => {
         const items = checklist.items ?? [];
-        const filteredItems = itemSourceType
+        const filteredItems = itemSourceType && itemSourceType !== 'ALL'
           ? items.filter((item: any) => item.sourceType === itemSourceType)
           : items;
         const statusSummary = filteredItems.reduce(

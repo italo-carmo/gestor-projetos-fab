@@ -357,8 +357,9 @@ export class ElosService {
         ldapUid: true,
         commissionFunction: true,
         commissionPhone: true,
+        commissionSeniority: true,
       },
-      orderBy: [{ name: 'asc' }],
+      orderBy: [{ commissionSeniority: 'asc' }, { name: 'asc' }],
       take: 400,
     });
 
@@ -371,6 +372,7 @@ export class ElosService {
         ldapUid: item.ldapUid,
         functionText: item.commissionFunction ?? null,
         phone: item.commissionPhone ?? null,
+        seniority: item.commissionSeniority ?? null,
       })),
     };
   }
@@ -421,7 +423,7 @@ export class ElosService {
     const commissionRole = await this.getCommissionRoleOrFail();
     const target = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, isActive: true, name: true, email: true },
+      select: { id: true, isActive: true, name: true, email: true, commissionSeniority: true },
     });
     if (!target || !target.isActive) {
       throwError('NOT_FOUND');
@@ -440,6 +442,22 @@ export class ElosService {
       },
       update: {},
     });
+    if (!target.commissionSeniority) {
+      const maxSeniority = await this.prisma.user.aggregate({
+        where: {
+          roles: {
+            some: { roleId: commissionRole.id },
+          },
+        },
+        _max: { commissionSeniority: true },
+      });
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          commissionSeniority: (maxSeniority._max.commissionSeniority ?? 0) + 1,
+        },
+      });
+    }
 
     await this.audit.log({
       userId: user?.id,
@@ -481,6 +499,14 @@ export class ElosService {
     if (!deleted.count) {
       throwError('NOT_FOUND');
     }
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        commissionFunction: null,
+        commissionPhone: null,
+        commissionSeniority: null,
+      },
+    });
 
     await this.audit.log({
       userId: user?.id,
@@ -504,6 +530,7 @@ export class ElosService {
       userId: string;
       functionText?: string | null;
       phone?: string | null;
+      seniority?: number | null;
     },
     user?: RbacUser,
   ) {
@@ -539,6 +566,12 @@ export class ElosService {
           payload.phone === undefined
             ? undefined
             : this.maskCommissionPhone(payload.phone),
+        commissionSeniority:
+          payload.seniority === undefined
+            ? undefined
+            : payload.seniority === null
+              ? null
+              : Math.max(1, Number(payload.seniority)),
       },
       select: {
         id: true,
@@ -546,6 +579,7 @@ export class ElosService {
         email: true,
         commissionFunction: true,
         commissionPhone: true,
+        commissionSeniority: true,
       },
     });
 
@@ -557,6 +591,7 @@ export class ElosService {
       diffJson: {
         functionText: updated.commissionFunction ?? null,
         phone: updated.commissionPhone ?? null,
+        seniority: updated.commissionSeniority ?? null,
       },
     });
 
@@ -569,8 +604,63 @@ export class ElosService {
         email: updated.email,
         functionText: updated.commissionFunction ?? null,
         phone: updated.commissionPhone ?? null,
+        seniority: updated.commissionSeniority ?? null,
       },
     };
+  }
+
+  async reorderCommissionMembers(
+    payload: { userIds: string[] },
+    user?: RbacUser,
+  ) {
+    this.assertCanManageOrgChart(user);
+    const commissionRole = await this.getCommissionRoleOrFail();
+    const normalizedIds = Array.from(
+      new Set(
+        (payload.userIds ?? [])
+          .map((id) => String(id ?? '').trim())
+          .filter(Boolean),
+      ),
+    );
+    if (!normalizedIds.length) {
+      throwError('VALIDATION_ERROR', { reason: 'ORDER_REQUIRED' });
+    }
+
+    const currentMembers = await this.prisma.user.findMany({
+      where: {
+        isActive: true,
+        roles: { some: { roleId: commissionRole.id } },
+      },
+      select: { id: true },
+      orderBy: [{ name: 'asc' }],
+    });
+    if (normalizedIds.length !== currentMembers.length) {
+      throwError('VALIDATION_ERROR', { reason: 'ORDER_INCOMPLETE' });
+    }
+
+    const currentSet = new Set(currentMembers.map((item) => item.id));
+    const hasUnknown = normalizedIds.some((id) => !currentSet.has(id));
+    if (hasUnknown) {
+      throwError('VALIDATION_ERROR', { reason: 'ORDER_HAS_INVALID_MEMBER' });
+    }
+
+    await this.prisma.$transaction(
+      normalizedIds.map((id, index) =>
+        this.prisma.user.update({
+          where: { id },
+          data: { commissionSeniority: index + 1 },
+        }),
+      ),
+    );
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'org_chart',
+      action: 'commission_member_reorder',
+      diffJson: { userIds: normalizedIds },
+    });
+
+    return { ok: true };
   }
 
   async createOrgChartAssignment(

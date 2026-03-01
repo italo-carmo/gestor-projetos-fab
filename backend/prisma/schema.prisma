@@ -23,6 +23,7 @@ model User {
   eloRoleId        String?        // Responsável por este elo (ex: Psicologia a nível Brasil)
   commissionFunction String?
   commissionPhone    String?
+  commissionSeniority Int?
   flagsJson        Json?
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
@@ -692,6 +693,7 @@ model SocialCommunicationArticle {
   title         String
   coverImageUrl String?
   summary       String?
+  tags          String[]  @default([])
   publishedAt   DateTime?
   createdById   String?
   createdAt     DateTime  @default(now())

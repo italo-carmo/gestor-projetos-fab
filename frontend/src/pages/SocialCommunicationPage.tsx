@@ -1,4 +1,5 @@
 import {
+  Autocomplete,
   Box,
   Button,
   Card,
@@ -13,6 +14,8 @@ import {
   IconButton,
   Stack,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from "@mui/material";
 import AutoAwesomeRoundedIcon from "@mui/icons-material/AutoAwesomeRounded";
@@ -21,6 +24,8 @@ import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import LanguageRoundedIcon from "@mui/icons-material/LanguageRounded";
 import NewspaperRoundedIcon from "@mui/icons-material/NewspaperRounded";
+import ViewListRoundedIcon from "@mui/icons-material/ViewListRounded";
+import ViewModuleRoundedIcon from "@mui/icons-material/ViewModuleRounded";
 import { useEffect, useMemo, useState } from "react";
 import { parseApiError } from "../app/apiErrors";
 import { api } from "../api/client";
@@ -53,6 +58,7 @@ type SocialCommunicationArticle = {
   summary?: string | null;
   publishedAt?: string | null;
   contentProxyPath?: string | null;
+  tags?: string[];
   createdAt: string;
   updatedAt: string;
   createdBy?: { id: string; name: string } | null;
@@ -90,6 +96,19 @@ function toApiUrl(path: string) {
   return `${normalizedBase}${normalizedPath}`;
 }
 
+function normalizeTags(values: string[]) {
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+  for (const value of values) {
+    const clean = String(value ?? "").trim().toLowerCase();
+    if (!clean || seen.has(clean)) continue;
+    seen.add(clean);
+    normalized.push(clean);
+    if (normalized.length >= 30) break;
+  }
+  return normalized;
+}
+
 export function SocialCommunicationPage() {
   const toast = useToast();
   const { data: me } = useMe();
@@ -101,6 +120,8 @@ export function SocialCommunicationPage() {
   ]);
 
   const [search, setSearch] = useState("");
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [viewMode, setViewMode] = useState<"cards" | "list">("cards");
   const filters = useMemo(() => ({ q: search.trim() || undefined }), [search]);
 
   const query = useSocialCommunication(filters);
@@ -109,15 +130,11 @@ export function SocialCommunicationPage() {
   const deleteArticle = useDeleteSocialCommunicationArticle();
   const resolveMetadata = useResolveSocialCommunicationMetadata();
 
-  const [previewing, setPreviewing] =
-    useState<SocialCommunicationArticle | null>(null);
+  const [previewing, setPreviewing] = useState<SocialCommunicationArticle | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
-  const [editing, setEditing] = useState<SocialCommunicationArticle | null>(
-    null,
-  );
-  const [deleteTarget, setDeleteTarget] =
-    useState<SocialCommunicationArticle | null>(null);
+  const [editing, setEditing] = useState<SocialCommunicationArticle | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<SocialCommunicationArticle | null>(null);
   const [resolvedUrl, setResolvedUrl] = useState("");
   const [form, setForm] = useState({
     url: "",
@@ -125,6 +142,7 @@ export function SocialCommunicationPage() {
     coverImageUrl: "",
     summary: "",
     publishedAt: "",
+    tags: [] as string[],
   });
 
   useEffect(() => {
@@ -144,6 +162,7 @@ export function SocialCommunicationPage() {
       coverImageUrl: "",
       summary: "",
       publishedAt: "",
+      tags: [],
     });
     setEditorOpen(true);
   };
@@ -157,6 +176,7 @@ export function SocialCommunicationPage() {
       coverImageUrl: item.coverImageUrl ?? "",
       summary: item.summary ?? "",
       publishedAt: toInputDate(item.publishedAt),
+      tags: normalizeTags(item.tags ?? []),
     });
     setEditorOpen(true);
   };
@@ -173,8 +193,7 @@ export function SocialCommunicationPage() {
         ...prev,
         url: metadata.url ?? prev.url,
         title: prev.title.trim() || metadata.title || "",
-        coverImageUrl:
-          prev.coverImageUrl.trim() || metadata.coverImageUrl || "",
+        coverImageUrl: prev.coverImageUrl.trim() || metadata.coverImageUrl || "",
         summary: prev.summary.trim() || metadata.summary || "",
         publishedAt: prev.publishedAt || toInputDate(metadata.publishedAt),
       }));
@@ -194,9 +213,8 @@ export function SocialCommunicationPage() {
         title: form.title.trim() || undefined,
         coverImageUrl: form.coverImageUrl.trim() || null,
         summary: form.summary.trim() || null,
-        publishedAt: form.publishedAt
-          ? new Date(form.publishedAt).toISOString()
-          : null,
+        publishedAt: form.publishedAt ? new Date(form.publishedAt).toISOString() : null,
+        tags: normalizeTags(form.tags),
       };
 
       if (editing) {
@@ -236,11 +254,34 @@ export function SocialCommunicationPage() {
   };
 
   if (query.isLoading) return <SkeletonState />;
-  if (query.isError) {
-    return <ErrorState error={query.error} onRetry={() => query.refetch()} />;
-  }
+  if (query.isError) return <ErrorState error={query.error} onRetry={() => query.refetch()} />;
 
   const items = (query.data?.items ?? []) as SocialCommunicationArticle[];
+  const allTags = Array.from(
+    new Set(items.flatMap((item) => normalizeTags(item.tags ?? []))),
+  ).sort((a, b) => a.localeCompare(b, "pt-BR"));
+
+  const activeTags = normalizeTags(selectedTags);
+  const visibleItems = activeTags.length
+    ? items.filter((item) => {
+        const itemTags = normalizeTags(item.tags ?? []);
+        return activeTags.some((tag) => itemTags.includes(tag));
+      })
+    : items;
+
+  const renderTags = (tags: string[], limit = 4) => {
+    if (!tags.length) return null;
+    const visible = tags.slice(0, limit);
+    const remaining = tags.length - visible.length;
+    return (
+      <Stack direction="row" spacing={0.8} alignItems="center" flexWrap="wrap" useFlexGap>
+        {visible.map((tag) => (
+          <Chip key={tag} label={`#${tag}`} size="small" variant="outlined" />
+        ))}
+        {remaining > 0 && <Chip label={`+${remaining}`} size="small" />}
+      </Stack>
+    );
+  };
 
   return (
     <Box>
@@ -254,30 +295,42 @@ export function SocialCommunicationPage() {
         <Box>
           <Typography variant="h4">Comunicacao Social</Typography>
           <Typography variant="body2" color="text.secondary">
-            Ultimas materias em formato de cards para leitura rapida.
+            Visualize as matérias em cards ou em lista e filtre por tags.
           </Typography>
         </Box>
-        {canEdit && (
-          <Button variant="contained" onClick={openCreate}>
-            Nova materia
-          </Button>
-        )}
+        <Stack direction="row" spacing={1} alignItems="center">
+          <ToggleButtonGroup
+            value={viewMode}
+            exclusive
+            size="small"
+            onChange={(_, value) => {
+              if (value) setViewMode(value);
+            }}
+          >
+            <ToggleButton value="cards">
+              <ViewModuleRoundedIcon fontSize="small" sx={{ mr: 0.6 }} /> Cards
+            </ToggleButton>
+            <ToggleButton value="list">
+              <ViewListRoundedIcon fontSize="small" sx={{ mr: 0.6 }} /> Lista
+            </ToggleButton>
+          </ToggleButtonGroup>
+          {canEdit && (
+            <Button variant="contained" onClick={openCreate}>
+              Nova materia
+            </Button>
+          )}
+        </Stack>
       </Stack>
 
       <Card
         sx={{
           mb: 2.5,
           borderRadius: 3,
-          background:
-            "linear-gradient(135deg, rgba(17,66,89,0.06), rgba(255,255,255,0.9))",
+          background: "linear-gradient(135deg, rgba(17,66,89,0.06), rgba(255,255,255,0.9))",
         }}
       >
         <CardContent sx={{ py: 2 }}>
-          <Stack
-            direction={{ xs: "column", md: "row" }}
-            spacing={1.5}
-            alignItems={{ xs: "stretch", md: "center" }}
-          >
+          <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} alignItems={{ xs: "stretch", md: "center" }}>
             <TextField
               size="small"
               fullWidth
@@ -285,9 +338,19 @@ export function SocialCommunicationPage() {
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
+            <Autocomplete
+              multiple
+              size="small"
+              options={allTags}
+              value={activeTags}
+              onChange={(_, value) => setSelectedTags(normalizeTags(value))}
+              filterSelectedOptions
+              sx={{ minWidth: { xs: "100%", md: 300 } }}
+              renderInput={(params) => <TextField {...params} label="Filtrar por tags" placeholder="Selecione" />}
+            />
             <Chip
               icon={<LanguageRoundedIcon />}
-              label={`${items.length} publicacao${items.length === 1 ? "" : "oes"}`}
+              label={`${visibleItems.length} publicacao${visibleItems.length === 1 ? "" : "oes"}`}
               color="primary"
               variant="outlined"
               sx={{ alignSelf: { xs: "flex-start", md: "center" } }}
@@ -296,16 +359,12 @@ export function SocialCommunicationPage() {
         </CardContent>
       </Card>
 
-      {items.length === 0 ? (
+      {visibleItems.length === 0 ? (
         <EmptyState
           title="Sem materias publicadas"
-          description={
-            canEdit
-              ? "Cadastre um link para publicar a primeira materia."
-              : "Aguardando publicacoes da comissao."
-          }
+          description={canEdit ? "Cadastre um link para publicar a primeira materia." : "Aguardando publicacoes da comissao."}
         />
-      ) : (
+      ) : viewMode === "cards" ? (
         <Box
           display="grid"
           gap={2}
@@ -315,145 +374,209 @@ export function SocialCommunicationPage() {
             lg: "repeat(4, minmax(0, 1fr))",
           }}
         >
-          {items.map((item) => (
-            <Card
-              key={item.id}
-              sx={{
-                borderRadius: 3,
-                border: "1px solid rgba(17, 66, 89, 0.14)",
-                position: "relative",
-                overflow: "hidden",
-                transition: "transform 160ms ease, box-shadow 160ms ease",
-                "&:hover": {
-                  transform: "translateY(-2px)",
-                  boxShadow: "0 10px 24px rgba(17, 66, 89, 0.16)",
-                },
-              }}
-            >
-              <CardActionArea
-                onClick={() => setPreviewing(item)}
-                sx={{ alignItems: "stretch" }}
+          {visibleItems.map((item) => {
+            const tags = normalizeTags(item.tags ?? []);
+            return (
+              <Card
+                key={item.id}
+                sx={{
+                  borderRadius: 3,
+                  border: "1px solid rgba(17, 66, 89, 0.14)",
+                  position: "relative",
+                  overflow: "hidden",
+                  transition: "transform 160ms ease, box-shadow 160ms ease",
+                  "&:hover": {
+                    transform: "translateY(-2px)",
+                    boxShadow: "0 10px 24px rgba(17, 66, 89, 0.16)",
+                  },
+                }}
               >
-                <Box
-                  sx={{
-                    height: 156,
-                    background:
-                      "linear-gradient(140deg, #114259 0%, #4D86A0 100%)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    overflow: "hidden",
-                  }}
-                >
-                  {item.coverProxyPath || item.coverImageUrl ? (
-                    <Box
-                      component="img"
-                      src={
-                        item.coverProxyPath
-                          ? toApiUrl(item.coverProxyPath)
-                          : (item.coverImageUrl ?? undefined)
-                      }
-                      alt={item.title}
-                      sx={{ width: "100%", height: "100%", objectFit: "cover" }}
-                    />
-                  ) : (
-                    <NewspaperRoundedIcon
-                      sx={{ color: "white", fontSize: 38 }}
-                    />
-                  )}
-                </Box>
-                <CardContent sx={{ minHeight: 165 }}>
-                  <Typography
-                    variant="subtitle1"
-                    fontWeight={700}
+                <CardActionArea onClick={() => setPreviewing(item)} sx={{ alignItems: "stretch" }}>
+                  <Box
                     sx={{
-                      mb: 0.8,
-                      display: "-webkit-box",
-                      WebkitLineClamp: 2,
-                      WebkitBoxOrient: "vertical",
+                      height: 156,
+                      background: "linear-gradient(140deg, #114259 0%, #4D86A0 100%)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
                       overflow: "hidden",
                     }}
                   >
-                    {item.title}
-                  </Typography>
-                  {item.summary && (
+                    {item.coverProxyPath || item.coverImageUrl ? (
+                      <Box
+                        component="img"
+                        src={item.coverProxyPath ? toApiUrl(item.coverProxyPath) : (item.coverImageUrl ?? undefined)}
+                        alt={item.title}
+                        sx={{ width: "100%", height: "100%", objectFit: "cover" }}
+                      />
+                    ) : (
+                      <NewspaperRoundedIcon sx={{ color: "white", fontSize: 38 }} />
+                    )}
+                  </Box>
+                  <CardContent sx={{ minHeight: 200 }}>
                     <Typography
-                      variant="body2"
-                      color="text.secondary"
+                      variant="subtitle1"
+                      fontWeight={700}
                       sx={{
-                        mb: 1.3,
+                        mb: 0.8,
                         display: "-webkit-box",
-                        WebkitLineClamp: 3,
+                        WebkitLineClamp: 2,
                         WebkitBoxOrient: "vertical",
                         overflow: "hidden",
                       }}
                     >
-                      {item.summary}
+                      {item.title}
                     </Typography>
-                  )}
-                  <Stack
-                    direction="row"
-                    spacing={0.8}
-                    alignItems="center"
-                    flexWrap="wrap"
-                    useFlexGap
-                  >
-                    <Chip
-                      label={sourceHost(item.sourceUrl)}
+                    {item.summary && (
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{
+                          mb: 1.3,
+                          display: "-webkit-box",
+                          WebkitLineClamp: 3,
+                          WebkitBoxOrient: "vertical",
+                          overflow: "hidden",
+                        }}
+                      >
+                        {item.summary}
+                      </Typography>
+                    )}
+                    {renderTags(tags, 3)}
+                    <Stack direction="row" spacing={0.8} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mt: 1.1 }}>
+                      <Chip label={sourceHost(item.sourceUrl)} size="small" variant="outlined" />
+                      {(item.publishedAt || item.createdAt) && (
+                        <Chip label={toDisplayDate(item.publishedAt ?? item.createdAt)} size="small" />
+                      )}
+                    </Stack>
+                  </CardContent>
+                </CardActionArea>
+                {canEdit && (
+                  <Stack direction="row" spacing={0.4} sx={{ position: "absolute", top: 8, right: 8, zIndex: 3 }}>
+                    <IconButton
                       size="small"
-                      variant="outlined"
-                    />
-                    {(item.publishedAt || item.createdAt) && (
-                      <Chip
-                        label={toDisplayDate(
-                          item.publishedAt ?? item.createdAt,
+                      sx={{ bgcolor: "rgba(255,255,255,0.92)" }}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        openEdit(item);
+                      }}
+                    >
+                      <EditRoundedIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton
+                      size="small"
+                      color="error"
+                      sx={{ bgcolor: "rgba(255,255,255,0.92)" }}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleDelete(item);
+                      }}
+                    >
+                      <DeleteOutlineRoundedIcon fontSize="small" />
+                    </IconButton>
+                  </Stack>
+                )}
+              </Card>
+            );
+          })}
+        </Box>
+      ) : (
+        <Stack spacing={1.5}>
+          {visibleItems.map((item) => {
+            const tags = normalizeTags(item.tags ?? []);
+            return (
+              <Card
+                key={item.id}
+                onClick={() => setPreviewing(item)}
+                sx={{
+                  borderRadius: 3,
+                  border: "1px solid rgba(17,66,89,0.14)",
+                  cursor: "pointer",
+                  transition: "box-shadow 160ms ease, transform 160ms ease",
+                  "&:hover": {
+                    boxShadow: "0 8px 18px rgba(17,66,89,0.14)",
+                    transform: "translateY(-1px)",
+                  },
+                }}
+              >
+                <CardContent>
+                  <Stack direction={{ xs: "column", md: "row" }} spacing={2} alignItems={{ xs: "stretch", md: "center" }}>
+                    <Box
+                      sx={{
+                        width: { xs: "100%", md: 180 },
+                        minWidth: { xs: "100%", md: 180 },
+                        height: 108,
+                        borderRadius: 2,
+                        overflow: "hidden",
+                        bgcolor: "rgba(17,66,89,0.08)",
+                        display: "grid",
+                        placeItems: "center",
+                      }}
+                    >
+                      {item.coverProxyPath || item.coverImageUrl ? (
+                        <Box
+                          component="img"
+                          src={item.coverProxyPath ? toApiUrl(item.coverProxyPath) : (item.coverImageUrl ?? undefined)}
+                          alt={item.title}
+                          sx={{ width: "100%", height: "100%", objectFit: "cover" }}
+                        />
+                      ) : (
+                        <NewspaperRoundedIcon sx={{ color: "#114259", fontSize: 32 }} />
+                      )}
+                    </Box>
+
+                    <Box sx={{ flex: 1 }}>
+                      <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 0.6 }}>
+                        {item.title}
+                      </Typography>
+                      {item.summary && (
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                          {item.summary}
+                        </Typography>
+                      )}
+                      {renderTags(tags, 8)}
+                      <Stack direction="row" spacing={0.8} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mt: 1.1 }}>
+                        <Chip label={sourceHost(item.sourceUrl)} size="small" variant="outlined" />
+                        {(item.publishedAt || item.createdAt) && (
+                          <Chip label={toDisplayDate(item.publishedAt ?? item.createdAt)} size="small" />
                         )}
-                        size="small"
-                      />
+                      </Stack>
+                    </Box>
+
+                    {canEdit && (
+                      <Stack direction="row" spacing={0.6}>
+                        <IconButton
+                          size="small"
+                          sx={{ bgcolor: "rgba(17,66,89,0.07)" }}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openEdit(item);
+                          }}
+                        >
+                          <EditRoundedIcon fontSize="small" />
+                        </IconButton>
+                        <IconButton
+                          size="small"
+                          color="error"
+                          sx={{ bgcolor: "rgba(255,0,0,0.06)" }}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleDelete(item);
+                          }}
+                        >
+                          <DeleteOutlineRoundedIcon fontSize="small" />
+                        </IconButton>
+                      </Stack>
                     )}
                   </Stack>
                 </CardContent>
-              </CardActionArea>
-              {canEdit && (
-                <Stack
-                  direction="row"
-                  spacing={0.4}
-                  sx={{ position: "absolute", top: 8, right: 8, zIndex: 3 }}
-                >
-                  <IconButton
-                    size="small"
-                    sx={{ bgcolor: "rgba(255,255,255,0.92)" }}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      openEdit(item);
-                    }}
-                  >
-                    <EditRoundedIcon fontSize="small" />
-                  </IconButton>
-                  <IconButton
-                    size="small"
-                    color="error"
-                    sx={{ bgcolor: "rgba(255,255,255,0.92)" }}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      handleDelete(item);
-                    }}
-                  >
-                    <DeleteOutlineRoundedIcon fontSize="small" />
-                  </IconButton>
-                </Stack>
-              )}
-            </Card>
-          ))}
-        </Box>
+              </Card>
+            );
+          })}
+        </Stack>
       )}
 
-      <Dialog
-        open={Boolean(previewing)}
-        onClose={() => setPreviewing(null)}
-        fullWidth
-        maxWidth="lg"
-      >
+      <Dialog open={Boolean(previewing)} onClose={() => setPreviewing(null)} fullWidth maxWidth="lg">
         {previewing && (
           <DialogContent dividers sx={{ p: 0, position: "relative" }}>
             <IconButton
@@ -486,8 +609,7 @@ export function SocialCommunicationPage() {
                     zIndex: 1,
                     display: "grid",
                     placeItems: "center",
-                    background:
-                      "linear-gradient(180deg, rgba(249,252,255,0.97) 0%, rgba(235,244,250,0.97) 100%)",
+                    background: "linear-gradient(180deg, rgba(249,252,255,0.97) 0%, rgba(235,244,250,0.97) 100%)",
                   }}
                 >
                   <Stack spacing={1.5} alignItems="center">
@@ -504,16 +626,8 @@ export function SocialCommunicationPage() {
                     >
                       <AutoAwesomeRoundedIcon fontSize="small" />
                     </Box>
-                    <CircularProgress
-                      size={28}
-                      thickness={5}
-                      sx={{ color: "#114259" }}
-                    />
-                    <Typography
-                      variant="body2"
-                      fontWeight={600}
-                      sx={{ color: "#114259" }}
-                    >
+                    <CircularProgress size={28} thickness={5} sx={{ color: "#114259" }} />
+                    <Typography variant="body2" fontWeight={600} sx={{ color: "#114259" }}>
                       Carregando matéria...
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
@@ -525,11 +639,7 @@ export function SocialCommunicationPage() {
               <Box
                 component="iframe"
                 title={previewing.title}
-                src={
-                  previewing.contentProxyPath
-                    ? toApiUrl(previewing.contentProxyPath)
-                    : previewing.sourceUrl
-                }
+                src={previewing.contentProxyPath ? toApiUrl(previewing.contentProxyPath) : previewing.sourceUrl}
                 sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
                 referrerPolicy="no-referrer"
                 onLoad={() => setPreviewLoading(false)}
@@ -546,12 +656,7 @@ export function SocialCommunicationPage() {
         )}
       </Dialog>
 
-      <Dialog
-        open={editorOpen}
-        onClose={() => setEditorOpen(false)}
-        fullWidth
-        maxWidth="sm"
-      >
+      <Dialog open={editorOpen} onClose={() => setEditorOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>{editing ? "Editar materia" : "Nova materia"}</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={1.5} mt={0.5}>
@@ -560,22 +665,15 @@ export function SocialCommunicationPage() {
               size="small"
               required
               value={form.url}
-              onChange={(event) =>
-                setForm((prev) => ({ ...prev, url: event.target.value }))
-              }
+              onChange={(event) => setForm((prev) => ({ ...prev, url: event.target.value }))}
               onBlur={() => {
                 void applyMetadata(false);
               }}
               placeholder="https://..."
             />
-            <Stack
-              direction="row"
-              justifyContent="space-between"
-              alignItems="center"
-            >
+            <Stack direction="row" justifyContent="space-between" alignItems="center">
               <Typography variant="caption" color="text.secondary">
-                O sistema tenta preencher titulo e capa automaticamente pelo
-                link.
+                O sistema tenta preencher titulo e capa automaticamente pelo link.
               </Typography>
               <Button
                 size="small"
@@ -593,20 +691,13 @@ export function SocialCommunicationPage() {
               label="Titulo"
               size="small"
               value={form.title}
-              onChange={(event) =>
-                setForm((prev) => ({ ...prev, title: event.target.value }))
-              }
+              onChange={(event) => setForm((prev) => ({ ...prev, title: event.target.value }))}
             />
             <TextField
               label="URL da capa"
               size="small"
               value={form.coverImageUrl}
-              onChange={(event) =>
-                setForm((prev) => ({
-                  ...prev,
-                  coverImageUrl: event.target.value,
-                }))
-              }
+              onChange={(event) => setForm((prev) => ({ ...prev, coverImageUrl: event.target.value }))}
               placeholder="https://..."
             />
             <TextField
@@ -615,9 +706,26 @@ export function SocialCommunicationPage() {
               multiline
               minRows={3}
               value={form.summary}
-              onChange={(event) =>
-                setForm((prev) => ({ ...prev, summary: event.target.value }))
+              onChange={(event) => setForm((prev) => ({ ...prev, summary: event.target.value }))}
+            />
+            <Autocomplete
+              multiple
+              freeSolo
+              options={allTags}
+              value={form.tags}
+              onChange={(_, value) => setForm((prev) => ({ ...prev, tags: normalizeTags(value as string[]) }))}
+              renderTags={(value, getTagProps) =>
+                value.map((option, index) => <Chip {...getTagProps({ index })} key={option} size="small" label={`#${option}`} />)
               }
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  size="small"
+                  label="Tags"
+                  placeholder="Digite e pressione Enter"
+                  helperText="Você pode adicionar quantas tags quiser."
+                />
+              )}
             />
             <TextField
               label="Data da publicacao"
@@ -625,12 +733,7 @@ export function SocialCommunicationPage() {
               size="small"
               InputLabelProps={{ shrink: true }}
               value={form.publishedAt}
-              onChange={(event) =>
-                setForm((prev) => ({
-                  ...prev,
-                  publishedAt: event.target.value,
-                }))
-              }
+              onChange={(event) => setForm((prev) => ({ ...prev, publishedAt: event.target.value }))}
             />
           </Stack>
         </DialogContent>
@@ -638,11 +741,7 @@ export function SocialCommunicationPage() {
           <Button onClick={() => setEditorOpen(false)}>Cancelar</Button>
           <Button
             variant="contained"
-            disabled={
-              !form.url.trim() ||
-              createArticle.isPending ||
-              updateArticle.isPending
-            }
+            disabled={!form.url.trim() || createArticle.isPending || updateArticle.isPending}
             onClick={() => {
               void handleSave();
             }}

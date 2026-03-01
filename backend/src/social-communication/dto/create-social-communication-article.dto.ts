@@ -1,4 +1,4 @@
-import { IsDateString, IsOptional, IsString, IsUrl } from 'class-validator';
+import { IsArray, IsDateString, IsOptional, IsString, IsUrl } from 'class-validator';
 
 export class CreateSocialCommunicationArticleDto {
   @IsUrl({ require_protocol: true }, { message: 'url must be a valid URL' })
@@ -19,4 +19,9 @@ export class CreateSocialCommunicationArticleDto {
   @IsOptional()
   @IsDateString()
   publishedAt?: string | null;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  tags?: string[];
 }

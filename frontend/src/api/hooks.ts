@@ -1333,6 +1333,7 @@ export function useCreateSocialCommunicationArticle() {
       coverImageUrl?: string | null;
       summary?: string | null;
       publishedAt?: string | null;
+      tags?: string[];
     }) => (await api.post("/social-communication", payload)).data,
     onSuccess: () =>
       qc.invalidateQueries({ queryKey: ["socialCommunication"] }),
@@ -1350,6 +1351,7 @@ export function useUpdateSocialCommunicationArticle() {
         coverImageUrl?: string | null;
         summary?: string | null;
         publishedAt?: string | null;
+        tags?: string[];
       };
     }) =>
       (await api.put(`/social-communication/${args.id}`, args.payload)).data,
@@ -1633,7 +1635,11 @@ export function useUpdateOrgChartCommissionMember() {
   return useMutation({
     mutationFn: async (args: {
       userId: string;
-      payload: { functionText?: string | null; phone?: string | null };
+      payload: {
+        functionText?: string | null;
+        phone?: string | null;
+        seniority?: number | null;
+      };
     }) =>
       (
         await api.put(
@@ -1645,6 +1651,18 @@ export function useUpdateOrgChartCommissionMember() {
       qc.invalidateQueries({ queryKey: ["orgChart"] });
       qc.invalidateQueries({ queryKey: ["orgChart", "commissionMembers"] });
       qc.invalidateQueries({ queryKey: ["users"] });
+    },
+  });
+}
+
+export function useReorderOrgChartCommissionMembers() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: { userIds: string[] }) =>
+      (await api.put('/org-chart/commission-members/reorder', payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['orgChart', 'commissionMembers'] });
+      qc.invalidateQueries({ queryKey: ['orgChart'] });
     },
   });
 }
