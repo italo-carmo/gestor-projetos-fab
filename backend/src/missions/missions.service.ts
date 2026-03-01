@@ -21,6 +21,8 @@ const scheduleLogoCandidates = [
 
 @Injectable()
 export class MissionsService {
+  private readonly missionPdfTimeZone = 'America/Sao_Paulo';
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
@@ -755,7 +757,8 @@ export class MissionsService {
     const logoPath = this.findScheduleLogoPath();
     const missionTitle = mission.title || 'Missão sem título';
     const missionLocality = mission.locality ? `${mission.locality.name} (${mission.locality.code})` : '-';
-    const missionPeriod = `${this.formatDate(mission.startDate)} a ${this.formatDate(mission.endDate)}`;
+    const missionTimeZone = this.missionPdfTimeZone;
+    const missionPeriod = `${this.formatDate(mission.startDate, missionTimeZone)} a ${this.formatDate(mission.endDate, missionTimeZone)}`;
     const missionDescription = mission.description?.trim() || '-';
     const participantsLabel =
       mission.participants.length > 0
@@ -765,6 +768,7 @@ export class MissionsService {
         : 'Nenhum participante cadastrado';
 
     const drawPageFooter = () => {
+      const footerY = doc.page.height - doc.page.margins.bottom - 10;
       doc
         .font('Helvetica')
         .fontSize(8)
@@ -772,7 +776,7 @@ export class MissionsService {
         .text(
           `Página ${pageNumber} • Gerado em ${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date())}`,
           tableX,
-          doc.page.height - doc.page.margins.bottom + 4,
+          footerY,
           { width: contentWidth, align: 'right' },
         );
     };
@@ -1096,11 +1100,10 @@ export class MissionsService {
       let lastItemHour = -1;
 
       mission.scheduleItems.forEach((item) => {
-        // Verificar se precisa adicionar divisória entre manhã e tarde
-        // Usar UTC para manter consistência com formatTime
-        const itemDate = new Date(item.startAt);
-        const itemHour = itemDate.getUTCHours();
-        const itemDateStr = `${itemDate.getUTCFullYear()}-${String(itemDate.getUTCMonth() + 1).padStart(2, '0')}-${String(itemDate.getUTCDate()).padStart(2, '0')}`;
+        // Verificar divisórias com base no horário local da missão (America/Sao_Paulo)
+        const itemDateParts = this.getDateTimePartsInTimeZone(item.startAt, missionTimeZone);
+        const itemHour = Number(itemDateParts.hour);
+        const itemDateStr = `${itemDateParts.year}-${itemDateParts.month}-${itemDateParts.day}`;
         
         // Adicionar divisória de MANHÃ quando:
         // 1. Primeiro item do dia e é < 12h
@@ -1131,8 +1134,8 @@ export class MissionsService {
 
         const endAt = new Date(item.startAt.getTime() + item.durationMinutes * 60_000);
         drawScheduleRow(rowIndex, {
-          day: this.formatWeekdayDate(item.startAt),
-          time: `${this.formatTime(item.startAt)} - ${this.formatTime(endAt)}`,
+          day: this.formatWeekdayDate(item.startAt, missionTimeZone),
+          time: `${this.formatTime(item.startAt, missionTimeZone)} - ${this.formatTime(endAt, missionTimeZone)}`,
           duration: this.formatDuration(item.durationMinutes),
           activity: item.title || '-',
           location: item.location || '-',
@@ -1215,19 +1218,17 @@ export class MissionsService {
     return date;
   }
 
-  private formatDateNoYear(value: Date) {
-    // Usar UTC para manter consistência
-    const year = value.getUTCFullYear();
-    const month = String(value.getUTCMonth() + 1).padStart(2, '0');
-    const day = String(value.getUTCDate()).padStart(2, '0');
+  private formatDateNoYear(value: Date, timeZone = this.missionPdfTimeZone) {
+    const { month, day } = this.getDateTimePartsInTimeZone(value, timeZone);
     return `${day}/${month}`;
   }
 
-  private formatWeekdayDate(value: Date) {
-    // Usar UTC para manter consistência
-    const weekdays = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB'];
-    const weekday = weekdays[value.getUTCDay()];
-    return `${weekday} ${this.formatDateNoYear(value)}`;
+  private formatWeekdayDate(value: Date, timeZone = this.missionPdfTimeZone) {
+    const weekday = new Intl.DateTimeFormat('pt-BR', { weekday: 'short', timeZone })
+      .format(value)
+      .replace('.', '')
+      .toUpperCase();
+    return `${weekday} ${this.formatDateNoYear(value, timeZone)}`;
   }
 
   private formatDuration(minutes: number) {
@@ -1239,17 +1240,34 @@ export class MissionsService {
     return `${hours}h ${mins}min`;
   }
 
-  private formatDate(value: Date) {
-    return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' }).format(value);
+  private formatDate(value: Date, timeZone = this.missionPdfTimeZone) {
+    return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeZone }).format(value);
   }
 
-  private formatTime(value: Date) {
-    // O horário foi salvo como UTC pelo frontend (toISOString()),
-    // então precisamos usar getUTCHours() e getUTCMinutes() para
-    // preservar o horário original que o usuário digitou
-    const hours = value.getUTCHours().toString().padStart(2, '0');
-    const minutes = value.getUTCMinutes().toString().padStart(2, '0');
+  private formatTime(value: Date, timeZone = this.missionPdfTimeZone) {
+    const { hour: hours, minute: minutes } = this.getDateTimePartsInTimeZone(value, timeZone);
     return `${hours}:${minutes}`;
+  }
+
+  private getDateTimePartsInTimeZone(value: Date, timeZone = this.missionPdfTimeZone) {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).formatToParts(value);
+
+    const byType = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    return {
+      year: byType.year ?? '0000',
+      month: byType.month ?? '01',
+      day: byType.day ?? '01',
+      hour: byType.hour ?? '00',
+      minute: byType.minute ?? '00',
+    };
   }
 
   private extractCpf(value: string | null | undefined) {
