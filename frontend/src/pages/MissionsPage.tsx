@@ -393,100 +393,101 @@ export function MissionsPage() {
         </Button>
       </Stack>
 
-      <Card sx={{ mb: 2 }}>
-        <CardContent>
-          <Typography variant="subtitle1" fontWeight={700} mb={2}>
-            Estatísticas de Missões
-          </Typography>
-          {statisticsQuery.isLoading && (
-            <Box sx={{ py: 2 }}>
-              <LinearProgress />
-            </Box>
-          )}
-          {statisticsQuery.isError && (
-            <Typography variant="body2" color="error" sx={{ py: 1 }}>
+      {statisticsQuery.isLoading && (
+        <Card sx={{ mb: 2 }}>
+          <CardContent>
+            <LinearProgress />
+          </CardContent>
+        </Card>
+      )}
+      {statisticsQuery.isError && (
+        <Card sx={{ mb: 2 }}>
+          <CardContent>
+            <Typography variant="body2" color="error">
               Erro ao carregar estatísticas.
             </Typography>
-          )}
-          {statisticsQuery.data && (
-            <Grid container spacing={2}>
-              <Grid item xs={12} sm={6} md={3}>
-                <Card variant="outlined">
-                  <CardContent>
-                    <Typography variant="body2" color="text.secondary" gutterBottom>
-                      Total de Missões
-                    </Typography>
-                    <Typography variant="h4" fontWeight={700} color="primary.main">
-                      {statisticsQuery.data.totalMissions}
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-              <Grid item xs={12} sm={6} md={3}>
-                <Card variant="outlined">
-                  <CardContent>
-                    <Typography variant="body2" color="text.secondary" gutterBottom>
-                      Total de Participantes
-                    </Typography>
-                    <Typography variant="h4" fontWeight={700} color="primary.main">
-                      {statisticsQuery.data.totalParticipants}
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-              <Grid item xs={12} sm={6} md={3}>
-                <Card variant="outlined">
-                  <CardContent>
-                    <Typography variant="body2" color="text.secondary" gutterBottom>
-                      Média de Participantes
-                    </Typography>
-                    <Typography variant="h4" fontWeight={700} color="primary.main">
-                      {statisticsQuery.data.averageParticipantsPerMission.toFixed(1)}
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-              <Grid item xs={12} sm={6} md={3}>
-                <Card variant="outlined">
-                  <CardContent>
-                    <Typography variant="body2" color="text.secondary" gutterBottom>
-                      Missões sem Participantes
-                    </Typography>
-                    <Typography variant="h4" fontWeight={700} color={statisticsQuery.data.missionsWithoutParticipants > 0 ? 'warning.main' : 'success.main'}>
-                      {statisticsQuery.data.missionsWithoutParticipants}
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-            </Grid>
-          )}
-        </CardContent>
-      </Card>
-
-      {statisticsQuery.data && (statisticsQuery.data.missionsByUser.length > 0 || statisticsQuery.data.participantsByMission.length > 0) && (
-        <Grid container spacing={2} sx={{ mb: 2 }}>
+          </CardContent>
+        </Card>
+      )}
+      {statisticsQuery.data && (
+        <Grid container spacing={1.5} sx={{ mb: 2 }}>
+          <Grid item xs={12}>
+            <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
+              Estatísticas de Missões
+            </Typography>
+          </Grid>
+          <Grid item xs={6} sm={3}>
+            <Card variant="outlined" sx={{ height: '100%' }}>
+              <CardContent sx={{ pb: '16px !important' }}>
+                <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                  Total de Missões
+                </Typography>
+                <Typography variant="h5" fontWeight={700} color="primary.main">
+                  {statisticsQuery.data.totalMissions}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={6} sm={3}>
+            <Card variant="outlined" sx={{ height: '100%' }}>
+              <CardContent sx={{ pb: '16px !important' }}>
+                <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                  Total de Participantes
+                </Typography>
+                <Typography variant="h5" fontWeight={700} color="primary.main">
+                  {statisticsQuery.data.totalParticipants}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={6} sm={3}>
+            <Card variant="outlined" sx={{ height: '100%' }}>
+              <CardContent sx={{ pb: '16px !important' }}>
+                <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                  Média de Participantes
+                </Typography>
+                <Typography variant="h5" fontWeight={700} color="primary.main">
+                  {statisticsQuery.data.averageParticipantsPerMission.toFixed(1)}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={6} sm={3}>
+            <Card variant="outlined" sx={{ height: '100%' }}>
+              <CardContent sx={{ pb: '16px !important' }}>
+                <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                  Missões sem Participantes
+                </Typography>
+                <Typography variant="h5" fontWeight={700} color={statisticsQuery.data.missionsWithoutParticipants > 0 ? 'warning.main' : 'success.main'}>
+                  {statisticsQuery.data.missionsWithoutParticipants}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
           {statisticsQuery.data.missionsByUser.length > 0 && (
             <Grid item xs={12} md={6}>
-              <Card>
+              <Card variant="outlined" sx={{ height: '100%' }}>
                 <CardContent>
-                  <Typography variant="subtitle1" fontWeight={700} gutterBottom>
+                  <Typography variant="subtitle2" fontWeight={700} gutterBottom>
                     Usuários com Mais Missões
                   </Typography>
-                  <Stack spacing={1} sx={{ mt: 1.5 }}>
+                  <Stack spacing={0.8} sx={{ mt: 1 }}>
                     {statisticsQuery.data.missionsByUser.map((item: any, index: number) => (
                       <Box key={item.userId}>
-                        <Stack direction="row" justifyContent="space-between" alignItems="center" mb={0.5}>
-                          <Typography variant="body2" fontWeight={500}>
-                            {item.userName}
-                          </Typography>
-                          <Chip label={item.count} size="small" color="primary" />
+                        <Stack direction="row" justifyContent="space-between" alignItems="center">
+                          <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <Typography variant="body2" fontWeight={500} noWrap>
+                              {item.userName}
+                            </Typography>
+                            {item.userEmail && (
+                              <Typography variant="caption" color="text.secondary" display="block" noWrap>
+                                {item.userEmail}
+                              </Typography>
+                            )}
+                          </Box>
+                          <Chip label={item.count} size="small" color="primary" sx={{ ml: 1 }} />
                         </Stack>
-                        {item.userEmail && (
-                          <Typography variant="caption" color="text.secondary">
-                            {item.userEmail}
-                          </Typography>
-                        )}
-                        {index < statisticsQuery.data.missionsByUser.length - 1 && <Divider sx={{ mt: 1 }} />}
+                        {index < statisticsQuery.data.missionsByUser.length - 1 && <Divider sx={{ mt: 0.8 }} />}
                       </Box>
                     ))}
                   </Stack>
@@ -496,21 +497,21 @@ export function MissionsPage() {
           )}
           {statisticsQuery.data.participantsByMission.length > 0 && (
             <Grid item xs={12} md={6}>
-              <Card>
+              <Card variant="outlined" sx={{ height: '100%' }}>
                 <CardContent>
-                  <Typography variant="subtitle1" fontWeight={700} gutterBottom>
+                  <Typography variant="subtitle2" fontWeight={700} gutterBottom>
                     Missões com Mais Participantes
                   </Typography>
-                  <Stack spacing={1} sx={{ mt: 1.5 }}>
+                  <Stack spacing={0.8} sx={{ mt: 1 }}>
                     {statisticsQuery.data.participantsByMission.map((item: any, index: number) => (
                       <Box key={item.missionId}>
-                        <Stack direction="row" justifyContent="space-between" alignItems="center" mb={0.5}>
-                          <Typography variant="body2" fontWeight={500} sx={{ flex: 1, mr: 1 }}>
+                        <Stack direction="row" justifyContent="space-between" alignItems="center">
+                          <Typography variant="body2" fontWeight={500} sx={{ flex: 1, mr: 1 }} noWrap>
                             {item.missionTitle}
                           </Typography>
                           <Chip label={item.participantsCount} size="small" color="secondary" />
                         </Stack>
-                        {index < statisticsQuery.data.participantsByMission.length - 1 && <Divider sx={{ mt: 1 }} />}
+                        {index < statisticsQuery.data.participantsByMission.length - 1 && <Divider sx={{ mt: 0.8 }} />}
                       </Box>
                     ))}
                   </Stack>
