@@ -660,10 +660,9 @@ export function MissionsPage() {
                               />
                             )}
                             renderOption={(props, option: any) => {
-                              if (!option || !option.id) return null;
                               const roles = option.roles?.map((r: any) => r.role?.name).filter(Boolean).join(', ') || '';
                               return (
-                                <li {...props} key={option.id}>
+                                <li {...props}>
                                   <Stack>
                                     <Typography variant="body2" fontWeight={500}>
                                       {option.name || 'Sem nome'}
