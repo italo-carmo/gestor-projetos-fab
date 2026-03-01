@@ -327,9 +327,15 @@ export function MissionsPage() {
       return;
     }
 
+    // Converter datetime-local para UTC preservando o horário digitado
+    // datetime-local retorna "YYYY-MM-DDTHH:mm" (sem timezone)
+    // Precisamos tratar como UTC para preservar o horário que o usuário digitou
+    const localDateTime = scheduleForm.startAt;
+    const utcDateTime = localDateTime.endsWith('Z') ? localDateTime : `${localDateTime}:00.000Z`;
+
     const payload = {
       title: scheduleForm.title,
-      startAt: new Date(scheduleForm.startAt).toISOString(),
+      startAt: utcDateTime,
       durationMinutes: Number(scheduleForm.durationMinutes) || 0,
       location: scheduleForm.location,
       responsible: scheduleForm.responsible,
@@ -1000,9 +1006,23 @@ export function MissionsPage() {
                                     size="small"
                                     onClick={() => {
                                       setEditingScheduleItemId(item.id);
+                                      // Converter UTC ISO string para formato datetime-local preservando o horário UTC
+                                      // item.startAt vem como "2026-03-03T10:15:00.000Z" (UTC)
+                                      // Precisamos extrair "2026-03-03T10:15" sem conversão de timezone
+                                      let startAtFormatted = '';
+                                      if (item.startAt) {
+                                        const date = new Date(item.startAt);
+                                        // Usar métodos UTC para preservar o horário original
+                                        const year = date.getUTCFullYear();
+                                        const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+                                        const day = String(date.getUTCDate()).padStart(2, '0');
+                                        const hours = String(date.getUTCHours()).padStart(2, '0');
+                                        const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+                                        startAtFormatted = `${year}-${month}-${day}T${hours}:${minutes}`;
+                                      }
                                       setScheduleForm({
                                         title: item.title ?? '',
-                                        startAt: item.startAt ? new Date(item.startAt).toISOString().slice(0, 16) : '',
+                                        startAt: startAtFormatted,
                                         durationMinutes: Number(item.durationMinutes ?? 60),
                                         location: item.location ?? '',
                                         responsible: item.responsible ?? '',

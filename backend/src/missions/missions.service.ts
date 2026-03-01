@@ -931,13 +931,15 @@ export class MissionsService {
     const openNewPage = (forceTableHeader = true) => {
       if (!isFirstPage) {
         // Só desenhar footer e criar nova página se houver conteúdo significativo na página atual
-        // Verificar se há pelo menos 50px de conteúdo para evitar páginas quase vazias
-        if (cursorY > doc.page.margins.top + 50) {
+        // Verificar se há pelo menos 100px de conteúdo para evitar páginas quase vazias
+        const minContentHeight = 100;
+        if (cursorY > doc.page.margins.top + minContentHeight) {
           drawPageFooter();
           doc.addPage();
           pageNumber += 1;
         } else {
           // Se não há conteúdo suficiente, não criar nova página - apenas resetar cursor
+          // Isso evita páginas em branco no meio do documento
           cursorY = doc.page.margins.top;
           if (forceTableHeader) drawTableHeader();
           return;
@@ -956,16 +958,25 @@ export class MissionsService {
 
     const ensureRowFits = (rowHeight: number) => {
       // Adicionar margem de segurança para evitar quebras no meio de elementos
-      const safetyMargin = 15;
+      const safetyMargin = 20;
       if (cursorY + rowHeight + safetyMargin <= tableBottomLimit) return;
       // Só criar nova página se realmente não couber e houver conteúdo suficiente na página atual
-      // Exigir pelo menos 60px de conteúdo antes de criar nova página
-      if (cursorY > doc.page.margins.top + 60) {
+      // Exigir pelo menos 100px de conteúdo antes de criar nova página
+      const minContentHeight = 100;
+      if (cursorY > doc.page.margins.top + minContentHeight) {
         openNewPage(true);
       } else {
         // Se não há espaço suficiente mas também não há conteúdo suficiente na página,
         // tentar ajustar o cursorY para o limite da tabela para evitar página em branco
-        cursorY = tableBottomLimit - rowHeight - safetyMargin;
+        // Se mesmo assim não couber, forçar a quebra apenas se absolutamente necessário
+        const availableSpace = tableBottomLimit - cursorY - safetyMargin;
+        if (availableSpace < rowHeight * 0.5) {
+          // Se não há nem metade do espaço necessário, forçar nova página mesmo sem conteúdo suficiente
+          // Mas só se realmente não couber nada
+          openNewPage(true);
+        } else {
+          cursorY = tableBottomLimit - rowHeight - safetyMargin;
+        }
       }
     };
 
@@ -973,14 +984,15 @@ export class MissionsService {
       const dividerHeight = 20;
       // Verificar se há espaço para a divisória + pelo menos uma linha mínima
       const minRowHeight = 22;
-      const safetyMargin = 10;
+      const safetyMargin = 15;
       if (cursorY + dividerHeight + minRowHeight + safetyMargin > tableBottomLimit) {
         // Só criar nova página se realmente não couber e houver conteúdo suficiente na página atual
-        // Exigir pelo menos 60px de conteúdo antes de criar nova página
-        if (cursorY > doc.page.margins.top + 60) {
+        // Exigir pelo menos 100px de conteúdo antes de criar nova página
+        const minContentHeight = 100;
+        if (cursorY > doc.page.margins.top + minContentHeight) {
           openNewPage(true);
         } else {
-          // Se não há espaço mas também não há conteúdo suficiente, não desenhar a divisória
+          // Se não há espaço mas também não há conteúdo suficiente, não desenhar a divisória agora
           // Ela será desenhada na próxima página quando houver espaço
           return;
         }
@@ -1000,14 +1012,15 @@ export class MissionsService {
       const dividerHeight = 20;
       // Verificar se há espaço para a divisória + pelo menos uma linha mínima
       const minRowHeight = 22;
-      const safetyMargin = 10;
+      const safetyMargin = 15;
       if (cursorY + dividerHeight + minRowHeight + safetyMargin > tableBottomLimit) {
         // Só criar nova página se realmente não couber e houver conteúdo suficiente na página atual
-        // Exigir pelo menos 60px de conteúdo antes de criar nova página
-        if (cursorY > doc.page.margins.top + 60) {
+        // Exigir pelo menos 100px de conteúdo antes de criar nova página
+        const minContentHeight = 100;
+        if (cursorY > doc.page.margins.top + minContentHeight) {
           openNewPage(true);
         } else {
-          // Se não há espaço mas também não há conteúdo suficiente, não desenhar a divisória
+          // Se não há espaço mas também não há conteúdo suficiente, não desenhar a divisória agora
           // Ela será desenhada na próxima página quando houver espaço
           return;
         }
