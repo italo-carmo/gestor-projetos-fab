@@ -965,8 +965,12 @@ export class MissionsService {
       const dividerHeight = 20;
       // Verificar se há espaço para a divisória + pelo menos uma linha mínima
       const minRowHeight = 22;
-      if (cursorY + dividerHeight + minRowHeight > tableBottomLimit) {
-        openNewPage(true);
+      const safetyMargin = 5;
+      if (cursorY + dividerHeight + minRowHeight + safetyMargin > tableBottomLimit) {
+        // Só criar nova página se realmente não couber e houver conteúdo suficiente na página atual
+        if (cursorY > doc.page.margins.top + 30) {
+          openNewPage(true);
+        }
       }
       doc
         .rect(tableX, cursorY, contentWidth, dividerHeight)
@@ -983,8 +987,12 @@ export class MissionsService {
       const dividerHeight = 20;
       // Verificar se há espaço para a divisória + pelo menos uma linha mínima
       const minRowHeight = 22;
-      if (cursorY + dividerHeight + minRowHeight > tableBottomLimit) {
-        openNewPage(true);
+      const safetyMargin = 5;
+      if (cursorY + dividerHeight + minRowHeight + safetyMargin > tableBottomLimit) {
+        // Só criar nova página se realmente não couber e houver conteúdo suficiente na página atual
+        if (cursorY > doc.page.margins.top + 30) {
+          openNewPage(true);
+        }
       }
       doc
         .rect(tableX, cursorY, contentWidth, dividerHeight)
