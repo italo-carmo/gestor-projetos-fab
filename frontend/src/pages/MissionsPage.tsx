@@ -642,6 +642,8 @@ export function MissionsPage() {
                               const roles = option.roles?.map((r: any) => r.role?.name).filter(Boolean).join(', ') || '';
                               return `${option.name}${option.email ? ` • ${option.email}` : ''}${roles ? ` • ${roles}` : ''}`;
                             }}
+                            getOptionKey={(option: any) => option.id}
+                            isOptionEqualToValue={(option: any, value: any) => option.id === value?.id}
                             value={filteredUsers.find((u: any) => u.id === selectedUserId) || null}
                             onChange={(_, newValue: any) => setSelectedUserId(newValue?.id || null)}
                             inputValue={userSearch}
@@ -656,7 +658,7 @@ export function MissionsPage() {
                             renderOption={(props, option: any) => {
                               const roles = option.roles?.map((r: any) => r.role?.name).filter(Boolean).join(', ') || '';
                               return (
-                                <Box component="li" {...props} key={option.id}>
+                                <Box component="li" {...props}>
                                   <Stack>
                                     <Typography variant="body2" fontWeight={500}>
                                       {option.name}
