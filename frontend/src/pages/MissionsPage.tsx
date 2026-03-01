@@ -268,10 +268,14 @@ export function MissionsPage() {
     }
   };
 
-  const filteredUsers = useMemo(() => {
+  const allUsers = useMemo(() => {
     if (!usersQuery.data?.items) return [];
+    return (usersQuery.data.items as any[]).filter((user: any) => user?.id);
+  }, [usersQuery.data?.items]);
+
+  const filteredUsers = useMemo(() => {
+    if (!allUsers.length) return [];
     const searchTerm = userSearch.toLowerCase().trim();
-    const allUsers = (usersQuery.data.items as any[]).filter((user: any) => user?.id);
     if (!searchTerm) return allUsers.slice(0, 50);
     return allUsers
       .filter((user: any) => {
@@ -281,7 +285,12 @@ export function MissionsPage() {
         return name.includes(searchTerm) || email.includes(searchTerm) || ldapUid.includes(searchTerm);
       })
       .slice(0, 50);
-  }, [usersQuery.data?.items, userSearch]);
+  }, [allUsers, userSearch]);
+
+  const selectedUser = useMemo(() => {
+    if (!selectedUserId || !allUsers.length) return null;
+    return allUsers.find((u: any) => u?.id === selectedUserId) || null;
+  }, [selectedUserId, allUsers]);
 
   const validParticipants = useMemo(() => {
     if (!selectedMission?.participants) return [];
@@ -661,8 +670,13 @@ export function MissionsPage() {
                               if (!option || !value || !option.id || !value.id) return false;
                               return option.id === value.id;
                             }}
-                            value={filteredUsers.find((u: any) => u?.id === selectedUserId) || null}
-                            onChange={(_, newValue: any) => setSelectedUserId(newValue?.id || null)}
+                            value={selectedUser}
+                            onChange={(_, newValue: any) => {
+                              setSelectedUserId(newValue?.id || null);
+                              if (newValue) {
+                                setUserSearch(newValue.name || '');
+                              }
+                            }}
                             inputValue={userSearch}
                             onInputChange={(_, newInputValue) => setUserSearch(newInputValue)}
                             renderInput={(params) => (
