@@ -92,6 +92,96 @@ export class MissionsService {
     };
   }
 
+  async getStatistics(user?: RbacUser) {
+    this.assertMissionAccess(user);
+
+    const targetLocalityIds = await this.getTargetLocalityIds();
+    if (targetLocalityIds.length === 0) {
+      return {
+        totalMissions: 0,
+        totalParticipants: 0,
+        missionsByUser: [],
+        participantsByMission: [],
+        averageParticipantsPerMission: 0,
+        missionsWithoutParticipants: 0,
+        missionsWithMostParticipants: [],
+      };
+    }
+
+    const missions = await this.prisma.mission.findMany({
+      where: { localityId: { in: targetLocalityIds } },
+      include: {
+        participants: {
+          select: {
+            id: true,
+            userId: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    const totalMissions = missions.length;
+    const totalParticipants = missions.reduce((acc, m) => acc + m.participants.length, 0);
+    const averageParticipantsPerMission = totalMissions > 0 ? totalParticipants / totalMissions : 0;
+    const missionsWithoutParticipants = missions.filter((m) => m.participants.length === 0).length;
+
+    // Estatísticas por usuário (participantes que são usuários do sistema)
+    const userMissionCount = new Map<string, { userId: string; userName: string; userEmail: string; count: number }>();
+    for (const mission of missions) {
+      for (const participant of mission.participants) {
+        if (participant.userId) {
+          const existing = userMissionCount.get(participant.userId);
+          if (existing) {
+            existing.count += 1;
+          } else {
+            userMissionCount.set(participant.userId, {
+              userId: participant.userId,
+              userName: participant.name || 'Sem nome',
+              userEmail: participant.email || '',
+              count: 1,
+            });
+          }
+        }
+      }
+    }
+
+    const missionsByUser = Array.from(userMissionCount.values())
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+
+    // Estatísticas por missão
+    const participantsByMission = missions
+      .map((m) => ({
+        missionId: m.id,
+        missionTitle: m.title,
+        participantsCount: m.participants.length,
+      }))
+      .sort((a, b) => b.participantsCount - a.participantsCount)
+      .slice(0, 10);
+
+    const missionsWithMostParticipants = missions
+      .filter((m) => m.participants.length > 0)
+      .sort((a, b) => b.participants.length - a.participants.length)
+      .slice(0, 5)
+      .map((m) => ({
+        missionId: m.id,
+        missionTitle: m.title,
+        participantsCount: m.participants.length,
+      }));
+
+    return {
+      totalMissions,
+      totalParticipants,
+      missionsByUser,
+      participantsByMission,
+      averageParticipantsPerMission: Math.round(averageParticipantsPerMission * 10) / 10,
+      missionsWithoutParticipants,
+      missionsWithMostParticipants,
+    };
+  }
+
   async getById(id: string, user?: RbacUser) {
     this.assertMissionAccess(user);
 

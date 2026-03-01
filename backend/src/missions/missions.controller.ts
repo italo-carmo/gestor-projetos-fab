@@ -28,6 +28,11 @@ export class MissionsController {
     return this.missions.list({ localityId, q, page, pageSize }, user);
   }
 
+  @Get('statistics')
+  getStatistics(@CurrentUser() user: RbacUser) {
+    return this.missions.getStatistics(user);
+  }
+
   @Post()
   create(@Body() dto: CreateMissionDto, @CurrentUser() user: RbacUser) {
     return this.missions.create(dto, user);

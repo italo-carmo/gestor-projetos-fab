@@ -7,7 +7,9 @@ import {
   Chip,
   Divider,
   Drawer,
+  Grid,
   IconButton,
+  LinearProgress,
   MenuItem,
   Stack,
   Tab,
@@ -38,6 +40,7 @@ import {
   useLocalities,
   useLookupMissionLdapParticipant,
   useMission,
+  useMissionStatistics,
   useMissions,
   useRemoveMissionParticipant,
   useUpdateMission,
@@ -80,6 +83,7 @@ export function MissionsPage() {
   const missionsQuery = useMissions({ localityId: localityId || undefined, q: q || undefined });
   const localitiesQuery = useLocalities();
   const missionDetailQuery = useMission(missionIdFromUrl, Boolean(missionIdFromUrl));
+  const statisticsQuery = useMissionStatistics();
 
   const createMission = useCreateMission();
   const updateMission = useUpdateMission();
@@ -388,6 +392,117 @@ export function MissionsPage() {
           Nova missão
         </Button>
       </Stack>
+
+      {statisticsQuery.data && (
+        <Grid container spacing={2} sx={{ mb: 2 }}>
+          <Grid item xs={12} sm={6} md={3}>
+            <Card>
+              <CardContent>
+                <Typography variant="body2" color="text.secondary" gutterBottom>
+                  Total de Missões
+                </Typography>
+                <Typography variant="h4" fontWeight={700} color="primary.main">
+                  {statisticsQuery.data.totalMissions}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <Card>
+              <CardContent>
+                <Typography variant="body2" color="text.secondary" gutterBottom>
+                  Total de Participantes
+                </Typography>
+                <Typography variant="h4" fontWeight={700} color="primary.main">
+                  {statisticsQuery.data.totalParticipants}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <Card>
+              <CardContent>
+                <Typography variant="body2" color="text.secondary" gutterBottom>
+                  Média de Participantes
+                </Typography>
+                <Typography variant="h4" fontWeight={700} color="primary.main">
+                  {statisticsQuery.data.averageParticipantsPerMission.toFixed(1)}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <Card>
+              <CardContent>
+                <Typography variant="body2" color="text.secondary" gutterBottom>
+                  Missões sem Participantes
+                </Typography>
+                <Typography variant="h4" fontWeight={700} color={statisticsQuery.data.missionsWithoutParticipants > 0 ? 'warning.main' : 'success.main'}>
+                  {statisticsQuery.data.missionsWithoutParticipants}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+      )}
+
+      {statisticsQuery.data && (statisticsQuery.data.missionsByUser.length > 0 || statisticsQuery.data.participantsByMission.length > 0) && (
+        <Grid container spacing={2} sx={{ mb: 2 }}>
+          {statisticsQuery.data.missionsByUser.length > 0 && (
+            <Grid item xs={12} md={6}>
+              <Card>
+                <CardContent>
+                  <Typography variant="subtitle1" fontWeight={700} gutterBottom>
+                    Usuários com Mais Missões
+                  </Typography>
+                  <Stack spacing={1} sx={{ mt: 1.5 }}>
+                    {statisticsQuery.data.missionsByUser.map((item: any, index: number) => (
+                      <Box key={item.userId}>
+                        <Stack direction="row" justifyContent="space-between" alignItems="center" mb={0.5}>
+                          <Typography variant="body2" fontWeight={500}>
+                            {item.userName}
+                          </Typography>
+                          <Chip label={item.count} size="small" color="primary" />
+                        </Stack>
+                        {item.userEmail && (
+                          <Typography variant="caption" color="text.secondary">
+                            {item.userEmail}
+                          </Typography>
+                        )}
+                        {index < statisticsQuery.data.missionsByUser.length - 1 && <Divider sx={{ mt: 1 }} />}
+                      </Box>
+                    ))}
+                  </Stack>
+                </CardContent>
+              </Card>
+            </Grid>
+          )}
+          {statisticsQuery.data.participantsByMission.length > 0 && (
+            <Grid item xs={12} md={6}>
+              <Card>
+                <CardContent>
+                  <Typography variant="subtitle1" fontWeight={700} gutterBottom>
+                    Missões com Mais Participantes
+                  </Typography>
+                  <Stack spacing={1} sx={{ mt: 1.5 }}>
+                    {statisticsQuery.data.participantsByMission.map((item: any, index: number) => (
+                      <Box key={item.missionId}>
+                        <Stack direction="row" justifyContent="space-between" alignItems="center" mb={0.5}>
+                          <Typography variant="body2" fontWeight={500} sx={{ flex: 1, mr: 1 }}>
+                            {item.missionTitle}
+                          </Typography>
+                          <Chip label={item.participantsCount} size="small" color="secondary" />
+                        </Stack>
+                        {index < statisticsQuery.data.participantsByMission.length - 1 && <Divider sx={{ mt: 1 }} />}
+                      </Box>
+                    ))}
+                  </Stack>
+                </CardContent>
+              </Card>
+            </Grid>
+          )}
+        </Grid>
+      )}
 
       <Card sx={{ mb: 2 }}>
         <CardContent>
