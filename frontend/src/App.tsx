@@ -65,14 +65,28 @@ function App() {
               <Routes>
                 <Route path="/" element={<HomeRedirect />} />
                 <Route
-                  path="/dashboard/national"
+                  path="/dashboard/smif"
                   element={
                     <RequireRoleAccess allow={(user) => hasNationalManagementScope(user)}>
                       <DashboardNationalPage />
                     </RequireRoleAccess>
                   }
                 />
-                <Route path="/dashboard/executive" element={<DashboardExecutivePage />} />
+                <Route path="/dashboard/national" element={<Navigate to="/dashboard/smif" replace />} />
+                <Route path="/dashboard/cipavd" element={<DashboardExecutivePage />} />
+                <Route path="/dashboard/executive" element={<Navigate to="/dashboard/cipavd" replace />} />
+                <Route
+                  path="/dashboard/cpca"
+                  element={
+                    <RequireRoleAccess
+                      allow={(user) =>
+                        hasAnyRole(user, [ROLE_CPCA, ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI])
+                      }
+                    >
+                      <CpcaStatsPage />
+                    </RequireRoleAccess>
+                  }
+                />
                 <Route
                   path="/dashboard/bi"
                   element={

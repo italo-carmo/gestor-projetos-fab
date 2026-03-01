@@ -27,8 +27,6 @@ import MenuIcon from "@mui/icons-material/Menu";
 import SearchIcon from "@mui/icons-material/Search";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import TaskIcon from "@mui/icons-material/Task";
-import TimelineIcon from "@mui/icons-material/Timeline";
-import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import SettingsIcon from "@mui/icons-material/Settings";
 import GroupsIcon from "@mui/icons-material/Groups";
 import PeopleIcon from "@mui/icons-material/People";
@@ -37,7 +35,6 @@ import CampaignIcon from "@mui/icons-material/Campaign";
 import ChecklistIcon from "@mui/icons-material/Checklist";
 import AccountTreeIcon from "@mui/icons-material/AccountTree";
 import ContactPhoneIcon from "@mui/icons-material/ContactPhone";
-import HistoryIcon from "@mui/icons-material/History";
 import EventNoteIcon from "@mui/icons-material/EventNote";
 import FlagRoundedIcon from "@mui/icons-material/FlagRounded";
 import NewspaperRoundedIcon from "@mui/icons-material/NewspaperRounded";
@@ -75,106 +72,51 @@ const drawerExpandedWidth = 284;
 const drawerCollapsedWidth = 92;
 const headerHeight = 84;
 
-const navItems = [
+type NavItem = { label: string; to: string; icon: JSX.Element };
+type NavSection = { id: string; label?: string; items: NavItem[] };
+
+const navSections: NavSection[] = [
   {
-    label: "Painel de Comando",
-    to: "/dashboard/national",
-    icon: <DashboardIcon fontSize="small" />,
+    id: "command",
+    label: "PAINÉIS",
+    items: [
+      { label: "Painel de Comando - SMIF", to: "/dashboard/smif", icon: <DashboardIcon fontSize="small" /> },
+      { label: "Painel de Comando - CIPAVD", to: "/dashboard/cipavd", icon: <InsightsRoundedIcon fontSize="small" /> },
+      { label: "Painel de Comando - CPCA", to: "/dashboard/cpca", icon: <PolicyRoundedIcon fontSize="small" /> },
+      { label: "Organograma", to: "/org-chart", icon: <AccountTreeIcon fontSize="small" /> },
+      { label: "Comunicação Social", to: "/social-communication", icon: <NewspaperRoundedIcon fontSize="small" /> },
+    ],
   },
   {
-    label: "Painel Exec.",
-    to: "/dashboard/executive",
-    icon: <DashboardIcon fontSize="small" />,
+    id: "smif",
+    label: "SMIF",
+    items: [
+      { label: "Checklists", to: "/checklists", icon: <ChecklistIcon fontSize="small" /> },
+      { label: "Atividades de Campo", to: "/activities", icon: <EventNoteIcon fontSize="small" /> },
+      { label: "Modelo de Atividades de Campo", to: "/templates", icon: <TaskIcon fontSize="small" /> },
+      { label: "GSD e Recrutas", to: "/gsd-recruits", icon: <PeopleIcon fontSize="small" /> },
+      { label: "Elos", to: "/elos", icon: <ContactPhoneIcon fontSize="small" /> },
+      { label: "Avisos", to: "/notices", icon: <CampaignIcon fontSize="small" /> },
+    ],
   },
   {
-    label: "BI Pesquisas",
-    to: "/dashboard/bi",
-    icon: <InsightsRoundedIcon fontSize="small" />,
+    id: "cipavd",
+    label: "CIPAVD",
+    items: [
+      { label: "Tarefas", to: "/tasks", icon: <TaskIcon fontSize="small" /> },
+      { label: "Reuniões", to: "/meetings", icon: <GroupsIcon fontSize="small" /> },
+      { label: "Missões", to: "/missions", icon: <FlagRoundedIcon fontSize="small" /> },
+      { label: "BI Pesquisas", to: "/dashboard/bi", icon: <InsightsRoundedIcon fontSize="small" /> },
+    ],
   },
   {
-    label: "CPCA Denúncias",
-    to: "/cpca-cases",
-    icon: <PolicyRoundedIcon fontSize="small" />,
-  },
-  {
-    label: "CPCA Estatísticas",
-    to: "/cpca-stats",
-    icon: <InsightsRoundedIcon fontSize="small" />,
-  },
-  {
-    label: "Missões",
-    to: "/missions",
-    icon: <FlagRoundedIcon fontSize="small" />,
-  },
-  {
-    label: "Atividades de Campo",
-    to: "/activities",
-    icon: <EventNoteIcon fontSize="small" />,
-  },
-  { label: "Tarefas", to: "/tasks", icon: <TaskIcon fontSize="small" /> },
-  {
-    label: "Modelos de tarefa",
-    to: "/templates",
-    icon: <TaskIcon fontSize="small" />,
-  },
-  {
-    label: "Comunicação Social",
-    to: "/social-communication",
-    icon: <NewspaperRoundedIcon fontSize="small" />,
-  },
-  {
-    label: "Cronograma",
-    to: "/gantt",
-    icon: <TimelineIcon fontSize="small" />,
-  },
-  {
-    label: "Calendário",
-    to: "/calendar",
-    icon: <CalendarMonthIcon fontSize="small" />,
-  },
-  { label: "Reuniões", to: "/meetings", icon: <GroupsIcon fontSize="small" /> },
-  {
-    label: "GSD e Recrutas",
-    to: "/gsd-recruits",
-    icon: <PeopleIcon fontSize="small" />,
-  },
-  { label: "Avisos", to: "/notices", icon: <CampaignIcon fontSize="small" /> },
-  {
-    label: "Checklists",
-    to: "/checklists",
-    icon: <ChecklistIcon fontSize="small" />,
-  },
-  { label: "Elos", to: "/elos", icon: <ContactPhoneIcon fontSize="small" /> },
-  {
-    label: "Organograma",
-    to: "/org-chart",
-    icon: <AccountTreeIcon fontSize="small" />,
-  },
-  { label: "Auditoria", to: "/audit", icon: <HistoryIcon fontSize="small" /> },
-  {
-    label: "Tipos de Elo",
-    to: "/admin/elo-roles",
-    icon: <ContactPhoneIcon fontSize="small" />,
-  },
-  {
-    label: "OMs (CRUD)",
-    to: "/admin/oms",
-    icon: <BusinessIcon fontSize="small" />,
-  },
-  {
-    label: "Postos",
-    to: "/admin/postos",
-    icon: <ContactPhoneIcon fontSize="small" />,
-  },
-  {
-    label: "Fases",
-    to: "/admin/phases",
-    icon: <SettingsIcon fontSize="small" />,
-  },
-  {
-    label: "Admin RBAC",
-    to: "/admin/rbac",
-    icon: <SettingsIcon fontSize="small" />,
+    id: "cpca",
+    label: "CPCA",
+    items: [
+      { label: "Denúncias", to: "/cpca-cases", icon: <PolicyRoundedIcon fontSize="small" /> },
+      { label: "Estatísticas", to: "/cpca-stats", icon: <InsightsRoundedIcon fontSize="small" /> },
+      { label: "OMs", to: "/admin/oms", icon: <BusinessIcon fontSize="small" /> },
+    ],
   },
 ];
 
@@ -290,7 +232,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     window.location.assign("/login");
   };
 
-  const visibleNavItems = navItems.filter((item) => {
+  const canSeeNavItem = (item: NavItem) => {
     const isNationalManager = hasNationalManagementScope(me);
     const isBiRole = hasAnyRole(me, [
       ROLE_COORDENACAO_CIPAVD,
@@ -304,23 +246,23 @@ export function AppShell({ children }: { children: ReactNode }) {
     const activeRoleName = normalizeRoleName(
       me?.activeRole?.name ?? me?.roles?.[0]?.name,
     );
-    const cpcaOnlyMode = activeRoleName === normalizeRoleName(ROLE_CPCA);
-
-    // Papel CPCA (OM): menu operacional restrito apenas ao fluxo de denúncias.
-    if (cpcaOnlyMode) {
-      return item.to === "/cpca-cases";
-    }
-
-    if (item.to === "/dashboard/national") {
+    if (item.to === "/dashboard/smif") {
       return isNationalManager && can(me, "dashboard", "view");
     }
-    if (item.to === "/admin/rbac") {
-      return can(me, "admin_rbac", "export") || can(me, "roles", "view");
-    }
-    if (item.to === "/dashboard/executive") {
+    if (item.to === "/dashboard/cipavd") {
       return (
         can(me, "dashboard", "view") &&
         (me?.executive_hide_pii || can(me, "roles", "view"))
+      );
+    }
+    if (item.to === "/dashboard/cpca") {
+      return (
+        hasAnyRole(me, [
+          ROLE_CPCA,
+          ROLE_COORDENACAO_CIPAVD,
+          ROLE_COMANDANTE_COMGEP,
+          ROLE_TI,
+        ]) && can(me, "cpca_cases", "view")
       );
     }
     if (item.to === "/dashboard/bi") {
@@ -352,9 +294,6 @@ export function AppShell({ children }: { children: ReactNode }) {
         ]) && can(me, "cpca_cases", "view")
       );
     }
-    if (item.to === "/audit") {
-      return hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]);
-    }
     if (item.to === "/notices") {
       return canSeeCommissionTiBoards && can(me, "notices", "view");
     }
@@ -376,29 +315,24 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (item.to === "/activities") {
       return can(me, "task_instances", "view");
     }
-    if (item.to === "/calendar") {
-      return isNationalManager && can(me, "calendar", "view");
-    }
     if (item.to === "/meetings") {
       return canSeeCommissionTiBoards && can(me, "meetings", "view");
     }
     if (item.to === "/gsd-recruits") {
       return can(me, "localities", "view") || can(me, "dashboard", "view");
     }
-    if (item.to === "/admin/elo-roles") {
-      return can(me, "elo_roles", "view");
-    }
-    if (item.to === "/admin/postos") {
-      return can(me, "postos", "view");
-    }
     if (item.to === "/admin/oms") {
       return hasRole(me, ROLE_TI) && can(me, "localities", "view");
     }
-    if (item.to === "/admin/phases") {
-      return can(me, "phases", "update");
-    }
     return true;
-  });
+  };
+
+  const visibleNavSections = navSections
+    .map((section) => ({
+      ...section,
+      items: section.items.filter(canSeeNavItem),
+    }))
+    .filter((section) => section.items.length > 0);
 
   useEffect(() => {
     const fromUrl = (searchParams.get("localityId") ?? "").trim();
@@ -468,7 +402,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 letterSpacing: "0.08em",
               }}
             >
-              MÓDULOS
+              NAVEGAÇÃO
             </Typography>
           )}
           {!isMobile && (
@@ -493,59 +427,88 @@ export function AppShell({ children }: { children: ReactNode }) {
             </Tooltip>
           )}
         </Box>
-        <List disablePadding>
-          {visibleNavItems.map((item) => {
-            const selected =
-              location.pathname === item.to ||
-              location.pathname.startsWith(`${item.to}/`);
-            const button = (
-              <ListItemButton
-                key={item.to}
-                component={Link}
-                to={
-                  canUseGlobalLocalityFilter && globalLocalityId
-                    ? `${item.to}?localityId=${encodeURIComponent(globalLocalityId)}`
-                    : item.to
-                }
-                selected={selected}
-                onClick={() => setMobileOpen(false)}
+        {visibleNavSections.map((section, sectionIndex) => (
+          <Box key={section.id}>
+            {!sidebarCollapsed && section.label && (
+              <Typography
+                variant="caption"
                 sx={{
-                  justifyContent: sidebarCollapsed ? "center" : "flex-start",
-                  px: sidebarCollapsed ? 1 : undefined,
+                  display: "block",
+                  px: 1.2,
+                  pt: sectionIndex === 0 ? 0.6 : 1.4,
+                  pb: 0.6,
+                  color: "text.secondary",
+                  fontWeight: 700,
+                  letterSpacing: "0.08em",
                 }}
               >
-                <ListItemIcon
-                  sx={{
-                    minWidth: sidebarCollapsed ? 0 : 34,
-                    color: selected ? "primary.dark" : "text.secondary",
-                  }}
-                >
-                  {item.icon}
-                </ListItemIcon>
-                {!sidebarCollapsed && (
-                  <ListItemText
-                    primary={item.label}
-                    primaryTypographyProps={{
-                      fontSize: 13.5,
-                      fontWeight: selected ? 700 : 600,
-                      lineHeight: 1.22,
+                {section.label}
+              </Typography>
+            )}
+            <List disablePadding>
+              {section.items.map((item) => {
+                const selected =
+                  location.pathname === item.to ||
+                  location.pathname.startsWith(`${item.to}/`);
+                const button = (
+                  <ListItemButton
+                    key={item.to}
+                    component={Link}
+                    to={
+                      canUseGlobalLocalityFilter && globalLocalityId
+                        ? `${item.to}?localityId=${encodeURIComponent(globalLocalityId)}`
+                        : item.to
+                    }
+                    selected={selected}
+                    onClick={() => setMobileOpen(false)}
+                    sx={{
+                      justifyContent: sidebarCollapsed ? "center" : "flex-start",
+                      px: sidebarCollapsed ? 1 : undefined,
                     }}
-                  />
-                )}
-              </ListItemButton>
-            );
-            if (!sidebarCollapsed) return button;
-            return (
-              <Tooltip
-                key={`tt-${item.to}`}
-                title={item.label}
-                placement="right"
-              >
-                {button}
-              </Tooltip>
-            );
-          })}
-        </List>
+                  >
+                    <ListItemIcon
+                      sx={{
+                        minWidth: sidebarCollapsed ? 0 : 34,
+                        color: selected ? "primary.dark" : "text.secondary",
+                      }}
+                    >
+                      {item.icon}
+                    </ListItemIcon>
+                    {!sidebarCollapsed && (
+                      <ListItemText
+                        primary={item.label}
+                        primaryTypographyProps={{
+                          fontSize: 13.5,
+                          fontWeight: selected ? 700 : 600,
+                          lineHeight: 1.22,
+                        }}
+                      />
+                    )}
+                  </ListItemButton>
+                );
+                if (!sidebarCollapsed) return button;
+                return (
+                  <Tooltip
+                    key={`tt-${item.to}`}
+                    title={item.label}
+                    placement="right"
+                  >
+                    {button}
+                  </Tooltip>
+                );
+              })}
+            </List>
+            {sectionIndex < visibleNavSections.length - 1 && (
+              <Divider
+                sx={{
+                  my: 1.1,
+                  mx: sidebarCollapsed ? 0.6 : 0.8,
+                  opacity: 0.45,
+                }}
+              />
+            )}
+          </Box>
+        ))}
       </Box>
     ),
     [
@@ -554,7 +517,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       isMobile,
       location.pathname,
       sidebarCollapsed,
-      visibleNavItems,
+      visibleNavSections,
     ],
   );
 

@@ -73,8 +73,8 @@ export function canEditRecruitsCount(
 }
 
 export function resolveHomePath(user: MePayload | undefined) {
-  if (hasNationalManagementScope(user)) return '/dashboard/national';
+  if (hasNationalManagementScope(user)) return '/dashboard/smif';
   if (can(user, 'cpca_cases', 'view')) return '/cpca-cases';
   if (can(user, 'task_instances', 'view')) return '/activities';
-  return '/dashboard/executive';
+  return '/dashboard/cipavd';
 }

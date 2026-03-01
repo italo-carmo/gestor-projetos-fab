@@ -168,7 +168,7 @@ export function DashboardExecutivePage() {
   return (
     <Box>
       <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
-        <Typography variant="h4">Dashboard Executivo</Typography>
+        <Typography variant="h4">Painel de Comando - CIPAVD</Typography>
         <Button variant="outlined" onClick={downloadCsv}>
           Exportar CSV
         </Button>

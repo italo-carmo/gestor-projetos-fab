@@ -317,11 +317,10 @@ export function CpcaStatsPage() {
       >
         <Box>
           <Typography variant="h5" fontWeight={700}>
-            CPCA - Estatísticas de Assédio
+            Painel de Comando - CPCA
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Indicadores de risco, tempo de resposta e priorização por OM para
-            apoio ao comando.
+            Indicadores de denúncias, risco, tempo de resposta e priorização por OM para apoio ao comando.
           </Typography>
         </Box>
         <Button component={Link} to="/cpca-cases" variant="outlined">
