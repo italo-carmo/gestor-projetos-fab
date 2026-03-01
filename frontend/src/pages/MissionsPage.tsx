@@ -639,11 +639,14 @@ export function MissionsPage() {
                             size="small"
                             options={filteredUsers}
                             getOptionLabel={(option: any) => {
+                              if (!option) return '';
                               const roles = option.roles?.map((r: any) => r.role?.name).filter(Boolean).join(', ') || '';
-                              return `${option.name}${option.email ? ` • ${option.email}` : ''}${roles ? ` • ${roles}` : ''}`;
+                              return `${option.name || ''}${option.email ? ` • ${option.email}` : ''}${roles ? ` • ${roles}` : ''}`;
                             }}
-                            getOptionKey={(option: any) => option.id}
-                            isOptionEqualToValue={(option: any, value: any) => option.id === value?.id}
+                            isOptionEqualToValue={(option: any, value: any) => {
+                              if (!option || !value) return false;
+                              return option.id === value.id;
+                            }}
                             value={filteredUsers.find((u: any) => u.id === selectedUserId) || null}
                             onChange={(_, newValue: any) => setSelectedUserId(newValue?.id || null)}
                             inputValue={userSearch}
@@ -658,7 +661,7 @@ export function MissionsPage() {
                             renderOption={(props, option: any) => {
                               const roles = option.roles?.map((r: any) => r.role?.name).filter(Boolean).join(', ') || '';
                               return (
-                                <Box component="li" {...props}>
+                                <li {...props} key={option.id}>
                                   <Stack>
                                     <Typography variant="body2" fontWeight={500}>
                                       {option.name}
@@ -668,7 +671,7 @@ export function MissionsPage() {
                                       {roles && ` • ${roles}`}
                                     </Typography>
                                   </Stack>
-                                </Box>
+                                </li>
                               );
                             }}
                             loading={usersQuery.isLoading}
