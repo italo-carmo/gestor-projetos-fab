@@ -283,6 +283,19 @@ export function MissionsPage() {
       .slice(0, 50);
   }, [usersQuery.data?.items, userSearch]);
 
+  const validParticipants = useMemo(() => {
+    if (!selectedMission?.participants) return [];
+    const participants = selectedMission.participants as any[];
+    const seen = new Set<string>();
+    return participants
+      .filter((p: any) => {
+        if (!p?.id) return false;
+        if (seen.has(p.id)) return false;
+        seen.add(p.id);
+        return true;
+      });
+  }, [selectedMission?.participants]);
+
   const handleRemoveParticipant = async (participantId: string) => {
     if (!selectedMission) return;
 
@@ -694,16 +707,16 @@ export function MissionsPage() {
                       <Divider sx={{ my: 2 }} />
 
                       <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 1.2 }}>
-                        {(selectedMission.participants ?? []).map((participant: any) => (
+                        {validParticipants.map((participant: any) => (
                           <Chip
                             key={participant.id}
-                            label={`${participant.name}${participant.email ? ` • ${participant.email}` : participant.cpf ? ` • ${participant.cpf}` : ''}`}
+                            label={`${participant.name || 'Sem nome'}${participant.email ? ` • ${participant.email}` : participant.cpf ? ` • ${participant.cpf}` : ''}`}
                             onDelete={() => handleRemoveParticipant(participant.id)}
                             size="small"
                             color={participant.userId ? 'primary' : 'default'}
                           />
                         ))}
-                        {(selectedMission.participants ?? []).length === 0 && (
+                        {validParticipants.length === 0 && (
                           <Typography variant="body2" color="text.secondary">
                             Nenhum participante cadastrado.
                           </Typography>
