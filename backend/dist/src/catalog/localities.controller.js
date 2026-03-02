@@ -48,7 +48,7 @@ let LocalitiesController = class LocalitiesController {
         return { items };
     }
     async create(dto) {
-        return this.prisma.locality.create({
+        const created = await this.prisma.locality.create({
             data: {
                 code: (0, sanitize_1.sanitizeText)(dto.code),
                 name: (0, sanitize_1.sanitizeText)(dto.name),
@@ -60,6 +60,11 @@ let LocalitiesController = class LocalitiesController {
                 notes: dto.notes ? (0, sanitize_1.sanitizeText)(dto.notes) : null,
             },
         });
+        if (dto.recruitsFemaleCountCurrent && dto.recruitsFemaleCountCurrent > 0) {
+            await this.createInitialRecruits(created.id, dto.recruitsFemaleCountCurrent);
+            await this.syncLocalityRecruitCount(created.id);
+        }
+        return created;
     }
     async update(id, dto, user) {
         this.assertLocalityAccess(id, user);
@@ -87,6 +92,19 @@ let LocalitiesController = class LocalitiesController {
             },
         });
         if (dto.recruitsFemaleCountCurrent !== undefined && dto.recruitsFemaleCountCurrent !== null) {
+            const currentActiveCount = await this.prisma.recruitFemale.count({
+                where: {
+                    localityId: id,
+                    status: {
+                        in: [client_1.RecruitFemaleStatus.RECRUITMENT_TO_START, client_1.RecruitFemaleStatus.RECRUITMENT_STARTED],
+                    },
+                },
+            });
+            const targetCount = dto.recruitsFemaleCountCurrent;
+            if (targetCount > currentActiveCount) {
+                await this.createInitialRecruits(id, targetCount - currentActiveCount);
+            }
+            await this.syncLocalityRecruitCount(id);
             await this.registerRecruitsHistory(id, dto.recruitsFemaleCountCurrent, currentLocality.recruitsFemaleCountCurrent ?? 0, null);
         }
         return updated;
@@ -101,14 +119,60 @@ let LocalitiesController = class LocalitiesController {
         if (!currentLocality)
             (0, http_error_1.throwError)('NOT_FOUND');
         const previousCount = currentLocality.recruitsFemaleCountCurrent ?? 0;
-        const updated = await this.prisma.locality.update({
-            where: { id },
-            data: {
-                recruitsFemaleCountCurrent: dto.recruitsFemaleCountCurrent,
+        const currentActiveCount = await this.prisma.recruitFemale.count({
+            where: {
+                localityId: id,
+                status: {
+                    in: [client_1.RecruitFemaleStatus.RECRUITMENT_TO_START, client_1.RecruitFemaleStatus.RECRUITMENT_STARTED],
+                },
             },
         });
-        await this.registerRecruitsHistory(id, dto.recruitsFemaleCountCurrent, previousCount, dto.dismissalReason ?? null, true);
-        return updated;
+        const targetCount = dto.recruitsFemaleCountCurrent;
+        if (targetCount > currentActiveCount) {
+            await this.createInitialRecruits(id, targetCount - currentActiveCount);
+        }
+        else if (targetCount < currentActiveCount) {
+            const toRemove = currentActiveCount - targetCount;
+            const activeRecruits = await this.prisma.recruitFemale.findMany({
+                where: {
+                    localityId: id,
+                    status: {
+                        in: [client_1.RecruitFemaleStatus.RECRUITMENT_TO_START, client_1.RecruitFemaleStatus.RECRUITMENT_STARTED],
+                    },
+                },
+                orderBy: { createdAt: 'asc' },
+                take: toRemove,
+            });
+            if (activeRecruits.length > 0) {
+                const dismissalReason = dto.dismissalReason ? (0, sanitize_1.sanitizeText)(dto.dismissalReason).trim() : null;
+                if (!dismissalReason) {
+                    (0, http_error_1.throwError)('VALIDATION_ERROR', {
+                        field: 'dismissalReason',
+                        reason: 'DISMISSAL_REASON_REQUIRED',
+                    });
+                }
+                const now = new Date();
+                await this.prisma.recruitFemale.updateMany({
+                    where: {
+                        id: { in: activeRecruits.map((r) => r.id) },
+                    },
+                    data: {
+                        status: client_1.RecruitFemaleStatus.DISMISSED,
+                        dismissalReason,
+                        dismissedAt: now,
+                        destinationLocalityId: null,
+                        designatedAt: null,
+                    },
+                });
+            }
+        }
+        await this.syncLocalityRecruitCount(id);
+        const updated = await this.prisma.locality.findUnique({
+            where: { id },
+            select: { recruitsFemaleCountCurrent: true },
+        });
+        await this.registerRecruitsHistory(id, updated?.recruitsFemaleCountCurrent ?? targetCount, previousCount, dto.dismissalReason ?? null, true);
+        return updated ?? { id, recruitsFemaleCountCurrent: targetCount };
     }
     async listRecruitDesignations(id, user) {
         this.assertRecruitsEditorAccess(id, user);
@@ -431,6 +495,28 @@ let LocalitiesController = class LocalitiesController {
                 designatedAt: item.designatedAt?.toISOString() ?? null,
             })),
         };
+    }
+    async createInitialRecruits(localityId, count) {
+        if (count <= 0)
+            return;
+        const locality = await this.prisma.locality.findUnique({
+            where: { id: localityId },
+            select: { code: true, name: true },
+        });
+        if (!locality)
+            return;
+        const now = new Date();
+        const recruits = Array.from({ length: count }, (_, index) => ({
+            id: `rf_${(0, crypto_1.randomUUID)().replace(/-/g, '')}`,
+            localityId,
+            name: `Recruta ${index + 1} - ${locality.code || locality.name.substring(0, 8)}`,
+            status: client_1.RecruitFemaleStatus.RECRUITMENT_TO_START,
+            createdAt: now,
+            updatedAt: now,
+        }));
+        if (recruits.length > 0) {
+            await this.prisma.recruitFemale.createMany({ data: recruits });
+        }
     }
     async syncLocalityRecruitCount(localityId) {
         const aggregate = await this.prisma.recruitFemale.count({

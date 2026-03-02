@@ -57,17 +57,10 @@ export declare class LocalitiesController {
         notes: string | null;
     }>;
     updateRecruits(id: string, dto: UpdateLocalityRecruitsDto, user: RbacUser): Promise<{
-        id: string;
-        createdAt: Date;
-        updatedAt: Date;
-        name: string;
-        code: string;
-        commandName: string | null;
-        commanderName: string | null;
-        individualMeetingDate: Date | null;
-        visitDate: Date | null;
         recruitsFemaleCountCurrent: number | null;
-        notes: string | null;
+    } | {
+        id: string;
+        recruitsFemaleCountCurrent: number;
     }>;
     listRecruitDesignations(id: string, user: RbacUser): Promise<{
         localityId: string;
@@ -134,6 +127,7 @@ export declare class LocalitiesController {
     private assertRecruitAssignmentsWithinTotal;
     private buildRecruitDesignationsResponse;
     private buildRecruitMembersResponse;
+    private createInitialRecruits;
     private syncLocalityRecruitCount;
     private registerRecruitsHistory;
 }

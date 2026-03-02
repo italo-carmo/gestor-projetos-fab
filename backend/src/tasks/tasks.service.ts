@@ -2289,34 +2289,27 @@ export class TasksService {
       (a, b) => a.date.localeCompare(b.date),
     );
 
-    const currentPerLocality = localities.map((loc) => ({
-      localityId: loc.id,
-      localityName: loc.name,
-      code: loc.code,
-      recruitsFemaleCountCurrent: loc.recruitsFemaleCountCurrent ?? 0,
-      recruitsByStatus: {
-        toStart: recruitMembers.filter(
-          (member) =>
-            aliasByLocalityId.get(member.localityId) === loc.id &&
-            member.status === 'RECRUITMENT_TO_START',
-        ).length,
-        started: recruitMembers.filter(
-          (member) =>
-            aliasByLocalityId.get(member.localityId) === loc.id &&
-            member.status === 'RECRUITMENT_STARTED',
-        ).length,
-        dismissed: recruitMembers.filter(
-          (member) =>
-            aliasByLocalityId.get(member.localityId) === loc.id &&
-            member.status === 'DISMISSED',
-        ).length,
-        assignedToOm: recruitMembers.filter(
-          (member) =>
-            aliasByLocalityId.get(member.localityId) === loc.id &&
-            member.status === 'ASSIGNED_TO_OM',
-        ).length,
-      },
-    }));
+    const currentPerLocality = localities.map((loc) => {
+      const locMembers = recruitMembers.filter(
+        (member) => aliasByLocalityId.get(member.localityId) === loc.id,
+      );
+      const activeCount = locMembers.filter(
+        (member) =>
+          member.status === 'RECRUITMENT_TO_START' || member.status === 'RECRUITMENT_STARTED',
+      ).length;
+      return {
+        localityId: loc.id,
+        localityName: loc.name,
+        code: loc.code,
+        recruitsFemaleCountCurrent: activeCount,
+        recruitsByStatus: {
+          toStart: locMembers.filter((member) => member.status === 'RECRUITMENT_TO_START').length,
+          started: locMembers.filter((member) => member.status === 'RECRUITMENT_STARTED').length,
+          dismissed: locMembers.filter((member) => member.status === 'DISMISSED').length,
+          assignedToOm: locMembers.filter((member) => member.status === 'ASSIGNED_TO_OM').length,
+        },
+      };
+    });
 
     const aggregateByMonth: { month: string; value: number }[] = [];
     const monthMap = new Map<string, number>();
