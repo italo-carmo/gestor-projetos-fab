@@ -48,6 +48,7 @@ type UserItem = {
   name: string;
   email: string;
   ldapUid?: string | null;
+  ldapOm?: string | null;
   localityId?: string | null;
   specialtyId?: string | null;
   roles?: UserRoleItem[];
@@ -617,6 +618,7 @@ export function AdminRbacPage() {
                     const localityCode = user.localityId
                       ? (localityById.get(user.localityId)?.code ?? '')
                       : '';
+                    const ldapOm = String(user.ldapOm ?? '').trim();
                     const specialtyName = user.specialtyId
                       ? (specialtyById.get(user.specialtyId)?.name ?? user.specialtyId)
                       : 'Sem especialidade';
@@ -654,7 +656,9 @@ export function AdminRbacPage() {
                           </Stack>
                         </TableCell>
                         <TableCell>
-                          {user.localityId ? (
+                          {ldapOm ? (
+                            ldapOm
+                          ) : user.localityId ? (
                             <>
                               {localityName}
                               {localityCode && (

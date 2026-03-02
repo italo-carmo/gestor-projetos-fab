@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./client";
 import { qk } from "./queryKeys";
-import { toMilitaryDisplayName } from "../app/militaryName";
+import { splitMilitaryNameAndOm, toMilitaryDisplayName } from "../app/militaryName";
 
 export function useMe() {
   return useQuery({
@@ -1153,10 +1153,14 @@ export function useUsers(enabled = true) {
       const data = (await api.get("/users")).data;
       return {
         ...data,
-        items: (data?.items ?? []).map((item: any) => ({
-          ...item,
-          name: toMilitaryDisplayName(item?.name),
-        })),
+        items: (data?.items ?? []).map((item: any) => {
+          const parsed = splitMilitaryNameAndOm(item?.name);
+          return {
+            ...item,
+            name: toMilitaryDisplayName(item?.name),
+            ldapOm: parsed.om,
+          };
+        }),
       };
     },
     enabled,
