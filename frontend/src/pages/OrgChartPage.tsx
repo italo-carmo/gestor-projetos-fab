@@ -47,8 +47,9 @@ export function OrgChartPage() {
     commissionDrawerOpen && canManage,
   );
 
-  const commissionMembersRaw = (commissionMembersQuery.data?.items ?? []) as any[];
+  const commissionMembersRaw = commissionMembersQuery.data?.items as any[] | undefined;
   useEffect(() => {
+    if (!commissionMembersRaw) return;
     setOrderedMembers(commissionMembersRaw);
   }, [commissionMembersRaw]);
 
