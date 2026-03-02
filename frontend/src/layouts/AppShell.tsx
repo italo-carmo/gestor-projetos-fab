@@ -118,6 +118,17 @@ const navSections: NavSection[] = [
       { label: "OMs", to: "/admin/oms", icon: <BusinessIcon fontSize="small" /> },
     ],
   },
+  {
+    id: "ti",
+    label: "TI",
+    items: [
+      { label: "Usuários e Permissões", to: "/admin/rbac", icon: <PeopleIcon fontSize="small" /> },
+      { label: "Postos", to: "/admin/postos", icon: <SettingsIcon fontSize="small" /> },
+      { label: "Fases", to: "/admin/phases", icon: <SettingsIcon fontSize="small" /> },
+      { label: "Papéis de Elo", to: "/admin/elo-roles", icon: <SettingsIcon fontSize="small" /> },
+      { label: "OMs", to: "/admin/oms", icon: <BusinessIcon fontSize="small" /> },
+    ],
+  },
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -323,6 +334,14 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
     if (item.to === "/admin/oms") {
       return hasRole(me, ROLE_TI) && can(me, "localities", "view");
+    }
+    if (
+      item.to === "/admin/rbac" ||
+      item.to === "/admin/postos" ||
+      item.to === "/admin/phases" ||
+      item.to === "/admin/elo-roles"
+    ) {
+      return hasRole(me, ROLE_TI);
     }
     return true;
   };
