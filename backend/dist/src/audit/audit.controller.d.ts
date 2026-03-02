@@ -23,6 +23,7 @@ export declare class AuditController {
                 localityId: string | null;
                 commissionFunction: string | null;
                 commissionPhone: string | null;
+                commissionSeniority: number | null;
             } | null;
             locality: {
                 id: string;

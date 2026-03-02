@@ -57,6 +57,7 @@ export declare class UsersService {
         localityId: string | null;
         commissionFunction: string | null;
         commissionPhone: string | null;
+        commissionSeniority: number | null;
     }) | null, null, import("@prisma/client/runtime/client").DefaultArgs, import("@prisma/client").Prisma.PrismaClientOptions>;
     findByLdapUid(ldapUid: string): import("@prisma/client").Prisma.Prisma__UserClient<({
         roles: ({
@@ -110,6 +111,7 @@ export declare class UsersService {
         localityId: string | null;
         commissionFunction: string | null;
         commissionPhone: string | null;
+        commissionSeniority: number | null;
     }) | null, null, import("@prisma/client/runtime/client").DefaultArgs, import("@prisma/client").Prisma.PrismaClientOptions>;
     findForAuth(identifier: string): import("@prisma/client").Prisma.Prisma__UserClient<({
         roles: ({
@@ -163,6 +165,7 @@ export declare class UsersService {
         localityId: string | null;
         commissionFunction: string | null;
         commissionPhone: string | null;
+        commissionSeniority: number | null;
     }) | null, null, import("@prisma/client/runtime/client").DefaultArgs, import("@prisma/client").Prisma.PrismaClientOptions>;
     findById(id: string): import("@prisma/client").Prisma.Prisma__UserClient<({
         roles: ({
@@ -216,6 +219,7 @@ export declare class UsersService {
         localityId: string | null;
         commissionFunction: string | null;
         commissionPhone: string | null;
+        commissionSeniority: number | null;
     }) | null, null, import("@prisma/client/runtime/client").DefaultArgs, import("@prisma/client").Prisma.PrismaClientOptions>;
     list(): Promise<({
         id: string;

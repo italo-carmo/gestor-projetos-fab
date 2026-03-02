@@ -50,6 +50,7 @@ export declare class AuditService {
                 localityId: string | null;
                 commissionFunction: string | null;
                 commissionPhone: string | null;
+                commissionSeniority: number | null;
             } | null;
             locality: {
                 id: string;

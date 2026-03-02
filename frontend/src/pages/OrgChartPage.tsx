@@ -47,15 +47,15 @@ export function OrgChartPage() {
     commissionDrawerOpen && canManage,
   );
 
-  if (commissionMembersQuery.isLoading) return <SkeletonState />;
-  if (commissionMembersQuery.isError) {
-    return <ErrorState error={commissionMembersQuery.error} onRetry={() => commissionMembersQuery.refetch()} />;
-  }
-
   const commissionMembersRaw = (commissionMembersQuery.data?.items ?? []) as any[];
   useEffect(() => {
     setOrderedMembers(commissionMembersRaw);
   }, [commissionMembersRaw]);
+
+  if (commissionMembersQuery.isLoading) return <SkeletonState />;
+  if (commissionMembersQuery.isError) {
+    return <ErrorState error={commissionMembersQuery.error} onRetry={() => commissionMembersQuery.refetch()} />;
+  }
 
   const canReorder = canManage && !commissionSearch.trim();
   const commissionMembers = commissionSearch

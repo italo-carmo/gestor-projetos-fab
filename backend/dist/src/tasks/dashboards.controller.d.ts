@@ -91,6 +91,12 @@ export declare class DashboardsController {
             localityName: string;
             code: string;
             recruitsFemaleCountCurrent: number;
+            recruitsByStatus: {
+                toStart: number;
+                started: number;
+                dismissed: number;
+                assignedToOm: number;
+            };
         }[];
         aggregateByMonth: {
             month: string;
@@ -115,6 +121,15 @@ export declare class DashboardsController {
             recruitsFemaleCount: number;
             turnoverCount: number;
             dismissalReason: string | null;
+        }[];
+        dismissedRecruitsLog: {
+            recruitId: string;
+            recruitName: string;
+            localityId: string;
+            localityName: string;
+            code: string;
+            dismissalReason: string | null;
+            dismissedAt: string | null;
         }[];
     }>;
     executive(from: string | undefined, to: string | undefined, phaseId: string | undefined, threshold: string | undefined, command: string | undefined, localityId: string | undefined, user: RbacUser): Promise<{

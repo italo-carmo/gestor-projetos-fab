@@ -163,6 +163,8 @@ model Locality {
   cpcaCases                  CpcComplaintCase[]
   recruitDesignationsFrom    RecruitOmAssignment[] @relation("RecruitOmAssignmentSource")
   recruitDesignationsTo      RecruitOmAssignment[] @relation("RecruitOmAssignmentDestination")
+  recruitMembers             RecruitFemale[]       @relation("RecruitSourceLocality")
+  recruitsDesignatedHere     RecruitFemale[]       @relation("RecruitDestinationLocality")
 }
 
 model Activity {
@@ -814,6 +816,26 @@ model RecruitOmAssignment {
   @@index([destinationLocalityId])
 }
 
+model RecruitFemale {
+  id                    String             @id @default(cuid())
+  localityId            String
+  name                  String
+  status                RecruitFemaleStatus @default(RECRUITMENT_TO_START)
+  dismissalReason       String?
+  dismissedAt           DateTime?
+  destinationLocalityId String?
+  designatedAt          DateTime?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+
+  locality              Locality           @relation("RecruitSourceLocality", fields: [localityId], references: [id], onDelete: Cascade)
+  destinationLocality   Locality?          @relation("RecruitDestinationLocality", fields: [destinationLocalityId], references: [id], onDelete: SetNull)
+
+  @@index([localityId, status])
+  @@index([destinationLocalityId, status])
+  @@index([status, dismissedAt])
+}
+
 model CpcComplaintCase {
   id                              String             @id @default(cuid())
   caseNumber                      String             @unique
@@ -1126,4 +1148,11 @@ enum ActivityStatus {
 enum BiImportFormat {
   CSV
   XLSX
+}
+
+enum RecruitFemaleStatus {
+  RECRUITMENT_TO_START
+  RECRUITMENT_STARTED
+  DISMISSED
+  ASSIGNED_TO_OM
 }

@@ -594,7 +594,7 @@ export function AdminRbacPage() {
                     <TableCell sx={{ fontWeight: 700 }}>Usuário</TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>CPF/Email</TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>Papel</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Localidade</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>OM</TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>Especialidade</TableCell>
                     <TableCell sx={{ fontWeight: 700, width: 110 }}>Ações</TableCell>
                   </TableRow>
@@ -602,7 +602,7 @@ export function AdminRbacPage() {
                 <TableBody>
                   {filteredUsers.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={6}>
+                      <TableCell colSpan={7}>
                         <Typography variant="body2" color="text.secondary">
                           Nenhum usuário encontrado com os filtros selecionados.
                         </Typography>
@@ -614,6 +614,9 @@ export function AdminRbacPage() {
                     const localityName = user.localityId
                       ? (localityById.get(user.localityId)?.name ?? user.localityId)
                       : 'Sem localidade';
+                    const localityCode = user.localityId
+                      ? (localityById.get(user.localityId)?.code ?? '')
+                      : '';
                     const specialtyName = user.specialtyId
                       ? (specialtyById.get(user.specialtyId)?.name ?? user.specialtyId)
                       : 'Sem especialidade';
@@ -650,7 +653,20 @@ export function AdminRbacPage() {
                             ))}
                           </Stack>
                         </TableCell>
-                        <TableCell>{localityName}</TableCell>
+                        <TableCell>
+                          {user.localityId ? (
+                            <>
+                              {localityName}
+                              {localityCode && (
+                                <Typography variant="caption" color="text.secondary" display="block">
+                                  {localityCode}
+                                </Typography>
+                              )}
+                            </>
+                          ) : (
+                            '—'
+                          )}
+                        </TableCell>
                         <TableCell>{specialtyName}</TableCell>
                         <TableCell>
                           <IconButton

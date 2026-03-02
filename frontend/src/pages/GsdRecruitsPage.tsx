@@ -5,7 +5,8 @@ import {
   Button,
   Card,
   CardContent,
-  Divider,
+  Checkbox,
+  Chip,
   Drawer,
   MenuItem,
   Stack,
@@ -23,11 +24,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
   useDashboardRecruits,
-  useLocalityRecruitDesignations,
+  useLocalityRecruitMembers,
   useMe,
   useOmsCatalog,
-  useUpdateLocalityRecruitDesignations,
-  useUpdateLocalityRecruits,
+  useReplaceLocalityRecruitMembers,
 } from '../api/hooks';
 import { can } from '../app/rbac';
 import { canEditRecruitsCount } from '../app/roleAccess';
@@ -52,20 +52,48 @@ import {
 type RecruitsTab = 'gestao' | 'historico';
 const APP_HEADER_HEIGHT = 96;
 
-type DesignationFormRow = {
-  id: string;
-  destinationLocalityId: string;
-  assignedCount: string;
+type RecruitStatus =
+  | 'RECRUITMENT_TO_START'
+  | 'RECRUITMENT_STARTED'
+  | 'DISMISSED'
+  | 'ASSIGNED_TO_OM';
+
+type RecruitMemberRow = {
+  id?: string;
+  name: string;
+  status: RecruitStatus;
+  dismissalReason?: string | null;
+  destinationLocalityId?: string | null;
+  dismissedAt?: string | null;
+  designatedAt?: string | null;
 };
 
-function createDesignationDraftId() {
-  return `draft-${Math.random().toString(36).slice(2, 10)}`;
-}
+const RECRUIT_STATUS_OPTIONS: Array<{ value: RecruitStatus; label: string }> = [
+  { value: 'RECRUITMENT_TO_START', label: 'Recrutamento a iniciar' },
+  { value: 'RECRUITMENT_STARTED', label: 'Recrutamento iniciado' },
+  { value: 'DISMISSED', label: 'Desligada' },
+  { value: 'ASSIGNED_TO_OM', label: 'Designada para OM' },
+];
 
 function formatHistoryDate(value: string) {
   const [year, month, day] = String(value ?? '').split('-');
   if (!year || !month || !day) return value;
   return `${day}/${month}/${year}`;
+}
+
+function statusLabel(status: RecruitStatus) {
+  return RECRUIT_STATUS_OPTIONS.find((item) => item.value === status)?.label ?? status;
+}
+
+function newRecruitDraft(): RecruitMemberRow {
+  return {
+    name: '',
+    status: 'RECRUITMENT_TO_START',
+    dismissalReason: null,
+    destinationLocalityId: null,
+    dismissedAt: null,
+    designatedAt: null,
+  };
 }
 
 export function GsdRecruitsPage() {
@@ -96,16 +124,17 @@ export function GsdRecruitsPage() {
 
   const recruitsQuery = useDashboardRecruits({}, canLoadRecruitsData);
   const omsCatalogQuery = useOmsCatalog(canLoadRecruitsData);
-  const updateLocalityRecruits = useUpdateLocalityRecruits();
-  const updateLocalityRecruitDesignations = useUpdateLocalityRecruitDesignations();
+  const replaceRecruitMembers = useReplaceLocalityRecruitMembers();
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selected, setSelected] = useState<any | null>(null);
-  const [formRecruitsCount, setFormRecruitsCount] = useState<string>('');
-  const [formDismissalReason, setFormDismissalReason] = useState<string>('');
-  const [designationRows, setDesignationRows] = useState<DesignationFormRow[]>([]);
+  const [memberRows, setMemberRows] = useState<RecruitMemberRow[]>([]);
+  const [selectedRecruitKeys, setSelectedRecruitKeys] = useState<string[]>([]);
+  const [bulkDismissReason, setBulkDismissReason] = useState('');
+  const [bulkDestinationLocalityId, setBulkDestinationLocalityId] = useState('');
+
   const selectedLocalityId = String(selected?.id ?? '');
-  const recruitDesignationsQuery = useLocalityRecruitDesignations(
+  const recruitMembersQuery = useLocalityRecruitMembers(
     selectedLocalityId,
     drawerOpen && Boolean(selectedLocalityId),
   );
@@ -116,6 +145,12 @@ export function GsdRecruitsPage() {
     name: loc.localityName,
     code: loc.code,
     recruitsFemaleCountCurrent: loc.recruitsFemaleCountCurrent,
+    recruitsByStatus: loc.recruitsByStatus ?? {
+      toStart: 0,
+      started: 0,
+      dismissed: 0,
+      assignedToOm: 0,
+    },
   }));
 
   const historyCurrentPerLocality = useMemo(
@@ -126,15 +161,7 @@ export function GsdRecruitsPage() {
     [data?.currentPerLocality],
   );
   const historyAggregateByMonth = data?.aggregateByMonth ?? [];
-  const historyByLocality = useMemo(() => {
-    const visibleLocalityIds = new Set(
-      historyCurrentPerLocality.map((loc: any) => String(loc.localityId)),
-    );
-    return (data?.byLocality ?? []).filter((loc: any) =>
-      visibleLocalityIds.has(String(loc.localityId)),
-    );
-  }, [data?.byLocality, historyCurrentPerLocality]);
-
+  const historyByLocality = data?.byLocality ?? [];
   const historySelectedSeries = useMemo(() => {
     if (!selectedHistoryLocalityId) return [];
     const locality = historyByLocality.find(
@@ -149,29 +176,34 @@ export function GsdRecruitsPage() {
       (entry: any) => String(entry.localityId) === selectedHistoryLocalityId,
     );
   }, [historyLog, selectedHistoryLocalityId]);
-  const historyRowsForTable = useMemo(
-    () => historySelectedLog,
-    [historySelectedLog],
-  );
-
-  const historyTotalCurrent = historyCurrentPerLocality.reduce(
-    (acc: number, loc: any) => acc + (loc.recruitsFemaleCountCurrent ?? 0),
-    0,
-  );
+  const dismissedRecruitsLog = useMemo(() => {
+    const rows = (data?.dismissedRecruitsLog ?? []) as any[];
+    if (!selectedHistoryLocalityId) return rows;
+    return rows.filter(
+      (entry) => String(entry.localityId) === selectedHistoryLocalityId,
+    );
+  }, [data?.dismissedRecruitsLog, selectedHistoryLocalityId]);
 
   useEffect(() => {
     if (!drawerOpen || !selectedLocalityId) return;
-    if (recruitDesignationsQuery.isLoading) return;
-    const rows = ((recruitDesignationsQuery.data?.items ?? []) as Array<any>).map((item) => ({
-      id: String(item.id ?? createDesignationDraftId()),
-      destinationLocalityId: String(item.destinationLocalityId ?? ''),
-      assignedCount: String(item.assignedCount ?? ''),
+    if (recruitMembersQuery.isLoading) return;
+    const rows = ((recruitMembersQuery.data?.items ?? []) as Array<any>).map((item) => ({
+      id: String(item.id ?? ''),
+      name: String(item.name ?? ''),
+      status: item.status as RecruitStatus,
+      dismissalReason: item.dismissalReason ?? null,
+      destinationLocalityId: item.destinationLocalityId ?? null,
+      dismissedAt: item.dismissedAt ?? null,
+      designatedAt: item.designatedAt ?? null,
     }));
-    setDesignationRows(rows);
+    setMemberRows(rows);
+    setSelectedRecruitKeys([]);
+    setBulkDismissReason('');
+    setBulkDestinationLocalityId('');
   }, [
     drawerOpen,
-    recruitDesignationsQuery.data?.items,
-    recruitDesignationsQuery.isLoading,
+    recruitMembersQuery.data?.items,
+    recruitMembersQuery.isLoading,
     selectedLocalityId,
   ]);
 
@@ -183,18 +215,6 @@ export function GsdRecruitsPage() {
     next.set('tab', activeTab);
     setSearchParams(next, { replace: true });
   }, [activeTab, requestedTab, searchParams, setSearchParams, visibleTabs.length]);
-
-  useEffect(() => {
-    if (!selectedHistoryLocalityId) return;
-    const stillAvailable = historyByLocality.some(
-      (loc: any) => String(loc.localityId) === selectedHistoryLocalityId,
-    );
-    if (!stillAvailable) {
-      const next = new URLSearchParams(searchParams);
-      next.delete('localityId');
-      setSearchParams(next, { replace: true });
-    }
-  }, [historyByLocality, searchParams, selectedHistoryLocalityId, setSearchParams]);
 
   if (meLoading) return <SkeletonState />;
   if (!visibleTabs.length) {
@@ -222,119 +242,183 @@ export function GsdRecruitsPage() {
   const openEdit = (locality: any) => {
     if (!canEditRecruitsCount(me, locality.id)) return;
     setSelected(locality);
-    setFormRecruitsCount(String(locality.recruitsFemaleCountCurrent ?? ''));
-    setFormDismissalReason('');
-    setDesignationRows([]);
+    setMemberRows([]);
+    setSelectedRecruitKeys([]);
+    setBulkDismissReason('');
+    setBulkDestinationLocalityId('');
     setDrawerOpen(true);
   };
 
-  const addDesignationRow = () => {
-    setDesignationRows((current) => [
-      ...current,
-      {
-        id: createDesignationDraftId(),
-        destinationLocalityId: '',
-        assignedCount: '',
-      },
-    ]);
-  };
+  const omOptions = ((omsCatalogQuery.data?.items ?? []) as Array<any>).map((item) => ({
+    id: String(item.id),
+    code: String(item.code ?? ''),
+    name: String(item.name ?? item.id),
+  }));
 
-  const updateDesignationRow = (
-    rowId: string,
-    patch: Partial<Pick<DesignationFormRow, 'destinationLocalityId' | 'assignedCount'>>,
-  ) => {
-    setDesignationRows((current) =>
-      current.map((row) => (row.id === rowId ? { ...row, ...patch } : row)),
+  const rowKey = (row: RecruitMemberRow, index: number) => row.id || `draft-${index}`;
+
+  const selectedRows = memberRows.filter((row, index) =>
+    selectedRecruitKeys.includes(rowKey(row, index)),
+  );
+
+  const statusSummary = memberRows.reduce(
+    (acc, row) => {
+      if (row.status === 'RECRUITMENT_TO_START') acc.toStart += 1;
+      else if (row.status === 'RECRUITMENT_STARTED') acc.started += 1;
+      else if (row.status === 'DISMISSED') acc.dismissed += 1;
+      else if (row.status === 'ASSIGNED_TO_OM') acc.assigned += 1;
+      return acc;
+    },
+    { toStart: 0, started: 0, dismissed: 0, assigned: 0 },
+  );
+  const activeCount = statusSummary.toStart + statusSummary.started;
+
+  const setMemberStatus = (keys: string[], status: RecruitStatus) => {
+    const nowIso = new Date().toISOString();
+    setMemberRows((current) =>
+      current.map((row, index) => {
+        const key = rowKey(row, index);
+        if (!keys.includes(key)) return row;
+
+        if (status === 'DISMISSED') {
+          return {
+            ...row,
+            status,
+            destinationLocalityId: null,
+            designatedAt: null,
+            dismissedAt: row.dismissedAt ?? nowIso,
+          };
+        }
+
+        if (status === 'ASSIGNED_TO_OM') {
+          return {
+            ...row,
+            status,
+            dismissalReason: null,
+            dismissedAt: null,
+            designatedAt: row.designatedAt ?? nowIso,
+          };
+        }
+
+        return {
+          ...row,
+          status,
+          dismissalReason: null,
+          dismissedAt: null,
+          destinationLocalityId: null,
+          designatedAt: null,
+        };
+      }),
     );
   };
 
-  const removeDesignationRow = (rowId: string) => {
-    setDesignationRows((current) => current.filter((row) => row.id !== rowId));
+  const handleMarkRecruitmentStarted = () => {
+    if (!selectedRows.length) return;
+    setMemberStatus(selectedRecruitKeys, 'RECRUITMENT_STARTED');
+  };
+
+  const handleMarkRecruitmentToStart = () => {
+    if (!selectedRows.length) return;
+    setMemberStatus(selectedRecruitKeys, 'RECRUITMENT_TO_START');
+  };
+
+  const handleBulkDismiss = () => {
+    if (!selectedRows.length) return;
+    const reason = bulkDismissReason.trim();
+    if (!reason) {
+      toast.push({ message: 'Informe o motivo da baixa para as recrutas selecionadas.', severity: 'warning' });
+      return;
+    }
+
+    const nowIso = new Date().toISOString();
+    setMemberRows((current) =>
+      current.map((row, index) => {
+        const key = rowKey(row, index);
+        if (!selectedRecruitKeys.includes(key)) return row;
+        return {
+          ...row,
+          status: 'DISMISSED',
+          dismissalReason: reason,
+          dismissedAt: row.dismissedAt ?? nowIso,
+          destinationLocalityId: null,
+          designatedAt: null,
+        };
+      }),
+    );
+  };
+
+  const handleBulkDesignate = () => {
+    if (!selectedRows.length) return;
+    const destinationId = String(bulkDestinationLocalityId ?? '').trim();
+    if (!destinationId) {
+      toast.push({ message: 'Selecione a OM de destino para designação.', severity: 'warning' });
+      return;
+    }
+    const nowIso = new Date().toISOString();
+    setMemberRows((current) =>
+      current.map((row, index) => {
+        const key = rowKey(row, index);
+        if (!selectedRecruitKeys.includes(key)) return row;
+        return {
+          ...row,
+          status: 'ASSIGNED_TO_OM',
+          destinationLocalityId: destinationId,
+          designatedAt: row.designatedAt ?? nowIso,
+          dismissalReason: null,
+          dismissedAt: null,
+        };
+      }),
+    );
+  };
+
+  const addRecruitRow = () => {
+    setMemberRows((current) => [...current, newRecruitDraft()]);
+  };
+
+  const removeDraftRow = (index: number) => {
+    setMemberRows((current) => current.filter((_, i) => i !== index));
   };
 
   const handleSave = async () => {
     if (!selected) return;
-    if (recruitDesignationsQuery.isError) {
-      toast.push({
-        message:
-          'Não foi possível validar a distribuição por OM. Reabra a edição e tente novamente.',
-        severity: 'warning',
-      });
+
+    const payloadItems = memberRows
+      .map((row) => ({
+        id: row.id,
+        name: String(row.name ?? '').trim(),
+        status: row.status,
+        dismissalReason: row.dismissalReason?.trim() || null,
+        destinationLocalityId: row.destinationLocalityId || null,
+      }))
+      .filter((row) => row.name);
+
+    if (!payloadItems.length) {
+      toast.push({ message: 'Inclua ao menos uma recruta com nome.', severity: 'warning' });
       return;
     }
 
-    const value = Number(formRecruitsCount);
-    if (!Number.isInteger(value) || value < 0) {
-      toast.push({
-        message: 'Informe um número inteiro maior ou igual a zero.',
-        severity: 'warning',
-      });
-      return;
-    }
-    const previousValue = Number(selected.recruitsFemaleCountCurrent ?? 0);
-    const isDismissal = value < previousValue;
-    if (isDismissal && !formDismissalReason.trim()) {
-      toast.push({
-        message: 'Informe o motivo da baixa/desligamento.',
-        severity: 'warning',
-      });
-      return;
-    }
-
-    const mergedDesignations = new Map<string, number>();
-    for (const row of designationRows) {
-      const destinationLocalityId = String(row.destinationLocalityId ?? '').trim();
-      const countRaw = String(row.assignedCount ?? '').trim();
-      const hasAnyContent = Boolean(destinationLocalityId || countRaw);
-      if (!hasAnyContent) continue;
-
-      const assignedCount = Number(countRaw);
-      if (!destinationLocalityId || !Number.isInteger(assignedCount) || assignedCount <= 0) {
-        toast.push({
-          message:
-            'Preencha cada linha da distribuição com OM e quantidade inteira maior que zero.',
-          severity: 'warning',
-        });
-        return;
-      }
-
-      mergedDesignations.set(
-        destinationLocalityId,
-        (mergedDesignations.get(destinationLocalityId) ?? 0) + assignedCount,
-      );
-    }
-    const designationPayload = Array.from(mergedDesignations.entries()).map(
-      ([destinationLocalityId, assignedCount]) => ({
-        destinationLocalityId,
-        assignedCount,
-      }),
+    const hasDismissWithoutReason = payloadItems.some(
+      (row) => row.status === 'DISMISSED' && !row.dismissalReason,
     );
-    const totalDesignated = designationPayload.reduce(
-      (acc, item) => acc + item.assignedCount,
-      0,
+    if (hasDismissWithoutReason) {
+      toast.push({ message: 'Toda recruta desligada deve ter motivo da baixa.', severity: 'warning' });
+      return;
+    }
+
+    const hasAssignedWithoutDestination = payloadItems.some(
+      (row) => row.status === 'ASSIGNED_TO_OM' && !row.destinationLocalityId,
     );
-    if (totalDesignated > value) {
-      toast.push({
-        message: 'Total designado para OMs não pode ser maior que o total de recrutas.',
-        severity: 'warning',
-      });
+    if (hasAssignedWithoutDestination) {
+      toast.push({ message: 'Toda recruta designada deve ter OM de destino.', severity: 'warning' });
       return;
     }
 
     try {
-      await updateLocalityRecruitDesignations.mutateAsync({
+      await replaceRecruitMembers.mutateAsync({
         localityId: selected.id,
-        items: designationPayload,
+        items: payloadItems,
       });
-      await updateLocalityRecruits.mutateAsync({
-        id: selected.id,
-        recruitsFemaleCountCurrent: value,
-        dismissalReason: isDismissal ? formDismissalReason.trim() : null,
-      });
-      toast.push({
-        message: 'Recrutas e distribuição por OM atualizados com sucesso.',
-        severity: 'success',
-      });
+      toast.push({ message: 'Recrutas atualizadas com sucesso.', severity: 'success' });
       setDrawerOpen(false);
     } catch (error) {
       const payload = parseApiError(error);
@@ -351,25 +435,6 @@ export function GsdRecruitsPage() {
     next.set('localityId', localityId);
     setSearchParams(next, { replace: true });
   };
-  const omOptions = ((omsCatalogQuery.data?.items ?? []) as Array<any>).map((item) => ({
-    id: String(item.id),
-    code: String(item.code ?? ''),
-    name: String(item.name ?? item.id),
-  }));
-  const parsedFormCount = Number(formRecruitsCount);
-  const targetCount =
-    Number.isInteger(parsedFormCount) && parsedFormCount >= 0 ? parsedFormCount : 0;
-  const selectedCurrentCount = Number(selected?.recruitsFemaleCountCurrent ?? 0);
-  const totalDesignatedInForm = designationRows.reduce((acc, row) => {
-    const assignedCount = Number(row.assignedCount);
-    if (!Number.isInteger(assignedCount) || assignedCount <= 0) return acc;
-    return acc + assignedCount;
-  }, 0);
-  const hasDesignationOverflow = totalDesignatedInForm > targetCount;
-  const isDismissalChange =
-    Boolean(selected) &&
-    Number.isFinite(parsedFormCount) &&
-    parsedFormCount < selectedCurrentCount;
 
   return (
     <Box>
@@ -377,7 +442,7 @@ export function GsdRecruitsPage() {
         GSD e Recrutas
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Gestão de quantitativo atual e histórico de recrutas em um único módulo.
+        Gestão individual das recrutas por GSD, com status, baixas e designação de OM por pessoa.
       </Typography>
 
       <Tabs value={activeTab} onChange={handleTabChange} sx={{ mb: 2 }}>
@@ -408,7 +473,10 @@ export function GsdRecruitsPage() {
                       Localidade
                     </TableCell>
                     <TableCell sx={{ color: 'white', fontWeight: 600 }}>
-                      Recrutas femininos
+                      Recrutas ativas
+                    </TableCell>
+                    <TableCell sx={{ color: 'white', fontWeight: 600 }}>
+                      Situação
                     </TableCell>
                     <TableCell sx={{ color: 'white', fontWeight: 600 }} align="right">
                       Ações
@@ -428,8 +496,14 @@ export function GsdRecruitsPage() {
                           </Typography>
                         )}
                       </TableCell>
+                      <TableCell>{locality.recruitsFemaleCountCurrent ?? 0}</TableCell>
                       <TableCell>
-                        {locality.recruitsFemaleCountCurrent ?? 0}
+                        <Stack direction="row" spacing={0.6} flexWrap="wrap" useFlexGap>
+                          <Chip size="small" label={`A iniciar: ${locality.recruitsByStatus?.toStart ?? 0}`} variant="outlined" />
+                          <Chip size="small" label={`Iniciado: ${locality.recruitsByStatus?.started ?? 0}`} color="info" variant="outlined" />
+                          <Chip size="small" label={`Designadas: ${locality.recruitsByStatus?.assignedToOm ?? 0}`} color="success" variant="outlined" />
+                          <Chip size="small" label={`Desligadas: ${locality.recruitsByStatus?.dismissed ?? 0}`} color="warning" variant="outlined" />
+                        </Stack>
                       </TableCell>
                       <TableCell align="right">
                         <Button
@@ -438,7 +512,7 @@ export function GsdRecruitsPage() {
                           onClick={() => openEdit(locality)}
                           disabled={!canEditRecruitsCount(me, locality.id)}
                         >
-                          Editar quantidade
+                          Editar recrutas
                         </Button>
                         {canViewHistoryTab && (
                           <Button
@@ -489,55 +563,37 @@ export function GsdRecruitsPage() {
                       description="Nenhuma localidade no seu escopo com recrutas maior que zero."
                     />
                   ) : (
-                    <>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                        Total atual: <strong>{historyTotalCurrent}</strong> recrutas femininas
-                      </Typography>
-                      <Table size="small">
-                        <TableHead>
-                          <TableRow sx={{ bgcolor: 'primary.main' }}>
-                            <TableCell sx={{ color: 'white', fontWeight: 600 }}>
-                              Localidade
-                            </TableCell>
-                            <TableCell sx={{ color: 'white', fontWeight: 600 }} align="right">
-                              Quantidade
-                            </TableCell>
-                            <TableCell sx={{ color: 'white', fontWeight: 600 }}>Ação</TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {historyCurrentPerLocality.map((locality: any) => (
-                            <TableRow key={locality.localityId} hover>
-                              <TableCell>
-                                <Typography variant="body2" fontWeight={600}>
-                                  {locality.localityName}
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow sx={{ bgcolor: 'primary.main' }}>
+                          <TableCell sx={{ color: 'white', fontWeight: 600 }}>
+                            Localidade
+                          </TableCell>
+                          <TableCell sx={{ color: 'white', fontWeight: 600 }} align="right">
+                            Quantidade
+                          </TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {historyCurrentPerLocality.map((locality: any) => (
+                          <TableRow key={locality.localityId} hover>
+                            <TableCell>
+                              <Typography variant="body2" fontWeight={600}>
+                                {locality.localityName}
+                              </Typography>
+                              {locality.code && (
+                                <Typography variant="caption" color="text.secondary">
+                                  {locality.code}
                                 </Typography>
-                                {locality.code && (
-                                  <Typography variant="caption" color="text.secondary">
-                                    {locality.code}
-                                  </Typography>
-                                )}
-                              </TableCell>
-                              <TableCell align="right">
-                                {locality.recruitsFemaleCountCurrent ?? 0}
-                              </TableCell>
-                              <TableCell>
-                                <Button
-                                  size="small"
-                                  onClick={() => {
-                                    const next = new URLSearchParams(searchParams);
-                                    next.set('tab', 'gestao');
-                                    setSearchParams(next, { replace: true });
-                                  }}
-                                >
-                                  Editar em gestão
-                                </Button>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </>
+                              )}
+                            </TableCell>
+                            <TableCell align="right">
+                              {locality.recruitsFemaleCountCurrent ?? 0}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
                   )}
                 </CardContent>
               </Card>
@@ -570,7 +626,7 @@ export function GsdRecruitsPage() {
               )}
 
               {historyByLocality.length > 0 && (
-                <Card>
+                <Card sx={{ mb: 2 }}>
                   <CardContent>
                     <Typography variant="h6" gutterBottom>
                       Histórico por localidade
@@ -621,24 +677,16 @@ export function GsdRecruitsPage() {
                         </LineChart>
                       </ResponsiveContainer>
                     )}
-                    {selectedHistoryLocalityId && historySelectedSeries.length === 0 && (
-                      <Typography variant="body2" color="text.secondary">
-                        Nenhum ponto de histórico para esta localidade ainda.
-                      </Typography>
-                    )}
                   </CardContent>
                 </Card>
               )}
 
-              <Card sx={{ mt: 2 }}>
+              <Card sx={{ mb: 2 }}>
                 <CardContent>
                   <Typography variant="h6" gutterBottom>
-                    Histórico consultável de alterações
+                    Histórico de alterações por quantidade
                   </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                    Quantidade por época e motivo de desligamento (quando houver baixa).
-                  </Typography>
-                  {historyRowsForTable.length === 0 ? (
+                  {historySelectedLog.length === 0 ? (
                     <Typography variant="body2" color="text.secondary">
                       Sem registros para o filtro/localidade selecionado.
                     </Typography>
@@ -659,39 +707,22 @@ export function GsdRecruitsPage() {
                             Baixas
                           </TableCell>
                           <TableCell sx={{ color: 'white', fontWeight: 600 }}>
-                            Motivo do desligamento
+                            Motivo
                           </TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {historyRowsForTable.map((entry: any, index: number) => (
+                        {historySelectedLog.map((entry: any, index: number) => (
                           <TableRow key={`${entry.localityId}:${entry.date}:${index}`} hover>
                             <TableCell>{formatHistoryDate(entry.date)}</TableCell>
                             <TableCell>
                               <Typography variant="body2" fontWeight={600}>
                                 {entry.localityName}
                               </Typography>
-                              {entry.code && (
-                                <Typography variant="caption" color="text.secondary">
-                                  {entry.code}
-                                </Typography>
-                              )}
                             </TableCell>
-                            <TableCell align="right">
-                              {entry.recruitsFemaleCount ?? 0}
-                            </TableCell>
-                            <TableCell align="right">
-                              {entry.turnoverCount ?? 0}
-                            </TableCell>
-                            <TableCell>
-                              <Typography
-                                variant="body2"
-                                color="text.secondary"
-                                sx={{ whiteSpace: 'pre-wrap' }}
-                              >
-                                {entry.dismissalReason || '—'}
-                              </Typography>
-                            </TableCell>
+                            <TableCell align="right">{entry.recruitsFemaleCount ?? 0}</TableCell>
+                            <TableCell align="right">{entry.turnoverCount ?? 0}</TableCell>
+                            <TableCell>{entry.dismissalReason || '—'}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -700,18 +731,43 @@ export function GsdRecruitsPage() {
                 </CardContent>
               </Card>
 
-              {historyCurrentPerLocality.length > 0 &&
-                historyAggregateByMonth.length === 0 &&
-                historyByLocality.length === 0 && (
-                  <Card>
-                    <CardContent>
-                      <Typography variant="body2" color="text.secondary">
-                        O histórico será preenchido conforme as localidades forem
-                        atualizando o número de recrutas em Gestão por localidade.
-                      </Typography>
-                    </CardContent>
-                  </Card>
-                )}
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    Recrutas desligadas (individual)
+                  </Typography>
+                  {dismissedRecruitsLog.length === 0 ? (
+                    <Typography variant="body2" color="text.secondary">
+                      Nenhuma baixa individual registrada para o filtro atual.
+                    </Typography>
+                  ) : (
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow sx={{ bgcolor: 'primary.main' }}>
+                          <TableCell sx={{ color: 'white', fontWeight: 600 }}>Data da baixa</TableCell>
+                          <TableCell sx={{ color: 'white', fontWeight: 600 }}>Recruta</TableCell>
+                          <TableCell sx={{ color: 'white', fontWeight: 600 }}>Localidade</TableCell>
+                          <TableCell sx={{ color: 'white', fontWeight: 600 }}>Motivo</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {dismissedRecruitsLog.map((entry: any) => (
+                          <TableRow key={entry.recruitId} hover>
+                            <TableCell>
+                              {entry.dismissedAt
+                                ? new Date(entry.dismissedAt).toLocaleDateString('pt-BR')
+                                : '—'}
+                            </TableCell>
+                            <TableCell>{entry.recruitName}</TableCell>
+                            <TableCell>{entry.localityName}</TableCell>
+                            <TableCell>{entry.dismissalReason || '—'}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </CardContent>
+              </Card>
             </>
           )}
         </Box>
@@ -723,20 +779,14 @@ export function GsdRecruitsPage() {
         onClose={() => setDrawerOpen(false)}
         PaperProps={{
           sx: {
-            width: { xs: '100%', md: 620 },
+            width: { xs: '100%', md: 760 },
             mt: `${APP_HEADER_HEIGHT}px`,
             height: `calc(100% - ${APP_HEADER_HEIGHT}px)`,
           },
         }}
       >
-        <Box
-          p={3}
-          display="flex"
-          flexDirection="column"
-          gap={2}
-          sx={{ height: '100%', overflow: 'auto' }}
-        >
-          <Typography variant="h6">Atualizar recrutas</Typography>
+        <Box p={3} display="flex" flexDirection="column" gap={2} sx={{ height: '100%', overflow: 'auto' }}>
+          <Typography variant="h6">Gestão individual de recrutas</Typography>
           {selected && (
             <>
               <TextField
@@ -746,146 +796,228 @@ export function GsdRecruitsPage() {
                 fullWidth
                 InputProps={{ readOnly: true }}
               />
-              <TextField
-                size="small"
-                type="number"
-                label="Recrutas femininos"
-                value={formRecruitsCount}
-                onChange={(e) => {
-                  const nextValue = e.target.value;
-                  setFormRecruitsCount(nextValue);
-                  const parsed = Number(nextValue);
-                  if (!Number.isFinite(parsed) || parsed >= selectedCurrentCount) {
-                    setFormDismissalReason('');
-                  }
-                }}
-                fullWidth
-                inputProps={{ min: 0, step: 1 }}
-              />
-              <TextField
-                size="small"
-                label="Motivo da baixa (desligamento)"
-                value={formDismissalReason}
-                onChange={(e) => setFormDismissalReason(e.target.value)}
-                fullWidth
-                multiline
-                minRows={4}
-                helperText={
-                  isDismissalChange
-                    ? 'Obrigatório quando houver redução da quantidade. Campo de texto livre.'
-                    : 'Texto livre. Será considerado no histórico quando houver baixa.'
-                }
-              />
-              <Typography variant="caption" color="text.secondary">
-                O sistema registra automaticamente o histórico da alteração na data
-                de hoje, incluindo motivo da baixa quando houver desligamento.
-              </Typography>
-              <Divider sx={{ my: 0.5 }} />
-              <Box>
-                <Stack
-                  direction={{ xs: 'column', sm: 'row' }}
-                  alignItems={{ xs: 'flex-start', sm: 'center' }}
-                  justifyContent="space-between"
-                  spacing={1}
-                  sx={{ mb: 1 }}
-                >
-                  <Box>
-                    <Typography variant="subtitle1" fontWeight={700}>
-                      Designação por OM pós-estágio
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Informe pares de quantidade e OM. Você pode incluir, editar e remover linhas.
-                    </Typography>
-                  </Box>
-                  <Button size="small" variant="outlined" onClick={addDesignationRow}>
-                    Adicionar OM
-                  </Button>
-                </Stack>
 
-                <Alert
-                  severity={hasDesignationOverflow ? 'error' : 'info'}
-                  sx={{ mb: 1.2 }}
-                >
-                  Designado: <strong>{totalDesignatedInForm}</strong> | Total de recrutas:{' '}
-                  <strong>{targetCount}</strong> | Pendente:{' '}
-                  <strong>{Math.max(0, targetCount - totalDesignatedInForm)}</strong>
-                </Alert>
+              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                <Chip label={`Ativas: ${activeCount}`} color="primary" />
+                <Chip label={`A iniciar: ${statusSummary.toStart}`} variant="outlined" />
+                <Chip label={`Iniciadas: ${statusSummary.started}`} variant="outlined" />
+                <Chip label={`Designadas: ${statusSummary.assigned}`} color="success" variant="outlined" />
+                <Chip label={`Desligadas: ${statusSummary.dismissed}`} color="warning" variant="outlined" />
+              </Stack>
 
-                {recruitDesignationsQuery.isLoading && (
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                    Carregando distribuição atual...
-                  </Typography>
-                )}
-                {recruitDesignationsQuery.isError && (
-                  <Alert severity="warning" sx={{ mb: 1 }}>
-                    Não foi possível carregar a distribuição por OM desta localidade.
-                  </Alert>
-                )}
+              <Alert severity="info">
+                Selecione uma ou mais recrutas para ações em lote: iniciar recrutamento, desligar com motivo e designar para OM.
+              </Alert>
 
-                {designationRows.length === 0 && !recruitDesignationsQuery.isLoading && (
-                  <Typography variant="body2" color="text.secondary">
-                    Nenhuma OM vinculada ainda. Use "Adicionar OM" para começar.
-                  </Typography>
-                )}
+              <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} alignItems={{ xs: 'stretch', md: 'center' }}>
+                <Button variant="outlined" onClick={addRecruitRow}>Adicionar recruta</Button>
+                <Button variant="outlined" onClick={handleMarkRecruitmentToStart} disabled={!selectedRows.length}>
+                  Marcar a iniciar
+                </Button>
+                <Button variant="outlined" onClick={handleMarkRecruitmentStarted} disabled={!selectedRows.length}>
+                  Marcar recrutamento iniciado
+                </Button>
+              </Stack>
 
-                <Stack spacing={1.2}>
-                  {designationRows.map((row) => (
-                    <Stack
-                      key={row.id}
-                      direction={{ xs: 'column', md: 'row' }}
-                      spacing={1}
-                      alignItems={{ xs: 'stretch', md: 'center' }}
-                    >
-                      <TextField
-                        size="small"
-                        type="number"
-                        label="Quantidade"
-                        value={row.assignedCount}
-                        onChange={(event) =>
-                          updateDesignationRow(row.id, {
-                            assignedCount: event.target.value,
-                          })
-                        }
-                        inputProps={{ min: 1, step: 1 }}
-                        sx={{ width: { xs: '100%', md: 130 } }}
-                      />
-                      <Autocomplete
-                        size="small"
-                        options={omOptions}
-                        value={
-                          omOptions.find((option) => option.id === row.destinationLocalityId) ??
-                          null
-                        }
-                        onChange={(_, option) =>
-                          updateDesignationRow(row.id, {
-                            destinationLocalityId: option?.id ?? '',
-                          })
-                        }
-                        getOptionLabel={(option) =>
-                          option.code ? `${option.name} (${option.code})` : option.name
-                        }
-                        isOptionEqualToValue={(option, value) => option.id === value.id}
-                        renderInput={(params) => (
-                          <TextField
-                            {...params}
-                            label="OM de destino"
-                            placeholder="Digite para filtrar"
-                          />
-                        )}
-                        sx={{ flex: 1 }}
-                      />
-                      <Button
-                        color="error"
-                        variant="text"
-                        onClick={() => removeDesignationRow(row.id)}
-                        sx={{ alignSelf: { xs: 'flex-end', md: 'center' } }}
-                      >
-                        Remover
-                      </Button>
-                    </Stack>
-                  ))}
-                </Stack>
-              </Box>
+              <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} alignItems={{ xs: 'stretch', md: 'center' }}>
+                <TextField
+                  size="small"
+                  label="Motivo da baixa"
+                  value={bulkDismissReason}
+                  onChange={(event) => setBulkDismissReason(event.target.value)}
+                  sx={{ minWidth: 260 }}
+                />
+                <Button color="warning" variant="outlined" onClick={handleBulkDismiss} disabled={!selectedRows.length}>
+                  Registrar baixa das selecionadas
+                </Button>
+              </Stack>
+
+              <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} alignItems={{ xs: 'stretch', md: 'center' }}>
+                <Autocomplete
+                  size="small"
+                  options={omOptions}
+                  value={omOptions.find((option) => option.id === bulkDestinationLocalityId) ?? null}
+                  onChange={(_, option) => setBulkDestinationLocalityId(option?.id ?? '')}
+                  getOptionLabel={(option) => option.code ? `${option.name} (${option.code})` : option.name}
+                  isOptionEqualToValue={(option, value) => option.id === value.id}
+                  renderInput={(params) => <TextField {...params} label="OM de destino" />}
+                  sx={{ minWidth: 300 }}
+                />
+                <Button color="success" variant="outlined" onClick={handleBulkDesignate} disabled={!selectedRows.length}>
+                  Designar selecionadas para OM
+                </Button>
+              </Stack>
+
+              {recruitMembersQuery.isLoading ? (
+                <Typography variant="body2" color="text.secondary">Carregando recrutas...</Typography>
+              ) : (
+                <Table size="small">
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: 'primary.main' }}>
+                      <TableCell sx={{ color: 'white', fontWeight: 600, width: 40 }}>
+                        <Checkbox
+                          size="small"
+                          checked={memberRows.length > 0 && selectedRecruitKeys.length === memberRows.length}
+                          indeterminate={selectedRecruitKeys.length > 0 && selectedRecruitKeys.length < memberRows.length}
+                          onChange={(event) => {
+                            if (event.target.checked) {
+                              setSelectedRecruitKeys(memberRows.map((row, index) => rowKey(row, index)));
+                            } else {
+                              setSelectedRecruitKeys([]);
+                            }
+                          }}
+                          sx={{ color: 'white', '&.Mui-checked': { color: 'white' } }}
+                        />
+                      </TableCell>
+                      <TableCell sx={{ color: 'white', fontWeight: 600 }}>Nome</TableCell>
+                      <TableCell sx={{ color: 'white', fontWeight: 600 }}>Status</TableCell>
+                      <TableCell sx={{ color: 'white', fontWeight: 600 }}>OM destino</TableCell>
+                      <TableCell sx={{ color: 'white', fontWeight: 600 }}>Baixa</TableCell>
+                      <TableCell sx={{ color: 'white', fontWeight: 600 }} align="right">Ações</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {memberRows.map((row, index) => {
+                      const key = rowKey(row, index);
+                      const isSelected = selectedRecruitKeys.includes(key);
+                      return (
+                        <TableRow key={key} hover>
+                          <TableCell>
+                            <Checkbox
+                              size="small"
+                              checked={isSelected}
+                              onChange={(event) => {
+                                setSelectedRecruitKeys((current) => {
+                                  if (event.target.checked) return [...current, key];
+                                  return current.filter((item) => item !== key);
+                                });
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <TextField
+                              size="small"
+                              value={row.name}
+                              onChange={(event) =>
+                                setMemberRows((current) =>
+                                  current.map((item, itemIndex) =>
+                                    itemIndex === index ? { ...item, name: event.target.value } : item,
+                                  ),
+                                )
+                              }
+                              placeholder="Nome da recruta"
+                              fullWidth
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <TextField
+                              select
+                              size="small"
+                              value={row.status}
+                              onChange={(event) => {
+                                const nextStatus = event.target.value as RecruitStatus;
+                                setMemberRows((current) =>
+                                  current.map((item, itemIndex) => {
+                                    if (itemIndex !== index) return item;
+                                    if (nextStatus === 'DISMISSED') {
+                                      return {
+                                        ...item,
+                                        status: nextStatus,
+                                        destinationLocalityId: null,
+                                        designatedAt: null,
+                                      };
+                                    }
+                                    if (nextStatus === 'ASSIGNED_TO_OM') {
+                                      return {
+                                        ...item,
+                                        status: nextStatus,
+                                        dismissalReason: null,
+                                        dismissedAt: null,
+                                      };
+                                    }
+                                    return {
+                                      ...item,
+                                      status: nextStatus,
+                                      destinationLocalityId: null,
+                                      designatedAt: null,
+                                      dismissalReason: null,
+                                      dismissedAt: null,
+                                    };
+                                  }),
+                                );
+                              }}
+                              sx={{ minWidth: 190 }}
+                            >
+                              {RECRUIT_STATUS_OPTIONS.map((option) => (
+                                <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                              ))}
+                            </TextField>
+                          </TableCell>
+                          <TableCell>
+                            {row.status === 'ASSIGNED_TO_OM' ? (
+                              <Autocomplete
+                                size="small"
+                                options={omOptions}
+                                value={omOptions.find((option) => option.id === row.destinationLocalityId) ?? null}
+                                onChange={(_, option) =>
+                                  setMemberRows((current) =>
+                                    current.map((item, itemIndex) =>
+                                      itemIndex === index
+                                        ? { ...item, destinationLocalityId: option?.id ?? null }
+                                        : item,
+                                    ),
+                                  )
+                                }
+                                getOptionLabel={(option) => option.code ? `${option.name} (${option.code})` : option.name}
+                                isOptionEqualToValue={(option, value) => option.id === value.id}
+                                renderInput={(params) => <TextField {...params} size="small" placeholder="Selecione a OM" />}
+                                sx={{ minWidth: 220 }}
+                              />
+                            ) : (
+                              <Typography variant="body2" color="text.secondary">—</Typography>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {row.status === 'DISMISSED' ? (
+                              <Stack spacing={0.8}>
+                                <TextField
+                                  size="small"
+                                  value={row.dismissalReason ?? ''}
+                                  onChange={(event) =>
+                                    setMemberRows((current) =>
+                                      current.map((item, itemIndex) =>
+                                        itemIndex === index
+                                          ? { ...item, dismissalReason: event.target.value }
+                                          : item,
+                                      ),
+                                    )
+                                  }
+                                  placeholder="Motivo da baixa"
+                                  fullWidth
+                                />
+                                <Typography variant="caption" color="text.secondary">
+                                  {row.dismissedAt
+                                    ? `Baixa em ${new Date(row.dismissedAt).toLocaleDateString('pt-BR')}`
+                                    : 'Baixa será registrada na data de hoje.'}
+                                </Typography>
+                              </Stack>
+                            ) : (
+                              <Typography variant="body2" color="text.secondary">—</Typography>
+                            )}
+                          </TableCell>
+                          <TableCell align="right">
+                            {!row.id && (
+                              <Button color="error" size="small" onClick={() => removeDraftRow(index)}>
+                                Remover
+                              </Button>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              )}
             </>
           )}
           <Box display="flex" gap={1} justifyContent="flex-end" sx={{ mt: 1 }}>
@@ -898,10 +1030,8 @@ export function GsdRecruitsPage() {
               disabled={
                 !selected ||
                 !canEditRecruitsCount(me, selected.id) ||
-                updateLocalityRecruits.isPending ||
-                updateLocalityRecruitDesignations.isPending ||
-                recruitDesignationsQuery.isLoading ||
-                hasDesignationOverflow
+                replaceRecruitMembers.isPending ||
+                recruitMembersQuery.isLoading
               }
             >
               Salvar

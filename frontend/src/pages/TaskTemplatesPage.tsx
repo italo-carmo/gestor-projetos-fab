@@ -275,7 +275,7 @@ export function TaskTemplatesPage() {
         alignItems="center"
         mb={2}
       >
-        <Typography variant="h4">Modelos de tarefa</Typography>
+        <Typography variant="h4">Modelos de Atividades de Campo</Typography>
         {can(me, "task_templates", "create") && (
           <Button variant="contained" onClick={openCreate}>
             Novo template

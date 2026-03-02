@@ -1797,7 +1797,7 @@ let TasksService = class TasksService {
         else if (localityId) {
             localityWhere.id = localityId;
         }
-        const [localitiesRaw, historyRaw] = await this.prisma.$transaction([
+        const [localitiesRaw, historyRaw, recruitMembersRaw] = await this.prisma.$transaction([
             this.prisma.locality.findMany({
                 where: localityWhere,
                 orderBy: { name: 'asc' },
@@ -1815,11 +1815,35 @@ let TasksService = class TasksService {
                     : undefined,
                 orderBy: { date: 'asc' },
             }),
+            this.prisma.recruitFemale.findMany({
+                where: !hasNationalRecruitScope && constraints.localityId
+                    ? { localityId: constraints.localityId }
+                    : undefined,
+                select: {
+                    id: true,
+                    localityId: true,
+                    name: true,
+                    status: true,
+                    dismissalReason: true,
+                    dismissedAt: true,
+                    destinationLocalityId: true,
+                    designatedAt: true,
+                    destinationLocality: {
+                        select: {
+                            id: true,
+                            code: true,
+                            name: true,
+                        },
+                    },
+                },
+                orderBy: [{ name: 'asc' }],
+            }),
         ]);
         const history = historyRaw;
         const localityGroups = (0, priority_localities_1.groupTargetLocalities)(localitiesRaw);
         const localities = localityGroups.map((group) => group.canonical);
         const { aliasByLocalityId } = (0, priority_localities_1.createTargetLocalityAliasMap)(localityGroups);
+        const recruitMembers = recruitMembersRaw.filter((item) => aliasByLocalityId.has(item.localityId));
         const filteredHistory = history.filter((entry) => aliasByLocalityId.has(entry.localityId));
         const normalizedHistoryMap = new Map();
         for (const entry of filteredHistory) {
@@ -1850,6 +1874,16 @@ let TasksService = class TasksService {
             localityName: loc.name,
             code: loc.code,
             recruitsFemaleCountCurrent: loc.recruitsFemaleCountCurrent ?? 0,
+            recruitsByStatus: {
+                toStart: recruitMembers.filter((member) => aliasByLocalityId.get(member.localityId) === loc.id &&
+                    member.status === 'RECRUITMENT_TO_START').length,
+                started: recruitMembers.filter((member) => aliasByLocalityId.get(member.localityId) === loc.id &&
+                    member.status === 'RECRUITMENT_STARTED').length,
+                dismissed: recruitMembers.filter((member) => aliasByLocalityId.get(member.localityId) === loc.id &&
+                    member.status === 'DISMISSED').length,
+                assignedToOm: recruitMembers.filter((member) => aliasByLocalityId.get(member.localityId) === loc.id &&
+                    member.status === 'ASSIGNED_TO_OM').length,
+            },
         }));
         const aggregateByMonth = [];
         const monthMap = new Map();
@@ -1890,11 +1924,28 @@ let TasksService = class TasksService {
             dismissalReason: entry.dismissalReason,
         }))
             .sort((a, b) => b.date.localeCompare(a.date));
+        const dismissedRecruitsLog = recruitMembers
+            .filter((member) => member.status === 'DISMISSED')
+            .map((member) => {
+            const canonicalId = aliasByLocalityId.get(member.localityId);
+            return {
+                recruitId: member.id,
+                recruitName: member.name,
+                localityId: canonicalId ?? member.localityId,
+                localityName: localityById.get(canonicalId ?? member.localityId)?.name ??
+                    member.localityId,
+                code: localityById.get(canonicalId ?? member.localityId)?.code ?? '',
+                dismissalReason: member.dismissalReason ?? null,
+                dismissedAt: member.dismissedAt?.toISOString() ?? null,
+            };
+        })
+            .sort((a, b) => String(b.dismissedAt ?? '').localeCompare(String(a.dismissedAt ?? '')));
         return {
             currentPerLocality,
             aggregateByMonth,
             byLocality,
             historyLog,
+            dismissedRecruitsLog,
         };
     }
     async getDashboardExecutive(params, user) {

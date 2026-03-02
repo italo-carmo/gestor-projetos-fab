@@ -1767,6 +1767,15 @@ export function useLocalityRecruitDesignations(localityId: string, enabled = tru
   });
 }
 
+export function useLocalityRecruitMembers(localityId: string, enabled = true) {
+  return useQuery({
+    queryKey: ['localities', 'recruitMembers', localityId || ''],
+    queryFn: async () => (await api.get(`/localities/${localityId}/recruits-members`)).data,
+    enabled: Boolean(localityId) && enabled,
+    staleTime: 10_000,
+  });
+}
+
 export function useEloRoles() {
   return useQuery({
     queryKey: qk.eloRoles,
@@ -1894,6 +1903,39 @@ export function useUpdateLocalityRecruitDesignations() {
       qc.invalidateQueries({ queryKey: ["dashboardRecruits"] });
       qc.invalidateQueries({ queryKey: ["dashboardNational"] });
       qc.invalidateQueries({ queryKey: ["dashboardExecutive"] });
+    },
+  });
+}
+
+export function useReplaceLocalityRecruitMembers() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      localityId: string;
+      items: Array<{
+        id?: string;
+        name: string;
+        status:
+          | 'RECRUITMENT_TO_START'
+          | 'RECRUITMENT_STARTED'
+          | 'DISMISSED'
+          | 'ASSIGNED_TO_OM';
+        dismissalReason?: string | null;
+        destinationLocalityId?: string | null;
+      }>;
+    }) =>
+      (
+        await api.put(`/localities/${args.localityId}/recruits-members`, {
+          items: args.items,
+        })
+      ).data,
+    onSuccess: (_data, args) => {
+      qc.invalidateQueries({ queryKey: ['localities', 'recruitMembers', args.localityId] });
+      qc.invalidateQueries({ queryKey: qk.recruitDesignations(args.localityId) });
+      qc.invalidateQueries({ queryKey: qk.localities });
+      qc.invalidateQueries({ queryKey: ['dashboardRecruits'] });
+      qc.invalidateQueries({ queryKey: ['dashboardNational'] });
+      qc.invalidateQueries({ queryKey: ['dashboardExecutive'] });
     },
   });
 }

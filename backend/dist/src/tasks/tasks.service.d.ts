@@ -360,6 +360,12 @@ export declare class TasksService {
             localityName: string;
             code: string;
             recruitsFemaleCountCurrent: number;
+            recruitsByStatus: {
+                toStart: number;
+                started: number;
+                dismissed: number;
+                assignedToOm: number;
+            };
         }[];
         aggregateByMonth: {
             month: string;
@@ -384,6 +390,15 @@ export declare class TasksService {
             recruitsFemaleCount: number;
             turnoverCount: number;
             dismissalReason: string | null;
+        }[];
+        dismissedRecruitsLog: {
+            recruitId: string;
+            recruitName: string;
+            localityId: string;
+            localityName: string;
+            code: string;
+            dismissalReason: string | null;
+            dismissedAt: string | null;
         }[];
     }>;
     getDashboardExecutive(params: {
