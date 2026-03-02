@@ -10,7 +10,9 @@ import { canEditRecruitsByRole, isNationalCommissionMember, ROLE_TI, hasRole } f
 import type { RbacUser } from '../rbac/rbac.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { sanitizeText } from '../common/sanitize';
+import { FabLdapService } from '../ldap/fab-ldap.service';
 import { CreateLocalityDto } from './dto/create-locality.dto';
+import { SetLocalityCommanderFromLdapDto } from './dto/set-locality-commander-from-ldap.dto';
 import { UpdateLocalityRecruitDesignationsDto } from './dto/update-locality-recruit-designations.dto';
 import {
   ReplaceLocalityRecruitsMembersDto,
@@ -21,7 +23,10 @@ import { UpdateLocalityDto } from './dto/update-locality.dto';
 @Controller('localities')
 @UseGuards(JwtAuthGuard, RbacGuard)
 export class LocalitiesController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly fabLdap: FabLdapService,
+  ) {}
 
   @Get()
   @RequirePermission('localities', 'view')
@@ -366,6 +371,44 @@ export class LocalitiesController {
     }
 
     return this.buildRecruitMembersResponse(id);
+  }
+
+  @Put(':id/commander-from-ldap')
+  @RequirePermission('dashboard', 'view')
+  async setCommanderFromLdap(
+    @Param('id') id: string,
+    @Body() dto: SetLocalityCommanderFromLdapDto,
+    @CurrentUser() user: RbacUser,
+  ) {
+    this.assertRecruitsEditorAccess(id, user);
+    const profile = await this.fabLdap.lookupByUid(dto.uid);
+    if (!profile) {
+      throwError('VALIDATION_ERROR', {
+        field: 'uid',
+        reason: 'LDAP_USER_NOT_FOUND',
+      });
+    }
+    const commanderName = sanitizeText(profile.name ?? '');
+    if (!commanderName) {
+      throwError('VALIDATION_ERROR', {
+        field: 'uid',
+        reason: 'LDAP_USER_NAME_NOT_FOUND',
+      });
+    }
+
+    const updated = await this.prisma.locality.update({
+      where: { id },
+      data: { commanderName },
+      select: { id: true, commanderName: true },
+    });
+
+    return {
+      localityId: updated.id,
+      commanderName: updated.commanderName,
+      uid: profile.uid,
+      fabom: profile.fabom,
+      email: profile.email,
+    };
   }
 
   @Put(':id/recruit-designations')

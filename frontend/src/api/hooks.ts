@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./client";
 import { qk } from "./queryKeys";
+import { toMilitaryDisplayName } from "../app/militaryName";
 
 export function useMe() {
   return useQuery({
@@ -1148,7 +1149,16 @@ export function useRbacImport() {
 export function useUsers(enabled = true) {
   return useQuery({
     queryKey: ["users"],
-    queryFn: async () => (await api.get("/users")).data,
+    queryFn: async () => {
+      const data = (await api.get("/users")).data;
+      return {
+        ...data,
+        items: (data?.items ?? []).map((item: any) => ({
+          ...item,
+          name: toMilitaryDisplayName(item?.name),
+        })),
+      };
+    },
     enabled,
   });
 }
@@ -1514,9 +1524,18 @@ export function useOrgChart(filters: Record<string, any>) {
 export function useOrgChartCommissionMembers(filters: Record<string, any>) {
   return useQuery({
     queryKey: qk.orgChartCommissionMembers(filters),
-    queryFn: async () =>
-      (await api.get("/org-chart/commission-members", { params: filters }))
-        .data,
+    queryFn: async () => {
+      const data = (await api.get("/org-chart/commission-members", { params: filters }))
+        .data;
+      return {
+        ...data,
+        items: (data?.items ?? []).map((item: any) => ({
+          ...item,
+          name: toMilitaryDisplayName(item?.name),
+          warName: toMilitaryDisplayName(item?.warName ?? item?.name),
+        })),
+      };
+    },
     staleTime: 15_000,
   });
 }
@@ -1527,9 +1546,18 @@ export function useOrgChartCommissionCandidates(
 ) {
   return useQuery({
     queryKey: qk.orgChartCommissionCandidates(filters),
-    queryFn: async () =>
-      (await api.get("/org-chart/commission-candidates", { params: filters }))
-        .data,
+    queryFn: async () => {
+      const data = (await api.get("/org-chart/commission-candidates", { params: filters }))
+        .data;
+      return {
+        ...data,
+        items: (data?.items ?? []).map((item: any) => ({
+          ...item,
+          name: toMilitaryDisplayName(item?.name),
+          warName: toMilitaryDisplayName(item?.warName ?? item?.name),
+        })),
+      };
+    },
     enabled,
     staleTime: 10_000,
   });
@@ -1541,8 +1569,17 @@ export function useOrgChartCandidates(
 ) {
   return useQuery({
     queryKey: ["orgChart", "candidates", filters],
-    queryFn: async () =>
-      (await api.get("/org-chart/candidates", { params: filters })).data,
+    queryFn: async () => {
+      const data = (await api.get("/org-chart/candidates", { params: filters })).data;
+      return {
+        ...data,
+        items: (data?.items ?? []).map((item: any) => ({
+          ...item,
+          name: toMilitaryDisplayName(item?.name),
+          warName: toMilitaryDisplayName(item?.warName ?? item?.name),
+        })),
+      };
+    },
     enabled,
     staleTime: 10_000,
   });
@@ -1932,6 +1969,24 @@ export function useReplaceLocalityRecruitMembers() {
     onSuccess: (_data, args) => {
       qc.invalidateQueries({ queryKey: ['localities', 'recruitMembers', args.localityId] });
       qc.invalidateQueries({ queryKey: qk.recruitDesignations(args.localityId) });
+      qc.invalidateQueries({ queryKey: qk.localities });
+      qc.invalidateQueries({ queryKey: ['dashboardRecruits'] });
+      qc.invalidateQueries({ queryKey: ['dashboardNational'] });
+      qc.invalidateQueries({ queryKey: ['dashboardExecutive'] });
+    },
+  });
+}
+
+export function useSetLocalityCommanderFromLdap() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { localityId: string; uid: string }) =>
+      (
+        await api.put(`/localities/${args.localityId}/commander-from-ldap`, {
+          uid: args.uid,
+        })
+      ).data,
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.localities });
       qc.invalidateQueries({ queryKey: ['dashboardRecruits'] });
       qc.invalidateQueries({ queryKey: ['dashboardNational'] });

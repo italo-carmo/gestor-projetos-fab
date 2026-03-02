@@ -28,6 +28,7 @@ import {
   useMe,
   useOmsCatalog,
   useReplaceLocalityRecruitMembers,
+  useSetLocalityCommanderFromLdap,
 } from '../api/hooks';
 import { can } from '../app/rbac';
 import { canEditRecruitsCount } from '../app/roleAccess';
@@ -125,6 +126,7 @@ export function GsdRecruitsPage() {
   const recruitsQuery = useDashboardRecruits({}, canLoadRecruitsData);
   const omsCatalogQuery = useOmsCatalog(canLoadRecruitsData);
   const replaceRecruitMembers = useReplaceLocalityRecruitMembers();
+  const setLocalityCommanderFromLdap = useSetLocalityCommanderFromLdap();
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selected, setSelected] = useState<any | null>(null);
@@ -132,6 +134,7 @@ export function GsdRecruitsPage() {
   const [selectedRecruitKeys, setSelectedRecruitKeys] = useState<string[]>([]);
   const [bulkDismissReason, setBulkDismissReason] = useState('');
   const [bulkDestinationLocalityId, setBulkDestinationLocalityId] = useState('');
+  const [commanderLdapUid, setCommanderLdapUid] = useState('');
 
   const selectedLocalityId = String(selected?.id ?? '');
   const recruitMembersQuery = useLocalityRecruitMembers(
@@ -144,6 +147,7 @@ export function GsdRecruitsPage() {
     id: loc.localityId,
     name: loc.localityName,
     code: loc.code,
+    commanderName: loc.commanderName ?? null,
     recruitsFemaleCountCurrent: loc.recruitsFemaleCountCurrent,
     recruitsByStatus: loc.recruitsByStatus ?? {
       toStart: 0,
@@ -246,7 +250,39 @@ export function GsdRecruitsPage() {
     setSelectedRecruitKeys([]);
     setBulkDismissReason('');
     setBulkDestinationLocalityId('');
+    setCommanderLdapUid('');
     setDrawerOpen(true);
+  };
+
+  const handleSetCommanderFromLdap = async () => {
+    if (!selected) return;
+    const uid = commanderLdapUid.trim();
+    if (!uid) {
+      toast.push({ message: 'Informe o UID/CPF no LDAP.', severity: 'warning' });
+      return;
+    }
+    try {
+      const response = await setLocalityCommanderFromLdap.mutateAsync({
+        localityId: selected.id,
+        uid,
+      });
+      const nextCommanderName = String(response?.commanderName ?? '').trim();
+      setSelected((current: any) =>
+        current ? { ...current, commanderName: nextCommanderName || current.commanderName } : current,
+      );
+      toast.push({
+        message: nextCommanderName
+          ? `Comandante atualizado para ${nextCommanderName}.`
+          : 'Comandante atualizado com sucesso.',
+        severity: 'success',
+      });
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({
+        message: payload.message ?? 'Erro ao atualizar comandante via LDAP.',
+        severity: 'error',
+      });
+    }
   };
 
   const omOptions = ((omsCatalogQuery.data?.items ?? []) as Array<any>).map((item) => ({
@@ -476,6 +512,9 @@ export function GsdRecruitsPage() {
                       Recrutas ativas
                     </TableCell>
                     <TableCell sx={{ color: 'white', fontWeight: 600 }}>
+                      Comandante (LDAP)
+                    </TableCell>
+                    <TableCell sx={{ color: 'white', fontWeight: 600 }}>
                       Situação
                     </TableCell>
                     <TableCell sx={{ color: 'white', fontWeight: 600 }} align="right">
@@ -497,6 +536,7 @@ export function GsdRecruitsPage() {
                         )}
                       </TableCell>
                       <TableCell>{locality.recruitsFemaleCountCurrent ?? 0}</TableCell>
+                      <TableCell>{locality.commanderName || '—'}</TableCell>
                       <TableCell>
                         <Stack direction="row" spacing={0.6} flexWrap="wrap" useFlexGap>
                           <Chip size="small" label={`A iniciar: ${locality.recruitsByStatus?.toStart ?? 0}`} variant="outlined" />
@@ -796,6 +836,31 @@ export function GsdRecruitsPage() {
                 fullWidth
                 InputProps={{ readOnly: true }}
               />
+              <TextField
+                size="small"
+                label="Comandante atual"
+                value={selected.commanderName ?? ''}
+                fullWidth
+                InputProps={{ readOnly: true }}
+                placeholder="Não definido"
+              />
+              <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} alignItems={{ xs: 'stretch', md: 'center' }}>
+                <TextField
+                  size="small"
+                  label="UID/CPF do comandante (LDAP)"
+                  value={commanderLdapUid}
+                  onChange={(event) => setCommanderLdapUid(event.target.value)}
+                  placeholder="Ex.: 12229820729"
+                  sx={{ minWidth: 280 }}
+                />
+                <Button
+                  variant="outlined"
+                  onClick={handleSetCommanderFromLdap}
+                  disabled={setLocalityCommanderFromLdap.isPending}
+                >
+                  Definir comandante via LDAP
+                </Button>
+              </Stack>
 
               <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
                 <Chip label={`Ativas: ${activeCount}`} color="primary" />

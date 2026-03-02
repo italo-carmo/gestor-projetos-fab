@@ -2198,6 +2198,7 @@ export class TasksService {
           id: true,
           name: true,
           code: true,
+          commanderName: true,
           recruitsFemaleCountCurrent: true,
           updatedAt: true,
         },
@@ -2301,6 +2302,7 @@ export class TasksService {
         localityId: loc.id,
         localityName: loc.name,
         code: loc.code,
+        commanderName: loc.commanderName ?? null,
         recruitsFemaleCountCurrent: activeCount,
         recruitsByStatus: {
           toStart: locMembers.filter((member) => member.status === 'RECRUITMENT_TO_START').length,

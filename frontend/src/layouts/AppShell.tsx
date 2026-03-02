@@ -122,6 +122,7 @@ const navSections: NavSection[] = [
     label: "TI",
     items: [
       { label: "Usuários e Permissões", to: "/admin/rbac", icon: <PeopleIcon fontSize="small" /> },
+      { label: "Logs", to: "/audit", icon: <InsightsRoundedIcon fontSize="small" /> },
       { label: "Postos", to: "/admin/postos", icon: <SettingsIcon fontSize="small" /> },
       { label: "Fases", to: "/admin/phases", icon: <SettingsIcon fontSize="small" /> },
       { label: "Papéis de Elo", to: "/admin/elo-roles", icon: <SettingsIcon fontSize="small" /> },

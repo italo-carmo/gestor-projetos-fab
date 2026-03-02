@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Client } from 'ldapts';
 import { throwError } from '../common/http-error';
+import { stripOmSuffixFromLdapName } from '../common/military-name';
 
 export type FabLdapProfile = {
   uid: string;
@@ -121,19 +122,21 @@ export class FabLdapService {
 
   private mapEntry(entry: LdapEntry, fallbackUid: string): FabLdapProfile {
     const uid = this.readAttribute(entry, 'uid') ?? fallbackUid;
+    const fabom = this.readAttribute(entry, 'fabom');
     const givenName = this.readAttribute(entry, 'givenName');
     const surname = this.readAttribute(entry, 'sn');
     const composedName = [givenName, surname].filter(Boolean).join(' ').trim();
+    const rawName =
+      this.readAttribute(entry, 'displayName') ??
+      this.readAttribute(entry, 'cn') ??
+      (composedName || null);
 
     return {
       uid,
       dn: typeof entry.dn === 'string' && entry.dn.trim() ? entry.dn : this.buildUserDn(uid),
-      name:
-        this.readAttribute(entry, 'displayName') ??
-        this.readAttribute(entry, 'cn') ??
-        (composedName || null),
+      name: stripOmSuffixFromLdapName(rawName, fabom) || null,
       email: this.readAttribute(entry, 'mail')?.toLowerCase() ?? null,
-      fabom: this.readAttribute(entry, 'fabom'),
+      fabom,
     };
   }
 

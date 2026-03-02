@@ -42,7 +42,6 @@ import { ErrorState } from "../components/states/ErrorState";
 import { EmptyState } from "../components/states/EmptyState";
 import { StatusChip } from "../components/chips/StatusChip";
 import { DueBadge } from "../components/chips/DueBadge";
-import { ProgressInline } from "../components/chips/ProgressInline";
 import { TaskDetailsDrawer } from "../components/tasks/TaskDetailsDrawer";
 import { api } from "../api/client";
 import { can } from "../app/rbac";
@@ -887,14 +886,14 @@ export function TasksPage() {
                     {
                       field: "title",
                       headerName: "Título da tarefa",
-                      flex: 1.4,
-                      minWidth: 360,
+                      flex: 1.2,
+                      minWidth: 260,
                       valueGetter: (_, row) => resolveTaskTitle(row),
                     },
                     {
                       field: "locality",
-                      headerName: "Localidade",
-                      width: 110,
+                      headerName: "Loc.",
+                      width: 86,
                       renderCell: (params) => {
                         const count = Number(
                           params.row.groupedLocalityCount ?? 1,
@@ -912,20 +911,20 @@ export function TasksPage() {
                     {
                       field: "phase",
                       headerName: "Fase",
-                      width: 130,
+                      width: 110,
                       valueGetter: (_, row) =>
                         phaseMap.get(row.taskTemplate?.phaseId) ?? "-",
                     },
                     {
                       field: "specialty",
                       headerName: "Especialidade",
-                      width: 160,
+                      width: 130,
                       valueGetter: (_, row) => row.specialtyName ?? "Todas",
                     },
                     {
                       field: "dueDate",
                       headerName: "Prazo",
-                      width: 125,
+                      width: 112,
                       renderCell: (params) => (
                         <DueBadge
                           dueDate={params.row.dueDate}
@@ -936,7 +935,7 @@ export function TasksPage() {
                     {
                       field: "assignee",
                       headerName: "Responsável",
-                      width: 170,
+                      width: 145,
                       valueGetter: (_, row) =>
                         me?.executive_hide_pii
                           ? "-"
@@ -949,7 +948,7 @@ export function TasksPage() {
                     {
                       field: "comments",
                       headerName: "Comentários",
-                      width: 120,
+                      width: 92,
                       renderCell: (params) => {
                         const total = params.row.comments?.total ?? 0;
                         const unread = params.row.comments?.unread ?? 0;
@@ -960,7 +959,7 @@ export function TasksPage() {
                     {
                       field: "status",
                       headerName: "Status",
-                      width: 130,
+                      width: 120,
                       renderCell: (params) => (
                         <StatusChip
                           status={params.row.status}
@@ -971,45 +970,22 @@ export function TasksPage() {
                     {
                       field: "progress",
                       headerName: "Progresso",
-                      width: 145,
-                      renderCell: (params) => (
-                        <ProgressInline
-                          value={params.row.progressPercent ?? 0}
-                        />
-                      ),
+                      width: 84,
+                      valueGetter: (_, row) =>
+                        `${Math.max(0, Math.min(100, Number(row.progressPercent ?? 0)))}%`,
                     },
                     {
                       field: "eloRole",
                       headerName: "Elo",
-                      width: 100,
+                      width: 84,
                       valueGetter: (_, row) =>
                         row.eloRole?.name ?? row.eloRole?.code ?? "—",
                     },
-                    {
-                      field: "meeting",
-                      headerName: "Reunião",
-                      width: 170,
-                      renderCell: (params) => {
-                        const m = params.row.meeting;
-                        if (!m) return "—";
-                        return (
-                          <Link
-                            component={RouterLink}
-                            to={`/meetings?meetingId=${m.id}`}
-                            sx={{ fontSize: 13 }}
-                          >
-                            {format(new Date(m.datetime), "dd/MM/yyyy")} —{" "}
-                            {m.scope
-                              ? m.scope.length > 15
-                                ? m.scope.slice(0, 15) + "…"
-                                : m.scope
-                              : "Reunião"}
-                          </Link>
-                        );
-                      },
-                    },
                   ] as GridColDef[]
                 }
+                density="compact"
+                rowHeight={40}
+                columnHeaderHeight={42}
                 checkboxSelection
                 rowSelectionModel={selectionModel}
                 onRowSelectionModelChange={(newModel) => {
