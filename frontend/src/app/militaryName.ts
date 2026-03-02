@@ -3,7 +3,7 @@ function normalizeWhitespace(value: string) {
 }
 
 const MILITARY_RANK_PREFIX =
-  /^(ALUNO|SD|CB|3S|2S|1S|SO|ASP|2T|1T|CAP|MAJ|TCEL|TEN CEL|CEL|BRIG|BRIGADEIRO|GEN)\b/i;
+  /^(ALUNO|SD|CB|3S|2S|1S|SO|ASP|CP|MB|TB|2T|1T|CAP|MAJ|TCEL|TEN CEL|CEL|BRIG|BRIGADEIRO|GEN)\b/i;
 
 export function toMilitaryDisplayName(raw: string | null | undefined) {
   const name = normalizeWhitespace(raw ?? '');
@@ -15,7 +15,7 @@ export function toMilitaryDisplayName(raw: string | null | undefined) {
     const index = upper.lastIndexOf(separator);
     if (index <= 0) continue;
     const right = upper.slice(index + separator.length).replace(/\)$/, '').trim();
-    if (/^[A-Z0-9]{2,10}$/.test(right)) {
+    if (/^[A-Z0-9-]{2,14}$/.test(right)) {
       return name.slice(0, index).trim();
     }
   }
@@ -23,7 +23,7 @@ export function toMilitaryDisplayName(raw: string | null | undefined) {
   const tokens = name.split(' ');
   if (tokens.length >= 3 && MILITARY_RANK_PREFIX.test(tokens[0])) {
     const last = tokens[tokens.length - 1].toUpperCase();
-    if (/^[A-Z0-9]{2,10}$/.test(last)) {
+    if (/^[A-Z0-9-]{2,14}$/.test(last)) {
       return tokens.slice(0, -1).join(' ');
     }
   }
