@@ -55,6 +55,8 @@ type OmsForm = {
   notes: string;
 };
 
+type CpcaCoverageFilter = 'ALL' | 'WITH_CPCA' | 'WITHOUT_CPCA';
+
 const DEFAULT_FORM: OmsForm = {
   code: '',
   name: '',
@@ -79,6 +81,7 @@ export function OmsAdminPage() {
   const deleteLocality = useDeleteLocality();
 
   const [search, setSearch] = useState('');
+  const [cpcaCoverageFilter, setCpcaCoverageFilter] = useState<CpcaCoverageFilter>('ALL');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<LocalityItem | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -111,13 +114,16 @@ export function OmsAdminPage() {
 
   const filteredLocalities = useMemo(() => {
     const term = search.trim().toLowerCase();
-    if (!term) return localities;
     return localities.filter((item) => {
+      const hasCoverage = (cpcaByLocalityId.get(item.id)?.length ?? 0) > 0;
+      if (cpcaCoverageFilter === 'WITH_CPCA' && !hasCoverage) return false;
+      if (cpcaCoverageFilter === 'WITHOUT_CPCA' && hasCoverage) return false;
+      if (!term) return true;
       const code = String(item.code ?? '').toLowerCase();
       const name = String(item.name ?? '').toLowerCase();
       return code.includes(term) || name.includes(term);
     });
-  }, [localities, search]);
+  }, [localities, search, cpcaCoverageFilter, cpcaByLocalityId]);
 
   const coverage = useMemo(() => {
     const withCpca = localities.filter((locality) => (cpcaByLocalityId.get(locality.id)?.length ?? 0) > 0);
@@ -260,8 +266,23 @@ export function OmsAdminPage() {
               onChange={(event) => setSearch(event.target.value)}
               sx={{ minWidth: 260 }}
             />
+            <TextField
+              select
+              size="small"
+              label="Cobertura CPCA"
+              value={cpcaCoverageFilter}
+              onChange={(event) => setCpcaCoverageFilter(event.target.value as CpcaCoverageFilter)}
+              sx={{ minWidth: 220 }}
+            >
+              <MenuItem value="ALL">Todas</MenuItem>
+              <MenuItem value="WITH_CPCA">Com CPCA</MenuItem>
+              <MenuItem value="WITHOUT_CPCA">Sem CPCA</MenuItem>
+            </TextField>
             <Button variant="text" onClick={() => setSearch('')}>
               Limpar
+            </Button>
+            <Button variant="text" onClick={() => setCpcaCoverageFilter('ALL')}>
+              Limpar cobertura
             </Button>
           </Stack>
         </CardContent>
