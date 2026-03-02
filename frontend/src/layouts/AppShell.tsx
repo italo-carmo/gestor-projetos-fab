@@ -608,7 +608,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 variant="caption"
                 sx={{ color: "text.secondary", lineHeight: 1.1 }}
               >
-                Comissão de Iniciação
+                SMIF e CPCA
               </Typography>
             </Box>
           </Box>
