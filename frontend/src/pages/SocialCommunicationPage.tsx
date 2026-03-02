@@ -391,7 +391,10 @@ export function SocialCommunicationPage() {
                   },
                 }}
               >
-                <CardActionArea onClick={() => setPreviewing(item)} sx={{ alignItems: "stretch" }}>
+                <CardActionArea
+                  onClick={() => setPreviewing(item)}
+                  sx={{ alignItems: "stretch", height: "100%", display: "flex", flexDirection: "column" }}
+                >
                   <Box
                     sx={{
                       height: 156,
@@ -413,42 +416,46 @@ export function SocialCommunicationPage() {
                       <NewspaperRoundedIcon sx={{ color: "white", fontSize: 38 }} />
                     )}
                   </Box>
-                  <CardContent sx={{ minHeight: 200 }}>
-                    <Typography
-                      variant="subtitle1"
-                      fontWeight={700}
-                      sx={{
-                        mb: 0.8,
-                        display: "-webkit-box",
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: "vertical",
-                        overflow: "hidden",
-                      }}
-                    >
-                      {item.title}
-                    </Typography>
-                    {item.summary && (
+                  <CardContent sx={{ minHeight: 200, width: "100%", display: "flex", flexDirection: "column", flexGrow: 1 }}>
+                    <Box>
                       <Typography
-                        variant="body2"
-                        color="text.secondary"
+                        variant="subtitle1"
+                        fontWeight={700}
                         sx={{
-                          mb: 1.3,
+                          mb: 0.8,
                           display: "-webkit-box",
-                          WebkitLineClamp: 3,
+                          WebkitLineClamp: 2,
                           WebkitBoxOrient: "vertical",
                           overflow: "hidden",
                         }}
                       >
-                        {item.summary}
+                        {item.title}
                       </Typography>
-                    )}
-                    {renderTags(tags, 3)}
-                    <Stack direction="row" spacing={0.8} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mt: 1.1 }}>
-                      <Chip label={sourceHost(item.sourceUrl)} size="small" variant="outlined" />
-                      {(item.publishedAt || item.createdAt) && (
-                        <Chip label={toDisplayDate(item.publishedAt ?? item.createdAt)} size="small" />
+                      {item.summary && (
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          sx={{
+                            mb: 1.3,
+                            display: "-webkit-box",
+                            WebkitLineClamp: 3,
+                            WebkitBoxOrient: "vertical",
+                            overflow: "hidden",
+                          }}
+                        >
+                          {item.summary}
+                        </Typography>
                       )}
-                    </Stack>
+                    </Box>
+                    <Box sx={{ mt: "auto" }}>
+                      {renderTags(tags, 3)}
+                      <Stack direction="row" spacing={0.8} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mt: 1.1 }}>
+                        <Chip label={sourceHost(item.sourceUrl)} size="small" variant="outlined" />
+                        {(item.publishedAt || item.createdAt) && (
+                          <Chip label={toDisplayDate(item.publishedAt ?? item.createdAt)} size="small" />
+                        )}
+                      </Stack>
+                    </Box>
                   </CardContent>
                 </CardActionArea>
                 {canEdit && (
