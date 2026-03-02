@@ -841,19 +841,35 @@ export function TasksPage() {
                   dataGridPtBR.components.MuiDataGrid.defaultProps.localeText
                 }
                 sx={{
+                  "--DataGrid-containerBackground": "rgb(23, 57, 75)",
                   "& .MuiDataGrid-columnHeaders": {
-                    backgroundColor: "primary.main !important",
+                    backgroundColor: "rgb(23, 57, 75) !important",
                     color: "#FFFFFF !important",
                   },
+                  "& .MuiDataGrid-topContainer": {
+                    backgroundColor: "rgb(23, 57, 75) !important",
+                  },
+                  "& .MuiDataGrid-columnHeaderRow": {
+                    backgroundColor: "rgb(23, 57, 75) !important",
+                  },
                   "& .MuiDataGrid-columnHeader": {
-                    backgroundColor: "primary.main !important",
+                    backgroundColor: "rgb(23, 57, 75) !important",
                     color: "#FFFFFF !important",
                   },
                   "& .MuiDataGrid-columnHeaderTitle": {
                     fontWeight: 700,
                     color: "#FFFFFF !important",
                   },
+                  "& .MuiDataGrid-columnHeaderTitleContainer": {
+                    color: "#FFFFFF !important",
+                  },
+                  "& .MuiDataGrid-columnHeaderDraggableContainer": {
+                    color: "#FFFFFF !important",
+                  },
                   "& .MuiDataGrid-sortIcon, & .MuiDataGrid-menuIconButton": {
+                    color: "#FFFFFF !important",
+                  },
+                  "& .MuiDataGrid-menuIconButton .MuiSvgIcon-root, & .MuiDataGrid-sortIcon .MuiSvgIcon-root": {
                     color: "#FFFFFF !important",
                   },
                   "& .MuiDataGrid-iconSeparator": {
