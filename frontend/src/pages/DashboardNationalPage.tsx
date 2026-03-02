@@ -54,8 +54,6 @@ export function DashboardNationalPage() {
   const averageProgress = smifLocalities.length
     ? Math.round(smifLocalities.reduce((acc, item) => acc + Number(item.progress ?? 0), 0) / smifLocalities.length)
     : 0;
-  const localitiesAbove80 = smifLocalities.filter((item) => Number(item.progress ?? 0) >= 80).length;
-  const localitiesWithVisit = smifLocalities.filter((item) => Boolean(item.visitDate)).length;
 
   const kpiCards = [
     { label: 'Cobertura', value: `${smifLocalities.length}/${smifLocalities.length} localidades`, icon: <TargetIcon sx={{ fontSize: 28 }} />, bg: '#E8F8EF' },
@@ -72,18 +70,6 @@ export function DashboardNationalPage() {
       bg: '#EEF8FF',
     },
     { label: 'Relatórios', value: `${totals.reportsProduced ?? 0} produzidos`, icon: <DescriptionIcon sx={{ fontSize: 28 }} />, bg: '#FFF6E1' },
-    {
-      label: 'OM com alta performance',
-      value: `${localitiesAbove80} com 80%+`,
-      icon: <PeopleIcon sx={{ fontSize: 28 }} />,
-      bg: '#F0F8EE',
-    },
-    {
-      label: 'Visitas realizadas',
-      value: `${localitiesWithVisit} OM com visita`,
-      icon: <DescriptionIcon sx={{ fontSize: 28 }} />,
-      bg: '#F8F2FF',
-    },
   ];
 
   return (

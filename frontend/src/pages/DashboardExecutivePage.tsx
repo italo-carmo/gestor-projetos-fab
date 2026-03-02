@@ -253,15 +253,6 @@ export function DashboardExecutivePage() {
             </Typography>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent>
-            <Typography variant="overline">Localidades acima do padrão</Typography>
-            <Typography variant="h4">{data.localityAboveThreshold?.count ?? 0}</Typography>
-            <Typography variant="caption" color="text.secondary">
-              de {data.localityAboveThreshold?.total ?? 0} localidades no limiar
-            </Typography>
-          </CardContent>
-        </Card>
       </Box>
 
       <Box
