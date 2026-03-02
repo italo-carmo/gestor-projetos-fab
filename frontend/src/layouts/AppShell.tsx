@@ -78,11 +78,11 @@ type NavSection = { id: string; label?: string; items: NavItem[] };
 const navSections: NavSection[] = [
   {
     id: "command",
-    label: "PAINÉIS",
+    label: "COMANDO",
     items: [
-      { label: "Painel de Comando - SMIF", to: "/dashboard/smif", icon: <DashboardIcon fontSize="small" /> },
-      { label: "Painel de Comando - CIPAVD", to: "/dashboard/cipavd", icon: <InsightsRoundedIcon fontSize="small" /> },
-      { label: "Painel de Comando - CPCA", to: "/dashboard/cpca", icon: <PolicyRoundedIcon fontSize="small" /> },
+      { label: "SMIF", to: "/dashboard/smif", icon: <DashboardIcon fontSize="small" /> },
+      { label: "CIPAVD", to: "/dashboard/cipavd", icon: <InsightsRoundedIcon fontSize="small" /> },
+      { label: "CPCA", to: "/dashboard/cpca", icon: <PolicyRoundedIcon fontSize="small" /> },
       { label: "Organograma", to: "/org-chart", icon: <AccountTreeIcon fontSize="small" /> },
       { label: "Comunicação Social", to: "/social-communication", icon: <NewspaperRoundedIcon fontSize="small" /> },
     ],
@@ -114,7 +114,6 @@ const navSections: NavSection[] = [
     label: "CPCA",
     items: [
       { label: "Denúncias", to: "/cpca-cases", icon: <PolicyRoundedIcon fontSize="small" /> },
-      { label: "Estatísticas", to: "/cpca-stats", icon: <InsightsRoundedIcon fontSize="small" /> },
       { label: "OMs", to: "/admin/oms", icon: <BusinessIcon fontSize="small" /> },
     ],
   },
