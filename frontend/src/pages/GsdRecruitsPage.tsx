@@ -867,7 +867,7 @@ export function GsdRecruitsPage() {
                   onClick={handleSetCommanderFromLdap}
                   disabled={setLocalityCommanderFromLdap.isPending}
                 >
-                  Definir comandante via LDAP
+                  Definir comandante
                 </Button>
               </Stack>
 

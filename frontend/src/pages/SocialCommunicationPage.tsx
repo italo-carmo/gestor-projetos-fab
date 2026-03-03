@@ -399,6 +399,7 @@ export function SocialCommunicationPage() {
                 >
                   <Box
                     sx={{
+                      position: "relative",
                       height: 156,
                       background: "linear-gradient(140deg, #114259 0%, #4D86A0 100%)",
                       display: "flex",
@@ -407,15 +408,26 @@ export function SocialCommunicationPage() {
                       overflow: "hidden",
                     }}
                   >
-                    {item.coverProxyPath || item.coverImageUrl ? (
+                    <NewspaperRoundedIcon sx={{ color: "white", fontSize: 38, position: "relative", zIndex: 0 }} />
+                    {(item.coverProxyPath || item.coverImageUrl) && (
                       <Box
                         component="img"
                         src={item.coverProxyPath ? toApiUrl(item.coverProxyPath) : (item.coverImageUrl ?? undefined)}
                         alt={item.title}
-                        sx={{ width: "100%", height: "100%", objectFit: "cover" }}
+                        sx={{
+                          position: "absolute",
+                          inset: 0,
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                          zIndex: 1,
+                        }}
+                        onError={(event: any) => {
+                          // Esconde a imagem quebrada e deixa o ícone padrão aparecer
+                          // eslint-disable-next-line no-param-reassign
+                          event.currentTarget.style.display = "none";
+                        }}
                       />
-                    ) : (
-                      <NewspaperRoundedIcon sx={{ color: "white", fontSize: 38 }} />
                     )}
                   </Box>
                   <CardContent sx={{ minHeight: 200, width: "100%", display: "flex", flexDirection: "column", flexGrow: 1 }}>
@@ -512,6 +524,7 @@ export function SocialCommunicationPage() {
                   <Stack direction={{ xs: "column", md: "row" }} spacing={2} alignItems={{ xs: "stretch", md: "center" }}>
                     <Box
                       sx={{
+                        position: "relative",
                         width: { xs: "100%", md: 180 },
                         minWidth: { xs: "100%", md: 180 },
                         height: 108,
@@ -522,15 +535,26 @@ export function SocialCommunicationPage() {
                         placeItems: "center",
                       }}
                     >
-                      {item.coverProxyPath || item.coverImageUrl ? (
+                      <NewspaperRoundedIcon sx={{ color: "#114259", fontSize: 32, position: "relative", zIndex: 0 }} />
+                      {(item.coverProxyPath || item.coverImageUrl) && (
                         <Box
                           component="img"
                           src={item.coverProxyPath ? toApiUrl(item.coverProxyPath) : (item.coverImageUrl ?? undefined)}
                           alt={item.title}
-                          sx={{ width: "100%", height: "100%", objectFit: "cover" }}
+                          sx={{
+                            position: "absolute",
+                            inset: 0,
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                            zIndex: 1,
+                          }}
+                          onError={(event: any) => {
+                            // Esconde a imagem quebrada e deixa o ícone padrão aparecer
+                            // eslint-disable-next-line no-param-reassign
+                            event.currentTarget.style.display = "none";
+                          }}
                         />
-                      ) : (
-                        <NewspaperRoundedIcon sx={{ color: "#114259", fontSize: 32 }} />
                       )}
                     </Box>
 
