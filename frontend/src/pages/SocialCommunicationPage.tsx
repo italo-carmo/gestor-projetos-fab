@@ -86,6 +86,11 @@ function sourceHost(url: string) {
   }
 }
 
+function isFabDomain(url: string) {
+  const host = sourceHost(url).toLowerCase();
+  return host === "fab.mil.br" || host.endsWith(".fab.mil.br");
+}
+
 function toApiUrl(path: string) {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
   const baseUrl = String(api.defaults.baseURL ?? "/api");
@@ -261,7 +266,14 @@ export function SocialCommunicationPage() {
       return;
     }
     setPreviewLoading(true);
-    // Prioridade: primeiro tenta URL direta (navegador do usuário), depois proxy (servidor)
+    // Para fab.mil.br, prioriza proxy por causa de bloqueios de iframe (X-Frame-Options / Cloudflare challenge).
+    if (isFabDomain(previewing.sourceUrl) && previewing.contentProxyPath) {
+      setPreviewSrc(toApiUrl(previewing.contentProxyPath));
+      setPreviewTriedDirect(true);
+      return;
+    }
+
+    // Para demais domínios: primeiro URL direta (navegador), depois proxy (servidor).
     if (previewing.sourceUrl) {
       setPreviewSrc(previewing.sourceUrl);
       setPreviewTriedDirect(false);
@@ -708,19 +720,34 @@ export function SocialCommunicationPage() {
       <Dialog open={Boolean(previewing)} onClose={() => setPreviewing(null)} fullWidth maxWidth="lg">
         {previewing && (
           <DialogContent dividers sx={{ p: 0, position: "relative" }}>
-            <IconButton
-              onClick={() => setPreviewing(null)}
-              sx={{
-                position: "absolute",
-                top: 8,
-                right: 8,
-                zIndex: 2,
-                bgcolor: "rgba(255,255,255,0.9)",
-                "&:hover": { bgcolor: "rgba(255,255,255,1)" },
-              }}
+            <Stack
+              direction="row"
+              spacing={0.8}
+              sx={{ position: "absolute", top: 8, right: 8, zIndex: 2 }}
             >
-              <CloseRoundedIcon />
-            </IconButton>
+              <Button
+                size="small"
+                variant="outlined"
+                color="success"
+                startIcon={<LanguageRoundedIcon fontSize="small" />}
+                component="a"
+                href={previewing.sourceUrl}
+                target="_blank"
+                rel="noreferrer"
+                sx={{ bgcolor: "rgba(255,255,255,0.95)" }}
+              >
+                Abrir no site
+              </Button>
+              <IconButton
+                onClick={() => setPreviewing(null)}
+                sx={{
+                  bgcolor: "rgba(255,255,255,0.9)",
+                  "&:hover": { bgcolor: "rgba(255,255,255,1)" },
+                }}
+              >
+                <CloseRoundedIcon />
+              </IconButton>
+            </Stack>
             <Box
               sx={{
                 border: "1px solid rgba(17,66,89,0.16)",
