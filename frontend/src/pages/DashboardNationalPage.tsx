@@ -101,30 +101,39 @@ export function DashboardNationalPage() {
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
         Acompanhamento estratégico do alistamento feminino, execução de atividades e prontidão nas OM.
       </Typography>
-      <Grid container spacing={2} alignItems="stretch">
+      <Box
+        sx={{
+          display: 'grid',
+          gap: 2,
+          gridTemplateColumns: {
+            xs: '1fr',
+            sm: 'repeat(2, minmax(0, 1fr))',
+            md: 'repeat(5, minmax(0, 1fr))',
+          },
+        }}
+      >
         {kpiCards.map((kpi) => (
-          <Grid key={kpi.label} size={{ xs: 12, sm: 6, md: 3 }} sx={{ display: 'flex' }}>
-            <Card
-              sx={{
-                background: kpi.bg,
-                border: '1px solid rgba(0,0,0,0.06)',
-                width: '100%',
-                height: '100%',
-                minHeight: 116,
-                display: 'flex',
-              }}
-            >
-              <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%' }}>
-                <Box sx={{ color: 'primary.main' }}>{kpi.icon}</Box>
-                <Box>
-                  <Typography variant="overline" color="text.secondary" fontWeight={600}>{kpi.label}</Typography>
-                  <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2 }}>{kpi.value}</Typography>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
+          <Card
+            key={kpi.label}
+            sx={{
+              background: kpi.bg,
+              border: '1px solid rgba(0,0,0,0.06)',
+              width: '100%',
+              height: '100%',
+              minHeight: 116,
+              display: 'flex',
+            }}
+          >
+            <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%' }}>
+              <Box sx={{ color: 'primary.main' }}>{kpi.icon}</Box>
+              <Box>
+                <Typography variant="overline" color="text.secondary" fontWeight={600}>{kpi.label}</Typography>
+                <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2 }}>{kpi.value}</Typography>
+              </Box>
+            </CardContent>
+          </Card>
         ))}
-      </Grid>
+      </Box>
       <Grid container spacing={2} sx={{ mt: 1 }}>
         <Grid size={{ xs: 12, md: 8 }}>
           <Card>
