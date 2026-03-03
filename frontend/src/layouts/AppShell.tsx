@@ -105,6 +105,8 @@ const navSections: NavSection[] = [
     items: [
       { label: "Tarefas", to: "/tasks", icon: <TaskIcon fontSize="small" /> },
       { label: "Reuniões", to: "/meetings", icon: <GroupsIcon fontSize="small" /> },
+      { label: "Cronograma", to: "/gantt", icon: <TaskIcon fontSize="small" /> },
+      { label: "Calendário", to: "/calendar", icon: <EventNoteIcon fontSize="small" /> },
       { label: "Missões", to: "/missions", icon: <FlagRoundedIcon fontSize="small" /> },
       { label: "BI Pesquisas", to: "/dashboard/bi", icon: <InsightsRoundedIcon fontSize="small" /> },
     ],
