@@ -97,6 +97,35 @@ const drawerActionButtonSx = {
 
 type ActivityDrawerTab = 'activity' | 'report';
 
+function getActivityStatusChipStyle(status: string) {
+  if (status === 'DONE') {
+    return {
+      bg: '#E8F5E9',
+      color: '#2E7D32',
+      borderColor: '#A5D6A7',
+    };
+  }
+  if (status === 'IN_PROGRESS') {
+    return {
+      bg: '#ECEFF1',
+      color: '#455A64',
+      borderColor: '#CFD8DC',
+    };
+  }
+  if (status === 'CANCELLED') {
+    return {
+      bg: '#FFEBEE',
+      color: '#C62828',
+      borderColor: '#FFCDD2',
+    };
+  }
+  return {
+    bg: '#E3F2FD',
+    color: '#1565C0',
+    borderColor: '#BBDEFB',
+  };
+}
+
 export function ActivitiesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const activityIdFromUrl = searchParams.get('activityId') ?? '';
@@ -1051,7 +1080,25 @@ export function ActivitiesPage() {
                           : '—'}
                       </TableCell>
                       <TableCell>{item.eventDate ? new Date(item.eventDate).toLocaleDateString('pt-BR') : '-'}</TableCell>
-                      <TableCell>{ACTIVITY_STATUS_LABELS[item.status] ?? item.status}</TableCell>
+                      <TableCell>
+                        {(() => {
+                          const statusStyle = getActivityStatusChipStyle(String(item.status));
+                          return (
+                            <Chip
+                              size="small"
+                              label={ACTIVITY_STATUS_LABELS[item.status] ?? item.status}
+                              sx={{
+                                fontWeight: 700,
+                                borderWidth: 1,
+                                borderStyle: 'solid',
+                                bgcolor: statusStyle.bg,
+                                color: statusStyle.color,
+                                borderColor: statusStyle.borderColor,
+                              }}
+                            />
+                          );
+                        })()}
+                      </TableCell>
                       <TableCell>
                         <IconButton
                           size="small"
