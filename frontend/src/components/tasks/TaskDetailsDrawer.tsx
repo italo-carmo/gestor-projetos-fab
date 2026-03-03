@@ -809,21 +809,27 @@ export function TaskDetailsDrawer({
                 </Box>
                 <Stack direction="row" spacing={1}>
                   <Button
+                    size="small"
                     variant="outlined"
                     onClick={() => handleStatus("IN_PROGRESS")}
                     disabled={!canManageTaskData}
+                    sx={{ minHeight: 32, px: 1.5 }}
                   >
                     Iniciar
                   </Button>
                   <Button
+                    size="small"
                     variant="contained"
+                    color="success"
                     onClick={() => handleStatus("DONE")}
                     disabled={!canManageTaskData}
                     data-testid="task-mark-done"
+                    sx={{ minHeight: 32, px: 1.5 }}
                   >
                     Concluir
                   </Button>
                   <Button
+                    size="small"
                     variant="outlined"
                     color="success"
                     onClick={handleSaveTitle}
@@ -835,10 +841,12 @@ export function TaskDetailsDrawer({
                       taskTitleDraft.trim() === resolveTaskTitle(task)
                     }
                     data-testid="task-save"
+                    sx={{ minHeight: 32, px: 1.5 }}
                   >
                     Salvar
                   </Button>
                   <Button
+                    size="small"
                     variant="outlined"
                     color="success"
                     onClick={handleSaveLocalities}
@@ -847,15 +855,18 @@ export function TaskDetailsDrawer({
                       updateTaskLocalities.isPending ||
                       linkedLocalityIdsDraft.length === 0
                     }
+                    sx={{ minHeight: 32, px: 1.5 }}
                   >
                     Salvar localidades
                   </Button>
                   {canDelete && (
                     <Button
+                      size="small"
                       variant="outlined"
                       color="error"
                       onClick={handleDelete}
                       disabled={deleteTask.isPending || batchDeleteTasks.isPending}
+                      sx={{ minHeight: 32, px: 1.5 }}
                     >
                       Excluir
                     </Button>
