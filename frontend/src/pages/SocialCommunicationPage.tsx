@@ -123,21 +123,14 @@ function ArticleCoverImage({
   toApiUrl: (path: string) => string;
 }) {
   const [imageError, setImageError] = useState(false);
-  const [useProxy, setUseProxy] = useState(false);
-  
-  // Prioridade: primeiro tenta URL direta (navegador do usuário), depois proxy (servidor)
   const proxySrc = coverProxyPath ? toApiUrl(coverProxyPath) : null;
   const directSrc = coverImageUrl || null;
-  
-  // Determina qual fonte usar
-  const imageSrc = useProxy && proxySrc
-    ? proxySrc
-    : directSrc || proxySrc || null;
+  const [imageSrc, setImageSrc] = useState<string | null>(directSrc || proxySrc || null);
 
   // Reset state when props change
   useEffect(() => {
     setImageError(false);
-    setUseProxy(false);
+    setImageSrc(directSrc || proxySrc || null);
   }, [coverProxyPath, coverImageUrl]);
 
   if (!coverProxyPath && !coverImageUrl) {
@@ -151,18 +144,16 @@ function ArticleCoverImage({
   return (
     <Box
       component="img"
-      key={`${imageSrc}-${useProxy}`} // Force re-render when src changes
       src={imageSrc}
       alt={title}
       sx={{ width: "100%", height: "100%", objectFit: "cover" }}
       onError={() => {
-        // Se tentou URL direta e falhou, tenta proxy
-        if (!useProxy && directSrc && proxySrc && imageSrc === directSrc) {
-          setUseProxy(true);
+        if (directSrc && proxySrc && imageSrc === directSrc) {
+          // Tenta proxy apenas se falhou a URL direta.
+          setImageSrc(proxySrc);
           setImageError(false);
           return;
         }
-        // Se tentou proxy e falhou, ou não tem mais opções, mostra ícone
         setImageError(true);
       }}
       onLoad={() => {
@@ -184,21 +175,14 @@ function ArticleCoverImageSmall({
   toApiUrl: (path: string) => string;
 }) {
   const [imageError, setImageError] = useState(false);
-  const [useProxy, setUseProxy] = useState(false);
-  
-  // Prioridade: primeiro tenta URL direta (navegador do usuário), depois proxy (servidor)
   const proxySrc = coverProxyPath ? toApiUrl(coverProxyPath) : null;
   const directSrc = coverImageUrl || null;
-  
-  // Determina qual fonte usar
-  const imageSrc = useProxy && proxySrc
-    ? proxySrc
-    : directSrc || proxySrc || null;
+  const [imageSrc, setImageSrc] = useState<string | null>(directSrc || proxySrc || null);
 
   // Reset state when props change
   useEffect(() => {
     setImageError(false);
-    setUseProxy(false);
+    setImageSrc(directSrc || proxySrc || null);
   }, [coverProxyPath, coverImageUrl]);
 
   if (!coverProxyPath && !coverImageUrl) {
@@ -212,18 +196,16 @@ function ArticleCoverImageSmall({
   return (
     <Box
       component="img"
-      key={`${imageSrc}-${useProxy}`} // Force re-render when src changes
       src={imageSrc}
       alt={title}
       sx={{ width: "100%", height: "100%", objectFit: "cover" }}
       onError={() => {
-        // Se tentou URL direta e falhou, tenta proxy
-        if (!useProxy && directSrc && proxySrc && imageSrc === directSrc) {
-          setUseProxy(true);
+        if (directSrc && proxySrc && imageSrc === directSrc) {
+          // Tenta proxy apenas se falhou a URL direta.
+          setImageSrc(proxySrc);
           setImageError(false);
           return;
         }
-        // Se tentou proxy e falhou, ou não tem mais opções, mostra ícone
         setImageError(true);
       }}
       onLoad={() => {
