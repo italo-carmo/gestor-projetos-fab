@@ -423,9 +423,15 @@ export function SocialCommunicationPage() {
                           zIndex: 1,
                         }}
                         onError={(event: any) => {
-                          // Esconde a imagem quebrada e deixa o ícone padrão aparecer
+                          const img = event.currentTarget;
+                          // Se o proxy falhou e temos URL direta, tenta usar ela
+                          if (item.coverProxyPath && item.coverImageUrl && img.src.includes('/proxy/cover')) {
+                            img.src = item.coverImageUrl;
+                            return;
+                          }
+                          // Caso contrário, esconde a imagem quebrada
                           // eslint-disable-next-line no-param-reassign
-                          event.currentTarget.style.display = "none";
+                          img.style.display = "none";
                         }}
                       />
                     )}
@@ -550,9 +556,15 @@ export function SocialCommunicationPage() {
                             zIndex: 1,
                           }}
                           onError={(event: any) => {
-                            // Esconde a imagem quebrada e deixa o ícone padrão aparecer
+                            const img = event.currentTarget;
+                            // Se o proxy falhou e temos URL direta, tenta usar ela
+                            if (item.coverProxyPath && item.coverImageUrl && img.src.includes('/proxy/cover')) {
+                              img.src = item.coverImageUrl;
+                              return;
+                            }
+                            // Caso contrário, esconde a imagem quebrada
                             // eslint-disable-next-line no-param-reassign
-                            event.currentTarget.style.display = "none";
+                            img.style.display = "none";
                           }}
                         />
                       )}

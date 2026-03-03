@@ -301,7 +301,12 @@ export class SocialCommunicationService {
     });
     if (!article?.coverImageUrl) throwError('NOT_FOUND');
 
-    return this.fetchRemoteAsset(article.coverImageUrl, 'image/*,*/*;q=0.8');
+    try {
+      return await this.fetchRemoteAsset(article.coverImageUrl, 'image/*,*/*;q=0.8');
+    } catch (error: any) {
+      // Se falhar ao buscar via proxy, retorna erro para que o frontend tente URL direta
+      throwError('NOT_FOUND');
+    }
   }
 
   async getPublicAsset(url: string, exp: string, sig: string) {
