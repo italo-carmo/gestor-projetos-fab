@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { AuditService } from '../audit/audit.service';
 import { throwError } from '../common/http-error';
 import { sanitizeText } from '../common/sanitize';
@@ -301,10 +303,36 @@ export class SocialCommunicationService {
     });
     if (!article?.coverImageUrl) throwError('NOT_FOUND');
 
+    if (article.coverImageUrl.startsWith('/social-communication/uploads/')) {
+      const filename = path.basename(article.coverImageUrl);
+      const filePath = path.resolve(
+        process.cwd(),
+        'storage',
+        'social-communication-covers',
+        filename,
+      );
+      if (!fs.existsSync(filePath)) throwError('NOT_FOUND');
+      const buffer = fs.readFileSync(filePath);
+      const extension = path.extname(filename).toLowerCase();
+      const contentType =
+        extension === '.png'
+          ? 'image/png'
+          : extension === '.webp'
+            ? 'image/webp'
+            : extension === '.gif'
+              ? 'image/gif'
+              : 'image/jpeg';
+      return {
+        buffer,
+        contentType,
+        sourceUrl: article.coverImageUrl,
+      };
+    }
+
     try {
       return await this.fetchRemoteAsset(article.coverImageUrl, 'image/*,*/*;q=0.8');
-    } catch (error: any) {
-      // Se falhar ao buscar via proxy, retorna erro para que o frontend tente URL direta
+    } catch {
+      // Se falhar ao buscar via proxy, retorna erro para que o frontend tente URL direta.
       throwError('NOT_FOUND');
     }
   }
@@ -351,6 +379,10 @@ export class SocialCommunicationService {
     const payload = await this.fetchRemoteHtml(normalizedUrl);
     const html = this.rewriteHtmlForProxy(payload.html, payload.sourceUrl);
     return { html };
+  }
+
+  ensureEditorAccess(user?: RbacUser) {
+    this.assertEditorAccess(user);
   }
 
   private assertEditorAccess(user?: RbacUser) {
@@ -907,6 +939,10 @@ export class SocialCommunicationService {
     if (value === null) return null;
     const normalized = sanitizeText(value);
     if (!normalized) return null;
+
+    if (normalized.startsWith('/social-communication/uploads/')) {
+      return normalized;
+    }
 
     try {
       const resolved = new URL(normalized, sourceUrl);

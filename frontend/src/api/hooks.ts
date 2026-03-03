@@ -1373,6 +1373,20 @@ export function useResolveSocialCommunicationMetadata() {
   });
 }
 
+export function useUploadSocialCommunicationCover() {
+  return useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      return (
+        await api.post("/social-communication/upload-cover", formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        })
+      ).data as { coverImageUrl: string | null };
+    },
+  });
+}
+
 export function useCreateSocialCommunicationArticle() {
   const qc = useQueryClient();
   return useMutation({

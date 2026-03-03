@@ -1,6 +1,9 @@
-import { Controller, Get, Query, Res } from '@nestjs/common';
+import { Controller, Get, Param, Query, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { SocialCommunicationService } from './social-communication.service';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { throwError } from '../common/http-error';
 
 @Controller('social-communication/proxy')
 export class SocialCommunicationProxyController {
@@ -70,5 +73,24 @@ export class SocialCommunicationProxyController {
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.setHeader('Cache-Control', 'public, max-age=600');
     return res.send(payload.html);
+  }
+
+}
+
+@Controller('social-communication/uploads')
+export class SocialCommunicationUploadsController {
+  @Get(':filename')
+  async uploadedCover(@Param('filename') filename: string, @Res() res: Response) {
+    const safeName = path.basename(String(filename ?? ''));
+    if (!safeName || safeName !== filename) throwError('NOT_FOUND');
+    const filePath = path.resolve(
+      process.cwd(),
+      'storage',
+      'social-communication-covers',
+      safeName,
+    );
+    if (!fs.existsSync(filePath)) throwError('NOT_FOUND');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    return res.sendFile(filePath);
   }
 }

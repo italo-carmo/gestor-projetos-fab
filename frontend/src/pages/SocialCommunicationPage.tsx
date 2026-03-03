@@ -26,7 +26,8 @@ import LanguageRoundedIcon from "@mui/icons-material/LanguageRounded";
 import NewspaperRoundedIcon from "@mui/icons-material/NewspaperRounded";
 import ViewListRoundedIcon from "@mui/icons-material/ViewListRounded";
 import ViewModuleRoundedIcon from "@mui/icons-material/ViewModuleRounded";
-import { useEffect, useMemo, useState } from "react";
+import UploadFileRoundedIcon from "@mui/icons-material/UploadFileRounded";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { parseApiError } from "../app/apiErrors";
 import { api } from "../api/client";
 import {
@@ -42,6 +43,7 @@ import {
   useMe,
   useResolveSocialCommunicationMetadata,
   useSocialCommunication,
+  useUploadSocialCommunicationCover,
   useUpdateSocialCommunicationArticle,
 } from "../api/hooks";
 import { EmptyState } from "../components/states/EmptyState";
@@ -135,7 +137,11 @@ function ArticleCoverImage({
 }) {
   const [imageError, setImageError] = useState(false);
   const proxySrc = coverProxyPath ? toApiUrl(coverProxyPath) : null;
-  const directSrc = coverImageUrl || null;
+  const directSrc = coverImageUrl
+    ? /^https?:\/\//i.test(coverImageUrl)
+      ? coverImageUrl
+      : toApiUrl(coverImageUrl)
+    : null;
   const mshotSrc = buildMshotUrl(sourceUrl);
   const [imageSrc, setImageSrc] = useState<string | null>(
     directSrc || proxySrc || mshotSrc
@@ -199,7 +205,11 @@ function ArticleCoverImageSmall({
 }) {
   const [imageError, setImageError] = useState(false);
   const proxySrc = coverProxyPath ? toApiUrl(coverProxyPath) : null;
-  const directSrc = coverImageUrl || null;
+  const directSrc = coverImageUrl
+    ? /^https?:\/\//i.test(coverImageUrl)
+      ? coverImageUrl
+      : toApiUrl(coverImageUrl)
+    : null;
   const mshotSrc = buildMshotUrl(sourceUrl);
   const [imageSrc, setImageSrc] = useState<string | null>(
     directSrc || proxySrc || mshotSrc
@@ -268,6 +278,8 @@ export function SocialCommunicationPage() {
   const updateArticle = useUpdateSocialCommunicationArticle();
   const deleteArticle = useDeleteSocialCommunicationArticle();
   const resolveMetadata = useResolveSocialCommunicationMetadata();
+  const uploadCover = useUploadSocialCommunicationCover();
+  const coverFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [previewing, setPreviewing] = useState<SocialCommunicationArticle | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -379,6 +391,25 @@ export function SocialCommunicationPage() {
       const payload = parseApiError(error);
       toast.push({
         message: payload.message ?? "Nao foi possivel ler dados do link",
+        severity: "error",
+      });
+    }
+  };
+
+  const handleUploadCoverFile = async (file: File | null) => {
+    if (!file) return;
+    try {
+      const response = await uploadCover.mutateAsync(file);
+      if (!response.coverImageUrl) {
+        toast.push({ message: "Nao foi possivel enviar a imagem", severity: "error" });
+        return;
+      }
+      setForm((prev) => ({ ...prev, coverImageUrl: response.coverImageUrl ?? "" }));
+      toast.push({ message: "Capa enviada com sucesso", severity: "success" });
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({
+        message: payload.message ?? "Erro ao enviar capa",
         severity: "error",
       });
     }
@@ -881,6 +912,32 @@ export function SocialCommunicationPage() {
               value={form.coverImageUrl}
               onChange={(event) => setForm((prev) => ({ ...prev, coverImageUrl: event.target.value }))}
               placeholder="https://..."
+            />
+            <Stack direction="row" spacing={1} alignItems="center">
+              <Button
+                size="small"
+                variant="outlined"
+                color="success"
+                startIcon={<UploadFileRoundedIcon fontSize="small" />}
+                disabled={uploadCover.isPending}
+                onClick={() => coverFileInputRef.current?.click()}
+              >
+                {uploadCover.isPending ? "Enviando..." : "Enviar capa por arquivo"}
+              </Button>
+              <Typography variant="caption" color="text.secondary">
+                PNG/JPG/WebP ate 5MB.
+              </Typography>
+            </Stack>
+            <input
+              ref={coverFileInputRef}
+              type="file"
+              accept="image/*"
+              style={{ display: "none" }}
+              onChange={(event) => {
+                const file = event.target.files?.[0] ?? null;
+                void handleUploadCoverFile(file);
+                event.currentTarget.value = "";
+              }}
             />
             <TextField
               label="Resumo"

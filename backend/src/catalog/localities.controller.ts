@@ -428,23 +428,24 @@ export class LocalitiesController {
       });
     }
 
-    // Verificar se usuário já existe
+    // Verificar se usuário já existe (uid sempre, email quando disponível).
+    const userWhereOr: Array<{ ldapUid?: string; email?: string }> = [
+      { ldapUid: profile.uid },
+    ];
+    if (profile.email) {
+      userWhereOr.push({ email: profile.email });
+    }
     const existingUser = await this.prisma.user.findFirst({
-      where: {
-        OR: [{ ldapUid: profile.uid }, { email: profile.email }],
-      },
-      include: {
-        roles: {
-          include: { role: { select: { id: true, name: true } } },
-        },
-      },
+      where: { OR: userWhereOr },
+      select: { id: true, localityId: true },
     });
 
     // Se usuário existe, verificar se já tem role GSD e adicionar se necessário
     if (existingUser) {
-      const hasGsdRole = existingUser.roles.some(
-        (ur) => ur.role.id === gsdRole.id || ur.role.name === ROLE_GSD_LOCALIDADE,
-      );
+      const hasGsdRole = await this.prisma.userRole.findFirst({
+        where: { userId: existingUser.id, roleId: gsdRole.id },
+        select: { userId: true },
+      });
       if (!hasGsdRole) {
         await this.prisma.userRole.create({
           data: { userId: existingUser.id, roleId: gsdRole.id },
