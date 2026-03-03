@@ -123,39 +123,42 @@ function ArticleCoverImage({
   toApiUrl: (path: string) => string;
 }) {
   const [imageError, setImageError] = useState(false);
-  const [currentSrc, setCurrentSrc] = useState<string | null>(null);
+  const [useProxy, setUseProxy] = useState(false);
   
+  // Prioridade: primeiro tenta URL direta (navegador do usuário), depois proxy (servidor)
+  const proxySrc = coverProxyPath ? toApiUrl(coverProxyPath) : null;
+  const directSrc = coverImageUrl || null;
+  
+  // Determina qual fonte usar
+  const imageSrc = useProxy && proxySrc
+    ? proxySrc
+    : directSrc || proxySrc || null;
+
   // Reset state when props change
   useEffect(() => {
     setImageError(false);
-    // Prioridade: primeiro tenta URL direta (navegador do usuário), depois proxy (servidor)
-    if (coverImageUrl) {
-      setCurrentSrc(coverImageUrl);
-    } else if (coverProxyPath) {
-      setCurrentSrc(toApiUrl(coverProxyPath));
-    } else {
-      setCurrentSrc(null);
-    }
-  }, [coverProxyPath, coverImageUrl, toApiUrl]);
+    setUseProxy(false);
+  }, [coverProxyPath, coverImageUrl]);
 
   if (!coverProxyPath && !coverImageUrl) {
     return <NewspaperRoundedIcon sx={{ color: "white", fontSize: 38 }} />;
   }
 
-  if (imageError || !currentSrc) {
+  if (imageError || !imageSrc) {
     return <NewspaperRoundedIcon sx={{ color: "white", fontSize: 38 }} />;
   }
 
   return (
     <Box
       component="img"
-      src={currentSrc}
+      key={`${imageSrc}-${useProxy}`} // Force re-render when src changes
+      src={imageSrc}
       alt={title}
       sx={{ width: "100%", height: "100%", objectFit: "cover" }}
       onError={() => {
         // Se tentou URL direta e falhou, tenta proxy
-        if (coverImageUrl && currentSrc === coverImageUrl && coverProxyPath) {
-          setCurrentSrc(toApiUrl(coverProxyPath));
+        if (!useProxy && directSrc && proxySrc && imageSrc === directSrc) {
+          setUseProxy(true);
           setImageError(false);
           return;
         }
@@ -181,39 +184,42 @@ function ArticleCoverImageSmall({
   toApiUrl: (path: string) => string;
 }) {
   const [imageError, setImageError] = useState(false);
-  const [currentSrc, setCurrentSrc] = useState<string | null>(null);
+  const [useProxy, setUseProxy] = useState(false);
   
+  // Prioridade: primeiro tenta URL direta (navegador do usuário), depois proxy (servidor)
+  const proxySrc = coverProxyPath ? toApiUrl(coverProxyPath) : null;
+  const directSrc = coverImageUrl || null;
+  
+  // Determina qual fonte usar
+  const imageSrc = useProxy && proxySrc
+    ? proxySrc
+    : directSrc || proxySrc || null;
+
   // Reset state when props change
   useEffect(() => {
     setImageError(false);
-    // Prioridade: primeiro tenta URL direta (navegador do usuário), depois proxy (servidor)
-    if (coverImageUrl) {
-      setCurrentSrc(coverImageUrl);
-    } else if (coverProxyPath) {
-      setCurrentSrc(toApiUrl(coverProxyPath));
-    } else {
-      setCurrentSrc(null);
-    }
-  }, [coverProxyPath, coverImageUrl, toApiUrl]);
+    setUseProxy(false);
+  }, [coverProxyPath, coverImageUrl]);
 
   if (!coverProxyPath && !coverImageUrl) {
     return <NewspaperRoundedIcon sx={{ color: "#114259", fontSize: 32 }} />;
   }
 
-  if (imageError || !currentSrc) {
+  if (imageError || !imageSrc) {
     return <NewspaperRoundedIcon sx={{ color: "#114259", fontSize: 32 }} />;
   }
 
   return (
     <Box
       component="img"
-      src={currentSrc}
+      key={`${imageSrc}-${useProxy}`} // Force re-render when src changes
+      src={imageSrc}
       alt={title}
       sx={{ width: "100%", height: "100%", objectFit: "cover" }}
       onError={() => {
         // Se tentou URL direta e falhou, tenta proxy
-        if (coverImageUrl && currentSrc === coverImageUrl && coverProxyPath) {
-          setCurrentSrc(toApiUrl(coverProxyPath));
+        if (!useProxy && directSrc && proxySrc && imageSrc === directSrc) {
+          setUseProxy(true);
           setImageError(false);
           return;
         }
@@ -277,6 +283,17 @@ export function SocialCommunicationPage() {
     if (previewing.sourceUrl) {
       setPreviewSrc(previewing.sourceUrl);
       setPreviewTriedDirect(false);
+      // Timeout para detectar se a URL direta não carregou após 5 segundos
+      const timeout = setTimeout(() => {
+        setPreviewLoading((prevLoading) => {
+          if (prevLoading && previewing.contentProxyPath) {
+            setPreviewSrc(toApiUrl(previewing.contentProxyPath));
+            setPreviewTriedDirect(true);
+          }
+          return prevLoading;
+        });
+      }, 5000);
+      return () => clearTimeout(timeout);
     } else if (previewing.contentProxyPath) {
       setPreviewSrc(toApiUrl(previewing.contentProxyPath));
       setPreviewTriedDirect(true);
@@ -768,22 +785,12 @@ export function SocialCommunicationPage() {
               )}
               <Box
                 component="iframe"
+                key={previewSrc || previewing.sourceUrl} // Force re-render when src changes
                 title={previewing.title}
                 src={previewSrc || previewing.sourceUrl}
                 sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
                 referrerPolicy="no-referrer"
                 onLoad={() => {
-                  setPreviewLoading(false);
-                }}
-                onError={() => {
-                  // Se tentou URL direta e falhou, tenta proxy
-                  if (!previewTriedDirect && previewing.contentProxyPath && previewSrc === previewing.sourceUrl) {
-                    setPreviewSrc(toApiUrl(previewing.contentProxyPath));
-                    setPreviewTriedDirect(true);
-                    setPreviewLoading(true);
-                    return;
-                  }
-                  // Se tentou proxy e falhou, para de tentar
                   setPreviewLoading(false);
                 }}
                 sx={{
