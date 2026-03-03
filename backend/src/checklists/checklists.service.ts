@@ -131,7 +131,17 @@ export class ChecklistsService {
                 }
               : {}),
           },
-          select: { title: true, localityId: true, status: true, specialtyId: true },
+          select: {
+            title: true,
+            localityId: true,
+            status: true,
+            specialtyId: true,
+            activityType: {
+              select: {
+                name: true,
+              },
+            },
+          },
         })
       : [];
 
@@ -144,6 +154,7 @@ export class ChecklistsService {
       instanceByTemplateLocality.set(key, list);
     }
     const activityByTitleLocality = new Map<string, ActivityStatus[]>();
+    const activityTypeByTitle = new Map<string, string | null>();
     for (const activity of activities) {
       if (!activity.localityId) continue;
       const normalizedTitle = this.normalizeChecklistActivityTitle(activity.title);
@@ -153,6 +164,12 @@ export class ChecklistsService {
       const list = activityByTitleLocality.get(key) ?? [];
       list.push(activity.status);
       activityByTitleLocality.set(key, list);
+      if (!activityTypeByTitle.has(normalizedTitle)) {
+        activityTypeByTitle.set(
+          normalizedTitle,
+          activity.activityType?.name ?? null,
+        );
+      }
     }
 
     const items = checklists.map((checklist) => {
@@ -178,6 +195,9 @@ export class ChecklistsService {
           taskTemplateId: item.taskTemplateId,
           sourceType: item.taskTemplateId ? 'TASK' : 'ACTIVITY',
           statuses: statusesByLocality,
+          activityTypeName: item.taskTemplateId
+            ? null
+            : activityTypeByTitle.get(activityTitleKey) ?? null,
         };
       });
 
@@ -607,7 +627,17 @@ export class ChecklistsService {
             }
           : {}),
       },
-      select: { title: true, localityId: true, status: true, specialtyId: true },
+      select: {
+        title: true,
+        localityId: true,
+        status: true,
+        specialtyId: true,
+        activityType: {
+          select: {
+            name: true,
+          },
+        },
+      },
     });
 
     const templateById = new Map<string, string>();
@@ -623,6 +653,7 @@ export class ChecklistsService {
     }
 
     const activityStatusByTitleLocality = new Map<string, ActivityStatus[]>();
+    const activityTypeByTitle = new Map<string, string | null>();
     for (const activity of activities) {
       if (!activity.localityId) continue;
       const titleKey = this.normalizeChecklistActivityTitle(activity.title);
@@ -631,6 +662,9 @@ export class ChecklistsService {
       const list = activityStatusByTitleLocality.get(key) ?? [];
       list.push(activity.status);
       activityStatusByTitleLocality.set(key, list);
+      if (!activityTypeByTitle.has(titleKey)) {
+        activityTypeByTitle.set(titleKey, activity.activityType?.name ?? null);
+      }
     }
 
     const automaticTaskItems = Array.from(templateById.entries())
@@ -670,6 +704,7 @@ export class ChecklistsService {
           taskTemplateId: null,
           sourceType: 'ACTIVITY',
           statuses: statusesByLocality,
+          activityTypeName: activityTypeByTitle.get(titleKey) ?? null,
         };
       });
 

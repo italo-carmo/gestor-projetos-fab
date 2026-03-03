@@ -509,7 +509,12 @@ export function ChecklistsPage() {
                       >
                         Localidade
                       </TableCell>
-                      {filteredItems.map((item: any) => (
+                      {filteredItems.map((item: any) => {
+                        const label =
+                          item.sourceType === 'ACTIVITY' && item.activityTypeName
+                            ? `${item.activityTypeName} - ${item.title}`
+                            : item.title;
+                        return (
                         <TableCell
                           key={item.id}
                           align="center"
@@ -523,14 +528,14 @@ export function ChecklistsPage() {
                             zIndex: 7,
                           }}
                         >
-                          <Tooltip title={item.title}>
+                          <Tooltip title={label}>
                             <Typography variant="caption" noWrap sx={{ maxWidth: 80, display: 'block' }}>
-                              {item.title.slice(0, 12)}
-                              {item.title.length > 12 ? '…' : ''}
+                              {label.slice(0, 12)}
+                              {label.length > 12 ? '…' : ''}
                             </Typography>
                           </Tooltip>
                         </TableCell>
-                      ))}
+                      )})}
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -609,12 +614,17 @@ export function ChecklistsPage() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {filteredItems.map((item: any) => (
+                    {filteredItems.map((item: any) => {
+                      const label =
+                        item.sourceType === 'ACTIVITY' && item.activityTypeName
+                          ? `${item.activityTypeName} - ${item.title}`
+                          : item.title;
+                      return (
                       <TableRow key={item.id} hover>
                         <TableCell sx={{ fontWeight: 500, position: 'sticky', left: 0, bgcolor: 'background.paper', zIndex: 2 }}>
                           <Stack direction="row" spacing={1} alignItems="center">
                             <Typography variant="body2" fontWeight={500}>
-                              {item.title}
+                              {label}
                             </Typography>
                             <Chip
                               size="small"
@@ -646,7 +656,7 @@ export function ChecklistsPage() {
                           );
                         })}
                       </TableRow>
-                    ))}
+                    )})}
                   </TableBody>
                 </Table>
                 </Box>
