@@ -2101,7 +2101,12 @@ export class TasksService {
         .filter((value): value is Date => value instanceof Date)
         .sort((a, b) => b.getTime() - a.getTime())[0];
       const visitCompleted = visitActivities.some(
-        (activity) => activity.status === ActivityStatus.DONE,
+        (activity) => {
+          if (activity.status === ActivityStatus.DONE) return true;
+          if (activity.status === ActivityStatus.CANCELLED) return false;
+          if (!activity.eventDate) return false;
+          return activity.eventDate.getTime() <= now;
+        },
       );
       const late = localityActivities.filter((activity) =>
         isLateActivity(activity),
