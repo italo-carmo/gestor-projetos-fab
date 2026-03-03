@@ -408,32 +408,76 @@ export function TaskDetailsDrawer({
     }
   };
 
-  const handleSaveTitle = async () => {
+  const handleSave = async () => {
     if (!task || !canManageTaskData) return;
+
     const nextTitle = taskTitleDraft.trim();
-    if (!nextTitle) return;
+    const titleChanged =
+      !!nextTitle && nextTitle !== resolveTaskTitle(task);
+
+    const nextLocalityIds = Array.from(
+      new Set(linkedLocalityIdsDraft.map((value) => String(value).trim())),
+    ).filter(Boolean);
+
+    let didSomething = false;
+
     try {
-      if (saveTitleByTaskInstance) {
-        for (const id of normalizedLinkedIds) {
-          await updateTaskTitle.mutateAsync({ id, title: nextTitle });
+      if (titleChanged) {
+        if (saveTitleByTaskInstance) {
+          for (const id of normalizedLinkedIds) {
+            await updateTaskTitle.mutateAsync({ id, title: nextTitle });
+          }
+        } else {
+          const templateId = String(
+            task.taskTemplateId ?? task.taskTemplate?.id ?? "",
+          ).trim();
+          if (templateId) {
+            await updateTaskTemplate.mutateAsync({
+              id: templateId,
+              payload: {
+                title: nextTitle,
+              },
+            });
+          }
         }
+        didSomething = true;
+      }
+
+      if (linkedLocalities.length > 0) {
+        if (!nextLocalityIds.length) {
+          toast.push({
+            message: "Selecione ao menos uma localidade.",
+            severity: "warning",
+          });
+        } else {
+          await updateTaskLocalities.mutateAsync({
+            id: task.id,
+            localityIds: nextLocalityIds,
+            sourceTaskIds: normalizedLinkedIds,
+          });
+          if (!nextLocalityIds.includes(selectedLocalityId)) {
+            setSelectedLocalityId(nextLocalityIds[0] ?? "");
+            setSelectedAssigneeValue("");
+          }
+          didSomething = true;
+        }
+      }
+
+      if (didSomething) {
+        toast.push({
+          message: "Alterações salvas",
+          severity: "success",
+        });
       } else {
-        const templateId = String(
-          task.taskTemplateId ?? task.taskTemplate?.id ?? "",
-        ).trim();
-        if (!templateId) return;
-        await updateTaskTemplate.mutateAsync({
-          id: templateId,
-          payload: {
-            title: nextTitle,
-          },
+        toast.push({
+          message: "Nenhuma alteração para salvar.",
+          severity: "info",
         });
       }
-      toast.push({ message: "Título atualizado", severity: "success" });
     } catch (error) {
       const payload = parseApiError(error);
       toast.push({
-        message: payload.message ?? "Erro ao atualizar título",
+        message: payload.message ?? "Erro ao salvar alterações",
         severity: "error",
       });
     }
@@ -442,38 +486,6 @@ export function TaskDetailsDrawer({
   const handleDelete = async () => {
     if (!task || !canDelete) return;
     setConfirmDeleteOpen(true);
-  };
-
-  const handleSaveLocalities = async () => {
-    if (!task || !canManageTaskData) return;
-    const nextLocalityIds = Array.from(
-      new Set(linkedLocalityIdsDraft.map((value) => String(value).trim())),
-    ).filter(Boolean);
-    if (!nextLocalityIds.length) {
-      toast.push({
-        message: "Selecione ao menos uma localidade.",
-        severity: "warning",
-      });
-      return;
-    }
-    try {
-      await updateTaskLocalities.mutateAsync({
-        id: task.id,
-        localityIds: nextLocalityIds,
-        sourceTaskIds: normalizedLinkedIds,
-      });
-      if (!nextLocalityIds.includes(selectedLocalityId)) {
-        setSelectedLocalityId(nextLocalityIds[0] ?? "");
-        setSelectedAssigneeValue("");
-      }
-      toast.push({ message: "Localidades atualizadas", severity: "success" });
-    } catch (error) {
-      const payload = parseApiError(error);
-      toast.push({
-        message: payload.message ?? "Erro ao atualizar localidades",
-        severity: "error",
-      });
-    }
   };
 
   const handleConfirmDelete = async () => {
@@ -813,7 +825,7 @@ export function TaskDetailsDrawer({
                     variant="outlined"
                     onClick={() => handleStatus("IN_PROGRESS")}
                     disabled={!canManageTaskData}
-                    sx={{ minHeight: 32, px: 1.5 }}
+                    sx={{ minHeight: 30, px: 1.5 }}
                   >
                     Iniciar
                   </Button>
@@ -824,7 +836,7 @@ export function TaskDetailsDrawer({
                     onClick={() => handleStatus("DONE")}
                     disabled={!canManageTaskData}
                     data-testid="task-mark-done"
-                    sx={{ minHeight: 32, px: 1.5 }}
+                    sx={{ minHeight: 30, px: 1.5 }}
                   >
                     Concluir
                   </Button>
@@ -832,32 +844,17 @@ export function TaskDetailsDrawer({
                     size="small"
                     variant="outlined"
                     color="success"
-                    onClick={handleSaveTitle}
+                    onClick={handleSave}
                     disabled={
                       !canManageTaskData ||
                       updateTaskTemplate.isPending ||
                       updateTaskTitle.isPending ||
-                      !taskTitleDraft.trim() ||
-                      taskTitleDraft.trim() === resolveTaskTitle(task)
+                      updateTaskLocalities.isPending
                     }
                     data-testid="task-save"
-                    sx={{ minHeight: 32, px: 1.5 }}
+                    sx={{ minHeight: 30, px: 1.5 }}
                   >
                     Salvar
-                  </Button>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    color="success"
-                    onClick={handleSaveLocalities}
-                    disabled={
-                      !canManageTaskData ||
-                      updateTaskLocalities.isPending ||
-                      linkedLocalityIdsDraft.length === 0
-                    }
-                    sx={{ minHeight: 32, px: 1.5 }}
-                  >
-                    Salvar localidades
                   </Button>
                   {canDelete && (
                     <Button
@@ -866,7 +863,7 @@ export function TaskDetailsDrawer({
                       color="error"
                       onClick={handleDelete}
                       disabled={deleteTask.isPending || batchDeleteTasks.isPending}
-                      sx={{ minHeight: 32, px: 1.5 }}
+                      sx={{ minHeight: 30, px: 1.5 }}
                     >
                       Excluir
                     </Button>
