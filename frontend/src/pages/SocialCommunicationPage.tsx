@@ -146,6 +146,7 @@ function ArticleCoverImage({
       component="img"
       src={imageSrc}
       alt={title}
+      referrerPolicy="no-referrer"
       sx={{ width: "100%", height: "100%", objectFit: "cover" }}
       onError={() => {
         if (directSrc && proxySrc && imageSrc === directSrc) {
@@ -198,6 +199,7 @@ function ArticleCoverImageSmall({
       component="img"
       src={imageSrc}
       alt={title}
+      referrerPolicy="no-referrer"
       sx={{ width: "100%", height: "100%", objectFit: "cover" }}
       onError={() => {
         if (directSrc && proxySrc && imageSrc === directSrc) {
