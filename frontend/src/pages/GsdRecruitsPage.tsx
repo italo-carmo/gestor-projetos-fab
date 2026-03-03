@@ -524,7 +524,14 @@ export function GsdRecruitsPage() {
                 </TableHead>
                 <TableBody>
                   {managementItems.map((locality: any) => (
-                    <TableRow key={locality.id} hover>
+                    <TableRow
+                      key={locality.id}
+                      hover
+                      onClick={() => openEdit(locality)}
+                      sx={{
+                        cursor: canEditRecruitsCount(me, locality.id) ? 'pointer' : 'default',
+                      }}
+                    >
                       <TableCell>
                         <Typography variant="body2" fontWeight={600}>
                           {locality.name}
