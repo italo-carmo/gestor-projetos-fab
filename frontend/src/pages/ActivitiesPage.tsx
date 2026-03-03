@@ -1005,6 +1005,9 @@ export function ActivitiesPage() {
               <Table size="small">
                 <TableHead>
                   <TableRow sx={{ bgcolor: 'primary.main' }}>
+                    {canUpdate && (
+                      <TableCell sx={{ color: 'white', fontWeight: 600, width: 40 }} />
+                    )}
                     {canManageBatch && (
                       <TableCell padding="checkbox" sx={{ color: 'white' }}>
                         <Checkbox
@@ -1032,11 +1035,6 @@ export function ActivitiesPage() {
                     <TableRow
                       key={item.id}
                       hover
-                      draggable={canUpdate}
-                      onDragStart={() => {
-                        if (!canUpdate) return;
-                        setDraggingActivityId(String(item.id));
-                      }}
                       onDragOver={(event) => {
                         if (!canUpdate) return;
                         event.preventDefault();
@@ -1046,14 +1044,38 @@ export function ActivitiesPage() {
                         event.preventDefault();
                         void handleDropReorder(String(item.id));
                       }}
-                      onDragEnd={() => setDraggingActivityId('')}
                       selected={!isCreateMode && selectedId === item.id}
                       onClick={() => openActivityDrawer(item.id, 'activity')}
                       sx={{
-                        cursor: canUpdate ? 'grab' : 'pointer',
+                        cursor: 'pointer',
                         opacity: draggingActivityId === String(item.id) ? 0.72 : 1,
                       }}
                     >
+                      {canUpdate && (
+                        <TableCell
+                          padding="checkbox"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          <Box
+                            component="span"
+                            draggable
+                            onDragStart={() => {
+                              setDraggingActivityId(String(item.id));
+                            }}
+                            onDragEnd={() => setDraggingActivityId('')}
+                            sx={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'grab',
+                              color: 'text.disabled',
+                              '&:active': { cursor: 'grabbing' },
+                            }}
+                          >
+                            <DragIndicatorRoundedIcon fontSize="small" />
+                          </Box>
+                        </TableCell>
+                      )}
                       {canManageBatch && (
                         <TableCell padding="checkbox" onClick={(event) => event.stopPropagation()}>
                           <Checkbox
@@ -1064,12 +1086,9 @@ export function ActivitiesPage() {
                         </TableCell>
                       )}
                       <TableCell>
-                        <Stack direction="row" spacing={0.5} alignItems="center">
-                          <DragIndicatorRoundedIcon fontSize="small" color="disabled" />
-                          <Typography variant="body2">
-                            {item.activityType?.name ?? '—'}
-                          </Typography>
-                        </Stack>
+                        <Typography variant="body2">
+                          {item.activityType?.name ?? '—'}
+                        </Typography>
                       </TableCell>
                       <TableCell>{item.title}</TableCell>
                       <TableCell>{item.locality?.name ?? '-'}</TableCell>
