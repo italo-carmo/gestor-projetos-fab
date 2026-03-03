@@ -239,6 +239,7 @@ export function SocialCommunicationPage() {
   const [previewing, setPreviewing] = useState<SocialCommunicationArticle | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewSrc, setPreviewSrc] = useState<string | null>(null);
+  const [previewTriedDirect, setPreviewTriedDirect] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<SocialCommunicationArticle | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SocialCommunicationArticle | null>(null);
@@ -256,6 +257,7 @@ export function SocialCommunicationPage() {
     if (!previewing) {
       setPreviewLoading(false);
       setPreviewSrc(null);
+      setPreviewTriedDirect(false);
       return;
     }
     setPreviewLoading(true);
@@ -263,38 +265,28 @@ export function SocialCommunicationPage() {
     // Fluxo primário: navegador do usuário.
     if (previewing.sourceUrl) {
       setPreviewSrc(previewing.sourceUrl);
+      setPreviewTriedDirect(false);
 
-      // Só aciona fallback no servidor quando houver falha real de conectividade
-      // do navegador para o link de origem (cenário comum em VPN sem internet).
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 7000);
-      void fetch(previewing.sourceUrl, {
-        method: "GET",
-        mode: "no-cors",
-        cache: "no-store",
-        signal: controller.signal,
-      })
-        .then(() => {
-          // Alcancavel no navegador: mantém fluxo primário.
-        })
-        .catch(() => {
-          if (previewing.contentProxyPath) {
+      // Fallback para servidor apenas se o carregamento direto não concluir em tempo hábil.
+      const timeout = setTimeout(() => {
+        setPreviewLoading((prevLoading) => {
+          if (prevLoading && !previewTriedDirect && previewing.contentProxyPath) {
             setPreviewSrc(toApiUrl(previewing.contentProxyPath));
-            setPreviewLoading(true);
+            setPreviewTriedDirect(true);
+            return true;
           }
-        })
-        .finally(() => {
-          clearTimeout(timeout);
+          return prevLoading;
         });
+      }, 15000);
 
       return () => {
         clearTimeout(timeout);
-        controller.abort();
       };
     }
 
     if (previewing.contentProxyPath) {
       setPreviewSrc(toApiUrl(previewing.contentProxyPath));
+      setPreviewTriedDirect(true);
     }
   }, [previewing]);
 
