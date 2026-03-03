@@ -976,9 +976,6 @@ export function ActivitiesPage() {
               <Table size="small">
                 <TableHead>
                   <TableRow sx={{ bgcolor: 'primary.main' }}>
-                    <TableCell sx={{ color: 'white', fontWeight: 600, width: 40 }}>
-                      Ordem
-                    </TableCell>
                     {canManageBatch && (
                       <TableCell padding="checkbox" sx={{ color: 'white' }}>
                         <Checkbox
@@ -990,8 +987,8 @@ export function ActivitiesPage() {
                         />
                       </TableCell>
                     )}
-                    <TableCell sx={{ color: 'white', fontWeight: 600 }}>Atividade</TableCell>
                     <TableCell sx={{ color: 'white', fontWeight: 600 }}>Tipo</TableCell>
+                    <TableCell sx={{ color: 'white', fontWeight: 600 }}>Atividade</TableCell>
                     <TableCell sx={{ color: 'white', fontWeight: 600 }}>Localidade</TableCell>
                     <TableCell sx={{ color: 'white', fontWeight: 600 }}>Especialidade</TableCell>
                     <TableCell sx={{ color: 'white', fontWeight: 600 }}>Responsável</TableCell>
@@ -1028,13 +1025,6 @@ export function ActivitiesPage() {
                         opacity: draggingActivityId === String(item.id) ? 0.72 : 1,
                       }}
                     >
-                      <TableCell
-                        align="center"
-                        sx={{ color: 'text.secondary' }}
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        <DragIndicatorRoundedIcon fontSize="small" />
-                      </TableCell>
                       {canManageBatch && (
                         <TableCell padding="checkbox" onClick={(event) => event.stopPropagation()}>
                           <Checkbox
@@ -1044,8 +1034,15 @@ export function ActivitiesPage() {
                           />
                         </TableCell>
                       )}
+                      <TableCell>
+                        <Stack direction="row" spacing={0.5} alignItems="center">
+                          <DragIndicatorRoundedIcon fontSize="small" color="disabled" />
+                          <Typography variant="body2">
+                            {item.activityType?.name ?? '—'}
+                          </Typography>
+                        </Stack>
+                      </TableCell>
                       <TableCell>{item.title}</TableCell>
-                      <TableCell>{item.activityType?.name ?? '—'}</TableCell>
                       <TableCell>{item.locality?.name ?? '-'}</TableCell>
                       <TableCell>{item.specialty?.name ?? 'Todas'}</TableCell>
                       <TableCell>
