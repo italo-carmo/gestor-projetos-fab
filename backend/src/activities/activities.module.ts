@@ -7,5 +7,6 @@ import { ActivitiesService } from './activities.service';
   imports: [RbacModule],
   controllers: [ActivitiesController],
   providers: [ActivitiesService],
+  exports: [ActivitiesService],
 })
 export class ActivitiesModule {}
