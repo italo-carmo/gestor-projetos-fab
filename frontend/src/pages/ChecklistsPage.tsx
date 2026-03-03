@@ -407,7 +407,6 @@ export function ChecklistsPage() {
 
       {filteredByPhase.map((checklist: any) => {
         const items = checklist.items ?? [];
-        const isAutoChecklist = String(checklist.id).startsWith('auto-');
         const filteredItems = itemSourceType && itemSourceType !== 'ALL'
           ? items.filter((item: any) => item.sourceType === itemSourceType)
           : items;
@@ -542,9 +541,7 @@ export function ChecklistsPage() {
                         </TableCell>
                         {filteredItems.map((item: any) => {
                           const status = item.statuses?.[loc.id] ?? 'NOT_STARTED';
-                          const isAutoItem = String(item.id).startsWith('auto-');
-                          const canToggle =
-                            canUpdateChecklistStatus && !isAutoChecklist && !isAutoItem;
+                          const canToggle = canUpdateChecklistStatus;
                           return (
                             <TableCell key={item.id} align="center" sx={{ py: 0.75 }}>
                               <StatusIcon
@@ -628,9 +625,7 @@ export function ChecklistsPage() {
                         </TableCell>
                         {localities.map((loc: any) => {
                           const status = item.statuses?.[loc.id] ?? 'NOT_STARTED';
-                          const isAutoItem = String(item.id).startsWith('auto-');
-                          const canToggle =
-                            canUpdateChecklistStatus && !isAutoChecklist && !isAutoItem;
+                          const canToggle = canUpdateChecklistStatus;
                           return (
                             <TableCell key={loc.id} align="center" sx={{ py: 0.75 }}>
                               <StatusIcon

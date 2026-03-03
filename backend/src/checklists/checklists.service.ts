@@ -293,15 +293,26 @@ export class ChecklistsService {
       return { updatedTasks: 0, updatedActivities: 0 };
     }
 
-    const itemIds = Array.from(new Set(normalized.map((entry) => entry.checklistItemId)));
-    const items = await this.prisma.checklistItem.findMany({
-      where: { id: { in: itemIds } },
-      select: {
-        id: true,
-        title: true,
-        taskTemplateId: true,
-      },
-    });
+    const autoUpdates = normalized.filter((entry) =>
+      entry.checklistItemId.startsWith('auto-'),
+    );
+    const dbUpdates = normalized.filter(
+      (entry) => !entry.checklistItemId.startsWith('auto-'),
+    );
+
+    const itemIds = Array.from(
+      new Set(dbUpdates.map((entry) => entry.checklistItemId)),
+    );
+    const items = itemIds.length
+      ? await this.prisma.checklistItem.findMany({
+          where: { id: { in: itemIds } },
+          select: {
+            id: true,
+            title: true,
+            taskTemplateId: true,
+          },
+        })
+      : [];
     const itemById = new Map(items.map((item) => [item.id, item]));
 
     const canonicalLocalityIds = Array.from(
@@ -323,7 +334,8 @@ export class ChecklistsService {
     let updatedTasks = 0;
     let updatedActivities = 0;
 
-    for (const entry of normalized) {
+    // Atualiza itens vinculados a checklists salvos (template/task + atividade por título)
+    for (const entry of dbUpdates) {
       const item = itemById.get(entry.checklistItemId);
       if (!item) continue;
 
@@ -367,6 +379,64 @@ export class ChecklistsService {
         }
         await this.activities.updateStatus(activity.id, targetActivityStatus, user);
         updatedActivities += 1;
+      }
+    }
+
+    // Atualiza itens do checklist automático (ids auto-task: / auto-activity:)
+    for (const entry of autoUpdates) {
+      const checklistStatus = this.normalizeChecklistTargetStatus(entry.status);
+      const targetTaskStatus = this.mapChecklistToTaskStatus(checklistStatus);
+      const targetActivityStatus = this.mapChecklistToActivityStatus(
+        checklistStatus,
+      );
+
+      const targetLocalityIds =
+        aliasIdsByCanonicalId.get(entry.localityId) ?? [entry.localityId];
+
+      if (entry.checklistItemId.startsWith('auto-task:')) {
+        const taskTemplateId = entry.checklistItemId.slice('auto-task:'.length);
+        if (!taskTemplateId) continue;
+
+        const instances = await this.prisma.taskInstance.findMany({
+          where: {
+            taskTemplateId,
+            localityId: { in: targetLocalityIds },
+          },
+          select: { id: true },
+        });
+        for (const instance of instances) {
+          await this.tasks.updateStatus(instance.id, targetTaskStatus, user);
+          updatedTasks += 1;
+        }
+        continue;
+      }
+
+      if (entry.checklistItemId.startsWith('auto-activity:')) {
+        const titleKey = entry.checklistItemId.slice('auto-activity:'.length);
+        if (!titleKey) continue;
+
+        const activities = await this.prisma.activity.findMany({
+          where: {
+            localityId: { in: targetLocalityIds },
+          },
+          select: {
+            id: true,
+            title: true,
+          },
+        });
+        for (const activity of activities) {
+          if (
+            this.normalizeChecklistActivityTitle(activity.title) !== titleKey
+          ) {
+            continue;
+          }
+          await this.activities.updateStatus(
+            activity.id,
+            targetActivityStatus,
+            user,
+          );
+          updatedActivities += 1;
+        }
       }
     }
 
