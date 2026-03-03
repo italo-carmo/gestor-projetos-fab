@@ -152,6 +152,15 @@ export class ActivitiesController {
     );
   }
 
+  @Put('batch/reorder')
+  @RequirePermission('task_instances', 'update')
+  batchReorder(
+    @Body() body: { ids: string[] },
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.activities.batchReorder(body.ids ?? [], user);
+  }
+
   @Put(':id/status')
   updateStatus(@Param('id') id: string, @Body() dto: UpdateActivityStatusDto, @CurrentUser() user: RbacUser) {
     return this.activities.updateStatus(id, dto.status as any, user);

@@ -29,6 +29,7 @@ import {
 } from '@mui/material';
 import CheckBoxRoundedIcon from '@mui/icons-material/CheckBoxRounded';
 import CheckBoxOutlineBlankRoundedIcon from '@mui/icons-material/CheckBoxOutlineBlankRounded';
+import DragIndicatorRoundedIcon from '@mui/icons-material/DragIndicatorRounded';
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
@@ -40,6 +41,7 @@ import {
   useBatchUpdateActivityResponsible,
   useBatchUpdateActivitySpecialty,
   useBatchUpdateActivityStatus,
+  useReorderActivities,
   useReplicateActivities,
   useCreateActivityType,
   useCreateActivity,
@@ -160,6 +162,7 @@ export function ActivitiesPage() {
   const batchUpdateActivityStatus = useBatchUpdateActivityStatus();
   const batchUpdateActivitySpecialty = useBatchUpdateActivitySpecialty();
   const batchUpdateActivityResponsible = useBatchUpdateActivityResponsible();
+  const reorderActivities = useReorderActivities();
   const replicateActivities = useReplicateActivities();
   const commentsQuery = useActivityComments(selectedId ?? '');
   const addComment = useAddActivityComment();
@@ -171,6 +174,8 @@ export function ActivitiesPage() {
   const exportPdf = useExportActivityReportPdf();
 
   const items = activitiesQuery.data?.items ?? [];
+  const [orderedItems, setOrderedItems] = useState<any[]>([]);
+  const [draggingActivityId, setDraggingActivityId] = useState('');
   const selectedIdsSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const selectedActivities = useMemo(
     () => items.filter((item: any) => selectedIdsSet.has(String(item.id))),
@@ -205,7 +210,13 @@ export function ActivitiesPage() {
       ),
     [replicateTargetLocalityIds, replicateTargetLocalityOptions],
   );
-  const allVisibleSelected = items.length > 0 && selectedIds.length === items.length;
+  const displayedItems = orderedItems.length ? orderedItems : items;
+  const allVisibleSelected =
+    displayedItems.length > 0 && selectedIds.length === displayedItems.length;
+
+  useEffect(() => {
+    setOrderedItems(items);
+  }, [items]);
 
   useEffect(() => {
     if (activitiesQuery.isLoading) return;
@@ -483,7 +494,7 @@ export function ActivitiesPage() {
       setSelectedIds([]);
       return;
     }
-    setSelectedIds(items.map((item: any) => String(item.id)));
+    setSelectedIds(displayedItems.map((item: any) => String(item.id)));
   };
 
   const toggleRowSelection = (id: string) => {
@@ -491,6 +502,39 @@ export function ActivitiesPage() {
       if (prev.includes(id)) return prev.filter((entry) => entry !== id);
       return [...prev, id];
     });
+  };
+
+  const handleDropReorder = async (targetId: string) => {
+    if (!canUpdate) return;
+    if (!draggingActivityId || draggingActivityId === targetId) return;
+
+    const fromIndex = displayedItems.findIndex(
+      (item: any) => String(item.id) === draggingActivityId,
+    );
+    const toIndex = displayedItems.findIndex(
+      (item: any) => String(item.id) === targetId,
+    );
+    if (fromIndex < 0 || toIndex < 0) return;
+
+    const previous = displayedItems;
+    const next = [...displayedItems];
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, moved);
+    setOrderedItems(next);
+    setDraggingActivityId('');
+
+    try {
+      await reorderActivities.mutateAsync(
+        next.map((item: any) => String(item.id)),
+      );
+      toast.push({ message: 'Ordem das atividades atualizada.', severity: 'success' });
+    } catch (error) {
+      setOrderedItems(previous);
+      toast.push({
+        message: parseApiError(error).message ?? 'Erro ao reordenar atividades.',
+        severity: 'error',
+      });
+    }
   };
 
   const handleBatchStatusApply = async () => {
@@ -926,12 +970,15 @@ export function ActivitiesPage() {
               </Box>
             )}
             <Typography variant="h6" sx={{ mb: 1 }}>Atividades de Campo</Typography>
-            {items.length === 0 ? (
+            {displayedItems.length === 0 ? (
               <EmptyState title="Nenhuma atividade" description="Cadastre uma nova atividade externa." />
             ) : (
               <Table size="small">
                 <TableHead>
                   <TableRow sx={{ bgcolor: 'primary.main' }}>
+                    <TableCell sx={{ color: 'white', fontWeight: 600, width: 40 }}>
+                      Ordem
+                    </TableCell>
                     {canManageBatch && (
                       <TableCell padding="checkbox" sx={{ color: 'white' }}>
                         <Checkbox
@@ -955,14 +1002,39 @@ export function ActivitiesPage() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {items.map((item: any) => (
+                  {displayedItems.map((item: any) => (
                     <TableRow
                       key={item.id}
                       hover
+                      draggable={canUpdate}
+                      onDragStart={() => {
+                        if (!canUpdate) return;
+                        setDraggingActivityId(String(item.id));
+                      }}
+                      onDragOver={(event) => {
+                        if (!canUpdate) return;
+                        event.preventDefault();
+                      }}
+                      onDrop={(event) => {
+                        if (!canUpdate) return;
+                        event.preventDefault();
+                        void handleDropReorder(String(item.id));
+                      }}
+                      onDragEnd={() => setDraggingActivityId('')}
                       selected={!isCreateMode && selectedId === item.id}
                       onClick={() => openActivityDrawer(item.id, 'activity')}
-                      sx={{ cursor: 'pointer' }}
+                      sx={{
+                        cursor: canUpdate ? 'grab' : 'pointer',
+                        opacity: draggingActivityId === String(item.id) ? 0.72 : 1,
+                      }}
                     >
+                      <TableCell
+                        align="center"
+                        sx={{ color: 'text.secondary' }}
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <DragIndicatorRoundedIcon fontSize="small" />
+                      </TableCell>
                       {canManageBatch && (
                         <TableCell padding="checkbox" onClick={(event) => event.stopPropagation()}>
                           <Checkbox

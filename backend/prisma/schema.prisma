@@ -171,6 +171,7 @@ model Activity {
   id            String        @id @default(cuid())
   title         String
   description   String?
+  sortOrder     Int           @default(0)
   localityId    String?
   activityTypeId String?
   specialtyId   String?
@@ -197,6 +198,7 @@ model Activity {
   @@index([specialtyId])
   @@index([status])
   @@index([eventDate])
+  @@index([sortOrder])
 }
 
 model ActivityType {

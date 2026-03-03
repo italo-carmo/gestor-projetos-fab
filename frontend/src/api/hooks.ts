@@ -503,6 +503,17 @@ export function useReplicateActivities() {
   });
 }
 
+export function useReorderActivities() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (ids: string[]) =>
+      (await api.put('/activities/batch/reorder', { ids })).data as { updated: number },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['activities'] });
+    },
+  });
+}
+
 export function useBatchUpdateActivityStatus() {
   const qc = useQueryClient();
   return useMutation({
