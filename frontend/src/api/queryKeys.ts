@@ -5,6 +5,7 @@ export const qk = {
   taskComments: (taskId: string) => ["taskComments", taskId] as const,
   activityComments: (activityId: string) => ["activityComments", activityId] as const,
   activitySchedule: (activityId: string) => ["activitySchedule", activityId] as const,
+  activityTypes: ["activityTypes"] as const,
   missions: (filters: Record<string, any>) => ["missions", filters] as const,
   mission: (id: string) => ["mission", id] as const,
   missionSchedule: (missionId: string) => ["missionSchedule", missionId] as const,

@@ -23,6 +23,10 @@ export class CreateActivityDto {
   specialtyId?: string | null;
 
   @IsOptional()
+  @IsString()
+  activityTypeId?: string | null;
+
+  @IsOptional()
   @IsDateString()
   eventDate?: string | null;
 

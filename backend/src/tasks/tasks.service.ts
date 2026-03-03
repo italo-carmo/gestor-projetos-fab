@@ -1912,6 +1912,7 @@ export class TasksService {
           unassigned: 0,
           recruitsFemale: 0,
           reportsProduced: 0,
+          smifNewsCount: 0,
         },
         lateItems: [],
         unassignedItems: [],
@@ -2155,6 +2156,9 @@ export class TasksService {
     const reportsCount = filteredActivities.filter((activity) =>
       Boolean(activity.report?.id),
     ).length;
+    const smifNewsCount = await this.prisma.socialCommunicationArticle.count({
+      where: { tags: { has: 'smif' } },
+    });
 
     return {
       items: perLocality,
@@ -2165,6 +2169,7 @@ export class TasksService {
         unassigned: perLocality.reduce((acc, item) => acc + item.unassigned, 0),
         recruitsFemale: totalRecruits,
         reportsProduced: reportsCount,
+        smifNewsCount,
       },
       lateItems,
       unassignedItems,
@@ -2821,7 +2826,7 @@ export class TasksService {
     const specialtiesMap = new Map<string, { specialtyId: string | null; specialtyName: string; count: number }>();
     for (const activity of filteredActivities) {
       const specialtyId = activity.specialtyId ?? null;
-      const specialtyName = activity.specialty?.name ?? 'Sem especialidade';
+      const specialtyName = activity.specialty?.name ?? 'Todas';
       const key = specialtyId ?? '__none__';
       const current = specialtiesMap.get(key);
       if (current) {

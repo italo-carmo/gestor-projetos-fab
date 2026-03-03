@@ -109,6 +109,8 @@ function normalizeTags(values: string[]) {
   return normalized;
 }
 
+const QUICK_TAGS = ["smif", "cipavd", "cpca"] as const;
+
 export function SocialCommunicationPage() {
   const toast = useToast();
   const { data: me } = useMe();
@@ -734,6 +736,37 @@ export function SocialCommunicationPage() {
                 />
               )}
             />
+            <Box>
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.6 }}>
+                Tags rápidas
+              </Typography>
+              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                {QUICK_TAGS.map((tag) => {
+                  const selected = form.tags.includes(tag);
+                  return (
+                    <Chip
+                      key={tag}
+                      label={`#${tag}`}
+                      clickable
+                      color={selected ? "primary" : "default"}
+                      variant={selected ? "filled" : "outlined"}
+                      onClick={() => {
+                        setForm((prev) => {
+                          const next = prev.tags.includes(tag)
+                            ? prev.tags.filter((value) => value !== tag)
+                            : [...prev.tags, tag];
+                          return { ...prev, tags: normalizeTags(next) };
+                        });
+                      }}
+                      sx={{
+                        borderRadius: 1.6,
+                        fontWeight: 700,
+                      }}
+                    />
+                  );
+                })}
+              </Stack>
+            </Box>
             <TextField
               label="Data da publicacao"
               type="date"

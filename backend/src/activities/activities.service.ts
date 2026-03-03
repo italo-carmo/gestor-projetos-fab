@@ -91,6 +91,7 @@ export class ActivitiesService {
         take,
         include: {
           locality: { select: { id: true, code: true, name: true } },
+          activityType: { select: { id: true, name: true } },
           specialty: { select: { id: true, name: true, color: true } },
           createdBy: { select: { id: true, name: true } },
           responsibles: {
@@ -148,6 +149,7 @@ export class ActivitiesService {
       description?: string | null;
       localityId?: string | null;
       localityIds?: string[];
+      activityTypeId?: string | null;
       specialtyId?: string | null;
       eventDate?: string | null;
       reportRequired?: boolean;
@@ -189,6 +191,9 @@ export class ActivitiesService {
 
     const singleLocalityId =
       createLocalityIds.length === 1 ? createLocalityIds[0] : null;
+    const activityTypeId = await this.resolveActivityTypeId(
+      payload.activityTypeId,
+    );
     const responsibleUserIds = await this.resolveActivityResponsibleIds(
       singleLocalityId,
       normalizedResponsibleIds,
@@ -204,6 +209,7 @@ export class ActivitiesService {
               ? sanitizeText(payload.description)
               : null,
             localityId,
+            activityTypeId,
             specialtyId,
             eventDate: payload.eventDate ? new Date(payload.eventDate) : null,
             reportRequired: payload.reportRequired ?? false,
@@ -220,6 +226,7 @@ export class ActivitiesService {
           },
           include: {
             locality: { select: { id: true, code: true, name: true } },
+            activityType: { select: { id: true, name: true } },
             specialty: { select: { id: true, name: true, color: true } },
             createdBy: { select: { id: true, name: true } },
             responsibles: {
@@ -292,6 +299,7 @@ export class ActivitiesService {
       title?: string;
       description?: string | null;
       localityId?: string | null;
+      activityTypeId?: string | null;
       specialtyId?: string | null;
       eventDate?: string | null;
       reportRequired?: boolean;
@@ -316,6 +324,11 @@ export class ActivitiesService {
       payload.specialtyId === undefined
         ? ((existing as any).specialtyId ?? null)
         : payload.specialtyId;
+    const activityTypeId = await this.resolveActivityTypeId(
+      payload.activityTypeId === undefined
+        ? ((existing as any).activityTypeId ?? null)
+        : payload.activityTypeId,
+    );
     this.assertScopeConstraint(localityId, specialtyId, user);
     const responsibleUserIds = await this.resolveActivityResponsibleIds(
       localityId,
@@ -335,6 +348,7 @@ export class ActivitiesService {
               ? null
               : sanitizeText(payload.description),
         localityId,
+        activityTypeId,
         specialtyId,
         eventDate:
           payload.eventDate === undefined
@@ -357,6 +371,7 @@ export class ActivitiesService {
       },
       include: {
         locality: { select: { id: true, code: true, name: true } },
+        activityType: { select: { id: true, name: true } },
         specialty: { select: { id: true, name: true, color: true } },
         createdBy: { select: { id: true, name: true } },
         responsibles: {
@@ -433,6 +448,7 @@ export class ActivitiesService {
       data: { status },
       include: {
         locality: { select: { id: true, code: true, name: true } },
+        activityType: { select: { id: true, name: true } },
         specialty: { select: { id: true, name: true, color: true } },
         createdBy: { select: { id: true, name: true } },
         responsibles: {
@@ -770,6 +786,144 @@ export class ActivitiesService {
     });
 
     return { deleted: targetIds.length };
+  }
+
+  async batchReplicate(
+    ids: string[],
+    targetLocalityIds: string[],
+    options?: {
+      statusMode?: 'RESET' | 'KEEP';
+      dateMode?: 'KEEP' | 'CLEAR' | 'SHIFT_DAYS';
+      dayOffset?: number | string;
+    },
+    user?: RbacUser,
+  ) {
+    this.assertActivityOperateAccess(null, user);
+    const normalizedIds = this.normalizeActivityIds(ids);
+    const normalizedTargetLocalityIds = Array.from(
+      new Set(
+        (targetLocalityIds ?? [])
+          .map((value) => String(value ?? '').trim())
+          .filter(Boolean),
+      ),
+    );
+    if (!normalizedIds.length || !normalizedTargetLocalityIds.length) {
+      return { created: 0, skippedSameLocality: 0, requestedPairs: 0 };
+    }
+
+    const statusMode = options?.statusMode === 'KEEP' ? 'KEEP' : 'RESET';
+    const dateMode =
+      options?.dateMode === 'CLEAR' || options?.dateMode === 'SHIFT_DAYS'
+        ? options.dateMode
+        : 'KEEP';
+    const dayOffsetRaw = Number(options?.dayOffset ?? 0);
+    const dayOffset = Number.isFinite(dayOffsetRaw) ? Math.trunc(dayOffsetRaw) : 0;
+
+    const existing = await this.prisma.activity.findMany({
+      where: { id: { in: normalizedIds } },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        localityId: true,
+        activityTypeId: true,
+        specialtyId: true,
+        eventDate: true,
+        status: true,
+        reportRequired: true,
+      },
+    });
+    if (!existing.length) {
+      return { created: 0, skippedSameLocality: 0, requestedPairs: 0 };
+    }
+
+    const allowedTargetLocalityIds = await this.getTargetLocalityIds();
+    const targetLocalities = await this.prisma.locality.findMany({
+      where: {
+        AND: [
+          { id: { in: normalizedTargetLocalityIds } },
+          { id: { in: allowedTargetLocalityIds } },
+        ],
+      },
+      select: { id: true },
+    });
+    if (targetLocalities.length !== normalizedTargetLocalityIds.length) {
+      throwError('VALIDATION_ERROR', {
+        field: 'targetLocalityIds',
+        reason: 'LOCALITY_INVALID',
+      });
+    }
+
+    for (const activity of existing) {
+      this.assertActivityOperateAccess(activity, user);
+      this.assertScopeConstraint(activity.localityId, activity.specialtyId, user);
+      for (const localityId of normalizedTargetLocalityIds) {
+        this.assertScopeConstraint(localityId, activity.specialtyId, user);
+      }
+    }
+
+    let skippedSameLocality = 0;
+    const cloneRows: Prisma.ActivityCreateManyInput[] = [];
+    for (const activity of existing) {
+      for (const targetLocalityId of normalizedTargetLocalityIds) {
+        if (activity.localityId && activity.localityId === targetLocalityId) {
+          skippedSameLocality += 1;
+          continue;
+        }
+        const eventDate =
+          dateMode === 'CLEAR'
+            ? null
+            : dateMode === 'SHIFT_DAYS' && activity.eventDate
+              ? new Date(
+                  activity.eventDate.getTime() + dayOffset * 24 * 60 * 60 * 1000,
+                )
+              : activity.eventDate ?? null;
+        cloneRows.push({
+          title: activity.title,
+          description: activity.description ?? null,
+          localityId: targetLocalityId,
+          activityTypeId: activity.activityTypeId ?? null,
+          specialtyId: activity.specialtyId ?? null,
+          eventDate,
+          status: statusMode === 'KEEP' ? activity.status : ActivityStatus.NOT_STARTED,
+          reportRequired: activity.reportRequired,
+          createdById: user?.id ?? null,
+        });
+      }
+    }
+
+    if (!cloneRows.length) {
+      return {
+        created: 0,
+        skippedSameLocality,
+        requestedPairs: existing.length * normalizedTargetLocalityIds.length,
+      };
+    }
+
+    const result = await this.prisma.activity.createMany({
+      data: cloneRows,
+    });
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'activities',
+      action: 'batch_replicate',
+      diffJson: {
+        sourceCount: existing.length,
+        targetLocalityIds: normalizedTargetLocalityIds,
+        statusMode,
+        dateMode,
+        dayOffset: dateMode === 'SHIFT_DAYS' ? dayOffset : 0,
+        created: result.count,
+        skippedSameLocality,
+      },
+    });
+
+    return {
+      created: result.count,
+      skippedSameLocality,
+      requestedPairs: existing.length * normalizedTargetLocalityIds.length,
+    };
   }
 
   async listComments(id: string, user?: RbacUser) {
@@ -1340,6 +1494,7 @@ export class ActivitiesService {
       where: { id: activityId },
       include: {
         locality: { select: { id: true, code: true, name: true } },
+        activityType: { select: { id: true, name: true } },
         specialty: { select: { id: true, name: true, color: true } },
         createdBy: { select: { id: true, name: true } },
         responsibles: {
@@ -1824,6 +1979,12 @@ export class ActivitiesService {
       : [];
     return {
       ...rest,
+      activityType: activity?.activityType
+        ? {
+            id: activity.activityType.id,
+            name: activity.activityType.name,
+          }
+        : null,
       responsibleUsers: executiveHidePii ? [] : responsibleUsers,
       report: activity.report
         ? {
@@ -1835,6 +1996,33 @@ export class ActivitiesService {
           }
         : null,
     };
+  }
+
+  async listTypes() {
+    const items = await this.prisma.activityType.findMany({
+      orderBy: { name: 'asc' },
+    });
+    return { items };
+  }
+
+  async createType(name: string) {
+    const normalized = sanitizeText(name ?? '');
+    if (!normalized.trim()) {
+      throwError('VALIDATION_ERROR', {
+        field: 'name',
+        reason: 'REQUIRED',
+      });
+    }
+    const existing = await this.prisma.activityType.findFirst({
+      where: { name: { equals: normalized, mode: 'insensitive' } },
+      select: { id: true, name: true },
+    });
+    if (existing) return existing;
+
+    return this.prisma.activityType.create({
+      data: { name: normalized },
+      select: { id: true, name: true },
+    });
   }
 
   private mapComment(comment: any, executiveHidePii?: boolean) {
@@ -2189,6 +2377,23 @@ export class ActivitiesService {
 
     this.assertScopeConstraint(localityId, null, user);
     return users.map((candidate) => candidate.id);
+  }
+
+  private async resolveActivityTypeId(activityTypeId?: string | null) {
+    const normalized = String(activityTypeId ?? '').trim();
+    if (!normalized) return null;
+
+    const existing = await this.prisma.activityType.findUnique({
+      where: { id: normalized },
+      select: { id: true },
+    });
+    if (!existing) {
+      throwError('VALIDATION_ERROR', {
+        field: 'activityTypeId',
+        reason: 'NOT_FOUND',
+      });
+    }
+    return existing.id;
   }
 
   private async invalidateSignature(reportId: string) {

@@ -44,6 +44,14 @@ export function useActivities(filters: Record<string, any>) {
   });
 }
 
+export function useActivityTypes() {
+  return useQuery({
+    queryKey: qk.activityTypes,
+    queryFn: async () => (await api.get("/activities/types")).data,
+    staleTime: 60_000,
+  });
+}
+
 export function useMissions(filters: Record<string, any>) {
   return useQuery({
     queryKey: qk.missions(filters),
@@ -412,6 +420,7 @@ export function useCreateActivity() {
       description?: string | null;
       localityId?: string | null;
       localityIds?: string[];
+      activityTypeId?: string | null;
       specialtyId?: string | null;
       responsibleUserIds?: string[];
       eventDate?: string | null;
@@ -430,6 +439,7 @@ export function useUpdateActivity() {
         title?: string;
         description?: string | null;
         localityId?: string | null;
+        activityTypeId?: string | null;
         specialtyId?: string | null;
         responsibleUserIds?: string[];
         eventDate?: string | null;
@@ -437,6 +447,17 @@ export function useUpdateActivity() {
       };
     }) => (await api.put(`/activities/${args.id}`, args.payload)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["activities"] }),
+  });
+}
+
+export function useCreateActivityType() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: { name: string }) =>
+      (await api.post("/activities/types", payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.activityTypes });
+    },
   });
 }
 
@@ -464,6 +485,20 @@ export function useBatchDeleteActivities() {
   return useMutation({
     mutationFn: async (args: { ids: string[] }) =>
       (await api.post("/activities/batch/delete", args)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["activities"] }),
+  });
+}
+
+export function useReplicateActivities() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      ids: string[];
+      targetLocalityIds: string[];
+      statusMode?: "RESET" | "KEEP";
+      dateMode?: "KEEP" | "CLEAR" | "SHIFT_DAYS";
+      dayOffset?: number;
+    }) => (await api.post("/activities/batch/replicate", args)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["activities"] }),
   });
 }

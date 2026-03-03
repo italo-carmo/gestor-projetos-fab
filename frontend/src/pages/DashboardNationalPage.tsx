@@ -2,7 +2,8 @@ import { Box, Button, Card, CardContent, Chip, Grid, Table, TableBody, TableCell
 import TargetIcon from '@mui/icons-material/GpsFixed';
 import PeopleIcon from '@mui/icons-material/Groups';
 import DescriptionIcon from '@mui/icons-material/Description';
-import { Link, useSearchParams } from 'react-router-dom';
+import NewspaperRoundedIcon from '@mui/icons-material/NewspaperRounded';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useDashboardNational } from '../api/hooks';
 import { SkeletonState } from '../components/states/SkeletonState';
 import { ErrorState } from '../components/states/ErrorState';
@@ -32,6 +33,7 @@ type NationalActivityItem = {
 
 export function DashboardNationalPage() {
   const [params] = useSearchParams();
+  const navigate = useNavigate();
   const localityId = params.get('localityId') ?? '';
   const dashboardQuery = useDashboardNational({ localityId: localityId || undefined });
   const qc = useQueryClient();
@@ -43,7 +45,13 @@ export function DashboardNationalPage() {
   const smifLocalities = [...items]
     .sort((a, b) => a.localityName.localeCompare(b.localityName, 'pt-BR'))
     .slice(0, 8);
-  const totals = dashboardQuery.data?.totals ?? { late: 0, unassigned: 0, recruitsFemale: 0, reportsProduced: 0 };
+  const totals = dashboardQuery.data?.totals ?? {
+    late: 0,
+    unassigned: 0,
+    recruitsFemale: 0,
+    reportsProduced: 0,
+    smifNewsCount: 0,
+  };
   const positiveHighlights = ((dashboardQuery.data?.riskTasks ?? []) as NationalActivityItem[])
     .sort((a, b) => {
       const dateA = a.eventDate ? new Date(a.eventDate).getTime() : 0;
@@ -68,6 +76,12 @@ export function DashboardNationalPage() {
       value: `${averageProgress}%`,
       icon: <TargetIcon sx={{ fontSize: 28 }} />,
       bg: '#EEF8FF',
+    },
+    {
+      label: 'Reportagens (SMIF)',
+      value: String(totals.smifNewsCount ?? 0),
+      icon: <NewspaperRoundedIcon sx={{ fontSize: 28 }} />,
+      bg: '#F2F5FF',
     },
     { label: 'Relatórios', value: `${totals.reportsProduced ?? 0} produzidos`, icon: <DescriptionIcon sx={{ fontSize: 28 }} />, bg: '#FFF6E1' },
   ];
@@ -123,12 +137,23 @@ export function DashboardNationalPage() {
                         <TableCell sx={{ color: 'white', fontWeight: 600 }}>Recrutas femininas</TableCell>
                         <TableCell sx={{ color: 'white', fontWeight: 600 }}>Comandante</TableCell>
                         <TableCell sx={{ color: 'white', fontWeight: 600 }}>Visita</TableCell>
-                        <TableCell sx={{ color: 'white', fontWeight: 600 }}>Abrir</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
                       {smifLocalities.map((loc) => (
-                        <TableRow key={loc.localityId} hover>
+                        <TableRow
+                          key={loc.localityId}
+                          hover
+                          onClick={() => navigate(`/dashboard/locality/${loc.localityId}`)}
+                          onMouseEnter={() =>
+                            qc.prefetchQuery({
+                              queryKey: ['localityProgress', loc.localityId],
+                              queryFn: async () =>
+                                (await api.get(`/localities/${loc.localityId}/progress`)).data,
+                            })
+                          }
+                          sx={{ cursor: 'pointer' }}
+                        >
                           <TableCell>
                             <Typography variant="body2" fontWeight={600}>{loc.localityName}</Typography>
                             {loc.commandName && (
@@ -139,20 +164,6 @@ export function DashboardNationalPage() {
                           <TableCell>{loc.recruitsFemaleCountCurrent ?? 0}</TableCell>
                           <TableCell>{loc.commanderName ?? '—'}</TableCell>
                           <TableCell>{loc.visitDate ? new Date(loc.visitDate).toLocaleDateString('pt-BR') : '—'}</TableCell>
-                          <TableCell>
-                            <Link
-                              to={`/dashboard/locality/${loc.localityId}`}
-                              onMouseEnter={() =>
-                                qc.prefetchQuery({
-                                  queryKey: ['localityProgress', loc.localityId],
-                                  queryFn: async () =>
-                                    (await api.get(`/localities/${loc.localityId}/progress`)).data,
-                                })
-                              }
-                            >
-                              Abrir
-                            </Link>
-                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>

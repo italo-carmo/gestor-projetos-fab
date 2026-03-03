@@ -28,6 +28,7 @@ import { UpsertActivityReportDto } from './dto/upsert-activity-report.dto';
 import { ActivityCommentDto } from './dto/activity-comment.dto';
 import { CreateActivityScheduleItemDto } from './dto/create-activity-schedule-item.dto';
 import { UpdateActivityScheduleItemDto } from './dto/update-activity-schedule-item.dto';
+import { CreateActivityTypeDto } from './dto/create-activity-type.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { MulterExceptionFilter } from '../reports/multer-exception.filter';
@@ -64,6 +65,18 @@ export class ActivitiesController {
   @Post()
   create(@Body() dto: CreateActivityDto, @CurrentUser() user: RbacUser) {
     return this.activities.create(dto, user);
+  }
+
+  @Get('types')
+  @RequirePermission('task_instances', 'view')
+  listTypes() {
+    return this.activities.listTypes();
+  }
+
+  @Post('types')
+  @RequirePermission('task_instances', 'create')
+  createType(@Body() dto: CreateActivityTypeDto) {
+    return this.activities.createType(dto.name);
   }
 
   @Put(':id')
@@ -113,6 +126,30 @@ export class ActivitiesController {
     @CurrentUser() user: RbacUser,
   ) {
     return this.activities.batchDelete(body.ids ?? [], user);
+  }
+
+  @Post('batch/replicate')
+  batchReplicate(
+    @Body()
+    body: {
+      ids: string[];
+      targetLocalityIds: string[];
+      statusMode?: 'RESET' | 'KEEP';
+      dateMode?: 'KEEP' | 'CLEAR' | 'SHIFT_DAYS';
+      dayOffset?: number | string;
+    },
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.activities.batchReplicate(
+      body.ids ?? [],
+      body.targetLocalityIds ?? [],
+      {
+        statusMode: body.statusMode,
+        dateMode: body.dateMode,
+        dayOffset: body.dayOffset,
+      },
+      user,
+    );
   }
 
   @Put(':id/status')

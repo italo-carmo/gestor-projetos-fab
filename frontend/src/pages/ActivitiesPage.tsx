@@ -8,6 +8,11 @@ import {
   Checkbox,
   Chip,
   Divider,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
   Drawer,
   IconButton,
   MenuItem,
@@ -28,12 +33,15 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   useActivityComments,
+  useActivityTypes,
   useAddActivityComment,
   useActivities,
   useBatchDeleteActivities,
   useBatchUpdateActivityResponsible,
   useBatchUpdateActivitySpecialty,
   useBatchUpdateActivityStatus,
+  useReplicateActivities,
+  useCreateActivityType,
   useCreateActivity,
   useDeleteActivity,
   useDeleteActivityReportPhoto,
@@ -104,6 +112,8 @@ export function ActivitiesPage() {
   const localities = localitiesData?.items ?? [];
   const { data: specialtiesData } = useSpecialties();
   const specialties = specialtiesData?.items ?? [];
+  const activityTypesQuery = useActivityTypes();
+  const activityTypes = activityTypesQuery.data?.items ?? [];
   const usersQuery = useUsers();
   const allUsers = usersQuery.data?.items ?? [];
 
@@ -133,11 +143,17 @@ export function ActivitiesPage() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [batchDeleteConfirmOpen, setBatchDeleteConfirmOpen] = useState(false);
+  const [replicateDialogOpen, setReplicateDialogOpen] = useState(false);
   const [batchStatus, setBatchStatus] = useState('');
   const [batchSpecialtyId, setBatchSpecialtyId] = useState('');
   const [batchResponsibleUserId, setBatchResponsibleUserId] = useState('');
+  const [replicateTargetLocalityIds, setReplicateTargetLocalityIds] = useState<string[]>([]);
+  const [replicateStatusMode, setReplicateStatusMode] = useState<'RESET' | 'KEEP'>('RESET');
+  const [replicateDateMode, setReplicateDateMode] = useState<'KEEP' | 'CLEAR' | 'SHIFT_DAYS'>('KEEP');
+  const [replicateDayOffset, setReplicateDayOffset] = useState('0');
 
   const createActivity = useCreateActivity();
+  const createActivityType = useCreateActivityType();
   const deleteActivity = useDeleteActivity();
   const updateActivity = useUpdateActivity();
   const updateActivityStatus = useUpdateActivityStatus();
@@ -145,6 +161,7 @@ export function ActivitiesPage() {
   const batchUpdateActivityStatus = useBatchUpdateActivityStatus();
   const batchUpdateActivitySpecialty = useBatchUpdateActivitySpecialty();
   const batchUpdateActivityResponsible = useBatchUpdateActivityResponsible();
+  const replicateActivities = useReplicateActivities();
   const commentsQuery = useActivityComments(selectedId ?? '');
   const addComment = useAddActivityComment();
   const markCommentsSeen = useMarkActivityCommentsSeen();
@@ -171,6 +188,24 @@ export function ActivitiesPage() {
       ),
     [selectedActivities],
   );
+  const sourceLocalityIdsSet = useMemo(
+    () => new Set(selectedLocalityIds),
+    [selectedLocalityIds],
+  );
+  const replicateTargetLocalityOptions = useMemo(
+    () =>
+      selectableLocalities.filter(
+        (locality: any) => !sourceLocalityIdsSet.has(String(locality.id)),
+      ),
+    [selectableLocalities, sourceLocalityIdsSet],
+  );
+  const replicateSelectedLocalities = useMemo(
+    () =>
+      replicateTargetLocalityOptions.filter((locality: any) =>
+        replicateTargetLocalityIds.includes(String(locality.id)),
+      ),
+    [replicateTargetLocalityIds, replicateTargetLocalityOptions],
+  );
   const allVisibleSelected = items.length > 0 && selectedIds.length === items.length;
 
   useEffect(() => {
@@ -194,6 +229,15 @@ export function ActivitiesPage() {
       prev.filter((id) => items.some((item: any) => String(item.id) === String(id))),
     );
   }, [items]);
+
+  useEffect(() => {
+    const allowedIds = new Set(
+      replicateTargetLocalityOptions.map((locality: any) => String(locality.id)),
+    );
+    setReplicateTargetLocalityIds((prev) =>
+      prev.filter((id) => allowedIds.has(String(id))),
+    );
+  }, [replicateTargetLocalityOptions]);
 
   useEffect(() => {
     if (localityIdFromUrl && localityIdFromUrl !== localityFilter) {
@@ -228,6 +272,7 @@ export function ActivitiesPage() {
     description: '',
     localityId: '',
     localityIds: [] as string[],
+    activityTypeId: '',
     specialtyId: '',
     responsibleUserId: '',
     eventDate: '',
@@ -241,6 +286,7 @@ export function ActivitiesPage() {
       description: selected.description ?? '',
       localityId: selected.localityId ?? '',
       localityIds: selected.localityId ? [selected.localityId] : [],
+      activityTypeId: selected.activityType?.id ?? '',
       specialtyId: selected.specialtyId ?? '',
       responsibleUserId: selected.responsibleUsers?.[0]?.id ?? '',
       eventDate: selected.eventDate ? String(selected.eventDate).slice(0, 10) : '',
@@ -359,6 +405,7 @@ export function ActivitiesPage() {
         description: activityForm.description || null,
         localityId: activityForm.localityId || null,
         localityIds: activityForm.localityIds,
+        activityTypeId: activityForm.activityTypeId || null,
         specialtyId: activityForm.specialtyId || null,
         responsibleUserIds: activityForm.responsibleUserId ? [activityForm.responsibleUserId] : [],
         eventDate: activityForm.eventDate || null,
@@ -390,6 +437,7 @@ export function ActivitiesPage() {
           title: activityForm.title,
           description: activityForm.description || null,
           localityId: activityForm.localityId || null,
+          activityTypeId: activityForm.activityTypeId || null,
           specialtyId: activityForm.specialtyId || null,
           responsibleUserIds: activityForm.responsibleUserId ? [activityForm.responsibleUserId] : [],
           eventDate: activityForm.eventDate || null,
@@ -512,6 +560,55 @@ export function ActivitiesPage() {
     }
   };
 
+  const openReplicateDialog = () => {
+    if (!selectedIds.length) return;
+    setReplicateTargetLocalityIds([]);
+    setReplicateStatusMode('RESET');
+    setReplicateDateMode('KEEP');
+    setReplicateDayOffset('0');
+    setReplicateDialogOpen(true);
+  };
+
+  const handleReplicateConfirm = async () => {
+    if (!selectedIds.length) return;
+    if (!replicateTargetLocalityIds.length) {
+      toast.push({
+        message: 'Selecione ao menos uma localidade de destino.',
+        severity: 'warning',
+      });
+      return;
+    }
+    try {
+      const payload = await replicateActivities.mutateAsync({
+        ids: selectedIds,
+        targetLocalityIds: replicateTargetLocalityIds,
+        statusMode: replicateStatusMode,
+        dateMode: replicateDateMode,
+        dayOffset:
+          replicateDateMode === 'SHIFT_DAYS'
+            ? Number(replicateDayOffset || 0)
+            : 0,
+      });
+      const created = Number(payload?.created ?? 0);
+      const skipped = Number(payload?.skippedSameLocality ?? 0);
+      toast.push({
+        message:
+          skipped > 0
+            ? `${created} atividade(s) replicada(s). ${skipped} combinação(ões) ignorada(s) por localidade de origem igual ao destino.`
+            : `${created} atividade(s) replicada(s) com sucesso.`,
+        severity: 'success',
+      });
+      setReplicateDialogOpen(false);
+      setSelectedIds([]);
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({
+        message: payload.message ?? 'Erro ao replicar atividades.',
+        severity: 'error',
+      });
+    }
+  };
+
   const handleSaveReport = async () => {
     if (!selected || !canEditReport) return;
     try {
@@ -603,6 +700,7 @@ export function ActivitiesPage() {
       description: '',
       localityId: '',
       localityIds: [],
+      activityTypeId: '',
       specialtyId: '',
       responsibleUserId: '',
       eventDate: '',
@@ -797,6 +895,15 @@ export function ActivitiesPage() {
                       Aplicar responsável
                     </Button>
                     <Button
+                      variant="contained"
+                      size="small"
+                      sx={{ minHeight: 36, px: 1.4, whiteSpace: 'nowrap' }}
+                      onClick={openReplicateDialog}
+                      disabled={!selectedIds.length || replicateActivities.isPending}
+                    >
+                      Replicar selecionadas
+                    </Button>
+                    <Button
                       color="error"
                       variant="outlined"
                       size="small"
@@ -829,6 +936,7 @@ export function ActivitiesPage() {
                       </TableCell>
                     )}
                     <TableCell sx={{ color: 'white', fontWeight: 600 }}>Atividade</TableCell>
+                    <TableCell sx={{ color: 'white', fontWeight: 600 }}>Tipo</TableCell>
                     <TableCell sx={{ color: 'white', fontWeight: 600 }}>Localidade</TableCell>
                     <TableCell sx={{ color: 'white', fontWeight: 600 }}>Especialidade</TableCell>
                     <TableCell sx={{ color: 'white', fontWeight: 600 }}>Responsável</TableCell>
@@ -857,6 +965,7 @@ export function ActivitiesPage() {
                         </TableCell>
                       )}
                       <TableCell>{item.title}</TableCell>
+                      <TableCell>{item.activityType?.name ?? '—'}</TableCell>
                       <TableCell>{item.locality?.name ?? '-'}</TableCell>
                       <TableCell>{item.specialty?.name ?? 'Todas'}</TableCell>
                       <TableCell>
@@ -1084,6 +1193,48 @@ export function ActivitiesPage() {
                     ))}
                   </TextField>
                 )}
+                <TextField
+                  select
+                  size="small"
+                  label="Tipo"
+                  value={activityForm.activityTypeId}
+                  onChange={(e) => setActivityForm({ ...activityForm, activityTypeId: e.target.value })}
+                  sx={{ minWidth: 220 }}
+                  disabled={!canEditActivityForm}
+                >
+                  <MenuItem value="">Sem tipo</MenuItem>
+                  {activityTypes.map((type: any) => (
+                    <MenuItem key={type.id} value={type.id}>
+                      {type.name}
+                    </MenuItem>
+                  ))}
+                </TextField>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  sx={drawerActionButtonSx}
+                  disabled={!canEditActivityForm || createActivityType.isPending}
+                  onClick={async () => {
+                    const name = window.prompt('Informe o nome do novo tipo de atividade:');
+                    const normalized = String(name ?? '').trim();
+                    if (!normalized) return;
+                    try {
+                      const created = await createActivityType.mutateAsync({ name: normalized });
+                      setActivityForm((prev) => ({
+                        ...prev,
+                        activityTypeId: String(created?.id ?? ''),
+                      }));
+                      toast.push({ message: 'Tipo criado com sucesso', severity: 'success' });
+                    } catch (error) {
+                      toast.push({
+                        message: parseApiError(error).message ?? 'Erro ao criar tipo',
+                        severity: 'error',
+                      });
+                    }
+                  }}
+                >
+                  Novo tipo
+                </Button>
                 <TextField
                   select
                   size="small"
@@ -1511,6 +1662,139 @@ export function ActivitiesPage() {
 
         </Box>
       </Drawer>
+
+      <Dialog
+        open={replicateDialogOpen}
+        onClose={() => setReplicateDialogOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Replicar atividades selecionadas</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={1.5} mt={0.5}>
+            <DialogContentText>
+              Replicação rápida para outras localidades. Responsáveis, comentários,
+              cronograma de visita e relatório não são copiados.
+            </DialogContentText>
+            <Autocomplete
+              multiple
+              disableCloseOnSelect
+              options={replicateTargetLocalityOptions}
+              value={replicateSelectedLocalities}
+              getOptionLabel={(option: any) => String(option.name ?? option.id)}
+              isOptionEqualToValue={(option: any, value: any) => option.id === value.id}
+              onChange={(_, options) =>
+                setReplicateTargetLocalityIds(
+                  options.map((option: any) => String(option.id)),
+                )
+              }
+              renderTags={(value, getTagProps) =>
+                value.map((option: any, index: number) => (
+                  <Chip
+                    {...getTagProps({ index })}
+                    key={option.id}
+                    label={option.name}
+                    size="small"
+                    variant="outlined"
+                  />
+                ))
+              }
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  size="small"
+                  label="Localidades destino"
+                  placeholder={
+                    replicateTargetLocalityIds.length
+                      ? ''
+                      : 'Selecione uma ou mais localidades'
+                  }
+                />
+              )}
+            />
+            <Stack direction="row" spacing={1}>
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={() =>
+                  setReplicateTargetLocalityIds(
+                    replicateTargetLocalityOptions.map((locality: any) =>
+                      String(locality.id),
+                    ),
+                  )
+                }
+              >
+                Selecionar todas
+              </Button>
+              <Button
+                size="small"
+                onClick={() => setReplicateTargetLocalityIds([])}
+              >
+                Limpar
+              </Button>
+              <Chip
+                size="small"
+                color={replicateTargetLocalityIds.length > 0 ? 'primary' : 'default'}
+                label={`${replicateTargetLocalityIds.length} destino(s)`}
+                variant={replicateTargetLocalityIds.length > 0 ? 'filled' : 'outlined'}
+              />
+            </Stack>
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
+              <TextField
+                select
+                size="small"
+                label="Status nas cópias"
+                value={replicateStatusMode}
+                onChange={(event) =>
+                  setReplicateStatusMode(
+                    event.target.value as 'RESET' | 'KEEP',
+                  )
+                }
+                fullWidth
+              >
+                <MenuItem value="RESET">Reiniciar como Não iniciada</MenuItem>
+                <MenuItem value="KEEP">Manter status original</MenuItem>
+              </TextField>
+              <TextField
+                select
+                size="small"
+                label="Data nas cópias"
+                value={replicateDateMode}
+                onChange={(event) =>
+                  setReplicateDateMode(
+                    event.target.value as 'KEEP' | 'CLEAR' | 'SHIFT_DAYS',
+                  )
+                }
+                fullWidth
+              >
+                <MenuItem value="KEEP">Manter data original</MenuItem>
+                <MenuItem value="CLEAR">Deixar sem data</MenuItem>
+                <MenuItem value="SHIFT_DAYS">Deslocar por dias</MenuItem>
+              </TextField>
+            </Stack>
+            {replicateDateMode === 'SHIFT_DAYS' && (
+              <TextField
+                size="small"
+                type="number"
+                label="Deslocamento em dias"
+                value={replicateDayOffset}
+                onChange={(event) => setReplicateDayOffset(event.target.value)}
+                helperText="Use negativo para antecipar (ex.: -7) e positivo para postergar."
+              />
+            )}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setReplicateDialogOpen(false)}>Cancelar</Button>
+          <Button
+            variant="contained"
+            onClick={handleReplicateConfirm}
+            disabled={!selectedIds.length || replicateActivities.isPending}
+          >
+            Replicar
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <ConfirmDialog
         open={batchDeleteConfirmOpen}
