@@ -896,7 +896,7 @@ export function GsdRecruitsPage() {
                 InputProps={{ readOnly: true }}
                 placeholder="Não definido"
               />
-              <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} alignItems={{ xs: 'stretch', md: 'center' }}>
+              <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} alignItems={{ xs: 'stretch', md: 'flex-start' }}>
                 <TextField
                   size="small"
                   label="UID/CPF ou Email do comandante (LDAP)"
@@ -906,8 +906,7 @@ export function GsdRecruitsPage() {
                     setCommanderLookupPreview(null);
                   }}
                   placeholder="Ex.: 12229820729 ou email@fab.intraer"
-                  sx={{ minWidth: 280 }}
-                  helperText="1) Busque no LDAP  2) Confira os dados  3) Defina comandante"
+                  sx={{ flex: 1, minWidth: 280 }}
                 />
                 <Button
                   variant="outlined"
@@ -915,6 +914,7 @@ export function GsdRecruitsPage() {
                     void handleLookupCommander();
                   }}
                   disabled={lookupLdapUser.isPending}
+                  sx={{ minHeight: 40, mt: { xs: 0, md: 0.5 } }}
                 >
                   {lookupLdapUser.isPending ? 'Buscando...' : 'Buscar'}
                 </Button>
@@ -923,10 +923,14 @@ export function GsdRecruitsPage() {
                   color="success"
                   onClick={handleSetCommanderFromLdap}
                   disabled={setLocalityCommanderFromLdap.isPending || !commanderLookupPreview?.uid}
+                  sx={{ minHeight: 40, mt: { xs: 0, md: 0.5 } }}
                 >
                   Definir comandante
                 </Button>
               </Stack>
+              <Typography variant="caption" color="text.secondary">
+                1) Busque no LDAP  2) Confira os dados  3) Defina comandante
+              </Typography>
               {commanderLookupPreview && (
                 <Alert severity="info">
                   <strong>{commanderLookupPreview.name || 'Sem nome no LDAP'}</strong>
@@ -990,7 +994,11 @@ export function GsdRecruitsPage() {
                 </Button>
               </Stack>
 
-              {recruitMembersQuery.isLoading ? (
+              {recruitMembersQuery.isError ? (
+                <Alert severity="error">
+                  {parseApiError(recruitMembersQuery.error).message ?? 'Não foi possível carregar a lista de recrutas.'}
+                </Alert>
+              ) : recruitMembersQuery.isLoading ? (
                 <Typography variant="body2" color="text.secondary">Carregando recrutas...</Typography>
               ) : (
                 <Table size="small">

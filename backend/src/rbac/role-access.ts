@@ -115,7 +115,7 @@ export function canEditRecruitsByRole(
   targetLocalityId: string,
 ) {
   if (!user) return false;
-  if (hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_COMISSAO_CIPAVD])) {
+  if (hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_COMISSAO_CIPAVD, ROLE_TI])) {
     return true;
   }
   if (hasRole(user, ROLE_GSD_LOCALIDADE) && user.localityId === targetLocalityId) {

@@ -204,21 +204,18 @@ export class LocalitiesController {
   }
 
   @Get(':id/recruit-designations')
-  @RequirePermission('dashboard', 'view')
   async listRecruitDesignations(@Param('id') id: string, @CurrentUser() user: RbacUser) {
     this.assertRecruitsEditorAccess(id, user);
     return this.buildRecruitDesignationsResponse(id);
   }
 
   @Get(':id/recruits-members')
-  @RequirePermission('dashboard', 'view')
   async listRecruitMembers(@Param('id') id: string, @CurrentUser() user: RbacUser) {
     this.assertRecruitsEditorAccess(id, user);
     return this.buildRecruitMembersResponse(id);
   }
 
   @Put(':id/recruits-members')
-  @RequirePermission('dashboard', 'view')
   async replaceRecruitMembers(
     @Param('id') id: string,
     @Body() dto: ReplaceLocalityRecruitsMembersDto,
@@ -376,7 +373,6 @@ export class LocalitiesController {
   }
 
   @Put(':id/commander-from-ldap')
-  @RequirePermission('dashboard', 'view')
   async setCommanderFromLdap(
     @Param('id') id: string,
     @Body() dto: SetLocalityCommanderFromLdapDto,
@@ -488,7 +484,6 @@ export class LocalitiesController {
   }
 
   @Put(':id/recruit-designations')
-  @RequirePermission('dashboard', 'view')
   async replaceRecruitDesignations(
     @Param('id') id: string,
     @Body() dto: UpdateLocalityRecruitDesignationsDto,
