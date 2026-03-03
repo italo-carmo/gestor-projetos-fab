@@ -46,6 +46,8 @@ export function DashboardNationalPage() {
     .sort((a, b) => a.localityName.localeCompare(b.localityName, 'pt-BR'))
     .slice(0, 8);
   const totals = dashboardQuery.data?.totals ?? {
+    localities: 0,
+    visitsCompleted: 0,
     late: 0,
     unassigned: 0,
     recruitsFemale: 0,
@@ -64,7 +66,12 @@ export function DashboardNationalPage() {
     : 0;
 
   const kpiCards = [
-    { label: 'Cobertura', value: `${smifLocalities.length}/${smifLocalities.length} localidades`, icon: <TargetIcon sx={{ fontSize: 28 }} />, bg: '#E8F8EF' },
+    {
+      label: 'Cobertura',
+      value: `${totals.visitsCompleted ?? 0}/${totals.localities ?? 0} localidades`,
+      icon: <TargetIcon sx={{ fontSize: 28 }} />,
+      bg: '#E8F8EF',
+    },
     {
       label: 'Recrutas femininas',
       value: String(totals.recruitsFemale ?? 0),

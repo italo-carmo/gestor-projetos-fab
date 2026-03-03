@@ -1913,6 +1913,7 @@ export class TasksService {
           recruitsFemale: 0,
           reportsProduced: 0,
           smifNewsCount: 0,
+          visitsCompleted: 0,
         },
         lateItems: [],
         unassignedItems: [],
@@ -1991,6 +1992,12 @@ export class TasksService {
             name: true,
           },
         },
+        activityType: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
         responsibles: {
           select: {
             userId: true,
@@ -2052,6 +2059,12 @@ export class TasksService {
       activity: (typeof filteredActivities)[number],
     ): boolean =>
       Boolean(activity.report?.signedAt && activity.report?.signatureHash);
+    const isVisitActivity = (
+      activity: (typeof filteredActivities)[number],
+    ): boolean =>
+      String(activity.activityType?.name ?? '')
+        .trim()
+        .toLowerCase() === 'visita';
 
     const mapNationalActivityDetail = (
       activity: (typeof filteredActivities)[number],
@@ -2082,6 +2095,16 @@ export class TasksService {
 
     const perLocality = localities.map((locality) => {
       const localityActivities = activitiesByLocalityId.get(locality.id) ?? [];
+      const visitActivities = localityActivities.filter((activity) =>
+        isVisitActivity(activity),
+      );
+      const latestVisitDate = visitActivities
+        .map((activity) => activity.eventDate)
+        .filter((value): value is Date => value instanceof Date)
+        .sort((a, b) => b.getTime() - a.getTime())[0];
+      const visitCompleted = visitActivities.some(
+        (activity) => activity.status === ActivityStatus.DONE,
+      );
       const late = localityActivities.filter((activity) =>
         isLateActivity(activity),
       ).length;
@@ -2107,8 +2130,8 @@ export class TasksService {
         individualMeetingDate: locality.individualMeetingDate
           ? locality.individualMeetingDate.toISOString().slice(0, 10)
           : null,
-        visitDate: locality.visitDate
-          ? locality.visitDate.toISOString().slice(0, 10)
+        visitDate: latestVisitDate
+          ? latestVisitDate.toISOString().slice(0, 10)
           : null,
         commandName: locality.commandName ?? null,
         notes: locality.notes ?? null,
@@ -2116,6 +2139,7 @@ export class TasksService {
         late,
         blocked: 0,
         unassigned,
+        visitCompleted,
       };
     });
 
@@ -2159,6 +2183,9 @@ export class TasksService {
     const smifNewsCount = await this.prisma.socialCommunicationArticle.count({
       where: { tags: { has: 'smif' } },
     });
+    const visitsCompleted = perLocality.filter(
+      (item) => item.visitCompleted,
+    ).length;
 
     return {
       items: perLocality,
@@ -2170,6 +2197,7 @@ export class TasksService {
         recruitsFemale: totalRecruits,
         reportsProduced: reportsCount,
         smifNewsCount,
+        visitsCompleted,
       },
       lateItems,
       unassignedItems,

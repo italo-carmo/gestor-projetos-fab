@@ -1196,6 +1196,28 @@ export function ActivitiesPage() {
                 <TextField
                   select
                   size="small"
+                  label="Especialidade"
+                  value={activityForm.specialtyId}
+                  onChange={(e) => setActivityForm({ ...activityForm, specialtyId: e.target.value })}
+                  sx={{ minWidth: 220 }}
+                  disabled={!canEditActivityForm}
+                >
+                  <MenuItem value="">Todas as especialidades</MenuItem>
+                  {specialties.map((s: any) => (
+                    <MenuItem key={s.id} value={s.id}>
+                      {s.name}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </Stack>
+              <Stack
+                direction={{ xs: 'column', md: 'row' }}
+                spacing={1}
+                sx={{ mt: 1, alignItems: { xs: 'stretch', md: 'center' } }}
+              >
+                <TextField
+                  select
+                  size="small"
                   label="Tipo"
                   value={activityForm.activityTypeId}
                   onChange={(e) => setActivityForm({ ...activityForm, activityTypeId: e.target.value })}
@@ -1233,24 +1255,8 @@ export function ActivitiesPage() {
                     }
                   }}
                 >
-                  Novo tipo
+                  Adicionar tipo
                 </Button>
-                <TextField
-                  select
-                  size="small"
-                  label="Especialidade"
-                  value={activityForm.specialtyId}
-                  onChange={(e) => setActivityForm({ ...activityForm, specialtyId: e.target.value })}
-                  sx={{ minWidth: 220 }}
-                  disabled={!canEditActivityForm}
-                >
-                  <MenuItem value="">Todas as especialidades</MenuItem>
-                  {specialties.map((s: any) => (
-                    <MenuItem key={s.id} value={s.id}>
-                      {s.name}
-                    </MenuItem>
-                  ))}
-                </TextField>
               </Stack>
               {isCreateMode && activityForm.localityIds.length > 1 && (
                 <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
