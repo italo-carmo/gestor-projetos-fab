@@ -1907,6 +1907,7 @@ export class TasksService {
         items: [],
         totals: {
           localities: 0,
+          coverageLocalities: 0,
           late: 0,
           blocked: 0,
           unassigned: 0,
@@ -2190,11 +2191,15 @@ export class TasksService {
     const visitsCompleted = perLocality.filter(
       (item) => item.visitCompleted,
     ).length;
+    const coverageLocalities = perLocality.filter(
+      (item) => Number(item.recruitsFemaleCountCurrent ?? 0) > 0,
+    ).length;
 
     return {
       items: perLocality,
       totals: {
         localities: perLocality.length,
+        coverageLocalities,
         late: perLocality.reduce((acc, item) => acc + item.late, 0),
         blocked: perLocality.reduce((acc, item) => acc + item.blocked, 0),
         unassigned: perLocality.reduce((acc, item) => acc + item.unassigned, 0),

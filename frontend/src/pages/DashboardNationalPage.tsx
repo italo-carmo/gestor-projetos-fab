@@ -68,7 +68,7 @@ export function DashboardNationalPage() {
   const kpiCards = [
     {
       label: 'Cobertura',
-      value: `${totals.visitsCompleted ?? 0}/${totals.localities ?? 0} localidades`,
+      value: `${totals.visitsCompleted ?? 0}/${totals.coverageLocalities ?? totals.localities ?? 0} localidades`,
       icon: <TargetIcon sx={{ fontSize: 28 }} />,
       bg: '#E8F8EF',
     },
