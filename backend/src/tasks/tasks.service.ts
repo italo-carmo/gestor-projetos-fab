@@ -2061,10 +2061,14 @@ export class TasksService {
       Boolean(activity.report?.signedAt && activity.report?.signatureHash);
     const isVisitActivity = (
       activity: (typeof filteredActivities)[number],
-    ): boolean =>
-      String(activity.activityType?.name ?? '')
+    ): boolean => {
+      const typeName = String(activity.activityType?.name ?? '')
         .trim()
-        .toLowerCase() === 'visita';
+        .toLowerCase();
+      if (typeName === 'visita') return true;
+      const title = String(activity.title ?? '').toLowerCase();
+      return /\bvisita\b/.test(title);
+    };
 
     const mapNationalActivityDetail = (
       activity: (typeof filteredActivities)[number],
