@@ -123,15 +123,22 @@ function ArticleCoverImage({
   toApiUrl: (path: string) => string;
 }) {
   const [imageError, setImageError] = useState(false);
-  const [imageSrc, setImageSrc] = useState(
+  const [imageSrc, setImageSrc] = useState<string | undefined>(
     coverProxyPath ? toApiUrl(coverProxyPath) : (coverImageUrl ?? undefined)
   );
+
+  // Reset error state when props change
+  useEffect(() => {
+    setImageError(false);
+    const newSrc = coverProxyPath ? toApiUrl(coverProxyPath) : (coverImageUrl ?? undefined);
+    setImageSrc(newSrc);
+  }, [coverProxyPath, coverImageUrl]);
 
   if (!coverProxyPath && !coverImageUrl) {
     return <NewspaperRoundedIcon sx={{ color: "white", fontSize: 38 }} />;
   }
 
-  if (imageError) {
+  if (imageError || !imageSrc) {
     return <NewspaperRoundedIcon sx={{ color: "white", fontSize: 38 }} />;
   }
 
@@ -145,6 +152,7 @@ function ArticleCoverImage({
         // Se o proxy falhou e temos URL direta, tenta usar ela
         if (coverProxyPath && coverImageUrl && imageSrc.includes('/proxy/cover')) {
           setImageSrc(coverImageUrl);
+          setImageError(false);
           return;
         }
         // Caso contrário, mostra o ícone padrão
@@ -166,15 +174,22 @@ function ArticleCoverImageSmall({
   toApiUrl: (path: string) => string;
 }) {
   const [imageError, setImageError] = useState(false);
-  const [imageSrc, setImageSrc] = useState(
+  const [imageSrc, setImageSrc] = useState<string | undefined>(
     coverProxyPath ? toApiUrl(coverProxyPath) : (coverImageUrl ?? undefined)
   );
+
+  // Reset error state when props change
+  useEffect(() => {
+    setImageError(false);
+    const newSrc = coverProxyPath ? toApiUrl(coverProxyPath) : (coverImageUrl ?? undefined);
+    setImageSrc(newSrc);
+  }, [coverProxyPath, coverImageUrl]);
 
   if (!coverProxyPath && !coverImageUrl) {
     return <NewspaperRoundedIcon sx={{ color: "#114259", fontSize: 32 }} />;
   }
 
-  if (imageError) {
+  if (imageError || !imageSrc) {
     return <NewspaperRoundedIcon sx={{ color: "#114259", fontSize: 32 }} />;
   }
 
@@ -188,6 +203,7 @@ function ArticleCoverImageSmall({
         // Se o proxy falhou e temos URL direta, tenta usar ela
         if (coverProxyPath && coverImageUrl && imageSrc.includes('/proxy/cover')) {
           setImageSrc(coverImageUrl);
+          setImageError(false);
           return;
         }
         // Caso contrário, mostra o ícone padrão
