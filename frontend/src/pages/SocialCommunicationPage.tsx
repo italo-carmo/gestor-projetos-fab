@@ -148,15 +148,23 @@ function ArticleCoverImage({
       src={imageSrc}
       alt={title}
       sx={{ width: "100%", height: "100%", objectFit: "cover" }}
-      onError={() => {
+      onError={(event: any) => {
+        const img = event.currentTarget;
         // Se o proxy falhou e temos URL direta, tenta usar ela
-        if (coverProxyPath && coverImageUrl && imageSrc.includes('/proxy/cover')) {
-          setImageSrc(coverImageUrl);
-          setImageError(false);
-          return;
+        if (coverProxyPath && coverImageUrl && img.src.includes('/proxy/cover')) {
+          // Previne loop infinito: só tenta fallback uma vez
+          if (imageSrc !== coverImageUrl) {
+            setImageSrc(coverImageUrl);
+            setImageError(false);
+            return;
+          }
         }
         // Caso contrário, mostra o ícone padrão
         setImageError(true);
+      }}
+      onLoad={() => {
+        // Se a imagem carregou com sucesso, garante que o erro está limpo
+        setImageError(false);
       }}
     />
   );
@@ -199,15 +207,23 @@ function ArticleCoverImageSmall({
       src={imageSrc}
       alt={title}
       sx={{ width: "100%", height: "100%", objectFit: "cover" }}
-      onError={() => {
+      onError={(event: any) => {
+        const img = event.currentTarget;
         // Se o proxy falhou e temos URL direta, tenta usar ela
-        if (coverProxyPath && coverImageUrl && imageSrc.includes('/proxy/cover')) {
-          setImageSrc(coverImageUrl);
-          setImageError(false);
-          return;
+        if (coverProxyPath && coverImageUrl && img.src.includes('/proxy/cover')) {
+          // Previne loop infinito: só tenta fallback uma vez
+          if (imageSrc !== coverImageUrl) {
+            setImageSrc(coverImageUrl);
+            setImageError(false);
+            return;
+          }
         }
         // Caso contrário, mostra o ícone padrão
         setImageError(true);
+      }}
+      onLoad={() => {
+        // Se a imagem carregou com sucesso, garante que o erro está limpo
+        setImageError(false);
       }}
     />
   );
