@@ -38,7 +38,7 @@ export const theme = createTheme({
     button: { textTransform: 'none', fontWeight: 600, letterSpacing: 0 },
   },
   shape: {
-    borderRadius: 10,
+    borderRadius: 8,
   },
   shadows: [
     'none',

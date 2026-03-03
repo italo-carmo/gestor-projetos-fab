@@ -88,9 +88,8 @@ const blankReport = {
 };
 
 const drawerActionButtonSx = {
-  minHeight: 34,
-  px: 1.75,
-  borderRadius: 1.5,
+  minHeight: 32,
+  px: 1.5,
   whiteSpace: 'nowrap',
 } as const;
 

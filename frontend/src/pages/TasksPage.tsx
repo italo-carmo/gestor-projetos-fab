@@ -801,6 +801,7 @@ export function TasksPage() {
                 size="small"
                 variant="outlined"
                 color="success"
+                sx={{ minHeight: 32, px: 1.5 }}
                 disabled={
                   !selectedIds.length || !batchStatus || !canManageTaskData
                 }
@@ -829,6 +830,7 @@ export function TasksPage() {
                 size="small"
                 variant="outlined"
                 color="error"
+                sx={{ minHeight: 32, px: 1.5 }}
                 disabled={!selectedIds.length || !canManageTaskData}
                 onClick={() => setBatchDeleteOpen(true)}
               >
@@ -1473,6 +1475,7 @@ export function TasksPage() {
                 size="small"
                 variant="outlined"
                 color="error"
+                sx={{ minHeight: 32, px: 1.5 }}
                 onClick={() => setCreateDrawerOpen(false)}
               >
                 Cancelar
@@ -1481,6 +1484,7 @@ export function TasksPage() {
                 size="small"
                 variant="contained"
                 color="success"
+                sx={{ minHeight: 32, px: 1.5 }}
                 onClick={handleCreateTasks}
                 disabled={
                   !canCreateTask ||
