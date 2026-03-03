@@ -819,13 +819,13 @@ export function TaskDetailsDrawer({
                     ))}
                   </TextField>
                 </Box>
-                <Stack direction="row" spacing={1}>
+                <Stack direction="row" spacing={1} sx={{ width: '100%' }}>
                   <Button
                     size="small"
                     variant="outlined"
                     onClick={() => handleStatus("IN_PROGRESS")}
                     disabled={!canManageTaskData}
-                    sx={{ minHeight: 30, px: 1.5 }}
+                    sx={{ minHeight: 30, px: 1.5, flex: 1 }}
                   >
                     Iniciar
                   </Button>
@@ -836,7 +836,7 @@ export function TaskDetailsDrawer({
                     onClick={() => handleStatus("DONE")}
                     disabled={!canManageTaskData}
                     data-testid="task-mark-done"
-                    sx={{ minHeight: 30, px: 1.5 }}
+                    sx={{ minHeight: 30, px: 1.5, flex: 1 }}
                   >
                     Concluir
                   </Button>
@@ -852,7 +852,7 @@ export function TaskDetailsDrawer({
                       updateTaskLocalities.isPending
                     }
                     data-testid="task-save"
-                    sx={{ minHeight: 30, px: 1.5 }}
+                    sx={{ minHeight: 30, px: 1.5, flex: 1 }}
                   >
                     Salvar
                   </Button>
@@ -863,7 +863,7 @@ export function TaskDetailsDrawer({
                       color="error"
                       onClick={handleDelete}
                       disabled={deleteTask.isPending || batchDeleteTasks.isPending}
-                      sx={{ minHeight: 30, px: 1.5 }}
+                      sx={{ minHeight: 30, px: 1.5, flex: 1 }}
                     >
                       Excluir
                     </Button>
