@@ -111,6 +111,92 @@ function normalizeTags(values: string[]) {
 
 const QUICK_TAGS = ["smif", "cipavd", "cpca"] as const;
 
+function ArticleCoverImage({
+  coverProxyPath,
+  coverImageUrl,
+  title,
+  toApiUrl,
+}: {
+  coverProxyPath?: string | null;
+  coverImageUrl?: string | null;
+  title: string;
+  toApiUrl: (path: string) => string;
+}) {
+  const [imageError, setImageError] = useState(false);
+  const [imageSrc, setImageSrc] = useState(
+    coverProxyPath ? toApiUrl(coverProxyPath) : (coverImageUrl ?? undefined)
+  );
+
+  if (!coverProxyPath && !coverImageUrl) {
+    return <NewspaperRoundedIcon sx={{ color: "white", fontSize: 38 }} />;
+  }
+
+  if (imageError) {
+    return <NewspaperRoundedIcon sx={{ color: "white", fontSize: 38 }} />;
+  }
+
+  return (
+    <Box
+      component="img"
+      src={imageSrc}
+      alt={title}
+      sx={{ width: "100%", height: "100%", objectFit: "cover" }}
+      onError={() => {
+        // Se o proxy falhou e temos URL direta, tenta usar ela
+        if (coverProxyPath && coverImageUrl && imageSrc.includes('/proxy/cover')) {
+          setImageSrc(coverImageUrl);
+          return;
+        }
+        // Caso contrário, mostra o ícone padrão
+        setImageError(true);
+      }}
+    />
+  );
+}
+
+function ArticleCoverImageSmall({
+  coverProxyPath,
+  coverImageUrl,
+  title,
+  toApiUrl,
+}: {
+  coverProxyPath?: string | null;
+  coverImageUrl?: string | null;
+  title: string;
+  toApiUrl: (path: string) => string;
+}) {
+  const [imageError, setImageError] = useState(false);
+  const [imageSrc, setImageSrc] = useState(
+    coverProxyPath ? toApiUrl(coverProxyPath) : (coverImageUrl ?? undefined)
+  );
+
+  if (!coverProxyPath && !coverImageUrl) {
+    return <NewspaperRoundedIcon sx={{ color: "#114259", fontSize: 32 }} />;
+  }
+
+  if (imageError) {
+    return <NewspaperRoundedIcon sx={{ color: "#114259", fontSize: 32 }} />;
+  }
+
+  return (
+    <Box
+      component="img"
+      src={imageSrc}
+      alt={title}
+      sx={{ width: "100%", height: "100%", objectFit: "cover" }}
+      onError={() => {
+        // Se o proxy falhou e temos URL direta, tenta usar ela
+        if (coverProxyPath && coverImageUrl && imageSrc.includes('/proxy/cover')) {
+          setImageSrc(coverImageUrl);
+          return;
+        }
+        // Caso contrário, mostra o ícone padrão
+        setImageError(true);
+      }}
+    />
+  );
+}
+
 export function SocialCommunicationPage() {
   const toast = useToast();
   const { data: me } = useMe();
@@ -399,7 +485,6 @@ export function SocialCommunicationPage() {
                 >
                   <Box
                     sx={{
-                      position: "relative",
                       height: 156,
                       background: "linear-gradient(140deg, #114259 0%, #4D86A0 100%)",
                       display: "flex",
@@ -408,33 +493,12 @@ export function SocialCommunicationPage() {
                       overflow: "hidden",
                     }}
                   >
-                    <NewspaperRoundedIcon sx={{ color: "white", fontSize: 38, position: "relative", zIndex: 0 }} />
-                    {(item.coverProxyPath || item.coverImageUrl) && (
-                      <Box
-                        component="img"
-                        src={item.coverProxyPath ? toApiUrl(item.coverProxyPath) : (item.coverImageUrl ?? undefined)}
-                        alt={item.title}
-                        sx={{
-                          position: "absolute",
-                          inset: 0,
-                          width: "100%",
-                          height: "100%",
-                          objectFit: "cover",
-                          zIndex: 1,
-                        }}
-                        onError={(event: any) => {
-                          const img = event.currentTarget;
-                          // Se o proxy falhou e temos URL direta, tenta usar ela
-                          if (item.coverProxyPath && item.coverImageUrl && img.src.includes('/proxy/cover')) {
-                            img.src = item.coverImageUrl;
-                            return;
-                          }
-                          // Caso contrário, esconde a imagem quebrada
-                          // eslint-disable-next-line no-param-reassign
-                          img.style.display = "none";
-                        }}
-                      />
-                    )}
+                    <ArticleCoverImage
+                      coverProxyPath={item.coverProxyPath}
+                      coverImageUrl={item.coverImageUrl}
+                      title={item.title}
+                      toApiUrl={toApiUrl}
+                    />
                   </Box>
                   <CardContent sx={{ minHeight: 200, width: "100%", display: "flex", flexDirection: "column", flexGrow: 1 }}>
                     <Box>
@@ -530,44 +594,23 @@ export function SocialCommunicationPage() {
                   <Stack direction={{ xs: "column", md: "row" }} spacing={2} alignItems={{ xs: "stretch", md: "center" }}>
                     <Box
                       sx={{
-                        position: "relative",
                         width: { xs: "100%", md: 180 },
                         minWidth: { xs: "100%", md: 180 },
                         height: 108,
                         borderRadius: 2,
                         overflow: "hidden",
                         bgcolor: "rgba(17,66,89,0.08)",
-                        display: "grid",
-                        placeItems: "center",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
                       }}
                     >
-                      <NewspaperRoundedIcon sx={{ color: "#114259", fontSize: 32, position: "relative", zIndex: 0 }} />
-                      {(item.coverProxyPath || item.coverImageUrl) && (
-                        <Box
-                          component="img"
-                          src={item.coverProxyPath ? toApiUrl(item.coverProxyPath) : (item.coverImageUrl ?? undefined)}
-                          alt={item.title}
-                          sx={{
-                            position: "absolute",
-                            inset: 0,
-                            width: "100%",
-                            height: "100%",
-                            objectFit: "cover",
-                            zIndex: 1,
-                          }}
-                          onError={(event: any) => {
-                            const img = event.currentTarget;
-                            // Se o proxy falhou e temos URL direta, tenta usar ela
-                            if (item.coverProxyPath && item.coverImageUrl && img.src.includes('/proxy/cover')) {
-                              img.src = item.coverImageUrl;
-                              return;
-                            }
-                            // Caso contrário, esconde a imagem quebrada
-                            // eslint-disable-next-line no-param-reassign
-                            img.style.display = "none";
-                          }}
-                        />
-                      )}
+                      <ArticleCoverImageSmall
+                        coverProxyPath={item.coverProxyPath}
+                        coverImageUrl={item.coverImageUrl}
+                        title={item.title}
+                        toApiUrl={toApiUrl}
+                      />
                     </Box>
 
                     <Box sx={{ flex: 1 }}>
