@@ -9,6 +9,9 @@ import { TASK_STATUS_LABELS } from '../../constants/enums';
 
 const DEFAULT_DURATION_DAYS = 7;
 const DATE_COL_WIDTH = 88;
+const GANTT_ROW_HEIGHT = 34;
+const GANTT_HEADER_HEIGHT = 42;
+const GANTT_BAR_FILL = 62;
 
 const STATUS_COLORS: Record<string, { bg: string; progress: string }> = {
   DONE: { bg: '#2E7D32', progress: '#66BB6A' },
@@ -241,7 +244,7 @@ export function GanttView({
     return startOfMonth(min);
   }, [tasks]);
 
-  const ganttHeight = Math.min(620, Math.max(320, tasks.length * 44 + 90));
+  const ganttHeight = Math.min(620, Math.max(320, tasks.length * GANTT_ROW_HEIGHT + 90));
   const columnWidth = viewMode === 'Day' ? 70 : viewMode === 'Week' ? 88 : 130;
   const rootRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ active: boolean; pointerId: number | null; startX: number; startScrollLeft: number }>({
@@ -375,10 +378,10 @@ export function GanttView({
         preStepsCount={1}
         listCellWidth="260px"
         columnWidth={columnWidth}
-        rowHeight={44}
-        headerHeight={48}
+        rowHeight={GANTT_ROW_HEIGHT}
+        headerHeight={GANTT_HEADER_HEIGHT}
         ganttHeight={ganttHeight}
-        barFill={88}
+        barFill={GANTT_BAR_FILL}
         barCornerRadius={5}
         todayColor="rgba(12, 101, 126, 0.08)"
         fontSize="13px"
