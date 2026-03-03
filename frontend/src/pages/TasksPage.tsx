@@ -798,7 +798,9 @@ export function TasksPage() {
                 Atribuir em massa
               </Button>
               <Button
+                size="small"
                 variant="outlined"
+                color="success"
                 disabled={
                   !selectedIds.length || !batchStatus || !canManageTaskData
                 }
@@ -824,7 +826,8 @@ export function TasksPage() {
                 Status em massa
               </Button>
               <Button
-                variant="contained"
+                size="small"
+                variant="outlined"
                 color="error"
                 disabled={!selectedIds.length || !canManageTaskData}
                 onClick={() => setBatchDeleteOpen(true)}

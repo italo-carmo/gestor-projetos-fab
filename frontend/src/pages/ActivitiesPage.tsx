@@ -838,6 +838,7 @@ export function ActivitiesPage() {
                     </TextField>
                     <Button
                       variant="outlined"
+                      color="success"
                       size="small"
                       sx={{ minHeight: 36, px: 1.4, whiteSpace: 'nowrap' }}
                       onClick={handleBatchStatusApply}
@@ -863,6 +864,7 @@ export function ActivitiesPage() {
                     </TextField>
                     <Button
                       variant="outlined"
+                      color="success"
                       size="small"
                       sx={{ minHeight: 36, px: 1.4, whiteSpace: 'nowrap' }}
                       onClick={handleBatchSpecialtyApply}
@@ -888,6 +890,7 @@ export function ActivitiesPage() {
                     </TextField>
                     <Button
                       variant="outlined"
+                      color="success"
                       size="small"
                       sx={{ minHeight: 36, px: 1.4, whiteSpace: 'nowrap' }}
                       onClick={handleBatchResponsibleApply}
@@ -900,7 +903,8 @@ export function ActivitiesPage() {
                       Aplicar responsável
                     </Button>
                     <Button
-                      variant="contained"
+                      variant="outlined"
+                      color="success"
                       size="small"
                       sx={{ minHeight: 36, px: 1.4, whiteSpace: 'nowrap' }}
                       onClick={openReplicateDialog}
@@ -1239,6 +1243,7 @@ export function ActivitiesPage() {
                 <Button
                   size="small"
                   variant="outlined"
+                  color="success"
                   sx={drawerActionButtonSx}
                   disabled={!canEditActivityForm || createActivityType.isPending}
                   onClick={async () => {

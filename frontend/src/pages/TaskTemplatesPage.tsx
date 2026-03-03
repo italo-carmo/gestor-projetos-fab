@@ -482,12 +482,13 @@ export function TaskTemplatesPage() {
           <Stack direction="row" spacing={1}>
             <Button
               variant="contained"
+              color="success"
               onClick={handleSaveTemplate}
               disabled={createTemplate.isPending || updateTemplate.isPending}
             >
               {editingTemplateId ? "Salvar alterações" : "Salvar"}
             </Button>
-            <Button variant="text" onClick={() => setDrawerOpen(false)}>
+            <Button variant="outlined" color="error" onClick={() => setDrawerOpen(false)}>
               Cancelar
             </Button>
           </Stack>
@@ -606,10 +607,10 @@ export function TaskTemplatesPage() {
             ))}
           </TextField>
           <Stack direction="row" spacing={1}>
-            <Button variant="contained" onClick={handleGenerate}>
+            <Button variant="contained" color="success" onClick={handleGenerate}>
               Gerar
             </Button>
-            <Button variant="text" onClick={() => setGenerateOpen(false)}>
+            <Button variant="outlined" color="error" onClick={() => setGenerateOpen(false)}>
               Cancelar
             </Button>
           </Stack>
