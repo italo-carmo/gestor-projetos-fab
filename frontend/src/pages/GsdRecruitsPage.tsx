@@ -24,6 +24,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
   useDashboardRecruits,
+  useLookupLdapUser,
   useLocalityRecruitMembers,
   useMe,
   useOmsCatalog,
@@ -127,6 +128,7 @@ export function GsdRecruitsPage() {
   const omsCatalogQuery = useOmsCatalog(canLoadRecruitsData);
   const replaceRecruitMembers = useReplaceLocalityRecruitMembers();
   const setLocalityCommanderFromLdap = useSetLocalityCommanderFromLdap();
+  const lookupLdapUser = useLookupLdapUser();
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selected, setSelected] = useState<any | null>(null);
@@ -135,6 +137,12 @@ export function GsdRecruitsPage() {
   const [bulkDismissReason, setBulkDismissReason] = useState('');
   const [bulkDestinationLocalityId, setBulkDestinationLocalityId] = useState('');
   const [commanderLdapUid, setCommanderLdapUid] = useState('');
+  const [commanderLookupPreview, setCommanderLookupPreview] = useState<{
+    uid: string;
+    name: string | null;
+    email: string | null;
+    fabom: string | null;
+  } | null>(null);
 
   const selectedLocalityId = String(selected?.id ?? '');
   const recruitMembersQuery = useLocalityRecruitMembers(
@@ -251,20 +259,57 @@ export function GsdRecruitsPage() {
     setBulkDismissReason('');
     setBulkDestinationLocalityId('');
     setCommanderLdapUid('');
+    setCommanderLookupPreview(null);
     setDrawerOpen(true);
+  };
+
+  const handleLookupCommander = async () => {
+    const identifier = commanderLdapUid.trim();
+    if (!identifier) {
+      toast.push({ message: 'Informe o UID/CPF ou email para buscar no LDAP.', severity: 'warning' });
+      return;
+    }
+    try {
+      const result = (await lookupLdapUser.mutateAsync(identifier)) as {
+        user?: {
+          uid: string;
+          name: string | null;
+          email: string | null;
+          fabom: string | null;
+        };
+      };
+      if (!result?.user?.uid) {
+        setCommanderLookupPreview(null);
+        toast.push({ message: 'Nenhum militar encontrado no LDAP.', severity: 'warning' });
+        return;
+      }
+      setCommanderLookupPreview({
+        uid: result.user.uid,
+        name: result.user.name ?? null,
+        email: result.user.email ?? null,
+        fabom: result.user.fabom ?? null,
+      });
+      toast.push({ message: 'Militar encontrado no LDAP.', severity: 'success' });
+    } catch (error) {
+      setCommanderLookupPreview(null);
+      const payload = parseApiError(error);
+      toast.push({
+        message: payload.message ?? 'Erro ao buscar militar no LDAP.',
+        severity: 'error',
+      });
+    }
   };
 
   const handleSetCommanderFromLdap = async () => {
     if (!selected) return;
-    const uidOrEmail = commanderLdapUid.trim();
-    if (!uidOrEmail) {
-      toast.push({ message: 'Informe o UID/CPF ou email no LDAP.', severity: 'warning' });
+    if (!commanderLookupPreview?.uid) {
+      toast.push({ message: 'Busque e confirme o militar antes de definir comandante.', severity: 'warning' });
       return;
     }
     try {
       const response = await setLocalityCommanderFromLdap.mutateAsync({
         localityId: selected.id,
-        uidOrEmail,
+        uidOrEmail: commanderLookupPreview.uid,
       });
       const nextCommanderName = String(response?.commanderName ?? '').trim();
       setSelected((current: any) =>
@@ -559,7 +604,7 @@ export function GsdRecruitsPage() {
                           onClick={() => openEdit(locality)}
                           disabled={!canEditRecruitsCount(me, locality.id)}
                         >
-                          Editar recrutas
+                          Editar
                         </Button>
                         {canViewHistoryTab && (
                           <Button
@@ -856,20 +901,43 @@ export function GsdRecruitsPage() {
                   size="small"
                   label="UID/CPF ou Email do comandante (LDAP)"
                   value={commanderLdapUid}
-                  onChange={(event) => setCommanderLdapUid(event.target.value)}
+                  onChange={(event) => {
+                    setCommanderLdapUid(event.target.value);
+                    setCommanderLookupPreview(null);
+                  }}
                   placeholder="Ex.: 12229820729 ou email@fab.intraer"
                   sx={{ minWidth: 280 }}
-                  helperText="Ao inserir por email, o usuário será criado automaticamente com permissão de GSD para esta localidade"
+                  helperText="1) Busque no LDAP  2) Confira os dados  3) Defina comandante"
                 />
+                <Button
+                  variant="outlined"
+                  onClick={() => {
+                    void handleLookupCommander();
+                  }}
+                  disabled={lookupLdapUser.isPending}
+                >
+                  {lookupLdapUser.isPending ? 'Buscando...' : 'Buscar'}
+                </Button>
                 <Button
                   variant="outlined"
                   color="success"
                   onClick={handleSetCommanderFromLdap}
-                  disabled={setLocalityCommanderFromLdap.isPending}
+                  disabled={setLocalityCommanderFromLdap.isPending || !commanderLookupPreview?.uid}
                 >
                   Definir comandante
                 </Button>
               </Stack>
+              {commanderLookupPreview && (
+                <Alert severity="info">
+                  <strong>{commanderLookupPreview.name || 'Sem nome no LDAP'}</strong>
+                  {' · '}
+                  UID/CPF: {commanderLookupPreview.uid}
+                  {' · '}
+                  Email: {commanderLookupPreview.email || 'Não informado'}
+                  {' · '}
+                  OM: {commanderLookupPreview.fabom || 'Não informado'}
+                </Alert>
+              )}
 
               <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
                 <Chip label={`Ativas: ${activeCount}`} color="primary" />
