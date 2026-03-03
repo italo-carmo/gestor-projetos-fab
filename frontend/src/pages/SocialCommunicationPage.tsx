@@ -86,6 +86,15 @@ function sourceHost(url: string) {
   }
 }
 
+function isFabDomain(url: string) {
+  const host = sourceHost(url).toLowerCase();
+  return host === "fab.mil.br" || host.endsWith(".fab.mil.br");
+}
+
+function buildMshotUrl(sourceUrl: string) {
+  return `https://s.wordpress.com/mshots/v1/${encodeURIComponent(sourceUrl)}?w=1200`;
+}
+
 function toApiUrl(path: string) {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
   const baseUrl = String(api.defaults.baseURL ?? "/api");
@@ -114,24 +123,29 @@ const QUICK_TAGS = ["smif", "cipavd", "cpca"] as const;
 function ArticleCoverImage({
   coverProxyPath,
   coverImageUrl,
+  sourceUrl,
   title,
   toApiUrl,
 }: {
   coverProxyPath?: string | null;
   coverImageUrl?: string | null;
+  sourceUrl: string;
   title: string;
   toApiUrl: (path: string) => string;
 }) {
   const [imageError, setImageError] = useState(false);
   const proxySrc = coverProxyPath ? toApiUrl(coverProxyPath) : null;
   const directSrc = coverImageUrl || null;
-  const [imageSrc, setImageSrc] = useState<string | null>(directSrc || proxySrc || null);
+  const mshotSrc = buildMshotUrl(sourceUrl);
+  const [imageSrc, setImageSrc] = useState<string | null>(
+    directSrc || proxySrc || mshotSrc
+  );
 
   // Reset state when props change
   useEffect(() => {
     setImageError(false);
-    setImageSrc(directSrc || proxySrc || null);
-  }, [coverProxyPath, coverImageUrl]);
+    setImageSrc(directSrc || proxySrc || mshotSrc);
+  }, [coverProxyPath, coverImageUrl, sourceUrl]);
 
   if (!coverProxyPath && !coverImageUrl) {
     return <NewspaperRoundedIcon sx={{ color: "white", fontSize: 38 }} />;
@@ -155,6 +169,12 @@ function ArticleCoverImage({
           setImageError(false);
           return;
         }
+        if (imageSrc !== mshotSrc) {
+          // Ultimo fallback: thumbnail por URL da materia.
+          setImageSrc(mshotSrc);
+          setImageError(false);
+          return;
+        }
         setImageError(true);
       }}
       onLoad={() => {
@@ -167,24 +187,29 @@ function ArticleCoverImage({
 function ArticleCoverImageSmall({
   coverProxyPath,
   coverImageUrl,
+  sourceUrl,
   title,
   toApiUrl,
 }: {
   coverProxyPath?: string | null;
   coverImageUrl?: string | null;
+  sourceUrl: string;
   title: string;
   toApiUrl: (path: string) => string;
 }) {
   const [imageError, setImageError] = useState(false);
   const proxySrc = coverProxyPath ? toApiUrl(coverProxyPath) : null;
   const directSrc = coverImageUrl || null;
-  const [imageSrc, setImageSrc] = useState<string | null>(directSrc || proxySrc || null);
+  const mshotSrc = buildMshotUrl(sourceUrl);
+  const [imageSrc, setImageSrc] = useState<string | null>(
+    directSrc || proxySrc || mshotSrc
+  );
 
   // Reset state when props change
   useEffect(() => {
     setImageError(false);
-    setImageSrc(directSrc || proxySrc || null);
-  }, [coverProxyPath, coverImageUrl]);
+    setImageSrc(directSrc || proxySrc || mshotSrc);
+  }, [coverProxyPath, coverImageUrl, sourceUrl]);
 
   if (!coverProxyPath && !coverImageUrl) {
     return <NewspaperRoundedIcon sx={{ color: "#114259", fontSize: 32 }} />;
@@ -205,6 +230,12 @@ function ArticleCoverImageSmall({
         if (directSrc && proxySrc && imageSrc === directSrc) {
           // Tenta proxy apenas se falhou a URL direta.
           setImageSrc(proxySrc);
+          setImageError(false);
+          return;
+        }
+        if (imageSrc !== mshotSrc) {
+          // Ultimo fallback: thumbnail por URL da materia.
+          setImageSrc(mshotSrc);
           setImageError(false);
           return;
         }
@@ -254,6 +285,14 @@ export function SocialCommunicationPage() {
     publishedAt: "",
     tags: [] as string[],
   });
+
+  const openPreview = (item: SocialCommunicationArticle) => {
+    if (isFabDomain(item.sourceUrl)) {
+      window.open(item.sourceUrl, "_blank", "noopener,noreferrer");
+      return;
+    }
+    setPreviewing(item);
+  };
 
   useEffect(() => {
     if (!previewing) {
@@ -531,7 +570,7 @@ export function SocialCommunicationPage() {
                 }}
               >
                 <CardActionArea
-                  onClick={() => setPreviewing(item)}
+                  onClick={() => openPreview(item)}
                   sx={{ alignItems: "stretch", height: "100%", display: "flex", flexDirection: "column" }}
                 >
                   <Box
@@ -547,6 +586,7 @@ export function SocialCommunicationPage() {
                     <ArticleCoverImage
                       coverProxyPath={item.coverProxyPath}
                       coverImageUrl={item.coverImageUrl}
+                      sourceUrl={item.sourceUrl}
                       title={item.title}
                       toApiUrl={toApiUrl}
                     />
@@ -629,7 +669,7 @@ export function SocialCommunicationPage() {
             return (
               <Card
                 key={item.id}
-                onClick={() => setPreviewing(item)}
+                onClick={() => openPreview(item)}
                 sx={{
                   borderRadius: 3,
                   border: "1px solid rgba(17,66,89,0.14)",
@@ -659,6 +699,7 @@ export function SocialCommunicationPage() {
                       <ArticleCoverImageSmall
                         coverProxyPath={item.coverProxyPath}
                         coverImageUrl={item.coverImageUrl}
+                          sourceUrl={item.sourceUrl}
                         title={item.title}
                         toApiUrl={toApiUrl}
                       />
