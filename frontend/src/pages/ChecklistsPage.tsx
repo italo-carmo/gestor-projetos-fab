@@ -718,8 +718,15 @@ export function ChecklistsPage() {
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setCreateOpen(false)}>Cancelar</Button>
-          <Button variant="contained" onClick={handleCreateChecklist} disabled={!createTitle.trim() || createChecklist.isPending}>
+          <Button color="error" variant="outlined" onClick={() => setCreateOpen(false)}>
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            color="success"
+            onClick={handleCreateChecklist}
+            disabled={!createTitle.trim() || createChecklist.isPending}
+          >
             {createChecklist.isPending ? 'Criando…' : 'Criar'}
           </Button>
         </DialogActions>

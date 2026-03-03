@@ -335,11 +335,12 @@ export function OrgChartPage() {
             helperText="Ordem no organograma: 1 = mais antigo."
           />
           <Stack direction="row" justifyContent="flex-end" spacing={1}>
-            <Button variant="text" onClick={() => setCommissionEditOpen(false)}>
+            <Button variant="outlined" color="error" onClick={() => setCommissionEditOpen(false)}>
               Cancelar
             </Button>
             <Button
               variant="contained"
+              color="success"
               onClick={() => {
                 void handleSaveCommissionMember();
               }}

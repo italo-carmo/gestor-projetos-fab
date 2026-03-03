@@ -1086,11 +1086,12 @@ export function GsdRecruitsPage() {
             </>
           )}
           <Box display="flex" gap={1} justifyContent="flex-end" sx={{ mt: 1 }}>
-            <Button variant="text" onClick={() => setDrawerOpen(false)}>
+            <Button variant="outlined" color="error" onClick={() => setDrawerOpen(false)}>
               Cancelar
             </Button>
             <Button
               variant="contained"
+              color="success"
               onClick={handleSave}
               disabled={
                 !selected ||

@@ -783,9 +783,12 @@ export function AdminRbacPage() {
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setEditingUser(null)}>Cancelar</Button>
+          <Button color="error" variant="outlined" onClick={() => setEditingUser(null)}>
+            Cancelar
+          </Button>
           <Button
             variant="contained"
+            color="success"
             onClick={() => {
               void handleSaveUser();
             }}

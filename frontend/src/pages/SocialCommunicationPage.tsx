@@ -778,9 +778,12 @@ export function SocialCommunicationPage() {
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setEditorOpen(false)}>Cancelar</Button>
+          <Button color="error" variant="outlined" onClick={() => setEditorOpen(false)}>
+            Cancelar
+          </Button>
           <Button
             variant="contained"
+            color="success"
             disabled={!form.url.trim() || createArticle.isPending || updateArticle.isPending}
             onClick={() => {
               void handleSave();

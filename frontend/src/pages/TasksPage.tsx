@@ -1466,12 +1466,18 @@ export function TasksPage() {
             />
 
             <Stack direction="row" spacing={1} justifyContent="flex-end">
-              <Button size="small" onClick={() => setCreateDrawerOpen(false)}>
+              <Button
+                size="small"
+                variant="outlined"
+                color="error"
+                onClick={() => setCreateDrawerOpen(false)}
+              >
                 Cancelar
               </Button>
               <Button
                 size="small"
                 variant="contained"
+                color="success"
                 onClick={handleCreateTasks}
                 disabled={
                   !canCreateTask ||

@@ -377,16 +377,17 @@ export function EntityDocumentLinksManager({
                           >
                             Cancelar
                           </Button>
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            onClick={() => {
-                              void handleSaveLabel(link.id);
-                            }}
-                            disabled={!canManage || updateLink.isPending}
-                          >
-                            Salvar nota
-                          </Button>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="success"
+                          onClick={() => {
+                            void handleSaveLabel(link.id);
+                          }}
+                          disabled={!canManage || updateLink.isPending}
+                        >
+                          Salvar nota
+                        </Button>
                         </>
                       ) : (
                         <Button

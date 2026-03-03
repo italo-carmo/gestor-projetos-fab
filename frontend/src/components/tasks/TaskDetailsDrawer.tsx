@@ -824,7 +824,8 @@ export function TaskDetailsDrawer({
                     Concluir
                   </Button>
                   <Button
-                    variant="text"
+                    variant="outlined"
+                    color="success"
                     onClick={handleSaveTitle}
                     disabled={
                       !canManageTaskData ||
@@ -838,7 +839,8 @@ export function TaskDetailsDrawer({
                     Salvar
                   </Button>
                   <Button
-                    variant="text"
+                    variant="outlined"
+                    color="success"
                     onClick={handleSaveLocalities}
                     disabled={
                       !canManageTaskData ||

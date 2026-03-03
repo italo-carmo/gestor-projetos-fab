@@ -1362,7 +1362,8 @@ export function ActivitiesPage() {
                   </Button>
                 ) : (
                   <Button
-                    variant="outlined"
+                    variant="contained"
+                    color="success"
                     size="small"
                     sx={drawerActionButtonSx}
                     onClick={handleSaveActivity}
@@ -1631,6 +1632,7 @@ export function ActivitiesPage() {
                 <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
                   <Button
                     variant="contained"
+                    color="success"
                     size="small"
                     sx={drawerActionButtonSx}
                     onClick={handleSaveReport}

@@ -177,10 +177,15 @@ export function PostosPage() {
             inputProps={{ min: 0 }}
           />
           <Box display="flex" gap={1} justifyContent="flex-end">
-            <Button variant="text" onClick={() => setDrawerOpen(false)}>
+            <Button variant="outlined" color="error" onClick={() => setDrawerOpen(false)}>
               Cancelar
             </Button>
-            <Button variant="contained" onClick={handleSave} disabled={createPosto.isPending || updatePosto.isPending}>
+            <Button
+              variant="contained"
+              color="success"
+              onClick={handleSave}
+              disabled={createPosto.isPending || updatePosto.isPending}
+            >
               Salvar
             </Button>
           </Box>

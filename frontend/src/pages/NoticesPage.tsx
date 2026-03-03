@@ -375,10 +375,10 @@ export function NoticesPage() {
             ))}
           </TextField>
           <Stack direction="row" spacing={1}>
-            <Button variant="contained" onClick={handleSave}>
+            <Button variant="contained" color="success" onClick={handleSave}>
               Salvar
             </Button>
-            <Button variant="text" onClick={() => setDrawerOpen(false)}>
+            <Button variant="outlined" color="error" onClick={() => setDrawerOpen(false)}>
               Cancelar
             </Button>
           </Stack>

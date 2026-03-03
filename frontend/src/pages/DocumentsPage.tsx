@@ -930,6 +930,7 @@ export function DocumentsPage() {
                                 <Button
                                   size="small"
                                   variant="contained"
+                                  color="success"
                                   onClick={(event) => {
                                     event.stopPropagation();
                                     void handleSaveRename();
@@ -940,7 +941,8 @@ export function DocumentsPage() {
                                 </Button>
                                 <Button
                                   size="small"
-                                  variant="text"
+                                  variant="outlined"
+                                  color="error"
                                   onClick={(event) => {
                                     event.stopPropagation();
                                     setRenamingFolderId('');
