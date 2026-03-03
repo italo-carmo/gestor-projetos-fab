@@ -24,15 +24,22 @@ const rbac_guard_1 = require("../rbac/rbac.guard");
 const role_access_1 = require("../rbac/role-access");
 const prisma_service_1 = require("../prisma/prisma.service");
 const sanitize_1 = require("../common/sanitize");
+const fab_ldap_service_1 = require("../ldap/fab-ldap.service");
+const rbac_service_1 = require("../rbac/rbac.service");
 const create_locality_dto_1 = require("./dto/create-locality.dto");
+const set_locality_commander_from_ldap_dto_1 = require("./dto/set-locality-commander-from-ldap.dto");
 const update_locality_recruit_designations_dto_1 = require("./dto/update-locality-recruit-designations.dto");
 const replace_locality_recruits_members_dto_1 = require("./dto/replace-locality-recruits-members.dto");
 const update_locality_recruits_dto_1 = require("./dto/update-locality-recruits.dto");
 const update_locality_dto_1 = require("./dto/update-locality.dto");
 let LocalitiesController = class LocalitiesController {
     prisma;
-    constructor(prisma) {
+    fabLdap;
+    rbac;
+    constructor(prisma, fabLdap, rbac) {
         this.prisma = prisma;
+        this.fabLdap = fabLdap;
+        this.rbac = rbac;
     }
     async list(user) {
         const canViewAll = (0, role_access_1.isNationalCommissionMember)(user) || (0, role_access_1.hasRole)(user, role_access_1.ROLE_TI);
@@ -304,6 +311,91 @@ let LocalitiesController = class LocalitiesController {
             await this.registerRecruitsHistory(id, nextCount, previousCount, dismissedReasons.length ? dismissedReasons.join('; ') : null, false);
         }
         return this.buildRecruitMembersResponse(id);
+    }
+    async setCommanderFromLdap(id, dto, user) {
+        this.assertRecruitsEditorAccess(id, user);
+        const locality = await this.prisma.locality.findUnique({
+            where: { id },
+            select: { id: true, name: true },
+        });
+        if (!locality)
+            (0, http_error_1.throwError)('NOT_FOUND');
+        const identifier = String(dto.uidOrEmail ?? '').trim();
+        if (!identifier) {
+            (0, http_error_1.throwError)('VALIDATION_ERROR', {
+                field: 'uidOrEmail',
+                reason: 'LDAP_IDENTIFIER_REQUIRED',
+            });
+        }
+        const profile = identifier.includes('@')
+            ? await this.fabLdap.lookupByEmail(identifier)
+            : await this.fabLdap.lookupByUid(identifier);
+        if (!profile) {
+            (0, http_error_1.throwError)('VALIDATION_ERROR', {
+                field: 'uidOrEmail',
+                reason: 'LDAP_USER_NOT_FOUND',
+            });
+        }
+        const commanderName = (0, sanitize_1.sanitizeText)(profile.name ?? '');
+        if (!commanderName) {
+            (0, http_error_1.throwError)('VALIDATION_ERROR', {
+                field: 'uidOrEmail',
+                reason: 'LDAP_USER_NAME_NOT_FOUND',
+            });
+        }
+        const gsdRole = await this.prisma.role.findFirst({
+            where: { name: role_access_1.ROLE_GSD_LOCALIDADE },
+            select: { id: true },
+        });
+        if (!gsdRole) {
+            (0, http_error_1.throwError)('VALIDATION_ERROR', {
+                reason: 'GSD_ROLE_NOT_FOUND',
+            });
+        }
+        const existingUser = await this.prisma.user.findFirst({
+            where: {
+                OR: [{ ldapUid: profile.uid }, { email: profile.email }],
+            },
+            include: {
+                roles: {
+                    include: { role: { select: { id: true, name: true } } },
+                },
+            },
+        });
+        if (existingUser) {
+            const hasGsdRole = existingUser.roles.some((ur) => ur.role.id === gsdRole.id || ur.role.name === role_access_1.ROLE_GSD_LOCALIDADE);
+            if (!hasGsdRole) {
+                await this.prisma.userRole.create({
+                    data: { userId: existingUser.id, roleId: gsdRole.id },
+                });
+            }
+            if (existingUser.localityId !== id) {
+                await this.prisma.user.update({
+                    where: { id: existingUser.id },
+                    data: { localityId: id },
+                });
+            }
+        }
+        else {
+            await this.rbac.upsertLdapUser({
+                uid: profile.uid,
+                roleIds: [gsdRole.id],
+                localityId: id,
+                replaceExistingRoles: false,
+            }, user.id);
+        }
+        const updated = await this.prisma.locality.update({
+            where: { id },
+            data: { commanderName },
+            select: { id: true, commanderName: true },
+        });
+        return {
+            localityId: updated.id,
+            commanderName: updated.commanderName,
+            uid: profile.uid,
+            fabom: profile.fabom,
+            email: profile.email,
+        };
     }
     async replaceRecruitDesignations(id, dto, user) {
         this.assertRecruitsEditorAccess(id, user);
@@ -641,6 +733,16 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], LocalitiesController.prototype, "replaceRecruitMembers", null);
 __decorate([
+    (0, common_1.Put)(':id/commander-from-ldap'),
+    (0, require_permission_decorator_1.RequirePermission)('dashboard', 'view'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)()),
+    __param(2, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, set_locality_commander_from_ldap_dto_1.SetLocalityCommanderFromLdapDto, Object]),
+    __metadata("design:returntype", Promise)
+], LocalitiesController.prototype, "setCommanderFromLdap", null);
+__decorate([
     (0, common_1.Put)(':id/recruit-designations'),
     (0, require_permission_decorator_1.RequirePermission)('dashboard', 'view'),
     __param(0, (0, common_1.Param)('id')),
@@ -661,6 +763,8 @@ __decorate([
 exports.LocalitiesController = LocalitiesController = __decorate([
     (0, common_1.Controller)('localities'),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, rbac_guard_1.RbacGuard),
-    __metadata("design:paramtypes", [prisma_service_1.PrismaService])
+    __metadata("design:paramtypes", [prisma_service_1.PrismaService,
+        fab_ldap_service_1.FabLdapService,
+        rbac_service_1.RbacService])
 ], LocalitiesController);
 //# sourceMappingURL=localities.controller.js.map

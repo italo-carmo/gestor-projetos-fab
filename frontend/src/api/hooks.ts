@@ -2019,10 +2019,10 @@ export function useReplaceLocalityRecruitMembers() {
 export function useSetLocalityCommanderFromLdap() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (args: { localityId: string; uid: string }) =>
+    mutationFn: async (args: { localityId: string; uidOrEmail: string }) =>
       (
         await api.put(`/localities/${args.localityId}/commander-from-ldap`, {
-          uid: args.uid,
+          uidOrEmail: args.uidOrEmail,
         })
       ).data,
     onSuccess: () => {

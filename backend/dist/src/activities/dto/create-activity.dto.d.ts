@@ -4,6 +4,7 @@ export declare class CreateActivityDto {
     localityId?: string | null;
     localityIds?: string[];
     specialtyId?: string | null;
+    activityTypeId?: string | null;
     eventDate?: string | null;
     reportRequired?: boolean;
     responsibleUserIds?: string[];

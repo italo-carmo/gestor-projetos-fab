@@ -6,11 +6,12 @@ import { CurrentUser } from '../common/current-user.decorator';
 import { throwError } from '../common/http-error';
 import { RequirePermission } from '../rbac/require-permission.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
-import { canEditRecruitsByRole, isNationalCommissionMember, ROLE_TI, hasRole } from '../rbac/role-access';
+import { canEditRecruitsByRole, isNationalCommissionMember, ROLE_TI, hasRole, ROLE_GSD_LOCALIDADE } from '../rbac/role-access';
 import type { RbacUser } from '../rbac/rbac.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { sanitizeText } from '../common/sanitize';
 import { FabLdapService } from '../ldap/fab-ldap.service';
+import { RbacService } from '../rbac/rbac.service';
 import { CreateLocalityDto } from './dto/create-locality.dto';
 import { SetLocalityCommanderFromLdapDto } from './dto/set-locality-commander-from-ldap.dto';
 import { UpdateLocalityRecruitDesignationsDto } from './dto/update-locality-recruit-designations.dto';
@@ -26,6 +27,7 @@ export class LocalitiesController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly fabLdap: FabLdapService,
+    private readonly rbac: RbacService,
   ) {}
 
   @Get()
@@ -381,21 +383,94 @@ export class LocalitiesController {
     @CurrentUser() user: RbacUser,
   ) {
     this.assertRecruitsEditorAccess(id, user);
-    const profile = await this.fabLdap.lookupByUid(dto.uid);
+    const locality = await this.prisma.locality.findUnique({
+      where: { id },
+      select: { id: true, name: true },
+    });
+    if (!locality) throwError('NOT_FOUND');
+
+    // Buscar perfil no LDAP por UID ou email
+    const identifier = String(dto.uidOrEmail ?? '').trim();
+    if (!identifier) {
+      throwError('VALIDATION_ERROR', {
+        field: 'uidOrEmail',
+        reason: 'LDAP_IDENTIFIER_REQUIRED',
+      });
+    }
+
+    const profile = identifier.includes('@')
+      ? await this.fabLdap.lookupByEmail(identifier)
+      : await this.fabLdap.lookupByUid(identifier);
+
     if (!profile) {
       throwError('VALIDATION_ERROR', {
-        field: 'uid',
+        field: 'uidOrEmail',
         reason: 'LDAP_USER_NOT_FOUND',
       });
     }
+
     const commanderName = sanitizeText(profile.name ?? '');
     if (!commanderName) {
       throwError('VALIDATION_ERROR', {
-        field: 'uid',
+        field: 'uidOrEmail',
         reason: 'LDAP_USER_NAME_NOT_FOUND',
       });
     }
 
+    // Buscar role GSD Localidade
+    const gsdRole = await this.prisma.role.findFirst({
+      where: { name: ROLE_GSD_LOCALIDADE },
+      select: { id: true },
+    });
+    if (!gsdRole) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'GSD_ROLE_NOT_FOUND',
+      });
+    }
+
+    // Verificar se usuário já existe
+    const existingUser = await this.prisma.user.findFirst({
+      where: {
+        OR: [{ ldapUid: profile.uid }, { email: profile.email }],
+      },
+      include: {
+        roles: {
+          include: { role: { select: { id: true, name: true } } },
+        },
+      },
+    });
+
+    // Se usuário existe, verificar se já tem role GSD e adicionar se necessário
+    if (existingUser) {
+      const hasGsdRole = existingUser.roles.some(
+        (ur) => ur.role.id === gsdRole.id || ur.role.name === ROLE_GSD_LOCALIDADE,
+      );
+      if (!hasGsdRole) {
+        await this.prisma.userRole.create({
+          data: { userId: existingUser.id, roleId: gsdRole.id },
+        });
+      }
+      // Atualizar localidade do usuário se necessário
+      if (existingUser.localityId !== id) {
+        await this.prisma.user.update({
+          where: { id: existingUser.id },
+          data: { localityId: id },
+        });
+      }
+    } else {
+      // Criar novo usuário com role GSD para esta localidade
+      await this.rbac.upsertLdapUser(
+        {
+          uid: profile.uid,
+          roleIds: [gsdRole.id],
+          localityId: id,
+          replaceExistingRoles: false,
+        },
+        user.id,
+      );
+    }
+
+    // Atualizar commanderName na localidade
     const updated = await this.prisma.locality.update({
       where: { id },
       data: { commanderName },

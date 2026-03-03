@@ -7,6 +7,7 @@ import { UpsertActivityReportDto } from './dto/upsert-activity-report.dto';
 import { ActivityCommentDto } from './dto/activity-comment.dto';
 import { CreateActivityScheduleItemDto } from './dto/create-activity-schedule-item.dto';
 import { UpdateActivityScheduleItemDto } from './dto/update-activity-schedule-item.dto';
+import { CreateActivityTypeDto } from './dto/create-activity-type.dto';
 import type { Request, Response } from 'express';
 export declare class ActivitiesController {
     private readonly activities;
@@ -18,6 +19,10 @@ export declare class ActivitiesController {
         total: number;
     }>;
     create(dto: CreateActivityDto, user: RbacUser): Promise<any>;
+    listTypes(): Promise<{
+        items: any;
+    }>;
+    createType(dto: CreateActivityTypeDto): Promise<any>;
     update(id: string, dto: UpdateActivityDto, user: RbacUser): Promise<any>;
     batchStatus(body: {
         ids: string[];
@@ -41,6 +46,17 @@ export declare class ActivitiesController {
         ids: string[];
     }, user: RbacUser): Promise<{
         deleted: number;
+    }>;
+    batchReplicate(body: {
+        ids: string[];
+        targetLocalityIds: string[];
+        statusMode?: 'RESET' | 'KEEP';
+        dateMode?: 'KEEP' | 'CLEAR' | 'SET_DATE';
+        targetDate?: string | null;
+    }, user: RbacUser): Promise<{
+        created: number;
+        skippedSameLocality: number;
+        requestedPairs: number;
     }>;
     updateStatus(id: string, dto: UpdateActivityStatusDto, user: RbacUser): Promise<any>;
     remove(id: string, user: RbacUser): Promise<{

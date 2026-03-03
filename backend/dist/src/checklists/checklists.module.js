@@ -9,6 +9,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ChecklistsModule = void 0;
 const common_1 = require("@nestjs/common");
 const rbac_module_1 = require("../rbac/rbac.module");
+const tasks_module_1 = require("../tasks/tasks.module");
+const activities_module_1 = require("../activities/activities.module");
 const checklists_controller_1 = require("./checklists.controller");
 const checklists_service_1 = require("./checklists.service");
 let ChecklistsModule = class ChecklistsModule {
@@ -16,7 +18,7 @@ let ChecklistsModule = class ChecklistsModule {
 exports.ChecklistsModule = ChecklistsModule;
 exports.ChecklistsModule = ChecklistsModule = __decorate([
     (0, common_1.Module)({
-        imports: [rbac_module_1.RbacModule],
+        imports: [rbac_module_1.RbacModule, tasks_module_1.TasksModule, activities_module_1.ActivitiesModule],
         controllers: [checklists_controller_1.ChecklistsController, checklists_controller_1.ChecklistItemStatusController],
         providers: [checklists_service_1.ChecklistsService],
         exports: [checklists_service_1.ChecklistsService],

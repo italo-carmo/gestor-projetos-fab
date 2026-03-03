@@ -30,6 +30,7 @@ const upsert_activity_report_dto_1 = require("./dto/upsert-activity-report.dto")
 const activity_comment_dto_1 = require("./dto/activity-comment.dto");
 const create_activity_schedule_item_dto_1 = require("./dto/create-activity-schedule-item.dto");
 const update_activity_schedule_item_dto_1 = require("./dto/update-activity-schedule-item.dto");
+const create_activity_type_dto_1 = require("./dto/create-activity-type.dto");
 const platform_express_1 = require("@nestjs/platform-express");
 const multer_1 = require("multer");
 const multer_exception_filter_1 = require("../reports/multer-exception.filter");
@@ -52,6 +53,12 @@ let ActivitiesController = class ActivitiesController {
     create(dto, user) {
         return this.activities.create(dto, user);
     }
+    listTypes() {
+        return this.activities.listTypes();
+    }
+    createType(dto) {
+        return this.activities.createType(dto.name);
+    }
     update(id, dto, user) {
         return this.activities.update(id, dto, user);
     }
@@ -66,6 +73,13 @@ let ActivitiesController = class ActivitiesController {
     }
     batchDelete(body, user) {
         return this.activities.batchDelete(body.ids ?? [], user);
+    }
+    batchReplicate(body, user) {
+        return this.activities.batchReplicate(body.ids ?? [], body.targetLocalityIds ?? [], {
+            statusMode: body.statusMode,
+            dateMode: body.dateMode,
+            targetDate: body.targetDate,
+        }, user);
     }
     updateStatus(id, dto, user) {
         return this.activities.updateStatus(id, dto.status, user);
@@ -167,6 +181,21 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], ActivitiesController.prototype, "create", null);
 __decorate([
+    (0, common_1.Get)('types'),
+    (0, require_permission_decorator_1.RequirePermission)('task_instances', 'view'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", void 0)
+], ActivitiesController.prototype, "listTypes", null);
+__decorate([
+    (0, common_1.Post)('types'),
+    (0, require_permission_decorator_1.RequirePermission)('task_instances', 'create'),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [create_activity_type_dto_1.CreateActivityTypeDto]),
+    __metadata("design:returntype", void 0)
+], ActivitiesController.prototype, "createType", null);
+__decorate([
     (0, common_1.Put)(':id'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
@@ -207,6 +236,14 @@ __decorate([
     __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", void 0)
 ], ActivitiesController.prototype, "batchDelete", null);
+__decorate([
+    (0, common_1.Post)('batch/replicate'),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", void 0)
+], ActivitiesController.prototype, "batchReplicate", null);
 __decorate([
     (0, common_1.Put)(':id/status'),
     __param(0, (0, common_1.Param)('id')),

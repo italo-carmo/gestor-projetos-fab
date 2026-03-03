@@ -13,6 +13,46 @@ export declare class ChecklistsController {
             phaseId: string | null;
             specialtyId: string | null;
             eloRoleId: string | null;
+            eloRole: null;
+            items: ({
+                id: string;
+                title: string;
+                taskTemplateId: string;
+                sourceType: string;
+                statuses: Record<string, import("@prisma/client").$Enums.ChecklistItemStatusType>;
+            } | {
+                id: string;
+                title: string;
+                taskTemplateId: null;
+                sourceType: string;
+                statuses: Record<string, import("@prisma/client").$Enums.ChecklistItemStatusType>;
+                activityTypeName: string | null;
+            })[];
+            localityProgress: {
+                localityId: string;
+                percent: number;
+            }[];
+        }[];
+        localities: {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            name: string;
+            code: string;
+            commandName: string | null;
+            commanderName: string | null;
+            individualMeetingDate: Date | null;
+            visitDate: Date | null;
+            recruitsFemaleCountCurrent: number | null;
+            notes: string | null;
+        }[];
+    } | {
+        items: {
+            id: string;
+            title: string;
+            phaseId: string | null;
+            specialtyId: string | null;
+            eloRoleId: string | null;
             eloRole: {
                 id: string;
                 name: string;
@@ -24,6 +64,7 @@ export declare class ChecklistsController {
                 taskTemplateId: string | null;
                 sourceType: string;
                 statuses: Record<string, import("@prisma/client").$Enums.ChecklistItemStatusType>;
+                activityTypeName: string | null;
             }[];
             localityProgress: {
                 localityId: string;
@@ -65,5 +106,8 @@ export declare class ChecklistsController {
 export declare class ChecklistItemStatusController {
     private readonly checklists;
     constructor(checklists: ChecklistsService);
-    batch(dto: UpdateChecklistStatusDto, user: RbacUser): Promise<void>;
+    batch(dto: UpdateChecklistStatusDto, user: RbacUser): Promise<{
+        updatedTasks: number;
+        updatedActivities: number;
+    }>;
 }

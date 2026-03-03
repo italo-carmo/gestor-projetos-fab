@@ -1,16 +1,60 @@
 import { PrismaService } from '../prisma/prisma.service';
 import { RbacUser } from '../rbac/rbac.types';
 import { AuditService } from '../audit/audit.service';
+import { TasksService } from '../tasks/tasks.service';
+import { ActivitiesService } from '../activities/activities.service';
 export declare class ChecklistsService {
     private readonly prisma;
     private readonly audit;
-    constructor(prisma: PrismaService, audit: AuditService);
+    private readonly tasks;
+    private readonly activities;
+    constructor(prisma: PrismaService, audit: AuditService, tasks: TasksService, activities: ActivitiesService);
     list(filters: {
         phaseId?: string;
         specialtyId?: string;
         eloRoleId?: string;
         localityId?: string;
     }, user?: RbacUser): Promise<{
+        items: {
+            id: string;
+            title: string;
+            phaseId: string | null;
+            specialtyId: string | null;
+            eloRoleId: string | null;
+            eloRole: null;
+            items: ({
+                id: string;
+                title: string;
+                taskTemplateId: string;
+                sourceType: string;
+                statuses: Record<string, import("@prisma/client").$Enums.ChecklistItemStatusType>;
+            } | {
+                id: string;
+                title: string;
+                taskTemplateId: null;
+                sourceType: string;
+                statuses: Record<string, import("@prisma/client").$Enums.ChecklistItemStatusType>;
+                activityTypeName: string | null;
+            })[];
+            localityProgress: {
+                localityId: string;
+                percent: number;
+            }[];
+        }[];
+        localities: {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            name: string;
+            code: string;
+            commandName: string | null;
+            commanderName: string | null;
+            individualMeetingDate: Date | null;
+            visitDate: Date | null;
+            recruitsFemaleCountCurrent: number | null;
+            notes: string | null;
+        }[];
+    } | {
         items: {
             id: string;
             title: string;
@@ -28,6 +72,7 @@ export declare class ChecklistsService {
                 taskTemplateId: string | null;
                 sourceType: string;
                 statuses: Record<string, import("@prisma/client").$Enums.ChecklistItemStatusType>;
+                activityTypeName: string | null;
             }[];
             localityProgress: {
                 localityId: string;
@@ -73,11 +118,17 @@ export declare class ChecklistsService {
         checklistId: string;
         taskTemplateId: string | null;
     }>;
-    updateStatuses(_updates: {
+    updateStatuses(updates: {
         checklistItemId: string;
         localityId: string;
         status: string;
-    }[], _user?: RbacUser): Promise<void>;
+    }[], user?: RbacUser): Promise<{
+        updatedTasks: number;
+        updatedActivities: number;
+    }>;
+    private normalizeChecklistTargetStatus;
+    private mapChecklistToTaskStatus;
+    private mapChecklistToActivityStatus;
     private getScopeConstraints;
     private assertConstraints;
     private aggregateTaskStatus;

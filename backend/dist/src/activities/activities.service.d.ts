@@ -26,6 +26,7 @@ export declare class ActivitiesService {
         description?: string | null;
         localityId?: string | null;
         localityIds?: string[];
+        activityTypeId?: string | null;
         specialtyId?: string | null;
         eventDate?: string | null;
         reportRequired?: boolean;
@@ -35,6 +36,7 @@ export declare class ActivitiesService {
         title?: string;
         description?: string | null;
         localityId?: string | null;
+        activityTypeId?: string | null;
         specialtyId?: string | null;
         eventDate?: string | null;
         reportRequired?: boolean;
@@ -55,6 +57,15 @@ export declare class ActivitiesService {
     }>;
     batchDelete(ids: string[], user?: RbacUser): Promise<{
         deleted: number;
+    }>;
+    batchReplicate(ids: string[], targetLocalityIds: string[], options?: {
+        statusMode?: 'RESET' | 'KEEP';
+        dateMode?: 'KEEP' | 'CLEAR' | 'SET_DATE';
+        targetDate?: string | null;
+    }, user?: RbacUser): Promise<{
+        created: number;
+        skippedSameLocality: number;
+        requestedPairs: number;
     }>;
     listComments(id: string, user?: RbacUser): Promise<{
         items: {
@@ -219,6 +230,10 @@ export declare class ActivitiesService {
     }>;
     private attachActivityCommentSummary;
     private mapActivity;
+    listTypes(): Promise<{
+        items: any;
+    }>;
+    createType(name: string): Promise<any>;
     private mapComment;
     private mapScheduleItem;
     private normalizeScheduleTime;
@@ -238,6 +253,7 @@ export declare class ActivitiesService {
     private assertActivityOperateAccess;
     private assertDeleteAccess;
     private resolveActivityResponsibleIds;
+    private resolveActivityTypeId;
     private invalidateSignature;
     private formatDate;
     private formatDateTime;

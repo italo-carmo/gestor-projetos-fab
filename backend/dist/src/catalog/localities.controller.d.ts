@@ -1,13 +1,18 @@
 import type { RbacUser } from '../rbac/rbac.types';
 import { PrismaService } from '../prisma/prisma.service';
+import { FabLdapService } from '../ldap/fab-ldap.service';
+import { RbacService } from '../rbac/rbac.service';
 import { CreateLocalityDto } from './dto/create-locality.dto';
+import { SetLocalityCommanderFromLdapDto } from './dto/set-locality-commander-from-ldap.dto';
 import { UpdateLocalityRecruitDesignationsDto } from './dto/update-locality-recruit-designations.dto';
 import { ReplaceLocalityRecruitsMembersDto } from './dto/replace-locality-recruits-members.dto';
 import { UpdateLocalityRecruitsDto } from './dto/update-locality-recruits.dto';
 import { UpdateLocalityDto } from './dto/update-locality.dto';
 export declare class LocalitiesController {
     private readonly prisma;
-    constructor(prisma: PrismaService);
+    private readonly fabLdap;
+    private readonly rbac;
+    constructor(prisma: PrismaService, fabLdap: FabLdapService, rbac: RbacService);
     list(user: RbacUser): Promise<{
         items: {
             id: string;
@@ -104,6 +109,13 @@ export declare class LocalitiesController {
             destinationLocalityCode: string | null;
             designatedAt: string | null;
         }[];
+    }>;
+    setCommanderFromLdap(id: string, dto: SetLocalityCommanderFromLdapDto, user: RbacUser): Promise<{
+        localityId: string;
+        commanderName: string | null;
+        uid: string;
+        fabom: string | null;
+        email: string | null;
     }>;
     replaceRecruitDesignations(id: string, dto: UpdateLocalityRecruitDesignationsDto, user: RbacUser): Promise<{
         localityId: string;

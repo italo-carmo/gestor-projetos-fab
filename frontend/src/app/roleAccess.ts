@@ -66,8 +66,10 @@ export function canEditRecruitsCount(
   targetLocalityId: string,
 ) {
   if (!user) return false;
-  if (hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_COMISSAO_CIPAVD]))
+  // TI e Coordenação CIPAVD podem editar qualquer localidade
+  if (hasAnyRole(user, [ROLE_TI, ROLE_COORDENACAO_CIPAVD, ROLE_COMISSAO_CIPAVD]))
     return true;
+  // GSD pode editar apenas sua própria localidade
   if (hasRole(user, ROLE_GSD_LOCALIDADE) && user.localityId === targetLocalityId) return true;
   return false;
 }

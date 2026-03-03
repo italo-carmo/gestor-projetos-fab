@@ -19,6 +19,7 @@ exports.ActivitiesModule = ActivitiesModule = __decorate([
         imports: [rbac_module_1.RbacModule],
         controllers: [activities_controller_1.ActivitiesController],
         providers: [activities_service_1.ActivitiesService],
+        exports: [activities_service_1.ActivitiesService],
     })
 ], ActivitiesModule);
 //# sourceMappingURL=activities.module.js.map

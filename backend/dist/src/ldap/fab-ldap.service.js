@@ -14,6 +14,7 @@ const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
 const ldapts_1 = require("ldapts");
 const http_error_1 = require("../common/http-error");
+const military_name_1 = require("../common/military-name");
 let FabLdapService = class FabLdapService {
     config;
     constructor(config) {
@@ -115,17 +116,19 @@ let FabLdapService = class FabLdapService {
     }
     mapEntry(entry, fallbackUid) {
         const uid = this.readAttribute(entry, 'uid') ?? fallbackUid;
+        const fabom = this.readAttribute(entry, 'fabom');
         const givenName = this.readAttribute(entry, 'givenName');
         const surname = this.readAttribute(entry, 'sn');
         const composedName = [givenName, surname].filter(Boolean).join(' ').trim();
+        const rawName = this.readAttribute(entry, 'displayName') ??
+            this.readAttribute(entry, 'cn') ??
+            (composedName || null);
         return {
             uid,
             dn: typeof entry.dn === 'string' && entry.dn.trim() ? entry.dn : this.buildUserDn(uid),
-            name: this.readAttribute(entry, 'displayName') ??
-                this.readAttribute(entry, 'cn') ??
-                (composedName || null),
+            name: (0, military_name_1.stripOmSuffixFromLdapName)(rawName, fabom) || null,
             email: this.readAttribute(entry, 'mail')?.toLowerCase() ?? null,
-            fabom: this.readAttribute(entry, 'fabom'),
+            fabom,
         };
     }
     readAttribute(entry, attribute) {

@@ -16,6 +16,7 @@ class UpdateActivityDto {
     description;
     localityId;
     specialtyId;
+    activityTypeId;
     eventDate;
     reportRequired;
     responsibleUserIds;
@@ -42,6 +43,11 @@ __decorate([
     (0, class_validator_1.IsString)(),
     __metadata("design:type", Object)
 ], UpdateActivityDto.prototype, "specialtyId", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", Object)
+], UpdateActivityDto.prototype, "activityTypeId", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsDateString)(),

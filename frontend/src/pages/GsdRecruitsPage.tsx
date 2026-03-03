@@ -256,15 +256,15 @@ export function GsdRecruitsPage() {
 
   const handleSetCommanderFromLdap = async () => {
     if (!selected) return;
-    const uid = commanderLdapUid.trim();
-    if (!uid) {
-      toast.push({ message: 'Informe o UID/CPF no LDAP.', severity: 'warning' });
+    const uidOrEmail = commanderLdapUid.trim();
+    if (!uidOrEmail) {
+      toast.push({ message: 'Informe o UID/CPF ou email no LDAP.', severity: 'warning' });
       return;
     }
     try {
       const response = await setLocalityCommanderFromLdap.mutateAsync({
         localityId: selected.id,
-        uid,
+        uidOrEmail,
       });
       const nextCommanderName = String(response?.commanderName ?? '').trim();
       setSelected((current: any) =>
@@ -854,14 +854,16 @@ export function GsdRecruitsPage() {
               <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} alignItems={{ xs: 'stretch', md: 'center' }}>
                 <TextField
                   size="small"
-                  label="UID/CPF do comandante (LDAP)"
+                  label="UID/CPF ou Email do comandante (LDAP)"
                   value={commanderLdapUid}
                   onChange={(event) => setCommanderLdapUid(event.target.value)}
-                  placeholder="Ex.: 12229820729"
+                  placeholder="Ex.: 12229820729 ou email@fab.intraer"
                   sx={{ minWidth: 280 }}
+                  helperText="Ao inserir por email, o usuário será criado automaticamente com permissão de GSD para esta localidade"
                 />
                 <Button
                   variant="outlined"
+                  color="success"
                   onClick={handleSetCommanderFromLdap}
                   disabled={setLocalityCommanderFromLdap.isPending}
                 >

@@ -77,6 +77,7 @@ let ActivitiesService = class ActivitiesService {
                 take,
                 include: {
                     locality: { select: { id: true, code: true, name: true } },
+                    activityType: { select: { id: true, name: true } },
                     specialty: { select: { id: true, name: true, color: true } },
                     createdBy: { select: { id: true, name: true } },
                     responsibles: {
@@ -143,6 +144,7 @@ let ActivitiesService = class ActivitiesService {
             });
         }
         const singleLocalityId = createLocalityIds.length === 1 ? createLocalityIds[0] : null;
+        const activityTypeId = await this.resolveActivityTypeId(payload.activityTypeId);
         const responsibleUserIds = await this.resolveActivityResponsibleIds(singleLocalityId, normalizedResponsibleIds, user);
         const createdItems = await this.prisma.$transaction(createLocalityIds.map((localityId) => this.prisma.activity.create({
             data: {
@@ -151,6 +153,7 @@ let ActivitiesService = class ActivitiesService {
                     ? (0, sanitize_1.sanitizeText)(payload.description)
                     : null,
                 localityId,
+                activityTypeId,
                 specialtyId,
                 eventDate: payload.eventDate ? new Date(payload.eventDate) : null,
                 reportRequired: payload.reportRequired ?? false,
@@ -166,6 +169,7 @@ let ActivitiesService = class ActivitiesService {
             },
             include: {
                 locality: { select: { id: true, code: true, name: true } },
+                activityType: { select: { id: true, name: true } },
                 specialty: { select: { id: true, name: true, color: true } },
                 createdBy: { select: { id: true, name: true } },
                 responsibles: {
@@ -242,6 +246,9 @@ let ActivitiesService = class ActivitiesService {
         const specialtyId = payload.specialtyId === undefined
             ? (existing.specialtyId ?? null)
             : payload.specialtyId;
+        const activityTypeId = await this.resolveActivityTypeId(payload.activityTypeId === undefined
+            ? (existing.activityTypeId ?? null)
+            : payload.activityTypeId);
         this.assertScopeConstraint(localityId, specialtyId, user);
         const responsibleUserIds = await this.resolveActivityResponsibleIds(localityId, payload.responsibleUserIds ??
             existing.responsibles.map((entry) => entry.userId), user);
@@ -255,6 +262,7 @@ let ActivitiesService = class ActivitiesService {
                         ? null
                         : (0, sanitize_1.sanitizeText)(payload.description),
                 localityId,
+                activityTypeId,
                 specialtyId,
                 eventDate: payload.eventDate === undefined
                     ? undefined
@@ -276,6 +284,7 @@ let ActivitiesService = class ActivitiesService {
             },
             include: {
                 locality: { select: { id: true, code: true, name: true } },
+                activityType: { select: { id: true, name: true } },
                 specialty: { select: { id: true, name: true, color: true } },
                 createdBy: { select: { id: true, name: true } },
                 responsibles: {
@@ -348,6 +357,7 @@ let ActivitiesService = class ActivitiesService {
             data: { status },
             include: {
                 locality: { select: { id: true, code: true, name: true } },
+                activityType: { select: { id: true, name: true } },
                 specialty: { select: { id: true, name: true, color: true } },
                 createdBy: { select: { id: true, name: true } },
                 responsibles: {
@@ -643,6 +653,118 @@ let ActivitiesService = class ActivitiesService {
             },
         });
         return { deleted: targetIds.length };
+    }
+    async batchReplicate(ids, targetLocalityIds, options, user) {
+        this.assertActivityOperateAccess(null, user);
+        const normalizedIds = this.normalizeActivityIds(ids);
+        const normalizedTargetLocalityIds = Array.from(new Set((targetLocalityIds ?? [])
+            .map((value) => String(value ?? '').trim())
+            .filter(Boolean)));
+        if (!normalizedIds.length || !normalizedTargetLocalityIds.length) {
+            return { created: 0, skippedSameLocality: 0, requestedPairs: 0 };
+        }
+        const statusMode = options?.statusMode === 'KEEP' ? 'KEEP' : 'RESET';
+        const dateMode = options?.dateMode === 'CLEAR' || options?.dateMode === 'SET_DATE'
+            ? options.dateMode
+            : 'KEEP';
+        const targetDate = dateMode === 'SET_DATE' && options?.targetDate
+            ? new Date(String(options.targetDate))
+            : null;
+        const existing = await this.prisma.activity.findMany({
+            where: { id: { in: normalizedIds } },
+            select: {
+                id: true,
+                title: true,
+                description: true,
+                localityId: true,
+                activityTypeId: true,
+                specialtyId: true,
+                eventDate: true,
+                status: true,
+                reportRequired: true,
+            },
+        });
+        if (!existing.length) {
+            return { created: 0, skippedSameLocality: 0, requestedPairs: 0 };
+        }
+        const allowedTargetLocalityIds = await this.getTargetLocalityIds();
+        const targetLocalities = await this.prisma.locality.findMany({
+            where: {
+                AND: [
+                    { id: { in: normalizedTargetLocalityIds } },
+                    { id: { in: allowedTargetLocalityIds } },
+                ],
+            },
+            select: { id: true },
+        });
+        if (targetLocalities.length !== normalizedTargetLocalityIds.length) {
+            (0, http_error_1.throwError)('VALIDATION_ERROR', {
+                field: 'targetLocalityIds',
+                reason: 'LOCALITY_INVALID',
+            });
+        }
+        for (const activity of existing) {
+            this.assertActivityOperateAccess(activity, user);
+            this.assertScopeConstraint(activity.localityId, activity.specialtyId, user);
+            for (const localityId of normalizedTargetLocalityIds) {
+                this.assertScopeConstraint(localityId, activity.specialtyId, user);
+            }
+        }
+        let skippedSameLocality = 0;
+        const cloneRows = [];
+        for (const activity of existing) {
+            for (const targetLocalityId of normalizedTargetLocalityIds) {
+                if (activity.localityId && activity.localityId === targetLocalityId) {
+                    skippedSameLocality += 1;
+                    continue;
+                }
+                const eventDate = dateMode === 'CLEAR'
+                    ? null
+                    : dateMode === 'SET_DATE' && targetDate
+                        ? targetDate
+                        : activity.eventDate ?? null;
+                cloneRows.push({
+                    title: activity.title,
+                    description: activity.description ?? null,
+                    localityId: targetLocalityId,
+                    activityTypeId: activity.activityTypeId ?? null,
+                    specialtyId: activity.specialtyId ?? null,
+                    eventDate,
+                    status: statusMode === 'KEEP' ? activity.status : client_1.ActivityStatus.NOT_STARTED,
+                    reportRequired: activity.reportRequired,
+                    createdById: user?.id ?? null,
+                });
+            }
+        }
+        if (!cloneRows.length) {
+            return {
+                created: 0,
+                skippedSameLocality,
+                requestedPairs: existing.length * normalizedTargetLocalityIds.length,
+            };
+        }
+        const result = await this.prisma.activity.createMany({
+            data: cloneRows,
+        });
+        await this.audit.log({
+            userId: user?.id,
+            resource: 'activities',
+            action: 'batch_replicate',
+            diffJson: {
+                sourceCount: existing.length,
+                targetLocalityIds: normalizedTargetLocalityIds,
+                statusMode,
+                dateMode,
+                targetDate: targetDate ? targetDate.toISOString().slice(0, 10) : null,
+                created: result.count,
+                skippedSameLocality,
+            },
+        });
+        return {
+            created: result.count,
+            skippedSameLocality,
+            requestedPairs: existing.length * normalizedTargetLocalityIds.length,
+        };
     }
     async listComments(id, user) {
         const activity = await this.prisma.activity.findUnique({
@@ -1090,6 +1212,7 @@ let ActivitiesService = class ActivitiesService {
             where: { id: activityId },
             include: {
                 locality: { select: { id: true, code: true, name: true } },
+                activityType: { select: { id: true, name: true } },
                 specialty: { select: { id: true, name: true, color: true } },
                 createdBy: { select: { id: true, name: true } },
                 responsibles: {
@@ -1514,6 +1637,12 @@ let ActivitiesService = class ActivitiesService {
             : [];
         return {
             ...rest,
+            activityType: activity?.activityType
+                ? {
+                    id: activity.activityType.id,
+                    name: activity.activityType.name,
+                }
+                : null,
             responsibleUsers: executiveHidePii ? [] : responsibleUsers,
             report: activity.report
                 ? {
@@ -1523,6 +1652,31 @@ let ActivitiesService = class ActivitiesService {
                 }
                 : null,
         };
+    }
+    async listTypes() {
+        const items = await this.prisma.activityType.findMany({
+            orderBy: { name: 'asc' },
+        });
+        return { items };
+    }
+    async createType(name) {
+        const normalized = (0, sanitize_1.sanitizeText)(name ?? '');
+        if (!normalized.trim()) {
+            (0, http_error_1.throwError)('VALIDATION_ERROR', {
+                field: 'name',
+                reason: 'REQUIRED',
+            });
+        }
+        const existing = await this.prisma.activityType.findFirst({
+            where: { name: { equals: normalized, mode: 'insensitive' } },
+            select: { id: true, name: true },
+        });
+        if (existing)
+            return existing;
+        return this.prisma.activityType.create({
+            data: { name: normalized },
+            select: { id: true, name: true },
+        });
     }
     mapComment(comment, executiveHidePii) {
         return {
@@ -1822,6 +1976,22 @@ let ActivitiesService = class ActivitiesService {
         }
         this.assertScopeConstraint(localityId, null, user);
         return users.map((candidate) => candidate.id);
+    }
+    async resolveActivityTypeId(activityTypeId) {
+        const normalized = String(activityTypeId ?? '').trim();
+        if (!normalized)
+            return null;
+        const existing = await this.prisma.activityType.findUnique({
+            where: { id: normalized },
+            select: { id: true },
+        });
+        if (!existing) {
+            (0, http_error_1.throwError)('VALIDATION_ERROR', {
+                field: 'activityTypeId',
+                reason: 'NOT_FOUND',
+            });
+        }
+        return existing.id;
     }
     async invalidateSignature(reportId) {
         await this.prisma.activityReport.update({

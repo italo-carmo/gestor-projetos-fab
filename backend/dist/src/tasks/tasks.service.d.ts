@@ -295,6 +295,7 @@ export declare class TasksService {
             late: number;
             blocked: number;
             unassigned: number;
+            visitCompleted: boolean;
         }[];
         totals: {
             localities: number;
@@ -303,6 +304,8 @@ export declare class TasksService {
             unassigned: number;
             recruitsFemale: number;
             reportsProduced: number;
+            smifNewsCount: number;
+            visitsCompleted: number;
         };
         lateItems: {
             activityId: string;
@@ -311,7 +314,7 @@ export declare class TasksService {
             localityCode: string;
             localityName: string;
             specialtyId: string | null;
-            specialtyName: string;
+            specialtyName: any;
             eventDate: Date | null;
             createdAt: Date;
             status: import("@prisma/client").$Enums.ActivityStatus;
@@ -327,7 +330,7 @@ export declare class TasksService {
             localityCode: string;
             localityName: string;
             specialtyId: string | null;
-            specialtyName: string;
+            specialtyName: any;
             eventDate: Date | null;
             createdAt: Date;
             status: import("@prisma/client").$Enums.ActivityStatus;
@@ -343,7 +346,7 @@ export declare class TasksService {
             localityCode: string;
             localityName: string;
             specialtyId: string | null;
-            specialtyName: string;
+            specialtyName: any;
             eventDate: Date | null;
             createdAt: Date;
             status: import("@prisma/client").$Enums.ActivityStatus;
@@ -359,6 +362,7 @@ export declare class TasksService {
             localityId: string;
             localityName: string;
             code: string;
+            commanderName: string | null;
             recruitsFemaleCountCurrent: number;
             recruitsByStatus: {
                 toStart: number;

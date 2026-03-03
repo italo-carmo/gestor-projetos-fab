@@ -1573,6 +1573,8 @@ let TasksService = class TasksService {
                     unassigned: 0,
                     recruitsFemale: 0,
                     reportsProduced: 0,
+                    smifNewsCount: 0,
+                    visitsCompleted: 0,
                 },
                 lateItems: [],
                 unassignedItems: [],
@@ -1646,6 +1648,12 @@ let TasksService = class TasksService {
                         name: true,
                     },
                 },
+                activityType: {
+                    select: {
+                        id: true,
+                        name: true,
+                    },
+                },
                 responsibles: {
                     select: {
                         userId: true,
@@ -1692,6 +1700,15 @@ let TasksService = class TasksService {
         const hasResponsible = (activity) => Array.isArray(activity.responsibles) &&
             activity.responsibles.some((entry) => Boolean(entry?.userId));
         const hasSignedReport = (activity) => Boolean(activity.report?.signedAt && activity.report?.signatureHash);
+        const isVisitActivity = (activity) => {
+            const typeName = String(activity.activityType?.name ?? '')
+                .trim()
+                .toLowerCase();
+            if (typeName === 'visita')
+                return true;
+            const title = String(activity.title ?? '').toLowerCase();
+            return /\bvisita\b/.test(title);
+        };
         const mapNationalActivityDetail = (activity) => {
             const canonicalId = canonicalLocalityIdByActivityId.get(activity.id) ??
                 activity.localityId ??
@@ -1717,6 +1734,12 @@ let TasksService = class TasksService {
         };
         const perLocality = localities.map((locality) => {
             const localityActivities = activitiesByLocalityId.get(locality.id) ?? [];
+            const visitActivities = localityActivities.filter((activity) => isVisitActivity(activity));
+            const latestVisitDate = visitActivities
+                .map((activity) => activity.eventDate)
+                .filter((value) => value instanceof Date)
+                .sort((a, b) => b.getTime() - a.getTime())[0];
+            const visitCompleted = visitActivities.some((activity) => activity.status === client_1.ActivityStatus.DONE);
             const late = localityActivities.filter((activity) => isLateActivity(activity)).length;
             const unassigned = localityActivities.filter((activity) => !hasResponsible(activity)).length;
             const progress = localityActivities.length
@@ -1731,8 +1754,8 @@ let TasksService = class TasksService {
                 individualMeetingDate: locality.individualMeetingDate
                     ? locality.individualMeetingDate.toISOString().slice(0, 10)
                     : null,
-                visitDate: locality.visitDate
-                    ? locality.visitDate.toISOString().slice(0, 10)
+                visitDate: latestVisitDate
+                    ? latestVisitDate.toISOString().slice(0, 10)
                     : null,
                 commandName: locality.commandName ?? null,
                 notes: locality.notes ?? null,
@@ -1740,6 +1763,7 @@ let TasksService = class TasksService {
                 late,
                 blocked: 0,
                 unassigned,
+                visitCompleted,
             };
         });
         const totalRecruits = localities.reduce((acc, l) => acc + (l.recruitsFemaleCountCurrent ?? 0), 0);
@@ -1765,6 +1789,10 @@ let TasksService = class TasksService {
             .slice(0, 10)
             .map((activity) => mapNationalActivityDetail(activity));
         const reportsCount = filteredActivities.filter((activity) => Boolean(activity.report?.id)).length;
+        const smifNewsCount = await this.prisma.socialCommunicationArticle.count({
+            where: { tags: { has: 'smif' } },
+        });
+        const visitsCompleted = perLocality.filter((item) => item.visitCompleted).length;
         return {
             items: perLocality,
             totals: {
@@ -1774,6 +1802,8 @@ let TasksService = class TasksService {
                 unassigned: perLocality.reduce((acc, item) => acc + item.unassigned, 0),
                 recruitsFemale: totalRecruits,
                 reportsProduced: reportsCount,
+                smifNewsCount,
+                visitsCompleted,
             },
             lateItems,
             unassignedItems,
@@ -1805,6 +1835,7 @@ let TasksService = class TasksService {
                     id: true,
                     name: true,
                     code: true,
+                    commanderName: true,
                     recruitsFemaleCountCurrent: true,
                     updatedAt: true,
                 },
@@ -1876,6 +1907,7 @@ let TasksService = class TasksService {
                 localityId: loc.id,
                 localityName: loc.name,
                 code: loc.code,
+                commanderName: loc.commanderName ?? null,
                 recruitsFemaleCountCurrent: activeCount,
                 recruitsByStatus: {
                     toStart: locMembers.filter((member) => member.status === 'RECRUITMENT_TO_START').length,
@@ -2264,7 +2296,7 @@ let TasksService = class TasksService {
         const specialtiesMap = new Map();
         for (const activity of filteredActivities) {
             const specialtyId = activity.specialtyId ?? null;
-            const specialtyName = activity.specialty?.name ?? 'Sem especialidade';
+            const specialtyName = activity.specialty?.name ?? 'Todas';
             const key = specialtyId ?? '__none__';
             const current = specialtiesMap.get(key);
             if (current) {
