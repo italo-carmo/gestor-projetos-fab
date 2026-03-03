@@ -239,7 +239,6 @@ export function SocialCommunicationPage() {
   const [previewing, setPreviewing] = useState<SocialCommunicationArticle | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewSrc, setPreviewSrc] = useState<string | null>(null);
-  const [previewTriedDirect, setPreviewTriedDirect] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<SocialCommunicationArticle | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SocialCommunicationArticle | null>(null);
@@ -257,28 +256,45 @@ export function SocialCommunicationPage() {
     if (!previewing) {
       setPreviewLoading(false);
       setPreviewSrc(null);
-      setPreviewTriedDirect(false);
       return;
     }
     setPreviewLoading(true);
-    // Primeiro tenta URL direta no navegador do usuário, com fallback para proxy no servidor.
+
+    // Fluxo primário: navegador do usuário.
     if (previewing.sourceUrl) {
       setPreviewSrc(previewing.sourceUrl);
-      setPreviewTriedDirect(false);
-      // Timeout para detectar se a URL direta não carregou após 5 segundos
-      const timeout = setTimeout(() => {
-        setPreviewLoading((prevLoading) => {
-          if (prevLoading && !previewTriedDirect && previewing.contentProxyPath) {
+
+      // Só aciona fallback no servidor quando houver falha real de conectividade
+      // do navegador para o link de origem (cenário comum em VPN sem internet).
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 7000);
+      void fetch(previewing.sourceUrl, {
+        method: "GET",
+        mode: "no-cors",
+        cache: "no-store",
+        signal: controller.signal,
+      })
+        .then(() => {
+          // Alcancavel no navegador: mantém fluxo primário.
+        })
+        .catch(() => {
+          if (previewing.contentProxyPath) {
             setPreviewSrc(toApiUrl(previewing.contentProxyPath));
-            setPreviewTriedDirect(true);
+            setPreviewLoading(true);
           }
-          return prevLoading;
+        })
+        .finally(() => {
+          clearTimeout(timeout);
         });
-      }, 5000);
-      return () => clearTimeout(timeout);
-    } else if (previewing.contentProxyPath) {
+
+      return () => {
+        clearTimeout(timeout);
+        controller.abort();
+      };
+    }
+
+    if (previewing.contentProxyPath) {
       setPreviewSrc(toApiUrl(previewing.contentProxyPath));
-      setPreviewTriedDirect(true);
     }
   }, [previewing]);
 
