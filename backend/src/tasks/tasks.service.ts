@@ -1901,8 +1901,38 @@ export class TasksService {
   }
 
   async getDashboardNational(user?: RbacUser, localityId?: string) {
-    const allowedLocalityIds = await this.getTargetLocalityIds();
-    if (allowedLocalityIds.length === 0) {
+    const where: Prisma.LocalityWhereInput = {};
+    const constraints = this.getScopeConstraints(user);
+    if (
+      constraints.localityId &&
+      localityId &&
+      constraints.localityId !== localityId
+    ) {
+      where.id = '__none__';
+    } else if (constraints.localityId) {
+      where.id = constraints.localityId;
+    } else if (localityId) {
+      where.id = localityId;
+    }
+
+    const rawLocalities = await this.prisma.locality.findMany({
+      where,
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        recruitsFemaleCountCurrent: true,
+        commanderName: true,
+        individualMeetingDate: true,
+        visitDate: true,
+        commandName: true,
+        notes: true,
+        updatedAt: true,
+      },
+    });
+    const localityGroups = groupTargetLocalities(rawLocalities);
+    const localities = localityGroups.map((group) => group.canonical);
+    if (localities.length === 0) {
       return {
         items: [],
         totals: {
@@ -1922,43 +1952,6 @@ export class TasksService {
         executive_hide_pii: user?.executiveHidePii ?? false,
       };
     }
-
-    const where: Prisma.LocalityWhereInput = {};
-    const constraints = this.getScopeConstraints(user);
-    if (
-      constraints.localityId &&
-      localityId &&
-      constraints.localityId !== localityId
-    ) {
-      where.id = '__none__';
-    } else if (constraints.localityId) {
-      where.id = constraints.localityId;
-    } else if (localityId) {
-      where.id = localityId;
-    }
-
-    const localityWhere: Prisma.LocalityWhereInput =
-      Object.keys(where).length > 0
-        ? { AND: [where, { id: { in: allowedLocalityIds } }] }
-        : { id: { in: allowedLocalityIds } };
-
-    const rawLocalities = await this.prisma.locality.findMany({
-      where: localityWhere,
-      select: {
-        id: true,
-        name: true,
-        code: true,
-        recruitsFemaleCountCurrent: true,
-        commanderName: true,
-        individualMeetingDate: true,
-        visitDate: true,
-        commandName: true,
-        notes: true,
-        updatedAt: true,
-      },
-    });
-    const localityGroups = groupTargetLocalities(rawLocalities);
-    const localities = localityGroups.map((group) => group.canonical);
     const { aliasByLocalityId } = createTargetLocalityAliasMap(localityGroups);
     const localityAliasIds = Array.from(aliasByLocalityId.keys());
     const activityWhereClauses: Prisma.ActivityWhereInput[] = [];
