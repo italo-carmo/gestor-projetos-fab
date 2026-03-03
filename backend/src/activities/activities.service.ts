@@ -793,8 +793,8 @@ export class ActivitiesService {
     targetLocalityIds: string[],
     options?: {
       statusMode?: 'RESET' | 'KEEP';
-      dateMode?: 'KEEP' | 'CLEAR' | 'SHIFT_DAYS';
-      dayOffset?: number | string;
+      dateMode?: 'KEEP' | 'CLEAR' | 'SET_DATE';
+      targetDate?: string | null;
     },
     user?: RbacUser,
   ) {
@@ -813,11 +813,13 @@ export class ActivitiesService {
 
     const statusMode = options?.statusMode === 'KEEP' ? 'KEEP' : 'RESET';
     const dateMode =
-      options?.dateMode === 'CLEAR' || options?.dateMode === 'SHIFT_DAYS'
+      options?.dateMode === 'CLEAR' || options?.dateMode === 'SET_DATE'
         ? options.dateMode
         : 'KEEP';
-    const dayOffsetRaw = Number(options?.dayOffset ?? 0);
-    const dayOffset = Number.isFinite(dayOffsetRaw) ? Math.trunc(dayOffsetRaw) : 0;
+    const targetDate =
+      dateMode === 'SET_DATE' && options?.targetDate
+        ? new Date(String(options.targetDate))
+        : null;
 
     const existing = await this.prisma.activity.findMany({
       where: { id: { in: normalizedIds } },
@@ -873,10 +875,8 @@ export class ActivitiesService {
         const eventDate =
           dateMode === 'CLEAR'
             ? null
-            : dateMode === 'SHIFT_DAYS' && activity.eventDate
-              ? new Date(
-                  activity.eventDate.getTime() + dayOffset * 24 * 60 * 60 * 1000,
-                )
+            : dateMode === 'SET_DATE' && targetDate
+              ? targetDate
               : activity.eventDate ?? null;
         cloneRows.push({
           title: activity.title,
@@ -913,7 +913,7 @@ export class ActivitiesService {
         targetLocalityIds: normalizedTargetLocalityIds,
         statusMode,
         dateMode,
-        dayOffset: dateMode === 'SHIFT_DAYS' ? dayOffset : 0,
+        targetDate: targetDate ? targetDate.toISOString().slice(0, 10) : null,
         created: result.count,
         skippedSameLocality,
       },

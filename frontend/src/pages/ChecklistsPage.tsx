@@ -29,7 +29,7 @@ import RadioButtonUncheckedRoundedIcon from '@mui/icons-material/RadioButtonUnch
 import ScheduleRoundedIcon from '@mui/icons-material/ScheduleRounded';
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useChecklists, usePhases, useSpecialties, useEloRoles, useCreateChecklist, useMe } from '../api/hooks';
+import { useChecklists, usePhases, useSpecialties, useEloRoles, useCreateChecklist, useUpdateChecklistStatus, useMe } from '../api/hooks';
 import { EmptyState } from '../components/states/EmptyState';
 import { ErrorState } from '../components/states/ErrorState';
 import { SkeletonState } from '../components/states/SkeletonState';
@@ -46,15 +46,26 @@ const IN_PROGRESS_COLOR = '#ed6c02';
 const CHECKLIST_TABLE_STICKY_TOP = 76;
 const CHECKLIST_HEADER_BG = '#17394B';
 
-function StatusIcon({ status, localityName }: { status: string; localityName: string }) {
+function StatusIcon({
+  status,
+  localityName,
+  onClick,
+  disabled,
+}: {
+  status: string;
+  localityName: string;
+  onClick?: () => void;
+  disabled?: boolean;
+}) {
   const label = CHECKLIST_ITEM_STATUS_LABELS[status] ?? status;
+  const clickable = Boolean(onClick) && !disabled;
   const content = (
     <Box
       sx={{
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
-        cursor: 'default',
+        cursor: clickable ? 'pointer' : 'default',
         borderRadius: 1,
       }}
     >
@@ -67,7 +78,18 @@ function StatusIcon({ status, localityName }: { status: string; localityName: st
   );
   return (
     <Tooltip title={`${localityName}: ${label}`} arrow placement="top">
-      <span>{content}</span>
+      <span
+        onClick={
+          clickable
+            ? (event) => {
+                event.stopPropagation();
+                onClick?.();
+              }
+            : undefined
+        }
+      >
+        {content}
+      </span>
     </Tooltip>
   );
 }
@@ -105,6 +127,7 @@ export function ChecklistsPage() {
   const specialtiesQuery = useSpecialties();
   const eloRolesQuery = useEloRoles();
   const createChecklist = useCreateChecklist();
+  const updateChecklistStatus = useUpdateChecklistStatus();
   const [createOpen, setCreateOpen] = useState(false);
   const [createTitle, setCreateTitle] = useState('');
   const [createPhaseId, setCreatePhaseId] = useState('');
@@ -131,6 +154,34 @@ export function ChecklistsPage() {
   const specialtyMap = new Map<string, string>(specialties.map((s: any) => [String(s.id), String(s.name)]));
   const localities = selectTargetLocalities((data.localities ?? []) as any[]);
   const checklists = data.items ?? [];
+
+  const canUpdateChecklistStatus = can(me, 'checklists', 'update');
+
+  const getNextChecklistStatus = (current: string): string => {
+    if (current === 'DONE') return 'NOT_STARTED';
+    if (current === 'IN_PROGRESS' || current === 'STARTED') return 'DONE';
+    return 'IN_PROGRESS';
+  };
+
+  const handleToggleStatus = async (
+    checklistItemId: string,
+    localityId: string,
+    currentStatus: string,
+  ) => {
+    if (!canUpdateChecklistStatus) return;
+    const nextStatus = getNextChecklistStatus(currentStatus);
+    try {
+      await updateChecklistStatus.mutateAsync({
+        updates: [{ checklistItemId, localityId, status: nextStatus }],
+      });
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({
+        message: payload.message ?? 'Erro ao atualizar status pelo checklist',
+        severity: 'error',
+      });
+    }
+  };
 
   const checklistsToRender = useMemo(() => {
     if (showDuplicates) return checklists;
@@ -356,6 +407,7 @@ export function ChecklistsPage() {
 
       {filteredByPhase.map((checklist: any) => {
         const items = checklist.items ?? [];
+        const isAutoChecklist = String(checklist.id).startsWith('auto-');
         const filteredItems = itemSourceType && itemSourceType !== 'ALL'
           ? items.filter((item: any) => item.sourceType === itemSourceType)
           : items;
@@ -490,11 +542,24 @@ export function ChecklistsPage() {
                         </TableCell>
                         {filteredItems.map((item: any) => {
                           const status = item.statuses?.[loc.id] ?? 'NOT_STARTED';
+                          const isAutoItem = String(item.id).startsWith('auto-');
+                          const canToggle =
+                            canUpdateChecklistStatus && !isAutoChecklist && !isAutoItem;
                           return (
                             <TableCell key={item.id} align="center" sx={{ py: 0.75 }}>
                               <StatusIcon
                                 status={status}
                                 localityName={loc.name}
+                                onClick={
+                                  canToggle
+                                    ? () =>
+                                        handleToggleStatus(
+                                          item.id,
+                                          loc.id,
+                                          status,
+                                        )
+                                    : undefined
+                                }
                               />
                             </TableCell>
                           );
@@ -563,11 +628,24 @@ export function ChecklistsPage() {
                         </TableCell>
                         {localities.map((loc: any) => {
                           const status = item.statuses?.[loc.id] ?? 'NOT_STARTED';
+                          const isAutoItem = String(item.id).startsWith('auto-');
+                          const canToggle =
+                            canUpdateChecklistStatus && !isAutoChecklist && !isAutoItem;
                           return (
                             <TableCell key={loc.id} align="center" sx={{ py: 0.75 }}>
                               <StatusIcon
                                 status={status}
                                 localityName={loc.name}
+                                onClick={
+                                  canToggle
+                                    ? () =>
+                                        handleToggleStatus(
+                                          item.id,
+                                          loc.id,
+                                          status,
+                                        )
+                                    : undefined
+                                }
                               />
                             </TableCell>
                           );

@@ -135,8 +135,8 @@ export class ActivitiesController {
       ids: string[];
       targetLocalityIds: string[];
       statusMode?: 'RESET' | 'KEEP';
-      dateMode?: 'KEEP' | 'CLEAR' | 'SHIFT_DAYS';
-      dayOffset?: number | string;
+      dateMode?: 'KEEP' | 'CLEAR' | 'SET_DATE';
+      targetDate?: string | null;
     },
     @CurrentUser() user: RbacUser,
   ) {
@@ -146,7 +146,7 @@ export class ActivitiesController {
       {
         statusMode: body.statusMode,
         dateMode: body.dateMode,
-        dayOffset: body.dayOffset,
+        targetDate: body.targetDate,
       },
       user,
     );

@@ -5,6 +5,8 @@ import { RbacUser } from '../rbac/rbac.types';
 import { throwError } from '../common/http-error';
 import { sanitizeText } from '../common/sanitize';
 import { AuditService } from '../audit/audit.service';
+import { TasksService } from '../tasks/tasks.service';
+import { ActivitiesService } from '../activities/activities.service';
 import { resolveAccessProfile } from '../rbac/role-access';
 import { createTargetLocalityAliasMap, groupTargetLocalities } from '../common/priority-localities';
 
@@ -13,6 +15,8 @@ export class ChecklistsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly tasks: TasksService,
+    private readonly activities: ActivitiesService,
   ) {}
 
   async list(filters: { phaseId?: string; specialtyId?: string; eloRoleId?: string; localityId?: string }, user?: RbacUser) {
@@ -269,8 +273,130 @@ export class ChecklistsService {
     return created;
   }
 
-  async updateStatuses(_updates: { checklistItemId: string; localityId: string; status: string }[], _user?: RbacUser) {
-    throwError('CHECKLIST_AUTOMATIC_ONLY');
+  async updateStatuses(
+    updates: { checklistItemId: string; localityId: string; status: string }[],
+    user?: RbacUser,
+  ) {
+    if (!updates?.length) {
+      return { updatedTasks: 0, updatedActivities: 0 };
+    }
+
+    const normalized = updates
+      .map((entry) => ({
+        checklistItemId: String(entry.checklistItemId ?? '').trim(),
+        localityId: String(entry.localityId ?? '').trim(),
+        status: String(entry.status ?? '').trim().toUpperCase(),
+      }))
+      .filter((entry) => entry.checklistItemId && entry.localityId);
+
+    if (!normalized.length) {
+      return { updatedTasks: 0, updatedActivities: 0 };
+    }
+
+    const itemIds = Array.from(new Set(normalized.map((entry) => entry.checklistItemId)));
+    const items = await this.prisma.checklistItem.findMany({
+      where: { id: { in: itemIds } },
+      select: {
+        id: true,
+        title: true,
+        taskTemplateId: true,
+      },
+    });
+    const itemById = new Map(items.map((item) => [item.id, item]));
+
+    const canonicalLocalityIds = Array.from(
+      new Set(normalized.map((entry) => entry.localityId)),
+    );
+    const allLocalities = await this.prisma.locality.findMany({
+      where: { id: { in: canonicalLocalityIds } },
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        recruitsFemaleCountCurrent: true,
+        updatedAt: true,
+      },
+    });
+    const localityGroups = groupTargetLocalities(allLocalities);
+    const { aliasIdsByCanonicalId } = createTargetLocalityAliasMap(localityGroups);
+
+    let updatedTasks = 0;
+    let updatedActivities = 0;
+
+    for (const entry of normalized) {
+      const item = itemById.get(entry.checklistItemId);
+      if (!item) continue;
+
+      const targetLocalityIds =
+        aliasIdsByCanonicalId.get(entry.localityId) ?? [entry.localityId];
+
+      const checklistStatus = this.normalizeChecklistTargetStatus(entry.status);
+      const targetTaskStatus = this.mapChecklistToTaskStatus(checklistStatus);
+      const targetActivityStatus = this.mapChecklistToActivityStatus(checklistStatus);
+
+      if (item.taskTemplateId) {
+        const instances = await this.prisma.taskInstance.findMany({
+          where: {
+            taskTemplateId: item.taskTemplateId,
+            localityId: { in: targetLocalityIds },
+          },
+          select: { id: true },
+        });
+        for (const instance of instances) {
+          await this.tasks.updateStatus(instance.id, targetTaskStatus, user);
+          updatedTasks += 1;
+        }
+        continue;
+      }
+
+      const normalizedTitle = this.normalizeChecklistActivityTitle(item.title);
+      const activities = await this.prisma.activity.findMany({
+        where: {
+          localityId: { in: targetLocalityIds },
+        },
+        select: {
+          id: true,
+          title: true,
+        },
+      });
+      for (const activity of activities) {
+        if (
+          this.normalizeChecklistActivityTitle(activity.title) !== normalizedTitle
+        ) {
+          continue;
+        }
+        await this.activities.updateStatus(activity.id, targetActivityStatus, user);
+        updatedActivities += 1;
+      }
+    }
+
+    return { updatedTasks, updatedActivities };
+  }
+
+  private normalizeChecklistTargetStatus(rawStatus: string): ChecklistItemStatusType {
+    const value = String(rawStatus ?? '').trim().toUpperCase();
+    if (value === ChecklistItemStatusType.DONE) return ChecklistItemStatusType.DONE;
+    if (value === ChecklistItemStatusType.IN_PROGRESS)
+      return ChecklistItemStatusType.IN_PROGRESS;
+    return ChecklistItemStatusType.NOT_STARTED;
+  }
+
+  private mapChecklistToTaskStatus(
+    status: ChecklistItemStatusType,
+  ): TaskStatus {
+    if (status === ChecklistItemStatusType.DONE) return TaskStatus.DONE;
+    if (status === ChecklistItemStatusType.IN_PROGRESS)
+      return TaskStatus.IN_PROGRESS;
+    return TaskStatus.NOT_STARTED;
+  }
+
+  private mapChecklistToActivityStatus(
+    status: ChecklistItemStatusType,
+  ): ActivityStatus {
+    if (status === ChecklistItemStatusType.DONE) return ActivityStatus.DONE;
+    if (status === ChecklistItemStatusType.IN_PROGRESS)
+      return ActivityStatus.IN_PROGRESS;
+    return ActivityStatus.NOT_STARTED;
   }
 
   private getScopeConstraints(user?: RbacUser) {

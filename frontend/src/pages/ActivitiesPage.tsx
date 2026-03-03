@@ -149,8 +149,8 @@ export function ActivitiesPage() {
   const [batchResponsibleUserId, setBatchResponsibleUserId] = useState('');
   const [replicateTargetLocalityIds, setReplicateTargetLocalityIds] = useState<string[]>([]);
   const [replicateStatusMode, setReplicateStatusMode] = useState<'RESET' | 'KEEP'>('RESET');
-  const [replicateDateMode, setReplicateDateMode] = useState<'KEEP' | 'CLEAR' | 'SHIFT_DAYS'>('KEEP');
-  const [replicateDayOffset, setReplicateDayOffset] = useState('0');
+  const [replicateDateMode, setReplicateDateMode] = useState<'KEEP' | 'CLEAR' | 'SET_DATE'>('KEEP');
+  const [replicateTargetDate, setReplicateTargetDate] = useState('');
 
   const createActivity = useCreateActivity();
   const createActivityType = useCreateActivityType();
@@ -565,7 +565,7 @@ export function ActivitiesPage() {
     setReplicateTargetLocalityIds([]);
     setReplicateStatusMode('RESET');
     setReplicateDateMode('KEEP');
-    setReplicateDayOffset('0');
+    setReplicateTargetDate('');
     setReplicateDialogOpen(true);
   };
 
@@ -578,16 +578,21 @@ export function ActivitiesPage() {
       });
       return;
     }
+    if (replicateDateMode === 'SET_DATE' && !replicateTargetDate) {
+      toast.push({
+        message: 'Selecione a data que será aplicada às cópias.',
+        severity: 'warning',
+      });
+      return;
+    }
     try {
       const payload = await replicateActivities.mutateAsync({
         ids: selectedIds,
         targetLocalityIds: replicateTargetLocalityIds,
         statusMode: replicateStatusMode,
         dateMode: replicateDateMode,
-        dayOffset:
-          replicateDateMode === 'SHIFT_DAYS'
-            ? Number(replicateDayOffset || 0)
-            : 0,
+        targetDate:
+          replicateDateMode === 'SET_DATE' ? replicateTargetDate || null : null,
       });
       const created = Number(payload?.created ?? 0);
       const skipped = Number(payload?.skippedSameLocality ?? 0);
@@ -1768,24 +1773,24 @@ export function ActivitiesPage() {
                 value={replicateDateMode}
                 onChange={(event) =>
                   setReplicateDateMode(
-                    event.target.value as 'KEEP' | 'CLEAR' | 'SHIFT_DAYS',
+                    event.target.value as 'KEEP' | 'CLEAR' | 'SET_DATE',
                   )
                 }
                 fullWidth
               >
                 <MenuItem value="KEEP">Manter data original</MenuItem>
                 <MenuItem value="CLEAR">Deixar sem data</MenuItem>
-                <MenuItem value="SHIFT_DAYS">Deslocar por dias</MenuItem>
+                <MenuItem value="SET_DATE">Definir uma data</MenuItem>
               </TextField>
             </Stack>
-            {replicateDateMode === 'SHIFT_DAYS' && (
+            {replicateDateMode === 'SET_DATE' && (
               <TextField
                 size="small"
-                type="number"
-                label="Deslocamento em dias"
-                value={replicateDayOffset}
-                onChange={(event) => setReplicateDayOffset(event.target.value)}
-                helperText="Use negativo para antecipar (ex.: -7) e positivo para postergar."
+                type="date"
+                label="Data para as cópias"
+                value={replicateTargetDate}
+                onChange={(event) => setReplicateTargetDate(event.target.value)}
+                InputLabelProps={{ shrink: true }}
               />
             )}
           </Stack>

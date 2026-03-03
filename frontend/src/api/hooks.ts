@@ -496,8 +496,8 @@ export function useReplicateActivities() {
       ids: string[];
       targetLocalityIds: string[];
       statusMode?: "RESET" | "KEEP";
-      dateMode?: "KEEP" | "CLEAR" | "SHIFT_DAYS";
-      dayOffset?: number;
+      dateMode?: "KEEP" | "CLEAR" | "SET_DATE";
+      targetDate?: string | null;
     }) => (await api.post("/activities/batch/replicate", args)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["activities"] }),
   });
