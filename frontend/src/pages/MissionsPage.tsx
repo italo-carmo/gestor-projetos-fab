@@ -71,6 +71,22 @@ const blankScheduleForm = {
   participants: '',
 };
 
+function formatDateOnlyPtBr(value: string | Date | null | undefined) {
+  if (!value) return '-';
+  const raw = String(value);
+  const isoDatePart = raw.slice(0, 10);
+  const match = isoDatePart.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (match) {
+    return `${match[3]}/${match[2]}/${match[1]}`;
+  }
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return raw;
+  const day = String(parsed.getUTCDate()).padStart(2, '0');
+  const month = String(parsed.getUTCMonth() + 1).padStart(2, '0');
+  const year = String(parsed.getUTCFullYear());
+  return `${day}/${month}/${year}`;
+}
+
 export function MissionsPage() {
   const toast = useToast();
   const [params, setParams] = useSearchParams();
@@ -672,8 +688,8 @@ export function MissionsPage() {
                     </TableCell>
                     <TableCell>{mission.locality?.name ?? '-'}</TableCell>
                     <TableCell>
-                      {new Date(mission.startDate).toLocaleDateString('pt-BR')} a{' '}
-                      {new Date(mission.endDate).toLocaleDateString('pt-BR')}
+                      {formatDateOnlyPtBr(mission.startDate)} a{' '}
+                      {formatDateOnlyPtBr(mission.endDate)}
                     </TableCell>
                     <TableCell>
                       <Chip label={String(mission.participantsCount ?? mission.participants?.length ?? 0)} size="small" />
