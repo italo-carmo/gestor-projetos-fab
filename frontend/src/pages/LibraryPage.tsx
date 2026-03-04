@@ -51,7 +51,9 @@ import { SkeletonState } from "../components/states/SkeletonState";
 type LibraryPhoto = {
   id: string;
   title: string;
-  fileUrl: string;
+  fileUrl?: string | null; // Mantido para compatibilidade
+  imageData?: string; // Base64 da imagem
+  mimeType?: string | null; // Tipo MIME (ex: image/jpeg)
   sortOrder: number;
   localityId?: string | null;
   locality?: {
@@ -73,15 +75,22 @@ type LibraryDocument = {
 function toApiUrl(path: string) {
   if (!path) return "";
   if (/^https?:\/\//i.test(path)) return path;
-  // Library uploads are served via /api/library/uploads/ (nginx proxies /api/ to backend)
-  // So we need to ensure /api is prepended
   const baseUrl = String(api.defaults.baseURL ?? "/api");
-  if (path.startsWith("/library/uploads/")) {
-    // Ensure /api prefix for library uploads
-    return `${baseUrl.replace(/\/$/, "")}${path}`;
-  }
   if (!baseUrl || baseUrl === "/api") return path;
   return `${baseUrl.replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
+function getPhotoUrl(photo: LibraryPhoto): string {
+  // Use base64 data URL if available, otherwise fallback to fileUrl
+  if (photo.imageData) {
+    const mimeType = photo.mimeType || 'image/jpeg';
+    return `data:${mimeType};base64,${photo.imageData}`;
+  }
+  // Fallback for old photos that still use fileUrl
+  if (photo.fileUrl) {
+    return toApiUrl(photo.fileUrl);
+  }
+  return "";
 }
 
 function formatFileSize(value?: number | null) {
@@ -243,12 +252,12 @@ export function LibraryPage() {
                   <Typography sx={{ color: "white" }}>Sem fotos cadastradas</Typography>
                 </Stack>
               ) : (
-                <Box
-                  component="img"
-                  src={toApiUrl(currentPhoto.fileUrl)}
-                  alt={currentPhoto.title}
-                  sx={{ width: "100%", height: "100%", objectFit: "cover" }}
-                />
+                  <Box
+                    component="img"
+                    src={getPhotoUrl(currentPhoto)}
+                    alt={currentPhoto.title}
+                    sx={{ width: "100%", height: "100%", objectFit: "cover" }}
+                  />
               )}
               {photos.length > 1 && (
                 <>
@@ -502,12 +511,12 @@ export function LibraryPage() {
                             return (
                               <TableRow key={photo.id} hover>
                                 <TableCell>
-                                  <Box
-                                    component="img"
-                                    src={toApiUrl(photo.fileUrl)}
-                                    alt={photo.title}
-                                    sx={{ width: 86, height: 56, borderRadius: 1, objectFit: "cover", border: "1px solid #D4E1EC" }}
-                                  />
+                                <Box
+                                  component="img"
+                                  src={getPhotoUrl(photo)}
+                                  alt={photo.title}
+                                  sx={{ width: 86, height: 56, borderRadius: 1, objectFit: "cover", border: "1px solid #D4E1EC" }}
+                                />
                                 </TableCell>
                                 <TableCell>
                                   <TextField

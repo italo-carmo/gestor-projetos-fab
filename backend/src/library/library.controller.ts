@@ -77,7 +77,7 @@ export class LibraryController {
         const mimetype = String(file.mimetype ?? '').toLowerCase();
         cb(null, mimetype.startsWith('image/'));
       },
-      limits: { fileSize: 8 * 1024 * 1024 },
+      limits: { fileSize: 2 * 1024 * 1024 }, // 2MB máximo para base64
     }),
   )
   @UseFilters(MulterExceptionFilter)
@@ -100,7 +100,7 @@ export class LibraryController {
 
   @Delete('photos/:id')
   deletePhoto(@Param('id') id: string, @CurrentUser() user: RbacUser) {
-    return this.library.deletePhoto(id, libraryPhotosDir, user);
+    return this.library.deletePhoto(id, '', user);
   }
 
   @Post('documents/upload')

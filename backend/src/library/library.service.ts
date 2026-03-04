@@ -10,6 +10,9 @@ import {
   ROLE_TI,
 } from '../rbac/role-access';
 import type { RbacUser } from '../rbac/rbac.types';
+import { libraryPhotosDir } from './library.controller';
+
+const MAX_IMAGE_SIZE = 2 * 1024 * 1024; // 2MB máximo para base64
 
 @Injectable()
 export class LibraryService {
@@ -100,17 +103,45 @@ export class LibraryService {
     if (!file) {
       throwError('VALIDATION_ERROR', { field: 'file', reason: 'required' });
     }
+    
+    // Validate file size (max 2MB for base64 storage)
+    if (file.size > MAX_IMAGE_SIZE) {
+      throwError('VALIDATION_ERROR', {
+        field: 'file',
+        reason: 'file_too_large',
+        message: `Imagem muito grande. Tamanho máximo: ${MAX_IMAGE_SIZE / 1024 / 1024}MB`,
+      });
+    }
+
+    // Convert image to base64
+    const filePath = path.join(libraryPhotosDir, file.filename);
+    const fileBuffer = fs.readFileSync(filePath);
+    const base64Data = fileBuffer.toString('base64');
+    const mimeType = file.mimetype || 'image/jpeg';
+
+    // Clean up uploaded file since we're storing in DB
+    try {
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    } catch {
+      // Ignore cleanup errors
+    }
+
     const currentMaxSortOrder = await this.prisma.libraryPhoto.aggregate({
       _max: { sortOrder: true },
     });
     const nextSortOrder = Number(currentMaxSortOrder._max.sortOrder ?? -1) + 1;
     const title = String(payload.title ?? '').trim() || file.originalname || 'Foto';
     const localityId = String(payload.localityId ?? '').trim() || null;
+    
     const created = await this.prisma.libraryPhoto.create({
       data: {
         title,
-        fileUrl: `/library/uploads/photos/${file.filename}`,
-        storageKey: file.filename,
+        imageData: base64Data,
+        mimeType,
+        fileUrl: null, // No longer used
+        storageKey: null, // No longer used
         sortOrder: nextSortOrder,
         localityId,
         createdById: user?.id,
@@ -167,20 +198,12 @@ export class LibraryService {
     return updated;
   }
 
-  async deletePhoto(id: string, photosDir: string, user?: RbacUser) {
+  async deletePhoto(id: string, _photosDir: string, user?: RbacUser) {
     this.ensureEditorAccess(user);
     const current = await this.prisma.libraryPhoto.findUnique({ where: { id } });
     if (!current) throwError('NOT_FOUND');
     await this.prisma.libraryPhoto.delete({ where: { id } });
-    const storageKey = String(current.storageKey ?? '').trim();
-    if (storageKey) {
-      const filePath = path.join(photosDir, storageKey);
-      try {
-        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-      } catch {
-        // The database row was removed; file cleanup can fail silently.
-      }
-    }
+    // No file cleanup needed since images are stored in DB as base64
     await this.audit.log({
       userId: user?.id,
       resource: 'library',

@@ -732,8 +732,10 @@ model SocialCommunicationArticle {
 model LibraryPhoto {
   id          String   @id @default(cuid())
   title       String
-  fileUrl     String
-  storageKey  String?
+  fileUrl     String?  // Mantido para compatibilidade, mas não mais usado
+  storageKey  String?  // Mantido para compatibilidade, mas não mais usado
+  imageData   String   @db.Text // Base64 da imagem
+  mimeType    String?  // Tipo MIME da imagem (ex: image/jpeg)
   sortOrder   Int      @default(0)
   localityId  String?
   createdById String?
