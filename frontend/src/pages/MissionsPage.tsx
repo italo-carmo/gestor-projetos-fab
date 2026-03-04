@@ -871,11 +871,9 @@ export function MissionsPage() {
                           <Autocomplete
                             size="small"
                             options={filteredUsers}
-                            getOptionLabel={(option: any) => {
-                              if (!option || !option.id) return '';
-                              const roles = option.roles?.map((r: any) => r.role?.name).filter(Boolean).join(', ') || '';
-                              return `${option.name || ''}${option.email ? ` • ${option.email}` : ''}${roles ? ` • ${roles}` : ''}`;
-                            }}
+                            getOptionLabel={(option: any) =>
+                              option?.id ? String(option.name ?? '') : ''
+                            }
                             isOptionEqualToValue={(option: any, value: any) => {
                               if (!option || !value) return false;
                               if (!option.id || !value.id) return false;
