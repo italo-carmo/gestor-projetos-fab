@@ -340,7 +340,7 @@ export function LibraryPage() {
           onClose={() => setDrawerOpen(false)}
           PaperProps={{
             sx: {
-              width: { xs: "100%", md: 720 },
+              width: { xs: "100%", md: 800 },
               top: 76,
               height: "calc(100% - 76px)",
             },
@@ -452,7 +452,7 @@ export function LibraryPage() {
                           const file = event.target.files?.[0];
                           if (!file) return;
                           try {
-                            await uploadPhoto.mutateAsync({
+                            const result = await uploadPhoto.mutateAsync({
                               file,
                               title: newPhotoTitle.trim() || undefined,
                               localityId: newPhotoLocalityId || undefined,
@@ -460,7 +460,8 @@ export function LibraryPage() {
                             setNewPhotoTitle("");
                             setNewPhotoLocalityId("");
                             toast.push({ message: "Foto adicionada.", severity: "success" });
-                            libraryQuery.refetch();
+                            // Force immediate refetch - the mutation already invalidates, but we ensure it happens
+                            await libraryQuery.refetch();
                           } catch (error) {
                             toast.push({
                               message: parseApiError(error).message ?? "Erro ao enviar foto.",
@@ -476,101 +477,103 @@ export function LibraryPage() {
                   {allPhotos.length === 0 ? (
                     <EmptyState title="Nenhuma foto" description="Adicione fotos para o carrossel da Biblioteca." />
                   ) : (
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow sx={{ bgcolor: "primary.main" }}>
-                          <TableCell sx={{ color: "white", fontWeight: 700 }}>Preview</TableCell>
-                          <TableCell sx={{ color: "white", fontWeight: 700 }}>Título</TableCell>
-                          <TableCell sx={{ color: "white", fontWeight: 700 }}>Localidade</TableCell>
-                          <TableCell sx={{ color: "white", fontWeight: 700, width: 120 }}>Ordem</TableCell>
-                          <TableCell sx={{ color: "white", fontWeight: 700 }} align="right">Ações</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {allPhotos.map((photo) => {
-                          const titleDraft = photoTitleDrafts[photo.id] ?? photo.title;
-                          const orderDraft = photoOrderDrafts[photo.id] ?? photo.sortOrder;
-                          const localityDraft = photoLocalityDrafts[photo.id] ?? photo.localityId ?? "";
-                          return (
-                            <TableRow key={photo.id} hover>
-                              <TableCell>
-                                <Box
-                                  component="img"
-                                  src={toApiUrl(photo.fileUrl)}
-                                  alt={photo.title}
-                                  sx={{ width: 86, height: 56, borderRadius: 1, objectFit: "cover", border: "1px solid #D4E1EC" }}
-                                />
-                              </TableCell>
-                              <TableCell>
-                                <TextField
-                                  size="small"
-                                  value={titleDraft}
-                                  onChange={(event) =>
-                                    setPhotoTitleDrafts((prev) => ({ ...prev, [photo.id]: event.target.value }))
-                                  }
-                                  fullWidth
-                                />
-                              </TableCell>
-                              <TableCell>
-                                <TextField
-                                  select
-                                  size="small"
-                                  value={localityDraft}
-                                  onChange={(event) =>
-                                    setPhotoLocalityDrafts((prev) => ({ ...prev, [photo.id]: event.target.value }))
-                                  }
-                                  sx={{ minWidth: 200 }}
-                                >
-                                  <MenuItem value="">Sem localidade</MenuItem>
-                                  {localities.map((loc) => (
-                                    <MenuItem key={loc.id} value={loc.id}>
-                                      {loc.name}
-                                    </MenuItem>
-                                  ))}
-                                </TextField>
-                              </TableCell>
-                              <TableCell>
-                                <TextField
-                                  size="small"
-                                  type="number"
-                                  value={String(orderDraft)}
-                                  onChange={(event) =>
-                                    setPhotoOrderDrafts((prev) => ({
-                                      ...prev,
-                                      [photo.id]: Number(event.target.value || 0),
-                                    }))
-                                  }
-                                />
-                              </TableCell>
-                              <TableCell align="right">
-                                <Stack direction="row" spacing={0.8} justifyContent="flex-end">
-                                  <Button
+                    <Box sx={{ overflowX: "auto" }}>
+                      <Table size="small" sx={{ minWidth: 800 }}>
+                        <TableHead>
+                          <TableRow sx={{ bgcolor: "primary.main" }}>
+                            <TableCell sx={{ color: "white", fontWeight: 700, width: 100 }}>Preview</TableCell>
+                            <TableCell sx={{ color: "white", fontWeight: 700, minWidth: 200 }}>Título</TableCell>
+                            <TableCell sx={{ color: "white", fontWeight: 700, minWidth: 180 }}>Localidade</TableCell>
+                            <TableCell sx={{ color: "white", fontWeight: 700, width: 100 }}>Ordem</TableCell>
+                            <TableCell sx={{ color: "white", fontWeight: 700, width: 180 }} align="right">Ações</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {allPhotos.map((photo) => {
+                            const titleDraft = photoTitleDrafts[photo.id] ?? photo.title;
+                            const orderDraft = photoOrderDrafts[photo.id] ?? photo.sortOrder;
+                            const localityDraft = photoLocalityDrafts[photo.id] ?? photo.localityId ?? "";
+                            return (
+                              <TableRow key={photo.id} hover>
+                                <TableCell>
+                                  <Box
+                                    component="img"
+                                    src={toApiUrl(photo.fileUrl)}
+                                    alt={photo.title}
+                                    sx={{ width: 86, height: 56, borderRadius: 1, objectFit: "cover", border: "1px solid #D4E1EC" }}
+                                  />
+                                </TableCell>
+                                <TableCell>
+                                  <TextField
                                     size="small"
-                                    variant="outlined"
-                                    color="success"
-                                    onClick={async () => {
-                                      try {
-                                        await updatePhoto.mutateAsync({
-                                          id: photo.id,
-                                          payload: {
-                                            title: titleDraft.trim(),
-                                            sortOrder: orderDraft,
-                                            localityId: localityDraft || null,
-                                          },
-                                        });
-                                        toast.push({ message: "Foto atualizada.", severity: "success" });
-                                        libraryQuery.refetch();
-                                      } catch (error) {
-                                        toast.push({
-                                          message: parseApiError(error).message ?? "Erro ao atualizar foto.",
-                                          severity: "error",
-                                        });
-                                      }
-                                    }}
-                                    disabled={updatePhoto.isPending}
+                                    value={titleDraft}
+                                    onChange={(event) =>
+                                      setPhotoTitleDrafts((prev) => ({ ...prev, [photo.id]: event.target.value }))
+                                    }
+                                    fullWidth
+                                  />
+                                </TableCell>
+                                <TableCell>
+                                  <TextField
+                                    select
+                                    size="small"
+                                    value={localityDraft}
+                                    onChange={(event) =>
+                                      setPhotoLocalityDrafts((prev) => ({ ...prev, [photo.id]: event.target.value }))
+                                    }
+                                    sx={{ minWidth: 160 }}
                                   >
-                                    Salvar
-                                  </Button>
+                                    <MenuItem value="">Sem localidade</MenuItem>
+                                    {localities.map((loc) => (
+                                      <MenuItem key={loc.id} value={loc.id}>
+                                        {loc.name}
+                                      </MenuItem>
+                                    ))}
+                                  </TextField>
+                                </TableCell>
+                                <TableCell>
+                                  <TextField
+                                    size="small"
+                                    type="number"
+                                    value={String(orderDraft)}
+                                    onChange={(event) =>
+                                      setPhotoOrderDrafts((prev) => ({
+                                        ...prev,
+                                        [photo.id]: Number(event.target.value || 0),
+                                      }))
+                                    }
+                                    sx={{ width: 80 }}
+                                  />
+                                </TableCell>
+                                <TableCell align="right">
+                                  <Stack direction="row" spacing={0.8} justifyContent="flex-end" flexWrap="wrap" useFlexGap>
+                                    <Button
+                                      size="small"
+                                      variant="outlined"
+                                      color="success"
+                                      onClick={async () => {
+                                        try {
+                                          await updatePhoto.mutateAsync({
+                                            id: photo.id,
+                                            payload: {
+                                              title: titleDraft.trim(),
+                                              sortOrder: orderDraft,
+                                              localityId: localityDraft || null,
+                                            },
+                                          });
+                                          toast.push({ message: "Foto atualizada.", severity: "success" });
+                                          libraryQuery.refetch();
+                                        } catch (error) {
+                                          toast.push({
+                                            message: parseApiError(error).message ?? "Erro ao atualizar foto.",
+                                            severity: "error",
+                                          });
+                                        }
+                                      }}
+                                      disabled={updatePhoto.isPending}
+                                    >
+                                      Salvar
+                                    </Button>
                                   <Tooltip title="Excluir foto">
                                     <span>
                                       <IconButton
@@ -601,6 +604,7 @@ export function LibraryPage() {
                         })}
                       </TableBody>
                     </Table>
+                    </Box>
                   )}
                 </CardContent>
               </Card>
