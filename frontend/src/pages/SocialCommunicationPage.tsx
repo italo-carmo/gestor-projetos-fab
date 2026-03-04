@@ -93,10 +93,6 @@ function isFabDomain(url: string) {
   return host === "fab.mil.br" || host.endsWith(".fab.mil.br");
 }
 
-function buildMshotUrl(sourceUrl: string) {
-  return `https://s.wordpress.com/mshots/v1/${encodeURIComponent(sourceUrl)}?w=1200`;
-}
-
 function toApiUrl(path: string) {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
   const baseUrl = String(api.defaults.baseURL ?? "/api");
@@ -125,13 +121,11 @@ const QUICK_TAGS = ["smif", "cipavd", "cpca"] as const;
 function ArticleCoverImage({
   coverProxyPath,
   coverImageUrl,
-  sourceUrl,
   title,
   toApiUrl,
 }: {
   coverProxyPath?: string | null;
   coverImageUrl?: string | null;
-  sourceUrl: string;
   title: string;
   toApiUrl: (path: string) => string;
 }) {
@@ -142,16 +136,15 @@ function ArticleCoverImage({
       ? coverImageUrl
       : toApiUrl(coverImageUrl)
     : null;
-  const mshotSrc = buildMshotUrl(sourceUrl);
   const [imageSrc, setImageSrc] = useState<string | null>(
-    directSrc || proxySrc || mshotSrc
+    directSrc || proxySrc
   );
 
   // Reset state when props change
   useEffect(() => {
     setImageError(false);
-    setImageSrc(directSrc || proxySrc || mshotSrc);
-  }, [coverProxyPath, coverImageUrl, sourceUrl]);
+    setImageSrc(directSrc || proxySrc);
+  }, [coverProxyPath, coverImageUrl]);
 
   if (!coverProxyPath && !coverImageUrl) {
     return <NewspaperRoundedIcon sx={{ color: "white", fontSize: 38 }} />;
@@ -172,12 +165,6 @@ function ArticleCoverImage({
         if (directSrc && proxySrc && imageSrc === directSrc) {
           // Tenta proxy apenas se falhou a URL direta.
           setImageSrc(proxySrc);
-          setImageError(false);
-          return;
-        }
-        if (imageSrc !== mshotSrc) {
-          // Ultimo fallback: thumbnail por URL da materia.
-          setImageSrc(mshotSrc);
           setImageError(false);
           return;
         }
@@ -193,13 +180,11 @@ function ArticleCoverImage({
 function ArticleCoverImageSmall({
   coverProxyPath,
   coverImageUrl,
-  sourceUrl,
   title,
   toApiUrl,
 }: {
   coverProxyPath?: string | null;
   coverImageUrl?: string | null;
-  sourceUrl: string;
   title: string;
   toApiUrl: (path: string) => string;
 }) {
@@ -210,16 +195,15 @@ function ArticleCoverImageSmall({
       ? coverImageUrl
       : toApiUrl(coverImageUrl)
     : null;
-  const mshotSrc = buildMshotUrl(sourceUrl);
   const [imageSrc, setImageSrc] = useState<string | null>(
-    directSrc || proxySrc || mshotSrc
+    directSrc || proxySrc
   );
 
   // Reset state when props change
   useEffect(() => {
     setImageError(false);
-    setImageSrc(directSrc || proxySrc || mshotSrc);
-  }, [coverProxyPath, coverImageUrl, sourceUrl]);
+    setImageSrc(directSrc || proxySrc);
+  }, [coverProxyPath, coverImageUrl]);
 
   if (!coverProxyPath && !coverImageUrl) {
     return <NewspaperRoundedIcon sx={{ color: "#114259", fontSize: 32 }} />;
@@ -240,12 +224,6 @@ function ArticleCoverImageSmall({
         if (directSrc && proxySrc && imageSrc === directSrc) {
           // Tenta proxy apenas se falhou a URL direta.
           setImageSrc(proxySrc);
-          setImageError(false);
-          return;
-        }
-        if (imageSrc !== mshotSrc) {
-          // Ultimo fallback: thumbnail por URL da materia.
-          setImageSrc(mshotSrc);
           setImageError(false);
           return;
         }
@@ -617,7 +595,6 @@ export function SocialCommunicationPage() {
                     <ArticleCoverImage
                       coverProxyPath={item.coverProxyPath}
                       coverImageUrl={item.coverImageUrl}
-                      sourceUrl={item.sourceUrl}
                       title={item.title}
                       toApiUrl={toApiUrl}
                     />
@@ -730,7 +707,6 @@ export function SocialCommunicationPage() {
                       <ArticleCoverImageSmall
                         coverProxyPath={item.coverProxyPath}
                         coverImageUrl={item.coverImageUrl}
-                          sourceUrl={item.sourceUrl}
                         title={item.title}
                         toApiUrl={toApiUrl}
                       />
