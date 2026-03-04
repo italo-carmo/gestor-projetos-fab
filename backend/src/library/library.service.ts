@@ -179,7 +179,7 @@ export class LibraryService {
         _max: { sortOrder: true },
       });
       const nextSortOrder = Number(currentMaxSortOrder._max.sortOrder ?? -1) + 1;
-      const title = String(payload.title ?? '').trim() || file.originalname || 'Foto';
+      const title = String(payload.title ?? '').trim();
       const localityId = String(payload.localityId ?? '').trim() || null;
       
       const created = await this.prisma.libraryPhoto.create({
@@ -229,9 +229,6 @@ export class LibraryService {
     if (!current) throwError('NOT_FOUND');
     const nextTitle =
       payload.title === undefined ? current.title : String(payload.title).trim();
-    if (!nextTitle) {
-      throwError('VALIDATION_ERROR', { field: 'title', reason: 'required' });
-    }
     const nextSortOrder =
       payload.sortOrder === undefined
         ? current.sortOrder
