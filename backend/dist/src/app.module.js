@@ -35,6 +35,7 @@ const fab_ldap_module_1 = require("./ldap/fab-ldap.module");
 const missions_module_1 = require("./missions/missions.module");
 const social_communication_module_1 = require("./social-communication/social-communication.module");
 const cpca_module_1 = require("./cpca/cpca.module");
+const library_module_1 = require("./library/library.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -71,6 +72,7 @@ exports.AppModule = AppModule = __decorate([
             missions_module_1.MissionsModule,
             social_communication_module_1.SocialCommunicationModule,
             cpca_module_1.CpcaModule,
+            library_module_1.LibraryModule,
         ],
         controllers: [app_controller_1.AppController],
         providers: [app_service_1.AppService],

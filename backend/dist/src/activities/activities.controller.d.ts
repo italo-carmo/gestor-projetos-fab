@@ -58,6 +58,11 @@ export declare class ActivitiesController {
         skippedSameLocality: number;
         requestedPairs: number;
     }>;
+    batchReorder(body: {
+        ids: string[];
+    }, user: RbacUser): Promise<{
+        updated: number;
+    }>;
     updateStatus(id: string, dto: UpdateActivityStatusDto, user: RbacUser): Promise<any>;
     remove(id: string, user: RbacUser): Promise<{
         ok: boolean;

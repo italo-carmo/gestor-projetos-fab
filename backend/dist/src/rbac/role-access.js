@@ -116,7 +116,7 @@ function resolveAccessProfile(user) {
 function canEditRecruitsByRole(user, targetLocalityId) {
     if (!user)
         return false;
-    if (hasAnyRole(user, [exports.ROLE_COORDENACAO_CIPAVD, exports.ROLE_COMISSAO_CIPAVD])) {
+    if (hasAnyRole(user, [exports.ROLE_COORDENACAO_CIPAVD, exports.ROLE_COMISSAO_CIPAVD, exports.ROLE_TI])) {
         return true;
     }
     if (hasRole(user, exports.ROLE_GSD_LOCALIDADE) && user.localityId === targetLocalityId) {

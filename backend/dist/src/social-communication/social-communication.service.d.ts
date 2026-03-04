@@ -92,7 +92,7 @@ export declare class SocialCommunicationService {
         html: string;
     }>;
     getPublicCover(articleId: string, exp: string, sig: string): Promise<{
-        buffer: Buffer<ArrayBuffer>;
+        buffer: NonSharedBuffer;
         contentType: string;
         sourceUrl: string;
     }>;
@@ -104,6 +104,7 @@ export declare class SocialCommunicationService {
     getPublicPage(url: string, exp: string, sig: string): Promise<{
         html: string;
     }>;
+    ensureEditorAccess(user?: RbacUser): void;
     private assertEditorAccess;
     private buildContentProxyPath;
     private buildCoverProxyPath;

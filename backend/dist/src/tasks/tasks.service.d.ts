@@ -299,6 +299,7 @@ export declare class TasksService {
         }[];
         totals: {
             localities: number;
+            coverageLocalities: number;
             late: number;
             blocked: number;
             unassigned: number;

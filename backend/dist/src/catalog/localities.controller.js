@@ -352,18 +352,21 @@ let LocalitiesController = class LocalitiesController {
                 reason: 'GSD_ROLE_NOT_FOUND',
             });
         }
+        const userWhereOr = [
+            { ldapUid: profile.uid },
+        ];
+        if (profile.email) {
+            userWhereOr.push({ email: profile.email });
+        }
         const existingUser = await this.prisma.user.findFirst({
-            where: {
-                OR: [{ ldapUid: profile.uid }, { email: profile.email }],
-            },
-            include: {
-                roles: {
-                    include: { role: { select: { id: true, name: true } } },
-                },
-            },
+            where: { OR: userWhereOr },
+            select: { id: true, localityId: true },
         });
         if (existingUser) {
-            const hasGsdRole = existingUser.roles.some((ur) => ur.role.id === gsdRole.id || ur.role.name === role_access_1.ROLE_GSD_LOCALIDADE);
+            const hasGsdRole = await this.prisma.userRole.findFirst({
+                where: { userId: existingUser.id, roleId: gsdRole.id },
+                select: { userId: true },
+            });
             if (!hasGsdRole) {
                 await this.prisma.userRole.create({
                     data: { userId: existingUser.id, roleId: gsdRole.id },
@@ -706,7 +709,6 @@ __decorate([
 ], LocalitiesController.prototype, "updateRecruits", null);
 __decorate([
     (0, common_1.Get)(':id/recruit-designations'),
-    (0, require_permission_decorator_1.RequirePermission)('dashboard', 'view'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
@@ -715,7 +717,6 @@ __decorate([
 ], LocalitiesController.prototype, "listRecruitDesignations", null);
 __decorate([
     (0, common_1.Get)(':id/recruits-members'),
-    (0, require_permission_decorator_1.RequirePermission)('dashboard', 'view'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
@@ -724,7 +725,6 @@ __decorate([
 ], LocalitiesController.prototype, "listRecruitMembers", null);
 __decorate([
     (0, common_1.Put)(':id/recruits-members'),
-    (0, require_permission_decorator_1.RequirePermission)('dashboard', 'view'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),
@@ -734,7 +734,6 @@ __decorate([
 ], LocalitiesController.prototype, "replaceRecruitMembers", null);
 __decorate([
     (0, common_1.Put)(':id/commander-from-ldap'),
-    (0, require_permission_decorator_1.RequirePermission)('dashboard', 'view'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),
@@ -744,7 +743,6 @@ __decorate([
 ], LocalitiesController.prototype, "setCommanderFromLdap", null);
 __decorate([
     (0, common_1.Put)(':id/recruit-designations'),
-    (0, require_permission_decorator_1.RequirePermission)('dashboard', 'view'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),

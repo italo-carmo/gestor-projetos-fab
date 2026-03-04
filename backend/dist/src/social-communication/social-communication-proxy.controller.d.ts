@@ -8,3 +8,6 @@ export declare class SocialCommunicationProxyController {
     asset(url: string, exp: string, sig: string, res: Response): Promise<Response<any, Record<string, any>>>;
     page(url: string, exp: string, sig: string, res: Response): Promise<Response<any, Record<string, any>>>;
 }
+export declare class SocialCommunicationUploadsController {
+    uploadedCover(filename: string, res: Response): Promise<void>;
+}

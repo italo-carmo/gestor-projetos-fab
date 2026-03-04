@@ -30,6 +30,7 @@ export declare class DashboardsController {
         }[];
         totals: {
             localities: number;
+            coverageLocalities: number;
             late: number;
             blocked: number;
             unassigned: number;

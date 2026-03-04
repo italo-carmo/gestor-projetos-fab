@@ -72,7 +72,7 @@ let ActivitiesService = class ActivitiesService {
         const [items, total] = await this.prisma.$transaction([
             this.prisma.activity.findMany({
                 where,
-                orderBy: [{ eventDate: 'desc' }, { createdAt: 'desc' }],
+                orderBy: [{ sortOrder: 'asc' }, { eventDate: 'desc' }, { createdAt: 'desc' }],
                 skip,
                 take,
                 include: {
@@ -144,6 +144,10 @@ let ActivitiesService = class ActivitiesService {
             });
         }
         const singleLocalityId = createLocalityIds.length === 1 ? createLocalityIds[0] : null;
+        const currentMaxSortOrder = await this.prisma.activity.aggregate({
+            _max: { sortOrder: true },
+        });
+        let nextSortOrder = Number(currentMaxSortOrder._max.sortOrder ?? -1) + 1;
         const activityTypeId = await this.resolveActivityTypeId(payload.activityTypeId);
         const responsibleUserIds = await this.resolveActivityResponsibleIds(singleLocalityId, normalizedResponsibleIds, user);
         const createdItems = await this.prisma.$transaction(createLocalityIds.map((localityId) => this.prisma.activity.create({
@@ -153,6 +157,7 @@ let ActivitiesService = class ActivitiesService {
                     ? (0, sanitize_1.sanitizeText)(payload.description)
                     : null,
                 localityId,
+                sortOrder: nextSortOrder++,
                 activityTypeId,
                 specialtyId,
                 eventDate: payload.eventDate ? new Date(payload.eventDate) : null,
@@ -711,6 +716,10 @@ let ActivitiesService = class ActivitiesService {
             }
         }
         let skippedSameLocality = 0;
+        const currentMaxSortOrder = await this.prisma.activity.aggregate({
+            _max: { sortOrder: true },
+        });
+        let nextSortOrder = Number(currentMaxSortOrder._max.sortOrder ?? -1) + 1;
         const cloneRows = [];
         for (const activity of existing) {
             for (const targetLocalityId of normalizedTargetLocalityIds) {
@@ -727,6 +736,7 @@ let ActivitiesService = class ActivitiesService {
                     title: activity.title,
                     description: activity.description ?? null,
                     localityId: targetLocalityId,
+                    sortOrder: nextSortOrder++,
                     activityTypeId: activity.activityTypeId ?? null,
                     specialtyId: activity.specialtyId ?? null,
                     eventDate,
@@ -765,6 +775,39 @@ let ActivitiesService = class ActivitiesService {
             skippedSameLocality,
             requestedPairs: existing.length * normalizedTargetLocalityIds.length,
         };
+    }
+    async batchReorder(ids, user) {
+        this.assertActivityOperateAccess(null, user);
+        const normalizedIds = this.normalizeActivityIds(ids);
+        if (!normalizedIds.length)
+            return { updated: 0 };
+        const existing = await this.prisma.activity.findMany({
+            where: { id: { in: normalizedIds } },
+            select: { id: true, localityId: true, sortOrder: true },
+        });
+        if (!existing.length)
+            return { updated: 0 };
+        for (const activity of existing) {
+            this.assertActivityOperateAccess(activity, user);
+        }
+        const idSet = new Set(existing.map((item) => item.id));
+        const orderedIds = normalizedIds.filter((id) => idSet.has(id));
+        const minSortOrder = Math.min(...existing.map((item) => Number(item.sortOrder ?? 0)));
+        await this.prisma.$transaction(orderedIds.map((id, index) => this.prisma.activity.update({
+            where: { id },
+            data: { sortOrder: minSortOrder + index },
+            select: { id: true },
+        })));
+        await this.audit.log({
+            userId: user?.id,
+            resource: 'activities',
+            action: 'batch_reorder',
+            diffJson: {
+                updated: orderedIds.length,
+                ids: orderedIds,
+            },
+        });
+        return { updated: orderedIds.length };
     }
     async listComments(id, user) {
         const activity = await this.prisma.activity.findUnique({

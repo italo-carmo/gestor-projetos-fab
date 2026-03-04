@@ -21,6 +21,7 @@ exports.SocialCommunicationModule = SocialCommunicationModule = __decorate([
         controllers: [
             social_communication_controller_1.SocialCommunicationController,
             social_communication_proxy_controller_1.SocialCommunicationProxyController,
+            social_communication_proxy_controller_1.SocialCommunicationUploadsController,
         ],
         providers: [social_communication_service_1.SocialCommunicationService],
     })

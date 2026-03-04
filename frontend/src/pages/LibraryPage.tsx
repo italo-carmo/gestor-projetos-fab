@@ -31,6 +31,7 @@ import {
   useDeleteLibraryDocument,
   useDeleteLibraryPhoto,
   useLibrary,
+  useLocalities,
   useMe,
   useUpdateLibraryDocument,
   useUpdateLibraryPhoto,
@@ -42,6 +43,7 @@ import { api } from "../api/client";
 import { ROLE_COORDENACAO_CIPAVD, ROLE_TI, hasAnyRole } from "../app/roleAccess";
 import { parseApiError } from "../app/apiErrors";
 import { useToast } from "../app/toast";
+import { selectTargetLocalities } from "../constants/localities";
 import { EmptyState } from "../components/states/EmptyState";
 import { ErrorState } from "../components/states/ErrorState";
 import { SkeletonState } from "../components/states/SkeletonState";
@@ -51,6 +53,12 @@ type LibraryPhoto = {
   title: string;
   fileUrl: string;
   sortOrder: number;
+  localityId?: string | null;
+  locality?: {
+    id: string;
+    code: string;
+    name: string;
+  } | null;
 };
 
 type LibraryDocument = {
@@ -81,6 +89,7 @@ export function LibraryPage() {
   const toast = useToast();
   const { data: me } = useMe();
   const libraryQuery = useLibrary();
+  const localitiesQuery = useLocalities();
   const updateSettings = useUpdateLibrarySettings();
   const uploadPhoto = useUploadLibraryPhoto();
   const updatePhoto = useUpdateLibraryPhoto();
@@ -90,23 +99,42 @@ export function LibraryPage() {
   const deleteDocument = useDeleteLibraryDocument();
   const canManage = hasAnyRole(me, [ROLE_TI, ROLE_COORDENACAO_CIPAVD]);
 
-  const photos = useMemo(
+  const allPhotos = useMemo(
     () => ((libraryQuery.data?.photos ?? []) as LibraryPhoto[]).slice().sort((a, b) => a.sortOrder - b.sortOrder),
     [libraryQuery.data?.photos],
   );
+
+  const [selectedLocalityId, setSelectedLocalityId] = useState<string>("");
+
+  const photos = useMemo(() => {
+    if (!selectedLocalityId) return allPhotos;
+    return allPhotos.filter((photo) => photo.localityId === selectedLocalityId);
+  }, [allPhotos, selectedLocalityId]);
+
   const documents = useMemo(
     () => (libraryQuery.data?.documents ?? []) as LibraryDocument[],
     [libraryQuery.data?.documents],
   );
   const intervalFromApi = Number(libraryQuery.data?.settings?.carouselIntervalSeconds ?? 5);
 
+  const localities = useMemo(() => {
+    const items = (localitiesQuery.data?.items ?? []) as any[];
+    return selectTargetLocalities(items).map((loc: any) => ({
+      id: String(loc.id),
+      name: String(loc.name ?? loc.code ?? loc.id),
+      code: String(loc.code ?? ""),
+    }));
+  }, [localitiesQuery.data]);
+
   const [intervalSeconds, setIntervalSeconds] = useState(5);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [photoTitleDrafts, setPhotoTitleDrafts] = useState<Record<string, string>>({});
   const [photoOrderDrafts, setPhotoOrderDrafts] = useState<Record<string, number>>({});
+  const [photoLocalityDrafts, setPhotoLocalityDrafts] = useState<Record<string, string>>({});
   const [documentTitleDrafts, setDocumentTitleDrafts] = useState<Record<string, string>>({});
   const [newPhotoTitle, setNewPhotoTitle] = useState("");
+  const [newPhotoLocalityId, setNewPhotoLocalityId] = useState("");
   const [newDocumentTitle, setNewDocumentTitle] = useState("");
 
   useEffect(() => {
@@ -169,9 +197,29 @@ export function LibraryPage() {
       <Card sx={{ mb: 2 }}>
         <CardContent>
           <Box sx={{ flex: 1 }}>
-            <Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>
-              Carrossel de Fotos
-            </Typography>
+            <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", sm: "center" }} gap={1} sx={{ mb: 1.5 }}>
+              <Typography variant="h6" fontWeight={700}>
+                Carrossel de Fotos
+              </Typography>
+              <TextField
+                select
+                size="small"
+                label="Filtrar por localidade"
+                value={selectedLocalityId}
+                onChange={(e) => {
+                  setSelectedLocalityId(e.target.value);
+                  setCurrentIndex(0);
+                }}
+                sx={{ minWidth: { xs: "100%", sm: 240 } }}
+              >
+                <MenuItem value="">Todas as localidades</MenuItem>
+                {localities.map((loc) => (
+                  <MenuItem key={loc.id} value={loc.id}>
+                    {loc.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Stack>
             <Box
               sx={{
                 position: "relative",
@@ -361,14 +409,31 @@ export function LibraryPage() {
                   <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1.5 }}>
                     Gestão de Fotos
                   </Typography>
-                  <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ mb: 1.5 }}>
-                    <TextField
-                      size="small"
-                      label="Título da nova foto (opcional)"
-                      value={newPhotoTitle}
-                      onChange={(event) => setNewPhotoTitle(event.target.value)}
-                      fullWidth
-                    />
+                  <Stack spacing={1.5} sx={{ mb: 1.5 }}>
+                    <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
+                      <TextField
+                        size="small"
+                        label="Título da nova foto (opcional)"
+                        value={newPhotoTitle}
+                        onChange={(event) => setNewPhotoTitle(event.target.value)}
+                        fullWidth
+                      />
+                      <TextField
+                        select
+                        size="small"
+                        label="Localidade (opcional)"
+                        value={newPhotoLocalityId}
+                        onChange={(event) => setNewPhotoLocalityId(event.target.value)}
+                        sx={{ minWidth: { xs: "100%", md: 240 } }}
+                      >
+                        <MenuItem value="">Sem localidade específica</MenuItem>
+                        {localities.map((loc) => (
+                          <MenuItem key={loc.id} value={loc.id}>
+                            {loc.name}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                    </Stack>
                     <Button
                       component="label"
                       variant="outlined"
@@ -376,7 +441,7 @@ export function LibraryPage() {
                       size="small"
                       startIcon={<UploadRoundedIcon fontSize="small" />}
                       disabled={uploadPhoto.isPending}
-                      sx={{ minWidth: { xs: "auto", md: 140 }, alignSelf: { xs: "stretch", md: "flex-start" } }}
+                      sx={{ alignSelf: { xs: "stretch", md: "flex-start" }, maxWidth: { md: 200 } }}
                     >
                       {uploadPhoto.isPending ? "Enviando..." : "Enviar foto"}
                       <input
@@ -387,8 +452,13 @@ export function LibraryPage() {
                           const file = event.target.files?.[0];
                           if (!file) return;
                           try {
-                            await uploadPhoto.mutateAsync({ file, title: newPhotoTitle.trim() || undefined });
+                            await uploadPhoto.mutateAsync({
+                              file,
+                              title: newPhotoTitle.trim() || undefined,
+                              localityId: newPhotoLocalityId || undefined,
+                            });
                             setNewPhotoTitle("");
+                            setNewPhotoLocalityId("");
                             toast.push({ message: "Foto adicionada.", severity: "success" });
                             libraryQuery.refetch();
                           } catch (error) {
@@ -403,7 +473,7 @@ export function LibraryPage() {
                     </Button>
                   </Stack>
 
-                  {photos.length === 0 ? (
+                  {allPhotos.length === 0 ? (
                     <EmptyState title="Nenhuma foto" description="Adicione fotos para o carrossel da Biblioteca." />
                   ) : (
                     <Table size="small">
@@ -411,14 +481,16 @@ export function LibraryPage() {
                         <TableRow sx={{ bgcolor: "primary.main" }}>
                           <TableCell sx={{ color: "white", fontWeight: 700 }}>Preview</TableCell>
                           <TableCell sx={{ color: "white", fontWeight: 700 }}>Título</TableCell>
+                          <TableCell sx={{ color: "white", fontWeight: 700 }}>Localidade</TableCell>
                           <TableCell sx={{ color: "white", fontWeight: 700, width: 120 }}>Ordem</TableCell>
                           <TableCell sx={{ color: "white", fontWeight: 700 }} align="right">Ações</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {photos.map((photo) => {
+                        {allPhotos.map((photo) => {
                           const titleDraft = photoTitleDrafts[photo.id] ?? photo.title;
                           const orderDraft = photoOrderDrafts[photo.id] ?? photo.sortOrder;
+                          const localityDraft = photoLocalityDrafts[photo.id] ?? photo.localityId ?? "";
                           return (
                             <TableRow key={photo.id} hover>
                               <TableCell>
@@ -438,6 +510,24 @@ export function LibraryPage() {
                                   }
                                   fullWidth
                                 />
+                              </TableCell>
+                              <TableCell>
+                                <TextField
+                                  select
+                                  size="small"
+                                  value={localityDraft}
+                                  onChange={(event) =>
+                                    setPhotoLocalityDrafts((prev) => ({ ...prev, [photo.id]: event.target.value }))
+                                  }
+                                  sx={{ minWidth: 200 }}
+                                >
+                                  <MenuItem value="">Sem localidade</MenuItem>
+                                  {localities.map((loc) => (
+                                    <MenuItem key={loc.id} value={loc.id}>
+                                      {loc.name}
+                                    </MenuItem>
+                                  ))}
+                                </TextField>
                               </TableCell>
                               <TableCell>
                                 <TextField
@@ -462,7 +552,11 @@ export function LibraryPage() {
                                       try {
                                         await updatePhoto.mutateAsync({
                                           id: photo.id,
-                                          payload: { title: titleDraft.trim(), sortOrder: orderDraft },
+                                          payload: {
+                                            title: titleDraft.trim(),
+                                            sortOrder: orderDraft,
+                                            localityId: localityDraft || null,
+                                          },
                                         });
                                         toast.push({ message: "Foto atualizada.", severity: "success" });
                                         libraryQuery.refetch();

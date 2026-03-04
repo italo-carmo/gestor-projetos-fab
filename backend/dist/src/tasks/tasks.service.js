@@ -1562,26 +1562,6 @@ let TasksService = class TasksService {
         };
     }
     async getDashboardNational(user, localityId) {
-        const allowedLocalityIds = await this.getTargetLocalityIds();
-        if (allowedLocalityIds.length === 0) {
-            return {
-                items: [],
-                totals: {
-                    localities: 0,
-                    late: 0,
-                    blocked: 0,
-                    unassigned: 0,
-                    recruitsFemale: 0,
-                    reportsProduced: 0,
-                    smifNewsCount: 0,
-                    visitsCompleted: 0,
-                },
-                lateItems: [],
-                unassignedItems: [],
-                riskTasks: [],
-                executive_hide_pii: user?.executiveHidePii ?? false,
-            };
-        }
         const where = {};
         const constraints = this.getScopeConstraints(user);
         if (constraints.localityId &&
@@ -1595,11 +1575,8 @@ let TasksService = class TasksService {
         else if (localityId) {
             where.id = localityId;
         }
-        const localityWhere = Object.keys(where).length > 0
-            ? { AND: [where, { id: { in: allowedLocalityIds } }] }
-            : { id: { in: allowedLocalityIds } };
         const rawLocalities = await this.prisma.locality.findMany({
-            where: localityWhere,
+            where,
             select: {
                 id: true,
                 name: true,
@@ -1615,6 +1592,26 @@ let TasksService = class TasksService {
         });
         const localityGroups = (0, priority_localities_1.groupTargetLocalities)(rawLocalities);
         const localities = localityGroups.map((group) => group.canonical);
+        if (localities.length === 0) {
+            return {
+                items: [],
+                totals: {
+                    localities: 0,
+                    coverageLocalities: 0,
+                    late: 0,
+                    blocked: 0,
+                    unassigned: 0,
+                    recruitsFemale: 0,
+                    reportsProduced: 0,
+                    smifNewsCount: 0,
+                    visitsCompleted: 0,
+                },
+                lateItems: [],
+                unassignedItems: [],
+                riskTasks: [],
+                executive_hide_pii: user?.executiveHidePii ?? false,
+            };
+        }
         const { aliasByLocalityId } = (0, priority_localities_1.createTargetLocalityAliasMap)(localityGroups);
         const localityAliasIds = Array.from(aliasByLocalityId.keys());
         const activityWhereClauses = [];
@@ -1739,7 +1736,15 @@ let TasksService = class TasksService {
                 .map((activity) => activity.eventDate)
                 .filter((value) => value instanceof Date)
                 .sort((a, b) => b.getTime() - a.getTime())[0];
-            const visitCompleted = visitActivities.some((activity) => activity.status === client_1.ActivityStatus.DONE);
+            const visitCompleted = visitActivities.some((activity) => {
+                if (activity.status === client_1.ActivityStatus.DONE)
+                    return true;
+                if (activity.status === client_1.ActivityStatus.CANCELLED)
+                    return false;
+                if (!activity.eventDate)
+                    return false;
+                return activity.eventDate.getTime() <= now;
+            });
             const late = localityActivities.filter((activity) => isLateActivity(activity)).length;
             const unassigned = localityActivities.filter((activity) => !hasResponsible(activity)).length;
             const progress = localityActivities.length
@@ -1793,10 +1798,12 @@ let TasksService = class TasksService {
             where: { tags: { has: 'smif' } },
         });
         const visitsCompleted = perLocality.filter((item) => item.visitCompleted).length;
+        const coverageLocalities = perLocality.filter((item) => Number(item.recruitsFemaleCountCurrent ?? 0) > 0).length;
         return {
             items: perLocality,
             totals: {
                 localities: perLocality.length,
+                coverageLocalities,
                 late: perLocality.reduce((acc, item) => acc + item.late, 0),
                 blocked: perLocality.reduce((acc, item) => acc + item.blocked, 0),
                 unassigned: perLocality.reduce((acc, item) => acc + item.unassigned, 0),

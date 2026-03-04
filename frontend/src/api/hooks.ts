@@ -1465,10 +1465,11 @@ export function useUpdateLibrarySettings() {
 export function useUploadLibraryPhoto() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (args: { file: File; title?: string }) => {
+    mutationFn: async (args: { file: File; title?: string; localityId?: string }) => {
       const formData = new FormData();
       formData.append("file", args.file);
       if (args.title) formData.append("title", args.title);
+      if (args.localityId) formData.append("localityId", args.localityId);
       return (
         await api.post("/library/photos/upload", formData, {
           headers: { "Content-Type": "multipart/form-data" },
@@ -1484,7 +1485,7 @@ export function useUpdateLibraryPhoto() {
   return useMutation({
     mutationFn: async (args: {
       id: string;
-      payload: { title?: string; sortOrder?: number };
+      payload: { title?: string; sortOrder?: number; localityId?: string | null };
     }) => (await api.put(`/library/photos/${args.id}`, args.payload)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: qk.library }),
   });

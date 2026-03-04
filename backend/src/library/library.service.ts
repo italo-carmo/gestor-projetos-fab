@@ -21,6 +21,15 @@ export class LibraryService {
   async getData() {
     const [photos, documents, settings] = await this.prisma.$transaction([
       this.prisma.libraryPhoto.findMany({
+        include: {
+          locality: {
+            select: {
+              id: true,
+              code: true,
+              name: true,
+            },
+          },
+        },
         orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
       }),
       this.prisma.libraryDocument.findMany({
@@ -84,7 +93,7 @@ export class LibraryService {
 
   async createPhoto(
     file: Express.Multer.File,
-    payload: { title?: string },
+    payload: { title?: string; localityId?: string },
     user?: RbacUser,
   ) {
     this.ensureEditorAccess(user);
@@ -96,12 +105,14 @@ export class LibraryService {
     });
     const nextSortOrder = Number(currentMaxSortOrder._max.sortOrder ?? -1) + 1;
     const title = String(payload.title ?? '').trim() || file.originalname || 'Foto';
+    const localityId = String(payload.localityId ?? '').trim() || null;
     const created = await this.prisma.libraryPhoto.create({
       data: {
         title,
         fileUrl: `/library/uploads/photos/${file.filename}`,
         storageKey: file.filename,
         sortOrder: nextSortOrder,
+        localityId,
         createdById: user?.id,
       },
     });
@@ -110,14 +121,14 @@ export class LibraryService {
       resource: 'library',
       action: 'create_photo',
       entityId: created.id,
-      diffJson: { title: created.title, sortOrder: created.sortOrder },
+      diffJson: { title: created.title, sortOrder: created.sortOrder, localityId: created.localityId },
     });
     return created;
   }
 
   async updatePhoto(
     id: string,
-    payload: { title?: string; sortOrder?: number },
+    payload: { title?: string; sortOrder?: number; localityId?: string | null },
     user?: RbacUser,
   ) {
     this.ensureEditorAccess(user);
@@ -132,11 +143,18 @@ export class LibraryService {
       payload.sortOrder === undefined
         ? current.sortOrder
         : Math.max(0, Math.floor(Number(payload.sortOrder) || 0));
+    const nextLocalityId =
+      payload.localityId === undefined
+        ? current.localityId
+        : payload.localityId === null || payload.localityId === ''
+        ? null
+        : String(payload.localityId).trim() || null;
     const updated = await this.prisma.libraryPhoto.update({
       where: { id },
       data: {
         title: nextTitle,
         sortOrder: nextSortOrder,
+        localityId: nextLocalityId,
       },
     });
     await this.audit.log({
@@ -144,7 +162,7 @@ export class LibraryService {
       resource: 'library',
       action: 'update_photo',
       entityId: updated.id,
-      diffJson: { title: updated.title, sortOrder: updated.sortOrder },
+      diffJson: { title: updated.title, sortOrder: updated.sortOrder, localityId: updated.localityId },
     });
     return updated;
   }

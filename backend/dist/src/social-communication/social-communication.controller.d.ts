@@ -50,6 +50,9 @@ export declare class SocialCommunicationController {
         tags: string[];
         sourceUrl: string;
     }>;
+    uploadCover(file: Express.Multer.File, user: RbacUser): Promise<{
+        coverImageUrl: string;
+    }>;
     update(id: string, dto: UpdateSocialCommunicationArticleDto, user: RbacUser): Promise<{
         createdBy: {
             id: string;

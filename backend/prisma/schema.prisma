@@ -167,6 +167,7 @@ model Locality {
   recruitDesignationsTo      RecruitOmAssignment[] @relation("RecruitOmAssignmentDestination")
   recruitMembers             RecruitFemale[]       @relation("RecruitSourceLocality")
   recruitsDesignatedHere     RecruitFemale[]       @relation("RecruitDestinationLocality")
+  libraryPhotos              LibraryPhoto[]
 }
 
 model Activity {
@@ -734,13 +735,16 @@ model LibraryPhoto {
   fileUrl     String
   storageKey  String?
   sortOrder   Int      @default(0)
+  localityId  String?
   createdById String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  createdBy   User?    @relation("LibraryPhotoCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  locality    Locality? @relation(fields: [localityId], references: [id], onDelete: SetNull)
+  createdBy   User?     @relation("LibraryPhotoCreator", fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([sortOrder, createdAt])
+  @@index([localityId])
 }
 
 model LibraryDocument {

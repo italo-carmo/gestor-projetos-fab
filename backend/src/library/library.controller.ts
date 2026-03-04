@@ -83,7 +83,7 @@ export class LibraryController {
   @UseFilters(MulterExceptionFilter)
   uploadPhoto(
     @UploadedFile() file: Express.Multer.File,
-    @Body() body: { title?: string },
+    @Body() body: { title?: string; localityId?: string },
     @CurrentUser() user: RbacUser,
   ) {
     return this.library.createPhoto(file, body, user);
@@ -92,7 +92,7 @@ export class LibraryController {
   @Put('photos/:id')
   updatePhoto(
     @Param('id') id: string,
-    @Body() body: { title?: string; sortOrder?: number },
+    @Body() body: { title?: string; sortOrder?: number; localityId?: string | null },
     @CurrentUser() user: RbacUser,
   ) {
     return this.library.updatePhoto(id, body, user);

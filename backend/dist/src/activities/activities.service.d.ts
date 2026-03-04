@@ -67,6 +67,9 @@ export declare class ActivitiesService {
         skippedSameLocality: number;
         requestedPairs: number;
     }>;
+    batchReorder(ids: string[], user?: RbacUser): Promise<{
+        updated: number;
+    }>;
     listComments(id: string, user?: RbacUser): Promise<{
         items: {
             id: any;

@@ -81,6 +81,9 @@ let ActivitiesController = class ActivitiesController {
             targetDate: body.targetDate,
         }, user);
     }
+    batchReorder(body, user) {
+        return this.activities.batchReorder(body.ids ?? [], user);
+    }
     updateStatus(id, dto, user) {
         return this.activities.updateStatus(id, dto.status, user);
     }
@@ -244,6 +247,15 @@ __decorate([
     __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", void 0)
 ], ActivitiesController.prototype, "batchReplicate", null);
+__decorate([
+    (0, common_1.Put)('batch/reorder'),
+    (0, require_permission_decorator_1.RequirePermission)('task_instances', 'update'),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", void 0)
+], ActivitiesController.prototype, "batchReorder", null);
 __decorate([
     (0, common_1.Put)(':id/status'),
     __param(0, (0, common_1.Param)('id')),
