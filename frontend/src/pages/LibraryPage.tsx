@@ -3,6 +3,7 @@ import {
   Button,
   Card,
   CardContent,
+  Checkbox,
   Chip,
   Divider,
   Drawer,
@@ -24,7 +25,7 @@ import SaveRoundedIcon from "@mui/icons-material/SaveRounded";
 import ArrowBackIosNewRoundedIcon from "@mui/icons-material/ArrowBackIosNewRounded";
 import ArrowForwardIosRoundedIcon from "@mui/icons-material/ArrowForwardIosRounded";
 import ImageRoundedIcon from "@mui/icons-material/ImageRounded";
-import SettingsRoundedIcon from "@mui/icons-material/SettingsRounded";
+import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import OpenInNewRoundedIcon from "@mui/icons-material/OpenInNewRounded";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -145,12 +146,14 @@ export function LibraryPage() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [photoTitleDrafts, setPhotoTitleDrafts] = useState<Record<string, string>>({});
-  const [photoOrderDrafts, setPhotoOrderDrafts] = useState<Record<string, number>>({});
   const [photoLocalityDrafts, setPhotoLocalityDrafts] = useState<Record<string, string>>({});
   const [documentTitleDrafts, setDocumentTitleDrafts] = useState<Record<string, string>>({});
   const [newPhotoTitle, setNewPhotoTitle] = useState("");
   const [newPhotoLocalityId, setNewPhotoLocalityId] = useState("");
   const [newDocumentTitle, setNewDocumentTitle] = useState("");
+  const [dragPhotoId, setDragPhotoId] = useState<string | null>(null);
+  const [selectedPhotoIds, setSelectedPhotoIds] = useState<string[]>([]);
+  const [bulkLocalityId, setBulkLocalityId] = useState<string>("");
 
   useEffect(() => {
     setIntervalSeconds(Math.max(2, Math.min(60, intervalFromApi)));
@@ -180,12 +183,90 @@ export function LibraryPage() {
     }
   }, [drawerOpen]);
 
+  useEffect(() => {
+    const validIds = new Set(allPhotos.map((photo) => photo.id));
+    setSelectedPhotoIds((prev) => prev.filter((id) => validIds.has(id)));
+  }, [allPhotos]);
+
   if (libraryQuery.isLoading) return <SkeletonState />;
   if (libraryQuery.isError) {
     return <ErrorState error={libraryQuery.error} onRetry={() => libraryQuery.refetch()} />;
   }
 
   const currentPhoto = photos[currentIndex] ?? null;
+
+  const reorderPhotos = async (draggedId: string, targetId: string) => {
+    if (!draggedId || !targetId || draggedId === targetId || updatePhoto.isPending) return;
+
+    const fromIndex = allPhotos.findIndex((photo) => photo.id === draggedId);
+    const toIndex = allPhotos.findIndex((photo) => photo.id === targetId);
+    if (fromIndex < 0 || toIndex < 0) return;
+
+    const reordered = [...allPhotos];
+    const [moved] = reordered.splice(fromIndex, 1);
+    reordered.splice(toIndex, 0, moved);
+
+    const previousSortOrders = new Map(allPhotos.map((photo) => [photo.id, photo.sortOrder]));
+    const updates = reordered
+      .map((photo, index) => ({ id: photo.id, sortOrder: index }))
+      .filter(({ id, sortOrder }) => previousSortOrders.get(id) !== sortOrder);
+
+    if (updates.length === 0) return;
+
+    try {
+      for (const update of updates) {
+        await updatePhoto.mutateAsync({
+          id: update.id,
+          payload: { sortOrder: update.sortOrder },
+        });
+      }
+      toast.push({ message: "Ordem das fotos atualizada.", severity: "success" });
+      await libraryQuery.refetch();
+    } catch (error) {
+      toast.push({
+        message: parseApiError(error).message ?? "Erro ao reordenar fotos.",
+        severity: "error",
+      });
+    } finally {
+      setDragPhotoId(null);
+    }
+  };
+
+  const allPhotosSelected = allPhotos.length > 0 && selectedPhotoIds.length === allPhotos.length;
+
+  const togglePhotoSelection = (photoId: string) => {
+    setSelectedPhotoIds((prev) =>
+      prev.includes(photoId) ? prev.filter((id) => id !== photoId) : [...prev, photoId],
+    );
+  };
+
+  const toggleSelectAllPhotos = () => {
+    setSelectedPhotoIds((prev) => (prev.length === allPhotos.length ? [] : allPhotos.map((photo) => photo.id)));
+  };
+
+  const applyBulkLocality = async () => {
+    if (selectedPhotoIds.length === 0) {
+      toast.push({ message: "Selecione ao menos uma foto.", severity: "warning" });
+      return;
+    }
+
+    try {
+      for (const photoId of selectedPhotoIds) {
+        await updatePhoto.mutateAsync({
+          id: photoId,
+          payload: { localityId: bulkLocalityId || null },
+        });
+      }
+      toast.push({ message: "Localidade atualizada em massa.", severity: "success" });
+      setSelectedPhotoIds([]);
+      await libraryQuery.refetch();
+    } catch (error) {
+      toast.push({
+        message: parseApiError(error).message ?? "Erro ao aplicar localidade em massa.",
+        severity: "error",
+      });
+    }
+  };
 
   return (
     <Box>
@@ -195,18 +276,22 @@ export function LibraryPage() {
             <Typography variant="h4" fontWeight={700}>
               Biblioteca
             </Typography>
-            {canManage && (
-              <Tooltip title="Gerenciar fotos e documentos">
-                <IconButton size="small" onClick={() => setDrawerOpen(true)} sx={{ color: "primary.main" }}>
-                  <SettingsRoundedIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-            )}
           </Stack>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
             Acervo oficial da comissão com galeria de fotos e documentos institucionais.
           </Typography>
         </Box>
+        {canManage && (
+          <Button
+            variant="contained"
+            size="small"
+            startIcon={<EditRoundedIcon fontSize="small" />}
+            onClick={() => setDrawerOpen(true)}
+            sx={{ alignSelf: { xs: "flex-end", md: "center" }, px: 2.2 }}
+          >
+            Editar
+          </Button>
+        )}
       </Stack>
 
       <Card sx={{ mb: 2 }}>
@@ -241,10 +326,10 @@ export function LibraryPage() {
                 borderRadius: 2,
                 overflow: "hidden",
                 width: "100%",
-                maxWidth: { xs: "100%", md: 840 },
+                maxWidth: { xs: "100%", md: 920 },
                 mx: "auto",
                 aspectRatio: "16 / 9",
-                minHeight: { xs: 240, md: 320 },
+                minHeight: { xs: 260, md: 360 },
                 bgcolor: "#0E2E3A",
                 display: "grid",
                 placeItems: "center",
@@ -280,17 +365,24 @@ export function LibraryPage() {
                 </>
               )}
             </Box>
-            <Stack direction="row" spacing={0.8} mt={1.2} flexWrap="wrap" useFlexGap>
-              {photos.map((photo, index) => (
-                <Chip
-                  key={photo.id}
-                  size="small"
-                  label={String(index + 1)}
-                  color={index === currentIndex ? "primary" : "default"}
-                  onClick={() => setCurrentIndex(index)}
-                />
-              ))}
-            </Stack>
+            {photos.length > 0 && (
+              <Stack alignItems="center" spacing={0.8} mt={1.2}>
+                <Typography variant="caption" color="text.secondary">
+                  Foto {currentIndex + 1} de {photos.length}
+                </Typography>
+                <Stack direction="row" spacing={0.8} flexWrap="wrap" useFlexGap justifyContent="center">
+                  {photos.map((photo, index) => (
+                    <Chip
+                      key={photo.id}
+                      size="small"
+                      label={String(index + 1)}
+                      color={index === currentIndex ? "primary" : "default"}
+                      onClick={() => setCurrentIndex(index)}
+                    />
+                  ))}
+                </Stack>
+              </Stack>
+            )}
             {currentPhoto && currentPhoto.title && (
               <Typography variant="subtitle2" sx={{ mt: 1, fontWeight: 700 }}>
                 {currentPhoto.title}
@@ -519,6 +611,32 @@ export function LibraryPage() {
                         }}
                       />
                     </Button>
+                    <Stack direction={{ xs: "column", md: "row" }} spacing={1} alignItems={{ xs: "stretch", md: "center" }}>
+                      <TextField
+                        select
+                        size="small"
+                        label="Localidade em massa"
+                        value={bulkLocalityId}
+                        onChange={(event) => setBulkLocalityId(event.target.value)}
+                        sx={{ minWidth: { xs: "100%", md: 260 } }}
+                      >
+                        <MenuItem value="">Sem localidade</MenuItem>
+                        {localities.map((loc) => (
+                          <MenuItem key={loc.id} value={loc.id}>
+                            {loc.name}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                      <Button
+                        variant="contained"
+                        size="small"
+                        color="primary"
+                        disabled={updatePhoto.isPending || selectedPhotoIds.length === 0}
+                        onClick={applyBulkLocality}
+                      >
+                        Aplicar aos selecionados ({selectedPhotoIds.length})
+                      </Button>
+                    </Stack>
                   </Stack>
 
                   {allPhotos.length === 0 ? (
@@ -528,20 +646,57 @@ export function LibraryPage() {
                       <Table size="small" sx={{ minWidth: 800 }}>
                         <TableHead>
                           <TableRow sx={{ bgcolor: "primary.main" }}>
+                            <TableCell sx={{ color: "white", fontWeight: 700, width: 56, py: 0.6 }}>
+                              <Checkbox
+                                checked={allPhotosSelected}
+                                indeterminate={selectedPhotoIds.length > 0 && !allPhotosSelected}
+                                onChange={toggleSelectAllPhotos}
+                                sx={{ color: "white", "&.Mui-checked": { color: "white" }, "&.MuiCheckbox-indeterminate": { color: "white" } }}
+                              />
+                            </TableCell>
                             <TableCell sx={{ color: "white", fontWeight: 700, width: 100 }}>Preview</TableCell>
                             <TableCell sx={{ color: "white", fontWeight: 700, minWidth: 200 }}>Título</TableCell>
                             <TableCell sx={{ color: "white", fontWeight: 700, minWidth: 180 }}>Localidade</TableCell>
-                            <TableCell sx={{ color: "white", fontWeight: 700, width: 100 }}>Ordem</TableCell>
                             <TableCell sx={{ color: "white", fontWeight: 700, width: 180 }} align="right">Ações</TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
                           {allPhotos.map((photo) => {
                             const titleDraft = photoTitleDrafts[photo.id] ?? photo.title;
-                            const orderDraft = photoOrderDrafts[photo.id] ?? photo.sortOrder;
                             const localityDraft = photoLocalityDrafts[photo.id] ?? photo.localityId ?? "";
                             return (
-                              <TableRow key={photo.id} hover>
+                              <TableRow
+                                key={photo.id}
+                                hover
+                                draggable
+                                onDragStart={(event) => {
+                                  setDragPhotoId(photo.id);
+                                  event.dataTransfer.setData("text/library-photo-id", photo.id);
+                                  event.dataTransfer.effectAllowed = "move";
+                                }}
+                                onDragOver={(event) => {
+                                  event.preventDefault();
+                                  event.dataTransfer.dropEffect = "move";
+                                }}
+                                onDrop={(event) => {
+                                  event.preventDefault();
+                                  const draggedId =
+                                    event.dataTransfer.getData("text/library-photo-id") || dragPhotoId || "";
+                                  void reorderPhotos(draggedId, photo.id);
+                                }}
+                                onDragEnd={() => setDragPhotoId(null)}
+                                sx={{
+                                  cursor: "move",
+                                  opacity: dragPhotoId === photo.id ? 0.55 : 1,
+                                }}
+                              >
+                                <TableCell sx={{ py: 0.6 }}>
+                                  <Checkbox
+                                    checked={selectedPhotoIds.includes(photo.id)}
+                                    onChange={() => togglePhotoSelection(photo.id)}
+                                    onClick={(event) => event.stopPropagation()}
+                                  />
+                                </TableCell>
                                 <TableCell>
                                 <Box
                                   component="img"
@@ -578,20 +733,6 @@ export function LibraryPage() {
                                     ))}
                                   </TextField>
                                 </TableCell>
-                                <TableCell>
-                                  <TextField
-                                    size="small"
-                                    type="number"
-                                    value={String(orderDraft)}
-                                    onChange={(event) =>
-                                      setPhotoOrderDrafts((prev) => ({
-                                        ...prev,
-                                        [photo.id]: Number(event.target.value || 0),
-                                      }))
-                                    }
-                                    sx={{ width: 80 }}
-                                  />
-                                </TableCell>
                                 <TableCell align="right">
                                   <Stack direction="row" spacing={0.8} justifyContent="flex-end" flexWrap="wrap" useFlexGap>
                                     <Button
@@ -604,7 +745,6 @@ export function LibraryPage() {
                                             id: photo.id,
                                             payload: {
                                               title: titleDraft.trim(),
-                                              sortOrder: orderDraft,
                                               localityId: localityDraft || null,
                                             },
                                           });
