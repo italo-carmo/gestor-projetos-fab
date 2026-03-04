@@ -452,8 +452,8 @@ export function LibraryPage() {
           PaperProps={{
             sx: {
               width: { xs: "100%", md: 800 },
-              top: 76,
-              height: "calc(100% - 76px)",
+              top: 84,
+              height: "calc(100% - 84px)",
             },
           }}
         >
@@ -643,7 +643,7 @@ export function LibraryPage() {
                     <EmptyState title="Nenhuma foto" description="Adicione fotos para o carrossel da Biblioteca." />
                   ) : (
                     <Box sx={{ overflowX: "auto" }}>
-                      <Table size="small" sx={{ minWidth: 800 }}>
+                      <Table size="small" sx={{ width: "100%", tableLayout: "fixed" }}>
                         <TableHead>
                           <TableRow sx={{ bgcolor: "primary.main" }}>
                             <TableCell sx={{ color: "white", fontWeight: 700, width: 56, py: 0.6 }}>
@@ -654,10 +654,10 @@ export function LibraryPage() {
                                 sx={{ color: "white", "&.Mui-checked": { color: "white" }, "&.MuiCheckbox-indeterminate": { color: "white" } }}
                               />
                             </TableCell>
-                            <TableCell sx={{ color: "white", fontWeight: 700, width: 100 }}>Preview</TableCell>
-                            <TableCell sx={{ color: "white", fontWeight: 700, minWidth: 200 }}>Título</TableCell>
-                            <TableCell sx={{ color: "white", fontWeight: 700, minWidth: 180 }}>Localidade</TableCell>
-                            <TableCell sx={{ color: "white", fontWeight: 700, width: 180 }} align="right">Ações</TableCell>
+                            <TableCell sx={{ color: "white", fontWeight: 700, width: 88 }}>Preview</TableCell>
+                            <TableCell sx={{ color: "white", fontWeight: 700, width: "38%" }}>Título</TableCell>
+                            <TableCell sx={{ color: "white", fontWeight: 700, width: "32%" }}>Localidade</TableCell>
+                            <TableCell sx={{ color: "white", fontWeight: 700, width: 138 }} align="right">Ações</TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>

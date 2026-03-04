@@ -1170,8 +1170,8 @@ export function DocumentsPage() {
         PaperProps={{
           sx: {
             width: { xs: '100%', md: 680 },
-            top: 76,
-            height: 'calc(100% - 76px)',
+            top: 84,
+            height: 'calc(100% - 84px)',
           },
         }}
       >
