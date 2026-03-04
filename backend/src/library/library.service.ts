@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import sharp from 'sharp';
 import { AuditService } from '../audit/audit.service';
 import { throwError } from '../common/http-error';
 import { PrismaService } from '../prisma/prisma.service';
@@ -12,7 +13,11 @@ import {
 import type { RbacUser } from '../rbac/rbac.types';
 import { libraryPhotosDir } from './library.controller';
 
-const MAX_IMAGE_SIZE = 2 * 1024 * 1024; // 2MB máximo para base64
+const MAX_IMAGE_SIZE = 2 * 1024 * 1024; // 2MB máximo para base64 (após compressão)
+const MAX_IMAGE_WIDTH = 1920;
+const MAX_IMAGE_HEIGHT = 1080;
+const JPEG_QUALITY = 80;
+const PNG_QUALITY = 80;
 
 @Injectable()
 export class LibraryService {
@@ -103,58 +108,115 @@ export class LibraryService {
     if (!file) {
       throwError('VALIDATION_ERROR', { field: 'file', reason: 'required' });
     }
-    
-    // Validate file size (max 2MB for base64 storage)
-    if (file.size > MAX_IMAGE_SIZE) {
+
+    const filePath = path.join(libraryPhotosDir, file.filename);
+    let fileBuffer: Buffer;
+    let mimeType: string;
+
+    try {
+      // Read and compress image
+      const image = sharp(filePath);
+      const metadata = await image.metadata();
+      
+      // Determine output format (convert to JPEG for better compression, except for PNG with transparency)
+      const isPng = metadata.format === 'png' && metadata.hasAlpha;
+      mimeType = isPng ? 'image/png' : 'image/jpeg';
+
+      // Resize if needed (maintain aspect ratio)
+      let resized = image;
+      if (metadata.width && metadata.height) {
+        if (metadata.width > MAX_IMAGE_WIDTH || metadata.height > MAX_IMAGE_HEIGHT) {
+          resized = image.resize(MAX_IMAGE_WIDTH, MAX_IMAGE_HEIGHT, {
+            fit: 'inside',
+            withoutEnlargement: true,
+          });
+        }
+      }
+
+      // Compress image
+      if (isPng) {
+        fileBuffer = await resized.png({ quality: PNG_QUALITY, compressionLevel: 9 }).toBuffer();
+      } else {
+        fileBuffer = await resized.jpeg({ quality: JPEG_QUALITY, mozjpeg: true }).toBuffer();
+        mimeType = 'image/jpeg';
+      }
+
+      // Check final size (should be under 2MB after compression)
+      if (fileBuffer.length > MAX_IMAGE_SIZE) {
+        // If still too large, reduce quality further
+        let quality = isPng ? Math.max(60, PNG_QUALITY - 20) : Math.max(60, JPEG_QUALITY - 20);
+        let attempts = 0;
+        while (fileBuffer.length > MAX_IMAGE_SIZE && attempts < 3) {
+          quality = Math.max(40, quality - 10);
+          if (isPng) {
+            fileBuffer = await image.resize(MAX_IMAGE_WIDTH, MAX_IMAGE_HEIGHT, {
+              fit: 'inside',
+              withoutEnlargement: true,
+            }).png({ quality, compressionLevel: 9 }).toBuffer();
+          } else {
+            fileBuffer = await image.resize(MAX_IMAGE_WIDTH, MAX_IMAGE_HEIGHT, {
+              fit: 'inside',
+              withoutEnlargement: true,
+            }).jpeg({ quality, mozjpeg: true }).toBuffer();
+          }
+          attempts++;
+        }
+      }
+
+      // Convert to base64
+      const base64Data = fileBuffer.toString('base64');
+      
+      // Clean up uploaded file since we're storing in DB
+      try {
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      } catch {
+        // Ignore cleanup errors
+      }
+
+      const currentMaxSortOrder = await this.prisma.libraryPhoto.aggregate({
+        _max: { sortOrder: true },
+      });
+      const nextSortOrder = Number(currentMaxSortOrder._max.sortOrder ?? -1) + 1;
+      const title = String(payload.title ?? '').trim() || file.originalname || 'Foto';
+      const localityId = String(payload.localityId ?? '').trim() || null;
+      
+      const created = await this.prisma.libraryPhoto.create({
+        data: {
+          title,
+          imageData: base64Data,
+          mimeType,
+          fileUrl: null, // No longer used
+          storageKey: null, // No longer used
+          sortOrder: nextSortOrder,
+          localityId,
+          createdById: user?.id,
+        },
+      });
+      await this.audit.log({
+        userId: user?.id,
+        resource: 'library',
+        action: 'create_photo',
+        entityId: created.id,
+        diffJson: { title: created.title, sortOrder: created.sortOrder, localityId: created.localityId },
+      });
+      return created;
+    } catch (error) {
+      // Clean up on error
+      try {
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      } catch {
+        // Ignore cleanup errors
+      }
       throwError('VALIDATION_ERROR', {
         field: 'file',
-        reason: 'file_too_large',
-        message: `Imagem muito grande. Tamanho máximo: ${MAX_IMAGE_SIZE / 1024 / 1024}MB`,
+        reason: 'image_processing_failed',
+        message: 'Erro ao processar a imagem. Verifique se o arquivo é uma imagem válida.',
       });
     }
-
-    // Convert image to base64
-    const filePath = path.join(libraryPhotosDir, file.filename);
-    const fileBuffer = fs.readFileSync(filePath);
-    const base64Data = fileBuffer.toString('base64');
-    const mimeType = file.mimetype || 'image/jpeg';
-
-    // Clean up uploaded file since we're storing in DB
-    try {
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
-      }
-    } catch {
-      // Ignore cleanup errors
-    }
-
-    const currentMaxSortOrder = await this.prisma.libraryPhoto.aggregate({
-      _max: { sortOrder: true },
-    });
-    const nextSortOrder = Number(currentMaxSortOrder._max.sortOrder ?? -1) + 1;
-    const title = String(payload.title ?? '').trim() || file.originalname || 'Foto';
-    const localityId = String(payload.localityId ?? '').trim() || null;
-    
-    const created = await this.prisma.libraryPhoto.create({
-      data: {
-        title,
-        imageData: base64Data,
-        mimeType,
-        fileUrl: null, // No longer used
-        storageKey: null, // No longer used
-        sortOrder: nextSortOrder,
-        localityId,
-        createdById: user?.id,
-      },
-    });
-    await this.audit.log({
-      userId: user?.id,
-      resource: 'library',
-      action: 'create_photo',
-      entityId: created.id,
-      diffJson: { title: created.title, sortOrder: created.sortOrder, localityId: created.localityId },
-    });
-    return created;
   }
 
   async updatePhoto(

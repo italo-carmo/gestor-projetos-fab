@@ -188,6 +188,11 @@ export declare class ActivitiesService {
         executionSchedule?: string;
         activitiesPerformed: string;
         participantsCount: number;
+        instructorsCount: number;
+        recruitsCount: number;
+        eloPsychologyCount: number;
+        eloSocialAssistanceCount: number;
+        eloGraduadoMasterCount: number;
         participantsCharacteristics: string;
         conclusion: string;
         city: string;

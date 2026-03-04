@@ -77,7 +77,7 @@ export class LibraryController {
         const mimetype = String(file.mimetype ?? '').toLowerCase();
         cb(null, mimetype.startsWith('image/'));
       },
-      limits: { fileSize: 2 * 1024 * 1024 }, // 2MB máximo para base64
+      limits: { fileSize: 10 * 1024 * 1024 }, // 10MB máximo antes da compressão (será comprimido para <2MB)
     }),
   )
   @UseFilters(MulterExceptionFilter)

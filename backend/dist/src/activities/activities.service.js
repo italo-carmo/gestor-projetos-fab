@@ -1225,7 +1225,12 @@ let ActivitiesService = class ActivitiesService {
             missionObjectives: (0, sanitize_1.sanitizeText)(payload.missionObjectives ?? ''),
             executionSchedule: (0, sanitize_1.sanitizeText)(payload.executionSchedule ?? ''),
             activitiesPerformed: (0, sanitize_1.sanitizeText)(payload.activitiesPerformed),
-            participantsCount: payload.participantsCount,
+            participantsCount: Math.max(0, Number(payload.participantsCount) || 0),
+            instructorsCount: Math.max(0, Number(payload.instructorsCount) || 0),
+            recruitsCount: Math.max(0, Number(payload.recruitsCount) || 0),
+            eloPsychologyCount: Math.max(0, Number(payload.eloPsychologyCount) || 0),
+            eloSocialAssistanceCount: Math.max(0, Number(payload.eloSocialAssistanceCount) || 0),
+            eloGraduadoMasterCount: Math.max(0, Number(payload.eloGraduadoMasterCount) || 0),
             participantsCharacteristics: (0, sanitize_1.sanitizeText)(payload.participantsCharacteristics),
             conclusion: (0, sanitize_1.sanitizeText)(payload.conclusion),
             city: (0, sanitize_1.sanitizeText)(payload.city),
@@ -1413,6 +1418,11 @@ let ActivitiesService = class ActivitiesService {
                 activityAnalysis: report.missionSupport,
                 activitiesPerformed: report.activitiesPerformed,
                 participantsCount: report.participantsCount,
+                instructorsCount: report.instructorsCount ?? 0,
+                recruitsCount: report.recruitsCount ?? 0,
+                eloPsychologyCount: report.eloPsychologyCount ?? 0,
+                eloSocialAssistanceCount: report.eloSocialAssistanceCount ?? 0,
+                eloGraduadoMasterCount: report.eloGraduadoMasterCount ?? 0,
                 participantsCharacteristics: report.participantsCharacteristics,
                 conclusion: report.conclusion,
                 city: report.city,
@@ -1541,6 +1551,11 @@ let ActivitiesService = class ActivitiesService {
         writeLine('Análise da atividade', report.missionSupport);
         writeLine('Atividades realizadas', report.activitiesPerformed);
         writeLine('Participantes (número)', String(report.participantsCount));
+        writeLine('Participantes por perfil', `Instrutores: ${report.instructorsCount ?? 0}\n` +
+            `Recrutas: ${report.recruitsCount ?? 0}\n` +
+            `Elo Psicologia: ${report.eloPsychologyCount ?? 0}\n` +
+            `Elo Assistência Social: ${report.eloSocialAssistanceCount ?? 0}\n` +
+            `Elo Graduado Master: ${report.eloGraduadoMasterCount ?? 0}`);
         writeLine('Participantes (características)', report.participantsCharacteristics);
         writeLine('Conclusão', report.conclusion);
         writeLine('Cidade', report.city);

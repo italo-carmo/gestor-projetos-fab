@@ -83,7 +83,7 @@ let LibraryController = class LibraryController {
         return this.library.updatePhoto(id, body, user);
     }
     deletePhoto(id, user) {
-        return this.library.deletePhoto(id, exports.libraryPhotosDir, user);
+        return this.library.deletePhoto(id, '', user);
     }
     uploadDocument(file, body, user) {
         return this.library.createDocument(file, body, user);
@@ -125,7 +125,7 @@ __decorate([
             const mimetype = String(file.mimetype ?? '').toLowerCase();
             cb(null, mimetype.startsWith('image/'));
         },
-        limits: { fileSize: 8 * 1024 * 1024 },
+        limits: { fileSize: 10 * 1024 * 1024 },
     })),
     (0, common_1.UseFilters)(multer_exception_filter_1.MulterExceptionFilter),
     __param(0, (0, common_1.UploadedFile)()),

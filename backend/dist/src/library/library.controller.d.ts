@@ -17,10 +17,12 @@ export declare class LibraryController {
     }, user: RbacUser): Promise<any>;
     uploadPhoto(file: Express.Multer.File, body: {
         title?: string;
+        localityId?: string;
     }, user: RbacUser): Promise<any>;
     updatePhoto(id: string, body: {
         title?: string;
         sortOrder?: number;
+        localityId?: string | null;
     }, user: RbacUser): Promise<any>;
     deletePhoto(id: string, user: RbacUser): Promise<{
         success: boolean;

@@ -22,6 +22,11 @@ class UpsertActivityReportDto {
     executionSchedule;
     activitiesPerformed;
     participantsCount;
+    instructorsCount;
+    recruitsCount;
+    eloPsychologyCount;
+    eloSocialAssistanceCount;
+    eloGraduadoMasterCount;
     participantsCharacteristics;
     conclusion;
     city;
@@ -73,6 +78,31 @@ __decorate([
     (0, class_validator_1.Min)(0),
     __metadata("design:type", Number)
 ], UpsertActivityReportDto.prototype, "participantsCount", void 0);
+__decorate([
+    (0, class_validator_1.IsInt)(),
+    (0, class_validator_1.Min)(0),
+    __metadata("design:type", Number)
+], UpsertActivityReportDto.prototype, "instructorsCount", void 0);
+__decorate([
+    (0, class_validator_1.IsInt)(),
+    (0, class_validator_1.Min)(0),
+    __metadata("design:type", Number)
+], UpsertActivityReportDto.prototype, "recruitsCount", void 0);
+__decorate([
+    (0, class_validator_1.IsInt)(),
+    (0, class_validator_1.Min)(0),
+    __metadata("design:type", Number)
+], UpsertActivityReportDto.prototype, "eloPsychologyCount", void 0);
+__decorate([
+    (0, class_validator_1.IsInt)(),
+    (0, class_validator_1.Min)(0),
+    __metadata("design:type", Number)
+], UpsertActivityReportDto.prototype, "eloSocialAssistanceCount", void 0);
+__decorate([
+    (0, class_validator_1.IsInt)(),
+    (0, class_validator_1.Min)(0),
+    __metadata("design:type", Number)
+], UpsertActivityReportDto.prototype, "eloGraduadoMasterCount", void 0);
 __decorate([
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)

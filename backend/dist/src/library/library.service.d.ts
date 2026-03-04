@@ -18,12 +18,14 @@ export declare class LibraryService {
     }, user?: RbacUser): Promise<any>;
     createPhoto(file: Express.Multer.File, payload: {
         title?: string;
+        localityId?: string;
     }, user?: RbacUser): Promise<any>;
     updatePhoto(id: string, payload: {
         title?: string;
         sortOrder?: number;
+        localityId?: string | null;
     }, user?: RbacUser): Promise<any>;
-    deletePhoto(id: string, photosDir: string, user?: RbacUser): Promise<{
+    deletePhoto(id: string, _photosDir: string, user?: RbacUser): Promise<{
         success: boolean;
     }>;
     createDocument(file: Express.Multer.File, payload: {
