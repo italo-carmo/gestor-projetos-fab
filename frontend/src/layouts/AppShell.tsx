@@ -71,7 +71,7 @@ import {
 
 const drawerExpandedWidth = 284;
 const drawerCollapsedWidth = 92;
-const headerHeight = 84;
+const headerHeight = 76;
 
 type NavItem = { label: string; to: string; icon: JSX.Element };
 type NavSection = { id: string; label?: string; items: NavItem[] };
@@ -937,7 +937,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         component="main"
         sx={{ flexGrow: 1, px: { xs: 1.5, md: 3 }, pb: 3.5 }}
       >
-        <Toolbar sx={{ minHeight: headerHeight + 8 }} />
+        <Toolbar sx={{ minHeight: headerHeight }} />
         <Box
           className="page-enter"
           sx={{ maxWidth: 1650, mx: "auto", pt: { xs: 1.2, md: 1.8 } }}

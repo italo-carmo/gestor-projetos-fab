@@ -438,9 +438,6 @@ export function LibraryPage() {
             </Table>
           )}
           <Divider sx={{ my: 1.2 }} />
-          <Typography variant="caption" color="text.secondary">
-            Permissões de edição: TI e Coordenação CIPAVD. Demais perfis podem visualizar e abrir os arquivos.
-          </Typography>
         </CardContent>
       </Card>
 
@@ -452,8 +449,8 @@ export function LibraryPage() {
           PaperProps={{
             sx: {
               width: { xs: "100%", md: 800 },
-              top: 84,
-              height: "calc(100% - 84px)",
+              top: 76,
+              height: "calc(100% - 76px)",
             },
           }}
         >

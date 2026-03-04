@@ -1823,8 +1823,8 @@ export function CpcaCasesPage() {
         PaperProps={{
           sx: {
             width: { xs: "100%", md: 900 },
-            top: 84,
-            height: "calc(100% - 84px)",
+            top: 76,
+            height: "calc(100% - 76px)",
           },
         }}
       >
