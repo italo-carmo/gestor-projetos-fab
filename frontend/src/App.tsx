@@ -8,10 +8,8 @@ import { ActivitiesPage } from './pages/ActivitiesPage';
 import { GanttPage } from './pages/GanttPage';
 import { CalendarPage } from './pages/CalendarPage';
 import { AdminRbacPage } from './pages/AdminRbacPage';
-import { EloRolesPage } from './pages/EloRolesPage';
-import { PostosPage } from './pages/PostosPage';
+import { AdminPage } from './pages/AdminPage';
 import { OmsAdminPage } from './pages/OmsAdminPage';
-import { AdminPhasesPage } from './pages/AdminPhasesPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { LoginPage } from './pages/LoginPage';
 import { MeetingsPage } from './pages/MeetingsPage';
@@ -182,7 +180,10 @@ function App() {
                   }
                 />
                 <Route path="/admin/rbac" element={<AdminRbacPage />} />
-                <Route path="/admin/elo-roles" element={<EloRolesPage />} />
+                <Route path="/admin" element={<AdminPage />} />
+                <Route path="/admin/postos" element={<Navigate to="/admin?tab=postos" replace />} />
+                <Route path="/admin/phases" element={<Navigate to="/admin?tab=phases" replace />} />
+                <Route path="/admin/elo-roles" element={<Navigate to="/admin?tab=elo-roles" replace />} />
                 <Route
                   path="/admin/oms"
                   element={
@@ -191,8 +192,6 @@ function App() {
                     </RequireRoleAccess>
                   }
                 />
-                <Route path="/admin/postos" element={<PostosPage />} />
-                <Route path="/admin/phases" element={<AdminPhasesPage />} />
                 <Route path="*" element={<NotFoundPage />} />
               </Routes>
             </AppShell>
