@@ -73,7 +73,13 @@ type LibraryDocument = {
 function toApiUrl(path: string) {
   if (!path) return "";
   if (/^https?:\/\//i.test(path)) return path;
+  // Library uploads are served via /api/library/uploads/ (nginx proxies /api/ to backend)
+  // So we need to ensure /api is prepended
   const baseUrl = String(api.defaults.baseURL ?? "/api");
+  if (path.startsWith("/library/uploads/")) {
+    // Ensure /api prefix for library uploads
+    return `${baseUrl.replace(/\/$/, "")}${path}`;
+  }
   if (!baseUrl || baseUrl === "/api") return path;
   return `${baseUrl.replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
 }
