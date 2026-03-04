@@ -84,7 +84,6 @@ const navSections: NavSection[] = [
       { label: "SMIF", to: "/dashboard/smif", icon: <DashboardIcon fontSize="small" /> },
       { label: "CIPAVD", to: "/dashboard/cipavd", icon: <InsightsRoundedIcon fontSize="small" /> },
       { label: "CPCA", to: "/dashboard/cpca", icon: <PolicyRoundedIcon fontSize="small" /> },
-      { label: "Organograma", to: "/org-chart", icon: <AccountTreeIcon fontSize="small" /> },
       { label: "Comunicação Social", to: "/social-communication", icon: <NewspaperRoundedIcon fontSize="small" /> },
       { label: "Biblioteca", to: "/library", icon: <PhotoLibraryRoundedIcon fontSize="small" /> },
     ],
@@ -107,6 +106,7 @@ const navSections: NavSection[] = [
     items: [
       { label: "Tarefas", to: "/tasks", icon: <TaskIcon fontSize="small" /> },
       { label: "Reuniões", to: "/meetings", icon: <GroupsIcon fontSize="small" /> },
+      { label: "Organograma", to: "/org-chart", icon: <AccountTreeIcon fontSize="small" /> },
       { label: "Cronograma", to: "/gantt", icon: <TaskIcon fontSize="small" /> },
       { label: "Calendário", to: "/calendar", icon: <EventNoteIcon fontSize="small" /> },
       { label: "Missões", to: "/missions", icon: <FlagRoundedIcon fontSize="small" /> },
