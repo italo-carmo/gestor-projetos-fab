@@ -562,8 +562,17 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <Box sx={{ display: "flex", minHeight: "100vh" }}>
       <CssBaseline />
-      <AppBar position="fixed" sx={{ zIndex: theme.zIndex.drawer + 1 }}>
-        <Toolbar sx={{ minHeight: headerHeight, gap: 1.2 }}>
+      <AppBar
+        position="fixed"
+        sx={{ zIndex: theme.zIndex.drawer + 1, height: `${headerHeight}px` }}
+      >
+        <Toolbar
+          sx={{
+            minHeight: `${headerHeight}px !important`,
+            height: `${headerHeight}px`,
+            gap: 1.2,
+          }}
+        >
           {isMobile && (
             <IconButton
               edge="start"
@@ -920,7 +929,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             "& .MuiDrawer-paper": {
               width: { xs: drawerExpandedWidth, lg: sidebarWidth },
               boxSizing: "border-box",
-              top: { lg: headerHeight },
+              top: { lg: `${headerHeight}px` },
               height: { lg: `calc(100% - ${headerHeight}px)` },
               overflowX: "hidden",
               transition: theme.transitions.create("width", {
@@ -937,7 +946,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         component="main"
         sx={{ flexGrow: 1, px: { xs: 1.5, md: 3 }, pb: 3.5 }}
       >
-        <Toolbar sx={{ minHeight: headerHeight }} />
+        <Toolbar sx={{ minHeight: `${headerHeight}px !important`, height: `${headerHeight}px` }} />
         <Box
           className="page-enter"
           sx={{ maxWidth: 1650, mx: "auto", pt: { xs: 1.2, md: 1.8 } }}
