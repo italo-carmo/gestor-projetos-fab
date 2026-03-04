@@ -22,6 +22,7 @@ export const qk = {
   taskTemplates: ["taskTemplates"] as const,
   notices: (filters: Record<string, any>) => ["notices", filters] as const,
   socialCommunication: (filters: Record<string, any>) => ["socialCommunication", filters] as const,
+  library: ["library"] as const,
   meetings: (filters: Record<string, any>) => ["meetings", filters] as const,
   checklists: (filters: Record<string, any>) => ["checklists", filters] as const,
   elos: (filters: Record<string, any>) => ["elos", filters] as const,

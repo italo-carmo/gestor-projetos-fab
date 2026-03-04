@@ -1444,6 +1444,95 @@ export function useDeleteSocialCommunicationArticle() {
   });
 }
 
+/** Library */
+export function useLibrary() {
+  return useQuery({
+    queryKey: qk.library,
+    queryFn: async () => (await api.get("/library")).data,
+    staleTime: 10_000,
+  });
+}
+
+export function useUpdateLibrarySettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: { carouselIntervalSeconds: number }) =>
+      (await api.put("/library/settings", payload)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.library }),
+  });
+}
+
+export function useUploadLibraryPhoto() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { file: File; title?: string }) => {
+      const formData = new FormData();
+      formData.append("file", args.file);
+      if (args.title) formData.append("title", args.title);
+      return (
+        await api.post("/library/photos/upload", formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        })
+      ).data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.library }),
+  });
+}
+
+export function useUpdateLibraryPhoto() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      payload: { title?: string; sortOrder?: number };
+    }) => (await api.put(`/library/photos/${args.id}`, args.payload)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.library }),
+  });
+}
+
+export function useDeleteLibraryPhoto() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await api.delete(`/library/photos/${id}`)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.library }),
+  });
+}
+
+export function useUploadLibraryDocument() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { file: File; title?: string }) => {
+      const formData = new FormData();
+      formData.append("file", args.file);
+      if (args.title) formData.append("title", args.title);
+      return (
+        await api.post("/library/documents/upload", formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        })
+      ).data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.library }),
+  });
+}
+
+export function useUpdateLibraryDocument() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; payload: { title?: string } }) =>
+      (await api.put(`/library/documents/${args.id}`, args.payload)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.library }),
+  });
+}
+
+export function useDeleteLibraryDocument() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      (await api.delete(`/library/documents/${id}`)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.library }),
+  });
+}
+
 /** Meetings */
 export function useMeetings(filters: Record<string, any>) {
   return useQuery({

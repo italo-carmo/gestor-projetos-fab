@@ -28,6 +28,7 @@ import { MissionsPage } from './pages/MissionsPage';
 import { SocialCommunicationPage } from './pages/SocialCommunicationPage';
 import { CpcaCasesPage } from './pages/CpcaCasesPage';
 import { CpcaStatsPage } from './pages/CpcaStatsPage';
+import { LibraryPage } from './pages/LibraryPage';
 import { RequireAuth } from './app/RequireAuth';
 import { RequireRoleAccess } from './app/RequireRoleAccess';
 import {
@@ -161,6 +162,7 @@ function App() {
                 <Route path="/checklists" element={<ChecklistsPage />} />
                 <Route path="/templates" element={<TaskTemplatesPage />} />
                 <Route path="/social-communication" element={<SocialCommunicationPage />} />
+                <Route path="/library" element={<LibraryPage />} />
                 <Route
                   path="/documents"
                   element={

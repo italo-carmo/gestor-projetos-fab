@@ -55,6 +55,8 @@ model User {
   cpcaCasesUpdated CpcComplaintCase[] @relation("CpcComplaintCaseUpdatedBy")
   cpcaCaseComments CpcComplaintComment[] @relation("CpcComplaintCommentAuthor")
   cpcaCaseStatusChanges CpcComplaintStatusHistory[] @relation("CpcComplaintStatusChangedBy")
+  libraryPhotosCreated LibraryPhoto[] @relation("LibraryPhotoCreator")
+  libraryDocumentsCreated LibraryDocument[] @relation("LibraryDocumentCreator")
 }
 
 model UserModuleAccessOverride {
@@ -719,6 +721,45 @@ model SocialCommunicationArticle {
 
   @@index([createdAt])
   @@index([publishedAt])
+}
+
+model LibraryPhoto {
+  id          String   @id @default(cuid())
+  title       String
+  fileUrl     String
+  storageKey  String?
+  sortOrder   Int      @default(0)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  createdBy   User?    @relation("LibraryPhotoCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([sortOrder, createdAt])
+}
+
+model LibraryDocument {
+  id          String   @id @default(cuid())
+  title       String
+  fileName    String
+  fileUrl     String
+  storageKey  String?
+  mimeType    String?
+  fileSize    Int?
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  createdBy   User?    @relation("LibraryDocumentCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+}
+
+model LibrarySetting {
+  id                      String   @id @default(cuid())
+  carouselIntervalSeconds Int      @default(5)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
 }
 
 model Checklist {

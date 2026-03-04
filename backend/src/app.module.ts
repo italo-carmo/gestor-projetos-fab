@@ -26,6 +26,7 @@ import { FabLdapModule } from './ldap/fab-ldap.module';
 import { MissionsModule } from './missions/missions.module';
 import { SocialCommunicationModule } from './social-communication/social-communication.module';
 import { CpcaModule } from './cpca/cpca.module';
+import { LibraryModule } from './library/library.module';
 
 @Module({
   imports: [
@@ -59,6 +60,7 @@ import { CpcaModule } from './cpca/cpca.module';
     MissionsModule,
     SocialCommunicationModule,
     CpcaModule,
+    LibraryModule,
   ],
   controllers: [AppController],
   providers: [AppService],
