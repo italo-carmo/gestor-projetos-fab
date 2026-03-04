@@ -220,45 +220,48 @@ export function LibraryPage() {
               )}
             </Box>
 
-            <Box sx={{ width: { xs: "100%", lg: 320 } }}>
-              <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
-                Configuração
-              </Typography>
-              <Stack spacing={1.2}>
-                <TextField
-                  select
-                  size="small"
-                  label="Troca automática"
-                  value={String(intervalSeconds)}
-                  onChange={(event) => setIntervalSeconds(Number(event.target.value))}
-                >
-                  {[2, 3, 5, 8, 10, 12, 15, 20, 30].map((seconds) => (
-                    <MenuItem key={seconds} value={String(seconds)}>
-                      {seconds} segundos
-                    </MenuItem>
-                  ))}
-                </TextField>
-                <Button
-                  variant="contained"
-                  color="success"
-                  startIcon={<SaveRoundedIcon fontSize="small" />}
-                  disabled={!canManage || updateSettings.isPending || intervalSeconds === intervalFromApi}
-                  onClick={async () => {
-                    try {
-                      await updateSettings.mutateAsync({ carouselIntervalSeconds: intervalSeconds });
-                      toast.push({ message: "Intervalo atualizado.", severity: "success" });
-                    } catch (error) {
-                      toast.push({
-                        message: parseApiError(error).message ?? "Erro ao salvar intervalo.",
-                        severity: "error",
-                      });
-                    }
-                  }}
-                >
-                  Salvar intervalo
-                </Button>
-              </Stack>
-            </Box>
+            {canManage && (
+              <Box sx={{ width: { xs: "100%", lg: 320 } }}>
+                <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
+                  Configuração
+                </Typography>
+                <Stack spacing={1.2}>
+                  <TextField
+                    select
+                    size="small"
+                    label="Troca automática"
+                    value={String(intervalSeconds)}
+                    onChange={(event) => setIntervalSeconds(Number(event.target.value))}
+                  >
+                    {[2, 3, 5, 8, 10, 12, 15, 20, 30].map((seconds) => (
+                      <MenuItem key={seconds} value={String(seconds)}>
+                        {seconds} segundos
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                  <Button
+                    variant="contained"
+                    color="success"
+                    size="small"
+                    startIcon={<SaveRoundedIcon fontSize="small" />}
+                    disabled={!canManage || updateSettings.isPending || intervalSeconds === intervalFromApi}
+                    onClick={async () => {
+                      try {
+                        await updateSettings.mutateAsync({ carouselIntervalSeconds: intervalSeconds });
+                        toast.push({ message: "Intervalo atualizado.", severity: "success" });
+                      } catch (error) {
+                        toast.push({
+                          message: parseApiError(error).message ?? "Erro ao salvar intervalo.",
+                          severity: "error",
+                        });
+                      }
+                    }}
+                  >
+                    Salvar intervalo
+                  </Button>
+                </Stack>
+              </Box>
+            )}
           </Stack>
         </CardContent>
       </Card>
@@ -277,7 +280,15 @@ export function LibraryPage() {
                 onChange={(event) => setNewPhotoTitle(event.target.value)}
                 fullWidth
               />
-              <Button component="label" variant="contained" color="success" startIcon={<UploadRoundedIcon fontSize="small" />} disabled={uploadPhoto.isPending}>
+              <Button
+                component="label"
+                variant="outlined"
+                color="primary"
+                size="small"
+                startIcon={<UploadRoundedIcon fontSize="small" />}
+                disabled={uploadPhoto.isPending}
+                sx={{ alignSelf: { xs: "stretch", md: "flex-start" }, minWidth: { xs: "auto", md: 140 } }}
+              >
                 {uploadPhoto.isPending ? "Enviando..." : "Enviar foto"}
                 <input
                   type="file"
@@ -429,7 +440,15 @@ export function LibraryPage() {
                 onChange={(event) => setNewDocumentTitle(event.target.value)}
                 fullWidth
               />
-              <Button component="label" variant="contained" color="success" startIcon={<UploadRoundedIcon fontSize="small" />} disabled={uploadDocument.isPending}>
+              <Button
+                component="label"
+                variant="outlined"
+                color="primary"
+                size="small"
+                startIcon={<UploadRoundedIcon fontSize="small" />}
+                disabled={uploadDocument.isPending}
+                sx={{ alignSelf: { xs: "stretch", md: "flex-start" }, minWidth: { xs: "auto", md: 160 } }}
+              >
                 {uploadDocument.isPending ? "Enviando..." : "Enviar documento"}
                 <input
                   type="file"
