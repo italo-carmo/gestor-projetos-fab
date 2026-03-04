@@ -240,7 +240,7 @@ export function LibraryPage() {
                 position: "relative",
                 borderRadius: 2,
                 overflow: "hidden",
-                minHeight: { xs: 220, md: 340 },
+                minHeight: { xs: 180, md: 240 },
                 bgcolor: "#0E2E3A",
                 display: "grid",
                 placeItems: "center",
@@ -287,7 +287,7 @@ export function LibraryPage() {
                 />
               ))}
             </Stack>
-            {currentPhoto && (
+            {currentPhoto && currentPhoto.title && (
               <Typography variant="subtitle2" sx={{ mt: 1, fontWeight: 700 }}>
                 {currentPhoto.title}
               </Typography>
@@ -458,31 +458,59 @@ export function LibraryPage() {
                       disabled={uploadPhoto.isPending}
                       sx={{ alignSelf: { xs: "stretch", md: "flex-start" }, maxWidth: { md: 200 } }}
                     >
-                      {uploadPhoto.isPending ? "Enviando..." : "Enviar foto"}
+                      {uploadPhoto.isPending ? "Enviando..." : "Enviar foto(s)"}
                       <input
                         type="file"
                         hidden
                         accept="image/*"
+                        multiple
                         onChange={async (event) => {
-                          const file = event.target.files?.[0];
-                          if (!file) return;
-                          try {
-                            const result = await uploadPhoto.mutateAsync({
-                              file,
-                              title: newPhotoTitle.trim() || undefined,
-                              localityId: newPhotoLocalityId || undefined,
+                          const files = Array.from(event.target.files || []);
+                          if (files.length === 0) return;
+                          
+                          const title = newPhotoTitle.trim() || undefined;
+                          const localityId = newPhotoLocalityId || undefined;
+                          
+                          setNewPhotoTitle("");
+                          setNewPhotoLocalityId("");
+                          
+                          let successCount = 0;
+                          let errorCount = 0;
+                          
+                          for (const file of files) {
+                            try {
+                              await uploadPhoto.mutateAsync({
+                                file,
+                                title: files.length === 1 ? title : undefined, // Só usa título se for uma foto só
+                                localityId,
+                              });
+                              successCount++;
+                            } catch (error) {
+                              errorCount++;
+                              console.error("Erro ao enviar foto:", error);
+                            }
+                          }
+                          
+                          // Force immediate refetch
+                          await libraryQuery.refetch();
+                          
+                          if (successCount > 0 && errorCount === 0) {
+                            toast.push({ 
+                              message: files.length === 1 ? "Foto adicionada." : `${successCount} foto(s) adicionada(s).`, 
+                              severity: "success" 
                             });
-                            setNewPhotoTitle("");
-                            setNewPhotoLocalityId("");
-                            toast.push({ message: "Foto adicionada.", severity: "success" });
-                            // Force immediate refetch - the mutation already invalidates, but we ensure it happens
-                            await libraryQuery.refetch();
-                          } catch (error) {
+                          } else if (successCount > 0 && errorCount > 0) {
+                            toast.push({ 
+                              message: `${successCount} foto(s) adicionada(s), ${errorCount} erro(s).`, 
+                              severity: "warning" 
+                            });
+                          } else {
                             toast.push({
-                              message: parseApiError(error).message ?? "Erro ao enviar foto.",
+                              message: parseApiError(new Error("Erro ao enviar fotos.")).message ?? "Erro ao enviar fotos.",
                               severity: "error",
                             });
                           }
+                          
                           event.target.value = "";
                         }}
                       />
