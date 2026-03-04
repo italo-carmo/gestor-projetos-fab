@@ -42,6 +42,26 @@ export class UpsertActivityReportDto {
   @Min(0)
   participantsCount: number;
 
+  @IsInt()
+  @Min(0)
+  instructorsCount: number;
+
+  @IsInt()
+  @Min(0)
+  recruitsCount: number;
+
+  @IsInt()
+  @Min(0)
+  eloPsychologyCount: number;
+
+  @IsInt()
+  @Min(0)
+  eloSocialAssistanceCount: number;
+
+  @IsInt()
+  @Min(0)
+  eloGraduadoMasterCount: number;
+
   @IsString()
   participantsCharacteristics: string;
 

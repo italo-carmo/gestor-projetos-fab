@@ -83,6 +83,11 @@ const blankReport = {
   activityAnalysis: '',
   activitiesPerformed: '',
   participantsCount: 0,
+  instructorsCount: 0,
+  recruitsCount: 0,
+  eloPsychologyCount: 0,
+  eloSocialAssistanceCount: 0,
+  eloGraduadoMasterCount: 0,
   participantsCharacteristics: '',
   conclusion: '',
   city: '',
@@ -347,6 +352,11 @@ export function ActivitiesPage() {
       activityAnalysis: selected.report.activityAnalysis ?? selected.report.missionSupport ?? '',
       activitiesPerformed: selected.report.activitiesPerformed ?? '',
       participantsCount: Number(selected.report.participantsCount ?? 0),
+      instructorsCount: Number(selected.report.instructorsCount ?? 0),
+      recruitsCount: Number(selected.report.recruitsCount ?? 0),
+      eloPsychologyCount: Number(selected.report.eloPsychologyCount ?? 0),
+      eloSocialAssistanceCount: Number(selected.report.eloSocialAssistanceCount ?? 0),
+      eloGraduadoMasterCount: Number(selected.report.eloGraduadoMasterCount ?? 0),
       participantsCharacteristics: selected.report.participantsCharacteristics ?? '',
       conclusion: selected.report.conclusion ?? '',
       city: selected.report.city ?? '',
@@ -1026,8 +1036,16 @@ export function ActivitiesPage() {
                     <TableCell sx={{ color: 'white', fontWeight: 600 }}>Responsável</TableCell>
                     <TableCell sx={{ color: 'white', fontWeight: 600 }}>Data</TableCell>
                     <TableCell sx={{ color: 'white', fontWeight: 600 }}>Status</TableCell>
-                    <TableCell sx={{ color: 'white', fontWeight: 600 }}>Comentários</TableCell>
-                    <TableCell sx={{ color: 'white', fontWeight: 600 }}>Relatório</TableCell>
+                    <TableCell
+                      sx={{ color: 'white', fontWeight: 600, display: { xs: 'none', md: 'table-cell' } }}
+                    >
+                      Comentários
+                    </TableCell>
+                    <TableCell
+                      sx={{ color: 'white', fontWeight: 600, display: { xs: 'none', sm: 'table-cell' } }}
+                    >
+                      Relatório
+                    </TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -1118,7 +1136,7 @@ export function ActivitiesPage() {
                           );
                         })()}
                       </TableCell>
-                      <TableCell>
+                      <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
                         <IconButton
                           size="small"
                           onClick={(event) => {
@@ -1157,7 +1175,7 @@ export function ActivitiesPage() {
                           </Badge>
                         </IconButton>
                       </TableCell>
-                      <TableCell>
+                      <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
                         <IconButton
                           size="small"
                           onClick={(event) => {
@@ -1673,6 +1691,91 @@ export function ActivitiesPage() {
                     disabled={!canEditReport}
                   />
                 </Stack>
+
+                <Box sx={{ p: 1.2, border: '1px solid #E6ECF5', borderRadius: 2, bgcolor: '#F9FCFF' }}>
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                    Participantes por perfil
+                  </Typography>
+                  <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
+                    <TextField
+                      size="small"
+                      type="number"
+                      label="Instrutores"
+                      value={reportForm.instructorsCount}
+                      onChange={(e) =>
+                        setReportForm({
+                          ...reportForm,
+                          instructorsCount: Number(e.target.value) || 0,
+                        })
+                      }
+                      inputProps={{ min: 0 }}
+                      fullWidth
+                      disabled={!canEditReport}
+                    />
+                    <TextField
+                      size="small"
+                      type="number"
+                      label="Recrutas"
+                      value={reportForm.recruitsCount}
+                      onChange={(e) =>
+                        setReportForm({
+                          ...reportForm,
+                          recruitsCount: Number(e.target.value) || 0,
+                        })
+                      }
+                      inputProps={{ min: 0 }}
+                      fullWidth
+                      disabled={!canEditReport}
+                    />
+                  </Stack>
+                  <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} sx={{ mt: 1 }}>
+                    <TextField
+                      size="small"
+                      type="number"
+                      label="Elo Psicologia"
+                      value={reportForm.eloPsychologyCount}
+                      onChange={(e) =>
+                        setReportForm({
+                          ...reportForm,
+                          eloPsychologyCount: Number(e.target.value) || 0,
+                        })
+                      }
+                      inputProps={{ min: 0 }}
+                      fullWidth
+                      disabled={!canEditReport}
+                    />
+                    <TextField
+                      size="small"
+                      type="number"
+                      label="Elo Assistência Social"
+                      value={reportForm.eloSocialAssistanceCount}
+                      onChange={(e) =>
+                        setReportForm({
+                          ...reportForm,
+                          eloSocialAssistanceCount: Number(e.target.value) || 0,
+                        })
+                      }
+                      inputProps={{ min: 0 }}
+                      fullWidth
+                      disabled={!canEditReport}
+                    />
+                    <TextField
+                      size="small"
+                      type="number"
+                      label="Elo Graduado Master"
+                      value={reportForm.eloGraduadoMasterCount}
+                      onChange={(e) =>
+                        setReportForm({
+                          ...reportForm,
+                          eloGraduadoMasterCount: Number(e.target.value) || 0,
+                        })
+                      }
+                      inputProps={{ min: 0 }}
+                      fullWidth
+                      disabled={!canEditReport}
+                    />
+                  </Stack>
+                </Box>
 
                 <TextField
                   size="small"

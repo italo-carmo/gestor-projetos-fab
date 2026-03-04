@@ -296,6 +296,11 @@ model ActivityReport {
   executionSchedule         String
   activitiesPerformed       String
   participantsCount         Int
+  instructorsCount          Int      @default(0)
+  recruitsCount             Int      @default(0)
+  eloPsychologyCount        Int      @default(0)
+  eloSocialAssistanceCount  Int      @default(0)
+  eloGraduadoMasterCount    Int      @default(0)
   participantsCharacteristics String
   conclusion                String
   city                      String

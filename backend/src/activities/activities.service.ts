@@ -1492,6 +1492,11 @@ export class ActivitiesService {
       executionSchedule?: string;
       activitiesPerformed: string;
       participantsCount: number;
+      instructorsCount: number;
+      recruitsCount: number;
+      eloPsychologyCount: number;
+      eloSocialAssistanceCount: number;
+      eloGraduadoMasterCount: number;
       participantsCharacteristics: string;
       conclusion: string;
       city: string;
@@ -1515,7 +1520,18 @@ export class ActivitiesService {
       missionObjectives: sanitizeText(payload.missionObjectives ?? ''),
       executionSchedule: sanitizeText(payload.executionSchedule ?? ''),
       activitiesPerformed: sanitizeText(payload.activitiesPerformed),
-      participantsCount: payload.participantsCount,
+      participantsCount: Math.max(0, Number(payload.participantsCount) || 0),
+      instructorsCount: Math.max(0, Number(payload.instructorsCount) || 0),
+      recruitsCount: Math.max(0, Number(payload.recruitsCount) || 0),
+      eloPsychologyCount: Math.max(0, Number(payload.eloPsychologyCount) || 0),
+      eloSocialAssistanceCount: Math.max(
+        0,
+        Number(payload.eloSocialAssistanceCount) || 0,
+      ),
+      eloGraduadoMasterCount: Math.max(
+        0,
+        Number(payload.eloGraduadoMasterCount) || 0,
+      ),
       participantsCharacteristics: sanitizeText(
         payload.participantsCharacteristics,
       ),
@@ -1730,6 +1746,11 @@ export class ActivitiesService {
         activityAnalysis: report.missionSupport,
         activitiesPerformed: report.activitiesPerformed,
         participantsCount: report.participantsCount,
+        instructorsCount: report.instructorsCount ?? 0,
+        recruitsCount: report.recruitsCount ?? 0,
+        eloPsychologyCount: report.eloPsychologyCount ?? 0,
+        eloSocialAssistanceCount: report.eloSocialAssistanceCount ?? 0,
+        eloGraduadoMasterCount: report.eloGraduadoMasterCount ?? 0,
         participantsCharacteristics: report.participantsCharacteristics,
         conclusion: report.conclusion,
         city: report.city,
@@ -1874,6 +1895,14 @@ export class ActivitiesService {
     writeLine('Análise da atividade', report.missionSupport);
     writeLine('Atividades realizadas', report.activitiesPerformed);
     writeLine('Participantes (número)', String(report.participantsCount));
+    writeLine(
+      'Participantes por perfil',
+      `Instrutores: ${report.instructorsCount ?? 0}\n` +
+        `Recrutas: ${report.recruitsCount ?? 0}\n` +
+        `Elo Psicologia: ${report.eloPsychologyCount ?? 0}\n` +
+        `Elo Assistência Social: ${report.eloSocialAssistanceCount ?? 0}\n` +
+        `Elo Graduado Master: ${report.eloGraduadoMasterCount ?? 0}`,
+    );
     writeLine(
       'Participantes (características)',
       report.participantsCharacteristics,

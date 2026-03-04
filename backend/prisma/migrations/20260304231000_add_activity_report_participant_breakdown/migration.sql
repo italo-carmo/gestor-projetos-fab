@@ -1,0 +1,8 @@
+-- AlterTable
+ALTER TABLE "ActivityReport"
+ADD COLUMN "instructorsCount" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN "recruitsCount" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN "eloPsychologyCount" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN "eloSocialAssistanceCount" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN "eloGraduadoMasterCount" INTEGER NOT NULL DEFAULT 0;
+
