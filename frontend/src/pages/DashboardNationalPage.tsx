@@ -195,7 +195,7 @@ export function DashboardNationalPage() {
             title: 'Atividades de Campo por Área',
             subtitle: 'Somente atividades de campo concluídas',
             items: fieldBySpecialtyIndicators,
-            bg: '#245A72',
+            bg: '#2F6F8A',
             border: '1px solid rgba(132, 178, 201, 0.36)',
             shadow: '0 18px 34px rgba(16,40,53,0.38)',
             titleColor: '#F2FBFE',
