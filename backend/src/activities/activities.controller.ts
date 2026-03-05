@@ -79,6 +79,16 @@ export class ActivitiesController {
     return this.activities.createType(dto.name);
   }
 
+  @Get('responsible-users')
+  @RequirePermission('task_instances', 'view')
+  listResponsibleUsers(
+    @Query('localityId') localityId: string | undefined,
+    @Query('specialtyId') specialtyId: string | undefined,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.activities.listResponsibleUsers({ localityId, specialtyId }, user);
+  }
+
   @Put(':id')
   update(@Param('id') id: string, @Body() dto: UpdateActivityDto, @CurrentUser() user: RbacUser) {
     return this.activities.update(id, dto, user);

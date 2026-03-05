@@ -44,6 +44,23 @@ export function useActivities(filters: Record<string, any>) {
   });
 }
 
+export function useActivityResponsibleUsers(filters: {
+  localityId?: string;
+  specialtyId?: string;
+}) {
+  const normalized = {
+    localityId: filters.localityId || undefined,
+    specialtyId: filters.specialtyId || undefined,
+  };
+  return useQuery({
+    queryKey: ["activityResponsibleUsers", normalized],
+    queryFn: async () =>
+      (await api.get("/activities/responsible-users", { params: normalized }))
+        .data,
+    staleTime: 15_000,
+  });
+}
+
 export function useActivityTypes() {
   return useQuery({
     queryKey: qk.activityTypes,

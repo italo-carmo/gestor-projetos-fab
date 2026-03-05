@@ -143,6 +143,74 @@ export class ActivitiesService {
     };
   }
 
+  async listResponsibleUsers(
+    filters: {
+      localityId?: string;
+      specialtyId?: string;
+    },
+    user?: RbacUser,
+  ) {
+    const targetLocalityIds = await this.getTargetLocalityIds();
+    if (targetLocalityIds.length === 0) {
+      return { items: [] };
+    }
+
+    const localityId = String(filters.localityId ?? '').trim();
+    const specialtyId = String(filters.specialtyId ?? '').trim();
+    const constraints = this.getScopeConstraints(user);
+    const andClauses: Prisma.UserWhereInput[] = [
+      { isActive: true },
+      { localityId: { in: targetLocalityIds } },
+    ];
+
+    if (constraints.localityId) {
+      andClauses.push({ localityId: constraints.localityId });
+    }
+    if (localityId) {
+      andClauses.push({ localityId });
+    }
+
+    const effectiveSpecialtyId = specialtyId || constraints.specialtyId || '';
+    if (effectiveSpecialtyId) {
+      andClauses.push({
+        OR: [
+          { specialtyId: null },
+          { specialtyId: effectiveSpecialtyId },
+        ],
+      });
+    }
+
+    const where: Prisma.UserWhereInput =
+      andClauses.length === 1 ? andClauses[0] : { AND: andClauses };
+
+    const users = await this.prisma.user.findMany({
+      where,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        localityId: true,
+        specialtyId: true,
+        eloRoleId: true,
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    return {
+      items: users.map((item) => ({
+        id: item.id,
+        name:
+          String(item.name ?? '').trim() ||
+          String(item.email ?? '').trim() ||
+          `Usuário ${item.id.slice(0, 8)}`,
+        email: item.email ?? null,
+        localityId: item.localityId ?? null,
+        specialtyId: item.specialtyId ?? null,
+        eloRoleId: item.eloRoleId ?? null,
+      })),
+    };
+  }
+
   async create(
     payload: {
       title: string;

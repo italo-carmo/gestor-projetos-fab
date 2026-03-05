@@ -34,6 +34,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   useActivityComments,
+  useActivityResponsibleUsers,
   useActivityTypes,
   useAddActivityComment,
   useActivities,
@@ -51,7 +52,6 @@ import {
   useLocalities,
   useMe,
   useSpecialties,
-  useUsers,
   useSignActivityReport,
   useMarkActivityCommentsSeen,
   useUpdateActivity,
@@ -149,8 +149,8 @@ export function ActivitiesPage() {
   const specialties = specialtiesData?.items ?? [];
   const activityTypesQuery = useActivityTypes();
   const activityTypes = activityTypesQuery.data?.items ?? [];
-  const usersQuery = useUsers();
-  const allUsers = usersQuery.data?.items ?? [];
+  const responsibleUsersQuery = useActivityResponsibleUsers({});
+  const allResponsibleUsers = responsibleUsersQuery.data?.items ?? [];
 
   const selectableLocalities = useMemo(
     () =>
@@ -404,7 +404,7 @@ export function ActivitiesPage() {
   }, [isCreateMode, activityForm.localityIds, activityForm.responsibleUserId]);
 
   const responsibleOptions = useMemo(() => {
-    const filtered = allUsers.filter((user: any) => {
+    const filtered = allResponsibleUsers.filter((user: any) => {
       if (!String(user?.id ?? '').trim() || !String(user?.name ?? '').trim()) return false;
       if (effectiveResponsibleLocalityId && user.localityId && user.localityId !== effectiveResponsibleLocalityId) return false;
       if (activityForm.specialtyId && user.specialtyId && user.specialtyId !== activityForm.specialtyId) return false;
@@ -421,16 +421,16 @@ export function ActivitiesPage() {
     }
 
     return filtered.sort((a: any, b: any) => String(a.name).localeCompare(String(b.name), 'pt-BR'));
-  }, [effectiveResponsibleLocalityId, activityForm.specialtyId, allUsers, selected?.responsibleUsers]);
+  }, [effectiveResponsibleLocalityId, activityForm.specialtyId, allResponsibleUsers, selected?.responsibleUsers]);
 
   const batchResponsibleOptions = useMemo(() => {
-    const filtered = allUsers.filter((user: any) => {
+    const filtered = allResponsibleUsers.filter((user: any) => {
       if (!String(user?.id ?? '').trim() || !String(user?.name ?? '').trim()) return false;
       if (selectedLocalityIds.length === 1 && user.localityId !== selectedLocalityIds[0]) return false;
       return true;
     });
     return filtered.sort((a: any, b: any) => String(a.name).localeCompare(String(b.name), 'pt-BR'));
-  }, [allUsers, selectedLocalityIds]);
+  }, [allResponsibleUsers, selectedLocalityIds]);
 
   const handleCreate = async () => {
     if (!activityForm.title.trim()) {
@@ -1433,7 +1433,7 @@ export function ActivitiesPage() {
                   value={activityForm.responsibleUserId}
                   onChange={(e) => setActivityForm({ ...activityForm, responsibleUserId: e.target.value })}
                   sx={{ minWidth: 240 }}
-                  disabled={usersQuery.isLoading || !canEditActivityForm || !canCreateAssignResponsible}
+                  disabled={responsibleUsersQuery.isLoading || !canEditActivityForm || !canCreateAssignResponsible}
                 >
                   <MenuItem value="">Sem responsável</MenuItem>
                   {responsibleOptions.map((user: any) => (
@@ -1469,7 +1469,7 @@ export function ActivitiesPage() {
                 sx={{ mt: 1 }}
                 disabled={!canEditActivityForm}
               />
-              {usersQuery.isError && (
+              {responsibleUsersQuery.isError && (
                 <Typography variant="caption" color="warning.main" sx={{ mt: 0.5, display: 'block' }}>
                   Não foi possível carregar a lista completa de responsáveis no momento.
                 </Typography>
