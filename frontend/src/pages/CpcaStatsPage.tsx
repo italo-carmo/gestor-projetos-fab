@@ -405,8 +405,18 @@ export function CpcaStatsPage() {
       <Grid container spacing={2}>
         {kpiCards.map((card) => (
           <Grid key={card.label} size={{ xs: 12, sm: 6, md: 4 }}>
-            <Card sx={{ ...CPCA_KPI_CARD_SX, height: "100%" }}>
-              <CardContent>
+            <Card
+              sx={{
+                ...CPCA_KPI_CARD_SX,
+                height: "100%",
+                backgroundColor: "rgb(31, 74, 97) !important",
+              }}
+            >
+              <CardContent
+                sx={{
+                  backgroundColor: "rgb(31, 74, 97) !important",
+                }}
+              >
                 <Typography variant="overline" fontWeight={600}>
                   {card.label}
                 </Typography>
