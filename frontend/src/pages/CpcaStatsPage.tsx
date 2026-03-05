@@ -338,7 +338,7 @@ export function CpcaStatsPage() {
         mb={2}
       >
         <Box>
-          <Typography variant="h5" fontWeight={700}>
+          <Typography variant="h4" fontWeight={700}>
             Painel de Comando - CPCA
           </Typography>
           <Typography variant="body2" color="text.secondary">
