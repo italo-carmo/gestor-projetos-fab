@@ -287,7 +287,7 @@ export function DashboardNationalPage() {
                   <Table
                     size="small"
                     sx={{
-                      minWidth: 760,
+                      minWidth: 720,
                       tableLayout: 'fixed',
                       '& .MuiTableCell-root': {
                         px: 1,
@@ -297,11 +297,11 @@ export function DashboardNationalPage() {
                   >
                     <TableHead>
                       <TableRow sx={{ bgcolor: 'primary.main' }}>
-                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '18%' }}>GSD</TableCell>
-                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '16%' }}>% Geral</TableCell>
-                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '18%' }}>Recrutas Fem</TableCell>
-                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '30%' }}>Comandante</TableCell>
-                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '18%' }}>Visita</TableCell>
+                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '14%', px: 0.5 }}>GSD</TableCell>
+                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '12%', px: 0.5 }}>% Geral</TableCell>
+                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '13%', px: 0.5 }}>Rec. Fem.</TableCell>
+                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '39%' }}>Comandante</TableCell>
+                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '22%' }}>Visita</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -319,7 +319,7 @@ export function DashboardNationalPage() {
                           }
                           sx={{ cursor: 'pointer' }}
                         >
-                          <TableCell>
+                          <TableCell sx={{ px: 0.5 }}>
                             <Typography variant="body2" fontWeight={700}>
                               {formatGsdLabel(loc.localityName, loc.localityCode)}
                             </Typography>
@@ -329,8 +329,8 @@ export function DashboardNationalPage() {
                               </Typography>
                             )}
                           </TableCell>
-                          <TableCell>{Math.round(loc.progress)}%</TableCell>
-                          <TableCell>{loc.recruitsFemaleCountCurrent ?? 0}</TableCell>
+                          <TableCell sx={{ px: 0.5 }}>{Math.round(loc.progress)}%</TableCell>
+                          <TableCell sx={{ px: 0.5 }}>{loc.recruitsFemaleCountCurrent ?? 0}</TableCell>
                           <TableCell>
                             <Typography variant="body2" noWrap>
                               {loc.commanderName ?? '—'}
