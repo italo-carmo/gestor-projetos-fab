@@ -120,9 +120,8 @@ export function DashboardNationalPage() {
     const base = toMilitaryDisplayName(commanderName);
     if (!base) return '—';
     const sanitized = base
-      .replace(/\s+GSD\s+[A-Z0-9-]{1,8}$/i, '')
-      .replace(/\s+GSD$/i, '')
-      .replace(/\s+OM\s+[A-Z0-9-]{1,8}$/i, '')
+      .replace(/\s+(?:GSD|OM)(?:\s*[-/]\s*|\s+)?[A-Z0-9]{1,8}$/i, '')
+      .replace(/\s+(?:GSD|OM)$/i, '')
       .trim();
     return sanitized || base;
   };
