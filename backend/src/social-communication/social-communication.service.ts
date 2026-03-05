@@ -15,6 +15,7 @@ import {
   ROLE_TI,
 } from '../rbac/role-access';
 import type { RbacUser } from '../rbac/rbac.types';
+import { getSocialCommunicationCoverCandidates } from './social-communication-storage';
 
 type MetadataExtraction = {
   title?: string;
@@ -305,13 +306,10 @@ export class SocialCommunicationService {
 
     if (article.coverImageUrl.startsWith('/social-communication/uploads/')) {
       const filename = path.basename(article.coverImageUrl);
-      const filePath = path.resolve(
-        process.cwd(),
-        'storage',
-        'social-communication-covers',
-        filename,
+      const filePath = getSocialCommunicationCoverCandidates(filename).find((candidate) =>
+        fs.existsSync(candidate),
       );
-      if (!fs.existsSync(filePath)) throwError('NOT_FOUND');
+      if (!filePath) throwError('NOT_FOUND');
       const buffer = fs.readFileSync(filePath);
       const extension = path.extname(filename).toLowerCase();
       const contentType =

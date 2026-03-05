@@ -137,13 +137,13 @@ function ArticleCoverImage({
       : toApiUrl(coverImageUrl)
     : null;
   const [imageSrc, setImageSrc] = useState<string | null>(
-    directSrc || proxySrc
+    proxySrc || directSrc
   );
 
   // Reset state when props change
   useEffect(() => {
     setImageError(false);
-    setImageSrc(directSrc || proxySrc);
+    setImageSrc(proxySrc || directSrc);
   }, [coverProxyPath, coverImageUrl]);
 
   if (!coverProxyPath && !coverImageUrl) {
@@ -162,9 +162,9 @@ function ArticleCoverImage({
       referrerPolicy="no-referrer"
       sx={{ width: "100%", height: "100%", objectFit: "cover" }}
       onError={() => {
-        if (directSrc && proxySrc && imageSrc === directSrc) {
-          // Tenta proxy apenas se falhou a URL direta.
-          setImageSrc(proxySrc);
+        if (directSrc && proxySrc && imageSrc === proxySrc) {
+          // Tenta URL direta apenas se o proxy falhar.
+          setImageSrc(directSrc);
           setImageError(false);
           return;
         }
@@ -196,13 +196,13 @@ function ArticleCoverImageSmall({
       : toApiUrl(coverImageUrl)
     : null;
   const [imageSrc, setImageSrc] = useState<string | null>(
-    directSrc || proxySrc
+    proxySrc || directSrc
   );
 
   // Reset state when props change
   useEffect(() => {
     setImageError(false);
-    setImageSrc(directSrc || proxySrc);
+    setImageSrc(proxySrc || directSrc);
   }, [coverProxyPath, coverImageUrl]);
 
   if (!coverProxyPath && !coverImageUrl) {
@@ -221,9 +221,9 @@ function ArticleCoverImageSmall({
       referrerPolicy="no-referrer"
       sx={{ width: "100%", height: "100%", objectFit: "cover" }}
       onError={() => {
-        if (directSrc && proxySrc && imageSrc === directSrc) {
-          // Tenta proxy apenas se falhou a URL direta.
-          setImageSrc(proxySrc);
+        if (directSrc && proxySrc && imageSrc === proxySrc) {
+          // Tenta URL direta apenas se o proxy falhar.
+          setImageSrc(directSrc);
           setImageError(false);
           return;
         }

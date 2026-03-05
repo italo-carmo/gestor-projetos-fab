@@ -4,6 +4,7 @@ import { SocialCommunicationService } from './social-communication.service';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { throwError } from '../common/http-error';
+import { getSocialCommunicationCoverCandidates } from './social-communication-storage';
 
 @Controller('social-communication/proxy')
 export class SocialCommunicationProxyController {
@@ -83,13 +84,10 @@ export class SocialCommunicationUploadsController {
   async uploadedCover(@Param('filename') filename: string, @Res() res: Response) {
     const safeName = path.basename(String(filename ?? ''));
     if (!safeName || safeName !== filename) throwError('NOT_FOUND');
-    const filePath = path.resolve(
-      process.cwd(),
-      'storage',
-      'social-communication-covers',
-      safeName,
+    const filePath = getSocialCommunicationCoverCandidates(safeName).find((candidate) =>
+      fs.existsSync(candidate),
     );
-    if (!fs.existsSync(filePath)) throwError('NOT_FOUND');
+    if (!filePath) throwError('NOT_FOUND');
     res.setHeader('Cache-Control', 'public, max-age=3600');
     return res.sendFile(filePath);
   }

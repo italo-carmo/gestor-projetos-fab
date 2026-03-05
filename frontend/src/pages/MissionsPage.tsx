@@ -780,7 +780,12 @@ export function MissionsPage() {
         </CardContent>
       </Card>
 
-      <Drawer anchor="right" open={drawerOpen} onClose={closeDrawer} PaperProps={{ sx: { width: { xs: '100%', md: 760 } } }}>
+      <Drawer
+        anchor="right"
+        open={drawerOpen}
+        onClose={closeDrawer}
+        PaperProps={{ sx: { width: { xs: '100%', md: 'min(1100px, 96vw)' } } }}
+      >
         <Box p={3} sx={{ height: '100%', overflowY: 'auto' }}>
           <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
             <Typography variant="h6">{isCreateMode ? 'Nova missão' : 'Detalhes da missão'}</Typography>

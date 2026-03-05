@@ -27,12 +27,9 @@ import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { MulterExceptionFilter } from '../reports/multer-exception.filter';
 import { throwError } from '../common/http-error';
+import { getSocialCommunicationCoversDir } from './social-communication-storage';
 
-const uploadDir = path.resolve(
-  process.cwd(),
-  'storage',
-  'social-communication-covers',
-);
+const uploadDir = getSocialCommunicationCoversDir();
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
