@@ -181,6 +181,8 @@ function App() {
                 />
                 <Route path="/admin/rbac" element={<AdminRbacPage />} />
                 <Route path="/admin" element={<AdminPage />} />
+                <Route path="/admin/localities" element={<Navigate to="/admin?tab=localities" replace />} />
+                <Route path="/admin/localidades" element={<Navigate to="/admin?tab=localities" replace />} />
                 <Route path="/admin/postos" element={<Navigate to="/admin?tab=postos" replace />} />
                 <Route path="/admin/phases" element={<Navigate to="/admin?tab=phases" replace />} />
                 <Route path="/admin/elo-roles" element={<Navigate to="/admin?tab=elo-roles" replace />} />

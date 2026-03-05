@@ -23,9 +23,13 @@ import {
   useUpdatePosto,
 } from '../api/hooks';
 import {
+  useCreateLocality,
+  useDeleteLocality,
   useCreateEloRole,
   useDeleteEloRole,
   useEloRoles,
+  useLocalities,
+  useUpdateLocality,
   useUpdateEloRole,
 } from '../api/hooks';
 import { can } from '../app/rbac';
@@ -36,6 +40,183 @@ import { ErrorState } from '../components/states/ErrorState';
 import { EmptyState } from '../components/states/EmptyState';
 import { ConfirmDialog } from '../components/dialogs/ConfirmDialog';
 import { useSearchParams } from 'react-router-dom';
+
+type LocalityForm = {
+  code: string;
+  name: string;
+};
+
+function LocalitiesTab() {
+  const localitiesQuery = useLocalities();
+  const createLocality = useCreateLocality();
+  const updateLocality = useUpdateLocality();
+  const deleteLocality = useDeleteLocality();
+  const toast = useToast();
+
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [editing, setEditing] = useState<any | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [form, setForm] = useState<LocalityForm>({ code: '', name: '' });
+
+  if (localitiesQuery.isLoading) return <SkeletonState />;
+  if (localitiesQuery.isError) {
+    return <ErrorState error={localitiesQuery.error} onRetry={() => localitiesQuery.refetch()} />;
+  }
+
+  const items = (localitiesQuery.data?.items ?? []).slice().sort((a: any, b: any) =>
+    String(a?.name ?? '').localeCompare(String(b?.name ?? ''), 'pt-BR'),
+  );
+
+  const openCreate = () => {
+    setEditing(null);
+    setForm({ code: '', name: '' });
+    setDrawerOpen(true);
+  };
+
+  const openEdit = (item: any) => {
+    setEditing(item);
+    setForm({
+      code: item.code ?? '',
+      name: item.name ?? '',
+    });
+    setDrawerOpen(true);
+  };
+
+  const handleSave = async () => {
+    const payload = {
+      code: form.code.trim().toUpperCase(),
+      name: form.name.trim(),
+    };
+    if (!payload.code || !payload.name) {
+      toast.push({ message: 'Informe sigla e nome da localidade.', severity: 'warning' });
+      return;
+    }
+
+    try {
+      if (editing) {
+        await updateLocality.mutateAsync({ id: editing.id, payload });
+        toast.push({ message: 'Localidade atualizada.', severity: 'success' });
+      } else {
+        await createLocality.mutateAsync(payload);
+        toast.push({ message: 'Localidade criada.', severity: 'success' });
+      }
+      setDrawerOpen(false);
+    } catch (error) {
+      toast.push({ message: parseApiError(error).message, severity: 'error' });
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteLocality.mutateAsync(id);
+      toast.push({ message: 'Localidade excluída.', severity: 'success' });
+      setDeleteId(null);
+    } catch (error) {
+      toast.push({ message: parseApiError(error).message, severity: 'error' });
+    }
+  };
+
+  return (
+    <Box>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+        <Typography variant="h6" fontWeight={700}>Localidades</Typography>
+        <Button variant="contained" size="small" onClick={openCreate}>
+          Nova localidade
+        </Button>
+      </Box>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        Cadastre e gerencie as localidades do sistema, incluindo a sigla de cada uma.
+      </Typography>
+
+      <Card>
+        <CardContent>
+          {items.length === 0 ? (
+            <EmptyState
+              title="Nenhuma localidade"
+              description="Crie uma localidade para começar."
+            />
+          ) : (
+            <Table size="small">
+              <TableHead>
+                <TableRow sx={{ bgcolor: 'primary.main' }}>
+                  <TableCell sx={{ color: 'white', fontWeight: 600, width: 160 }}>Sigla</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 600 }}>Localidade</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 600 }} align="right">
+                    Ações
+                  </TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {items.map((item: any) => (
+                  <TableRow key={item.id} hover>
+                    <TableCell>{item.code}</TableCell>
+                    <TableCell>{item.name}</TableCell>
+                    <TableCell align="right">
+                      <Button size="small" onClick={() => openEdit(item)}>
+                        Editar
+                      </Button>
+                      <Button size="small" color="error" onClick={() => setDeleteId(item.id)}>
+                        Excluir
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <Drawer
+        anchor="right"
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        PaperProps={{ sx: { width: { xs: '100%', md: 380 } } }}
+      >
+        <Box p={3} display="flex" flexDirection="column" gap={2}>
+          <Typography variant="h6">{editing ? 'Editar localidade' : 'Nova localidade'}</Typography>
+          <TextField
+            size="small"
+            label="Sigla"
+            value={form.code}
+            onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
+            placeholder="Ex: BASV"
+            fullWidth
+          />
+          <TextField
+            size="small"
+            label="Nome da localidade"
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            placeholder="Ex: Base Aérea de Salvador"
+            fullWidth
+          />
+          <Box display="flex" gap={1} justifyContent="flex-end">
+            <Button variant="outlined" color="error" onClick={() => setDrawerOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="contained"
+              color="success"
+              onClick={handleSave}
+              disabled={createLocality.isPending || updateLocality.isPending}
+            >
+              Salvar
+            </Button>
+          </Box>
+        </Box>
+      </Drawer>
+
+      <ConfirmDialog
+        open={Boolean(deleteId)}
+        title="Excluir localidade"
+        message="Essa ação remove a localidade e pode afetar vínculos existentes. Deseja continuar?"
+        onConfirm={() => deleteId && handleDelete(deleteId)}
+        onCancel={() => setDeleteId(null)}
+      />
+    </Box>
+  );
+}
 
 function PostosTab() {
   const postosQuery = usePostos();
@@ -520,7 +701,7 @@ export function AdminPage() {
         Administração
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Gerencie postos, fases e papéis de elo do sistema.
+        Gerencie localidades, postos, fases e papéis de elo do sistema.
       </Typography>
 
       <Card>
@@ -530,11 +711,13 @@ export function AdminPage() {
             onChange={handleTabChange}
             sx={{ mb: 3, borderBottom: 1, borderColor: 'divider' }}
           >
+            <Tab label="Localidades" value="localities" />
             <Tab label="Postos" value="postos" />
             <Tab label="Fases" value="phases" />
             <Tab label="Papéis de Elo" value="elo-roles" />
           </Tabs>
 
+          {currentTab === 'localities' && <LocalitiesTab />}
           {currentTab === 'postos' && <PostosTab />}
           {currentTab === 'phases' && <PhasesTab />}
           {currentTab === 'elo-roles' && <EloRolesTab />}
@@ -543,4 +726,3 @@ export function AdminPage() {
     </Box>
   );
 }
-
