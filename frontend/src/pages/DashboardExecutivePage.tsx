@@ -275,7 +275,7 @@ export function DashboardExecutivePage() {
             <Typography variant="subtitle1" gutterBottom>
               Distribuição de atividades por status
             </Typography>
-            <ResponsiveContainer width="100%" height={180}>
+            <ResponsiveContainer width="100%" height={140}>
               <BarChart data={statusItems}>
                 <XAxis dataKey="status" tickFormatter={(value) => formatStatus(value)} />
                 <YAxis allowDecimals={false} />
@@ -315,7 +315,7 @@ export function DashboardExecutivePage() {
           <Typography variant="subtitle1" gutterBottom>
             Destaque de performance por localidade
           </Typography>
-          <ResponsiveContainer width="100%" height={190}>
+          <ResponsiveContainer width="100%" height={140}>
             <BarChart data={topLocalitiesByProgress}>
               <XAxis dataKey="localityCode" />
               <YAxis />

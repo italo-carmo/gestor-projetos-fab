@@ -357,8 +357,8 @@ export function LibraryPage() {
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    gap: { xs: 0.5, md: 1 },
-                    height: { xs: 280, md: 450 },
+                    gap: { xs: 0.3, md: 0.5 },
+                    height: { xs: 200, md: 320 },
                   }}
                 >
                   {[-2, -1, 0, 1, 2].map((offset) => {
@@ -369,9 +369,9 @@ export function LibraryPage() {
                     const distance = Math.abs(offset);
                     const isActive = offset === 0;
 
-                    // Tamanhos baseados na distância do centro
-                    const sizeScale = isActive ? 1 : distance === 1 ? 0.65 : 0.45;
-                    const opacity = isActive ? 1 : distance === 1 ? 0.75 : 0.5;
+                    // Tamanhos baseados na distância do centro - formato paisagem
+                    const sizeScale = isActive ? 1 : distance === 1 ? 0.7 : 0.5;
+                    const opacity = isActive ? 1 : distance === 1 ? 0.8 : 0.6;
                     const zIndex = isActive ? 10 : 5 - distance;
 
                     return (
@@ -383,9 +383,9 @@ export function LibraryPage() {
                           borderRadius: 2,
                           overflow: "hidden",
                           aspectRatio: "16 / 9",
-                          width: { xs: `${sizeScale * 100}%`, md: `${sizeScale * 320}px` },
+                          width: { xs: `${sizeScale * 100}%`, md: `${sizeScale * 280}px` },
                           maxWidth: { xs: "100%", md: "none" },
-                          height: { xs: `${sizeScale * 100}%`, md: `${sizeScale * 450}px` },
+                          height: { xs: `${sizeScale * 100}%`, md: `${sizeScale * 320}px` },
                           bgcolor: "#0E2E3A",
                           cursor: offset !== 0 ? "pointer" : "default",
                           opacity,
