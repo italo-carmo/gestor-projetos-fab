@@ -40,6 +40,7 @@ import { ErrorState } from '../components/states/ErrorState';
 import { EmptyState } from '../components/states/EmptyState';
 import { ConfirmDialog } from '../components/dialogs/ConfirmDialog';
 import { useSearchParams } from 'react-router-dom';
+import { getTargetLocalityKey, selectTargetLocalities } from '../constants/localities';
 
 type LocalityForm = {
   code: string;
@@ -63,9 +64,9 @@ function LocalitiesTab() {
     return <ErrorState error={localitiesQuery.error} onRetry={() => localitiesQuery.refetch()} />;
   }
 
-  const items = (localitiesQuery.data?.items ?? []).slice().sort((a: any, b: any) =>
-    String(a?.name ?? '').localeCompare(String(b?.name ?? ''), 'pt-BR'),
-  );
+  const items = selectTargetLocalities((localitiesQuery.data?.items ?? []) as any[])
+    .slice()
+    .sort((a: any, b: any) => String(a?.name ?? '').localeCompare(String(b?.name ?? ''), 'pt-BR'));
 
   const openCreate = () => {
     setEditing(null);
@@ -89,6 +90,14 @@ function LocalitiesTab() {
     };
     if (!payload.code || !payload.name) {
       toast.push({ message: 'Informe sigla e nome da localidade.', severity: 'warning' });
+      return;
+    }
+    if (!getTargetLocalityKey(payload.name)) {
+      toast.push({
+        message:
+          'Nome inválido para localidade SMIF. Use uma das localidades alvo (Brasília, Canoas, Guaratinguetá, Lagoa Santa, Manaus, Pirassununga, Rio de Janeiro, São Paulo).',
+        severity: 'warning',
+      });
       return;
     }
 
@@ -125,7 +134,7 @@ function LocalitiesTab() {
         </Button>
       </Box>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Cadastre e gerencie as localidades do sistema, incluindo a sigla de cada uma.
+        Cadastre e gerencie as localidades da SMIF (ex.: Brasília-DF, Canoas-RS), incluindo a sigla de cada uma.
       </Typography>
 
       <Card>
@@ -133,7 +142,7 @@ function LocalitiesTab() {
           {items.length === 0 ? (
             <EmptyState
               title="Nenhuma localidade"
-              description="Crie uma localidade para começar."
+              description="Crie uma localidade da SMIF para começar."
             />
           ) : (
             <Table size="small">
@@ -174,7 +183,7 @@ function LocalitiesTab() {
         PaperProps={{ sx: { width: { xs: '100%', md: 380 } } }}
       >
         <Box p={3} display="flex" flexDirection="column" gap={2}>
-          <Typography variant="h6">{editing ? 'Editar localidade' : 'Nova localidade'}</Typography>
+          <Typography variant="h6">{editing ? 'Editar localidade SMIF' : 'Nova localidade SMIF'}</Typography>
           <TextField
             size="small"
             label="Sigla"
@@ -188,7 +197,7 @@ function LocalitiesTab() {
             label="Nome da localidade"
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
-            placeholder="Ex: Base Aérea de Salvador"
+            placeholder="Ex: Brasília-DF"
             fullWidth
           />
           <Box display="flex" gap={1} justifyContent="flex-end">
@@ -701,7 +710,7 @@ export function AdminPage() {
         Administração
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Gerencie localidades, postos, fases e papéis de elo do sistema.
+        Gerencie localidades SMIF, postos, fases e papéis de elo do sistema.
       </Typography>
 
       <Card>
@@ -711,7 +720,7 @@ export function AdminPage() {
             onChange={handleTabChange}
             sx={{ mb: 3, borderBottom: 1, borderColor: 'divider' }}
           >
-            <Tab label="Localidades" value="localities" />
+            <Tab label="Localidades SMIF" value="localities" />
             <Tab label="Postos" value="postos" />
             <Tab label="Fases" value="phases" />
             <Tab label="Papéis de Elo" value="elo-roles" />
