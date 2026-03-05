@@ -2266,9 +2266,25 @@ export class TasksService {
       taskWhereClauses.length === 1
         ? taskWhereClauses[0]
         : { AND: taskWhereClauses };
-    const completedTasks = await this.prisma.taskInstance.count({
+    const doneTaskInstances = await this.prisma.taskInstance.findMany({
       where: completedTasksWhere,
+      select: {
+        localityId: true,
+        taskTemplateId: true,
+      },
     });
+    const taskCoverageByTemplateId = new Map<string, Set<string>>();
+    for (const instance of doneTaskInstances) {
+      const canonicalLocalityId = aliasByLocalityId.get(instance.localityId);
+      if (!canonicalLocalityId) continue;
+      const coverage = taskCoverageByTemplateId.get(instance.taskTemplateId) ?? new Set<string>();
+      coverage.add(canonicalLocalityId);
+      taskCoverageByTemplateId.set(instance.taskTemplateId, coverage);
+    }
+    const requiredLocalityCount = localities.length;
+    const completedTasks = Array.from(taskCoverageByTemplateId.values()).filter(
+      (coveredLocalities) => coveredLocalities.size >= requiredLocalityCount,
+    ).length;
 
     return {
       items: perLocality,

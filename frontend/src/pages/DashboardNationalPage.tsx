@@ -118,7 +118,7 @@ export function DashboardNationalPage() {
     {
       label: 'Tarefas',
       value: String(totals.completedTasks ?? 0),
-      helper: 'Concluídas',
+      helper: 'Concluídas nas localidades',
       icon: <TaskAltIcon sx={{ fontSize: 22 }} />,
     },
     {
