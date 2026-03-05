@@ -10,6 +10,7 @@ import GavelIcon from '@mui/icons-material/Gavel';
 import type { ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useDashboardNational } from '../api/hooks';
+import { toMilitaryDisplayName } from '../app/militaryName';
 import { SkeletonState } from '../components/states/SkeletonState';
 import { ErrorState } from '../components/states/ErrorState';
 import { EmptyState } from '../components/states/EmptyState';
@@ -114,6 +115,16 @@ export function DashboardNationalPage() {
       return normalized.split('-').pop()?.trim() || String(localityCode ?? '').trim() || normalized;
     }
     return String(localityCode ?? '').trim() || normalized || '—';
+  };
+  const formatCommanderName = (commanderName?: string | null) => {
+    const base = toMilitaryDisplayName(commanderName);
+    if (!base) return '—';
+    const sanitized = base
+      .replace(/\s+GSD\s+[A-Z0-9-]{1,8}$/i, '')
+      .replace(/\s+GSD$/i, '')
+      .replace(/\s+OM\s+[A-Z0-9-]{1,8}$/i, '')
+      .trim();
+    return sanitized || base;
   };
 
   const completedIndicators: IndicatorTile[] = [
@@ -300,8 +311,8 @@ export function DashboardNationalPage() {
                         <TableCell sx={{ color: 'white', fontWeight: 600, width: '14%', px: 0.5 }}>GSD</TableCell>
                         <TableCell sx={{ color: 'white', fontWeight: 600, width: '12%', px: 0.5 }}>% Geral</TableCell>
                         <TableCell sx={{ color: 'white', fontWeight: 600, width: '13%', px: 0.5 }}>Rec. Fem.</TableCell>
-                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '39%' }}>Comandante</TableCell>
-                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '22%' }}>Visita</TableCell>
+                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '40%', px: 0.5 }}>Comandante</TableCell>
+                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '21%', px: 0.5 }}>Visita</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -331,12 +342,14 @@ export function DashboardNationalPage() {
                           </TableCell>
                           <TableCell sx={{ px: 0.5 }}>{Math.round(loc.progress)}%</TableCell>
                           <TableCell sx={{ px: 0.5 }}>{loc.recruitsFemaleCountCurrent ?? 0}</TableCell>
-                          <TableCell>
+                          <TableCell sx={{ px: 0.5 }}>
                             <Typography variant="body2" noWrap>
-                              {loc.commanderName ?? '—'}
+                              {formatCommanderName(loc.commanderName)}
                             </Typography>
                           </TableCell>
-                          <TableCell>{loc.visitDate ? new Date(loc.visitDate).toLocaleDateString('pt-BR') : '—'}</TableCell>
+                          <TableCell sx={{ px: 0.5 }}>
+                            {loc.visitDate ? new Date(loc.visitDate).toLocaleDateString('pt-BR') : '—'}
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
