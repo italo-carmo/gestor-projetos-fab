@@ -284,14 +284,24 @@ export function DashboardNationalPage() {
                 <EmptyState title="Sem dados" description="Nenhuma localidade encontrada." />
               ) : (
                 <TableContainer sx={{ width: '100%', overflowX: 'auto' }}>
-                  <Table size="small" sx={{ minWidth: 980 }}>
+                  <Table
+                    size="small"
+                    sx={{
+                      minWidth: 760,
+                      tableLayout: 'fixed',
+                      '& .MuiTableCell-root': {
+                        px: 1,
+                        py: 0.75,
+                      },
+                    }}
+                  >
                     <TableHead>
                       <TableRow sx={{ bgcolor: 'primary.main' }}>
-                        <TableCell sx={{ color: 'white', fontWeight: 600 }}>GSD</TableCell>
-                        <TableCell sx={{ color: 'white', fontWeight: 600 }}>% Geral</TableCell>
-                        <TableCell sx={{ color: 'white', fontWeight: 600 }}>Recrutas Fem</TableCell>
-                        <TableCell sx={{ color: 'white', fontWeight: 600 }}>Comandante</TableCell>
-                        <TableCell sx={{ color: 'white', fontWeight: 600 }}>Visita</TableCell>
+                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '18%' }}>GSD</TableCell>
+                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '16%' }}>% Geral</TableCell>
+                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '18%' }}>Recrutas Fem</TableCell>
+                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '30%' }}>Comandante</TableCell>
+                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '18%' }}>Visita</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -310,16 +320,22 @@ export function DashboardNationalPage() {
                           sx={{ cursor: 'pointer' }}
                         >
                           <TableCell>
-                            <Typography variant="body2" fontWeight={600}>
+                            <Typography variant="body2" fontWeight={700}>
                               {formatGsdLabel(loc.localityName, loc.localityCode)}
                             </Typography>
                             {loc.commandName && (
-                              <Typography variant="caption" color="text.secondary">{loc.commandName}</Typography>
+                              <Typography variant="caption" color="text.secondary" noWrap>
+                                {loc.commandName}
+                              </Typography>
                             )}
                           </TableCell>
                           <TableCell>{Math.round(loc.progress)}%</TableCell>
                           <TableCell>{loc.recruitsFemaleCountCurrent ?? 0}</TableCell>
-                          <TableCell>{loc.commanderName ?? '—'}</TableCell>
+                          <TableCell>
+                            <Typography variant="body2" noWrap>
+                              {loc.commanderName ?? '—'}
+                            </Typography>
+                          </TableCell>
                           <TableCell>{loc.visitDate ? new Date(loc.visitDate).toLocaleDateString('pt-BR') : '—'}</TableCell>
                         </TableRow>
                       ))}
