@@ -101,18 +101,57 @@ function LocalitiesTab() {
       });
       return;
     }
-    const duplicatedCode = allLocalities.some((locality: any) => {
+
+    const conflictingLocality = allLocalities.find((locality: any) => {
       const localityId = String(locality?.id ?? '').trim();
-      const localityCode = String(locality?.code ?? '')
-        .trim()
-        .toUpperCase();
+      const localityCode = String(locality?.code ?? '').trim().toUpperCase();
       if (!localityCode) return false;
       if (editing && localityId === String(editing.id ?? '')) return false;
       return localityCode === payload.code;
     });
-    if (duplicatedCode) {
+
+    if (conflictingLocality && editing) {
+      const editingKey = getTargetLocalityKey(String(editing?.name ?? payload.name));
+      const conflictKey = getTargetLocalityKey(String(conflictingLocality?.name ?? ''));
+      const sameSmifLocality = Boolean(editingKey && conflictKey && editingKey === conflictKey);
+      if (sameSmifLocality) {
+        const previousCode = String(editing?.code ?? '').trim().toUpperCase();
+        const conflictId = String(conflictingLocality?.id ?? '').trim();
+        const usedCodes = new Set(
+          allLocalities.map((item: any) => String(item?.code ?? '').trim().toUpperCase()).filter(Boolean),
+        );
+        let tempCode = `TMP${Date.now().toString().slice(-6)}`;
+        while (usedCodes.has(tempCode)) {
+          tempCode = `TMP${Math.floor(Math.random() * 1000000)
+            .toString()
+            .padStart(6, '0')}`;
+        }
+        try {
+          await updateLocality.mutateAsync({
+            id: conflictId,
+            payload: { code: tempCode },
+          });
+          await updateLocality.mutateAsync({ id: editing.id, payload });
+          if (previousCode && previousCode !== payload.code) {
+            await updateLocality.mutateAsync({
+              id: conflictId,
+              payload: { code: previousCode },
+            });
+          }
+          toast.push({ message: 'Localidade atualizada e registros consolidados.', severity: 'success' });
+          setDrawerOpen(false);
+          return;
+        } catch (error) {
+          toast.push({ message: parseApiError(error).message, severity: 'error' });
+          return;
+        }
+      }
+    }
+
+    if (conflictingLocality) {
+      const conflictName = String(conflictingLocality?.name ?? 'outra localidade');
       toast.push({
-        message: `A sigla ${payload.code} já está em uso por outra localidade. Use uma sigla diferente.`,
+        message: `A sigla ${payload.code} já está em uso por ${conflictName}. Use uma sigla diferente.`,
         severity: 'warning',
       });
       return;
