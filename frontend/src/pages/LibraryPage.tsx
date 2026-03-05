@@ -387,6 +387,7 @@ export function LibraryPage() {
                           width: { xs: `${sizeScale * 100}%`, md: `${sizeScale * 800}px` },
                           maxWidth: { xs: "100%", md: "none" },
                           height: { xs: `${sizeScale * 100}%`, md: `${sizeScale * 450}px` },
+                          flexShrink: 0,
                           bgcolor: "#0E2E3A",
                           cursor: offset !== 0 ? "pointer" : "default",
                           opacity,
@@ -406,7 +407,7 @@ export function LibraryPage() {
                           component="img"
                           src={getPhotoUrl(photo)}
                           alt={photo.title}
-                          sx={{ width: "100%", height: "100%", objectFit: "cover" }}
+                          sx={{ width: "100%", height: "100%", objectFit: "contain", bgcolor: "#0E2E3A" }}
                         />
                       </Box>
                     );
