@@ -64,7 +64,8 @@ function LocalitiesTab() {
     return <ErrorState error={localitiesQuery.error} onRetry={() => localitiesQuery.refetch()} />;
   }
 
-  const items = selectTargetLocalities((localitiesQuery.data?.items ?? []) as any[])
+  const allLocalities = (localitiesQuery.data?.items ?? []) as any[];
+  const items = selectTargetLocalities(allLocalities)
     .slice()
     .sort((a: any, b: any) => String(a?.name ?? '').localeCompare(String(b?.name ?? ''), 'pt-BR'));
 
@@ -96,6 +97,22 @@ function LocalitiesTab() {
       toast.push({
         message:
           'Nome inválido para localidade SMIF. Use uma das localidades alvo (Brasília, Canoas, Guaratinguetá, Lagoa Santa, Manaus, Pirassununga, Rio de Janeiro, São Paulo).',
+        severity: 'warning',
+      });
+      return;
+    }
+    const duplicatedCode = allLocalities.some((locality: any) => {
+      const localityId = String(locality?.id ?? '').trim();
+      const localityCode = String(locality?.code ?? '')
+        .trim()
+        .toUpperCase();
+      if (!localityCode) return false;
+      if (editing && localityId === String(editing.id ?? '')) return false;
+      return localityCode === payload.code;
+    });
+    if (duplicatedCode) {
+      toast.push({
+        message: `A sigla ${payload.code} já está em uso por outra localidade. Use uma sigla diferente.`,
         severity: 'warning',
       });
       return;
