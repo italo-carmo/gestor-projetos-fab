@@ -98,6 +98,7 @@ export function MissionsPage() {
   const missionsQuery = useMissions({ localityId: localityId || undefined, q: q || undefined });
   const localitiesQuery = useLocalities();
   const missionDetailQuery = useMission(missionIdFromUrl, Boolean(missionIdFromUrl));
+  const cloneMissionOptionsQuery = useMissions({ pageSize: '200' });
   const statisticsQuery = useMissionStatistics();
 
   const createMission = useCreateMission();
@@ -121,6 +122,7 @@ export function MissionsPage() {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [scheduleForm, setScheduleForm] = useState(blankScheduleForm);
   const [editingScheduleItemId, setEditingScheduleItemId] = useState<string | null>(null);
+  const [cloneSourceMissionId, setCloneSourceMissionId] = useState('');
   const [missionDeleteTarget, setMissionDeleteTarget] = useState<{ id: string; title: string } | null>(null);
   const [scheduleDeleteTarget, setScheduleDeleteTarget] = useState<{ id: string; title: string } | null>(null);
 
@@ -137,6 +139,11 @@ export function MissionsPage() {
 
   const items = missionsQuery.data?.items ?? [];
   const selectedMission = missionDetailQuery.data ?? null;
+  const cloneSourceMissionQuery = useMission(cloneSourceMissionId, Boolean(cloneSourceMissionId));
+  const cloneMissionOptions = useMemo(() => {
+    const missions = (cloneMissionOptionsQuery.data?.items ?? []) as any[];
+    return missions.filter((mission) => String(mission.id) !== String(selectedMission?.id ?? ''));
+  }, [cloneMissionOptionsQuery.data?.items, selectedMission?.id]);
 
   useEffect(() => {
     if (!missionIdFromUrl) {
@@ -171,6 +178,7 @@ export function MissionsPage() {
     setLdapIdentifier('');
     setScheduleForm(blankScheduleForm);
     setEditingScheduleItemId(null);
+    setCloneSourceMissionId('');
     setDrawerOpen(true);
 
     const next = new URLSearchParams(params);
@@ -183,6 +191,7 @@ export function MissionsPage() {
     setDrawerOpen(true);
     setEditingScheduleItemId(null);
     setScheduleForm(blankScheduleForm);
+    setCloneSourceMissionId('');
 
     const next = new URLSearchParams(params);
     next.set('missionId', id);
@@ -194,6 +203,7 @@ export function MissionsPage() {
     setIsCreateMode(false);
     setEditingScheduleItemId(null);
     setScheduleForm(blankScheduleForm);
+    setCloneSourceMissionId('');
     setMissionDeleteTarget(null);
     setScheduleDeleteTarget(null);
 
@@ -216,6 +226,38 @@ export function MissionsPage() {
       return;
     }
 
+    const cloneScheduleItems = async (targetMissionId: string) => {
+      if (!cloneSourceMissionId) return 0;
+      const sourceItems = ((cloneSourceMissionQuery.data?.scheduleItems ?? []) as any[])
+        .slice()
+        .sort(
+          (a, b) =>
+            new Date(String(a.startAt ?? 0)).getTime() - new Date(String(b.startAt ?? 0)).getTime(),
+        );
+      if (!sourceItems.length) return 0;
+
+      for (const item of sourceItems) {
+        const startAtIso = new Date(String(item.startAt)).toISOString();
+        await createScheduleItem.mutateAsync({
+          id: targetMissionId,
+          payload: {
+            title: String(item.title ?? ''),
+            startAt: startAtIso,
+            durationMinutes: Number(item.durationMinutes ?? 60) || 60,
+            location: String(item.location ?? ''),
+            responsible: String(item.responsible ?? ''),
+            participants: String(item.participants ?? ''),
+          },
+        });
+      }
+      return sourceItems.length;
+    };
+
+    if (cloneSourceMissionId && cloneSourceMissionQuery.isLoading) {
+      toast.push({ message: 'Aguarde o carregamento da missão origem para clonar o cronograma.', severity: 'info' });
+      return;
+    }
+
     try {
       if (isCreateMode) {
         const created = await createMission.mutateAsync({
@@ -225,7 +267,16 @@ export function MissionsPage() {
           startDate: missionForm.startDate,
           endDate: missionForm.endDate,
         });
+        const clonedCount = await cloneScheduleItems(created.id);
         toast.push({ message: 'Missão criada com sucesso.', severity: 'success' });
+        if (cloneSourceMissionId) {
+          toast.push({
+            message: clonedCount > 0
+              ? `Cronograma clonado com ${clonedCount} item(ns).`
+              : 'Missão origem sem itens de cronograma para clonar.',
+            severity: clonedCount > 0 ? 'success' : 'warning',
+          });
+        }
         openMission(created.id);
       } else if (selectedMission) {
         await updateMission.mutateAsync({
@@ -239,7 +290,17 @@ export function MissionsPage() {
           },
         });
         toast.push({ message: 'Missão atualizada.', severity: 'success' });
+        const clonedCount = await cloneScheduleItems(selectedMission.id);
+        if (cloneSourceMissionId) {
+          toast.push({
+            message: clonedCount > 0
+              ? `Cronograma clonado com ${clonedCount} item(ns).`
+              : 'Missão origem sem itens de cronograma para clonar.',
+            severity: clonedCount > 0 ? 'success' : 'warning',
+          });
+        }
       }
+      setCloneSourceMissionId('');
     } catch (error) {
       toast.push({ message: parseApiError(error).message ?? 'Erro ao salvar missão.', severity: 'error' });
     }
@@ -806,11 +867,27 @@ export function MissionsPage() {
                         sx={{ minWidth: 180 }}
                       />
                     </Stack>
+                    <TextField
+                      select
+                      size="small"
+                      label="Clonar cronograma de"
+                      value={cloneSourceMissionId}
+                      onChange={(event) => setCloneSourceMissionId(event.target.value)}
+                      helperText="Opcional. Ao salvar, os itens da missão selecionada serão adicionados ao cronograma."
+                      fullWidth
+                    >
+                      <MenuItem value="">Não clonar</MenuItem>
+                      {cloneMissionOptions.map((mission: any) => (
+                        <MenuItem key={mission.id} value={String(mission.id)}>
+                          {mission.title} ({formatDateOnlyPtBr(mission.startDate)} a {formatDateOnlyPtBr(mission.endDate)})
+                        </MenuItem>
+                      ))}
+                    </TextField>
                     <Box display="flex" justifyContent="flex-end">
                       <Button
                         variant="contained"
                         onClick={handleSaveMission}
-                        disabled={createMission.isPending || updateMission.isPending}
+                        disabled={createMission.isPending || updateMission.isPending || createScheduleItem.isPending}
                       >
                         {isCreateMode ? 'Criar missão' : 'Salvar missão'}
                       </Button>

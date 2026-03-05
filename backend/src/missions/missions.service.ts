@@ -739,7 +739,7 @@ export class MissionsService {
       include: {
         locality: { select: { id: true, code: true, name: true } },
         participants: {
-          select: { name: true, email: true, cpf: true },
+          select: { name: true, email: true, cpf: true, fabom: true },
           orderBy: [{ createdAt: 'asc' }],
         },
         scheduleItems: {
@@ -787,11 +787,13 @@ export class MissionsService {
     const missionLocality = mission.locality ? `${mission.locality.name} (${mission.locality.code})` : '-';
     const missionTimeZone = this.missionPdfTimeZone;
     const missionPeriod = `${this.formatDate(mission.startDate, missionTimeZone)} a ${this.formatDate(mission.endDate, missionTimeZone)}`;
-    const missionDescription = mission.description?.trim() || '-';
     const participantsLabel =
       mission.participants.length > 0
         ? mission.participants
-            .map((participant) => participant.name || participant.email || participant.cpf || 'Participante')
+            .map((participant) => {
+              const baseName = participant.name || participant.email || participant.cpf || 'Participante';
+              return this.removeOmFromParticipantName(baseName, participant.fabom);
+            })
             .join(', ')
         : 'Nenhum participante cadastrado';
 
@@ -871,26 +873,6 @@ export class MissionsService {
       }
 
       cursorY += cardHeight + 6;
-
-      const descriptionHeight = 38;
-      doc
-        .roundedRect(tableX, cursorY, contentWidth, descriptionHeight, 6)
-        .fillAndStroke(palette.paper, palette.cardBorder);
-      doc
-        .font('Helvetica-Bold')
-        .fontSize(8)
-        .fillColor(palette.muted)
-        .text('Descrição', tableX + 8, cursorY + 6, { width: contentWidth - 16 });
-      doc
-        .font('Helvetica')
-        .fontSize(9)
-        .fillColor(palette.text)
-        .text(missionDescription, tableX + 8, cursorY + 16, {
-          width: contentWidth - 16,
-          height: 16,
-        });
-
-      cursorY += descriptionHeight + 6;
 
       const participantsHeight = Math.max(
         32,
@@ -1295,6 +1277,16 @@ export class MissionsService {
       hour: byType.hour ?? '00',
       minute: byType.minute ?? '00',
     };
+  }
+
+  private removeOmFromParticipantName(name: string, fabom?: string | null) {
+    const normalizedName = sanitizeText(name ?? '').trim();
+    if (!normalizedName) return 'Participante';
+    const normalizedFabom = sanitizeText(fabom ?? '').trim();
+    if (!normalizedFabom) return normalizedName;
+
+    const escapedFabom = normalizedFabom.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return normalizedName.replace(new RegExp(`\\s+${escapedFabom}$`, 'i'), '').trim() || normalizedName;
   }
 
   private extractCpf(value: string | null | undefined) {
