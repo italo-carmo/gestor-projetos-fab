@@ -114,6 +114,22 @@ function normalizePossiblyMojibake(value: string | null | undefined) {
   }
 }
 
+function getDocumentType(value: { fileName?: string | null; title?: string | null }) {
+  const fromFileName = String(value.fileName ?? "")
+    .split(".")
+    .pop()
+    ?.trim()
+    .toLowerCase();
+  const fromTitle = String(value.title ?? "")
+    .split(".")
+    .pop()
+    ?.trim()
+    .toLowerCase();
+  const extension = fromFileName || fromTitle || "";
+  if (!extension) return "Arquivo";
+  return extension.slice(0, 6).toUpperCase();
+}
+
 export function LibraryPage() {
   const toast = useToast();
   const { data: me } = useMe();
@@ -566,7 +582,7 @@ export function LibraryPage() {
               <TableHead>
                 <TableRow sx={{ bgcolor: "primary.main" }}>
                   <TableCell sx={{ color: "white", fontWeight: 700 }}>Título</TableCell>
-                  <TableCell sx={{ color: "white", fontWeight: 700 }}>Arquivo</TableCell>
+                  <TableCell sx={{ color: "white", fontWeight: 700 }}>Tipo</TableCell>
                   <TableCell sx={{ color: "white", fontWeight: 700 }}>Tamanho</TableCell>
                   <TableCell sx={{ color: "white", fontWeight: 700 }}>Publicado em</TableCell>
                   <TableCell sx={{ color: "white", fontWeight: 700 }} align="right">Ações</TableCell>
@@ -578,7 +594,14 @@ export function LibraryPage() {
                     <TableCell sx={{ minWidth: 260, fontWeight: 500 }}>
                       {normalizePossiblyMojibake(document.title)}
                     </TableCell>
-                    <TableCell>{normalizePossiblyMojibake(document.fileName)}</TableCell>
+                    <TableCell>
+                      <Chip
+                        size="small"
+                        color="primary"
+                        variant="outlined"
+                        label={getDocumentType(document)}
+                      />
+                    </TableCell>
                     <TableCell>{formatFileSize(document.fileSize)}</TableCell>
                     <TableCell>{new Date(document.createdAt).toLocaleString("pt-BR")}</TableCell>
                     <TableCell align="right">

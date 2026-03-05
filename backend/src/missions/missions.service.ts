@@ -1283,7 +1283,17 @@ export class MissionsService {
     const normalizedName = sanitizeText(name ?? '').trim();
     if (!normalizedName) return 'Participante';
     const normalizedFabom = sanitizeText(fabom ?? '').trim();
-    if (!normalizedFabom) return normalizedName;
+    if (!normalizedFabom) {
+      const parts = normalizedName.split(/\s+/).filter(Boolean);
+      if (parts.length >= 3) {
+        const lastToken = parts[parts.length - 1];
+        const looksLikeOm = /^[A-Z]{2,5}$/.test(lastToken);
+        if (looksLikeOm) {
+          return parts.slice(0, -1).join(' ').trim() || normalizedName;
+        }
+      }
+      return normalizedName;
+    }
 
     const escapedFabom = normalizedFabom.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     return normalizedName.replace(new RegExp(`\\s+${escapedFabom}$`, 'i'), '').trim() || normalizedName;
