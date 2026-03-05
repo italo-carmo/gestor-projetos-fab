@@ -310,8 +310,8 @@ export function DashboardNationalPage() {
                         <TableCell sx={{ color: 'white', fontWeight: 600, width: '14%', px: 0.5 }}>GSD</TableCell>
                         <TableCell sx={{ color: 'white', fontWeight: 600, width: '12%', px: 0.5 }}>% Geral</TableCell>
                         <TableCell sx={{ color: 'white', fontWeight: 600, width: '13%', px: 0.5 }}>Rec. Fem.</TableCell>
-                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '40%', px: 0.5 }}>Comandante</TableCell>
-                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '21%', px: 0.5 }}>Visita</TableCell>
+                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '34%', px: 0.5 }}>Comandante</TableCell>
+                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '27%', px: 0.5 }}>Visita</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
