@@ -20,6 +20,7 @@ import { ACTIVITY_STATUS_LABELS } from '../constants/enums';
 
 const KPI_BLUE_CARD_SX = {
   bgcolor: 'rgb(31, 74, 97)',
+  backgroundColor: 'rgb(31, 74, 97) !important',
   border: '1px solid rgba(139, 184, 207, 0.38)',
   boxShadow: '0 18px 34px rgba(15,44,59,0.36)',
 } as const;

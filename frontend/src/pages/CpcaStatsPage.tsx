@@ -123,6 +123,12 @@ const BLUE_CARD_SX = {
   },
 };
 
+const CPCA_KPI_CARD_SX = {
+  ...BLUE_CARD_SX,
+  backgroundColor: "rgb(31, 74, 97) !important",
+  boxShadow: "0 18px 34px rgba(15,44,59,0.36)",
+} as const;
+
 function formatPercent(value: number) {
   const numeric = Number(value ?? 0);
   if (!Number.isFinite(numeric)) return "0%";
@@ -399,7 +405,7 @@ export function CpcaStatsPage() {
       <Grid container spacing={2}>
         {kpiCards.map((card) => (
           <Grid key={card.label} size={{ xs: 12, sm: 6, md: 4 }}>
-            <Card sx={{ ...BLUE_CARD_SX, height: "100%" }}>
+            <Card sx={{ ...CPCA_KPI_CARD_SX, height: "100%" }}>
               <CardContent>
                 <Typography variant="overline" fontWeight={600}>
                   {card.label}
