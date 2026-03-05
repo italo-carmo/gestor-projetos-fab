@@ -368,12 +368,12 @@ export function LibraryPage() {
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    gap: { xs: 0.25, md: 0.65 },
-                    height: { xs: 210, md: 400 },
+                    gap: { xs: 0.4, md: 1.1 },
+                    height: { xs: 190, md: 360 },
                   }}
                 >
-                  {Array.from({ length: Math.min(3, Math.floor((photos.length - 1) / 2)) * 2 + 1 }, (_, i) => {
-                    const sideCount = Math.min(3, Math.floor((photos.length - 1) / 2));
+                  {Array.from({ length: Math.min(4, Math.floor((photos.length - 1) / 2)) * 2 + 1 }, (_, i) => {
+                    const sideCount = Math.min(4, Math.floor((photos.length - 1) / 2));
                     return i - sideCount;
                   }).map((offset) => {
                     const idx = (currentIndex + offset + photos.length) % photos.length;
@@ -385,13 +385,13 @@ export function LibraryPage() {
 
                     // Mantem o card principal maior e reduz progressivamente nas laterais.
                     const sizeScale =
-                      distance === 0 ? 1 : distance === 1 ? 0.82 : distance === 2 ? 0.62 : 0.46;
+                      distance === 0 ? 0.9 : distance === 1 ? 0.74 : distance === 2 ? 0.56 : distance === 3 ? 0.42 : 0.32;
                     const opacity =
-                      distance === 0 ? 1 : distance === 1 ? 0.86 : distance === 2 ? 0.72 : 0.58;
+                      distance === 0 ? 1 : distance === 1 ? 0.86 : distance === 2 ? 0.72 : distance === 3 ? 0.58 : 0.48;
                     const zIndex = 20 - distance;
                     const aspectRatio = photoAspectRatios[photo.id] || 16 / 9;
-                    const widthDesktop = 400 * aspectRatio;
-                    const widthMobile = 190 * aspectRatio;
+                    const widthDesktop = 360 * aspectRatio;
+                    const widthMobile = 170 * aspectRatio;
 
                     return (
                       <Box
@@ -404,9 +404,9 @@ export function LibraryPage() {
                           aspectRatio,
                           width: { xs: `${sizeScale * widthMobile}px`, md: `${sizeScale * widthDesktop}px` },
                           maxWidth: { xs: "92vw", md: "none" },
-                          height: { xs: `${sizeScale * 190}px`, md: `${sizeScale * 400}px` },
+                          height: { xs: `${sizeScale * 170}px`, md: `${sizeScale * 360}px` },
                           flexShrink: 0,
-                          mx: { xs: 0, md: distance === 1 ? -0.35 : 0 },
+                          mx: 0,
                           bgcolor: "#0E2E3A",
                           cursor: offset !== 0 ? "pointer" : "default",
                           opacity,
