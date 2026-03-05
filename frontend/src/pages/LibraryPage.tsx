@@ -144,6 +144,7 @@ export function LibraryPage() {
 
   const [intervalSeconds, setIntervalSeconds] = useState(5);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [slideDirection, setSlideDirection] = useState<1 | -1>(1);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [photoTitleDrafts, setPhotoTitleDrafts] = useState<Record<string, string>>({});
   const [photoLocalityDrafts, setPhotoLocalityDrafts] = useState<Record<string, string>>({});
@@ -166,6 +167,7 @@ export function LibraryPage() {
       return;
     }
     const timer = window.setInterval(() => {
+      setSlideDirection(1);
       setCurrentIndex((prev) => (prev + 1) % photos.length);
     }, Math.max(2, intervalSeconds) * 1000);
     return () => window.clearInterval(timer);
@@ -205,6 +207,16 @@ export function LibraryPage() {
   }
 
   const currentPhoto = photos[currentIndex] ?? null;
+  const goToNextPhoto = () => {
+    if (!photos.length) return;
+    setSlideDirection(1);
+    setCurrentIndex((prev) => (prev + 1) % photos.length);
+  };
+  const goToPreviousPhoto = () => {
+    if (!photos.length) return;
+    setSlideDirection(-1);
+    setCurrentIndex((prev) => (prev - 1 + photos.length) % photos.length);
+  };
 
   const reorderPhotos = async (draggedId: string, targetId: string) => {
     if (!draggedId || !targetId || draggedId === targetId || updatePhoto.isPending) return;
@@ -396,7 +408,11 @@ export function LibraryPage() {
                     return (
                       <Box
                         key={`${photo.id}-${offset}`}
-                        onClick={() => setCurrentIndex(idx)}
+                        onClick={() => {
+                          if (offset === 0) return;
+                          setSlideDirection(offset > 0 ? 1 : -1);
+                          setCurrentIndex(idx);
+                        }}
                         sx={{
                           position: "relative",
                           borderRadius: 2,
@@ -411,7 +427,7 @@ export function LibraryPage() {
                           cursor: offset !== 0 ? "pointer" : "default",
                           opacity,
                           zIndex,
-                          transition: "all 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
+                          transition: "all 0.55s cubic-bezier(0.22, 1, 0.36, 1)",
                           transform: "scale(1)",
                           boxShadow: isActive
                             ? "0 12px 32px rgba(0,0,0,0.4)"
@@ -436,7 +452,21 @@ export function LibraryPage() {
                               return { ...prev, [photo.id]: ratio };
                             });
                           }}
-                          sx={{ width: "100%", height: "100%", objectFit: "contain", bgcolor: "#0E2E3A" }}
+                          sx={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "contain",
+                            bgcolor: "#0E2E3A",
+                            animation: `${slideDirection === 1 ? "carouselSlideInRight" : "carouselSlideInLeft"} 0.45s cubic-bezier(0.22, 1, 0.36, 1)`,
+                            "@keyframes carouselSlideInRight": {
+                              "0%": { opacity: 0.7, transform: "translateX(14px) scale(1.015)" },
+                              "100%": { opacity: 1, transform: "translateX(0) scale(1)" },
+                            },
+                            "@keyframes carouselSlideInLeft": {
+                              "0%": { opacity: 0.7, transform: "translateX(-14px) scale(1.015)" },
+                              "100%": { opacity: 1, transform: "translateX(0) scale(1)" },
+                            },
+                          }}
                         />
                       </Box>
                     );
@@ -445,7 +475,7 @@ export function LibraryPage() {
                 {photos.length > 1 && (
                   <>
                     <IconButton
-                      onClick={() => setCurrentIndex((prev) => (prev - 1 + photos.length) % photos.length)}
+                      onClick={goToPreviousPhoto}
                       sx={{
                         position: "absolute",
                         left: { xs: 5, md: 10 },
@@ -459,7 +489,7 @@ export function LibraryPage() {
                       <ArrowBackIosNewRoundedIcon fontSize="small" />
                     </IconButton>
                     <IconButton
-                      onClick={() => setCurrentIndex((prev) => (prev + 1) % photos.length)}
+                      onClick={goToNextPhoto}
                       sx={{
                         position: "absolute",
                         right: { xs: 5, md: 10 },
@@ -488,7 +518,11 @@ export function LibraryPage() {
                       size="small"
                       label={String(index + 1)}
                       color={index === currentIndex ? "primary" : "default"}
-                      onClick={() => setCurrentIndex(index)}
+                      onClick={() => {
+                        if (index === currentIndex) return;
+                        setSlideDirection(index > currentIndex ? 1 : -1);
+                        setCurrentIndex(index);
+                      }}
                     />
                   ))}
                 </Stack>
