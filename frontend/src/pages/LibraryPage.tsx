@@ -154,6 +154,7 @@ export function LibraryPage() {
   const [dragPhotoId, setDragPhotoId] = useState<string | null>(null);
   const [selectedPhotoIds, setSelectedPhotoIds] = useState<string[]>([]);
   const [bulkLocalityId, setBulkLocalityId] = useState<string>("");
+  const [photoAspectRatios, setPhotoAspectRatios] = useState<Record<string, number>>({});
 
   useEffect(() => {
     setIntervalSeconds(Math.max(2, Math.min(60, intervalFromApi)));
@@ -186,6 +187,16 @@ export function LibraryPage() {
   useEffect(() => {
     const validIds = new Set(allPhotos.map((photo) => photo.id));
     setSelectedPhotoIds((prev) => prev.filter((id) => validIds.has(id)));
+  }, [allPhotos]);
+
+  useEffect(() => {
+    const validIds = new Set(allPhotos.map((photo) => photo.id));
+    setPhotoAspectRatios((prev) => {
+      const next = Object.fromEntries(
+        Object.entries(prev).filter(([id]) => validIds.has(id)),
+      );
+      return Object.keys(next).length === Object.keys(prev).length ? prev : next;
+    });
   }, [allPhotos]);
 
   if (libraryQuery.isLoading) return <SkeletonState />;
@@ -373,6 +384,9 @@ export function LibraryPage() {
                     const sizeScale = isActive ? 1 : distance === 1 ? 0.7 : 0.5;
                     const opacity = isActive ? 1 : distance === 1 ? 0.8 : 0.6;
                     const zIndex = isActive ? 10 : 5 - distance;
+                    const aspectRatio = photoAspectRatios[photo.id] || 16 / 9;
+                    const widthDesktop = 450 * aspectRatio;
+                    const widthMobile = 220 * aspectRatio;
 
                     return (
                       <Box
@@ -382,10 +396,10 @@ export function LibraryPage() {
                           position: "relative",
                           borderRadius: 2,
                           overflow: "hidden",
-                          aspectRatio: "16 / 9",
-                          width: { xs: `${sizeScale * 100}%`, md: `${sizeScale * 800}px` },
-                          maxWidth: { xs: "100%", md: "none" },
-                          height: { xs: `${sizeScale * 100}%`, md: `${sizeScale * 450}px` },
+                          aspectRatio,
+                          width: { xs: `${sizeScale * widthMobile}px`, md: `${sizeScale * widthDesktop}px` },
+                          maxWidth: { xs: "92vw", md: "none" },
+                          height: { xs: `${sizeScale * 220}px`, md: `${sizeScale * 450}px` },
                           flexShrink: 0,
                           mx: 0,
                           bgcolor: "#0E2E3A",
@@ -407,6 +421,16 @@ export function LibraryPage() {
                           component="img"
                           src={getPhotoUrl(photo)}
                           alt={photo.title}
+                          onLoad={(event) => {
+                            const image = event.currentTarget;
+                            if (!image.naturalWidth || !image.naturalHeight) return;
+                            const ratio = image.naturalWidth / image.naturalHeight;
+                            setPhotoAspectRatios((prev) => {
+                              const current = prev[photo.id];
+                              if (current && Math.abs(current - ratio) < 0.01) return prev;
+                              return { ...prev, [photo.id]: ratio };
+                            });
+                          }}
                           sx={{ width: "100%", height: "100%", objectFit: "contain", bgcolor: "#0E2E3A" }}
                         />
                       </Box>
