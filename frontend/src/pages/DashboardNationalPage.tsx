@@ -1,8 +1,13 @@
-import { Box, Button, Card, CardContent, Chip, Grid, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from '@mui/material';
-import TargetIcon from '@mui/icons-material/GpsFixed';
-import PeopleIcon from '@mui/icons-material/Groups';
+import { Box, Card, CardContent, Chip, Grid, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from '@mui/material';
 import DescriptionIcon from '@mui/icons-material/Description';
-import NewspaperRoundedIcon from '@mui/icons-material/NewspaperRounded';
+import TaskAltIcon from '@mui/icons-material/TaskAlt';
+import TerrainIcon from '@mui/icons-material/Terrain';
+import PlaceIcon from '@mui/icons-material/Place';
+import PsychologyIcon from '@mui/icons-material/Psychology';
+import VolunteerActivismIcon from '@mui/icons-material/VolunteerActivism';
+import MenuBookIcon from '@mui/icons-material/MenuBook';
+import GavelIcon from '@mui/icons-material/Gavel';
+import type { ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useDashboardNational } from '../api/hooks';
 import { SkeletonState } from '../components/states/SkeletonState';
@@ -30,6 +35,33 @@ type NationalActivityItem = {
   status: string;
   isLate?: boolean;
 };
+type NationalDashboardTotals = {
+  localities: number;
+  coverageLocalities: number;
+  late: number;
+  unassigned: number;
+  recruitsFemale: number;
+  reportsProduced: number;
+  smifNewsCount: number;
+  visitsCompleted: number;
+  completedReports: number;
+  completedTasks: number;
+  completedFieldActivities: number;
+  completedVisits: number;
+  fieldActivitiesBySpecialty: {
+    psychology: number;
+    socialService: number;
+    doctrine: number;
+    law: number;
+  };
+};
+
+type IndicatorTile = {
+  label: string;
+  value: string;
+  helper: string;
+  icon: ReactNode;
+};
 
 export function DashboardNationalPage() {
   const [params] = useSearchParams();
@@ -45,14 +77,25 @@ export function DashboardNationalPage() {
   const smifLocalities = [...items]
     .sort((a, b) => a.localityName.localeCompare(b.localityName, 'pt-BR'))
     .slice(0, 8);
-  const totals = dashboardQuery.data?.totals ?? {
+  const totals: NationalDashboardTotals = dashboardQuery.data?.totals ?? {
     localities: 0,
+    coverageLocalities: 0,
     visitsCompleted: 0,
     late: 0,
     unassigned: 0,
     recruitsFemale: 0,
     reportsProduced: 0,
     smifNewsCount: 0,
+    completedReports: 0,
+    completedTasks: 0,
+    completedFieldActivities: 0,
+    completedVisits: 0,
+    fieldActivitiesBySpecialty: {
+      psychology: 0,
+      socialService: 0,
+      doctrine: 0,
+      law: 0,
+    },
   };
   const positiveHighlights = ((dashboardQuery.data?.riskTasks ?? []) as NationalActivityItem[])
     .sort((a, b) => {
@@ -65,32 +108,57 @@ export function DashboardNationalPage() {
     ? Math.round(smifLocalities.reduce((acc, item) => acc + Number(item.progress ?? 0), 0) / smifLocalities.length)
     : 0;
 
-  const kpiCards = [
+  const completedIndicators: IndicatorTile[] = [
     {
-      label: 'Cobertura',
-      value: `${totals.visitsCompleted ?? 0}/${totals.coverageLocalities ?? totals.localities ?? 0} localidades`,
-      icon: <TargetIcon sx={{ fontSize: 28 }} />,
-      bg: '#E8F8EF',
+      label: 'Relatórios',
+      value: String(totals.completedReports ?? 0),
+      helper: 'Concluídos',
+      icon: <DescriptionIcon sx={{ fontSize: 22 }} />,
     },
     {
-      label: 'Recrutas femininas',
-      value: String(totals.recruitsFemale ?? 0),
-      icon: <PeopleIcon sx={{ fontSize: 28 }} />,
-      bg: '#E8F2FF',
+      label: 'Tarefas',
+      value: String(totals.completedTasks ?? 0),
+      helper: 'Concluídas',
+      icon: <TaskAltIcon sx={{ fontSize: 22 }} />,
     },
     {
-      label: 'Execução média',
-      value: `${averageProgress}%`,
-      icon: <TargetIcon sx={{ fontSize: 28 }} />,
-      bg: '#EEF8FF',
+      label: 'Atividades de campo',
+      value: String(totals.completedFieldActivities ?? 0),
+      helper: 'Concluídas',
+      icon: <TerrainIcon sx={{ fontSize: 22 }} />,
     },
     {
-      label: 'Reportagens (SMIF)',
-      value: String(totals.smifNewsCount ?? 0),
-      icon: <NewspaperRoundedIcon sx={{ fontSize: 28 }} />,
-      bg: '#F2F5FF',
+      label: 'Visitas',
+      value: String(totals.completedVisits ?? 0),
+      helper: 'Concluídas',
+      icon: <PlaceIcon sx={{ fontSize: 22 }} />,
     },
-    { label: 'Relatórios', value: `${totals.reportsProduced ?? 0} produzidos`, icon: <DescriptionIcon sx={{ fontSize: 28 }} />, bg: '#FFF6E1' },
+  ];
+  const fieldBySpecialtyIndicators: IndicatorTile[] = [
+    {
+      label: 'Psicologia',
+      value: String(totals.fieldActivitiesBySpecialty?.psychology ?? 0),
+      helper: 'Atividades concluídas',
+      icon: <PsychologyIcon sx={{ fontSize: 22 }} />,
+    },
+    {
+      label: 'Serviço Social',
+      value: String(totals.fieldActivitiesBySpecialty?.socialService ?? 0),
+      helper: 'Atividades concluídas',
+      icon: <VolunteerActivismIcon sx={{ fontSize: 22 }} />,
+    },
+    {
+      label: 'Doutrina',
+      value: String(totals.fieldActivitiesBySpecialty?.doctrine ?? 0),
+      helper: 'Atividades concluídas',
+      icon: <MenuBookIcon sx={{ fontSize: 22 }} />,
+    },
+    {
+      label: 'Direito',
+      value: String(totals.fieldActivitiesBySpecialty?.law ?? 0),
+      helper: 'Atividades concluídas',
+      icon: <GavelIcon sx={{ fontSize: 22 }} />,
+    },
   ];
 
   return (
@@ -107,28 +175,83 @@ export function DashboardNationalPage() {
           gap: 2,
           gridTemplateColumns: {
             xs: '1fr',
-            sm: 'repeat(2, minmax(0, 1fr))',
-            md: 'repeat(5, minmax(0, 1fr))',
+            md: 'repeat(2, minmax(0, 1fr))',
           },
+          mb: 1,
         }}
       >
-        {kpiCards.map((kpi) => (
+        {[
+          {
+            title: 'Concluídos no SMIF',
+            subtitle: `Execução média atual: ${averageProgress}%`,
+            items: completedIndicators,
+            bg: 'linear-gradient(145deg, rgba(17,66,89,0.10) 0%, rgba(255,255,255,0.98) 58%, rgba(77,134,160,0.10) 100%)',
+          },
+          {
+            title: 'Atividades de Campo por Área',
+            subtitle: 'Somente atividades de campo concluídas',
+            items: fieldBySpecialtyIndicators,
+            bg: 'linear-gradient(145deg, rgba(12,101,126,0.09) 0%, rgba(255,255,255,0.98) 62%, rgba(231,244,250,0.88) 100%)',
+          },
+        ].map((group) => (
           <Card
-            key={kpi.label}
+            key={group.title}
             sx={{
-              background: kpi.bg,
-              border: '1px solid rgba(0,0,0,0.06)',
+              background: group.bg,
+              border: '1px solid rgba(17,66,89,0.12)',
               width: '100%',
-              height: '100%',
-              minHeight: 116,
-              display: 'flex',
+              borderRadius: 3,
+              boxShadow: '0 14px 30px rgba(17,66,89,0.08)',
             }}
           >
-            <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%' }}>
-              <Box sx={{ color: 'primary.main' }}>{kpi.icon}</Box>
-              <Box>
-                <Typography variant="overline" color="text.secondary" fontWeight={600}>{kpi.label}</Typography>
-                <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2 }}>{kpi.value}</Typography>
+            <CardContent sx={{ p: 2.25 }}>
+              <Typography variant="subtitle1" fontWeight={700} sx={{ letterSpacing: 0.2 }}>
+                {group.title}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {group.subtitle}
+              </Typography>
+              <Box
+                sx={{
+                  mt: 1.5,
+                  display: 'grid',
+                  gap: 1.25,
+                  gridTemplateColumns: {
+                    xs: '1fr',
+                    sm: 'repeat(2, minmax(0, 1fr))',
+                  },
+                }}
+              >
+                {group.items.map((item) => (
+                  <Box
+                    key={item.label}
+                    sx={{
+                      p: 1.5,
+                      borderRadius: 2,
+                      border: '1px solid rgba(17,66,89,0.12)',
+                      backgroundColor: 'rgba(255,255,255,0.72)',
+                      minHeight: 106,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between',
+                    }}
+                  >
+                    <Box display="flex" alignItems="center" justifyContent="space-between" gap={1}>
+                      <Typography variant="body2" color="text.secondary" fontWeight={600}>
+                        {item.label}
+                      </Typography>
+                      <Box sx={{ color: '#114259' }}>{item.icon}</Box>
+                    </Box>
+                    <Box>
+                      <Typography variant="h4" sx={{ fontWeight: 800, lineHeight: 1.1, color: '#0E3142' }}>
+                        {item.value}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {item.helper}
+                      </Typography>
+                    </Box>
+                  </Box>
+                ))}
               </Box>
             </CardContent>
           </Card>

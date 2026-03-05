@@ -1945,6 +1945,16 @@ export class TasksService {
           reportsProduced: 0,
           smifNewsCount: 0,
           visitsCompleted: 0,
+          completedReports: 0,
+          completedTasks: 0,
+          completedFieldActivities: 0,
+          completedVisits: 0,
+          fieldActivitiesBySpecialty: {
+            psychology: 0,
+            socialService: 0,
+            doctrine: 0,
+            law: 0,
+          },
         },
         lateItems: [],
         unassignedItems: [],
@@ -2063,6 +2073,15 @@ export class TasksService {
       const title = String(activity.title ?? '').toLowerCase();
       return /\bvisita\b/.test(title);
     };
+    const isCompletedActivity = (
+      activity: (typeof filteredActivities)[number],
+    ): boolean => activity.status === ActivityStatus.DONE;
+    const normalizeSpecialtyName = (value: string): string =>
+      value
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim()
+        .toLowerCase();
 
     const mapNationalActivityDetail = (
       activity: (typeof filteredActivities)[number],
@@ -2192,6 +2211,64 @@ export class TasksService {
     const coverageLocalities = perLocality.filter(
       (item) => Number(item.recruitsFemaleCountCurrent ?? 0) > 0,
     ).length;
+    const completedActivities = filteredActivities.filter((activity) =>
+      isCompletedActivity(activity),
+    );
+    const completedFieldActivities = completedActivities.filter(
+      (activity) => !isVisitActivity(activity),
+    );
+    const fieldActivitiesBySpecialty = {
+      psychology: 0,
+      socialService: 0,
+      doctrine: 0,
+      law: 0,
+    };
+    for (const activity of completedFieldActivities) {
+      const normalized = normalizeSpecialtyName(
+        String(activity.specialty?.name ?? ''),
+      );
+      if (!normalized) continue;
+      if (normalized.includes('psicologia')) {
+        fieldActivitiesBySpecialty.psychology += 1;
+        continue;
+      }
+      if (normalized.includes('servico social') || normalized === 'sso') {
+        fieldActivitiesBySpecialty.socialService += 1;
+        continue;
+      }
+      if (normalized.includes('doutrina')) {
+        fieldActivitiesBySpecialty.doctrine += 1;
+        continue;
+      }
+      if (normalized.includes('direito') || normalized.includes('jurid')) {
+        fieldActivitiesBySpecialty.law += 1;
+      }
+    }
+    const completedReports = completedActivities.filter((activity) =>
+      hasSignedReport(activity),
+    ).length;
+    const completedVisits = completedActivities.filter((activity) =>
+      isVisitActivity(activity),
+    ).length;
+    const taskWhereClauses: Prisma.TaskInstanceWhereInput[] = [];
+    if (localityAliasIds.length === 0) {
+      taskWhereClauses.push({ localityId: '__none__' });
+    } else {
+      taskWhereClauses.push({ localityId: { in: localityAliasIds } });
+    }
+    taskWhereClauses.push({ status: TaskStatus.DONE });
+    if (constraints.specialtyId) {
+      taskWhereClauses.push({
+        OR: [{ specialtyId: null }, { specialtyId: constraints.specialtyId }],
+      });
+    }
+    const completedTasksWhere: Prisma.TaskInstanceWhereInput =
+      taskWhereClauses.length === 1
+        ? taskWhereClauses[0]
+        : { AND: taskWhereClauses };
+    const completedTasks = await this.prisma.taskInstance.count({
+      where: completedTasksWhere,
+    });
 
     return {
       items: perLocality,
@@ -2205,6 +2282,11 @@ export class TasksService {
         reportsProduced: reportsCount,
         smifNewsCount,
         visitsCompleted,
+        completedReports,
+        completedTasks,
+        completedFieldActivities: completedFieldActivities.length,
+        completedVisits,
+        fieldActivitiesBySpecialty,
       },
       lateItems,
       unassignedItems,
