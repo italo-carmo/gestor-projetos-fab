@@ -125,7 +125,7 @@ const BLUE_CARD_SX = {
 
 const CPCA_KPI_CARD_SX = {
   ...BLUE_CARD_SX,
-  backgroundColor: "rgb(31, 74, 97) !important",
+  backgroundColor: "rgb(56, 114, 146) !important",
   boxShadow: "0 18px 34px rgba(15,44,59,0.36)",
 } as const;
 
@@ -409,12 +409,12 @@ export function CpcaStatsPage() {
               sx={{
                 ...CPCA_KPI_CARD_SX,
                 height: "100%",
-                backgroundColor: "rgb(31, 74, 97) !important",
+                backgroundColor: "rgb(56, 114, 146) !important",
               }}
             >
               <CardContent
                 sx={{
-                  backgroundColor: "rgb(31, 74, 97) !important",
+                  backgroundColor: "rgb(56, 114, 146) !important",
                 }}
               >
                 <Typography variant="overline" fontWeight={600}>
