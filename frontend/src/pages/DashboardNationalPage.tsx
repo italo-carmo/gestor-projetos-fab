@@ -284,7 +284,7 @@ export function DashboardNationalPage() {
         ))}
       </Box>
       <Grid container spacing={2} sx={{ mt: 0 }}>
-        <Grid size={{ xs: 12, md: 8 }}>
+        <Grid size={{ xs: 12, md: 12 }}>
           <Card>
             <CardContent>
               <Typography variant="h6" gutterBottom>
@@ -358,7 +358,7 @@ export function DashboardNationalPage() {
             </CardContent>
           </Card>
         </Grid>
-        <Grid size={{ xs: 12, md: 4 }}>
+        <Grid size={{ xs: 12, md: 12 }}>
           <Card>
             <CardContent>
               <Typography variant="h6" gutterBottom>
