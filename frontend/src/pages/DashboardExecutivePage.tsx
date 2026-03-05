@@ -236,7 +236,7 @@ export function DashboardExecutivePage() {
         mb={2}
       >
         <Card sx={KPI_BLUE_CARD_SX}>
-          <CardContent>
+          <CardContent sx={{ backgroundColor: 'rgb(31, 74, 97) !important' }}>
             <Typography variant="overline" sx={BLUE_TEXT_SUB}>Atividades concluídas</Typography>
             <Typography variant="h4" sx={BLUE_TEXT_MAIN}>{doneCount}</Typography>
             <Typography variant="caption" sx={BLUE_TEXT_SUB}>
@@ -245,7 +245,7 @@ export function DashboardExecutivePage() {
           </CardContent>
         </Card>
         <Card sx={KPI_BLUE_CARD_SX}>
-          <CardContent>
+          <CardContent sx={{ backgroundColor: 'rgb(31, 74, 97) !important' }}>
             <Typography variant="overline" sx={BLUE_TEXT_SUB}>Taxa de conclusão</Typography>
             <Typography variant="h4" sx={BLUE_TEXT_MAIN}>{closureRate}%</Typography>
             <Typography variant="caption" sx={BLUE_TEXT_SUB}>
@@ -254,7 +254,7 @@ export function DashboardExecutivePage() {
           </CardContent>
         </Card>
         <Card sx={KPI_BLUE_CARD_SX}>
-          <CardContent>
+          <CardContent sx={{ backgroundColor: 'rgb(31, 74, 97) !important' }}>
             <Typography variant="overline" sx={BLUE_TEXT_SUB}>Relatórios aprovados</Typography>
             <Typography variant="h4" sx={BLUE_TEXT_MAIN}>{approvedReports}</Typography>
             <Typography variant="caption" sx={BLUE_TEXT_SUB}>
