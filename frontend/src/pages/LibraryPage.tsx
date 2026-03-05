@@ -368,7 +368,7 @@ export function LibraryPage() {
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    gap: { xs: 0.4, md: 1.2 },
+                    gap: { xs: 0.3, md: 0.9 },
                     height: { xs: 240, md: 450 },
                   }}
                 >
@@ -381,7 +381,7 @@ export function LibraryPage() {
                     const isActive = offset === 0;
 
                     // Tamanhos baseados na distância do centro - formato paisagem.
-                    const sizeScale = isActive ? 1 : distance === 1 ? 0.7 : 0.5;
+                    const sizeScale = isActive ? 1 : distance === 1 ? 0.76 : 0.5;
                     const opacity = isActive ? 1 : distance === 1 ? 0.8 : 0.6;
                     const zIndex = isActive ? 10 : 5 - distance;
                     const aspectRatio = photoAspectRatios[photo.id] || 16 / 9;
