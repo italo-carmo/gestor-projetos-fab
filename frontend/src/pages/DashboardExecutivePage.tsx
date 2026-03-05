@@ -19,8 +19,9 @@ import { SkeletonState } from '../components/states/SkeletonState';
 import { ACTIVITY_STATUS_LABELS } from '../constants/enums';
 
 const KPI_BLUE_CARD_SX = {
-  bgcolor: 'rgb(23, 57, 75)',
-  border: '1px solid rgba(115, 161, 188, 0.36)',
+  bgcolor: 'rgb(31, 74, 97)',
+  border: '1px solid rgba(139, 184, 207, 0.38)',
+  boxShadow: '0 18px 34px rgba(15,44,59,0.36)',
 } as const;
 const BLUE_TEXT_MAIN = { color: '#F4FAFD' };
 const BLUE_TEXT_SUB = { color: 'rgba(231,244,250,0.92)' };
