@@ -17,6 +17,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 type NationalLocalityItem = {
   localityId: string;
+  localityCode?: string | null;
   localityName: string;
   commandName?: string | null;
   progress: number;
@@ -107,6 +108,13 @@ export function DashboardNationalPage() {
   const averageProgress = smifLocalities.length
     ? Math.round(smifLocalities.reduce((acc, item) => acc + Number(item.progress ?? 0), 0) / smifLocalities.length)
     : 0;
+  const formatGsdLabel = (localityName?: string | null, localityCode?: string | null) => {
+    const normalized = String(localityName ?? '').trim();
+    if (normalized.includes('-')) {
+      return normalized.split('-').pop()?.trim() || String(localityCode ?? '').trim() || normalized;
+    }
+    return String(localityCode ?? '').trim() || normalized || '—';
+  };
 
   const completedIndicators: IndicatorTile[] = [
     {
@@ -177,7 +185,7 @@ export function DashboardNationalPage() {
             xs: '1fr',
             md: 'repeat(2, minmax(0, 1fr))',
           },
-          mb: 1,
+          mb: 2,
         }}
       >
         {[
@@ -185,7 +193,7 @@ export function DashboardNationalPage() {
             title: 'Concluídos no SMIF',
             subtitle: `Execução média atual: ${averageProgress}%`,
             items: completedIndicators,
-            bg: '#17394B',
+            bg: '#1F4A61',
             border: '1px solid rgba(139, 184, 207, 0.38)',
             shadow: '0 18px 34px rgba(15,44,59,0.36)',
             titleColor: '#F4FAFD',
@@ -265,7 +273,7 @@ export function DashboardNationalPage() {
           </Card>
         ))}
       </Box>
-      <Grid container spacing={2} sx={{ mt: 1 }}>
+      <Grid container spacing={2} sx={{ mt: 0 }}>
         <Grid size={{ xs: 12, md: 8 }}>
           <Card>
             <CardContent>
@@ -279,9 +287,9 @@ export function DashboardNationalPage() {
                   <Table size="small" sx={{ minWidth: 980 }}>
                     <TableHead>
                       <TableRow sx={{ bgcolor: 'primary.main' }}>
-                        <TableCell sx={{ color: 'white', fontWeight: 600 }}>Localidade / GSD</TableCell>
+                        <TableCell sx={{ color: 'white', fontWeight: 600 }}>GSD</TableCell>
                         <TableCell sx={{ color: 'white', fontWeight: 600 }}>% Geral</TableCell>
-                        <TableCell sx={{ color: 'white', fontWeight: 600 }}>Recrutas femininas</TableCell>
+                        <TableCell sx={{ color: 'white', fontWeight: 600 }}>Recrutas Fem</TableCell>
                         <TableCell sx={{ color: 'white', fontWeight: 600 }}>Comandante</TableCell>
                         <TableCell sx={{ color: 'white', fontWeight: 600 }}>Visita</TableCell>
                       </TableRow>
@@ -302,7 +310,9 @@ export function DashboardNationalPage() {
                           sx={{ cursor: 'pointer' }}
                         >
                           <TableCell>
-                            <Typography variant="body2" fontWeight={600}>{loc.localityName}</Typography>
+                            <Typography variant="body2" fontWeight={600}>
+                              {formatGsdLabel(loc.localityName, loc.localityCode)}
+                            </Typography>
                             {loc.commandName && (
                               <Typography variant="caption" color="text.secondary">{loc.commandName}</Typography>
                             )}
