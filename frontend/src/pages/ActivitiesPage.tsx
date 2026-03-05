@@ -382,12 +382,6 @@ export function ActivitiesPage() {
   const canManageBatch = can(me, 'task_instances', 'update') && hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]);
   const canBatchAssignResponsible = selectedLocalityIds.length <= 1;
   const canCreateAssignResponsible = !isCreateMode || activityForm.localityIds.length <= 1;
-  const effectiveResponsibleLocalityId =
-    isCreateMode && activityForm.localityIds.length === 1
-      ? activityForm.localityIds[0]
-      : isCreateMode
-        ? ''
-        : activityForm.localityId;
   const createSelectedLocalities = useMemo(
     () =>
       selectableLocalities.filter((locality: any) =>
@@ -406,8 +400,6 @@ export function ActivitiesPage() {
   const responsibleOptions = useMemo(() => {
     const filtered = allResponsibleUsers.filter((user: any) => {
       if (!String(user?.id ?? '').trim() || !String(user?.name ?? '').trim()) return false;
-      if (effectiveResponsibleLocalityId && user.localityId && user.localityId !== effectiveResponsibleLocalityId) return false;
-      if (activityForm.specialtyId && user.specialtyId && user.specialtyId !== activityForm.specialtyId) return false;
       return true;
     });
 
@@ -421,16 +413,15 @@ export function ActivitiesPage() {
     }
 
     return filtered.sort((a: any, b: any) => String(a.name).localeCompare(String(b.name), 'pt-BR'));
-  }, [effectiveResponsibleLocalityId, activityForm.specialtyId, allResponsibleUsers, selected?.responsibleUsers]);
+  }, [allResponsibleUsers, selected?.responsibleUsers]);
 
   const batchResponsibleOptions = useMemo(() => {
     const filtered = allResponsibleUsers.filter((user: any) => {
       if (!String(user?.id ?? '').trim() || !String(user?.name ?? '').trim()) return false;
-      if (selectedLocalityIds.length === 1 && user.localityId !== selectedLocalityIds[0]) return false;
       return true;
     });
     return filtered.sort((a: any, b: any) => String(a.name).localeCompare(String(b.name), 'pt-BR'));
-  }, [allResponsibleUsers, selectedLocalityIds]);
+  }, [allResponsibleUsers]);
 
   const handleCreate = async () => {
     if (!activityForm.title.trim()) {

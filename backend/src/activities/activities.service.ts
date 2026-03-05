@@ -150,32 +150,20 @@ export class ActivitiesService {
     },
     user?: RbacUser,
   ) {
-    const targetLocalityIds = await this.getTargetLocalityIds();
-    if (targetLocalityIds.length === 0) {
-      return { items: [] };
-    }
-
+    if (!user?.id) throwError('RBAC_FORBIDDEN');
     const localityId = String(filters.localityId ?? '').trim();
     const specialtyId = String(filters.specialtyId ?? '').trim();
-    const constraints = this.getScopeConstraints(user);
-    const andClauses: Prisma.UserWhereInput[] = [
-      { isActive: true },
-      { localityId: { in: targetLocalityIds } },
-    ];
+    const andClauses: Prisma.UserWhereInput[] = [{ isActive: true }];
 
-    if (constraints.localityId) {
-      andClauses.push({ localityId: constraints.localityId });
-    }
     if (localityId) {
       andClauses.push({ localityId });
     }
 
-    const effectiveSpecialtyId = specialtyId || constraints.specialtyId || '';
-    if (effectiveSpecialtyId) {
+    if (specialtyId) {
       andClauses.push({
         OR: [
           { specialtyId: null },
-          { specialtyId: effectiveSpecialtyId },
+          { specialtyId },
         ],
       });
     }
@@ -2514,15 +2502,6 @@ export class ActivitiesService {
     if (users.length !== normalized.length) {
       throwError('VALIDATION_ERROR', {
         reason: 'ACTIVITY_RESPONSIBLE_INVALID',
-      });
-    }
-
-    const mismatched = users.some(
-      (candidate) => candidate.localityId !== localityId,
-    );
-    if (mismatched) {
-      throwError('VALIDATION_ERROR', {
-        reason: 'ACTIVITY_RESPONSIBLE_LOCALITY_MISMATCH',
       });
     }
 
