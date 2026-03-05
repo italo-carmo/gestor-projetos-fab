@@ -31,6 +31,8 @@ type NationalLocalityItem = {
 type NationalActivityItem = {
   activityId: string;
   title: string;
+  activityTypeName?: string | null;
+  specialtyName?: string | null;
   localityCode?: string | null;
   localityName?: string | null;
   eventDate?: string | Date | null;
@@ -106,6 +108,10 @@ export function DashboardNationalPage() {
       return dateB - dateA;
     })
     .slice(0, 5);
+  const formatHighlightType = (activity: NationalActivityItem) => {
+    const normalized = String(activity.activityTypeName ?? activity.specialtyName ?? '').trim();
+    return normalized;
+  };
   const averageProgress = smifLocalities.length
     ? Math.round(smifLocalities.reduce((acc, item) => acc + Number(item.progress ?? 0), 0) / smifLocalities.length)
     : 0;
@@ -374,30 +380,35 @@ export function DashboardNationalPage() {
                 </Typography>
               ) : (
                 <Box display="grid" gap={1}>
-                  {positiveHighlights.map((activity) => (
-                    <Card key={activity.activityId} variant="outlined">
-                      <CardContent>
-                        <Typography variant="subtitle2">{activity.title ?? 'Atividade'}</Typography>
-                        <Box display="flex" gap={1} flexWrap="wrap" mt={1}>
-                          <Chip size="small" color="success" label="Em execução" />
-                          {activity.eventDate && (
-                            <Chip
-                              size="small"
-                              variant="outlined"
-                              label={new Date(activity.eventDate).toLocaleDateString('pt-BR')}
-                            />
-                          )}
-                          {activity.localityCode && (
-                            <Chip
-                              size="small"
-                              label={activity.localityCode}
-                              variant="outlined"
-                            />
-                          )}
-                        </Box>
-                      </CardContent>
-                    </Card>
-                  ))}
+                  {positiveHighlights.map((activity) => {
+                    const highlightType = formatHighlightType(activity);
+                    return (
+                      <Card key={activity.activityId} variant="outlined">
+                        <CardContent>
+                          <Typography variant="subtitle2">
+                            {highlightType ? `${highlightType} - ${activity.title ?? 'Atividade'}` : activity.title ?? 'Atividade'}
+                          </Typography>
+                          <Box display="flex" gap={1} flexWrap="wrap" mt={1}>
+                            <Chip size="small" color="success" label="Em execução" />
+                            {activity.eventDate && (
+                              <Chip
+                                size="small"
+                                variant="outlined"
+                                label={new Date(activity.eventDate).toLocaleDateString('pt-BR')}
+                              />
+                            )}
+                            {activity.localityCode && (
+                              <Chip
+                                size="small"
+                                label={activity.localityCode}
+                                variant="outlined"
+                              />
+                            )}
+                          </Box>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
                 </Box>
               )}
             </CardContent>

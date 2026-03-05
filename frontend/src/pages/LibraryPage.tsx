@@ -278,7 +278,7 @@ export function LibraryPage() {
             </Typography>
           </Stack>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            Acervo oficial da comissão com galeria de fotos e documentos institucionais.
+            Acervo oficial da comissão com galeria de fotos e publicações institucionais.
           </Typography>
         </Box>
         {canManage && (
@@ -395,14 +395,14 @@ export function LibraryPage() {
       <Card>
         <CardContent>
           <Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>
-            Documentos da Comissão
+            Publicações da Comissão
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1.4 }}>
             Cartilhas, normativos e demais materiais institucionais para consulta rápida.
           </Typography>
 
           {documents.length === 0 ? (
-            <EmptyState title="Nenhum documento" description="Inclua os documentos produzidos pela comissão." />
+            <EmptyState title="Nenhuma publicação" description="Inclua as publicações produzidas pela comissão." />
           ) : (
             <Table size="small">
               <TableHead>
@@ -422,7 +422,7 @@ export function LibraryPage() {
                     <TableCell>{formatFileSize(document.fileSize)}</TableCell>
                     <TableCell>{new Date(document.createdAt).toLocaleString("pt-BR")}</TableCell>
                     <TableCell align="right">
-                      <Tooltip title="Abrir documento">
+                      <Tooltip title="Abrir publicação">
                         <IconButton
                           size="small"
                           onClick={() => window.open(toApiUrl(document.fileUrl), "_blank")}
@@ -461,7 +461,7 @@ export function LibraryPage() {
                   Gerenciar Biblioteca
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Configure o carrossel de fotos e gerencie os documentos da comissão.
+                  Configure o carrossel de fotos e gerencie as publicações da comissão.
                 </Typography>
               </Box>
 
@@ -793,16 +793,16 @@ export function LibraryPage() {
                 </CardContent>
               </Card>
 
-              {/* Gestão de Documentos */}
+              {/* Gestão de Publicações */}
               <Card>
                 <CardContent>
                   <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1.5 }}>
-                    Gestão de Documentos
+                    Gestão de Publicações
                   </Typography>
                   <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ mb: 1.5 }}>
                     <TextField
                       size="small"
-                      label="Título do novo documento (opcional)"
+                      label="Título da nova publicação (opcional)"
                       value={newDocumentTitle}
                       onChange={(event) => setNewDocumentTitle(event.target.value)}
                       fullWidth
@@ -816,7 +816,7 @@ export function LibraryPage() {
                       disabled={uploadDocument.isPending}
                       sx={{ minWidth: { xs: "auto", md: 160 }, alignSelf: { xs: "stretch", md: "flex-start" } }}
                     >
-                      {uploadDocument.isPending ? "Enviando..." : "Enviar documento"}
+                      {uploadDocument.isPending ? "Enviando..." : "Enviar publicação"}
                       <input
                         type="file"
                         hidden
@@ -829,11 +829,11 @@ export function LibraryPage() {
                               title: newDocumentTitle.trim() || undefined,
                             });
                             setNewDocumentTitle("");
-                            toast.push({ message: "Documento adicionado.", severity: "success" });
+                            toast.push({ message: "Publicação adicionada.", severity: "success" });
                             libraryQuery.refetch();
                           } catch (error) {
                             toast.push({
-                              message: parseApiError(error).message ?? "Erro ao enviar documento.",
+                              message: parseApiError(error).message ?? "Erro ao enviar publicação.",
                               severity: "error",
                             });
                           }
@@ -844,7 +844,7 @@ export function LibraryPage() {
                   </Stack>
 
                   {documents.length === 0 ? (
-                    <EmptyState title="Nenhum documento" description="Inclua os documentos produzidos pela comissão." />
+                    <EmptyState title="Nenhuma publicação" description="Inclua as publicações produzidas pela comissão." />
                   ) : (
                     <Table size="small">
                       <TableHead>
@@ -889,11 +889,11 @@ export function LibraryPage() {
                                           id: document.id,
                                           payload: { title: titleDraft.trim() },
                                         });
-                                        toast.push({ message: "Documento atualizado.", severity: "success" });
+                                        toast.push({ message: "Publicação atualizada.", severity: "success" });
                                         libraryQuery.refetch();
                                       } catch (error) {
                                         toast.push({
-                                          message: parseApiError(error).message ?? "Erro ao atualizar documento.",
+                                          message: parseApiError(error).message ?? "Erro ao atualizar publicação.",
                                           severity: "error",
                                         });
                                       }
@@ -902,7 +902,7 @@ export function LibraryPage() {
                                   >
                                     Salvar
                                   </Button>
-                                  <Tooltip title="Excluir documento">
+                                  <Tooltip title="Excluir publicação">
                                     <span>
                                       <IconButton
                                         size="small"
@@ -910,11 +910,11 @@ export function LibraryPage() {
                                         onClick={async () => {
                                           try {
                                             await deleteDocument.mutateAsync(document.id);
-                                            toast.push({ message: "Documento excluído.", severity: "success" });
+                                            toast.push({ message: "Publicação excluída.", severity: "success" });
                                             libraryQuery.refetch();
                                           } catch (error) {
                                             toast.push({
-                                              message: parseApiError(error).message ?? "Erro ao excluir documento.",
+                                              message: parseApiError(error).message ?? "Erro ao excluir publicação.",
                                               severity: "error",
                                             });
                                           }
