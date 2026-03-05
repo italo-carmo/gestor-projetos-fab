@@ -185,30 +185,38 @@ export function DashboardNationalPage() {
             title: 'Concluídos no SMIF',
             subtitle: `Execução média atual: ${averageProgress}%`,
             items: completedIndicators,
-            bg: 'linear-gradient(145deg, rgba(17,66,89,0.10) 0%, rgba(255,255,255,0.98) 58%, rgba(77,134,160,0.10) 100%)',
+            bg: 'linear-gradient(140deg, #114259 0%, #1A5F7B 48%, #4D86A0 100%)',
+            border: '1px solid rgba(164, 214, 234, 0.38)',
+            shadow: '0 18px 34px rgba(17,66,89,0.28)',
+            titleColor: '#F4FAFD',
+            subtitleColor: 'rgba(231,244,250,0.92)',
           },
           {
             title: 'Atividades de Campo por Área',
             subtitle: 'Somente atividades de campo concluídas',
             items: fieldBySpecialtyIndicators,
-            bg: 'linear-gradient(145deg, rgba(12,101,126,0.09) 0%, rgba(255,255,255,0.98) 62%, rgba(231,244,250,0.88) 100%)',
+            bg: 'linear-gradient(140deg, #0C657E 0%, #1B7896 52%, #63A7BE 100%)',
+            border: '1px solid rgba(180, 226, 238, 0.44)',
+            shadow: '0 18px 34px rgba(12,101,126,0.26)',
+            titleColor: '#F2FBFE',
+            subtitleColor: 'rgba(236,250,255,0.9)',
           },
         ].map((group) => (
           <Card
             key={group.title}
             sx={{
               background: group.bg,
-              border: '1px solid rgba(17,66,89,0.12)',
+              border: group.border,
               width: '100%',
               borderRadius: 3,
-              boxShadow: '0 14px 30px rgba(17,66,89,0.08)',
+              boxShadow: group.shadow,
             }}
           >
             <CardContent sx={{ p: 2.25 }}>
-              <Typography variant="subtitle1" fontWeight={700} sx={{ letterSpacing: 0.2 }}>
+              <Typography variant="subtitle1" fontWeight={700} sx={{ letterSpacing: 0.2, color: group.titleColor }}>
                 {group.title}
               </Typography>
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" sx={{ color: group.subtitleColor }}>
                 {group.subtitle}
               </Typography>
               <Box
@@ -228,8 +236,8 @@ export function DashboardNationalPage() {
                     sx={{
                       p: 1.5,
                       borderRadius: 2,
-                      border: '1px solid rgba(17,66,89,0.12)',
-                      backgroundColor: 'rgba(255,255,255,0.72)',
+                      border: '1px solid rgba(255,255,255,0.5)',
+                      backgroundColor: 'rgba(255,255,255,0.9)',
                       minHeight: 106,
                       display: 'flex',
                       flexDirection: 'column',
