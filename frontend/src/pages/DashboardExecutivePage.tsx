@@ -222,33 +222,33 @@ export function DashboardExecutivePage() {
 
       <Box
         display="grid"
-        gridTemplateColumns={{ xs: '1fr', md: 'repeat(4, 1fr)' }}
+        gridTemplateColumns={{ xs: '1fr', md: 'repeat(3, 1fr)' }}
         gap={2}
         mb={2}
       >
-        <Card>
+        <Card sx={{ bgcolor: '#1F4A61', border: '1px solid rgba(139, 184, 207, 0.38)' }}>
           <CardContent>
-            <Typography variant="overline">Atividades concluídas</Typography>
-            <Typography variant="h4">{doneCount}</Typography>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="overline" sx={{ color: 'rgba(231,244,250,0.92)' }}>Atividades concluídas</Typography>
+            <Typography variant="h4" sx={{ color: '#F4FAFD' }}>{doneCount}</Typography>
+            <Typography variant="caption" sx={{ color: 'rgba(231,244,250,0.92)' }}>
               Entregas finalizadas no período
             </Typography>
           </CardContent>
         </Card>
-        <Card>
+        <Card sx={{ bgcolor: '#1F4A61', border: '1px solid rgba(139, 184, 207, 0.38)' }}>
           <CardContent>
-            <Typography variant="overline">Taxa de conclusão</Typography>
-            <Typography variant="h4">{closureRate}%</Typography>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="overline" sx={{ color: 'rgba(231,244,250,0.92)' }}>Taxa de conclusão</Typography>
+            <Typography variant="h4" sx={{ color: '#F4FAFD' }}>{closureRate}%</Typography>
+            <Typography variant="caption" sx={{ color: 'rgba(231,244,250,0.92)' }}>
               Concluídas sobre total de atividades
             </Typography>
           </CardContent>
         </Card>
-        <Card>
+        <Card sx={{ bgcolor: '#1F4A61', border: '1px solid rgba(139, 184, 207, 0.38)' }}>
           <CardContent>
-            <Typography variant="overline">Relatórios aprovados</Typography>
-            <Typography variant="h4">{approvedReports}</Typography>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="overline" sx={{ color: 'rgba(231,244,250,0.92)' }}>Relatórios aprovados</Typography>
+            <Typography variant="h4" sx={{ color: '#F4FAFD' }}>{approvedReports}</Typography>
+            <Typography variant="caption" sx={{ color: 'rgba(231,244,250,0.92)' }}>
               Conformidade de relatórios: {reportsComplianceRate}%
             </Typography>
           </CardContent>

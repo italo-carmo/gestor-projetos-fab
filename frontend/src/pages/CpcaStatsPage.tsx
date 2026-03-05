@@ -265,37 +265,31 @@ export function CpcaStatsPage() {
       label: "Total de notificações",
       value: String(summary.totalCases ?? 0),
       hint: "Registros no período filtrado",
-      bg: "#E8F2FF",
     },
     {
       label: "Casos em aberto",
       value: String(summary.openCases ?? 0),
       hint: `${formatPercent(((summary.openCases ?? 0) / Math.max(1, summary.totalCases ?? 0)) * 100)} do total`,
-      bg: "#FFF6E1",
     },
     {
       label: "Taxa de conclusão",
       value: formatPercent(summary.closureRatePercent ?? 0),
       hint: `${summary.concludedCases ?? 0} concluídas + ${summary.archivedCases ?? 0} arquivadas`,
-      bg: "#E8F8EF",
     },
     {
       label: "Tempo médio até fechamento",
       value: `${summary.averageDaysToClosure ?? 0} dias`,
       hint: "Concluídas + Arquivadas",
-      bg: "#F2EEFF",
     },
     {
       label: "Triagem > 7 dias",
       value: String(summary.triageOver7Days ?? 0),
       hint: "Alertas de tempo no item 3 da ICA",
-      bg: "#FFECEF",
     },
     {
       label: "Apuração > 30 dias",
       value: String(summary.investigationOver30Days ?? 0),
       hint: "Procedimento definido/apuração sem fechamento",
-      bg: "#FFECEF",
     },
   ];
 
@@ -383,19 +377,25 @@ export function CpcaStatsPage() {
       <Grid container spacing={2}>
         {kpiCards.map((card) => (
           <Grid key={card.label} size={{ xs: 12, sm: 6, md: 4 }}>
-            <Card sx={{ bgcolor: card.bg, height: "100%" }}>
+            <Card
+              sx={{
+                bgcolor: "#1F4A61",
+                border: "1px solid rgba(139, 184, 207, 0.38)",
+                height: "100%",
+              }}
+            >
               <CardContent>
                 <Typography
                   variant="overline"
-                  color="text.secondary"
+                  sx={{ color: "rgba(231,244,250,0.92)" }}
                   fontWeight={600}
                 >
                   {card.label}
                 </Typography>
-                <Typography variant="h5" fontWeight={800} lineHeight={1.15}>
+                <Typography variant="h5" fontWeight={800} lineHeight={1.15} sx={{ color: "#F4FAFD" }}>
                   {card.value}
                 </Typography>
-                <Typography variant="caption" color="text.secondary">
+                <Typography variant="caption" sx={{ color: "rgba(231,244,250,0.92)" }}>
                   {card.hint}
                 </Typography>
               </CardContent>

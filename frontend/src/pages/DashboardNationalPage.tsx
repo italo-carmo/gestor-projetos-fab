@@ -116,8 +116,9 @@ export function DashboardNationalPage() {
     ? Math.round(smifLocalities.reduce((acc, item) => acc + Number(item.progress ?? 0), 0) / smifLocalities.length)
     : 0;
   const formatGsdLabel = (localityName?: string | null, localityCode?: string | null) => {
+    const code = String(localityCode ?? '').trim();
     const normalized = String(localityName ?? '').trim();
-    return normalized || String(localityCode ?? '').trim() || '—';
+    return code || normalized || '—';
   };
   const formatCommanderName = (commanderName?: string | null) => {
     const base = toMilitaryDisplayName(commanderName);
