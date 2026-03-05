@@ -111,10 +111,7 @@ export function DashboardNationalPage() {
     : 0;
   const formatGsdLabel = (localityName?: string | null, localityCode?: string | null) => {
     const normalized = String(localityName ?? '').trim();
-    if (normalized.includes('-')) {
-      return normalized.split('-').pop()?.trim() || String(localityCode ?? '').trim() || normalized;
-    }
-    return String(localityCode ?? '').trim() || normalized || '—';
+    return normalized || String(localityCode ?? '').trim() || '—';
   };
   const formatCommanderName = (commanderName?: string | null) => {
     const base = toMilitaryDisplayName(commanderName);
