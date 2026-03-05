@@ -357,8 +357,8 @@ export function LibraryPage() {
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    gap: { xs: 0.3, md: 0.5 },
-                    height: { xs: 240, md: 450 },
+                    gap: 0,
+                    height: { xs: 250, md: 480 },
                   }}
                 >
                   {[-2, -1, 0, 1, 2].map((offset) => {
@@ -369,8 +369,7 @@ export function LibraryPage() {
                     const distance = Math.abs(offset);
                     const isActive = offset === 0;
 
-                    // Tamanhos baseados na distância do centro - formato paisagem horizontal
-                    // Card principal: 800x450px (16:9), laterais: 560x315px e 400x225px
+                    // Tamanhos baseados na distância do centro em proporção de foto horizontal.
                     const sizeScale = isActive ? 1 : distance === 1 ? 0.7 : 0.5;
                     const opacity = isActive ? 1 : distance === 1 ? 0.8 : 0.6;
                     const zIndex = isActive ? 10 : 5 - distance;
@@ -383,11 +382,12 @@ export function LibraryPage() {
                           position: "relative",
                           borderRadius: 2,
                           overflow: "hidden",
-                          aspectRatio: "16 / 9",
-                          width: { xs: `${sizeScale * 100}%`, md: `${sizeScale * 800}px` },
+                          aspectRatio: "4 / 3",
+                          width: { xs: `${sizeScale * 100}%`, md: `${sizeScale * 640}px` },
                           maxWidth: { xs: "100%", md: "none" },
-                          height: { xs: `${sizeScale * 100}%`, md: `${sizeScale * 450}px` },
+                          height: { xs: `${sizeScale * 100}%`, md: `${sizeScale * 480}px` },
                           flexShrink: 0,
+                          mx: { xs: -0.5, md: distance === 1 ? -5 : -9 },
                           bgcolor: "#0E2E3A",
                           cursor: offset !== 0 ? "pointer" : "default",
                           opacity,
