@@ -18,6 +18,14 @@ import { ErrorState } from '../components/states/ErrorState';
 import { SkeletonState } from '../components/states/SkeletonState';
 import { ACTIVITY_STATUS_LABELS } from '../constants/enums';
 
+const BLUE_CARD_SX = {
+  bgcolor: '#1F4A61',
+  border: '1px solid rgba(139, 184, 207, 0.38)',
+};
+const BLUE_TEXT_MAIN = { color: '#F4FAFD' };
+const BLUE_TEXT_SUB = { color: 'rgba(231,244,250,0.92)' };
+const CHART_TICK_STYLE = { fill: 'rgba(231,244,250,0.92)', fontSize: 11 };
+
 function formatStatus(value: string | null | undefined) {
   if (!value) return '-';
   return ACTIVITY_STATUS_LABELS[value] ?? value;
@@ -226,29 +234,29 @@ export function DashboardExecutivePage() {
         gap={2}
         mb={2}
       >
-        <Card sx={{ bgcolor: '#1F4A61', border: '1px solid rgba(139, 184, 207, 0.38)' }}>
+        <Card sx={BLUE_CARD_SX}>
           <CardContent>
-            <Typography variant="overline" sx={{ color: 'rgba(231,244,250,0.92)' }}>Atividades concluídas</Typography>
-            <Typography variant="h4" sx={{ color: '#F4FAFD' }}>{doneCount}</Typography>
-            <Typography variant="caption" sx={{ color: 'rgba(231,244,250,0.92)' }}>
+            <Typography variant="overline" sx={BLUE_TEXT_SUB}>Atividades concluídas</Typography>
+            <Typography variant="h4" sx={BLUE_TEXT_MAIN}>{doneCount}</Typography>
+            <Typography variant="caption" sx={BLUE_TEXT_SUB}>
               Entregas finalizadas no período
             </Typography>
           </CardContent>
         </Card>
-        <Card sx={{ bgcolor: '#1F4A61', border: '1px solid rgba(139, 184, 207, 0.38)' }}>
+        <Card sx={BLUE_CARD_SX}>
           <CardContent>
-            <Typography variant="overline" sx={{ color: 'rgba(231,244,250,0.92)' }}>Taxa de conclusão</Typography>
-            <Typography variant="h4" sx={{ color: '#F4FAFD' }}>{closureRate}%</Typography>
-            <Typography variant="caption" sx={{ color: 'rgba(231,244,250,0.92)' }}>
+            <Typography variant="overline" sx={BLUE_TEXT_SUB}>Taxa de conclusão</Typography>
+            <Typography variant="h4" sx={BLUE_TEXT_MAIN}>{closureRate}%</Typography>
+            <Typography variant="caption" sx={BLUE_TEXT_SUB}>
               Concluídas sobre total de atividades
             </Typography>
           </CardContent>
         </Card>
-        <Card sx={{ bgcolor: '#1F4A61', border: '1px solid rgba(139, 184, 207, 0.38)' }}>
+        <Card sx={BLUE_CARD_SX}>
           <CardContent>
-            <Typography variant="overline" sx={{ color: 'rgba(231,244,250,0.92)' }}>Relatórios aprovados</Typography>
-            <Typography variant="h4" sx={{ color: '#F4FAFD' }}>{approvedReports}</Typography>
-            <Typography variant="caption" sx={{ color: 'rgba(231,244,250,0.92)' }}>
+            <Typography variant="overline" sx={BLUE_TEXT_SUB}>Relatórios aprovados</Typography>
+            <Typography variant="h4" sx={BLUE_TEXT_MAIN}>{approvedReports}</Typography>
+            <Typography variant="caption" sx={BLUE_TEXT_SUB}>
               Conformidade de relatórios: {reportsComplianceRate}%
             </Typography>
           </CardContent>
@@ -261,15 +269,26 @@ export function DashboardExecutivePage() {
         gap={2}
         mb={2}
       >
-        <Card>
+        <Card sx={BLUE_CARD_SX}>
           <CardContent>
-            <Typography variant="subtitle1" gutterBottom>
+            <Typography variant="subtitle1" gutterBottom sx={BLUE_TEXT_MAIN}>
               Distribuição de atividades por status
             </Typography>
-            <ResponsiveContainer width="100%" height={220}>
+            <ResponsiveContainer width="100%" height={180}>
               <BarChart data={statusItems}>
-                <XAxis dataKey="status" tickFormatter={(value) => formatStatus(value)} />
-                <YAxis allowDecimals={false} />
+                <XAxis
+                  dataKey="status"
+                  tickFormatter={(value) => formatStatus(value)}
+                  tick={CHART_TICK_STYLE}
+                  axisLine={{ stroke: 'rgba(231,244,250,0.35)' }}
+                  tickLine={{ stroke: 'rgba(231,244,250,0.35)' }}
+                />
+                <YAxis
+                  allowDecimals={false}
+                  tick={CHART_TICK_STYLE}
+                  axisLine={{ stroke: 'rgba(231,244,250,0.35)' }}
+                  tickLine={{ stroke: 'rgba(231,244,250,0.35)' }}
+                />
                 <Tooltip
                   formatter={(value: any) => [value, 'Quantidade']}
                   labelFormatter={(value: any) => formatStatus(value)}
@@ -280,9 +299,9 @@ export function DashboardExecutivePage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card sx={BLUE_CARD_SX}>
           <CardContent>
-            <Typography variant="subtitle1" gutterBottom>
+            <Typography variant="subtitle1" gutterBottom sx={BLUE_TEXT_MAIN}>
               Indicadores por especialidade
             </Typography>
             <ResponsiveContainer width="100%" height={220}>
@@ -291,8 +310,21 @@ export function DashboardExecutivePage() {
                 layout="vertical"
                 margin={{ left: 30 }}
               >
-                <XAxis type="number" allowDecimals={false} />
-                <YAxis type="category" dataKey="specialtyName" width={150} />
+                <XAxis
+                  type="number"
+                  allowDecimals={false}
+                  tick={CHART_TICK_STYLE}
+                  axisLine={{ stroke: 'rgba(231,244,250,0.35)' }}
+                  tickLine={{ stroke: 'rgba(231,244,250,0.35)' }}
+                />
+                <YAxis
+                  type="category"
+                  dataKey="specialtyName"
+                  width={150}
+                  tick={CHART_TICK_STYLE}
+                  axisLine={{ stroke: 'rgba(231,244,250,0.35)' }}
+                  tickLine={{ stroke: 'rgba(231,244,250,0.35)' }}
+                />
                 <Tooltip formatter={(value: any) => [value, 'Atividades']} />
                 <Bar dataKey="count" fill="#4D86A0" radius={[0, 6, 6, 0]} />
               </BarChart>
@@ -301,15 +333,24 @@ export function DashboardExecutivePage() {
         </Card>
       </Box>
 
-      <Card>
+      <Card sx={BLUE_CARD_SX}>
         <CardContent>
-          <Typography variant="subtitle1" gutterBottom>
+          <Typography variant="subtitle1" gutterBottom sx={BLUE_TEXT_MAIN}>
             Destaque de performance por localidade
           </Typography>
-          <ResponsiveContainer width="100%" height={240}>
+          <ResponsiveContainer width="100%" height={190}>
             <BarChart data={topLocalitiesByProgress}>
-              <XAxis dataKey="localityCode" />
-              <YAxis />
+              <XAxis
+                dataKey="localityCode"
+                tick={CHART_TICK_STYLE}
+                axisLine={{ stroke: 'rgba(231,244,250,0.35)' }}
+                tickLine={{ stroke: 'rgba(231,244,250,0.35)' }}
+              />
+              <YAxis
+                tick={CHART_TICK_STYLE}
+                axisLine={{ stroke: 'rgba(231,244,250,0.35)' }}
+                tickLine={{ stroke: 'rgba(231,244,250,0.35)' }}
+              />
               <Tooltip formatter={(value: any) => [`${value}%`, 'Progresso']} />
               <Bar dataKey="progress" fill="#114259" radius={[6, 6, 0, 0]} />
             </BarChart>
