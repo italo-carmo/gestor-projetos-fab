@@ -320,51 +320,190 @@ export function LibraryPage() {
                 ))}
               </TextField>
             </Stack>
-            <Box
-              sx={{
-                position: "relative",
-                borderRadius: 2,
-                overflow: "hidden",
-                width: "100%",
-                maxWidth: { xs: "100%", md: 920 },
-                mx: "auto",
-                aspectRatio: "16 / 9",
-                minHeight: { xs: 260, md: 360 },
-                bgcolor: "#0E2E3A",
-                display: "grid",
-                placeItems: "center",
-              }}
-            >
-              {!currentPhoto ? (
+            {!currentPhoto ? (
+              <Box
+                sx={{
+                  position: "relative",
+                  borderRadius: 2,
+                  overflow: "hidden",
+                  width: "100%",
+                  maxWidth: { xs: "100%", md: 920 },
+                  mx: "auto",
+                  aspectRatio: "16 / 9",
+                  minHeight: { xs: 260, md: 360 },
+                  bgcolor: "#0E2E3A",
+                  display: "grid",
+                  placeItems: "center",
+                }}
+              >
                 <Stack alignItems="center" spacing={1}>
                   <ImageRoundedIcon sx={{ color: "white", fontSize: 44, opacity: 0.8 }} />
                   <Typography sx={{ color: "white" }}>Sem fotos cadastradas</Typography>
                 </Stack>
-              ) : (
+              </Box>
+            ) : (
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1.5,
+                  width: "100%",
+                  maxWidth: { xs: "100%", md: 1100 },
+                  mx: "auto",
+                }}
+              >
+                {/* Cards menores - anteriores */}
+                {photos.length > 1 && (
+                  <Box
+                    sx={{
+                      display: { xs: "none", md: "flex" },
+                      flexDirection: "column",
+                      gap: 1,
+                      width: 140,
+                      flexShrink: 0,
+                      justifyContent: "center",
+                    }}
+                  >
+                    {[1, 2].map((offset) => {
+                      const idx = (currentIndex - offset + photos.length) % photos.length;
+                      if (idx === currentIndex) return null;
+                      const photo = photos[idx];
+                      if (!photo) return null;
+                      return (
+                        <Box
+                          key={photo.id}
+                          onClick={() => setCurrentIndex(idx)}
+                          sx={{
+                            position: "relative",
+                            borderRadius: 1.5,
+                            overflow: "hidden",
+                            aspectRatio: "16 / 9",
+                            height: 90,
+                            bgcolor: "#0E2E3A",
+                            cursor: "pointer",
+                            opacity: 0.6,
+                            transition: "opacity 0.2s, transform 0.2s",
+                            "&:hover": {
+                              opacity: 0.85,
+                              transform: "scale(1.05)",
+                            },
+                          }}
+                        >
+                          <Box
+                            component="img"
+                            src={getPhotoUrl(photo)}
+                            alt={photo.title}
+                            sx={{ width: "100%", height: "100%", objectFit: "cover" }}
+                          />
+                        </Box>
+                      );
+                    })}
+                  </Box>
+                )}
+
+                {/* Card principal - em evidência */}
+                <Box
+                  sx={{
+                    position: "relative",
+                    borderRadius: 2,
+                    overflow: "hidden",
+                    flex: 1,
+                    aspectRatio: "16 / 9",
+                    minHeight: { xs: 260, md: 400 },
+                    bgcolor: "#0E2E3A",
+                    display: "grid",
+                    placeItems: "center",
+                    boxShadow: "0 12px 32px rgba(0,0,0,0.3)",
+                  }}
+                >
                   <Box
                     component="img"
                     src={getPhotoUrl(currentPhoto)}
                     alt={currentPhoto.title}
                     sx={{ width: "100%", height: "100%", objectFit: "cover" }}
                   />
-              )}
-              {photos.length > 1 && (
-                <>
-                  <IconButton
-                    onClick={() => setCurrentIndex((prev) => (prev - 1 + photos.length) % photos.length)}
-                    sx={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", bgcolor: "rgba(255,255,255,0.86)" }}
+                  {photos.length > 1 && (
+                    <>
+                      <IconButton
+                        onClick={() => setCurrentIndex((prev) => (prev - 1 + photos.length) % photos.length)}
+                        sx={{
+                          position: "absolute",
+                          left: 10,
+                          top: "50%",
+                          transform: "translateY(-50%)",
+                          bgcolor: "rgba(255,255,255,0.92)",
+                          "&:hover": { bgcolor: "rgba(255,255,255,1)" },
+                        }}
+                      >
+                        <ArrowBackIosNewRoundedIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton
+                        onClick={() => setCurrentIndex((prev) => (prev + 1) % photos.length)}
+                        sx={{
+                          position: "absolute",
+                          right: 10,
+                          top: "50%",
+                          transform: "translateY(-50%)",
+                          bgcolor: "rgba(255,255,255,0.92)",
+                          "&:hover": { bgcolor: "rgba(255,255,255,1)" },
+                        }}
+                      >
+                        <ArrowForwardIosRoundedIcon fontSize="small" />
+                      </IconButton>
+                    </>
+                  )}
+                </Box>
+
+                {/* Cards menores - próximos */}
+                {photos.length > 1 && (
+                  <Box
+                    sx={{
+                      display: { xs: "none", md: "flex" },
+                      flexDirection: "column",
+                      gap: 1,
+                      width: 140,
+                      flexShrink: 0,
+                      justifyContent: "center",
+                    }}
                   >
-                    <ArrowBackIosNewRoundedIcon fontSize="small" />
-                  </IconButton>
-                  <IconButton
-                    onClick={() => setCurrentIndex((prev) => (prev + 1) % photos.length)}
-                    sx={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", bgcolor: "rgba(255,255,255,0.86)" }}
-                  >
-                    <ArrowForwardIosRoundedIcon fontSize="small" />
-                  </IconButton>
-                </>
-              )}
-            </Box>
+                    {[1, 2].map((offset) => {
+                      const idx = (currentIndex + offset) % photos.length;
+                      if (idx === currentIndex) return null;
+                      const photo = photos[idx];
+                      if (!photo) return null;
+                      return (
+                        <Box
+                          key={photo.id}
+                          onClick={() => setCurrentIndex(idx)}
+                          sx={{
+                            position: "relative",
+                            borderRadius: 1.5,
+                            overflow: "hidden",
+                            aspectRatio: "16 / 9",
+                            height: 90,
+                            bgcolor: "#0E2E3A",
+                            cursor: "pointer",
+                            opacity: 0.6,
+                            transition: "opacity 0.2s, transform 0.2s",
+                            "&:hover": {
+                              opacity: 0.85,
+                              transform: "scale(1.05)",
+                            },
+                          }}
+                        >
+                          <Box
+                            component="img"
+                            src={getPhotoUrl(photo)}
+                            alt={photo.title}
+                            sx={{ width: "100%", height: "100%", objectFit: "cover" }}
+                          />
+                        </Box>
+                      );
+                    })}
+                  </Box>
+                )}
+              </Box>
+            )}
             {photos.length > 0 && (
               <Stack alignItems="center" spacing={0.8} mt={1.2}>
                 <Typography variant="caption" color="text.secondary">
