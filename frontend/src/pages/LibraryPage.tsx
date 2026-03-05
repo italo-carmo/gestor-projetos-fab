@@ -368,11 +368,14 @@ export function LibraryPage() {
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    gap: { xs: 0.3, md: 0.9 },
-                    height: { xs: 240, md: 450 },
+                    gap: { xs: 0.25, md: 0.65 },
+                    height: { xs: 210, md: 400 },
                   }}
                 >
-                  {[-2, -1, 0, 1, 2].map((offset) => {
+                  {Array.from({ length: Math.min(3, Math.floor((photos.length - 1) / 2)) * 2 + 1 }, (_, i) => {
+                    const sideCount = Math.min(3, Math.floor((photos.length - 1) / 2));
+                    return i - sideCount;
+                  }).map((offset) => {
                     const idx = (currentIndex + offset + photos.length) % photos.length;
                     const photo = photos[idx];
                     if (!photo) return null;
@@ -380,13 +383,15 @@ export function LibraryPage() {
                     const distance = Math.abs(offset);
                     const isActive = offset === 0;
 
-                    // Tamanhos baseados na distância do centro - formato paisagem.
-                    const sizeScale = isActive ? 1 : distance === 1 ? 0.76 : 0.5;
-                    const opacity = isActive ? 1 : distance === 1 ? 0.8 : 0.6;
-                    const zIndex = isActive ? 10 : 5 - distance;
+                    // Mantem o card principal maior e reduz progressivamente nas laterais.
+                    const sizeScale =
+                      distance === 0 ? 1 : distance === 1 ? 0.82 : distance === 2 ? 0.62 : 0.46;
+                    const opacity =
+                      distance === 0 ? 1 : distance === 1 ? 0.86 : distance === 2 ? 0.72 : 0.58;
+                    const zIndex = 20 - distance;
                     const aspectRatio = photoAspectRatios[photo.id] || 16 / 9;
-                    const widthDesktop = 450 * aspectRatio;
-                    const widthMobile = 220 * aspectRatio;
+                    const widthDesktop = 400 * aspectRatio;
+                    const widthMobile = 190 * aspectRatio;
 
                     return (
                       <Box
@@ -399,21 +404,21 @@ export function LibraryPage() {
                           aspectRatio,
                           width: { xs: `${sizeScale * widthMobile}px`, md: `${sizeScale * widthDesktop}px` },
                           maxWidth: { xs: "92vw", md: "none" },
-                          height: { xs: `${sizeScale * 220}px`, md: `${sizeScale * 450}px` },
+                          height: { xs: `${sizeScale * 190}px`, md: `${sizeScale * 400}px` },
                           flexShrink: 0,
-                          mx: 0,
+                          mx: { xs: 0, md: distance === 1 ? -0.35 : 0 },
                           bgcolor: "#0E2E3A",
                           cursor: offset !== 0 ? "pointer" : "default",
                           opacity,
                           zIndex,
                           transition: "all 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
-                          transform: isActive ? "scale(1)" : `scale(${sizeScale})`,
+                          transform: "scale(1)",
                           boxShadow: isActive
                             ? "0 12px 32px rgba(0,0,0,0.4)"
                             : "0 4px 12px rgba(0,0,0,0.2)",
                           "&:hover": {
                             opacity: offset !== 0 ? 0.9 : 1,
-                            transform: offset !== 0 ? `scale(${sizeScale * 1.05})` : "scale(1)",
+                            transform: offset !== 0 ? "scale(1.03)" : "scale(1)",
                           },
                         }}
                       >
