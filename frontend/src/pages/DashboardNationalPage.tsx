@@ -293,25 +293,32 @@ export function DashboardNationalPage() {
               {smifLocalities.length === 0 ? (
                 <EmptyState title="Sem dados" description="Nenhuma localidade encontrada." />
               ) : (
-                <TableContainer sx={{ width: '100%', overflowX: 'auto' }}>
+                <TableContainer sx={{ width: '100%', overflowX: 'hidden' }}>
                   <Table
                     size="small"
                     sx={{
-                      minWidth: 720,
+                      width: '100%',
                       tableLayout: 'fixed',
                       '& .MuiTableCell-root': {
-                        px: 1,
+                        px: 0.75,
                         py: 0.75,
+                      },
+                      '& .MuiTableBody-root .MuiTableCell-root': {
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
                       },
                     }}
                   >
                     <TableHead>
                       <TableRow sx={{ bgcolor: 'primary.main' }}>
-                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '14%', px: 0.5 }}>GSD</TableCell>
-                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '12%', px: 0.5 }}>% Geral</TableCell>
-                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '13%', px: 0.5 }}>Rec. Fem.</TableCell>
-                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '34%', px: 0.5 }}>Comandante</TableCell>
-                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '27%', px: 0.5 }}>Visita</TableCell>
+                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '12%', px: 0.5 }}>GSD</TableCell>
+                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '10%', px: 0.5 }}>% Geral</TableCell>
+                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '18%', px: 0.5, whiteSpace: 'normal', lineHeight: 1.2 }}>
+                          Recrutas Femininas
+                        </TableCell>
+                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '36%', px: 0.5 }}>Comandante</TableCell>
+                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '24%', px: 0.5 }}>Visita</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
