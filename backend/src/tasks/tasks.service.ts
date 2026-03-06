@@ -2978,7 +2978,7 @@ export class TasksService {
       
       // Group by specialtyId if available, otherwise by normalized name
       // This ensures "Comissão CIPAVD" (now a real specialty) is grouped correctly
-      const key = specialtyId ?? normalizedName || '__unknown__';
+      const key = specialtyId ?? (normalizedName || '__unknown__');
       
       const current = specialtiesMap.get(key);
       if (current) {
