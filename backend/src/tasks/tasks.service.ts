@@ -2040,6 +2040,7 @@ export class TasksService {
     const filteredActivitiesNoDate = activitiesNoDate.filter((activity) =>
       activity.localityId ? aliasByLocalityId.has(activity.localityId) : false,
     );
+
     const canonicalLocalityIdByActivityId = new Map<string, string>();
     const activitiesByLocalityId = new Map<
       string,
@@ -2614,10 +2615,8 @@ export class TasksService {
         : emptyResponse;
     }
 
-    const from = params.from
-      ? new Date(params.from)
-      : new Date(Date.now() - 56 * 24 * 60 * 60 * 1000);
-    const to = params.to ? new Date(params.to) : new Date();
+    const from = params.from ? new Date(params.from) : null;
+    const to = params.to ? new Date(params.to) : null;
     const thresholdRaw = Number(params.threshold ?? 70);
     const threshold = Number.isFinite(thresholdRaw) ? thresholdRaw : 70;
 
@@ -2656,13 +2655,31 @@ export class TasksService {
         : emptyResponse;
     }
 
+    const activityDateRangeFilter: Prisma.ActivityWhereInput | null =
+      from || to
+        ? {
+            OR: [
+              {
+                eventDate: {
+                  ...(from ? { gte: from } : {}),
+                  ...(to ? { lte: to } : {}),
+                },
+              },
+              {
+                eventDate: null,
+                createdAt: {
+                  ...(from ? { gte: from } : {}),
+                  ...(to ? { lte: to } : {}),
+                },
+              },
+            ],
+          }
+        : null;
+
     const activities = await this.prisma.activity.findMany({
       where: {
         localityId: { in: localityIds },
-        OR: [
-          { eventDate: { gte: from, lte: to } },
-          { eventDate: null, createdAt: { gte: from, lte: to } },
-        ],
+        ...(activityDateRangeFilter ?? {}),
       },
       include: {
         locality: {
@@ -3157,10 +3174,8 @@ export class TasksService {
       return { count: 0, activities: [] };
     }
 
-    const from = params.from
-      ? new Date(params.from)
-      : new Date(Date.now() - 56 * 24 * 60 * 60 * 1000);
-    const to = params.to ? new Date(params.to) : new Date();
+    const from = params.from ? new Date(params.from) : null;
+    const to = params.to ? new Date(params.to) : null;
 
     const localitiesRaw = await this.prisma.locality.findMany({
       where: { id: { in: allowedLocalityIds } },
@@ -3171,13 +3186,31 @@ export class TasksService {
     const { aliasByLocalityId } = createTargetLocalityAliasMap(localityGroups);
     const localityIds = Array.from(aliasByLocalityId.keys());
 
+    const activityDateRangeFilter: Prisma.ActivityWhereInput | null =
+      from || to
+        ? {
+            OR: [
+              {
+                eventDate: {
+                  ...(from ? { gte: from } : {}),
+                  ...(to ? { lte: to } : {}),
+                },
+              },
+              {
+                eventDate: null,
+                createdAt: {
+                  ...(from ? { gte: from } : {}),
+                  ...(to ? { lte: to } : {}),
+                },
+              },
+            ],
+          }
+        : null;
+
     const activities = await this.prisma.activity.findMany({
       where: {
         localityId: { in: localityIds },
-        OR: [
-          { eventDate: { gte: from, lte: to } },
-          { eventDate: null, createdAt: { gte: from, lte: to } },
-        ],
+        ...(activityDateRangeFilter ?? {}),
       },
       include: {
         specialty: {
@@ -3248,10 +3281,8 @@ export class TasksService {
       };
     }
 
-    const from = params.from
-      ? new Date(params.from)
-      : new Date(Date.now() - 56 * 24 * 60 * 60 * 1000);
-    const to = params.to ? new Date(params.to) : new Date();
+    const from = params.from ? new Date(params.from) : null;
+    const to = params.to ? new Date(params.to) : null;
 
     // Get specialties
     const psicologiaSpecialty = await this.prisma.specialty.findFirst({
@@ -3273,13 +3304,31 @@ export class TasksService {
     const { aliasByLocalityId } = createTargetLocalityAliasMap(localityGroups);
     const localityIds = Array.from(aliasByLocalityId.keys());
 
+    const activityDateRangeFilter: Prisma.ActivityWhereInput | null =
+      from || to
+        ? {
+            OR: [
+              {
+                eventDate: {
+                  ...(from ? { gte: from } : {}),
+                  ...(to ? { lte: to } : {}),
+                },
+              },
+              {
+                eventDate: null,
+                createdAt: {
+                  ...(from ? { gte: from } : {}),
+                  ...(to ? { lte: to } : {}),
+                },
+              },
+            ],
+          }
+        : null;
+
     const activities = await this.prisma.activity.findMany({
       where: {
         localityId: { in: localityIds },
-        OR: [
-          { eventDate: { gte: from, lte: to } },
-          { eventDate: null, createdAt: { gte: from, lte: to } },
-        ],
+        ...(activityDateRangeFilter ?? {}),
       },
       include: {
         specialty: {
