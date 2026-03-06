@@ -39,7 +39,7 @@ const BEST_PRACTICES_BLUE_CARD_SX = {
 };
 
 const REPLICATION_PRACTICES_CARD_SX = {
-  backgroundColor: "rgb(56, 114, 146) !important",
+  backgroundColor: "rgb(110, 160, 190) !important",
 };
 
 type BestPracticePost = {
@@ -329,7 +329,7 @@ export function BestPracticesPage() {
                         ...cardSx,
                         height: "100%",
                         borderRadius: 2,
-                        borderColor: isCommission ? "rgba(56, 114, 146, 0.9)" : "rgba(83, 127, 151, 0.9)",
+                        borderColor: isCommission ? "rgba(110, 160, 190, 0.9)" : "rgba(83, 127, 151, 0.9)",
                         boxShadow: "0 12px 24px rgba(22, 60, 82, 0.3)",
                         width: isCommission ? "100%" : undefined,
                       }}
