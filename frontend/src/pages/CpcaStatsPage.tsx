@@ -99,7 +99,7 @@ const CHART_COLORS = [
   "#4A67A1",
   "#7B4DB4",
 ];
-const CHART_TICK_STYLE = { fontSize: 11, fill: "rgba(231,244,250,0.92)" };
+const CHART_TICK_STYLE = { fontSize: 11, fill: "rgba(35, 49, 64, 0.88)" };
 const BLUE_CARD_SX = {
   bgcolor: "#1F4A61",
   border: "1px solid rgba(139, 184, 207, 0.38)",
@@ -122,6 +122,22 @@ const BLUE_CARD_SX = {
     color: "#9FD6FF",
   },
 };
+
+const CPCA_PANEL_CARD_SX = {
+  bgcolor: "#FFFFFF",
+  backgroundColor: "#FFFFFF",
+  border: "1px solid rgba(17,66,89,0.14)",
+  "& .MuiTypography-root": { color: "text.primary" },
+  "& .MuiTypography-caption, & .MuiTypography-body2": { color: "text.secondary" },
+  "& .MuiTableCell-root": {
+    color: "text.primary",
+    borderColor: "rgba(17,66,89,0.14)",
+  },
+  "& .MuiTableHead-root .MuiTableCell-root": {
+    color: "text.primary",
+    fontWeight: 700,
+  },
+} as const;
 
 const CPCA_KPI_CARD_SX = {
   ...BLUE_CARD_SX,
@@ -434,7 +450,7 @@ export function CpcaStatsPage() {
 
       <Grid container spacing={2} sx={{ mt: 0.5 }}>
         <Grid size={{ xs: 12, md: 6 }}>
-          <Card sx={{ ...BLUE_CARD_SX, height: "100%" }}>
+          <Card sx={{ ...CPCA_PANEL_CARD_SX, height: "100%" }}>
             <CardContent>
               <Typography variant="h6" gutterBottom>
                 Distribuição por status
@@ -470,7 +486,7 @@ export function CpcaStatsPage() {
           </Card>
         </Grid>
         <Grid size={{ xs: 12, md: 6 }}>
-          <Card sx={{ ...BLUE_CARD_SX, height: "100%" }}>
+          <Card sx={{ ...CPCA_PANEL_CARD_SX, height: "100%" }}>
             <CardContent>
               <Typography variant="h6" gutterBottom>
                 Evolução mensal (moral x sexual x aberto)
@@ -516,7 +532,7 @@ export function CpcaStatsPage() {
           </Card>
         </Grid>
         <Grid size={{ xs: 12, md: 6 }}>
-          <Card sx={{ ...BLUE_CARD_SX, height: "100%" }}>
+          <Card sx={{ ...CPCA_PANEL_CARD_SX, height: "100%" }}>
             <CardContent>
               <Typography variant="h6" gutterBottom>
                 Procedimento instaurado
@@ -552,7 +568,7 @@ export function CpcaStatsPage() {
           </Card>
         </Grid>
         <Grid size={{ xs: 12, md: 6 }}>
-          <Card sx={{ ...BLUE_CARD_SX, height: "100%" }}>
+          <Card sx={{ ...CPCA_PANEL_CARD_SX, height: "100%" }}>
             <CardContent>
               <Typography variant="h6" gutterBottom>
                 Envelhecimento dos casos abertos
@@ -585,7 +601,7 @@ export function CpcaStatsPage() {
 
       <Grid container spacing={2} sx={{ mt: 0.5 }}>
         <Grid size={{ xs: 12, md: 7 }}>
-          <Card sx={{ ...BLUE_CARD_SX, height: "100%" }}>
+          <Card sx={{ ...CPCA_PANEL_CARD_SX, height: "100%" }}>
             <CardContent>
               <Typography variant="h6" gutterBottom>
                 Top OMs por risco operacional CPCA
@@ -636,7 +652,7 @@ export function CpcaStatsPage() {
           </Card>
         </Grid>
         <Grid size={{ xs: 12, md: 5 }}>
-          <Card sx={{ ...BLUE_CARD_SX, height: "100%" }}>
+          <Card sx={{ ...CPCA_PANEL_CARD_SX, height: "100%" }}>
             <CardContent>
               <Typography variant="h6" gutterBottom>
                 Distribuição por tipo de assédio ou violência
@@ -719,7 +735,7 @@ export function CpcaStatsPage() {
 
       <Grid container spacing={2} sx={{ mt: 0.5 }}>
         <Grid size={{ xs: 12, md: 6 }}>
-          <Card sx={{ ...BLUE_CARD_SX, height: "100%" }}>
+          <Card sx={{ ...CPCA_PANEL_CARD_SX, height: "100%" }}>
             <CardContent>
               <Typography variant="h6" gutterBottom>
                 Faixa etária do acusado
@@ -761,7 +777,7 @@ export function CpcaStatsPage() {
           </Card>
         </Grid>
         <Grid size={{ xs: 12, md: 6 }}>
-          <Card sx={{ height: "100%" }}>
+          <Card sx={{ ...CPCA_PANEL_CARD_SX, height: "100%" }}>
             <CardContent>
               <Typography variant="h6" gutterBottom>
                 Faixa etária da vítima/noticiante
@@ -804,7 +820,7 @@ export function CpcaStatsPage() {
         </Grid>
       </Grid>
 
-      <Card sx={{ ...BLUE_CARD_SX, mt: 2 }}>
+      <Card sx={{ ...CPCA_PANEL_CARD_SX, mt: 2 }}>
         <CardContent>
           <Typography variant="h6" gutterBottom>
             Casos críticos em aberto (priorização imediata)
