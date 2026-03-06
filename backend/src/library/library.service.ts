@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import sharp from 'sharp';
+import { resolveExistingLibraryDocumentPath } from './library-storage';
 import { AuditService } from '../audit/audit.service';
 import { throwError } from '../common/http-error';
 import { PrismaService } from '../prisma/prisma.service';
@@ -335,7 +336,7 @@ export class LibraryService {
     await this.prisma.libraryDocument.delete({ where: { id } });
     const storageKey = String(current.storageKey ?? '').trim();
     if (storageKey) {
-      const filePath = path.join(documentsDir, storageKey);
+      const filePath = resolveExistingLibraryDocumentPath(storageKey) || path.join(documentsDir, storageKey);
       try {
         if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
       } catch {

@@ -22,6 +22,7 @@ import { RbacGuard } from '../rbac/rbac.guard';
 import type { RbacUser } from '../rbac/rbac.types';
 import { MulterExceptionFilter } from '../reports/multer-exception.filter';
 import { LibraryService } from './library.service';
+import { getLibraryDocumentsDir } from './library-storage';
 
 export const libraryPhotosDir = path.resolve(
   process.cwd(),
@@ -29,9 +30,7 @@ export const libraryPhotosDir = path.resolve(
   'library-photos',
 );
 export const libraryDocumentsDir = path.resolve(
-  process.cwd(),
-  'storage',
-  'library-documents',
+  getLibraryDocumentsDir(),
 );
 
 if (!fs.existsSync(libraryPhotosDir)) {

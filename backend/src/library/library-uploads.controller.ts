@@ -4,6 +4,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { throwError } from '../common/http-error';
 import { libraryDocumentsDir, libraryPhotosDir } from './library.controller';
+import { resolveExistingLibraryDocumentPath } from './library-storage';
 
 @Controller('library/uploads')
 export class LibraryUploadsController {
@@ -21,7 +22,7 @@ export class LibraryUploadsController {
   @Get('documents/:filename')
   sendDocument(@Param('filename') filename: string, @Res() res: Response) {
     const safeName = path.basename(String(filename ?? '').trim());
-    const filePath = path.join(libraryDocumentsDir, safeName);
+    const filePath = resolveExistingLibraryDocumentPath(safeName);
     if (!safeName || !fs.existsSync(filePath)) {
       throwError('NOT_FOUND');
     }

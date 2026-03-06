@@ -42,7 +42,7 @@ import {
   useUploadLibraryDocument,
   useUploadLibraryPhoto,
 } from "../api/hooks";
-import { ACTIVE_ROLE_STORAGE_KEY, api } from "../api/client";
+import { api } from "../api/client";
 import { ROLE_COORDENACAO_CIPAVD, ROLE_TI, hasAnyRole } from "../app/roleAccess";
 import { parseApiError } from "../app/apiErrors";
 import { useToast } from "../app/toast";
@@ -287,33 +287,15 @@ export function LibraryPage() {
   };
   const downloadDocument = async (document: LibraryDocument) => {
     try {
-      const token = localStorage.getItem("accessToken");
-      const activeRoleId = localStorage.getItem(ACTIVE_ROLE_STORAGE_KEY)?.trim();
-      const response = await fetch(toApiUrl(document.fileUrl), {
-        method: "GET",
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          ...(activeRoleId ? { "x-active-role-id": activeRoleId } : {}),
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Download failed with status ${response.status}`);
-      }
-
-      const blob = await response.blob();
-      if (!blob || blob.size === 0) {
-        throw new Error("Empty file response");
-      }
-
-      const downloadUrl = URL.createObjectURL(blob);
+      const directUrl = toApiUrl(document.fileUrl);
       const link = document.createElement("a");
-      link.href = downloadUrl;
+      link.href = directUrl;
       link.download = String(document.fileName || document.title || "publicacao").trim();
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
       document.body.appendChild(link);
       link.click();
       link.remove();
-      window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1200);
     } catch (error) {
       toast.push({
         message: parseApiError(error).message ?? "Arquivo indisponível para download.",
