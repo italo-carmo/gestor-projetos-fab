@@ -3270,6 +3270,12 @@ export class TasksService {
             name: true,
           },
         },
+        activityType: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
       },
     });
 
@@ -3323,6 +3329,14 @@ export class TasksService {
         }
         return byId;
       })(),
+      activitiesSample: filteredActivities.map((act) => ({
+        id: act.id,
+        title: act.title,
+        specialtyId: act.specialtyId,
+        specialtyName: act.specialty?.name ?? null,
+        activityTypeId: act.activityTypeId,
+        activityTypeName: act.activityType?.name ?? null,
+      })),
     };
   }
 
