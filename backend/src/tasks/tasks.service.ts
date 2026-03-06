@@ -2999,11 +2999,12 @@ export class TasksService {
         key = '__psicologia__';
         displayName = 'Psicologia';
       }
-      // Priority 2: If specialtyId matches Comissão CIPAVD specialty ID, or name contains "comissao cipavd", or no specialtyId
+      // Priority 2: If specialtyId matches Comissão CIPAVD specialty ID, or name contains "comissao cipavd", or no specialtyId, or no specialtyName
       else if (
         specialtyId === commissionSpecialtyId ||
         normalizedName.includes('comissao cipavd') ||
-        !specialtyId
+        !specialtyId ||
+        !hasSpecialtyName
       ) {
         key = '__commission__';
         displayName = 'Comissão CIPAVD';
