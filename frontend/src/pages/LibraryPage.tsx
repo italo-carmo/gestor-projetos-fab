@@ -287,15 +287,19 @@ export function LibraryPage() {
   };
   const downloadDocument = async (document: LibraryDocument) => {
     try {
-      const directUrl = toApiUrl(document.fileUrl);
+      const response = await api.get(document.fileUrl, { responseType: "blob" });
+      const blob = response.data as Blob;
+      if (!blob || !(blob instanceof Blob) || blob.size === 0) {
+        throw new Error("Empty file response");
+      }
+      const directUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = directUrl;
       link.download = String(document.fileName || document.title || "publicacao").trim();
-      link.target = "_blank";
-      link.rel = "noopener noreferrer";
       document.body.appendChild(link);
       link.click();
       link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(directUrl), 1200);
     } catch (error) {
       toast.push({
         message: parseApiError(error).message ?? "Arquivo indisponível para download.",
