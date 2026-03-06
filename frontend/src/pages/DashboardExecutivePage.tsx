@@ -19,8 +19,8 @@ import { SkeletonState } from '../components/states/SkeletonState';
 import { ACTIVITY_STATUS_LABELS } from '../constants/enums';
 
 const KPI_BLUE_CARD_SX = {
-  bgcolor: 'rgb(56, 114, 146)',
-  backgroundColor: 'rgb(56, 114, 146) !important',
+  bgcolor: 'rgb(83, 127, 151)',
+  backgroundColor: 'rgb(83, 127, 151) !important',
   border: '1px solid rgba(139, 184, 207, 0.38)',
   boxShadow: '0 18px 34px rgba(15,44,59,0.36)',
 } as const;
@@ -236,7 +236,7 @@ export function DashboardExecutivePage() {
         mb={2}
       >
         <Card sx={KPI_BLUE_CARD_SX}>
-          <CardContent sx={{ backgroundColor: 'rgb(56, 114, 146) !important' }}>
+          <CardContent sx={{ backgroundColor: 'rgb(83, 127, 151) !important' }}>
             <Typography variant="overline" sx={BLUE_TEXT_SUB}>Atividades concluídas</Typography>
             <Typography variant="h4" sx={BLUE_TEXT_MAIN}>{doneCount}</Typography>
             <Typography variant="caption" sx={BLUE_TEXT_SUB}>
@@ -245,7 +245,7 @@ export function DashboardExecutivePage() {
           </CardContent>
         </Card>
         <Card sx={KPI_BLUE_CARD_SX}>
-          <CardContent sx={{ backgroundColor: 'rgb(56, 114, 146) !important' }}>
+          <CardContent sx={{ backgroundColor: 'rgb(83, 127, 151) !important' }}>
             <Typography variant="overline" sx={BLUE_TEXT_SUB}>Taxa de conclusão</Typography>
             <Typography variant="h4" sx={BLUE_TEXT_MAIN}>{closureRate}%</Typography>
             <Typography variant="caption" sx={BLUE_TEXT_SUB}>
@@ -254,7 +254,7 @@ export function DashboardExecutivePage() {
           </CardContent>
         </Card>
         <Card sx={KPI_BLUE_CARD_SX}>
-          <CardContent sx={{ backgroundColor: 'rgb(56, 114, 146) !important' }}>
+          <CardContent sx={{ backgroundColor: 'rgb(83, 127, 151) !important' }}>
             <Typography variant="overline" sx={BLUE_TEXT_SUB}>Relatórios aprovados</Typography>
             <Typography variant="h4" sx={BLUE_TEXT_MAIN}>{approvedReports}</Typography>
             <Typography variant="caption" sx={BLUE_TEXT_SUB}>
