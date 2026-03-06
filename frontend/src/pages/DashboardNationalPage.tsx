@@ -7,7 +7,7 @@ import PsychologyIcon from '@mui/icons-material/Psychology';
 import VolunteerActivismIcon from '@mui/icons-material/VolunteerActivism';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
 import GavelIcon from '@mui/icons-material/Gavel';
-import type { ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useDashboardNational } from '../api/hooks';
 import { toMilitaryDisplayName } from '../app/militaryName';
@@ -73,6 +73,28 @@ export function DashboardNationalPage() {
   const localityId = params.get('localityId') ?? '';
   const dashboardQuery = useDashboardNational({ localityId: localityId || undefined });
   const qc = useQueryClient();
+  const tableContainerRef = useRef<HTMLDivElement | null>(null);
+  const [showVisitColumn, setShowVisitColumn] = useState(true);
+
+  useEffect(() => {
+    const element = tableContainerRef.current;
+    if (!element) return;
+
+    const updateVisibility = () => {
+      // Hide visit column when the area gets narrow to avoid horizontal scrolling.
+      const minWidthWithVisitColumn = 760;
+      setShowVisitColumn(element.clientWidth >= minWidthWithVisitColumn);
+    };
+
+    updateVisibility();
+    const observer = new ResizeObserver(updateVisibility);
+    observer.observe(element);
+    window.addEventListener('resize', updateVisibility);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateVisibility);
+    };
+  }, []);
 
   if (dashboardQuery.isLoading) return <SkeletonState />;
   if (dashboardQuery.isError) return <ErrorState error={dashboardQuery.error} onRetry={() => dashboardQuery.refetch()} />;
@@ -297,7 +319,7 @@ export function DashboardNationalPage() {
               {smifLocalities.length === 0 ? (
                 <EmptyState title="Sem dados" description="Nenhuma localidade encontrada." />
               ) : (
-                <TableContainer sx={{ width: '100%', overflowX: 'hidden' }}>
+                <TableContainer ref={tableContainerRef} sx={{ width: '100%', overflowX: 'hidden' }}>
                   <Table
                     size="small"
                     sx={{
@@ -316,12 +338,15 @@ export function DashboardNationalPage() {
                   >
                     <TableHead>
                       <TableRow sx={{ bgcolor: 'primary.main' }}>
-                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '13%', px: 0.4 }}>GSD</TableCell>
-                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '11%', px: 0.4 }}>% Geral</TableCell>
-                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '14%', px: 0.4, whiteSpace: 'normal', lineHeight: 1.2 }}>
+                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '12%', px: 0.4 }}>GSD</TableCell>
+                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '10%', px: 0.4 }}>% Geral</TableCell>
+                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '12%', px: 0.4, whiteSpace: 'normal', lineHeight: 1.2 }}>
                           Rec. Fem.
                         </TableCell>
-                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '62%', px: 0.4 }}>Comandante</TableCell>
+                        <TableCell sx={{ color: 'white', fontWeight: 600, width: showVisitColumn ? '46%' : '66%', px: 0.4 }}>Comandante</TableCell>
+                        {showVisitColumn && (
+                          <TableCell sx={{ color: 'white', fontWeight: 600, width: '20%', px: 0.4 }}>Visita</TableCell>
+                        )}
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -356,6 +381,11 @@ export function DashboardNationalPage() {
                               {formatCommanderName(loc.commanderName)}
                             </Typography>
                           </TableCell>
+                          {showVisitColumn && (
+                            <TableCell sx={{ px: 0.4 }}>
+                              {loc.visitDate ? new Date(loc.visitDate).toLocaleDateString('pt-BR') : '—'}
+                            </TableCell>
+                          )}
                         </TableRow>
                       ))}
                     </TableBody>

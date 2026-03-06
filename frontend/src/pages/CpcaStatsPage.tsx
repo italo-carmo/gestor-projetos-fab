@@ -462,7 +462,7 @@ export function CpcaStatsPage() {
                     name="Quantidade"
                     fill="#0C657E"
                     radius={[8, 8, 0, 0]}
-                    barSize={16}
+                    barSize={12}
                   />
                 </BarChart>
               </ResponsiveContainer>
@@ -544,7 +544,7 @@ export function CpcaStatsPage() {
                     name="Quantidade"
                     fill="#1D8A6C"
                     radius={[8, 8, 0, 0]}
-                    barSize={16}
+                    barSize={12}
                   />
                 </BarChart>
               </ResponsiveContainer>
@@ -568,7 +568,7 @@ export function CpcaStatsPage() {
                       translateMetricName(name),
                     ]}
                   />
-                  <Bar dataKey="count" name="Quantidade" radius={[8, 8, 0, 0]} barSize={16}>
+                  <Bar dataKey="count" name="Quantidade" radius={[8, 8, 0, 0]} barSize={12}>
                     {openByAgeBuckets.map((entry, index) => (
                       <Cell
                         key={entry.bucket}
@@ -669,7 +669,7 @@ export function CpcaStatsPage() {
                       name="Quantidade"
                       fill="#4A67A1"
                       radius={[8, 8, 0, 0]}
-                      barSize={14}
+                      barSize={10}
                     />
                   </BarChart>
                 </ResponsiveContainer>
@@ -752,7 +752,7 @@ export function CpcaStatsPage() {
                       name="Quantidade"
                       fill="#1D8A6C"
                       radius={[8, 8, 0, 0]}
-                      barSize={16}
+                      barSize={12}
                     />
                   </BarChart>
                 </ResponsiveContainer>
@@ -794,7 +794,7 @@ export function CpcaStatsPage() {
                       name="Quantidade"
                       fill="#AD2F45"
                       radius={[8, 8, 0, 0]}
-                      barSize={16}
+                      barSize={12}
                     />
                   </BarChart>
                 </ResponsiveContainer>

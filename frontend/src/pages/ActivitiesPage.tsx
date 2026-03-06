@@ -162,12 +162,17 @@ function getLocalityShortLabel(item: any) {
 }
 
 function getLocalityChipStyle(localityLabel: string) {
-  const normalized = String(localityLabel ?? '').trim().toUpperCase();
-  if (normalized === 'RJ') {
+  const normalized = String(localityLabel ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Z0-9]/gi, '')
+    .trim()
+    .toUpperCase();
+  if (normalized === 'RJ' || normalized === 'RIO' || normalized.includes('RIODEJANEIRO')) {
     return { bg: '#E3F2FD', color: '#0D47A1', border: '#90CAF9' };
   }
-  if (normalized === 'LS') {
-    return { bg: '#E8F5E9', color: '#1B5E20', border: '#A5D6A7' };
+  if (normalized === 'LS' || normalized.includes('LAGOASANTA')) {
+    return { bg: '#FFF3E0', color: '#E65100', border: '#FFCC80' };
   }
   let hash = 0;
   for (let index = 0; index < localityLabel.length; index += 1) {
