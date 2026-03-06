@@ -78,9 +78,17 @@ type LibraryDocument = {
 function toApiUrl(path: string) {
   if (!path) return "";
   if (/^https?:\/\//i.test(path)) return path;
-  const baseUrl = String(api.defaults.baseURL ?? "/api");
-  if (!baseUrl || baseUrl === "/api") return path;
-  return `${baseUrl.replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const baseUrl = String(api.defaults.baseURL ?? "/api").replace(/\/$/, "");
+  if (!baseUrl) return normalizedPath;
+  if (baseUrl.startsWith("http://") || baseUrl.startsWith("https://")) {
+    return `${baseUrl}${normalizedPath}`;
+  }
+  if (normalizedPath.startsWith("/api/")) return normalizedPath;
+  if (baseUrl.startsWith("/")) {
+    return `${baseUrl}${normalizedPath}`;
+  }
+  return `${window.location.origin}/${baseUrl.replace(/^\//, "")}${normalizedPath}`;
 }
 
 function getPhotoUrl(photo: LibraryPhoto): string {
@@ -130,6 +138,18 @@ function getDocumentType(value: { fileName?: string | null; title?: string | nul
   const extension = fromFileName || fromTitle || "";
   if (!extension) return "Arquivo";
   return extension.slice(0, 6).toUpperCase();
+}
+
+function triggerDocumentDownload(fileUrl: string, fileName?: string) {
+  const url = toApiUrl(fileUrl);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = String(fileName ?? "").trim() || "publicacao";
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
 }
 
 export function LibraryPage() {
@@ -548,7 +568,12 @@ export function LibraryPage() {
               </TableHead>
               <TableBody>
                 {documents.map((document) => (
-                  <TableRow key={document.id} hover>
+                  <TableRow
+                    key={document.id}
+                    hover
+                    onClick={() => triggerDocumentDownload(document.fileUrl, document.fileName)}
+                    sx={{ cursor: "pointer" }}
+                  >
                     <TableCell sx={{ minWidth: 260, fontWeight: 500 }}>
                       {normalizePossiblyMojibake(document.title)}
                     </TableCell>
@@ -563,10 +588,13 @@ export function LibraryPage() {
                     <TableCell>{formatFileSize(document.fileSize)}</TableCell>
                     <TableCell>{new Date(document.createdAt).toLocaleString("pt-BR")}</TableCell>
                     <TableCell align="right">
-                      <Tooltip title="Abrir publicação">
+                      <Tooltip title="Baixar publicação">
                         <IconButton
                           size="small"
-                          onClick={() => window.open(toApiUrl(document.fileUrl), "_blank")}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            triggerDocumentDownload(document.fileUrl, document.fileName);
+                          }}
                           sx={{ color: "primary.main" }}
                         >
                           <OpenInNewRoundedIcon fontSize="small" />
