@@ -75,6 +75,7 @@ export function DashboardNationalPage() {
   const qc = useQueryClient();
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
   const [showVisitColumn, setShowVisitColumn] = useState(true);
+  const [highlightOffset, setHighlightOffset] = useState(0);
 
   useEffect(() => {
     const element = tableContainerRef.current;
@@ -94,6 +95,13 @@ export function DashboardNationalPage() {
       observer.disconnect();
       window.removeEventListener('resize', updateVisibility);
     };
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setHighlightOffset((prev) => prev + 1);
+    }, 3800);
+    return () => window.clearInterval(timer);
   }, []);
 
   if (dashboardQuery.isLoading) return <SkeletonState />;
@@ -130,6 +138,14 @@ export function DashboardNationalPage() {
       return dateB - dateA;
     })
     .slice(0, 5);
+  const highlightsPerView = 3;
+  const visibleHighlights =
+    positiveHighlights.length <= highlightsPerView
+      ? positiveHighlights
+      : Array.from({ length: highlightsPerView }, (_, index) => {
+          const safeIndex = (highlightOffset + index) % positiveHighlights.length;
+          return positiveHighlights[safeIndex];
+        });
   const formatHighlightType = (activity: NationalActivityItem) => {
     const normalized = String(activity.activityTypeName ?? activity.specialtyName ?? '').trim();
     return normalized;
@@ -309,9 +325,9 @@ export function DashboardNationalPage() {
           </Card>
         ))}
       </Box>
-      <Grid container spacing={1.2} sx={{ mt: 0 }}>
-        <Grid size={{ xs: 12, md: 6 }}>
-          <Card>
+      <Grid container spacing={1.2} sx={{ mt: 0 }} alignItems="stretch">
+        <Grid size={{ xs: 12, md: 6 }} sx={{ display: 'flex' }}>
+          <Card sx={{ width: '100%', height: '100%' }}>
             <CardContent>
               <Typography variant="h6" gutterBottom>
                 Localidades
@@ -395,9 +411,9 @@ export function DashboardNationalPage() {
             </CardContent>
           </Card>
         </Grid>
-        <Grid size={{ xs: 12, md: 6 }}>
-          <Card>
-            <CardContent>
+        <Grid size={{ xs: 12, md: 6 }} sx={{ display: 'flex' }}>
+          <Card sx={{ width: '100%', height: '100%' }}>
+            <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
               <Typography variant="h6" gutterBottom>
                 Destaques recentes
               </Typography>
@@ -406,11 +422,25 @@ export function DashboardNationalPage() {
                   Nenhum destaque encontrado.
                 </Typography>
               ) : (
-                <Box display="grid" gap={1}>
-                  {positiveHighlights.map((activity) => {
+                <Box
+                  display="grid"
+                  gap={1}
+                  sx={{
+                    flex: 1,
+                    overflow: 'hidden',
+                    alignContent: 'start',
+                  }}
+                >
+                  {visibleHighlights.map((activity) => {
                     const highlightType = formatHighlightType(activity);
                     return (
-                      <Card key={activity.activityId} variant="outlined">
+                      <Card
+                        key={`${activity.activityId}-${highlightOffset}`}
+                        variant="outlined"
+                        sx={{
+                          transition: 'transform 280ms ease, opacity 280ms ease',
+                        }}
+                      >
                         <CardContent>
                           <Typography variant="subtitle2">
                             {highlightType ? `${highlightType} - ${activity.title ?? 'Atividade'}` : activity.title ?? 'Atividade'}
