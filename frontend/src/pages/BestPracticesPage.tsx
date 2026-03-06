@@ -21,6 +21,7 @@ import { parseApiError } from "../app/apiErrors";
 import { can } from "../app/rbac";
 import { hasRole, ROLE_COORDENACAO_CIPAVD } from "../app/roleAccess";
 import { useToast } from "../app/toast";
+import { selectTargetLocalities } from "../constants/localities";
 import {
   useBestPractices,
   useCreateBestPractice,
@@ -81,10 +82,17 @@ export function BestPracticesPage() {
     );
   }
 
-  const localities = (localitiesQuery.data?.items ?? []) as Array<{
-    id: string;
-    name: string;
-  }>;
+  const localities = selectTargetLocalities(
+    (localitiesQuery.data?.items ?? []) as Array<{
+      id: string;
+      name: string;
+      recruitsFemaleCountCurrent?: number | null;
+      updatedAt?: string | Date | null;
+    }>,
+  ).map((item) => ({
+    id: String(item.id),
+    name: String(item.name ?? ""),
+  }));
   const posts = (postsQuery.data?.items ?? []) as BestPracticePost[];
   const canCreate =
     hasRole(me, ROLE_COORDENACAO_CIPAVD) && can(me, "best_practices", "create");
