@@ -34,6 +34,10 @@ import { EmptyState } from "../components/states/EmptyState";
 import { ErrorState } from "../components/states/ErrorState";
 import { SkeletonState } from "../components/states/SkeletonState";
 
+const BEST_PRACTICES_BLUE_CARD_SX = {
+  backgroundColor: "rgb(56, 114, 146) !important",
+};
+
 type BestPracticePost = {
   id: string;
   title: string;
@@ -314,14 +318,19 @@ export function BestPracticesPage() {
                       key={post.id}
                       variant="outlined"
                       sx={{
+                        ...BEST_PRACTICES_BLUE_CARD_SX,
                         height: "100%",
                         borderRadius: 2,
                         borderColor: "rgba(56, 114, 146, 0.9)",
-                        backgroundColor: "rgb(56, 114, 146) !important",
                         boxShadow: "0 12px 24px rgba(22, 60, 82, 0.3)",
                       }}
                     >
-                      <CardContent sx={{ p: 1.5 }}>
+                      <CardContent
+                        sx={{
+                          ...BEST_PRACTICES_BLUE_CARD_SX,
+                          p: 1.5,
+                        }}
+                      >
                         <Stack
                           direction="row"
                           justifyContent="space-between"
