@@ -168,6 +168,9 @@ export class ActivitiesService {
       });
     }
 
+    // Only include users with LDAP (exclude old test users like "GSD AF", "Teste Admin", etc.)
+    andClauses.push({ ldapUid: { not: null } });
+
     const where: Prisma.UserWhereInput =
       andClauses.length === 1 ? andClauses[0] : { AND: andClauses };
 

@@ -69,6 +69,7 @@ import {
 } from '../app/roleAccess';
 import { useToast } from '../app/toast';
 import { can } from '../app/rbac';
+import { toMilitaryDisplayName } from '../app/militaryName';
 import { EmptyState } from '../components/states/EmptyState';
 import { ErrorState } from '../components/states/ErrorState';
 import { SkeletonState } from '../components/states/SkeletonState';
@@ -903,7 +904,7 @@ export function ActivitiesPage() {
               onChange={(e) => setSpecialtyFilter(e.target.value)}
               sx={{ minWidth: 220 }}
             >
-              <MenuItem value="">Todas</MenuItem>
+              <MenuItem value="">Comissão CIPAVD</MenuItem>
               {specialties.map((s: any) => (
                 <MenuItem key={s.id} value={s.id}>
                   {s.name}
@@ -978,7 +979,7 @@ export function ActivitiesPage() {
                       sx={{ width: { xs: '100%', sm: 210 } }}
                       disabled={!selectedIds.length}
                     >
-                      <MenuItem value="">Todas</MenuItem>
+                      <MenuItem value="">Comissão CIPAVD</MenuItem>
                       {specialties.map((specialty: any) => (
                         <MenuItem key={specialty.id} value={specialty.id}>
                           {specialty.name}
@@ -1007,7 +1008,7 @@ export function ActivitiesPage() {
                       <MenuItem value="">Sem responsável</MenuItem>
                       {batchResponsibleOptions.map((user: any) => (
                         <MenuItem key={user.id} value={user.id}>
-                          {user.name}
+                          {toMilitaryDisplayName(user.name)}
                         </MenuItem>
                       ))}
                     </TextField>
@@ -1171,10 +1172,10 @@ export function ActivitiesPage() {
                           );
                         })()}
                       </TableCell>
-                      <TableCell>{item.specialty?.name ?? 'Todas'}</TableCell>
+                      <TableCell>{item.specialty?.name ?? 'Comissão CIPAVD'}</TableCell>
                       <TableCell>
                         {Array.isArray(item.responsibleUsers) && item.responsibleUsers.length > 0
-                          ? item.responsibleUsers.map((user: any) => user.name).join(', ')
+                          ? item.responsibleUsers.map((user: any) => toMilitaryDisplayName(user.name)).join(', ')
                           : '—'}
                       </TableCell>
                       <TableCell>{item.eventDate ? new Date(item.eventDate).toLocaleDateString('pt-BR') : '-'}</TableCell>
@@ -1424,7 +1425,7 @@ export function ActivitiesPage() {
                   sx={{ minWidth: 220 }}
                   disabled={!canEditActivityForm}
                 >
-                  <MenuItem value="">Todas as especialidades</MenuItem>
+                  <MenuItem value="">Comissão CIPAVD</MenuItem>
                   {specialties.map((s: any) => (
                     <MenuItem key={s.id} value={s.id}>
                       {s.name}
@@ -1499,7 +1500,7 @@ export function ActivitiesPage() {
                   <MenuItem value="">Sem responsável</MenuItem>
                   {responsibleOptions.map((user: any) => (
                     <MenuItem key={user.id} value={user.id}>
-                      {user.name}
+                      {toMilitaryDisplayName(user.name)}
                     </MenuItem>
                   ))}
                 </TextField>
@@ -1599,7 +1600,7 @@ export function ActivitiesPage() {
                   </Typography>
                   <Typography variant="body2">
                     {Array.isArray(selected.responsibleUsers) && selected.responsibleUsers.length > 0
-                      ? selected.responsibleUsers.map((user: any) => user.name).join(', ')
+                      ? selected.responsibleUsers.map((user: any) => toMilitaryDisplayName(user.name)).join(', ')
                       : 'Não definido'}
                   </Typography>
                 </Box>
