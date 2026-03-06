@@ -389,7 +389,7 @@ export function BestPracticesPage() {
         PaperProps={{ sx: { width: { xs: "100%", md: 520 } } }}
       >
         <Box p={3} pt={5} display="flex" flexDirection="column" gap={2}>
-          <Typography variant="h5" sx={{ mt: 1.5 }}>
+          <Typography variant="h5" sx={{ mt: 4 }}>
             {editing ? "Editar boa prática" : "Nova boa prática"}
           </Typography>
           <TextField
