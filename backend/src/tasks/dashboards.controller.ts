@@ -114,6 +114,7 @@ export class DashboardsController {
         commission: dbCounts.counts.commission,
         total: dbCounts.counts.total,
       },
+      databaseNoDate: dbCounts.countsNoDate,
       dashboard: {
         psicologia: dashboardPsicologia?.count || 0,
         commission: dashboardCommission?.count || 0,
