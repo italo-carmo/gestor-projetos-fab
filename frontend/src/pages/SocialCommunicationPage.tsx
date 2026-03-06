@@ -480,7 +480,7 @@ export function SocialCommunicationPage() {
         mb={2.5}
       >
         <Box>
-          <Typography variant="h4">Comunicacao Social</Typography>
+          <Typography variant="h4">Impacto Positivo</Typography>
           <Typography variant="body2" color="text.secondary">
             Visualize as matérias em cards ou em lista e filtre por tags.
           </Typography>
@@ -1007,7 +1007,7 @@ export function SocialCommunicationPage() {
           void handleConfirmDelete();
         }}
         title="Excluir materia"
-        message="Deseja remover esta materia da Comunicacao Social?"
+        message="Deseja remover esta materia de Impacto Positivo?"
         highlightText={deleteTarget?.title ?? ""}
         note="A exclusão é permanente e será registrada em auditoria."
         confirmLabel="Excluir materia"

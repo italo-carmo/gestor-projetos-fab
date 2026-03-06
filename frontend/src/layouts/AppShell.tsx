@@ -84,7 +84,7 @@ const navSections: NavSection[] = [
       { label: "SMIF", to: "/dashboard/smif", icon: <DashboardIcon fontSize="small" /> },
       { label: "CIPAVD", to: "/dashboard/cipavd", icon: <InsightsRoundedIcon fontSize="small" /> },
       { label: "CPCA", to: "/dashboard/cpca", icon: <PolicyRoundedIcon fontSize="small" /> },
-      { label: "Comunicação Social", to: "/social-communication", icon: <NewspaperRoundedIcon fontSize="small" /> },
+      { label: "Impacto Positivo", to: "/social-communication", icon: <NewspaperRoundedIcon fontSize="small" /> },
       { label: "Biblioteca", to: "/library", icon: <PhotoLibraryRoundedIcon fontSize="small" /> },
     ],
   },
@@ -764,8 +764,8 @@ export function AppShell({ children }: { children: ReactNode }) {
                               primary={doc.title}
                               secondary={
                                 doc.localityName
-                                  ? `Comunicação Social • ${doc.localityName}`
-                                  : "Comunicação Social"
+                                  ? `Impacto Positivo • ${doc.localityName}`
+                                  : "Impacto Positivo"
                               }
                             />
                           </ListItemButton>

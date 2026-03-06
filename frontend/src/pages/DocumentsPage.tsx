@@ -668,7 +668,7 @@ export function DocumentsPage() {
       <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" gap={1} mb={1}>
         <Box>
           <Typography variant="h4" fontWeight={700}>
-            Comunicação Social
+            Impacto Positivo
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
             Estrutura em pastas e subpastas (multi-nivel), com navegacao tipo drive e vinculos detalhados por arquivo.
@@ -779,7 +779,7 @@ export function DocumentsPage() {
                   setCurrentFolderId('');
                 }}
               >
-                Comunicação Social
+                Impacto Positivo
               </Link>
               {category && (
                 <Link
@@ -969,7 +969,7 @@ export function DocumentsPage() {
         <CardContent>
           <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" mb={1.2}>
             <Typography variant="subtitle1" fontWeight={700}>
-              {category ? `Arquivos em ${selectedPathLabel}` : 'Selecione uma categoria para navegar na Comunicação Social'}
+              {category ? `Arquivos em ${selectedPathLabel}` : 'Selecione uma categoria para navegar em Impacto Positivo'}
             </Typography>
             {!category && (
               <Typography variant="caption" color="text.secondary">
