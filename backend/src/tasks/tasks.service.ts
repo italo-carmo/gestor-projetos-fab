@@ -3204,7 +3204,18 @@ export class TasksService {
   ) {
     const allowedLocalityIds = await this.getTargetLocalityIds();
     if (allowedLocalityIds.length === 0) {
-      return { psicologia: 0, commission: 0, total: 0 };
+      return {
+        specialties: {
+          psicologia: { id: null, name: null },
+          commission: { id: null, name: null },
+        },
+        counts: {
+          psicologia: 0,
+          commission: 0,
+          total: 0,
+        },
+        bySpecialtyId: {},
+      };
     }
 
     const from = params.from
