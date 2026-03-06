@@ -38,6 +38,10 @@ const BEST_PRACTICES_BLUE_CARD_SX = {
   backgroundColor: "rgb(83, 127, 151) !important",
 };
 
+const REPLICATION_PRACTICES_CARD_SX = {
+  backgroundColor: "rgb(56, 114, 146) !important",
+};
+
 type BestPracticePost = {
   id: string;
   title: string;
@@ -116,7 +120,7 @@ export function BestPracticesPage() {
   const sections = [
     {
       key: "__commission__",
-      title: "Comissão CIPAVD",
+      title: "Práticas com potencial de replicação",
       subtitle: "Boas práticas de aplicação geral da comissão",
       icon: <LightbulbRoundedIcon fontSize="small" />,
       posts: commissionPosts,
@@ -217,7 +221,7 @@ export function BestPracticesPage() {
         <Box>
           <Typography variant="h4">Boas Práticas</Typography>
           <Typography variant="body2" color="text.secondary">
-            Compartilhe ações efetivas por localidade e para a Comissão CIPAVD.
+            Compartilhe ações efetivas por localidade e práticas com potencial de replicação.
           </Typography>
         </Box>
         {canCreate && (
@@ -247,7 +251,7 @@ export function BestPracticesPage() {
               sx={{ minWidth: 260 }}
             >
               <MenuItem value="">Todas</MenuItem>
-              <MenuItem value="__commission__">Comissão CIPAVD</MenuItem>
+              <MenuItem value="__commission__">Práticas com potencial de replicação</MenuItem>
               {localities.map((locality) => (
                 <MenuItem key={locality.id} value={locality.id}>
                   {locality.name}
@@ -304,8 +308,9 @@ export function BestPracticesPage() {
               ) : (
                 <Box
                   sx={{
-                    display: "grid",
-                    gridTemplateColumns: {
+                    display: section.key === "__commission__" ? "flex" : "grid",
+                    flexDirection: section.key === "__commission__" ? "column" : undefined,
+                    gridTemplateColumns: section.key === "__commission__" ? undefined : {
                       xs: "1fr",
                       md: "repeat(2, minmax(0, 1fr))",
                       xl: "repeat(3, minmax(0, 1fr))",
@@ -313,21 +318,25 @@ export function BestPracticesPage() {
                     gap: 1.4,
                   }}
                 >
-                  {section.posts.map((post) => (
+                  {section.posts.map((post) => {
+                    const isCommission = section.key === "__commission__";
+                    const cardSx = isCommission ? REPLICATION_PRACTICES_CARD_SX : BEST_PRACTICES_BLUE_CARD_SX;
+                    return (
                     <Card
                       key={post.id}
                       variant="outlined"
                       sx={{
-                        ...BEST_PRACTICES_BLUE_CARD_SX,
+                        ...cardSx,
                         height: "100%",
                         borderRadius: 2,
-                        borderColor: "rgba(83, 127, 151, 0.9)",
+                        borderColor: isCommission ? "rgba(56, 114, 146, 0.9)" : "rgba(83, 127, 151, 0.9)",
                         boxShadow: "0 12px 24px rgba(22, 60, 82, 0.3)",
+                        width: isCommission ? "100%" : undefined,
                       }}
                     >
                       <CardContent
                         sx={{
-                          ...BEST_PRACTICES_BLUE_CARD_SX,
+                          ...cardSx,
                           p: 1.5,
                         }}
                       >
@@ -384,7 +393,8 @@ export function BestPracticesPage() {
                         </Stack>
                       </CardContent>
                     </Card>
-                  ))}
+                    );
+                  })}
                 </Box>
               )}
             </CardContent>
@@ -424,7 +434,7 @@ export function BestPracticesPage() {
             value={form.target}
             onChange={(event) => setForm((prev) => ({ ...prev, target: event.target.value }))}
           >
-            <MenuItem value="commission">Comissão CIPAVD</MenuItem>
+            <MenuItem value="commission">Práticas com potencial de replicação</MenuItem>
             {localities.map((locality) => (
               <MenuItem key={locality.id} value={locality.id}>
                 {locality.name}
