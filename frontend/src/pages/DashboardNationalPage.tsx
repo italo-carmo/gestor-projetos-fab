@@ -546,18 +546,19 @@ export function DashboardNationalPage() {
                       variant="outlined"
                       sx={{
                         transition: 'transform 280ms ease, opacity 280ms ease',
-                        borderColor: 'rgba(12,101,126,0.24)',
+                        backgroundColor: 'rgb(83, 127, 151)',
+                        borderColor: 'rgba(83, 127, 151, 0.9)',
                       }}
                     >
-                      <CardContent sx={{ p: 1.2 }}>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 700, lineHeight: 1.25 }}>
+                      <CardContent sx={{ p: 1.2, backgroundColor: 'rgb(83, 127, 151)' }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700, lineHeight: 1.25, color: '#F4FAFD' }}>
                           {lesson.title}
                         </Typography>
                         <Typography
                           variant="body2"
-                          color="text.secondary"
                           sx={{
                             mt: 0.6,
+                            color: 'rgba(244, 250, 253, 0.94)',
                             display: '-webkit-box',
                             WebkitLineClamp: 3,
                             WebkitBoxOrient: 'vertical',
@@ -567,10 +568,10 @@ export function DashboardNationalPage() {
                           {lesson.content}
                         </Typography>
                         <Box display="flex" justifyContent="space-between" gap={1} mt={1}>
-                          <Typography variant="caption" color="text.secondary" noWrap>
+                          <Typography variant="caption" sx={{ color: 'rgba(236, 248, 252, 0.92)' }} noWrap>
                             {lesson.authorLabel || 'Coordenação CIPAVD'}
                           </Typography>
-                          <Typography variant="caption" color="text.secondary" noWrap>
+                          <Typography variant="caption" sx={{ color: 'rgba(236, 248, 252, 0.9)' }} noWrap>
                             {new Date(lesson.createdAt).toLocaleString('pt-BR')}
                           </Typography>
                         </Box>
@@ -592,9 +593,9 @@ export function DashboardNationalPage() {
         }}
         PaperProps={{ sx: { width: { xs: '100%', md: 520 } } }}
       >
-        <Box p={3} display="flex" flexDirection="column" gap={1.4}>
+        <Box p={3} pt={5} display="flex" flexDirection="column" gap={1.4}>
           <Stack direction="row" justifyContent="space-between" alignItems="center">
-            <Typography variant="h6">
+            <Typography variant="h6" sx={{ mt: 1.5 }}>
               {editingLessonId ? 'Editar lição aprendida' : 'Nova lição aprendida'}
             </Typography>
             <Button size="small" variant="outlined" onClick={openCreateLesson}>

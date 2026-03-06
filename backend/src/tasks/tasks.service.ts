@@ -2225,7 +2225,7 @@ export class TasksService {
     };
     for (const activity of completedFieldActivities) {
       const normalized = normalizeSpecialtyName(
-        String(activity.specialty?.name ?? ''),
+        String(activity.specialty?.name ?? activity.activityType?.name ?? ''),
       );
       if (!normalized) continue;
       if (normalized.includes('psicologia')) {
@@ -2661,6 +2661,12 @@ export class TasksService {
             name: true,
           },
         },
+        activityType: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
         responsibles: {
           select: {
             userId: true,
@@ -2959,7 +2965,10 @@ export class TasksService {
     const specialtiesMap = new Map<string, { specialtyId: string | null; specialtyName: string; count: number }>();
     for (const activity of filteredActivities) {
       const specialtyId = activity.specialtyId ?? null;
-      const specialtyName = activity.specialty?.name ?? 'Todas';
+      const specialtyName =
+        activity.specialty?.name ??
+        activity.activityType?.name ??
+        'Comissão CIPAVD';
       const key = specialtyId ?? '__none__';
       const current = specialtiesMap.get(key);
       if (current) {
