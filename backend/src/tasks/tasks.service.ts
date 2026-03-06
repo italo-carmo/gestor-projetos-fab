@@ -2023,24 +2023,6 @@ export class TasksService {
       activity.localityId ? aliasByLocalityId.has(activity.localityId) : false,
     );
 
-    const activitiesNoDate = await this.prisma.activity.findMany({
-      where: {
-        localityId: { in: localityIds },
-      },
-      include: {
-        specialty: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-    });
-
-    const filteredActivitiesNoDate = activitiesNoDate.filter((activity) =>
-      activity.localityId ? aliasByLocalityId.has(activity.localityId) : false,
-    );
-
     const canonicalLocalityIdByActivityId = new Map<string, string>();
     const activitiesByLocalityId = new Map<
       string,
@@ -3387,20 +3369,6 @@ export class TasksService {
         psicologia: psicologia.length,
         commission: commission.length,
         total: filteredActivities.length,
-      },
-      countsNoDate: {
-        psicologia: filteredActivitiesNoDate.filter((a) => {
-          if (psicologiaSpecialty && a.specialtyId === psicologiaSpecialty.id) return true;
-          const name = (a.specialty?.name || '').toLowerCase();
-          return name.includes('psicologia');
-        }).length,
-        commission: filteredActivitiesNoDate.filter((a) => {
-          if (commissionSpecialty && a.specialtyId === commissionSpecialty.id) return true;
-          if (!a.specialtyId) return true;
-          const name = (a.specialty?.name || '').toLowerCase();
-          return name.includes('comissão') && name.includes('cipavd');
-        }).length,
-        total: filteredActivitiesNoDate.length,
       },
       bySpecialtyId: (() => {
         const byId: Record<string, number> = {};
