@@ -124,6 +124,8 @@ export class DashboardsController {
         })),
       },
       specialties: dbCounts.specialties,
+      bySpecialtyId: dbCounts.bySpecialtyId,
+      activitiesSample: dbCounts.activitiesSample,
       match: {
         psicologia: dbCounts.counts.psicologia === (dashboardPsicologia?.count || 0),
         commission: dbCounts.counts.commission === (dashboardCommission?.count || 0),
