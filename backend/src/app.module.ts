@@ -28,6 +28,7 @@ import { SocialCommunicationModule } from './social-communication/social-communi
 import { CpcaModule } from './cpca/cpca.module';
 import { LibraryModule } from './library/library.module';
 import { BestPracticesModule } from './best-practices/best-practices.module';
+import { LessonsLearnedModule } from './lessons-learned/lessons-learned.module';
 
 @Module({
   imports: [
@@ -63,6 +64,7 @@ import { BestPracticesModule } from './best-practices/best-practices.module';
     CpcaModule,
     LibraryModule,
     BestPracticesModule,
+    LessonsLearnedModule,
   ],
   controllers: [AppController],
   providers: [AppService],

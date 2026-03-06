@@ -1471,6 +1471,15 @@ export function useBestPractices(filters: Record<string, any>, enabled = true) {
   });
 }
 
+export function useLessonsLearned(filters: Record<string, any>, enabled = true) {
+  return useQuery({
+    queryKey: qk.lessonsLearned(filters),
+    queryFn: async () => (await api.get("/lessons-learned", { params: filters })).data,
+    enabled,
+    staleTime: 10_000,
+  });
+}
+
 export function useCreateBestPractice() {
   const qc = useQueryClient();
   return useMutation({
@@ -1505,6 +1514,39 @@ export function useDeleteBestPractice() {
   return useMutation({
     mutationFn: async (id: string) => (await api.delete(`/best-practices/${id}`)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["bestPractices"] }),
+  });
+}
+
+export function useCreateLessonLearned() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      title: string;
+      content: string;
+    }) => (await api.post("/lessons-learned", payload)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["lessonsLearned"] }),
+  });
+}
+
+export function useUpdateLessonLearned() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      payload: {
+        title?: string;
+        content?: string;
+      };
+    }) => (await api.put(`/lessons-learned/${args.id}`, args.payload)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["lessonsLearned"] }),
+  });
+}
+
+export function useDeleteLessonLearned() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await api.delete(`/lessons-learned/${id}`)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["lessonsLearned"] }),
   });
 }
 

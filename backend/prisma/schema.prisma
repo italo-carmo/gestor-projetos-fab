@@ -58,6 +58,7 @@ model User {
   libraryPhotosCreated LibraryPhoto[] @relation("LibraryPhotoCreator")
   libraryDocumentsCreated LibraryDocument[] @relation("LibraryDocumentCreator")
   bestPracticesCreated BestPracticePost[] @relation("BestPracticeCreator")
+  lessonsLearnedCreated LessonLearnedPost[] @relation("LessonLearnedCreator")
 }
 
 model UserModuleAccessOverride {
@@ -791,6 +792,21 @@ model BestPracticePost {
 
   @@index([isCommission, createdAt])
   @@index([localityId, createdAt])
+  @@index([createdById, createdAt])
+}
+
+model LessonLearnedPost {
+  id             String    @id @default(cuid())
+  title          String
+  content        String
+  createdById    String?
+  authorLabel    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  createdBy      User?     @relation("LessonLearnedCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
   @@index([createdById, createdAt])
 }
 

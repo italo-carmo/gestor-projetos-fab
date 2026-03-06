@@ -29,11 +29,11 @@ import GavelIcon from '@mui/icons-material/Gavel';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  useBestPractices,
-  useCreateBestPractice,
+  useCreateLessonLearned,
   useDashboardNational,
+  useLessonsLearned,
   useMe,
-  useUpdateBestPractice,
+  useUpdateLessonLearned,
 } from '../api/hooks';
 import { toMilitaryDisplayName } from '../app/militaryName';
 import { parseApiError } from '../app/apiErrors';
@@ -102,13 +102,13 @@ export function DashboardNationalPage() {
   const dashboardQuery = useDashboardNational({ localityId: localityId || undefined });
   const canViewLessons =
     hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI, ROLE_COMANDANTE_COMGEP]) &&
-    can(me, 'best_practices', 'view');
+    can(me, 'lessons_learned', 'view');
   const canManageLessons =
     hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]) &&
-    can(me, 'best_practices', 'view');
-  const lessonsQuery = useBestPractices({ localityId: '__commission__' }, canViewLessons);
-  const createLesson = useCreateBestPractice();
-  const updateLesson = useUpdateBestPractice();
+    can(me, 'lessons_learned', 'create');
+  const lessonsQuery = useLessonsLearned({}, canViewLessons);
+  const createLesson = useCreateLessonLearned();
+  const updateLesson = useUpdateLessonLearned();
   const qc = useQueryClient();
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
   const [showVisitColumn, setShowVisitColumn] = useState(true);
@@ -218,8 +218,6 @@ export function DashboardNationalPage() {
           payload: {
             title,
             content,
-            isCommission: true,
-            localityId: null,
           },
         });
         toast.push({ message: 'Lição atualizada.', severity: 'success' });
@@ -227,8 +225,6 @@ export function DashboardNationalPage() {
         await createLesson.mutateAsync({
           title,
           content,
-          isCommission: true,
-          localityId: null,
         });
         toast.push({ message: 'Lição criada.', severity: 'success' });
       }

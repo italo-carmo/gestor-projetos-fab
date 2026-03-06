@@ -6,7 +6,6 @@ import { sanitizeText } from '../common/sanitize';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   hasAnyRole,
-  hasRole,
   ROLE_COMANDANTE_COMGEP,
   ROLE_COORDENACAO_CIPAVD,
   ROLE_TI,
@@ -14,86 +13,59 @@ import {
 import type { RbacUser } from '../rbac/rbac.types';
 
 @Injectable()
-export class BestPracticesService {
+export class LessonsLearnedService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
   ) {}
 
-  async list(filters: { q?: string; localityId?: string }, user?: RbacUser) {
+  async list(filters: { q?: string }, user?: RbacUser) {
     this.assertViewerAccess(user);
 
-    const where: Prisma.BestPracticePostWhereInput = {};
+    const where: Prisma.LessonLearnedPostWhereInput = {};
     if (filters.q) {
       const q = String(filters.q).trim();
       where.OR = [
         { title: { contains: q, mode: 'insensitive' } },
         { content: { contains: q, mode: 'insensitive' } },
         { authorLabel: { contains: q, mode: 'insensitive' } },
-        { locality: { name: { contains: q, mode: 'insensitive' } } },
       ];
     }
-    if (filters.localityId) {
-      if (filters.localityId === '__commission__') {
-        where.isCommission = true;
-      } else {
-        where.localityId = filters.localityId;
-      }
-    }
 
-    const items = await this.prisma.bestPracticePost.findMany({
+    const items = await this.prisma.lessonLearnedPost.findMany({
       where,
-      include: {
-        locality: { select: { id: true, name: true, code: true } },
-        createdBy: { select: { id: true, name: true } },
-      },
-      orderBy: [{ isCommission: 'desc' }, { createdAt: 'desc' }],
+      include: { createdBy: { select: { id: true, name: true } } },
+      orderBy: [{ createdAt: 'desc' }],
     });
 
     return { items };
   }
 
   async create(
-    payload: {
-      title: string;
-      content: string;
-      localityId?: string | null;
-      isCommission?: boolean;
-    },
+    payload: { title: string; content: string },
     user?: RbacUser,
   ) {
     this.assertEditorAccess(user);
 
     const title = this.normalizeRequiredText(payload.title, 'title', 140);
     const content = this.normalizeRequiredText(payload.content, 'content', 1200);
-    const isCommission = Boolean(payload.isCommission);
-    const localityId = this.resolveLocalityTarget(payload.localityId, isCommission);
 
-    const created = await this.prisma.bestPracticePost.create({
+    const created = await this.prisma.lessonLearnedPost.create({
       data: {
         title,
         content,
-        isCommission,
-        localityId,
         createdById: user?.id ?? null,
         authorLabel: this.buildAuthorLabel(user),
       },
-      include: {
-        locality: { select: { id: true, name: true, code: true } },
-        createdBy: { select: { id: true, name: true } },
-      },
+      include: { createdBy: { select: { id: true, name: true } } },
     });
 
     await this.audit.log({
       userId: user?.id,
-      localityId: created.localityId ?? undefined,
-      resource: 'best_practices',
+      resource: 'lessons_learned',
       action: 'create',
       entityId: created.id,
-      diffJson: {
-        title: created.title,
-        isCommission: created.isCommission,
-      },
+      diffJson: { title: created.title },
     });
 
     return created;
@@ -101,26 +73,16 @@ export class BestPracticesService {
 
   async update(
     id: string,
-    payload: {
-      title?: string;
-      content?: string;
-      localityId?: string | null;
-      isCommission?: boolean;
-    },
+    payload: { title?: string; content?: string },
     user?: RbacUser,
   ) {
     this.assertEditorAccess(user);
-    const existing = await this.prisma.bestPracticePost.findUnique({ where: { id } });
+    const existing = await this.prisma.lessonLearnedPost.findUnique({
+      where: { id },
+    });
     if (!existing) throwError('NOT_FOUND');
 
-    const nextIsCommission =
-      payload.isCommission !== undefined ? Boolean(payload.isCommission) : existing.isCommission;
-    const nextLocalityId = this.resolveLocalityTarget(
-      payload.localityId !== undefined ? payload.localityId : existing.localityId,
-      nextIsCommission,
-    );
-
-    const updated = await this.prisma.bestPracticePost.update({
+    const updated = await this.prisma.lessonLearnedPost.update({
       where: { id },
       data: {
         title:
@@ -131,26 +93,16 @@ export class BestPracticesService {
           payload.content !== undefined
             ? this.normalizeRequiredText(payload.content, 'content', 1200)
             : undefined,
-        isCommission:
-          payload.isCommission !== undefined ? Boolean(payload.isCommission) : undefined,
-        localityId: nextLocalityId,
       },
-      include: {
-        locality: { select: { id: true, name: true, code: true } },
-        createdBy: { select: { id: true, name: true } },
-      },
+      include: { createdBy: { select: { id: true, name: true } } },
     });
 
     await this.audit.log({
       userId: user?.id,
-      localityId: updated.localityId ?? undefined,
-      resource: 'best_practices',
+      resource: 'lessons_learned',
       action: 'update',
       entityId: updated.id,
-      diffJson: {
-        title: updated.title,
-        isCommission: updated.isCommission,
-      },
+      diffJson: { title: updated.title },
     });
 
     return updated;
@@ -158,20 +110,18 @@ export class BestPracticesService {
 
   async remove(id: string, user?: RbacUser) {
     this.assertEditorAccess(user);
-    const existing = await this.prisma.bestPracticePost.findUnique({ where: { id } });
+    const existing = await this.prisma.lessonLearnedPost.findUnique({
+      where: { id },
+    });
     if (!existing) throwError('NOT_FOUND');
 
-    await this.prisma.bestPracticePost.delete({ where: { id } });
+    await this.prisma.lessonLearnedPost.delete({ where: { id } });
     await this.audit.log({
       userId: user?.id,
-      localityId: existing.localityId ?? undefined,
-      resource: 'best_practices',
+      resource: 'lessons_learned',
       action: 'delete',
       entityId: existing.id,
-      diffJson: {
-        title: existing.title,
-        isCommission: existing.isCommission,
-      },
+      diffJson: { title: existing.title },
     });
     return { ok: true };
   }
@@ -189,31 +139,12 @@ export class BestPracticesService {
   }
 
   private assertEditorAccess(user?: RbacUser) {
-    if (!hasRole(user, ROLE_COORDENACAO_CIPAVD)) {
+    if (!hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_TI])) {
       throwError('RBAC_FORBIDDEN');
     }
   }
 
-  private resolveLocalityTarget(
-    localityId: string | null | undefined,
-    isCommission: boolean,
-  ) {
-    if (isCommission) return null;
-    const id = String(localityId ?? '').trim();
-    if (!id) {
-      throwError('VALIDATION_ERROR', {
-        field: 'localityId',
-        reason: 'required_for_locality_post',
-      });
-    }
-    return id;
-  }
-
-  private normalizeRequiredText(
-    value: string,
-    field: string,
-    maxLength: number,
-  ) {
+  private normalizeRequiredText(value: string, field: string, maxLength: number) {
     const normalized = sanitizeText(value);
     if (!normalized) {
       throwError('VALIDATION_ERROR', { field, reason: 'required' });
@@ -231,7 +162,10 @@ export class BestPracticesService {
     if (tokens.length >= 3) {
       const last = String(tokens[tokens.length - 1] ?? '').toUpperCase();
       const first = String(tokens[0] ?? '').toUpperCase();
-      const looksLikeRank = /^(ALUNO|SD|CB|3S|2S|1S|SO|ASP|CP|CL|MB|TB|2T|1T|CAP|MAJ|TCEL|TEN|CEL|BRIG|GEN)$/.test(first);
+      const looksLikeRank =
+        /^(ALUNO|SD|CB|3S|2S|1S|SO|ASP|CP|CL|MB|TB|2T|1T|CAP|MAJ|TCEL|TEN|CEL|BRIG|GEN)$/.test(
+          first,
+        );
       const looksLikeOm = /^[A-Z0-9-]{2,14}$/.test(last);
       if (looksLikeRank && looksLikeOm) {
         return tokens.slice(0, -1).join(' ').trim() || raw;
