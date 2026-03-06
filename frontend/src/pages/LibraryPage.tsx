@@ -285,18 +285,18 @@ export function LibraryPage() {
       });
     }
   };
-  const downloadDocument = async (document: LibraryDocument) => {
+  const downloadDocument = async (doc: LibraryDocument) => {
     try {
-      const response = await api.get(`/library/documents/${document.id}/download`, { responseType: "blob" });
+      const response = await api.get(`/library/documents/${doc.id}/download`, { responseType: "blob" });
       const blob = response.data as Blob;
       if (!blob || !(blob instanceof Blob) || blob.size === 0) {
         throw new Error("Empty file response");
       }
       const directUrl = URL.createObjectURL(blob);
-      const link = document.createElement("a");
+      const link = window.document.createElement("a");
       link.href = directUrl;
-      link.download = String(document.fileName || document.title || "publicacao").trim();
-      document.body.appendChild(link);
+      link.download = String(doc.fileName || doc.title || "publicacao").trim();
+      window.document.body.appendChild(link);
       link.click();
       link.remove();
       window.setTimeout(() => URL.revokeObjectURL(directUrl), 1200);
