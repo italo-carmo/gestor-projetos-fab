@@ -197,6 +197,10 @@ export function ActivitiesPage() {
   const localities = localitiesData?.items ?? [];
   const { data: specialtiesData } = useSpecialties();
   const specialties = specialtiesData?.items ?? [];
+  const commissionSpecialty = useMemo(
+    () => specialties.find((s: any) => s.name === 'Comissão CIPAVD'),
+    [specialties],
+  );
   const activityTypesQuery = useActivityTypes();
   const activityTypes = activityTypesQuery.data?.items ?? [];
   const responsibleUsersQuery = useActivityResponsibleUsers({});
@@ -913,12 +917,16 @@ export function ActivitiesPage() {
               onChange={(e) => setSpecialtyFilter(e.target.value)}
               sx={{ minWidth: 220 }}
             >
-              <MenuItem value="">Comissão CIPAVD</MenuItem>
-              {specialties.map((s: any) => (
-                <MenuItem key={s.id} value={s.id}>
-                  {s.name}
-                </MenuItem>
-              ))}
+              {commissionSpecialty && (
+                <MenuItem value={commissionSpecialty.id}>Comissão CIPAVD</MenuItem>
+              )}
+              {specialties
+                .filter((s: any) => s.name !== 'Comissão CIPAVD')
+                .map((s: any) => (
+                  <MenuItem key={s.id} value={s.id}>
+                    {s.name}
+                  </MenuItem>
+                ))}
             </TextField>
           </Stack>
         </CardContent>
