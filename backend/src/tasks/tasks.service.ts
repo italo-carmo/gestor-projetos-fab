@@ -2962,13 +2962,24 @@ export class TasksService {
       .filter((activity) => !hasSignedReport(activity))
       .map((activity) => mapExecutiveActivityItem(activity));
 
-    // Get specialty IDs
+    // Get specialty IDs - search more broadly to ensure we find them
     const psicologiaSpecialty = await this.prisma.specialty.findFirst({
-      where: { name: { contains: 'Psicologia', mode: 'insensitive' } },
+      where: {
+        OR: [
+          { name: { equals: 'Psicologia', mode: 'insensitive' } },
+          { name: { contains: 'Psicologia', mode: 'insensitive' } },
+        ],
+      },
       select: { id: true, name: true },
     });
     const commissionSpecialty = await this.prisma.specialty.findFirst({
-      where: { name: { contains: 'Comissão CIPAVD', mode: 'insensitive' } },
+      where: {
+        OR: [
+          { name: { equals: 'Comissão CIPAVD', mode: 'insensitive' } },
+          { name: { contains: 'Comissão CIPAVD', mode: 'insensitive' } },
+          { name: { contains: 'Comissao CIPAVD', mode: 'insensitive' } },
+        ],
+      },
       select: { id: true, name: true },
     });
     const psicologiaSpecialtyId = psicologiaSpecialty?.id ?? null;
