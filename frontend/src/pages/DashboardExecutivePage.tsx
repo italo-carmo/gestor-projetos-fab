@@ -283,7 +283,7 @@ export function DashboardExecutivePage() {
                   formatter={(value: any) => [value, 'Quantidade']}
                   labelFormatter={(value: any) => formatStatus(value)}
                 />
-                <Bar dataKey="count" fill="#0B4DA1" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="count" fill="#0B4DA1" radius={[6, 6, 0, 0]} barSize={16} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -303,7 +303,7 @@ export function DashboardExecutivePage() {
                 <XAxis type="number" allowDecimals={false} />
                 <YAxis type="category" dataKey="specialtyName" width={150} />
                 <Tooltip formatter={(value: any) => [value, 'Atividades']} />
-                <Bar dataKey="count" fill="#4D86A0" radius={[0, 6, 6, 0]} />
+                <Bar dataKey="count" fill="#4D86A0" radius={[0, 6, 6, 0]} barSize={12} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -320,7 +320,7 @@ export function DashboardExecutivePage() {
               <XAxis dataKey="localityCode" />
               <YAxis />
               <Tooltip formatter={(value: any) => [`${value}%`, 'Progresso']} />
-              <Bar dataKey="progress" fill="#114259" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="progress" fill="#114259" radius={[6, 6, 0, 0]} barSize={16} />
             </BarChart>
           </ResponsiveContainer>
         </CardContent>

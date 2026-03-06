@@ -131,6 +131,44 @@ function getActivityStatusChipStyle(status: string) {
   };
 }
 
+const localityBadgePalette = [
+  { bg: '#E8F5E9', color: '#1B5E20', border: '#A5D6A7' },
+  { bg: '#E3F2FD', color: '#0D47A1', border: '#90CAF9' },
+  { bg: '#FFF3E0', color: '#E65100', border: '#FFCC80' },
+  { bg: '#F3E5F5', color: '#6A1B9A', border: '#CE93D8' },
+  { bg: '#E0F2F1', color: '#004D40', border: '#80CBC4' },
+  { bg: '#FCE4EC', color: '#880E4F', border: '#F48FB1' },
+  { bg: '#EDE7F6', color: '#4527A0', border: '#B39DDB' },
+  { bg: '#F1F8E9', color: '#33691E', border: '#C5E1A5' },
+] as const;
+
+function normalizeLocalityCode(value: string | null | undefined) {
+  const normalized = String(value ?? '').trim().toUpperCase();
+  if (normalized) return normalized;
+  return 'SEM';
+}
+
+function getLocalityShortLabel(item: any) {
+  const code = normalizeLocalityCode(item?.locality?.code);
+  if (code !== 'SEM') return code;
+  const name = String(item?.locality?.name ?? '').trim();
+  if (!name) return 'SEM';
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((chunk) => chunk[0]?.toUpperCase() ?? '')
+    .join('') || 'SEM';
+}
+
+function getLocalityChipStyle(localityLabel: string) {
+  let hash = 0;
+  for (let index = 0; index < localityLabel.length; index += 1) {
+    hash = (hash * 31 + localityLabel.charCodeAt(index)) >>> 0;
+  }
+  return localityBadgePalette[hash % localityBadgePalette.length];
+}
+
 export function ActivitiesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const activityIdFromUrl = searchParams.get('activityId') ?? '';
@@ -1100,7 +1138,27 @@ export function ActivitiesPage() {
                         </Typography>
                       </TableCell>
                       <TableCell>{item.title}</TableCell>
-                      <TableCell>{item.locality?.name ?? '-'}</TableCell>
+                      <TableCell>
+                        {(() => {
+                          const localityLabel = getLocalityShortLabel(item);
+                          const localityStyle = getLocalityChipStyle(localityLabel);
+                          return (
+                            <Chip
+                              size="small"
+                              label={localityLabel}
+                              title={item.locality?.name ?? localityLabel}
+                              sx={{
+                                fontWeight: 700,
+                                borderWidth: 1,
+                                borderStyle: 'solid',
+                                bgcolor: localityStyle.bg,
+                                color: localityStyle.color,
+                                borderColor: localityStyle.border,
+                              }}
+                            />
+                          );
+                        })()}
+                      </TableCell>
                       <TableCell>{item.specialty?.name ?? 'Todas'}</TableCell>
                       <TableCell>
                         {Array.isArray(item.responsibleUsers) && item.responsibleUsers.length > 0

@@ -287,8 +287,8 @@ export function DashboardNationalPage() {
           </Card>
         ))}
       </Box>
-      <Grid container spacing={2} sx={{ mt: 0 }}>
-        <Grid size={{ xs: 12, md: 12 }}>
+      <Grid container spacing={1.2} sx={{ mt: 0 }}>
+        <Grid size={{ xs: 12, md: 6 }}>
           <Card>
             <CardContent>
               <Typography variant="h6" gutterBottom>
@@ -304,8 +304,8 @@ export function DashboardNationalPage() {
                       width: '100%',
                       tableLayout: 'fixed',
                       '& .MuiTableCell-root': {
-                        px: 0.75,
-                        py: 0.75,
+                        px: 0.45,
+                        py: 0.6,
                       },
                       '& .MuiTableBody-root .MuiTableCell-root': {
                         whiteSpace: 'nowrap',
@@ -316,13 +316,12 @@ export function DashboardNationalPage() {
                   >
                     <TableHead>
                       <TableRow sx={{ bgcolor: 'primary.main' }}>
-                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '12%', px: 0.5 }}>GSD</TableCell>
-                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '10%', px: 0.5 }}>% Geral</TableCell>
-                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '18%', px: 0.5, whiteSpace: 'normal', lineHeight: 1.2 }}>
-                          Recrutas Femininas
+                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '13%', px: 0.4 }}>GSD</TableCell>
+                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '11%', px: 0.4 }}>% Geral</TableCell>
+                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '14%', px: 0.4, whiteSpace: 'normal', lineHeight: 1.2 }}>
+                          Rec. Fem.
                         </TableCell>
-                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '36%', px: 0.5 }}>Comandante</TableCell>
-                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '24%', px: 0.5 }}>Visita</TableCell>
+                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '62%', px: 0.4 }}>Comandante</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -340,7 +339,7 @@ export function DashboardNationalPage() {
                           }
                           sx={{ cursor: 'pointer' }}
                         >
-                          <TableCell sx={{ px: 0.5 }}>
+                          <TableCell sx={{ px: 0.4 }}>
                             <Typography variant="body2" fontWeight={700}>
                               {formatGsdLabel(loc.localityName, loc.localityCode)}
                             </Typography>
@@ -350,15 +349,12 @@ export function DashboardNationalPage() {
                               </Typography>
                             )}
                           </TableCell>
-                          <TableCell sx={{ px: 0.5 }}>{Math.round(loc.progress)}%</TableCell>
-                          <TableCell sx={{ px: 0.5 }}>{loc.recruitsFemaleCountCurrent ?? 0}</TableCell>
-                          <TableCell sx={{ px: 0.5 }}>
+                          <TableCell sx={{ px: 0.4 }}>{Math.round(loc.progress)}%</TableCell>
+                          <TableCell sx={{ px: 0.4 }}>{loc.recruitsFemaleCountCurrent ?? 0}</TableCell>
+                          <TableCell sx={{ px: 0.4 }}>
                             <Typography variant="body2" noWrap>
                               {formatCommanderName(loc.commanderName)}
                             </Typography>
-                          </TableCell>
-                          <TableCell sx={{ px: 0.5 }}>
-                            {loc.visitDate ? new Date(loc.visitDate).toLocaleDateString('pt-BR') : '—'}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -369,7 +365,7 @@ export function DashboardNationalPage() {
             </CardContent>
           </Card>
         </Grid>
-        <Grid size={{ xs: 12, md: 12 }}>
+        <Grid size={{ xs: 12, md: 6 }}>
           <Card>
             <CardContent>
               <Typography variant="h6" gutterBottom>
