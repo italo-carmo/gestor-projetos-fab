@@ -5,6 +5,7 @@ import {
   CardContent,
   Checkbox,
   Chip,
+  Dialog,
   Divider,
   Drawer,
   IconButton,
@@ -22,6 +23,9 @@ import {
 import UploadRoundedIcon from "@mui/icons-material/UploadRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import SaveRoundedIcon from "@mui/icons-material/SaveRounded";
+import ArrowBackIosNewRoundedIcon from "@mui/icons-material/ArrowBackIosNewRounded";
+import ArrowForwardIosRoundedIcon from "@mui/icons-material/ArrowForwardIosRounded";
+import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import ImageRoundedIcon from "@mui/icons-material/ImageRounded";
 import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import OpenInNewRoundedIcon from "@mui/icons-material/OpenInNewRounded";
@@ -165,7 +169,10 @@ export function LibraryPage() {
   const [intervalSeconds, setIntervalSeconds] = useState(5);
   const [carouselIndicesByLocality, setCarouselIndicesByLocality] = useState<Record<string, number>>({});
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerMode, setDrawerMode] = useState<"photos" | "documents">("photos");
   const [editingLocalityId, setEditingLocalityId] = useState<string>("");
+  const [expandedLocalityId, setExpandedLocalityId] = useState<string | null>(null);
+  const [expandedPhotoIndex, setExpandedPhotoIndex] = useState(0);
   const [photoTitleDrafts, setPhotoTitleDrafts] = useState<Record<string, string>>({});
   const [photoLocalityDrafts, setPhotoLocalityDrafts] = useState<Record<string, string>>({});
   const [documentTitleDrafts, setDocumentTitleDrafts] = useState<Record<string, string>>({});
@@ -328,6 +335,31 @@ export function LibraryPage() {
   }, [editingLocalityId, tablePhotos, selectedPhotoIds]);
 
   const allPhotosSelected = tablePhotos.length > 0 && selectedInTableCount === tablePhotos.length;
+  const expandedPhotos = useMemo(
+    () => (expandedLocalityId ? photosByLocality.get(expandedLocalityId) ?? [] : []),
+    [expandedLocalityId, photosByLocality],
+  );
+  const expandedLocality = useMemo(
+    () => localities.find((loc) => loc.id === expandedLocalityId) ?? null,
+    [localities, expandedLocalityId],
+  );
+
+  useEffect(() => {
+    if (!expandedLocalityId) return;
+    if (expandedPhotos.length === 0) {
+      setExpandedPhotoIndex(0);
+      return;
+    }
+    setExpandedPhotoIndex((prev) => prev % expandedPhotos.length);
+  }, [expandedLocalityId, expandedPhotos.length]);
+
+  useEffect(() => {
+    if (!expandedLocalityId || expandedPhotos.length <= 1) return;
+    const timer = window.setInterval(() => {
+      setExpandedPhotoIndex((prev) => (prev + 1) % expandedPhotos.length);
+    }, Math.max(2, intervalSeconds) * 1000);
+    return () => window.clearInterval(timer);
+  }, [expandedLocalityId, expandedPhotos.length, intervalSeconds]);
 
   if (libraryQuery.isLoading) return <SkeletonState />;
   if (libraryQuery.isError) {
@@ -347,34 +379,10 @@ export function LibraryPage() {
             Acervo oficial da comissão com galeria de fotos e publicações institucionais.
           </Typography>
         </Box>
-        {canManage && (
-          <Button
-            variant="contained"
-            size="small"
-            startIcon={<EditRoundedIcon fontSize="small" />}
-            onClick={() => {
-              setEditingLocalityId("");
-              setDrawerOpen(true);
-            }}
-            sx={{ alignSelf: { xs: "flex-end", md: "center" }, px: 2.2 }}
-          >
-            Editar
-          </Button>
-        )}
       </Stack>
 
       <Card sx={{ mb: 2 }}>
         <CardContent>
-          <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", md: "center" }} spacing={1} sx={{ mb: 1.5 }}>
-            <Typography variant="h6" fontWeight={700}>
-              Carrosséis por Localidade
-            </Typography>
-            <Chip
-              label={`Troca automática: ${intervalSeconds}s`}
-              color="primary"
-              variant="outlined"
-            />
-          </Stack>
           {localities.length === 0 ? (
             <EmptyState title="Nenhuma localidade disponível" description="Cadastre localidade SMIF para gerar novos carrosséis." />
           ) : (
@@ -427,6 +435,7 @@ export function LibraryPage() {
                             <IconButton
                               size="small"
                               onClick={() => {
+                                setDrawerMode("photos");
                                 setEditingLocalityId(locality.id);
                                 setNewPhotoLocalityId(locality.id);
                                 setDrawerOpen(true);
@@ -446,6 +455,12 @@ export function LibraryPage() {
                         alignItems: "center",
                         justifyContent: "center",
                         overflow: "hidden",
+                        cursor: currentPhoto ? "zoom-in" : "default",
+                      }}
+                      onClick={() => {
+                        if (!currentPhoto) return;
+                        setExpandedLocalityId(locality.id);
+                        setExpandedPhotoIndex(currentIndex);
                       }}
                     >
                       {currentPhoto ? (
@@ -494,9 +509,26 @@ export function LibraryPage() {
 
       <Card>
         <CardContent>
-          <Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>
-            Publicações da Comissão
-          </Typography>
+          <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", md: "center" }} gap={1} sx={{ mb: 1 }}>
+            <Typography variant="h6" fontWeight={700}>
+              Publicações da Comissão
+            </Typography>
+            {canManage && (
+              <Button
+                variant="contained"
+                size="small"
+                startIcon={<EditRoundedIcon fontSize="small" />}
+                onClick={() => {
+                  setDrawerMode("documents");
+                  setEditingLocalityId("");
+                  setDrawerOpen(true);
+                }}
+                sx={{ alignSelf: { xs: "flex-end", md: "center" }, px: 2.2 }}
+              >
+                Editar
+              </Button>
+            )}
+          </Stack>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1.4 }}>
             Cartilhas, normativos e demais materiais institucionais para consulta rápida.
           </Typography>
@@ -567,16 +599,19 @@ export function LibraryPage() {
             <Stack spacing={3}>
               <Box>
                 <Typography variant="h6" fontWeight={700} sx={{ mb: 0.5 }}>
-                  Gerenciar Biblioteca
+                  {drawerMode === "photos" ? "Gerenciar Fotos da Biblioteca" : "Gerenciar Publicações da Comissão"}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  {editingLocalityId
-                    ? `Gerencie as fotos de ${localities.find((loc) => loc.id === editingLocalityId)?.name ?? "localidade selecionada"} e as publicações da comissão.`
-                    : "Configure o carrossel de fotos e gerencie as publicações da comissão."}
+                  {drawerMode === "photos"
+                    ? editingLocalityId
+                      ? `Gerencie as fotos de ${localities.find((loc) => loc.id === editingLocalityId)?.name ?? "localidade selecionada"}.`
+                      : "Configure o carrossel e gerencie as fotos."
+                    : "Gerencie títulos e arquivos das publicações institucionais."}
                 </Typography>
               </Box>
 
-              {/* Configuração do Carrossel */}
+              {drawerMode === "photos" && (
+                <>
               <Card>
                 <CardContent>
                   <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1.5 }}>
@@ -622,7 +657,6 @@ export function LibraryPage() {
                 </CardContent>
               </Card>
 
-              {/* Gestão de Fotos */}
               <Card>
                 <CardContent>
                   <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1.5 }}>
@@ -903,8 +937,10 @@ export function LibraryPage() {
                   )}
                 </CardContent>
               </Card>
+                </>
+              )}
 
-              {/* Gestão de Publicações */}
+              {drawerMode === "documents" && (
               <Card>
                 <CardContent>
                   <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1.5 }}>
@@ -1046,10 +1082,128 @@ export function LibraryPage() {
                   )}
                 </CardContent>
               </Card>
+              )}
             </Stack>
           </Box>
         </Drawer>
       )}
+      <Dialog
+        open={Boolean(expandedLocalityId)}
+        onClose={() => setExpandedLocalityId(null)}
+        maxWidth="xl"
+        fullWidth
+      >
+        <Box sx={{ position: "relative", bgcolor: "#081E27" }}>
+          <IconButton
+            onClick={() => setExpandedLocalityId(null)}
+            sx={{
+              position: "absolute",
+              top: 8,
+              right: 8,
+              zIndex: 3,
+              color: "white",
+              bgcolor: "rgba(0,0,0,0.28)",
+              "&:hover": { bgcolor: "rgba(0,0,0,0.46)" },
+            }}
+          >
+            <CloseRoundedIcon />
+          </IconButton>
+          <Stack direction={{ xs: "column", md: "row" }} alignItems={{ xs: "flex-start", md: "center" }} justifyContent="space-between" spacing={1} sx={{ px: 2, pt: 1.2, pb: 1 }}>
+            <Typography sx={{ color: "white", fontWeight: 700 }}>
+              {expandedLocality?.name ?? "Localidade"}
+            </Typography>
+            <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.82)" }}>
+              {expandedPhotos.length > 0 ? `Foto ${Math.min(expandedPhotoIndex + 1, expandedPhotos.length)} de ${expandedPhotos.length}` : "Sem fotos"}
+            </Typography>
+          </Stack>
+          <Box
+            sx={{
+              position: "relative",
+              width: "100%",
+              height: { xs: "58vh", md: "72vh" },
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              overflow: "hidden",
+              px: { xs: 1.2, md: 2.4 },
+              pb: 1.6,
+            }}
+          >
+            {expandedPhotos.length > 0 ? (
+              <Box
+                component="img"
+                src={getPhotoUrl(expandedPhotos[expandedPhotoIndex])}
+                alt={expandedPhotos[expandedPhotoIndex]?.title || "Foto da localidade"}
+                sx={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "contain",
+                  borderRadius: 1.5,
+                  backgroundColor: "#0E2E3A",
+                }}
+              />
+            ) : (
+              <Stack alignItems="center" spacing={1}>
+                <ImageRoundedIcon sx={{ color: "white", fontSize: 42, opacity: 0.86 }} />
+                <Typography sx={{ color: "white" }}>Sem fotos nesta localidade</Typography>
+              </Stack>
+            )}
+            {expandedPhotos.length > 1 && (
+              <>
+                <IconButton
+                  onClick={() =>
+                    setExpandedPhotoIndex((prev) => (prev - 1 + expandedPhotos.length) % expandedPhotos.length)
+                  }
+                  sx={{
+                    position: "absolute",
+                    left: { xs: 12, md: 24 },
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    color: "white",
+                    bgcolor: "rgba(0,0,0,0.32)",
+                    "&:hover": { bgcolor: "rgba(0,0,0,0.5)" },
+                  }}
+                >
+                  <ArrowBackIosNewRoundedIcon />
+                </IconButton>
+                <IconButton
+                  onClick={() =>
+                    setExpandedPhotoIndex((prev) => (prev + 1) % expandedPhotos.length)
+                  }
+                  sx={{
+                    position: "absolute",
+                    right: { xs: 12, md: 24 },
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    color: "white",
+                    bgcolor: "rgba(0,0,0,0.32)",
+                    "&:hover": { bgcolor: "rgba(0,0,0,0.5)" },
+                  }}
+                >
+                  <ArrowForwardIosRoundedIcon />
+                </IconButton>
+              </>
+            )}
+          </Box>
+          {expandedPhotos.length > 0 && (
+            <Typography
+              variant="body2"
+              sx={{
+                px: 2,
+                pb: 2,
+                color: "rgba(255,255,255,0.92)",
+                fontWeight: 600,
+                display: "-webkit-box",
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: "vertical",
+                overflow: "hidden",
+              }}
+            >
+              {expandedPhotos[expandedPhotoIndex]?.title?.trim() || "Sem título"}
+            </Typography>
+          )}
+        </Box>
+      </Dialog>
     </Box>
   );
 }
