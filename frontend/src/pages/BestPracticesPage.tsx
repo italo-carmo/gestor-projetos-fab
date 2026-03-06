@@ -388,13 +388,14 @@ export function BestPracticesPage() {
         onClose={() => setDrawerOpen(false)}
         PaperProps={{ sx: { width: { xs: "100%", md: 520 } } }}
       >
-        <Box p={3} display="flex" flexDirection="column" gap={2}>
-          <Typography variant="h5" sx={{ mt: 1 }}>
+        <Box p={3} pt={5} display="flex" flexDirection="column" gap={2}>
+          <Typography variant="h5" sx={{ mt: 1.5 }}>
             {editing ? "Editar boa prática" : "Nova boa prática"}
           </Typography>
           <TextField
             size="small"
             label="Título"
+            sx={{ mt: 0.5 }}
             value={form.title}
             onChange={(event) => setForm((prev) => ({ ...prev, title: event.target.value }))}
           />
