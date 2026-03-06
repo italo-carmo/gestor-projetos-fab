@@ -128,6 +128,14 @@ export class DashboardsController {
         psicologia: dbCounts.counts.psicologia === (dashboardPsicologia?.count || 0),
         commission: dbCounts.counts.commission === (dashboardCommission?.count || 0),
       },
+      expected: {
+        psicologia: 3,
+        commission: 7,
+      },
+      status: {
+        psicologiaOk: (dashboardPsicologia?.count || 0) === 3,
+        commissionOk: (dashboardCommission?.count || 0) === 7,
+      },
     };
   }
 }
