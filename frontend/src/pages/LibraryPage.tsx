@@ -589,7 +589,7 @@ export function LibraryPage() {
           onClose={() => setDrawerOpen(false)}
           PaperProps={{
             sx: {
-              width: { xs: "100%", md: 800 },
+              width: { xs: "100%", md: drawerMode === "documents" ? 1080 : 800 },
               top: 76,
               height: "calc(100% - 76px)",
             },
@@ -956,12 +956,19 @@ export function LibraryPage() {
                     />
                     <Button
                       component="label"
-                      variant="outlined"
+                      variant="contained"
                       color="primary"
                       size="small"
                       startIcon={<UploadRoundedIcon fontSize="small" />}
                       disabled={uploadDocument.isPending}
-                      sx={{ minWidth: { xs: "auto", md: 160 }, alignSelf: { xs: "stretch", md: "flex-start" } }}
+                      sx={{
+                        minWidth: { xs: "auto", md: 180 },
+                        minHeight: 36,
+                        height: 36,
+                        px: 2,
+                        alignSelf: { xs: "flex-start", md: "center" },
+                        whiteSpace: "nowrap",
+                      }}
                     >
                       {uploadDocument.isPending ? "Enviando..." : "Enviar publicação"}
                       <input
