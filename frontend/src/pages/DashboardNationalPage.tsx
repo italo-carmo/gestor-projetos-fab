@@ -137,6 +137,18 @@ export function DashboardNationalPage() {
     };
   }, []);
 
+  const lessons = ((lessonsQuery.data?.items ?? []) as LessonPost[])
+    .filter((item) => item?.id)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  useEffect(() => {
+    if (lessons.length <= 1) return;
+    const timer = window.setInterval(() => {
+      setLessonOffset((prev) => prev + 1);
+    }, 3800);
+    return () => window.clearInterval(timer);
+  }, [lessons.length]);
+
   if (dashboardQuery.isLoading) return <SkeletonState />;
   if (dashboardQuery.isError) return <ErrorState error={dashboardQuery.error} onRetry={() => dashboardQuery.refetch()} />;
 
@@ -164,9 +176,6 @@ export function DashboardNationalPage() {
       law: 0,
     },
   };
-  const lessons = ((lessonsQuery.data?.items ?? []) as LessonPost[])
-    .filter((item) => item?.id)
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   const lessonsPerView = 3;
   const visibleLessons =
     lessons.length <= lessonsPerView
@@ -175,14 +184,6 @@ export function DashboardNationalPage() {
           const safeIndex = (lessonOffset + index) % lessons.length;
           return lessons[safeIndex];
         });
-
-  useEffect(() => {
-    if (lessons.length <= 1) return;
-    const timer = window.setInterval(() => {
-      setLessonOffset((prev) => prev + 1);
-    }, 3800);
-    return () => window.clearInterval(timer);
-  }, [lessons.length]);
 
   const resetLessonForm = () => {
     setEditingLessonId(null);
