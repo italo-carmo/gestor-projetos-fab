@@ -316,9 +316,9 @@ export function BestPracticesPage() {
                       sx={{
                         height: "100%",
                         borderRadius: 2,
-                        borderColor: "rgba(26,91,124,0.24)",
+                        borderColor: "rgba(56, 114, 146, 0.42)",
                         background:
-                          "linear-gradient(180deg, rgba(246,250,253,0.95) 0%, rgba(255,255,255,1) 100%)",
+                          "linear-gradient(180deg, rgba(56, 114, 146, 0.18) 0%, rgba(255,255,255,0.98) 100%)",
                       }}
                     >
                       <CardContent sx={{ p: 1.5 }}>
