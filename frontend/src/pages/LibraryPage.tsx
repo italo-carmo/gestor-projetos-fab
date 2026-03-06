@@ -192,11 +192,6 @@ export function LibraryPage() {
     setSelectedPhotoIds((prev) => prev.filter((id) => validIds.has(id)));
   }, [allPhotos]);
 
-  if (libraryQuery.isLoading) return <SkeletonState />;
-  if (libraryQuery.isError) {
-    return <ErrorState error={libraryQuery.error} onRetry={() => libraryQuery.refetch()} />;
-  }
-
   const reorderPhotos = async (draggedId: string, targetId: string) => {
     if (!draggedId || !targetId || draggedId === targetId || updatePhoto.isPending) return;
 
@@ -333,6 +328,11 @@ export function LibraryPage() {
   }, [editingLocalityId, tablePhotos, selectedPhotoIds]);
 
   const allPhotosSelected = tablePhotos.length > 0 && selectedInTableCount === tablePhotos.length;
+
+  if (libraryQuery.isLoading) return <SkeletonState />;
+  if (libraryQuery.isError) {
+    return <ErrorState error={libraryQuery.error} onRetry={() => libraryQuery.refetch()} />;
+  }
 
   return (
     <Box sx={{ overflowX: "clip" }}>
