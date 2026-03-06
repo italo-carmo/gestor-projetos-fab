@@ -190,6 +190,7 @@ export function LibraryPage() {
   const [dragPhotoId, setDragPhotoId] = useState<string | null>(null);
   const [selectedPhotoIds, setSelectedPhotoIds] = useState<string[]>([]);
   const [bulkLocalityId, setBulkLocalityId] = useState<string>("");
+  const [downloadingDocumentId, setDownloadingDocumentId] = useState<string | null>(null);
 
   useEffect(() => {
     setIntervalSeconds(Math.max(2, Math.min(60, intervalFromApi)));
@@ -286,6 +287,12 @@ export function LibraryPage() {
     }
   };
   const downloadDocument = async (doc: LibraryDocument) => {
+    if (downloadingDocumentId === doc.id) return; // Prevent multiple clicks
+    setDownloadingDocumentId(doc.id);
+    toast.push({
+      message: "Baixando arquivo...",
+      severity: "info",
+    });
     try {
       const response = await api.get(`/library/documents/${doc.id}/download`, { responseType: "blob" });
       const blob = response.data as Blob;
@@ -300,11 +307,17 @@ export function LibraryPage() {
       link.click();
       link.remove();
       window.setTimeout(() => URL.revokeObjectURL(directUrl), 1200);
+      toast.push({
+        message: "Download concluído.",
+        severity: "success",
+      });
     } catch (error) {
       toast.push({
         message: parseApiError(error).message ?? "Arquivo indisponível para download.",
         severity: "error",
       });
+    } finally {
+      setDownloadingDocumentId(null);
     }
   };
 
@@ -582,9 +595,11 @@ export function LibraryPage() {
                     key={document.id}
                     hover
                     onClick={() => {
-                      void downloadDocument(document);
+                      if (downloadingDocumentId !== document.id) {
+                        void downloadDocument(document);
+                      }
                     }}
-                    sx={{ cursor: "pointer" }}
+                    sx={{ cursor: downloadingDocumentId === document.id ? "wait" : "pointer", opacity: downloadingDocumentId === document.id ? 0.6 : 1 }}
                   >
                     <TableCell sx={{ minWidth: 260, fontWeight: 500 }}>
                       {normalizePossiblyMojibake(document.title)}
@@ -600,17 +615,22 @@ export function LibraryPage() {
                     <TableCell>{formatFileSize(document.fileSize)}</TableCell>
                     <TableCell>{new Date(document.createdAt).toLocaleString("pt-BR")}</TableCell>
                     <TableCell align="right">
-                      <Tooltip title="Baixar publicação">
-                        <IconButton
-                          size="small"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            void downloadDocument(document);
-                          }}
-                          sx={{ color: "primary.main" }}
-                        >
-                          <OpenInNewRoundedIcon fontSize="small" />
-                        </IconButton>
+                      <Tooltip title={downloadingDocumentId === document.id ? "Baixando..." : "Baixar publicação"}>
+                        <span>
+                          <IconButton
+                            size="small"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              if (downloadingDocumentId !== document.id) {
+                                void downloadDocument(document);
+                              }
+                            }}
+                            disabled={downloadingDocumentId === document.id}
+                            sx={{ color: "primary.main" }}
+                          >
+                            <OpenInNewRoundedIcon fontSize="small" />
+                          </IconButton>
+                        </span>
                       </Tooltip>
                     </TableCell>
                   </TableRow>
@@ -629,7 +649,7 @@ export function LibraryPage() {
           onClose={() => setDrawerOpen(false)}
           PaperProps={{
             sx: {
-              width: { xs: "100%", md: drawerMode === "documents" ? 1080 : 800 },
+              width: { xs: "100%", md: drawerMode === "documents" ? 1080 : 1200 },
               top: 76,
               height: "calc(100% - 76px)",
             },
