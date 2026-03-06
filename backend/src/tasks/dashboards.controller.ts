@@ -53,4 +53,22 @@ export class DashboardsController {
   ) {
     return this.tasks.getDashboardExecutive({ from, to, phaseId, threshold, command, localityId }, user);
   }
+
+  @Get('dashboard/executive/debug-specialties')
+  @RequirePermission('dashboard', 'view')
+  async debugSpecialties(
+    @Query('from') from: string | undefined,
+    @Query('to') to: string | undefined,
+    @CurrentUser() user: RbacUser,
+  ) {
+    const result = await this.tasks.getDashboardExecutive({ from, to, threshold: '70' }, user);
+    return {
+      specialties: result.specialties.items.map((s: any) => ({
+        specialtyName: s.specialtyName,
+        count: s.count,
+        specialtyId: s.specialtyId,
+      })),
+      total: result.specialties.items.reduce((sum: number, s: any) => sum + s.count, 0),
+    };
+  }
 }
