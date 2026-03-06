@@ -2962,14 +2962,22 @@ export class TasksService {
       .filter((activity) => !hasSignedReport(activity))
       .map((activity) => mapExecutiveActivityItem(activity));
 
+    const normalizeSpecialtyBucketName = (value: string) =>
+      String(value ?? '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim()
+        .toLowerCase();
     const specialtiesMap = new Map<string, { specialtyId: string | null; specialtyName: string; count: number }>();
     for (const activity of filteredActivities) {
       const specialtyId = activity.specialtyId ?? null;
       const specialtyName =
         activity.specialty?.name ??
-        activity.activityType?.name ??
         'Comissão CIPAVD';
-      const key = specialtyId ?? '__none__';
+      const key =
+        specialtyId ??
+        normalizeSpecialtyBucketName(specialtyName) ??
+        '__commission__';
       const current = specialtiesMap.get(key);
       if (current) {
         current.count += 1;
