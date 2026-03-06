@@ -287,7 +287,7 @@ export function LibraryPage() {
   };
   const downloadDocument = async (document: LibraryDocument) => {
     try {
-      const response = await api.get(document.fileUrl, { responseType: "blob" });
+      const response = await api.get(`/library/documents/${document.id}/download`, { responseType: "blob" });
       const blob = response.data as Blob;
       if (!blob || !(blob instanceof Blob) || blob.size === 0) {
         throw new Error("Empty file response");

@@ -6,6 +6,7 @@ import {
   Param,
   Post,
   Put,
+  Res,
   UploadedFile,
   UseFilters,
   UseGuards,
@@ -16,13 +17,14 @@ import { diskStorage } from 'multer';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../common/current-user.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
 import type { RbacUser } from '../rbac/rbac.types';
 import { MulterExceptionFilter } from '../reports/multer-exception.filter';
 import { LibraryService } from './library.service';
-import { getLibraryDocumentsDir } from './library-storage';
+import { getLibraryDocumentsDir, resolveExistingLibraryDocumentPath } from './library-storage';
 
 export const libraryPhotosDir = path.resolve(
   process.cwd(),
@@ -137,6 +139,21 @@ export class LibraryController {
   @Delete('documents/:id')
   deleteDocument(@Param('id') id: string, @CurrentUser() user: RbacUser) {
     return this.library.deleteDocument(id, libraryDocumentsDir, user);
+  }
+
+  @Get('documents/:id/download')
+  async downloadDocument(
+    @Param('id') id: string,
+    @Res() res: Response,
+  ) {
+    const document = await this.library.getDocumentById(id);
+    const storageKey = String(document.storageKey ?? '').trim() || path.basename(String(document.fileUrl ?? '').trim());
+    const filePath = resolveExistingLibraryDocumentPath(storageKey);
+    if (!filePath) {
+      return res.status(404).json({ message: 'Arquivo indisponível para download.', code: 'NOT_FOUND' });
+    }
+    res.setHeader('Cache-Control', 'private, no-store');
+    return res.download(filePath, document.fileName || document.title || 'publicacao');
   }
 }
 

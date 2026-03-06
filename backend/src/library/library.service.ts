@@ -352,5 +352,11 @@ export class LibraryService {
     });
     return { success: true };
   }
+
+  async getDocumentById(id: string) {
+    const document = await this.prisma.libraryDocument.findUnique({ where: { id } });
+    if (!document) throwError('NOT_FOUND');
+    return document;
+  }
 }
 
