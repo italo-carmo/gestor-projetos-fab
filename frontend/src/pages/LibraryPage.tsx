@@ -42,7 +42,7 @@ import {
   useUploadLibraryDocument,
   useUploadLibraryPhoto,
 } from "../api/hooks";
-import { api } from "../api/client";
+import { ACTIVE_ROLE_STORAGE_KEY, api } from "../api/client";
 import { ROLE_COORDENACAO_CIPAVD, ROLE_TI, hasAnyRole } from "../app/roleAccess";
 import { parseApiError } from "../app/apiErrors";
 import { useToast } from "../app/toast";
@@ -138,18 +138,6 @@ function getDocumentType(value: { fileName?: string | null; title?: string | nul
   const extension = fromFileName || fromTitle || "";
   if (!extension) return "Arquivo";
   return extension.slice(0, 6).toUpperCase();
-}
-
-function triggerDocumentDownload(fileUrl: string, fileName?: string) {
-  const url = toApiUrl(fileUrl);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = String(fileName ?? "").trim() || "publicacao";
-  link.target = "_blank";
-  link.rel = "noopener noreferrer";
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
 }
 
 export function LibraryPage() {
@@ -293,6 +281,42 @@ export function LibraryPage() {
     } catch (error) {
       toast.push({
         message: parseApiError(error).message ?? "Erro ao aplicar localidade em massa.",
+        severity: "error",
+      });
+    }
+  };
+  const downloadDocument = async (document: LibraryDocument) => {
+    try {
+      const token = localStorage.getItem("accessToken");
+      const activeRoleId = localStorage.getItem(ACTIVE_ROLE_STORAGE_KEY)?.trim();
+      const response = await fetch(toApiUrl(document.fileUrl), {
+        method: "GET",
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(activeRoleId ? { "x-active-role-id": activeRoleId } : {}),
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Download failed with status ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      if (!blob || blob.size === 0) {
+        throw new Error("Empty file response");
+      }
+
+      const downloadUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.download = String(document.fileName || document.title || "publicacao").trim();
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1200);
+    } catch (error) {
+      toast.push({
+        message: parseApiError(error).message ?? "Arquivo indisponível para download.",
         severity: "error",
       });
     }
@@ -571,7 +595,9 @@ export function LibraryPage() {
                   <TableRow
                     key={document.id}
                     hover
-                    onClick={() => triggerDocumentDownload(document.fileUrl, document.fileName)}
+                    onClick={() => {
+                      void downloadDocument(document);
+                    }}
                     sx={{ cursor: "pointer" }}
                   >
                     <TableCell sx={{ minWidth: 260, fontWeight: 500 }}>
@@ -593,7 +619,7 @@ export function LibraryPage() {
                           size="small"
                           onClick={(event) => {
                             event.stopPropagation();
-                            triggerDocumentDownload(document.fileUrl, document.fileName);
+                            void downloadDocument(document);
                           }}
                           sx={{ color: "primary.main" }}
                         >
