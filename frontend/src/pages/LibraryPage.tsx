@@ -22,8 +22,6 @@ import {
 import UploadRoundedIcon from "@mui/icons-material/UploadRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import SaveRoundedIcon from "@mui/icons-material/SaveRounded";
-import ArrowBackIosNewRoundedIcon from "@mui/icons-material/ArrowBackIosNewRounded";
-import ArrowForwardIosRoundedIcon from "@mui/icons-material/ArrowForwardIosRounded";
 import ImageRoundedIcon from "@mui/icons-material/ImageRounded";
 import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import OpenInNewRoundedIcon from "@mui/icons-material/OpenInNewRounded";
@@ -149,13 +147,6 @@ export function LibraryPage() {
     [libraryQuery.data?.photos],
   );
 
-  const [selectedLocalityId, setSelectedLocalityId] = useState<string>("");
-
-  const photos = useMemo(() => {
-    if (!selectedLocalityId) return allPhotos;
-    return allPhotos.filter((photo) => photo.localityId === selectedLocalityId);
-  }, [allPhotos, selectedLocalityId]);
-
   const documents = useMemo(
     () => (libraryQuery.data?.documents ?? []) as LibraryDocument[],
     [libraryQuery.data?.documents],
@@ -172,9 +163,9 @@ export function LibraryPage() {
   }, [localitiesQuery.data]);
 
   const [intervalSeconds, setIntervalSeconds] = useState(5);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [slideDirection, setSlideDirection] = useState<1 | -1>(1);
+  const [carouselIndicesByLocality, setCarouselIndicesByLocality] = useState<Record<string, number>>({});
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [editingLocalityId, setEditingLocalityId] = useState<string>("");
   const [photoTitleDrafts, setPhotoTitleDrafts] = useState<Record<string, string>>({});
   const [photoLocalityDrafts, setPhotoLocalityDrafts] = useState<Record<string, string>>({});
   const [documentTitleDrafts, setDocumentTitleDrafts] = useState<Record<string, string>>({});
@@ -184,29 +175,10 @@ export function LibraryPage() {
   const [dragPhotoId, setDragPhotoId] = useState<string | null>(null);
   const [selectedPhotoIds, setSelectedPhotoIds] = useState<string[]>([]);
   const [bulkLocalityId, setBulkLocalityId] = useState<string>("");
-  const [photoAspectRatios, setPhotoAspectRatios] = useState<Record<string, number>>({});
 
   useEffect(() => {
     setIntervalSeconds(Math.max(2, Math.min(60, intervalFromApi)));
   }, [intervalFromApi]);
-
-  useEffect(() => {
-    if (!photos.length) {
-      setCurrentIndex(0);
-      return;
-    }
-    const timer = window.setInterval(() => {
-      setSlideDirection(1);
-      setCurrentIndex((prev) => (prev + 1) % photos.length);
-    }, Math.max(2, intervalSeconds) * 1000);
-    return () => window.clearInterval(timer);
-  }, [photos.length, intervalSeconds]);
-
-  useEffect(() => {
-    if (currentIndex > 0 && currentIndex >= photos.length) {
-      setCurrentIndex(0);
-    }
-  }, [currentIndex, photos.length]);
 
   // Refetch when drawer closes to ensure data is fresh
   useEffect(() => {
@@ -220,32 +192,10 @@ export function LibraryPage() {
     setSelectedPhotoIds((prev) => prev.filter((id) => validIds.has(id)));
   }, [allPhotos]);
 
-  useEffect(() => {
-    const validIds = new Set(allPhotos.map((photo) => photo.id));
-    setPhotoAspectRatios((prev) => {
-      const next = Object.fromEntries(
-        Object.entries(prev).filter(([id]) => validIds.has(id)),
-      );
-      return Object.keys(next).length === Object.keys(prev).length ? prev : next;
-    });
-  }, [allPhotos]);
-
   if (libraryQuery.isLoading) return <SkeletonState />;
   if (libraryQuery.isError) {
     return <ErrorState error={libraryQuery.error} onRetry={() => libraryQuery.refetch()} />;
   }
-
-  const currentPhoto = photos[currentIndex] ?? null;
-  const goToNextPhoto = () => {
-    if (!photos.length) return;
-    setSlideDirection(1);
-    setCurrentIndex((prev) => (prev + 1) % photos.length);
-  };
-  const goToPreviousPhoto = () => {
-    if (!photos.length) return;
-    setSlideDirection(-1);
-    setCurrentIndex((prev) => (prev - 1 + photos.length) % photos.length);
-  };
 
   const reorderPhotos = async (draggedId: string, targetId: string) => {
     if (!draggedId || !targetId || draggedId === targetId || updatePhoto.isPending) return;
@@ -284,8 +234,6 @@ export function LibraryPage() {
     }
   };
 
-  const allPhotosSelected = allPhotos.length > 0 && selectedPhotoIds.length === allPhotos.length;
-
   const togglePhotoSelection = (photoId: string) => {
     setSelectedPhotoIds((prev) =>
       prev.includes(photoId) ? prev.filter((id) => id !== photoId) : [...prev, photoId],
@@ -293,17 +241,25 @@ export function LibraryPage() {
   };
 
   const toggleSelectAllPhotos = () => {
-    setSelectedPhotoIds((prev) => (prev.length === allPhotos.length ? [] : allPhotos.map((photo) => photo.id)));
+    const tableIds = tablePhotos.map((photo) => photo.id);
+    const allSelected = tableIds.length > 0 && tableIds.every((id) => selectedPhotoIds.includes(id));
+    setSelectedPhotoIds((prev) => {
+      if (allSelected) {
+        return prev.filter((id) => !tableIds.includes(id));
+      }
+      const merged = new Set([...prev, ...tableIds]);
+      return Array.from(merged);
+    });
   };
 
   const applyBulkLocality = async () => {
-    if (selectedPhotoIds.length === 0) {
+    if (selectedIdsForBulkAction.length === 0) {
       toast.push({ message: "Selecione ao menos uma foto.", severity: "warning" });
       return;
     }
 
     try {
-      for (const photoId of selectedPhotoIds) {
+      for (const photoId of selectedIdsForBulkAction) {
         await updatePhoto.mutateAsync({
           id: photoId,
           payload: { localityId: bulkLocalityId || null },
@@ -319,6 +275,64 @@ export function LibraryPage() {
       });
     }
   };
+
+  const photosByLocality = useMemo(() => {
+    const grouped = new Map<string, LibraryPhoto[]>();
+    for (const locality of localities) {
+      grouped.set(locality.id, []);
+    }
+    for (const photo of allPhotos) {
+      if (!photo.localityId) continue;
+      if (!grouped.has(photo.localityId)) grouped.set(photo.localityId, []);
+      grouped.get(photo.localityId)?.push(photo);
+    }
+    return grouped;
+  }, [allPhotos, localities]);
+
+  useEffect(() => {
+    setCarouselIndicesByLocality((prev) => {
+      const next: Record<string, number> = {};
+      for (const locality of localities) {
+        const count = photosByLocality.get(locality.id)?.length ?? 0;
+        const prevIndex = prev[locality.id] ?? 0;
+        next[locality.id] = count > 0 ? prevIndex % count : 0;
+      }
+      return next;
+    });
+  }, [localities, photosByLocality]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setCarouselIndicesByLocality((prev) => {
+        const next = { ...prev };
+        for (const locality of localities) {
+          const items = photosByLocality.get(locality.id) ?? [];
+          if (items.length <= 1) continue;
+          const current = next[locality.id] ?? 0;
+          next[locality.id] = (current + 1) % items.length;
+        }
+        return next;
+      });
+    }, Math.max(2, intervalSeconds) * 1000);
+    return () => window.clearInterval(timer);
+  }, [intervalSeconds, localities, photosByLocality]);
+
+  const tablePhotos = useMemo(() => {
+    if (!editingLocalityId) return allPhotos;
+    return allPhotos.filter((photo) => photo.localityId === editingLocalityId);
+  }, [allPhotos, editingLocalityId]);
+
+  const selectedInTableCount = useMemo(
+    () => tablePhotos.filter((photo) => selectedPhotoIds.includes(photo.id)).length,
+    [tablePhotos, selectedPhotoIds],
+  );
+  const selectedIdsForBulkAction = useMemo(() => {
+    if (!editingLocalityId) return selectedPhotoIds;
+    const tableIds = new Set(tablePhotos.map((photo) => photo.id));
+    return selectedPhotoIds.filter((id) => tableIds.has(id));
+  }, [editingLocalityId, tablePhotos, selectedPhotoIds]);
+
+  const allPhotosSelected = tablePhotos.length > 0 && selectedInTableCount === tablePhotos.length;
 
   return (
     <Box sx={{ overflowX: "clip" }}>
@@ -338,7 +352,10 @@ export function LibraryPage() {
             variant="contained"
             size="small"
             startIcon={<EditRoundedIcon fontSize="small" />}
-            onClick={() => setDrawerOpen(true)}
+            onClick={() => {
+              setEditingLocalityId("");
+              setDrawerOpen(true);
+            }}
             sx={{ alignSelf: { xs: "flex-end", md: "center" }, px: 2.2 }}
           >
             Editar
@@ -348,221 +365,129 @@ export function LibraryPage() {
 
       <Card sx={{ mb: 2 }}>
         <CardContent>
-          <Box sx={{ flex: 1 }}>
-            <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", sm: "center" }} gap={1} sx={{ mb: 1.5 }}>
-              <Typography variant="h6" fontWeight={700}>
-                Carrossel de Fotos
-              </Typography>
-              <TextField
-                select
-                size="small"
-                label="Filtrar por localidade"
-                value={selectedLocalityId}
-                onChange={(e) => {
-                  setSelectedLocalityId(e.target.value);
-                  setCurrentIndex(0);
-                }}
-                sx={{ minWidth: { xs: "100%", sm: 240 } }}
-              >
-                <MenuItem value="">Todas as localidades</MenuItem>
-                {localities.map((loc) => (
-                  <MenuItem key={loc.id} value={loc.id}>
-                    {loc.name}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Stack>
-            {!currentPhoto ? (
-              <Box
-                sx={{
-                  position: "relative",
-                  borderRadius: 2,
-                  overflow: "hidden",
-                  width: "100%",
-                  maxWidth: { xs: "100%", md: 920 },
-                  mx: "auto",
-                  aspectRatio: "16 / 9",
-                  minHeight: { xs: 260, md: 360 },
-                  bgcolor: "#0E2E3A",
-                  display: "grid",
-                  placeItems: "center",
-                }}
-              >
-                <Stack alignItems="center" spacing={1}>
-                  <ImageRoundedIcon sx={{ color: "white", fontSize: 44, opacity: 0.8 }} />
-                  <Typography sx={{ color: "white" }}>Sem fotos cadastradas</Typography>
-                </Stack>
-              </Box>
-            ) : (
-              <Box
-                sx={{
-                  position: "relative",
-                  width: "100%",
-                  maxWidth: { xs: "100%", md: 1360 },
-                  mx: "auto",
-                  overflow: "hidden",
-                  py: 2,
-                }}
-              >
-                <Box
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: { xs: 0.4, md: 1.1 },
-                    height: { xs: 190, md: 360 },
-                  }}
-                >
-                  {Array.from({ length: Math.min(4, Math.floor((photos.length - 1) / 2)) * 2 + 1 }, (_, i) => {
-                    const sideCount = Math.min(4, Math.floor((photos.length - 1) / 2));
-                    return i - sideCount;
-                  }).map((offset) => {
-                    const idx = (currentIndex + offset + photos.length) % photos.length;
-                    const photo = photos[idx];
-                    if (!photo) return null;
-
-                    const distance = Math.abs(offset);
-                    const isActive = offset === 0;
-
-                    // Mantem o card principal maior e reduz progressivamente nas laterais.
-                    const sizeScale =
-                      distance === 0 ? 0.9 : distance === 1 ? 0.74 : distance === 2 ? 0.56 : distance === 3 ? 0.42 : 0.32;
-                    const opacity =
-                      distance === 0 ? 1 : distance === 1 ? 0.86 : distance === 2 ? 0.72 : distance === 3 ? 0.58 : 0.48;
-                    const zIndex = 20 - distance;
-                    const aspectRatio = photoAspectRatios[photo.id] || 16 / 9;
-                    const widthDesktop = 360 * aspectRatio;
-                    const widthMobile = 170 * aspectRatio;
-
-                    return (
-                      <Box
-                        key={`${photo.id}-${offset}`}
-                        onClick={() => {
-                          if (offset === 0) return;
-                          setSlideDirection(offset > 0 ? 1 : -1);
-                          setCurrentIndex(idx);
-                        }}
-                        sx={{
-                          position: "relative",
-                          borderRadius: 2,
-                          overflow: "hidden",
-                          aspectRatio,
-                          width: { xs: `${sizeScale * widthMobile}px`, md: `${sizeScale * widthDesktop}px` },
-                          maxWidth: { xs: "92vw", md: "none" },
-                          height: { xs: `${sizeScale * 170}px`, md: `${sizeScale * 360}px` },
-                          flexShrink: 0,
-                          mx: 0,
-                          bgcolor: "#0E2E3A",
-                          cursor: offset !== 0 ? "pointer" : "default",
-                          opacity,
-                          zIndex,
-                          transition: "all 0.55s cubic-bezier(0.22, 1, 0.36, 1)",
-                          transform: "scale(1)",
-                          boxShadow: isActive
-                            ? "0 12px 32px rgba(0,0,0,0.4)"
-                            : "0 4px 12px rgba(0,0,0,0.2)",
-                          "&:hover": {
-                            opacity: offset !== 0 ? 0.9 : 1,
-                            transform: offset !== 0 ? "scale(1.03)" : "scale(1)",
-                          },
-                        }}
-                      >
+          <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", md: "center" }} spacing={1} sx={{ mb: 1.5 }}>
+            <Typography variant="h6" fontWeight={700}>
+              Carrosséis por Localidade
+            </Typography>
+            <Chip
+              label={`Troca automática: ${intervalSeconds}s`}
+              color="primary"
+              variant="outlined"
+            />
+          </Stack>
+          {localities.length === 0 ? (
+            <EmptyState title="Nenhuma localidade disponível" description="Cadastre localidade SMIF para gerar novos carrosséis." />
+          ) : (
+            <Box
+              display="grid"
+              gap={2}
+              gridTemplateColumns={{
+                xs: "1fr",
+                sm: "repeat(2, minmax(0, 1fr))",
+                md: "repeat(3, minmax(0, 1fr))",
+                lg: "repeat(4, minmax(0, 1fr))",
+              }}
+            >
+              {localities.map((locality) => {
+                const localityPhotos = photosByLocality.get(locality.id) ?? [];
+                const currentIndex = carouselIndicesByLocality[locality.id] ?? 0;
+                const currentPhoto = localityPhotos[currentIndex] ?? null;
+                return (
+                  <Card
+                    key={locality.id}
+                    sx={{
+                      borderRadius: 3,
+                      border: "1px solid rgba(17,66,89,0.14)",
+                      overflow: "hidden",
+                      position: "relative",
+                      transition: "transform 160ms ease, box-shadow 160ms ease",
+                      "&:hover": {
+                        transform: "translateY(-2px)",
+                        boxShadow: "0 10px 24px rgba(17,66,89,0.16)",
+                      },
+                    }}
+                  >
+                    <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ px: 1.2, pt: 1.2, pb: 0.6 }}>
+                      <Box sx={{ minWidth: 0 }}>
+                        <Typography variant="subtitle2" fontWeight={700} noWrap>
+                          {locality.code || locality.name}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" noWrap>
+                          {locality.name}
+                        </Typography>
+                      </Box>
+                      <Stack direction="row" alignItems="center" spacing={0.6}>
+                        <Chip
+                          size="small"
+                          label={localityPhotos.length ? `${Math.min(currentIndex + 1, localityPhotos.length)}/${localityPhotos.length}` : "0/0"}
+                          variant="outlined"
+                        />
+                        {canManage && (
+                          <Tooltip title={`Editar fotos de ${locality.name}`}>
+                            <IconButton
+                              size="small"
+                              onClick={() => {
+                                setEditingLocalityId(locality.id);
+                                setNewPhotoLocalityId(locality.id);
+                                setDrawerOpen(true);
+                              }}
+                            >
+                              <EditRoundedIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                      </Stack>
+                    </Stack>
+                    <Box
+                      sx={{
+                        height: 170,
+                        background: "linear-gradient(140deg, #114259 0%, #4D86A0 100%)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        overflow: "hidden",
+                      }}
+                    >
+                      {currentPhoto ? (
                         <Box
                           component="img"
-                          src={getPhotoUrl(photo)}
-                          alt={photo.title}
-                          onLoad={(event) => {
-                            const image = event.currentTarget;
-                            if (!image.naturalWidth || !image.naturalHeight) return;
-                            const ratio = image.naturalWidth / image.naturalHeight;
-                            setPhotoAspectRatios((prev) => {
-                              const current = prev[photo.id];
-                              if (current && Math.abs(current - ratio) < 0.01) return prev;
-                              return { ...prev, [photo.id]: ratio };
-                            });
-                          }}
+                          src={getPhotoUrl(currentPhoto)}
+                          alt={currentPhoto.title || `Foto ${locality.name}`}
                           sx={{
                             width: "100%",
                             height: "100%",
                             objectFit: "contain",
-                            bgcolor: "#0E2E3A",
-                            animation: `${slideDirection === 1 ? "carouselSlideInRight" : "carouselSlideInLeft"} 0.45s cubic-bezier(0.22, 1, 0.36, 1)`,
-                            "@keyframes carouselSlideInRight": {
-                              "0%": { opacity: 0.7, transform: "translateX(14px) scale(1.015)" },
-                              "100%": { opacity: 1, transform: "translateX(0) scale(1)" },
-                            },
-                            "@keyframes carouselSlideInLeft": {
-                              "0%": { opacity: 0.7, transform: "translateX(-14px) scale(1.015)" },
-                              "100%": { opacity: 1, transform: "translateX(0) scale(1)" },
-                            },
+                            display: "block",
+                            transition: "opacity 220ms ease-in-out",
                           }}
                         />
-                      </Box>
-                    );
-                  })}
-                </Box>
-                {photos.length > 1 && (
-                  <>
-                    <IconButton
-                      onClick={goToPreviousPhoto}
-                      sx={{
-                        position: "absolute",
-                        left: { xs: 5, md: 10 },
-                        top: "50%",
-                        transform: "translateY(-50%)",
-                        bgcolor: "rgba(255,255,255,0.92)",
-                        zIndex: 20,
-                        "&:hover": { bgcolor: "rgba(255,255,255,1)" },
-                      }}
-                    >
-                      <ArrowBackIosNewRoundedIcon fontSize="small" />
-                    </IconButton>
-                    <IconButton
-                      onClick={goToNextPhoto}
-                      sx={{
-                        position: "absolute",
-                        right: { xs: 5, md: 10 },
-                        top: "50%",
-                        transform: "translateY(-50%)",
-                        bgcolor: "rgba(255,255,255,0.92)",
-                        zIndex: 20,
-                        "&:hover": { bgcolor: "rgba(255,255,255,1)" },
-                      }}
-                    >
-                      <ArrowForwardIosRoundedIcon fontSize="small" />
-                    </IconButton>
-                  </>
-                )}
-              </Box>
-            )}
-            {photos.length > 0 && (
-              <Stack alignItems="center" spacing={0.8} mt={1.2}>
-                <Typography variant="caption" color="text.secondary">
-                  Foto {currentIndex + 1} de {photos.length}
-                </Typography>
-                <Stack direction="row" spacing={0.8} flexWrap="wrap" useFlexGap justifyContent="center">
-                  {photos.map((photo, index) => (
-                    <Chip
-                      key={photo.id}
-                      size="small"
-                      label={String(index + 1)}
-                      color={index === currentIndex ? "primary" : "default"}
-                      onClick={() => {
-                        if (index === currentIndex) return;
-                        setSlideDirection(index > currentIndex ? 1 : -1);
-                        setCurrentIndex(index);
-                      }}
-                    />
-                  ))}
-                </Stack>
-              </Stack>
-            )}
-            {currentPhoto && currentPhoto.title && (
-              <Typography variant="subtitle2" sx={{ mt: 1, fontWeight: 700 }}>
-                {currentPhoto.title}
-              </Typography>
-            )}
-          </Box>
+                      ) : (
+                        <Stack alignItems="center" spacing={0.8}>
+                          <ImageRoundedIcon sx={{ color: "white", fontSize: 34, opacity: 0.88 }} />
+                          <Typography sx={{ color: "white", fontSize: 12 }}>Sem fotos</Typography>
+                        </Stack>
+                      )}
+                    </Box>
+                    <CardContent sx={{ py: 1.2 }}>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          minHeight: 40,
+                          fontWeight: 600,
+                          display: "-webkit-box",
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: "vertical",
+                          overflow: "hidden",
+                        }}
+                      >
+                        {currentPhoto?.title?.trim() || "Sem título"}
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </Box>
+          )}
         </CardContent>
       </Card>
 
@@ -644,7 +569,9 @@ export function LibraryPage() {
                   Gerenciar Biblioteca
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Configure o carrossel de fotos e gerencie as publicações da comissão.
+                  {editingLocalityId
+                    ? `Gerencie as fotos de ${localities.find((loc) => loc.id === editingLocalityId)?.name ?? "localidade selecionada"} e as publicações da comissão.`
+                    : "Configure o carrossel de fotos e gerencie as publicações da comissão."}
                 </Typography>
               </Box>
 
@@ -748,7 +675,7 @@ export function LibraryPage() {
                           const localityId = newPhotoLocalityId || undefined;
                           
                           setNewPhotoTitle("");
-                          setNewPhotoLocalityId("");
+                          setNewPhotoLocalityId(editingLocalityId || "");
                           
                           let successCount = 0;
                           let errorCount = 0;
@@ -811,15 +738,15 @@ export function LibraryPage() {
                         variant="contained"
                         size="small"
                         color="primary"
-                        disabled={updatePhoto.isPending || selectedPhotoIds.length === 0}
+                        disabled={updatePhoto.isPending || selectedInTableCount === 0}
                         onClick={applyBulkLocality}
                       >
-                        Aplicar aos selecionados ({selectedPhotoIds.length})
+                        Aplicar aos selecionados ({selectedInTableCount})
                       </Button>
                     </Stack>
                   </Stack>
 
-                  {allPhotos.length === 0 ? (
+                  {tablePhotos.length === 0 ? (
                     <EmptyState title="Nenhuma foto" description="Adicione fotos para o carrossel da Biblioteca." />
                   ) : (
                     <Box sx={{ overflowX: "auto" }}>
@@ -829,7 +756,7 @@ export function LibraryPage() {
                             <TableCell sx={{ color: "white", fontWeight: 700, width: 56, py: 0.6 }}>
                               <Checkbox
                                 checked={allPhotosSelected}
-                                indeterminate={selectedPhotoIds.length > 0 && !allPhotosSelected}
+                                indeterminate={selectedInTableCount > 0 && !allPhotosSelected}
                                 onChange={toggleSelectAllPhotos}
                                 sx={{ color: "white", "&.Mui-checked": { color: "white" }, "&.MuiCheckbox-indeterminate": { color: "white" } }}
                               />
@@ -841,7 +768,7 @@ export function LibraryPage() {
                           </TableRow>
                         </TableHead>
                         <TableBody>
-                          {allPhotos.map((photo) => {
+                          {tablePhotos.map((photo) => {
                             const titleDraft = photoTitleDrafts[photo.id] ?? photo.title;
                             const localityDraft = photoLocalityDrafts[photo.id] ?? photo.localityId ?? "";
                             return (
