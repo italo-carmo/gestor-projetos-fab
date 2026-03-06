@@ -2971,25 +2971,29 @@ export class TasksService {
     const specialtiesMap = new Map<string, { specialtyId: string | null; specialtyName: string; count: number }>();
     for (const activity of filteredActivities) {
       const specialtyId = activity.specialtyId ?? null;
-      // Treat empty string, null, or undefined as "Comissão CIPAVD"
       const rawSpecialtyName = activity.specialty?.name;
       const hasSpecialtyName = rawSpecialtyName && rawSpecialtyName.trim();
-      const specialtyName = hasSpecialtyName ? rawSpecialtyName.trim() : 'Comissão CIPAVD';
+      const specialtyName = hasSpecialtyName ? rawSpecialtyName.trim() : '';
       const normalizedName = normalizeSpecialtyBucketName(specialtyName);
       
       // Determine the grouping key
       let key: string;
-      // If no specialtyId and no name, it's definitely "Comissão CIPAVD"
-      if (!specialtyId && !hasSpecialtyName) {
+      let displayName: string;
+      
+      // If no specialtyId OR no name (empty string), it's "Comissão CIPAVD"
+      if (!specialtyId || !hasSpecialtyName) {
         key = '__commission__';
+        displayName = 'Comissão CIPAVD';
       }
-      // If normalized name contains "comissao cipavd", group as commission
-      else if (normalizedName.includes('comissao cipavd')) {
-        key = '__commission__';
+      // If normalized name contains "psicologia", group as Psicologia
+      else if (normalizedName.includes('psicologia')) {
+        key = '__psicologia__';
+        displayName = 'Psicologia';
       }
-      // Otherwise, group by normalized name (this will group all "psicologia" variations together)
+      // Otherwise, group by normalized name
       else {
         key = normalizedName || '__commission__';
+        displayName = specialtyName || 'Comissão CIPAVD';
       }
       
       const current = specialtiesMap.get(key);
@@ -2997,7 +3001,7 @@ export class TasksService {
         current.count += 1;
       } else {
         // Keep the first specialtyId found for this group (may be null for commission)
-        specialtiesMap.set(key, { specialtyId, specialtyName, count: 1 });
+        specialtiesMap.set(key, { specialtyId, specialtyName: displayName, count: 1 });
       }
     }
 
