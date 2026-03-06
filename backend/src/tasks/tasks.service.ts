@@ -2977,13 +2977,20 @@ export class TasksService {
       const specialtyName = hasSpecialtyName ? rawSpecialtyName.trim() : 'Comissão CIPAVD';
       const normalizedName = normalizeSpecialtyBucketName(specialtyName);
       
-      // Group by normalized name to catch all variations (e.g., "Psicologia" vs "psicologia")
-      // For "Comissão CIPAVD", use fixed key only when specialtyId is null AND name is empty/null
-      // This ensures all "Comissão CIPAVD" activities without specialtyId are grouped together
-      const key =
-        !specialtyId && !hasSpecialtyName
-          ? '__commission__'
-          : normalizedName || '__commission__';
+      // Determine the grouping key
+      let key: string;
+      // If no specialtyId and no name, it's definitely "Comissão CIPAVD"
+      if (!specialtyId && !hasSpecialtyName) {
+        key = '__commission__';
+      }
+      // If normalized name contains "comissao cipavd", group as commission
+      else if (normalizedName.includes('comissao cipavd')) {
+        key = '__commission__';
+      }
+      // Otherwise, group by normalized name (this will group all "psicologia" variations together)
+      else {
+        key = normalizedName || '__commission__';
+      }
       
       const current = specialtiesMap.get(key);
       if (current) {
