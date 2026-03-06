@@ -2962,6 +2962,18 @@ export class TasksService {
       .filter((activity) => !hasSignedReport(activity))
       .map((activity) => mapExecutiveActivityItem(activity));
 
+    // Get "Comissão CIPAVD" specialty ID if it exists
+    const commissionSpecialty = await this.prisma.specialty.findFirst({
+      where: {
+        name: {
+          contains: 'Comissão CIPAVD',
+          mode: 'insensitive',
+        },
+      },
+      select: { id: true, name: true },
+    });
+    const commissionSpecialtyId = commissionSpecialty?.id ?? null;
+
     const normalizeSpecialtyBucketName = (value: string) =>
       String(value ?? '')
         .normalize('NFD')
@@ -2985,6 +2997,15 @@ export class TasksService {
         key = '__psicologia__';
         displayName = 'Psicologia';
       }
+      // If it's "Comissão CIPAVD" (by ID, name, or null specialtyId), group together
+      else if (
+        specialtyId === commissionSpecialtyId ||
+        normalizedName.includes('comissao cipavd') ||
+        !specialtyId
+      ) {
+        key = '__commission__';
+        displayName = 'Comissão CIPAVD';
+      }
       // Otherwise, group by specialtyId if available, or by normalized name
       else {
         key = specialtyId ?? (normalizedName || '__unknown__');
@@ -2996,7 +3017,7 @@ export class TasksService {
         current.count += 1;
       } else {
         // Keep the first specialtyId found for this group
-        specialtiesMap.set(key, { specialtyId, specialtyName: displayName, count: 1 });
+        specialtiesMap.set(key, { specialtyId: commissionSpecialtyId ?? specialtyId, specialtyName: displayName, count: 1 });
       }
     }
 
