@@ -2962,16 +2962,16 @@ export class TasksService {
       .filter((activity) => !hasSignedReport(activity))
       .map((activity) => mapExecutiveActivityItem(activity));
 
-    // Get "Comissão CIPAVD" specialty ID if it exists
-    const commissionSpecialty = await this.prisma.specialty.findFirst({
-      where: {
-        name: {
-          contains: 'Comissão CIPAVD',
-          mode: 'insensitive',
-        },
-      },
+    // Get specialty IDs
+    const psicologiaSpecialty = await this.prisma.specialty.findFirst({
+      where: { name: { contains: 'Psicologia', mode: 'insensitive' } },
       select: { id: true, name: true },
     });
+    const commissionSpecialty = await this.prisma.specialty.findFirst({
+      where: { name: { contains: 'Comissão CIPAVD', mode: 'insensitive' } },
+      select: { id: true, name: true },
+    });
+    const psicologiaSpecialtyId = psicologiaSpecialty?.id ?? null;
     const commissionSpecialtyId = commissionSpecialty?.id ?? null;
 
     const normalizeSpecialtyBucketName = (value: string) =>
@@ -2980,24 +2980,26 @@ export class TasksService {
         .replace(/[\u0300-\u036f]/g, '')
         .trim()
         .toLowerCase();
+    
     const specialtiesMap = new Map<string, { specialtyId: string | null; specialtyName: string; count: number }>();
+    
     for (const activity of filteredActivities) {
       const specialtyId = activity.specialtyId ?? null;
       const rawSpecialtyName = activity.specialty?.name;
       const hasSpecialtyName = rawSpecialtyName && rawSpecialtyName.trim();
-      const specialtyName = hasSpecialtyName ? rawSpecialtyName.trim() : 'Comissão CIPAVD';
+      const specialtyName = hasSpecialtyName ? rawSpecialtyName.trim() : '';
       const normalizedName = normalizeSpecialtyBucketName(specialtyName);
       
       // Determine grouping key
       let key: string;
       let displayName: string;
       
-      // If normalized name contains "psicologia", group all together
-      if (normalizedName.includes('psicologia')) {
+      // Priority 1: If specialtyId matches Psicologia specialty ID, or name contains "psicologia"
+      if (specialtyId === psicologiaSpecialtyId || normalizedName.includes('psicologia')) {
         key = '__psicologia__';
         displayName = 'Psicologia';
       }
-      // If it's "Comissão CIPAVD" (by ID, name, or null specialtyId), group together
+      // Priority 2: If specialtyId matches Comissão CIPAVD specialty ID, or name contains "comissao cipavd", or no specialtyId
       else if (
         specialtyId === commissionSpecialtyId ||
         normalizedName.includes('comissao cipavd') ||
@@ -3006,18 +3008,22 @@ export class TasksService {
         key = '__commission__';
         displayName = 'Comissão CIPAVD';
       }
-      // Otherwise, group by specialtyId if available, or by normalized name
+      // Priority 3: Otherwise, group by specialtyId if available, or by normalized name
       else {
         key = specialtyId ?? (normalizedName || '__unknown__');
-        displayName = specialtyName;
+        displayName = specialtyName || 'Sem especialidade';
       }
       
       const current = specialtiesMap.get(key);
       if (current) {
         current.count += 1;
       } else {
-        // Keep the first specialtyId found for this group
-        specialtiesMap.set(key, { specialtyId: commissionSpecialtyId ?? specialtyId, specialtyName: displayName, count: 1 });
+        // For Psicologia, use psicologiaSpecialtyId; for Commission, use commissionSpecialtyId
+        const finalSpecialtyId = 
+          key === '__psicologia__' ? psicologiaSpecialtyId :
+          key === '__commission__' ? commissionSpecialtyId :
+          specialtyId;
+        specialtiesMap.set(key, { specialtyId: finalSpecialtyId, specialtyName: displayName, count: 1 });
       }
     }
 

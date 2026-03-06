@@ -98,6 +98,36 @@ export class DashboardsController {
     @Query('to') to: string | undefined,
     @CurrentUser() user: RbacUser,
   ) {
-    return this.tasks.debugActivityCounts({ from, to }, user);
+    const dbCounts = await this.tasks.debugActivityCounts({ from, to }, user);
+    const dashboardResult = await this.tasks.getDashboardExecutive({ from, to, threshold: '70' }, user);
+    
+    const dashboardPsicologia = dashboardResult.specialties.items.find((s: any) => 
+      s.specialtyName?.toLowerCase().includes('psicologia')
+    );
+    const dashboardCommission = dashboardResult.specialties.items.find((s: any) => 
+      s.specialtyName?.toLowerCase().includes('comissão') || s.specialtyName?.toLowerCase().includes('cipavd')
+    );
+    
+    return {
+      database: {
+        psicologia: dbCounts.counts.psicologia,
+        commission: dbCounts.counts.commission,
+        total: dbCounts.counts.total,
+      },
+      dashboard: {
+        psicologia: dashboardPsicologia?.count || 0,
+        commission: dashboardCommission?.count || 0,
+        allSpecialties: dashboardResult.specialties.items.map((s: any) => ({
+          name: s.specialtyName,
+          count: s.count,
+          specialtyId: s.specialtyId,
+        })),
+      },
+      specialties: dbCounts.specialties,
+      match: {
+        psicologia: dbCounts.counts.psicologia === (dashboardPsicologia?.count || 0),
+        commission: dbCounts.counts.commission === (dashboardCommission?.count || 0),
+      },
+    };
   }
 }
