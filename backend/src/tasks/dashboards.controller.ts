@@ -62,13 +62,22 @@ export class DashboardsController {
     @CurrentUser() user: RbacUser,
   ) {
     const result = await this.tasks.getDashboardExecutive({ from, to, threshold: '70' }, user);
+    const psicologia = result.specialties.items.find((s: any) => 
+      s.specialtyName?.toLowerCase().includes('psicologia')
+    );
     return {
       specialties: result.specialties.items.map((s: any) => ({
         specialtyName: s.specialtyName,
         count: s.count,
         specialtyId: s.specialtyId,
       })),
+      psicologia: {
+        count: psicologia?.count || 0,
+        specialtyId: psicologia?.specialtyId,
+        specialtyName: psicologia?.specialtyName,
+      },
       total: result.specialties.items.reduce((sum: number, s: any) => sum + s.count, 0),
+      totalActivities: result.summary.totalActivities,
     };
   }
 }

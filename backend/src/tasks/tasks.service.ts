@@ -2976,15 +2976,27 @@ export class TasksService {
       const specialtyName = hasSpecialtyName ? rawSpecialtyName.trim() : 'Comissão CIPAVD';
       const normalizedName = normalizeSpecialtyBucketName(specialtyName);
       
-      // Group by specialtyId if available, otherwise by normalized name
-      // This ensures "Comissão CIPAVD" (now a real specialty) is grouped correctly
-      const key = specialtyId ?? (normalizedName || '__unknown__');
+      // Determine grouping key
+      let key: string;
+      let displayName: string;
+      
+      // If normalized name contains "psicologia", group all together
+      if (normalizedName.includes('psicologia')) {
+        key = '__psicologia__';
+        displayName = 'Psicologia';
+      }
+      // Otherwise, group by specialtyId if available, or by normalized name
+      else {
+        key = specialtyId ?? (normalizedName || '__unknown__');
+        displayName = specialtyName;
+      }
       
       const current = specialtiesMap.get(key);
       if (current) {
         current.count += 1;
       } else {
-        specialtiesMap.set(key, { specialtyId, specialtyName, count: 1 });
+        // Keep the first specialtyId found for this group
+        specialtiesMap.set(key, { specialtyId, specialtyName: displayName, count: 1 });
       }
     }
 
