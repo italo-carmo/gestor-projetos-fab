@@ -2971,14 +2971,18 @@ export class TasksService {
     const specialtiesMap = new Map<string, { specialtyId: string | null; specialtyName: string; count: number }>();
     for (const activity of filteredActivities) {
       const specialtyId = activity.specialtyId ?? null;
+      // Treat empty string, null, or undefined as "Comissão CIPAVD"
+      const rawSpecialtyName = activity.specialty?.name;
       const specialtyName =
-        activity.specialty?.name ??
-        'Comissão CIPAVD';
+        rawSpecialtyName && rawSpecialtyName.trim()
+          ? rawSpecialtyName.trim()
+          : 'Comissão CIPAVD';
       const normalizedName = normalizeSpecialtyBucketName(specialtyName);
       // Use normalized name as key to group all variations together
       // For "Comissão CIPAVD" without specialtyId, use fixed key
+      // Also group by normalized name to catch variations (e.g., "Psicologia" vs "psicologia")
       const key =
-        normalizedName === 'comissao cipavd' && !specialtyId
+        (normalizedName === 'comissao cipavd' && !specialtyId) || (!specialtyId && !rawSpecialtyName)
           ? '__commission__'
           : normalizedName || '__commission__';
       const current = specialtiesMap.get(key);
