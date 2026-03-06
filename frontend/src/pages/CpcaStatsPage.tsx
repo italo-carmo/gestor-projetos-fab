@@ -614,13 +614,13 @@ export function CpcaStatsPage() {
               ) : (
                 <Table size="small">
                   <TableHead>
-                    <TableRow>
-                      <TableCell>OM</TableCell>
-                      <TableCell align="right">Total</TableCell>
-                      <TableCell align="right">Abertos</TableCell>
-                      <TableCell align="right">Retaliação</TableCell>
-                      <TableCell align="right">+30d</TableCell>
-                      <TableCell align="right">Risco</TableCell>
+                    <TableRow sx={{ bgcolor: "primary.main" }}>
+                      <TableCell sx={{ color: "white", fontWeight: 700 }}>OM</TableCell>
+                      <TableCell align="right" sx={{ color: "white", fontWeight: 700 }}>Total</TableCell>
+                      <TableCell align="right" sx={{ color: "white", fontWeight: 700 }}>Abertos</TableCell>
+                      <TableCell align="right" sx={{ color: "white", fontWeight: 700 }}>Retaliação</TableCell>
+                      <TableCell align="right" sx={{ color: "white", fontWeight: 700 }}>+30d</TableCell>
+                      <TableCell align="right" sx={{ color: "white", fontWeight: 700 }}>Risco</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -832,14 +832,14 @@ export function CpcaStatsPage() {
           ) : (
             <Table size="small">
               <TableHead>
-                <TableRow>
-                  <TableCell>Caso</TableCell>
-                  <TableCell>OM</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell>Tipo</TableCell>
-                  <TableCell align="right">Dias em aberto</TableCell>
-                  <TableCell align="right">Dias sem atualização</TableCell>
-                  <TableCell align="right">Retaliação</TableCell>
+                <TableRow sx={{ bgcolor: "primary.main" }}>
+                  <TableCell sx={{ color: "white", fontWeight: 700 }}>Caso</TableCell>
+                  <TableCell sx={{ color: "white", fontWeight: 700 }}>OM</TableCell>
+                  <TableCell sx={{ color: "white", fontWeight: 700 }}>Status</TableCell>
+                  <TableCell sx={{ color: "white", fontWeight: 700 }}>Tipo</TableCell>
+                  <TableCell align="right" sx={{ color: "white", fontWeight: 700 }}>Dias em aberto</TableCell>
+                  <TableCell align="right" sx={{ color: "white", fontWeight: 700 }}>Dias sem atualização</TableCell>
+                  <TableCell align="right" sx={{ color: "white", fontWeight: 700 }}>Retaliação</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
