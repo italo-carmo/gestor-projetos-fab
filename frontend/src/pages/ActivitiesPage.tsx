@@ -382,7 +382,7 @@ export function ActivitiesPage() {
       localityId: selected.localityId ?? '',
       localityIds: selected.localityId ? [selected.localityId] : [],
       activityTypeId: selected.activityType?.id ?? '',
-      specialtyId: selected.specialtyId ?? '',
+      specialtyId: selected.specialtyId ? String(selected.specialtyId) : '',
       responsibleUserId: selected.responsibleUsers?.[0]?.id ?? '',
       eventDate: selected.eventDate ? String(selected.eventDate).slice(0, 10) : '',
       reportRequired: Boolean(selected.reportRequired),
@@ -1420,7 +1420,7 @@ export function ActivitiesPage() {
                   select
                   size="small"
                   label="Especialidade"
-                  value={activityForm.specialtyId}
+                  value={activityForm.specialtyId || ''}
                   onChange={(e) => setActivityForm({ ...activityForm, specialtyId: e.target.value })}
                   sx={{ minWidth: 220 }}
                   disabled={!canEditActivityForm}
