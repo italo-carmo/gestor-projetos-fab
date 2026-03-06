@@ -316,9 +316,9 @@ export function BestPracticesPage() {
                       sx={{
                         height: "100%",
                         borderRadius: 2,
-                        borderColor: "rgba(56, 114, 146, 0.42)",
-                        background:
-                          "linear-gradient(180deg, rgba(56, 114, 146, 0.18) 0%, rgba(255,255,255,0.98) 100%)",
+                        borderColor: "rgba(56, 114, 146, 0.9)",
+                        backgroundColor: "rgb(56, 114, 146) !important",
+                        boxShadow: "0 12px 24px rgba(22, 60, 82, 0.3)",
                       }}
                     >
                       <CardContent sx={{ p: 1.5 }}>
@@ -328,18 +328,18 @@ export function BestPracticesPage() {
                           alignItems="flex-start"
                           spacing={1}
                         >
-                          <Typography variant="subtitle2" fontWeight={700}>
+                          <Typography variant="subtitle2" fontWeight={700} sx={{ color: "#F4FAFD" }}>
                             {post.title}
                           </Typography>
                           {(canUpdate || canDelete) && (
                             <Stack direction="row" spacing={0}>
                               {canUpdate && (
-                                <IconButton size="small" onClick={() => openEdit(post)}>
+                                <IconButton size="small" sx={{ color: "#F4FAFD" }} onClick={() => openEdit(post)}>
                                   <EditRoundedIcon fontSize="small" />
                                 </IconButton>
                               )}
                               {canDelete && (
-                                <IconButton size="small" color="error" onClick={() => handleDelete(post.id)}>
+                                <IconButton size="small" sx={{ color: "#FFD5D8" }} onClick={() => handleDelete(post.id)}>
                                   <DeleteOutlineRoundedIcon fontSize="small" />
                                 </IconButton>
                               )}
@@ -351,6 +351,7 @@ export function BestPracticesPage() {
                           color="text.secondary"
                           sx={{
                             mt: 0.8,
+                            color: "rgba(244, 250, 253, 0.94)",
                             display: "-webkit-box",
                             WebkitLineClamp: 4,
                             WebkitBoxOrient: "vertical",
@@ -359,16 +360,16 @@ export function BestPracticesPage() {
                         >
                           {post.content}
                         </Typography>
-                        <Divider sx={{ my: 1.1 }} />
+                        <Divider sx={{ my: 1.1, borderColor: "rgba(255,255,255,0.24)" }} />
                         <Stack
                           direction={{ xs: "column", sm: "row" }}
                           spacing={0.8}
                           justifyContent="space-between"
                         >
-                          <Typography variant="caption" color="text.secondary">
+                          <Typography variant="caption" sx={{ color: "rgba(236, 248, 252, 0.92)" }}>
                             Autor: {post.authorLabel || "Coordenação CIPAVD"}
                           </Typography>
-                          <Typography variant="caption" color="text.secondary">
+                          <Typography variant="caption" sx={{ color: "rgba(236, 248, 252, 0.9)" }}>
                             {new Date(post.createdAt).toLocaleString("pt-BR")}
                           </Typography>
                         </Stack>
