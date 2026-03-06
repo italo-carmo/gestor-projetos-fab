@@ -80,4 +80,14 @@ export class DashboardsController {
       totalActivities: result.summary.totalActivities,
     };
   }
+
+  @Get('dashboard/executive/debug-psicologia')
+  @RequirePermission('dashboard', 'view')
+  async debugPsicologia(
+    @Query('from') from: string | undefined,
+    @Query('to') to: string | undefined,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.tasks.debugPsicologiaActivities({ from, to }, user);
+  }
 }

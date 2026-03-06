@@ -3088,6 +3088,86 @@ export class TasksService {
     return user?.executiveHidePii ? sanitizeForExecutive(response) : response;
   }
 
+  async debugPsicologiaActivities(
+    params: {
+      from?: string;
+      to?: string;
+    },
+    user?: RbacUser,
+  ) {
+    const allowedLocalityIds = await this.getTargetLocalityIds();
+    if (allowedLocalityIds.length === 0) {
+      return { count: 0, activities: [] };
+    }
+
+    const from = params.from
+      ? new Date(params.from)
+      : new Date(Date.now() - 56 * 24 * 60 * 60 * 1000);
+    const to = params.to ? new Date(params.to) : new Date();
+
+    const localitiesRaw = await this.prisma.locality.findMany({
+      where: { id: { in: allowedLocalityIds } },
+      orderBy: { name: 'asc' },
+    });
+
+    const localityGroups = groupTargetLocalities(localitiesRaw);
+    const { aliasByLocalityId } = createTargetLocalityAliasMap(localityGroups);
+    const localityIds = Array.from(aliasByLocalityId.keys());
+
+    const activities = await this.prisma.activity.findMany({
+      where: {
+        localityId: { in: localityIds },
+        OR: [
+          { eventDate: { gte: from, lte: to } },
+          { eventDate: null, createdAt: { gte: from, lte: to } },
+        ],
+      },
+      include: {
+        specialty: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+      orderBy: [{ eventDate: 'asc' }, { createdAt: 'asc' }],
+    });
+
+    const filteredActivities = activities.filter((activity) =>
+      activity.localityId ? aliasByLocalityId.has(activity.localityId) : false,
+    );
+
+    const normalizeSpecialtyBucketName = (value: string) =>
+      String(value ?? '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim()
+        .toLowerCase();
+
+    const psicologiaActivities = filteredActivities.filter((activity) => {
+      const specialtyId = activity.specialtyId ?? null;
+      const rawSpecialtyName = activity.specialty?.name;
+      const hasSpecialtyName = rawSpecialtyName && rawSpecialtyName.trim();
+      const specialtyName = hasSpecialtyName ? rawSpecialtyName.trim() : '';
+      const normalizedName = normalizeSpecialtyBucketName(specialtyName);
+      return normalizedName.includes('psicologia') || specialtyId === 'cmlpet4hv004kzpvci51ktsd2';
+    });
+
+    return {
+      count: psicologiaActivities.length,
+      totalActivities: filteredActivities.length,
+      activities: psicologiaActivities.map((a) => ({
+        id: a.id,
+        title: a.title,
+        specialtyId: a.specialtyId,
+        specialtyName: a.specialty?.name || null,
+        localityId: a.localityId,
+        eventDate: a.eventDate,
+        createdAt: a.createdAt,
+      })),
+    };
+  }
+
   private applyProgressRules(status: TaskStatus, progressPercent: number) {
     if (status === TaskStatus.NOT_STARTED) return 0;
     if (status === TaskStatus.DONE) return 100;
