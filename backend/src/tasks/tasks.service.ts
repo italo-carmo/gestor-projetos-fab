@@ -2973,40 +2973,18 @@ export class TasksService {
       const specialtyId = activity.specialtyId ?? null;
       const rawSpecialtyName = activity.specialty?.name;
       const hasSpecialtyName = rawSpecialtyName && rawSpecialtyName.trim();
-      const specialtyName = hasSpecialtyName ? rawSpecialtyName.trim() : '';
+      const specialtyName = hasSpecialtyName ? rawSpecialtyName.trim() : 'Comissão CIPAVD';
       const normalizedName = normalizeSpecialtyBucketName(specialtyName);
       
-      // Determine the grouping key
-      let key: string;
-      let displayName: string;
-      
-      // Priority 1: If no specialtyId, it's always "Comissão CIPAVD"
-      if (!specialtyId) {
-        key = '__commission__';
-        displayName = 'Comissão CIPAVD';
-      }
-      // Priority 2: If no name (empty string), it's "Comissão CIPAVD"
-      else if (!hasSpecialtyName) {
-        key = '__commission__';
-        displayName = 'Comissão CIPAVD';
-      }
-      // Priority 3: If normalized name contains "psicologia", group as Psicologia
-      else if (normalizedName.includes('psicologia')) {
-        key = '__psicologia__';
-        displayName = 'Psicologia';
-      }
-      // Priority 4: Otherwise, group by normalized name
-      else {
-        key = normalizedName || '__commission__';
-        displayName = specialtyName || 'Comissão CIPAVD';
-      }
+      // Group by specialtyId if available, otherwise by normalized name
+      // This ensures "Comissão CIPAVD" (now a real specialty) is grouped correctly
+      const key = specialtyId ?? normalizedName || '__unknown__';
       
       const current = specialtiesMap.get(key);
       if (current) {
         current.count += 1;
       } else {
-        // Keep the first specialtyId found for this group (may be null for commission)
-        specialtiesMap.set(key, { specialtyId, specialtyName: displayName, count: 1 });
+        specialtiesMap.set(key, { specialtyId, specialtyName, count: 1 });
       }
     }
 
