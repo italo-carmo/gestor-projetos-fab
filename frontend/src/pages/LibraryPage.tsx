@@ -440,8 +440,8 @@ export function LibraryPage() {
                     </Stack>
                     <Box
                       sx={{
-                        height: 170,
-                        background: "linear-gradient(140deg, #114259 0%, #4D86A0 100%)",
+                        height: 206,
+                        backgroundColor: "#0E2E3A",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
@@ -456,7 +456,8 @@ export function LibraryPage() {
                           sx={{
                             width: "100%",
                             height: "100%",
-                            objectFit: "contain",
+                            objectFit: "cover",
+                            objectPosition: "center",
                             display: "block",
                             transition: "opacity 220ms ease-in-out",
                           }}
@@ -468,14 +469,14 @@ export function LibraryPage() {
                         </Stack>
                       )}
                     </Box>
-                    <CardContent sx={{ py: 1.2 }}>
+                    <CardContent sx={{ pt: 0.8, pb: 0.9 }}>
                       <Typography
                         variant="body2"
                         sx={{
-                          minHeight: 40,
+                          minHeight: 30,
                           fontWeight: 600,
                           display: "-webkit-box",
-                          WebkitLineClamp: 2,
+                          WebkitLineClamp: 1,
                           WebkitBoxOrient: "vertical",
                           overflow: "hidden",
                         }}
