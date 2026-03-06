@@ -473,6 +473,16 @@ export function ActivitiesPage() {
     });
     return filtered.sort((a: any, b: any) => String(a.name).localeCompare(String(b.name), 'pt-BR'));
   }, [allResponsibleUsers]);
+  const specialtyNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const specialty of specialties as any[]) {
+      const id = String(specialty?.id ?? '').trim();
+      const name = String(specialty?.name ?? '').trim();
+      if (!id) continue;
+      map.set(id, name || 'Especialidade');
+    }
+    return map;
+  }, [specialties]);
 
   const handleCreate = async () => {
     if (!activityForm.title.trim()) {
@@ -1424,6 +1434,14 @@ export function ActivitiesPage() {
                   onChange={(e) => setActivityForm({ ...activityForm, specialtyId: e.target.value })}
                   sx={{ minWidth: 220 }}
                   disabled={!canEditActivityForm}
+                  SelectProps={{
+                    displayEmpty: true,
+                    renderValue: (value) => {
+                      const selectedValue = String(value ?? '').trim();
+                      if (!selectedValue) return 'Comissão CIPAVD';
+                      return specialtyNameById.get(selectedValue) ?? 'Comissão CIPAVD';
+                    },
+                  }}
                 >
                   <MenuItem value="">Comissão CIPAVD</MenuItem>
                   {specialties.map((s: any) => (
