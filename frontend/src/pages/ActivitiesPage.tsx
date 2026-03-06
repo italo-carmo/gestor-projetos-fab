@@ -162,6 +162,13 @@ function getLocalityShortLabel(item: any) {
 }
 
 function getLocalityChipStyle(localityLabel: string) {
+  const normalized = String(localityLabel ?? '').trim().toUpperCase();
+  if (normalized === 'RJ') {
+    return { bg: '#E3F2FD', color: '#0D47A1', border: '#90CAF9' };
+  }
+  if (normalized === 'LS') {
+    return { bg: '#E8F5E9', color: '#1B5E20', border: '#A5D6A7' };
+  }
   let hash = 0;
   for (let index = 0; index < localityLabel.length; index += 1) {
     hash = (hash * 31 + localityLabel.charCodeAt(index)) >>> 0;
