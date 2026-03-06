@@ -44,6 +44,7 @@ import ChevronRightRoundedIcon from "@mui/icons-material/ChevronRightRounded";
 import InsightsRoundedIcon from "@mui/icons-material/InsightsRounded";
 import PolicyRoundedIcon from "@mui/icons-material/PolicyRounded";
 import PhotoLibraryRoundedIcon from "@mui/icons-material/PhotoLibraryRounded";
+import AutoStoriesRoundedIcon from "@mui/icons-material/AutoStoriesRounded";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { useDebounce } from "../app/useDebounce";
 import { can } from "../app/rbac";
@@ -85,6 +86,7 @@ const navSections: NavSection[] = [
       { label: "CIPAVD", to: "/dashboard/cipavd", icon: <InsightsRoundedIcon fontSize="small" /> },
       { label: "CPCA", to: "/dashboard/cpca", icon: <PolicyRoundedIcon fontSize="small" /> },
       { label: "Impacto Positivo", to: "/social-communication", icon: <NewspaperRoundedIcon fontSize="small" /> },
+      { label: "Boas Práticas", to: "/best-practices", icon: <AutoStoriesRoundedIcon fontSize="small" /> },
       { label: "Biblioteca", to: "/library", icon: <PhotoLibraryRoundedIcon fontSize="small" /> },
     ],
   },
@@ -327,6 +329,15 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
     if (item.to === "/library") {
       return true;
+    }
+    if (item.to === "/best-practices") {
+      return (
+        hasAnyRole(me, [
+          ROLE_COORDENACAO_CIPAVD,
+          ROLE_TI,
+          ROLE_COMANDANTE_COMGEP,
+        ]) && can(me, "best_practices", "view")
+      );
     }
     if (item.to === "/activities") {
       return can(me, "task_instances", "view");

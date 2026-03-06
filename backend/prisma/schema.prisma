@@ -57,6 +57,7 @@ model User {
   cpcaCaseStatusChanges CpcComplaintStatusHistory[] @relation("CpcComplaintStatusChangedBy")
   libraryPhotosCreated LibraryPhoto[] @relation("LibraryPhotoCreator")
   libraryDocumentsCreated LibraryDocument[] @relation("LibraryDocumentCreator")
+  bestPracticesCreated BestPracticePost[] @relation("BestPracticeCreator")
 }
 
 model UserModuleAccessOverride {
@@ -168,6 +169,7 @@ model Locality {
   recruitMembers             RecruitFemale[]       @relation("RecruitSourceLocality")
   recruitsDesignatedHere     RecruitFemale[]       @relation("RecruitDestinationLocality")
   libraryPhotos              LibraryPhoto[]
+  bestPracticePosts          BestPracticePost[]
 }
 
 model Activity {
@@ -771,6 +773,25 @@ model LibrarySetting {
   carouselIntervalSeconds Int      @default(5)
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
+}
+
+model BestPracticePost {
+  id             String    @id @default(cuid())
+  title          String
+  content        String
+  localityId     String?
+  isCommission   Boolean   @default(false)
+  createdById    String?
+  authorLabel    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  locality       Locality? @relation(fields: [localityId], references: [id], onDelete: SetNull)
+  createdBy      User?     @relation("BestPracticeCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([isCommission, createdAt])
+  @@index([localityId, createdAt])
+  @@index([createdById, createdAt])
 }
 
 model Checklist {

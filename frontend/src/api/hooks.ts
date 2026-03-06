@@ -1461,6 +1461,52 @@ export function useDeleteSocialCommunicationArticle() {
   });
 }
 
+/** Best practices */
+export function useBestPractices(filters: Record<string, any>) {
+  return useQuery({
+    queryKey: qk.bestPractices(filters),
+    queryFn: async () => (await api.get("/best-practices", { params: filters })).data,
+    staleTime: 10_000,
+  });
+}
+
+export function useCreateBestPractice() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      title: string;
+      content: string;
+      localityId?: string | null;
+      isCommission?: boolean;
+    }) => (await api.post("/best-practices", payload)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["bestPractices"] }),
+  });
+}
+
+export function useUpdateBestPractice() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      payload: {
+        title?: string;
+        content?: string;
+        localityId?: string | null;
+        isCommission?: boolean;
+      };
+    }) => (await api.put(`/best-practices/${args.id}`, args.payload)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["bestPractices"] }),
+  });
+}
+
+export function useDeleteBestPractice() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await api.delete(`/best-practices/${id}`)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["bestPractices"] }),
+  });
+}
+
 /** Library */
 export function useLibrary() {
   return useQuery({

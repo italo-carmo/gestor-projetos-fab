@@ -27,6 +27,7 @@ import { SocialCommunicationPage } from './pages/SocialCommunicationPage';
 import { CpcaCasesPage } from './pages/CpcaCasesPage';
 import { CpcaStatsPage } from './pages/CpcaStatsPage';
 import { LibraryPage } from './pages/LibraryPage';
+import { BestPracticesPage } from './pages/BestPracticesPage';
 import { RequireAuth } from './app/RequireAuth';
 import { RequireRoleAccess } from './app/RequireRoleAccess';
 import {
@@ -160,6 +161,18 @@ function App() {
                 <Route path="/checklists" element={<ChecklistsPage />} />
                 <Route path="/templates" element={<TaskTemplatesPage />} />
                 <Route path="/social-communication" element={<SocialCommunicationPage />} />
+                <Route
+                  path="/best-practices"
+                  element={
+                    <RequireRoleAccess
+                      allow={(user) =>
+                        hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI])
+                      }
+                    >
+                      <BestPracticesPage />
+                    </RequireRoleAccess>
+                  }
+                />
                 <Route path="/library" element={<LibraryPage />} />
                 <Route
                   path="/documents"
