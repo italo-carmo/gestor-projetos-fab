@@ -1,6 +1,5 @@
 import {
   Autocomplete,
-  Badge,
   Box,
   Button,
   Card,
@@ -1089,11 +1088,6 @@ export function ActivitiesPage() {
                     <TableCell sx={{ color: 'white', fontWeight: 600 }}>Data</TableCell>
                     <TableCell sx={{ color: 'white', fontWeight: 600 }}>Status</TableCell>
                     <TableCell
-                      sx={{ color: 'white', fontWeight: 600, display: { xs: 'none', md: 'table-cell' } }}
-                    >
-                      Comentários
-                    </TableCell>
-                    <TableCell
                       sx={{ color: 'white', fontWeight: 600, display: { xs: 'none', sm: 'table-cell' } }}
                     >
                       Relatório
@@ -1207,45 +1201,6 @@ export function ActivitiesPage() {
                             />
                           );
                         })()}
-                      </TableCell>
-                      <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
-                        <IconButton
-                          size="small"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            openActivityDrawer(item.id, 'activity');
-                          }}
-                        >
-                          <Badge
-                            overlap="rectangular"
-                            badgeContent={0}
-                            sx={{
-                              '& .MuiBadge-badge': {
-                                display: 'none',
-                              },
-                            }}
-                          >
-                            <Box
-                              sx={{
-                                minWidth: 26,
-                                height: 20,
-                                px: 0.8,
-                                borderRadius: 999,
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontSize: 12,
-                                fontWeight: 700,
-                                border: '1px solid',
-                                borderColor: item.comments?.hasUnread ? '#C56A2B' : '#C9D7E6',
-                                bgcolor: item.comments?.hasUnread ? '#FFF3E8' : '#F7FAFC',
-                                color: item.comments?.hasUnread ? '#9A4B14' : '#44566C',
-                              }}
-                            >
-                              {item.comments?.total ?? 0}
-                            </Box>
-                          </Badge>
-                        </IconButton>
                       </TableCell>
                       <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
                         <IconButton
@@ -1430,6 +1385,7 @@ export function ActivitiesPage() {
                   select
                   size="small"
                   label="Especialidade"
+                  InputLabelProps={{ shrink: true }}
                   value={activityForm.specialtyId || ''}
                   onChange={(e) => setActivityForm({ ...activityForm, specialtyId: e.target.value })}
                   sx={{ minWidth: 220 }}
