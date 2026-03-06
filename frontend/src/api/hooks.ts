@@ -1462,10 +1462,11 @@ export function useDeleteSocialCommunicationArticle() {
 }
 
 /** Best practices */
-export function useBestPractices(filters: Record<string, any>) {
+export function useBestPractices(filters: Record<string, any>, enabled = true) {
   return useQuery({
     queryKey: qk.bestPractices(filters),
     queryFn: async () => (await api.get("/best-practices", { params: filters })).data,
+    enabled,
     staleTime: 10_000,
   });
 }

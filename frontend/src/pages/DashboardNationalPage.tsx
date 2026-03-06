@@ -1,4 +1,23 @@
-import { Box, Card, CardContent, Chip, Grid, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from '@mui/material';
+import {
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  Drawer,
+  Grid,
+  IconButton,
+  Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TextField,
+  Typography,
+} from '@mui/material';
+import EditRoundedIcon from '@mui/icons-material/EditRounded';
 import DescriptionIcon from '@mui/icons-material/Description';
 import TaskAltIcon from '@mui/icons-material/TaskAlt';
 import TerrainIcon from '@mui/icons-material/Terrain';
@@ -9,8 +28,18 @@ import MenuBookIcon from '@mui/icons-material/MenuBook';
 import GavelIcon from '@mui/icons-material/Gavel';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useDashboardNational } from '../api/hooks';
+import {
+  useBestPractices,
+  useCreateBestPractice,
+  useDashboardNational,
+  useMe,
+  useUpdateBestPractice,
+} from '../api/hooks';
 import { toMilitaryDisplayName } from '../app/militaryName';
+import { parseApiError } from '../app/apiErrors';
+import { can } from '../app/rbac';
+import { hasAnyRole, ROLE_COMANDANTE_COMGEP, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from '../app/roleAccess';
+import { useToast } from '../app/toast';
 import { SkeletonState } from '../components/states/SkeletonState';
 import { ErrorState } from '../components/states/ErrorState';
 import { EmptyState } from '../components/states/EmptyState';
@@ -27,17 +56,6 @@ type NationalLocalityItem = {
   visitDate?: string | null;
   late: number;
   unassigned: number;
-};
-type NationalActivityItem = {
-  activityId: string;
-  title: string;
-  activityTypeName?: string | null;
-  specialtyName?: string | null;
-  localityCode?: string | null;
-  localityName?: string | null;
-  eventDate?: string | Date | null;
-  status: string;
-  isLate?: boolean;
 };
 type NationalDashboardTotals = {
   localities: number;
@@ -67,15 +85,37 @@ type IndicatorTile = {
   icon: ReactNode;
 };
 
+type LessonPost = {
+  id: string;
+  title: string;
+  content: string;
+  authorLabel?: string | null;
+  createdAt: string;
+};
+
 export function DashboardNationalPage() {
+  const toast = useToast();
+  const { data: me } = useMe();
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const localityId = params.get('localityId') ?? '';
   const dashboardQuery = useDashboardNational({ localityId: localityId || undefined });
+  const canViewLessons =
+    hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI, ROLE_COMANDANTE_COMGEP]) &&
+    can(me, 'best_practices', 'view');
+  const canManageLessons =
+    hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]) &&
+    can(me, 'best_practices', 'view');
+  const lessonsQuery = useBestPractices({ localityId: '__commission__' }, canViewLessons);
+  const createLesson = useCreateBestPractice();
+  const updateLesson = useUpdateBestPractice();
   const qc = useQueryClient();
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
   const [showVisitColumn, setShowVisitColumn] = useState(true);
-  const [highlightOffset, setHighlightOffset] = useState(0);
+  const [lessonOffset, setLessonOffset] = useState(0);
+  const [lessonsDrawerOpen, setLessonsDrawerOpen] = useState(false);
+  const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
+  const [lessonForm, setLessonForm] = useState({ title: '', content: '' });
 
   useEffect(() => {
     const element = tableContainerRef.current;
@@ -95,13 +135,6 @@ export function DashboardNationalPage() {
       observer.disconnect();
       window.removeEventListener('resize', updateVisibility);
     };
-  }, []);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      setHighlightOffset((prev) => prev + 1);
-    }, 3800);
-    return () => window.clearInterval(timer);
   }, []);
 
   if (dashboardQuery.isLoading) return <SkeletonState />;
@@ -131,24 +164,82 @@ export function DashboardNationalPage() {
       law: 0,
     },
   };
-  const positiveHighlights = ((dashboardQuery.data?.riskTasks ?? []) as NationalActivityItem[])
-    .sort((a, b) => {
-      const dateA = a.eventDate ? new Date(a.eventDate).getTime() : 0;
-      const dateB = b.eventDate ? new Date(b.eventDate).getTime() : 0;
-      return dateB - dateA;
-    })
-    .slice(0, 5);
-  const highlightsPerView = 3;
-  const visibleHighlights =
-    positiveHighlights.length <= highlightsPerView
-      ? positiveHighlights
-      : Array.from({ length: highlightsPerView }, (_, index) => {
-          const safeIndex = (highlightOffset + index) % positiveHighlights.length;
-          return positiveHighlights[safeIndex];
+  const lessons = ((lessonsQuery.data?.items ?? []) as LessonPost[])
+    .filter((item) => item?.id)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const lessonsPerView = 3;
+  const visibleLessons =
+    lessons.length <= lessonsPerView
+      ? lessons
+      : Array.from({ length: lessonsPerView }, (_, index) => {
+          const safeIndex = (lessonOffset + index) % lessons.length;
+          return lessons[safeIndex];
         });
-  const formatHighlightType = (activity: NationalActivityItem) => {
-    const normalized = String(activity.activityTypeName ?? activity.specialtyName ?? '').trim();
-    return normalized;
+
+  useEffect(() => {
+    if (lessons.length <= 1) return;
+    const timer = window.setInterval(() => {
+      setLessonOffset((prev) => prev + 1);
+    }, 3800);
+    return () => window.clearInterval(timer);
+  }, [lessons.length]);
+
+  const resetLessonForm = () => {
+    setEditingLessonId(null);
+    setLessonForm({ title: '', content: '' });
+  };
+
+  const openCreateLesson = () => {
+    resetLessonForm();
+    setLessonsDrawerOpen(true);
+  };
+
+  const openEditLesson = (post: LessonPost) => {
+    setEditingLessonId(post.id);
+    setLessonForm({
+      title: String(post.title ?? ''),
+      content: String(post.content ?? ''),
+    });
+    setLessonsDrawerOpen(true);
+  };
+
+  const handleSaveLesson = async () => {
+    const title = lessonForm.title.trim();
+    const content = lessonForm.content.trim();
+    if (!title || !content) {
+      toast.push({ message: 'Preencha título e conteúdo.', severity: 'warning' });
+      return;
+    }
+    try {
+      if (editingLessonId) {
+        await updateLesson.mutateAsync({
+          id: editingLessonId,
+          payload: {
+            title,
+            content,
+            isCommission: true,
+            localityId: null,
+          },
+        });
+        toast.push({ message: 'Lição atualizada.', severity: 'success' });
+      } else {
+        await createLesson.mutateAsync({
+          title,
+          content,
+          isCommission: true,
+          localityId: null,
+        });
+        toast.push({ message: 'Lição criada.', severity: 'success' });
+      }
+      setLessonsDrawerOpen(false);
+      resetLessonForm();
+      await lessonsQuery.refetch();
+    } catch (error) {
+      toast.push({
+        message: parseApiError(error).message ?? 'Erro ao salvar lição aprendida.',
+        severity: 'error',
+      });
+    }
   };
   const averageProgress = smifLocalities.length
     ? Math.round(smifLocalities.reduce((acc, item) => acc + Number(item.progress ?? 0), 0) / smifLocalities.length)
@@ -414,12 +505,33 @@ export function DashboardNationalPage() {
         <Grid size={{ xs: 12, md: 6 }} sx={{ display: 'flex' }}>
           <Card sx={{ width: '100%', height: '100%' }}>
             <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-              <Typography variant="h6" gutterBottom>
-                Destaques recentes
-              </Typography>
-              {positiveHighlights.length === 0 ? (
+              <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+                <Typography variant="h6">Lições aprendidas</Typography>
+                {canManageLessons && (
+                  <IconButton
+                    size="small"
+                    onClick={openCreateLesson}
+                    title="Adicionar ou editar lições aprendidas"
+                  >
+                    <EditRoundedIcon fontSize="small" />
+                  </IconButton>
+                )}
+              </Stack>
+              {!canViewLessons ? (
                 <Typography variant="body2" color="text.secondary">
-                  Nenhum destaque encontrado.
+                  Conteúdo disponível para Coordenação, TI e COMGEP.
+                </Typography>
+              ) : lessonsQuery.isLoading ? (
+                <Typography variant="body2" color="text.secondary">
+                  Carregando lições aprendidas...
+                </Typography>
+              ) : lessonsQuery.isError ? (
+                <Typography variant="body2" color="error.main">
+                  Não foi possível carregar as lições aprendidas.
+                </Typography>
+              ) : lessons.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  Nenhuma lição aprendida cadastrada.
                 </Typography>
               ) : (
                 <Box
@@ -431,47 +543,139 @@ export function DashboardNationalPage() {
                     alignContent: 'start',
                   }}
                 >
-                  {visibleHighlights.map((activity) => {
-                    const highlightType = formatHighlightType(activity);
-                    return (
-                      <Card
-                        key={`${activity.activityId}-${highlightOffset}`}
-                        variant="outlined"
-                        sx={{
-                          transition: 'transform 280ms ease, opacity 280ms ease',
-                        }}
-                      >
-                        <CardContent>
-                          <Typography variant="subtitle2">
-                            {highlightType ? `${highlightType} - ${activity.title ?? 'Atividade'}` : activity.title ?? 'Atividade'}
+                  {visibleLessons.map((lesson, index) => (
+                    <Card
+                      key={`${lesson.id}-${lessonOffset}-${index}`}
+                      variant="outlined"
+                      sx={{
+                        transition: 'transform 280ms ease, opacity 280ms ease',
+                        borderColor: 'rgba(12,101,126,0.24)',
+                      }}
+                    >
+                      <CardContent sx={{ p: 1.2 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700, lineHeight: 1.25 }}>
+                          {lesson.title}
+                        </Typography>
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          sx={{
+                            mt: 0.6,
+                            display: '-webkit-box',
+                            WebkitLineClamp: 3,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden',
+                          }}
+                        >
+                          {lesson.content}
+                        </Typography>
+                        <Box display="flex" justifyContent="space-between" gap={1} mt={1}>
+                          <Typography variant="caption" color="text.secondary" noWrap>
+                            {lesson.authorLabel || 'Coordenação CIPAVD'}
                           </Typography>
-                          <Box display="flex" gap={1} flexWrap="wrap" mt={1}>
-                            <Chip size="small" color="success" label="Em execução" />
-                            {activity.eventDate && (
-                              <Chip
-                                size="small"
-                                variant="outlined"
-                                label={new Date(activity.eventDate).toLocaleDateString('pt-BR')}
-                              />
-                            )}
-                            {activity.localityCode && (
-                              <Chip
-                                size="small"
-                                label={activity.localityCode}
-                                variant="outlined"
-                              />
-                            )}
-                          </Box>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
+                          <Typography variant="caption" color="text.secondary" noWrap>
+                            {new Date(lesson.createdAt).toLocaleString('pt-BR')}
+                          </Typography>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  ))}
                 </Box>
               )}
             </CardContent>
           </Card>
         </Grid>
       </Grid>
+      <Drawer
+        anchor="right"
+        open={lessonsDrawerOpen}
+        onClose={() => {
+          setLessonsDrawerOpen(false);
+          resetLessonForm();
+        }}
+        PaperProps={{ sx: { width: { xs: '100%', md: 520 } } }}
+      >
+        <Box p={3} display="flex" flexDirection="column" gap={1.4}>
+          <Stack direction="row" justifyContent="space-between" alignItems="center">
+            <Typography variant="h6">
+              {editingLessonId ? 'Editar lição aprendida' : 'Nova lição aprendida'}
+            </Typography>
+            <Button size="small" variant="outlined" onClick={openCreateLesson}>
+              Nova
+            </Button>
+          </Stack>
+          <TextField
+            size="small"
+            label="Título"
+            value={lessonForm.title}
+            onChange={(event) =>
+              setLessonForm((prev) => ({ ...prev, title: event.target.value }))
+            }
+            fullWidth
+          />
+          <TextField
+            size="small"
+            label="Texto"
+            value={lessonForm.content}
+            onChange={(event) =>
+              setLessonForm((prev) => ({ ...prev, content: event.target.value }))
+            }
+            multiline
+            minRows={4}
+            fullWidth
+          />
+          <Stack direction="row" spacing={1}>
+            <Button
+              variant="contained"
+              onClick={handleSaveLesson}
+              disabled={createLesson.isPending || updateLesson.isPending}
+            >
+              Salvar
+            </Button>
+            <Button
+              variant="outlined"
+              onClick={() => {
+                setLessonsDrawerOpen(false);
+                resetLessonForm();
+              }}
+            >
+              Cancelar
+            </Button>
+          </Stack>
+          <Typography variant="subtitle2" sx={{ mt: 1 }}>
+            Lições cadastradas
+          </Typography>
+          <Box sx={{ display: 'grid', gap: 1, maxHeight: '55vh', overflowY: 'auto', pr: 0.3 }}>
+            {lessons.map((lesson) => (
+              <Card key={lesson.id} variant="outlined">
+                <CardContent sx={{ p: 1.2 }}>
+                  <Stack direction="row" justifyContent="space-between" gap={1}>
+                    <Typography variant="body2" fontWeight={700}>
+                      {lesson.title}
+                    </Typography>
+                    <IconButton size="small" onClick={() => openEditLesson(lesson)}>
+                      <EditRoundedIcon fontSize="small" />
+                    </IconButton>
+                  </Stack>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{
+                      mt: 0.4,
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    {lesson.content}
+                  </Typography>
+                </CardContent>
+              </Card>
+            ))}
+          </Box>
+        </Box>
+      </Drawer>
     </Box>
   );
 }

@@ -189,7 +189,7 @@ export class BestPracticesService {
   }
 
   private assertEditorAccess(user?: RbacUser) {
-    if (!hasRole(user, ROLE_COORDENACAO_CIPAVD)) {
+    if (!hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_TI])) {
       throwError('RBAC_FORBIDDEN');
     }
   }

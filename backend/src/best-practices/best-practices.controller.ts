@@ -21,13 +21,13 @@ export class BestPracticesController {
   }
 
   @Post()
-  @RequirePermission('best_practices', 'create')
+  @RequirePermission('best_practices', 'view')
   create(@Body() dto: CreateBestPracticeDto, @CurrentUser() user: RbacUser) {
     return this.bestPractices.create(dto, user);
   }
 
   @Put(':id')
-  @RequirePermission('best_practices', 'update')
+  @RequirePermission('best_practices', 'view')
   update(
     @Param('id') id: string,
     @Body() dto: UpdateBestPracticeDto,
@@ -37,7 +37,7 @@ export class BestPracticesController {
   }
 
   @Delete(':id')
-  @RequirePermission('best_practices', 'delete')
+  @RequirePermission('best_practices', 'view')
   remove(@Param('id') id: string, @CurrentUser() user: RbacUser) {
     return this.bestPractices.remove(id, user);
   }
