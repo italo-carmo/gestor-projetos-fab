@@ -527,14 +527,16 @@ export function LibraryPage() {
                         </Stack>
                       )}
                     </Box>
-                    <CardContent sx={{ pt: 0.8, pb: 0.9 }}>
+                    <CardContent sx={{ pt: 0.7, pb: 0.5 }}>
                       <Typography
                         variant="body2"
                         sx={{
-                          minHeight: 30,
+                          minHeight: 32,
                           fontWeight: 600,
+                          fontSize: 13,
+                          lineHeight: 1.2,
                           display: "-webkit-box",
-                          WebkitLineClamp: 1,
+                          WebkitLineClamp: 2,
                           WebkitBoxOrient: "vertical",
                           overflow: "hidden",
                         }}

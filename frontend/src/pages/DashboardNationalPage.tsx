@@ -18,6 +18,7 @@ import {
   Typography,
 } from '@mui/material';
 import EditRoundedIcon from '@mui/icons-material/EditRounded';
+import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import DescriptionIcon from '@mui/icons-material/Description';
 import TaskAltIcon from '@mui/icons-material/TaskAlt';
 import TerrainIcon from '@mui/icons-material/Terrain';
@@ -33,6 +34,7 @@ import {
   useDashboardNational,
   useLessonsLearned,
   useMe,
+  useDeleteLessonLearned,
   useUpdateLessonLearned,
 } from '../api/hooks';
 import { toMilitaryDisplayName } from '../app/militaryName';
@@ -109,6 +111,7 @@ export function DashboardNationalPage() {
   const lessonsQuery = useLessonsLearned({}, canViewLessons);
   const createLesson = useCreateLessonLearned();
   const updateLesson = useUpdateLessonLearned();
+  const deleteLesson = useDeleteLessonLearned();
   const qc = useQueryClient();
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
   const [showVisitColumn, setShowVisitColumn] = useState(true);
@@ -234,6 +237,25 @@ export function DashboardNationalPage() {
     } catch (error) {
       toast.push({
         message: parseApiError(error).message ?? 'Erro ao salvar lição aprendida.',
+        severity: 'error',
+      });
+    }
+  };
+
+  const handleDeleteLesson = async (post: LessonPost) => {
+    const title = String(post.title ?? '').trim() || 'esta lição';
+    const confirmed = window.confirm(`Deseja excluir "${title}"?`);
+    if (!confirmed) return;
+    try {
+      await deleteLesson.mutateAsync(post.id);
+      if (editingLessonId === post.id) {
+        resetLessonForm();
+      }
+      toast.push({ message: 'Lição excluída.', severity: 'success' });
+      await lessonsQuery.refetch();
+    } catch (error) {
+      toast.push({
+        message: parseApiError(error).message ?? 'Erro ao excluir lição aprendida.',
         severity: 'error',
       });
     }
@@ -593,9 +615,9 @@ export function DashboardNationalPage() {
         }}
         PaperProps={{ sx: { width: { xs: '100%', md: 520 } } }}
       >
-        <Box p={3} pt={5} display="flex" flexDirection="column" gap={1.4}>
+        <Box p={3} pt={7} display="flex" flexDirection="column" gap={1.4}>
           <Stack direction="row" justifyContent="space-between" alignItems="center">
-            <Typography variant="h6" sx={{ mt: 1.5 }}>
+            <Typography variant="h6" sx={{ mt: 2.5 }}>
               {editingLessonId ? 'Editar lição aprendida' : 'Nova lição aprendida'}
             </Typography>
             <Button size="small" variant="outlined" onClick={openCreateLesson}>
@@ -651,9 +673,19 @@ export function DashboardNationalPage() {
                     <Typography variant="body2" fontWeight={700}>
                       {lesson.title}
                     </Typography>
-                    <IconButton size="small" onClick={() => openEditLesson(lesson)}>
-                      <EditRoundedIcon fontSize="small" />
-                    </IconButton>
+                    <Stack direction="row" spacing={0.5}>
+                      <IconButton size="small" onClick={() => openEditLesson(lesson)}>
+                        <EditRoundedIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        color="error"
+                        onClick={() => handleDeleteLesson(lesson)}
+                        disabled={deleteLesson.isPending}
+                      >
+                        <DeleteOutlineRoundedIcon fontSize="small" />
+                      </IconButton>
+                    </Stack>
                   </Stack>
                   <Typography
                     variant="caption"

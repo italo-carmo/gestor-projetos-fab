@@ -917,6 +917,7 @@ export function ActivitiesPage() {
               onChange={(e) => setSpecialtyFilter(e.target.value)}
               sx={{ minWidth: 220 }}
             >
+              <MenuItem value="">Todas</MenuItem>
               {commissionSpecialty && (
                 <MenuItem value={commissionSpecialty.id}>Comissão CIPAVD</MenuItem>
               )}
