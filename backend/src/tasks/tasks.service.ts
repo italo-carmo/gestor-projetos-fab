@@ -2974,10 +2974,13 @@ export class TasksService {
       const specialtyName =
         activity.specialty?.name ??
         'Comissão CIPAVD';
+      const normalizedName = normalizeSpecialtyBucketName(specialtyName);
+      // Use normalized name as key to group all variations together
+      // For "Comissão CIPAVD" without specialtyId, use fixed key
       const key =
-        specialtyId ??
-        normalizeSpecialtyBucketName(specialtyName) ??
-        '__commission__';
+        normalizedName === 'comissao cipavd' && !specialtyId
+          ? '__commission__'
+          : normalizedName || '__commission__';
       const current = specialtiesMap.get(key);
       if (current) {
         current.count += 1;
