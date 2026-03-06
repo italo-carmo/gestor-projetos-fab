@@ -2999,17 +2999,17 @@ export class TasksService {
         key = '__psicologia__';
         displayName = 'Psicologia';
       }
-      // Priority 2: If specialtyId matches Comissão CIPAVD specialty ID, or name contains "comissao cipavd", or no specialtyId, or no specialtyName
-      else if (
-        specialtyId === commissionSpecialtyId ||
-        normalizedName.includes('comissao cipavd') ||
-        !specialtyId ||
-        !hasSpecialtyName
-      ) {
+      // Priority 2: If specialtyId matches Comissão CIPAVD specialty ID, or name contains "comissao cipavd"
+      else if (specialtyId === commissionSpecialtyId || normalizedName.includes('comissao cipavd')) {
         key = '__commission__';
         displayName = 'Comissão CIPAVD';
       }
-      // Priority 3: Otherwise, group by specialtyId if available, or by normalized name
+      // Priority 3: If no specialtyId or no specialtyName, it's Comissão CIPAVD
+      else if (!specialtyId || !hasSpecialtyName) {
+        key = '__commission__';
+        displayName = 'Comissão CIPAVD';
+      }
+      // Priority 4: Otherwise, group by specialtyId if available, or by normalized name
       else {
         key = specialtyId ?? (normalizedName || '__unknown__');
         displayName = specialtyName || 'Sem especialidade';
