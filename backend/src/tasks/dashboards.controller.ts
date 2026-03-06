@@ -90,4 +90,14 @@ export class DashboardsController {
   ) {
     return this.tasks.debugPsicologiaActivities({ from, to }, user);
   }
+
+  @Get('dashboard/executive/debug-counts')
+  @RequirePermission('dashboard', 'view')
+  async debugCounts(
+    @Query('from') from: string | undefined,
+    @Query('to') to: string | undefined,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.tasks.debugActivityCounts({ from, to }, user);
+  }
 }
