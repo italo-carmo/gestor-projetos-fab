@@ -3006,17 +3006,17 @@ export class TasksService {
       let displayName: string;
       
       // Priority 1: If specialtyId matches Psicologia specialty ID, or name contains "psicologia"
-      if (specialtyId === psicologiaSpecialtyId || normalizedName.includes('psicologia')) {
+      if (specialtyId === psicologiaSpecialtyId || (normalizedName && normalizedName.includes('psicologia'))) {
         key = '__psicologia__';
         displayName = 'Psicologia';
       }
       // Priority 2: If specialtyId matches Comissão CIPAVD specialty ID, or name contains "comissao cipavd"
-      else if (specialtyId === commissionSpecialtyId || normalizedName.includes('comissao cipavd')) {
+      else if (specialtyId === commissionSpecialtyId || (normalizedName && normalizedName.includes('comissao cipavd'))) {
         key = '__commission__';
         displayName = 'Comissão CIPAVD';
       }
-      // Priority 3: If no specialtyId or no specialtyName, it's Comissão CIPAVD
-      else if (!specialtyId || !hasSpecialtyName) {
+      // Priority 3: If no specialtyId or no specialtyName (empty string), it's Comissão CIPAVD
+      else if (!specialtyId || !hasSpecialtyName || !normalizedName) {
         key = '__commission__';
         displayName = 'Comissão CIPAVD';
       }
