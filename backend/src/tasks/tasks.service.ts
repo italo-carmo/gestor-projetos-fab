@@ -2980,17 +2980,22 @@ export class TasksService {
       let key: string;
       let displayName: string;
       
-      // If no specialtyId OR no name (empty string), it's "Comissão CIPAVD"
-      if (!specialtyId || !hasSpecialtyName) {
+      // Priority 1: If no specialtyId, it's always "Comissão CIPAVD"
+      if (!specialtyId) {
         key = '__commission__';
         displayName = 'Comissão CIPAVD';
       }
-      // If normalized name contains "psicologia", group as Psicologia
+      // Priority 2: If no name (empty string), it's "Comissão CIPAVD"
+      else if (!hasSpecialtyName) {
+        key = '__commission__';
+        displayName = 'Comissão CIPAVD';
+      }
+      // Priority 3: If normalized name contains "psicologia", group as Psicologia
       else if (normalizedName.includes('psicologia')) {
         key = '__psicologia__';
         displayName = 'Psicologia';
       }
-      // Otherwise, group by normalized name
+      // Priority 4: Otherwise, group by normalized name
       else {
         key = normalizedName || '__commission__';
         displayName = specialtyName || 'Comissão CIPAVD';
