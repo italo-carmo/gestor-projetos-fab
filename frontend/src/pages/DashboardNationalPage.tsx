@@ -1,7 +1,12 @@
 import {
   Box,
+  Button,
   Card,
   CardContent,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Grid,
   Stack,
   Table,
@@ -103,6 +108,7 @@ export function DashboardNationalPage() {
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
   const [showVisitColumn, setShowVisitColumn] = useState(true);
   const [lessonOffset, setLessonOffset] = useState(0);
+  const [readingLesson, setReadingLesson] = useState<LessonPost | null>(null);
 
   useEffect(() => {
     const element = tableContainerRef.current;
@@ -477,10 +483,16 @@ export function DashboardNationalPage() {
                     <Card
                       key={`${lesson.id}-${lessonOffset}-${index}`}
                       variant="outlined"
+                      onClick={() => setReadingLesson(lesson)}
                       sx={{
                         transition: 'transform 280ms ease, opacity 280ms ease',
                         backgroundColor: lesson.type?.colorHex || '#8E44AD',
                         borderColor: lesson.type?.colorHex || '#8E44AD',
+                        cursor: 'pointer',
+                        '&:hover': {
+                          transform: 'translateY(-2px)',
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                        },
                       }}
                     >
                       <CardContent sx={{ p: 1.2, backgroundColor: lesson.type?.colorHex || '#8E44AD' }}>
@@ -517,6 +529,41 @@ export function DashboardNationalPage() {
           </Card>
         </Grid>
       </Grid>
+
+      <Dialog
+        open={Boolean(readingLesson)}
+        onClose={() => setReadingLesson(null)}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle sx={{ pb: 0.5 }}>
+          {readingLesson?.title || 'Resultado Positivo'}
+        </DialogTitle>
+        <DialogContent dividers>
+          <Typography
+            variant="body1"
+            sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}
+          >
+            {readingLesson?.content || '-'}
+          </Typography>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={1}
+            justifyContent="space-between"
+            sx={{ mt: 2, pt: 2, borderTop: '1px solid rgba(0,0,0,0.1)' }}
+          >
+            <Typography variant="caption" color="text.secondary">
+              Autor: {readingLesson?.authorLabel || 'Coordenação CIPAVD'}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Data: {readingLesson?.createdAt ? new Date(readingLesson.createdAt).toLocaleString('pt-BR') : '-'}
+            </Typography>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setReadingLesson(null)}>Fechar</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
