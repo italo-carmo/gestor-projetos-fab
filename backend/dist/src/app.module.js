@@ -36,6 +36,8 @@ const missions_module_1 = require("./missions/missions.module");
 const social_communication_module_1 = require("./social-communication/social-communication.module");
 const cpca_module_1 = require("./cpca/cpca.module");
 const library_module_1 = require("./library/library.module");
+const best_practices_module_1 = require("./best-practices/best-practices.module");
+const lessons_learned_module_1 = require("./lessons-learned/lessons-learned.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -73,6 +75,8 @@ exports.AppModule = AppModule = __decorate([
             social_communication_module_1.SocialCommunicationModule,
             cpca_module_1.CpcaModule,
             library_module_1.LibraryModule,
+            best_practices_module_1.BestPracticesModule,
+            lessons_learned_module_1.LessonsLearnedModule,
         ],
         controllers: [app_controller_1.AppController],
         providers: [app_service_1.AppService],

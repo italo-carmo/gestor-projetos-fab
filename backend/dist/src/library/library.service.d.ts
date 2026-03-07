@@ -37,4 +37,5 @@ export declare class LibraryService {
     deleteDocument(id: string, documentsDir: string, user?: RbacUser): Promise<{
         success: boolean;
     }>;
+    getDocumentById(id: string): Promise<any>;
 }

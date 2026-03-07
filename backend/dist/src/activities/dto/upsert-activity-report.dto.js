@@ -22,12 +22,19 @@ class UpsertActivityReportDto {
     executionSchedule;
     activitiesPerformed;
     participantsCount;
+    participantsMaleCount;
+    participantsFemaleCount;
+    publicProfile;
     instructorsCount;
     recruitsCount;
     eloPsychologyCount;
     eloSocialAssistanceCount;
     eloGraduadoMasterCount;
     participantsCharacteristics;
+    mainPointsObserved;
+    attentionPoints;
+    nextSteps;
+    referencesAndAttachments;
     conclusion;
     city;
     closingDate;
@@ -79,6 +86,23 @@ __decorate([
     __metadata("design:type", Number)
 ], UpsertActivityReportDto.prototype, "participantsCount", void 0);
 __decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsInt)(),
+    (0, class_validator_1.Min)(0),
+    __metadata("design:type", Number)
+], UpsertActivityReportDto.prototype, "participantsMaleCount", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsInt)(),
+    (0, class_validator_1.Min)(0),
+    __metadata("design:type", Number)
+], UpsertActivityReportDto.prototype, "participantsFemaleCount", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], UpsertActivityReportDto.prototype, "publicProfile", void 0);
+__decorate([
     (0, class_validator_1.IsInt)(),
     (0, class_validator_1.Min)(0),
     __metadata("design:type", Number)
@@ -107,6 +131,26 @@ __decorate([
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], UpsertActivityReportDto.prototype, "participantsCharacteristics", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], UpsertActivityReportDto.prototype, "mainPointsObserved", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], UpsertActivityReportDto.prototype, "attentionPoints", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], UpsertActivityReportDto.prototype, "nextSteps", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], UpsertActivityReportDto.prototype, "referencesAndAttachments", void 0);
 __decorate([
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)

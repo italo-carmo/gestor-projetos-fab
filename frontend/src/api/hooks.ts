@@ -69,10 +69,11 @@ export function useActivityTypes() {
   });
 }
 
-export function useMissions(filters: Record<string, any>) {
+export function useMissions(filters: Record<string, any>, enabled = true) {
   return useQuery({
     queryKey: qk.missions(filters),
     queryFn: async () => (await api.get("/missions", { params: filters })).data,
+    enabled,
     staleTime: 10_000,
   });
 }
@@ -1340,10 +1341,11 @@ export function useUploadReport() {
 }
 
 /** Notices */
-export function useNotices(filters: Record<string, any>) {
+export function useNotices(filters: Record<string, any>, enabled = true) {
   return useQuery({
     queryKey: qk.notices(filters),
     queryFn: async () => (await api.get("/notices", { params: filters })).data,
+    enabled,
     staleTime: 10_000,
   });
 }
@@ -1689,10 +1691,11 @@ export function useDeleteLibraryDocument() {
 }
 
 /** Meetings */
-export function useMeetings(filters: Record<string, any>) {
+export function useMeetings(filters: Record<string, any>, enabled = true) {
   return useQuery({
     queryKey: qk.meetings(filters),
     queryFn: async () => (await api.get("/meetings", { params: filters })).data,
+    enabled,
     staleTime: 10_000,
   });
 }
@@ -2321,11 +2324,12 @@ export function useSearch(q: string) {
   });
 }
 
-export function useDocuments(filters: Record<string, any>) {
+export function useDocuments(filters: Record<string, any>, enabled = true) {
   return useQuery({
     queryKey: qk.documents(filters),
     queryFn: async () =>
       (await api.get("/documents", { params: filters })).data,
+    enabled,
     staleTime: 10_000,
   });
 }

@@ -53,6 +53,7 @@ const http_error_1 = require("../common/http-error");
 const sanitize_1 = require("../common/sanitize");
 const prisma_service_1 = require("../prisma/prisma.service");
 const role_access_1 = require("../rbac/role-access");
+const social_communication_storage_1 = require("./social-communication-storage");
 let SocialCommunicationService = class SocialCommunicationService {
     prisma;
     audit;
@@ -254,8 +255,8 @@ let SocialCommunicationService = class SocialCommunicationService {
             (0, http_error_1.throwError)('NOT_FOUND');
         if (article.coverImageUrl.startsWith('/social-communication/uploads/')) {
             const filename = path.basename(article.coverImageUrl);
-            const filePath = path.resolve(process.cwd(), 'storage', 'social-communication-covers', filename);
-            if (!fs.existsSync(filePath))
+            const filePath = (0, social_communication_storage_1.getSocialCommunicationCoverCandidates)(filename).find((candidate) => fs.existsSync(candidate));
+            if (!filePath)
                 (0, http_error_1.throwError)('NOT_FOUND');
             const buffer = fs.readFileSync(filePath);
             const extension = path.extname(filename).toLowerCase();

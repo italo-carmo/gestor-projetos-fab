@@ -1,7 +1,21 @@
 import { Box, Button, Card, CardContent, Chip, Divider, Stack, Typography } from '@mui/material';
 import { Link } from 'react-router-dom';
 import { useParams } from 'react-router-dom';
-import { useDashboardNational, useLocalityProgress, useTasks, useMe, useTaskTemplates } from '../api/hooks';
+import {
+  useActivities,
+  useBestPractices,
+  useDashboardNational,
+  useDocuments,
+  useLocalityProgress,
+  useMeetings,
+  useMissions,
+  useNotices,
+  useTasks,
+  useMe,
+  useTaskTemplates,
+} from '../api/hooks';
+import { can } from '../app/rbac';
+import { hasAnyRole, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from '../app/roleAccess';
 import { SkeletonState } from '../components/states/SkeletonState';
 import { ErrorState } from '../components/states/ErrorState';
 import { EmptyState } from '../components/states/EmptyState';
@@ -15,6 +29,18 @@ export function DashboardLocalityPage() {
   const progressQuery = useLocalityProgress(id ?? '');
   const tasksQuery = useTasks({ localityId: id });
   const templatesQuery = useTaskTemplates();
+  const canViewBestPractices = can(me, 'best_practices', 'view');
+  const canViewNotices = can(me, 'notices', 'view');
+  const canViewMeetings = can(me, 'meetings', 'view');
+  const canViewDocuments =
+    can(me, 'search', 'view') &&
+    hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]);
+  const activitiesQuery = useActivities({ localityId: id, pageSize: '20' });
+  const bestPracticesQuery = useBestPractices({ localityId: id }, canViewBestPractices);
+  const noticesQuery = useNotices({ localityId: id, pageSize: '20' }, canViewNotices);
+  const missionsQuery = useMissions({ localityId: id, pageSize: '20' }, Boolean(id));
+  const meetingsQuery = useMeetings({ localityId: id, pageSize: '20' }, canViewMeetings);
+  const documentsQuery = useDocuments({ localityId: id, pageSize: '20' }, canViewDocuments);
 
   if (progressQuery.isLoading) return <SkeletonState />;
   if (progressQuery.isError) return <ErrorState error={progressQuery.error} onRetry={() => progressQuery.refetch()} />;
@@ -33,6 +59,12 @@ export function DashboardLocalityPage() {
   const unassigned = tasks.filter((task: any) => task.hasAssignee === false).slice(0, 5);
 
   const localityInfo = (dashboardQuery.data?.items ?? []).find((loc: any) => loc.localityId === id);
+  const activities = (activitiesQuery.data?.items ?? []).slice(0, 5);
+  const bestPractices = (bestPracticesQuery.data?.items ?? []).slice(0, 5);
+  const notices = (noticesQuery.data?.items ?? []).slice(0, 5);
+  const missions = (missionsQuery.data?.items ?? []).slice(0, 5);
+  const meetings = (meetingsQuery.data?.items ?? []).slice(0, 5);
+  const documents = (documentsQuery.data?.items ?? []).slice(0, 5);
 
   return (
     <Box>
@@ -136,6 +168,171 @@ export function DashboardLocalityPage() {
           </CardContent>
         </Card>
       </Stack>
+
+      <Card sx={{ mt: 2 }}>
+        <CardContent>
+          <Typography variant="h6" gutterBottom>
+            Panorama da localidade
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+            Conteúdos e registros vinculados a esta localidade em todo o sistema (exceto denúncias/CPCA).
+          </Typography>
+
+          <Box
+            sx={{
+              display: 'grid',
+              gap: 1.5,
+              gridTemplateColumns: {
+                xs: '1fr',
+                md: 'repeat(2, minmax(0, 1fr))',
+                xl: 'repeat(3, minmax(0, 1fr))',
+              },
+            }}
+          >
+            <Card variant="outlined">
+              <CardContent>
+                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+                  <Typography variant="subtitle2" fontWeight={700}>Boas práticas</Typography>
+                  <Button size="small" component={Link} to={`/best-practices?localityId=${id}`}>
+                    Ver tudo
+                  </Button>
+                </Stack>
+                {bestPracticesQuery.isError ? (
+                  <Typography variant="body2" color="text.secondary">Sem permissão ou indisponível.</Typography>
+                ) : bestPractices.length === 0 ? (
+                  <Typography variant="body2" color="text.secondary">Sem registros.</Typography>
+                ) : (
+                  <Stack spacing={0.7}>
+                    {bestPractices.map((item: any) => (
+                      <Typography key={item.id} variant="body2" noWrap>
+                        • {item.title}
+                      </Typography>
+                    ))}
+                  </Stack>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card variant="outlined">
+              <CardContent>
+                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+                  <Typography variant="subtitle2" fontWeight={700}>Atividades de campo</Typography>
+                  <Button size="small" component={Link} to={`/activities?localityId=${id}`}>
+                    Ver tudo
+                  </Button>
+                </Stack>
+                {activities.length === 0 ? (
+                  <Typography variant="body2" color="text.secondary">Sem registros.</Typography>
+                ) : (
+                  <Stack spacing={0.7}>
+                    {activities.map((item: any) => (
+                      <Typography key={item.id} variant="body2" noWrap>
+                        • {item.title}
+                      </Typography>
+                    ))}
+                  </Stack>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card variant="outlined">
+              <CardContent>
+                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+                  <Typography variant="subtitle2" fontWeight={700}>Avisos</Typography>
+                  <Button size="small" component={Link} to={`/notices?localityId=${id}`}>
+                    Ver tudo
+                  </Button>
+                </Stack>
+                {noticesQuery.isError ? (
+                  <Typography variant="body2" color="text.secondary">Sem permissão ou indisponível.</Typography>
+                ) : notices.length === 0 ? (
+                  <Typography variant="body2" color="text.secondary">Sem registros.</Typography>
+                ) : (
+                  <Stack spacing={0.7}>
+                    {notices.map((item: any) => (
+                      <Typography key={item.id} variant="body2" noWrap>
+                        • {item.title}
+                      </Typography>
+                    ))}
+                  </Stack>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card variant="outlined">
+              <CardContent>
+                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+                  <Typography variant="subtitle2" fontWeight={700}>Missões</Typography>
+                  <Button size="small" component={Link} to={`/missions?localityId=${id}`}>
+                    Ver tudo
+                  </Button>
+                </Stack>
+                {missionsQuery.isError ? (
+                  <Typography variant="body2" color="text.secondary">Sem permissão ou indisponível.</Typography>
+                ) : missions.length === 0 ? (
+                  <Typography variant="body2" color="text.secondary">Sem registros.</Typography>
+                ) : (
+                  <Stack spacing={0.7}>
+                    {missions.map((item: any) => (
+                      <Typography key={item.id} variant="body2" noWrap>
+                        • {item.title}
+                      </Typography>
+                    ))}
+                  </Stack>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card variant="outlined">
+              <CardContent>
+                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+                  <Typography variant="subtitle2" fontWeight={700}>Reuniões</Typography>
+                  <Button size="small" component={Link} to={`/meetings?localityId=${id}`}>
+                    Ver tudo
+                  </Button>
+                </Stack>
+                {meetingsQuery.isError ? (
+                  <Typography variant="body2" color="text.secondary">Sem permissão ou indisponível.</Typography>
+                ) : meetings.length === 0 ? (
+                  <Typography variant="body2" color="text.secondary">Sem registros.</Typography>
+                ) : (
+                  <Stack spacing={0.7}>
+                    {meetings.map((item: any) => (
+                      <Typography key={item.id} variant="body2" noWrap>
+                        • {item.scope || 'Reunião'}
+                      </Typography>
+                    ))}
+                  </Stack>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card variant="outlined">
+              <CardContent>
+                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+                  <Typography variant="subtitle2" fontWeight={700}>Documentos</Typography>
+                  <Button size="small" component={Link} to={`/documents?localityId=${id}`}>
+                    Ver tudo
+                  </Button>
+                </Stack>
+                {documentsQuery.isError ? (
+                  <Typography variant="body2" color="text.secondary">Sem permissão ou indisponível.</Typography>
+                ) : documents.length === 0 ? (
+                  <Typography variant="body2" color="text.secondary">Sem registros.</Typography>
+                ) : (
+                  <Stack spacing={0.7}>
+                    {documents.map((item: any) => (
+                      <Typography key={item.id} variant="body2" noWrap>
+                        • {item.title}
+                      </Typography>
+                    ))}
+                  </Stack>
+                )}
+              </CardContent>
+            </Card>
+          </Box>
+        </CardContent>
+      </Card>
     </Box>
   );
 }

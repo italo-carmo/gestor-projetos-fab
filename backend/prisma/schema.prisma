@@ -300,12 +300,19 @@ model ActivityReport {
   executionSchedule         String
   activitiesPerformed       String
   participantsCount         Int
+  participantsMaleCount     Int?
+  participantsFemaleCount   Int?
+  publicProfile             String?
   instructorsCount          Int      @default(0)
   recruitsCount             Int      @default(0)
   eloPsychologyCount        Int      @default(0)
   eloSocialAssistanceCount  Int      @default(0)
   eloGraduadoMasterCount    Int      @default(0)
   participantsCharacteristics String
+  mainPointsObserved        String?
+  attentionPoints           String?
+  nextSteps                 String?
+  referencesAndAttachments   String?
   conclusion                String
   city                      String
   closingDate               DateTime

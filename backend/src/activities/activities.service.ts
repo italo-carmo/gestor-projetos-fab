@@ -1551,12 +1551,19 @@ export class ActivitiesService {
       executionSchedule?: string;
       activitiesPerformed: string;
       participantsCount: number;
+      participantsMaleCount?: number;
+      participantsFemaleCount?: number;
+      publicProfile?: string;
       instructorsCount: number;
       recruitsCount: number;
       eloPsychologyCount: number;
       eloSocialAssistanceCount: number;
       eloGraduadoMasterCount: number;
       participantsCharacteristics: string;
+      mainPointsObserved?: string;
+      attentionPoints?: string;
+      nextSteps?: string;
+      referencesAndAttachments?: string;
       conclusion: string;
       city: string;
       closingDate: string;
@@ -1580,6 +1587,9 @@ export class ActivitiesService {
       executionSchedule: sanitizeText(payload.executionSchedule ?? ''),
       activitiesPerformed: sanitizeText(payload.activitiesPerformed),
       participantsCount: Math.max(0, Number(payload.participantsCount) || 0),
+      participantsMaleCount: payload.participantsMaleCount != null ? Math.max(0, Number(payload.participantsMaleCount) || 0) : null,
+      participantsFemaleCount: payload.participantsFemaleCount != null ? Math.max(0, Number(payload.participantsFemaleCount) || 0) : null,
+      publicProfile: payload.publicProfile ? sanitizeText(payload.publicProfile) : null,
       instructorsCount: Math.max(0, Number(payload.instructorsCount) || 0),
       recruitsCount: Math.max(0, Number(payload.recruitsCount) || 0),
       eloPsychologyCount: Math.max(0, Number(payload.eloPsychologyCount) || 0),
@@ -1594,6 +1604,10 @@ export class ActivitiesService {
       participantsCharacteristics: sanitizeText(
         payload.participantsCharacteristics,
       ),
+      mainPointsObserved: payload.mainPointsObserved ? sanitizeText(payload.mainPointsObserved) : null,
+      attentionPoints: payload.attentionPoints ? sanitizeText(payload.attentionPoints) : null,
+      nextSteps: payload.nextSteps ? sanitizeText(payload.nextSteps) : null,
+      referencesAndAttachments: payload.referencesAndAttachments ? sanitizeText(payload.referencesAndAttachments) : null,
       conclusion: sanitizeText(payload.conclusion),
       city: sanitizeText(payload.city),
       closingDate: new Date(payload.closingDate),
@@ -1889,6 +1903,7 @@ export class ActivitiesService {
         },
         locality: { select: { id: true, code: true, name: true } },
         specialty: { select: { id: true, name: true, color: true } },
+        activityType: { select: { id: true, name: true } },
         createdBy: { select: { id: true, name: true } },
         report: {
           include: {
@@ -1921,40 +1936,75 @@ export class ActivitiesService {
       doc.on('error', reject);
     });
 
-    const writeLine = (label: string, value: string) => {
-      doc.font('Helvetica-Bold').fontSize(10).text(label);
+    const writeSection = (title: string) => {
+      doc.moveDown(0.5);
+      doc
+        .font('Helvetica-Bold')
+        .fontSize(12)
+        .text(title, { underline: true });
+      doc.moveDown(0.4);
+    };
+
+    const writeField = (label: string, value: string) => {
+      doc.font('Helvetica-Bold').fontSize(10).text(label + ':', { continued: false });
       doc.moveDown(0.2);
       doc
         .font('Helvetica')
         .fontSize(11)
         .text(value || '-', { align: 'justify' });
-      doc.moveDown(0.8);
+      doc.moveDown(0.6);
+    };
+
+    const writeSubsection = (title: string, content: string) => {
+      doc.font('Helvetica-Bold').fontSize(10).text(title, { continued: false });
+      doc.moveDown(0.2);
+      doc
+        .font('Helvetica')
+        .fontSize(11)
+        .text(content || '-', { align: 'justify' });
+      doc.moveDown(0.6);
     };
 
     doc
       .font('Helvetica-Bold')
-      .fontSize(16)
-      .text('Relatório de Atividade', { align: 'center' });
-    doc.moveDown(0.8);
+      .fontSize(18)
+      .text('RELATÓRIO DE ATIVIDADE - CIPAVD / SMIF 2026', { align: 'center' });
+    doc.moveDown(1);
 
-    writeLine('Atividade', activity.title);
-    writeLine(
-      'Localidade',
-      activity.locality
-        ? `${activity.locality.name} (${activity.locality.code})`
-        : 'Não vinculada',
-    );
-    writeLine(
-      'Especialidade',
-      activity.specialty?.name ?? 'Todas as especialidades',
-    );
-    writeLine('Data da atividade', this.formatDate(report.date));
-    writeLine('Local', report.location);
-    writeLine('Responsável', report.responsible);
-    writeLine('Análise da atividade', report.missionSupport);
-    writeLine('Atividades realizadas', report.activitiesPerformed);
-    writeLine('Participantes (número)', String(report.participantsCount));
-    writeLine(
+    // 1. IDENTIFICAÇÃO DA ATIVIDADE
+    writeSection('1. IDENTIFICAÇÃO DA ATIVIDADE');
+    writeField('Tipo de Atividade', activity.activityType?.name ?? '-');
+    writeField('Título / Tema', activity.title);
+    writeField('Data', this.formatDate(report.date));
+    writeField('Local', report.location);
+
+    // 2. EQUIPE RESPONSÁVEL
+    writeSection('2. EQUIPE RESPONSÁVEL');
+    writeField('Responsável(is)', report.responsible);
+    if (report.missionSupport) {
+      writeField('Apoio à Missão', report.missionSupport);
+    }
+
+    // 3. PÚBLICO PARTICIPANTE
+    writeSection('3. PÚBLICO PARTICIPANTE');
+    writeField('Total de Participantes', String(report.participantsCount));
+    
+    const compositionParts: string[] = [];
+    if (report.participantsMaleCount != null && report.participantsMaleCount > 0) {
+      compositionParts.push(`${report.participantsMaleCount} homens`);
+    }
+    if (report.participantsFemaleCount != null && report.participantsFemaleCount > 0) {
+      compositionParts.push(`${report.participantsFemaleCount} mulheres`);
+    }
+    if (compositionParts.length > 0) {
+      writeField('Composição', compositionParts.join(' e '));
+    }
+    
+    if (report.publicProfile) {
+      writeField('Perfil do Público', report.publicProfile);
+    }
+    
+    writeSubsection(
       'Participantes por perfil',
       `Instrutores: ${report.instructorsCount ?? 0}\n` +
         `Recrutas: ${report.recruitsCount ?? 0}\n` +
@@ -1962,13 +2012,72 @@ export class ActivitiesService {
         `Elo Assistência Social: ${report.eloSocialAssistanceCount ?? 0}\n` +
         `Elo Graduado Master: ${report.eloGraduadoMasterCount ?? 0}`,
     );
-    writeLine(
-      'Participantes (características)',
-      report.participantsCharacteristics,
-    );
-    writeLine('Conclusão', report.conclusion);
-    writeLine('Cidade', report.city);
-    writeLine('Data (fechamento)', this.formatDate(report.closingDate));
+    
+    if (report.participantsCharacteristics) {
+      writeField('Características dos Participantes', report.participantsCharacteristics);
+    }
+
+    // 4. DESCRIÇÃO DA ATIVIDADE
+    writeSection('4. DESCRIÇÃO DA ATIVIDADE');
+    if (report.introduction) {
+      writeSubsection('Introdução', report.introduction);
+    }
+    if (report.missionObjectives) {
+      writeSubsection('Objetivos da Missão', report.missionObjectives);
+    }
+    if (report.executionSchedule) {
+      writeSubsection('Cronograma de Execução', report.executionSchedule);
+    }
+    writeSubsection('Desenvolvimento', report.activitiesPerformed);
+
+    // 5. PRINCIPAIS PONTOS OBSERVADOS
+    if (report.mainPointsObserved) {
+      writeSection('5. PRINCIPAIS PONTOS OBSERVADOS');
+      writeSubsection('Principais questionamentos levantados pelos participantes', report.mainPointsObserved);
+    }
+
+    // 6. PONTOS DE ATENÇÃO
+    if (report.attentionPoints) {
+      writeSection('6. PONTOS DE ATENÇÃO');
+      writeSubsection('Lacunas / Riscos / Encaminhamentos necessários', report.attentionPoints);
+    }
+
+    // 7. ENCAMINHAMENTOS E PRÓXIMOS PASSOS
+    if (report.nextSteps) {
+      writeSection('7. ENCAMINHAMENTOS E PRÓXIMOS PASSOS');
+      writeSubsection('Ações previstas', report.nextSteps);
+    }
+
+    // 8. REFERÊNCIAS E ANEXOS
+    if (report.referencesAndAttachments) {
+      writeSection('8. REFERÊNCIAS E ANEXOS');
+      writeSubsection('Links e registros', report.referencesAndAttachments);
+    }
+
+    // Conclusão
+    if (report.conclusion) {
+      writeSection('CONCLUSÃO');
+      doc
+        .font('Helvetica')
+        .fontSize(11)
+        .text(report.conclusion, { align: 'justify' });
+      doc.moveDown(0.8);
+    }
+
+    // Rodapé
+    doc.moveDown(1);
+    const footerY = doc.page.height - 80;
+    doc
+      .font('Helvetica')
+      .fontSize(10)
+      .text(`Local e Data: ${report.city}, ${this.formatDate(report.closingDate)}`, {
+        y: footerY,
+        align: 'left',
+      });
+    doc.text(`Responsável pelo Relatório: ${report.responsible}`, {
+      y: footerY + 15,
+      align: 'left',
+    });
 
     doc
       .font('Helvetica-Bold')

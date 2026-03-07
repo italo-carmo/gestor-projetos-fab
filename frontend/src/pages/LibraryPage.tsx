@@ -462,14 +462,14 @@ export function LibraryPage() {
                       <Box sx={{ minWidth: 0 }}>
                         <Typography variant="subtitle2" fontWeight={700} noWrap>
                           {locality.code || locality.name}
-                        </Typography>
+              </Typography>
                         <Typography variant="caption" color="text.secondary" noWrap>
                           {locality.name}
                         </Typography>
                       </Box>
                       <Stack direction="row" alignItems="center" spacing={0.6}>
                         <Chip
-                          size="small"
+                size="small"
                           label={localityPhotos.length ? `${Math.min(currentIndex + 1, localityPhotos.length)}/${localityPhotos.length}` : "0/0"}
                           variant="outlined"
                         />
@@ -482,24 +482,24 @@ export function LibraryPage() {
                                 setEditingLocalityId(locality.id);
                                 setNewPhotoLocalityId(locality.id);
                                 setDrawerOpen(true);
-                              }}
-                            >
+                }}
+              >
                               <EditRoundedIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
                         )}
                       </Stack>
-                    </Stack>
-                    <Box
-                      sx={{
+            </Stack>
+            <Box
+              sx={{
                         height: 206,
                         backgroundColor: "#0E2E3A",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
-                        overflow: "hidden",
+                overflow: "hidden",
                         cursor: currentPhoto ? "zoom-in" : "default",
-                      }}
+              }}
                       onClick={() => {
                         if (!currentPhoto) return;
                         setExpandedLocalityId(locality.id);
@@ -507,9 +507,9 @@ export function LibraryPage() {
                       }}
                     >
                       {currentPhoto ? (
-                        <Box
-                          component="img"
-                          src={getPhotoUrl(currentPhoto)}
+                  <Box
+                    component="img"
+                    src={getPhotoUrl(currentPhoto)}
                           alt={currentPhoto.title || `Foto ${locality.name}`}
                           sx={{
                             width: "100%",
@@ -525,8 +525,8 @@ export function LibraryPage() {
                           <ImageRoundedIcon sx={{ color: "white", fontSize: 34, opacity: 0.88 }} />
                           <Typography sx={{ color: "white", fontSize: 12 }}>Sem fotos</Typography>
                         </Stack>
-                      )}
-                    </Box>
+              )}
+            </Box>
                     <CardContent sx={{ pt: 0.7, pb: 0.5 }}>
                       <Typography
                         variant="body2"
@@ -542,12 +542,12 @@ export function LibraryPage() {
                         }}
                       >
                         {currentPhoto?.title?.trim() || "Sem título"}
-                      </Typography>
+              </Typography>
                     </CardContent>
                   </Card>
                 );
               })}
-            </Box>
+          </Box>
           )}
         </CardContent>
       </Card>
@@ -557,7 +557,7 @@ export function LibraryPage() {
           <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", md: "center" }} gap={1} sx={{ mb: 1 }}>
             <Typography variant="h6" fontWeight={700}>
               Publicações da Comissão
-            </Typography>
+          </Typography>
             {canManage && (
               <Button
                 variant="contained"
@@ -619,8 +619,8 @@ export function LibraryPage() {
                     <TableCell align="right">
                       <Tooltip title={downloadingDocumentId === document.id ? "Baixando..." : "Baixar publicação"}>
                         <span>
-                          <IconButton
-                            size="small"
+                        <IconButton
+                          size="small"
                             onClick={(event) => {
                               event.stopPropagation();
                               if (downloadingDocumentId !== document.id) {
@@ -628,10 +628,10 @@ export function LibraryPage() {
                               }
                             }}
                             disabled={downloadingDocumentId === document.id}
-                            sx={{ color: "primary.main" }}
-                          >
-                            <OpenInNewRoundedIcon fontSize="small" />
-                          </IconButton>
+                          sx={{ color: "primary.main" }}
+                        >
+                          <OpenInNewRoundedIcon fontSize="small" />
+                        </IconButton>
                         </span>
                       </Tooltip>
                     </TableCell>
@@ -839,7 +839,7 @@ export function LibraryPage() {
                         onClick={applyBulkLocality}
                       >
                         Aplicar aos selecionados ({selectedInTableCount})
-                      </Button>
+                    </Button>
                     </Stack>
                   </Stack>
 

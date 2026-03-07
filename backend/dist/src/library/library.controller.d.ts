@@ -1,3 +1,4 @@
+import type { Response } from 'express';
 import type { RbacUser } from '../rbac/rbac.types';
 import { LibraryService } from './library.service';
 export declare const libraryPhotosDir: string;
@@ -36,4 +37,5 @@ export declare class LibraryController {
     deleteDocument(id: string, user: RbacUser): Promise<{
         success: boolean;
     }>;
+    downloadDocument(id: string, res: Response): Promise<void | Response<any, Record<string, any>>>;
 }

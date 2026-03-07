@@ -38,6 +38,16 @@ export declare class DashboardsController {
             reportsProduced: number;
             smifNewsCount: number;
             visitsCompleted: number;
+            completedReports: number;
+            completedTasks: number;
+            completedFieldActivities: number;
+            completedVisits: number;
+            fieldActivitiesBySpecialty: {
+                psychology: number;
+                socialService: number;
+                doctrine: number;
+                law: number;
+            };
         };
         lateItems: {
             activityId: string;
@@ -149,6 +159,54 @@ export declare class DashboardsController {
             reportTotal: number;
         };
         status: {
+            items: never[];
+        };
+        progress: {
+            overall: number;
+            byLocality: never[];
+        };
+        localityAboveThreshold: {
+            threshold: number;
+            count: number;
+            total: number;
+            items: never[];
+        };
+        specialties: {
+            items: never[];
+        };
+        late: {
+            total: number;
+            trend: never[];
+            items: never[];
+        };
+        unassigned: {
+            total: number;
+            byLocality: never[];
+            items: never[];
+        };
+        reportsCompliance: {
+            approved: number;
+            pending: number;
+            total: number;
+            pendingItems: never[];
+        };
+        risk: {
+            top10: never[];
+        };
+    } | {
+        summary: {
+            totalActivities: number;
+            completedActivities: number;
+            completionPercent: number;
+            visitedCities: number;
+            participantsInActivities: number;
+            lateActivities: number;
+            unassignedActivities: number;
+            reportPending: number;
+            reportApproved: number;
+            reportTotal: number;
+        };
+        status: {
             items: {
                 status: "CANCELLED" | "DONE" | "NOT_STARTED" | "IN_PROGRESS";
                 count: number;
@@ -209,7 +267,7 @@ export declare class DashboardsController {
                 activityId: string;
                 title: string;
                 specialtyId: string | null;
-                specialtyName: string;
+                specialtyName: any;
                 localityId: string;
                 localityCode: string;
                 localityName: string;
@@ -237,7 +295,7 @@ export declare class DashboardsController {
                 activityId: string;
                 title: string;
                 specialtyId: string | null;
-                specialtyName: string;
+                specialtyName: any;
                 localityId: string;
                 localityCode: string;
                 localityName: string;
@@ -256,11 +314,51 @@ export declare class DashboardsController {
             approved: number;
             pending: number;
             total: number;
+            completedItems: {
+                report: {
+                    id: any;
+                    signedAt: any;
+                    date: any;
+                    location: any;
+                    responsible: any;
+                    missionSupport: any;
+                    introduction: any;
+                    missionObjectives: any;
+                    executionSchedule: any;
+                    activitiesPerformed: any;
+                    participantsCount: any;
+                    instructorsCount: any;
+                    recruitsCount: any;
+                    eloPsychologyCount: any;
+                    eloSocialAssistanceCount: any;
+                    eloGraduadoMasterCount: any;
+                    participantsCharacteristics: any;
+                    conclusion: any;
+                    city: any;
+                    closingDate: any;
+                } | null;
+                activityId: string;
+                title: string;
+                specialtyId: string | null;
+                specialtyName: any;
+                localityId: string;
+                localityCode: string;
+                localityName: string;
+                commandName: string;
+                eventDate: Date | null;
+                createdAt: Date;
+                status: import("@prisma/client").$Enums.ActivityStatus;
+                reportRequired: boolean;
+                hasSignedReport: boolean;
+                isLate: boolean;
+                daysLate: number;
+                isUnassigned: boolean;
+            }[];
             pendingItems: {
                 activityId: string;
                 title: string;
                 specialtyId: string | null;
-                specialtyName: string;
+                specialtyName: any;
                 localityId: string;
                 localityCode: string;
                 localityName: string;
@@ -287,6 +385,93 @@ export declare class DashboardsController {
                     reportPending: number;
                 };
             }[];
+        };
+    }>;
+    debugSpecialties(from: string | undefined, to: string | undefined, user: RbacUser): Promise<{
+        specialties: {
+            specialtyName: any;
+            count: any;
+            specialtyId: any;
+        }[];
+        psicologia: {
+            count: number;
+            specialtyId: string | null | undefined;
+            specialtyName: string | undefined;
+        };
+        total: any;
+        totalActivities: number;
+    }>;
+    debugPsicologia(from: string | undefined, to: string | undefined, user: RbacUser): Promise<{
+        count: number;
+        activities: never[];
+        totalActivities?: undefined;
+    } | {
+        count: number;
+        totalActivities: number;
+        activities: {
+            id: string;
+            title: string;
+            specialtyId: string | null;
+            specialtyName: string | null;
+            localityId: string | null;
+            eventDate: Date | null;
+            createdAt: Date;
+        }[];
+    }>;
+    debugCounts(from: string | undefined, to: string | undefined, user: RbacUser): Promise<{
+        database: {
+            psicologia: number;
+            commission: number;
+            total: number;
+        };
+        dashboard: {
+            psicologia: number;
+            commission: number;
+            allSpecialties: {
+                name: any;
+                count: any;
+                specialtyId: any;
+            }[];
+        };
+        specialties: {
+            psicologia: {
+                id: null;
+                name: null;
+            };
+            commission: {
+                id: null;
+                name: null;
+            };
+        } | {
+            psicologia: {
+                id: string | null;
+                name: string | null;
+            };
+            commission: {
+                id: string | null;
+                name: string | null;
+            };
+        };
+        bySpecialtyId: Record<string, number> | {};
+        activitiesSample: {
+            id: string;
+            title: string;
+            specialtyId: string | null;
+            specialtyName: any;
+            activityTypeId: any;
+            activityTypeName: any;
+        }[] | undefined;
+        match: {
+            psicologia: boolean;
+            commission: boolean;
+        };
+        expected: {
+            psicologia: number;
+            commission: number;
+        };
+        status: {
+            psicologiaOk: boolean;
+            commissionOk: boolean;
         };
     }>;
 }

@@ -1669,6 +1669,24 @@ let TasksService = class TasksService {
                 report: {
                     select: {
                         id: true,
+                        date: true,
+                        location: true,
+                        responsible: true,
+                        missionSupport: true,
+                        introduction: true,
+                        missionObjectives: true,
+                        executionSchedule: true,
+                        activitiesPerformed: true,
+                        participantsCount: true,
+                        instructorsCount: true,
+                        recruitsCount: true,
+                        eloPsychologyCount: true,
+                        eloSocialAssistanceCount: true,
+                        eloGraduadoMasterCount: true,
+                        participantsCharacteristics: true,
+                        conclusion: true,
+                        city: true,
+                        closingDate: true,
                         signedAt: true,
                         signatureHash: true,
                     },
@@ -1824,7 +1842,7 @@ let TasksService = class TasksService {
             law: 0,
         };
         for (const activity of completedFieldActivities) {
-            const normalized = normalizeSpecialtyName(String(activity.specialty?.name ?? ''));
+            const normalized = normalizeSpecialtyName(String(activity.specialty?.name ?? activity.activityType?.name ?? ''));
             if (!normalized)
                 continue;
             if (normalized.includes('psicologia')) {
@@ -2126,10 +2144,8 @@ let TasksService = class TasksService {
                 ? (0, executive_1.sanitizeForExecutive)(emptyResponse)
                 : emptyResponse;
         }
-        const from = params.from
-            ? new Date(params.from)
-            : new Date(Date.now() - 56 * 24 * 60 * 60 * 1000);
-        const to = params.to ? new Date(params.to) : new Date();
+        const from = params.from ? new Date(params.from) : null;
+        const to = params.to ? new Date(params.to) : null;
         const thresholdRaw = Number(params.threshold ?? 70);
         const threshold = Number.isFinite(thresholdRaw) ? thresholdRaw : 70;
         const localityWhere = {
@@ -2163,13 +2179,29 @@ let TasksService = class TasksService {
                 ? (0, executive_1.sanitizeForExecutive)(emptyResponse)
                 : emptyResponse;
         }
+        const activityDateRangeFilter = from || to
+            ? {
+                OR: [
+                    {
+                        eventDate: {
+                            ...(from ? { gte: from } : {}),
+                            ...(to ? { lte: to } : {}),
+                        },
+                    },
+                    {
+                        eventDate: null,
+                        createdAt: {
+                            ...(from ? { gte: from } : {}),
+                            ...(to ? { lte: to } : {}),
+                        },
+                    },
+                ],
+            }
+            : null;
         const activities = await this.prisma.activity.findMany({
             where: {
                 localityId: { in: localityIds },
-                OR: [
-                    { eventDate: { gte: from, lte: to } },
-                    { eventDate: null, createdAt: { gte: from, lte: to } },
-                ],
+                ...(activityDateRangeFilter ?? {}),
             },
             include: {
                 locality: {
@@ -2186,6 +2218,12 @@ let TasksService = class TasksService {
                         name: true,
                     },
                 },
+                activityType: {
+                    select: {
+                        id: true,
+                        name: true,
+                    },
+                },
                 responsibles: {
                     select: {
                         userId: true,
@@ -2194,6 +2232,24 @@ let TasksService = class TasksService {
                 report: {
                     select: {
                         id: true,
+                        date: true,
+                        location: true,
+                        responsible: true,
+                        missionSupport: true,
+                        introduction: true,
+                        missionObjectives: true,
+                        executionSchedule: true,
+                        activitiesPerformed: true,
+                        participantsCount: true,
+                        instructorsCount: true,
+                        recruitsCount: true,
+                        eloPsychologyCount: true,
+                        eloSocialAssistanceCount: true,
+                        eloGraduadoMasterCount: true,
+                        participantsCharacteristics: true,
+                        conclusion: true,
+                        city: true,
+                        closingDate: true,
                         signedAt: true,
                         signatureHash: true,
                     },
@@ -2380,22 +2436,114 @@ let TasksService = class TasksService {
             }
         }
         const reportRequiredActivities = filteredActivities.filter((activity) => activity.reportRequired && activity.status === client_1.ActivityStatus.DONE);
+        const approvedReportActivities = reportRequiredActivities.filter((activity) => hasSignedReport(activity));
         const complianceApproved = reportRequiredActivities.filter((activity) => hasSignedReport(activity)).length;
         const compliancePending = reportRequiredActivities.length - complianceApproved;
         const reportPendingItems = reportRequiredActivities
             .filter((activity) => !hasSignedReport(activity))
             .map((activity) => mapExecutiveActivityItem(activity));
+        const participantsInActivities = approvedReportActivities.reduce((acc, activity) => acc + Number(activity.report?.participantsCount ?? 0), 0);
+        const visitedCities = new Set(filteredActivities
+            .filter((activity) => activity.status === client_1.ActivityStatus.DONE ||
+            activity.status === client_1.ActivityStatus.CANCELLED)
+            .map((activity) => canonicalLocalityIdByActivityId.get(activity.id) ?? activity.localityId ?? '')
+            .filter(Boolean)).size;
+        const reportCompletedItems = approvedReportActivities
+            .map((activity) => {
+            const baseItem = mapExecutiveActivityItem(activity);
+            return {
+                ...baseItem,
+                report: activity.report
+                    ? {
+                        id: activity.report.id,
+                        signedAt: activity.report.signedAt,
+                        date: activity.report.date,
+                        location: activity.report.location,
+                        responsible: activity.report.responsible,
+                        missionSupport: activity.report.missionSupport,
+                        introduction: activity.report.introduction,
+                        missionObjectives: activity.report.missionObjectives,
+                        executionSchedule: activity.report.executionSchedule,
+                        activitiesPerformed: activity.report.activitiesPerformed,
+                        participantsCount: activity.report.participantsCount,
+                        instructorsCount: activity.report.instructorsCount,
+                        recruitsCount: activity.report.recruitsCount,
+                        eloPsychologyCount: activity.report.eloPsychologyCount,
+                        eloSocialAssistanceCount: activity.report.eloSocialAssistanceCount,
+                        eloGraduadoMasterCount: activity.report.eloGraduadoMasterCount,
+                        participantsCharacteristics: activity.report.participantsCharacteristics,
+                        conclusion: activity.report.conclusion,
+                        city: activity.report.city,
+                        closingDate: activity.report.closingDate,
+                    }
+                    : null,
+            };
+        })
+            .sort((a, b) => {
+            const left = new Date(a.report?.signedAt ?? a.createdAt ?? 0).getTime();
+            const right = new Date(b.report?.signedAt ?? b.createdAt ?? 0).getTime();
+            return right - left;
+        });
+        const psicologiaSpecialty = await this.prisma.specialty.findFirst({
+            where: {
+                OR: [
+                    { name: { equals: 'Psicologia', mode: 'insensitive' } },
+                    { name: { contains: 'Psicologia', mode: 'insensitive' } },
+                ],
+            },
+            select: { id: true, name: true },
+        });
+        const commissionSpecialty = await this.prisma.specialty.findFirst({
+            where: {
+                OR: [
+                    { name: { equals: 'Comissão CIPAVD', mode: 'insensitive' } },
+                    { name: { contains: 'Comissão CIPAVD', mode: 'insensitive' } },
+                    { name: { contains: 'Comissao CIPAVD', mode: 'insensitive' } },
+                ],
+            },
+            select: { id: true, name: true },
+        });
+        const psicologiaSpecialtyId = psicologiaSpecialty?.id ?? null;
+        const commissionSpecialtyId = commissionSpecialty?.id ?? null;
+        const normalizeSpecialtyBucketName = (value) => String(value ?? '')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .trim()
+            .toLowerCase();
         const specialtiesMap = new Map();
         for (const activity of filteredActivities) {
             const specialtyId = activity.specialtyId ?? null;
-            const specialtyName = activity.specialty?.name ?? 'Todas';
-            const key = specialtyId ?? '__none__';
+            const rawSpecialtyName = activity.specialty?.name;
+            const hasSpecialtyName = rawSpecialtyName && rawSpecialtyName.trim();
+            const specialtyName = hasSpecialtyName ? rawSpecialtyName.trim() : '';
+            const normalizedName = normalizeSpecialtyBucketName(specialtyName);
+            let key;
+            let displayName;
+            if (specialtyId === psicologiaSpecialtyId || (normalizedName && normalizedName.includes('psicologia'))) {
+                key = '__psicologia__';
+                displayName = 'Psicologia';
+            }
+            else if (specialtyId === commissionSpecialtyId || (normalizedName && normalizedName.includes('comissao cipavd'))) {
+                key = '__commission__';
+                displayName = 'Comissão CIPAVD';
+            }
+            else if (!specialtyId || !hasSpecialtyName || !normalizedName) {
+                key = '__commission__';
+                displayName = 'Comissão CIPAVD';
+            }
+            else {
+                key = specialtyId ?? (normalizedName || '__unknown__');
+                displayName = specialtyName || 'Sem especialidade';
+            }
             const current = specialtiesMap.get(key);
             if (current) {
                 current.count += 1;
             }
             else {
-                specialtiesMap.set(key, { specialtyId, specialtyName, count: 1 });
+                const finalSpecialtyId = key === '__psicologia__' ? psicologiaSpecialtyId :
+                    key === '__commission__' ? commissionSpecialtyId :
+                        specialtyId;
+                specialtiesMap.set(key, { specialtyId: finalSpecialtyId, specialtyName: displayName, count: 1 });
             }
         }
         const riskScores = localities.map((locality) => {
@@ -2427,6 +2575,8 @@ let TasksService = class TasksService {
                 totalActivities,
                 completedActivities,
                 completionPercent,
+                visitedCities,
+                participantsInActivities,
                 lateActivities: lateItems.length,
                 unassignedActivities: unassignedItems.length,
                 reportPending: compliancePending,
@@ -2463,6 +2613,7 @@ let TasksService = class TasksService {
                 approved: complianceApproved,
                 pending: compliancePending,
                 total: reportRequiredActivities.length,
+                completedItems: reportCompletedItems,
                 pendingItems: reportPendingItems,
             },
             risk: {
@@ -2470,6 +2621,208 @@ let TasksService = class TasksService {
             },
         };
         return user?.executiveHidePii ? (0, executive_1.sanitizeForExecutive)(response) : response;
+    }
+    async debugPsicologiaActivities(params, user) {
+        const allowedLocalityIds = await this.getTargetLocalityIds();
+        if (allowedLocalityIds.length === 0) {
+            return { count: 0, activities: [] };
+        }
+        const from = params.from ? new Date(params.from) : null;
+        const to = params.to ? new Date(params.to) : null;
+        const localitiesRaw = await this.prisma.locality.findMany({
+            where: { id: { in: allowedLocalityIds } },
+            orderBy: { name: 'asc' },
+        });
+        const localityGroups = (0, priority_localities_1.groupTargetLocalities)(localitiesRaw);
+        const { aliasByLocalityId } = (0, priority_localities_1.createTargetLocalityAliasMap)(localityGroups);
+        const localityIds = Array.from(aliasByLocalityId.keys());
+        const activityDateRangeFilter = from || to
+            ? {
+                OR: [
+                    {
+                        eventDate: {
+                            ...(from ? { gte: from } : {}),
+                            ...(to ? { lte: to } : {}),
+                        },
+                    },
+                    {
+                        eventDate: null,
+                        createdAt: {
+                            ...(from ? { gte: from } : {}),
+                            ...(to ? { lte: to } : {}),
+                        },
+                    },
+                ],
+            }
+            : null;
+        const activities = await this.prisma.activity.findMany({
+            where: {
+                localityId: { in: localityIds },
+                ...(activityDateRangeFilter ?? {}),
+            },
+            include: {
+                specialty: {
+                    select: {
+                        id: true,
+                        name: true,
+                    },
+                },
+            },
+            orderBy: [{ eventDate: 'asc' }, { createdAt: 'asc' }],
+        });
+        const filteredActivities = activities.filter((activity) => activity.localityId ? aliasByLocalityId.has(activity.localityId) : false);
+        const normalizeSpecialtyBucketName = (value) => String(value ?? '')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .trim()
+            .toLowerCase();
+        const psicologiaActivities = filteredActivities.filter((activity) => {
+            const specialtyId = activity.specialtyId ?? null;
+            const rawSpecialtyName = activity.specialty?.name;
+            const hasSpecialtyName = rawSpecialtyName && rawSpecialtyName.trim();
+            const specialtyName = hasSpecialtyName ? rawSpecialtyName.trim() : '';
+            const normalizedName = normalizeSpecialtyBucketName(specialtyName);
+            return normalizedName.includes('psicologia') || specialtyId === 'cmlpet4hv004kzpvci51ktsd2';
+        });
+        return {
+            count: psicologiaActivities.length,
+            totalActivities: filteredActivities.length,
+            activities: psicologiaActivities.map((a) => ({
+                id: a.id,
+                title: a.title,
+                specialtyId: a.specialtyId,
+                specialtyName: a.specialty?.name || null,
+                localityId: a.localityId,
+                eventDate: a.eventDate,
+                createdAt: a.createdAt,
+            })),
+        };
+    }
+    async debugActivityCounts(params, user) {
+        const allowedLocalityIds = await this.getTargetLocalityIds();
+        if (allowedLocalityIds.length === 0) {
+            return {
+                specialties: {
+                    psicologia: { id: null, name: null },
+                    commission: { id: null, name: null },
+                },
+                counts: {
+                    psicologia: 0,
+                    commission: 0,
+                    total: 0,
+                },
+                bySpecialtyId: {},
+            };
+        }
+        const from = params.from ? new Date(params.from) : null;
+        const to = params.to ? new Date(params.to) : null;
+        const psicologiaSpecialty = await this.prisma.specialty.findFirst({
+            where: { name: { contains: 'Psicologia', mode: 'insensitive' } },
+            select: { id: true, name: true },
+        });
+        const commissionSpecialty = await this.prisma.specialty.findFirst({
+            where: { name: { contains: 'Comissão CIPAVD', mode: 'insensitive' } },
+            select: { id: true, name: true },
+        });
+        const localitiesRaw = await this.prisma.locality.findMany({
+            where: { id: { in: allowedLocalityIds } },
+            orderBy: { name: 'asc' },
+        });
+        const localityGroups = (0, priority_localities_1.groupTargetLocalities)(localitiesRaw);
+        const { aliasByLocalityId } = (0, priority_localities_1.createTargetLocalityAliasMap)(localityGroups);
+        const localityIds = Array.from(aliasByLocalityId.keys());
+        const activityDateRangeFilter = from || to
+            ? {
+                OR: [
+                    {
+                        eventDate: {
+                            ...(from ? { gte: from } : {}),
+                            ...(to ? { lte: to } : {}),
+                        },
+                    },
+                    {
+                        eventDate: null,
+                        createdAt: {
+                            ...(from ? { gte: from } : {}),
+                            ...(to ? { lte: to } : {}),
+                        },
+                    },
+                ],
+            }
+            : null;
+        const activities = await this.prisma.activity.findMany({
+            where: {
+                localityId: { in: localityIds },
+                ...(activityDateRangeFilter ?? {}),
+            },
+            include: {
+                specialty: {
+                    select: {
+                        id: true,
+                        name: true,
+                    },
+                },
+                activityType: {
+                    select: {
+                        id: true,
+                        name: true,
+                    },
+                },
+            },
+        });
+        const filteredActivities = activities.filter((activity) => activity.localityId ? aliasByLocalityId.has(activity.localityId) : false);
+        const normalizeSpecialtyBucketName = (value) => String(value ?? '')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .trim()
+            .toLowerCase();
+        const psicologia = filteredActivities.filter((a) => {
+            if (psicologiaSpecialty && a.specialtyId === psicologiaSpecialty.id)
+                return true;
+            const name = (a.specialty?.name || '').toLowerCase();
+            return name.includes('psicologia');
+        });
+        const commission = filteredActivities.filter((a) => {
+            if (commissionSpecialty && a.specialtyId === commissionSpecialty.id)
+                return true;
+            if (!a.specialtyId)
+                return true;
+            const name = (a.specialty?.name || '').toLowerCase();
+            return name.includes('comissão') && name.includes('cipavd');
+        });
+        return {
+            specialties: {
+                psicologia: {
+                    id: psicologiaSpecialty?.id || null,
+                    name: psicologiaSpecialty?.name || null,
+                },
+                commission: {
+                    id: commissionSpecialty?.id || null,
+                    name: commissionSpecialty?.name || null,
+                },
+            },
+            counts: {
+                psicologia: psicologia.length,
+                commission: commission.length,
+                total: filteredActivities.length,
+            },
+            bySpecialtyId: (() => {
+                const byId = {};
+                for (const act of filteredActivities) {
+                    const key = act.specialtyId || 'NULL';
+                    byId[key] = (byId[key] || 0) + 1;
+                }
+                return byId;
+            })(),
+            activitiesSample: filteredActivities.map((act) => ({
+                id: act.id,
+                title: act.title,
+                specialtyId: act.specialtyId,
+                specialtyName: act.specialty?.name ?? null,
+                activityTypeId: act.activityTypeId,
+                activityTypeName: act.activityType?.name ?? null,
+            })),
+        };
     }
     applyProgressRules(status, progressPercent) {
         if (status === client_1.TaskStatus.NOT_STARTED)

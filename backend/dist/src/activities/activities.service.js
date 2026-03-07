@@ -121,6 +121,50 @@ let ActivitiesService = class ActivitiesService {
             total,
         };
     }
+    async listResponsibleUsers(filters, user) {
+        if (!user?.id)
+            (0, http_error_1.throwError)('RBAC_FORBIDDEN');
+        const localityId = String(filters.localityId ?? '').trim();
+        const specialtyId = String(filters.specialtyId ?? '').trim();
+        const andClauses = [{ isActive: true }];
+        if (localityId) {
+            andClauses.push({ localityId });
+        }
+        if (specialtyId) {
+            andClauses.push({
+                OR: [
+                    { specialtyId: null },
+                    { specialtyId },
+                ],
+            });
+        }
+        andClauses.push({ ldapUid: { not: null } });
+        const where = andClauses.length === 1 ? andClauses[0] : { AND: andClauses };
+        const users = await this.prisma.user.findMany({
+            where,
+            select: {
+                id: true,
+                name: true,
+                email: true,
+                localityId: true,
+                specialtyId: true,
+                eloRoleId: true,
+            },
+            orderBy: { name: 'asc' },
+        });
+        return {
+            items: users.map((item) => ({
+                id: item.id,
+                name: String(item.name ?? '').trim() ||
+                    String(item.email ?? '').trim() ||
+                    `Usuário ${item.id.slice(0, 8)}`,
+                email: item.email ?? null,
+                localityId: item.localityId ?? null,
+                specialtyId: item.specialtyId ?? null,
+                eloRoleId: item.eloRoleId ?? null,
+            })),
+        };
+    }
     async create(payload, user) {
         this.assertActivityOperateAccess(null, user);
         const normalizedLocalityIds = Array.from(new Set((payload.localityIds ?? [])
@@ -1226,12 +1270,19 @@ let ActivitiesService = class ActivitiesService {
             executionSchedule: (0, sanitize_1.sanitizeText)(payload.executionSchedule ?? ''),
             activitiesPerformed: (0, sanitize_1.sanitizeText)(payload.activitiesPerformed),
             participantsCount: Math.max(0, Number(payload.participantsCount) || 0),
+            participantsMaleCount: payload.participantsMaleCount != null ? Math.max(0, Number(payload.participantsMaleCount) || 0) : null,
+            participantsFemaleCount: payload.participantsFemaleCount != null ? Math.max(0, Number(payload.participantsFemaleCount) || 0) : null,
+            publicProfile: payload.publicProfile ? (0, sanitize_1.sanitizeText)(payload.publicProfile) : null,
             instructorsCount: Math.max(0, Number(payload.instructorsCount) || 0),
             recruitsCount: Math.max(0, Number(payload.recruitsCount) || 0),
             eloPsychologyCount: Math.max(0, Number(payload.eloPsychologyCount) || 0),
             eloSocialAssistanceCount: Math.max(0, Number(payload.eloSocialAssistanceCount) || 0),
             eloGraduadoMasterCount: Math.max(0, Number(payload.eloGraduadoMasterCount) || 0),
             participantsCharacteristics: (0, sanitize_1.sanitizeText)(payload.participantsCharacteristics),
+            mainPointsObserved: payload.mainPointsObserved ? (0, sanitize_1.sanitizeText)(payload.mainPointsObserved) : null,
+            attentionPoints: payload.attentionPoints ? (0, sanitize_1.sanitizeText)(payload.attentionPoints) : null,
+            nextSteps: payload.nextSteps ? (0, sanitize_1.sanitizeText)(payload.nextSteps) : null,
+            referencesAndAttachments: payload.referencesAndAttachments ? (0, sanitize_1.sanitizeText)(payload.referencesAndAttachments) : null,
             conclusion: (0, sanitize_1.sanitizeText)(payload.conclusion),
             city: (0, sanitize_1.sanitizeText)(payload.city),
             closingDate: new Date(payload.closingDate),
@@ -1496,6 +1547,7 @@ let ActivitiesService = class ActivitiesService {
                 },
                 locality: { select: { id: true, code: true, name: true } },
                 specialty: { select: { id: true, name: true, color: true } },
+                activityType: { select: { id: true, name: true } },
                 createdBy: { select: { id: true, name: true } },
                 report: {
                     include: {
@@ -1526,40 +1578,118 @@ let ActivitiesService = class ActivitiesService {
             doc.on('end', () => resolve(Buffer.concat(chunks)));
             doc.on('error', reject);
         });
-        const writeLine = (label, value) => {
-            doc.font('Helvetica-Bold').fontSize(10).text(label);
+        const writeSection = (title) => {
+            doc.moveDown(0.5);
+            doc
+                .font('Helvetica-Bold')
+                .fontSize(12)
+                .text(title, { underline: true });
+            doc.moveDown(0.4);
+        };
+        const writeField = (label, value) => {
+            doc.font('Helvetica-Bold').fontSize(10).text(label + ':', { continued: false });
             doc.moveDown(0.2);
             doc
                 .font('Helvetica')
                 .fontSize(11)
                 .text(value || '-', { align: 'justify' });
-            doc.moveDown(0.8);
+            doc.moveDown(0.6);
+        };
+        const writeSubsection = (title, content) => {
+            doc.font('Helvetica-Bold').fontSize(10).text(title, { continued: false });
+            doc.moveDown(0.2);
+            doc
+                .font('Helvetica')
+                .fontSize(11)
+                .text(content || '-', { align: 'justify' });
+            doc.moveDown(0.6);
         };
         doc
             .font('Helvetica-Bold')
-            .fontSize(16)
-            .text('Relatório de Atividade', { align: 'center' });
-        doc.moveDown(0.8);
-        writeLine('Atividade', activity.title);
-        writeLine('Localidade', activity.locality
-            ? `${activity.locality.name} (${activity.locality.code})`
-            : 'Não vinculada');
-        writeLine('Especialidade', activity.specialty?.name ?? 'Todas as especialidades');
-        writeLine('Data da atividade', this.formatDate(report.date));
-        writeLine('Local', report.location);
-        writeLine('Responsável', report.responsible);
-        writeLine('Análise da atividade', report.missionSupport);
-        writeLine('Atividades realizadas', report.activitiesPerformed);
-        writeLine('Participantes (número)', String(report.participantsCount));
-        writeLine('Participantes por perfil', `Instrutores: ${report.instructorsCount ?? 0}\n` +
+            .fontSize(18)
+            .text('RELATÓRIO DE ATIVIDADE - CIPAVD / SMIF 2026', { align: 'center' });
+        doc.moveDown(1);
+        writeSection('1. IDENTIFICAÇÃO DA ATIVIDADE');
+        writeField('Tipo de Atividade', activity.activityType?.name ?? '-');
+        writeField('Título / Tema', activity.title);
+        writeField('Data', this.formatDate(report.date));
+        writeField('Local', report.location);
+        writeSection('2. EQUIPE RESPONSÁVEL');
+        writeField('Responsável(is)', report.responsible);
+        if (report.missionSupport) {
+            writeField('Apoio à Missão', report.missionSupport);
+        }
+        writeSection('3. PÚBLICO PARTICIPANTE');
+        writeField('Total de Participantes', String(report.participantsCount));
+        const compositionParts = [];
+        if (report.participantsMaleCount != null && report.participantsMaleCount > 0) {
+            compositionParts.push(`${report.participantsMaleCount} homens`);
+        }
+        if (report.participantsFemaleCount != null && report.participantsFemaleCount > 0) {
+            compositionParts.push(`${report.participantsFemaleCount} mulheres`);
+        }
+        if (compositionParts.length > 0) {
+            writeField('Composição', compositionParts.join(' e '));
+        }
+        if (report.publicProfile) {
+            writeField('Perfil do Público', report.publicProfile);
+        }
+        writeSubsection('Participantes por perfil', `Instrutores: ${report.instructorsCount ?? 0}\n` +
             `Recrutas: ${report.recruitsCount ?? 0}\n` +
             `Elo Psicologia: ${report.eloPsychologyCount ?? 0}\n` +
             `Elo Assistência Social: ${report.eloSocialAssistanceCount ?? 0}\n` +
             `Elo Graduado Master: ${report.eloGraduadoMasterCount ?? 0}`);
-        writeLine('Participantes (características)', report.participantsCharacteristics);
-        writeLine('Conclusão', report.conclusion);
-        writeLine('Cidade', report.city);
-        writeLine('Data (fechamento)', this.formatDate(report.closingDate));
+        if (report.participantsCharacteristics) {
+            writeField('Características dos Participantes', report.participantsCharacteristics);
+        }
+        writeSection('4. DESCRIÇÃO DA ATIVIDADE');
+        if (report.introduction) {
+            writeSubsection('Introdução', report.introduction);
+        }
+        if (report.missionObjectives) {
+            writeSubsection('Objetivos da Missão', report.missionObjectives);
+        }
+        if (report.executionSchedule) {
+            writeSubsection('Cronograma de Execução', report.executionSchedule);
+        }
+        writeSubsection('Desenvolvimento', report.activitiesPerformed);
+        if (report.mainPointsObserved) {
+            writeSection('5. PRINCIPAIS PONTOS OBSERVADOS');
+            writeSubsection('Principais questionamentos levantados pelos participantes', report.mainPointsObserved);
+        }
+        if (report.attentionPoints) {
+            writeSection('6. PONTOS DE ATENÇÃO');
+            writeSubsection('Lacunas / Riscos / Encaminhamentos necessários', report.attentionPoints);
+        }
+        if (report.nextSteps) {
+            writeSection('7. ENCAMINHAMENTOS E PRÓXIMOS PASSOS');
+            writeSubsection('Ações previstas', report.nextSteps);
+        }
+        if (report.referencesAndAttachments) {
+            writeSection('8. REFERÊNCIAS E ANEXOS');
+            writeSubsection('Links e registros', report.referencesAndAttachments);
+        }
+        if (report.conclusion) {
+            writeSection('CONCLUSÃO');
+            doc
+                .font('Helvetica')
+                .fontSize(11)
+                .text(report.conclusion, { align: 'justify' });
+            doc.moveDown(0.8);
+        }
+        doc.moveDown(1);
+        const footerY = doc.page.height - 80;
+        doc
+            .font('Helvetica')
+            .fontSize(10)
+            .text(`Local e Data: ${report.city}, ${this.formatDate(report.closingDate)}`, {
+            y: footerY,
+            align: 'left',
+        });
+        doc.text(`Responsável pelo Relatório: ${report.responsible}`, {
+            y: footerY + 15,
+            align: 'left',
+        });
         doc
             .font('Helvetica-Bold')
             .fontSize(12)
@@ -2024,12 +2154,6 @@ let ActivitiesService = class ActivitiesService {
         if (users.length !== normalized.length) {
             (0, http_error_1.throwError)('VALIDATION_ERROR', {
                 reason: 'ACTIVITY_RESPONSIBLE_INVALID',
-            });
-        }
-        const mismatched = users.some((candidate) => candidate.localityId !== localityId);
-        if (mismatched) {
-            (0, http_error_1.throwError)('VALIDATION_ERROR', {
-                reason: 'ACTIVITY_RESPONSIBLE_LOCALITY_MISMATCH',
             });
         }
         this.assertScopeConstraint(localityId, null, user);

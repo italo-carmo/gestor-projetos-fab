@@ -61,7 +61,8 @@ const path = __importStar(require("node:path"));
 const node_crypto_1 = require("node:crypto");
 const multer_exception_filter_1 = require("../reports/multer-exception.filter");
 const http_error_1 = require("../common/http-error");
-const uploadDir = path.resolve(process.cwd(), 'storage', 'social-communication-covers');
+const social_communication_storage_1 = require("./social-communication-storage");
+const uploadDir = (0, social_communication_storage_1.getSocialCommunicationCoversDir)();
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
 }

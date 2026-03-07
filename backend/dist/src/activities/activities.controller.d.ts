@@ -23,6 +23,16 @@ export declare class ActivitiesController {
         items: any;
     }>;
     createType(dto: CreateActivityTypeDto): Promise<any>;
+    listResponsibleUsers(localityId: string | undefined, specialtyId: string | undefined, user: RbacUser): Promise<{
+        items: {
+            id: string;
+            name: string;
+            email: string;
+            localityId: string | null;
+            specialtyId: string | null;
+            eloRoleId: string | null;
+        }[];
+    }>;
     update(id: string, dto: UpdateActivityDto, user: RbacUser): Promise<any>;
     batchStatus(body: {
         ids: string[];

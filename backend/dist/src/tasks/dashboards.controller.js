@@ -41,6 +41,64 @@ let DashboardsController = class DashboardsController {
     executive(from, to, phaseId, threshold, command, localityId, user) {
         return this.tasks.getDashboardExecutive({ from, to, phaseId, threshold, command, localityId }, user);
     }
+    async debugSpecialties(from, to, user) {
+        const result = await this.tasks.getDashboardExecutive({ from, to, threshold: '70' }, user);
+        const psicologia = result.specialties.items.find((s) => s.specialtyName?.toLowerCase().includes('psicologia'));
+        return {
+            specialties: result.specialties.items.map((s) => ({
+                specialtyName: s.specialtyName,
+                count: s.count,
+                specialtyId: s.specialtyId,
+            })),
+            psicologia: {
+                count: psicologia?.count || 0,
+                specialtyId: psicologia?.specialtyId,
+                specialtyName: psicologia?.specialtyName,
+            },
+            total: result.specialties.items.reduce((sum, s) => sum + s.count, 0),
+            totalActivities: result.summary.totalActivities,
+        };
+    }
+    async debugPsicologia(from, to, user) {
+        return this.tasks.debugPsicologiaActivities({ from, to }, user);
+    }
+    async debugCounts(from, to, user) {
+        const dbCounts = await this.tasks.debugActivityCounts({ from, to }, user);
+        const dashboardResult = await this.tasks.getDashboardExecutive({ from, to, threshold: '70' }, user);
+        const dashboardPsicologia = dashboardResult.specialties.items.find((s) => s.specialtyName?.toLowerCase().includes('psicologia'));
+        const dashboardCommission = dashboardResult.specialties.items.find((s) => s.specialtyName?.toLowerCase().includes('comissão') || s.specialtyName?.toLowerCase().includes('cipavd'));
+        return {
+            database: {
+                psicologia: dbCounts.counts.psicologia,
+                commission: dbCounts.counts.commission,
+                total: dbCounts.counts.total,
+            },
+            dashboard: {
+                psicologia: dashboardPsicologia?.count || 0,
+                commission: dashboardCommission?.count || 0,
+                allSpecialties: dashboardResult.specialties.items.map((s) => ({
+                    name: s.specialtyName,
+                    count: s.count,
+                    specialtyId: s.specialtyId,
+                })),
+            },
+            specialties: dbCounts.specialties,
+            bySpecialtyId: dbCounts.bySpecialtyId,
+            activitiesSample: dbCounts.activitiesSample,
+            match: {
+                psicologia: dbCounts.counts.psicologia === (dashboardPsicologia?.count || 0),
+                commission: dbCounts.counts.commission === (dashboardCommission?.count || 0),
+            },
+            expected: {
+                psicologia: 3,
+                commission: 7,
+            },
+            status: {
+                psicologiaOk: (dashboardPsicologia?.count || 0) === 3,
+                commissionOk: (dashboardCommission?.count || 0) === 7,
+            },
+        };
+    }
 };
 exports.DashboardsController = DashboardsController;
 __decorate([
@@ -84,6 +142,36 @@ __decorate([
     __metadata("design:paramtypes", [Object, Object, Object, Object, Object, Object, Object]),
     __metadata("design:returntype", void 0)
 ], DashboardsController.prototype, "executive", null);
+__decorate([
+    (0, common_1.Get)('dashboard/executive/debug-specialties'),
+    (0, require_permission_decorator_1.RequirePermission)('dashboard', 'view'),
+    __param(0, (0, common_1.Query)('from')),
+    __param(1, (0, common_1.Query)('to')),
+    __param(2, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object, Object]),
+    __metadata("design:returntype", Promise)
+], DashboardsController.prototype, "debugSpecialties", null);
+__decorate([
+    (0, common_1.Get)('dashboard/executive/debug-psicologia'),
+    (0, require_permission_decorator_1.RequirePermission)('dashboard', 'view'),
+    __param(0, (0, common_1.Query)('from')),
+    __param(1, (0, common_1.Query)('to')),
+    __param(2, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object, Object]),
+    __metadata("design:returntype", Promise)
+], DashboardsController.prototype, "debugPsicologia", null);
+__decorate([
+    (0, common_1.Get)('dashboard/executive/debug-counts'),
+    (0, require_permission_decorator_1.RequirePermission)('dashboard', 'view'),
+    __param(0, (0, common_1.Query)('from')),
+    __param(1, (0, common_1.Query)('to')),
+    __param(2, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object, Object]),
+    __metadata("design:returntype", Promise)
+], DashboardsController.prototype, "debugCounts", null);
 exports.DashboardsController = DashboardsController = __decorate([
     (0, common_1.Controller)(),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, rbac_guard_1.RbacGuard),

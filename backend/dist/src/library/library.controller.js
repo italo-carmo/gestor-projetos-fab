@@ -57,8 +57,9 @@ const current_user_decorator_1 = require("../common/current-user.decorator");
 const rbac_guard_1 = require("../rbac/rbac.guard");
 const multer_exception_filter_1 = require("../reports/multer-exception.filter");
 const library_service_1 = require("./library.service");
+const library_storage_1 = require("./library-storage");
 exports.libraryPhotosDir = path.resolve(process.cwd(), 'storage', 'library-photos');
-exports.libraryDocumentsDir = path.resolve(process.cwd(), 'storage', 'library-documents');
+exports.libraryDocumentsDir = path.resolve((0, library_storage_1.getLibraryDocumentsDir)());
 if (!fs.existsSync(exports.libraryPhotosDir)) {
     fs.mkdirSync(exports.libraryPhotosDir, { recursive: true });
 }
@@ -93,6 +94,16 @@ let LibraryController = class LibraryController {
     }
     deleteDocument(id, user) {
         return this.library.deleteDocument(id, exports.libraryDocumentsDir, user);
+    }
+    async downloadDocument(id, res) {
+        const document = await this.library.getDocumentById(id);
+        const storageKey = String(document.storageKey ?? '').trim() || path.basename(String(document.fileUrl ?? '').trim());
+        const filePath = (0, library_storage_1.resolveExistingLibraryDocumentPath)(storageKey);
+        if (!filePath) {
+            return res.status(404).json({ message: 'Arquivo indisponível para download.', code: 'NOT_FOUND' });
+        }
+        res.setHeader('Cache-Control', 'private, no-store');
+        return res.download(filePath, document.fileName || document.title || 'publicacao');
     }
 };
 exports.LibraryController = LibraryController;
@@ -190,6 +201,14 @@ __decorate([
     __metadata("design:paramtypes", [String, Object]),
     __metadata("design:returntype", void 0)
 ], LibraryController.prototype, "deleteDocument", null);
+__decorate([
+    (0, common_1.Get)('documents/:id/download'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Res)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", Promise)
+], LibraryController.prototype, "downloadDocument", null);
 exports.LibraryController = LibraryController = __decorate([
     (0, common_1.Controller)('library'),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, rbac_guard_1.RbacGuard),

@@ -21,6 +21,19 @@ export declare class ActivitiesService {
         pageSize: number;
         total: number;
     }>;
+    listResponsibleUsers(filters: {
+        localityId?: string;
+        specialtyId?: string;
+    }, user?: RbacUser): Promise<{
+        items: {
+            id: string;
+            name: string;
+            email: string;
+            localityId: string | null;
+            specialtyId: string | null;
+            eloRoleId: string | null;
+        }[];
+    }>;
     create(payload: {
         title: string;
         description?: string | null;
@@ -188,12 +201,19 @@ export declare class ActivitiesService {
         executionSchedule?: string;
         activitiesPerformed: string;
         participantsCount: number;
+        participantsMaleCount?: number;
+        participantsFemaleCount?: number;
+        publicProfile?: string;
         instructorsCount: number;
         recruitsCount: number;
         eloPsychologyCount: number;
         eloSocialAssistanceCount: number;
         eloGraduadoMasterCount: number;
         participantsCharacteristics: string;
+        mainPointsObserved?: string;
+        attentionPoints?: string;
+        nextSteps?: string;
+        referencesAndAttachments?: string;
         conclusion: string;
         city: string;
         closingDate: string;

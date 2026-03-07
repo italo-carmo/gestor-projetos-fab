@@ -42,6 +42,20 @@ export class UpsertActivityReportDto {
   @Min(0)
   participantsCount: number;
 
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  participantsMaleCount?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  participantsFemaleCount?: number;
+
+  @IsOptional()
+  @IsString()
+  publicProfile?: string;
+
   @IsInt()
   @Min(0)
   instructorsCount: number;
@@ -64,6 +78,22 @@ export class UpsertActivityReportDto {
 
   @IsString()
   participantsCharacteristics: string;
+
+  @IsOptional()
+  @IsString()
+  mainPointsObserved?: string;
+
+  @IsOptional()
+  @IsString()
+  attentionPoints?: string;
+
+  @IsOptional()
+  @IsString()
+  nextSteps?: string;
+
+  @IsOptional()
+  @IsString()
+  referencesAndAttachments?: string;
 
   @IsString()
   conclusion: string;

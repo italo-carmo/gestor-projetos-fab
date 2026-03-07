@@ -59,6 +59,9 @@ let ActivitiesController = class ActivitiesController {
     createType(dto) {
         return this.activities.createType(dto.name);
     }
+    listResponsibleUsers(localityId, specialtyId, user) {
+        return this.activities.listResponsibleUsers({ localityId, specialtyId }, user);
+    }
     update(id, dto, user) {
         return this.activities.update(id, dto, user);
     }
@@ -198,6 +201,16 @@ __decorate([
     __metadata("design:paramtypes", [create_activity_type_dto_1.CreateActivityTypeDto]),
     __metadata("design:returntype", void 0)
 ], ActivitiesController.prototype, "createType", null);
+__decorate([
+    (0, common_1.Get)('responsible-users'),
+    (0, require_permission_decorator_1.RequirePermission)('task_instances', 'view'),
+    __param(0, (0, common_1.Query)('localityId')),
+    __param(1, (0, common_1.Query)('specialtyId')),
+    __param(2, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object, Object]),
+    __metadata("design:returntype", void 0)
+], ActivitiesController.prototype, "listResponsibleUsers", null);
 __decorate([
     (0, common_1.Put)(':id'),
     __param(0, (0, common_1.Param)('id')),

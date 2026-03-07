@@ -50,6 +50,7 @@ const common_1 = require("@nestjs/common");
 const fs = __importStar(require("node:fs"));
 const path = __importStar(require("node:path"));
 const sharp_1 = __importDefault(require("sharp"));
+const library_storage_1 = require("./library-storage");
 const audit_service_1 = require("../audit/audit.service");
 const http_error_1 = require("../common/http-error");
 const prisma_service_1 = require("../prisma/prisma.service");
@@ -193,7 +194,7 @@ let LibraryService = class LibraryService {
                 _max: { sortOrder: true },
             });
             const nextSortOrder = Number(currentMaxSortOrder._max.sortOrder ?? -1) + 1;
-            const title = String(payload.title ?? '').trim() || file.originalname || 'Foto';
+            const title = String(payload.title ?? '').trim();
             const localityId = String(payload.localityId ?? '').trim() || null;
             const created = await this.prisma.libraryPhoto.create({
                 data: {
@@ -237,9 +238,6 @@ let LibraryService = class LibraryService {
         if (!current)
             (0, http_error_1.throwError)('NOT_FOUND');
         const nextTitle = payload.title === undefined ? current.title : String(payload.title).trim();
-        if (!nextTitle) {
-            (0, http_error_1.throwError)('VALIDATION_ERROR', { field: 'title', reason: 'required' });
-        }
         const nextSortOrder = payload.sortOrder === undefined
             ? current.sortOrder
             : Math.max(0, Math.floor(Number(payload.sortOrder) || 0));
@@ -336,7 +334,7 @@ let LibraryService = class LibraryService {
         await this.prisma.libraryDocument.delete({ where: { id } });
         const storageKey = String(current.storageKey ?? '').trim();
         if (storageKey) {
-            const filePath = path.join(documentsDir, storageKey);
+            const filePath = (0, library_storage_1.resolveExistingLibraryDocumentPath)(storageKey) || path.join(documentsDir, storageKey);
             try {
                 if (fs.existsSync(filePath))
                     fs.unlinkSync(filePath);
@@ -352,6 +350,12 @@ let LibraryService = class LibraryService {
             diffJson: { title: current.title, fileName: current.fileName },
         });
         return { success: true };
+    }
+    async getDocumentById(id) {
+        const document = await this.prisma.libraryDocument.findUnique({ where: { id } });
+        if (!document)
+            (0, http_error_1.throwError)('NOT_FOUND');
+        return document;
     }
 };
 exports.LibraryService = LibraryService;

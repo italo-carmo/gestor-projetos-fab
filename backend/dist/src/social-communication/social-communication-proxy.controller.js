@@ -51,6 +51,7 @@ const social_communication_service_1 = require("./social-communication.service")
 const fs = __importStar(require("node:fs"));
 const path = __importStar(require("node:path"));
 const http_error_1 = require("../common/http-error");
+const social_communication_storage_1 = require("./social-communication-storage");
 let SocialCommunicationProxyController = class SocialCommunicationProxyController {
     socialCommunication;
     constructor(socialCommunication) {
@@ -131,8 +132,8 @@ let SocialCommunicationUploadsController = class SocialCommunicationUploadsContr
         const safeName = path.basename(String(filename ?? ''));
         if (!safeName || safeName !== filename)
             (0, http_error_1.throwError)('NOT_FOUND');
-        const filePath = path.resolve(process.cwd(), 'storage', 'social-communication-covers', safeName);
-        if (!fs.existsSync(filePath))
+        const filePath = (0, social_communication_storage_1.getSocialCommunicationCoverCandidates)(safeName).find((candidate) => fs.existsSync(candidate));
+        if (!filePath)
             (0, http_error_1.throwError)('NOT_FOUND');
         res.setHeader('Cache-Control', 'public, max-age=3600');
         return res.sendFile(filePath);

@@ -76,19 +76,47 @@ import { ConfirmDialog } from '../components/dialogs/ConfirmDialog';
 import { ACTIVITY_STATUS_LABELS, ActivityStatus } from '../constants/enums';
 import { selectTargetLocalities } from '../constants/localities';
 
-const blankReport = {
+const blankReport: {
+  date: string;
+  location: string;
+  responsible: string;
+  activityAnalysis: string;
+  activitiesPerformed: string;
+  participantsCount: number;
+  participantsMaleCount?: number;
+  participantsFemaleCount?: number;
+  publicProfile: string;
+  instructorsCount: number;
+  recruitsCount: number;
+  eloPsychologyCount: number;
+  eloSocialAssistanceCount: number;
+  eloGraduadoMasterCount: number;
+  participantsCharacteristics: string;
+  mainPointsObserved: string;
+  attentionPoints: string;
+  nextSteps: string;
+  referencesAndAttachments: string;
+  conclusion: string;
+  city: string;
+  closingDate: string;
+} = {
   date: '',
   location: '',
   responsible: '',
   activityAnalysis: '',
   activitiesPerformed: '',
   participantsCount: 0,
+  publicProfile: '',
   instructorsCount: 0,
   recruitsCount: 0,
   eloPsychologyCount: 0,
   eloSocialAssistanceCount: 0,
   eloGraduadoMasterCount: 0,
   participantsCharacteristics: '',
+  mainPointsObserved: '',
+  attentionPoints: '',
+  nextSteps: '',
+  referencesAndAttachments: '',
   conclusion: '',
   city: '',
   closingDate: '',
@@ -406,12 +434,19 @@ export function ActivitiesPage() {
       activityAnalysis: selected.report.activityAnalysis ?? selected.report.missionSupport ?? '',
       activitiesPerformed: selected.report.activitiesPerformed ?? '',
       participantsCount: Number(selected.report.participantsCount ?? 0),
+      participantsMaleCount: selected.report.participantsMaleCount != null ? Number(selected.report.participantsMaleCount) : undefined,
+      participantsFemaleCount: selected.report.participantsFemaleCount != null ? Number(selected.report.participantsFemaleCount) : undefined,
+      publicProfile: selected.report.publicProfile ?? '',
       instructorsCount: Number(selected.report.instructorsCount ?? 0),
       recruitsCount: Number(selected.report.recruitsCount ?? 0),
       eloPsychologyCount: Number(selected.report.eloPsychologyCount ?? 0),
       eloSocialAssistanceCount: Number(selected.report.eloSocialAssistanceCount ?? 0),
       eloGraduadoMasterCount: Number(selected.report.eloGraduadoMasterCount ?? 0),
       participantsCharacteristics: selected.report.participantsCharacteristics ?? '',
+      mainPointsObserved: selected.report.mainPointsObserved ?? '',
+      attentionPoints: selected.report.attentionPoints ?? '',
+      nextSteps: selected.report.nextSteps ?? '',
+      referencesAndAttachments: selected.report.referencesAndAttachments ?? '',
       conclusion: selected.report.conclusion ?? '',
       city: selected.report.city ?? '',
       closingDate: selected.report.closingDate ? String(selected.report.closingDate).slice(0, 10) : '',
@@ -924,10 +959,10 @@ export function ActivitiesPage() {
               {specialties
                 .filter((s: any) => s.name !== 'Comissão CIPAVD')
                 .map((s: any) => (
-                  <MenuItem key={s.id} value={s.id}>
-                    {s.name}
-                  </MenuItem>
-                ))}
+                <MenuItem key={s.id} value={s.id}>
+                  {s.name}
+                </MenuItem>
+              ))}
             </TextField>
           </Stack>
         </CardContent>
@@ -1657,182 +1692,361 @@ export function ActivitiesPage() {
 
           {!isCreateMode && selected && drawerTab === 'report' && (
             <>
-              <Typography variant="h6" sx={{ mb: 1 }}>
+              <Typography variant="h6" sx={{ mb: 2 }}>
                 Formulário de Relatório da Atividade
               </Typography>
 
-              <Stack spacing={1}>
-                <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
-                  <TextField
-                    size="small"
-                    type="date"
-                    label="Data"
-                    value={reportForm.date}
-                    onChange={(e) => setReportForm({ ...reportForm, date: e.target.value })}
-                    InputLabelProps={{ shrink: true }}
-                    fullWidth
-                    disabled={!canEditReport}
-                  />
-                  <TextField
-                    size="small"
-                    label="Local"
-                    value={reportForm.location}
-                    onChange={(e) => setReportForm({ ...reportForm, location: e.target.value })}
-                    fullWidth
-                    disabled={!canEditReport}
-                  />
-                  <TextField
-                    size="small"
-                    label="Responsável"
-                    value={reportForm.responsible}
-                    onChange={(e) => setReportForm({ ...reportForm, responsible: e.target.value })}
-                    fullWidth
-                    disabled={!canEditReport}
-                  />
-                </Stack>
-
-                <TextField
-                  size="small"
-                  label="Análise da atividade"
-                  value={reportForm.activityAnalysis}
-                  onChange={(e) => setReportForm({ ...reportForm, activityAnalysis: e.target.value })}
-                  multiline
-                  minRows={2}
-                  fullWidth
-                  disabled={!canEditReport}
-                />
-                <TextField
-                  size="small"
-                  label="Atividades realizadas"
-                  value={reportForm.activitiesPerformed}
-                  onChange={(e) => setReportForm({ ...reportForm, activitiesPerformed: e.target.value })}
-                  multiline
-                  minRows={3}
-                  fullWidth
-                  disabled={!canEditReport}
-                />
-
-                <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
-                  <TextField
-                    size="small"
-                    type="number"
-                    label="Número de participantes"
-                    value={reportForm.participantsCount}
-                    onChange={(e) =>
-                      setReportForm({ ...reportForm, participantsCount: Number(e.target.value) || 0 })
-                    }
-                    inputProps={{ min: 0 }}
-                    sx={{ minWidth: 220 }}
-                    disabled={!canEditReport}
-                  />
-                  <TextField
-                    size="small"
-                    label="Características dos participantes"
-                    value={reportForm.participantsCharacteristics}
-                    onChange={(e) =>
-                      setReportForm({ ...reportForm, participantsCharacteristics: e.target.value })
-                    }
-                    fullWidth
-                    disabled={!canEditReport}
-                  />
-                </Stack>
-
-                <Box sx={{ p: 1.2, border: '1px solid #E6ECF5', borderRadius: 2, bgcolor: '#F9FCFF' }}>
-                  <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                    Participantes por perfil
+              <Stack spacing={3}>
+                {/* 1. IDENTIFICAÇÃO DA ATIVIDADE */}
+                <Box>
+                  <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 'bold', textDecoration: 'underline' }}>
+                    1. IDENTIFICAÇÃO DA ATIVIDADE
                   </Typography>
-                  <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
+                  <Stack spacing={1.5}>
                     <TextField
                       size="small"
-                      type="number"
-                      label="Instrutores"
-                      value={reportForm.instructorsCount}
-                      onChange={(e) =>
-                        setReportForm({
-                          ...reportForm,
-                          instructorsCount: Number(e.target.value) || 0,
-                        })
-                      }
-                      inputProps={{ min: 0 }}
+                      label="Tipo de Atividade"
+                      value={selected.activityType?.name ?? ''}
                       fullWidth
-                      disabled={!canEditReport}
+                      disabled
                     />
                     <TextField
                       size="small"
-                      type="number"
-                      label="Recrutas"
-                      value={reportForm.recruitsCount}
-                      onChange={(e) =>
-                        setReportForm({
-                          ...reportForm,
-                          recruitsCount: Number(e.target.value) || 0,
-                        })
-                      }
-                      inputProps={{ min: 0 }}
+                      label="Título / Tema"
+                      value={selected.title ?? ''}
                       fullWidth
-                      disabled={!canEditReport}
+                      disabled
                     />
+                    <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
+                      <TextField
+                        size="small"
+                        type="date"
+                        label="Data"
+                        value={reportForm.date}
+                        onChange={(e) => setReportForm({ ...reportForm, date: e.target.value })}
+                        InputLabelProps={{ shrink: true }}
+                        fullWidth
+                        disabled={!canEditReport}
+                      />
+                      <TextField
+                        size="small"
+                        label="Local"
+                        value={reportForm.location}
+                        onChange={(e) => setReportForm({ ...reportForm, location: e.target.value })}
+                        fullWidth
+                        disabled={!canEditReport}
+                      />
+                    </Stack>
                   </Stack>
-                  <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} sx={{ mt: 1 }}>
+                </Box>
+
+                {/* 2. EQUIPE RESPONSÁVEL */}
+                <Box>
+                  <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 'bold', textDecoration: 'underline' }}>
+                    2. EQUIPE RESPONSÁVEL
+                  </Typography>
+                  <Stack spacing={1.5}>
                     <TextField
                       size="small"
-                      type="number"
-                      label="Elo Psicologia"
-                      value={reportForm.eloPsychologyCount}
-                      onChange={(e) =>
-                        setReportForm({
-                          ...reportForm,
-                          eloPsychologyCount: Number(e.target.value) || 0,
-                        })
-                      }
-                      inputProps={{ min: 0 }}
+                      label="Responsável(is)"
+                      value={reportForm.responsible}
+                      onChange={(e) => setReportForm({ ...reportForm, responsible: e.target.value })}
                       fullWidth
                       disabled={!canEditReport}
                     />
                     <TextField
                       size="small"
-                      type="number"
-                      label="Elo Assistência Social"
-                      value={reportForm.eloSocialAssistanceCount}
-                      onChange={(e) =>
-                        setReportForm({
-                          ...reportForm,
-                          eloSocialAssistanceCount: Number(e.target.value) || 0,
-                        })
-                      }
-                      inputProps={{ min: 0 }}
-                      fullWidth
-                      disabled={!canEditReport}
-                    />
-                    <TextField
-                      size="small"
-                      type="number"
-                      label="Elo Graduado Master"
-                      value={reportForm.eloGraduadoMasterCount}
-                      onChange={(e) =>
-                        setReportForm({
-                          ...reportForm,
-                          eloGraduadoMasterCount: Number(e.target.value) || 0,
-                        })
-                      }
-                      inputProps={{ min: 0 }}
+                      label="Apoio à Missão"
+                      value={reportForm.activityAnalysis}
+                      onChange={(e) => setReportForm({ ...reportForm, activityAnalysis: e.target.value })}
+                      multiline
+                      minRows={2}
                       fullWidth
                       disabled={!canEditReport}
                     />
                   </Stack>
                 </Box>
 
-                <TextField
-                  size="small"
-                  label="Conclusão"
-                  value={reportForm.conclusion}
-                  onChange={(e) => setReportForm({ ...reportForm, conclusion: e.target.value })}
-                  multiline
-                  minRows={2}
-                  fullWidth
-                  disabled={!canEditReport}
-                />
+                {/* 3. PÚBLICO PARTICIPANTE */}
+                <Box>
+                  <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 'bold', textDecoration: 'underline' }}>
+                    3. PÚBLICO PARTICIPANTE
+                  </Typography>
+                  <Stack spacing={1.5}>
+                    <TextField
+                      size="small"
+                      type="number"
+                      label="Total de Participantes"
+                      value={reportForm.participantsCount}
+                      onChange={(e) =>
+                        setReportForm({ ...reportForm, participantsCount: Number(e.target.value) || 0 })
+                      }
+                      inputProps={{ min: 0 }}
+                      fullWidth
+                      disabled={!canEditReport}
+                    />
+                    <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
+                      <TextField
+                        size="small"
+                        type="number"
+                        label="Homens"
+                        value={reportForm.participantsMaleCount ?? ''}
+                        onChange={(e) =>
+                          setReportForm({
+                            ...reportForm,
+                            participantsMaleCount: e.target.value ? Number(e.target.value) || 0 : undefined,
+                          })
+                        }
+                        inputProps={{ min: 0 }}
+                        fullWidth
+                        disabled={!canEditReport}
+                      />
+                      <TextField
+                        size="small"
+                        type="number"
+                        label="Mulheres"
+                        value={reportForm.participantsFemaleCount ?? ''}
+                        onChange={(e) =>
+                          setReportForm({
+                            ...reportForm,
+                            participantsFemaleCount: e.target.value ? Number(e.target.value) || 0 : undefined,
+                          })
+                        }
+                        inputProps={{ min: 0 }}
+                        fullWidth
+                        disabled={!canEditReport}
+                      />
+                    </Stack>
+                    <TextField
+                      size="small"
+                      label="Perfil do Público"
+                      value={reportForm.publicProfile}
+                      onChange={(e) => setReportForm({ ...reportForm, publicProfile: e.target.value })}
+                      multiline
+                      minRows={2}
+                      fullWidth
+                      disabled={!canEditReport}
+                      placeholder="Ex: Conscritos e voluntárias do GSD-BR, instrutores e equipe organizadora"
+                    />
+                    <Box sx={{ p: 1.2, border: '1px solid #E6ECF5', borderRadius: 2, bgcolor: '#F9FCFF' }}>
+                      <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                        Participantes por perfil
+                      </Typography>
+                      <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
+                        <TextField
+                          size="small"
+                          type="number"
+                          label="Instrutores"
+                          value={reportForm.instructorsCount}
+                          onChange={(e) =>
+                            setReportForm({
+                              ...reportForm,
+                              instructorsCount: Number(e.target.value) || 0,
+                            })
+                          }
+                          inputProps={{ min: 0 }}
+                          fullWidth
+                          disabled={!canEditReport}
+                        />
+                        <TextField
+                          size="small"
+                          type="number"
+                          label="Recrutas"
+                          value={reportForm.recruitsCount}
+                          onChange={(e) =>
+                            setReportForm({
+                              ...reportForm,
+                              recruitsCount: Number(e.target.value) || 0,
+                            })
+                          }
+                          inputProps={{ min: 0 }}
+                          fullWidth
+                          disabled={!canEditReport}
+                        />
+                      </Stack>
+                      <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} sx={{ mt: 1 }}>
+                        <TextField
+                          size="small"
+                          type="number"
+                          label="Elo Psicologia"
+                          value={reportForm.eloPsychologyCount}
+                          onChange={(e) =>
+                            setReportForm({
+                              ...reportForm,
+                              eloPsychologyCount: Number(e.target.value) || 0,
+                            })
+                          }
+                          inputProps={{ min: 0 }}
+                          fullWidth
+                          disabled={!canEditReport}
+                        />
+                        <TextField
+                          size="small"
+                          type="number"
+                          label="Elo Assistência Social"
+                          value={reportForm.eloSocialAssistanceCount}
+                          onChange={(e) =>
+                            setReportForm({
+                              ...reportForm,
+                              eloSocialAssistanceCount: Number(e.target.value) || 0,
+                            })
+                          }
+                          inputProps={{ min: 0 }}
+                          fullWidth
+                          disabled={!canEditReport}
+                        />
+                        <TextField
+                          size="small"
+                          type="number"
+                          label="Elo Graduado Master"
+                          value={reportForm.eloGraduadoMasterCount}
+                          onChange={(e) =>
+                            setReportForm({
+                              ...reportForm,
+                              eloGraduadoMasterCount: Number(e.target.value) || 0,
+                            })
+                          }
+                          inputProps={{ min: 0 }}
+                          fullWidth
+                          disabled={!canEditReport}
+                        />
+                      </Stack>
+                    </Box>
+                    <TextField
+                      size="small"
+                      label="Características dos Participantes"
+                      value={reportForm.participantsCharacteristics}
+                      onChange={(e) =>
+                        setReportForm({ ...reportForm, participantsCharacteristics: e.target.value })
+                      }
+                      multiline
+                      minRows={2}
+                      fullWidth
+                      disabled={!canEditReport}
+                    />
+                  </Stack>
+                </Box>
 
+                {/* 4. DESCRIÇÃO DA ATIVIDADE */}
+                <Box>
+                  <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 'bold', textDecoration: 'underline' }}>
+                    4. DESCRIÇÃO DA ATIVIDADE
+                  </Typography>
+                  <Stack spacing={1.5}>
+                    <TextField
+                      size="small"
+                      label="Desenvolvimento"
+                      value={reportForm.activitiesPerformed}
+                      onChange={(e) => setReportForm({ ...reportForm, activitiesPerformed: e.target.value })}
+                      multiline
+                      minRows={4}
+                      fullWidth
+                      disabled={!canEditReport}
+                      placeholder="Descreva o desenvolvimento da atividade, incluindo horários, conteúdo abordado, apresentações realizadas, etc."
+                    />
+                  </Stack>
+                </Box>
+
+                {/* 5. PRINCIPAIS PONTOS OBSERVADOS */}
+                <Box>
+                  <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 'bold', textDecoration: 'underline' }}>
+                    5. PRINCIPAIS PONTOS OBSERVADOS
+                  </Typography>
+                  <Stack spacing={1.5}>
+                    <TextField
+                      size="small"
+                      label="Principais questionamentos levantados pelos participantes"
+                      value={reportForm.mainPointsObserved}
+                      onChange={(e) => setReportForm({ ...reportForm, mainPointsObserved: e.target.value })}
+                      multiline
+                      minRows={3}
+                      fullWidth
+                      disabled={!canEditReport}
+                      placeholder="Liste os principais questionamentos, pontos de atenção ou observações relevantes"
+                    />
+                  </Stack>
+                </Box>
+
+                {/* 6. PONTOS DE ATENÇÃO */}
+                <Box>
+                  <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 'bold', textDecoration: 'underline' }}>
+                    6. PONTOS DE ATENÇÃO
+                  </Typography>
+                  <Stack spacing={1.5}>
+                    <TextField
+                      size="small"
+                      label="Lacunas / Riscos / Encaminhamentos necessários"
+                      value={reportForm.attentionPoints}
+                      onChange={(e) => setReportForm({ ...reportForm, attentionPoints: e.target.value })}
+                      multiline
+                      minRows={3}
+                      fullWidth
+                      disabled={!canEditReport}
+                      placeholder="Identifique lacunas, riscos ou encaminhamentos necessários"
+                    />
+                  </Stack>
+                </Box>
+
+                {/* 7. ENCAMINHAMENTOS E PRÓXIMOS PASSOS */}
+                <Box>
+                  <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 'bold', textDecoration: 'underline' }}>
+                    7. ENCAMINHAMENTOS E PRÓXIMOS PASSOS
+                  </Typography>
+                  <Stack spacing={1.5}>
+                    <TextField
+                      size="small"
+                      label="Ações previstas"
+                      value={reportForm.nextSteps}
+                      onChange={(e) => setReportForm({ ...reportForm, nextSteps: e.target.value })}
+                      multiline
+                      minRows={3}
+                      fullWidth
+                      disabled={!canEditReport}
+                      placeholder="Descreva as ações previstas e próximos passos"
+                    />
+                  </Stack>
+                </Box>
+
+                {/* 8. REFERÊNCIAS E ANEXOS */}
+                <Box>
+                  <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 'bold', textDecoration: 'underline' }}>
+                    8. REFERÊNCIAS E ANEXOS
+                  </Typography>
+                  <Stack spacing={1.5}>
+                    <TextField
+                      size="small"
+                      label="Links e registros"
+                      value={reportForm.referencesAndAttachments}
+                      onChange={(e) => setReportForm({ ...reportForm, referencesAndAttachments: e.target.value })}
+                      multiline
+                      minRows={2}
+                      fullWidth
+                      disabled={!canEditReport}
+                      placeholder="Ex: Reportagem completa: https://... | Vídeo resumo: https://..."
+                    />
+                  </Stack>
+                </Box>
+
+                {/* CONCLUSÃO */}
+                <Box>
+                  <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 'bold', textDecoration: 'underline' }}>
+                    CONCLUSÃO
+                  </Typography>
+                  <Stack spacing={1.5}>
+                    <TextField
+                      size="small"
+                      label="Conclusão"
+                      value={reportForm.conclusion}
+                      onChange={(e) => setReportForm({ ...reportForm, conclusion: e.target.value })}
+                      multiline
+                      minRows={3}
+                      fullWidth
+                      disabled={!canEditReport}
+                    />
+                  </Stack>
+                </Box>
+
+                {/* Rodapé */}
                 <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
                   <TextField
                     size="small"
@@ -1845,7 +2059,7 @@ export function ActivitiesPage() {
                   <TextField
                     size="small"
                     type="date"
-                    label="Data"
+                    label="Data de Fechamento"
                     value={reportForm.closingDate}
                     onChange={(e) => setReportForm({ ...reportForm, closingDate: e.target.value })}
                     InputLabelProps={{ shrink: true }}

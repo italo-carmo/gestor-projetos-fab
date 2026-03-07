@@ -345,6 +345,7 @@ export declare class MissionsService {
     private formatDate;
     private formatTime;
     private getDateTimePartsInTimeZone;
+    private removeOmFromParticipantName;
     private extractCpf;
     private calculateInclusiveDays;
 }

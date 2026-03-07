@@ -51,6 +51,7 @@ const fs = __importStar(require("node:fs"));
 const path = __importStar(require("node:path"));
 const http_error_1 = require("../common/http-error");
 const library_controller_1 = require("./library.controller");
+const library_storage_1 = require("./library-storage");
 let LibraryUploadsController = class LibraryUploadsController {
     sendPhoto(filename, res) {
         const safeName = path.basename(String(filename ?? '').trim());
@@ -63,7 +64,7 @@ let LibraryUploadsController = class LibraryUploadsController {
     }
     sendDocument(filename, res) {
         const safeName = path.basename(String(filename ?? '').trim());
-        const filePath = path.join(library_controller_1.libraryDocumentsDir, safeName);
+        const filePath = (0, library_storage_1.resolveExistingLibraryDocumentPath)(safeName);
         if (!safeName || !fs.existsSync(filePath)) {
             (0, http_error_1.throwError)('NOT_FOUND');
         }

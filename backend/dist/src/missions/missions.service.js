@@ -614,7 +614,7 @@ let MissionsService = class MissionsService {
             include: {
                 locality: { select: { id: true, code: true, name: true } },
                 participants: {
-                    select: { name: true, email: true, cpf: true },
+                    select: { name: true, email: true, cpf: true, fabom: true },
                     orderBy: [{ createdAt: 'asc' }],
                 },
                 scheduleItems: {
@@ -658,10 +658,12 @@ let MissionsService = class MissionsService {
         const missionLocality = mission.locality ? `${mission.locality.name} (${mission.locality.code})` : '-';
         const missionTimeZone = this.missionPdfTimeZone;
         const missionPeriod = `${this.formatDate(mission.startDate, missionTimeZone)} a ${this.formatDate(mission.endDate, missionTimeZone)}`;
-        const missionDescription = mission.description?.trim() || '-';
         const participantsLabel = mission.participants.length > 0
             ? mission.participants
-                .map((participant) => participant.name || participant.email || participant.cpf || 'Participante')
+                .map((participant) => {
+                const baseName = participant.name || participant.email || participant.cpf || 'Participante';
+                return this.removeOmFromParticipantName(baseName, participant.fabom);
+            })
                 .join(', ')
             : 'Nenhum participante cadastrado';
         const drawPageFooter = () => {
@@ -728,24 +730,6 @@ let MissionsService = class MissionsService {
                 x += cardWidth + gap;
             }
             cursorY += cardHeight + 6;
-            const descriptionHeight = 38;
-            doc
-                .roundedRect(tableX, cursorY, contentWidth, descriptionHeight, 6)
-                .fillAndStroke(palette.paper, palette.cardBorder);
-            doc
-                .font('Helvetica-Bold')
-                .fontSize(8)
-                .fillColor(palette.muted)
-                .text('Descrição', tableX + 8, cursorY + 6, { width: contentWidth - 16 });
-            doc
-                .font('Helvetica')
-                .fontSize(9)
-                .fillColor(palette.text)
-                .text(missionDescription, tableX + 8, cursorY + 16, {
-                width: contentWidth - 16,
-                height: 16,
-            });
-            cursorY += descriptionHeight + 6;
             const participantsHeight = Math.max(32, doc.heightOfString(participantsLabel, { width: contentWidth - 16, align: 'left' }) + 16);
             doc
                 .roundedRect(tableX, cursorY, contentWidth, participantsHeight, 6)
@@ -1089,6 +1073,25 @@ let MissionsService = class MissionsService {
             hour: byType.hour ?? '00',
             minute: byType.minute ?? '00',
         };
+    }
+    removeOmFromParticipantName(name, fabom) {
+        const normalizedName = (0, sanitize_1.sanitizeText)(name ?? '').trim();
+        if (!normalizedName)
+            return 'Participante';
+        const normalizedFabom = (0, sanitize_1.sanitizeText)(fabom ?? '').trim();
+        if (!normalizedFabom) {
+            const parts = normalizedName.split(/\s+/).filter(Boolean);
+            if (parts.length >= 3) {
+                const lastToken = parts[parts.length - 1];
+                const looksLikeOm = /^[A-Z]{2,5}$/.test(lastToken);
+                if (looksLikeOm) {
+                    return parts.slice(0, -1).join(' ').trim() || normalizedName;
+                }
+            }
+            return normalizedName;
+        }
+        const escapedFabom = normalizedFabom.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        return normalizedName.replace(new RegExp(`\\s+${escapedFabom}$`, 'i'), '').trim() || normalizedName;
     }
     extractCpf(value) {
         const digits = String(value ?? '').replace(/\D/g, '');
