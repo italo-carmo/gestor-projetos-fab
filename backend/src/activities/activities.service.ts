@@ -2067,14 +2067,13 @@ export class ActivitiesService {
     // Rodapé
     doc.moveDown(1);
     const footerY = doc.page.height - 80;
-    doc
-      .font('Helvetica')
-      .fontSize(10)
-      .y(footerY)
-      .text(`Local e Data: ${report.city}, ${this.formatDate(report.closingDate)}`, {
-        align: 'left',
-      });
-    doc.y(footerY + 15).text(`Responsável pelo Relatório: ${report.responsible}`, {
+    doc.font('Helvetica').fontSize(10);
+    doc.y = footerY;
+    doc.text(`Local e Data: ${report.city}, ${this.formatDate(report.closingDate)}`, {
+      align: 'left',
+    });
+    doc.y = footerY + 15;
+    doc.text(`Responsável pelo Relatório: ${report.responsible}`, {
       align: 'left',
     });
 
