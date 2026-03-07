@@ -1,0 +1,13 @@
+import { IsHexColor, IsOptional, IsString, MaxLength } from 'class-validator';
+
+export class UpdateLessonLearnedTypeDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  name?: string;
+
+  @IsOptional()
+  @IsHexColor()
+  colorHex?: string;
+}
+

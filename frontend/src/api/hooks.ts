@@ -1480,6 +1480,15 @@ export function useLessonsLearned(filters: Record<string, any>, enabled = true) 
   });
 }
 
+export function useLessonLearnedTypes(enabled = true) {
+  return useQuery({
+    queryKey: qk.lessonLearnedTypes,
+    queryFn: async () => (await api.get("/lessons-learned/types")).data,
+    enabled,
+    staleTime: 10_000,
+  });
+}
+
 export function useCreateBestPractice() {
   const qc = useQueryClient();
   return useMutation({
@@ -1523,6 +1532,7 @@ export function useCreateLessonLearned() {
     mutationFn: async (payload: {
       title: string;
       content: string;
+      typeId: string;
     }) => (await api.post("/lessons-learned", payload)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["lessonsLearned"] }),
   });
@@ -1536,6 +1546,7 @@ export function useUpdateLessonLearned() {
       payload: {
         title?: string;
         content?: string;
+        typeId?: string;
       };
     }) => (await api.put(`/lessons-learned/${args.id}`, args.payload)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["lessonsLearned"] }),
@@ -1547,6 +1558,43 @@ export function useDeleteLessonLearned() {
   return useMutation({
     mutationFn: async (id: string) => (await api.delete(`/lessons-learned/${id}`)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["lessonsLearned"] }),
+  });
+}
+
+export function useCreateLessonLearnedType() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: { name: string; colorHex: string }) =>
+      (await api.post("/lessons-learned/types", payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["lessonLearnedTypes"] });
+      qc.invalidateQueries({ queryKey: ["lessonsLearned"] });
+    },
+  });
+}
+
+export function useUpdateLessonLearnedType() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      payload: { name?: string; colorHex?: string };
+    }) => (await api.put(`/lessons-learned/types/${args.id}`, args.payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["lessonLearnedTypes"] });
+      qc.invalidateQueries({ queryKey: ["lessonsLearned"] });
+    },
+  });
+}
+
+export function useDeleteLessonLearnedType() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await api.delete(`/lessons-learned/types/${id}`)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["lessonLearnedTypes"] });
+      qc.invalidateQueries({ queryKey: ["lessonsLearned"] });
+    },
   });
 }
 

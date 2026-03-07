@@ -19,7 +19,7 @@ export class LessonsLearnedService {
     private readonly audit: AuditService,
   ) {}
 
-  async list(filters: { q?: string }, user?: RbacUser) {
+  async list(filters: { q?: string; typeId?: string }, user?: RbacUser) {
     this.assertViewerAccess(user);
 
     const where: Prisma.LessonLearnedPostWhereInput = {};
@@ -31,33 +31,52 @@ export class LessonsLearnedService {
         { authorLabel: { contains: q, mode: 'insensitive' } },
       ];
     }
+    if (filters.typeId) {
+      where.typeId = String(filters.typeId).trim();
+    }
 
     const items = await this.prisma.lessonLearnedPost.findMany({
       where,
-      include: { createdBy: { select: { id: true, name: true } } },
+      include: {
+        createdBy: { select: { id: true, name: true } },
+        type: { select: { id: true, name: true, colorHex: true } },
+      },
       orderBy: [{ createdAt: 'desc' }],
     });
 
     return { items };
   }
 
+  async listTypes(user?: RbacUser) {
+    this.assertViewerAccess(user);
+    const items = await this.prisma.lessonLearnedType.findMany({
+      orderBy: [{ name: 'asc' }],
+    });
+    return { items };
+  }
+
   async create(
-    payload: { title: string; content: string },
+    payload: { title: string; content: string; typeId: string },
     user?: RbacUser,
   ) {
     this.assertEditorAccess(user);
 
     const title = this.normalizeRequiredText(payload.title, 'title', 140);
     const content = this.normalizeRequiredText(payload.content, 'content', 1200);
+    const typeId = await this.resolveTypeId(payload.typeId);
 
     const created = await this.prisma.lessonLearnedPost.create({
       data: {
         title,
         content,
+        typeId,
         createdById: user?.id ?? null,
         authorLabel: this.buildAuthorLabel(user),
       },
-      include: { createdBy: { select: { id: true, name: true } } },
+      include: {
+        createdBy: { select: { id: true, name: true } },
+        type: { select: { id: true, name: true, colorHex: true } },
+      },
     });
 
     await this.audit.log({
@@ -73,7 +92,7 @@ export class LessonsLearnedService {
 
   async update(
     id: string,
-    payload: { title?: string; content?: string },
+    payload: { title?: string; content?: string; typeId?: string },
     user?: RbacUser,
   ) {
     this.assertEditorAccess(user);
@@ -93,8 +112,15 @@ export class LessonsLearnedService {
           payload.content !== undefined
             ? this.normalizeRequiredText(payload.content, 'content', 1200)
             : undefined,
+        typeId:
+          payload.typeId !== undefined
+            ? await this.resolveTypeId(payload.typeId)
+            : undefined,
       },
-      include: { createdBy: { select: { id: true, name: true } } },
+      include: {
+        createdBy: { select: { id: true, name: true } },
+        type: { select: { id: true, name: true, colorHex: true } },
+      },
     });
 
     await this.audit.log({
@@ -122,6 +148,102 @@ export class LessonsLearnedService {
       action: 'delete',
       entityId: existing.id,
       diffJson: { title: existing.title },
+    });
+    return { ok: true };
+  }
+
+  async createType(payload: { name: string; colorHex: string }, user?: RbacUser) {
+    this.assertEditorAccess(user);
+    const name = this.normalizeRequiredText(payload.name, 'name', 80);
+    const colorHex = this.normalizeColorHex(payload.colorHex);
+    const existing = await this.prisma.lessonLearnedType.findFirst({
+      where: { name: { equals: name, mode: 'insensitive' } },
+      select: { id: true },
+    });
+    if (existing) {
+      throwError('VALIDATION_ERROR', { field: 'name', reason: 'already_exists' });
+    }
+    const created = await this.prisma.lessonLearnedType.create({
+      data: { name, colorHex },
+    });
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'lessons_learned',
+      action: 'create',
+      entityId: created.id,
+      diffJson: { type: created.name, colorHex: created.colorHex },
+    });
+    return created;
+  }
+
+  async updateType(
+    id: string,
+    payload: { name?: string; colorHex?: string },
+    user?: RbacUser,
+  ) {
+    this.assertEditorAccess(user);
+    const existing = await this.prisma.lessonLearnedType.findUnique({
+      where: { id },
+    });
+    if (!existing) throwError('NOT_FOUND');
+    const nextName =
+      payload.name !== undefined
+        ? this.normalizeRequiredText(payload.name, 'name', 80)
+        : undefined;
+    if (nextName && nextName.toLowerCase() !== existing.name.toLowerCase()) {
+      const duplicated = await this.prisma.lessonLearnedType.findFirst({
+        where: {
+          id: { not: id },
+          name: { equals: nextName, mode: 'insensitive' },
+        },
+        select: { id: true },
+      });
+      if (duplicated) {
+        throwError('VALIDATION_ERROR', { field: 'name', reason: 'already_exists' });
+      }
+    }
+    const updated = await this.prisma.lessonLearnedType.update({
+      where: { id },
+      data: {
+        name: nextName,
+        colorHex:
+          payload.colorHex !== undefined
+            ? this.normalizeColorHex(payload.colorHex)
+            : undefined,
+      },
+    });
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'lessons_learned',
+      action: 'update',
+      entityId: updated.id,
+      diffJson: { type: updated.name, colorHex: updated.colorHex },
+    });
+    return updated;
+  }
+
+  async removeType(id: string, user?: RbacUser) {
+    this.assertEditorAccess(user);
+    const existing = await this.prisma.lessonLearnedType.findUnique({
+      where: { id },
+    });
+    if (!existing) throwError('NOT_FOUND');
+    const inUse = await this.prisma.lessonLearnedPost.count({
+      where: { typeId: id },
+    });
+    if (inUse > 0) {
+      throwError('VALIDATION_ERROR', {
+        field: 'typeId',
+        reason: 'LESSON_TYPE_IN_USE',
+      });
+    }
+    await this.prisma.lessonLearnedType.delete({ where: { id } });
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'lessons_learned',
+      action: 'delete',
+      entityId: id,
+      diffJson: { type: existing.name },
     });
     return { ok: true };
   }
@@ -172,6 +294,29 @@ export class LessonsLearnedService {
       }
     }
     return raw;
+  }
+
+  private async resolveTypeId(typeId: string) {
+    const normalized = String(typeId ?? '').trim();
+    if (!normalized) {
+      throwError('VALIDATION_ERROR', { field: 'typeId', reason: 'required' });
+    }
+    const existing = await this.prisma.lessonLearnedType.findUnique({
+      where: { id: normalized },
+      select: { id: true },
+    });
+    if (!existing) {
+      throwError('VALIDATION_ERROR', { field: 'typeId', reason: 'invalid' });
+    }
+    return existing.id;
+  }
+
+  private normalizeColorHex(value: string) {
+    const normalized = String(value ?? '').trim().toUpperCase();
+    if (!/^#[0-9A-F]{6}$/.test(normalized)) {
+      throwError('VALIDATION_ERROR', { field: 'colorHex', reason: 'invalid' });
+    }
+    return normalized;
   }
 }
 

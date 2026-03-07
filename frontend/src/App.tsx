@@ -28,6 +28,7 @@ import { CpcaCasesPage } from './pages/CpcaCasesPage';
 import { CpcaStatsPage } from './pages/CpcaStatsPage';
 import { LibraryPage } from './pages/LibraryPage';
 import { BestPracticesPage } from './pages/BestPracticesPage';
+import { LessonsLearnedPage } from './pages/LessonsLearnedPage';
 import { RequireAuth } from './app/RequireAuth';
 import { RequireRoleAccess } from './app/RequireRoleAccess';
 import {
@@ -174,6 +175,18 @@ function App() {
                   }
                 />
                 <Route path="/library" element={<LibraryPage />} />
+                <Route
+                  path="/lessons-learned"
+                  element={
+                    <RequireRoleAccess
+                      allow={(user) =>
+                        hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI])
+                      }
+                    >
+                      <LessonsLearnedPage />
+                    </RequireRoleAccess>
+                  }
+                />
                 <Route
                   path="/documents"
                   element={

@@ -85,7 +85,7 @@ const navSections: NavSection[] = [
       { label: "SMIF", to: "/dashboard/smif", icon: <DashboardIcon fontSize="small" /> },
       { label: "CIPAVD", to: "/dashboard/cipavd", icon: <InsightsRoundedIcon fontSize="small" /> },
       { label: "Impacto Positivo", to: "/social-communication", icon: <NewspaperRoundedIcon fontSize="small" /> },
-      { label: "Boas Práticas", to: "/best-practices", icon: <AutoStoriesRoundedIcon fontSize="small" /> },
+      { label: "Lições Aprendidas", to: "/lessons-learned", icon: <AutoStoriesRoundedIcon fontSize="small" /> },
       { label: "Biblioteca", to: "/library", icon: <PhotoLibraryRoundedIcon fontSize="small" /> },
       { label: "CPCA", to: "/dashboard/cpca", icon: <PolicyRoundedIcon fontSize="small" /> },
     ],
@@ -99,7 +99,7 @@ const navSections: NavSection[] = [
       { label: "Modelo de Atividades de Campo", to: "/templates", icon: <TaskIcon fontSize="small" /> },
       { label: "GSD e Recrutas", to: "/gsd-recruits", icon: <PeopleIcon fontSize="small" /> },
       { label: "Elos", to: "/elos", icon: <ContactPhoneIcon fontSize="small" /> },
-      { label: "Avisos", to: "/notices", icon: <CampaignIcon fontSize="small" /> },
+      { label: "Boas Práticas", to: "/best-practices", icon: <AutoStoriesRoundedIcon fontSize="small" /> },
     ],
   },
   {
@@ -113,6 +113,7 @@ const navSections: NavSection[] = [
       { label: "Calendário", to: "/calendar", icon: <EventNoteIcon fontSize="small" /> },
       { label: "Missões", to: "/missions", icon: <FlagRoundedIcon fontSize="small" /> },
       { label: "BI Pesquisas", to: "/dashboard/bi", icon: <InsightsRoundedIcon fontSize="small" /> },
+      { label: "Avisos", to: "/notices", icon: <CampaignIcon fontSize="small" /> },
     ],
   },
   {
@@ -337,6 +338,15 @@ export function AppShell({ children }: { children: ReactNode }) {
           ROLE_TI,
           ROLE_COMANDANTE_COMGEP,
         ]) && can(me, "best_practices", "view")
+      );
+    }
+    if (item.to === "/lessons-learned") {
+      return (
+        hasAnyRole(me, [
+          ROLE_COORDENACAO_CIPAVD,
+          ROLE_TI,
+          ROLE_COMANDANTE_COMGEP,
+        ]) && can(me, "lessons_learned", "view")
       );
     }
     if (item.to === "/activities") {

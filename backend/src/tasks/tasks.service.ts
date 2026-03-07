@@ -2010,6 +2010,24 @@ export class TasksService {
         report: {
           select: {
             id: true,
+            date: true,
+            location: true,
+            responsible: true,
+            missionSupport: true,
+            introduction: true,
+            missionObjectives: true,
+            executionSchedule: true,
+            activitiesPerformed: true,
+            participantsCount: true,
+            instructorsCount: true,
+            recruitsCount: true,
+            eloPsychologyCount: true,
+            eloSocialAssistanceCount: true,
+            eloGraduadoMasterCount: true,
+            participantsCharacteristics: true,
+            conclusion: true,
+            city: true,
+            closingDate: true,
             signedAt: true,
             signatureHash: true,
           },
@@ -2971,6 +2989,9 @@ export class TasksService {
       (activity) =>
         activity.reportRequired && activity.status === ActivityStatus.DONE,
     );
+    const approvedReportActivities = reportRequiredActivities.filter((activity) =>
+      hasSignedReport(activity),
+    );
     const complianceApproved = reportRequiredActivities.filter((activity) =>
       hasSignedReport(activity),
     ).length;
@@ -2978,6 +2999,56 @@ export class TasksService {
     const reportPendingItems = reportRequiredActivities
       .filter((activity) => !hasSignedReport(activity))
       .map((activity) => mapExecutiveActivityItem(activity));
+    const participantsInActivities = approvedReportActivities.reduce(
+      (acc, activity) => acc + Number(activity.report?.participantsCount ?? 0),
+      0,
+    );
+    const visitedCities = new Set(
+      filteredActivities
+        .filter(
+          (activity) =>
+            activity.status === ActivityStatus.DONE ||
+            activity.status === ActivityStatus.CANCELLED,
+        )
+        .map((activity) => canonicalLocalityIdByActivityId.get(activity.id) ?? activity.localityId ?? '')
+        .filter(Boolean),
+    ).size;
+    const reportCompletedItems = approvedReportActivities
+      .map((activity) => {
+        const baseItem = mapExecutiveActivityItem(activity);
+        return {
+          ...baseItem,
+          report: activity.report
+            ? {
+                id: activity.report.id,
+                signedAt: activity.report.signedAt,
+                date: activity.report.date,
+                location: activity.report.location,
+                responsible: activity.report.responsible,
+                missionSupport: activity.report.missionSupport,
+                introduction: activity.report.introduction,
+                missionObjectives: activity.report.missionObjectives,
+                executionSchedule: activity.report.executionSchedule,
+                activitiesPerformed: activity.report.activitiesPerformed,
+                participantsCount: activity.report.participantsCount,
+                instructorsCount: activity.report.instructorsCount,
+                recruitsCount: activity.report.recruitsCount,
+                eloPsychologyCount: activity.report.eloPsychologyCount,
+                eloSocialAssistanceCount: activity.report.eloSocialAssistanceCount,
+                eloGraduadoMasterCount: activity.report.eloGraduadoMasterCount,
+                participantsCharacteristics: activity.report.participantsCharacteristics,
+                conclusion: activity.report.conclusion,
+                city: activity.report.city,
+                closingDate: activity.report.closingDate,
+              }
+            : null,
+        };
+      })
+      .sort((a, b) => {
+        const left = new Date(a.report?.signedAt ?? a.createdAt ?? 0).getTime();
+        const right = new Date(b.report?.signedAt ?? b.createdAt ?? 0).getTime();
+        return right - left;
+      });
 
     // Get specialty IDs - search more broadly to ensure we find them
     const psicologiaSpecialty = await this.prisma.specialty.findFirst({
@@ -3094,6 +3165,8 @@ export class TasksService {
         totalActivities,
         completedActivities,
         completionPercent,
+        visitedCities,
+        participantsInActivities,
         lateActivities: lateItems.length,
         unassignedActivities: unassignedItems.length,
         reportPending: compliancePending,
@@ -3134,6 +3207,7 @@ export class TasksService {
         approved: complianceApproved,
         pending: compliancePending,
         total: reportRequiredActivities.length,
+        completedItems: reportCompletedItems,
         pendingItems: reportPendingItems,
       },
       risk: {

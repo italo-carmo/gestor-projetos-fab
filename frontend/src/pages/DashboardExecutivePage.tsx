@@ -3,12 +3,13 @@ import {
   Button,
   Card,
   CardContent,
+  Drawer,
   MenuItem,
   Stack,
   TextField,
   Typography,
 } from '@mui/material';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useExecutiveDashboard, useMe } from '../api/hooks';
@@ -16,7 +17,6 @@ import { can } from '../app/rbac';
 import { EmptyState } from '../components/states/EmptyState';
 import { ErrorState } from '../components/states/ErrorState';
 import { SkeletonState } from '../components/states/SkeletonState';
-import { ACTIVITY_STATUS_LABELS } from '../constants/enums';
 
 const KPI_BLUE_CARD_SX = {
   bgcolor: 'rgb(83, 127, 151)',
@@ -27,9 +27,11 @@ const KPI_BLUE_CARD_SX = {
 const BLUE_TEXT_MAIN = { color: '#F4FAFD' };
 const BLUE_TEXT_SUB = { color: 'rgba(231,244,250,0.92)' };
 
-function formatStatus(value: string | null | undefined) {
+function formatDateTime(value: string | null | undefined) {
   if (!value) return '-';
-  return ACTIVITY_STATUS_LABELS[value] ?? value;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+  return date.toLocaleString('pt-BR');
 }
 
 export function DashboardExecutivePage() {
@@ -54,6 +56,7 @@ export function DashboardExecutivePage() {
   );
 
   const dashboardQuery = useExecutiveDashboard(filters);
+  const [selectedReport, setSelectedReport] = useState<any | null>(null);
 
   const updateParam = (key: string, value: string) => {
     const next = new URLSearchParams(params);
@@ -128,6 +131,18 @@ export function DashboardExecutivePage() {
   const topLocalitiesByProgress = [...byLocality]
     .sort((a: any, b: any) => Number(b.progress ?? 0) - Number(a.progress ?? 0))
     .slice(0, 12);
+  const completedReportItems = data.reportsCompliance?.completedItems ?? [];
+  const visitedCities = Number(
+    data.summary?.visitedCities ??
+      byLocality.filter((item: any) => Number(item.done ?? 0) > 0).length,
+  );
+  const participantsInActivities = Number(
+    data.summary?.participantsInActivities ??
+      completedReportItems.reduce(
+        (acc: number, item: any) => acc + Number(item?.report?.participantsCount ?? 0),
+        0,
+      ),
+  );
 
   const downloadCsv = () => {
     const headers = ['localityCode', 'localityName', 'progress', 'specialtyName', 'specialtyCount'];
@@ -231,100 +246,195 @@ export function DashboardExecutivePage() {
 
       <Box
         display="grid"
-        gridTemplateColumns={{ xs: '1fr', md: 'repeat(3, 1fr)' }}
+        gridTemplateColumns={{ xs: '1fr', lg: 'repeat(2, minmax(0, 1fr))' }}
         gap={2}
-        mb={2}
       >
-        <Card sx={KPI_BLUE_CARD_SX}>
-          <CardContent sx={{ backgroundColor: 'rgb(83, 127, 151) !important' }}>
-            <Typography variant="overline" sx={BLUE_TEXT_SUB}>Atividades concluídas</Typography>
-            <Typography variant="h4" sx={BLUE_TEXT_MAIN}>{doneCount}</Typography>
-            <Typography variant="caption" sx={BLUE_TEXT_SUB}>
-              Entregas finalizadas no período
+        <Card sx={{ ...KPI_BLUE_CARD_SX, minHeight: 320 }}>
+          <CardContent sx={{ backgroundColor: 'rgb(83, 127, 151) !important', height: '100%' }}>
+            <Typography variant="subtitle1" sx={{ ...BLUE_TEXT_MAIN, fontWeight: 700, mb: 1.4 }}>
+              Indicadores executivos
             </Typography>
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
+                gap: 1.2,
+              }}
+            >
+              {[
+                {
+                  label: 'Atividades concluídas',
+                  value: doneCount,
+                  helper: `Taxa de conclusão: ${closureRate}%`,
+                },
+                {
+                  label: 'Cidades visitadas',
+                  value: visitedCities,
+                  helper: 'Localidades com atividade concluída',
+                },
+                {
+                  label: 'Relatórios aprovados',
+                  value: approvedReports,
+                  helper: `Conformidade: ${reportsComplianceRate}%`,
+                },
+                {
+                  label: 'Participantes em atividades',
+                  value: participantsInActivities,
+                  helper: 'Somatório dos relatórios concluídos',
+                },
+              ].map((item) => (
+                <Box
+                  key={item.label}
+                  sx={{
+                    p: 1.4,
+                    borderRadius: 2,
+                    border: '1px solid rgba(255,255,255,0.45)',
+                    bgcolor: 'rgba(255,255,255,0.12)',
+                  }}
+                >
+                  <Typography variant="overline" sx={BLUE_TEXT_SUB}>
+                    {item.label}
+                  </Typography>
+                  <Typography variant="h4" sx={{ ...BLUE_TEXT_MAIN, lineHeight: 1.05 }}>
+                    {item.value}
+                  </Typography>
+                  <Typography variant="caption" sx={BLUE_TEXT_SUB}>
+                    {item.helper}
+                  </Typography>
+                </Box>
+              ))}
+            </Box>
           </CardContent>
         </Card>
-        <Card sx={KPI_BLUE_CARD_SX}>
-          <CardContent sx={{ backgroundColor: 'rgb(83, 127, 151) !important' }}>
-            <Typography variant="overline" sx={BLUE_TEXT_SUB}>Taxa de conclusão</Typography>
-            <Typography variant="h4" sx={BLUE_TEXT_MAIN}>{closureRate}%</Typography>
-            <Typography variant="caption" sx={BLUE_TEXT_SUB}>
-              Concluídas sobre total de atividades
-            </Typography>
-          </CardContent>
-        </Card>
-        <Card sx={KPI_BLUE_CARD_SX}>
-          <CardContent sx={{ backgroundColor: 'rgb(83, 127, 151) !important' }}>
-            <Typography variant="overline" sx={BLUE_TEXT_SUB}>Relatórios aprovados</Typography>
-            <Typography variant="h4" sx={BLUE_TEXT_MAIN}>{approvedReports}</Typography>
-            <Typography variant="caption" sx={BLUE_TEXT_SUB}>
-              Conformidade de relatórios: {reportsComplianceRate}%
-            </Typography>
-          </CardContent>
-        </Card>
-      </Box>
 
-      <Box
-        display="grid"
-        gridTemplateColumns={{ xs: '1fr', md: 'repeat(2, 1fr)' }}
-        gap={2}
-        mb={2}
-      >
-        <Card>
+        <Card sx={{ minHeight: 320 }}>
           <CardContent>
-            <Typography variant="subtitle1" gutterBottom>
-              Distribuição de atividades por status
-            </Typography>
-            <ResponsiveContainer width="100%" height={140}>
-              <BarChart data={statusItems}>
-                <XAxis dataKey="status" tickFormatter={(value) => formatStatus(value)} />
-                <YAxis allowDecimals={false} />
-                <Tooltip
-                  formatter={(value: any) => [value, 'Quantidade']}
-                  labelFormatter={(value: any) => formatStatus(value)}
-                />
-                <Bar dataKey="count" fill="#0B4DA1" radius={[6, 6, 0, 0]} barSize={16} />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent>
-            <Typography variant="subtitle1" gutterBottom>
+            <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 700 }}>
               Indicadores por especialidade
             </Typography>
-            <ResponsiveContainer width="100%" height={220}>
+            <ResponsiveContainer width="100%" height={250}>
               <BarChart
                 data={topSpecialties}
                 layout="vertical"
-                margin={{ left: 30 }}
+                margin={{ left: 20, right: 10 }}
               >
                 <XAxis type="number" allowDecimals={false} />
                 <YAxis type="category" dataKey="specialtyName" width={150} />
                 <Tooltip formatter={(value: any) => [value, 'Atividades']} />
-                <Bar dataKey="count" fill="#4D86A0" radius={[0, 6, 6, 0]} barSize={12} />
+                <Bar dataKey="count" fill="#4D86A0" radius={[0, 6, 6, 0]} barSize={14} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
+
+        <Card sx={{ minHeight: 320 }}>
+          <CardContent>
+            <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 700 }}>
+              Destaque de performance por localidade
+            </Typography>
+            <ResponsiveContainer width="100%" height={250}>
+              <BarChart data={topLocalitiesByProgress}>
+                <XAxis dataKey="localityCode" />
+                <YAxis />
+                <Tooltip formatter={(value: any) => [`${value}%`, 'Progresso']} />
+                <Bar dataKey="progress" fill="#114259" radius={[6, 6, 0, 0]} barSize={18} />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        <Card sx={{ minHeight: 320 }}>
+          <CardContent sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+            <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 700 }}>
+              Relatórios concluídos
+            </Typography>
+            {completedReportItems.length === 0 ? (
+              <Typography variant="body2" color="text.secondary">
+                Nenhum relatório concluído no período selecionado.
+              </Typography>
+            ) : (
+              <Box sx={{ display: 'grid', gap: 1, overflowY: 'auto', maxHeight: 250, pr: 0.3 }}>
+                {completedReportItems.map((item: any) => (
+                  <Card key={item.activityId} variant="outlined" sx={{ borderColor: 'rgba(17,66,89,0.18)' }}>
+                    <CardContent sx={{ p: 1.2 }}>
+                      <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1}>
+                        <Box sx={{ minWidth: 0 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 700 }} noWrap>
+                            {item.title}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" noWrap>
+                            {(item.localityCode || item.localityName) ?? '-'} - Assinado em {formatDateTime(item.report?.signedAt)}
+                          </Typography>
+                        </Box>
+                        <Button size="small" variant="outlined" onClick={() => setSelectedReport(item)}>
+                          Ler
+                        </Button>
+                      </Stack>
+                    </CardContent>
+                  </Card>
+                ))}
+              </Box>
+            )}
+          </CardContent>
+        </Card>
       </Box>
 
-      <Card>
-        <CardContent>
-          <Typography variant="subtitle1" gutterBottom>
-            Destaque de performance por localidade
+      <Drawer
+        anchor="right"
+        open={Boolean(selectedReport)}
+        onClose={() => setSelectedReport(null)}
+        PaperProps={{ sx: { width: { xs: '100%', md: 560 } } }}
+      >
+        <Box sx={{ p: 3, pt: 7 }}>
+          <Typography variant="h6" sx={{ mt: 2, mb: 0.8 }}>
+            {selectedReport?.title || 'Relatório'}
           </Typography>
-          <ResponsiveContainer width="100%" height={140}>
-            <BarChart data={topLocalitiesByProgress}>
-              <XAxis dataKey="localityCode" />
-              <YAxis />
-              <Tooltip formatter={(value: any) => [`${value}%`, 'Progresso']} />
-              <Bar dataKey="progress" fill="#114259" radius={[6, 6, 0, 0]} barSize={16} />
-            </BarChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.8 }}>
+            {selectedReport?.localityName || '-'} - {formatDateTime(selectedReport?.report?.signedAt)}
+          </Typography>
+
+          <Stack spacing={1.4}>
+            <Box>
+              <Typography variant="subtitle2">Responsável</Typography>
+              <Typography variant="body2" color="text.secondary">
+                {selectedReport?.report?.responsible || '-'}
+              </Typography>
+            </Box>
+            <Box>
+              <Typography variant="subtitle2">Objetivos da missão</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-wrap' }}>
+                {selectedReport?.report?.missionObjectives || '-'}
+              </Typography>
+            </Box>
+            <Box>
+              <Typography variant="subtitle2">Atividades realizadas</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-wrap' }}>
+                {selectedReport?.report?.activitiesPerformed || '-'}
+              </Typography>
+            </Box>
+            <Box>
+              <Typography variant="subtitle2">Perfil dos participantes</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-wrap' }}>
+                {selectedReport?.report?.participantsCharacteristics || '-'}
+              </Typography>
+            </Box>
+            <Box>
+              <Typography variant="subtitle2">Conclusão</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-wrap' }}>
+                {selectedReport?.report?.conclusion || '-'}
+              </Typography>
+            </Box>
+            <Box>
+              <Typography variant="subtitle2">Resumo numérico</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Participantes: {selectedReport?.report?.participantsCount ?? 0} | Instrutores:{' '}
+                {selectedReport?.report?.instructorsCount ?? 0} | Recrutas:{' '}
+                {selectedReport?.report?.recruitsCount ?? 0}
+              </Typography>
+            </Box>
+          </Stack>
+        </Box>
+      </Drawer>
     </Box>
   );
 }

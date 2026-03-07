@@ -4,6 +4,10 @@ import {
   Card,
   CardContent,
   Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Divider,
   Drawer,
   IconButton,
@@ -39,7 +43,7 @@ const BEST_PRACTICES_BLUE_CARD_SX = {
 };
 
 const REPLICATION_PRACTICES_CARD_SX = {
-  backgroundColor: "rgb(110, 160, 190) !important",
+  backgroundColor: "rgb(102, 133, 114) !important",
 };
 
 type BestPracticePost = {
@@ -61,6 +65,7 @@ export function BestPracticesPage() {
   const [localityFilter, setLocalityFilter] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<BestPracticePost | null>(null);
+  const [readingPost, setReadingPost] = useState<BestPracticePost | null>(null);
   const [form, setForm] = useState({
     title: "",
     content: "",
@@ -325,13 +330,28 @@ export function BestPracticesPage() {
                     <Card
                       key={post.id}
                       variant="outlined"
+                      onClick={() => setReadingPost(post)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          setReadingPost(post);
+                        }
+                      }}
                       sx={{
                         ...cardSx,
                         height: "100%",
                         borderRadius: 2,
-                        borderColor: isCommission ? "rgba(110, 160, 190, 0.9)" : "rgba(83, 127, 151, 0.9)",
+                        borderColor: isCommission ? "rgba(102, 133, 114, 0.9)" : "rgba(83, 127, 151, 0.9)",
                         boxShadow: "0 12px 24px rgba(22, 60, 82, 0.3)",
                         width: isCommission ? "100%" : undefined,
+                        cursor: "pointer",
+                        transition: "transform 160ms ease, box-shadow 160ms ease",
+                        "&:hover": {
+                          transform: "translateY(-1px)",
+                          boxShadow: "0 16px 28px rgba(22, 60, 82, 0.34)",
+                        },
                       }}
                     >
                       <CardContent
@@ -352,12 +372,26 @@ export function BestPracticesPage() {
                           {(canUpdate || canDelete) && (
                             <Stack direction="row" spacing={0}>
                               {canUpdate && (
-                                <IconButton size="small" sx={{ color: "#F4FAFD" }} onClick={() => openEdit(post)}>
+                                <IconButton
+                                  size="small"
+                                  sx={{ color: "#F4FAFD" }}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    openEdit(post);
+                                  }}
+                                >
                                   <EditRoundedIcon fontSize="small" />
                                 </IconButton>
                               )}
                               {canDelete && (
-                                <IconButton size="small" sx={{ color: "#FFD5D8" }} onClick={() => handleDelete(post.id)}>
+                                <IconButton
+                                  size="small"
+                                  sx={{ color: "#FFD5D8" }}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    handleDelete(post.id);
+                                  }}
+                                >
                                   <DeleteOutlineRoundedIcon fontSize="small" />
                                 </IconButton>
                               )}
@@ -391,6 +425,9 @@ export function BestPracticesPage() {
                             {new Date(post.createdAt).toLocaleString("pt-BR")}
                           </Typography>
                         </Stack>
+                        <Typography variant="caption" sx={{ color: "rgba(236, 248, 252, 0.88)", mt: 0.8, display: "block" }}>
+                          Clique para ler o texto completo
+                        </Typography>
                       </CardContent>
                     </Card>
                     );
@@ -451,6 +488,41 @@ export function BestPracticesPage() {
           </Stack>
         </Box>
       </Drawer>
+
+      <Dialog
+        open={Boolean(readingPost)}
+        onClose={() => setReadingPost(null)}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle sx={{ pb: 0.5 }}>
+          {readingPost?.title || "Boa prática"}
+        </DialogTitle>
+        <DialogContent dividers>
+          <Typography
+            variant="body1"
+            sx={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}
+          >
+            {readingPost?.content || "-"}
+          </Typography>
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            spacing={1}
+            justifyContent="space-between"
+            sx={{ mt: 2 }}
+          >
+            <Typography variant="caption" color="text.secondary">
+              Autor: {readingPost?.authorLabel || "Coordenação CIPAVD"}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {readingPost ? new Date(readingPost.createdAt).toLocaleString("pt-BR") : "-"}
+            </Typography>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setReadingPost(null)}>Fechar</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

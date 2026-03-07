@@ -10,6 +10,10 @@ export class UpdateLessonLearnedDto {
   @IsString()
   @MaxLength(1200)
   content?: string;
+
+  @IsOptional()
+  @IsString()
+  typeId?: string;
 }
 
 

@@ -4,6 +4,10 @@ export class ListLessonLearnedDto {
   @IsOptional()
   @IsString()
   q?: string;
+
+  @IsOptional()
+  @IsString()
+  typeId?: string;
 }
 
 

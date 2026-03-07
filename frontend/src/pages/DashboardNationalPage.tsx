@@ -1,12 +1,8 @@
 import {
   Box,
-  Button,
   Card,
   CardContent,
-  Chip,
-  Drawer,
   Grid,
-  IconButton,
   Stack,
   Table,
   TableBody,
@@ -14,11 +10,8 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  TextField,
   Typography,
 } from '@mui/material';
-import EditRoundedIcon from '@mui/icons-material/EditRounded';
-import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import DescriptionIcon from '@mui/icons-material/Description';
 import TaskAltIcon from '@mui/icons-material/TaskAlt';
 import TerrainIcon from '@mui/icons-material/Terrain';
@@ -30,18 +23,13 @@ import GavelIcon from '@mui/icons-material/Gavel';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  useCreateLessonLearned,
   useDashboardNational,
   useLessonsLearned,
   useMe,
-  useDeleteLessonLearned,
-  useUpdateLessonLearned,
 } from '../api/hooks';
 import { toMilitaryDisplayName } from '../app/militaryName';
-import { parseApiError } from '../app/apiErrors';
 import { can } from '../app/rbac';
 import { hasAnyRole, ROLE_COMANDANTE_COMGEP, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from '../app/roleAccess';
-import { useToast } from '../app/toast';
 import { SkeletonState } from '../components/states/SkeletonState';
 import { ErrorState } from '../components/states/ErrorState';
 import { EmptyState } from '../components/states/EmptyState';
@@ -93,10 +81,15 @@ type LessonPost = {
   content: string;
   authorLabel?: string | null;
   createdAt: string;
+  typeId: string;
+  type?: {
+    id: string;
+    name: string;
+    colorHex: string;
+  } | null;
 };
 
 export function DashboardNationalPage() {
-  const toast = useToast();
   const { data: me } = useMe();
   const [params] = useSearchParams();
   const navigate = useNavigate();
@@ -105,20 +98,11 @@ export function DashboardNationalPage() {
   const canViewLessons =
     hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI, ROLE_COMANDANTE_COMGEP]) &&
     can(me, 'lessons_learned', 'view');
-  const canManageLessons =
-    hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]) &&
-    can(me, 'lessons_learned', 'create');
   const lessonsQuery = useLessonsLearned({}, canViewLessons);
-  const createLesson = useCreateLessonLearned();
-  const updateLesson = useUpdateLessonLearned();
-  const deleteLesson = useDeleteLessonLearned();
   const qc = useQueryClient();
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
   const [showVisitColumn, setShowVisitColumn] = useState(true);
   const [lessonOffset, setLessonOffset] = useState(0);
-  const [lessonsDrawerOpen, setLessonsDrawerOpen] = useState(false);
-  const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
-  const [lessonForm, setLessonForm] = useState({ title: '', content: '' });
 
   useEffect(() => {
     const element = tableContainerRef.current;
@@ -142,6 +126,14 @@ export function DashboardNationalPage() {
 
   const lessons = ((lessonsQuery.data?.items ?? []) as LessonPost[])
     .filter((item) => item?.id)
+    .filter((item) => {
+      const normalizedType = String(item.type?.name ?? '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim();
+      return normalizedType === 'resultados positivos';
+    })
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   useEffect(() => {
@@ -188,78 +180,6 @@ export function DashboardNationalPage() {
           return lessons[safeIndex];
         });
 
-  const resetLessonForm = () => {
-    setEditingLessonId(null);
-    setLessonForm({ title: '', content: '' });
-  };
-
-  const openCreateLesson = () => {
-    resetLessonForm();
-    setLessonsDrawerOpen(true);
-  };
-
-  const openEditLesson = (post: LessonPost) => {
-    setEditingLessonId(post.id);
-    setLessonForm({
-      title: String(post.title ?? ''),
-      content: String(post.content ?? ''),
-    });
-    setLessonsDrawerOpen(true);
-  };
-
-  const handleSaveLesson = async () => {
-    const title = lessonForm.title.trim();
-    const content = lessonForm.content.trim();
-    if (!title || !content) {
-      toast.push({ message: 'Preencha título e conteúdo.', severity: 'warning' });
-      return;
-    }
-    try {
-      if (editingLessonId) {
-        await updateLesson.mutateAsync({
-          id: editingLessonId,
-          payload: {
-            title,
-            content,
-          },
-        });
-        toast.push({ message: 'Lição atualizada.', severity: 'success' });
-      } else {
-        await createLesson.mutateAsync({
-          title,
-          content,
-        });
-        toast.push({ message: 'Lição criada.', severity: 'success' });
-      }
-      setLessonsDrawerOpen(false);
-      resetLessonForm();
-      await lessonsQuery.refetch();
-    } catch (error) {
-      toast.push({
-        message: parseApiError(error).message ?? 'Erro ao salvar lição aprendida.',
-        severity: 'error',
-      });
-    }
-  };
-
-  const handleDeleteLesson = async (post: LessonPost) => {
-    const title = String(post.title ?? '').trim() || 'esta lição';
-    const confirmed = window.confirm(`Deseja excluir "${title}"?`);
-    if (!confirmed) return;
-    try {
-      await deleteLesson.mutateAsync(post.id);
-      if (editingLessonId === post.id) {
-        resetLessonForm();
-      }
-      toast.push({ message: 'Lição excluída.', severity: 'success' });
-      await lessonsQuery.refetch();
-    } catch (error) {
-      toast.push({
-        message: parseApiError(error).message ?? 'Erro ao excluir lição aprendida.',
-        severity: 'error',
-      });
-    }
-  };
   const averageProgress = smifLocalities.length
     ? Math.round(smifLocalities.reduce((acc, item) => acc + Number(item.progress ?? 0), 0) / smifLocalities.length)
     : 0;
@@ -525,16 +445,7 @@ export function DashboardNationalPage() {
           <Card sx={{ width: '100%', height: '100%' }}>
             <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
               <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
-                <Typography variant="h6">Lições aprendidas</Typography>
-                {canManageLessons && (
-                  <IconButton
-                    size="small"
-                    onClick={openCreateLesson}
-                    title="Adicionar ou editar lições aprendidas"
-                  >
-                    <EditRoundedIcon fontSize="small" />
-                  </IconButton>
-                )}
+                <Typography variant="h6">Resultados Positivos</Typography>
               </Stack>
               {!canViewLessons ? (
                 <Typography variant="body2" color="text.secondary">
@@ -550,7 +461,7 @@ export function DashboardNationalPage() {
                 </Typography>
               ) : lessons.length === 0 ? (
                 <Typography variant="body2" color="text.secondary">
-                  Nenhuma lição aprendida cadastrada.
+                  Nenhum resultado positivo cadastrado.
                 </Typography>
               ) : (
                 <Box
@@ -568,11 +479,11 @@ export function DashboardNationalPage() {
                       variant="outlined"
                       sx={{
                         transition: 'transform 280ms ease, opacity 280ms ease',
-                        backgroundColor: 'rgb(83, 127, 151)',
-                        borderColor: 'rgba(83, 127, 151, 0.9)',
+                        backgroundColor: lesson.type?.colorHex || '#8E44AD',
+                        borderColor: lesson.type?.colorHex || '#8E44AD',
                       }}
                     >
-                      <CardContent sx={{ p: 1.2, backgroundColor: 'rgb(83, 127, 151)' }}>
+                      <CardContent sx={{ p: 1.2, backgroundColor: lesson.type?.colorHex || '#8E44AD' }}>
                         <Typography variant="subtitle2" sx={{ fontWeight: 700, lineHeight: 1.25, color: '#F4FAFD' }}>
                           {lesson.title}
                         </Typography>
@@ -606,106 +517,6 @@ export function DashboardNationalPage() {
           </Card>
         </Grid>
       </Grid>
-      <Drawer
-        anchor="right"
-        open={lessonsDrawerOpen}
-        onClose={() => {
-          setLessonsDrawerOpen(false);
-          resetLessonForm();
-        }}
-        PaperProps={{ sx: { width: { xs: '100%', md: 520 } } }}
-      >
-        <Box p={3} pt={7} display="flex" flexDirection="column" gap={1.4}>
-          <Stack direction="row" justifyContent="space-between" alignItems="center">
-            <Typography variant="h6" sx={{ mt: 2.5 }}>
-              {editingLessonId ? 'Editar lição aprendida' : 'Nova lição aprendida'}
-            </Typography>
-            <Button size="small" variant="outlined" onClick={openCreateLesson}>
-              Nova
-            </Button>
-          </Stack>
-          <TextField
-            size="small"
-            label="Título"
-            value={lessonForm.title}
-            onChange={(event) =>
-              setLessonForm((prev) => ({ ...prev, title: event.target.value }))
-            }
-            fullWidth
-          />
-          <TextField
-            size="small"
-            label="Texto"
-            value={lessonForm.content}
-            onChange={(event) =>
-              setLessonForm((prev) => ({ ...prev, content: event.target.value }))
-            }
-            multiline
-            minRows={4}
-            fullWidth
-          />
-          <Stack direction="row" spacing={1}>
-            <Button
-              variant="contained"
-              onClick={handleSaveLesson}
-              disabled={createLesson.isPending || updateLesson.isPending}
-            >
-              Salvar
-            </Button>
-            <Button
-              variant="outlined"
-              onClick={() => {
-                setLessonsDrawerOpen(false);
-                resetLessonForm();
-              }}
-            >
-              Cancelar
-            </Button>
-          </Stack>
-          <Typography variant="subtitle2" sx={{ mt: 1 }}>
-            Lições cadastradas
-          </Typography>
-          <Box sx={{ display: 'grid', gap: 1, maxHeight: '55vh', overflowY: 'auto', pr: 0.3 }}>
-            {lessons.map((lesson) => (
-              <Card key={lesson.id} variant="outlined">
-                <CardContent sx={{ p: 1.2 }}>
-                  <Stack direction="row" justifyContent="space-between" gap={1}>
-                    <Typography variant="body2" fontWeight={700}>
-                      {lesson.title}
-                    </Typography>
-                    <Stack direction="row" spacing={0.5}>
-                      <IconButton size="small" onClick={() => openEditLesson(lesson)}>
-                        <EditRoundedIcon fontSize="small" />
-                      </IconButton>
-                      <IconButton
-                        size="small"
-                        color="error"
-                        onClick={() => handleDeleteLesson(lesson)}
-                        disabled={deleteLesson.isPending}
-                      >
-                        <DeleteOutlineRoundedIcon fontSize="small" />
-                      </IconButton>
-                    </Stack>
-                  </Stack>
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    sx={{
-                      mt: 0.4,
-                      display: '-webkit-box',
-                      WebkitLineClamp: 2,
-                      WebkitBoxOrient: 'vertical',
-                      overflow: 'hidden',
-                    }}
-                  >
-                    {lesson.content}
-                  </Typography>
-                </CardContent>
-              </Card>
-            ))}
-          </Box>
-        </Box>
-      </Drawer>
     </Box>
   );
 }
