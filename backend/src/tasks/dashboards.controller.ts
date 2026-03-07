@@ -76,7 +76,7 @@ export class DashboardsController {
         specialtyId: psicologia?.specialtyId,
         specialtyName: psicologia?.specialtyName,
       },
-      total: result.specialties.items.reduce((sum: number, s: any) => sum + s.count, 0),
+      total: (result.specialties.items as any[]).reduce((sum: number, s: any) => sum + s.count, 0),
       totalActivities: result.summary.totalActivities,
     };
   }
