@@ -600,7 +600,7 @@ export function CpcaStatsPage() {
       </Grid>
 
       <Grid container spacing={2} sx={{ mt: 0.5 }}>
-        <Grid size={{ xs: 12, md: 7 }}>
+        <Grid size={{ xs: 12, md: 6 }}>
           <Card sx={{ ...CPCA_PANEL_CARD_SX, height: "100%" }}>
             <CardContent>
               <Typography variant="h6" gutterBottom>
@@ -659,7 +659,7 @@ export function CpcaStatsPage() {
             </CardContent>
           </Card>
         </Grid>
-        <Grid size={{ xs: 12, md: 5 }}>
+        <Grid size={{ xs: 12, md: 6 }}>
           <Card sx={{ ...CPCA_PANEL_CARD_SX, height: "100%" }}>
             <CardContent>
               <Typography variant="h6" gutterBottom>
