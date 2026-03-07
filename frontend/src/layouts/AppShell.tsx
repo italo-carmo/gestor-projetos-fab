@@ -267,6 +267,11 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
     if (item.to === "/dashboard/cipavd") {
       return (
+        hasAnyRole(me, [
+          ROLE_COORDENACAO_CIPAVD,
+          ROLE_COMANDANTE_COMGEP,
+          ROLE_TI,
+        ]) &&
         can(me, "dashboard", "view") &&
         (me?.executive_hide_pii || can(me, "roles", "view"))
       );

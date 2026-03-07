@@ -4,6 +4,7 @@ import {
   Card,
   CardContent,
   Chip,
+  Collapse,
   Drawer,
   IconButton,
   MenuItem,
@@ -14,6 +15,9 @@ import {
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import EditRoundedIcon from '@mui/icons-material/EditRounded';
+import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded';
+import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
+import ExpandLessRoundedIcon from '@mui/icons-material/ExpandLessRounded';
 import { useMemo, useState } from 'react';
 import {
   useCreateLessonLearned,
@@ -59,6 +63,9 @@ export function LessonsLearnedPage() {
   const canManage =
     hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]) &&
     can(me, 'lessons_learned', 'create');
+  const canManageTypes =
+    hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]) &&
+    can(me, 'lessons_learned_types', 'create');
 
   const typesQuery = useLessonLearnedTypes(canView);
   const lessonsQuery = useLessonsLearned({}, canView);
@@ -77,6 +84,7 @@ export function LessonsLearnedPage() {
   const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
   const [lessonForm, setLessonForm] = useState({ title: '', content: '', typeId: '' });
   const [typeForm, setTypeForm] = useState({ id: '', name: '', colorHex: '#8E44AD' });
+  const [typesSectionOpen, setTypesSectionOpen] = useState(false);
 
   const resetLessonForm = () => {
     setEditingLessonId(null);
@@ -282,58 +290,68 @@ export function LessonsLearnedPage() {
 
         <Card sx={{ flex: 1 }}>
           <CardContent>
-            <Typography variant="h6" sx={{ mb: 1 }}>
-              Tipos de lição
-            </Typography>
-            {canManage ? (
-              <Stack spacing={1}>
-                <TextField
+            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+              <Typography variant="h6">Tipos de lição</Typography>
+              {canManageTypes && (
+                <Button
                   size="small"
-                  label="Nome do tipo"
-                  value={typeForm.name}
-                  onChange={(event) => setTypeForm((prev) => ({ ...prev, name: event.target.value }))}
-                />
-                <Stack direction="row" spacing={1} alignItems="center">
+                  startIcon={<SettingsRoundedIcon />}
+                  endIcon={typesSectionOpen ? <ExpandLessRoundedIcon /> : <ExpandMoreRoundedIcon />}
+                  onClick={() => setTypesSectionOpen(!typesSectionOpen)}
+                  variant="outlined"
+                >
+                  {typesSectionOpen ? 'Ocultar' : 'Gerenciar tipos'}
+                </Button>
+              )}
+            </Stack>
+
+            <Collapse in={typesSectionOpen}>
+              {canManageTypes ? (
+                <Stack spacing={1} sx={{ mb: 1.5 }}>
                   <TextField
                     size="small"
-                    type="color"
-                    label="Cor do card"
-                    value={typeForm.colorHex}
-                    onChange={(event) => setTypeForm((prev) => ({ ...prev, colorHex: event.target.value.toUpperCase() }))}
-                    sx={{ width: 120 }}
-                    InputLabelProps={{ shrink: true }}
+                    label="Nome do tipo"
+                    value={typeForm.name}
+                    onChange={(event) => setTypeForm((prev) => ({ ...prev, name: event.target.value }))}
                   />
-                  <Box
-                    sx={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: 1,
-                      border: '1px solid rgba(0,0,0,0.2)',
-                      bgcolor: typeForm.colorHex,
-                    }}
-                  />
-                  <Typography variant="caption" color="text.secondary">
-                    Prévia
-                  </Typography>
-                </Stack>
-                <Stack direction="row" spacing={1}>
-                  <Button variant="contained" onClick={handleSaveType}>
-                    {typeForm.id ? 'Atualizar tipo' : 'Criar tipo'}
-                  </Button>
-                  {typeForm.id && (
-                    <Button variant="outlined" onClick={resetTypeForm}>
-                      Cancelar edição
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <TextField
+                      size="small"
+                      type="color"
+                      label="Cor do card"
+                      value={typeForm.colorHex}
+                      onChange={(event) => setTypeForm((prev) => ({ ...prev, colorHex: event.target.value.toUpperCase() }))}
+                      sx={{ width: 120 }}
+                      InputLabelProps={{ shrink: true }}
+                    />
+                    <Box
+                      sx={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: 1,
+                        border: '1px solid rgba(0,0,0,0.2)',
+                        bgcolor: typeForm.colorHex,
+                      }}
+                    />
+                    <Typography variant="caption" color="text.secondary">
+                      Prévia
+                    </Typography>
+                  </Stack>
+                  <Stack direction="row" spacing={1}>
+                    <Button variant="contained" onClick={handleSaveType}>
+                      {typeForm.id ? 'Atualizar tipo' : 'Criar tipo'}
                     </Button>
-                  )}
+                    {typeForm.id && (
+                      <Button variant="outlined" onClick={resetTypeForm}>
+                        Cancelar edição
+                      </Button>
+                    )}
+                  </Stack>
                 </Stack>
-              </Stack>
-            ) : (
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                Somente Coordenação CIPAVD e TI podem alterar tipos.
-              </Typography>
-            )}
+              ) : null}
+            </Collapse>
 
-            <Box sx={{ mt: 1.5, display: 'grid', gap: 0.8 }}>
+            <Box sx={{ mt: typesSectionOpen ? 0 : 1.5, display: 'grid', gap: 0.8 }}>
               {types.map((type) => (
                 <Card key={type.id} variant="outlined">
                   <CardContent sx={{ p: 1 }}>
@@ -344,11 +362,14 @@ export function LessonsLearnedPage() {
                           {type.name}
                         </Typography>
                       </Stack>
-                      {canManage && (
+                      {canManageTypes && typesSectionOpen && (
                         <Stack direction="row" spacing={0.5}>
                           <IconButton
                             size="small"
-                            onClick={() => setTypeForm({ id: type.id, name: type.name, colorHex: type.colorHex })}
+                            onClick={() => {
+                              setTypeForm({ id: type.id, name: type.name, colorHex: type.colorHex });
+                              setTypesSectionOpen(true);
+                            }}
                           >
                             <EditRoundedIcon fontSize="small" />
                           </IconButton>
