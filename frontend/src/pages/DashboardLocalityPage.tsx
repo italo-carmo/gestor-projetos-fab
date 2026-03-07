@@ -1,6 +1,8 @@
-import { Box, Button, Card, CardContent, Chip, Divider, Stack, Typography } from '@mui/material';
+import { Box, Button, Card, CardContent, Chip, Divider, Stack, Typography, Dialog, DialogTitle, DialogContent, DialogActions, IconButton } from '@mui/material';
 import { Link } from 'react-router-dom';
 import { useParams } from 'react-router-dom';
+import { useState } from 'react';
+import CloseIcon from '@mui/icons-material/Close';
 import {
   useActivities,
   useBestPractices,
@@ -55,7 +57,8 @@ export function DashboardLocalityPage() {
   const upcoming = [...tasks]
     .sort((a: any, b: any) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
     .slice(0, 5);
-  const late = tasks.filter((task: any) => task.isLate).slice(0, 5);
+  // Filtrar tarefas atrasadas excluindo as que estão com status DONE
+  const late = tasks.filter((task: any) => task.isLate && task.status !== 'DONE').slice(0, 5);
   const unassigned = tasks.filter((task: any) => task.hasAssignee === false).slice(0, 5);
 
   const localityInfo = (dashboardQuery.data?.items ?? []).find((loc: any) => loc.localityId === id);
@@ -65,6 +68,9 @@ export function DashboardLocalityPage() {
   const missions = (missionsQuery.data?.items ?? []).slice(0, 5);
   const meetings = (meetingsQuery.data?.items ?? []).slice(0, 5);
   const documents = (documentsQuery.data?.items ?? []).slice(0, 5);
+
+  // Estado para modal de boas práticas
+  const [selectedBestPractice, setSelectedBestPractice] = useState<any>(null);
 
   return (
     <Box>
@@ -181,7 +187,7 @@ export function DashboardLocalityPage() {
           <Box
             sx={{
               display: 'grid',
-              gap: 1.5,
+              gap: 2,
               gridTemplateColumns: {
                 xs: '1fr',
                 md: 'repeat(2, minmax(0, 1fr))',
@@ -189,148 +195,455 @@ export function DashboardLocalityPage() {
               },
             }}
           >
-            <Card variant="outlined">
+            {/* Boas Práticas */}
+            <Card
+              sx={{
+                background: 'linear-gradient(135deg, rgb(102, 133, 114) 0%, rgb(85, 110, 95) 100%)',
+                color: 'white',
+                transition: 'transform 0.2s, box-shadow 0.2s',
+                '&:hover': {
+                  transform: 'translateY(-4px)',
+                  boxShadow: 6,
+                },
+              }}
+            >
               <CardContent>
-                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
-                  <Typography variant="subtitle2" fontWeight={700}>Boas práticas</Typography>
-                  <Button size="small" component={Link} to={`/best-practices?localityId=${id}`}>
+                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+                  <Typography variant="h6" fontWeight={700} sx={{ color: 'white' }}>
+                    Boas práticas
+                  </Typography>
+                  <Button
+                    size="small"
+                    component={Link}
+                    to={`/best-practices?localityId=${id}`}
+                    sx={{
+                      color: 'white',
+                      borderColor: 'rgba(255, 255, 255, 0.5)',
+                      '&:hover': {
+                        borderColor: 'white',
+                        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                      },
+                    }}
+                    variant="outlined"
+                  >
                     Ver tudo
                   </Button>
                 </Stack>
                 {bestPracticesQuery.isError ? (
-                  <Typography variant="body2" color="text.secondary">Sem permissão ou indisponível.</Typography>
+                  <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.8)' }}>
+                    Sem permissão ou indisponível.
+                  </Typography>
                 ) : bestPractices.length === 0 ? (
-                  <Typography variant="body2" color="text.secondary">Sem registros.</Typography>
+                  <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.8)' }}>
+                    Sem registros.
+                  </Typography>
                 ) : (
-                  <Stack spacing={0.7}>
+                  <Stack spacing={1.5}>
                     {bestPractices.map((item: any) => (
-                      <Typography key={item.id} variant="body2" noWrap>
-                        • {item.title}
-                      </Typography>
+                      <Box
+                        key={item.id}
+                        onClick={() => setSelectedBestPractice(item)}
+                        sx={{
+                          cursor: 'pointer',
+                          p: 1.5,
+                          borderRadius: 1,
+                          backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                          transition: 'background-color 0.2s',
+                          '&:hover': {
+                            backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                          },
+                        }}
+                      >
+                        <Typography variant="body2" fontWeight={600} sx={{ color: 'white', mb: 0.5 }}>
+                          {item.title}
+                        </Typography>
+                        {item.content && (
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              color: 'rgba(255, 255, 255, 0.9)',
+                              display: '-webkit-box',
+                              WebkitLineClamp: 2,
+                              WebkitBoxOrient: 'vertical',
+                              overflow: 'hidden',
+                            }}
+                          >
+                            {item.content}
+                          </Typography>
+                        )}
+                      </Box>
                     ))}
                   </Stack>
                 )}
               </CardContent>
             </Card>
 
-            <Card variant="outlined">
+            {/* Atividades de Campo */}
+            <Card
+              sx={{
+                background: 'linear-gradient(135deg, rgb(83, 127, 151) 0%, rgb(65, 100, 120) 100%)',
+                color: 'white',
+                transition: 'transform 0.2s, box-shadow 0.2s',
+                '&:hover': {
+                  transform: 'translateY(-4px)',
+                  boxShadow: 6,
+                },
+              }}
+            >
               <CardContent>
-                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
-                  <Typography variant="subtitle2" fontWeight={700}>Atividades de campo</Typography>
-                  <Button size="small" component={Link} to={`/activities?localityId=${id}`}>
+                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+                  <Typography variant="h6" fontWeight={700} sx={{ color: 'white' }}>
+                    Atividades de campo
+                  </Typography>
+                  <Button
+                    size="small"
+                    component={Link}
+                    to={`/activities?localityId=${id}`}
+                    sx={{
+                      color: 'white',
+                      borderColor: 'rgba(255, 255, 255, 0.5)',
+                      '&:hover': {
+                        borderColor: 'white',
+                        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                      },
+                    }}
+                    variant="outlined"
+                  >
                     Ver tudo
                   </Button>
                 </Stack>
                 {activities.length === 0 ? (
-                  <Typography variant="body2" color="text.secondary">Sem registros.</Typography>
+                  <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.8)' }}>
+                    Sem registros.
+                  </Typography>
                 ) : (
-                  <Stack spacing={0.7}>
+                  <Stack spacing={1.5}>
                     {activities.map((item: any) => (
-                      <Typography key={item.id} variant="body2" noWrap>
-                        • {item.title}
-                      </Typography>
+                      <Box
+                        key={item.id}
+                        sx={{
+                          p: 1.5,
+                          borderRadius: 1,
+                          backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                        }}
+                      >
+                        <Typography variant="body2" fontWeight={600} sx={{ color: 'white' }}>
+                          {item.title}
+                        </Typography>
+                        {item.specialtyName && (
+                          <Chip
+                            label={item.specialtyName}
+                            size="small"
+                            sx={{
+                              mt: 0.5,
+                              backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                              color: 'white',
+                              fontSize: '0.7rem',
+                            }}
+                          />
+                        )}
+                      </Box>
                     ))}
                   </Stack>
                 )}
               </CardContent>
             </Card>
 
-            <Card variant="outlined">
+            {/* Avisos */}
+            <Card
+              sx={{
+                background: 'linear-gradient(135deg, rgb(255, 152, 0) 0%, rgb(230, 126, 0) 100%)',
+                color: 'white',
+                transition: 'transform 0.2s, box-shadow 0.2s',
+                '&:hover': {
+                  transform: 'translateY(-4px)',
+                  boxShadow: 6,
+                },
+              }}
+            >
               <CardContent>
-                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
-                  <Typography variant="subtitle2" fontWeight={700}>Avisos</Typography>
-                  <Button size="small" component={Link} to={`/notices?localityId=${id}`}>
+                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+                  <Typography variant="h6" fontWeight={700} sx={{ color: 'white' }}>
+                    Avisos
+                  </Typography>
+                  <Button
+                    size="small"
+                    component={Link}
+                    to={`/notices?localityId=${id}`}
+                    sx={{
+                      color: 'white',
+                      borderColor: 'rgba(255, 255, 255, 0.5)',
+                      '&:hover': {
+                        borderColor: 'white',
+                        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                      },
+                    }}
+                    variant="outlined"
+                  >
                     Ver tudo
                   </Button>
                 </Stack>
                 {noticesQuery.isError ? (
-                  <Typography variant="body2" color="text.secondary">Sem permissão ou indisponível.</Typography>
+                  <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.8)' }}>
+                    Sem permissão ou indisponível.
+                  </Typography>
                 ) : notices.length === 0 ? (
-                  <Typography variant="body2" color="text.secondary">Sem registros.</Typography>
+                  <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.8)' }}>
+                    Sem registros.
+                  </Typography>
                 ) : (
-                  <Stack spacing={0.7}>
+                  <Stack spacing={1.5}>
                     {notices.map((item: any) => (
-                      <Typography key={item.id} variant="body2" noWrap>
-                        • {item.title}
-                      </Typography>
+                      <Box
+                        key={item.id}
+                        sx={{
+                          p: 1.5,
+                          borderRadius: 1,
+                          backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                        }}
+                      >
+                        <Typography variant="body2" fontWeight={600} sx={{ color: 'white' }}>
+                          {item.title}
+                        </Typography>
+                      </Box>
                     ))}
                   </Stack>
                 )}
               </CardContent>
             </Card>
 
-            <Card variant="outlined">
+            {/* Missões */}
+            <Card
+              sx={{
+                background: 'linear-gradient(135deg, rgb(156, 39, 176) 0%, rgb(123, 31, 162) 100%)',
+                color: 'white',
+                transition: 'transform 0.2s, box-shadow 0.2s',
+                '&:hover': {
+                  transform: 'translateY(-4px)',
+                  boxShadow: 6,
+                },
+              }}
+            >
               <CardContent>
-                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
-                  <Typography variant="subtitle2" fontWeight={700}>Missões</Typography>
-                  <Button size="small" component={Link} to={`/missions?localityId=${id}`}>
+                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+                  <Typography variant="h6" fontWeight={700} sx={{ color: 'white' }}>
+                    Missões
+                  </Typography>
+                  <Button
+                    size="small"
+                    component={Link}
+                    to={`/missions?localityId=${id}`}
+                    sx={{
+                      color: 'white',
+                      borderColor: 'rgba(255, 255, 255, 0.5)',
+                      '&:hover': {
+                        borderColor: 'white',
+                        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                      },
+                    }}
+                    variant="outlined"
+                  >
                     Ver tudo
                   </Button>
                 </Stack>
                 {missionsQuery.isError ? (
-                  <Typography variant="body2" color="text.secondary">Sem permissão ou indisponível.</Typography>
+                  <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.8)' }}>
+                    Sem permissão ou indisponível.
+                  </Typography>
                 ) : missions.length === 0 ? (
-                  <Typography variant="body2" color="text.secondary">Sem registros.</Typography>
+                  <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.8)' }}>
+                    Sem registros.
+                  </Typography>
                 ) : (
-                  <Stack spacing={0.7}>
+                  <Stack spacing={1.5}>
                     {missions.map((item: any) => (
-                      <Typography key={item.id} variant="body2" noWrap>
-                        • {item.title}
-                      </Typography>
+                      <Box
+                        key={item.id}
+                        sx={{
+                          p: 1.5,
+                          borderRadius: 1,
+                          backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                        }}
+                      >
+                        <Typography variant="body2" fontWeight={600} sx={{ color: 'white' }}>
+                          {item.title}
+                        </Typography>
+                      </Box>
                     ))}
                   </Stack>
                 )}
               </CardContent>
             </Card>
 
-            <Card variant="outlined">
+            {/* Reuniões */}
+            <Card
+              sx={{
+                background: 'linear-gradient(135deg, rgb(33, 150, 243) 0%, rgb(25, 118, 210) 100%)',
+                color: 'white',
+                transition: 'transform 0.2s, box-shadow 0.2s',
+                '&:hover': {
+                  transform: 'translateY(-4px)',
+                  boxShadow: 6,
+                },
+              }}
+            >
               <CardContent>
-                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
-                  <Typography variant="subtitle2" fontWeight={700}>Reuniões</Typography>
-                  <Button size="small" component={Link} to={`/meetings?localityId=${id}`}>
+                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+                  <Typography variant="h6" fontWeight={700} sx={{ color: 'white' }}>
+                    Reuniões
+                  </Typography>
+                  <Button
+                    size="small"
+                    component={Link}
+                    to={`/meetings?localityId=${id}`}
+                    sx={{
+                      color: 'white',
+                      borderColor: 'rgba(255, 255, 255, 0.5)',
+                      '&:hover': {
+                        borderColor: 'white',
+                        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                      },
+                    }}
+                    variant="outlined"
+                  >
                     Ver tudo
                   </Button>
                 </Stack>
                 {meetingsQuery.isError ? (
-                  <Typography variant="body2" color="text.secondary">Sem permissão ou indisponível.</Typography>
+                  <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.8)' }}>
+                    Sem permissão ou indisponível.
+                  </Typography>
                 ) : meetings.length === 0 ? (
-                  <Typography variant="body2" color="text.secondary">Sem registros.</Typography>
+                  <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.8)' }}>
+                    Sem registros.
+                  </Typography>
                 ) : (
-                  <Stack spacing={0.7}>
+                  <Stack spacing={1.5}>
                     {meetings.map((item: any) => (
-                      <Typography key={item.id} variant="body2" noWrap>
-                        • {item.scope || 'Reunião'}
-                      </Typography>
+                      <Box
+                        key={item.id}
+                        sx={{
+                          p: 1.5,
+                          borderRadius: 1,
+                          backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                        }}
+                      >
+                        <Typography variant="body2" fontWeight={600} sx={{ color: 'white' }}>
+                          {item.scope || 'Reunião'}
+                        </Typography>
+                      </Box>
                     ))}
                   </Stack>
                 )}
               </CardContent>
             </Card>
 
-            <Card variant="outlined">
+            {/* Documentos */}
+            <Card
+              sx={{
+                background: 'linear-gradient(135deg, rgb(76, 175, 80) 0%, rgb(56, 142, 60) 100%)',
+                color: 'white',
+                transition: 'transform 0.2s, box-shadow 0.2s',
+                '&:hover': {
+                  transform: 'translateY(-4px)',
+                  boxShadow: 6,
+                },
+              }}
+            >
               <CardContent>
-                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
-                  <Typography variant="subtitle2" fontWeight={700}>Documentos</Typography>
-                  <Button size="small" component={Link} to={`/documents?localityId=${id}`}>
+                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+                  <Typography variant="h6" fontWeight={700} sx={{ color: 'white' }}>
+                    Documentos
+                  </Typography>
+                  <Button
+                    size="small"
+                    component={Link}
+                    to={`/documents?localityId=${id}`}
+                    sx={{
+                      color: 'white',
+                      borderColor: 'rgba(255, 255, 255, 0.5)',
+                      '&:hover': {
+                        borderColor: 'white',
+                        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                      },
+                    }}
+                    variant="outlined"
+                  >
                     Ver tudo
                   </Button>
                 </Stack>
                 {documentsQuery.isError ? (
-                  <Typography variant="body2" color="text.secondary">Sem permissão ou indisponível.</Typography>
+                  <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.8)' }}>
+                    Sem permissão ou indisponível.
+                  </Typography>
                 ) : documents.length === 0 ? (
-                  <Typography variant="body2" color="text.secondary">Sem registros.</Typography>
+                  <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.8)' }}>
+                    Sem registros.
+                  </Typography>
                 ) : (
-                  <Stack spacing={0.7}>
+                  <Stack spacing={1.5}>
                     {documents.map((item: any) => (
-                      <Typography key={item.id} variant="body2" noWrap>
-                        • {item.title}
-                      </Typography>
+                      <Box
+                        key={item.id}
+                        sx={{
+                          p: 1.5,
+                          borderRadius: 1,
+                          backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                        }}
+                      >
+                        <Typography variant="body2" fontWeight={600} sx={{ color: 'white' }}>
+                          {item.title}
+                        </Typography>
+                      </Box>
                     ))}
                   </Stack>
                 )}
               </CardContent>
             </Card>
           </Box>
+
+          {/* Modal para exibir boas práticas completas */}
+          <Dialog
+            open={Boolean(selectedBestPractice)}
+            onClose={() => setSelectedBestPractice(null)}
+            maxWidth="md"
+            fullWidth
+          >
+            <DialogTitle>
+              <Stack direction="row" justifyContent="space-between" alignItems="center">
+                <Typography variant="h6">{selectedBestPractice?.title}</Typography>
+                <IconButton onClick={() => setSelectedBestPractice(null)} size="small">
+                  <CloseIcon />
+                </IconButton>
+              </Stack>
+            </DialogTitle>
+            <DialogContent>
+              {selectedBestPractice?.content && (
+                <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap', mt: 1 }}>
+                  {selectedBestPractice.content}
+                </Typography>
+              )}
+              {selectedBestPractice?.authorLabel && (
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>
+                  Por: {selectedBestPractice.authorLabel}
+                </Typography>
+              )}
+              {selectedBestPractice?.createdAt && (
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                  {new Date(selectedBestPractice.createdAt).toLocaleDateString('pt-BR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </Typography>
+              )}
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setSelectedBestPractice(null)}>Fechar</Button>
+            </DialogActions>
+          </Dialog>
         </CardContent>
       </Card>
     </Box>
