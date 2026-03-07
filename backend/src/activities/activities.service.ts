@@ -2070,12 +2070,11 @@ export class ActivitiesService {
     doc
       .font('Helvetica')
       .fontSize(10)
+      .y(footerY)
       .text(`Local e Data: ${report.city}, ${this.formatDate(report.closingDate)}`, {
-        y: footerY,
         align: 'left',
       });
-    doc.text(`Responsável pelo Relatório: ${report.responsible}`, {
-      y: footerY + 15,
+    doc.y(footerY + 15).text(`Responsável pelo Relatório: ${report.responsible}`, {
       align: 'left',
     });
 
