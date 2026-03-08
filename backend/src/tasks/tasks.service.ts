@@ -1947,21 +1947,28 @@ export class TasksService {
           visitsCompleted: 0,
           completedReports: 0,
           completedTasks: 0,
-        completedFieldActivities: 0,
-        completedVisits: 0,
-        fieldActivitiesBySpecialty: {
-          psychology: 0,
-          socialService: 0,
-          doctrine: 0,
-          law: 0,
+          completedFieldActivities: 0,
+          completedVisits: 0,
+          fieldActivitiesBySpecialty: {
+            psychology: 0,
+            socialService: 0,
+            doctrine: 0,
+            law: 0,
+          },
+          participantsKpis: {
+            instructors: 0,
+            recruits: 0,
+            eloPsychology: 0,
+            eloSocialAssistance: 0,
+            eloGraduadoMaster: 0,
+          },
+          participants: {
+            instructors: 0,
+            recruits: 0,
+            elos: 0,
+            graduadosMaster: 0,
+          },
         },
-        participants: {
-          instructors: 0,
-          recruits: 0,
-          elos: 0,
-          graduadosMaster: 0,
-        },
-      },
         lateItems: [],
         unassignedItems: [],
         riskTasks: [],
@@ -2279,13 +2286,20 @@ export class TasksService {
     // Calculate participant KPIs from activity reports
     let totalInstructors = 0;
     let totalRecruitsFromReports = 0;
+    let totalEloPsychology = 0;
+    let totalEloSocialAssistance = 0;
     let totalElos = 0;
     let totalGraduadosMaster = 0;
     for (const activity of completedActivities) {
       if ((activity as any).report) {
         totalInstructors += (activity as any).report.instructorsCount ?? 0;
         totalRecruitsFromReports += (activity as any).report.recruitsCount ?? 0;
-        totalElos += ((activity as any).report.eloPsychologyCount ?? 0) + ((activity as any).report.eloSocialAssistanceCount ?? 0);
+        const eloPsychologyCount = (activity as any).report.eloPsychologyCount ?? 0;
+        const eloSocialAssistanceCount =
+          (activity as any).report.eloSocialAssistanceCount ?? 0;
+        totalEloPsychology += eloPsychologyCount;
+        totalEloSocialAssistance += eloSocialAssistanceCount;
+        totalElos += eloPsychologyCount + eloSocialAssistanceCount;
         totalGraduadosMaster += (activity as any).report.eloGraduadoMasterCount ?? 0;
       }
     }
@@ -2342,9 +2356,16 @@ export class TasksService {
         completedFieldActivities: completedFieldActivities.length,
         completedVisits,
         fieldActivitiesBySpecialty,
+        participantsKpis: {
+          instructors: totalInstructors,
+          recruits: totalRecruitsFromReports,
+          eloPsychology: totalEloPsychology,
+          eloSocialAssistance: totalEloSocialAssistance,
+          eloGraduadoMaster: totalGraduadosMaster,
+        },
         participants: {
           instructors: totalInstructors,
-          recruits: totalRecruits,
+          recruits: totalRecruitsFromReports,
           elos: totalElos,
           graduadosMaster: totalGraduadosMaster,
         },
