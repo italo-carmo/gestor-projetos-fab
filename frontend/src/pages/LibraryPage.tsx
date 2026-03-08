@@ -438,6 +438,16 @@ export function LibraryPage() {
     });
   }, [localities, mainCarouselIndex]);
 
+  const handleMainCarouselPrev = () => {
+    if (localities.length <= 1) return;
+    setMainCarouselIndex((prev) => (prev - 1 + localities.length) % localities.length);
+  };
+
+  const handleMainCarouselNext = () => {
+    if (localities.length <= 1) return;
+    setMainCarouselIndex((prev) => (prev + 1) % localities.length);
+  };
+
   const tablePhotos = useMemo(() => {
     if (!editingLocalityId) return allPhotos;
     return allPhotos.filter((photo) => photo.localityId === editingLocalityId);
@@ -512,6 +522,7 @@ export function LibraryPage() {
                   gap: 2,
                   overflowX: 'hidden',
                   scrollBehavior: 'smooth',
+                  px: { xs: 4.5, md: 5.5 },
                 }}
               >
                 {visibleLocalities.map((locality) => {
@@ -628,32 +639,39 @@ export function LibraryPage() {
                 );
               })}
               </Box>
-              {localities.length > CAROUSEL_VISIBLE_COUNT && (
-                <Stack direction="row" spacing={1} justifyContent="center" alignItems="center" sx={{ mt: 2 }}>
+              {localities.length > 1 && (
+                <>
                   <IconButton
                     size="small"
-                    onClick={() =>
-                      setMainCarouselIndex((prev) => (prev - 1 + localities.length) % localities.length)
-                    }
-                    sx={{ bgcolor: 'rgba(17,66,89,0.08)', '&:hover': { bgcolor: 'rgba(17,66,89,0.15)' } }}
+                    onClick={handleMainCarouselPrev}
+                    sx={{
+                      position: 'absolute',
+                      left: 2,
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      zIndex: 2,
+                      bgcolor: 'rgba(17,66,89,0.12)',
+                      '&:hover': { bgcolor: 'rgba(17,66,89,0.2)' },
+                    }}
                   >
                     <ArrowBackIosNewRoundedIcon fontSize="small" />
                   </IconButton>
-                  <Chip
-                    size="small"
-                    label={`${(mainCarouselIndex % localities.length) + 1} / ${localities.length}`}
-                    variant="outlined"
-                  />
                   <IconButton
                     size="small"
-                    onClick={() =>
-                      setMainCarouselIndex((prev) => (prev + 1) % localities.length)
-                    }
-                    sx={{ bgcolor: 'rgba(17,66,89,0.08)', '&:hover': { bgcolor: 'rgba(17,66,89,0.15)' } }}
+                    onClick={handleMainCarouselNext}
+                    sx={{
+                      position: 'absolute',
+                      right: 2,
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      zIndex: 2,
+                      bgcolor: 'rgba(17,66,89,0.12)',
+                      '&:hover': { bgcolor: 'rgba(17,66,89,0.2)' },
+                    }}
                   >
                     <ArrowForwardIosRoundedIcon fontSize="small" />
                   </IconButton>
-                </Stack>
+                </>
               )}
             </Box>
           )}
