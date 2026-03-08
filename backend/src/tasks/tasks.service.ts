@@ -2278,15 +2278,15 @@ export class TasksService {
     
     // Calculate participant KPIs from activity reports
     let totalInstructors = 0;
-    let totalRecruits = 0;
+    let totalRecruitsFromReports = 0;
     let totalElos = 0;
     let totalGraduadosMaster = 0;
     for (const activity of completedActivities) {
-      if (activity.report) {
-        totalInstructors += activity.report.instructorsCount ?? 0;
-        totalRecruits += activity.report.recruitsCount ?? 0;
-        totalElos += (activity.report.eloPsychologyCount ?? 0) + (activity.report.eloSocialAssistanceCount ?? 0);
-        totalGraduadosMaster += activity.report.eloGraduadoMasterCount ?? 0;
+      if ((activity as any).report) {
+        totalInstructors += (activity as any).report.instructorsCount ?? 0;
+        totalRecruitsFromReports += (activity as any).report.recruitsCount ?? 0;
+        totalElos += ((activity as any).report.eloPsychologyCount ?? 0) + ((activity as any).report.eloSocialAssistanceCount ?? 0);
+        totalGraduadosMaster += (activity as any).report.eloGraduadoMasterCount ?? 0;
       }
     }
     const taskWhereClauses: Prisma.TaskInstanceWhereInput[] = [];

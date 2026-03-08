@@ -391,7 +391,7 @@ export class ActivitiesService {
     const responsibleUserIds = await this.resolveActivityResponsibleIds(
       localityId,
       payload.responsibleUserIds ??
-        existing.responsibles.map((entry) => entry.userId),
+        ((existing as any).responsibles ?? []).map((entry: any) => entry.userId),
       user,
     );
 
@@ -569,7 +569,7 @@ export class ActivitiesService {
 
     this.assertDeleteAccess(user);
 
-    const photos = existing.report?.photos ?? [];
+    const photos = (existing as any).report?.photos ?? [];
 
     await this.prisma.$transaction(async (tx) => {
       if (existing.report) {
@@ -814,7 +814,7 @@ export class ActivitiesService {
     if (!existing.length) return { deleted: 0 };
 
     const targetIds = existing.map((item) => item.id);
-    const photos = existing.flatMap((item) => item.report?.photos ?? []);
+    const photos = existing.flatMap((item: any) => (item as any).report?.photos ?? []);
 
     await this.prisma.activity.deleteMany({
       where: { id: { in: targetIds } },
@@ -1182,8 +1182,8 @@ export class ActivitiesService {
         id: activity.id,
         title: activity.title,
         eventDate: activity.eventDate,
-        locality: activity.locality,
-        specialty: activity.specialty,
+        locality: (activity as any).locality,
+        specialty: (activity as any).specialty,
       },
       items: items.map((item) => this.mapScheduleItem(item)),
     };
@@ -1415,13 +1415,13 @@ export class ActivitiesService {
     writeLine('Atividade', activity.title);
     writeLine(
       'Localidade',
-      activity.locality
-        ? `${activity.locality.name} (${activity.locality.code})`
+      (activity as any).locality
+        ? `${(activity as any).locality.name} (${(activity as any).locality.code})`
         : 'Não vinculada',
     );
     writeLine(
       'Especialidade',
-      activity.specialty?.name ?? 'Todas as especialidades',
+      (activity as any).specialty?.name ?? 'Todas as especialidades',
     );
     writeLine(
       'Data da visita',
@@ -1436,13 +1436,13 @@ export class ActivitiesService {
       .text('Programação', { underline: true });
     doc.moveDown(0.4);
 
-    if (activity.visitScheduleItems.length === 0) {
+    if (((activity as any).visitScheduleItems ?? []).length === 0) {
       doc
         .font('Helvetica')
         .fontSize(11)
         .text('Nenhum item de cronograma cadastrado para esta visita.');
     } else {
-      activity.visitScheduleItems.forEach((item, index) => {
+      ((activity as any).visitScheduleItems ?? []).forEach((item: any, index: number) => {
         if (doc.y > doc.page.height - 150) {
           doc.addPage();
         }
@@ -1862,7 +1862,7 @@ export class ActivitiesService {
     return {
       activityId,
       signedAt: updated.signedAt,
-      signedBy: updated.signedBy,
+      signedBy: (updated as any).signedBy,
       signatureHash: updated.signatureHash,
       signaturePayloadHash: updated.signaturePayloadHash,
       signatureAlgorithm: updated.signatureAlgorithm,
