@@ -195,6 +195,7 @@ export function LibraryPage() {
   const [intervalSeconds, setIntervalSeconds] = useState(5);
   const [carouselIndicesByLocality, setCarouselIndicesByLocality] = useState<Record<string, number>>({});
   const [mainCarouselIndex, setMainCarouselIndex] = useState(0);
+  const MAIN_VISIBLE_CARDS = 6;
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerMode, setDrawerMode] = useState<"photos" | "documents">("photos");
   const [editingLocalityId, setEditingLocalityId] = useState<string>("");
@@ -538,9 +539,24 @@ export function LibraryPage() {
                       overflow: "hidden",
                       position: "relative",
                       transition: "transform 160ms ease, box-shadow 160ms ease",
-                      flex: { xs: '0 0 100%', sm: '0 0 240px', md: '0 0 220px', lg: '0 0 210px' },
-                      minWidth: { xs: '100%', sm: 240, md: 220, lg: 210 },
-                      maxWidth: { xs: '100%', sm: 240, md: 220, lg: 210 },
+                      flex: {
+                        xs: '0 0 100%',
+                        sm: '0 0 calc(50% - 8px)',
+                        md: '0 0 calc(33.333% - 10.67px)',
+                        lg: `0 0 calc(${100 / MAIN_VISIBLE_CARDS}% - 13.34px)`,
+                      },
+                      minWidth: {
+                        xs: '100%',
+                        sm: 'calc(50% - 8px)',
+                        md: 'calc(33.333% - 10.67px)',
+                        lg: `calc(${100 / MAIN_VISIBLE_CARDS}% - 13.34px)`,
+                      },
+                      maxWidth: {
+                        xs: '100%',
+                        sm: 'calc(50% - 8px)',
+                        md: 'calc(33.333% - 10.67px)',
+                        lg: `calc(${100 / MAIN_VISIBLE_CARDS}% - 13.34px)`,
+                      },
                       display: "flex",
                       flexDirection: "column",
                       height: 292,
