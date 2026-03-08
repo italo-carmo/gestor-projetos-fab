@@ -1907,7 +1907,7 @@ export class ActivitiesService {
 
     const report = (activity as any).report;
 
-    const doc = new PDFDocument({ margin: 48, size: 'A4' });
+    const doc = new PDFDocument({ margin: 44, size: 'A4' });
     const chunks: Buffer[] = [];
     const done = new Promise<Buffer>((resolve, reject) => {
       doc.on('data', (chunk) => chunks.push(chunk as Buffer));
@@ -1915,59 +1915,253 @@ export class ActivitiesService {
       doc.on('error', reject);
     });
 
-    const writeSection = (title: string) => {
-      doc.moveDown(0.5);
+    const colors = {
+      primary: '#1F365D',
+      primarySoft: '#D7E2EF',
+      section: '#2B4B75',
+      border: '#A9B8C8',
+      text: '#1E2A36',
+      muted: '#5A6B7D',
+      warning: '#B26A00',
+    };
+
+    const contentLeft = doc.page.margins.left;
+    const contentWidth =
+      doc.page.width - doc.page.margins.left - doc.page.margins.right;
+    const pageBottomLimit = () => doc.page.height - doc.page.margins.bottom;
+    const normalizeText = (value?: string | null) =>
+      String(value ?? '').trim() || '-';
+    const sectionGap = 6;
+
+    const ensureSpace = (needed: number) => {
+      if (doc.y + needed <= pageBottomLimit()) return;
+      doc.addPage();
+      doc.y = doc.page.margins.top;
+    };
+
+    const drawHeader = () => {
+      const yearSource = report.closingDate ?? report.date;
+      const reportYear = !Number.isNaN(new Date(yearSource).getTime())
+        ? new Date(yearSource).getFullYear()
+        : new Date().getFullYear();
+      const logoPath = this.findScheduleLogoPath();
+      const headerY = doc.y;
+      if (logoPath) {
+        try {
+          doc.image(logoPath, contentLeft, headerY, { fit: [84, 36] });
+        } catch {
+          // ignora logo se houver falha de leitura
+        }
+      }
+      const barX = contentLeft + (logoPath ? 94 : 0);
+      const barW = contentWidth - (logoPath ? 94 : 0);
+      const barH = 32;
+      doc.save();
+      doc.fillColor(colors.primary).rect(barX, headerY, barW, barH).fill();
+      doc.restore();
       doc
+        .fillColor('#FFFFFF')
         .font('Helvetica-Bold')
-        .fontSize(12)
-        .text(title, { underline: true });
-      doc.moveDown(0.4);
-    };
-
-    const writeField = (label: string, value: string) => {
-      doc.font('Helvetica-Bold').fontSize(10).text(label + ':', { continued: false });
-      doc.moveDown(0.2);
+        .fontSize(13)
+        .text(`RELATÓRIO DE ATIVIDADE — CIPAVD / SMIF ${reportYear}`, barX, headerY + 9, {
+          width: barW,
+          align: 'center',
+        });
       doc
+        .fillColor(colors.muted)
         .font('Helvetica')
-        .fontSize(11)
-        .text(value || '-', { align: 'justify' });
-      doc.moveDown(0.6);
+        .fontSize(9)
+        .text(
+          `${normalizeText((activity as any).locality?.name)} • ${normalizeText(
+            (activity as any).specialty?.name,
+          )}`,
+          contentLeft,
+          headerY + barH + 6,
+          { width: contentWidth, align: 'left' },
+        );
+      doc.y = headerY + barH + 18;
     };
 
-    const writeSubsection = (title: string, content: string) => {
-      doc.font('Helvetica-Bold').fontSize(10).text(title, { continued: false });
+    const drawSectionTitle = (title: string) => {
+      ensureSpace(26);
       doc.moveDown(0.2);
+      const y = doc.y;
       doc
-        .font('Helvetica')
-        .fontSize(11)
-        .text(content || '-', { align: 'justify' });
-      doc.moveDown(0.6);
+        .fillColor(colors.section)
+        .font('Helvetica-Bold')
+        .fontSize(10.5)
+        .text(title, contentLeft, y, { width: contentWidth, align: 'left' });
+      const lineY = y + 15;
+      doc
+        .strokeColor(colors.section)
+        .lineWidth(1)
+        .moveTo(contentLeft, lineY)
+        .lineTo(contentLeft + contentWidth, lineY)
+        .stroke();
+      doc.y = lineY + sectionGap;
+      doc.fillColor(colors.text);
     };
 
-    doc
-      .font('Helvetica-Bold')
-      .fontSize(18)
-      .text('RELATÓRIO DE ATIVIDADE - CIPAVD / SMIF 2026', { align: 'center' });
-    doc.moveDown(1);
+    const drawTableRow = (
+      cells: Array<{ label: string; value: string; ratio?: number }>,
+      opts?: { minHeight?: number },
+    ) => {
+      const minHeight = opts?.minHeight ?? 22;
+      const ratioSum = cells.reduce((sum, cell) => sum + (cell.ratio ?? 1), 0);
+      const horizontalPadding = 6;
 
-    // 1. IDENTIFICAÇÃO DA ATIVIDADE
-    writeSection('1. IDENTIFICAÇÃO DA ATIVIDADE');
-    writeField('Tipo de Atividade', (activity as any).activityType?.name ?? '-');
-    writeField('Título / Tema', activity.title);
-    writeField('Data', this.formatDate(report.date));
-    writeField('Local', report.location);
+      const metrics = cells.map((cell) => {
+        const width = (contentWidth * (cell.ratio ?? 1)) / ratioSum;
+        const labelWidth = Math.min(124, Math.max(76, width * 0.38));
+        const valueWidth = Math.max(40, width - labelWidth - horizontalPadding * 2);
+        const labelHeight = doc.heightOfString(normalizeText(cell.label), {
+          width: Math.max(30, labelWidth - horizontalPadding * 2),
+        });
+        const valueHeight = doc.heightOfString(normalizeText(cell.value), {
+          width: valueWidth,
+          align: 'left',
+        });
+        return {
+          width,
+          labelWidth,
+          cellHeight: Math.max(minHeight, labelHeight + 8, valueHeight + 8),
+        };
+      });
 
-    // 2. EQUIPE RESPONSÁVEL
-    writeSection('2. EQUIPE RESPONSÁVEL');
-    writeField('Responsável(is)', report.responsible);
+      const rowHeight = metrics.reduce(
+        (max, metric) => Math.max(max, metric.cellHeight),
+        minHeight,
+      );
+      ensureSpace(rowHeight + 2);
+
+      const rowY = doc.y;
+      let cursorX = contentLeft;
+
+      cells.forEach((cell, index) => {
+        const metric = metrics[index];
+        const label = normalizeText(cell.label);
+        const value = normalizeText(cell.value);
+        const valueWidth = metric.width - metric.labelWidth - horizontalPadding * 2;
+
+        doc.save();
+        doc
+          .fillColor(colors.primarySoft)
+          .rect(cursorX, rowY, metric.labelWidth, rowHeight)
+          .fill();
+        doc.restore();
+        doc
+          .strokeColor(colors.border)
+          .lineWidth(0.8)
+          .rect(cursorX, rowY, metric.labelWidth, rowHeight)
+          .stroke();
+        doc
+          .strokeColor(colors.border)
+          .lineWidth(0.8)
+          .rect(
+            cursorX + metric.labelWidth,
+            rowY,
+            metric.width - metric.labelWidth,
+            rowHeight,
+          )
+          .stroke();
+        doc
+          .fillColor(colors.text)
+          .font('Helvetica-Bold')
+          .fontSize(8.8)
+          .text(label, cursorX + horizontalPadding, rowY + 4, {
+            width: Math.max(20, metric.labelWidth - horizontalPadding * 2),
+            align: 'left',
+          });
+        doc
+          .fillColor(colors.text)
+          .font('Helvetica')
+          .fontSize(9.2)
+          .text(value, cursorX + metric.labelWidth + horizontalPadding, rowY + 4, {
+            width: valueWidth,
+            align: 'left',
+          });
+
+        cursorX += metric.width;
+      });
+
+      doc.y = rowY + rowHeight + 5;
+    };
+
+    const drawNarrativeBlock = (title: string, content: string) => {
+      const normalizedTitle = normalizeText(title);
+      const normalizedContent = normalizeText(content);
+      const titleHeight = 17;
+      const textPadding = 7;
+      const textHeight = doc.heightOfString(normalizedContent, {
+        width: contentWidth - textPadding * 2,
+        align: 'justify',
+      });
+      const contentHeight = Math.max(38, textHeight + textPadding * 2);
+      ensureSpace(titleHeight + contentHeight + 4);
+
+      const blockY = doc.y;
+      doc.save();
+      doc
+        .fillColor(colors.primarySoft)
+        .rect(contentLeft, blockY, contentWidth, titleHeight)
+        .fill();
+      doc.restore();
+      doc
+        .strokeColor(colors.border)
+        .lineWidth(0.8)
+        .rect(contentLeft, blockY, contentWidth, titleHeight)
+        .stroke();
+      doc
+        .fillColor(colors.text)
+        .font('Helvetica-Bold')
+        .fontSize(9)
+        .text(normalizedTitle, contentLeft + 6, blockY + 4, {
+          width: contentWidth - 12,
+          align: 'left',
+        });
+      doc
+        .strokeColor(colors.border)
+        .lineWidth(0.8)
+        .rect(contentLeft, blockY + titleHeight, contentWidth, contentHeight)
+        .stroke();
+      doc
+        .fillColor(colors.text)
+        .font('Helvetica')
+        .fontSize(9.4)
+        .text(
+          normalizedContent,
+          contentLeft + textPadding,
+          blockY + titleHeight + textPadding,
+          {
+            width: contentWidth - textPadding * 2,
+            align: 'justify',
+          },
+        );
+      doc.y = blockY + titleHeight + contentHeight + 6;
+    };
+
+    drawHeader();
+
+    drawSectionTitle('1. IDENTIFICAÇÃO DA ATIVIDADE');
+    drawTableRow([
+      {
+        label: 'Tipo de Atividade',
+        value: normalizeText((activity as any).activityType?.name),
+      },
+    ]);
+    drawTableRow([{ label: 'Título / Tema', value: normalizeText(activity.title) }]);
+    drawTableRow([
+      { label: 'Data', value: this.formatDate(report.date), ratio: 1 },
+      { label: 'Local', value: normalizeText(report.location), ratio: 1 },
+    ]);
+
+    drawSectionTitle('2. EQUIPE RESPONSÁVEL');
+    drawTableRow([{ label: 'Responsável(is)', value: normalizeText(report.responsible) }]);
     if (report.missionSupport) {
-      writeField('Apoio à Missão', report.missionSupport);
+      drawTableRow([{ label: 'Apoio à Missão', value: normalizeText(report.missionSupport) }]);
     }
 
-    // 3. PÚBLICO PARTICIPANTE
-    writeSection('3. PÚBLICO PARTICIPANTE');
-    writeField('Total de Participantes', String(report.participantsCount));
-    
+    drawSectionTitle('3. PÚBLICO PARTICIPANTE');
     const compositionParts: string[] = [];
     if (report.participantsMaleCount != null && report.participantsMaleCount > 0) {
       compositionParts.push(`${report.participantsMaleCount} homens`);
@@ -1975,140 +2169,174 @@ export class ActivitiesService {
     if (report.participantsFemaleCount != null && report.participantsFemaleCount > 0) {
       compositionParts.push(`${report.participantsFemaleCount} mulheres`);
     }
-    if (compositionParts.length > 0) {
-      writeField('Composição', compositionParts.join(' e '));
-    }
-    
-    if (report.publicProfile) {
-      writeField('Perfil do Público', report.publicProfile);
-    }
-    
-    writeSubsection(
-      'Participantes por perfil',
-      `Instrutores: ${report.instructorsCount ?? 0}\n` +
-        `Recrutas: ${report.recruitsCount ?? 0}\n` +
-        `Elo Psicologia: ${report.eloPsychologyCount ?? 0}\n` +
-        `Elo Assistência Social: ${report.eloSocialAssistanceCount ?? 0}\n` +
-        `Elo Graduado Master: ${report.eloGraduadoMasterCount ?? 0}`,
-    );
-    
-    if (report.participantsCharacteristics) {
-      writeField('Características dos Participantes', report.participantsCharacteristics);
-    }
+    drawTableRow([
+      {
+        label: 'Total de Participantes',
+        value: String(report.participantsCount ?? 0),
+      },
+      {
+        label: 'Composição',
+        value:
+          compositionParts.length > 0 ? compositionParts.join(' e ') : 'Não informada',
+      },
+    ]);
+    drawTableRow([
+      {
+        label: 'Perfil do Público',
+        value: normalizeText(report.publicProfile || report.participantsCharacteristics),
+      },
+    ]);
+    drawTableRow([
+      {
+        label: 'Participantes por Perfil',
+        value:
+          `Instrutores: ${report.instructorsCount ?? 0} | ` +
+          `Recrutas: ${report.recruitsCount ?? 0} | ` +
+          `Elo Psicologia: ${report.eloPsychologyCount ?? 0} | ` +
+          `Elo Assistência Social: ${report.eloSocialAssistanceCount ?? 0} | ` +
+          `Elo Graduado Master: ${report.eloGraduadoMasterCount ?? 0}`,
+      },
+    ]);
 
-    // 4. DESCRIÇÃO DA ATIVIDADE
-    writeSection('4. DESCRIÇÃO DA ATIVIDADE');
+    drawSectionTitle('4. DESCRIÇÃO DA ATIVIDADE');
     if (report.introduction) {
-      writeSubsection('Introdução', report.introduction);
+      drawNarrativeBlock('Introdução', report.introduction);
     }
     if (report.missionObjectives) {
-      writeSubsection('Objetivos da Missão', report.missionObjectives);
+      drawNarrativeBlock('Objetivos da Missão', report.missionObjectives);
     }
     if (report.executionSchedule) {
-      writeSubsection('Cronograma de Execução', report.executionSchedule);
+      drawNarrativeBlock('Cronograma de Execução', report.executionSchedule);
     }
-    writeSubsection('Desenvolvimento', report.activitiesPerformed);
+    drawNarrativeBlock('Desenvolvimento', report.activitiesPerformed);
 
-    // 5. PRINCIPAIS PONTOS OBSERVADOS
     if (report.mainPointsObserved) {
-      writeSection('5. PRINCIPAIS PONTOS OBSERVADOS');
-      writeSubsection('Principais questionamentos levantados pelos participantes', report.mainPointsObserved);
+      drawSectionTitle('5. PRINCIPAIS PONTOS OBSERVADOS');
+      drawNarrativeBlock(
+        'Principais questionamentos levantados pelos participantes',
+        report.mainPointsObserved,
+      );
     }
 
-    // 6. PONTOS DE ATENÇÃO
     if (report.attentionPoints) {
-      writeSection('6. PONTOS DE ATENÇÃO');
-      writeSubsection('Lacunas / Riscos / Encaminhamentos necessários', report.attentionPoints);
+      drawSectionTitle('6. PONTOS DE ATENÇÃO');
+      drawNarrativeBlock(
+        'Lacunas / Riscos / Encaminhamentos necessários',
+        report.attentionPoints,
+      );
     }
 
-    // 7. ENCAMINHAMENTOS E PRÓXIMOS PASSOS
     if (report.nextSteps) {
-      writeSection('7. ENCAMINHAMENTOS E PRÓXIMOS PASSOS');
-      writeSubsection('Ações previstas', report.nextSteps);
+      drawSectionTitle('7. ENCAMINHAMENTOS E PRÓXIMOS PASSOS');
+      drawNarrativeBlock('Ações previstas', report.nextSteps);
     }
 
-    // 8. REFERÊNCIAS E ANEXOS
     if (report.referencesAndAttachments) {
-      writeSection('8. REFERÊNCIAS E ANEXOS');
-      writeSubsection('Links e registros', report.referencesAndAttachments);
+      drawSectionTitle('8. REFERÊNCIAS E ANEXOS');
+      drawNarrativeBlock('Links e registros', report.referencesAndAttachments);
     }
 
-    // Conclusão
     if (report.conclusion) {
-      writeSection('CONCLUSÃO');
-      doc
-        .font('Helvetica')
-        .fontSize(11)
-        .text(report.conclusion, { align: 'justify' });
-      doc.moveDown(0.8);
+      drawSectionTitle('CONCLUSÃO');
+      drawNarrativeBlock('Síntese conclusiva', report.conclusion);
     }
 
-    // Rodapé
-    doc.moveDown(1);
-    const footerY = doc.page.height - 80;
-    doc.font('Helvetica').fontSize(10);
-    doc.y = footerY;
-    doc.text(`Local e Data: ${report.city}, ${this.formatDate(report.closingDate)}`, {
-      align: 'left',
-    });
-    doc.y = footerY + 15;
-    doc.text(`Responsável pelo Relatório: ${report.responsible}`, {
-      align: 'left',
-    });
+    drawTableRow([
+      {
+        label: 'Local e Data',
+        value: `${normalizeText(report.city)}, ${this.formatDate(report.closingDate)}`,
+      },
+      {
+        label: 'Responsável pelo Relatório',
+        value: normalizeText(report.responsible),
+      },
+    ]);
 
-    doc
-      .font('Helvetica-Bold')
-      .fontSize(12)
-      .text('Assinatura Digital', { underline: true });
-    doc.moveDown(0.4);
+    drawSectionTitle('ASSINATURA DIGITAL');
     if (report.signedAt && report.signatureHash) {
-      doc.font('Helvetica').fontSize(11).text('Status: ASSINADO');
-      doc.text(`Assinado em: ${this.formatDateTime(report.signedAt)}`);
-      doc.text(
-        `Assinado por: ${report.signedBy?.name ?? report.signedById ?? 'N/A'}`,
+      drawTableRow([
+        { label: 'Status', value: 'ASSINADO' },
+        { label: 'Assinado em', value: this.formatDateTime(report.signedAt) },
+      ]);
+      drawTableRow([
+        {
+          label: 'Assinado por',
+          value: normalizeText(report.signedBy?.name ?? report.signedById),
+        },
+      ]);
+      drawTableRow([
+        {
+          label: 'Algoritmo',
+          value: `${report.signatureAlgorithm ?? 'HMAC-SHA256'} v${report.signatureVersion ?? 1}`,
+        },
+      ]);
+      drawNarrativeBlock(
+        'Hash de verificação',
+        `Hash da assinatura: ${normalizeText(report.signatureHash)}\n` +
+          `Hash do conteúdo: ${normalizeText(report.signaturePayloadHash)}`,
       );
-      doc.text(
-        `Algoritmo: ${report.signatureAlgorithm ?? 'HMAC-SHA256'} v${report.signatureVersion ?? 1}`,
-      );
-      doc.text(`Hash da assinatura: ${report.signatureHash}`);
-      doc.text(`Hash do conteúdo: ${report.signaturePayloadHash ?? '-'}`);
     } else {
-      doc.font('Helvetica').fontSize(11).text('Status: NÃO ASSINADO');
+      drawNarrativeBlock(
+        'Status da assinatura',
+        'NÃO ASSINADO. Este relatório ainda não possui assinatura digital de validação.',
+      );
     }
 
     if (report.photos.length > 0) {
       doc.addPage();
-      doc
-        .font('Helvetica-Bold')
-        .fontSize(14)
-        .text('Imagens da atividade', { align: 'left' });
-      doc.moveDown(0.6);
-
-      for (const photo of report.photos) {
-        doc.font('Helvetica').fontSize(10).text(`• ${photo.fileName}`);
+      doc.y = doc.page.margins.top;
+      drawSectionTitle('ANEXOS FOTOGRÁFICOS');
+      for (const [index, photo] of report.photos.entries()) {
+        ensureSpace(262);
+        drawTableRow([
+          {
+            label: `Imagem ${index + 1}`,
+            value: normalizeText(photo.fileName),
+          },
+        ]);
+        const imageY = doc.y;
+        const imageHeight = 230;
         const storageKey = photo.storageKey ?? path.basename(photo.fileUrl);
         const filePath = path.join(activityPhotosDir, storageKey);
+        doc
+          .strokeColor(colors.border)
+          .lineWidth(0.8)
+          .rect(contentLeft, imageY, contentWidth, imageHeight)
+          .stroke();
         if (fs.existsSync(filePath)) {
           try {
-            const availableWidth =
-              doc.page.width - doc.page.margins.left - doc.page.margins.right;
-            doc.image(filePath, {
-              fit: [availableWidth, 220],
+            doc.image(filePath, contentLeft + 4, imageY + 4, {
+              fit: [contentWidth - 8, imageHeight - 8],
               align: 'center',
+              valign: 'center',
             });
-            doc.moveDown(0.8);
           } catch {
             doc
+              .fillColor(colors.warning)
               .font('Helvetica-Oblique')
-              .text('  (Não foi possível renderizar esta imagem no PDF)');
-            doc.moveDown(0.6);
+              .fontSize(9.5)
+              .text(
+                '(Não foi possível renderizar esta imagem no PDF)',
+                contentLeft + 8,
+                imageY + 12,
+                { width: contentWidth - 16, align: 'left' },
+              );
+            doc.fillColor(colors.text);
           }
         } else {
           doc
+            .fillColor(colors.warning)
             .font('Helvetica-Oblique')
-            .text('  (Arquivo de imagem não encontrado no armazenamento)');
-          doc.moveDown(0.6);
+            .fontSize(9.5)
+            .text(
+              '(Arquivo de imagem não encontrado no armazenamento)',
+              contentLeft + 8,
+              imageY + 12,
+              { width: contentWidth - 16, align: 'left' },
+            );
+          doc.fillColor(colors.text);
         }
+        doc.y = imageY + imageHeight + 8;
       }
     }
 
