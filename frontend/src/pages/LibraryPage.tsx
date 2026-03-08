@@ -420,19 +420,22 @@ export function LibraryPage() {
     return () => window.clearInterval(timer);
   }, [intervalSeconds, localities, photosByLocality]);
 
-  // Main carousel for localities (8 cards, changes every 5 seconds)
+  // Main carousel for localities: rotate one card to the left each tick (infinite loop)
   useEffect(() => {
-    if (localities.length <= 8) return;
+    if (localities.length <= 1) return;
     const timer = window.setInterval(() => {
-      setMainCarouselIndex((prev) => (prev + 1) % Math.ceil(localities.length / 8));
+      setMainCarouselIndex((prev) => (prev + 1) % localities.length);
     }, 5000);
     return () => window.clearInterval(timer);
   }, [localities.length]);
 
+  const CAROUSEL_VISIBLE_COUNT = 8;
   const visibleLocalities = useMemo(() => {
-    if (localities.length <= 8) return localities;
-    const startIndex = mainCarouselIndex * 8;
-    return localities.slice(startIndex, startIndex + 8);
+    if (localities.length <= CAROUSEL_VISIBLE_COUNT) return localities;
+    return Array.from({ length: CAROUSEL_VISIBLE_COUNT }, (_, offset) => {
+      const index = (mainCarouselIndex + offset) % localities.length;
+      return localities[index];
+    });
   }, [localities, mainCarouselIndex]);
 
   const tablePhotos = useMemo(() => {
@@ -526,6 +529,9 @@ export function LibraryPage() {
                       transition: "transform 160ms ease, box-shadow 160ms ease",
                       minWidth: { xs: '100%', sm: 'calc(50% - 8px)', md: 'calc(33.333% - 10.67px)', lg: 'calc(12.5% - 14px)' },
                       flexShrink: 0,
+                      display: "flex",
+                      flexDirection: "column",
+                      height: 292,
                       "&:hover": {
                         transform: "translateY(-2px)",
                         boxShadow: "0 10px 24px rgba(17,66,89,0.16)",
@@ -601,7 +607,7 @@ export function LibraryPage() {
                         </Stack>
               )}
             </Box>
-                    <CardContent sx={{ pt: 0.7, pb: 0.5 }}>
+                    <CardContent sx={{ pt: 0.7, pb: 0.5, minHeight: 54 }}>
                       <Typography
                         variant="body2"
                         sx={{
@@ -622,23 +628,27 @@ export function LibraryPage() {
                 );
               })}
               </Box>
-              {localities.length > 8 && (
+              {localities.length > CAROUSEL_VISIBLE_COUNT && (
                 <Stack direction="row" spacing={1} justifyContent="center" alignItems="center" sx={{ mt: 2 }}>
                   <IconButton
                     size="small"
-                    onClick={() => setMainCarouselIndex((prev) => (prev - 1 + Math.ceil(localities.length / 8)) % Math.ceil(localities.length / 8))}
+                    onClick={() =>
+                      setMainCarouselIndex((prev) => (prev - 1 + localities.length) % localities.length)
+                    }
                     sx={{ bgcolor: 'rgba(17,66,89,0.08)', '&:hover': { bgcolor: 'rgba(17,66,89,0.15)' } }}
                   >
                     <ArrowBackIosNewRoundedIcon fontSize="small" />
                   </IconButton>
                   <Chip
                     size="small"
-                    label={`${mainCarouselIndex + 1} / ${Math.ceil(localities.length / 8)}`}
+                    label={`${(mainCarouselIndex % localities.length) + 1} / ${localities.length}`}
                     variant="outlined"
                   />
                   <IconButton
                     size="small"
-                    onClick={() => setMainCarouselIndex((prev) => (prev + 1) % Math.ceil(localities.length / 8))}
+                    onClick={() =>
+                      setMainCarouselIndex((prev) => (prev + 1) % localities.length)
+                    }
                     sx={{ bgcolor: 'rgba(17,66,89,0.08)', '&:hover': { bgcolor: 'rgba(17,66,89,0.15)' } }}
                   >
                     <ArrowForwardIosRoundedIcon fontSize="small" />
