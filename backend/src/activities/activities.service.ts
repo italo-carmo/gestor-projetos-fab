@@ -493,10 +493,10 @@ export class ActivitiesService {
     this.assertActivityOperateAccess(existing, user);
 
     if (status === ActivityStatus.DONE && existing.reportRequired) {
-      if (!existing.report) {
+      if (!(existing as any).report) {
         throwError('ACTIVITY_REPORT_REQUIRED');
       }
-      if (!existing.report.signedAt || !existing.report.signatureHash) {
+      if (!(existing as any).report.signedAt || !(existing as any).report.signatureHash) {
         throwError('ACTIVITY_REPORT_SIGNATURE_REQUIRED');
       }
     }
@@ -572,11 +572,11 @@ export class ActivitiesService {
     const photos = (existing as any).report?.photos ?? [];
 
     await this.prisma.$transaction(async (tx) => {
-      if (existing.report) {
+      if ((existing as any).report) {
         await tx.activityReportPhoto.deleteMany({
-          where: { reportId: existing.report.id },
+          where: { reportId: (existing as any).report.id },
         });
-        await tx.activityReport.delete({ where: { id: existing.report.id } });
+        await tx.activityReport.delete({ where: { id: (existing as any).report.id } });
       }
       await tx.activity.delete({ where: { id } });
     });
@@ -647,10 +647,10 @@ export class ActivitiesService {
     for (const activity of existing) {
       this.assertActivityOperateAccess(activity, user);
       if (status === ActivityStatus.DONE && activity.reportRequired) {
-        if (!activity.report) {
+        if (!(activity as any).report) {
           throwError('ACTIVITY_REPORT_REQUIRED');
         }
-        if (!activity.report.signedAt || !activity.report.signatureHash) {
+        if (!(activity as any).report.signedAt || !(activity as any).report.signatureHash) {
           throwError('ACTIVITY_REPORT_SIGNATURE_REQUIRED');
         }
       }
@@ -1768,9 +1768,9 @@ export class ActivitiesService {
     } as any);
     if (!activity) throwError('NOT_FOUND');
     this.assertActivityOperateAccess(activity, user);
-    if (!activity.report) throwError('ACTIVITY_REPORT_NOT_FOUND');
+    if (!(activity as any).report) throwError('ACTIVITY_REPORT_NOT_FOUND');
 
-    const report = activity.report;
+    const report = (activity as any).report;
     if (
       !report.location ||
       !report.responsible ||
