@@ -130,6 +130,17 @@ const drawerActionButtonSx = {
 
 type ActivityDrawerTab = 'activity' | 'report';
 
+function toIsoDateStartOfDay(value: string) {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return `${raw}T00:00:00.000Z`;
+  }
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return parsed.toISOString();
+}
+
 function getActivityStatusChipStyle(status: string) {
   if (status === 'DONE') {
     return {
@@ -788,8 +799,25 @@ export function ActivitiesPage() {
 
   const handleSaveReport = async () => {
     if (!selected || !canEditReport) return;
+    const reportDateIso = toIsoDateStartOfDay(reportForm.date);
+    const closingDateInput = reportForm.closingDate || reportForm.date;
+    const closingDateIso = toIsoDateStartOfDay(closingDateInput);
+    if (!reportDateIso || !closingDateIso) {
+      toast.push({
+        message: 'Preencha uma data válida para Data e Data de Fechamento.',
+        severity: 'warning',
+      });
+      return;
+    }
     try {
-      await upsertReport.mutateAsync({ id: selected.id, payload: reportForm });
+      await upsertReport.mutateAsync({
+        id: selected.id,
+        payload: {
+          ...reportForm,
+          date: reportDateIso,
+          closingDate: closingDateIso,
+        },
+      });
       toast.push({ message: 'Relatório salvo', severity: 'success' });
     } catch (error) {
       toast.push({ message: parseApiError(error).message ?? 'Erro ao salvar relatório', severity: 'error' });
