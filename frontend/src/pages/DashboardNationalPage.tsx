@@ -267,6 +267,9 @@ export function DashboardNationalPage() {
       icon: <GavelIcon sx={{ fontSize: 22 }} />,
     },
   ];
+  const totalElos = (totals.participantsKpis?.eloPsychology ?? 0) + 
+                    (totals.participantsKpis?.eloSocialAssistance ?? 0) + 
+                    (totals.participantsKpis?.eloGraduadoMaster ?? 0);
   const participantsIndicators: IndicatorTile[] = [
     {
       label: 'Instrutores',
@@ -281,21 +284,15 @@ export function DashboardNationalPage() {
       icon: <SchoolIcon sx={{ fontSize: 22 }} />,
     },
     {
-      label: 'Elos Psicologia',
-      value: String(totals.participantsKpis?.eloPsychology ?? 0),
+      label: 'Elos',
+      value: String(totalElos),
       helper: 'Total de elos',
-      icon: <PsychologyIcon sx={{ fontSize: 22 }} />,
+      icon: <GroupIcon sx={{ fontSize: 22 }} />,
     },
     {
-      label: 'Elos Serviço Social',
-      value: String(totals.participantsKpis?.eloSocialAssistance ?? 0),
-      helper: 'Total de elos',
-      icon: <VolunteerActivismIcon sx={{ fontSize: 22 }} />,
-    },
-    {
-      label: 'Elos Graduado Master',
+      label: 'Graduados Master',
       value: String(totals.participantsKpis?.eloGraduadoMaster ?? 0),
-      helper: 'Total de elos',
+      helper: 'Total de graduados',
       icon: <WorkspacePremiumIcon sx={{ fontSize: 22 }} />,
     },
   ];
