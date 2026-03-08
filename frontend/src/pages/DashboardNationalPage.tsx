@@ -75,11 +75,12 @@ type NationalDashboardTotals = {
     doctrine: number;
     law: number;
   };
-  participants?: {
+  participantsKpis?: {
     instructors: number;
     recruits: number;
-    elos: number;
-    graduadosMaster: number;
+    eloPsychology: number;
+    eloSocialAssistance: number;
+    eloGraduadoMaster: number;
   };
 };
 
