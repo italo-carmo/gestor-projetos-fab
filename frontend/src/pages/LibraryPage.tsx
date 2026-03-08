@@ -196,6 +196,7 @@ export function LibraryPage() {
   const [carouselIndicesByLocality, setCarouselIndicesByLocality] = useState<Record<string, number>>({});
   const [mainCarouselIndex, setMainCarouselIndex] = useState(0);
   const MAIN_VISIBLE_CARDS = 5;
+  const MAIN_CAROUSEL_GAP_PX = 16;
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerMode, setDrawerMode] = useState<"photos" | "documents">("photos");
   const [editingLocalityId, setEditingLocalityId] = useState<string>("");
@@ -521,9 +522,12 @@ export function LibraryPage() {
                   display: 'flex',
                   gap: 2,
                   overflowX: 'hidden',
+                  overflowY: 'hidden',
                   scrollBehavior: 'smooth',
                   px: { xs: 4.5, md: 5.5 },
                   alignItems: 'stretch',
+                  width: '100%',
+                  maxWidth: '100%',
                 }}
               >
                 {orderedLocalities.map((locality) => {
@@ -541,22 +545,23 @@ export function LibraryPage() {
                       transition: "transform 160ms ease, box-shadow 160ms ease",
                       flex: {
                         xs: '0 0 100%',
-                        sm: '0 0 calc(50% - 8px)',
-                        md: '0 0 calc(33.333% - 10.67px)',
-                        lg: `0 0 calc(${100 / MAIN_VISIBLE_CARDS}% - 13.34px)`,
+                        sm: `0 0 calc((100% - ${MAIN_CAROUSEL_GAP_PX}px) / 2)`,
+                        md: `0 0 calc((100% - ${MAIN_CAROUSEL_GAP_PX * 2}px) / 3)`,
+                        lg: `0 0 calc((100% - ${MAIN_CAROUSEL_GAP_PX * (MAIN_VISIBLE_CARDS - 1)}px) / ${MAIN_VISIBLE_CARDS})`,
                       },
                       minWidth: {
                         xs: '100%',
-                        sm: 'calc(50% - 8px)',
-                        md: 'calc(33.333% - 10.67px)',
-                        lg: `calc(${100 / MAIN_VISIBLE_CARDS}% - 13.34px)`,
+                        sm: `calc((100% - ${MAIN_CAROUSEL_GAP_PX}px) / 2)`,
+                        md: `calc((100% - ${MAIN_CAROUSEL_GAP_PX * 2}px) / 3)`,
+                        lg: `calc((100% - ${MAIN_CAROUSEL_GAP_PX * (MAIN_VISIBLE_CARDS - 1)}px) / ${MAIN_VISIBLE_CARDS})`,
                       },
                       maxWidth: {
                         xs: '100%',
-                        sm: 'calc(50% - 8px)',
-                        md: 'calc(33.333% - 10.67px)',
-                        lg: `calc(${100 / MAIN_VISIBLE_CARDS}% - 13.34px)`,
+                        sm: `calc((100% - ${MAIN_CAROUSEL_GAP_PX}px) / 2)`,
+                        md: `calc((100% - ${MAIN_CAROUSEL_GAP_PX * 2}px) / 3)`,
+                        lg: `calc((100% - ${MAIN_CAROUSEL_GAP_PX * (MAIN_VISIBLE_CARDS - 1)}px) / ${MAIN_VISIBLE_CARDS})`,
                       },
+                      boxSizing: 'border-box',
                       display: "flex",
                       flexDirection: "column",
                       height: 292,
