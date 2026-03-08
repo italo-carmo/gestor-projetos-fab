@@ -172,6 +172,7 @@ export class BiController {
   )
   importSurvey(
     @UploadedFile() file: Express.Multer.File,
+    @Body('replace') replace: string | undefined,
     @Req() req: Request & { fileValidationError?: string },
     @CurrentUser() user: RbacUser,
   ) {
@@ -183,7 +184,12 @@ export class BiController {
       throwError('VALIDATION_ERROR', { reason: 'FILE_REQUIRED' });
     }
 
-    return this.bi.importSurvey(file, user);
+    const replaceAll =
+      typeof replace === 'string'
+        ? ['1', 'true', 'sim', 'yes'].includes(replace.toLowerCase().trim())
+        : false;
+
+    return this.bi.importSurvey(file, user, { replaceAll });
   }
 
   @Post('surveys/responses/delete')

@@ -21,6 +21,10 @@ type SurveyFilters = {
   combineMode?: string;
 };
 
+type ImportSurveyOptions = {
+  replaceAll?: boolean;
+};
+
 type ParsedSurveyRow = {
   submittedAt: Date | null;
   sufferedViolenceRaw: string | null;
@@ -36,23 +40,34 @@ type ParsedSurveyRow = {
   sourceHash: string;
 };
 
+type CorrelatedViolenceSummary = {
+  sheetName: string;
+  totalRows: number;
+  mentionRows: number;
+  byType: Array<{
+    type: string;
+    count: number;
+    percent: number;
+  }>;
+};
+
 const KNOWN_VIOLENCE_TYPES = [
-  'Violencia Patrimonial',
-  'Violencia Fisica',
-  'Violencia Sexual',
-  'Violencia Moral',
-  'Violencia Psicologica',
+  'Violência Patrimonial',
+  'Violência Física',
+  'Violência Sexual',
+  'Violência Moral',
+  'Violência Psicológica',
 ] as const;
 
 const VIOLENCE_TYPE_ALIASES: Array<{
   match: string;
   label: (typeof KNOWN_VIOLENCE_TYPES)[number];
 }> = [
-  { match: 'patrimonial', label: 'Violencia Patrimonial' },
-  { match: 'fisica', label: 'Violencia Fisica' },
-  { match: 'sexual', label: 'Violencia Sexual' },
-  { match: 'moral', label: 'Violencia Moral' },
-  { match: 'psicologica', label: 'Violencia Psicologica' },
+  { match: 'patrimonial', label: 'Violência Patrimonial' },
+  { match: 'fisica', label: 'Violência Física' },
+  { match: 'sexual', label: 'Violência Sexual' },
+  { match: 'moral', label: 'Violência Moral' },
+  { match: 'psicologica', label: 'Violência Psicológica' },
 ];
 
 const OM_PRIORITY: Record<string, number> = {
@@ -78,33 +93,29 @@ type SurveyQuestionDefinition = {
 const SURVEY_QUESTION_DEFINITIONS: SurveyQuestionDefinition[] = [
   {
     id: 'suffered',
-    label: 'Voce ja sofreu violencia?',
-    extractValues: (row) => (row.sufferedViolenceRaw ? [row.sufferedViolenceRaw] : []),
+    label: 'Você já sofreu violência?',
+    extractValues: (row) =>
+      row.sufferedViolenceRaw ? [row.sufferedViolenceRaw] : [],
   },
   {
     id: 'violenceTypes',
-    label: 'Qual tipo de violencia voce sofreu?',
+    label: 'Qual tipo de violência você sofreu?',
     extractValues: (row) => row.violenceTypes ?? [],
   },
   {
     id: 'postoGraduacao',
-    label: 'Posto / Graduacao',
+    label: 'Posto / Graduação',
     extractValues: (row) => (row.postoGraduacao ? [row.postoGraduacao] : []),
   },
   {
     id: 'mission',
-    label: 'OM / Missao',
+    label: 'OM / Missão',
     extractValues: (row) => (row.om ? [row.om] : []),
   },
   {
     id: 'posto',
-    label: 'Posto',
+    label: 'Perfil funcional',
     extractValues: (row) => (row.posto ? [row.posto] : []),
-  },
-  {
-    id: 'autodeclara',
-    label: 'Como voce se autodeclara?',
-    extractValues: (row) => (row.autodeclara ? [row.autodeclara] : []),
   },
 ];
 
@@ -112,11 +123,19 @@ const SURVEY_QUESTION_DEFINITIONS: SurveyQuestionDefinition[] = [
 export class BiService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async importSurvey(file: Express.Multer.File, user?: RbacUser) {
+  async importSurvey(
+    file: Express.Multer.File,
+    user?: RbacUser,
+    options: ImportSurveyOptions = {},
+  ) {
     const extension = this.fileExtension(file.originalname);
     const format =
       extension === 'csv' ? BiImportFormat.CSV : BiImportFormat.XLSX;
-    const { sheetName, rows } = this.extractRows(file.buffer, format);
+    const replaceAll = options.replaceAll === true;
+    const { sheetName, rows, correlatedViolence } = this.extractRows(
+      file.buffer,
+      format,
+    );
 
     if (rows.length === 0) {
       throwError('VALIDATION_ERROR', { reason: 'empty_file' });
@@ -137,6 +156,13 @@ export class BiService {
         continue;
       }
       parsed.push(parsedRow.value);
+    }
+
+    if (replaceAll) {
+      await this.prisma.$transaction([
+        this.prisma.biSurveyResponse.deleteMany(),
+        this.prisma.biSurveyImportBatch.deleteMany(),
+      ]);
     }
 
     const batch = await this.prisma.biSurveyImportBatch.create({
@@ -202,6 +228,8 @@ export class BiService {
         posto: item.posto,
         autodeclara: item.autodeclara,
       })),
+      importMode: replaceAll ? 'REPLACE' : 'APPEND',
+      correlatedViolence,
     };
   }
 
@@ -289,9 +317,9 @@ export class BiService {
 
     const items = SURVEY_QUESTION_DEFINITIONS.map((question) => {
       const normalizedValuesByRow = rows.map((row) =>
-        question.extractValues(row).map((value) =>
-          this.normalizeQuestionAnswer(question.id, value),
-        ),
+        question
+          .extractValues(row)
+          .map((value) => this.normalizeQuestionAnswer(question.id, value)),
       );
 
       const answeredCount = normalizedValuesByRow.reduce((acc, rowValues) => {
@@ -438,27 +466,29 @@ export class BiService {
     const omViolence = this.buildOmViolenceChart(rows);
     const omDistribution = this.buildDistribution(
       rows,
-      (row) => row.om ?? 'Nao informado',
+      (row) => row.om ?? 'Não informado',
       'om',
     );
     const postoDistribution = this.buildDistribution(
       rows,
-      (row) => row.posto ?? 'Nao informado',
+      (row) => row.posto ?? 'Não informado',
       'posto',
     );
     const postoGraduacaoDistribution = this.buildDistribution(
       rows,
-      (row) => row.postoGraduacao ?? 'Nao informado',
+      (row) => row.postoGraduacao ?? 'Não informado',
       'postoGraduacao',
     );
     const autodeclaraDistribution = this.buildDistribution(
       rows,
-      (row) => row.autodeclara ?? 'Nao informado',
+      (row) => row.autodeclara ?? 'Não informado',
       'autodeclara',
     );
 
     const violenceTypePercent = this.buildViolenceTypeChart(rows);
     const violenceTypeByOmPercent = this.buildViolenceTypeByOmChart(rows);
+    const violenceTypeByPostoPercent = this.buildViolenceTypeByPostoChart(rows);
+    const monthlyTrend = this.buildMonthlyTrend(rows);
 
     const typeCounter = new Map<string, number>();
     for (const row of rows) {
@@ -473,6 +503,14 @@ export class BiService {
       [...omViolence]
         .filter((item) => item.total >= 5)
         .sort((a, b) => b.simPercent - a.simPercent)[0] ?? null;
+    const topMissionByMentions =
+      [...violenceTypeByOmPercent.items].sort(
+        (a, b) => Number(b.total) - Number(a.total),
+      )[0] ?? null;
+    const topProfileByMentions =
+      [...violenceTypeByPostoPercent.items].sort(
+        (a, b) => Number(b.total) - Number(a.total),
+      )[0] ?? null;
 
     return {
       kpis: {
@@ -495,7 +533,7 @@ export class BiService {
         autodeclaraDistribution,
         yesNoDonut: [
           {
-            label: 'Nao',
+            label: 'Não',
             count: noCount,
             percent:
               total > 0 ? Number(((noCount / total) * 100).toFixed(2)) : 0,
@@ -507,7 +545,7 @@ export class BiService {
               total > 0 ? Number(((yesCount / total) * 100).toFixed(2)) : 0,
           },
           {
-            label: 'Nao informado',
+            label: 'Não informado',
             count: unknownCount,
             percent:
               total > 0 ? Number(((unknownCount / total) * 100).toFixed(2)) : 0,
@@ -515,6 +553,8 @@ export class BiService {
         ],
         violenceTypePercent,
         violenceTypeByOmPercent,
+        violenceTypeByPostoPercent,
+        monthlyTrend,
       },
       insights: {
         mostCommonType: mostCommonType
@@ -528,6 +568,36 @@ export class BiService {
               om: riskiestOm.om,
               simPercent: riskiestOm.simPercent,
               total: riskiestOm.total,
+            }
+          : null,
+        topMissionByMentions: topMissionByMentions
+          ? {
+              om: String(topMissionByMentions.om),
+              mentions: Number(topMissionByMentions.total),
+              sharePercent:
+                totalMentions > 0
+                  ? Number(
+                      (
+                        (Number(topMissionByMentions.total) / totalMentions) *
+                        100
+                      ).toFixed(2),
+                    )
+                  : 0,
+            }
+          : null,
+        topProfileByMentions: topProfileByMentions
+          ? {
+              posto: String(topProfileByMentions.posto),
+              mentions: Number(topProfileByMentions.total),
+              sharePercent:
+                totalMentions > 0
+                  ? Number(
+                      (
+                        (Number(topProfileByMentions.total) / totalMentions) *
+                        100
+                      ).toFixed(2),
+                    )
+                  : 0,
             }
           : null,
       },
@@ -577,7 +647,7 @@ export class BiService {
       ),
       suffered: [
         { value: 'SIM', label: 'Sim' },
-        { value: 'NAO', label: 'Nao' },
+        { value: 'NAO', label: 'Não' },
       ],
     };
   }
@@ -596,7 +666,7 @@ export class BiService {
     >();
 
     for (const row of rows) {
-      const key = row.om?.trim() || 'Nao informado';
+      const key = row.om?.trim() || 'Não informado';
       const current = map.get(key) ?? {
         simCount: 0,
         naoCount: 0,
@@ -688,7 +758,7 @@ export class BiService {
     const map = new Map<string, Record<string, number>>();
 
     for (const row of rows) {
-      const om = row.om?.trim() || 'Nao informado';
+      const om = row.om?.trim() || 'Não informado';
       const counters = map.get(om) ?? {};
       for (const type of row.violenceTypes) {
         counters[type] = (counters[type] ?? 0) + 1;
@@ -731,6 +801,96 @@ export class BiService {
       types: allTypes,
       items,
     };
+  }
+
+  private buildViolenceTypeByPostoChart(
+    rows: Array<{ posto: string | null; violenceTypes: string[] }>,
+  ) {
+    const map = new Map<string, Record<string, number>>();
+
+    for (const row of rows) {
+      const posto = row.posto?.trim() || 'Não informado';
+      const counters = map.get(posto) ?? {};
+      for (const type of row.violenceTypes) {
+        counters[type] = (counters[type] ?? 0) + 1;
+      }
+      map.set(posto, counters);
+    }
+
+    const seenTypes = new Set<string>();
+    for (const counters of map.values()) {
+      for (const type of Object.keys(counters)) {
+        seenTypes.add(type);
+      }
+    }
+
+    const allTypes = [...seenTypes].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+
+    const items = [...map.entries()]
+      .map(([posto, counters]) => {
+        const total = allTypes.reduce(
+          (sum, type) => sum + (counters[type] ?? 0),
+          0,
+        );
+        const row: Record<string, number | string> = {
+          posto,
+          total,
+        };
+
+        for (const type of allTypes) {
+          const count = counters[type] ?? 0;
+          row[`${type}__count`] = count;
+          row[`${type}__percent`] =
+            total > 0 ? Number(((count / total) * 100).toFixed(2)) : 0;
+        }
+
+        return row;
+      })
+      .sort((a, b) => String(a.posto).localeCompare(String(b.posto), 'pt-BR'));
+
+    return {
+      types: allTypes,
+      items,
+    };
+  }
+
+  private buildMonthlyTrend(
+    rows: Array<{ submittedAt: Date | null; sufferedViolence: boolean | null }>,
+  ) {
+    const map = new Map<
+      string,
+      { total: number; yesCount: number; noCount: number; unknownCount: number }
+    >();
+
+    for (const row of rows) {
+      const month = row.submittedAt
+        ? `${row.submittedAt.getFullYear()}-${String(
+            row.submittedAt.getMonth() + 1,
+          ).padStart(2, '0')}`
+        : 'Sem data';
+      const current = map.get(month) ?? {
+        total: 0,
+        yesCount: 0,
+        noCount: 0,
+        unknownCount: 0,
+      };
+      current.total += 1;
+      if (row.sufferedViolence === true) current.yesCount += 1;
+      else if (row.sufferedViolence === false) current.noCount += 1;
+      else current.unknownCount += 1;
+      map.set(month, current);
+    }
+
+    return [...map.entries()]
+      .map(([month, value]) => ({
+        month,
+        ...value,
+        yesRatePercent:
+          value.total > 0
+            ? Number(((value.yesCount / value.total) * 100).toFixed(2))
+            : 0,
+      }))
+      .sort((a, b) => a.month.localeCompare(b.month, 'pt-BR'));
   }
 
   private sortOm(a: string, b: string) {
@@ -826,17 +986,46 @@ export class BiService {
     if (questionId === 'suffered') {
       const normalized = this.normalize(value);
       if (['SIM', 'S', 'TRUE', 'YES'].includes(normalized)) return 'Sim';
-      if (['NAO', 'NÃO', 'N', 'FALSE', 'NO'].includes(normalized)) return 'Nao';
+      if (['NAO', 'NÃO', 'N', 'FALSE', 'NO'].includes(normalized)) return 'Não';
     }
 
     return value;
   }
 
   private extractRows(buffer: Buffer, format: BiImportFormat) {
-    let workbook: XLSX.WorkBook;
+    const workbook = this.readWorkbook(buffer);
+    const sheetNames = workbook.SheetNames ?? [];
 
+    if (sheetNames.length === 0) {
+      throwError('VALIDATION_ERROR', { reason: 'empty_workbook' });
+    }
+
+    const selectedName = this.findPreferredSheetName(sheetNames, [
+      'BANCO_DADOS',
+      'BANCO DE DADOS',
+      'BD VIOLENCIA',
+    ]);
+    const sheet = workbook.Sheets[selectedName];
+
+    if (!sheet) {
+      throwError('VALIDATION_ERROR', { reason: 'missing_sheet' });
+    }
+
+    const rows = this.sheetToMatrix(sheet);
+
+    return {
+      sheetName: format === BiImportFormat.CSV ? 'CSV' : selectedName,
+      rows,
+      correlatedViolence:
+        format === BiImportFormat.XLSX
+          ? this.extractCorrelatedViolenceSummary(workbook)
+          : null,
+    };
+  }
+
+  private readWorkbook(buffer: Buffer): XLSX.WorkBook {
     try {
-      workbook = XLSX.read(buffer, {
+      return XLSX.read(buffer, {
         type: 'buffer',
         cellDates: false,
         raw: false,
@@ -844,22 +1033,22 @@ export class BiService {
     } catch {
       throwError('VALIDATION_ERROR', { reason: 'invalid_spreadsheet' });
     }
+  }
 
-    const sheetNames = workbook.SheetNames ?? [];
-    if (sheetNames.length === 0) {
-      throwError('VALIDATION_ERROR', { reason: 'empty_workbook' });
-    }
-
-    const preferred = sheetNames.find(
-      (name) => this.normalize(name) === this.normalize('BANCO DE DADOS'),
+  private findPreferredSheetName(
+    sheetNames: string[],
+    preferredNames: string[],
+  ) {
+    const preferredNormalized = preferredNames.map((name) =>
+      this.normalize(name),
     );
-    const selectedName = preferred ?? sheetNames[0];
-    const sheet = workbook.Sheets[selectedName];
+    const selected = sheetNames.find((name) =>
+      preferredNormalized.includes(this.normalize(name)),
+    );
+    return selected ?? sheetNames[0];
+  }
 
-    if (!sheet) {
-      throwError('VALIDATION_ERROR', { reason: 'missing_sheet' });
-    }
-
+  private sheetToMatrix(sheet: XLSX.WorkSheet) {
     const matrix = XLSX.utils.sheet_to_json<
       Array<string | number | boolean | Date | null>
     >(sheet, {
@@ -869,13 +1058,80 @@ export class BiService {
       raw: false,
     });
 
-    const rows = matrix.map((row) =>
-      row.map((cell) => this.cleanCell(cell) ?? ''),
+    return matrix.map((row) => row.map((cell) => this.cleanCell(cell) ?? ''));
+  }
+
+  private extractCorrelatedViolenceSummary(
+    workbook: XLSX.WorkBook,
+  ): CorrelatedViolenceSummary | null {
+    const selectedName = this.findPreferredSheetName(
+      workbook.SheetNames ?? [],
+      ['BANCO_DADOS_VIOLENCIA'],
     );
 
+    if (
+      this.normalize(selectedName) !== this.normalize('BANCO_DADOS_VIOLENCIA')
+    ) {
+      return null;
+    }
+
+    const sheet = workbook.Sheets[selectedName];
+    if (!sheet) return null;
+
+    const rows = this.sheetToMatrix(sheet);
+    if (rows.length <= 1) return null;
+
+    const [headerRow, ...dataRows] = rows;
+    const map = this.resolveCorrelatedViolenceHeaderMap(headerRow);
+    if (map.typeDerived < 0 && map.violenceRaw < 0) return null;
+
+    const typeCounter = new Map<string, number>();
+    let mentionRows = 0;
+
+    for (const row of dataRows) {
+      const derived = this.getCell(row, map.typeDerived);
+      const fallback = this.getCell(row, map.violenceRaw);
+      const types = this.parseViolenceTypes(derived ?? fallback);
+      if (types.length === 0) continue;
+      mentionRows += types.length;
+      for (const type of types) {
+        typeCounter.set(type, (typeCounter.get(type) ?? 0) + 1);
+      }
+    }
+
+    const byType = [...typeCounter.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([type, count]) => ({
+        type,
+        count,
+        percent:
+          mentionRows > 0
+            ? Number(((count / mentionRows) * 100).toFixed(2))
+            : 0,
+      }));
+
     return {
-      sheetName: format === BiImportFormat.CSV ? 'CSV' : selectedName,
-      rows,
+      sheetName: selectedName,
+      totalRows: dataRows.length,
+      mentionRows,
+      byType,
+    };
+  }
+
+  private resolveCorrelatedViolenceHeaderMap(headerRow: string[]) {
+    const normalizedHeaders = headerRow.map((value) => this.normalize(value));
+    const findIndex = (predicates: string[]) => {
+      const needles = predicates
+        .map((item) => this.normalize(item))
+        .filter(Boolean);
+      return normalizedHeaders.findIndex((header) =>
+        needles.some((needle) => header.includes(needle)),
+      );
+    };
+
+    return {
+      typeDerived: findIndex(['Variavel derivada']),
+      violenceRaw: findIndex(['3Qual tipo de violencia voce sofreu']),
     };
   }
 
@@ -892,6 +1148,9 @@ export class BiService {
     };
 
     const map = {
+      recordId: normalizedHeaders.findIndex(
+        (header) => header === this.normalize('N'),
+      ),
       submittedAt: findIndex([
         '1Carimbo de data/hora',
         'Carimbo de data/hora',
@@ -906,6 +1165,10 @@ export class BiService {
         'Tipo de violencia',
       ]),
       postoGraduacao: findIndex(['4POSTO / GRADUACAO', 'POSTO / GRADUACAO']),
+      postoPadronizado: findIndex([
+        '4POSTO / GRADUACAO_PADRONIZADO',
+        '4POSTO / GRADUACAO2',
+      ]),
       om: findIndex(['5OM']),
       posto: findIndex(['6POSTO']),
       autodeclara: findIndex(['7Como voce se autodeclara', 'Autodeclara']),
@@ -916,8 +1179,8 @@ export class BiService {
       throwError('VALIDATION_ERROR', {
         reason: 'missing_required_columns',
         required: [
-          '2Voce ja sofreu violencia?',
-          '3Qual tipo de violencia voce sofreu?',
+          '2Você já sofreu violência?',
+          '3Qual tipo de violência você sofreu?',
           '5OM',
         ],
       });
@@ -925,22 +1188,24 @@ export class BiService {
 
     return {
       ...map,
-      // fallback para layout original em caso de cabecalho parcialmente diferente
-      submittedAt: map.submittedAt >= 0 ? map.submittedAt : 0,
-      postoGraduacao: map.postoGraduacao >= 0 ? map.postoGraduacao : 3,
-      posto: map.posto >= 0 ? map.posto : 5,
-      autodeclara: map.autodeclara >= 0 ? map.autodeclara : 6,
-      extraColumn: map.extraColumn >= 0 ? map.extraColumn : 7,
+      submittedAt: map.submittedAt >= 0 ? map.submittedAt : -1,
+      postoGraduacao: map.postoGraduacao >= 0 ? map.postoGraduacao : -1,
+      postoPadronizado: map.postoPadronizado >= 0 ? map.postoPadronizado : -1,
+      posto: map.posto >= 0 ? map.posto : -1,
+      autodeclara: map.autodeclara >= 0 ? map.autodeclara : -1,
+      extraColumn: map.extraColumn >= 0 ? map.extraColumn : -1,
     };
   }
 
   private parseDataRow(
     row: string[],
     map: {
+      recordId: number;
       submittedAt: number;
       sufferedViolence: number;
       violenceTypes: number;
       postoGraduacao: number;
+      postoPadronizado: number;
       om: number;
       posto: number;
       autodeclara: number;
@@ -950,16 +1215,19 @@ export class BiService {
   ):
     | { skip: true; value?: undefined }
     | { skip: false; value: ParsedSurveyRow | null } {
+    const recordId = this.getCell(row, map.recordId);
     const submittedAtRaw = this.getCell(row, map.submittedAt);
     const sufferedRaw = this.getCell(row, map.sufferedViolence);
     const violenceRaw = this.getCell(row, map.violenceTypes);
     const postoGraduacao = this.getCell(row, map.postoGraduacao);
+    const postoPadronizado = this.getCell(row, map.postoPadronizado);
     const om = this.getCell(row, map.om);
-    const posto = this.getCell(row, map.posto);
+    const posto = postoPadronizado ?? this.getCell(row, map.posto);
     const autodeclara = this.getCell(row, map.autodeclara);
     const extraColumn = this.getCell(row, map.extraColumn);
 
     const hasAnyValue = [
+      recordId,
       submittedAtRaw,
       sufferedRaw,
       violenceRaw,
@@ -979,10 +1247,12 @@ export class BiService {
     const violenceTypes = this.parseViolenceTypes(violenceRaw);
 
     const payload = {
+      recordId,
       submittedAtRaw,
       sufferedRaw,
       violenceRaw,
       postoGraduacao,
+      postoPadronizado,
       om,
       posto,
       autodeclara,
@@ -993,6 +1263,7 @@ export class BiService {
       .createHash('sha256')
       .update(
         JSON.stringify({
+          sourceRow,
           submittedAt: submittedAt?.toISOString() ?? null,
           sufferedViolenceRaw: sufferedRaw,
           sufferedViolence,
@@ -1087,9 +1358,9 @@ export class BiService {
     if (!raw) return [];
 
     const tokens = raw
-      .split(',')
+      .split(/[,;|\n]+/)
       .map((token) => token.trim())
-      .filter(Boolean);
+      .filter((token) => Boolean(token) && this.normalize(token) !== '0');
 
     if (tokens.length === 0) return [];
 
@@ -1104,7 +1375,7 @@ export class BiService {
         normalized.add(alias.label);
         continue;
       }
-      normalized.add(this.toTitleCase(token));
+      normalized.add(this.toTitleCaseWithAccents(token));
     }
 
     const ordered = [...normalized];
@@ -1124,7 +1395,7 @@ export class BiService {
     return ordered;
   }
 
-  private toTitleCase(value: string) {
+  private toTitleCaseWithAccents(value: string) {
     return value
       .toLowerCase()
       .split(' ')

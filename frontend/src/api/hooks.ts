@@ -2644,9 +2644,12 @@ export function useBiSurveyImports(filters: Record<string, any>) {
 export function useImportBiSurvey() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (args: { file: File }) => {
+    mutationFn: async (args: { file: File; replace?: boolean }) => {
       const form = new FormData();
       form.append("file", args.file);
+      if (typeof args.replace === "boolean") {
+        form.append("replace", String(args.replace));
+      }
       return (await api.post("/bi/surveys/import", form)).data;
     },
     onSuccess: () => {

@@ -17,7 +17,7 @@ function parseArgs(): Args {
   const filePath =
     fileArgIndex >= 0 && args[fileArgIndex + 1]
       ? args[fileArgIndex + 1]
-      : '/Users/italocarmo/Downloads/Repositório/5. PESQUISAS - Dados/SLIDES_BD_EEAR_CIAAR_COMGEP_AFA/Banco_de_dados_tabelas_graficos.xlsx';
+      : '/home/italoibsc/Downloads/BD_FINAL_CIPAVD.xlsx';
 
   return {
     filePath,
@@ -37,11 +37,6 @@ async function main() {
   await prisma.$connect();
 
   try {
-    if (reset) {
-      await prisma.biSurveyResponse.deleteMany();
-      await prisma.biSurveyImportBatch.deleteMany();
-    }
-
     const service = new BiService(prisma);
     const result = await service.importSurvey(
       {
@@ -49,6 +44,7 @@ async function main() {
         buffer: fs.readFileSync(resolved),
       } as Express.Multer.File,
       undefined,
+      { replaceAll: reset },
     );
 
     console.log(

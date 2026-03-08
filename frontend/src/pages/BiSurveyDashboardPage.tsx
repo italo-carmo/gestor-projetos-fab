@@ -117,10 +117,32 @@ type BiDashboardResponse = {
       types: string[];
       items: ViolenceTypeByOmDatum[];
     };
+    violenceTypeByPostoPercent: {
+      types: string[];
+      items: Array<{
+        posto: string;
+        total: number;
+        [key: string]: number | string;
+      }>;
+    };
+    monthlyTrend: Array<{
+      month: string;
+      total: number;
+      yesCount: number;
+      noCount: number;
+      unknownCount: number;
+      yesRatePercent: number;
+    }>;
   };
   insights: {
     mostCommonType: { type: string; mentions: number } | null;
     riskiestOm: { om: string; simPercent: number; total: number } | null;
+    topMissionByMentions:
+      | { om: string; mentions: number; sharePercent: number }
+      | null;
+    topProfileByMentions:
+      | { posto: string; mentions: number; sharePercent: number }
+      | null;
   };
   latestImport?: {
     id: string;
@@ -183,11 +205,11 @@ function getPercentLabel(value: number) {
 function buildCsv(items: BiResponseRow[]) {
   const header = [
     "Data",
-    "Missao",
+    "Missão",
     "Posto/Graduacao",
     "Posto",
     "Autodeclaracao",
-    "Sofreu violencia",
+    "Sofreu violência",
     "Tipos",
   ];
   const rows = items.map((item) => [
@@ -237,17 +259,17 @@ const PIE_COLORS = [
 ];
 
 const TYPE_COLOR_BY_LABEL: Record<string, string> = {
-  "Violencia Patrimonial": BI_PALETTE.warning,
-  "Violencia Fisica": BI_PALETTE.orange,
-  "Violencia Sexual": BI_PALETTE.violet,
-  "Violencia Moral": BI_PALETTE.accentSoft,
-  "Violencia Psicologica": BI_PALETTE.primary,
+  "Violência Patrimonial": BI_PALETTE.warning,
+  "Violência Física": BI_PALETTE.orange,
+  "Violência Sexual": BI_PALETTE.violet,
+  "Violência Moral": BI_PALETTE.accentSoft,
+  "Violência Psicológica": BI_PALETTE.primary,
 };
 
 const DONUT_COLOR_BY_LABEL: Record<string, string> = {
-  Nao: BI_PALETTE.primaryMid,
+  "Não": BI_PALETTE.primaryMid,
   Sim: BI_PALETTE.accent,
-  "Nao informado": "#A5A5A5",
+  "Não informado": "#A5A5A5",
 };
 
 const axisTickStyle = {
@@ -348,10 +370,14 @@ export function BiSurveyDashboardPage() {
 
   const typeByOm = dashboard?.charts.violenceTypeByOmPercent;
   const typeKeys = typeByOm?.types ?? [];
+  const typeByPosto = dashboard?.charts.violenceTypeByPostoPercent;
+  const typeByPostoKeys = typeByPosto?.types ?? [];
 
   const totalPages = responses
     ? Math.max(1, Math.ceil(responses.total / responses.pageSize))
     : 1;
+  const hasAutodeclara =
+    (dashboard?.filters?.autodeclara?.length ?? 0) > 0;
 
   const handleImport = async () => {
     if (!file) {
@@ -363,10 +389,11 @@ export function BiSurveyDashboardPage() {
     }
 
     try {
-      const result = await importMutation.mutateAsync({ file });
+      const result = await importMutation.mutateAsync({ file, replace: true });
       setFile(null);
+      const mentions = Number(result?.correlatedViolence?.mentionRows ?? 0);
       toast.push({
-        message: `Importacao em modo acumulativo concluida. Inseridos: ${result?.batch?.insertedRows ?? 0}. Duplicados: ${result?.batch?.duplicateRows ?? 0}.`,
+        message: `Base substituída com sucesso. Inseridos: ${result?.batch?.insertedRows ?? 0}. Menções de violência: ${mentions}.`,
         severity: "success",
       });
     } catch (error) {
@@ -515,11 +542,10 @@ export function BiSurveyDashboardPage() {
       >
         <Box>
           <Typography variant="h4" fontWeight={700}>
-            BI de Pesquisa
+            BI Pesquisas
           </Typography>
           <Typography variant="body2" sx={{ color: BI_PALETTE.muted }}>
-            Analise interativa dos dados do Google Forms com filtros, cenarios e
-            drill-down.
+            Painel analítico consolidado para leitura executiva e tomada de decisão sobre os dados de pesquisa.
           </Typography>
         </Box>
         <Stack direction="row" spacing={1}>
@@ -544,7 +570,7 @@ export function BiSurveyDashboardPage() {
               },
             }}
           >
-            Baixar template CSV
+            Baixar template
           </Button>
           <Button
             size="small"
@@ -615,6 +641,9 @@ export function BiSurveyDashboardPage() {
               sx={{ borderColor: alpha(BI_PALETTE.primaryMid, 0.4), color: BI_PALETTE.primaryMid }}
             />
           </Stack>
+          <Typography variant="caption" sx={{ color: BI_PALETTE.muted, display: "block", mt: 1 }}>
+            Fonte consolidada: abas BANCO_DADOS e BANCO_DADOS_VIOLENCIA.
+          </Typography>
         </CardContent>
       </Card>
 
@@ -642,8 +671,8 @@ export function BiSurveyDashboardPage() {
               variant="outlined"
               label={
                 filters.mission
-                  ? `Missao: ${filters.mission}`
-                  : "Selecione uma missao no filtro"
+                  ? `Missão: ${filters.mission}`
+                  : "Selecione uma missão no filtro"
               }
               sx={{
                 borderColor: alpha(BI_PALETTE.primary, 0.4),
@@ -774,7 +803,7 @@ export function BiSurveyDashboardPage() {
                 },
               }}
             >
-              {file ? file.name : "Selecionar CSV/XLSX"}
+              {file ? file.name : "Selecionar arquivo de pesquisa"}
               <input
                 hidden
                 type="file"
@@ -801,7 +830,7 @@ export function BiSurveyDashboardPage() {
             >
               {importMutation.isPending
                 ? "Importando..."
-                : "Importar para banco"}
+                : "Substituir base no banco"}
             </Button>
             <Box sx={{ ml: { lg: "auto" } }}>
               <Typography variant="caption" sx={{ color: BI_PALETTE.muted }}>
@@ -906,26 +935,28 @@ export function BiSurveyDashboardPage() {
                 </MenuItem>
               ))}
             </TextField>
+            {hasAutodeclara && (
+              <TextField
+                select
+                size="small"
+                label="Autodeclaração"
+                value={filters.autodeclara}
+                onChange={(event) =>
+                  updateFilter("autodeclara", event.target.value)
+                }
+              >
+                <MenuItem value="">Todas</MenuItem>
+                {(dashboard.filters.autodeclara ?? []).map((item) => (
+                  <MenuItem key={item} value={item}>
+                    {item}
+                  </MenuItem>
+                ))}
+              </TextField>
+            )}
             <TextField
               select
               size="small"
-              label="Autodeclaracao"
-              value={filters.autodeclara}
-              onChange={(event) =>
-                updateFilter("autodeclara", event.target.value)
-              }
-            >
-              <MenuItem value="">Todas</MenuItem>
-              {(dashboard.filters.autodeclara ?? []).map((item) => (
-                <MenuItem key={item} value={item}>
-                  {item}
-                </MenuItem>
-              ))}
-            </TextField>
-            <TextField
-              select
-              size="small"
-              label="Sofreu violencia"
+              label="Sofreu violência"
               value={filters.suffered}
               onChange={(event) => updateFilter("suffered", event.target.value)}
             >
@@ -939,7 +970,7 @@ export function BiSurveyDashboardPage() {
             <TextField
               select
               size="small"
-              label="Tipo de violencia"
+              label="Tipo de violência"
               value={filters.violenceType}
               onChange={(event) =>
                 updateFilter("violenceType", event.target.value)
@@ -991,7 +1022,7 @@ export function BiSurveyDashboardPage() {
               {dashboard.kpis.violenceRatePercent.toFixed(1)}%
             </Typography>
             <Typography variant="caption" sx={{ color: BI_PALETTE.muted }}>
-              Sim: {dashboard.kpis.yesCount} | Nao: {dashboard.kpis.noCount}
+              Sim: {dashboard.kpis.yesCount} | Não: {dashboard.kpis.noCount}
             </Typography>
           </CardContent>
         </Card>
@@ -1026,6 +1057,10 @@ export function BiSurveyDashboardPage() {
             <Typography variant="body2">
               Missão com maior taxa:{" "}
               <strong>{dashboard.insights.riskiestOm?.om ?? "-"}</strong>
+            </Typography>
+            <Typography variant="body2">
+              Perfil com mais relatos:{" "}
+              <strong>{dashboard.insights.topProfileByMentions?.posto ?? "-"}</strong>
             </Typography>
           </CardContent>
         </Card>
@@ -1084,7 +1119,7 @@ export function BiSurveyDashboardPage() {
                 <Bar
                   dataKey={metricMode === "PERCENT" ? "naoPercent" : "naoCount"}
                   stackId="a"
-                  name="Nao"
+                  name="Não"
                   fill={BI_PALETTE.primarySoft}
                 />
                 <Bar
@@ -1101,10 +1136,10 @@ export function BiSurveyDashboardPage() {
         <Card sx={cardSx}>
           <CardContent>
             <Typography variant="subtitle1" fontWeight={700} gutterBottom>
-              Sofreu violencia (geral)
+              Sofreu violência (geral)
             </Typography>
             <Typography variant="caption" sx={chartCaptionSx}>
-              Clique em uma fatia para aplicar filtro de Sim/Nao.
+              Clique em uma fatia para aplicar filtro de Sim/Não.
             </Typography>
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
@@ -1126,7 +1161,7 @@ export function BiSurveyDashboardPage() {
                       onClick={() => {
                         if (entry.label === "Sim") {
                           updateFilter("suffered", "SIM");
-                        } else if (entry.label === "Nao") {
+                        } else if (entry.label === "Não") {
                           updateFilter("suffered", "NAO");
                         }
                       }}
@@ -1154,7 +1189,7 @@ export function BiSurveyDashboardPage() {
         <Card sx={cardSx}>
           <CardContent>
             <Typography variant="subtitle1" fontWeight={700} gutterBottom>
-              Violencia Percentual por tipo (
+              Violência percentual por tipo (
               {metricMode === "PERCENT" ? "%" : "Qtd"})
             </Typography>
             <Typography variant="caption" sx={chartCaptionSx}>
@@ -1219,7 +1254,7 @@ export function BiSurveyDashboardPage() {
         <Card sx={cardSx}>
           <CardContent>
             <Typography variant="subtitle1" fontWeight={700} gutterBottom>
-              Violencias por missão ({metricMode === "PERCENT" ? "%" : "Qtd"})
+              Violências por missão ({metricMode === "PERCENT" ? "%" : "Qtd"})
             </Typography>
             <Typography variant="caption" sx={chartCaptionSx}>
               Equivalente ao cruzamento por missão/tipo do arquivo original.
@@ -1330,29 +1365,28 @@ export function BiSurveyDashboardPage() {
         <Card sx={cardSx}>
           <CardContent>
             <Typography variant="subtitle1" fontWeight={700} gutterBottom>
-              Distribuicao por Posto/Graduacao (
-              {metricMode === "PERCENT" ? "%" : "Qtd"})
+              Tipos por perfil funcional ({metricMode === "PERCENT" ? "%" : "Qtd"})
             </Typography>
-            <ResponsiveContainer width="100%" height={260}>
-              <PieChart>
-                <Pie
-                  data={dashboard.charts.postoGraduacaoDistribution}
-                  dataKey={metricMode === "PERCENT" ? "percent" : "count"}
-                  nameKey="label"
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={90}
-                  label
-                >
-                  {dashboard.charts.postoGraduacaoDistribution.map(
-                    (entry, index) => (
-                      <Cell
-                        key={entry.label}
-                        fill={PIE_COLORS[index % PIE_COLORS.length]}
-                      />
-                    ),
-                  )}
-                </Pie>
+            <Typography variant="caption" sx={chartCaptionSx}>
+              Leitura de concentração por DISCENTE e GRADUADO E OFICIAL.
+            </Typography>
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={typeByPosto?.items ?? []}>
+                <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
+                <XAxis
+                  dataKey="posto"
+                  tick={axisTickStyle}
+                  axisLine={{ stroke: chartAxisStroke }}
+                  tickLine={{ stroke: chartAxisStroke }}
+                />
+                <YAxis
+                  tickFormatter={(value) =>
+                    metricMode === "PERCENT" ? `${value}%` : String(value)
+                  }
+                  tick={axisTickStyle}
+                  axisLine={{ stroke: chartAxisStroke }}
+                  tickLine={{ stroke: chartAxisStroke }}
+                />
                 <Tooltip
                   formatter={(value: number) =>
                     metricMode === "PERCENT" ? getPercentLabel(value) : value
@@ -1361,11 +1395,67 @@ export function BiSurveyDashboardPage() {
                   labelStyle={tooltipLabelStyle}
                 />
                 <Legend wrapperStyle={legendWrapperStyle} />
-              </PieChart>
+                {typeByPostoKeys.map((type, index) => (
+                  <Bar
+                    key={type}
+                    dataKey={
+                      metricMode === "PERCENT"
+                        ? `${type}__percent`
+                        : `${type}__count`
+                    }
+                    stackId="a"
+                    name={type}
+                    fill={
+                      TYPE_COLOR_BY_LABEL[type] ??
+                      PIE_COLORS[index % PIE_COLORS.length]
+                    }
+                  />
+                ))}
+              </BarChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
       </Box>
+
+      <Card sx={{ mb: 2, ...cardSx }}>
+        <CardContent>
+          <Typography variant="subtitle1" fontWeight={700} gutterBottom>
+            Evolução mensal das respostas ({metricMode === "PERCENT" ? "%" : "Qtd"})
+          </Typography>
+          <ResponsiveContainer width="100%" height={280}>
+            <BarChart data={dashboard.charts.monthlyTrend ?? []}>
+              <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
+              <XAxis
+                dataKey="month"
+                tick={axisTickStyle}
+                axisLine={{ stroke: chartAxisStroke }}
+                tickLine={{ stroke: chartAxisStroke }}
+              />
+              <YAxis
+                tickFormatter={(value) =>
+                  metricMode === "PERCENT" ? `${value}%` : String(value)
+                }
+                tick={axisTickStyle}
+                axisLine={{ stroke: chartAxisStroke }}
+                tickLine={{ stroke: chartAxisStroke }}
+              />
+              <Tooltip
+                formatter={(value: number) =>
+                  metricMode === "PERCENT" ? getPercentLabel(value) : value
+                }
+                contentStyle={tooltipContentStyle}
+                labelStyle={tooltipLabelStyle}
+              />
+              <Legend wrapperStyle={legendWrapperStyle} />
+              <Bar
+                dataKey={metricMode === "PERCENT" ? "yesRatePercent" : "total"}
+                name={metricMode === "PERCENT" ? "Taxa de relatos" : "Total de respostas"}
+                fill={metricMode === "PERCENT" ? BI_PALETTE.accent : BI_PALETTE.primaryMid}
+              />
+            </BarChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
 
       {dashboard.kpis.totalResponses === 0 && (
         <Alert severity="warning" sx={{ mb: 2 }}>
@@ -1526,7 +1616,7 @@ export function BiSurveyDashboardPage() {
                     Missão
                   </TableCell>
                   <TableCell sx={tableHeaderCellSx}>
-                    Posto/Graduacao
+                    Posto/Graduação
                   </TableCell>
                   <TableCell sx={tableHeaderCellSx}>
                     Posto
@@ -1535,7 +1625,7 @@ export function BiSurveyDashboardPage() {
                     Autodeclaracao
                   </TableCell>
                   <TableCell sx={tableHeaderCellSx}>
-                    Sofreu violencia?
+                    Sofreu violência?
                   </TableCell>
                   <TableCell sx={tableHeaderCellSx}>
                     Tipos
