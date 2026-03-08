@@ -568,10 +568,10 @@ export function SocialCommunicationPage() {
             sx={{
               p: { xs: 1.8, md: 2.4 },
               borderRadius: 3.2,
-              border: "1px solid rgba(17,66,89,0.24)",
+              border: "1px solid rgba(17,66,89,0.3)",
               background:
-                "linear-gradient(145deg, rgba(17,66,89,0.12) 0%, rgba(255,255,255,0.96) 50%, rgba(77,134,160,0.1) 100%)",
-              boxShadow: "0 14px 30px rgba(17,66,89,0.13)",
+                "linear-gradient(145deg, rgba(17,66,89,0.18) 0%, rgba(245,250,253,0.96) 50%, rgba(77,134,160,0.14) 100%)",
+              boxShadow: "0 16px 32px rgba(17,66,89,0.16)",
             }}
           >
             <Stack
@@ -828,10 +828,10 @@ export function SocialCommunicationPage() {
             sx={{
               p: { xs: 1.8, md: 2.4 },
               borderRadius: 3.2,
-              border: "1px solid rgba(77,134,160,0.24)",
+              border: "1px solid rgba(77,134,160,0.32)",
               background:
-                "linear-gradient(145deg, rgba(77,134,160,0.13) 0%, rgba(255,255,255,0.97) 52%, rgba(17,66,89,0.09) 100%)",
-              boxShadow: "0 14px 30px rgba(17,66,89,0.12)",
+                "linear-gradient(145deg, rgba(77,134,160,0.2) 0%, rgba(248,252,255,0.97) 52%, rgba(17,66,89,0.13) 100%)",
+              boxShadow: "0 16px 32px rgba(17,66,89,0.16)",
             }}
           >
             <Stack

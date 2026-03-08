@@ -81,6 +81,36 @@ export function LessonsLearnedPage() {
   const types = (typesQuery.data?.items ?? []) as LessonType[];
   const lessons = (lessonsQuery.data?.items ?? []) as LessonPost[];
   const typeById = useMemo(() => new Map(types.map((item) => [item.id, item])), [types]);
+  const lessonsByType = useMemo(() => {
+    const grouped = new Map<string, LessonPost[]>();
+    for (const lesson of lessons) {
+      const key = String(lesson.typeId || '__without_type__');
+      const list = grouped.get(key) ?? [];
+      list.push(lesson);
+      grouped.set(key, list);
+    }
+    return grouped;
+  }, [lessons]);
+  const sections = useMemo(() => {
+    const typedSections = types.map((type) => ({
+      key: type.id,
+      title: type.name,
+      subtitle: 'Lições deste tipo',
+      posts: lessonsByType.get(type.id) ?? [],
+      type,
+    }));
+    const orphanLessons = lessonsByType.get('__without_type__') ?? [];
+    if (orphanLessons.length > 0) {
+      typedSections.push({
+        key: '__without_type__',
+        title: 'Sem tipo',
+        subtitle: 'Lições sem tipo vinculado',
+        posts: orphanLessons,
+        type: null,
+      });
+    }
+    return typedSections.filter((section) => section.posts.length > 0);
+  }, [types, lessonsByType]);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
@@ -238,92 +268,121 @@ export function LessonsLearnedPage() {
         </Stack>
       </Stack>
 
-      <Card>
-        <CardContent>
-          <Typography variant="h6" sx={{ mb: 1.2 }}>
-            Lições cadastradas
-          </Typography>
-          {lessons.length === 0 ? (
+      {sections.length === 0 ? (
+        <Card>
+          <CardContent>
             <EmptyState title="Sem lições" description="Cadastre a primeira lição aprendida." />
-          ) : (
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: {
-                  xs: '1fr',
-                  md: 'repeat(2, minmax(0, 1fr))',
-                  xl: 'repeat(3, minmax(0, 1fr))',
-                },
-                gap: 1.4,
-              }}
-            >
-              {lessons.map((lesson) => {
-                const type = lesson.type ?? typeById.get(lesson.typeId);
-                const bg = type?.colorHex || '#537F97';
-                const textColor = type?.textColorHex || '#FFFFFF';
-                return (
-                  <Card key={lesson.id} variant="outlined" sx={{ borderColor: `${bg}CC`, height: '100%' }}>
-                    <CardContent sx={{ p: 1.5, backgroundColor: bg, height: '100%', display: 'flex', flexDirection: 'column' }}>
-                      <Stack direction="row" justifyContent="space-between" alignItems="start" gap={1} sx={{ flex: 1 }}>
-                        <Box sx={{ minWidth: 0, flex: 1 }}>
-                          <Typography variant="subtitle2" sx={{ color: textColor, fontWeight: 700 }}>
-                            {lesson.title}
-                          </Typography>
-                          <Typography
-                            variant="body2"
-                            sx={{
-                              mt: 0.8,
-                              color: `${textColor}F0`,
-                              display: '-webkit-box',
-                              WebkitLineClamp: 4,
-                              WebkitBoxOrient: 'vertical',
-                              overflow: 'hidden',
-                            }}
-                          >
-                            {lesson.content}
-                          </Typography>
-                          <Divider sx={{ my: 1.1, borderColor: `${textColor}40` }} />
-                          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-                            <Chip
-                              size="small"
-                              label={type?.name || 'Sem tipo'}
-                              sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: textColor }}
-                            />
-                            <Chip
-                              size="small"
-                              label={lesson.authorLabel || 'Coordenação CIPAVD'}
-                              sx={{
-                                bgcolor: 'rgba(255,255,255,0.15)',
-                                color: textColor,
-                                border: `1px solid ${textColor}40`,
-                                height: 20,
-                                fontSize: '0.7rem',
-                              }}
-                            />
-                            <Typography variant="caption" sx={{ color: `${textColor}E6` }}>
-                              {new Date(lesson.createdAt).toLocaleString('pt-BR')}
-                            </Typography>
+          </CardContent>
+        </Card>
+      ) : (
+        <Stack spacing={2}>
+          {sections.map((section) => (
+            <Card key={section.key} sx={{ borderRadius: 2.5 }}>
+              <CardContent>
+                <Stack
+                  direction={{ xs: "column", md: "row" }}
+                  justifyContent="space-between"
+                  alignItems={{ xs: "flex-start", md: "center" }}
+                  spacing={0.7}
+                  mb={1.4}
+                >
+                  <Box>
+                    <Stack direction="row" spacing={0.8} alignItems="center">
+                      <Typography variant="subtitle1" fontWeight={700}>
+                        {section.title}
+                      </Typography>
+                      <Chip
+                        size="small"
+                        label={`${section.posts.length} liç${section.posts.length === 1 ? "ão" : "ões"}`}
+                        variant="outlined"
+                      />
+                    </Stack>
+                    <Typography variant="caption" color="text.secondary">
+                      {section.subtitle}
+                    </Typography>
+                  </Box>
+                </Stack>
+                <Divider sx={{ mb: 1.4 }} />
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: {
+                      xs: '1fr',
+                      md: 'repeat(2, minmax(0, 1fr))',
+                      xl: 'repeat(3, minmax(0, 1fr))',
+                    },
+                    gap: 1.4,
+                  }}
+                >
+                  {section.posts.map((lesson) => {
+                    const type = lesson.type ?? typeById.get(lesson.typeId);
+                    const bg = type?.colorHex || '#537F97';
+                    const textColor = type?.textColorHex || '#FFFFFF';
+                    return (
+                      <Card key={lesson.id} variant="outlined" sx={{ borderColor: `${bg}CC`, height: '100%' }}>
+                        <CardContent sx={{ p: 1.5, backgroundColor: bg, height: '100%', display: 'flex', flexDirection: 'column' }}>
+                          <Stack direction="row" justifyContent="space-between" alignItems="start" gap={1} sx={{ flex: 1 }}>
+                            <Box sx={{ minWidth: 0, flex: 1 }}>
+                              <Typography variant="subtitle2" sx={{ color: textColor, fontWeight: 700 }}>
+                                {lesson.title}
+                              </Typography>
+                              <Typography
+                                variant="body2"
+                                sx={{
+                                  mt: 0.8,
+                                  color: `${textColor}F0`,
+                                  display: '-webkit-box',
+                                  WebkitLineClamp: 4,
+                                  WebkitBoxOrient: 'vertical',
+                                  overflow: 'hidden',
+                                }}
+                              >
+                                {lesson.content}
+                              </Typography>
+                              <Divider sx={{ my: 1.1, borderColor: `${textColor}40` }} />
+                              <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                                <Chip
+                                  size="small"
+                                  label={type?.name || 'Sem tipo'}
+                                  sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: textColor }}
+                                />
+                                <Chip
+                                  size="small"
+                                  label={lesson.authorLabel || 'Coordenação CIPAVD'}
+                                  sx={{
+                                    bgcolor: 'rgba(255,255,255,0.15)',
+                                    color: textColor,
+                                    border: `1px solid ${textColor}40`,
+                                    height: 20,
+                                    fontSize: '0.7rem',
+                                  }}
+                                />
+                                <Typography variant="caption" sx={{ color: `${textColor}E6` }}>
+                                  {new Date(lesson.createdAt).toLocaleString('pt-BR')}
+                                </Typography>
+                              </Stack>
+                            </Box>
+                            {canManage && (
+                              <Stack direction="row" spacing={0.5}>
+                                <IconButton size="small" sx={{ color: textColor }} onClick={() => openEditLesson(lesson)}>
+                                  <EditRoundedIcon fontSize="small" />
+                                </IconButton>
+                                <IconButton size="small" sx={{ color: textColor }} onClick={() => handleDeleteLesson(lesson)}>
+                                  <DeleteOutlineRoundedIcon fontSize="small" />
+                                </IconButton>
+                              </Stack>
+                            )}
                           </Stack>
-                        </Box>
-                        {canManage && (
-                          <Stack direction="row" spacing={0.5}>
-                            <IconButton size="small" sx={{ color: textColor }} onClick={() => openEditLesson(lesson)}>
-                              <EditRoundedIcon fontSize="small" />
-                            </IconButton>
-                            <IconButton size="small" sx={{ color: textColor }} onClick={() => handleDeleteLesson(lesson)}>
-                              <DeleteOutlineRoundedIcon fontSize="small" />
-                            </IconButton>
-                          </Stack>
-                        )}
-                      </Stack>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </Box>
-          )}
-        </CardContent>
-      </Card>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </Box>
+              </CardContent>
+            </Card>
+          ))}
+        </Stack>
+      )}
 
       {canManageTypes && (
         <Collapse in={typesSectionOpen}>
