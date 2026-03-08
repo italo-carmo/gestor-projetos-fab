@@ -3,6 +3,7 @@ import {
   Button,
   Card,
   CardContent,
+  Chip,
   Dialog,
   DialogActions,
   DialogContent,
@@ -672,13 +673,22 @@ export function DashboardNationalPage() {
                           {lesson.content}
                         </Typography>
                         <Box display="flex" justifyContent="space-between" gap={1} mt={1}>
-                          <Typography
-                            variant="caption"
-                            sx={{ color: lesson.type?.textColorHex || 'rgba(236, 248, 252, 0.92)' }}
-                            noWrap
-                          >
-                            {lesson.authorLabel || 'Coordenação CIPAVD'}
-                          </Typography>
+                          <Chip
+                            size="small"
+                            label={lesson.authorLabel || 'Coordenação CIPAVD'}
+                            sx={{
+                              bgcolor: 'rgba(255,255,255,0.15)',
+                              color: lesson.type?.textColorHex || 'rgba(236, 248, 252, 0.92)',
+                              border: `1px solid ${(lesson.type?.textColorHex || '#ECF8FC')}40`,
+                              height: 20,
+                              fontSize: '0.7rem',
+                              maxWidth: '68%',
+                              '& .MuiChip-label': {
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                              },
+                            }}
+                          />
                           <Typography
                             variant="caption"
                             sx={{ color: lesson.type?.textColorHex || 'rgba(236, 248, 252, 0.9)' }}
