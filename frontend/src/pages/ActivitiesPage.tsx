@@ -1226,7 +1226,25 @@ export function ActivitiesPage() {
                           ? item.responsibleUsers.map((user: any) => toMilitaryDisplayName(user.name)).join(', ')
                           : '—'}
                       </TableCell>
-                      <TableCell>{item.eventDate ? new Date(item.eventDate).toLocaleDateString('pt-BR') : '-'}</TableCell>
+                      <TableCell>
+                        {item.eventDate
+                          ? (() => {
+                              // Format date without timezone conversion to avoid day offset
+                              const dateStr = String(item.eventDate);
+                              if (dateStr.includes('T')) {
+                                const dateOnly = dateStr.split('T')[0];
+                                const [year, month, day] = dateOnly.split('-');
+                                return `${day}/${month}/${year}`;
+                              }
+                              // Fallback for other formats
+                              const date = new Date(dateStr);
+                              const day = String(date.getUTCDate()).padStart(2, '0');
+                              const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+                              const year = date.getUTCFullYear();
+                              return `${day}/${month}/${year}`;
+                            })()
+                          : '-'}
+                      </TableCell>
                       <TableCell>
                         {(() => {
                           const statusStyle = getActivityStatusChipStyle(String(item.status));

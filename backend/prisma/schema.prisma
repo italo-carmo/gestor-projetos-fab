@@ -177,7 +177,6 @@ model Activity {
   id            String        @id @default(cuid())
   title         String
   description   String?
-  sortOrder     Int           @default(0)
   localityId    String?
   activityTypeId String?
   specialtyId   String?
@@ -204,7 +203,6 @@ model Activity {
   @@index([specialtyId])
   @@index([status])
   @@index([eventDate])
-  @@index([sortOrder])
 }
 
 model ActivityType {
@@ -795,6 +793,7 @@ model BestPracticePost {
   title          String
   content        String
   localityId     String?
+  typeId         String?
   isCommission   Boolean   @default(false)
   createdById    String?
   authorLabel    String?
@@ -802,11 +801,26 @@ model BestPracticePost {
   updatedAt      DateTime  @updatedAt
 
   locality       Locality? @relation(fields: [localityId], references: [id], onDelete: SetNull)
+  type           BestPracticeType? @relation(fields: [typeId], references: [id], onDelete: SetNull)
   createdBy      User?     @relation("BestPracticeCreator", fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([isCommission, createdAt])
   @@index([localityId, createdAt])
   @@index([createdById, createdAt])
+  @@index([typeId])
+}
+
+model BestPracticeType {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  colorHex    String
+  textColorHex String? @default("#FFFFFF")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  posts       BestPracticePost[]
+
+  @@index([createdAt])
 }
 
 model LessonLearnedPost {

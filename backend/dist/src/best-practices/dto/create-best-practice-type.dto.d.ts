@@ -1,4 +1,4 @@
-export declare class CreateLessonLearnedTypeDto {
+export declare class CreateBestPracticeTypeDto {
     name: string;
     colorHex: string;
     textColorHex?: string;

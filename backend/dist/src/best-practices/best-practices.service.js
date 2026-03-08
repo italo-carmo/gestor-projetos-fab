@@ -47,9 +47,17 @@ let BestPracticesService = class BestPracticesService {
             where,
             include: {
                 locality: { select: { id: true, name: true, code: true } },
+                type: { select: { id: true, name: true, colorHex: true, textColorHex: true } },
                 createdBy: { select: { id: true, name: true } },
             },
             orderBy: [{ isCommission: 'desc' }, { createdAt: 'desc' }],
+        });
+        return { items };
+    }
+    async listTypes(user) {
+        this.assertViewerAccess(user);
+        const items = await this.prisma.bestPracticeType.findMany({
+            orderBy: [{ name: 'asc' }],
         });
         return { items };
     }
@@ -177,6 +185,112 @@ let BestPracticesService = class BestPracticesService {
             (0, http_error_1.throwError)('VALIDATION_ERROR', { field, reason: 'too_long' });
         }
         return normalized;
+    }
+    async createType(payload, user) {
+        this.assertTypeEditorAccess(user);
+        const normalized = this.normalizeRequiredText(payload.name, 'name', 80);
+        const colorHex = this.normalizeColorHex(payload.colorHex);
+        const textColorHex = payload.textColorHex ? this.normalizeColorHex(payload.textColorHex) : '#FFFFFF';
+        const existing = await this.prisma.bestPracticeType.findFirst({
+            where: { name: { equals: normalized, mode: 'insensitive' } },
+            select: { id: true, name: true },
+        });
+        if (existing) {
+            (0, http_error_1.throwError)('VALIDATION_ERROR', { field: 'name', reason: 'duplicate' });
+        }
+        const created = await this.prisma.bestPracticeType.create({
+            data: {
+                name: normalized,
+                colorHex,
+                textColorHex,
+            },
+            select: { id: true, name: true, colorHex: true, textColorHex: true },
+        });
+        await this.audit.log({
+            userId: user?.id,
+            resource: 'best_practice_types',
+            action: 'create',
+            entityId: created.id,
+            diffJson: { name: created.name },
+        });
+        return created;
+    }
+    async updateType(id, payload, user) {
+        this.assertTypeEditorAccess(user);
+        const existing = await this.prisma.bestPracticeType.findUnique({
+            where: { id },
+            select: { id: true },
+        });
+        if (!existing)
+            (0, http_error_1.throwError)('NOT_FOUND');
+        const updateData = {};
+        if (payload.name !== undefined) {
+            const normalized = this.normalizeRequiredText(payload.name, 'name', 80);
+            const duplicate = await this.prisma.bestPracticeType.findFirst({
+                where: { name: { equals: normalized, mode: 'insensitive' }, id: { not: id } },
+                select: { id: true },
+            });
+            if (duplicate) {
+                (0, http_error_1.throwError)('VALIDATION_ERROR', { field: 'name', reason: 'duplicate' });
+            }
+            updateData.name = normalized;
+        }
+        if (payload.colorHex !== undefined) {
+            updateData.colorHex = this.normalizeColorHex(payload.colorHex);
+        }
+        if (payload.textColorHex !== undefined) {
+            updateData.textColorHex = payload.textColorHex ? this.normalizeColorHex(payload.textColorHex) : '#FFFFFF';
+        }
+        const updated = await this.prisma.bestPracticeType.update({
+            where: { id },
+            data: updateData,
+            select: { id: true, name: true, colorHex: true, textColorHex: true },
+        });
+        await this.audit.log({
+            userId: user?.id,
+            resource: 'best_practice_types',
+            action: 'update',
+            entityId: updated.id,
+            diffJson: { name: updated.name },
+        });
+        return updated;
+    }
+    async removeType(id, user) {
+        this.assertTypeEditorAccess(user);
+        const existing = await this.prisma.bestPracticeType.findUnique({
+            where: { id },
+            select: { id: true, name: true },
+        });
+        if (!existing)
+            (0, http_error_1.throwError)('NOT_FOUND');
+        const inUse = await this.prisma.bestPracticePost.findFirst({
+            where: { typeId: id },
+            select: { id: true },
+        });
+        if (inUse) {
+            (0, http_error_1.throwError)('VALIDATION_ERROR', { field: 'id', reason: 'in_use' });
+        }
+        await this.prisma.bestPracticeType.delete({ where: { id } });
+        await this.audit.log({
+            userId: user?.id,
+            resource: 'best_practice_types',
+            action: 'delete',
+            entityId: existing.id,
+            diffJson: { name: existing.name },
+        });
+        return { ok: true };
+    }
+    assertTypeEditorAccess(user) {
+        if (!(0, role_access_1.hasAnyRole)(user, [role_access_1.ROLE_COORDENACAO_CIPAVD, role_access_1.ROLE_TI])) {
+            (0, http_error_1.throwError)('RBAC_FORBIDDEN');
+        }
+    }
+    normalizeColorHex(value) {
+        const hex = String(value).trim();
+        if (!/^#[0-9A-Fa-f]{6}$/.test(hex)) {
+            (0, http_error_1.throwError)('VALIDATION_ERROR', { field: 'colorHex', reason: 'invalid_format' });
+        }
+        return hex.toUpperCase();
     }
     buildAuthorLabel(user) {
         const raw = (0, sanitize_1.sanitizeText)(user?.name ?? '');

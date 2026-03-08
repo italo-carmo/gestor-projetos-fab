@@ -9,8 +9,13 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.CreateSocialCommunicationArticleDto = void 0;
+exports.CreateSocialCommunicationArticleDto = exports.SocialCommunicationAudience = void 0;
 const class_validator_1 = require("class-validator");
+var SocialCommunicationAudience;
+(function (SocialCommunicationAudience) {
+    SocialCommunicationAudience["INTERNAL"] = "INTERNAL";
+    SocialCommunicationAudience["EXTERNAL"] = "EXTERNAL";
+})(SocialCommunicationAudience || (exports.SocialCommunicationAudience = SocialCommunicationAudience = {}));
 class CreateSocialCommunicationArticleDto {
     url;
     title;
@@ -18,6 +23,7 @@ class CreateSocialCommunicationArticleDto {
     summary;
     publishedAt;
     tags;
+    audience;
 }
 exports.CreateSocialCommunicationArticleDto = CreateSocialCommunicationArticleDto;
 __decorate([
@@ -50,4 +56,9 @@ __decorate([
     (0, class_validator_1.IsString)({ each: true }),
     __metadata("design:type", Array)
 ], CreateSocialCommunicationArticleDto.prototype, "tags", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsEnum)(SocialCommunicationAudience),
+    __metadata("design:type", String)
+], CreateSocialCommunicationArticleDto.prototype, "audience", void 0);
 //# sourceMappingURL=create-social-communication-article.dto.js.map

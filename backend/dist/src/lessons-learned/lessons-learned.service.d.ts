@@ -30,10 +30,12 @@ export declare class LessonsLearnedService {
     createType(payload: {
         name: string;
         colorHex: string;
+        textColorHex?: string;
     }, user?: RbacUser): Promise<any>;
     updateType(id: string, payload: {
         name?: string;
         colorHex?: string;
+        textColorHex?: string;
     }, user?: RbacUser): Promise<any>;
     removeType(id: string, user?: RbacUser): Promise<{
         ok: boolean;

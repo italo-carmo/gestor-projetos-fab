@@ -317,6 +317,12 @@ export declare class TasksService {
                 doctrine: number;
                 law: number;
             };
+            participants: {
+                instructors: number;
+                recruits: number;
+                elos: number;
+                graduadosMaster: number;
+            };
         };
         lateItems: {
             activityId: string;

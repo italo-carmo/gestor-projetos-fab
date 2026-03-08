@@ -1947,15 +1947,21 @@ export class TasksService {
           visitsCompleted: 0,
           completedReports: 0,
           completedTasks: 0,
-          completedFieldActivities: 0,
-          completedVisits: 0,
-          fieldActivitiesBySpecialty: {
-            psychology: 0,
-            socialService: 0,
-            doctrine: 0,
-            law: 0,
-          },
+        completedFieldActivities: 0,
+        completedVisits: 0,
+        fieldActivitiesBySpecialty: {
+          psychology: 0,
+          socialService: 0,
+          doctrine: 0,
+          law: 0,
         },
+        participants: {
+          instructors: 0,
+          recruits: 0,
+          elos: 0,
+          graduadosMaster: 0,
+        },
+      },
         lateItems: [],
         unassignedItems: [],
         riskTasks: [],
@@ -2269,6 +2275,20 @@ export class TasksService {
     const completedVisits = completedActivities.filter((activity) =>
       isVisitActivity(activity),
     ).length;
+    
+    // Calculate participant KPIs from activity reports
+    let totalInstructors = 0;
+    let totalRecruits = 0;
+    let totalElos = 0;
+    let totalGraduadosMaster = 0;
+    for (const activity of completedActivities) {
+      if (activity.report) {
+        totalInstructors += activity.report.instructorsCount ?? 0;
+        totalRecruits += activity.report.recruitsCount ?? 0;
+        totalElos += (activity.report.eloPsychologyCount ?? 0) + (activity.report.eloSocialAssistanceCount ?? 0);
+        totalGraduadosMaster += activity.report.eloGraduadoMasterCount ?? 0;
+      }
+    }
     const taskWhereClauses: Prisma.TaskInstanceWhereInput[] = [];
     if (localityAliasIds.length === 0) {
       taskWhereClauses.push({ localityId: '__none__' });
@@ -2322,6 +2342,12 @@ export class TasksService {
         completedFieldActivities: completedFieldActivities.length,
         completedVisits,
         fieldActivitiesBySpecialty,
+        participants: {
+          instructors: totalInstructors,
+          recruits: totalRecruits,
+          elos: totalElos,
+          graduadosMaster: totalGraduadosMaster,
+        },
       },
       lateItems,
       unassignedItems,

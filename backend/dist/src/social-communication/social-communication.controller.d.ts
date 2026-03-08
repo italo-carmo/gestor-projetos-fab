@@ -34,11 +34,6 @@ export declare class SocialCommunicationController {
         publishedAt: string | null;
     }>;
     create(dto: CreateSocialCommunicationArticleDto, user: RbacUser): Promise<{
-        createdBy: {
-            id: string;
-            name: string;
-        } | null;
-    } & {
         id: string;
         title: string;
         createdAt: Date;
@@ -54,11 +49,6 @@ export declare class SocialCommunicationController {
         coverImageUrl: string;
     }>;
     update(id: string, dto: UpdateSocialCommunicationArticleDto, user: RbacUser): Promise<{
-        createdBy: {
-            id: string;
-            name: string;
-        } | null;
-    } & {
         id: string;
         title: string;
         createdAt: Date;

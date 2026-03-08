@@ -103,6 +103,7 @@ let SocialCommunicationService = class SocialCommunicationService {
                 coverImageUrl: this.resolveCoverUrl(payload.coverImageUrl ?? metadata.coverImageUrl ?? null, sourceUrl),
                 summary: this.normalizeOptionalText(payload.summary ?? metadata.summary ?? null),
                 tags: this.normalizeTags(payload.tags) ?? [],
+                audience: payload.audience ?? 'INTERNAL',
                 publishedAt: this.parseOptionalDate(payload.publishedAt ?? metadata.publishedAt ?? null, 'publishedAt'),
                 createdById: user?.id ?? null,
             },
@@ -166,6 +167,7 @@ let SocialCommunicationService = class SocialCommunicationService {
                     null)
                 : undefined;
         const tags = payload.tags !== undefined ? (this.normalizeTags(payload.tags) ?? []) : undefined;
+        const audience = payload.audience !== undefined ? payload.audience : undefined;
         const updated = await this.prisma.socialCommunicationArticle.update({
             where: { id },
             data: {
@@ -175,6 +177,7 @@ let SocialCommunicationService = class SocialCommunicationService {
                 summary,
                 publishedAt,
                 tags,
+                audience,
             },
             include: {
                 createdBy: { select: { id: true, name: true } },

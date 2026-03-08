@@ -37,12 +37,8 @@ export declare class SocialCommunicationService {
         summary?: string | null;
         publishedAt?: string | null;
         tags?: string[];
+        audience?: 'INTERNAL' | 'EXTERNAL';
     }, user?: RbacUser): Promise<{
-        createdBy: {
-            id: string;
-            name: string;
-        } | null;
-    } & {
         id: string;
         title: string;
         createdAt: Date;
@@ -61,12 +57,8 @@ export declare class SocialCommunicationService {
         summary?: string | null;
         publishedAt?: string | null;
         tags?: string[];
+        audience?: 'INTERNAL' | 'EXTERNAL';
     }, user?: RbacUser): Promise<{
-        createdBy: {
-            id: string;
-            name: string;
-        } | null;
-    } & {
         id: string;
         title: string;
         createdAt: Date;

@@ -41,7 +41,7 @@ let LessonsLearnedService = class LessonsLearnedService {
             where,
             include: {
                 createdBy: { select: { id: true, name: true } },
-                type: { select: { id: true, name: true, colorHex: true } },
+                type: { select: { id: true, name: true, colorHex: true, textColorHex: true } },
             },
             orderBy: [{ createdAt: 'desc' }],
         });
@@ -69,7 +69,7 @@ let LessonsLearnedService = class LessonsLearnedService {
             },
             include: {
                 createdBy: { select: { id: true, name: true } },
-                type: { select: { id: true, name: true, colorHex: true } },
+                type: { select: { id: true, name: true, colorHex: true, textColorHex: true } },
             },
         });
         await this.audit.log({
@@ -103,7 +103,7 @@ let LessonsLearnedService = class LessonsLearnedService {
             },
             include: {
                 createdBy: { select: { id: true, name: true } },
-                type: { select: { id: true, name: true, colorHex: true } },
+                type: { select: { id: true, name: true, colorHex: true, textColorHex: true } },
             },
         });
         await this.audit.log({
@@ -136,6 +136,7 @@ let LessonsLearnedService = class LessonsLearnedService {
         this.assertEditorAccess(user);
         const name = this.normalizeRequiredText(payload.name, 'name', 80);
         const colorHex = this.normalizeColorHex(payload.colorHex);
+        const textColorHex = payload.textColorHex ? this.normalizeColorHex(payload.textColorHex) : '#FFFFFF';
         const existing = await this.prisma.lessonLearnedType.findFirst({
             where: { name: { equals: name, mode: 'insensitive' } },
             select: { id: true },
@@ -144,14 +145,14 @@ let LessonsLearnedService = class LessonsLearnedService {
             (0, http_error_1.throwError)('VALIDATION_ERROR', { field: 'name', reason: 'already_exists' });
         }
         const created = await this.prisma.lessonLearnedType.create({
-            data: { name, colorHex },
+            data: { name, colorHex, textColorHex },
         });
         await this.audit.log({
             userId: user?.id,
             resource: 'lessons_learned',
             action: 'create',
             entityId: created.id,
-            diffJson: { type: created.name, colorHex: created.colorHex },
+            diffJson: { type: created.name, colorHex: created.colorHex, textColorHex: created.textColorHex },
         });
         return created;
     }
@@ -184,6 +185,9 @@ let LessonsLearnedService = class LessonsLearnedService {
                 colorHex: payload.colorHex !== undefined
                     ? this.normalizeColorHex(payload.colorHex)
                     : undefined,
+                textColorHex: payload.textColorHex !== undefined
+                    ? this.normalizeColorHex(payload.textColorHex)
+                    : undefined,
             },
         });
         await this.audit.log({
@@ -191,7 +195,7 @@ let LessonsLearnedService = class LessonsLearnedService {
             resource: 'lessons_learned',
             action: 'update',
             entityId: updated.id,
-            diffJson: { type: updated.name, colorHex: updated.colorHex },
+            diffJson: { type: updated.name, colorHex: updated.colorHex, textColorHex: updated.textColorHex },
         });
         return updated;
     }

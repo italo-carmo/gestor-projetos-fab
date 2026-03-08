@@ -11,6 +11,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.UpdateSocialCommunicationArticleDto = void 0;
 const class_validator_1 = require("class-validator");
+const create_social_communication_article_dto_1 = require("./create-social-communication-article.dto");
 class UpdateSocialCommunicationArticleDto {
     url;
     title;
@@ -18,6 +19,7 @@ class UpdateSocialCommunicationArticleDto {
     summary;
     publishedAt;
     tags;
+    audience;
 }
 exports.UpdateSocialCommunicationArticleDto = UpdateSocialCommunicationArticleDto;
 __decorate([
@@ -51,4 +53,9 @@ __decorate([
     (0, class_validator_1.IsString)({ each: true }),
     __metadata("design:type", Array)
 ], UpdateSocialCommunicationArticleDto.prototype, "tags", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsEnum)(create_social_communication_article_dto_1.SocialCommunicationAudience),
+    __metadata("design:type", String)
+], UpdateSocialCommunicationArticleDto.prototype, "audience", void 0);
 //# sourceMappingURL=update-social-communication-article.dto.js.map

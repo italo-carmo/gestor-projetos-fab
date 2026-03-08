@@ -20,9 +20,10 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
+  useDashboardNational,
   useDashboardRecruits,
   useLookupLdapUser,
   useLocalityRecruitMembers,
@@ -33,6 +34,11 @@ import {
 } from '../api/hooks';
 import { can } from '../app/rbac';
 import { canEditRecruitsCount } from '../app/roleAccess';
+import { toMilitaryDisplayName } from '../app/militaryName';
+import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
+import { api } from '../api/client';
+import TableContainer from '@mui/material/TableContainer';
 import { useToast } from '../app/toast';
 import { parseApiError } from '../app/apiErrors';
 import { EmptyState } from '../components/states/EmptyState';
@@ -125,6 +131,7 @@ export function GsdRecruitsPage() {
   const selectedHistoryLocalityId = searchParams.get('localityId') ?? '';
 
   const recruitsQuery = useDashboardRecruits({}, canLoadRecruitsData);
+  const dashboardNationalQuery = useDashboardNational({}, canLoadRecruitsData);
   const omsCatalogQuery = useOmsCatalog(canLoadRecruitsData);
   const replaceRecruitMembers = useReplaceLocalityRecruitMembers();
   const setLocalityCommanderFromLdap = useSetLocalityCommanderFromLdap();
@@ -227,6 +234,55 @@ export function GsdRecruitsPage() {
     next.set('tab', activeTab);
     setSearchParams(next, { replace: true });
   }, [activeTab, requestedTab, searchParams, setSearchParams, visibleTabs.length]);
+
+  useEffect(() => {
+    const element = tableContainerRef.current;
+    if (!element) return;
+
+    const updateVisibility = () => {
+      const minWidthWithVisitColumn = 760;
+      setShowVisitColumn(element.clientWidth >= minWidthWithVisitColumn);
+    };
+
+    updateVisibility();
+    const observer = new ResizeObserver(updateVisibility);
+    observer.observe(element);
+    window.addEventListener('resize', updateVisibility);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateVisibility);
+    };
+  }, []);
+
+  const formatGsdLabel = (localityName?: string | null, localityCode?: string | null) => {
+    const code = String(localityCode ?? '').trim();
+    const normalized = String(localityName ?? '').trim();
+    return code || normalized || '—';
+  };
+
+  const formatCommanderName = (commanderName?: string | null) => {
+    const base = toMilitaryDisplayName(commanderName);
+    if (!base) return '—';
+    const sanitized = base
+      .replace(/\s+(?:GSD|OM)(?:\s*[-/]\s*|\s+)?[A-Z0-9]{1,8}$/i, '')
+      .replace(/\s+(?:GSD|OM)$/i, '')
+      .trim();
+    return sanitized || base;
+  };
+
+  const nationalItems = (dashboardNationalQuery.data?.items ?? []) as Array<{
+    localityId: string;
+    localityCode?: string | null;
+    localityName: string;
+    commandName?: string | null;
+    progress: number;
+    recruitsFemaleCountCurrent?: number | null;
+    commanderName?: string | null;
+    visitDate?: string | null;
+  }>;
+  const smifLocalities = [...nationalItems]
+    .sort((a, b) => a.localityName.localeCompare(b.localityName, 'pt-BR'))
+    .slice(0, 8);
 
   if (meLoading) return <SkeletonState />;
   if (!visibleTabs.length) {
@@ -532,22 +588,118 @@ export function GsdRecruitsPage() {
       </Tabs>
 
       {activeTab === 'gestao' && (
-        <Card>
-          <CardContent>
-            {!canLoadRecruitsData ? (
-              <ErrorState
-                error={{
-                  message:
-                    'Você não possui permissão para visualizar o quantitativo de recrutas.',
-                }}
-              />
-            ) : managementItems.length === 0 ? (
-              <EmptyState
-                title="Sem localidades"
-                description="Nenhuma localidade disponível no seu escopo."
-              />
-            ) : (
-              <Table size="small">
+        <Stack spacing={2}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Localidades SMIF
+              </Typography>
+              {!canLoadRecruitsData ? (
+                <ErrorState
+                  error={{
+                    message:
+                      'Você não possui permissão para visualizar o quantitativo de recrutas.',
+                  }}
+                />
+              ) : dashboardNationalQuery.isLoading ? (
+                <SkeletonState />
+              ) : dashboardNationalQuery.isError ? (
+                <ErrorState error={dashboardNationalQuery.error} onRetry={() => dashboardNationalQuery.refetch()} />
+              ) : smifLocalities.length === 0 ? (
+                <EmptyState title="Sem dados" description="Nenhuma localidade encontrada." />
+              ) : (
+                <TableContainer ref={tableContainerRef} sx={{ width: '100%', overflowX: 'hidden' }}>
+                  <Table
+                    size="small"
+                    sx={{
+                      width: '100%',
+                      tableLayout: 'fixed',
+                      '& .MuiTableCell-root': {
+                        px: 0.45,
+                        py: 0.6,
+                      },
+                      '& .MuiTableBody-root .MuiTableCell-root': {
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      },
+                    }}
+                  >
+                    <TableHead>
+                      <TableRow sx={{ bgcolor: 'primary.main' }}>
+                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '12%', px: 0.4 }}>GSD</TableCell>
+                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '10%', px: 0.4 }}>% Geral</TableCell>
+                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '12%', px: 0.4, whiteSpace: 'normal', lineHeight: 1.2 }}>
+                          Rec. Fem.
+                        </TableCell>
+                        <TableCell sx={{ color: 'white', fontWeight: 600, width: showVisitColumn ? '46%' : '66%', px: 0.4 }}>Comandante</TableCell>
+                        {showVisitColumn && (
+                          <TableCell sx={{ color: 'white', fontWeight: 600, width: '20%', px: 0.4 }}>Visita</TableCell>
+                        )}
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {smifLocalities.map((loc) => (
+                        <TableRow
+                          key={loc.localityId}
+                          hover
+                          onClick={() => navigate(`/dashboard/locality/${loc.localityId}`)}
+                          onMouseEnter={() =>
+                            qc.prefetchQuery({
+                              queryKey: ['localityProgress', loc.localityId],
+                              queryFn: async () =>
+                                (await api.get(`/localities/${loc.localityId}/progress`)).data,
+                            })
+                          }
+                          sx={{ cursor: 'pointer' }}
+                        >
+                          <TableCell sx={{ px: 0.4 }}>
+                            <Typography variant="body2" fontWeight={700}>
+                              {formatGsdLabel(loc.localityName, loc.localityCode)}
+                            </Typography>
+                            {loc.commandName && (
+                              <Typography variant="caption" color="text.secondary" noWrap>
+                                {loc.commandName}
+                              </Typography>
+                            )}
+                          </TableCell>
+                          <TableCell sx={{ px: 0.4 }}>{Math.round(loc.progress)}%</TableCell>
+                          <TableCell sx={{ px: 0.4 }}>{loc.recruitsFemaleCountCurrent ?? 0}</TableCell>
+                          <TableCell sx={{ px: 0.4 }}>
+                            <Typography variant="body2" noWrap>
+                              {formatCommanderName(loc.commanderName)}
+                            </Typography>
+                          </TableCell>
+                          {showVisitColumn && (
+                            <TableCell sx={{ px: 0.4 }}>
+                              {loc.visitDate ? new Date(loc.visitDate).toLocaleDateString('pt-BR') : '—'}
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent>
+              {!canLoadRecruitsData ? (
+                <ErrorState
+                  error={{
+                    message:
+                      'Você não possui permissão para visualizar o quantitativo de recrutas.',
+                  }}
+                />
+              ) : managementItems.length === 0 ? (
+                <EmptyState
+                  title="Sem localidades"
+                  description="Nenhuma localidade disponível no seu escopo."
+                />
+              ) : (
+                <Table size="small">
                 <TableHead>
                   <TableRow sx={{ bgcolor: 'primary.main' }}>
                     <TableCell sx={{ color: 'white', fontWeight: 600 }}>

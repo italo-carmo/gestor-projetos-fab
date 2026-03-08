@@ -1528,6 +1528,52 @@ export function useDeleteBestPractice() {
   });
 }
 
+export function useBestPracticeTypes(enabled = true) {
+  return useQuery({
+    queryKey: ["bestPracticeTypes"],
+    queryFn: async () => (await api.get("/best-practices/types")).data,
+    enabled,
+    staleTime: 10_000,
+  });
+}
+
+export function useCreateBestPracticeType() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: { name: string; colorHex: string; textColorHex?: string }) =>
+      (await api.post("/best-practices/types", payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["bestPracticeTypes"] });
+      qc.invalidateQueries({ queryKey: ["bestPractices"] });
+    },
+  });
+}
+
+export function useUpdateBestPracticeType() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      payload: { name?: string; colorHex?: string; textColorHex?: string };
+    }) => (await api.put(`/best-practices/types/${args.id}`, args.payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["bestPracticeTypes"] });
+      qc.invalidateQueries({ queryKey: ["bestPractices"] });
+    },
+  });
+}
+
+export function useDeleteBestPracticeType() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await api.delete(`/best-practices/types/${id}`)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["bestPracticeTypes"] });
+      qc.invalidateQueries({ queryKey: ["bestPractices"] });
+    },
+  });
+}
+
 export function useCreateLessonLearned() {
   const qc = useQueryClient();
   return useMutation({

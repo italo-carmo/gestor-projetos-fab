@@ -41,6 +41,8 @@ import {
   useUpdateLibrarySettings,
   useUploadLibraryDocument,
   useUploadLibraryPhoto,
+  useActivities,
+  useExportActivityReportPdf,
 } from "../api/hooks";
 import { api } from "../api/client";
 import { ROLE_COORDENACAO_CIPAVD, ROLE_TI, hasAnyRole } from "../app/roleAccess";
@@ -152,6 +154,8 @@ export function LibraryPage() {
   const uploadDocument = useUploadLibraryDocument();
   const updateDocument = useUpdateLibraryDocument();
   const deleteDocument = useDeleteLibraryDocument();
+  const activitiesQuery = useActivities({ pageSize: '1000' }); // Get all activities to filter those with reports
+  const exportReportPdf = useExportActivityReportPdf();
   const canManage = hasAnyRole(me, [ROLE_TI, ROLE_COORDENACAO_CIPAVD]);
 
   const allPhotos = useMemo(
@@ -163,6 +167,20 @@ export function LibraryPage() {
     () => (libraryQuery.data?.documents ?? []) as LibraryDocument[],
     [libraryQuery.data?.documents],
   );
+  
+  // Filter activities that have reports
+  const activitiesWithReports = useMemo(() => {
+    const items = (activitiesQuery.data?.items ?? []) as any[];
+    return items.filter((activity) => activity.report != null).map((activity) => ({
+      id: activity.id,
+      title: activity.title,
+      locality: activity.locality?.name ?? activity.locality?.code ?? '—',
+      eventDate: activity.eventDate,
+      reportDate: activity.report?.date,
+      createdAt: activity.createdAt,
+    }));
+  }, [activitiesQuery.data?.items]);
+  
   const intervalFromApi = Number(libraryQuery.data?.settings?.carouselIntervalSeconds ?? 5);
 
   const localities = useMemo(() => {
@@ -176,6 +194,7 @@ export function LibraryPage() {
 
   const [intervalSeconds, setIntervalSeconds] = useState(5);
   const [carouselIndicesByLocality, setCarouselIndicesByLocality] = useState<Record<string, number>>({});
+  const [mainCarouselIndex, setMainCarouselIndex] = useState(0);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerMode, setDrawerMode] = useState<"photos" | "documents">("photos");
   const [editingLocalityId, setEditingLocalityId] = useState<string>("");
@@ -191,6 +210,8 @@ export function LibraryPage() {
   const [selectedPhotoIds, setSelectedPhotoIds] = useState<string[]>([]);
   const [bulkLocalityId, setBulkLocalityId] = useState<string>("");
   const [downloadingDocumentId, setDownloadingDocumentId] = useState<string | null>(null);
+  const [downloadingReportId, setDownloadingReportId] = useState<string | null>(null);
+  const [downloadingReportId, setDownloadingReportId] = useState<string | null>(null);
 
   useEffect(() => {
     setIntervalSeconds(Math.max(2, Math.min(60, intervalFromApi)));
@@ -321,6 +342,44 @@ export function LibraryPage() {
     }
   };
 
+  const downloadActivityReport = async (activityId: string, activityTitle: string) => {
+    if (downloadingReportId === activityId) return; // Prevent multiple clicks
+    setDownloadingReportId(activityId);
+    toast.push({
+      message: "Baixando relatório...",
+      severity: "info",
+    });
+    try {
+      const response = await api.get(`/activities/${activityId}/report/pdf`, {
+        responseType: "blob",
+      });
+      const blob = new Blob([response.data], { type: "application/pdf" });
+      if (!blob || blob.size === 0) {
+        throw new Error("Empty file response");
+      }
+      const directUrl = URL.createObjectURL(blob);
+      const link = window.document.createElement("a");
+      link.href = directUrl;
+      const sanitizedTitle = String(activityTitle || "relatorio").trim().replace(/[^a-z0-9]/gi, "_");
+      link.download = `${sanitizedTitle}.pdf`;
+      window.document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(directUrl), 1200);
+      toast.push({
+        message: "Download concluído.",
+        severity: "success",
+      });
+    } catch (error) {
+      toast.push({
+        message: parseApiError(error).message ?? "Relatório indisponível para download.",
+        severity: "error",
+      });
+    } finally {
+      setDownloadingReportId(null);
+    }
+  };
+
   const photosByLocality = useMemo(() => {
     const grouped = new Map<string, LibraryPhoto[]>();
     for (const locality of localities) {
@@ -361,6 +420,21 @@ export function LibraryPage() {
     }, Math.max(2, intervalSeconds) * 1000);
     return () => window.clearInterval(timer);
   }, [intervalSeconds, localities, photosByLocality]);
+
+  // Main carousel for localities (8 cards, changes every 5 seconds)
+  useEffect(() => {
+    if (localities.length <= 8) return;
+    const timer = window.setInterval(() => {
+      setMainCarouselIndex((prev) => (prev + 1) % Math.ceil(localities.length / 8));
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [localities.length]);
+
+  const visibleLocalities = useMemo(() => {
+    if (localities.length <= 8) return localities;
+    const startIndex = mainCarouselIndex * 8;
+    return localities.slice(startIndex, startIndex + 8);
+  }, [localities, mainCarouselIndex]);
 
   const tablePhotos = useMemo(() => {
     if (!editingLocalityId) return allPhotos;
@@ -429,17 +503,16 @@ export function LibraryPage() {
           {localities.length === 0 ? (
             <EmptyState title="Nenhuma localidade disponível" description="Cadastre localidade SMIF para gerar novos carrosséis." />
           ) : (
-            <Box
-              display="grid"
-              gap={2}
-              gridTemplateColumns={{
-                xs: "1fr",
-                sm: "repeat(2, minmax(0, 1fr))",
-                md: "repeat(3, minmax(0, 1fr))",
-                lg: "repeat(4, minmax(0, 1fr))",
-              }}
-            >
-              {localities.map((locality) => {
+            <Box sx={{ position: 'relative' }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  gap: 2,
+                  overflowX: 'hidden',
+                  scrollBehavior: 'smooth',
+                }}
+              >
+                {visibleLocalities.map((locality) => {
                 const localityPhotos = photosByLocality.get(locality.id) ?? [];
                 const currentIndex = carouselIndicesByLocality[locality.id] ?? 0;
                 const currentPhoto = localityPhotos[currentIndex] ?? null;
@@ -452,6 +525,8 @@ export function LibraryPage() {
                       overflow: "hidden",
                       position: "relative",
                       transition: "transform 160ms ease, box-shadow 160ms ease",
+                      minWidth: { xs: '100%', sm: 'calc(50% - 8px)', md: 'calc(33.333% - 10.67px)', lg: 'calc(12.5% - 14px)' },
+                      flexShrink: 0,
                       "&:hover": {
                         transform: "translateY(-2px)",
                         boxShadow: "0 10px 24px rgba(17,66,89,0.16)",
@@ -547,7 +622,31 @@ export function LibraryPage() {
                   </Card>
                 );
               })}
-          </Box>
+              </Box>
+              {localities.length > 8 && (
+                <Stack direction="row" spacing={1} justifyContent="center" alignItems="center" sx={{ mt: 2 }}>
+                  <IconButton
+                    size="small"
+                    onClick={() => setMainCarouselIndex((prev) => (prev - 1 + Math.ceil(localities.length / 8)) % Math.ceil(localities.length / 8))}
+                    sx={{ bgcolor: 'rgba(17,66,89,0.08)', '&:hover': { bgcolor: 'rgba(17,66,89,0.15)' } }}
+                  >
+                    <ArrowBackIosNewRoundedIcon fontSize="small" />
+                  </IconButton>
+                  <Chip
+                    size="small"
+                    label={`${mainCarouselIndex + 1} / ${Math.ceil(localities.length / 8)}`}
+                    variant="outlined"
+                  />
+                  <IconButton
+                    size="small"
+                    onClick={() => setMainCarouselIndex((prev) => (prev + 1) % Math.ceil(localities.length / 8))}
+                    sx={{ bgcolor: 'rgba(17,66,89,0.08)', '&:hover': { bgcolor: 'rgba(17,66,89,0.15)' } }}
+                  >
+                    <ArrowForwardIosRoundedIcon fontSize="small" />
+                  </IconButton>
+                </Stack>
+              )}
+            </Box>
           )}
         </CardContent>
       </Card>
@@ -637,6 +736,88 @@ export function LibraryPage() {
                     </TableCell>
                   </TableRow>
                 ))}
+              </TableBody>
+            </Table>
+          )}
+          <Divider sx={{ my: 1.2 }} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent>
+          <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", md: "center" }} gap={1} sx={{ mb: 1 }}>
+            <Typography variant="h6" fontWeight={700}>
+              Relatórios das Atividades
+            </Typography>
+          </Stack>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.4 }}>
+            Relatórios completos das atividades de campo realizadas pela comissão.
+          </Typography>
+
+          {activitiesQuery.isLoading ? (
+            <Typography variant="body2" color="text.secondary">Carregando relatórios...</Typography>
+          ) : activitiesWithReports.length === 0 ? (
+            <EmptyState title="Nenhum relatório disponível" description="Os relatórios das atividades aparecerão aqui quando forem criados." />
+          ) : (
+            <Table size="small">
+              <TableHead>
+                <TableRow sx={{ bgcolor: "primary.main" }}>
+                  <TableCell sx={{ color: "white", fontWeight: 700 }}>Atividade</TableCell>
+                  <TableCell sx={{ color: "white", fontWeight: 700 }}>Localidade</TableCell>
+                  <TableCell sx={{ color: "white", fontWeight: 700 }}>Data do Evento</TableCell>
+                  <TableCell sx={{ color: "white", fontWeight: 700 }}>Data do Relatório</TableCell>
+                  <TableCell sx={{ color: "white", fontWeight: 700 }} align="right">Ações</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {activitiesWithReports.map((activity) => {
+                  const formatDate = (dateStr: string | null | undefined) => {
+                    if (!dateStr) return '—';
+                    const date = new Date(dateStr);
+                    const day = String(date.getUTCDate()).padStart(2, '0');
+                    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+                    const year = date.getUTCFullYear();
+                    return `${day}/${month}/${year}`;
+                  };
+                  return (
+                    <TableRow
+                      key={activity.id}
+                      hover
+                      onClick={() => {
+                        if (downloadingReportId !== activity.id) {
+                          void downloadActivityReport(activity.id, activity.title);
+                        }
+                      }}
+                      sx={{ cursor: downloadingReportId === activity.id ? "wait" : "pointer", opacity: downloadingReportId === activity.id ? 0.6 : 1 }}
+                    >
+                      <TableCell sx={{ minWidth: 260, fontWeight: 500 }}>
+                        {activity.title}
+                      </TableCell>
+                      <TableCell>{activity.locality}</TableCell>
+                      <TableCell>{formatDate(activity.eventDate)}</TableCell>
+                      <TableCell>{formatDate(activity.reportDate)}</TableCell>
+                      <TableCell align="right">
+                        <Tooltip title={downloadingReportId === activity.id ? "Baixando..." : "Baixar relatório"}>
+                          <span>
+                            <IconButton
+                              size="small"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                if (downloadingReportId !== activity.id) {
+                                  void downloadActivityReport(activity.id, activity.title);
+                                }
+                              }}
+                              disabled={downloadingReportId === activity.id}
+                              sx={{ color: "primary.main" }}
+                            >
+                              <OpenInNewRoundedIcon fontSize="small" />
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}

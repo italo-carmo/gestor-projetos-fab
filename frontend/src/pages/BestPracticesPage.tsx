@@ -4,6 +4,7 @@ import {
   Card,
   CardContent,
   Chip,
+  Collapse,
   Dialog,
   DialogActions,
   DialogContent,
@@ -20,19 +21,26 @@ import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import LightbulbRoundedIcon from "@mui/icons-material/LightbulbRounded";
 import ApartmentRoundedIcon from "@mui/icons-material/ApartmentRounded";
+import SettingsRoundedIcon from "@mui/icons-material/SettingsRounded";
+import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
+import ExpandLessRoundedIcon from "@mui/icons-material/ExpandLessRounded";
 import { useMemo, useState } from "react";
 import { parseApiError } from "../app/apiErrors";
 import { can } from "../app/rbac";
-import { hasRole, ROLE_COORDENACAO_CIPAVD } from "../app/roleAccess";
+import { hasAnyRole, hasRole, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from "../app/roleAccess";
 import { useToast } from "../app/toast";
 import { selectTargetLocalities } from "../constants/localities";
 import {
   useBestPractices,
+  useBestPracticeTypes,
   useCreateBestPractice,
+  useCreateBestPracticeType,
   useDeleteBestPractice,
+  useDeleteBestPracticeType,
   useLocalities,
   useMe,
   useUpdateBestPractice,
+  useUpdateBestPracticeType,
 } from "../api/hooks";
 import { EmptyState } from "../components/states/EmptyState";
 import { ErrorState } from "../components/states/ErrorState";
@@ -46,15 +54,24 @@ const REPLICATION_PRACTICES_CARD_SX = {
   backgroundColor: "rgb(102, 133, 114) !important",
 };
 
+type BestPracticeType = {
+  id: string;
+  name: string;
+  colorHex: string;
+  textColorHex?: string | null;
+};
+
 type BestPracticePost = {
   id: string;
   title: string;
   content: string;
   isCommission: boolean;
   localityId: string | null;
+  typeId?: string | null;
   authorLabel: string | null;
   createdAt: string;
   locality?: { id: string; name: string; code?: string | null } | null;
+  type?: BestPracticeType | null;
 };
 
 export function BestPracticesPage() {
@@ -71,6 +88,8 @@ export function BestPracticesPage() {
     content: "",
     target: "commission",
   });
+  const [typesSectionOpen, setTypesSectionOpen] = useState(false);
+  const [typeForm, setTypeForm] = useState({ id: "", name: "", colorHex: "#537F97", textColorHex: "#FFFFFF" });
 
   const filters = useMemo(
     () => ({
@@ -81,9 +100,15 @@ export function BestPracticesPage() {
   );
 
   const postsQuery = useBestPractices(filters);
+  const typesQuery = useBestPracticeTypes();
   const createBestPractice = useCreateBestPractice();
   const updateBestPractice = useUpdateBestPractice();
   const deleteBestPractice = useDeleteBestPractice();
+  const createType = useCreateBestPracticeType();
+  const updateType = useUpdateBestPracticeType();
+  const deleteType = useDeleteBestPracticeType();
+  
+  const canManageTypes = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]) && can(me, "best_practices", "create");
 
   if (postsQuery.isLoading) return <SkeletonState />;
   if (postsQuery.isError) {
@@ -107,6 +132,8 @@ export function BestPracticesPage() {
     name: String(item.name ?? ""),
   }));
   const posts = (postsQuery.data?.items ?? []) as BestPracticePost[];
+  const types = (typesQuery.data?.items ?? []) as BestPracticeType[];
+  const typeById = useMemo(() => new Map(types.map((item) => [item.id, item])), [types]);
   const canCreate =
     hasRole(me, ROLE_COORDENACAO_CIPAVD) && can(me, "best_practices", "create");
   const canUpdate =
@@ -229,11 +256,23 @@ export function BestPracticesPage() {
             Compartilhe ações efetivas por localidade e práticas com potencial de replicação.
           </Typography>
         </Box>
-        {canCreate && (
-          <Button variant="contained" onClick={openCreate}>
-            Nova postagem
-          </Button>
-        )}
+        <Stack direction="row" spacing={1} alignItems="center">
+          {canManageTypes && (
+            <IconButton
+              size="small"
+              onClick={() => setTypesSectionOpen(!typesSectionOpen)}
+              sx={{ color: "primary.main" }}
+              title="Gerenciar tipos"
+            >
+              <EditRoundedIcon fontSize="small" />
+            </IconButton>
+          )}
+          {canCreate && (
+            <Button variant="contained" onClick={openCreate}>
+              Nova postagem
+            </Button>
+          )}
+        </Stack>
       </Stack>
 
       <Card sx={{ mb: 2 }}>
@@ -266,6 +305,214 @@ export function BestPracticesPage() {
           </Stack>
         </CardContent>
       </Card>
+
+      {canManageTypes && (
+        <Collapse in={typesSectionOpen}>
+          <Card sx={{ mb: 2 }}>
+            <CardContent>
+              <Typography variant="h6" fontWeight={700} sx={{ mb: 1.5 }}>
+                Gerenciar Tipos de Boas Práticas
+              </Typography>
+              <Stack spacing={2}>
+                {types.map((type) => {
+                  const isEditing = typeForm.id === type.id;
+                  return (
+                    <Card key={type.id} variant="outlined">
+                      <CardContent>
+                        <Stack spacing={1.5}>
+                          {isEditing ? (
+                            <>
+                              <TextField
+                                size="small"
+                                label="Nome do tipo"
+                                value={typeForm.name}
+                                onChange={(e) => setTypeForm({ ...typeForm, name: e.target.value })}
+                                fullWidth
+                              />
+                              <Stack direction="row" spacing={1}>
+                                <TextField
+                                  size="small"
+                                  type="color"
+                                  label="Cor do card"
+                                  value={typeForm.colorHex}
+                                  onChange={(e) => setTypeForm({ ...typeForm, colorHex: e.target.value })}
+                                  InputLabelProps={{ shrink: true }}
+                                  sx={{ flex: 1 }}
+                                />
+                                <TextField
+                                  size="small"
+                                  type="color"
+                                  label="Cor da fonte"
+                                  value={typeForm.textColorHex}
+                                  onChange={(e) => setTypeForm({ ...typeForm, textColorHex: e.target.value })}
+                                  InputLabelProps={{ shrink: true }}
+                                  sx={{ flex: 1 }}
+                                />
+                              </Stack>
+                              <Stack direction="row" spacing={1}>
+                                <Button
+                                  size="small"
+                                  variant="contained"
+                                  color="success"
+                                  onClick={async () => {
+                                    try {
+                                      await updateType.mutateAsync({
+                                        id: type.id,
+                                        payload: {
+                                          name: typeForm.name,
+                                          colorHex: typeForm.colorHex,
+                                          textColorHex: typeForm.textColorHex,
+                                        },
+                                      });
+                                      toast.push({ message: "Tipo atualizado.", severity: "success" });
+                                      setTypeForm({ id: "", name: "", colorHex: "#537F97", textColorHex: "#FFFFFF" });
+                                      await typesQuery.refetch();
+                                    } catch (error) {
+                                      toast.push({
+                                        message: parseApiError(error).message ?? "Erro ao atualizar tipo.",
+                                        severity: "error",
+                                      });
+                                    }
+                                  }}
+                                >
+                                  Salvar
+                                </Button>
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  onClick={() => setTypeForm({ id: "", name: "", colorHex: "#537F97", textColorHex: "#FFFFFF" })}
+                                >
+                                  Cancelar
+                                </Button>
+                              </Stack>
+                            </>
+                          ) : (
+                            <>
+                              <Stack direction="row" spacing={1} alignItems="center">
+                                <Box
+                                  sx={{
+                                    width: 24,
+                                    height: 24,
+                                    borderRadius: 1,
+                                    backgroundColor: type.colorHex,
+                                    border: "1px solid rgba(0,0,0,0.1)",
+                                  }}
+                                />
+                                <Typography variant="body1" fontWeight={600}>
+                                  {type.name}
+                                </Typography>
+                                <Box sx={{ flex: 1 }} />
+                                <IconButton
+                                  size="small"
+                                  onClick={() =>
+                                    setTypeForm({
+                                      id: type.id,
+                                      name: type.name,
+                                      colorHex: type.colorHex,
+                                      textColorHex: type.textColorHex || "#FFFFFF",
+                                    })
+                                  }
+                                >
+                                  <EditRoundedIcon fontSize="small" />
+                                </IconButton>
+                                <IconButton
+                                  size="small"
+                                  color="error"
+                                  onClick={async () => {
+                                    if (!window.confirm(`Deseja remover o tipo "${type.name}"?`)) return;
+                                    try {
+                                      await deleteType.mutateAsync(type.id);
+                                      toast.push({ message: "Tipo removido.", severity: "success" });
+                                      await typesQuery.refetch();
+                                    } catch (error) {
+                                      toast.push({
+                                        message: parseApiError(error).message ?? "Erro ao remover tipo.",
+                                        severity: "error",
+                                      });
+                                    }
+                                  }}
+                                >
+                                  <DeleteOutlineRoundedIcon fontSize="small" />
+                                </IconButton>
+                              </Stack>
+                            </>
+                          )}
+                        </Stack>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+                {typeForm.id === "" && (
+                  <Card variant="outlined">
+                    <CardContent>
+                      <Stack spacing={1.5}>
+                        <Typography variant="subtitle2" fontWeight={700}>
+                          Novo tipo
+                        </Typography>
+                        <TextField
+                          size="small"
+                          label="Nome do tipo"
+                          value={typeForm.name}
+                          onChange={(e) => setTypeForm({ ...typeForm, name: e.target.value })}
+                          fullWidth
+                        />
+                        <Stack direction="row" spacing={1}>
+                          <TextField
+                            size="small"
+                            type="color"
+                            label="Cor do card"
+                            value={typeForm.colorHex}
+                            onChange={(e) => setTypeForm({ ...typeForm, colorHex: e.target.value })}
+                            InputLabelProps={{ shrink: true }}
+                            sx={{ flex: 1 }}
+                          />
+                          <TextField
+                            size="small"
+                            type="color"
+                            label="Cor da fonte"
+                            value={typeForm.textColorHex}
+                            onChange={(e) => setTypeForm({ ...typeForm, textColorHex: e.target.value })}
+                            InputLabelProps={{ shrink: true }}
+                            sx={{ flex: 1 }}
+                          />
+                        </Stack>
+                        <Button
+                          size="small"
+                          variant="contained"
+                          color="primary"
+                          onClick={async () => {
+                            if (!typeForm.name.trim()) {
+                              toast.push({ message: "Preencha o nome do tipo.", severity: "warning" });
+                              return;
+                            }
+                            try {
+                              await createType.mutateAsync({
+                                name: typeForm.name,
+                                colorHex: typeForm.colorHex,
+                                textColorHex: typeForm.textColorHex,
+                              });
+                              toast.push({ message: "Tipo criado.", severity: "success" });
+                              setTypeForm({ id: "", name: "", colorHex: "#537F97", textColorHex: "#FFFFFF" });
+                              await typesQuery.refetch();
+                            } catch (error) {
+                              toast.push({
+                                message: parseApiError(error).message ?? "Erro ao criar tipo.",
+                                severity: "error",
+                              });
+                            }
+                          }}
+                        >
+                          Criar tipo
+                        </Button>
+                      </Stack>
+                    </CardContent>
+                  </Card>
+                )}
+              </Stack>
+            </CardContent>
+          </Card>
+        </Collapse>
+      )}
 
       {sections.length === 0 && (
         <EmptyState
@@ -313,9 +560,8 @@ export function BestPracticesPage() {
               ) : (
                 <Box
                   sx={{
-                    display: section.key === "__commission__" ? "flex" : "grid",
-                    flexDirection: section.key === "__commission__" ? "column" : undefined,
-                    gridTemplateColumns: section.key === "__commission__" ? undefined : {
+                    display: "grid",
+                    gridTemplateColumns: {
                       xs: "1fr",
                       md: "repeat(2, minmax(0, 1fr))",
                       xl: "repeat(3, minmax(0, 1fr))",
@@ -325,7 +571,13 @@ export function BestPracticesPage() {
                 >
                   {section.posts.map((post) => {
                     const isCommission = section.key === "__commission__";
-                    const cardSx = isCommission ? REPLICATION_PRACTICES_CARD_SX : BEST_PRACTICES_BLUE_CARD_SX;
+                    const type = post.typeId ? typeById.get(post.typeId) : null;
+                    const cardSx = type
+                      ? { backgroundColor: `${type.colorHex} !important` }
+                      : isCommission
+                        ? REPLICATION_PRACTICES_CARD_SX
+                        : BEST_PRACTICES_BLUE_CARD_SX;
+                    const textColor = type?.textColorHex || "#F4FAFD";
                     return (
                     <Card
                       key={post.id}
@@ -343,9 +595,8 @@ export function BestPracticesPage() {
                         ...cardSx,
                         height: "100%",
                         borderRadius: 2,
-                        borderColor: isCommission ? "rgba(102, 133, 114, 0.9)" : "rgba(83, 127, 151, 0.9)",
+                        borderColor: type ? `${type.colorHex}CC` : isCommission ? "rgba(102, 133, 114, 0.9)" : "rgba(83, 127, 151, 0.9)",
                         boxShadow: "0 12px 24px rgba(22, 60, 82, 0.3)",
-                        width: isCommission ? "100%" : undefined,
                         cursor: "pointer",
                         transition: "transform 160ms ease, box-shadow 160ms ease",
                         "&:hover": {
@@ -366,7 +617,7 @@ export function BestPracticesPage() {
                           alignItems="flex-start"
                           spacing={1}
                         >
-                          <Typography variant="subtitle2" fontWeight={700} sx={{ color: "#F4FAFD" }}>
+                          <Typography variant="subtitle2" fontWeight={700} sx={{ color: textColor }}>
                             {post.title}
                           </Typography>
                           {(canUpdate || canDelete) && (
@@ -374,7 +625,7 @@ export function BestPracticesPage() {
                               {canUpdate && (
                                 <IconButton
                                   size="small"
-                                  sx={{ color: "#F4FAFD" }}
+                                  sx={{ color: textColor }}
                                   onClick={(event) => {
                                     event.stopPropagation();
                                     openEdit(post);
@@ -386,7 +637,7 @@ export function BestPracticesPage() {
                               {canDelete && (
                                 <IconButton
                                   size="small"
-                                  sx={{ color: "#FFD5D8" }}
+                                  sx={{ color: textColor }}
                                   onClick={(event) => {
                                     event.stopPropagation();
                                     handleDelete(post.id);
@@ -403,7 +654,7 @@ export function BestPracticesPage() {
                           color="text.secondary"
                           sx={{
                             mt: 0.8,
-                            color: "rgba(244, 250, 253, 0.94)",
+                            color: `${textColor}F0`,
                             display: "-webkit-box",
                             WebkitLineClamp: 4,
                             WebkitBoxOrient: "vertical",
@@ -412,20 +663,29 @@ export function BestPracticesPage() {
                         >
                           {post.content}
                         </Typography>
-                        <Divider sx={{ my: 1.1, borderColor: "rgba(255,255,255,0.24)" }} />
+                        <Divider sx={{ my: 1.1, borderColor: `${textColor}40` }} />
                         <Stack
                           direction={{ xs: "column", sm: "row" }}
                           spacing={0.8}
                           justifyContent="space-between"
+                          alignItems="center"
                         >
-                          <Typography variant="caption" sx={{ color: "rgba(236, 248, 252, 0.92)" }}>
-                            Autor: {post.authorLabel || "Coordenação CIPAVD"}
-                          </Typography>
-                          <Typography variant="caption" sx={{ color: "rgba(236, 248, 252, 0.9)" }}>
+                          <Chip
+                            size="small"
+                            label={post.authorLabel || "Coordenação CIPAVD"}
+                            sx={{
+                              bgcolor: "rgba(255,255,255,0.15)",
+                              color: textColor,
+                              border: `1px solid ${textColor}40`,
+                              height: 20,
+                              fontSize: "0.7rem",
+                            }}
+                          />
+                          <Typography variant="caption" sx={{ color: `${textColor}E6` }}>
                             {new Date(post.createdAt).toLocaleString("pt-BR")}
                           </Typography>
                         </Stack>
-                        <Typography variant="caption" sx={{ color: "rgba(236, 248, 252, 0.88)", mt: 0.8, display: "block" }}>
+                        <Typography variant="caption" sx={{ color: `${textColor}E0`, mt: 0.8, display: "block" }}>
                           Clique para ler o texto completo
                         </Typography>
                       </CardContent>
@@ -511,9 +771,14 @@ export function BestPracticesPage() {
             justifyContent="space-between"
             sx={{ mt: 2 }}
           >
-            <Typography variant="caption" color="text.secondary">
-              Autor: {readingPost?.authorLabel || "Coordenação CIPAVD"}
-            </Typography>
+            <Chip
+              size="small"
+              label={readingPost?.authorLabel || "Coordenação CIPAVD"}
+              sx={{
+                bgcolor: "rgba(0,0,0,0.08)",
+                border: "1px solid rgba(0,0,0,0.12)",
+              }}
+            />
             <Typography variant="caption" color="text.secondary">
               {readingPost ? new Date(readingPost.createdAt).toLocaleString("pt-BR") : "-"}
             </Typography>

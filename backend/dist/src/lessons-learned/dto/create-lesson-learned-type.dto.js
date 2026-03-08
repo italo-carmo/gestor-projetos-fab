@@ -14,6 +14,7 @@ const class_validator_1 = require("class-validator");
 class CreateLessonLearnedTypeDto {
     name;
     colorHex;
+    textColorHex;
 }
 exports.CreateLessonLearnedTypeDto = CreateLessonLearnedTypeDto;
 __decorate([
@@ -25,4 +26,9 @@ __decorate([
     (0, class_validator_1.IsHexColor)(),
     __metadata("design:type", String)
 ], CreateLessonLearnedTypeDto.prototype, "colorHex", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsHexColor)(),
+    __metadata("design:type", String)
+], CreateLessonLearnedTypeDto.prototype, "textColorHex", void 0);
 //# sourceMappingURL=create-lesson-learned-type.dto.js.map

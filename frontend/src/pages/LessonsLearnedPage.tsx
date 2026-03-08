@@ -5,6 +5,7 @@ import {
   CardContent,
   Chip,
   Collapse,
+  Divider,
   Drawer,
   IconButton,
   MenuItem,
@@ -218,106 +219,268 @@ export function LessonsLearnedPage() {
             Gestão completa das lições e dos tipos (com cor dos cards).
           </Typography>
         </Box>
-        {canManage && (
-          <Button variant="contained" startIcon={<AddRoundedIcon />} onClick={openCreateLesson}>
-            Nova lição
-          </Button>
-        )}
+        <Stack direction="row" spacing={1} alignItems="center">
+          {canManageTypes && (
+            <IconButton
+              size="small"
+              onClick={() => setTypesSectionOpen(!typesSectionOpen)}
+              sx={{ color: "primary.main" }}
+              title="Gerenciar tipos"
+            >
+              <EditRoundedIcon fontSize="small" />
+            </IconButton>
+          )}
+          {canManage && (
+            <Button variant="contained" startIcon={<AddRoundedIcon />} onClick={openCreateLesson}>
+              Nova lição
+            </Button>
+          )}
+        </Stack>
       </Stack>
 
-      <Stack direction={{ xs: 'column', lg: 'row' }} spacing={2} alignItems="stretch">
-        <Card sx={{ flex: 2 }}>
-          <CardContent>
-            <Typography variant="h6" sx={{ mb: 1.2 }}>
-              Lições cadastradas
-            </Typography>
-            {lessons.length === 0 ? (
-              <EmptyState title="Sem lições" description="Cadastre a primeira lição aprendida." />
-            ) : (
-              <Box sx={{ display: 'grid', gap: 1.2 }}>
-                {lessons.map((lesson) => {
-                  const type = lesson.type ?? typeById.get(lesson.typeId);
-                  const bg = type?.colorHex || '#537F97';
-                  const textColor = type?.textColorHex || '#FFFFFF';
-                  return (
-                    <Card key={lesson.id} variant="outlined" sx={{ borderColor: `${bg}` }}>
-                      <CardContent sx={{ p: 1.4, backgroundColor: bg }}>
-                        <Stack direction="row" justifyContent="space-between" alignItems="start" gap={1}>
-                          <Box sx={{ minWidth: 0 }}>
-                            <Typography variant="subtitle2" sx={{ color: textColor, fontWeight: 700 }}>
-                              {lesson.title}
-                            </Typography>
-                            <Typography
-                              variant="body2"
+      <Card>
+        <CardContent>
+          <Typography variant="h6" sx={{ mb: 1.2 }}>
+            Lições cadastradas
+          </Typography>
+          {lessons.length === 0 ? (
+            <EmptyState title="Sem lições" description="Cadastre a primeira lição aprendida." />
+          ) : (
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: {
+                  xs: '1fr',
+                  md: 'repeat(2, minmax(0, 1fr))',
+                  xl: 'repeat(3, minmax(0, 1fr))',
+                },
+                gap: 1.4,
+              }}
+            >
+              {lessons.map((lesson) => {
+                const type = lesson.type ?? typeById.get(lesson.typeId);
+                const bg = type?.colorHex || '#537F97';
+                const textColor = type?.textColorHex || '#FFFFFF';
+                return (
+                  <Card key={lesson.id} variant="outlined" sx={{ borderColor: `${bg}CC`, height: '100%' }}>
+                    <CardContent sx={{ p: 1.5, backgroundColor: bg, height: '100%', display: 'flex', flexDirection: 'column' }}>
+                      <Stack direction="row" justifyContent="space-between" alignItems="start" gap={1} sx={{ flex: 1 }}>
+                        <Box sx={{ minWidth: 0, flex: 1 }}>
+                          <Typography variant="subtitle2" sx={{ color: textColor, fontWeight: 700 }}>
+                            {lesson.title}
+                          </Typography>
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              mt: 0.8,
+                              color: `${textColor}F0`,
+                              display: '-webkit-box',
+                              WebkitLineClamp: 4,
+                              WebkitBoxOrient: 'vertical',
+                              overflow: 'hidden',
+                            }}
+                          >
+                            {lesson.content}
+                          </Typography>
+                          <Divider sx={{ my: 1.1, borderColor: `${textColor}40` }} />
+                          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                            <Chip
+                              size="small"
+                              label={type?.name || 'Sem tipo'}
+                              sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: textColor }}
+                            />
+                            <Chip
+                              size="small"
+                              label={lesson.authorLabel || 'Coordenação CIPAVD'}
                               sx={{
-                                mt: 0.4,
-                                color: `${textColor}E6`,
-                                display: '-webkit-box',
-                                WebkitLineClamp: 3,
-                                WebkitBoxOrient: 'vertical',
-                                overflow: 'hidden',
+                                bgcolor: 'rgba(255,255,255,0.15)',
+                                color: textColor,
+                                border: `1px solid ${textColor}40`,
+                                height: 20,
+                                fontSize: '0.7rem',
                               }}
-                            >
-                              {lesson.content}
+                            />
+                            <Typography variant="caption" sx={{ color: `${textColor}E6` }}>
+                              {new Date(lesson.createdAt).toLocaleString('pt-BR')}
                             </Typography>
-                            <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.8 }}>
-                              <Chip
+                          </Stack>
+                        </Box>
+                        {canManage && (
+                          <Stack direction="row" spacing={0.5}>
+                            <IconButton size="small" sx={{ color: textColor }} onClick={() => openEditLesson(lesson)}>
+                              <EditRoundedIcon fontSize="small" />
+                            </IconButton>
+                            <IconButton size="small" sx={{ color: textColor }} onClick={() => handleDeleteLesson(lesson)}>
+                              <DeleteOutlineRoundedIcon fontSize="small" />
+                            </IconButton>
+                          </Stack>
+                        )}
+                      </Stack>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </Box>
+          )}
+        </CardContent>
+      </Card>
+
+      {canManageTypes && (
+        <Collapse in={typesSectionOpen}>
+          <Card sx={{ mt: 2 }}>
+            <CardContent>
+              <Typography variant="h6" fontWeight={700} sx={{ mb: 1.5 }}>
+                Gerenciar Tipos de Lições Aprendidas
+              </Typography>
+              <Stack spacing={2}>
+                {types.map((type) => {
+                  const isEditing = typeForm.id === type.id;
+                  return (
+                    <Card key={type.id} variant="outlined">
+                      <CardContent>
+                        <Stack spacing={1.5}>
+                          {isEditing ? (
+                            <>
+                              <TextField
                                 size="small"
-                                label={type?.name || 'Sem tipo'}
-                                sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: textColor }}
+                                label="Nome do tipo"
+                                value={typeForm.name}
+                                onChange={(e) => setTypeForm({ ...typeForm, name: e.target.value })}
+                                fullWidth
                               />
-                              <Chip
-                                size="small"
-                                label={lesson.authorLabel || 'Coordenação CIPAVD'}
-                                sx={{
-                                  bgcolor: 'rgba(255,255,255,0.15)',
-                                  color: textColor,
-                                  border: `1px solid ${textColor}40`,
-                                }}
-                              />
-                              <Typography variant="caption" sx={{ color: `${textColor}E6` }}>
-                                {new Date(lesson.createdAt).toLocaleString('pt-BR')}
-                              </Typography>
-                            </Stack>
-                          </Box>
-                          {canManage && (
-                            <Stack direction="row" spacing={0.5}>
-                              <IconButton size="small" sx={{ color: textColor }} onClick={() => openEditLesson(lesson)}>
-                                <EditRoundedIcon fontSize="small" />
-                              </IconButton>
-                              <IconButton size="small" sx={{ color: textColor }} onClick={() => handleDeleteLesson(lesson)}>
-                                <DeleteOutlineRoundedIcon fontSize="small" />
-                              </IconButton>
-                            </Stack>
+                              <Stack direction="row" spacing={1}>
+                                <TextField
+                                  size="small"
+                                  type="color"
+                                  label="Cor do card"
+                                  value={typeForm.colorHex}
+                                  onChange={(e) => setTypeForm({ ...typeForm, colorHex: e.target.value })}
+                                  InputLabelProps={{ shrink: true }}
+                                  sx={{ flex: 1 }}
+                                />
+                                <TextField
+                                  size="small"
+                                  type="color"
+                                  label="Cor da fonte"
+                                  value={typeForm.textColorHex}
+                                  onChange={(e) => setTypeForm({ ...typeForm, textColorHex: e.target.value })}
+                                  InputLabelProps={{ shrink: true }}
+                                  sx={{ flex: 1 }}
+                                />
+                              </Stack>
+                              <Stack direction="row" spacing={1}>
+                                <Button
+                                  size="small"
+                                  variant="contained"
+                                  color="success"
+                                  onClick={handleSaveType}
+                                >
+                                  Salvar
+                                </Button>
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  onClick={resetTypeForm}
+                                >
+                                  Cancelar
+                                </Button>
+                              </Stack>
+                            </>
+                          ) : (
+                            <>
+                              <Stack direction="row" spacing={1} alignItems="center">
+                                <Box
+                                  sx={{
+                                    width: 24,
+                                    height: 24,
+                                    borderRadius: 1,
+                                    backgroundColor: type.colorHex,
+                                    border: "1px solid rgba(0,0,0,0.1)",
+                                  }}
+                                />
+                                <Typography variant="body1" fontWeight={600}>
+                                  {type.name}
+                                </Typography>
+                                <Box sx={{ flex: 1 }} />
+                                <IconButton
+                                  size="small"
+                                  onClick={() =>
+                                    setTypeForm({
+                                      id: type.id,
+                                      name: type.name,
+                                      colorHex: type.colorHex,
+                                      textColorHex: type.textColorHex || "#FFFFFF",
+                                    })
+                                  }
+                                >
+                                  <EditRoundedIcon fontSize="small" />
+                                </IconButton>
+                                <IconButton
+                                  size="small"
+                                  color="error"
+                                  onClick={() => handleDeleteType(type)}
+                                >
+                                  <DeleteOutlineRoundedIcon fontSize="small" />
+                                </IconButton>
+                              </Stack>
+                            </>
                           )}
                         </Stack>
                       </CardContent>
                     </Card>
                   );
                 })}
-              </Box>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card sx={{ flex: 1 }}>
-          <CardContent>
-            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
-              <Typography variant="h6">Tipos de lição</Typography>
-              {canManageTypes && (
-                <Button
-                  size="small"
-                  startIcon={<SettingsRoundedIcon />}
-                  endIcon={typesSectionOpen ? <ExpandLessRoundedIcon /> : <ExpandMoreRoundedIcon />}
-                  onClick={() => setTypesSectionOpen(!typesSectionOpen)}
-                  variant="outlined"
-                >
-                  {typesSectionOpen ? 'Ocultar' : 'Gerenciar tipos'}
-                </Button>
-              )}
-            </Stack>
-
-            <Collapse in={typesSectionOpen}>
+                {typeForm.id === "" && (
+                  <Card variant="outlined">
+                    <CardContent>
+                      <Stack spacing={1.5}>
+                        <Typography variant="subtitle2" fontWeight={700}>
+                          Novo tipo
+                        </Typography>
+                        <TextField
+                          size="small"
+                          label="Nome do tipo"
+                          value={typeForm.name}
+                          onChange={(e) => setTypeForm({ ...typeForm, name: e.target.value })}
+                          fullWidth
+                        />
+                        <Stack direction="row" spacing={1}>
+                          <TextField
+                            size="small"
+                            type="color"
+                            label="Cor do card"
+                            value={typeForm.colorHex}
+                            onChange={(e) => setTypeForm({ ...typeForm, colorHex: e.target.value })}
+                            InputLabelProps={{ shrink: true }}
+                            sx={{ flex: 1 }}
+                          />
+                          <TextField
+                            size="small"
+                            type="color"
+                            label="Cor da fonte"
+                            value={typeForm.textColorHex}
+                            onChange={(e) => setTypeForm({ ...typeForm, textColorHex: e.target.value })}
+                            InputLabelProps={{ shrink: true }}
+                            sx={{ flex: 1 }}
+                          />
+                        </Stack>
+                        <Button
+                          size="small"
+                          variant="contained"
+                          color="primary"
+                          onClick={handleSaveType}
+                        >
+                          Criar tipo
+                        </Button>
+                      </Stack>
+                    </CardContent>
+                  </Card>
+                )}
+              </Stack>
+            </CardContent>
+          </Card>
+        </Collapse>
+      )}
               {canManageTypes ? (
                 <Stack spacing={1} sx={{ mb: 1.5 }}>
                   <TextField

@@ -9,28 +9,26 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.UpdateLessonLearnedTypeDto = void 0;
+exports.CreateBestPracticeTypeDto = void 0;
 const class_validator_1 = require("class-validator");
-class UpdateLessonLearnedTypeDto {
+class CreateBestPracticeTypeDto {
     name;
     colorHex;
     textColorHex;
 }
-exports.UpdateLessonLearnedTypeDto = UpdateLessonLearnedTypeDto;
+exports.CreateBestPracticeTypeDto = CreateBestPracticeTypeDto;
 __decorate([
-    (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
     (0, class_validator_1.MaxLength)(80),
     __metadata("design:type", String)
-], UpdateLessonLearnedTypeDto.prototype, "name", void 0);
+], CreateBestPracticeTypeDto.prototype, "name", void 0);
+__decorate([
+    (0, class_validator_1.IsHexColor)(),
+    __metadata("design:type", String)
+], CreateBestPracticeTypeDto.prototype, "colorHex", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsHexColor)(),
     __metadata("design:type", String)
-], UpdateLessonLearnedTypeDto.prototype, "colorHex", void 0);
-__decorate([
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsHexColor)(),
-    __metadata("design:type", String)
-], UpdateLessonLearnedTypeDto.prototype, "textColorHex", void 0);
-//# sourceMappingURL=update-lesson-learned-type.dto.js.map
+], CreateBestPracticeTypeDto.prototype, "textColorHex", void 0);
+//# sourceMappingURL=create-best-practice-type.dto.js.map

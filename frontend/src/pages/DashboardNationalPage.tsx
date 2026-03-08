@@ -25,6 +25,10 @@ import PsychologyIcon from '@mui/icons-material/Psychology';
 import VolunteerActivismIcon from '@mui/icons-material/VolunteerActivism';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
 import GavelIcon from '@mui/icons-material/Gavel';
+import PersonIcon from '@mui/icons-material/Person';
+import SchoolIcon from '@mui/icons-material/School';
+import GroupIcon from '@mui/icons-material/Group';
+import WorkspacePremiumIcon from '@mui/icons-material/WorkspacePremium';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -70,6 +74,12 @@ type NationalDashboardTotals = {
     socialService: number;
     doctrine: number;
     law: number;
+  };
+  participants?: {
+    instructors: number;
+    recruits: number;
+    elos: number;
+    graduadosMaster: number;
   };
 };
 
@@ -297,6 +307,16 @@ export function DashboardNationalPage() {
             titleColor: '#F2FBFE',
             subtitleColor: 'rgba(236,250,255,0.9)',
           },
+          {
+            title: 'Número de Participantes',
+            subtitle: 'Total de participantes em atividades concluídas',
+            items: participantsIndicators,
+            bg: '#3A7A9A',
+            border: '1px solid rgba(145, 195, 220, 0.36)',
+            shadow: '0 18px 34px rgba(18,42,56,0.38)',
+            titleColor: '#F0F9FC',
+            subtitleColor: 'rgba(238,251,255,0.9)',
+          },
         ].map((group) => (
           <Card
             key={group.title}
@@ -362,92 +382,7 @@ export function DashboardNationalPage() {
         ))}
       </Box>
       <Grid container spacing={1.2} sx={{ mt: 0 }} alignItems="stretch">
-        <Grid size={{ xs: 12, md: 6 }} sx={{ display: 'flex' }}>
-          <Card sx={{ width: '100%', height: '100%' }}>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Localidades
-              </Typography>
-              {smifLocalities.length === 0 ? (
-                <EmptyState title="Sem dados" description="Nenhuma localidade encontrada." />
-              ) : (
-                <TableContainer ref={tableContainerRef} sx={{ width: '100%', overflowX: 'hidden' }}>
-                  <Table
-                    size="small"
-                    sx={{
-                      width: '100%',
-                      tableLayout: 'fixed',
-                      '& .MuiTableCell-root': {
-                        px: 0.45,
-                        py: 0.6,
-                      },
-                      '& .MuiTableBody-root .MuiTableCell-root': {
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                      },
-                    }}
-                  >
-                    <TableHead>
-                      <TableRow sx={{ bgcolor: 'primary.main' }}>
-                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '12%', px: 0.4 }}>GSD</TableCell>
-                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '10%', px: 0.4 }}>% Geral</TableCell>
-                        <TableCell sx={{ color: 'white', fontWeight: 600, width: '12%', px: 0.4, whiteSpace: 'normal', lineHeight: 1.2 }}>
-                          Rec. Fem.
-                        </TableCell>
-                        <TableCell sx={{ color: 'white', fontWeight: 600, width: showVisitColumn ? '46%' : '66%', px: 0.4 }}>Comandante</TableCell>
-                        {showVisitColumn && (
-                          <TableCell sx={{ color: 'white', fontWeight: 600, width: '20%', px: 0.4 }}>Visita</TableCell>
-                        )}
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {smifLocalities.map((loc) => (
-                        <TableRow
-                          key={loc.localityId}
-                          hover
-                          onClick={() => navigate(`/dashboard/locality/${loc.localityId}`)}
-                          onMouseEnter={() =>
-                            qc.prefetchQuery({
-                              queryKey: ['localityProgress', loc.localityId],
-                              queryFn: async () =>
-                                (await api.get(`/localities/${loc.localityId}/progress`)).data,
-                            })
-                          }
-                          sx={{ cursor: 'pointer' }}
-                        >
-                          <TableCell sx={{ px: 0.4 }}>
-                            <Typography variant="body2" fontWeight={700}>
-                              {formatGsdLabel(loc.localityName, loc.localityCode)}
-                            </Typography>
-                            {loc.commandName && (
-                              <Typography variant="caption" color="text.secondary" noWrap>
-                                {loc.commandName}
-                              </Typography>
-                            )}
-                          </TableCell>
-                          <TableCell sx={{ px: 0.4 }}>{Math.round(loc.progress)}%</TableCell>
-                          <TableCell sx={{ px: 0.4 }}>{loc.recruitsFemaleCountCurrent ?? 0}</TableCell>
-                          <TableCell sx={{ px: 0.4 }}>
-                            <Typography variant="body2" noWrap>
-                              {formatCommanderName(loc.commanderName)}
-                            </Typography>
-                          </TableCell>
-                          {showVisitColumn && (
-                            <TableCell sx={{ px: 0.4 }}>
-                              {loc.visitDate ? new Date(loc.visitDate).toLocaleDateString('pt-BR') : '—'}
-                            </TableCell>
-                          )}
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid size={{ xs: 12, md: 6 }} sx={{ display: 'flex' }}>
+        <Grid size={{ xs: 12 }} sx={{ display: 'flex' }}>
           <Card sx={{ width: '100%', height: '100%' }}>
             <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
               <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>

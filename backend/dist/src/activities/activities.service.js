@@ -72,12 +72,11 @@ let ActivitiesService = class ActivitiesService {
         const [items, total] = await this.prisma.$transaction([
             this.prisma.activity.findMany({
                 where,
-                orderBy: [{ sortOrder: 'asc' }, { eventDate: 'desc' }, { createdAt: 'desc' }],
+                orderBy: [{ eventDate: 'desc' }, { createdAt: 'desc' }],
                 skip,
                 take,
                 include: {
                     locality: { select: { id: true, code: true, name: true } },
-                    activityType: { select: { id: true, name: true } },
                     specialty: { select: { id: true, name: true, color: true } },
                     createdBy: { select: { id: true, name: true } },
                     responsibles: {
@@ -188,10 +187,6 @@ let ActivitiesService = class ActivitiesService {
             });
         }
         const singleLocalityId = createLocalityIds.length === 1 ? createLocalityIds[0] : null;
-        const currentMaxSortOrder = await this.prisma.activity.aggregate({
-            _max: { sortOrder: true },
-        });
-        let nextSortOrder = Number(currentMaxSortOrder._max.sortOrder ?? -1) + 1;
         const activityTypeId = await this.resolveActivityTypeId(payload.activityTypeId);
         const responsibleUserIds = await this.resolveActivityResponsibleIds(singleLocalityId, normalizedResponsibleIds, user);
         const createdItems = await this.prisma.$transaction(createLocalityIds.map((localityId) => this.prisma.activity.create({
@@ -201,8 +196,7 @@ let ActivitiesService = class ActivitiesService {
                     ? (0, sanitize_1.sanitizeText)(payload.description)
                     : null,
                 localityId,
-                sortOrder: nextSortOrder++,
-                activityTypeId,
+                activityTypeId: activityTypeId,
                 specialtyId,
                 eventDate: payload.eventDate ? new Date(payload.eventDate) : null,
                 reportRequired: payload.reportRequired ?? false,
@@ -311,7 +305,7 @@ let ActivitiesService = class ActivitiesService {
                         ? null
                         : (0, sanitize_1.sanitizeText)(payload.description),
                 localityId,
-                activityTypeId,
+                activityTypeId: activityTypeId,
                 specialtyId,
                 eventDate: payload.eventDate === undefined
                     ? undefined
@@ -760,10 +754,6 @@ let ActivitiesService = class ActivitiesService {
             }
         }
         let skippedSameLocality = 0;
-        const currentMaxSortOrder = await this.prisma.activity.aggregate({
-            _max: { sortOrder: true },
-        });
-        let nextSortOrder = Number(currentMaxSortOrder._max.sortOrder ?? -1) + 1;
         const cloneRows = [];
         for (const activity of existing) {
             for (const targetLocalityId of normalizedTargetLocalityIds) {
@@ -780,7 +770,6 @@ let ActivitiesService = class ActivitiesService {
                     title: activity.title,
                     description: activity.description ?? null,
                     localityId: targetLocalityId,
-                    sortOrder: nextSortOrder++,
                     activityTypeId: activity.activityTypeId ?? null,
                     specialtyId: activity.specialtyId ?? null,
                     eventDate,
@@ -827,7 +816,7 @@ let ActivitiesService = class ActivitiesService {
             return { updated: 0 };
         const existing = await this.prisma.activity.findMany({
             where: { id: { in: normalizedIds } },
-            select: { id: true, localityId: true, sortOrder: true },
+            select: { id: true, localityId: true },
         });
         if (!existing.length)
             return { updated: 0 };
@@ -836,12 +825,6 @@ let ActivitiesService = class ActivitiesService {
         }
         const idSet = new Set(existing.map((item) => item.id));
         const orderedIds = normalizedIds.filter((id) => idSet.has(id));
-        const minSortOrder = Math.min(...existing.map((item) => Number(item.sortOrder ?? 0)));
-        await this.prisma.$transaction(orderedIds.map((id, index) => this.prisma.activity.update({
-            where: { id },
-            data: { sortOrder: minSortOrder + index },
-            select: { id: true },
-        })));
         await this.audit.log({
             userId: user?.id,
             resource: 'activities',
@@ -1679,15 +1662,13 @@ let ActivitiesService = class ActivitiesService {
         }
         doc.moveDown(1);
         const footerY = doc.page.height - 80;
-        doc
-            .font('Helvetica')
-            .fontSize(10)
-            .text(`Local e Data: ${report.city}, ${this.formatDate(report.closingDate)}`, {
-            y: footerY,
+        doc.font('Helvetica').fontSize(10);
+        doc.y = footerY;
+        doc.text(`Local e Data: ${report.city}, ${this.formatDate(report.closingDate)}`, {
             align: 'left',
         });
+        doc.y = footerY + 15;
         doc.text(`Responsável pelo Relatório: ${report.responsible}`, {
-            y: footerY + 15,
             align: 'left',
         });
         doc

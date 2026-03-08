@@ -121,16 +121,8 @@ export declare class ActivitiesService {
             id: string;
             title: string;
             eventDate: Date | null;
-            locality: {
-                id: string;
-                name: string;
-                code: string;
-            } | null;
-            specialty: {
-                id: string;
-                name: string;
-                color: string | null;
-            } | null;
+            locality: any;
+            specialty: any;
         };
         items: {
             id: any;
@@ -242,11 +234,7 @@ export declare class ActivitiesService {
     signReport(activityId: string, user?: RbacUser): Promise<{
         activityId: string;
         signedAt: Date | null;
-        signedBy: {
-            id: string;
-            name: string;
-            email: string;
-        } | null;
+        signedBy: any;
         signatureHash: string | null;
         signaturePayloadHash: string | null;
         signatureAlgorithm: string | null;

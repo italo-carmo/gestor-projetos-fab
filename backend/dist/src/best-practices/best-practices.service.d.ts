@@ -11,6 +11,9 @@ export declare class BestPracticesService {
     }, user?: RbacUser): Promise<{
         items: any;
     }>;
+    listTypes(user?: RbacUser): Promise<{
+        items: any;
+    }>;
     create(payload: {
         title: string;
         content: string;
@@ -30,5 +33,20 @@ export declare class BestPracticesService {
     private assertEditorAccess;
     private resolveLocalityTarget;
     private normalizeRequiredText;
+    createType(payload: {
+        name: string;
+        colorHex: string;
+        textColorHex?: string;
+    }, user?: RbacUser): Promise<any>;
+    updateType(id: string, payload: {
+        name?: string;
+        colorHex?: string;
+        textColorHex?: string;
+    }, user?: RbacUser): Promise<any>;
+    removeType(id: string, user?: RbacUser): Promise<{
+        ok: boolean;
+    }>;
+    private assertTypeEditorAccess;
+    private normalizeColorHex;
     private buildAuthorLabel;
 }

@@ -1615,6 +1615,12 @@ let TasksService = class TasksService {
                         doctrine: 0,
                         law: 0,
                     },
+                    participants: {
+                        instructors: 0,
+                        recruits: 0,
+                        elos: 0,
+                        graduadosMaster: 0,
+                    },
                 },
                 lateItems: [],
                 unassignedItems: [],
@@ -1863,6 +1869,18 @@ let TasksService = class TasksService {
         }
         const completedReports = completedActivities.filter((activity) => hasSignedReport(activity)).length;
         const completedVisits = completedActivities.filter((activity) => isVisitActivity(activity)).length;
+        let totalInstructors = 0;
+        let totalRecruits = 0;
+        let totalElos = 0;
+        let totalGraduadosMaster = 0;
+        for (const activity of completedActivities) {
+            if (activity.report) {
+                totalInstructors += activity.report.instructorsCount ?? 0;
+                totalRecruits += activity.report.recruitsCount ?? 0;
+                totalElos += (activity.report.eloPsychologyCount ?? 0) + (activity.report.eloSocialAssistanceCount ?? 0);
+                totalGraduadosMaster += activity.report.eloGraduadoMasterCount ?? 0;
+            }
+        }
         const taskWhereClauses = [];
         if (localityAliasIds.length === 0) {
             taskWhereClauses.push({ localityId: '__none__' });
@@ -1914,6 +1932,12 @@ let TasksService = class TasksService {
                 completedFieldActivities: completedFieldActivities.length,
                 completedVisits,
                 fieldActivitiesBySpecialty,
+                participants: {
+                    instructors: totalInstructors,
+                    recruits: totalRecruits,
+                    elos: totalElos,
+                    graduadosMaster: totalGraduadosMaster,
+                },
             },
             lateItems,
             unassignedItems,

@@ -1,3 +1,7 @@
+export declare enum SocialCommunicationAudience {
+    INTERNAL = "INTERNAL",
+    EXTERNAL = "EXTERNAL"
+}
 export declare class CreateSocialCommunicationArticleDto {
     url: string;
     title?: string;
@@ -5,4 +9,5 @@ export declare class CreateSocialCommunicationArticleDto {
     summary?: string | null;
     publishedAt?: string | null;
     tags?: string[];
+    audience?: SocialCommunicationAudience;
 }

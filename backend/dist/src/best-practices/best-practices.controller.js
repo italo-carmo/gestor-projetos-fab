@@ -22,6 +22,8 @@ const best_practices_service_1 = require("./best-practices.service");
 const create_best_practice_dto_1 = require("./dto/create-best-practice.dto");
 const list_best_practice_dto_1 = require("./dto/list-best-practice.dto");
 const update_best_practice_dto_1 = require("./dto/update-best-practice.dto");
+const create_best_practice_type_dto_1 = require("./dto/create-best-practice-type.dto");
+const update_best_practice_type_dto_1 = require("./dto/update-best-practice-type.dto");
 let BestPracticesController = class BestPracticesController {
     bestPractices;
     constructor(bestPractices) {
@@ -38,6 +40,18 @@ let BestPracticesController = class BestPracticesController {
     }
     remove(id, user) {
         return this.bestPractices.remove(id, user);
+    }
+    listTypes(user) {
+        return this.bestPractices.listTypes(user);
+    }
+    createType(dto, user) {
+        return this.bestPractices.createType(dto, user);
+    }
+    updateType(id, dto, user) {
+        return this.bestPractices.updateType(id, dto, user);
+    }
+    removeType(id, user) {
+        return this.bestPractices.removeType(id, user);
     }
 };
 exports.BestPracticesController = BestPracticesController;
@@ -78,6 +92,42 @@ __decorate([
     __metadata("design:paramtypes", [String, Object]),
     __metadata("design:returntype", void 0)
 ], BestPracticesController.prototype, "remove", null);
+__decorate([
+    (0, common_1.Get)('types'),
+    (0, require_permission_decorator_1.RequirePermission)('best_practices', 'view'),
+    __param(0, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], BestPracticesController.prototype, "listTypes", null);
+__decorate([
+    (0, common_1.Post)('types'),
+    (0, require_permission_decorator_1.RequirePermission)('best_practices', 'create'),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [create_best_practice_type_dto_1.CreateBestPracticeTypeDto, Object]),
+    __metadata("design:returntype", void 0)
+], BestPracticesController.prototype, "createType", null);
+__decorate([
+    (0, common_1.Put)('types/:id'),
+    (0, require_permission_decorator_1.RequirePermission)('best_practices', 'update'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)()),
+    __param(2, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, update_best_practice_type_dto_1.UpdateBestPracticeTypeDto, Object]),
+    __metadata("design:returntype", void 0)
+], BestPracticesController.prototype, "updateType", null);
+__decorate([
+    (0, common_1.Delete)('types/:id'),
+    (0, require_permission_decorator_1.RequirePermission)('best_practices', 'delete'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", void 0)
+], BestPracticesController.prototype, "removeType", null);
 exports.BestPracticesController = BestPracticesController = __decorate([
     (0, common_1.Controller)('best-practices'),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, rbac_guard_1.RbacGuard),
