@@ -41,21 +41,45 @@ export class BestPracticesService {
       }
     }
 
-    const items = await (this.prisma as any).bestPracticePost.findMany({
-      where,
-      include: {
-        locality: { select: { id: true, name: true, code: true } },
-        type: { select: { id: true, name: true, colorHex: true, textColorHex: true } },
-        createdBy: { select: { id: true, name: true } },
-      },
-      orderBy: [{ isCommission: 'desc' }, { createdAt: 'desc' }],
-    });
-
-    return { items };
+    try {
+      const items = await (this.prisma as any).bestPracticePost.findMany({
+        where,
+        include: {
+          locality: { select: { id: true, name: true, code: true } },
+          type: {
+            select: {
+              id: true,
+              name: true,
+              colorHex: true,
+              textColorHex: true,
+            },
+          },
+          createdBy: { select: { id: true, name: true } },
+        },
+        orderBy: [{ isCommission: 'desc' }, { createdAt: 'desc' }],
+      });
+      return { items };
+    } catch {
+      // Backward-compatible fallback for environments with outdated Prisma client.
+      const legacyItems = await (this.prisma as any).bestPracticePost.findMany({
+        where,
+        include: {
+          locality: { select: { id: true, name: true, code: true } },
+          createdBy: { select: { id: true, name: true } },
+        },
+        orderBy: [{ isCommission: 'desc' }, { createdAt: 'desc' }],
+      });
+      return {
+        items: legacyItems.map((item: any) => ({ ...item, type: null })),
+      };
+    }
   }
 
   async listTypes(user?: RbacUser) {
     this.assertViewerAccess(user);
+    if (!(this.prisma as any).bestPracticeType) {
+      return { items: [] };
+    }
     const items = await (this.prisma as any).bestPracticeType.findMany({
       orderBy: [{ name: 'asc' }],
     });
@@ -238,6 +262,12 @@ export class BestPracticesService {
     user?: RbacUser,
   ) {
     this.assertTypeEditorAccess(user);
+    if (!(this.prisma as any).bestPracticeType) {
+      throwError('VALIDATION_ERROR', {
+        field: 'type',
+        reason: 'feature_unavailable',
+      });
+    }
 
     const normalized = this.normalizeRequiredText(payload.name, 'name', 80);
     const colorHex = this.normalizeColorHex(payload.colorHex);
@@ -277,6 +307,12 @@ export class BestPracticesService {
     user?: RbacUser,
   ) {
     this.assertTypeEditorAccess(user);
+    if (!(this.prisma as any).bestPracticeType) {
+      throwError('VALIDATION_ERROR', {
+        field: 'type',
+        reason: 'feature_unavailable',
+      });
+    }
 
     const existing = await (this.prisma as any).bestPracticeType.findUnique({
       where: { id },
@@ -322,6 +358,12 @@ export class BestPracticesService {
 
   async removeType(id: string, user?: RbacUser) {
     this.assertTypeEditorAccess(user);
+    if (!(this.prisma as any).bestPracticeType) {
+      throwError('VALIDATION_ERROR', {
+        field: 'type',
+        reason: 'feature_unavailable',
+      });
+    }
 
     const existing = await (this.prisma as any).bestPracticeType.findUnique({
       where: { id },
