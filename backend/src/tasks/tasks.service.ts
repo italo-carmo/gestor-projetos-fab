@@ -2842,9 +2842,7 @@ export class TasksService {
       const typeName = String(activity.activityType?.name ?? '')
         .trim()
         .toLowerCase();
-      if (typeName === 'visita') return true;
-      const title = String(activity.title ?? '').toLowerCase();
-      return /\bvisita\b/.test(title);
+      return typeName.includes('visita');
     };
 
     const mapExecutiveActivityItem = (
