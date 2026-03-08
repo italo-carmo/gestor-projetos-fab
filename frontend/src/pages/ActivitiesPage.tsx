@@ -22,6 +22,7 @@ import {
   TableCell,
   TableHead,
   TableRow,
+  TableSortLabel,
   Tabs,
   TextField,
   Typography,
@@ -129,6 +130,31 @@ const drawerActionButtonSx = {
 } as const;
 
 type ActivityDrawerTab = 'activity' | 'report';
+type ActivitySortColumn = 'type' | 'activity' | 'locality' | 'specialty' | 'eventDate' | 'status';
+type ActivitySortDirection = 'asc' | 'desc';
+
+function normalizeSortText(value: unknown) {
+  return String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+}
+
+function compareTextValues(first: unknown, second: unknown) {
+  return normalizeSortText(first).localeCompare(normalizeSortText(second), 'pt-BR', {
+    sensitivity: 'base',
+  });
+}
+
+function toSortableDateValue(value: unknown) {
+  const raw = String(value ?? '').trim();
+  if (!raw) return null;
+  const normalized = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? `${raw}T00:00:00.000Z` : raw;
+  const parsed = new Date(normalized);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.getTime();
+}
 
 function toIsoDateStartOfDay(value: string) {
   const raw = String(value ?? '').trim();
@@ -303,6 +329,10 @@ export function ActivitiesPage() {
   const items = activitiesQuery.data?.items ?? [];
   const [orderedItems, setOrderedItems] = useState<any[]>([]);
   const [draggingActivityId, setDraggingActivityId] = useState('');
+  const [sortState, setSortState] = useState<{
+    column: ActivitySortColumn;
+    direction: ActivitySortDirection;
+  } | null>(null);
   const selectedIdsSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const selectedActivities = useMemo(
     () => items.filter((item: any) => selectedIdsSet.has(String(item.id))),
@@ -337,13 +367,77 @@ export function ActivitiesPage() {
       ),
     [replicateTargetLocalityIds, replicateTargetLocalityOptions],
   );
-  const displayedItems = orderedItems.length ? orderedItems : items;
+  const baseItems = orderedItems.length ? orderedItems : items;
+  const displayedItems = useMemo(() => {
+    if (!sortState) return baseItems;
+    const sorted = [...baseItems];
+    sorted.sort((first: any, second: any) => {
+      let result = 0;
+      if (sortState.column === 'type') {
+        result = compareTextValues(first?.activityType?.name ?? '', second?.activityType?.name ?? '');
+      } else if (sortState.column === 'activity') {
+        result = compareTextValues(first?.title ?? '', second?.title ?? '');
+      } else if (sortState.column === 'locality') {
+        result = compareTextValues(first?.locality?.name ?? '', second?.locality?.name ?? '');
+      } else if (sortState.column === 'specialty') {
+        result = compareTextValues(
+          first?.specialty?.name ?? 'Comissão CIPAVD',
+          second?.specialty?.name ?? 'Comissão CIPAVD',
+        );
+      } else if (sortState.column === 'status') {
+        result = compareTextValues(
+          ACTIVITY_STATUS_LABELS[first?.status] ?? first?.status ?? '',
+          ACTIVITY_STATUS_LABELS[second?.status] ?? second?.status ?? '',
+        );
+      } else if (sortState.column === 'eventDate') {
+        const firstDate = toSortableDateValue(first?.eventDate);
+        const secondDate = toSortableDateValue(second?.eventDate);
+        if (firstDate == null && secondDate == null) {
+          result = 0;
+        } else if (firstDate == null) {
+          result = 1;
+        } else if (secondDate == null) {
+          result = -1;
+        } else {
+          result = firstDate - secondDate;
+        }
+      }
+      if (result === 0) {
+        return compareTextValues(first?.id ?? '', second?.id ?? '');
+      }
+      return sortState.direction === 'asc' ? result : -result;
+    });
+    return sorted;
+  }, [baseItems, sortState]);
   const allVisibleSelected =
     displayedItems.length > 0 && selectedIds.length === displayedItems.length;
+
+  const handleSortByColumn = (column: ActivitySortColumn) => {
+    setSortState((previous) => {
+      if (!previous || previous.column !== column) {
+        return { column, direction: 'asc' };
+      }
+      return {
+        column,
+        direction: previous.direction === 'asc' ? 'desc' : 'asc',
+      };
+    });
+  };
+  const sortLabelSx = {
+    color: 'white !important',
+    '&.Mui-active': { color: 'white !important' },
+    '& .MuiTableSortLabel-icon': { color: 'white !important' },
+  };
 
   useEffect(() => {
     setOrderedItems(items);
   }, [items]);
+
+  useEffect(() => {
+    if (sortState) {
+      setDraggingActivityId('');
+    }
+  }, [sortState]);
 
   useEffect(() => {
     if (activitiesQuery.isLoading) return;
@@ -646,6 +740,7 @@ export function ActivitiesPage() {
 
   const handleDropReorder = async (targetId: string) => {
     if (!canUpdate) return;
+    if (sortState) return;
     if (!draggingActivityId || draggingActivityId === targetId) return;
 
     const fromIndex = displayedItems.findIndex(
@@ -1152,13 +1247,67 @@ export function ActivitiesPage() {
                         />
                       </TableCell>
                     )}
-                    <TableCell sx={{ color: 'white', fontWeight: 600 }}>Tipo</TableCell>
-                    <TableCell sx={{ color: 'white', fontWeight: 600 }}>Atividade</TableCell>
-                    <TableCell sx={{ color: 'white', fontWeight: 600 }}>Localidade</TableCell>
-                    <TableCell sx={{ color: 'white', fontWeight: 600 }}>Especialidade</TableCell>
+                    <TableCell sx={{ color: 'white', fontWeight: 600 }}>
+                      <TableSortLabel
+                        active={sortState?.column === 'type'}
+                        direction={sortState?.column === 'type' ? sortState.direction : 'asc'}
+                        onClick={() => handleSortByColumn('type')}
+                        sx={sortLabelSx}
+                      >
+                        Tipo
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell sx={{ color: 'white', fontWeight: 600 }}>
+                      <TableSortLabel
+                        active={sortState?.column === 'activity'}
+                        direction={sortState?.column === 'activity' ? sortState.direction : 'asc'}
+                        onClick={() => handleSortByColumn('activity')}
+                        sx={sortLabelSx}
+                      >
+                        Atividade
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell sx={{ color: 'white', fontWeight: 600 }}>
+                      <TableSortLabel
+                        active={sortState?.column === 'locality'}
+                        direction={sortState?.column === 'locality' ? sortState.direction : 'asc'}
+                        onClick={() => handleSortByColumn('locality')}
+                        sx={sortLabelSx}
+                      >
+                        Localidade
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell sx={{ color: 'white', fontWeight: 600 }}>
+                      <TableSortLabel
+                        active={sortState?.column === 'specialty'}
+                        direction={sortState?.column === 'specialty' ? sortState.direction : 'asc'}
+                        onClick={() => handleSortByColumn('specialty')}
+                        sx={sortLabelSx}
+                      >
+                        Especialidade
+                      </TableSortLabel>
+                    </TableCell>
                     <TableCell sx={{ color: 'white', fontWeight: 600 }}>Responsável</TableCell>
-                    <TableCell sx={{ color: 'white', fontWeight: 600 }}>Data</TableCell>
-                    <TableCell sx={{ color: 'white', fontWeight: 600 }}>Status</TableCell>
+                    <TableCell sx={{ color: 'white', fontWeight: 600 }}>
+                      <TableSortLabel
+                        active={sortState?.column === 'eventDate'}
+                        direction={sortState?.column === 'eventDate' ? sortState.direction : 'asc'}
+                        onClick={() => handleSortByColumn('eventDate')}
+                        sx={sortLabelSx}
+                      >
+                        Data
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell sx={{ color: 'white', fontWeight: 600 }}>
+                      <TableSortLabel
+                        active={sortState?.column === 'status'}
+                        direction={sortState?.column === 'status' ? sortState.direction : 'asc'}
+                        onClick={() => handleSortByColumn('status')}
+                        sx={sortLabelSx}
+                      >
+                        Status
+                      </TableSortLabel>
+                    </TableCell>
                     <TableCell
                       sx={{ color: 'white', fontWeight: 600, display: { xs: 'none', sm: 'table-cell' } }}
                     >
@@ -1172,11 +1321,11 @@ export function ActivitiesPage() {
                       key={item.id}
                       hover
                       onDragOver={(event) => {
-                        if (!canUpdate) return;
+                        if (!canUpdate || !!sortState) return;
                         event.preventDefault();
                       }}
                       onDrop={(event) => {
-                        if (!canUpdate) return;
+                        if (!canUpdate || !!sortState) return;
                         event.preventDefault();
                         void handleDropReorder(String(item.id));
                       }}
@@ -1194,8 +1343,9 @@ export function ActivitiesPage() {
                         >
                           <Box
                             component="span"
-                            draggable
+                            draggable={!sortState}
                             onDragStart={() => {
+                              if (sortState) return;
                               setDraggingActivityId(String(item.id));
                             }}
                             onDragEnd={() => setDraggingActivityId('')}
@@ -1203,9 +1353,9 @@ export function ActivitiesPage() {
                               display: 'inline-flex',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              cursor: 'grab',
+                              cursor: sortState ? 'not-allowed' : 'grab',
                               color: 'text.disabled',
-                              '&:active': { cursor: 'grabbing' },
+                              '&:active': { cursor: sortState ? 'not-allowed' : 'grabbing' },
                             }}
                           >
                             <DragIndicatorRoundedIcon fontSize="small" />
