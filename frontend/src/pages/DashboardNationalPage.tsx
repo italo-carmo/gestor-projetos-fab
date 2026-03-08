@@ -267,6 +267,38 @@ export function DashboardNationalPage() {
       icon: <GavelIcon sx={{ fontSize: 22 }} />,
     },
   ];
+  const participantsIndicators: IndicatorTile[] = [
+    {
+      label: 'Instrutores',
+      value: String(totals.participantsKpis?.instructors ?? 0),
+      helper: 'Total de instrutores',
+      icon: <PersonIcon sx={{ fontSize: 22 }} />,
+    },
+    {
+      label: 'Recrutas',
+      value: String(totals.participantsKpis?.recruits ?? 0),
+      helper: 'Total de recrutas',
+      icon: <SchoolIcon sx={{ fontSize: 22 }} />,
+    },
+    {
+      label: 'Elos Psicologia',
+      value: String(totals.participantsKpis?.eloPsychology ?? 0),
+      helper: 'Total de elos',
+      icon: <PsychologyIcon sx={{ fontSize: 22 }} />,
+    },
+    {
+      label: 'Elos Serviço Social',
+      value: String(totals.participantsKpis?.eloSocialAssistance ?? 0),
+      helper: 'Total de elos',
+      icon: <VolunteerActivismIcon sx={{ fontSize: 22 }} />,
+    },
+    {
+      label: 'Elos Graduado Master',
+      value: String(totals.participantsKpis?.eloGraduadoMaster ?? 0),
+      helper: 'Total de elos',
+      icon: <WorkspacePremiumIcon sx={{ fontSize: 22 }} />,
+    },
+  ];
 
   return (
     <Box>
