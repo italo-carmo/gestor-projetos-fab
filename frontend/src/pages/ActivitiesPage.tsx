@@ -1474,7 +1474,7 @@ export function ActivitiesPage() {
         anchor="right"
         open={drawerOpen}
         onClose={closeDrawer}
-        PaperProps={{ sx: { width: { xs: '100%', md: 620 } } }}
+        PaperProps={{ sx: { width: { xs: '100%', md: 840, lg: 920 } } }}
       >
         <Box p={3} sx={{ height: '100%', overflowY: 'auto' }}>
           <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>

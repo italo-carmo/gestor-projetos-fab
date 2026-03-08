@@ -2838,6 +2838,16 @@ export class TasksService {
       activity: (typeof filteredActivities)[number],
     ): boolean =>
       Boolean(activity.report?.signedAt && activity.report?.signatureHash);
+    const isVisitActivity = (
+      activity: (typeof filteredActivities)[number],
+    ): boolean => {
+      const typeName = String(activity.activityType?.name ?? '')
+        .trim()
+        .toLowerCase();
+      if (typeName === 'visita') return true;
+      const title = String(activity.title ?? '').toLowerCase();
+      return /\bvisita\b/.test(title);
+    };
 
     const mapExecutiveActivityItem = (
       activity: (typeof filteredActivities)[number],
@@ -3064,18 +3074,27 @@ export class TasksService {
     const reportPendingItems = reportRequiredActivities
       .filter((activity) => !hasSignedReport(activity))
       .map((activity) => mapExecutiveActivityItem(activity));
-    const participantsInActivities = approvedReportActivities.reduce(
-      (acc, activity) => acc + Number(activity.report?.participantsCount ?? 0),
-      0,
+    const completedActivitiesWithSavedReport = filteredActivities.filter(
+      (activity) =>
+        activity.status === ActivityStatus.DONE && Boolean(activity.report?.id),
     );
+    const participantsInCompletedActivities =
+      completedActivitiesWithSavedReport.reduce(
+        (acc, activity) => acc + Number(activity.report?.participantsCount ?? 0),
+        0,
+      );
     const visitedCities = new Set(
       filteredActivities
         .filter(
           (activity) =>
-            activity.status === ActivityStatus.DONE ||
-            activity.status === ActivityStatus.CANCELLED,
+            activity.status === ActivityStatus.DONE && isVisitActivity(activity),
         )
-        .map((activity) => canonicalLocalityIdByActivityId.get(activity.id) ?? activity.localityId ?? '')
+        .map(
+          (activity) =>
+            canonicalLocalityIdByActivityId.get(activity.id) ??
+            activity.localityId ??
+            '',
+        )
         .filter(Boolean),
     ).size;
     const reportCompletedItems = approvedReportActivities
@@ -3231,7 +3250,7 @@ export class TasksService {
         completedActivities,
         completionPercent,
         visitedCities,
-        participantsInActivities,
+        participantsInActivities: participantsInCompletedActivities,
         lateActivities: lateItems.length,
         unassignedActivities: unassignedItems.length,
         reportPending: compliancePending,
