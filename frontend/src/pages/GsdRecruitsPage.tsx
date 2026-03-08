@@ -783,6 +783,7 @@ export function GsdRecruitsPage() {
             )}
           </CardContent>
         </Card>
+        </Stack>
       )}
 
       {activeTab === 'historico' && (
