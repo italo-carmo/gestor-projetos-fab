@@ -86,6 +86,7 @@ const navSections: NavSection[] = [
       { label: "CIPAVD", to: "/dashboard/cipavd", icon: <InsightsRoundedIcon fontSize="small" /> },
       { label: "Impacto Positivo", to: "/social-communication", icon: <NewspaperRoundedIcon fontSize="small" /> },
       { label: "Lições Aprendidas", to: "/lessons-learned", icon: <AutoStoriesRoundedIcon fontSize="small" /> },
+      { label: "Boas Práticas", to: "/best-practices", icon: <AutoStoriesRoundedIcon fontSize="small" /> },
       { label: "Biblioteca", to: "/library", icon: <PhotoLibraryRoundedIcon fontSize="small" /> },
       { label: "CPCA", to: "/dashboard/cpca", icon: <PolicyRoundedIcon fontSize="small" /> },
     ],
@@ -99,7 +100,6 @@ const navSections: NavSection[] = [
       { label: "Modelo de Atividades de Campo", to: "/templates", icon: <TaskIcon fontSize="small" /> },
       { label: "GSD e Recrutas", to: "/gsd-recruits", icon: <PeopleIcon fontSize="small" /> },
       { label: "Elos", to: "/elos", icon: <ContactPhoneIcon fontSize="small" /> },
-      { label: "Boas Práticas", to: "/best-practices", icon: <AutoStoriesRoundedIcon fontSize="small" /> },
     ],
   },
   {

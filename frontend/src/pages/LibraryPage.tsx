@@ -700,7 +700,7 @@ export function LibraryPage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card sx={{ mb: 2 }}>
         <CardContent>
           <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", md: "center" }} gap={1} sx={{ mb: 1 }}>
             <Typography variant="h6" fontWeight={700}>
@@ -788,7 +788,6 @@ export function LibraryPage() {
               </TableBody>
             </Table>
           )}
-          <Divider sx={{ my: 1.2 }} />
         </CardContent>
       </Card>
 

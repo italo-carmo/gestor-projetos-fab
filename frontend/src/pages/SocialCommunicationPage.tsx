@@ -564,10 +564,46 @@ export function SocialCommunicationPage() {
       ) : (
         <Stack spacing={4}>
           {/* Público Interno */}
-          <Box>
-            <Typography variant="h5" fontWeight={700} sx={{ mb: 2 }}>
-              Público Interno
-            </Typography>
+          <Box
+            sx={{
+              p: { xs: 1.6, md: 2.2 },
+              borderRadius: 3,
+              border: "1px solid rgba(17,66,89,0.16)",
+              background:
+                "linear-gradient(145deg, rgba(17,66,89,0.08) 0%, rgba(255,255,255,0.94) 52%, rgba(77,134,160,0.08) 100%)",
+              boxShadow: "0 8px 20px rgba(17,66,89,0.08)",
+            }}
+          >
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              alignItems={{ xs: "flex-start", sm: "center" }}
+              justifyContent="space-between"
+              spacing={1}
+              sx={{ mb: 1.6 }}
+            >
+              <Stack direction="row" spacing={0.8} alignItems="center">
+                <Box
+                  sx={{
+                    width: 10,
+                    height: 10,
+                    borderRadius: "50%",
+                    bgcolor: "#114259",
+                  }}
+                />
+                <Typography variant="h5" fontWeight={700}>
+                  Público Interno
+                </Typography>
+              </Stack>
+              <Chip
+                size="small"
+                label={`${internalItems.length} matéria${internalItems.length === 1 ? "" : "s"}`}
+                sx={{
+                  bgcolor: "rgba(17,66,89,0.1)",
+                  color: "#114259",
+                  fontWeight: 700,
+                }}
+              />
+            </Stack>
             {internalItems.length === 0 ? (
               <EmptyState
                 title="Sem matérias para público interno"
@@ -787,10 +823,46 @@ export function SocialCommunicationPage() {
           </Box>
 
           {/* Público Externo */}
-          <Box>
-            <Typography variant="h5" fontWeight={700} sx={{ mb: 2 }}>
-              Público Externo
-            </Typography>
+          <Box
+            sx={{
+              p: { xs: 1.6, md: 2.2 },
+              borderRadius: 3,
+              border: "1px solid rgba(17,66,89,0.16)",
+              background:
+                "linear-gradient(145deg, rgba(77,134,160,0.08) 0%, rgba(255,255,255,0.96) 52%, rgba(17,66,89,0.07) 100%)",
+              boxShadow: "0 8px 20px rgba(17,66,89,0.08)",
+            }}
+          >
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              alignItems={{ xs: "flex-start", sm: "center" }}
+              justifyContent="space-between"
+              spacing={1}
+              sx={{ mb: 1.6 }}
+            >
+              <Stack direction="row" spacing={0.8} alignItems="center">
+                <Box
+                  sx={{
+                    width: 10,
+                    height: 10,
+                    borderRadius: "50%",
+                    bgcolor: "#4D86A0",
+                  }}
+                />
+                <Typography variant="h5" fontWeight={700}>
+                  Público Externo
+                </Typography>
+              </Stack>
+              <Chip
+                size="small"
+                label={`${externalItems.length} matéria${externalItems.length === 1 ? "" : "s"}`}
+                sx={{
+                  bgcolor: "rgba(77,134,160,0.14)",
+                  color: "#114259",
+                  fontWeight: 700,
+                }}
+              />
+            </Stack>
             {externalItems.length === 0 ? (
               <EmptyState
                 title="Sem matérias para público externo"
