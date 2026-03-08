@@ -1,4 +1,9 @@
-import { IsArray, IsDateString, IsOptional, IsString, IsUrl } from 'class-validator';
+import { IsArray, IsDateString, IsEnum, IsOptional, IsString, IsUrl } from 'class-validator';
+
+export enum SocialCommunicationAudience {
+  INTERNAL = 'INTERNAL',
+  EXTERNAL = 'EXTERNAL',
+}
 
 export class CreateSocialCommunicationArticleDto {
   @IsUrl({ require_protocol: true }, { message: 'url must be a valid URL' })
@@ -24,4 +29,8 @@ export class CreateSocialCommunicationArticleDto {
   @IsArray()
   @IsString({ each: true })
   tags?: string[];
+
+  @IsOptional()
+  @IsEnum(SocialCommunicationAudience)
+  audience?: SocialCommunicationAudience;
 }
