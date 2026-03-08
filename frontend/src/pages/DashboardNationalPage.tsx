@@ -80,6 +80,12 @@ type NationalDashboardTotals = {
     doctrine: number;
     law: number;
   };
+  participants?: {
+    instructors: number;
+    recruits: number;
+    elos: number;
+    graduadosMaster: number;
+  };
   participantsKpis?: {
     instructors: number;
     recruits: number;
@@ -298,9 +304,10 @@ export function DashboardNationalPage() {
       icon: <GavelIcon sx={{ fontSize: 22 }} />,
     },
   ];
-  const totalElos = (totals.participantsKpis?.eloPsychology ?? 0) + 
-                    (totals.participantsKpis?.eloSocialAssistance ?? 0) + 
-                    (totals.participantsKpis?.eloGraduadoMaster ?? 0);
+  const totalElos =
+    totals.participants?.elos ??
+    ((totals.participantsKpis?.eloPsychology ?? 0) +
+      (totals.participantsKpis?.eloSocialAssistance ?? 0));
   const participantsIndicators: IndicatorTile[] = [
     {
       label: 'Instrutores',
