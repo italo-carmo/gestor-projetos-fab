@@ -337,16 +337,6 @@ export function DashboardNationalPage() {
             titleColor: '#F2FBFE',
             subtitleColor: 'rgba(236,250,255,0.9)',
           },
-          {
-            title: 'Número de Participantes',
-            subtitle: 'Total de participantes em atividades concluídas',
-            items: participantsIndicators,
-            bg: '#3A7A9A',
-            border: '1px solid rgba(145, 195, 220, 0.36)',
-            shadow: '0 18px 34px rgba(18,42,56,0.38)',
-            titleColor: '#F0F9FC',
-            subtitleColor: 'rgba(238,251,255,0.9)',
-          },
         ].map((group) => (
           <Card
             key={group.title}
@@ -411,13 +401,82 @@ export function DashboardNationalPage() {
           </Card>
         ))}
       </Box>
-      <Grid container spacing={1.2} sx={{ mt: 0 }} alignItems="stretch">
-        <Grid size={{ xs: 12 }} sx={{ display: 'flex' }}>
-          <Card sx={{ width: '100%', height: '100%' }}>
-            <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-              <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
-                <Typography variant="h6">Resultados Positivos</Typography>
-              </Stack>
+      <Box
+        sx={{
+          display: 'grid',
+          gap: 2,
+          gridTemplateColumns: {
+            xs: '1fr',
+            md: 'repeat(2, minmax(0, 1fr))',
+          },
+          mb: 2,
+        }}
+      >
+        <Card
+          sx={{
+            background: '#3A7A9A',
+            border: '1px solid rgba(145, 195, 220, 0.36)',
+            width: '100%',
+            borderRadius: 3,
+            boxShadow: '0 18px 34px rgba(18,42,56,0.38)',
+          }}
+        >
+          <CardContent sx={{ p: 2.25 }}>
+            <Typography variant="subtitle1" fontWeight={700} sx={{ letterSpacing: 0.2, color: '#F0F9FC' }}>
+              Número de Participantes
+            </Typography>
+            <Typography variant="caption" sx={{ color: 'rgba(238,251,255,0.9)' }}>
+              Total de participantes em atividades concluídas
+            </Typography>
+            <Box
+              sx={{
+                mt: 1.5,
+                display: 'grid',
+                gap: 1.25,
+                gridTemplateColumns: {
+                  xs: '1fr',
+                  sm: 'repeat(2, minmax(0, 1fr))',
+                },
+              }}
+            >
+              {participantsIndicators.map((item) => (
+                <Box
+                  key={item.label}
+                  sx={{
+                    p: 1.5,
+                    borderRadius: 2,
+                    border: '1px solid rgba(255,255,255,0.5)',
+                    backgroundColor: 'rgba(255,255,255,0.9)',
+                    minHeight: 106,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  <Box display="flex" alignItems="center" justifyContent="space-between" gap={1}>
+                    <Typography variant="body2" color="text.secondary" fontWeight={600}>
+                      {item.label}
+                    </Typography>
+                    <Box sx={{ color: '#114259' }}>{item.icon}</Box>
+                  </Box>
+                  <Box>
+                    <Typography variant="h4" sx={{ fontWeight: 800, lineHeight: 1.1, color: '#0E3142' }}>
+                      {item.value}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {item.helper}
+                    </Typography>
+                  </Box>
+                </Box>
+              ))}
+            </Box>
+          </CardContent>
+        </Card>
+        <Card sx={{ width: '100%', height: '100%' }}>
+          <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+              <Typography variant="h6">Resultados Positivos</Typography>
+            </Stack>
               {!canViewLessons ? (
                 <Typography variant="body2" color="text.secondary">
                   Conteúdo disponível para Coordenação, TI e COMGEP.
@@ -492,8 +551,7 @@ export function DashboardNationalPage() {
               )}
             </CardContent>
           </Card>
-        </Grid>
-      </Grid>
+      </Box>
 
       <Dialog
         open={Boolean(readingLesson)}
