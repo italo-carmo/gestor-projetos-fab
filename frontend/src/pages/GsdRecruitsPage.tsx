@@ -108,6 +108,10 @@ export function GsdRecruitsPage() {
   const { data: me, isLoading: meLoading } = useMe();
   const [searchParams, setSearchParams] = useSearchParams();
   const toast = useToast();
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const tableContainerRef = useRef<HTMLDivElement | null>(null);
+  const [showVisitColumn, setShowVisitColumn] = useState(true);
 
   const canViewHistoryTab = can(me, 'dashboard', 'view');
   const canViewGsdTab =
