@@ -530,7 +530,7 @@ export function LibraryPage() {
                   maxWidth: '100%',
                 }}
               >
-                {orderedLocalities.map((locality) => {
+                {orderedLocalities.slice(0, MAIN_VISIBLE_CARDS).map((locality) => {
                 const localityPhotos = photosByLocality.get(locality.id) ?? [];
                 const currentIndex = carouselIndicesByLocality[locality.id] ?? 0;
                 const currentPhoto = localityPhotos[currentIndex] ?? null;
