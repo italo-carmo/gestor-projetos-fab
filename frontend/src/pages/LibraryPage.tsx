@@ -195,7 +195,7 @@ export function LibraryPage() {
   const [intervalSeconds, setIntervalSeconds] = useState(5);
   const [carouselIndicesByLocality, setCarouselIndicesByLocality] = useState<Record<string, number>>({});
   const [mainCarouselIndex, setMainCarouselIndex] = useState(0);
-  const MAIN_VISIBLE_CARDS = 6;
+  const MAIN_VISIBLE_CARDS = 5;
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerMode, setDrawerMode] = useState<"photos" | "documents">("photos");
   const [editingLocalityId, setEditingLocalityId] = useState<string>("");
