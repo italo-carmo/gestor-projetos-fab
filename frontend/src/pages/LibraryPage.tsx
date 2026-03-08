@@ -209,9 +209,8 @@ export function LibraryPage() {
   const [dragPhotoId, setDragPhotoId] = useState<string | null>(null);
   const [selectedPhotoIds, setSelectedPhotoIds] = useState<string[]>([]);
   const [bulkLocalityId, setBulkLocalityId] = useState<string>("");
-  const [downloadingDocumentId, setDownloadingDocumentId] = useState<string | null>(null);
-  const [downloadingReportId, setDownloadingReportId] = useState<string | null>(null);
-  const [downloadingReportId, setDownloadingReportId] = useState<string | null>(null);
+    const [downloadingDocumentId, setDownloadingDocumentId] = useState<string | null>(null);
+    const [downloadingReportId, setDownloadingReportId] = useState<string | null>(null);
 
   useEffect(() => {
     setIntervalSeconds(Math.max(2, Math.min(60, intervalFromApi)));
