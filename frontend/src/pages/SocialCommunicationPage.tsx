@@ -566,12 +566,23 @@ export function SocialCommunicationPage() {
           {/* Público Interno */}
           <Box
             sx={{
-              p: { xs: 1.6, md: 2.2 },
-              borderRadius: 3,
-              border: "1px solid rgba(17,66,89,0.16)",
+              p: { xs: 1.8, md: 2.4 },
+              borderRadius: 3.2,
+              border: "1px solid rgba(17,66,89,0.24)",
               background:
-                "linear-gradient(145deg, rgba(17,66,89,0.08) 0%, rgba(255,255,255,0.94) 52%, rgba(77,134,160,0.08) 100%)",
-              boxShadow: "0 8px 20px rgba(17,66,89,0.08)",
+                "linear-gradient(145deg, rgba(17,66,89,0.12) 0%, rgba(255,255,255,0.96) 50%, rgba(77,134,160,0.1) 100%)",
+              boxShadow: "0 14px 30px rgba(17,66,89,0.13)",
+              position: "relative",
+              overflow: "hidden",
+              "&::before": {
+                content: '""',
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                height: 5,
+                background: "linear-gradient(90deg, #114259 0%, #4D86A0 100%)",
+              },
             }}
           >
             <Stack
@@ -598,9 +609,10 @@ export function SocialCommunicationPage() {
                 size="small"
                 label={`${internalItems.length} matéria${internalItems.length === 1 ? "" : "s"}`}
                 sx={{
-                  bgcolor: "rgba(17,66,89,0.1)",
+                  bgcolor: "rgba(17,66,89,0.16)",
                   color: "#114259",
                   fontWeight: 700,
+                  border: "1px solid rgba(17,66,89,0.2)",
                 }}
               />
             </Stack>
@@ -825,12 +837,23 @@ export function SocialCommunicationPage() {
           {/* Público Externo */}
           <Box
             sx={{
-              p: { xs: 1.6, md: 2.2 },
-              borderRadius: 3,
-              border: "1px solid rgba(17,66,89,0.16)",
+              p: { xs: 1.8, md: 2.4 },
+              borderRadius: 3.2,
+              border: "1px solid rgba(77,134,160,0.24)",
               background:
-                "linear-gradient(145deg, rgba(77,134,160,0.08) 0%, rgba(255,255,255,0.96) 52%, rgba(17,66,89,0.07) 100%)",
-              boxShadow: "0 8px 20px rgba(17,66,89,0.08)",
+                "linear-gradient(145deg, rgba(77,134,160,0.13) 0%, rgba(255,255,255,0.97) 52%, rgba(17,66,89,0.09) 100%)",
+              boxShadow: "0 14px 30px rgba(17,66,89,0.12)",
+              position: "relative",
+              overflow: "hidden",
+              "&::before": {
+                content: '""',
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                height: 5,
+                background: "linear-gradient(90deg, #4D86A0 0%, #114259 100%)",
+              },
             }}
           >
             <Stack
@@ -857,9 +880,10 @@ export function SocialCommunicationPage() {
                 size="small"
                 label={`${externalItems.length} matéria${externalItems.length === 1 ? "" : "s"}`}
                 sx={{
-                  bgcolor: "rgba(77,134,160,0.14)",
+                  bgcolor: "rgba(77,134,160,0.2)",
                   color: "#114259",
                   fontWeight: 700,
+                  border: "1px solid rgba(77,134,160,0.28)",
                 }}
               />
             </Stack>
