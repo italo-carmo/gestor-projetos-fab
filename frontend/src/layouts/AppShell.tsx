@@ -45,6 +45,7 @@ import InsightsRoundedIcon from "@mui/icons-material/InsightsRounded";
 import PolicyRoundedIcon from "@mui/icons-material/PolicyRounded";
 import PhotoLibraryRoundedIcon from "@mui/icons-material/PhotoLibraryRounded";
 import AutoStoriesRoundedIcon from "@mui/icons-material/AutoStoriesRounded";
+import LightbulbRoundedIcon from "@mui/icons-material/LightbulbRounded";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { useDebounce } from "../app/useDebounce";
 import { can } from "../app/rbac";
@@ -86,7 +87,7 @@ const navSections: NavSection[] = [
       { label: "CIPAVD", to: "/dashboard/cipavd", icon: <InsightsRoundedIcon fontSize="small" /> },
       { label: "Impacto Positivo", to: "/social-communication", icon: <NewspaperRoundedIcon fontSize="small" /> },
       { label: "Lições Aprendidas", to: "/lessons-learned", icon: <AutoStoriesRoundedIcon fontSize="small" /> },
-      { label: "Boas Práticas", to: "/best-practices", icon: <AutoStoriesRoundedIcon fontSize="small" /> },
+      { label: "Boas Práticas", to: "/best-practices", icon: <LightbulbRoundedIcon fontSize="small" /> },
       { label: "Biblioteca", to: "/library", icon: <PhotoLibraryRoundedIcon fontSize="small" /> },
       { label: "CPCA", to: "/dashboard/cpca", icon: <PolicyRoundedIcon fontSize="small" /> },
     ],

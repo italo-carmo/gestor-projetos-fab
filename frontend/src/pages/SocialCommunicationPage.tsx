@@ -572,17 +572,6 @@ export function SocialCommunicationPage() {
               background:
                 "linear-gradient(145deg, rgba(17,66,89,0.12) 0%, rgba(255,255,255,0.96) 50%, rgba(77,134,160,0.1) 100%)",
               boxShadow: "0 14px 30px rgba(17,66,89,0.13)",
-              position: "relative",
-              overflow: "hidden",
-              "&::before": {
-                content: '""',
-                position: "absolute",
-                top: 0,
-                left: 0,
-                right: 0,
-                height: 5,
-                background: "linear-gradient(90deg, #114259 0%, #4D86A0 100%)",
-              },
             }}
           >
             <Stack
@@ -843,17 +832,6 @@ export function SocialCommunicationPage() {
               background:
                 "linear-gradient(145deg, rgba(77,134,160,0.13) 0%, rgba(255,255,255,0.97) 52%, rgba(17,66,89,0.09) 100%)",
               boxShadow: "0 14px 30px rgba(17,66,89,0.12)",
-              position: "relative",
-              overflow: "hidden",
-              "&::before": {
-                content: '""',
-                position: "absolute",
-                top: 0,
-                left: 0,
-                right: 0,
-                height: 5,
-                background: "linear-gradient(90deg, #4D86A0 0%, #114259 100%)",
-              },
             }}
           >
             <Stack
