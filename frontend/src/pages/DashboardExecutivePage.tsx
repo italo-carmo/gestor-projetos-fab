@@ -3,15 +3,22 @@ import {
   Button,
   Card,
   CardContent,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Drawer,
+  IconButton,
   MenuItem,
   Stack,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Bar, BarChart, ResponsiveContainer, Tooltip as RechartsTooltip, XAxis, YAxis } from 'recharts';
 import { useExecutiveDashboard, useMe } from '../api/hooks';
 import { can } from '../app/rbac';
 import { EmptyState } from '../components/states/EmptyState';
@@ -26,6 +33,23 @@ const KPI_BLUE_CARD_SX = {
 } as const;
 const BLUE_TEXT_MAIN = { color: '#F4FAFD' };
 const BLUE_TEXT_SUB = { color: 'rgba(231,244,250,0.92)' };
+const EXECUTIVE_CARD_STYLES_STORAGE_KEY = 'executive-card-styles-v1';
+
+type EditableCardStyle = {
+  backgroundColor: string;
+  textColor: string;
+};
+
+function loadExecutiveCardStyles(): Record<string, EditableCardStyle> {
+  try {
+    const raw = window.localStorage.getItem(EXECUTIVE_CARD_STYLES_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, EditableCardStyle>;
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
 
 function formatDateTime(value: string | null | undefined) {
   if (!value) return '-';
@@ -57,6 +81,13 @@ export function DashboardExecutivePage() {
 
   const dashboardQuery = useExecutiveDashboard(filters);
   const [selectedReport, setSelectedReport] = useState<any | null>(null);
+  const isTiProfile = Boolean(me?.roles?.some((role: any) => role?.name === 'TI' || role?.code === 'ROLE_TI'));
+  const [cardStyles, setCardStyles] = useState<Record<string, EditableCardStyle>>(() => loadExecutiveCardStyles());
+  const [editingCardId, setEditingCardId] = useState<string | null>(null);
+  const [editingCardDraft, setEditingCardDraft] = useState<EditableCardStyle>({
+    backgroundColor: '#FFFFFF',
+    textColor: '#111827',
+  });
 
   const updateParam = (key: string, value: string) => {
     const next = new URLSearchParams(params);
@@ -166,6 +197,22 @@ export function DashboardExecutivePage() {
     URL.revokeObjectURL(url);
   };
 
+  const getCardStyle = (cardId: string, defaults: EditableCardStyle) => cardStyles[cardId] ?? defaults;
+  const openStyleEditor = (cardId: string, defaults: EditableCardStyle) => {
+    setEditingCardId(cardId);
+    setEditingCardDraft(getCardStyle(cardId, defaults));
+  };
+  const saveStyleEditor = () => {
+    if (!editingCardId) return;
+    const next = {
+      ...cardStyles,
+      [editingCardId]: editingCardDraft,
+    };
+    setCardStyles(next);
+    window.localStorage.setItem(EXECUTIVE_CARD_STYLES_STORAGE_KEY, JSON.stringify(next));
+    setEditingCardId(null);
+  };
+
   return (
     <Box>
       <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
@@ -249,11 +296,35 @@ export function DashboardExecutivePage() {
         gridTemplateColumns={{ xs: '1fr', lg: 'repeat(2, minmax(0, 1fr))' }}
         gap={2}
       >
-        <Card sx={{ ...KPI_BLUE_CARD_SX, minHeight: 320 }}>
-          <CardContent sx={{ backgroundColor: 'rgb(83, 127, 151) !important', height: '100%' }}>
-            <Typography variant="subtitle1" sx={{ ...BLUE_TEXT_MAIN, fontWeight: 700, mb: 1.4 }}>
-              Indicadores executivos
-            </Typography>
+        {(() => {
+          const style = getCardStyle('cipavd-kpis', {
+            backgroundColor: 'rgb(83, 127, 151)',
+            textColor: '#F4FAFD',
+          });
+          return (
+        <Card sx={{ ...KPI_BLUE_CARD_SX, minHeight: 320, backgroundColor: `${style.backgroundColor} !important` }}>
+          <CardContent sx={{ backgroundColor: `${style.backgroundColor} !important`, height: '100%' }}>
+            <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1.4 }}>
+              <Typography variant="subtitle1" sx={{ color: style.textColor, fontWeight: 700 }}>
+                Indicadores executivos
+              </Typography>
+              {isTiProfile ? (
+                <Tooltip title="Editar cores do card">
+                  <IconButton
+                    size="small"
+                    sx={{ color: style.textColor, opacity: 0.72 }}
+                    onClick={() =>
+                      openStyleEditor('cipavd-kpis', {
+                        backgroundColor: 'rgb(83, 127, 151)',
+                        textColor: '#F4FAFD',
+                      })
+                    }
+                  >
+                    <EditOutlinedIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              ) : null}
+            </Stack>
             <Box
               sx={{
                 display: 'grid',
@@ -292,13 +363,13 @@ export function DashboardExecutivePage() {
                     bgcolor: 'rgba(255,255,255,0.12)',
                   }}
                 >
-                  <Typography variant="overline" sx={BLUE_TEXT_SUB}>
+                  <Typography variant="overline" sx={{ color: style.textColor }}>
                     {item.label}
                   </Typography>
-                  <Typography variant="h4" sx={{ ...BLUE_TEXT_MAIN, lineHeight: 1.05 }}>
+                  <Typography variant="h4" sx={{ color: style.textColor, lineHeight: 1.05 }}>
                     {item.value}
                   </Typography>
-                  <Typography variant="caption" sx={BLUE_TEXT_SUB}>
+                  <Typography variant="caption" sx={{ color: style.textColor }}>
                     {item.helper}
                   </Typography>
                 </Box>
@@ -306,12 +377,38 @@ export function DashboardExecutivePage() {
             </Box>
           </CardContent>
         </Card>
+          );
+        })()}
 
-        <Card sx={{ minHeight: 320 }}>
+        {(() => {
+          const style = getCardStyle('cipavd-specialty', {
+            backgroundColor: '#FFFFFF',
+            textColor: '#111827',
+          });
+          return (
+        <Card sx={{ minHeight: 320, backgroundColor: style.backgroundColor }}>
           <CardContent>
-            <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 700 }}>
-              Indicadores por especialidade
-            </Typography>
+            <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 0.8 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, color: style.textColor }}>
+                Indicadores por especialidade
+              </Typography>
+              {isTiProfile ? (
+                <Tooltip title="Editar cores do card">
+                  <IconButton
+                    size="small"
+                    sx={{ color: style.textColor, opacity: 0.72 }}
+                    onClick={() =>
+                      openStyleEditor('cipavd-specialty', {
+                        backgroundColor: '#FFFFFF',
+                        textColor: '#111827',
+                      })
+                    }
+                  >
+                    <EditOutlinedIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              ) : null}
+            </Stack>
             <ResponsiveContainer width="100%" height={250}>
               <BarChart
                 data={topSpecialties}
@@ -320,34 +417,86 @@ export function DashboardExecutivePage() {
               >
                 <XAxis type="number" allowDecimals={false} />
                 <YAxis type="category" dataKey="specialtyName" width={150} />
-                <Tooltip formatter={(value: any) => [value, 'Atividades']} />
+                <RechartsTooltip formatter={(value: any) => [value, 'Atividades']} />
                 <Bar dataKey="count" fill="#4D86A0" radius={[0, 6, 6, 0]} barSize={14} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
+          );
+        })()}
 
-        <Card sx={{ minHeight: 320 }}>
+        {(() => {
+          const style = getCardStyle('cipavd-locality-performance', {
+            backgroundColor: '#FFFFFF',
+            textColor: '#111827',
+          });
+          return (
+        <Card sx={{ minHeight: 320, backgroundColor: style.backgroundColor }}>
           <CardContent>
-            <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 700 }}>
-              Destaque de performance por localidade
-            </Typography>
+            <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 0.8 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, color: style.textColor }}>
+                Destaque de performance por localidade
+              </Typography>
+              {isTiProfile ? (
+                <Tooltip title="Editar cores do card">
+                  <IconButton
+                    size="small"
+                    sx={{ color: style.textColor, opacity: 0.72 }}
+                    onClick={() =>
+                      openStyleEditor('cipavd-locality-performance', {
+                        backgroundColor: '#FFFFFF',
+                        textColor: '#111827',
+                      })
+                    }
+                  >
+                    <EditOutlinedIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              ) : null}
+            </Stack>
             <ResponsiveContainer width="100%" height={250}>
               <BarChart data={topLocalitiesByProgress}>
                 <XAxis dataKey="localityCode" />
                 <YAxis />
-                <Tooltip formatter={(value: any) => [`${value}%`, 'Progresso']} />
+                <RechartsTooltip formatter={(value: any) => [`${value}%`, 'Progresso']} />
                 <Bar dataKey="progress" fill="#114259" radius={[6, 6, 0, 0]} barSize={18} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
+          );
+        })()}
 
-        <Card sx={{ minHeight: 320 }}>
+        {(() => {
+          const style = getCardStyle('cipavd-completed-reports', {
+            backgroundColor: '#FFFFFF',
+            textColor: '#111827',
+          });
+          return (
+        <Card sx={{ minHeight: 320, backgroundColor: style.backgroundColor }}>
           <CardContent sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-            <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 700 }}>
-              Relatórios concluídos
-            </Typography>
+            <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 0.8 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, color: style.textColor }}>
+                Relatórios concluídos
+              </Typography>
+              {isTiProfile ? (
+                <Tooltip title="Editar cores do card">
+                  <IconButton
+                    size="small"
+                    sx={{ color: style.textColor, opacity: 0.72 }}
+                    onClick={() =>
+                      openStyleEditor('cipavd-completed-reports', {
+                        backgroundColor: '#FFFFFF',
+                        textColor: '#111827',
+                      })
+                    }
+                  >
+                    <EditOutlinedIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              ) : null}
+            </Stack>
             {completedReportItems.length === 0 ? (
               <Typography variant="body2" color="text.secondary">
                 Nenhum relatório concluído no período selecionado.
@@ -377,6 +526,8 @@ export function DashboardExecutivePage() {
             )}
           </CardContent>
         </Card>
+          );
+        })()}
       </Box>
 
       <Drawer
@@ -435,6 +586,37 @@ export function DashboardExecutivePage() {
           </Stack>
         </Box>
       </Drawer>
+      <Dialog open={Boolean(editingCardId)} onClose={() => setEditingCardId(null)} fullWidth maxWidth="xs">
+        <DialogTitle>Editar cores do card</DialogTitle>
+        <DialogContent sx={{ pt: 1 }}>
+          <Stack spacing={1.5} sx={{ mt: 0.5 }}>
+            <TextField
+              label="Cor do fundo"
+              type="color"
+              value={editingCardDraft.backgroundColor}
+              onChange={(e) =>
+                setEditingCardDraft((prev) => ({ ...prev, backgroundColor: e.target.value }))
+              }
+              fullWidth
+            />
+            <TextField
+              label="Cor da fonte"
+              type="color"
+              value={editingCardDraft.textColor}
+              onChange={(e) =>
+                setEditingCardDraft((prev) => ({ ...prev, textColor: e.target.value }))
+              }
+              fullWidth
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditingCardId(null)}>Cancelar</Button>
+          <Button variant="contained" onClick={saveStyleEditor}>
+            Salvar
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

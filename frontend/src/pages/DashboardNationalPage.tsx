@@ -16,7 +16,11 @@ import {
   TableHead,
   TableRow,
   Typography,
+  IconButton,
+  Tooltip,
+  TextField,
 } from '@mui/material';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import DescriptionIcon from '@mui/icons-material/Description';
 import TaskAltIcon from '@mui/icons-material/TaskAlt';
 import TerrainIcon from '@mui/icons-material/Terrain';
@@ -106,6 +110,24 @@ type LessonPost = {
   } | null;
 };
 
+type EditableCardStyle = {
+  backgroundColor: string;
+  textColor: string;
+};
+
+const SMIF_CARD_STYLES_STORAGE_KEY = 'smif-card-styles-v1';
+
+function loadSmifCardStyles(): Record<string, EditableCardStyle> {
+  try {
+    const raw = window.localStorage.getItem(SMIF_CARD_STYLES_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, EditableCardStyle>;
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
 export function DashboardNationalPage() {
   const { data: me } = useMe();
   const [params] = useSearchParams();
@@ -121,6 +143,13 @@ export function DashboardNationalPage() {
   const [showVisitColumn, setShowVisitColumn] = useState(true);
   const [lessonOffset, setLessonOffset] = useState(0);
   const [readingLesson, setReadingLesson] = useState<LessonPost | null>(null);
+  const isTiProfile = hasAnyRole(me, [ROLE_TI]);
+  const [cardStyles, setCardStyles] = useState<Record<string, EditableCardStyle>>(() => loadSmifCardStyles());
+  const [editingCardId, setEditingCardId] = useState<string | null>(null);
+  const [editingCardDraft, setEditingCardDraft] = useState<EditableCardStyle>({
+    backgroundColor: '#FFFFFF',
+    textColor: '#111827',
+  });
 
   useEffect(() => {
     const element = tableContainerRef.current;
@@ -298,6 +327,24 @@ export function DashboardNationalPage() {
     },
   ];
 
+  const getCardStyle = (cardId: string, defaults: EditableCardStyle) => cardStyles[cardId] ?? defaults;
+
+  const openStyleEditor = (cardId: string, defaults: EditableCardStyle) => {
+    setEditingCardId(cardId);
+    setEditingCardDraft(getCardStyle(cardId, defaults));
+  };
+
+  const saveStyleEditor = () => {
+    if (!editingCardId) return;
+    const next = {
+      ...cardStyles,
+      [editingCardId]: editingCardDraft,
+    };
+    setCardStyles(next);
+    window.localStorage.setItem(SMIF_CARD_STYLES_STORAGE_KEY, JSON.stringify(next));
+    setEditingCardId(null);
+  };
+
   return (
     <Box>
       <Typography variant="h4" gutterBottom fontWeight={700}>
@@ -319,6 +366,7 @@ export function DashboardNationalPage() {
       >
         {[
           {
+            id: 'smif-completed',
             title: 'Concluídos no SMIF',
             subtitle: `Execução média atual: ${averageProgress}%`,
             items: completedIndicators,
@@ -329,6 +377,7 @@ export function DashboardNationalPage() {
             subtitleColor: 'rgba(231,244,250,0.92)',
           },
           {
+            id: 'smif-field',
             title: 'Atividades de Campo por Área',
             subtitle: 'Somente atividades de campo concluídas',
             items: fieldBySpecialtyIndicators,
@@ -338,24 +387,50 @@ export function DashboardNationalPage() {
             titleColor: '#F2FBFE',
             subtitleColor: 'rgba(236,250,255,0.9)',
           },
-        ].map((group) => (
+        ].map((group) => {
+          const groupStyle = getCardStyle(group.id, {
+            backgroundColor: group.bg,
+            textColor: group.titleColor,
+          });
+          return (
           <Card
             key={group.title}
             sx={{
-              background: group.bg,
+              background: groupStyle.backgroundColor,
               border: group.border,
               width: '100%',
               borderRadius: 3,
               boxShadow: group.shadow,
+              position: 'relative',
             }}
           >
             <CardContent sx={{ p: 2.25 }}>
-              <Typography variant="subtitle1" fontWeight={700} sx={{ letterSpacing: 0.2, color: group.titleColor }}>
-                {group.title}
-              </Typography>
-              <Typography variant="caption" sx={{ color: group.subtitleColor }}>
-                {group.subtitle}
-              </Typography>
+              <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
+                <Box>
+                  <Typography variant="subtitle1" fontWeight={700} sx={{ letterSpacing: 0.2, color: groupStyle.textColor }}>
+                    {group.title}
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: groupStyle.textColor }}>
+                    {group.subtitle}
+                  </Typography>
+                </Box>
+                {isTiProfile ? (
+                  <Tooltip title="Editar cores do card">
+                    <IconButton
+                      size="small"
+                      sx={{ color: groupStyle.textColor, opacity: 0.72 }}
+                      onClick={() =>
+                        openStyleEditor(group.id, {
+                          backgroundColor: group.bg,
+                          textColor: group.titleColor,
+                        })
+                      }
+                    >
+                      <EditOutlinedIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                ) : null}
+              </Stack>
               <Box
                 sx={{
                   mt: 1.5,
@@ -400,7 +475,7 @@ export function DashboardNationalPage() {
               </Box>
             </CardContent>
           </Card>
-        ))}
+        )})}
       </Box>
       <Box
         sx={{
@@ -413,9 +488,15 @@ export function DashboardNationalPage() {
           mb: 2,
         }}
       >
+        {(() => {
+          const style = getCardStyle('smif-participants', {
+            backgroundColor: '#3A7A9A',
+            textColor: '#F0F9FC',
+          });
+          return (
         <Card
           sx={{
-            background: '#3A7A9A',
+            background: style.backgroundColor,
             border: '1px solid rgba(145, 195, 220, 0.36)',
             width: '100%',
             borderRadius: 3,
@@ -423,12 +504,32 @@ export function DashboardNationalPage() {
           }}
         >
           <CardContent sx={{ p: 2.25 }}>
-            <Typography variant="subtitle1" fontWeight={700} sx={{ letterSpacing: 0.2, color: '#F0F9FC' }}>
-              Número de Participantes
-            </Typography>
-            <Typography variant="caption" sx={{ color: 'rgba(238,251,255,0.9)' }}>
-              Total de participantes em atividades concluídas
-            </Typography>
+            <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
+              <Box>
+                <Typography variant="subtitle1" fontWeight={700} sx={{ letterSpacing: 0.2, color: style.textColor }}>
+                  Número de Participantes
+                </Typography>
+                <Typography variant="caption" sx={{ color: style.textColor }}>
+                  Total de participantes em atividades concluídas
+                </Typography>
+              </Box>
+              {isTiProfile ? (
+                <Tooltip title="Editar cores do card">
+                  <IconButton
+                    size="small"
+                    sx={{ color: style.textColor, opacity: 0.72 }}
+                    onClick={() =>
+                      openStyleEditor('smif-participants', {
+                        backgroundColor: '#3A7A9A',
+                        textColor: '#F0F9FC',
+                      })
+                    }
+                  >
+                    <EditOutlinedIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              ) : null}
+            </Stack>
             <Box
               sx={{
                 mt: 1.5,
@@ -473,10 +574,36 @@ export function DashboardNationalPage() {
             </Box>
           </CardContent>
         </Card>
-        <Card sx={{ width: '100%', height: '100%' }}>
+          );
+        })()}
+        {(() => {
+          const style = getCardStyle('smif-positive-results', {
+            backgroundColor: '#FFFFFF',
+            textColor: '#111827',
+          });
+          return (
+        <Card sx={{ width: '100%', height: '100%', backgroundColor: style.backgroundColor }}>
           <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
-              <Typography variant="h6">Resultados Positivos</Typography>
+              <Typography variant="h6" sx={{ color: style.textColor }}>
+                Resultados Positivos
+              </Typography>
+              {isTiProfile ? (
+                <Tooltip title="Editar cores do card">
+                  <IconButton
+                    size="small"
+                    sx={{ color: style.textColor, opacity: 0.72 }}
+                    onClick={() =>
+                      openStyleEditor('smif-positive-results', {
+                        backgroundColor: '#FFFFFF',
+                        textColor: '#111827',
+                      })
+                    }
+                  >
+                    <EditOutlinedIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              ) : null}
             </Stack>
               {!canViewLessons ? (
                 <Typography variant="body2" color="text.secondary">
@@ -566,7 +693,9 @@ export function DashboardNationalPage() {
                 </Box>
               )}
             </CardContent>
-          </Card>
+        </Card>
+          );
+        })()}
       </Box>
 
       <Dialog
@@ -601,6 +730,38 @@ export function DashboardNationalPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setReadingLesson(null)}>Fechar</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={Boolean(editingCardId)} onClose={() => setEditingCardId(null)} fullWidth maxWidth="xs">
+        <DialogTitle>Editar cores do card</DialogTitle>
+        <DialogContent sx={{ pt: 1 }}>
+          <Stack spacing={1.5} sx={{ mt: 0.5 }}>
+            <TextField
+              label="Cor do fundo"
+              type="color"
+              value={editingCardDraft.backgroundColor}
+              onChange={(e) =>
+                setEditingCardDraft((prev) => ({ ...prev, backgroundColor: e.target.value }))
+              }
+              fullWidth
+            />
+            <TextField
+              label="Cor da fonte"
+              type="color"
+              value={editingCardDraft.textColor}
+              onChange={(e) =>
+                setEditingCardDraft((prev) => ({ ...prev, textColor: e.target.value }))
+              }
+              fullWidth
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditingCardId(null)}>Cancelar</Button>
+          <Button variant="contained" onClick={saveStyleEditor}>
+            Salvar
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>

@@ -3,7 +3,12 @@ import {
   Button,
   Card,
   CardContent,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Grid,
+  IconButton,
   MenuItem,
   Stack,
   Table,
@@ -12,9 +17,11 @@ import {
   TableHead,
   TableRow,
   TextField,
+  Tooltip,
   Typography,
 } from "@mui/material";
-import { useMemo } from "react";
+import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   Bar,
@@ -145,6 +152,24 @@ const CPCA_KPI_CARD_SX = {
   boxShadow: "0 18px 34px rgba(15,44,59,0.36)",
 } as const;
 
+type EditableCardStyle = {
+  backgroundColor: string;
+  textColor: string;
+};
+
+const CPCA_CARD_STYLES_STORAGE_KEY = "cpca-card-styles-v1";
+
+function loadCpcaCardStyles(): Record<string, EditableCardStyle> {
+  try {
+    const raw = window.localStorage.getItem(CPCA_CARD_STYLES_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, EditableCardStyle>;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
 function formatPercent(value: number) {
   const numeric = Number(value ?? 0);
   if (!Number.isFinite(numeric)) return "0%";
@@ -174,6 +199,15 @@ function translateMetricName(name: string | number) {
 export function CpcaStatsPage() {
   const [params, setParams] = useSearchParams();
   const { data: me } = useMe();
+  const isTiProfile = hasAnyRole(me, [ROLE_TI]);
+  const [cardStyles, setCardStyles] = useState<Record<string, EditableCardStyle>>(
+    () => loadCpcaCardStyles(),
+  );
+  const [editingCardId, setEditingCardId] = useState<string | null>(null);
+  const [editingCardDraft, setEditingCardDraft] = useState<EditableCardStyle>({
+    backgroundColor: "#FFFFFF",
+    textColor: "#111827",
+  });
   const isNationalScope = hasAnyRole(me, [
     ROLE_COORDENACAO_CIPAVD,
     ROLE_COMANDANTE_COMGEP,
@@ -337,6 +371,23 @@ export function CpcaStatsPage() {
     },
   ];
 
+  const getCardStyle = (cardId: string, defaults: EditableCardStyle) =>
+    cardStyles[cardId] ?? defaults;
+  const openStyleEditor = (cardId: string, defaults: EditableCardStyle) => {
+    setEditingCardId(cardId);
+    setEditingCardDraft(getCardStyle(cardId, defaults));
+  };
+  const saveStyleEditor = () => {
+    if (!editingCardId) return;
+    const next = {
+      ...cardStyles,
+      [editingCardId]: editingCardDraft,
+    };
+    setCardStyles(next);
+    window.localStorage.setItem(CPCA_CARD_STYLES_STORAGE_KEY, JSON.stringify(next));
+    setEditingCardId(null);
+  };
+
   return (
     <Box
       sx={{
@@ -419,42 +470,84 @@ export function CpcaStatsPage() {
       </Card>
 
       <Grid container spacing={2}>
-        {kpiCards.map((card) => (
+        {kpiCards.map((card) => {
+          const style = getCardStyle("cpca-kpi-cards", {
+            backgroundColor: "rgb(83, 127, 151)",
+            textColor: "#F4FAFD",
+          });
+          return (
           <Grid key={card.label} size={{ xs: 12, sm: 6, md: 4 }}>
             <Card
               sx={{
                 ...CPCA_KPI_CARD_SX,
                 height: "100%",
-                backgroundColor: "rgb(83, 127, 151) !important",
+                backgroundColor: `${style.backgroundColor} !important`,
               }}
             >
               <CardContent
                 sx={{
-                  backgroundColor: "rgb(83, 127, 151) !important",
+                  backgroundColor: `${style.backgroundColor} !important`,
                 }}
               >
-                <Typography variant="overline" fontWeight={600}>
+                {isTiProfile ? (
+                  <Box display="flex" justifyContent="flex-end">
+                    <Tooltip title="Editar cores do card">
+                      <IconButton
+                        size="small"
+                        sx={{ color: style.textColor, opacity: 0.72, p: 0.3 }}
+                        onClick={() =>
+                          openStyleEditor("cpca-kpi-cards", {
+                            backgroundColor: "rgb(83, 127, 151)",
+                            textColor: "#F4FAFD",
+                          })
+                        }
+                      >
+                        <EditOutlinedIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                ) : null}
+                <Typography variant="overline" fontWeight={600} sx={{ color: style.textColor }}>
                   {card.label}
                 </Typography>
-                <Typography variant="h5" fontWeight={800} lineHeight={1.15}>
+                <Typography variant="h5" fontWeight={800} lineHeight={1.15} sx={{ color: style.textColor }}>
                   {card.value}
                 </Typography>
-                <Typography variant="caption">
+                <Typography variant="caption" sx={{ color: style.textColor }}>
                   {card.hint}
                 </Typography>
               </CardContent>
             </Card>
           </Grid>
-        ))}
+          );
+        })}
       </Grid>
 
       <Grid container spacing={2} sx={{ mt: 0.5 }}>
         <Grid size={{ xs: 12, md: 6 }}>
-          <Card sx={{ ...CPCA_PANEL_CARD_SX, height: "100%" }}>
+          {(() => {
+            const style = getCardStyle("cpca-status", { backgroundColor: "#FFFFFF", textColor: "#111827" });
+            return (
+          <Card sx={{ ...CPCA_PANEL_CARD_SX, height: "100%", backgroundColor: style.backgroundColor }}>
             <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Distribuição por status
-              </Typography>
+              <Stack direction="row" alignItems="center" justifyContent="space-between" mb={1}>
+                <Typography variant="h6" sx={{ color: style.textColor }}>
+                  Distribuição por status
+                </Typography>
+                {isTiProfile ? (
+                  <Tooltip title="Editar cores do card">
+                    <IconButton
+                      size="small"
+                      sx={{ color: style.textColor, opacity: 0.72, p: 0.3 }}
+                      onClick={() =>
+                        openStyleEditor("cpca-status", { backgroundColor: "#FFFFFF", textColor: "#111827" })
+                      }
+                    >
+                      <EditOutlinedIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                ) : null}
+              </Stack>
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={statusDistribution}>
                   <CartesianGrid strokeDasharray="3 3" />
@@ -484,13 +577,33 @@ export function CpcaStatsPage() {
               </ResponsiveContainer>
             </CardContent>
           </Card>
+            );
+          })()}
         </Grid>
         <Grid size={{ xs: 12, md: 6 }}>
-          <Card sx={{ ...CPCA_PANEL_CARD_SX, height: "100%" }}>
+          {(() => {
+            const style = getCardStyle("cpca-monthly-trend", { backgroundColor: "#FFFFFF", textColor: "#111827" });
+            return (
+          <Card sx={{ ...CPCA_PANEL_CARD_SX, height: "100%", backgroundColor: style.backgroundColor }}>
             <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Evolução mensal (moral x sexual x aberto)
-              </Typography>
+              <Stack direction="row" alignItems="center" justifyContent="space-between" mb={1}>
+                <Typography variant="h6" sx={{ color: style.textColor }}>
+                  Evolução mensal (moral x sexual x aberto)
+                </Typography>
+                {isTiProfile ? (
+                  <Tooltip title="Editar cores do card">
+                    <IconButton
+                      size="small"
+                      sx={{ color: style.textColor, opacity: 0.72, p: 0.3 }}
+                      onClick={() =>
+                        openStyleEditor("cpca-monthly-trend", { backgroundColor: "#FFFFFF", textColor: "#111827" })
+                      }
+                    >
+                      <EditOutlinedIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                ) : null}
+              </Stack>
               <ResponsiveContainer width="100%" height={280}>
                 <LineChart data={monthlyTrend}>
                   <CartesianGrid strokeDasharray="3 3" />
@@ -530,13 +643,27 @@ export function CpcaStatsPage() {
               </ResponsiveContainer>
             </CardContent>
           </Card>
+            );
+          })()}
         </Grid>
         <Grid size={{ xs: 12, md: 6 }}>
-          <Card sx={{ ...CPCA_PANEL_CARD_SX, height: "100%" }}>
+          {(() => {
+            const style = getCardStyle("cpca-procedure", { backgroundColor: "#FFFFFF", textColor: "#111827" });
+            return (
+          <Card sx={{ ...CPCA_PANEL_CARD_SX, height: "100%", backgroundColor: style.backgroundColor }}>
             <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Procedimento instaurado
-              </Typography>
+              <Stack direction="row" alignItems="center" justifyContent="space-between" mb={1}>
+                <Typography variant="h6" sx={{ color: style.textColor }}>
+                  Procedimento instaurado
+                </Typography>
+                {isTiProfile ? (
+                  <Tooltip title="Editar cores do card">
+                    <IconButton size="small" sx={{ color: style.textColor, opacity: 0.72, p: 0.3 }} onClick={() => openStyleEditor("cpca-procedure", { backgroundColor: "#FFFFFF", textColor: "#111827" })}>
+                      <EditOutlinedIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                ) : null}
+              </Stack>
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={procedureDistribution}>
                   <CartesianGrid strokeDasharray="3 3" />
@@ -566,13 +693,27 @@ export function CpcaStatsPage() {
               </ResponsiveContainer>
             </CardContent>
           </Card>
+            );
+          })()}
         </Grid>
         <Grid size={{ xs: 12, md: 6 }}>
-          <Card sx={{ ...CPCA_PANEL_CARD_SX, height: "100%" }}>
+          {(() => {
+            const style = getCardStyle("cpca-open-aging", { backgroundColor: "#FFFFFF", textColor: "#111827" });
+            return (
+          <Card sx={{ ...CPCA_PANEL_CARD_SX, height: "100%", backgroundColor: style.backgroundColor }}>
             <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Envelhecimento dos casos abertos
-              </Typography>
+              <Stack direction="row" alignItems="center" justifyContent="space-between" mb={1}>
+                <Typography variant="h6" sx={{ color: style.textColor }}>
+                  Envelhecimento dos casos abertos
+                </Typography>
+                {isTiProfile ? (
+                  <Tooltip title="Editar cores do card">
+                    <IconButton size="small" sx={{ color: style.textColor, opacity: 0.72, p: 0.3 }} onClick={() => openStyleEditor("cpca-open-aging", { backgroundColor: "#FFFFFF", textColor: "#111827" })}>
+                      <EditOutlinedIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                ) : null}
+              </Stack>
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={openByAgeBuckets}>
                   <CartesianGrid strokeDasharray="3 3" />
@@ -596,16 +737,30 @@ export function CpcaStatsPage() {
               </ResponsiveContainer>
             </CardContent>
           </Card>
+            );
+          })()}
         </Grid>
       </Grid>
 
       <Grid container spacing={2} sx={{ mt: 0.5 }}>
         <Grid size={{ xs: 12, md: 6 }}>
-          <Card sx={{ ...CPCA_PANEL_CARD_SX, height: "100%" }}>
+          {(() => {
+            const style = getCardStyle("cpca-top-risk", { backgroundColor: "#FFFFFF", textColor: "#111827" });
+            return (
+          <Card sx={{ ...CPCA_PANEL_CARD_SX, height: "100%", backgroundColor: style.backgroundColor }}>
             <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Top OMs por risco operacional CPCA
-              </Typography>
+              <Stack direction="row" alignItems="center" justifyContent="space-between" mb={1}>
+                <Typography variant="h6" sx={{ color: style.textColor }}>
+                  Top OMs por risco operacional CPCA
+                </Typography>
+                {isTiProfile ? (
+                  <Tooltip title="Editar cores do card">
+                    <IconButton size="small" sx={{ color: style.textColor, opacity: 0.72, p: 0.3 }} onClick={() => openStyleEditor("cpca-top-risk", { backgroundColor: "#FFFFFF", textColor: "#111827" })}>
+                      <EditOutlinedIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                ) : null}
+              </Stack>
               {topRiskLocalities.length === 0 ? (
                 <EmptyState
                   title="Sem dados"
@@ -658,13 +813,27 @@ export function CpcaStatsPage() {
               )}
             </CardContent>
           </Card>
+            );
+          })()}
         </Grid>
         <Grid size={{ xs: 12, md: 6 }}>
-          <Card sx={{ ...CPCA_PANEL_CARD_SX, height: "100%" }}>
+          {(() => {
+            const style = getCardStyle("cpca-violence-type", { backgroundColor: "#FFFFFF", textColor: "#111827" });
+            return (
+          <Card sx={{ ...CPCA_PANEL_CARD_SX, height: "100%", backgroundColor: style.backgroundColor }}>
             <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Distribuição por tipo de assédio ou violência
-              </Typography>
+              <Stack direction="row" alignItems="center" justifyContent="space-between" mb={1}>
+                <Typography variant="h6" sx={{ color: style.textColor }}>
+                  Distribuição por tipo de assédio ou violência
+                </Typography>
+                {isTiProfile ? (
+                  <Tooltip title="Editar cores do card">
+                    <IconButton size="small" sx={{ color: style.textColor, opacity: 0.72, p: 0.3 }} onClick={() => openStyleEditor("cpca-violence-type", { backgroundColor: "#FFFFFF", textColor: "#111827" })}>
+                      <EditOutlinedIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                ) : null}
+              </Stack>
               {detailedTypeDistribution.length === 0 ? (
                 <Typography variant="body2" color="text.secondary">
                   Sem dados de tipo para o recorte.
@@ -738,16 +907,30 @@ export function CpcaStatsPage() {
               )}
             </CardContent>
           </Card>
+            );
+          })()}
         </Grid>
       </Grid>
 
       <Grid container spacing={2} sx={{ mt: 0.5 }}>
         <Grid size={{ xs: 12, md: 6 }}>
-          <Card sx={{ ...CPCA_PANEL_CARD_SX, height: "100%" }}>
+          {(() => {
+            const style = getCardStyle("cpca-aggressor-age", { backgroundColor: "#FFFFFF", textColor: "#111827" });
+            return (
+          <Card sx={{ ...CPCA_PANEL_CARD_SX, height: "100%", backgroundColor: style.backgroundColor }}>
             <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Faixa etária do acusado
-              </Typography>
+              <Stack direction="row" alignItems="center" justifyContent="space-between" mb={1}>
+                <Typography variant="h6" sx={{ color: style.textColor }}>
+                  Faixa etária do acusado
+                </Typography>
+                {isTiProfile ? (
+                  <Tooltip title="Editar cores do card">
+                    <IconButton size="small" sx={{ color: style.textColor, opacity: 0.72, p: 0.3 }} onClick={() => openStyleEditor("cpca-aggressor-age", { backgroundColor: "#FFFFFF", textColor: "#111827" })}>
+                      <EditOutlinedIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                ) : null}
+              </Stack>
               {aggressorAgeRangeDistribution.length === 0 ? (
                 <Typography variant="body2" color="text.secondary">
                   Sem dados de faixa etária do acusado.
@@ -783,13 +966,27 @@ export function CpcaStatsPage() {
               )}
             </CardContent>
           </Card>
+            );
+          })()}
         </Grid>
         <Grid size={{ xs: 12, md: 6 }}>
-          <Card sx={{ ...CPCA_PANEL_CARD_SX, height: "100%" }}>
+          {(() => {
+            const style = getCardStyle("cpca-victim-age", { backgroundColor: "#FFFFFF", textColor: "#111827" });
+            return (
+          <Card sx={{ ...CPCA_PANEL_CARD_SX, height: "100%", backgroundColor: style.backgroundColor }}>
             <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Faixa etária da vítima/noticiante
-              </Typography>
+              <Stack direction="row" alignItems="center" justifyContent="space-between" mb={1}>
+                <Typography variant="h6" sx={{ color: style.textColor }}>
+                  Faixa etária da vítima/noticiante
+                </Typography>
+                {isTiProfile ? (
+                  <Tooltip title="Editar cores do card">
+                    <IconButton size="small" sx={{ color: style.textColor, opacity: 0.72, p: 0.3 }} onClick={() => openStyleEditor("cpca-victim-age", { backgroundColor: "#FFFFFF", textColor: "#111827" })}>
+                      <EditOutlinedIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                ) : null}
+              </Stack>
               {victimAgeRangeDistribution.length === 0 ? (
                 <Typography variant="body2" color="text.secondary">
                   Sem dados de faixa etária da vítima/noticiante.
@@ -825,14 +1022,28 @@ export function CpcaStatsPage() {
               )}
             </CardContent>
           </Card>
+            );
+          })()}
         </Grid>
       </Grid>
 
-      <Card sx={{ ...CPCA_PANEL_CARD_SX, mt: 2 }}>
+      {(() => {
+        const style = getCardStyle("cpca-critical-open", { backgroundColor: "#FFFFFF", textColor: "#111827" });
+        return (
+      <Card sx={{ ...CPCA_PANEL_CARD_SX, mt: 2, backgroundColor: style.backgroundColor }}>
         <CardContent>
-          <Typography variant="h6" gutterBottom>
-            Casos críticos em aberto (priorização imediata)
-          </Typography>
+          <Stack direction="row" alignItems="center" justifyContent="space-between" mb={1}>
+            <Typography variant="h6" sx={{ color: style.textColor }}>
+              Casos críticos em aberto (priorização imediata)
+            </Typography>
+            {isTiProfile ? (
+              <Tooltip title="Editar cores do card">
+                <IconButton size="small" sx={{ color: style.textColor, opacity: 0.72, p: 0.3 }} onClick={() => openStyleEditor("cpca-critical-open", { backgroundColor: "#FFFFFF", textColor: "#111827" })}>
+                  <EditOutlinedIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            ) : null}
+          </Stack>
           {criticalOpenCases.length === 0 ? (
             <Typography variant="body2" color="text.secondary">
               Nenhum caso aberto no recorte atual.
@@ -894,6 +1105,40 @@ export function CpcaStatsPage() {
           )}
         </CardContent>
       </Card>
+        );
+      })()}
+
+      <Dialog open={Boolean(editingCardId)} onClose={() => setEditingCardId(null)} fullWidth maxWidth="xs">
+        <DialogTitle>Editar cores do card</DialogTitle>
+        <DialogContent sx={{ pt: 1 }}>
+          <Stack spacing={1.5} sx={{ mt: 0.5 }}>
+            <TextField
+              label="Cor do fundo"
+              type="color"
+              value={editingCardDraft.backgroundColor}
+              onChange={(e) =>
+                setEditingCardDraft((prev) => ({ ...prev, backgroundColor: e.target.value }))
+              }
+              fullWidth
+            />
+            <TextField
+              label="Cor da fonte"
+              type="color"
+              value={editingCardDraft.textColor}
+              onChange={(e) =>
+                setEditingCardDraft((prev) => ({ ...prev, textColor: e.target.value }))
+              }
+              fullWidth
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditingCardId(null)}>Cancelar</Button>
+          <Button variant="contained" onClick={saveStyleEditor}>
+            Salvar
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
