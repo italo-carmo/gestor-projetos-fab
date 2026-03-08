@@ -12,6 +12,7 @@ import {
   DialogContent,
   DialogTitle,
   IconButton,
+  MenuItem,
   Stack,
   TextField,
   ToggleButton,
@@ -61,6 +62,7 @@ type SocialCommunicationArticle = {
   publishedAt?: string | null;
   contentProxyPath?: string | null;
   tags?: string[];
+  audience?: 'INTERNAL' | 'EXTERNAL';
   createdAt: string;
   updatedAt: string;
   createdBy?: { id: string; name: string } | null;
@@ -249,6 +251,7 @@ export function SocialCommunicationPage() {
   const [search, setSearch] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<"cards" | "list">("cards");
+  const [audienceFilter, setAudienceFilter] = useState<'INTERNAL' | 'EXTERNAL' | 'ALL'>('ALL');
   const filters = useMemo(() => ({ q: search.trim() || undefined }), [search]);
 
   const query = useSocialCommunication(filters);
@@ -274,6 +277,7 @@ export function SocialCommunicationPage() {
     summary: "",
     publishedAt: "",
     tags: [] as string[],
+    audience: "INTERNAL" as "INTERNAL" | "EXTERNAL",
   });
 
   const openPreview = (item: SocialCommunicationArticle) => {
@@ -331,6 +335,7 @@ export function SocialCommunicationPage() {
       summary: "",
       publishedAt: "",
       tags: [],
+      audience: "INTERNAL",
     });
     setEditorOpen(true);
   };
@@ -345,6 +350,7 @@ export function SocialCommunicationPage() {
       summary: item.summary ?? "",
       publishedAt: toInputDate(item.publishedAt),
       tags: normalizeTags(item.tags ?? []),
+      audience: item.audience ?? "INTERNAL",
     });
     setEditorOpen(true);
   };
@@ -402,6 +408,7 @@ export function SocialCommunicationPage() {
         summary: form.summary.trim() || null,
         publishedAt: form.publishedAt ? new Date(form.publishedAt).toISOString() : null,
         tags: normalizeTags(form.tags),
+        audience: form.audience,
       };
 
       if (editing) {
@@ -449,12 +456,15 @@ export function SocialCommunicationPage() {
   ).sort((a, b) => a.localeCompare(b, "pt-BR"));
 
   const activeTags = normalizeTags(selectedTags);
-  const visibleItems = activeTags.length
+  const filteredByTags = activeTags.length
     ? items.filter((item) => {
         const itemTags = normalizeTags(item.tags ?? []);
         return activeTags.some((tag) => itemTags.includes(tag));
       })
     : items;
+  
+  const internalItems = filteredByTags.filter((item) => (item.audience ?? 'INTERNAL') === 'INTERNAL');
+  const externalItems = filteredByTags.filter((item) => (item.audience ?? 'INTERNAL') === 'EXTERNAL');
 
   const renderTags = (tags: string[], limit = 4) => {
     if (!tags.length) return null;
@@ -546,12 +556,24 @@ export function SocialCommunicationPage() {
         </CardContent>
       </Card>
 
-      {visibleItems.length === 0 ? (
+      {filteredByTags.length === 0 ? (
         <EmptyState
           title="Sem materias publicadas"
           description={canEdit ? "Cadastre um link para publicar a primeira materia." : "Aguardando publicacoes da comissao."}
         />
-      ) : viewMode === "cards" ? (
+      ) : (
+        <Stack spacing={4}>
+          {/* Público Interno */}
+          <Box>
+            <Typography variant="h5" fontWeight={700} sx={{ mb: 2 }}>
+              Público Interno
+            </Typography>
+            {internalItems.length === 0 ? (
+              <EmptyState
+                title="Sem matérias para público interno"
+                description="Nenhuma matéria cadastrada para público interno."
+              />
+            ) : viewMode === "cards" ? (
         <Box
           display="grid"
           gap={2}
@@ -561,7 +583,7 @@ export function SocialCommunicationPage() {
             lg: "repeat(4, minmax(0, 1fr))",
           }}
         >
-          {visibleItems.map((item) => {
+          {internalItems.map((item) => {
             const tags = normalizeTags(item.tags ?? []);
             return (
               <Card
@@ -672,7 +694,7 @@ export function SocialCommunicationPage() {
         </Box>
       ) : (
         <Stack spacing={1.5}>
-          {visibleItems.map((item) => {
+          {internalItems.map((item) => {
             const tags = normalizeTags(item.tags ?? []);
             return (
               <Card
@@ -760,6 +782,232 @@ export function SocialCommunicationPage() {
               </Card>
             );
           })}
+        </Stack>
+      )}
+          </Box>
+
+          {/* Público Externo */}
+          <Box>
+            <Typography variant="h5" fontWeight={700} sx={{ mb: 2 }}>
+              Público Externo
+            </Typography>
+            {externalItems.length === 0 ? (
+              <EmptyState
+                title="Sem matérias para público externo"
+                description="Nenhuma matéria cadastrada para público externo."
+              />
+            ) : viewMode === "cards" ? (
+        <Box
+          display="grid"
+          gap={2}
+          gridTemplateColumns={{
+            xs: "1fr",
+            sm: "repeat(2, minmax(0, 1fr))",
+            lg: "repeat(4, minmax(0, 1fr))",
+          }}
+        >
+          {externalItems.map((item) => {
+            const tags = normalizeTags(item.tags ?? []);
+            return (
+              <Card
+                key={item.id}
+                sx={{
+                  borderRadius: 3,
+                  border: "1px solid rgba(17, 66, 89, 0.14)",
+                  position: "relative",
+                  overflow: "hidden",
+                  transition: "transform 160ms ease, box-shadow 160ms ease",
+                  "&:hover": {
+                    transform: "translateY(-2px)",
+                    boxShadow: "0 10px 24px rgba(17, 66, 89, 0.16)",
+                  },
+                }}
+              >
+                <CardActionArea
+                  onClick={() => openPreview(item)}
+                  sx={{ alignItems: "stretch", height: "100%", display: "flex", flexDirection: "column" }}
+                >
+                  <Box
+                    sx={{
+                      height: 156,
+                      background: "linear-gradient(140deg, #114259 0%, #4D86A0 100%)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      overflow: "hidden",
+                    }}
+                  >
+                    <ArticleCoverImage
+                      coverProxyPath={item.coverProxyPath}
+                      coverImageUrl={item.coverImageUrl}
+                      title={item.title}
+                      toApiUrl={toApiUrl}
+                    />
+                  </Box>
+                  <CardContent sx={{ minHeight: 200, width: "100%", display: "flex", flexDirection: "column", flexGrow: 1 }}>
+                    <Box>
+                      <Typography
+                        variant="subtitle1"
+                        fontWeight={700}
+                        sx={{
+                          mb: 0.8,
+                          display: "-webkit-box",
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: "vertical",
+                          overflow: "hidden",
+                        }}
+                      >
+                        {item.title}
+                      </Typography>
+                      {item.summary && (
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          sx={{
+                            mb: 1.3,
+                            display: "-webkit-box",
+                            WebkitLineClamp: 3,
+                            WebkitBoxOrient: "vertical",
+                            overflow: "hidden",
+                          }}
+                        >
+                          {item.summary}
+                        </Typography>
+                      )}
+                    </Box>
+                    <Box sx={{ mt: "auto" }}>
+                      {renderTags(tags, 3)}
+                      <Stack direction="row" spacing={0.8} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mt: 1.1 }}>
+                        <Chip label={sourceHost(item.sourceUrl)} size="small" variant="outlined" />
+                        {(item.publishedAt || item.createdAt) && (
+                          <Chip label={toDisplayDate(item.publishedAt ?? item.createdAt)} size="small" />
+                        )}
+                      </Stack>
+                    </Box>
+                  </CardContent>
+                </CardActionArea>
+                {canEdit && (
+                  <Stack direction="row" spacing={0.4} sx={{ position: "absolute", top: 8, right: 8, zIndex: 3 }}>
+                    <IconButton
+                      size="small"
+                      sx={{ bgcolor: "rgba(255,255,255,0.92)" }}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        openEdit(item);
+                      }}
+                    >
+                      <EditRoundedIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton
+                      size="small"
+                      color="error"
+                      sx={{ bgcolor: "rgba(255,255,255,0.92)" }}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleDelete(item);
+                      }}
+                    >
+                      <DeleteOutlineRoundedIcon fontSize="small" />
+                    </IconButton>
+                  </Stack>
+                )}
+              </Card>
+            );
+          })}
+        </Box>
+      ) : (
+        <Stack spacing={1.5}>
+          {externalItems.map((item) => {
+            const tags = normalizeTags(item.tags ?? []);
+            return (
+              <Card
+                key={item.id}
+                onClick={() => openPreview(item)}
+                sx={{
+                  borderRadius: 3,
+                  border: "1px solid rgba(17,66,89,0.14)",
+                  cursor: "pointer",
+                  transition: "box-shadow 160ms ease, transform 160ms ease",
+                  "&:hover": {
+                    boxShadow: "0 8px 18px rgba(17,66,89,0.14)",
+                    transform: "translateY(-1px)",
+                  },
+                }}
+              >
+                <CardContent>
+                  <Stack direction={{ xs: "column", md: "row" }} spacing={2} alignItems={{ xs: "stretch", md: "center" }}>
+                    <Box
+                      sx={{
+                        width: { xs: "100%", md: 180 },
+                        minWidth: { xs: "100%", md: 180 },
+                        height: 108,
+                        borderRadius: 2,
+                        overflow: "hidden",
+                        bgcolor: "rgba(17,66,89,0.08)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <ArticleCoverImageSmall
+                        coverProxyPath={item.coverProxyPath}
+                        coverImageUrl={item.coverImageUrl}
+                        title={item.title}
+                        toApiUrl={toApiUrl}
+                      />
+                    </Box>
+
+                    <Box sx={{ flex: 1 }}>
+                      <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 0.6 }}>
+                        {item.title}
+                      </Typography>
+                      {item.summary && (
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                          {item.summary}
+                        </Typography>
+                      )}
+                      {renderTags(tags, 8)}
+                      <Stack direction="row" spacing={0.8} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mt: 1.1 }}>
+                        <Chip label={sourceHost(item.sourceUrl)} size="small" variant="outlined" />
+                        {(item.publishedAt || item.createdAt) && (
+                          <Chip label={toDisplayDate(item.publishedAt ?? item.createdAt)} size="small" />
+                        )}
+                      </Stack>
+                    </Box>
+
+                    {canEdit && (
+                      <Stack direction="row" spacing={0.6}>
+                        <IconButton
+                          size="small"
+                          sx={{ bgcolor: "rgba(17,66,89,0.07)" }}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openEdit(item);
+                          }}
+                        >
+                          <EditRoundedIcon fontSize="small" />
+                        </IconButton>
+                        <IconButton
+                          size="small"
+                          color="error"
+                          sx={{ bgcolor: "rgba(255,0,0,0.06)" }}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleDelete(item);
+                          }}
+                        >
+                          <DeleteOutlineRoundedIcon fontSize="small" />
+                        </IconButton>
+                      </Stack>
+                    )}
+                  </Stack>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </Stack>
+      )}
+          </Box>
         </Stack>
       )}
 
@@ -973,6 +1221,17 @@ export function SocialCommunicationPage() {
                 })}
               </Stack>
             </Box>
+            <TextField
+              label="Público"
+              select
+              size="small"
+              value={form.audience}
+              onChange={(event) => setForm((prev) => ({ ...prev, audience: event.target.value as "INTERNAL" | "EXTERNAL" }))}
+              InputLabelProps={{ shrink: true }}
+            >
+              <MenuItem value="INTERNAL">Interno</MenuItem>
+              <MenuItem value="EXTERNAL">Externo</MenuItem>
+            </TextField>
             <TextField
               label="Data da publicacao"
               type="date"

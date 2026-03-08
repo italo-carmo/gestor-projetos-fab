@@ -1,4 +1,4 @@
-import { IsHexColor, IsString, MaxLength } from 'class-validator';
+import { IsHexColor, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class CreateLessonLearnedTypeDto {
   @IsString()
@@ -7,5 +7,9 @@ export class CreateLessonLearnedTypeDto {
 
   @IsHexColor()
   colorHex: string;
+
+  @IsOptional()
+  @IsHexColor()
+  textColorHex?: string;
 }
 

@@ -73,6 +73,7 @@ export class SocialCommunicationService {
       summary?: string | null;
       publishedAt?: string | null;
       tags?: string[];
+      audience?: 'INTERNAL' | 'EXTERNAL';
     },
     user?: RbacUser,
   ) {
@@ -96,6 +97,7 @@ export class SocialCommunicationService {
           payload.summary ?? metadata.summary ?? null,
         ),
         tags: this.normalizeTags(payload.tags) ?? [],
+        audience: payload.audience ?? 'INTERNAL',
         publishedAt: this.parseOptionalDate(
           payload.publishedAt ?? metadata.publishedAt ?? null,
           'publishedAt',
@@ -130,6 +132,7 @@ export class SocialCommunicationService {
       summary?: string | null;
       publishedAt?: string | null;
       tags?: string[];
+      audience?: 'INTERNAL' | 'EXTERNAL';
     },
     user?: RbacUser,
   ) {
@@ -192,6 +195,7 @@ export class SocialCommunicationService {
           : undefined;
     const tags =
       payload.tags !== undefined ? (this.normalizeTags(payload.tags) ?? []) : undefined;
+    const audience = payload.audience !== undefined ? payload.audience : undefined;
 
     const updated = await this.prisma.socialCommunicationArticle.update({
       where: { id },
@@ -202,6 +206,7 @@ export class SocialCommunicationService {
         summary,
         publishedAt,
         tags,
+        audience,
       },
       include: {
         createdBy: { select: { id: true, name: true } },

@@ -39,7 +39,7 @@ export class LessonsLearnedService {
       where,
       include: {
         createdBy: { select: { id: true, name: true } },
-        type: { select: { id: true, name: true, colorHex: true } },
+        type: { select: { id: true, name: true, colorHex: true, textColorHex: true } },
       },
       orderBy: [{ createdAt: 'desc' }],
     });
@@ -75,7 +75,7 @@ export class LessonsLearnedService {
       },
       include: {
         createdBy: { select: { id: true, name: true } },
-        type: { select: { id: true, name: true, colorHex: true } },
+        type: { select: { id: true, name: true, colorHex: true, textColorHex: true } },
       },
     });
 
@@ -119,7 +119,7 @@ export class LessonsLearnedService {
       },
       include: {
         createdBy: { select: { id: true, name: true } },
-        type: { select: { id: true, name: true, colorHex: true } },
+        type: { select: { id: true, name: true, colorHex: true, textColorHex: true } },
       },
     });
 
@@ -152,10 +152,11 @@ export class LessonsLearnedService {
     return { ok: true };
   }
 
-  async createType(payload: { name: string; colorHex: string }, user?: RbacUser) {
+  async createType(payload: { name: string; colorHex: string; textColorHex?: string }, user?: RbacUser) {
     this.assertEditorAccess(user);
     const name = this.normalizeRequiredText(payload.name, 'name', 80);
     const colorHex = this.normalizeColorHex(payload.colorHex);
+    const textColorHex = payload.textColorHex ? this.normalizeColorHex(payload.textColorHex) : '#FFFFFF';
     const existing = await this.prisma.lessonLearnedType.findFirst({
       where: { name: { equals: name, mode: 'insensitive' } },
       select: { id: true },
@@ -164,21 +165,21 @@ export class LessonsLearnedService {
       throwError('VALIDATION_ERROR', { field: 'name', reason: 'already_exists' });
     }
     const created = await this.prisma.lessonLearnedType.create({
-      data: { name, colorHex },
+      data: { name, colorHex, textColorHex },
     });
     await this.audit.log({
       userId: user?.id,
       resource: 'lessons_learned',
       action: 'create',
       entityId: created.id,
-      diffJson: { type: created.name, colorHex: created.colorHex },
+      diffJson: { type: created.name, colorHex: created.colorHex, textColorHex: created.textColorHex },
     });
     return created;
   }
 
   async updateType(
     id: string,
-    payload: { name?: string; colorHex?: string },
+    payload: { name?: string; colorHex?: string; textColorHex?: string },
     user?: RbacUser,
   ) {
     this.assertEditorAccess(user);
@@ -210,6 +211,10 @@ export class LessonsLearnedService {
           payload.colorHex !== undefined
             ? this.normalizeColorHex(payload.colorHex)
             : undefined,
+        textColorHex:
+          payload.textColorHex !== undefined
+            ? this.normalizeColorHex(payload.textColorHex)
+            : undefined,
       },
     });
     await this.audit.log({
@@ -217,7 +222,7 @@ export class LessonsLearnedService {
       resource: 'lessons_learned',
       action: 'update',
       entityId: updated.id,
-      diffJson: { type: updated.name, colorHex: updated.colorHex },
+      diffJson: { type: updated.name, colorHex: updated.colorHex, textColorHex: updated.textColorHex },
     });
     return updated;
   }

@@ -42,6 +42,7 @@ type LessonType = {
   id: string;
   name: string;
   colorHex: string;
+  textColorHex?: string | null;
 };
 
 type LessonPost = {
@@ -83,7 +84,7 @@ export function LessonsLearnedPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
   const [lessonForm, setLessonForm] = useState({ title: '', content: '', typeId: '' });
-  const [typeForm, setTypeForm] = useState({ id: '', name: '', colorHex: '#8E44AD' });
+  const [typeForm, setTypeForm] = useState({ id: '', name: '', colorHex: '#8E44AD', textColorHex: '#FFFFFF' });
   const [typesSectionOpen, setTypesSectionOpen] = useState(false);
 
   const resetLessonForm = () => {
@@ -152,24 +153,25 @@ export function LessonsLearnedPage() {
     }
   };
 
-  const resetTypeForm = () => setTypeForm({ id: '', name: '', colorHex: '#8E44AD' });
+  const resetTypeForm = () => setTypeForm({ id: '', name: '', colorHex: '#8E44AD', textColorHex: '#FFFFFF' });
 
   const handleSaveType = async () => {
     const name = typeForm.name.trim();
     const colorHex = typeForm.colorHex.trim();
-    if (!name || !colorHex) {
-      toast.push({ message: 'Informe nome e cor do tipo.', severity: 'warning' });
+    const textColorHex = typeForm.textColorHex.trim();
+    if (!name || !colorHex || !textColorHex) {
+      toast.push({ message: 'Informe nome, cor do card e cor da fonte.', severity: 'warning' });
       return;
     }
     try {
       if (typeForm.id) {
         await updateType.mutateAsync({
           id: typeForm.id,
-          payload: { name, colorHex },
+          payload: { name, colorHex, textColorHex },
         });
         toast.push({ message: 'Tipo atualizado.', severity: 'success' });
       } else {
-        await createType.mutateAsync({ name, colorHex });
+        await createType.mutateAsync({ name, colorHex, textColorHex });
         toast.push({ message: 'Tipo criado.', severity: 'success' });
       }
       resetTypeForm();
@@ -236,19 +238,20 @@ export function LessonsLearnedPage() {
                 {lessons.map((lesson) => {
                   const type = lesson.type ?? typeById.get(lesson.typeId);
                   const bg = type?.colorHex || '#537F97';
+                  const textColor = type?.textColorHex || '#FFFFFF';
                   return (
                     <Card key={lesson.id} variant="outlined" sx={{ borderColor: `${bg}` }}>
                       <CardContent sx={{ p: 1.4, backgroundColor: bg }}>
                         <Stack direction="row" justifyContent="space-between" alignItems="start" gap={1}>
                           <Box sx={{ minWidth: 0 }}>
-                            <Typography variant="subtitle2" sx={{ color: '#fff', fontWeight: 700 }}>
+                            <Typography variant="subtitle2" sx={{ color: textColor, fontWeight: 700 }}>
                               {lesson.title}
                             </Typography>
                             <Typography
                               variant="body2"
                               sx={{
                                 mt: 0.4,
-                                color: 'rgba(255,255,255,0.94)',
+                                color: `${textColor}E6`,
                                 display: '-webkit-box',
                                 WebkitLineClamp: 3,
                                 WebkitBoxOrient: 'vertical',
@@ -261,19 +264,28 @@ export function LessonsLearnedPage() {
                               <Chip
                                 size="small"
                                 label={type?.name || 'Sem tipo'}
-                                sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: '#fff' }}
+                                sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: textColor }}
                               />
-                              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.9)' }}>
-                                {lesson.authorLabel || 'Coordenação CIPAVD'} - {new Date(lesson.createdAt).toLocaleString('pt-BR')}
+                              <Chip
+                                size="small"
+                                label={lesson.authorLabel || 'Coordenação CIPAVD'}
+                                sx={{
+                                  bgcolor: 'rgba(255,255,255,0.15)',
+                                  color: textColor,
+                                  border: `1px solid ${textColor}40`,
+                                }}
+                              />
+                              <Typography variant="caption" sx={{ color: `${textColor}E6` }}>
+                                {new Date(lesson.createdAt).toLocaleString('pt-BR')}
                               </Typography>
                             </Stack>
                           </Box>
                           {canManage && (
                             <Stack direction="row" spacing={0.5}>
-                              <IconButton size="small" sx={{ color: '#fff' }} onClick={() => openEditLesson(lesson)}>
+                              <IconButton size="small" sx={{ color: textColor }} onClick={() => openEditLesson(lesson)}>
                                 <EditRoundedIcon fontSize="small" />
                               </IconButton>
-                              <IconButton size="small" sx={{ color: '#fff' }} onClick={() => handleDeleteLesson(lesson)}>
+                              <IconButton size="small" sx={{ color: textColor }} onClick={() => handleDeleteLesson(lesson)}>
                                 <DeleteOutlineRoundedIcon fontSize="small" />
                               </IconButton>
                             </Stack>
@@ -324,6 +336,15 @@ export function LessonsLearnedPage() {
                       sx={{ width: 120 }}
                       InputLabelProps={{ shrink: true }}
                     />
+                    <TextField
+                      size="small"
+                      type="color"
+                      label="Cor da fonte"
+                      value={typeForm.textColorHex}
+                      onChange={(event) => setTypeForm((prev) => ({ ...prev, textColorHex: event.target.value.toUpperCase() }))}
+                      sx={{ width: 120 }}
+                      InputLabelProps={{ shrink: true }}
+                    />
                     <Box
                       sx={{
                         width: 28,
@@ -331,8 +352,15 @@ export function LessonsLearnedPage() {
                         borderRadius: 1,
                         border: '1px solid rgba(0,0,0,0.2)',
                         bgcolor: typeForm.colorHex,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
                       }}
-                    />
+                    >
+                      <Typography variant="caption" sx={{ color: typeForm.textColorHex, fontWeight: 700 }}>
+                        Aa
+                      </Typography>
+                    </Box>
                     <Typography variant="caption" color="text.secondary">
                       Prévia
                     </Typography>
@@ -367,7 +395,7 @@ export function LessonsLearnedPage() {
                           <IconButton
                             size="small"
                             onClick={() => {
-                              setTypeForm({ id: type.id, name: type.name, colorHex: type.colorHex });
+                              setTypeForm({ id: type.id, name: type.name, colorHex: type.colorHex, textColorHex: type.textColorHex || '#FFFFFF' });
                               setTypesSectionOpen(true);
                             }}
                           >

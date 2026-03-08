@@ -9,5 +9,9 @@ export class UpdateLessonLearnedTypeDto {
   @IsOptional()
   @IsHexColor()
   colorHex?: string;
+
+  @IsOptional()
+  @IsHexColor()
+  textColorHex?: string;
 }
 

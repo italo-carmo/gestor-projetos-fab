@@ -721,22 +721,29 @@ model Notice {
   @@index([localityId, specialtyId, dueDate])
 }
 
+enum SocialCommunicationAudience {
+  INTERNAL
+  EXTERNAL
+}
+
 model SocialCommunicationArticle {
-  id            String    @id @default(cuid())
+  id            String                        @id @default(cuid())
   sourceUrl     String
   title         String
   coverImageUrl String?
   summary       String?
-  tags          String[]  @default([])
+  tags          String[]                      @default([])
+  audience      SocialCommunicationAudience   @default(INTERNAL)
   publishedAt   DateTime?
   createdById   String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt     DateTime                      @default(now())
+  updatedAt     DateTime                      @updatedAt
 
-  createdBy     User?     @relation("SocialCommunicationArticleCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdBy     User?                         @relation("SocialCommunicationArticleCreator", fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([createdAt])
   @@index([publishedAt])
+  @@index([audience])
 }
 
 model LibraryPhoto {
@@ -821,13 +828,14 @@ model LessonLearnedPost {
 }
 
 model LessonLearnedType {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  colorHex  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(cuid())
+  name        String   @unique
+  colorHex    String
+  textColorHex String? @default("#FFFFFF")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  posts     LessonLearnedPost[]
+  posts       LessonLearnedPost[]
 
   @@index([createdAt])
 }

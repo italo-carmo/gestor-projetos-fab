@@ -1,4 +1,5 @@
-import { IsArray, IsDateString, IsOptional, IsString, IsUrl } from 'class-validator';
+import { IsArray, IsDateString, IsEnum, IsOptional, IsString, IsUrl } from 'class-validator';
+import { SocialCommunicationAudience } from './create-social-communication-article.dto';
 
 export class UpdateSocialCommunicationArticleDto {
   @IsOptional()
@@ -25,4 +26,8 @@ export class UpdateSocialCommunicationArticleDto {
   @IsArray()
   @IsString({ each: true })
   tags?: string[];
+
+  @IsOptional()
+  @IsEnum(SocialCommunicationAudience)
+  audience?: SocialCommunicationAudience;
 }
