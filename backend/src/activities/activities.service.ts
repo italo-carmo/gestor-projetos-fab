@@ -91,6 +91,7 @@ export class ActivitiesService {
         take,
         include: {
           locality: { select: { id: true, code: true, name: true } },
+          activityType: { select: { id: true, name: true } },
           specialty: { select: { id: true, name: true, color: true } },
           createdBy: { select: { id: true, name: true } },
           responsibles: {
@@ -122,8 +123,8 @@ export class ActivitiesService {
               signedBy: { select: { id: true, name: true, email: true } },
             },
           },
-        },
-      }),
+        } as any,
+      } as any),
       this.prisma.activity.count({ where }),
     ]);
 
