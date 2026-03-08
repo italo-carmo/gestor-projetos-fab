@@ -429,10 +429,9 @@ export function LibraryPage() {
     return () => window.clearInterval(timer);
   }, [localities.length]);
 
-  const CAROUSEL_VISIBLE_COUNT = 8;
-  const visibleLocalities = useMemo(() => {
-    if (localities.length <= CAROUSEL_VISIBLE_COUNT) return localities;
-    return Array.from({ length: CAROUSEL_VISIBLE_COUNT }, (_, offset) => {
+  const orderedLocalities = useMemo(() => {
+    if (localities.length === 0) return [];
+    return localities.map((_, offset) => {
       const index = (mainCarouselIndex + offset) % localities.length;
       return localities[index];
     });
@@ -523,9 +522,10 @@ export function LibraryPage() {
                   overflowX: 'hidden',
                   scrollBehavior: 'smooth',
                   px: { xs: 4.5, md: 5.5 },
+                  alignItems: 'stretch',
                 }}
               >
-                {visibleLocalities.map((locality) => {
+                {orderedLocalities.map((locality) => {
                 const localityPhotos = photosByLocality.get(locality.id) ?? [];
                 const currentIndex = carouselIndicesByLocality[locality.id] ?? 0;
                 const currentPhoto = localityPhotos[currentIndex] ?? null;
@@ -538,8 +538,9 @@ export function LibraryPage() {
                       overflow: "hidden",
                       position: "relative",
                       transition: "transform 160ms ease, box-shadow 160ms ease",
-                      minWidth: { xs: '100%', sm: 'calc(50% - 8px)', md: 'calc(33.333% - 10.67px)', lg: 'calc(12.5% - 14px)' },
-                      flexShrink: 0,
+                      flex: { xs: '0 0 100%', sm: '0 0 240px', md: '0 0 220px', lg: '0 0 210px' },
+                      minWidth: { xs: '100%', sm: 240, md: 220, lg: 210 },
+                      maxWidth: { xs: '100%', sm: 240, md: 220, lg: 210 },
                       display: "flex",
                       flexDirection: "column",
                       height: 292,
