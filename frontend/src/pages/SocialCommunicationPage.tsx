@@ -547,7 +547,7 @@ export function SocialCommunicationPage() {
             />
             <Chip
               icon={<LanguageRoundedIcon />}
-              label={`${visibleItems.length} publicacao${visibleItems.length === 1 ? "" : "oes"}`}
+              label={`${filteredByTags.length} publicacao${filteredByTags.length === 1 ? "" : "oes"}`}
               color="primary"
               variant="outlined"
               sx={{ alignSelf: { xs: "flex-start", md: "center" } }}
