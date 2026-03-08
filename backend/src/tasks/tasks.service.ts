@@ -2351,7 +2351,7 @@ export class TasksService {
         visitsCompleted,
         completedReports,
         completedTasks,
-        completedFieldActivities: completedFieldActivities.length,
+        completedFieldActivities: completedActivities.length,
         completedVisits,
         fieldActivitiesBySpecialty,
         participantsKpis: {
