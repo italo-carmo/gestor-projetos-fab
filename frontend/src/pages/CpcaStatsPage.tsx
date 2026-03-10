@@ -3,6 +3,7 @@ import {
   Button,
   Card,
   CardContent,
+  Chip,
   Dialog,
   DialogActions,
   DialogContent,
@@ -22,7 +23,7 @@ import {
 } from "@mui/material";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import { useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   Bar,
   BarChart,
@@ -157,6 +158,20 @@ type EditableCardStyle = {
   textColor: string;
 };
 
+type CpcaChartDetailKind =
+  | "status"
+  | "monthly"
+  | "procedure"
+  | "openAging"
+  | "violenceType"
+  | "aggressorAge"
+  | "victimAge";
+
+type CpcaChartDetailState = {
+  kind: CpcaChartDetailKind;
+  item: any;
+} | null;
+
 const CPCA_CARD_STYLES_STORAGE_KEY = "cpca-card-styles-v1";
 
 function loadCpcaCardStyles(): Record<string, EditableCardStyle> {
@@ -198,6 +213,7 @@ function translateMetricName(name: string | number) {
 
 export function CpcaStatsPage() {
   const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
   const { data: me } = useMe();
   const isTiProfile = hasAnyRole(me, [ROLE_TI]);
   const [cardStyles, setCardStyles] = useState<Record<string, EditableCardStyle>>(
@@ -208,6 +224,7 @@ export function CpcaStatsPage() {
     backgroundColor: "#FFFFFF",
     textColor: "#111827",
   });
+  const [chartDetail, setChartDetail] = useState<CpcaChartDetailState>(null);
   const isNationalScope = hasAnyRole(me, [
     ROLE_COORDENACAO_CIPAVD,
     ROLE_COMANDANTE_COMGEP,
@@ -388,6 +405,92 @@ export function CpcaStatsPage() {
     setEditingCardId(null);
   };
 
+  const openChartDetail = (kind: CpcaChartDetailKind, item: any) => {
+    if (!item) return;
+    setChartDetail({ kind, item });
+  };
+  const chartDetailTitleByKind: Record<CpcaChartDetailKind, string> = {
+    status: "Detalhe por status",
+    monthly: "Detalhe da evolução mensal",
+    procedure: "Detalhe por procedimento",
+    openAging: "Detalhe de envelhecimento dos abertos",
+    violenceType: "Detalhe por tipo de assédio/violência",
+    aggressorAge: "Detalhe de faixa etária do acusado",
+    victimAge: "Detalhe de faixa etária da vítima/noticiante",
+  };
+  const chartDetailMeaningByKind: Record<CpcaChartDetailKind, string> = {
+    status:
+      "Este item simboliza quantas denúncias estão neste status dentro do período e filtros atuais.",
+    monthly:
+      "Este item simboliza o comportamento mensal de entradas e estoque de casos em aberto.",
+    procedure:
+      "Este item simboliza quantas denúncias tiveram este procedimento instaurado no período.",
+    openAging:
+      "Este item simboliza a concentração de casos ainda abertos por faixa de tempo em aberto.",
+    violenceType:
+      "Este item simboliza a incidência de cada tipo específico de assédio/violência no recorte atual.",
+    aggressorAge:
+      "Este item simboliza quantas denúncias possuem acusado nesta faixa etária no recorte atual.",
+    victimAge:
+      "Este item simboliza quantas denúncias possuem vítima/noticiante nesta faixa etária no recorte atual.",
+  };
+  const chartDetailLabel =
+    chartDetail?.item?.label ??
+    chartDetail?.item?.month ??
+    chartDetail?.item?.bucket ??
+    "-";
+  const chartDetailValue =
+    chartDetail?.kind === "monthly"
+      ? Number(chartDetail?.item?.total ?? 0)
+      : Number(chartDetail?.item?.count ?? 0);
+  const chartDetailBase =
+    chartDetail?.kind === "openAging"
+      ? Number(summary.openCases ?? 0)
+      : Number(summary.totalCases ?? 0);
+  const chartDetailPercent = chartDetailBase
+    ? Math.round((chartDetailValue / chartDetailBase) * 100)
+    : 0;
+  const relatedCriticalCases = !chartDetail
+    ? []
+    : criticalOpenCases
+        .filter((item) => {
+          if (chartDetail.kind === "status") {
+            return String(item.status) === String(chartDetail.item?.status);
+          }
+          if (chartDetail.kind === "violenceType") {
+            return (
+              String(item.detailedViolenceType ?? "") ===
+              String(chartDetail.item?.detailedViolenceType ?? "")
+            );
+          }
+          return false;
+        })
+        .slice(0, 10);
+  const openCpcaCasesFromDetail = () => {
+    if (!chartDetail) return;
+    const next = new URLSearchParams();
+    if (localityId) next.set("localityId", localityId);
+    if (chartDetail.kind === "status") {
+      next.set("status", String(chartDetail.item?.status ?? ""));
+    }
+    if (chartDetail.kind === "procedure") {
+      next.set("procedureType", String(chartDetail.item?.procedureType ?? ""));
+    }
+    if (chartDetail.kind === "violenceType") {
+      next.set(
+        "detailedViolenceType",
+        String(chartDetail.item?.detailedViolenceType ?? ""),
+      );
+    }
+    navigate(`/cpca-cases${next.toString() ? `?${next.toString()}` : ""}`);
+  };
+  const canFilterOpenCases = Boolean(
+    chartDetail &&
+      (chartDetail.kind === "status" ||
+        chartDetail.kind === "procedure" ||
+        chartDetail.kind === "violenceType"),
+  );
+
   return (
     <Box
       sx={{
@@ -548,6 +651,9 @@ export function CpcaStatsPage() {
                   </Tooltip>
                 ) : null}
               </Stack>
+              <Typography variant="caption" color="text.secondary" sx={{ mb: 0.7, display: "block" }}>
+                Clique em uma barra para ver o que o status simboliza.
+              </Typography>
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={statusDistribution}>
                   <CartesianGrid strokeDasharray="3 3" />
@@ -572,6 +678,8 @@ export function CpcaStatsPage() {
                     fill="#0C657E"
                     radius={[8, 8, 0, 0]}
                     barSize={12}
+                    cursor="pointer"
+                    onClick={(state: any) => openChartDetail("status", state?.payload)}
                   />
                 </BarChart>
               </ResponsiveContainer>
@@ -604,8 +712,16 @@ export function CpcaStatsPage() {
                   </Tooltip>
                 ) : null}
               </Stack>
+              <Typography variant="caption" color="text.secondary" sx={{ mb: 0.7, display: "block" }}>
+                Clique em um ponto para ver o detalhamento do mês.
+              </Typography>
               <ResponsiveContainer width="100%" height={280}>
-                <LineChart data={monthlyTrend}>
+                <LineChart
+                  data={monthlyTrend}
+                  onClick={(state: any) =>
+                    openChartDetail("monthly", state?.activePayload?.[0]?.payload)
+                  }
+                >
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="month" tick={CHART_TICK_STYLE} />
                   <YAxis allowDecimals={false} tick={CHART_TICK_STYLE} />
@@ -621,7 +737,7 @@ export function CpcaStatsPage() {
                     name="Moral"
                     stroke="#0C657E"
                     strokeWidth={2}
-                    dot={false}
+                    dot={{ r: 3, cursor: "pointer" }}
                   />
                   <Line
                     type="monotone"
@@ -629,7 +745,7 @@ export function CpcaStatsPage() {
                     name="Sexual"
                     stroke="#AD2F45"
                     strokeWidth={2}
-                    dot={false}
+                    dot={{ r: 3, cursor: "pointer" }}
                   />
                   <Line
                     type="monotone"
@@ -637,7 +753,7 @@ export function CpcaStatsPage() {
                     name="Abertos"
                     stroke="#C56A2B"
                     strokeWidth={2}
-                    dot={false}
+                    dot={{ r: 3, cursor: "pointer" }}
                   />
                 </LineChart>
               </ResponsiveContainer>
@@ -664,6 +780,9 @@ export function CpcaStatsPage() {
                   </Tooltip>
                 ) : null}
               </Stack>
+              <Typography variant="caption" color="text.secondary" sx={{ mb: 0.7, display: "block" }}>
+                Clique em uma barra para detalhar este procedimento.
+              </Typography>
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={procedureDistribution}>
                   <CartesianGrid strokeDasharray="3 3" />
@@ -688,6 +807,8 @@ export function CpcaStatsPage() {
                     fill="#1D8A6C"
                     radius={[8, 8, 0, 0]}
                     barSize={12}
+                    cursor="pointer"
+                    onClick={(state: any) => openChartDetail("procedure", state?.payload)}
                   />
                 </BarChart>
               </ResponsiveContainer>
@@ -714,6 +835,9 @@ export function CpcaStatsPage() {
                   </Tooltip>
                 ) : null}
               </Stack>
+              <Typography variant="caption" color="text.secondary" sx={{ mb: 0.7, display: "block" }}>
+                Clique em uma barra para entender a faixa de tempo em aberto.
+              </Typography>
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={openByAgeBuckets}>
                   <CartesianGrid strokeDasharray="3 3" />
@@ -725,7 +849,14 @@ export function CpcaStatsPage() {
                       translateMetricName(name),
                     ]}
                   />
-                  <Bar dataKey="count" name="Quantidade" radius={[8, 8, 0, 0]} barSize={12}>
+                  <Bar
+                    dataKey="count"
+                    name="Quantidade"
+                    radius={[8, 8, 0, 0]}
+                    barSize={12}
+                    cursor="pointer"
+                    onClick={(state: any) => openChartDetail("openAging", state?.payload)}
+                  >
                     {openByAgeBuckets.map((entry, index) => (
                       <Cell
                         key={entry.bucket}
@@ -839,7 +970,11 @@ export function CpcaStatsPage() {
                   Sem dados de tipo para o recorte.
                 </Typography>
               ) : (
-                <ResponsiveContainer width="100%" height={220}>
+                <Box>
+                  <Typography variant="caption" color="text.secondary" sx={{ mb: 0.7, display: "block" }}>
+                    Clique em uma barra para detalhar o tipo selecionado.
+                  </Typography>
+                  <ResponsiveContainer width="100%" height={220}>
                   <BarChart data={detailedTypeDistribution}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis
@@ -863,9 +998,12 @@ export function CpcaStatsPage() {
                       fill="#4A67A1"
                       radius={[8, 8, 0, 0]}
                       barSize={10}
+                      cursor="pointer"
+                      onClick={(state: any) => openChartDetail("violenceType", state?.payload)}
                     />
                   </BarChart>
-                </ResponsiveContainer>
+                  </ResponsiveContainer>
+                </Box>
               )}
               <Typography variant="h6" gutterBottom sx={{ mt: 1.5 }}>
                 Top posto/graduação do acusado
@@ -936,7 +1074,11 @@ export function CpcaStatsPage() {
                   Sem dados de faixa etária do acusado.
                 </Typography>
               ) : (
-                <ResponsiveContainer width="100%" height={280}>
+                <Box>
+                  <Typography variant="caption" color="text.secondary" sx={{ mb: 0.7, display: "block" }}>
+                    Clique em uma barra para detalhar a faixa etária.
+                  </Typography>
+                  <ResponsiveContainer width="100%" height={280}>
                   <BarChart data={aggressorAgeRangeDistribution}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis
@@ -960,9 +1102,12 @@ export function CpcaStatsPage() {
                       fill="#1D8A6C"
                       radius={[8, 8, 0, 0]}
                       barSize={12}
+                      cursor="pointer"
+                      onClick={(state: any) => openChartDetail("aggressorAge", state?.payload)}
                     />
                   </BarChart>
-                </ResponsiveContainer>
+                  </ResponsiveContainer>
+                </Box>
               )}
             </CardContent>
           </Card>
@@ -992,7 +1137,11 @@ export function CpcaStatsPage() {
                   Sem dados de faixa etária da vítima/noticiante.
                 </Typography>
               ) : (
-                <ResponsiveContainer width="100%" height={280}>
+                <Box>
+                  <Typography variant="caption" color="text.secondary" sx={{ mb: 0.7, display: "block" }}>
+                    Clique em uma barra para detalhar a faixa etária.
+                  </Typography>
+                  <ResponsiveContainer width="100%" height={280}>
                   <BarChart data={victimAgeRangeDistribution}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis
@@ -1016,9 +1165,12 @@ export function CpcaStatsPage() {
                       fill="#AD2F45"
                       radius={[8, 8, 0, 0]}
                       barSize={12}
+                      cursor="pointer"
+                      onClick={(state: any) => openChartDetail("victimAge", state?.payload)}
                     />
                   </BarChart>
-                </ResponsiveContainer>
+                  </ResponsiveContainer>
+                </Box>
               )}
             </CardContent>
           </Card>
@@ -1107,6 +1259,89 @@ export function CpcaStatsPage() {
       </Card>
         );
       })()}
+
+      <Dialog
+        open={Boolean(chartDetail)}
+        onClose={() => setChartDetail(null)}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle sx={{ pb: 0.8 }}>
+          {chartDetail ? chartDetailTitleByKind[chartDetail.kind] : "Detalhe do gráfico"}
+        </DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.2 }}>
+            {chartDetail ? chartDetailMeaningByKind[chartDetail.kind] : ""}
+          </Typography>
+          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 1.4 }}>
+            <Chip size="small" label={`Item: ${chartDetailLabel}`} />
+            <Chip size="small" label={`Valor: ${chartDetailValue}`} />
+            <Chip
+              size="small"
+              label={`Participação no período: ${chartDetailPercent}%`}
+            />
+            <Chip size="small" label={`Base: ${chartDetailBase}`} />
+            {chartDetail?.kind === "monthly" ? (
+              <>
+                <Chip size="small" label={`Moral: ${Number(chartDetail.item?.moral ?? 0)}`} />
+                <Chip size="small" label={`Sexual: ${Number(chartDetail.item?.sexual ?? 0)}`} />
+                <Chip size="small" label={`Abertos: ${Number(chartDetail.item?.open ?? 0)}`} />
+              </>
+            ) : null}
+          </Stack>
+          {(chartDetail?.kind === "status" || chartDetail?.kind === "violenceType") && (
+            <Box>
+              <Typography variant="subtitle2" sx={{ mb: 0.8 }}>
+                Casos críticos relacionados (até 10)
+              </Typography>
+              {relatedCriticalCases.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  Nenhum caso crítico no recorte atual para este item.
+                </Typography>
+              ) : (
+                <Box sx={{ display: "grid", gap: 1 }}>
+                  {relatedCriticalCases.map((item) => (
+                    <Card key={item.caseId} variant="outlined">
+                      <CardContent sx={{ p: 1.2 }}>
+                        <Stack
+                          direction={{ xs: "column", md: "row" }}
+                          justifyContent="space-between"
+                          spacing={1}
+                        >
+                          <Box>
+                            <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                              {item.caseNumber}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {item.localityCode || item.localityName || "—"} • {item.openDays} dias em aberto
+                            </Typography>
+                          </Box>
+                          <Button
+                            component={Link}
+                            to={`/cpca-cases?q=${encodeURIComponent(item.caseNumber)}`}
+                            size="small"
+                            variant="text"
+                          >
+                            Abrir denúncia
+                          </Button>
+                        </Stack>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </Box>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          {canFilterOpenCases ? (
+            <Button variant="outlined" onClick={openCpcaCasesFromDetail}>
+              Abrir denúncias filtradas
+            </Button>
+          ) : null}
+          <Button onClick={() => setChartDetail(null)}>Fechar</Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={Boolean(editingCardId)} onClose={() => setEditingCardId(null)} fullWidth maxWidth="xs">
         <DialogTitle>Editar cores do card</DialogTitle>
