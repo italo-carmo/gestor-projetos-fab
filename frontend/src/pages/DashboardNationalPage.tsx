@@ -8,7 +8,6 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  Grid,
   Stack,
   Table,
   TableBody,
@@ -34,21 +33,18 @@ import PersonIcon from '@mui/icons-material/Person';
 import SchoolIcon from '@mui/icons-material/School';
 import GroupIcon from '@mui/icons-material/Group';
 import WorkspacePremiumIcon from '@mui/icons-material/WorkspacePremium';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   useDashboardNational,
   useLessonsLearned,
   useMe,
 } from '../api/hooks';
-import { toMilitaryDisplayName } from '../app/militaryName';
 import { can } from '../app/rbac';
 import { hasAnyRole, ROLE_COMANDANTE_COMGEP, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from '../app/roleAccess';
 import { SkeletonState } from '../components/states/SkeletonState';
 import { ErrorState } from '../components/states/ErrorState';
 import { EmptyState } from '../components/states/EmptyState';
-import { useQueryClient } from '@tanstack/react-query';
-import { api } from '../api/client';
 type NationalLocalityItem = {
   localityId: string;
   localityCode?: string | null;
@@ -96,11 +92,62 @@ type NationalDashboardTotals = {
 };
 
 type IndicatorTile = {
+  id: string;
   label: string;
   value: string;
   helper: string;
   icon: ReactNode;
 };
+
+type NationalDrilldownItem = {
+  activityId: string;
+  title: string;
+  localityId: string;
+  localityCode?: string | null;
+  localityName: string;
+  specialtyId?: string | null;
+  specialtyName?: string | null;
+  eventDate?: string | null;
+  status?: string;
+  hasSignedReport?: boolean;
+  instructors?: number;
+  recruits?: number;
+  eloPsychology?: number;
+  eloSocialAssistance?: number;
+  elos?: number;
+  eloGraduadoMaster?: number;
+};
+
+type NationalDashboardDrilldown = {
+  participants: {
+    instructors: NationalDrilldownItem[];
+    recruits: NationalDrilldownItem[];
+    elos: NationalDrilldownItem[];
+    graduadosMaster: NationalDrilldownItem[];
+  };
+  completedFieldActivities: NationalDrilldownItem[];
+  fieldActivitiesBySpecialty: {
+    psychology: NationalDrilldownItem[];
+    socialService: NationalDrilldownItem[];
+    doctrine: NationalDrilldownItem[];
+    law: NationalDrilldownItem[];
+  };
+};
+
+type DrilldownCountField =
+  | 'instructors'
+  | 'recruits'
+  | 'elos'
+  | 'eloGraduadoMaster'
+  | null;
+
+type KpiDetailState = {
+  title: string;
+  subtitle: string;
+  items: NationalDrilldownItem[];
+  emptyMessage: string;
+  countField: DrilldownCountField;
+} | null;
 
 type LessonPost = {
   id: string;
@@ -145,9 +192,6 @@ export function DashboardNationalPage() {
     hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI, ROLE_COMANDANTE_COMGEP]) &&
     can(me, 'lessons_learned', 'view');
   const lessonsQuery = useLessonsLearned({}, canViewLessons);
-  const qc = useQueryClient();
-  const tableContainerRef = useRef<HTMLDivElement | null>(null);
-  const [showVisitColumn, setShowVisitColumn] = useState(true);
   const [lessonOffset, setLessonOffset] = useState(0);
   const [readingLesson, setReadingLesson] = useState<LessonPost | null>(null);
   const isTiProfile = hasAnyRole(me, [ROLE_TI]);
@@ -157,26 +201,8 @@ export function DashboardNationalPage() {
     backgroundColor: '#FFFFFF',
     textColor: '#111827',
   });
-
-  useEffect(() => {
-    const element = tableContainerRef.current;
-    if (!element) return;
-
-    const updateVisibility = () => {
-      // Hide visit column when the area gets narrow to avoid horizontal scrolling.
-      const minWidthWithVisitColumn = 760;
-      setShowVisitColumn(element.clientWidth >= minWidthWithVisitColumn);
-    };
-
-    updateVisibility();
-    const observer = new ResizeObserver(updateVisibility);
-    observer.observe(element);
-    window.addEventListener('resize', updateVisibility);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener('resize', updateVisibility);
-    };
-  }, []);
+  const [kpiDetail, setKpiDetail] = useState<KpiDetailState>(null);
+  const [kpiDetailSearch, setKpiDetailSearch] = useState('');
 
   const lessons = ((lessonsQuery.data?.items ?? []) as LessonPost[])
     .filter((item) => item?.id)
@@ -225,6 +251,21 @@ export function DashboardNationalPage() {
       law: 0,
     },
   };
+  const drilldown: NationalDashboardDrilldown = dashboardQuery.data?.drilldown ?? {
+    participants: {
+      instructors: [],
+      recruits: [],
+      elos: [],
+      graduadosMaster: [],
+    },
+    completedFieldActivities: [],
+    fieldActivitiesBySpecialty: {
+      psychology: [],
+      socialService: [],
+      doctrine: [],
+      law: [],
+    },
+  };
   const lessonsPerView = 3;
   const visibleLessons =
     lessons.length <= lessonsPerView
@@ -242,36 +283,157 @@ export function DashboardNationalPage() {
     const normalized = String(localityName ?? '').trim();
     return code || normalized || '—';
   };
-  const formatCommanderName = (commanderName?: string | null) => {
-    const base = toMilitaryDisplayName(commanderName);
-    if (!base) return '—';
-    const sanitized = base
-      .replace(/\s+(?:GSD|OM)(?:\s*[-/]\s*|\s+)?[A-Z0-9]{1,8}$/i, '')
-      .replace(/\s+(?:GSD|OM)$/i, '')
-      .trim();
-    return sanitized || base;
+  const formatDrilldownDate = (value?: string | null) => {
+    if (!value) return 'Sem data';
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return 'Sem data';
+    return parsed.toLocaleDateString('pt-BR');
   };
+  const openKpiDetail = (nextDetail: Exclude<KpiDetailState, null>) => {
+    setKpiDetail(nextDetail);
+    setKpiDetailSearch('');
+  };
+  const openParticipantsDetail = (
+    key: 'instructors' | 'recruits' | 'elos' | 'graduadosMaster',
+  ) => {
+    if (key === 'instructors') {
+      openKpiDetail({
+        title: 'Instrutores por atividade',
+        subtitle: 'Atividades concluídas com registro de instrutores.',
+        items: drilldown.participants.instructors,
+        emptyMessage: 'Nenhuma atividade concluída com instrutores registrados.',
+        countField: 'instructors',
+      });
+      return;
+    }
+    if (key === 'recruits') {
+      openKpiDetail({
+        title: 'Recrutas por atividade',
+        subtitle: 'Atividades concluídas com registro de recrutas.',
+        items: drilldown.participants.recruits,
+        emptyMessage: 'Nenhuma atividade concluída com recrutas registradas.',
+        countField: 'recruits',
+      });
+      return;
+    }
+    if (key === 'elos') {
+      openKpiDetail({
+        title: 'Elos por atividade',
+        subtitle: 'Soma de Elo Psicologia e Elo Serviço Social por atividade concluída.',
+        items: drilldown.participants.elos,
+        emptyMessage: 'Nenhuma atividade concluída com elos registrados.',
+        countField: 'elos',
+      });
+      return;
+    }
+    openKpiDetail({
+      title: 'Graduados Master por atividade',
+      subtitle: 'Atividades concluídas com graduados master registrados.',
+      items: drilldown.participants.graduadosMaster,
+      emptyMessage: 'Nenhuma atividade concluída com graduados master registrados.',
+      countField: 'eloGraduadoMaster',
+    });
+  };
+  const openCompletedFieldActivitiesDetail = () => {
+    openKpiDetail({
+      title: 'Atividades de campo concluídas',
+      subtitle: 'Lista das atividades de campo concluídas no recorte atual.',
+      items: drilldown.completedFieldActivities,
+      emptyMessage: 'Nenhuma atividade de campo concluída encontrada.',
+      countField: null,
+    });
+  };
+  const openFieldAreaDetail = (
+    key: 'psychology' | 'socialService' | 'doctrine' | 'law',
+  ) => {
+    const labels: Record<
+      'psychology' | 'socialService' | 'doctrine' | 'law',
+      { title: string; subtitle: string; empty: string }
+    > = {
+      psychology: {
+        title: 'Atividades de Psicologia concluídas',
+        subtitle: 'Atividades de campo concluídas classificadas em Psicologia.',
+        empty: 'Nenhuma atividade concluída em Psicologia.',
+      },
+      socialService: {
+        title: 'Atividades de Serviço Social concluídas',
+        subtitle: 'Atividades de campo concluídas classificadas em Serviço Social.',
+        empty: 'Nenhuma atividade concluída em Serviço Social.',
+      },
+      doctrine: {
+        title: 'Atividades de Doutrina concluídas',
+        subtitle: 'Atividades de campo concluídas classificadas em Doutrina.',
+        empty: 'Nenhuma atividade concluída em Doutrina.',
+      },
+      law: {
+        title: 'Atividades de Direito concluídas',
+        subtitle: 'Atividades de campo concluídas classificadas em Direito.',
+        empty: 'Nenhuma atividade concluída em Direito.',
+      },
+    };
+    const metadata = labels[key];
+    openKpiDetail({
+      title: metadata.title,
+      subtitle: metadata.subtitle,
+      items: drilldown.fieldActivitiesBySpecialty[key] ?? [],
+      emptyMessage: metadata.empty,
+      countField: null,
+    });
+  };
+  const getKpiCountValue = (
+    item: NationalDrilldownItem,
+    field: DrilldownCountField,
+  ) => {
+    if (!field) return null;
+    return Number(item[field] ?? 0);
+  };
+  const normalizedKpiSearch = kpiDetailSearch
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+  const filteredKpiItems =
+    !kpiDetail || !normalizedKpiSearch
+      ? (kpiDetail?.items ?? [])
+      : kpiDetail.items.filter((item) => {
+          const haystack = [
+            item.title,
+            item.localityCode,
+            item.localityName,
+            item.specialtyName,
+          ]
+            .map((value) => String(value ?? ''))
+            .join(' ')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase();
+          return haystack.includes(normalizedKpiSearch);
+        });
 
   const completedIndicators: IndicatorTile[] = [
     {
+      id: 'reports',
       label: 'Relatórios',
       value: String(totals.completedReports ?? 0),
       helper: 'Concluídos',
       icon: <DescriptionIcon sx={{ fontSize: 22 }} />,
     },
     {
+      id: 'tasks',
       label: 'Tarefas',
       value: String(totals.completedTasks ?? 0),
       helper: 'Concluídas nas localidades',
       icon: <TaskAltIcon sx={{ fontSize: 22 }} />,
     },
     {
+      id: 'fieldActivities',
       label: 'Atividades de campo',
       value: String(totals.completedFieldActivities ?? 0),
       helper: 'Concluídas',
       icon: <TerrainIcon sx={{ fontSize: 22 }} />,
     },
     {
+      id: 'visits',
       label: 'Visitas',
       value: String(totals.completedVisits ?? 0),
       helper: 'Concluídas',
@@ -280,24 +442,28 @@ export function DashboardNationalPage() {
   ];
   const fieldBySpecialtyIndicators: IndicatorTile[] = [
     {
+      id: 'psychology',
       label: 'Psicologia',
       value: String(totals.fieldActivitiesBySpecialty?.psychology ?? 0),
       helper: 'Atividades concluídas',
       icon: <PsychologyIcon sx={{ fontSize: 22 }} />,
     },
     {
+      id: 'socialService',
       label: 'Serviço Social',
       value: String(totals.fieldActivitiesBySpecialty?.socialService ?? 0),
       helper: 'Atividades concluídas',
       icon: <VolunteerActivismIcon sx={{ fontSize: 22 }} />,
     },
     {
+      id: 'doctrine',
       label: 'Doutrina',
       value: String(totals.fieldActivitiesBySpecialty?.doctrine ?? 0),
       helper: 'Atividades concluídas',
       icon: <MenuBookIcon sx={{ fontSize: 22 }} />,
     },
     {
+      id: 'law',
       label: 'Direito',
       value: String(totals.fieldActivitiesBySpecialty?.law ?? 0),
       helper: 'Atividades concluídas',
@@ -310,24 +476,28 @@ export function DashboardNationalPage() {
       (totals.participantsKpis?.eloSocialAssistance ?? 0));
   const participantsIndicators: IndicatorTile[] = [
     {
+      id: 'instructors',
       label: 'Instrutores',
       value: String(totals.participantsKpis?.instructors ?? 0),
       helper: 'Total de instrutores',
       icon: <PersonIcon sx={{ fontSize: 22 }} />,
     },
     {
+      id: 'recruits',
       label: 'Recrutas',
       value: String(totals.participantsKpis?.recruits ?? 0),
       helper: 'Total de recrutas',
       icon: <SchoolIcon sx={{ fontSize: 22 }} />,
     },
     {
+      id: 'elos',
       label: 'Elos',
       value: String(totalElos),
       helper: 'Total de elos',
       icon: <GroupIcon sx={{ fontSize: 22 }} />,
     },
     {
+      id: 'graduadosMaster',
       label: 'Graduados Master',
       value: String(totals.participantsKpis?.eloGraduadoMaster ?? 0),
       helper: 'Total de graduados',
@@ -351,6 +521,40 @@ export function DashboardNationalPage() {
     setCardStyles(next);
     window.localStorage.setItem(SMIF_CARD_STYLES_STORAGE_KEY, JSON.stringify(next));
     setEditingCardId(null);
+  };
+  const getIndicatorClickAction = (groupId: string, itemId: string) => {
+    if (groupId === 'smif-completed' && itemId === 'fieldActivities') {
+      return openCompletedFieldActivitiesDetail;
+    }
+    if (groupId === 'smif-field') {
+      if (
+        itemId === 'psychology' ||
+        itemId === 'socialService' ||
+        itemId === 'doctrine' ||
+        itemId === 'law'
+      ) {
+        return () => openFieldAreaDetail(itemId);
+      }
+      return null;
+    }
+    if (groupId === 'smif-participants') {
+      if (
+        itemId === 'instructors' ||
+        itemId === 'recruits' ||
+        itemId === 'elos' ||
+        itemId === 'graduadosMaster'
+      ) {
+        return () => openParticipantsDetail(itemId);
+      }
+      return null;
+    }
+    return null;
+  };
+  const openActivityFromDetail = (activityId: string) => {
+    const next = new URLSearchParams();
+    next.set('activityId', activityId);
+    next.set('tab', 'report');
+    navigate(`/activities?${next.toString()}`);
   };
 
   return (
@@ -450,36 +654,68 @@ export function DashboardNationalPage() {
                   },
                 }}
               >
-                {group.items.map((item) => (
-                  <Box
-                    key={item.label}
-                    sx={{
-                      p: 1.5,
-                      borderRadius: 2,
-                      border: '1px solid rgba(255,255,255,0.5)',
-                      backgroundColor: 'rgba(255,255,255,0.9)',
-                      minHeight: 106,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      justifyContent: 'space-between',
-                    }}
-                  >
-                    <Box display="flex" alignItems="center" justifyContent="space-between" gap={1}>
-                      <Typography variant="body2" color="text.secondary" fontWeight={600}>
-                        {item.label}
-                      </Typography>
-                      <Box sx={{ color: '#114259' }}>{item.icon}</Box>
+                {group.items.map((item) => {
+                  const onItemClick = getIndicatorClickAction(group.id, item.id);
+                  const isInteractive = Boolean(onItemClick);
+                  return (
+                    <Box
+                      key={item.label}
+                      role={isInteractive ? 'button' : undefined}
+                      tabIndex={isInteractive ? 0 : undefined}
+                      onClick={onItemClick ?? undefined}
+                      onKeyDown={
+                        isInteractive
+                          ? (event) => {
+                              if ((event.key === 'Enter' || event.key === ' ') && onItemClick) {
+                                event.preventDefault();
+                                onItemClick();
+                              }
+                            }
+                          : undefined
+                      }
+                      sx={{
+                        p: 1.5,
+                        borderRadius: 2,
+                        border: isInteractive ? '1px solid rgba(0,60,92,0.35)' : '1px solid rgba(255,255,255,0.5)',
+                        backgroundColor: 'rgba(255,255,255,0.9)',
+                        minHeight: 106,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                        cursor: isInteractive ? 'pointer' : 'default',
+                        transition: 'transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease',
+                        '&:hover': isInteractive
+                          ? {
+                              transform: 'translateY(-1px)',
+                              boxShadow: '0 8px 16px rgba(17,66,89,0.16)',
+                              borderColor: 'rgba(0,60,92,0.45)',
+                            }
+                          : undefined,
+                        '&:focus-visible': isInteractive
+                          ? {
+                              outline: '2px solid #0D5B84',
+                              outlineOffset: '2px',
+                            }
+                          : undefined,
+                      }}
+                    >
+                      <Box display="flex" alignItems="center" justifyContent="space-between" gap={1}>
+                        <Typography variant="body2" color="text.secondary" fontWeight={600}>
+                          {item.label}
+                        </Typography>
+                        <Box sx={{ color: '#114259' }}>{item.icon}</Box>
+                      </Box>
+                      <Box>
+                        <Typography variant="h4" sx={{ fontWeight: 800, lineHeight: 1.1, color: '#0E3142' }}>
+                          {item.value}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {item.helper}{isInteractive ? ' • Clique para detalhar' : ''}
+                        </Typography>
+                      </Box>
                     </Box>
-                    <Box>
-                      <Typography variant="h4" sx={{ fontWeight: 800, lineHeight: 1.1, color: '#0E3142' }}>
-                        {item.value}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {item.helper}
-                      </Typography>
-                    </Box>
-                  </Box>
-                ))}
+                  );
+                })}
               </Box>
             </CardContent>
           </Card>
@@ -549,36 +785,64 @@ export function DashboardNationalPage() {
                 },
               }}
             >
-              {participantsIndicators.map((item) => (
-                <Box
-                  key={item.label}
-                  sx={{
-                    p: 1.5,
-                    borderRadius: 2,
-                    border: '1px solid rgba(255,255,255,0.5)',
-                    backgroundColor: 'rgba(255,255,255,0.9)',
-                    minHeight: 106,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-between',
-                  }}
-                >
-                  <Box display="flex" alignItems="center" justifyContent="space-between" gap={1}>
-                    <Typography variant="body2" color="text.secondary" fontWeight={600}>
-                      {item.label}
-                    </Typography>
-                    <Box sx={{ color: '#114259' }}>{item.icon}</Box>
+              {participantsIndicators.map((item) => {
+                const onItemClick = getIndicatorClickAction('smif-participants', item.id);
+                const isInteractive = Boolean(onItemClick);
+                return (
+                  <Box
+                    key={item.label}
+                    role={isInteractive ? 'button' : undefined}
+                    tabIndex={isInteractive ? 0 : undefined}
+                    onClick={onItemClick ?? undefined}
+                    onKeyDown={
+                      isInteractive
+                        ? (event) => {
+                            if ((event.key === 'Enter' || event.key === ' ') && onItemClick) {
+                              event.preventDefault();
+                              onItemClick();
+                            }
+                          }
+                        : undefined
+                    }
+                    sx={{
+                      p: 1.5,
+                      borderRadius: 2,
+                      border: '1px solid rgba(0,60,92,0.35)',
+                      backgroundColor: 'rgba(255,255,255,0.9)',
+                      minHeight: 106,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between',
+                      cursor: 'pointer',
+                      transition: 'transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease',
+                      '&:hover': {
+                        transform: 'translateY(-1px)',
+                        boxShadow: '0 8px 16px rgba(17,66,89,0.16)',
+                        borderColor: 'rgba(0,60,92,0.45)',
+                      },
+                      '&:focus-visible': {
+                        outline: '2px solid #0D5B84',
+                        outlineOffset: '2px',
+                      },
+                    }}
+                  >
+                    <Box display="flex" alignItems="center" justifyContent="space-between" gap={1}>
+                      <Typography variant="body2" color="text.secondary" fontWeight={600}>
+                        {item.label}
+                      </Typography>
+                      <Box sx={{ color: '#114259' }}>{item.icon}</Box>
+                    </Box>
+                    <Box>
+                      <Typography variant="h4" sx={{ fontWeight: 800, lineHeight: 1.1, color: '#0E3142' }}>
+                        {item.value}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {item.helper} • Clique para detalhar
+                      </Typography>
+                    </Box>
                   </Box>
-                  <Box>
-                    <Typography variant="h4" sx={{ fontWeight: 800, lineHeight: 1.1, color: '#0E3142' }}>
-                      {item.value}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {item.helper}
-                    </Typography>
-                  </Box>
-                </Box>
-              ))}
+                );
+              })}
             </Box>
           </CardContent>
         </Card>
@@ -714,6 +978,120 @@ export function DashboardNationalPage() {
           );
         })()}
       </Box>
+
+      <Dialog
+        open={Boolean(kpiDetail)}
+        onClose={() => setKpiDetail(null)}
+        fullWidth
+        maxWidth="lg"
+      >
+        <DialogTitle sx={{ pb: 0.75 }}>
+          {kpiDetail?.title ?? 'Detalhes do KPI'}
+        </DialogTitle>
+        <DialogContent dividers>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={1}
+            justifyContent="space-between"
+            alignItems={{ xs: 'stretch', sm: 'center' }}
+            sx={{ mb: 1.5 }}
+          >
+            <Box>
+              <Typography variant="body2" color="text.secondary">
+                {kpiDetail?.subtitle}
+              </Typography>
+              <Chip
+                size="small"
+                sx={{ mt: 0.8 }}
+                label={`${filteredKpiItems.length} atividade(s) no resultado`}
+              />
+            </Box>
+            <TextField
+              size="small"
+              label="Buscar atividade"
+              placeholder="Nome da atividade, localidade ou área"
+              value={kpiDetailSearch}
+              onChange={(event) => setKpiDetailSearch(event.target.value)}
+              sx={{ minWidth: { xs: '100%', sm: 320 } }}
+            />
+          </Stack>
+          {filteredKpiItems.length === 0 ? (
+            <EmptyState
+              title="Sem itens para exibir"
+              description={kpiDetail?.emptyMessage ?? 'Nenhum detalhe encontrado para este KPI.'}
+            />
+          ) : (
+            <TableContainer sx={{ border: '1px solid rgba(15, 23, 42, 0.08)', borderRadius: 2, maxHeight: 460 }}>
+              <Table size="small" stickyHeader>
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 700 }}>Atividade</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Localidade</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Data</TableCell>
+                    <TableCell sx={{ fontWeight: 700, textAlign: 'right' }}>
+                      {kpiDetail?.countField ? 'Quantidade' : 'Perfil'}
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Relatório</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 700 }}>Ação</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {filteredKpiItems.map((item) => (
+                    <TableRow key={item.activityId} hover>
+                      <TableCell>
+                        <Stack spacing={0.4}>
+                          <Typography variant="body2" fontWeight={700}>
+                            {item.title}
+                          </Typography>
+                          <Stack direction="row" spacing={0.75} alignItems="center">
+                            <Chip
+                              size="small"
+                              label={item.specialtyName || 'Comissão CIPAVD'}
+                              sx={{ height: 20 }}
+                            />
+                            <Typography variant="caption" color="text.secondary">
+                              ID: {item.activityId.slice(0, 8)}
+                            </Typography>
+                          </Stack>
+                        </Stack>
+                      </TableCell>
+                      <TableCell>
+                        {formatGsdLabel(item.localityName, item.localityCode)}
+                      </TableCell>
+                      <TableCell>{formatDrilldownDate(item.eventDate)}</TableCell>
+                      <TableCell sx={{ textAlign: 'right' }}>
+                        {kpiDetail?.countField
+                          ? getKpiCountValue(item, kpiDetail.countField)
+                          : `${item.instructors ?? 0} Inst | ${item.recruits ?? 0} Rec | ${item.elos ?? 0} Elo | ${item.eloGraduadoMaster ?? 0} GM`}
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          size="small"
+                          color={item.hasSignedReport ? 'success' : 'default'}
+                          label={item.hasSignedReport ? 'Assinado' : 'Não assinado'}
+                        />
+                      </TableCell>
+                      <TableCell align="right">
+                        <Button
+                          size="small"
+                          variant="text"
+                          onClick={() => openActivityFromDetail(item.activityId)}
+                        >
+                          Abrir
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => navigate('/activities')}>Ver todas as atividades</Button>
+          <Button onClick={() => setKpiDetail(null)}>Fechar</Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog
         open={Boolean(readingLesson)}

@@ -1202,7 +1202,9 @@ export class TasksService {
     this.assertTaskOperateAccess(baseInstance, user);
 
     const baseSpecialtyId =
-      baseInstance.specialtyId ?? baseInstance.taskTemplate?.specialtyId ?? null;
+      baseInstance.specialtyId ??
+      baseInstance.taskTemplate?.specialtyId ??
+      null;
     for (const localityId of desiredLocalityIds) {
       this.assertConstraints(localityId, baseSpecialtyId, user);
       this.assertCanAssignInLocality(localityId, user);
@@ -1216,16 +1218,17 @@ export class TasksService {
       ),
     );
 
-    let sourceInstances = sourceTaskIds.length > 1
-      ? await this.prisma.taskInstance.findMany({
-          where: { id: { in: sourceTaskIds } },
-          include: {
-            taskTemplate: { select: { specialtyId: true } },
-            assignedElo: { select: { id: true, eloRoleId: true } },
-            responsibles: { select: { userId: true } },
-          },
-        })
-      : [];
+    let sourceInstances =
+      sourceTaskIds.length > 1
+        ? await this.prisma.taskInstance.findMany({
+            where: { id: { in: sourceTaskIds } },
+            include: {
+              taskTemplate: { select: { specialtyId: true } },
+              assignedElo: { select: { id: true, eloRoleId: true } },
+              responsibles: { select: { userId: true } },
+            },
+          })
+        : [];
 
     if (sourceInstances.length <= 1 && baseInstance.groupKey) {
       sourceInstances = await this.prisma.taskInstance.findMany({
@@ -1265,7 +1268,9 @@ export class TasksService {
       }
     }
 
-    const primaryLocalityId = desiredLocalityIds.includes(baseInstance.localityId)
+    const primaryLocalityId = desiredLocalityIds.includes(
+      baseInstance.localityId,
+    )
       ? baseInstance.localityId
       : desiredLocalityIds[0];
 
@@ -1969,6 +1974,21 @@ export class TasksService {
             graduadosMaster: 0,
           },
         },
+        drilldown: {
+          participants: {
+            instructors: [],
+            recruits: [],
+            elos: [],
+            graduadosMaster: [],
+          },
+          completedFieldActivities: [],
+          fieldActivitiesBySpecialty: {
+            psychology: [],
+            socialService: [],
+            doctrine: [],
+            law: [],
+          },
+        },
         lateItems: [],
         unassignedItems: [],
         riskTasks: [],
@@ -2112,6 +2132,23 @@ export class TasksService {
         .replace(/[\u0300-\u036f]/g, '')
         .trim()
         .toLowerCase();
+    const resolveFieldActivitySpecialty = (
+      activity: (typeof filteredActivities)[number],
+    ): 'psychology' | 'socialService' | 'doctrine' | 'law' | null => {
+      const normalized = normalizeSpecialtyName(
+        String(activity.specialty?.name ?? activity.activityType?.name ?? ''),
+      );
+      if (!normalized) return null;
+      if (normalized.includes('psicologia')) return 'psychology';
+      if (normalized.includes('servico social') || normalized === 'sso') {
+        return 'socialService';
+      }
+      if (normalized.includes('doutrina')) return 'doctrine';
+      if (normalized.includes('direito') || normalized.includes('jurid')) {
+        return 'law';
+      }
+      return null;
+    };
 
     const mapNationalActivityDetail = (
       activity: (typeof filteredActivities)[number],
@@ -2139,6 +2176,39 @@ export class TasksService {
         isUnassigned: !hasResponsible(activity),
       };
     };
+    const mapNationalDrilldownDetail = (
+      activity: (typeof filteredActivities)[number],
+    ) => {
+      const canonicalId =
+        canonicalLocalityIdByActivityId.get(activity.id) ??
+        activity.localityId ??
+        '';
+      const locality = localityById.get(canonicalId);
+      const instructors = activity.report?.instructorsCount ?? 0;
+      const recruits = activity.report?.recruitsCount ?? 0;
+      const eloPsychology = activity.report?.eloPsychologyCount ?? 0;
+      const eloSocialAssistance =
+        activity.report?.eloSocialAssistanceCount ?? 0;
+      const eloGraduadoMaster = activity.report?.eloGraduadoMasterCount ?? 0;
+      return {
+        activityId: activity.id,
+        title: activity.title ?? 'Atividade',
+        localityId: canonicalId,
+        localityCode: locality?.code ?? '',
+        localityName: locality?.name ?? '',
+        specialtyId: activity.specialtyId ?? null,
+        specialtyName: activity.specialty?.name ?? '',
+        eventDate: activity.eventDate ?? null,
+        status: activity.status,
+        hasSignedReport: hasSignedReport(activity),
+        instructors,
+        recruits,
+        eloPsychology,
+        eloSocialAssistance,
+        elos: eloPsychology + eloSocialAssistance,
+        eloGraduadoMaster,
+      };
+    };
 
     const perLocality = localities.map((locality) => {
       const localityActivities = activitiesByLocalityId.get(locality.id) ?? [];
@@ -2149,14 +2219,12 @@ export class TasksService {
         .map((activity) => activity.eventDate)
         .filter((value): value is Date => value instanceof Date)
         .sort((a, b) => b.getTime() - a.getTime())[0];
-      const visitCompleted = visitActivities.some(
-        (activity) => {
-          if (activity.status === ActivityStatus.DONE) return true;
-          if (activity.status === ActivityStatus.CANCELLED) return false;
-          if (!activity.eventDate) return false;
-          return activity.eventDate.getTime() <= now;
-        },
-      );
+      const visitCompleted = visitActivities.some((activity) => {
+        if (activity.status === ActivityStatus.DONE) return true;
+        if (activity.status === ActivityStatus.CANCELLED) return false;
+        if (!activity.eventDate) return false;
+        return activity.eventDate.getTime() <= now;
+      });
       const late = localityActivities.filter((activity) =>
         isLateActivity(activity),
       ).length;
@@ -2166,8 +2234,7 @@ export class TasksService {
       const progress = localityActivities.length
         ? Math.round(
             localityActivities.reduce(
-              (acc, activity) =>
-                acc + progressWeightByStatus[activity.status],
+              (acc, activity) => acc + progressWeightByStatus[activity.status],
               0,
             ) / localityActivities.length,
           )
@@ -2206,6 +2273,14 @@ export class TasksService {
       const left = (a.eventDate ?? a.createdAt).getTime();
       const right = (b.eventDate ?? b.createdAt).getTime();
       return left - right;
+    };
+    const sortByMostRecentEvent = (
+      a: (typeof filteredActivities)[number],
+      b: (typeof filteredActivities)[number],
+    ) => {
+      const left = (a.eventDate ?? a.createdAt).getTime();
+      const right = (b.eventDate ?? b.createdAt).getTime();
+      return right - left;
     };
     const lateItems = filteredActivities
       .filter((activity) => isLateActivity(activity))
@@ -2254,25 +2329,9 @@ export class TasksService {
       law: 0,
     };
     for (const activity of completedFieldActivities) {
-      const normalized = normalizeSpecialtyName(
-        String(activity.specialty?.name ?? activity.activityType?.name ?? ''),
-      );
-      if (!normalized) continue;
-      if (normalized.includes('psicologia')) {
-        fieldActivitiesBySpecialty.psychology += 1;
-        continue;
-      }
-      if (normalized.includes('servico social') || normalized === 'sso') {
-        fieldActivitiesBySpecialty.socialService += 1;
-        continue;
-      }
-      if (normalized.includes('doutrina')) {
-        fieldActivitiesBySpecialty.doctrine += 1;
-        continue;
-      }
-      if (normalized.includes('direito') || normalized.includes('jurid')) {
-        fieldActivitiesBySpecialty.law += 1;
-      }
+      const specialtyKey = resolveFieldActivitySpecialty(activity);
+      if (!specialtyKey) continue;
+      fieldActivitiesBySpecialty[specialtyKey] += 1;
     }
     const completedReports = completedActivities.filter((activity) =>
       hasSignedReport(activity),
@@ -2280,7 +2339,7 @@ export class TasksService {
     const completedVisits = completedActivities.filter((activity) =>
       isVisitActivity(activity),
     ).length;
-    
+
     // Calculate participant KPIs from activity reports
     let totalInstructors = 0;
     let totalRecruitsFromReports = 0;
@@ -2292,14 +2351,60 @@ export class TasksService {
       if ((activity as any).report) {
         totalInstructors += (activity as any).report.instructorsCount ?? 0;
         totalRecruitsFromReports += (activity as any).report.recruitsCount ?? 0;
-        const eloPsychologyCount = (activity as any).report.eloPsychologyCount ?? 0;
+        const eloPsychologyCount =
+          (activity as any).report.eloPsychologyCount ?? 0;
         const eloSocialAssistanceCount =
           (activity as any).report.eloSocialAssistanceCount ?? 0;
         totalEloPsychology += eloPsychologyCount;
         totalEloSocialAssistance += eloSocialAssistanceCount;
         totalElos += eloPsychologyCount + eloSocialAssistanceCount;
-        totalGraduadosMaster += (activity as any).report.eloGraduadoMasterCount ?? 0;
+        totalGraduadosMaster +=
+          (activity as any).report.eloGraduadoMasterCount ?? 0;
       }
+    }
+    const participantsDrilldown = {
+      instructors: completedActivities
+        .filter((activity) => (activity.report?.instructorsCount ?? 0) > 0)
+        .sort(sortByMostRecentEvent)
+        .map((activity) => mapNationalDrilldownDetail(activity)),
+      recruits: completedActivities
+        .filter((activity) => (activity.report?.recruitsCount ?? 0) > 0)
+        .sort(sortByMostRecentEvent)
+        .map((activity) => mapNationalDrilldownDetail(activity)),
+      elos: completedActivities
+        .filter((activity) => {
+          const eloPsychology = activity.report?.eloPsychologyCount ?? 0;
+          const eloSocialAssistance =
+            activity.report?.eloSocialAssistanceCount ?? 0;
+          return eloPsychology + eloSocialAssistance > 0;
+        })
+        .sort(sortByMostRecentEvent)
+        .map((activity) => mapNationalDrilldownDetail(activity)),
+      graduadosMaster: completedActivities
+        .filter(
+          (activity) => (activity.report?.eloGraduadoMasterCount ?? 0) > 0,
+        )
+        .sort(sortByMostRecentEvent)
+        .map((activity) => mapNationalDrilldownDetail(activity)),
+    };
+    const completedFieldActivitiesDrilldown = completedFieldActivities
+      .slice()
+      .sort(sortByMostRecentEvent)
+      .map((activity) => mapNationalDrilldownDetail(activity));
+    const fieldActivitiesBySpecialtyDrilldown = {
+      psychology: [] as ReturnType<typeof mapNationalDrilldownDetail>[],
+      socialService: [] as ReturnType<typeof mapNationalDrilldownDetail>[],
+      doctrine: [] as ReturnType<typeof mapNationalDrilldownDetail>[],
+      law: [] as ReturnType<typeof mapNationalDrilldownDetail>[],
+    };
+    for (const activity of completedFieldActivities
+      .slice()
+      .sort(sortByMostRecentEvent)) {
+      const specialtyKey = resolveFieldActivitySpecialty(activity);
+      if (!specialtyKey) continue;
+      fieldActivitiesBySpecialtyDrilldown[specialtyKey].push(
+        mapNationalDrilldownDetail(activity),
+      );
     }
     const taskWhereClauses: Prisma.TaskInstanceWhereInput[] = [];
     if (localityAliasIds.length === 0) {
@@ -2328,7 +2433,9 @@ export class TasksService {
     for (const instance of doneTaskInstances) {
       const canonicalLocalityId = aliasByLocalityId.get(instance.localityId);
       if (!canonicalLocalityId) continue;
-      const coverage = taskCoverageByTemplateId.get(instance.taskTemplateId) ?? new Set<string>();
+      const coverage =
+        taskCoverageByTemplateId.get(instance.taskTemplateId) ??
+        new Set<string>();
       coverage.add(canonicalLocalityId);
       taskCoverageByTemplateId.set(instance.taskTemplateId, coverage);
     }
@@ -2351,7 +2458,7 @@ export class TasksService {
         visitsCompleted,
         completedReports,
         completedTasks,
-        completedFieldActivities: completedActivities.length,
+        completedFieldActivities: completedFieldActivities.length,
         completedVisits,
         fieldActivitiesBySpecialty,
         participantsKpis: {
@@ -2367,6 +2474,11 @@ export class TasksService {
           elos: totalElos,
           graduadosMaster: totalGraduadosMaster,
         },
+      },
+      drilldown: {
+        participants: participantsDrilldown,
+        completedFieldActivities: completedFieldActivitiesDrilldown,
+        fieldActivitiesBySpecialty: fieldActivitiesBySpecialtyDrilldown,
       },
       lateItems,
       unassignedItems,
@@ -2392,51 +2504,52 @@ export class TasksService {
       localityWhere.id = localityId;
     }
 
-    const [localitiesRaw, historyRaw, recruitMembersRaw] = await this.prisma.$transaction([
-      this.prisma.locality.findMany({
-        where: localityWhere,
-        orderBy: { name: 'asc' },
-        select: {
-          id: true,
-          name: true,
-          code: true,
-          commanderName: true,
-          recruitsFemaleCountCurrent: true,
-          updatedAt: true,
-        },
-      }),
-      this.prisma.recruitsHistory.findMany({
-        where:
-          !hasNationalRecruitScope && constraints.localityId
-            ? { localityId: constraints.localityId }
-            : undefined,
-        orderBy: { date: 'asc' },
-      }),
-      this.prisma.recruitFemale.findMany({
-        where:
-          !hasNationalRecruitScope && constraints.localityId
-            ? { localityId: constraints.localityId }
-            : undefined,
-        select: {
-          id: true,
-          localityId: true,
-          name: true,
-          status: true,
-          dismissalReason: true,
-          dismissedAt: true,
-          destinationLocalityId: true,
-          designatedAt: true,
-          destinationLocality: {
-            select: {
-              id: true,
-              code: true,
-              name: true,
+    const [localitiesRaw, historyRaw, recruitMembersRaw] =
+      await this.prisma.$transaction([
+        this.prisma.locality.findMany({
+          where: localityWhere,
+          orderBy: { name: 'asc' },
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            commanderName: true,
+            recruitsFemaleCountCurrent: true,
+            updatedAt: true,
+          },
+        }),
+        this.prisma.recruitsHistory.findMany({
+          where:
+            !hasNationalRecruitScope && constraints.localityId
+              ? { localityId: constraints.localityId }
+              : undefined,
+          orderBy: { date: 'asc' },
+        }),
+        this.prisma.recruitFemale.findMany({
+          where:
+            !hasNationalRecruitScope && constraints.localityId
+              ? { localityId: constraints.localityId }
+              : undefined,
+          select: {
+            id: true,
+            localityId: true,
+            name: true,
+            status: true,
+            dismissalReason: true,
+            dismissedAt: true,
+            destinationLocalityId: true,
+            designatedAt: true,
+            destinationLocality: {
+              select: {
+                id: true,
+                code: true,
+                name: true,
+              },
             },
           },
-        },
-        orderBy: [{ name: 'asc' }],
-      }),
-    ]);
+          orderBy: [{ name: 'asc' }],
+        }),
+      ]);
     const history = historyRaw as Array<{
       localityId: string;
       date: Date;
@@ -2498,7 +2611,8 @@ export class TasksService {
       );
       const activeCount = locMembers.filter(
         (member) =>
-          member.status === 'RECRUITMENT_TO_START' || member.status === 'RECRUITMENT_STARTED',
+          member.status === 'RECRUITMENT_TO_START' ||
+          member.status === 'RECRUITMENT_STARTED',
       ).length;
       return {
         localityId: loc.id,
@@ -2507,10 +2621,18 @@ export class TasksService {
         commanderName: loc.commanderName ?? null,
         recruitsFemaleCountCurrent: activeCount,
         recruitsByStatus: {
-          toStart: locMembers.filter((member) => member.status === 'RECRUITMENT_TO_START').length,
-          started: locMembers.filter((member) => member.status === 'RECRUITMENT_STARTED').length,
-          dismissed: locMembers.filter((member) => member.status === 'DISMISSED').length,
-          assignedToOm: locMembers.filter((member) => member.status === 'ASSIGNED_TO_OM').length,
+          toStart: locMembers.filter(
+            (member) => member.status === 'RECRUITMENT_TO_START',
+          ).length,
+          started: locMembers.filter(
+            (member) => member.status === 'RECRUITMENT_STARTED',
+          ).length,
+          dismissed: locMembers.filter(
+            (member) => member.status === 'DISMISSED',
+          ).length,
+          assignedToOm: locMembers.filter(
+            (member) => member.status === 'ASSIGNED_TO_OM',
+          ).length,
         },
       };
     });
@@ -2556,7 +2678,8 @@ export class TasksService {
     const historyLog = normalizedHistory
       .map((entry) => ({
         localityId: entry.localityId,
-        localityName: localityById.get(entry.localityId)?.name ?? entry.localityId,
+        localityName:
+          localityById.get(entry.localityId)?.name ?? entry.localityId,
         code: localityById.get(entry.localityId)?.code ?? '',
         date: entry.date,
         recruitsFemaleCount: entry.value,
@@ -2575,8 +2698,7 @@ export class TasksService {
           localityName:
             localityById.get(canonicalId ?? member.localityId)?.name ??
             member.localityId,
-          code:
-            localityById.get(canonicalId ?? member.localityId)?.code ?? '',
+          code: localityById.get(canonicalId ?? member.localityId)?.code ?? '',
           dismissalReason: member.dismissalReason ?? null,
           dismissedAt: member.dismissedAt?.toISOString() ?? null,
         };
@@ -2815,9 +2937,7 @@ export class TasksService {
     }
     const dayMs = 1000 * 60 * 60 * 24;
     const now = Date.now();
-    const isLate = (
-      activity: (typeof filteredActivities)[number],
-    ): boolean => {
+    const isLate = (activity: (typeof filteredActivities)[number]): boolean => {
       if (!activity.eventDate) return false;
       if (
         activity.status === ActivityStatus.DONE ||
@@ -2902,7 +3022,8 @@ export class TasksService {
 
     const progressByLocality = localities
       .map((locality) => {
-        const localityActivities = activitiesByLocalityId.get(locality.id) ?? [];
+        const localityActivities =
+          activitiesByLocalityId.get(locality.id) ?? [];
         const done = localityActivities.filter(
           (activity) =>
             activity.status === ActivityStatus.DONE ||
@@ -3060,13 +3181,14 @@ export class TasksService {
       (activity) =>
         activity.reportRequired && activity.status === ActivityStatus.DONE,
     );
-    const approvedReportActivities = reportRequiredActivities.filter((activity) =>
-      hasSignedReport(activity),
+    const approvedReportActivities = reportRequiredActivities.filter(
+      (activity) => hasSignedReport(activity),
     );
     const complianceApproved = reportRequiredActivities.filter((activity) =>
       hasSignedReport(activity),
     ).length;
-    const compliancePending = reportRequiredActivities.length - complianceApproved;
+    const compliancePending =
+      reportRequiredActivities.length - complianceApproved;
     const reportPendingItems = reportRequiredActivities
       .filter((activity) => !hasSignedReport(activity))
       .map((activity) => mapExecutiveActivityItem(activity));
@@ -3076,14 +3198,16 @@ export class TasksService {
     );
     const participantsInCompletedActivities =
       completedActivitiesWithSavedReport.reduce(
-        (acc, activity) => acc + Number(activity.report?.participantsCount ?? 0),
+        (acc, activity) =>
+          acc + Number(activity.report?.participantsCount ?? 0),
         0,
       );
     const visitedCities = new Set(
       filteredActivities
         .filter(
           (activity) =>
-            activity.status === ActivityStatus.DONE && isVisitActivity(activity),
+            activity.status === ActivityStatus.DONE &&
+            isVisitActivity(activity),
         )
         .map(
           (activity) =>
@@ -3114,9 +3238,11 @@ export class TasksService {
                 instructorsCount: activity.report.instructorsCount,
                 recruitsCount: activity.report.recruitsCount,
                 eloPsychologyCount: activity.report.eloPsychologyCount,
-                eloSocialAssistanceCount: activity.report.eloSocialAssistanceCount,
+                eloSocialAssistanceCount:
+                  activity.report.eloSocialAssistanceCount,
                 eloGraduadoMasterCount: activity.report.eloGraduadoMasterCount,
-                participantsCharacteristics: activity.report.participantsCharacteristics,
+                participantsCharacteristics:
+                  activity.report.participantsCharacteristics,
                 conclusion: activity.report.conclusion,
                 city: activity.report.city,
                 closingDate: activity.report.closingDate,
@@ -3126,7 +3252,9 @@ export class TasksService {
       })
       .sort((a, b) => {
         const left = new Date(a.report?.signedAt ?? a.createdAt ?? 0).getTime();
-        const right = new Date(b.report?.signedAt ?? b.createdAt ?? 0).getTime();
+        const right = new Date(
+          b.report?.signedAt ?? b.createdAt ?? 0,
+        ).getTime();
         return right - left;
       });
 
@@ -3159,27 +3287,36 @@ export class TasksService {
         .replace(/[\u0300-\u036f]/g, '')
         .trim()
         .toLowerCase();
-    
-    const specialtiesMap = new Map<string, { specialtyId: string | null; specialtyName: string; count: number }>();
-    
+
+    const specialtiesMap = new Map<
+      string,
+      { specialtyId: string | null; specialtyName: string; count: number }
+    >();
+
     for (const activity of filteredActivities) {
       const specialtyId = activity.specialtyId ?? null;
       const rawSpecialtyName = activity.specialty?.name;
       const hasSpecialtyName = rawSpecialtyName && rawSpecialtyName.trim();
       const specialtyName = hasSpecialtyName ? rawSpecialtyName.trim() : '';
       const normalizedName = normalizeSpecialtyBucketName(specialtyName);
-      
+
       // Determine grouping key
       let key: string;
       let displayName: string;
-      
+
       // Priority 1: If specialtyId matches Psicologia specialty ID, or name contains "psicologia"
-      if (specialtyId === psicologiaSpecialtyId || (normalizedName && normalizedName.includes('psicologia'))) {
+      if (
+        specialtyId === psicologiaSpecialtyId ||
+        (normalizedName && normalizedName.includes('psicologia'))
+      ) {
         key = '__psicologia__';
         displayName = 'Psicologia';
       }
       // Priority 2: If specialtyId matches Comissão CIPAVD specialty ID, or name contains "comissao cipavd"
-      else if (specialtyId === commissionSpecialtyId || (normalizedName && normalizedName.includes('comissao cipavd'))) {
+      else if (
+        specialtyId === commissionSpecialtyId ||
+        (normalizedName && normalizedName.includes('comissao cipavd'))
+      ) {
         key = '__commission__';
         displayName = 'Comissão CIPAVD';
       }
@@ -3193,17 +3330,23 @@ export class TasksService {
         key = specialtyId ?? (normalizedName || '__unknown__');
         displayName = specialtyName || 'Sem especialidade';
       }
-      
+
       const current = specialtiesMap.get(key);
       if (current) {
         current.count += 1;
       } else {
         // For Psicologia, use psicologiaSpecialtyId; for Commission, use commissionSpecialtyId
-        const finalSpecialtyId = 
-          key === '__psicologia__' ? psicologiaSpecialtyId :
-          key === '__commission__' ? commissionSpecialtyId :
-          specialtyId;
-        specialtiesMap.set(key, { specialtyId: finalSpecialtyId, specialtyName: displayName, count: 1 });
+        const finalSpecialtyId =
+          key === '__psicologia__'
+            ? psicologiaSpecialtyId
+            : key === '__commission__'
+              ? commissionSpecialtyId
+              : specialtyId;
+        specialtiesMap.set(key, {
+          specialtyId: finalSpecialtyId,
+          specialtyName: displayName,
+          count: 1,
+        });
       }
     }
 
@@ -3376,7 +3519,10 @@ export class TasksService {
       const hasSpecialtyName = rawSpecialtyName && rawSpecialtyName.trim();
       const specialtyName = hasSpecialtyName ? rawSpecialtyName.trim() : '';
       const normalizedName = normalizeSpecialtyBucketName(specialtyName);
-      return normalizedName.includes('psicologia') || specialtyId === 'cmlpet4hv004kzpvci51ktsd2';
+      return (
+        normalizedName.includes('psicologia') ||
+        specialtyId === 'cmlpet4hv004kzpvci51ktsd2'
+      );
     });
 
     return {
@@ -3495,14 +3641,16 @@ export class TasksService {
 
     // Count Psicologia
     const psicologia = filteredActivities.filter((a) => {
-      if (psicologiaSpecialty && a.specialtyId === psicologiaSpecialty.id) return true;
+      if (psicologiaSpecialty && a.specialtyId === psicologiaSpecialty.id)
+        return true;
       const name = (a.specialty?.name || '').toLowerCase();
       return name.includes('psicologia');
     });
 
     // Count Comissão CIPAVD
     const commission = filteredActivities.filter((a) => {
-      if (commissionSpecialty && a.specialtyId === commissionSpecialty.id) return true;
+      if (commissionSpecialty && a.specialtyId === commissionSpecialty.id)
+        return true;
       if (!a.specialtyId) return true;
       const name = (a.specialty?.name || '').toLowerCase();
       return name.includes('comissão') && name.includes('cipavd');
