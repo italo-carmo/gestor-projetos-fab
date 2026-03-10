@@ -51,6 +51,17 @@ type ExecutiveKpiDetailState = {
   subtitle: string;
 } | null;
 
+type ExecutiveChartDetailState =
+  | {
+      kind: 'locality';
+      item: any;
+    }
+  | {
+      kind: 'specialty';
+      item: any;
+    }
+  | null;
+
 function loadExecutiveCardStyles(): Record<string, EditableCardStyle> {
   try {
     const raw = window.localStorage.getItem(EXECUTIVE_CARD_STYLES_STORAGE_KEY);
@@ -102,6 +113,7 @@ export function DashboardExecutivePage() {
   });
   const [kpiDetail, setKpiDetail] = useState<ExecutiveKpiDetailState>(null);
   const [kpiDetailSearch, setKpiDetailSearch] = useState('');
+  const [chartDetail, setChartDetail] = useState<ExecutiveChartDetailState>(null);
 
   const updateParam = (key: string, value: string) => {
     const next = new URLSearchParams(params);
@@ -196,6 +208,9 @@ export function DashboardExecutivePage() {
         0,
       ),
   );
+  const completedActivityItems = executiveKpiDetails.completedActivities ?? [];
+  const participantsActivityItems = executiveKpiDetails.participantsInActivities ?? [];
+  const reportsApprovedItems = executiveKpiDetails.reportsApproved ?? [];
 
   const downloadCsv = () => {
     const headers = ['localityCode', 'localityName', 'progress', 'specialtyName', 'specialtyCount'];
@@ -276,6 +291,82 @@ export function DashboardExecutivePage() {
     next.set('localityId', targetLocalityId);
     navigate(`/activities?${next.toString()}`);
   };
+  const openSpecialtyActivities = (targetSpecialtyId: string) => {
+    const next = new URLSearchParams();
+    next.set('specialtyId', targetSpecialtyId);
+    navigate(`/activities?${next.toString()}`);
+  };
+  const openChartDetail = (kind: 'locality' | 'specialty', item: any) => {
+    setChartDetail({ kind, item });
+  };
+  const normalizeText = (value: unknown) =>
+    String(value ?? '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim()
+      .toLowerCase();
+  const specialtyMatches = (activity: any, specialty: any) => {
+    const selectedName = normalizeText(specialty?.specialtyName);
+    const activityName = normalizeText(activity?.specialtyName);
+    if (specialty?.specialtyId && activity?.specialtyId) {
+      return String(specialty.specialtyId) === String(activity.specialtyId);
+    }
+    if (selectedName === 'comissao cipavd') {
+      return activityName === '' || activityName === 'comissao cipavd';
+    }
+    if (selectedName === 'psicologia') {
+      return activityName.includes('psicologia');
+    }
+    return activityName === selectedName;
+  };
+  const chartDetailActivities =
+    chartDetail?.kind === 'locality'
+      ? completedActivityItems
+          .filter(
+            (item: any) =>
+              String(item?.localityId ?? '') ===
+              String(chartDetail.item?.localityId ?? ''),
+          )
+          .slice(0, 20)
+      : chartDetail?.kind === 'specialty'
+        ? completedActivityItems
+            .filter((item: any) => specialtyMatches(item, chartDetail.item))
+            .slice(0, 20)
+        : [];
+  const chartDetailParticipantsTotal =
+    chartDetail?.kind === 'locality'
+      ? participantsActivityItems
+          .filter(
+            (item: any) =>
+              String(item?.localityId ?? '') ===
+              String(chartDetail.item?.localityId ?? ''),
+          )
+          .reduce(
+            (acc: number, item: any) =>
+              acc + Number(item?.report?.participantsCount ?? 0),
+            0,
+          )
+      : chartDetail?.kind === 'specialty'
+        ? participantsActivityItems
+            .filter((item: any) => specialtyMatches(item, chartDetail.item))
+            .reduce(
+              (acc: number, item: any) =>
+                acc + Number(item?.report?.participantsCount ?? 0),
+              0,
+            )
+        : 0;
+  const chartDetailApprovedReports =
+    chartDetail?.kind === 'locality'
+      ? reportsApprovedItems.filter(
+          (item: any) =>
+            String(item?.localityId ?? '') ===
+            String(chartDetail.item?.localityId ?? ''),
+        ).length
+      : chartDetail?.kind === 'specialty'
+        ? reportsApprovedItems.filter((item: any) =>
+            specialtyMatches(item, chartDetail.item),
+          ).length
+        : 0;
   const activeKpiItems = kpiDetail
     ? executiveKpiDetails[kpiDetail.kind] ?? []
     : [];
@@ -521,6 +612,9 @@ export function DashboardExecutivePage() {
                 </Tooltip>
               ) : null}
             </Stack>
+            <Typography variant="caption" color="text.secondary" sx={{ mb: 0.7, display: 'block' }}>
+              Clique em uma barra para detalhar o indicador.
+            </Typography>
             <ResponsiveContainer width="100%" height={250}>
               <BarChart
                 data={topSpecialties}
@@ -530,7 +624,17 @@ export function DashboardExecutivePage() {
                 <XAxis type="number" allowDecimals={false} />
                 <YAxis type="category" dataKey="specialtyName" width={150} />
                 <RechartsTooltip formatter={(value: any) => [value, 'Atividades']} />
-                <Bar dataKey="count" fill="#4D86A0" radius={[0, 6, 6, 0]} barSize={14} />
+                <Bar
+                  dataKey="count"
+                  fill="#4D86A0"
+                  radius={[0, 6, 6, 0]}
+                  barSize={14}
+                  cursor="pointer"
+                  onClick={(state: any) => {
+                    if (!state?.payload) return;
+                    openChartDetail('specialty', state.payload);
+                  }}
+                />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -567,12 +671,25 @@ export function DashboardExecutivePage() {
                 </Tooltip>
               ) : null}
             </Stack>
+            <Typography variant="caption" color="text.secondary" sx={{ mb: 0.7, display: 'block' }}>
+              Clique em uma barra para detalhar a localidade.
+            </Typography>
             <ResponsiveContainer width="100%" height={250}>
               <BarChart data={topLocalitiesByProgress}>
                 <XAxis dataKey="localityCode" />
                 <YAxis />
                 <RechartsTooltip formatter={(value: any) => [`${value}%`, 'Progresso']} />
-                <Bar dataKey="progress" fill="#114259" radius={[6, 6, 0, 0]} barSize={18} />
+                <Bar
+                  dataKey="progress"
+                  fill="#114259"
+                  radius={[6, 6, 0, 0]}
+                  barSize={18}
+                  cursor="pointer"
+                  onClick={(state: any) => {
+                    if (!state?.payload) return;
+                    openChartDetail('locality', state.payload);
+                  }}
+                />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -836,6 +953,114 @@ export function DashboardExecutivePage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setKpiDetail(null)}>Fechar</Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog
+        open={Boolean(chartDetail)}
+        onClose={() => setChartDetail(null)}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle sx={{ pb: 0.7 }}>
+          {chartDetail?.kind === 'locality'
+            ? `Localidade: ${chartDetail.item?.localityCode || chartDetail.item?.localityName || '-'}`
+            : `Especialidade: ${chartDetail?.item?.specialtyName || 'Sem especialidade'}`}
+        </DialogTitle>
+        <DialogContent dividers>
+          {chartDetail?.kind === 'locality' ? (
+            <Stack spacing={1.1}>
+              <Typography variant="body2" color="text.secondary">
+                Este indicador simboliza o percentual médio de execução das atividades da localidade no período filtrado.
+              </Typography>
+              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                <Chip size="small" label={`Progresso: ${Number(chartDetail.item?.progress ?? 0)}%`} />
+                <Chip size="small" label={`Atividades: ${Number(chartDetail.item?.activitiesCount ?? 0)}`} />
+                <Chip size="small" label={`Concluídas: ${Number(chartDetail.item?.done ?? 0)}`} />
+                <Chip size="small" label={`Atrasadas: ${Number(chartDetail.item?.late ?? 0)}`} />
+                <Chip size="small" label={`Sem responsável: ${Number(chartDetail.item?.unassigned ?? 0)}`} />
+                <Chip size="small" label={`Relatórios pendentes: ${Number(chartDetail.item?.reportPending ?? 0)}`} />
+                <Chip size="small" label={`Relatórios aprovados: ${chartDetailApprovedReports}`} />
+                <Chip size="small" label={`Participantes: ${chartDetailParticipantsTotal}`} />
+              </Stack>
+            </Stack>
+          ) : (
+            <Stack spacing={1.1}>
+              <Typography variant="body2" color="text.secondary">
+                Este indicador simboliza o volume de atividades registradas para a especialidade no período filtrado.
+              </Typography>
+              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                <Chip size="small" label={`Atividades: ${Number(chartDetail?.item?.count ?? 0)}`} />
+                <Chip
+                  size="small"
+                  label={`Participação: ${
+                    totalActivities
+                      ? Math.round((Number(chartDetail?.item?.count ?? 0) / totalActivities) * 100)
+                      : 0
+                  }%`}
+                />
+                <Chip size="small" label={`Relatórios aprovados: ${chartDetailApprovedReports}`} />
+                <Chip size="small" label={`Participantes: ${chartDetailParticipantsTotal}`} />
+              </Stack>
+            </Stack>
+          )}
+          <Box sx={{ mt: 1.5 }}>
+            <Typography variant="subtitle2" sx={{ mb: 0.8 }}>
+              Atividades concluídas relacionadas (até 20)
+            </Typography>
+            {chartDetailActivities.length === 0 ? (
+              <Typography variant="body2" color="text.secondary">
+                Nenhuma atividade concluída encontrada para o item selecionado.
+              </Typography>
+            ) : (
+              <Box sx={{ display: 'grid', gap: 1 }}>
+                {chartDetailActivities.map((item: any) => (
+                  <Card key={item.activityId} variant="outlined">
+                    <CardContent sx={{ p: 1.2 }}>
+                      <Stack
+                        direction={{ xs: 'column', md: 'row' }}
+                        justifyContent="space-between"
+                        spacing={1}
+                      >
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                            {item.title}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {item.localityCode || item.localityName} • {formatDateTime(item.eventDate)}
+                          </Typography>
+                        </Box>
+                        <Button
+                          size="small"
+                          variant="text"
+                          onClick={() => openActivityFromDetail(String(item.activityId))}
+                        >
+                          Abrir atividade
+                        </Button>
+                      </Stack>
+                    </CardContent>
+                  </Card>
+                ))}
+              </Box>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          {chartDetail?.kind === 'locality' ? (
+            <Button
+              variant="outlined"
+              onClick={() => openLocalityActivities(String(chartDetail.item?.localityId ?? ''))}
+            >
+              Ver atividades da localidade
+            </Button>
+          ) : chartDetail?.item?.specialtyId ? (
+            <Button
+              variant="outlined"
+              onClick={() => openSpecialtyActivities(String(chartDetail.item?.specialtyId))}
+            >
+              Ver atividades da especialidade
+            </Button>
+          ) : null}
+          <Button onClick={() => setChartDetail(null)}>Fechar</Button>
         </DialogActions>
       </Dialog>
       <Dialog open={Boolean(editingCardId)} onClose={() => setEditingCardId(null)} fullWidth maxWidth="xs">
