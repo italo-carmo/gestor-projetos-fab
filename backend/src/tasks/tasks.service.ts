@@ -1981,7 +1981,10 @@ export class TasksService {
             elos: [],
             graduadosMaster: [],
           },
+          completedReports: [],
+          completedTasks: [],
           completedFieldActivities: [],
+          completedVisits: [],
           fieldActivitiesBySpecialty: {
             psychology: [],
             socialService: [],
@@ -2339,6 +2342,14 @@ export class TasksService {
     const completedVisits = completedActivities.filter((activity) =>
       isVisitActivity(activity),
     ).length;
+    const completedReportsDrilldown = completedActivities
+      .filter((activity) => hasSignedReport(activity))
+      .sort(sortByMostRecentEvent)
+      .map((activity) => mapNationalDrilldownDetail(activity));
+    const completedVisitsDrilldown = completedActivities
+      .filter((activity) => isVisitActivity(activity))
+      .sort(sortByMostRecentEvent)
+      .map((activity) => mapNationalDrilldownDetail(activity));
 
     // Calculate participant KPIs from activity reports
     let totalInstructors = 0;
@@ -2427,10 +2438,25 @@ export class TasksService {
       select: {
         localityId: true,
         taskTemplateId: true,
+        taskTemplate: {
+          select: {
+            title: true,
+            specialty: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        },
       },
     });
     const taskCoverageByTemplateId = new Map<string, Set<string>>();
+    const taskTemplateMetaByTemplateId = new Map<
+      string,
+      { title: string; specialtyName: string | null }
+    >();
     for (const instance of doneTaskInstances) {
+      if (!instance.taskTemplateId) continue;
       const canonicalLocalityId = aliasByLocalityId.get(instance.localityId);
       if (!canonicalLocalityId) continue;
       const coverage =
@@ -2438,11 +2464,53 @@ export class TasksService {
         new Set<string>();
       coverage.add(canonicalLocalityId);
       taskCoverageByTemplateId.set(instance.taskTemplateId, coverage);
+      if (!taskTemplateMetaByTemplateId.has(instance.taskTemplateId)) {
+        taskTemplateMetaByTemplateId.set(instance.taskTemplateId, {
+          title: String(instance.taskTemplate?.title ?? '').trim(),
+          specialtyName: instance.taskTemplate?.specialty?.name ?? null,
+        });
+      }
     }
     const requiredLocalityCount = localities.length;
-    const completedTasks = Array.from(taskCoverageByTemplateId.values()).filter(
-      (coveredLocalities) => coveredLocalities.size >= requiredLocalityCount,
-    ).length;
+    const completedTaskEntries = Array.from(taskCoverageByTemplateId.entries())
+      .filter(
+        ([, coveredLocalities]) =>
+          coveredLocalities.size >= requiredLocalityCount,
+      )
+      .sort(([leftTemplateId], [rightTemplateId]) => {
+        const leftTitle =
+          taskTemplateMetaByTemplateId.get(leftTemplateId)?.title ??
+          leftTemplateId;
+        const rightTitle =
+          taskTemplateMetaByTemplateId.get(rightTemplateId)?.title ??
+          rightTemplateId;
+        return leftTitle.localeCompare(rightTitle, 'pt-BR');
+      });
+    const completedTasks = completedTaskEntries.length;
+    const completedTasksDrilldown = completedTaskEntries.map(
+      ([templateId, coveredLocalities]) => {
+        const metadata = taskTemplateMetaByTemplateId.get(templateId);
+        const title = metadata?.title || 'Tarefa concluída';
+        const params = new URLSearchParams();
+        params.set('status', TaskStatus.DONE);
+        if (metadata?.title) {
+          params.set('q', metadata.title);
+        }
+        return {
+          activityId: `task-template-${templateId}`,
+          title,
+          localityId: '',
+          localityCode: '',
+          localityName: 'Cobertura nacional',
+          specialtyId: null,
+          specialtyName: metadata?.specialtyName || 'Tarefa',
+          eventDate: null,
+          status: TaskStatus.DONE,
+          detailLabel: `${coveredLocalities.size}/${requiredLocalityCount} localidades`,
+          linkPath: `/tasks?${params.toString()}`,
+        };
+      },
+    );
 
     return {
       items: perLocality,
@@ -2477,7 +2545,10 @@ export class TasksService {
       },
       drilldown: {
         participants: participantsDrilldown,
+        completedReports: completedReportsDrilldown,
+        completedTasks: completedTasksDrilldown,
         completedFieldActivities: completedFieldActivitiesDrilldown,
+        completedVisits: completedVisitsDrilldown,
         fieldActivitiesBySpecialty: fieldActivitiesBySpecialtyDrilldown,
       },
       lateItems,

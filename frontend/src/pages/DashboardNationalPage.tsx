@@ -110,6 +110,8 @@ type NationalDrilldownItem = {
   eventDate?: string | null;
   status?: string;
   hasSignedReport?: boolean;
+  detailLabel?: string | null;
+  linkPath?: string | null;
   instructors?: number;
   recruits?: number;
   eloPsychology?: number;
@@ -125,7 +127,10 @@ type NationalDashboardDrilldown = {
     elos: NationalDrilldownItem[];
     graduadosMaster: NationalDrilldownItem[];
   };
+  completedReports: NationalDrilldownItem[];
+  completedTasks: NationalDrilldownItem[];
   completedFieldActivities: NationalDrilldownItem[];
+  completedVisits: NationalDrilldownItem[];
   fieldActivitiesBySpecialty: {
     psychology: NationalDrilldownItem[];
     socialService: NationalDrilldownItem[];
@@ -139,6 +144,7 @@ type DrilldownCountField =
   | 'recruits'
   | 'elos'
   | 'eloGraduadoMaster'
+  | 'detailLabel'
   | null;
 
 type KpiDetailState = {
@@ -258,7 +264,10 @@ export function DashboardNationalPage() {
       elos: [],
       graduadosMaster: [],
     },
+    completedReports: [],
+    completedTasks: [],
     completedFieldActivities: [],
+    completedVisits: [],
     fieldActivitiesBySpecialty: {
       psychology: [],
       socialService: [],
@@ -343,6 +352,33 @@ export function DashboardNationalPage() {
       countField: null,
     });
   };
+  const openCompletedReportsDetail = () => {
+    openKpiDetail({
+      title: 'Relatórios concluídos',
+      subtitle: 'Atividades concluídas com relatório assinado.',
+      items: drilldown.completedReports,
+      emptyMessage: 'Nenhuma atividade concluída com relatório assinado.',
+      countField: null,
+    });
+  };
+  const openCompletedTasksDetail = () => {
+    openKpiDetail({
+      title: 'Tarefas concluídas',
+      subtitle: 'Tarefas finalizadas em todas as localidades do recorte.',
+      items: drilldown.completedTasks,
+      emptyMessage: 'Nenhuma tarefa concluída em todas as localidades.',
+      countField: 'detailLabel',
+    });
+  };
+  const openCompletedVisitsDetail = () => {
+    openKpiDetail({
+      title: 'Visitas concluídas',
+      subtitle: 'Atividades do tipo visita com status concluído.',
+      items: drilldown.completedVisits,
+      emptyMessage: 'Nenhuma visita concluída encontrada.',
+      countField: null,
+    });
+  };
   const openFieldAreaDetail = (
     key: 'psychology' | 'socialService' | 'doctrine' | 'law',
   ) => {
@@ -385,6 +421,9 @@ export function DashboardNationalPage() {
     field: DrilldownCountField,
   ) => {
     if (!field) return null;
+    if (field === 'detailLabel') {
+      return item.detailLabel || '—';
+    }
     return Number(item[field] ?? 0);
   };
   const normalizedKpiSearch = kpiDetailSearch
@@ -523,8 +562,12 @@ export function DashboardNationalPage() {
     setEditingCardId(null);
   };
   const getIndicatorClickAction = (groupId: string, itemId: string) => {
-    if (groupId === 'smif-completed' && itemId === 'fieldActivities') {
-      return openCompletedFieldActivitiesDetail;
+    if (groupId === 'smif-completed') {
+      if (itemId === 'reports') return openCompletedReportsDetail;
+      if (itemId === 'tasks') return openCompletedTasksDetail;
+      if (itemId === 'fieldActivities') return openCompletedFieldActivitiesDetail;
+      if (itemId === 'visits') return openCompletedVisitsDetail;
+      return null;
     }
     if (groupId === 'smif-field') {
       if (
@@ -555,6 +598,15 @@ export function DashboardNationalPage() {
     next.set('activityId', activityId);
     next.set('tab', 'report');
     navigate(`/activities?${next.toString()}`);
+  };
+  const openKpiDetailItem = (item: NationalDrilldownItem) => {
+    if (item.linkPath) {
+      navigate(item.linkPath);
+      return;
+    }
+    if (item.activityId) {
+      openActivityFromDetail(item.activityId);
+    }
   };
 
   return (
@@ -1029,7 +1081,11 @@ export function DashboardNationalPage() {
                     <TableCell sx={{ fontWeight: 700 }}>Localidade</TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>Data</TableCell>
                     <TableCell sx={{ fontWeight: 700, textAlign: 'right' }}>
-                      {kpiDetail?.countField ? 'Quantidade' : 'Perfil'}
+                      {kpiDetail?.countField === 'detailLabel'
+                        ? 'Detalhe'
+                        : kpiDetail?.countField
+                          ? 'Quantidade'
+                          : 'Perfil'}
                     </TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>Relatório</TableCell>
                     <TableCell align="right" sx={{ fontWeight: 700 }}>Ação</TableCell>
@@ -1065,19 +1121,25 @@ export function DashboardNationalPage() {
                           : `${item.instructors ?? 0} Inst | ${item.recruits ?? 0} Rec | ${item.elos ?? 0} Elo | ${item.eloGraduadoMaster ?? 0} GM`}
                       </TableCell>
                       <TableCell>
-                        <Chip
-                          size="small"
-                          color={item.hasSignedReport ? 'success' : 'default'}
-                          label={item.hasSignedReport ? 'Assinado' : 'Não assinado'}
-                        />
+                        {typeof item.hasSignedReport === 'boolean' ? (
+                          <Chip
+                            size="small"
+                            color={item.hasSignedReport ? 'success' : 'default'}
+                            label={item.hasSignedReport ? 'Assinado' : 'Não assinado'}
+                          />
+                        ) : (
+                          <Typography variant="caption" color="text.secondary">
+                            —
+                          </Typography>
+                        )}
                       </TableCell>
                       <TableCell align="right">
                         <Button
                           size="small"
                           variant="text"
-                          onClick={() => openActivityFromDetail(item.activityId)}
+                          onClick={() => openKpiDetailItem(item)}
                         >
-                          Abrir
+                          {item.linkPath ? 'Abrir tarefas' : 'Abrir'}
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -1088,7 +1150,15 @@ export function DashboardNationalPage() {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => navigate('/activities')}>Ver todas as atividades</Button>
+          <Button
+            onClick={() =>
+              navigate(kpiDetail?.countField === 'detailLabel' ? '/tasks' : '/activities')
+            }
+          >
+            {kpiDetail?.countField === 'detailLabel'
+              ? 'Ver todas as tarefas'
+              : 'Ver todas as atividades'}
+          </Button>
           <Button onClick={() => setKpiDetail(null)}>Fechar</Button>
         </DialogActions>
       </Dialog>
