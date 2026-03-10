@@ -2770,6 +2770,12 @@ export class TasksService {
         total: 0,
         pendingItems: [],
       },
+      kpiDetails: {
+        completedActivities: [],
+        visitedCities: [],
+        reportsApproved: [],
+        participantsInActivities: [],
+      },
       risk: {
         top10: [],
       },
@@ -2986,6 +2992,7 @@ export class TasksService {
         eventDate: activity.eventDate,
         createdAt: activity.createdAt,
         status: activity.status,
+        isVisit: isVisitActivity(activity),
         reportRequired: activity.reportRequired,
         hasSignedReport: hasSignedReport(activity),
         isLate: late,
@@ -3002,6 +3009,11 @@ export class TasksService {
     const activityItems = filteredActivities.map((activity) =>
       mapExecutiveActivityItem(activity),
     );
+    const sortByMostRecentActivity = (a: any, b: any) => {
+      const left = new Date(a.eventDate ?? a.createdAt ?? 0).getTime();
+      const right = new Date(b.eventDate ?? b.createdAt ?? 0).getTime();
+      return right - left;
+    };
     const totalActivities = activityItems.length;
     const completedActivities = activityItems.filter(
       (activity) =>
@@ -3217,6 +3229,99 @@ export class TasksService {
         )
         .filter(Boolean),
     ).size;
+    const completedActivitiesItems = filteredActivities
+      .filter((activity) => activity.status === ActivityStatus.DONE)
+      .map((activity) => mapExecutiveActivityItem(activity))
+      .sort(sortByMostRecentActivity);
+    const visitedCitiesMap = new Map<
+      string,
+      {
+        localityId: string;
+        localityCode: string;
+        localityName: string;
+        commandName: string;
+        visitActivities: number;
+        lastVisitDate: Date | null;
+      }
+    >();
+    for (const activity of filteredActivities) {
+      if (activity.status !== ActivityStatus.DONE || !isVisitActivity(activity)) {
+        continue;
+      }
+      const canonicalId =
+        canonicalLocalityIdByActivityId.get(activity.id) ??
+        activity.localityId ??
+        '';
+      if (!canonicalId) continue;
+      const locality = localityById.get(canonicalId);
+      const current = visitedCitiesMap.get(canonicalId);
+      const currentEventDate = activity.eventDate ?? activity.createdAt;
+      if (!current) {
+        visitedCitiesMap.set(canonicalId, {
+          localityId: canonicalId,
+          localityCode: locality?.code ?? '',
+          localityName: locality?.name ?? '',
+          commandName: locality?.commandName ?? '',
+          visitActivities: 1,
+          lastVisitDate: currentEventDate ?? null,
+        });
+        continue;
+      }
+      current.visitActivities += 1;
+      if (
+        currentEventDate &&
+        (!current.lastVisitDate ||
+          currentEventDate.getTime() > current.lastVisitDate.getTime())
+      ) {
+        current.lastVisitDate = currentEventDate;
+      }
+    }
+    const visitedCitiesItems = Array.from(visitedCitiesMap.values()).sort(
+      (a, b) => {
+        if (b.visitActivities !== a.visitActivities) {
+          return b.visitActivities - a.visitActivities;
+        }
+        return (
+          new Date(b.lastVisitDate ?? 0).getTime() -
+          new Date(a.lastVisitDate ?? 0).getTime()
+        );
+      },
+    );
+    const participantsActivitiesItems = completedActivitiesWithSavedReport
+      .filter((activity) => Number(activity.report?.participantsCount ?? 0) > 0)
+      .map((activity) => {
+        const baseItem = mapExecutiveActivityItem(activity);
+        return {
+          ...baseItem,
+          report: activity.report
+            ? {
+                id: activity.report.id,
+                signedAt: activity.report.signedAt,
+                date: activity.report.date,
+                location: activity.report.location,
+                responsible: activity.report.responsible,
+                missionSupport: activity.report.missionSupport,
+                introduction: activity.report.introduction,
+                missionObjectives: activity.report.missionObjectives,
+                executionSchedule: activity.report.executionSchedule,
+                activitiesPerformed: activity.report.activitiesPerformed,
+                participantsCount: activity.report.participantsCount,
+                instructorsCount: activity.report.instructorsCount,
+                recruitsCount: activity.report.recruitsCount,
+                eloPsychologyCount: activity.report.eloPsychologyCount,
+                eloSocialAssistanceCount:
+                  activity.report.eloSocialAssistanceCount,
+                eloGraduadoMasterCount: activity.report.eloGraduadoMasterCount,
+                participantsCharacteristics:
+                  activity.report.participantsCharacteristics,
+                conclusion: activity.report.conclusion,
+                city: activity.report.city,
+                closingDate: activity.report.closingDate,
+              }
+            : null,
+        };
+      })
+      .sort(sortByMostRecentActivity);
     const reportCompletedItems = approvedReportActivities
       .map((activity) => {
         const baseItem = mapExecutiveActivityItem(activity);
@@ -3432,6 +3537,12 @@ export class TasksService {
         total: reportRequiredActivities.length,
         completedItems: reportCompletedItems,
         pendingItems: reportPendingItems,
+      },
+      kpiDetails: {
+        completedActivities: completedActivitiesItems,
+        visitedCities: visitedCitiesItems,
+        reportsApproved: reportCompletedItems,
+        participantsInActivities: participantsActivitiesItems,
       },
       risk: {
         top10: riskScores.sort((a, b) => b.score - a.score).slice(0, 10),

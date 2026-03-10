@@ -3,6 +3,7 @@ import {
   Button,
   Card,
   CardContent,
+  Chip,
   Dialog,
   DialogActions,
   DialogContent,
@@ -17,7 +18,7 @@ import {
 } from '@mui/material';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import { useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Bar, BarChart, ResponsiveContainer, Tooltip as RechartsTooltip, XAxis, YAxis } from 'recharts';
 import { useExecutiveDashboard, useMe } from '../api/hooks';
 import { can } from '../app/rbac';
@@ -31,14 +32,24 @@ const KPI_BLUE_CARD_SX = {
   border: '1px solid rgba(139, 184, 207, 0.38)',
   boxShadow: '0 18px 34px rgba(15,44,59,0.36)',
 } as const;
-const BLUE_TEXT_MAIN = { color: '#F4FAFD' };
-const BLUE_TEXT_SUB = { color: 'rgba(231,244,250,0.92)' };
 const EXECUTIVE_CARD_STYLES_STORAGE_KEY = 'executive-card-styles-v1';
 
 type EditableCardStyle = {
   backgroundColor: string;
   textColor: string;
 };
+
+type ExecutiveKpiDetailKind =
+  | 'completedActivities'
+  | 'visitedCities'
+  | 'reportsApproved'
+  | 'participantsInActivities';
+
+type ExecutiveKpiDetailState = {
+  kind: ExecutiveKpiDetailKind;
+  title: string;
+  subtitle: string;
+} | null;
 
 function loadExecutiveCardStyles(): Record<string, EditableCardStyle> {
   try {
@@ -61,6 +72,7 @@ function formatDateTime(value: string | null | undefined) {
 export function DashboardExecutivePage() {
   const { data: me } = useMe();
   const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
 
   const from = params.get('from') ?? '';
   const to = params.get('to') ?? '';
@@ -88,6 +100,8 @@ export function DashboardExecutivePage() {
     backgroundColor: '#FFFFFF',
     textColor: '#111827',
   });
+  const [kpiDetail, setKpiDetail] = useState<ExecutiveKpiDetailState>(null);
+  const [kpiDetailSearch, setKpiDetailSearch] = useState('');
 
   const updateParam = (key: string, value: string) => {
     const next = new URLSearchParams(params);
@@ -163,6 +177,14 @@ export function DashboardExecutivePage() {
     .sort((a: any, b: any) => Number(b.progress ?? 0) - Number(a.progress ?? 0))
     .slice(0, 12);
   const completedReportItems = data.reportsCompliance?.completedItems ?? [];
+  const executiveKpiDetails = data.kpiDetails ?? {
+    completedActivities: [],
+    visitedCities: [],
+    reportsApproved: completedReportItems,
+    participantsInActivities: completedReportItems.filter(
+      (item: any) => Number(item?.report?.participantsCount ?? 0) > 0,
+    ),
+  };
   const visitedCities = Number(
     data.summary?.visitedCities ??
       byLocality.filter((item: any) => Number(item.done ?? 0) > 0).length,
@@ -212,6 +234,73 @@ export function DashboardExecutivePage() {
     window.localStorage.setItem(EXECUTIVE_CARD_STYLES_STORAGE_KEY, JSON.stringify(next));
     setEditingCardId(null);
   };
+  const openKpiDetail = (kind: ExecutiveKpiDetailKind) => {
+    const metadata: Record<
+      ExecutiveKpiDetailKind,
+      { title: string; subtitle: string }
+    > = {
+      completedActivities: {
+        title: 'Atividades concluídas',
+        subtitle: 'Lista de atividades concluídas no recorte atual.',
+      },
+      visitedCities: {
+        title: 'Cidades visitadas',
+        subtitle:
+          'Localidades que receberam atividade de visita concluída no recorte atual.',
+      },
+      reportsApproved: {
+        title: 'Relatórios aprovados',
+        subtitle: 'Relatórios assinados e aprovados no período.',
+      },
+      participantsInActivities: {
+        title: 'Participantes em atividades',
+        subtitle:
+          'Atividades concluídas com relatório salvo e participantes registrados.',
+      },
+    };
+    setKpiDetail({
+      kind,
+      title: metadata[kind].title,
+      subtitle: metadata[kind].subtitle,
+    });
+    setKpiDetailSearch('');
+  };
+  const openActivityFromDetail = (activityId: string) => {
+    const next = new URLSearchParams();
+    next.set('activityId', activityId);
+    next.set('tab', 'report');
+    navigate(`/activities?${next.toString()}`);
+  };
+  const openLocalityActivities = (targetLocalityId: string) => {
+    const next = new URLSearchParams();
+    next.set('localityId', targetLocalityId);
+    navigate(`/activities?${next.toString()}`);
+  };
+  const activeKpiItems = kpiDetail
+    ? executiveKpiDetails[kpiDetail.kind] ?? []
+    : [];
+  const normalizedKpiDetailSearch = String(kpiDetailSearch ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+  const filteredKpiItems = !normalizedKpiDetailSearch
+    ? activeKpiItems
+    : activeKpiItems.filter((item: any) => {
+        const haystack = [
+          item?.title,
+          item?.localityCode,
+          item?.localityName,
+          item?.commandName,
+          item?.specialtyName,
+        ]
+          .map((value) => String(value ?? ''))
+          .join(' ')
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .toLowerCase();
+        return haystack.includes(normalizedKpiDetailSearch);
+      });
 
   return (
     <Box>
@@ -334,21 +423,25 @@ export function DashboardExecutivePage() {
             >
               {[
                 {
+                  id: 'completedActivities' as const,
                   label: 'Atividades concluídas',
                   value: doneCount,
                   helper: `Taxa de conclusão: ${closureRate}%`,
                 },
                 {
+                  id: 'visitedCities' as const,
                   label: 'Cidades visitadas',
                   value: visitedCities,
                   helper: 'Localidades com atividade concluída',
                 },
                 {
+                  id: 'reportsApproved' as const,
                   label: 'Relatórios aprovados',
                   value: approvedReports,
                   helper: `Conformidade: ${reportsComplianceRate}%`,
                 },
                 {
+                  id: 'participantsInActivities' as const,
                   label: 'Participantes em atividades',
                   value: participantsInActivities,
                   helper: 'Somatório dos relatórios concluídos',
@@ -356,11 +449,30 @@ export function DashboardExecutivePage() {
               ].map((item) => (
                 <Box
                   key={item.label}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => openKpiDetail(item.id)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      openKpiDetail(item.id);
+                    }
+                  }}
                   sx={{
                     p: 1.4,
                     borderRadius: 2,
-                    border: '1px solid rgba(255,255,255,0.45)',
+                    border: '1px solid rgba(255,255,255,0.58)',
                     bgcolor: 'rgba(255,255,255,0.12)',
+                    cursor: 'pointer',
+                    transition: 'transform 150ms ease, box-shadow 150ms ease',
+                    '&:hover': {
+                      transform: 'translateY(-1px)',
+                      boxShadow: '0 8px 16px rgba(15,44,59,0.24)',
+                    },
+                    '&:focus-visible': {
+                      outline: '2px solid rgba(255,255,255,0.9)',
+                      outlineOffset: '2px',
+                    },
                   }}
                 >
                   <Typography variant="overline" sx={{ color: style.textColor }}>
@@ -370,7 +482,7 @@ export function DashboardExecutivePage() {
                     {item.value}
                   </Typography>
                   <Typography variant="caption" sx={{ color: style.textColor }}>
-                    {item.helper}
+                    {item.helper} • Clique para detalhar
                   </Typography>
                 </Box>
               ))}
@@ -586,6 +698,146 @@ export function DashboardExecutivePage() {
           </Stack>
         </Box>
       </Drawer>
+      <Dialog
+        open={Boolean(kpiDetail)}
+        onClose={() => setKpiDetail(null)}
+        fullWidth
+        maxWidth="lg"
+      >
+        <DialogTitle sx={{ pb: 0.7 }}>
+          {kpiDetail?.title ?? 'Detalhamento'}
+        </DialogTitle>
+        <DialogContent dividers>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={1}
+            justifyContent="space-between"
+            alignItems={{ xs: 'stretch', sm: 'center' }}
+            sx={{ mb: 1.5 }}
+          >
+            <Box>
+              <Typography variant="body2" color="text.secondary">
+                {kpiDetail?.subtitle}
+              </Typography>
+              <Chip
+                size="small"
+                sx={{ mt: 0.8 }}
+                label={`${filteredKpiItems.length} item(ns) encontrados`}
+              />
+            </Box>
+            <TextField
+              size="small"
+              label="Buscar"
+              placeholder="Atividade, localidade, comando"
+              value={kpiDetailSearch}
+              onChange={(event) => setKpiDetailSearch(event.target.value)}
+              sx={{ minWidth: { xs: '100%', sm: 320 } }}
+            />
+          </Stack>
+
+          {filteredKpiItems.length === 0 ? (
+            <EmptyState
+              title="Sem detalhes para exibir"
+              description="Nenhum registro encontrado para o KPI e filtros atuais."
+            />
+          ) : kpiDetail?.kind === 'visitedCities' ? (
+            <Box sx={{ display: 'grid', gap: 1 }}>
+              {filteredKpiItems.map((item: any) => (
+                <Card key={item.localityId} variant="outlined">
+                  <CardContent sx={{ p: 1.25 }}>
+                    <Stack
+                      direction={{ xs: 'column', md: 'row' }}
+                      justifyContent="space-between"
+                      spacing={1}
+                    >
+                      <Box>
+                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                          {item.localityCode || item.localityName}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {item.localityName || '-'} • Comando: {item.commandName || '-'}
+                        </Typography>
+                      </Box>
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <Chip
+                          size="small"
+                          label={`${Number(item.visitActivities ?? 0)} visita(s)`}
+                        />
+                        <Typography variant="caption" color="text.secondary">
+                          Última: {formatDateTime(item.lastVisitDate)}
+                        </Typography>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={() => openLocalityActivities(String(item.localityId))}
+                        >
+                          Ver atividades
+                        </Button>
+                      </Stack>
+                    </Stack>
+                  </CardContent>
+                </Card>
+              ))}
+            </Box>
+          ) : (
+            <Box sx={{ display: 'grid', gap: 1 }}>
+              {filteredKpiItems.map((item: any) => (
+                <Card key={item.activityId} variant="outlined">
+                  <CardContent sx={{ p: 1.25 }}>
+                    <Stack
+                      direction={{ xs: 'column', md: 'row' }}
+                      justifyContent="space-between"
+                      spacing={1}
+                    >
+                      <Box sx={{ minWidth: 0 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 700 }} noWrap>
+                          {item.title}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {(item.localityCode || item.localityName) ?? '-'} • {formatDateTime(item.eventDate)}
+                        </Typography>
+                        {kpiDetail?.kind === 'participantsInActivities' ? (
+                          <Typography variant="caption" color="text.secondary" display="block">
+                            Participantes: {Number(item?.report?.participantsCount ?? 0)} | Instrutores:{' '}
+                            {Number(item?.report?.instructorsCount ?? 0)} | Recrutas:{' '}
+                            {Number(item?.report?.recruitsCount ?? 0)}
+                          </Typography>
+                        ) : null}
+                        {kpiDetail?.kind === 'reportsApproved' ? (
+                          <Typography variant="caption" color="text.secondary" display="block">
+                            Assinado em: {formatDateTime(item?.report?.signedAt)}
+                          </Typography>
+                        ) : null}
+                      </Box>
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        {item?.report ? (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            onClick={() => setSelectedReport(item)}
+                          >
+                            Ler relatório
+                          </Button>
+                        ) : null}
+                        <Button
+                          size="small"
+                          variant="text"
+                          onClick={() => openActivityFromDetail(String(item.activityId))}
+                        >
+                          Abrir atividade
+                        </Button>
+                      </Stack>
+                    </Stack>
+                  </CardContent>
+                </Card>
+              ))}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setKpiDetail(null)}>Fechar</Button>
+        </DialogActions>
+      </Dialog>
       <Dialog open={Boolean(editingCardId)} onClose={() => setEditingCardId(null)} fullWidth maxWidth="xs">
         <DialogTitle>Editar cores do card</DialogTitle>
         <DialogContent sx={{ pt: 1 }}>
