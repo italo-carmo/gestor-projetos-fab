@@ -6,7 +6,6 @@ import {
   CardActionArea,
   CardContent,
   Chip,
-  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -20,7 +19,8 @@ import {
   Typography,
 } from "@mui/material";
 import AutoAwesomeRoundedIcon from "@mui/icons-material/AutoAwesomeRounded";
-import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
+import ArrowBackIosNewRoundedIcon from "@mui/icons-material/ArrowBackIosNewRounded";
+import ArrowForwardIosRoundedIcon from "@mui/icons-material/ArrowForwardIosRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import LanguageRoundedIcon from "@mui/icons-material/LanguageRounded";
@@ -28,7 +28,7 @@ import NewspaperRoundedIcon from "@mui/icons-material/NewspaperRounded";
 import ViewListRoundedIcon from "@mui/icons-material/ViewListRounded";
 import ViewModuleRoundedIcon from "@mui/icons-material/ViewModuleRounded";
 import UploadFileRoundedIcon from "@mui/icons-material/UploadFileRounded";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { parseApiError } from "../app/apiErrors";
 import { api } from "../api/client";
 import {
@@ -69,17 +69,25 @@ type SocialCommunicationArticle = {
 };
 
 function toDisplayDate(value?: string | null) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleDateString("pt-BR");
+  const isoDate = toInputDate(value);
+  if (!isoDate) return "";
+  const [year, month, day] = isoDate.split("-");
+  return `${day}/${month}/${year}`;
 }
 
 function toInputDate(value?: string | null) {
   if (!value) return "";
-  const date = new Date(value);
+  const raw = String(value).trim();
+  const isoLike = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoLike) {
+    return `${isoLike[1]}-${isoLike[2]}-${isoLike[3]}`;
+  }
+  const date = new Date(raw);
   if (Number.isNaN(date.getTime())) return "";
-  return date.toISOString().slice(0, 10);
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function sourceHost(url: string) {
@@ -88,11 +96,6 @@ function sourceHost(url: string) {
   } catch {
     return url;
   }
-}
-
-function isFabDomain(url: string) {
-  const host = sourceHost(url).toLowerCase();
-  return host === "fab.mil.br" || host.endsWith(".fab.mil.br");
 }
 
 function toApiUrl(path: string) {
@@ -251,7 +254,6 @@ export function SocialCommunicationPage() {
   const [search, setSearch] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<"cards" | "list">("cards");
-  const [audienceFilter, setAudienceFilter] = useState<'INTERNAL' | 'EXTERNAL' | 'ALL'>('ALL');
   const filters = useMemo(() => ({ q: search.trim() || undefined }), [search]);
 
   const query = useSocialCommunication(filters);
@@ -262,10 +264,6 @@ export function SocialCommunicationPage() {
   const uploadCover = useUploadSocialCommunicationCover();
   const coverFileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const [previewing, setPreviewing] = useState<SocialCommunicationArticle | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [previewSrc, setPreviewSrc] = useState<string | null>(null);
-  const [previewTriedDirect, setPreviewTriedDirect] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<SocialCommunicationArticle | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SocialCommunicationArticle | null>(null);
@@ -279,51 +277,16 @@ export function SocialCommunicationPage() {
     tags: [] as string[],
     audience: "INTERNAL" as "INTERNAL" | "EXTERNAL",
   });
+  const internalCarouselRef = useRef<HTMLDivElement | null>(null);
+  const externalCarouselRef = useRef<HTMLDivElement | null>(null);
 
   const openPreview = (item: SocialCommunicationArticle) => {
-    if (isFabDomain(item.sourceUrl)) {
-      window.open(item.sourceUrl, "_blank", "noopener,noreferrer");
-      return;
-    }
-    setPreviewing(item);
+    const url =
+      item.sourceUrl?.trim() ||
+      (item.contentProxyPath ? toApiUrl(item.contentProxyPath) : "");
+    if (!url) return;
+    window.open(url, "_blank", "noopener,noreferrer");
   };
-
-  useEffect(() => {
-    if (!previewing) {
-      setPreviewLoading(false);
-      setPreviewSrc(null);
-      setPreviewTriedDirect(false);
-      return;
-    }
-    setPreviewLoading(true);
-
-    // Fluxo primário: navegador do usuário.
-    if (previewing.sourceUrl) {
-      setPreviewSrc(previewing.sourceUrl);
-      setPreviewTriedDirect(false);
-
-      // Fallback para servidor apenas se o carregamento direto não concluir em tempo hábil.
-      const timeout = setTimeout(() => {
-        setPreviewLoading((prevLoading) => {
-          if (prevLoading && !previewTriedDirect && previewing.contentProxyPath) {
-            setPreviewSrc(toApiUrl(previewing.contentProxyPath));
-            setPreviewTriedDirect(true);
-            return true;
-          }
-          return prevLoading;
-        });
-      }, 15000);
-
-      return () => {
-        clearTimeout(timeout);
-      };
-    }
-
-    if (previewing.contentProxyPath) {
-      setPreviewSrc(toApiUrl(previewing.contentProxyPath));
-      setPreviewTriedDirect(true);
-    }
-  }, [previewing]);
 
   const openCreate = () => {
     setEditing(null);
@@ -447,10 +410,13 @@ export function SocialCommunicationPage() {
     }
   };
 
-  if (query.isLoading) return <SkeletonState />;
-  if (query.isError) return <ErrorState error={query.error} onRetry={() => query.refetch()} />;
-
-  const items = (query.data?.items ?? []) as SocialCommunicationArticle[];
+  const items = [...((query.data?.items ?? []) as SocialCommunicationArticle[])].sort((a, b) => {
+    const leftTimestamp = Date.parse(a.publishedAt ?? a.createdAt);
+    const rightTimestamp = Date.parse(b.publishedAt ?? b.createdAt);
+    const left = Number.isNaN(leftTimestamp) ? 0 : leftTimestamp;
+    const right = Number.isNaN(rightTimestamp) ? 0 : rightTimestamp;
+    return right - left;
+  });
   const allTags = Array.from(
     new Set(items.flatMap((item) => normalizeTags(item.tags ?? []))),
   ).sort((a, b) => a.localeCompare(b, "pt-BR"));
@@ -466,6 +432,56 @@ export function SocialCommunicationPage() {
   const internalItems = filteredByTags.filter((item) => (item.audience ?? 'INTERNAL') === 'INTERNAL');
   const externalItems = filteredByTags.filter((item) => (item.audience ?? 'INTERNAL') === 'EXTERNAL');
 
+  const scrollCarouselByCard = useCallback(
+    (carouselRef: RefObject<HTMLDivElement | null>, direction: 1 | -1) => {
+      const container = carouselRef.current;
+      if (!container) return;
+
+      const firstCard = container.querySelector<HTMLElement>("[data-carousel-card='true']");
+      const step = firstCard
+        ? firstCard.getBoundingClientRect().width + 16
+        : container.clientWidth * 0.9;
+      const maxScroll = Math.max(container.scrollWidth - container.clientWidth, 0);
+      const atStart = container.scrollLeft <= 4;
+      const atEnd = container.scrollLeft >= maxScroll - 4;
+
+      if (direction === 1) {
+        if (atEnd) {
+          container.scrollTo({ left: 0, behavior: "smooth" });
+        } else {
+          container.scrollBy({ left: step, behavior: "smooth" });
+        }
+        return;
+      }
+
+      if (atStart) {
+        container.scrollTo({ left: maxScroll, behavior: "smooth" });
+      } else {
+        container.scrollBy({ left: -step, behavior: "smooth" });
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (viewMode !== "cards") return;
+    const carouselRefs = [internalCarouselRef, externalCarouselRef];
+    const intervalIds = carouselRefs
+      .map((carouselRef) => {
+        const container = carouselRef.current;
+        if (!container) return null;
+        if (container.scrollWidth <= container.clientWidth + 8) return null;
+        return window.setInterval(() => {
+          scrollCarouselByCard(carouselRef, 1);
+        }, 6500);
+      })
+      .filter((value): value is number => value !== null);
+
+    return () => {
+      intervalIds.forEach((id) => window.clearInterval(id));
+    };
+  }, [externalItems.length, internalItems.length, scrollCarouselByCard, viewMode]);
+
   const renderTags = (tags: string[], limit = 4) => {
     if (!tags.length) return null;
     const visible = tags.slice(0, limit);
@@ -479,6 +495,227 @@ export function SocialCommunicationPage() {
       </Stack>
     );
   };
+
+  const renderCarouselCards = (
+    carouselItems: SocialCommunicationArticle[],
+    audience: "INTERNAL" | "EXTERNAL",
+  ) => {
+    const carouselRef =
+      audience === "INTERNAL" ? internalCarouselRef : externalCarouselRef;
+    const buttonBg =
+      audience === "INTERNAL"
+        ? "rgba(17,66,89,0.13)"
+        : "rgba(77,134,160,0.2)";
+    const buttonHoverBg =
+      audience === "INTERNAL"
+        ? "rgba(17,66,89,0.22)"
+        : "rgba(77,134,160,0.3)";
+
+    return (
+      <Stack spacing={1.1}>
+        <Stack direction="row" justifyContent="flex-end" spacing={0.7}>
+          <IconButton
+            size="small"
+            onClick={() => scrollCarouselByCard(carouselRef, -1)}
+            sx={{ bgcolor: buttonBg, "&:hover": { bgcolor: buttonHoverBg } }}
+            aria-label={`Voltar carrossel de público ${
+              audience === "INTERNAL" ? "interno" : "externo"
+            }`}
+          >
+            <ArrowBackIosNewRoundedIcon fontSize="small" />
+          </IconButton>
+          <IconButton
+            size="small"
+            onClick={() => scrollCarouselByCard(carouselRef, 1)}
+            sx={{ bgcolor: buttonBg, "&:hover": { bgcolor: buttonHoverBg } }}
+            aria-label={`Avançar carrossel de público ${
+              audience === "INTERNAL" ? "interno" : "externo"
+            }`}
+          >
+            <ArrowForwardIosRoundedIcon fontSize="small" />
+          </IconButton>
+        </Stack>
+        <Box
+          ref={carouselRef}
+          sx={{
+            display: "flex",
+            gap: 2,
+            overflowX: "auto",
+            scrollBehavior: "smooth",
+            scrollSnapType: "x mandatory",
+            pb: 0.5,
+            px: 0.2,
+            "&::-webkit-scrollbar": {
+              height: 8,
+            },
+            "&::-webkit-scrollbar-track": {
+              backgroundColor: "rgba(17,66,89,0.08)",
+              borderRadius: 999,
+            },
+            "&::-webkit-scrollbar-thumb": {
+              backgroundColor: "rgba(17,66,89,0.24)",
+              borderRadius: 999,
+            },
+          }}
+        >
+          {carouselItems.map((item) => {
+            const tags = normalizeTags(item.tags ?? []);
+            return (
+              <Card
+                key={item.id}
+                data-carousel-card="true"
+                sx={{
+                  flex: "0 0 auto",
+                  width: {
+                    xs: "calc(100% - 2px)",
+                    sm: "calc((100% - 16px) / 2)",
+                    md: "calc((100% - 32px) / 3)",
+                    lg: "calc((100% - 48px) / 4)",
+                  },
+                  scrollSnapAlign: "start",
+                  borderRadius: 3,
+                  border: "1px solid rgba(17, 66, 89, 0.14)",
+                  position: "relative",
+                  overflow: "hidden",
+                  transition: "transform 160ms ease, box-shadow 160ms ease",
+                  "&:hover": {
+                    transform: "translateY(-2px)",
+                    boxShadow: "0 10px 24px rgba(17, 66, 89, 0.16)",
+                  },
+                }}
+              >
+                <CardActionArea
+                  onClick={() => openPreview(item)}
+                  sx={{
+                    alignItems: "stretch",
+                    height: "100%",
+                    display: "flex",
+                    flexDirection: "column",
+                  }}
+                >
+                  <Box
+                    sx={{
+                      height: 156,
+                      background:
+                        "linear-gradient(140deg, #114259 0%, #4D86A0 100%)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      overflow: "hidden",
+                    }}
+                  >
+                    <ArticleCoverImage
+                      coverProxyPath={item.coverProxyPath}
+                      coverImageUrl={item.coverImageUrl}
+                      title={item.title}
+                      toApiUrl={toApiUrl}
+                    />
+                  </Box>
+                  <CardContent
+                    sx={{
+                      minHeight: 200,
+                      width: "100%",
+                      display: "flex",
+                      flexDirection: "column",
+                      flexGrow: 1,
+                    }}
+                  >
+                    <Box>
+                      <Typography
+                        variant="subtitle1"
+                        fontWeight={700}
+                        sx={{
+                          mb: 0.8,
+                          display: "-webkit-box",
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: "vertical",
+                          overflow: "hidden",
+                        }}
+                      >
+                        {item.title}
+                      </Typography>
+                      {item.summary && (
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          sx={{
+                            mb: 1.3,
+                            display: "-webkit-box",
+                            WebkitLineClamp: 3,
+                            WebkitBoxOrient: "vertical",
+                            overflow: "hidden",
+                          }}
+                        >
+                          {item.summary}
+                        </Typography>
+                      )}
+                    </Box>
+                    <Box sx={{ mt: "auto" }}>
+                      {renderTags(tags, 3)}
+                      <Stack
+                        direction="row"
+                        spacing={0.8}
+                        alignItems="center"
+                        flexWrap="wrap"
+                        useFlexGap
+                        sx={{ mt: 1.1 }}
+                      >
+                        <Chip
+                          label={sourceHost(item.sourceUrl)}
+                          size="small"
+                          variant="outlined"
+                        />
+                        {(item.publishedAt || item.createdAt) && (
+                          <Chip
+                            label={toDisplayDate(item.publishedAt ?? item.createdAt)}
+                            size="small"
+                          />
+                        )}
+                      </Stack>
+                    </Box>
+                  </CardContent>
+                </CardActionArea>
+                {canEdit && (
+                  <Stack
+                    direction="row"
+                    spacing={0.4}
+                    sx={{ position: "absolute", top: 8, right: 8, zIndex: 3 }}
+                  >
+                    <IconButton
+                      size="small"
+                      sx={{ bgcolor: "rgba(255,255,255,0.92)" }}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        openEdit(item);
+                      }}
+                    >
+                      <EditRoundedIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton
+                      size="small"
+                      color="error"
+                      sx={{ bgcolor: "rgba(255,255,255,0.92)" }}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleDelete(item);
+                      }}
+                    >
+                      <DeleteOutlineRoundedIcon fontSize="small" />
+                    </IconButton>
+                  </Stack>
+                )}
+              </Card>
+            );
+          })}
+        </Box>
+      </Stack>
+    );
+  };
+
+  if (query.isLoading) return <SkeletonState />;
+  if (query.isError) {
+    return <ErrorState error={query.error} onRetry={() => query.refetch()} />;
+  }
 
   return (
     <Box>
@@ -611,125 +848,8 @@ export function SocialCommunicationPage() {
                 description="Nenhuma matéria cadastrada para público interno."
               />
             ) : viewMode === "cards" ? (
-        <Box
-          display="grid"
-          gap={2}
-          gridTemplateColumns={{
-            xs: "1fr",
-            sm: "repeat(2, minmax(0, 1fr))",
-            lg: "repeat(4, minmax(0, 1fr))",
-          }}
-        >
-          {internalItems.map((item) => {
-            const tags = normalizeTags(item.tags ?? []);
-            return (
-              <Card
-                key={item.id}
-                sx={{
-                  borderRadius: 3,
-                  border: "1px solid rgba(17, 66, 89, 0.14)",
-                  position: "relative",
-                  overflow: "hidden",
-                  transition: "transform 160ms ease, box-shadow 160ms ease",
-                  "&:hover": {
-                    transform: "translateY(-2px)",
-                    boxShadow: "0 10px 24px rgba(17, 66, 89, 0.16)",
-                  },
-                }}
-              >
-                <CardActionArea
-                  onClick={() => openPreview(item)}
-                  sx={{ alignItems: "stretch", height: "100%", display: "flex", flexDirection: "column" }}
-                >
-                  <Box
-                    sx={{
-                      height: 156,
-                      background: "linear-gradient(140deg, #114259 0%, #4D86A0 100%)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      overflow: "hidden",
-                    }}
-                  >
-                    <ArticleCoverImage
-                      coverProxyPath={item.coverProxyPath}
-                      coverImageUrl={item.coverImageUrl}
-                      title={item.title}
-                      toApiUrl={toApiUrl}
-                    />
-                  </Box>
-                  <CardContent sx={{ minHeight: 200, width: "100%", display: "flex", flexDirection: "column", flexGrow: 1 }}>
-                    <Box>
-                      <Typography
-                        variant="subtitle1"
-                        fontWeight={700}
-                        sx={{
-                          mb: 0.8,
-                          display: "-webkit-box",
-                          WebkitLineClamp: 2,
-                          WebkitBoxOrient: "vertical",
-                          overflow: "hidden",
-                        }}
-                      >
-                        {item.title}
-                      </Typography>
-                      {item.summary && (
-                        <Typography
-                          variant="body2"
-                          color="text.secondary"
-                          sx={{
-                            mb: 1.3,
-                            display: "-webkit-box",
-                            WebkitLineClamp: 3,
-                            WebkitBoxOrient: "vertical",
-                            overflow: "hidden",
-                          }}
-                        >
-                          {item.summary}
-                        </Typography>
-                      )}
-                    </Box>
-                    <Box sx={{ mt: "auto" }}>
-                      {renderTags(tags, 3)}
-                      <Stack direction="row" spacing={0.8} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mt: 1.1 }}>
-                        <Chip label={sourceHost(item.sourceUrl)} size="small" variant="outlined" />
-                        {(item.publishedAt || item.createdAt) && (
-                          <Chip label={toDisplayDate(item.publishedAt ?? item.createdAt)} size="small" />
-                        )}
-                      </Stack>
-                    </Box>
-                  </CardContent>
-                </CardActionArea>
-                {canEdit && (
-                  <Stack direction="row" spacing={0.4} sx={{ position: "absolute", top: 8, right: 8, zIndex: 3 }}>
-                    <IconButton
-                      size="small"
-                      sx={{ bgcolor: "rgba(255,255,255,0.92)" }}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        openEdit(item);
-                      }}
-                    >
-                      <EditRoundedIcon fontSize="small" />
-                    </IconButton>
-                    <IconButton
-                      size="small"
-                      color="error"
-                      sx={{ bgcolor: "rgba(255,255,255,0.92)" }}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        handleDelete(item);
-                      }}
-                    >
-                      <DeleteOutlineRoundedIcon fontSize="small" />
-                    </IconButton>
-                  </Stack>
-                )}
-              </Card>
-            );
-          })}
-        </Box>
-      ) : (
+              renderCarouselCards(internalItems, "INTERNAL")
+            ) : (
         <Stack spacing={1.5}>
           {internalItems.map((item) => {
             const tags = normalizeTags(item.tags ?? []);
@@ -871,125 +991,8 @@ export function SocialCommunicationPage() {
                 description="Nenhuma matéria cadastrada para público externo."
               />
             ) : viewMode === "cards" ? (
-        <Box
-          display="grid"
-          gap={2}
-          gridTemplateColumns={{
-            xs: "1fr",
-            sm: "repeat(2, minmax(0, 1fr))",
-            lg: "repeat(4, minmax(0, 1fr))",
-          }}
-        >
-          {externalItems.map((item) => {
-            const tags = normalizeTags(item.tags ?? []);
-            return (
-              <Card
-                key={item.id}
-                sx={{
-                  borderRadius: 3,
-                  border: "1px solid rgba(17, 66, 89, 0.14)",
-                  position: "relative",
-                  overflow: "hidden",
-                  transition: "transform 160ms ease, box-shadow 160ms ease",
-                  "&:hover": {
-                    transform: "translateY(-2px)",
-                    boxShadow: "0 10px 24px rgba(17, 66, 89, 0.16)",
-                  },
-                }}
-              >
-                <CardActionArea
-                  onClick={() => openPreview(item)}
-                  sx={{ alignItems: "stretch", height: "100%", display: "flex", flexDirection: "column" }}
-                >
-                  <Box
-                    sx={{
-                      height: 156,
-                      background: "linear-gradient(140deg, #114259 0%, #4D86A0 100%)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      overflow: "hidden",
-                    }}
-                  >
-                    <ArticleCoverImage
-                      coverProxyPath={item.coverProxyPath}
-                      coverImageUrl={item.coverImageUrl}
-                      title={item.title}
-                      toApiUrl={toApiUrl}
-                    />
-                  </Box>
-                  <CardContent sx={{ minHeight: 200, width: "100%", display: "flex", flexDirection: "column", flexGrow: 1 }}>
-                    <Box>
-                      <Typography
-                        variant="subtitle1"
-                        fontWeight={700}
-                        sx={{
-                          mb: 0.8,
-                          display: "-webkit-box",
-                          WebkitLineClamp: 2,
-                          WebkitBoxOrient: "vertical",
-                          overflow: "hidden",
-                        }}
-                      >
-                        {item.title}
-                      </Typography>
-                      {item.summary && (
-                        <Typography
-                          variant="body2"
-                          color="text.secondary"
-                          sx={{
-                            mb: 1.3,
-                            display: "-webkit-box",
-                            WebkitLineClamp: 3,
-                            WebkitBoxOrient: "vertical",
-                            overflow: "hidden",
-                          }}
-                        >
-                          {item.summary}
-                        </Typography>
-                      )}
-                    </Box>
-                    <Box sx={{ mt: "auto" }}>
-                      {renderTags(tags, 3)}
-                      <Stack direction="row" spacing={0.8} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mt: 1.1 }}>
-                        <Chip label={sourceHost(item.sourceUrl)} size="small" variant="outlined" />
-                        {(item.publishedAt || item.createdAt) && (
-                          <Chip label={toDisplayDate(item.publishedAt ?? item.createdAt)} size="small" />
-                        )}
-                      </Stack>
-                    </Box>
-                  </CardContent>
-                </CardActionArea>
-                {canEdit && (
-                  <Stack direction="row" spacing={0.4} sx={{ position: "absolute", top: 8, right: 8, zIndex: 3 }}>
-                    <IconButton
-                      size="small"
-                      sx={{ bgcolor: "rgba(255,255,255,0.92)" }}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        openEdit(item);
-                      }}
-                    >
-                      <EditRoundedIcon fontSize="small" />
-                    </IconButton>
-                    <IconButton
-                      size="small"
-                      color="error"
-                      sx={{ bgcolor: "rgba(255,255,255,0.92)" }}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        handleDelete(item);
-                      }}
-                    >
-                      <DeleteOutlineRoundedIcon fontSize="small" />
-                    </IconButton>
-                  </Stack>
-                )}
-              </Card>
-            );
-          })}
-        </Box>
-      ) : (
+              renderCarouselCards(externalItems, "EXTERNAL")
+            ) : (
         <Stack spacing={1.5}>
           {externalItems.map((item) => {
             const tags = normalizeTags(item.tags ?? []);
@@ -1084,88 +1087,6 @@ export function SocialCommunicationPage() {
           </Box>
         </Stack>
       )}
-
-      <Dialog open={Boolean(previewing)} onClose={() => setPreviewing(null)} fullWidth maxWidth="lg">
-        {previewing && (
-          <DialogContent dividers sx={{ p: 0, position: "relative" }}>
-            <IconButton
-              onClick={() => setPreviewing(null)}
-              sx={{
-                position: "absolute",
-                top: 8,
-                right: 8,
-                zIndex: 2,
-                bgcolor: "rgba(255,255,255,0.9)",
-                "&:hover": { bgcolor: "rgba(255,255,255,1)" },
-              }}
-            >
-              <CloseRoundedIcon />
-            </IconButton>
-            <Box
-              sx={{
-                border: "1px solid rgba(17,66,89,0.16)",
-                borderRadius: 0,
-                overflow: "hidden",
-                height: { xs: "75vh", md: "78vh" },
-                position: "relative",
-              }}
-            >
-              {previewLoading && (
-                <Box
-                  sx={{
-                    position: "absolute",
-                    inset: 0,
-                    zIndex: 1,
-                    display: "grid",
-                    placeItems: "center",
-                    background: "linear-gradient(180deg, rgba(249,252,255,0.97) 0%, rgba(235,244,250,0.97) 100%)",
-                  }}
-                >
-                  <Stack spacing={1.5} alignItems="center">
-                    <Box
-                      sx={{
-                        width: 56,
-                        height: 56,
-                        borderRadius: "50%",
-                        bgcolor: "rgba(17,66,89,0.1)",
-                        color: "#114259",
-                        display: "grid",
-                        placeItems: "center",
-                      }}
-                    >
-                      <AutoAwesomeRoundedIcon fontSize="small" />
-                    </Box>
-                    <CircularProgress size={28} thickness={5} sx={{ color: "#114259" }} />
-                    <Typography variant="body2" fontWeight={600} sx={{ color: "#114259" }}>
-                      Carregando matéria...
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      Aguarde alguns segundos.
-                    </Typography>
-                  </Stack>
-                </Box>
-              )}
-              <Box
-                component="iframe"
-                key={previewSrc || previewing.sourceUrl} // Force re-render when src changes
-                title={previewing.title}
-                src={previewSrc || previewing.sourceUrl}
-                sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
-                referrerPolicy="no-referrer"
-                onLoad={() => {
-                  setPreviewLoading(false);
-                }}
-                sx={{
-                  width: "100%",
-                  height: "100%",
-                  border: 0,
-                  bgcolor: "#fff",
-                }}
-              />
-            </Box>
-          </DialogContent>
-        )}
-      </Dialog>
 
       <Dialog open={editorOpen} onClose={() => setEditorOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>{editing ? "Editar materia" : "Nova materia"}</DialogTitle>
