@@ -654,7 +654,7 @@ export function LibraryPage() {
                           overflow: "hidden",
                         }}
                       >
-                        {currentPhoto?.title?.trim() || "Sem título"}
+                        {currentPhoto?.title?.trim() || " "}
               </Typography>
                     </CardContent>
                   </Card>
@@ -1497,7 +1497,7 @@ export function LibraryPage() {
                 overflow: "hidden",
               }}
             >
-              {expandedPhotos[expandedPhotoIndex]?.title?.trim() || "Sem título"}
+              {expandedPhotos[expandedPhotoIndex]?.title?.trim() || " "}
             </Typography>
           )}
         </Box>
