@@ -338,6 +338,8 @@ export function ActivitiesPage() {
     localityId: localityFilter || undefined,
     specialtyId: specialtyFilter || undefined,
     q: search || undefined,
+    page: 1,
+    pageSize: 100,
   });
 
   const { data: me } = useMe();
