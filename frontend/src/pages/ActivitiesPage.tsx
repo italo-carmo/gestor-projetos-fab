@@ -626,6 +626,15 @@ export function ActivitiesPage() {
   const canSign = can(me, 'reports', 'approve') && canManageActivityDataByRole;
   const canUpload = can(me, 'reports', 'upload') && canManageActivityDataByRole;
   const canDownload = can(me, 'reports', 'download') && canManageActivityDataByRole;
+  const reportIsSigned = Boolean(selected?.report?.hasSignature);
+  const isReportSigner = Boolean(
+    selected?.report?.signedById &&
+      me?.id &&
+      String(selected.report.signedById) === String(me.id),
+  );
+  const canDeleteSignature = reportIsSigned && (isTiProfile || isReportSigner);
+  const canEditReportContent = canEditReport && !reportIsSigned;
+  const canUploadReportPhotos = canUpload && !reportIsSigned;
   const canEditActivityForm = isCreateMode ? canCreate : canUpdate;
   const canManageBatch = can(me, 'task_instances', 'update') && hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]);
   const canBatchAssignResponsible = selectedLocalityIds.length <= 1;
@@ -948,6 +957,13 @@ export function ActivitiesPage() {
 
   const handleSaveReport = async () => {
     if (!selected || !canEditReport) return;
+    if (reportIsSigned) {
+      toast.push({
+        message: 'Relatório assinado não pode ser alterado. Remova a assinatura para editar.',
+        severity: 'warning',
+      });
+      return;
+    }
     const reportDateIso = toIsoDateStartOfDay(reportForm.date);
     const closingDateInput = reportForm.closingDate || reportForm.date;
     const closingDateIso = toIsoDateStartOfDay(closingDateInput);
@@ -996,6 +1012,13 @@ export function ActivitiesPage() {
 
   const handleSign = async () => {
     if (!selected || !canSign) return;
+    if (reportIsSigned) {
+      toast.push({
+        message: 'Este relatório já está assinado. Remova a assinatura para alterar e assinar novamente.',
+        severity: 'warning',
+      });
+      return;
+    }
     const missingFields = getReportMissingFields(reportForm);
     if (missingFields.length > 0) {
       toast.push({
@@ -1050,6 +1073,15 @@ export function ActivitiesPage() {
       toast.push({ message: 'Relatório assinado digitalmente', severity: 'success' });
     } catch (error) {
       const payload = parseApiError(error);
+      if (payload.code === 'ACTIVITY_REPORT_SIGNED_LOCKED') {
+        toast.push({
+          message:
+            payload.message ??
+            'Relatório assinado não pode ser alterado. Remova a assinatura para editar.',
+          severity: 'warning',
+        });
+        return;
+      }
       if (
         payload.code === 'ACTIVITY_REPORT_INCOMPLETE' ||
         (payload.code === 'VALIDATION_ERROR' &&
@@ -1066,8 +1098,12 @@ export function ActivitiesPage() {
   };
 
   const handleRemoveSignature = async () => {
-    if (!selected || !isTiProfile) return;
-    if (!selected.report?.hasSignature) {
+    if (!selected) return;
+    if (!canDeleteSignature) {
+      toast.push({ message: 'Você não tem permissão para remover esta assinatura.', severity: 'error' });
+      return;
+    }
+    if (!reportIsSigned) {
       toast.push({ message: 'Este relatório não possui assinatura ativa.', severity: 'warning' });
       setRemoveSignatureConfirmOpen(false);
       return;
@@ -2123,7 +2159,7 @@ export function ActivitiesPage() {
                         onChange={(e) => setReportForm({ ...reportForm, date: e.target.value })}
                         InputLabelProps={{ shrink: true }}
                         fullWidth
-                        disabled={!canEditReport}
+                        disabled={!canEditReportContent}
                       />
                       <TextField
                         size="small"
@@ -2131,7 +2167,7 @@ export function ActivitiesPage() {
                         value={reportForm.location}
                         onChange={(e) => setReportForm({ ...reportForm, location: e.target.value })}
                         fullWidth
-                        disabled={!canEditReport}
+                        disabled={!canEditReportContent}
                       />
                     </Stack>
                   </Stack>
@@ -2149,7 +2185,7 @@ export function ActivitiesPage() {
                       value={reportForm.responsible}
                       onChange={(e) => setReportForm({ ...reportForm, responsible: e.target.value })}
                       fullWidth
-                      disabled={!canEditReport}
+                      disabled={!canEditReportContent}
                     />
                     <TextField
                       size="small"
@@ -2159,7 +2195,7 @@ export function ActivitiesPage() {
                       multiline
                       minRows={2}
                       fullWidth
-                      disabled={!canEditReport}
+                      disabled={!canEditReportContent}
                     />
                   </Stack>
                 </Box>
@@ -2180,7 +2216,7 @@ export function ActivitiesPage() {
                       }
                       inputProps={{ min: 0 }}
                       fullWidth
-                      disabled={!canEditReport}
+                      disabled={!canEditReportContent}
                     />
                     <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
                       <TextField
@@ -2196,7 +2232,7 @@ export function ActivitiesPage() {
                         }
                         inputProps={{ min: 0 }}
                         fullWidth
-                        disabled={!canEditReport}
+                        disabled={!canEditReportContent}
                       />
                       <TextField
                         size="small"
@@ -2211,7 +2247,7 @@ export function ActivitiesPage() {
                         }
                         inputProps={{ min: 0 }}
                         fullWidth
-                        disabled={!canEditReport}
+                        disabled={!canEditReportContent}
                       />
                     </Stack>
                     <TextField
@@ -2222,7 +2258,7 @@ export function ActivitiesPage() {
                       multiline
                       minRows={2}
                       fullWidth
-                      disabled={!canEditReport}
+                      disabled={!canEditReportContent}
                       placeholder="Ex: Conscritos e voluntárias do GSD-BR, instrutores e equipe organizadora"
                     />
                     <Box sx={{ p: 1.2, border: '1px solid #E6ECF5', borderRadius: 2, bgcolor: '#F9FCFF' }}>
@@ -2243,7 +2279,7 @@ export function ActivitiesPage() {
                           }
                           inputProps={{ min: 0 }}
                           fullWidth
-                          disabled={!canEditReport}
+                          disabled={!canEditReportContent}
                         />
                         <TextField
                           size="small"
@@ -2258,7 +2294,7 @@ export function ActivitiesPage() {
                           }
                           inputProps={{ min: 0 }}
                           fullWidth
-                          disabled={!canEditReport}
+                          disabled={!canEditReportContent}
                         />
                       </Stack>
                       <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} sx={{ mt: 1 }}>
@@ -2275,7 +2311,7 @@ export function ActivitiesPage() {
                           }
                           inputProps={{ min: 0 }}
                           fullWidth
-                          disabled={!canEditReport}
+                          disabled={!canEditReportContent}
                         />
                         <TextField
                           size="small"
@@ -2290,7 +2326,7 @@ export function ActivitiesPage() {
                           }
                           inputProps={{ min: 0 }}
                           fullWidth
-                          disabled={!canEditReport}
+                          disabled={!canEditReportContent}
                         />
                         <TextField
                           size="small"
@@ -2305,7 +2341,7 @@ export function ActivitiesPage() {
                           }
                           inputProps={{ min: 0 }}
                           fullWidth
-                          disabled={!canEditReport}
+                          disabled={!canEditReportContent}
                         />
                       </Stack>
                     </Box>
@@ -2319,7 +2355,7 @@ export function ActivitiesPage() {
                       multiline
                       minRows={2}
                       fullWidth
-                      disabled={!canEditReport}
+                      disabled={!canEditReportContent}
                     />
                   </Stack>
                 </Box>
@@ -2338,7 +2374,7 @@ export function ActivitiesPage() {
                       multiline
                       minRows={4}
                       fullWidth
-                      disabled={!canEditReport}
+                      disabled={!canEditReportContent}
                       placeholder="Descreva o desenvolvimento da atividade, incluindo horários, conteúdo abordado, apresentações realizadas, etc."
                     />
                   </Stack>
@@ -2358,7 +2394,7 @@ export function ActivitiesPage() {
                       multiline
                       minRows={3}
                       fullWidth
-                      disabled={!canEditReport}
+                      disabled={!canEditReportContent}
                       placeholder="Liste os principais questionamentos, pontos de atenção ou observações relevantes"
                     />
                   </Stack>
@@ -2378,7 +2414,7 @@ export function ActivitiesPage() {
                       multiline
                       minRows={3}
                       fullWidth
-                      disabled={!canEditReport}
+                      disabled={!canEditReportContent}
                       placeholder="Identifique lacunas, riscos ou encaminhamentos necessários"
                     />
                   </Stack>
@@ -2398,7 +2434,7 @@ export function ActivitiesPage() {
                       multiline
                       minRows={3}
                       fullWidth
-                      disabled={!canEditReport}
+                      disabled={!canEditReportContent}
                       placeholder="Descreva as ações previstas e próximos passos"
                     />
                   </Stack>
@@ -2418,7 +2454,7 @@ export function ActivitiesPage() {
                       multiline
                       minRows={2}
                       fullWidth
-                      disabled={!canEditReport}
+                      disabled={!canEditReportContent}
                       placeholder="Ex: Reportagem completa: https://... | Vídeo resumo: https://..."
                     />
                   </Stack>
@@ -2438,7 +2474,7 @@ export function ActivitiesPage() {
                       multiline
                       minRows={3}
                       fullWidth
-                      disabled={!canEditReport}
+                      disabled={!canEditReportContent}
                     />
                   </Stack>
                 </Box>
@@ -2451,7 +2487,7 @@ export function ActivitiesPage() {
                     value={reportForm.city}
                     onChange={(e) => setReportForm({ ...reportForm, city: e.target.value })}
                     fullWidth
-                    disabled={!canEditReport}
+                    disabled={!canEditReportContent}
                   />
                   <TextField
                     size="small"
@@ -2461,7 +2497,7 @@ export function ActivitiesPage() {
                     onChange={(e) => setReportForm({ ...reportForm, closingDate: e.target.value })}
                     InputLabelProps={{ shrink: true }}
                     fullWidth
-                    disabled={!canEditReport}
+                    disabled={!canEditReportContent}
                   />
                 </Stack>
 
@@ -2469,7 +2505,7 @@ export function ActivitiesPage() {
                   <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
                     Imagens da atividade
                   </Typography>
-                  <Button variant="outlined" component="label" size="small" disabled={!canUpload}>
+                  <Button variant="outlined" component="label" size="small" disabled={!canUploadReportPhotos}>
                     Inserir foto
                     <input
                       hidden
@@ -2494,7 +2530,7 @@ export function ActivitiesPage() {
                         key={photo.id}
                         label={photo.fileName}
                         onDelete={
-                          canUpload
+                          canUploadReportPhotos
                             ? async () => {
                                 try {
                                   await removePhoto.mutateAsync({ id: selected.id, photoId: photo.id });
@@ -2517,9 +2553,14 @@ export function ActivitiesPage() {
                 <Box sx={{ p: 1.5, border: '1px solid #E6ECF5', borderRadius: 2 }}>
                   <Typography variant="subtitle2">Assinatura digital</Typography>
                   {selected.report?.hasSignature ? (
-                    <Typography variant="body2" color="success.main">
-                      Assinado em {new Date(selected.report.signedAt).toLocaleString('pt-BR')} por {selected.report.signedBy?.name ?? selected.report.signedById}
-                    </Typography>
+                    <>
+                      <Typography variant="body2" color="success.main">
+                        Assinado em {new Date(selected.report.signedAt).toLocaleString('pt-BR')} por {selected.report.signedBy?.name ?? selected.report.signedById}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Relatório bloqueado para edição após assinatura.
+                      </Typography>
+                    </>
                   ) : (
                     <Typography variant="body2" color="warning.main">
                       Relatório ainda não assinado.
@@ -2527,13 +2568,13 @@ export function ActivitiesPage() {
                   )}
                 </Box>
 
-                {isTiProfile ? (
+                {canDeleteSignature ? (
                   <Box sx={{ p: 1.5, border: '1px dashed #CFD8DC', borderRadius: 2, bgcolor: '#FAFBFC' }}>
                     <Typography variant="subtitle2" color="text.secondary">
-                      Ação exclusiva TI
+                      Ação de assinatura
                     </Typography>
                     <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                      Remover assinatura digital do relatório sem excluir o conteúdo.
+                      Permite remover a assinatura digital do relatório sem excluir o conteúdo.
                     </Typography>
                     <Button
                       variant="outlined"
@@ -2541,7 +2582,7 @@ export function ActivitiesPage() {
                       size="small"
                       sx={drawerActionButtonSx}
                       onClick={() => setRemoveSignatureConfirmOpen(true)}
-                      disabled={!selected.report?.hasSignature || upsertReport.isPending}
+                      disabled={!canDeleteSignature || upsertReport.isPending}
                     >
                       Deletar assinatura
                     </Button>
@@ -2555,7 +2596,7 @@ export function ActivitiesPage() {
                     size="small"
                     sx={drawerActionButtonSx}
                     onClick={handleSaveReport}
-                    disabled={!canEditReport || upsertReport.isPending}
+                    disabled={!canEditReportContent || upsertReport.isPending}
                   >
                     Salvar relatório
                   </Button>
@@ -2564,7 +2605,7 @@ export function ActivitiesPage() {
                     size="small"
                     sx={drawerActionButtonSx}
                     onClick={handleSign}
-                    disabled={!canSign || signReport.isPending}
+                    disabled={!canSign || signReport.isPending || reportIsSigned}
                   >
                     Assinar digitalmente
                   </Button>
