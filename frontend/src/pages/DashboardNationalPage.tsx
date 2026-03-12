@@ -806,7 +806,7 @@ export function DashboardNationalPage() {
                   Número de Participações
                 </Typography>
                 <Typography variant="caption" sx={{ color: style.textColor }}>
-                  Total de participações
+                  Total de participações em atividades
                 </Typography>
               </Box>
               {isTiProfile ? (
