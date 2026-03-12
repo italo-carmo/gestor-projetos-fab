@@ -182,6 +182,43 @@ function toOptionalNonNegativeInt(value: unknown) {
   return Math.max(0, Math.trunc(parsed));
 }
 
+function getReportMissingFields(reportForm: typeof blankReport) {
+  const missing: string[] = [];
+  if (!String(reportForm.date ?? '').trim()) missing.push('Data');
+  if (!String(reportForm.closingDate ?? reportForm.date ?? '').trim()) {
+    missing.push('Data de Fechamento');
+  }
+  if (!String(reportForm.location ?? '').trim()) missing.push('Local');
+  if (!String(reportForm.responsible ?? '').trim()) missing.push('Responsável(is)');
+  if (!String(reportForm.activityAnalysis ?? '').trim()) missing.push('Apoio à Missão');
+  if (!String(reportForm.activitiesPerformed ?? '').trim()) missing.push('Desenvolvimento');
+  if (!String(reportForm.participantsCharacteristics ?? '').trim()) {
+    missing.push('Características dos Participantes');
+  }
+  if (!String(reportForm.conclusion ?? '').trim()) missing.push('Conclusão');
+  if (!String(reportForm.city ?? '').trim()) missing.push('Cidade');
+  return missing;
+}
+
+function buildIncompleteReportMessage(
+  payload: { message?: string; details?: any },
+  fallbackMissingFields: string[] = [],
+) {
+  const base = payload.message || 'Relatório incompleto para assinatura digital.';
+  const rawMissing = Array.isArray(payload.details?.missingFields)
+    ? payload.details.missingFields
+    : [];
+  const labels = [
+    ...rawMissing
+      .map((item: any) => String(item?.label ?? item?.field ?? '').trim())
+      .filter(Boolean),
+    ...fallbackMissingFields,
+  ];
+  const uniqueLabels = Array.from(new Set(labels.filter(Boolean)));
+  if (!uniqueLabels.length) return base;
+  return `${base} Faltando: ${uniqueLabels.join(', ')}.`;
+}
+
 function getActivityStatusChipStyle(status: string) {
   if (status === 'DONE') {
     return {
@@ -957,11 +994,72 @@ export function ActivitiesPage() {
 
   const handleSign = async () => {
     if (!selected || !canSign) return;
+    const missingFields = getReportMissingFields(reportForm);
+    if (missingFields.length > 0) {
+      toast.push({
+        message: `Preencha os campos obrigatórios antes de assinar: ${missingFields.join(', ')}.`,
+        severity: 'warning',
+      });
+      return;
+    }
+    const reportDateIso = toIsoDateStartOfDay(reportForm.date);
+    const closingDateInput = reportForm.closingDate || reportForm.date;
+    const closingDateIso = toIsoDateStartOfDay(closingDateInput);
+    if (!reportDateIso || !closingDateIso) {
+      toast.push({
+        message: 'Preencha uma data válida para Data e Data de Fechamento.',
+        severity: 'warning',
+      });
+      return;
+    }
+    const participantsMaleCount = toOptionalNonNegativeInt(reportForm.participantsMaleCount);
+    const participantsFemaleCount = toOptionalNonNegativeInt(reportForm.participantsFemaleCount);
     try {
+      if (canEditReport) {
+        await upsertReport.mutateAsync({
+          id: selected.id,
+          payload: {
+            date: reportDateIso,
+            location: String(reportForm.location ?? ''),
+            responsible: String(reportForm.responsible ?? ''),
+            activityAnalysis: String(reportForm.activityAnalysis ?? ''),
+            activitiesPerformed: String(reportForm.activitiesPerformed ?? ''),
+            participantsCount: toNonNegativeInt(reportForm.participantsCount),
+            participantsMaleCount,
+            participantsFemaleCount,
+            publicProfile: String(reportForm.publicProfile ?? ''),
+            instructorsCount: toNonNegativeInt(reportForm.instructorsCount),
+            recruitsCount: toNonNegativeInt(reportForm.recruitsCount),
+            eloPsychologyCount: toNonNegativeInt(reportForm.eloPsychologyCount),
+            eloSocialAssistanceCount: toNonNegativeInt(reportForm.eloSocialAssistanceCount),
+            eloGraduadoMasterCount: toNonNegativeInt(reportForm.eloGraduadoMasterCount),
+            participantsCharacteristics: String(reportForm.participantsCharacteristics ?? ''),
+            mainPointsObserved: String(reportForm.mainPointsObserved ?? ''),
+            attentionPoints: String(reportForm.attentionPoints ?? ''),
+            nextSteps: String(reportForm.nextSteps ?? ''),
+            referencesAndAttachments: String(reportForm.referencesAndAttachments ?? ''),
+            conclusion: String(reportForm.conclusion ?? ''),
+            city: String(reportForm.city ?? ''),
+            closingDate: closingDateIso,
+          },
+        });
+      }
       await signReport.mutateAsync(selected.id);
       toast.push({ message: 'Relatório assinado digitalmente', severity: 'success' });
     } catch (error) {
-      toast.push({ message: parseApiError(error).message ?? 'Erro ao assinar', severity: 'error' });
+      const payload = parseApiError(error);
+      if (
+        payload.code === 'ACTIVITY_REPORT_INCOMPLETE' ||
+        (payload.code === 'VALIDATION_ERROR' &&
+          payload.details?.reason === 'ACTIVITY_REPORT_INCOMPLETE')
+      ) {
+        toast.push({
+          message: buildIncompleteReportMessage(payload, getReportMissingFields(reportForm)),
+          severity: 'warning',
+        });
+        return;
+      }
+      toast.push({ message: payload.message ?? 'Erro ao assinar', severity: 'error' });
     }
   };
 
