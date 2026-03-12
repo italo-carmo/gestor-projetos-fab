@@ -803,7 +803,7 @@ export function DashboardNationalPage() {
             <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
               <Box>
                 <Typography variant="subtitle1" fontWeight={700} sx={{ letterSpacing: 0.2, color: style.textColor }}>
-                  Número de Participantes
+                  Número de Participacoes
                 </Typography>
                 <Typography variant="caption" sx={{ color: style.textColor }}>
                   Total de participantes em atividades concluídas
