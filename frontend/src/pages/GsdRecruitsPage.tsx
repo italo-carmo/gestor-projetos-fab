@@ -70,6 +70,7 @@ type RecruitMemberRow = {
   id?: string;
   name: string;
   status: RecruitStatus;
+  comment?: string | null;
   dismissalReason?: string | null;
   destinationLocalityId?: string | null;
   dismissedAt?: string | null;
@@ -89,14 +90,11 @@ function formatHistoryDate(value: string) {
   return `${day}/${month}/${year}`;
 }
 
-function statusLabel(status: RecruitStatus) {
-  return RECRUIT_STATUS_OPTIONS.find((item) => item.value === status)?.label ?? status;
-}
-
 function newRecruitDraft(): RecruitMemberRow {
   return {
     name: '',
     status: 'RECRUITMENT_TO_START',
+    comment: null,
     dismissalReason: null,
     destinationLocalityId: null,
     dismissedAt: null,
@@ -214,6 +212,7 @@ export function GsdRecruitsPage() {
       id: String(item.id ?? ''),
       name: String(item.name ?? ''),
       status: item.status as RecruitStatus,
+      comment: item.comment ?? null,
       dismissalReason: item.dismissalReason ?? null,
       destinationLocalityId: item.destinationLocalityId ?? null,
       dismissedAt: item.dismissedAt ?? null,
@@ -528,6 +527,7 @@ export function GsdRecruitsPage() {
         id: row.id,
         name: String(row.name ?? '').trim(),
         status: row.status,
+        comment: row.comment?.trim() || null,
         dismissalReason: row.dismissalReason?.trim() || null,
         destinationLocalityId: row.destinationLocalityId || null,
       }))
@@ -1028,7 +1028,7 @@ export function GsdRecruitsPage() {
         onClose={() => setDrawerOpen(false)}
         PaperProps={{
           sx: {
-            width: { xs: '100%', md: 760 },
+            width: { xs: '100%', md: 1080 },
             mt: `${APP_HEADER_HEIGHT}px`,
             height: `calc(100% - ${APP_HEADER_HEIGHT}px)`,
           },
@@ -1180,6 +1180,7 @@ export function GsdRecruitsPage() {
                       <TableCell sx={{ color: 'white', fontWeight: 600 }}>Status</TableCell>
                       <TableCell sx={{ color: 'white', fontWeight: 600 }}>OM destino</TableCell>
                       <TableCell sx={{ color: 'white', fontWeight: 600 }}>Baixa</TableCell>
+                      <TableCell sx={{ color: 'white', fontWeight: 600 }}>Comentário</TableCell>
                       <TableCell sx={{ color: 'white', fontWeight: 600 }} align="right">Ações</TableCell>
                     </TableRow>
                   </TableHead>
@@ -1311,6 +1312,24 @@ export function GsdRecruitsPage() {
                             ) : (
                               <Typography variant="body2" color="text.secondary">—</Typography>
                             )}
+                          </TableCell>
+                          <TableCell>
+                            <TextField
+                              size="small"
+                              value={row.comment ?? ''}
+                              onChange={(event) =>
+                                setMemberRows((current) =>
+                                  current.map((item, itemIndex) =>
+                                    itemIndex === index
+                                      ? { ...item, comment: event.target.value }
+                                      : item,
+                                  ),
+                                )
+                              }
+                              placeholder="Comentário da recruta"
+                              fullWidth
+                              sx={{ minWidth: 220 }}
+                            />
                           </TableCell>
                           <TableCell align="right">
                             {!row.id && (

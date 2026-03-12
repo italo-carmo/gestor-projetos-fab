@@ -1,5 +1,12 @@
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, IsArray, IsEnum, IsOptional, IsString, ValidateNested } from 'class-validator';
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsEnum,
+  IsOptional,
+  IsString,
+  ValidateNested,
+} from 'class-validator';
 
 export enum RecruitMemberStatusDto {
   RECRUITMENT_TO_START = 'RECRUITMENT_TO_START',
@@ -26,6 +33,10 @@ export class ReplaceLocalityRecruitMemberItemDto {
   @IsOptional()
   @IsString()
   destinationLocalityId?: string | null;
+
+  @IsOptional()
+  @IsString()
+  comment?: string | null;
 }
 
 export class ReplaceLocalityRecruitsMembersDto {
@@ -35,4 +46,3 @@ export class ReplaceLocalityRecruitsMembersDto {
   @Type(() => ReplaceLocalityRecruitMemberItemDto)
   items!: ReplaceLocalityRecruitMemberItemDto[];
 }
-

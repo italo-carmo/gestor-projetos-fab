@@ -968,6 +968,7 @@ model RecruitFemale {
   localityId            String
   name                  String
   status                RecruitFemaleStatus @default(RECRUITMENT_TO_START)
+  comment               String?
   dismissalReason       String?
   dismissedAt           DateTime?
   destinationLocalityId String?

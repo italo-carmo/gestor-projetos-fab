@@ -42,7 +42,6 @@ import {
   useUploadLibraryDocument,
   useUploadLibraryPhoto,
   useActivities,
-  useExportActivityReportPdf,
 } from "../api/hooks";
 import { api } from "../api/client";
 import { ROLE_COORDENACAO_CIPAVD, ROLE_TI, hasAnyRole } from "../app/roleAccess";
@@ -155,7 +154,6 @@ export function LibraryPage() {
   const updateDocument = useUpdateLibraryDocument();
   const deleteDocument = useDeleteLibraryDocument();
   const activitiesQuery = useActivities({ pageSize: '1000' }); // Get all activities to filter those with reports
-  const exportReportPdf = useExportActivityReportPdf();
   const canManage = hasAnyRole(me, [ROLE_TI, ROLE_COORDENACAO_CIPAVD]);
 
   const allPhotos = useMemo(
@@ -174,6 +172,10 @@ export function LibraryPage() {
     return items.filter((activity) => activity.report != null).map((activity) => ({
       id: activity.id,
       title: activity.title,
+      displayTitle:
+        String(activity.activityType?.name ?? '').trim() && String(activity.title ?? '').trim()
+          ? `${String(activity.activityType?.name ?? '').trim()} - ${String(activity.title ?? '').trim()}`
+          : String(activity.activityType?.name ?? '').trim() || String(activity.title ?? '').trim() || '—',
       locality: activity.locality?.name ?? activity.locality?.code ?? '—',
       eventDate: activity.eventDate,
       reportDate: activity.report?.date,
@@ -839,7 +841,7 @@ export function LibraryPage() {
                       sx={{ cursor: downloadingReportId === activity.id ? "wait" : "pointer", opacity: downloadingReportId === activity.id ? 0.6 : 1 }}
                     >
                       <TableCell sx={{ minWidth: 260, fontWeight: 500 }}>
-                        {activity.title}
+                        {activity.displayTitle}
                       </TableCell>
                       <TableCell>{activity.locality}</TableCell>
                       <TableCell>{formatDate(activity.eventDate)}</TableCell>

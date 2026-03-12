@@ -1,4 +1,13 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Put,
+  UseGuards,
+} from '@nestjs/common';
 import { Prisma, RecruitFemaleStatus } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -6,7 +15,13 @@ import { CurrentUser } from '../common/current-user.decorator';
 import { throwError } from '../common/http-error';
 import { RequirePermission } from '../rbac/require-permission.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
-import { canEditRecruitsByRole, isNationalCommissionMember, ROLE_TI, hasRole, ROLE_GSD_LOCALIDADE } from '../rbac/role-access';
+import {
+  canEditRecruitsByRole,
+  isNationalCommissionMember,
+  ROLE_TI,
+  hasRole,
+  ROLE_GSD_LOCALIDADE,
+} from '../rbac/role-access';
 import type { RbacUser } from '../rbac/rbac.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { sanitizeText } from '../common/sanitize';
@@ -15,9 +30,7 @@ import { RbacService } from '../rbac/rbac.service';
 import { CreateLocalityDto } from './dto/create-locality.dto';
 import { SetLocalityCommanderFromLdapDto } from './dto/set-locality-commander-from-ldap.dto';
 import { UpdateLocalityRecruitDesignationsDto } from './dto/update-locality-recruit-designations.dto';
-import {
-  ReplaceLocalityRecruitsMembersDto,
-} from './dto/replace-locality-recruits-members.dto';
+import { ReplaceLocalityRecruitsMembersDto } from './dto/replace-locality-recruits-members.dto';
 import { UpdateLocalityRecruitsDto } from './dto/update-locality-recruits.dto';
 import { UpdateLocalityDto } from './dto/update-locality.dto';
 
@@ -33,9 +46,14 @@ export class LocalitiesController {
   @Get()
   @RequirePermission('localities', 'view')
   async list(@CurrentUser() user: RbacUser) {
-    const canViewAll = isNationalCommissionMember(user) || hasRole(user, ROLE_TI);
-    const where = !canViewAll && user?.localityId ? { id: user.localityId } : undefined;
-    const items = await this.prisma.locality.findMany({ where, orderBy: { name: 'asc' } });
+    const canViewAll =
+      isNationalCommissionMember(user) || hasRole(user, ROLE_TI);
+    const where =
+      !canViewAll && user?.localityId ? { id: user.localityId } : undefined;
+    const items = await this.prisma.locality.findMany({
+      where,
+      orderBy: { name: 'asc' },
+    });
     return { items };
   }
 
@@ -57,15 +75,22 @@ export class LocalitiesController {
         code: sanitizeText(dto.code),
         name: sanitizeText(dto.name),
         commandName: dto.commandName ? sanitizeText(dto.commandName) : null,
-        commanderName: dto.commanderName ? sanitizeText(dto.commanderName) : null,
-        individualMeetingDate: dto.individualMeetingDate ? new Date(dto.individualMeetingDate) : null,
+        commanderName: dto.commanderName
+          ? sanitizeText(dto.commanderName)
+          : null,
+        individualMeetingDate: dto.individualMeetingDate
+          ? new Date(dto.individualMeetingDate)
+          : null,
         visitDate: dto.visitDate ? new Date(dto.visitDate) : null,
         recruitsFemaleCountCurrent: dto.recruitsFemaleCountCurrent ?? null,
         notes: dto.notes ? sanitizeText(dto.notes) : null,
       },
     });
     if (dto.recruitsFemaleCountCurrent && dto.recruitsFemaleCountCurrent > 0) {
-      await this.createInitialRecruits(created.id, dto.recruitsFemaleCountCurrent);
+      await this.createInitialRecruits(
+        created.id,
+        dto.recruitsFemaleCountCurrent,
+      );
       await this.syncLocalityRecruitCount(created.id);
     }
     return created;
@@ -73,11 +98,21 @@ export class LocalitiesController {
 
   @Put(':id')
   @RequirePermission('localities', 'update')
-  async update(@Param('id') id: string, @Body() dto: UpdateLocalityDto, @CurrentUser() user: RbacUser) {
+  async update(
+    @Param('id') id: string,
+    @Body() dto: UpdateLocalityDto,
+    @CurrentUser() user: RbacUser,
+  ) {
     this.assertLocalityAccess(id, user);
     this.assertRecruitsMutationAccess(id, user, dto.recruitsFemaleCountCurrent);
-    if (dto.recruitsFemaleCountCurrent !== undefined && dto.recruitsFemaleCountCurrent !== null) {
-      await this.assertRecruitAssignmentsWithinTotal(id, dto.recruitsFemaleCountCurrent);
+    if (
+      dto.recruitsFemaleCountCurrent !== undefined &&
+      dto.recruitsFemaleCountCurrent !== null
+    ) {
+      await this.assertRecruitAssignmentsWithinTotal(
+        id,
+        dto.recruitsFemaleCountCurrent,
+      );
     }
     const currentLocality = await this.prisma.locality.findUnique({
       where: { id },
@@ -90,20 +125,46 @@ export class LocalitiesController {
       data: {
         code: dto.code ? sanitizeText(dto.code) : undefined,
         name: dto.name ? sanitizeText(dto.name) : undefined,
-        commandName: dto.commandName ? sanitizeText(dto.commandName) : dto.commandName === null ? null : undefined,
-        commanderName: dto.commanderName ? sanitizeText(dto.commanderName) : dto.commanderName === null ? null : undefined,
-        individualMeetingDate: dto.individualMeetingDate ? new Date(dto.individualMeetingDate) : dto.individualMeetingDate === null ? null : undefined,
-        visitDate: dto.visitDate ? new Date(dto.visitDate) : dto.visitDate === null ? null : undefined,
+        commandName: dto.commandName
+          ? sanitizeText(dto.commandName)
+          : dto.commandName === null
+            ? null
+            : undefined,
+        commanderName: dto.commanderName
+          ? sanitizeText(dto.commanderName)
+          : dto.commanderName === null
+            ? null
+            : undefined,
+        individualMeetingDate: dto.individualMeetingDate
+          ? new Date(dto.individualMeetingDate)
+          : dto.individualMeetingDate === null
+            ? null
+            : undefined,
+        visitDate: dto.visitDate
+          ? new Date(dto.visitDate)
+          : dto.visitDate === null
+            ? null
+            : undefined,
         recruitsFemaleCountCurrent: dto.recruitsFemaleCountCurrent ?? undefined,
-        notes: dto.notes ? sanitizeText(dto.notes) : dto.notes === null ? null : undefined,
+        notes: dto.notes
+          ? sanitizeText(dto.notes)
+          : dto.notes === null
+            ? null
+            : undefined,
       },
     });
-    if (dto.recruitsFemaleCountCurrent !== undefined && dto.recruitsFemaleCountCurrent !== null) {
+    if (
+      dto.recruitsFemaleCountCurrent !== undefined &&
+      dto.recruitsFemaleCountCurrent !== null
+    ) {
       const currentActiveCount = await this.prisma.recruitFemale.count({
         where: {
           localityId: id,
           status: {
-            in: [RecruitFemaleStatus.RECRUITMENT_TO_START, RecruitFemaleStatus.RECRUITMENT_STARTED],
+            in: [
+              RecruitFemaleStatus.RECRUITMENT_TO_START,
+              RecruitFemaleStatus.RECRUITMENT_STARTED,
+            ],
           },
         },
       });
@@ -130,7 +191,10 @@ export class LocalitiesController {
     @CurrentUser() user: RbacUser,
   ) {
     this.assertRecruitsMutationAccess(id, user, dto.recruitsFemaleCountCurrent);
-    await this.assertRecruitAssignmentsWithinTotal(id, dto.recruitsFemaleCountCurrent);
+    await this.assertRecruitAssignmentsWithinTotal(
+      id,
+      dto.recruitsFemaleCountCurrent,
+    );
     const currentLocality = await this.prisma.locality.findUnique({
       where: { id },
       select: { recruitsFemaleCountCurrent: true },
@@ -142,12 +206,15 @@ export class LocalitiesController {
       where: {
         localityId: id,
         status: {
-          in: [RecruitFemaleStatus.RECRUITMENT_TO_START, RecruitFemaleStatus.RECRUITMENT_STARTED],
+          in: [
+            RecruitFemaleStatus.RECRUITMENT_TO_START,
+            RecruitFemaleStatus.RECRUITMENT_STARTED,
+          ],
         },
       },
     });
     const targetCount = dto.recruitsFemaleCountCurrent;
-    
+
     if (targetCount > currentActiveCount) {
       await this.createInitialRecruits(id, targetCount - currentActiveCount);
     } else if (targetCount < currentActiveCount) {
@@ -156,14 +223,19 @@ export class LocalitiesController {
         where: {
           localityId: id,
           status: {
-            in: [RecruitFemaleStatus.RECRUITMENT_TO_START, RecruitFemaleStatus.RECRUITMENT_STARTED],
+            in: [
+              RecruitFemaleStatus.RECRUITMENT_TO_START,
+              RecruitFemaleStatus.RECRUITMENT_STARTED,
+            ],
           },
         },
         orderBy: { createdAt: 'asc' },
         take: toRemove,
       });
       if (activeRecruits.length > 0) {
-        const dismissalReason = dto.dismissalReason ? sanitizeText(dto.dismissalReason).trim() : null;
+        const dismissalReason = dto.dismissalReason
+          ? sanitizeText(dto.dismissalReason).trim()
+          : null;
         if (!dismissalReason) {
           throwError('VALIDATION_ERROR', {
             field: 'dismissalReason',
@@ -204,13 +276,19 @@ export class LocalitiesController {
   }
 
   @Get(':id/recruit-designations')
-  async listRecruitDesignations(@Param('id') id: string, @CurrentUser() user: RbacUser) {
+  async listRecruitDesignations(
+    @Param('id') id: string,
+    @CurrentUser() user: RbacUser,
+  ) {
     this.assertRecruitsEditorAccess(id, user);
     return this.buildRecruitDesignationsResponse(id);
   }
 
   @Get(':id/recruits-members')
-  async listRecruitMembers(@Param('id') id: string, @CurrentUser() user: RbacUser) {
+  async listRecruitMembers(
+    @Param('id') id: string,
+    @CurrentUser() user: RbacUser,
+  ) {
     this.assertRecruitsEditorAccess(id, user);
     return this.buildRecruitMembersResponse(id);
   }
@@ -242,8 +320,12 @@ export class LocalitiesController {
         designatedAt: true,
       },
     });
-    const existingById = new Map(existingMembers.map((item) => [item.id, item]));
-    const hasUnknownId = incomingIds.some((memberId) => !existingById.has(memberId));
+    const existingById = new Map(
+      existingMembers.map((item) => [item.id, item]),
+    );
+    const hasUnknownId = incomingIds.some(
+      (memberId) => !existingById.has(memberId),
+    );
     if (hasUnknownId) {
       throwError('VALIDATION_ERROR', {
         field: 'items',
@@ -286,11 +368,14 @@ export class LocalitiesController {
         }
 
         const nextStatus = item.status as RecruitFemaleStatus;
-        const dismissalReasonRaw = sanitizeText(String(item.dismissalReason ?? '').trim());
+        const dismissalReasonRaw = sanitizeText(
+          String(item.dismissalReason ?? '').trim(),
+        );
         const dismissalReason = dismissalReasonRaw || null;
-        const destinationLocalityId = sanitizeText(
-          String(item.destinationLocalityId ?? '').trim(),
-        ) || null;
+        const destinationLocalityId =
+          sanitizeText(String(item.destinationLocalityId ?? '').trim()) || null;
+        const commentRaw = sanitizeText(String(item.comment ?? '').trim());
+        const comment = commentRaw || null;
 
         if (nextStatus === RecruitFemaleStatus.DISMISSED && !dismissalReason) {
           throwError('VALIDATION_ERROR', {
@@ -315,16 +400,20 @@ export class LocalitiesController {
           dismissedReasons.push(dismissalReason);
         }
 
-        const payload: Prisma.RecruitFemaleUncheckedCreateInput = {
+        const payload: Prisma.RecruitFemaleUncheckedCreateInput & {
+          comment?: string | null;
+        } = {
           id: memberId || `rf_${randomUUID().replace(/-/g, '')}`,
           localityId: id,
           name,
           status: nextStatus,
           dismissalReason:
-            nextStatus === RecruitFemaleStatus.DISMISSED ? dismissalReason : null,
+            nextStatus === RecruitFemaleStatus.DISMISSED
+              ? dismissalReason
+              : null,
           dismissedAt:
             nextStatus === RecruitFemaleStatus.DISMISSED
-              ? existing?.dismissedAt ?? now
+              ? (existing?.dismissedAt ?? now)
               : null,
           destinationLocalityId:
             nextStatus === RecruitFemaleStatus.ASSIGNED_TO_OM
@@ -332,15 +421,16 @@ export class LocalitiesController {
               : null,
           designatedAt:
             nextStatus === RecruitFemaleStatus.ASSIGNED_TO_OM
-              ? existing?.designatedAt ?? now
+              ? (existing?.designatedAt ?? now)
               : null,
+          comment,
           createdAt: now,
           updatedAt: now,
         };
 
         await tx.recruitFemale.upsert({
           where: { id: payload.id },
-          create: payload,
+          create: payload as any,
           update: {
             name: payload.name,
             status: payload.status,
@@ -348,7 +438,8 @@ export class LocalitiesController {
             dismissedAt: payload.dismissedAt,
             destinationLocalityId: payload.destinationLocalityId,
             designatedAt: payload.designatedAt,
-          },
+            comment: payload.comment,
+          } as any,
         });
       }
     });
@@ -499,18 +590,28 @@ export class LocalitiesController {
 
     const merged = new Map<string, number>();
     for (const item of dto.items ?? []) {
-      const destinationLocalityId = String(item.destinationLocalityId ?? '').trim();
+      const destinationLocalityId = String(
+        item.destinationLocalityId ?? '',
+      ).trim();
       if (!destinationLocalityId) continue;
       const nextCount = Number(item.assignedCount ?? 0);
       if (!Number.isInteger(nextCount) || nextCount <= 0) continue;
-      merged.set(destinationLocalityId, (merged.get(destinationLocalityId) ?? 0) + nextCount);
+      merged.set(
+        destinationLocalityId,
+        (merged.get(destinationLocalityId) ?? 0) + nextCount,
+      );
     }
 
-    const normalizedItems = Array.from(merged.entries()).map(([destinationLocalityId, assignedCount]) => ({
-      destinationLocalityId,
-      assignedCount,
-    }));
-    const totalAssigned = normalizedItems.reduce((acc, item) => acc + item.assignedCount, 0);
+    const normalizedItems = Array.from(merged.entries()).map(
+      ([destinationLocalityId, assignedCount]) => ({
+        destinationLocalityId,
+        assignedCount,
+      }),
+    );
+    const totalAssigned = normalizedItems.reduce(
+      (acc, item) => acc + item.assignedCount,
+      0,
+    );
     const totalRecruits = sourceLocality.recruitsFemaleCountCurrent ?? 0;
     if (totalAssigned > totalRecruits) {
       throwError('VALIDATION_ERROR', {
@@ -522,7 +623,9 @@ export class LocalitiesController {
     }
 
     if (normalizedItems.length > 0) {
-      const destinationIds = normalizedItems.map((item) => item.destinationLocalityId);
+      const destinationIds = normalizedItems.map(
+        (item) => item.destinationLocalityId,
+      );
       const destinationLocalities = await this.prisma.locality.findMany({
         where: { id: { in: destinationIds } },
         select: { id: true },
@@ -539,8 +642,9 @@ export class LocalitiesController {
       await tx.$executeRaw`DELETE FROM "RecruitOmAssignment" WHERE "sourceLocalityId" = ${id}`;
       if (!normalizedItems.length) return;
       const now = new Date();
-      const values = normalizedItems.map((item) =>
-        Prisma.sql`(
+      const values = normalizedItems.map(
+        (item) =>
+          Prisma.sql`(
           ${`rasg_${randomUUID()}`},
           ${id},
           ${item.destinationLocalityId},
@@ -573,7 +677,8 @@ export class LocalitiesController {
   }
 
   private assertLocalityAccess(localityId: string, user?: RbacUser) {
-    const bypassLocalityConstraint = isNationalCommissionMember(user) || hasRole(user, ROLE_TI);
+    const bypassLocalityConstraint =
+      isNationalCommissionMember(user) || hasRole(user, ROLE_TI);
     if (bypassLocalityConstraint) return;
     if (!user?.localityId) return;
     if (user.localityId !== localityId) {
@@ -586,7 +691,11 @@ export class LocalitiesController {
     user: RbacUser | undefined,
     recruitsFemaleCountCurrent: number | null | undefined,
   ) {
-    if (recruitsFemaleCountCurrent === undefined || recruitsFemaleCountCurrent === null) return;
+    if (
+      recruitsFemaleCountCurrent === undefined ||
+      recruitsFemaleCountCurrent === null
+    )
+      return;
     if (!canEditRecruitsByRole(user, localityId)) {
       throwError('RBAC_FORBIDDEN');
     }
@@ -598,8 +707,13 @@ export class LocalitiesController {
     }
   }
 
-  private async assertRecruitAssignmentsWithinTotal(localityId: string, recruitsFemaleCountCurrent: number) {
-    const aggregate = await this.prisma.$queryRaw<Array<{ totalAssigned: number }>>(
+  private async assertRecruitAssignmentsWithinTotal(
+    localityId: string,
+    recruitsFemaleCountCurrent: number,
+  ) {
+    const aggregate = await this.prisma.$queryRaw<
+      Array<{ totalAssigned: number }>
+    >(
       Prisma.sql`
         SELECT COALESCE(SUM("assignedCount"), 0)::int AS "totalAssigned"
         FROM "RecruitOmAssignment"
@@ -646,7 +760,10 @@ export class LocalitiesController {
         ORDER BY l."name" ASC, a."destinationLocalityId" ASC
       `,
     );
-    const totalAssigned = items.reduce((acc: number, item) => acc + item.assignedCount, 0);
+    const totalAssigned = items.reduce(
+      (acc: number, item) => acc + item.assignedCount,
+      0,
+    );
     const totalRecruits = locality.recruitsFemaleCountCurrent ?? 0;
 
     return {
@@ -657,7 +774,8 @@ export class LocalitiesController {
       items: items.map((item) => ({
         id: item.id,
         destinationLocalityId: item.destinationLocalityId,
-        destinationLocalityName: item.destinationLocalityName ?? item.destinationLocalityId,
+        destinationLocalityName:
+          item.destinationLocalityName ?? item.destinationLocalityId,
         destinationLocalityCode: item.destinationLocalityCode ?? '',
         assignedCount: item.assignedCount,
       })),
@@ -674,7 +792,7 @@ export class LocalitiesController {
     });
     if (!locality) throwError('NOT_FOUND');
 
-    const items = await this.prisma.recruitFemale.findMany({
+    const items = (await this.prisma.recruitFemale.findMany({
       where: { localityId },
       select: {
         id: true,
@@ -684,12 +802,13 @@ export class LocalitiesController {
         dismissedAt: true,
         destinationLocalityId: true,
         designatedAt: true,
+        comment: true,
         destinationLocality: {
           select: { id: true, name: true, code: true },
         },
       },
       orderBy: [{ name: 'asc' }],
-    });
+    } as any)) as Array<any>;
 
     return {
       localityId,
@@ -705,6 +824,7 @@ export class LocalitiesController {
           item.destinationLocality?.name ?? item.destinationLocalityId ?? null,
         destinationLocalityCode: item.destinationLocality?.code ?? null,
         designatedAt: item.designatedAt?.toISOString() ?? null,
+        comment: item.comment ?? null,
       })),
     };
   }

@@ -573,7 +573,19 @@ export function useUpsertActivityReport() {
         activityAnalysis: string;
         activitiesPerformed: string;
         participantsCount: number;
+        participantsMaleCount?: number;
+        participantsFemaleCount?: number;
+        publicProfile?: string;
+        instructorsCount?: number;
+        recruitsCount?: number;
+        eloPsychologyCount?: number;
+        eloSocialAssistanceCount?: number;
+        eloGraduadoMasterCount?: number;
         participantsCharacteristics: string;
+        mainPointsObserved?: string;
+        attentionPoints?: string;
+        nextSteps?: string;
+        referencesAndAttachments?: string;
         conclusion: string;
         city: string;
         closingDate: string;
@@ -1022,11 +1034,15 @@ export function useLocalityProgress(id: string) {
   });
 }
 
-export function useDashboardNational(filters: Record<string, any>) {
+export function useDashboardNational(
+  filters: Record<string, any>,
+  enabled = true,
+) {
   return useQuery({
     queryKey: qk.dashboardNational(filters),
     queryFn: async () =>
       (await api.get(`/dashboard/national`, { params: filters })).data,
+    enabled,
     staleTime: 15_000,
   });
 }
@@ -2316,6 +2332,7 @@ export function useReplaceLocalityRecruitMembers() {
           | 'ASSIGNED_TO_OM';
         dismissalReason?: string | null;
         destinationLocalityId?: string | null;
+        comment?: string | null;
       }>;
     }) =>
       (

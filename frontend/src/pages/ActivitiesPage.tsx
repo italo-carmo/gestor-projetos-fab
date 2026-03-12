@@ -167,6 +167,21 @@ function toIsoDateStartOfDay(value: string) {
   return parsed.toISOString();
 }
 
+function toNonNegativeInt(value: unknown) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.max(0, Math.trunc(parsed));
+}
+
+function toOptionalNonNegativeInt(value: unknown) {
+  if (value === undefined || value === null || String(value).trim() === '') {
+    return undefined;
+  }
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return undefined;
+  return Math.max(0, Math.trunc(parsed));
+}
+
 function getActivityStatusChipStyle(status: string) {
   if (status === 'DONE') {
     return {
@@ -904,12 +919,33 @@ export function ActivitiesPage() {
       });
       return;
     }
+    const participantsMaleCount = toOptionalNonNegativeInt(reportForm.participantsMaleCount);
+    const participantsFemaleCount = toOptionalNonNegativeInt(reportForm.participantsFemaleCount);
     try {
       await upsertReport.mutateAsync({
         id: selected.id,
         payload: {
-          ...reportForm,
           date: reportDateIso,
+          location: String(reportForm.location ?? ''),
+          responsible: String(reportForm.responsible ?? ''),
+          activityAnalysis: String(reportForm.activityAnalysis ?? ''),
+          activitiesPerformed: String(reportForm.activitiesPerformed ?? ''),
+          participantsCount: toNonNegativeInt(reportForm.participantsCount),
+          participantsMaleCount,
+          participantsFemaleCount,
+          publicProfile: String(reportForm.publicProfile ?? ''),
+          instructorsCount: toNonNegativeInt(reportForm.instructorsCount),
+          recruitsCount: toNonNegativeInt(reportForm.recruitsCount),
+          eloPsychologyCount: toNonNegativeInt(reportForm.eloPsychologyCount),
+          eloSocialAssistanceCount: toNonNegativeInt(reportForm.eloSocialAssistanceCount),
+          eloGraduadoMasterCount: toNonNegativeInt(reportForm.eloGraduadoMasterCount),
+          participantsCharacteristics: String(reportForm.participantsCharacteristics ?? ''),
+          mainPointsObserved: String(reportForm.mainPointsObserved ?? ''),
+          attentionPoints: String(reportForm.attentionPoints ?? ''),
+          nextSteps: String(reportForm.nextSteps ?? ''),
+          referencesAndAttachments: String(reportForm.referencesAndAttachments ?? ''),
+          conclusion: String(reportForm.conclusion ?? ''),
+          city: String(reportForm.city ?? ''),
           closingDate: closingDateIso,
         },
       });
