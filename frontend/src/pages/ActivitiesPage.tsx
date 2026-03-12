@@ -347,6 +347,7 @@ export function ActivitiesPage() {
   const [commentText, setCommentText] = useState('');
   const [drawerTab, setDrawerTab] = useState<ActivityDrawerTab>(tabFromUrl);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [removeSignatureConfirmOpen, setRemoveSignatureConfirmOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [batchDeleteConfirmOpen, setBatchDeleteConfirmOpen] = useState(false);
   const [replicateDialogOpen, setReplicateDialogOpen] = useState(false);
@@ -620,6 +621,7 @@ export function ActivitiesPage() {
   const canCreate = canManageActivityDataByRole;
   const canUpdate = canManageActivityDataByRole;
   const canDelete = canUpdate;
+  const isTiProfile = hasAnyRole(me, [ROLE_TI]);
   const canEditReport = can(me, 'reports', 'create') && canManageActivityDataByRole;
   const canSign = can(me, 'reports', 'approve') && canManageActivityDataByRole;
   const canUpload = can(me, 'reports', 'upload') && canManageActivityDataByRole;
@@ -1063,6 +1065,70 @@ export function ActivitiesPage() {
     }
   };
 
+  const handleRemoveSignature = async () => {
+    if (!selected || !isTiProfile) return;
+    if (!selected.report?.hasSignature) {
+      toast.push({ message: 'Este relatório não possui assinatura ativa.', severity: 'warning' });
+      setRemoveSignatureConfirmOpen(false);
+      return;
+    }
+
+    const source = selected.report;
+    const reportDateIso = toIsoDateStartOfDay(
+      source?.date ? String(source.date).slice(0, 10) : '',
+    );
+    const closingDateInput = source?.closingDate
+      ? String(source.closingDate).slice(0, 10)
+      : source?.date
+        ? String(source.date).slice(0, 10)
+        : '';
+    const closingDateIso = toIsoDateStartOfDay(closingDateInput);
+    if (!reportDateIso || !closingDateIso) {
+      toast.push({
+        message: 'Não foi possível remover a assinatura: datas do relatório estão inválidas.',
+        severity: 'error',
+      });
+      return;
+    }
+
+    try {
+      await upsertReport.mutateAsync({
+        id: selected.id,
+        payload: {
+          date: reportDateIso,
+          location: String(source.location ?? ''),
+          responsible: String(source.responsible ?? ''),
+          activityAnalysis: String(source.activityAnalysis ?? source.missionSupport ?? ''),
+          activitiesPerformed: String(source.activitiesPerformed ?? ''),
+          participantsCount: toNonNegativeInt(source.participantsCount),
+          participantsMaleCount: toOptionalNonNegativeInt(source.participantsMaleCount),
+          participantsFemaleCount: toOptionalNonNegativeInt(source.participantsFemaleCount),
+          publicProfile: String(source.publicProfile ?? ''),
+          instructorsCount: toNonNegativeInt(source.instructorsCount),
+          recruitsCount: toNonNegativeInt(source.recruitsCount),
+          eloPsychologyCount: toNonNegativeInt(source.eloPsychologyCount),
+          eloSocialAssistanceCount: toNonNegativeInt(source.eloSocialAssistanceCount),
+          eloGraduadoMasterCount: toNonNegativeInt(source.eloGraduadoMasterCount),
+          participantsCharacteristics: String(source.participantsCharacteristics ?? ''),
+          mainPointsObserved: String(source.mainPointsObserved ?? ''),
+          attentionPoints: String(source.attentionPoints ?? ''),
+          nextSteps: String(source.nextSteps ?? ''),
+          referencesAndAttachments: String(source.referencesAndAttachments ?? ''),
+          conclusion: String(source.conclusion ?? ''),
+          city: String(source.city ?? ''),
+          closingDate: closingDateIso,
+        },
+      });
+      toast.push({ message: 'Assinatura removida com sucesso.', severity: 'success' });
+      setRemoveSignatureConfirmOpen(false);
+    } catch (error) {
+      toast.push({
+        message: parseApiError(error).message ?? 'Erro ao remover assinatura do relatório',
+        severity: 'error',
+      });
+    }
+  };
+
   const handleExportPdf = async () => {
     if (!selected || !canDownload) return;
     try {
@@ -1112,6 +1178,7 @@ export function ActivitiesPage() {
   const closeDrawer = () => {
     setDrawerOpen(false);
     setDeleteConfirmOpen(false);
+    setRemoveSignatureConfirmOpen(false);
     syncUrlState(undefined);
   };
 
@@ -2460,6 +2527,27 @@ export function ActivitiesPage() {
                   )}
                 </Box>
 
+                {isTiProfile ? (
+                  <Box sx={{ p: 1.5, border: '1px dashed #CFD8DC', borderRadius: 2, bgcolor: '#FAFBFC' }}>
+                    <Typography variant="subtitle2" color="text.secondary">
+                      Ação exclusiva TI
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                      Remover assinatura digital do relatório sem excluir o conteúdo.
+                    </Typography>
+                    <Button
+                      variant="outlined"
+                      color="warning"
+                      size="small"
+                      sx={drawerActionButtonSx}
+                      onClick={() => setRemoveSignatureConfirmOpen(true)}
+                      disabled={!selected.report?.hasSignature || upsertReport.isPending}
+                    >
+                      Deletar assinatura
+                    </Button>
+                  </Box>
+                ) : null}
+
                 <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
                   <Button
                     variant="contained"
@@ -2664,6 +2752,18 @@ export function ActivitiesPage() {
         confirmLabel="Excluir atividade"
         severity="error"
         confirmLoading={deleteActivity.isPending}
+      />
+
+      <ConfirmDialog
+        open={removeSignatureConfirmOpen}
+        onCancel={() => setRemoveSignatureConfirmOpen(false)}
+        onConfirm={handleRemoveSignature}
+        title="Deletar assinatura digital"
+        message="Deseja realmente remover a assinatura digital deste relatório?"
+        note="Apenas o hash/registro da assinatura será removido. O conteúdo do relatório será mantido."
+        confirmLabel="Remover assinatura"
+        severity="warning"
+        confirmLoading={upsertReport.isPending}
       />
     </Box>
   );
