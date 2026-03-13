@@ -1079,6 +1079,7 @@ export class MissionsService {
       .slice(0, -1)
       .reduce((acc, col) => acc + col.width, 0);
     columnDefs[columnDefs.length - 1].width = contentWidth - fixedWidth;
+    const dayBlockGap = 18;
 
     const drawTableHeader = () => {
       const headerHeight = 22;
@@ -1106,11 +1107,10 @@ export class MissionsService {
     ) => {
       const blockHeight = 20;
       const tableHeaderHeight = 22;
-      const blockGap = 8;
       const safetyMargin = 15;
       let needsGap = cursorY > doc.page.margins.top + 20;
       const requiredHeight =
-        (needsGap ? blockGap : 0) +
+        (needsGap ? dayBlockGap : 0) +
         blockHeight +
         tableHeaderHeight +
         requiredContentHeight +
@@ -1122,7 +1122,7 @@ export class MissionsService {
       }
 
       if (needsGap) {
-        cursorY += blockGap;
+        cursorY += dayBlockGap;
       }
 
       doc
@@ -1356,7 +1356,7 @@ export class MissionsService {
     const moveDayBlockToNextPageWhenPossible = (dayBlockHeight: number) => {
       if (dayBlockHeight <= 0) return;
 
-      const blockGap = cursorY > doc.page.margins.top + 20 ? 8 : 0;
+      const blockGap = cursorY > doc.page.margins.top + 20 ? dayBlockGap : 0;
       const requiredOnCurrentPage = dayBlockHeight + blockGap;
       if (cursorY + requiredOnCurrentPage <= tableBottomLimit) return;
 
