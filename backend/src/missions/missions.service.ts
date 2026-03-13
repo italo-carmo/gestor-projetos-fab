@@ -7,7 +7,12 @@ import { PrismaService } from '../prisma/prisma.service';
 import { throwError } from '../common/http-error';
 import { AuditService } from '../audit/audit.service';
 import type { RbacUser } from '../rbac/rbac.types';
-import { hasAnyRole, ROLE_COMANDANTE_COMGEP, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from '../rbac/role-access';
+import {
+  hasAnyRole,
+  ROLE_COMANDANTE_COMGEP,
+  ROLE_COORDENACAO_CIPAVD,
+  ROLE_TI,
+} from '../rbac/role-access';
 import { sanitizeText } from '../common/sanitize';
 import { parsePagination } from '../common/pagination';
 import { FabLdapService } from '../ldap/fab-ldap.service';
@@ -16,7 +21,14 @@ import { selectTargetLocalities } from '../common/priority-localities';
 const scheduleLogoCandidates = [
   path.resolve(process.cwd(), 'frontend', 'public', 'brand', 'cipavd-7.png'),
   path.resolve(process.cwd(), 'public', 'brand', 'cipavd-7.png'),
-  path.resolve(process.cwd(), '..', 'frontend', 'public', 'brand', 'cipavd-7.png'),
+  path.resolve(
+    process.cwd(),
+    '..',
+    'frontend',
+    'public',
+    'brand',
+    'cipavd-7.png',
+  ),
 ];
 
 @Injectable()
@@ -30,18 +42,28 @@ export class MissionsService {
   ) {}
 
   async list(
-    filters: { localityId?: string; q?: string; page?: string; pageSize?: string },
+    filters: {
+      localityId?: string;
+      q?: string;
+      page?: string;
+      pageSize?: string;
+    },
     user?: RbacUser,
   ) {
     this.assertMissionAccess(user);
 
-    const { page, pageSize, skip, take } = parsePagination(filters.page, filters.pageSize);
+    const { page, pageSize, skip, take } = parsePagination(
+      filters.page,
+      filters.pageSize,
+    );
     const targetLocalityIds = await this.getTargetLocalityIds();
     if (targetLocalityIds.length === 0) {
       return { items: [], page, pageSize, total: 0 };
     }
 
-    const andClauses: Prisma.MissionWhereInput[] = [{ localityId: { in: targetLocalityIds } }];
+    const andClauses: Prisma.MissionWhereInput[] = [
+      { localityId: { in: targetLocalityIds } },
+    ];
     if (filters.localityId) andClauses.push({ localityId: filters.localityId });
     if (filters.q) {
       andClauses.push({
@@ -129,27 +151,46 @@ export class MissionsService {
     });
 
     const totalMissions = missions.length;
-    const totalParticipants = missions.reduce((acc, m) => acc + m.participants.length, 0);
-    const averageParticipantsPerMission = totalMissions > 0 ? totalParticipants / totalMissions : 0;
-    const missionsWithoutParticipants = missions.filter((m) => m.participants.length === 0).length;
-    const totalMissionDays = missions.reduce(
-      (acc, mission) => acc + this.calculateInclusiveDays(mission.startDate, mission.endDate),
+    const totalParticipants = missions.reduce(
+      (acc, m) => acc + m.participants.length,
       0,
     );
-    const averageMissionDays = totalMissions > 0 ? totalMissionDays / totalMissions : 0;
+    const averageParticipantsPerMission =
+      totalMissions > 0 ? totalParticipants / totalMissions : 0;
+    const missionsWithoutParticipants = missions.filter(
+      (m) => m.participants.length === 0,
+    ).length;
+    const totalMissionDays = missions.reduce(
+      (acc, mission) =>
+        acc + this.calculateInclusiveDays(mission.startDate, mission.endDate),
+      0,
+    );
+    const averageMissionDays =
+      totalMissions > 0 ? totalMissionDays / totalMissions : 0;
     const totalParticipantDays = missions.reduce(
       (acc, mission) =>
-        acc + this.calculateInclusiveDays(mission.startDate, mission.endDate) * mission.participants.length,
+        acc +
+        this.calculateInclusiveDays(mission.startDate, mission.endDate) *
+          mission.participants.length,
       0,
     );
 
     // Estatísticas por usuário (participantes que são usuários do sistema)
     const userMissionCount = new Map<
       string,
-      { userId: string; userName: string; userEmail: string; count: number; totalDays: number }
+      {
+        userId: string;
+        userName: string;
+        userEmail: string;
+        count: number;
+        totalDays: number;
+      }
     >();
     for (const mission of missions) {
-      const missionDays = this.calculateInclusiveDays(mission.startDate, mission.endDate);
+      const missionDays = this.calculateInclusiveDays(
+        mission.startDate,
+        mission.endDate,
+      );
       for (const participant of mission.participants) {
         if (participant.userId) {
           const existing = userMissionCount.get(participant.userId);
@@ -205,7 +246,8 @@ export class MissionsService {
       missionsByUser,
       usersByMissionDays,
       participantsByMission,
-      averageParticipantsPerMission: Math.round(averageParticipantsPerMission * 10) / 10,
+      averageParticipantsPerMission:
+        Math.round(averageParticipantsPerMission * 10) / 10,
       averageMissionDays: Math.round(averageMissionDays * 10) / 10,
       missionsWithoutParticipants,
       missionsWithMostParticipants,
@@ -249,19 +291,27 @@ export class MissionsService {
 
     const targetLocalityIds = await this.getTargetLocalityIds();
     if (!targetLocalityIds.includes(payload.localityId)) {
-      throwError('VALIDATION_ERROR', { field: 'localityId', reason: 'LOCALITY_NOT_ALLOWED' });
+      throwError('VALIDATION_ERROR', {
+        field: 'localityId',
+        reason: 'LOCALITY_NOT_ALLOWED',
+      });
     }
 
     const startDate = this.parseRequiredDate(payload.startDate, 'startDate');
     const endDate = this.parseRequiredDate(payload.endDate, 'endDate');
     if (endDate.getTime() < startDate.getTime()) {
-      throwError('VALIDATION_ERROR', { field: 'endDate', reason: 'END_DATE_BEFORE_START_DATE' });
+      throwError('VALIDATION_ERROR', {
+        field: 'endDate',
+        reason: 'END_DATE_BEFORE_START_DATE',
+      });
     }
 
     const created = await this.prisma.mission.create({
       data: {
         title: this.sanitizeRequiredText(payload.title, 'title'),
-        description: payload.description ? sanitizeText(payload.description) : null,
+        description: payload.description
+          ? sanitizeText(payload.description)
+          : null,
         localityId: payload.localityId,
         startDate,
         endDate,
@@ -313,7 +363,10 @@ export class MissionsService {
     const targetLocalityIds = await this.getTargetLocalityIds();
     const localityId = payload.localityId ?? existing.localityId;
     if (!targetLocalityIds.includes(localityId)) {
-      throwError('VALIDATION_ERROR', { field: 'localityId', reason: 'LOCALITY_NOT_ALLOWED' });
+      throwError('VALIDATION_ERROR', {
+        field: 'localityId',
+        reason: 'LOCALITY_NOT_ALLOWED',
+      });
     }
 
     const startDate = payload.startDate
@@ -324,18 +377,25 @@ export class MissionsService {
       : existing.endDate;
 
     if (endDate.getTime() < startDate.getTime()) {
-      throwError('VALIDATION_ERROR', { field: 'endDate', reason: 'END_DATE_BEFORE_START_DATE' });
+      throwError('VALIDATION_ERROR', {
+        field: 'endDate',
+        reason: 'END_DATE_BEFORE_START_DATE',
+      });
     }
 
     const updated = await this.prisma.mission.update({
       where: { id },
       data: {
-        title: payload.title === undefined ? undefined : this.sanitizeRequiredText(payload.title, 'title'),
-        description: payload.description === undefined
-          ? undefined
-          : payload.description === null
-            ? null
-            : sanitizeText(payload.description),
+        title:
+          payload.title === undefined
+            ? undefined
+            : this.sanitizeRequiredText(payload.title, 'title'),
+        description:
+          payload.description === undefined
+            ? undefined
+            : payload.description === null
+              ? null
+              : sanitizeText(payload.description),
         localityId,
         startDate,
         endDate,
@@ -425,7 +485,11 @@ export class MissionsService {
     };
   }
 
-  async addParticipantFromLdap(missionId: string, identifier: string, user?: RbacUser) {
+  async addParticipantFromLdap(
+    missionId: string,
+    identifier: string,
+    user?: RbacUser,
+  ) {
     this.assertMissionAccess(user);
 
     const mission = await this.prisma.mission.findUnique({
@@ -436,12 +500,17 @@ export class MissionsService {
 
     const normalized = String(identifier ?? '').trim();
     if (!normalized) {
-      throwError('VALIDATION_ERROR', { field: 'identifier', reason: 'REQUIRED' });
+      throwError('VALIDATION_ERROR', {
+        field: 'identifier',
+        reason: 'REQUIRED',
+      });
     }
 
     const profile = normalized.includes('@')
       ? await this.fabLdap.lookupByEmail(normalized)
-      : await this.fabLdap.lookupByUid(normalized.replace(/\D/g, '') || normalized);
+      : await this.fabLdap.lookupByUid(
+          normalized.replace(/\D/g, '') || normalized,
+        );
 
     if (!profile) {
       throwError('NOT_FOUND', { resource: 'ldap_user' });
@@ -453,7 +522,8 @@ export class MissionsService {
     const duplicate = mission.participants.find(
       (participant) =>
         (profile.uid && participant.ldapUid === profile.uid) ||
-        (normalizedEmail && participant.email?.toLowerCase() === normalizedEmail) ||
+        (normalizedEmail &&
+          participant.email?.toLowerCase() === normalizedEmail) ||
         (cpf && participant.cpf === cpf),
     );
     if (duplicate) {
@@ -499,7 +569,11 @@ export class MissionsService {
     return created;
   }
 
-  async addParticipantFromUser(missionId: string, userId: string, user?: RbacUser) {
+  async addParticipantFromUser(
+    missionId: string,
+    userId: string,
+    user?: RbacUser,
+  ) {
     this.assertMissionAccess(user);
 
     const mission = await this.prisma.mission.findUnique({
@@ -523,7 +597,8 @@ export class MissionsService {
       (participant) =>
         participant.userId === userId ||
         (systemUser.ldapUid && participant.ldapUid === systemUser.ldapUid) ||
-        (systemUser.email && participant.email?.toLowerCase() === systemUser.email.toLowerCase()),
+        (systemUser.email &&
+          participant.email?.toLowerCase() === systemUser.email.toLowerCase()),
     );
     if (duplicate) {
       return duplicate;
@@ -560,10 +635,16 @@ export class MissionsService {
     return created;
   }
 
-  async removeParticipant(missionId: string, participantId: string, user?: RbacUser) {
+  async removeParticipant(
+    missionId: string,
+    participantId: string,
+    user?: RbacUser,
+  ) {
     this.assertMissionAccess(user);
 
-    const mission = await this.prisma.mission.findUnique({ where: { id: missionId } });
+    const mission = await this.prisma.mission.findUnique({
+      where: { id: missionId },
+    });
     if (!mission) throwError('NOT_FOUND');
 
     const participant = await this.prisma.missionParticipant.findFirst({
@@ -571,7 +652,9 @@ export class MissionsService {
     });
     if (!participant) throwError('NOT_FOUND');
 
-    await this.prisma.missionParticipant.delete({ where: { id: participantId } });
+    await this.prisma.missionParticipant.delete({
+      where: { id: participantId },
+    });
 
     await this.audit.log({
       userId: user?.id,
@@ -630,7 +713,9 @@ export class MissionsService {
     user?: RbacUser,
   ) {
     this.assertMissionAccess(user);
-    const mission = await this.prisma.mission.findUnique({ where: { id: missionId } });
+    const mission = await this.prisma.mission.findUnique({
+      where: { id: missionId },
+    });
     if (!mission) throwError('NOT_FOUND');
 
     const created = await this.prisma.missionScheduleItem.create({
@@ -640,7 +725,10 @@ export class MissionsService {
         startAt: this.parseRequiredDate(payload.startAt, 'startAt'),
         durationMinutes: this.normalizeDurationMinutes(payload.durationMinutes),
         location: sanitizeText(payload.location ?? ''),
-        responsible: this.sanitizeRequiredText(payload.responsible, 'responsible'),
+        responsible: this.sanitizeRequiredText(
+          payload.responsible,
+          'responsible',
+        ),
         participants: sanitizeText(payload.participants ?? ''),
       },
     });
@@ -671,7 +759,9 @@ export class MissionsService {
     user?: RbacUser,
   ) {
     this.assertMissionAccess(user);
-    const mission = await this.prisma.mission.findUnique({ where: { id: missionId } });
+    const mission = await this.prisma.mission.findUnique({
+      where: { id: missionId },
+    });
     if (!mission) throwError('NOT_FOUND');
 
     const existing = await this.prisma.missionScheduleItem.findFirst({
@@ -682,15 +772,30 @@ export class MissionsService {
     const updated = await this.prisma.missionScheduleItem.update({
       where: { id: itemId },
       data: {
-        title: payload.title === undefined ? undefined : this.sanitizeRequiredText(payload.title, 'title'),
-        startAt: payload.startAt === undefined ? undefined : this.parseRequiredDate(payload.startAt, 'startAt'),
+        title:
+          payload.title === undefined
+            ? undefined
+            : this.sanitizeRequiredText(payload.title, 'title'),
+        startAt:
+          payload.startAt === undefined
+            ? undefined
+            : this.parseRequiredDate(payload.startAt, 'startAt'),
         durationMinutes:
-          payload.durationMinutes === undefined ? undefined : this.normalizeDurationMinutes(payload.durationMinutes),
-        location: payload.location === undefined ? undefined : sanitizeText(payload.location ?? ''),
+          payload.durationMinutes === undefined
+            ? undefined
+            : this.normalizeDurationMinutes(payload.durationMinutes),
+        location:
+          payload.location === undefined
+            ? undefined
+            : sanitizeText(payload.location ?? ''),
         responsible:
-          payload.responsible === undefined ? undefined : this.sanitizeRequiredText(payload.responsible, 'responsible'),
+          payload.responsible === undefined
+            ? undefined
+            : this.sanitizeRequiredText(payload.responsible, 'responsible'),
         participants:
-          payload.participants === undefined ? undefined : sanitizeText(payload.participants ?? ''),
+          payload.participants === undefined
+            ? undefined
+            : sanitizeText(payload.participants ?? ''),
       },
     });
 
@@ -708,7 +813,9 @@ export class MissionsService {
 
   async deleteScheduleItem(missionId: string, itemId: string, user?: RbacUser) {
     this.assertMissionAccess(user);
-    const mission = await this.prisma.mission.findUnique({ where: { id: missionId } });
+    const mission = await this.prisma.mission.findUnique({
+      where: { id: missionId },
+    });
     if (!mission) throwError('NOT_FOUND');
 
     const existing = await this.prisma.missionScheduleItem.findFirst({
@@ -750,7 +857,11 @@ export class MissionsService {
 
     if (!mission) throwError('NOT_FOUND');
 
-    const doc = new PDFDocument({ margin: 32, size: 'A4', layout: 'landscape' });
+    const doc = new PDFDocument({
+      margin: 32,
+      size: 'A4',
+      layout: 'landscape',
+    });
     const chunks: Buffer[] = [];
     const done = new Promise<Buffer>((resolve, reject) => {
       doc.on('data', (chunk) => chunks.push(chunk as Buffer));
@@ -776,7 +887,8 @@ export class MissionsService {
     };
 
     const tableX = doc.page.margins.left;
-    const contentWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+    const contentWidth =
+      doc.page.width - doc.page.margins.left - doc.page.margins.right;
     const tableBottomLimit = doc.page.height - doc.page.margins.bottom - 16;
     let cursorY = doc.page.margins.top;
     let pageNumber = 1;
@@ -784,15 +896,24 @@ export class MissionsService {
 
     const logoPath = this.findScheduleLogoPath();
     const missionTitle = mission.title || 'Missão sem título';
-    const missionLocality = mission.locality ? `${mission.locality.name} (${mission.locality.code})` : '-';
+    const missionLocality = mission.locality
+      ? `${mission.locality.name} (${mission.locality.code})`
+      : '-';
     const missionTimeZone = this.missionPdfTimeZone;
     const missionPeriod = `${this.formatDate(mission.startDate, missionTimeZone)} a ${this.formatDate(mission.endDate, missionTimeZone)}`;
     const participantsLabel =
       mission.participants.length > 0
         ? mission.participants
             .map((participant) => {
-              const baseName = participant.name || participant.email || participant.cpf || 'Participante';
-              return this.removeOmFromParticipantName(baseName, participant.fabom);
+              const baseName =
+                participant.name ||
+                participant.email ||
+                participant.cpf ||
+                'Participante';
+              return this.removeOmFromParticipantName(
+                baseName,
+                participant.fabom,
+              );
             })
             .join(', ')
         : 'Nenhum participante cadastrado';
@@ -852,7 +973,8 @@ export class MissionsService {
         { label: 'Período', value: missionPeriod },
         { label: 'Participantes', value: String(mission.participants.length) },
       ];
-      const cardWidth = (contentWidth - gap * (infoCards.length - 1)) / infoCards.length;
+      const cardWidth =
+        (contentWidth - gap * (infoCards.length - 1)) / infoCards.length;
 
       let x = tableX;
       for (const card of infoCards) {
@@ -868,7 +990,10 @@ export class MissionsService {
           .font('Helvetica-Bold')
           .fontSize(10)
           .fillColor(palette.text)
-          .text(card.value || '-', x + 8, cursorY + 18, { width: cardWidth - 16, height: 18 });
+          .text(card.value || '-', x + 8, cursorY + 18, {
+            width: cardWidth - 16,
+            height: 18,
+          });
         x += cardWidth + gap;
       }
 
@@ -876,7 +1001,10 @@ export class MissionsService {
 
       const participantsHeight = Math.max(
         32,
-        doc.heightOfString(participantsLabel, { width: contentWidth - 16, align: 'left' }) + 16,
+        doc.heightOfString(participantsLabel, {
+          width: contentWidth - 16,
+          align: 'left',
+        }) + 16,
       );
       doc
         .roundedRect(tableX, cursorY, contentWidth, participantsHeight, 6)
@@ -885,12 +1013,16 @@ export class MissionsService {
         .font('Helvetica-Bold')
         .fontSize(8)
         .fillColor(palette.muted)
-        .text('Participantes', tableX + 8, cursorY + 6, { width: contentWidth - 16 });
+        .text('Participantes', tableX + 8, cursorY + 6, {
+          width: contentWidth - 16,
+        });
       doc
         .font('Helvetica')
         .fontSize(8.5)
         .fillColor(palette.text)
-        .text(participantsLabel, tableX + 8, cursorY + 16, { width: contentWidth - 16 });
+        .text(participantsLabel, tableX + 8, cursorY + 16, {
+          width: contentWidth - 16,
+        });
 
       cursorY += participantsHeight + 8;
     };
@@ -904,22 +1036,48 @@ export class MissionsService {
         .font('Helvetica-Bold')
         .fontSize(11)
         .fillColor('#FFFFFF')
-        .text(`Cronograma da Missão • ${missionTitle}`, tableX + 10, cursorY + 8, {
-          width: contentWidth - 20,
-        });
+        .text(
+          `Cronograma da Missão • ${missionTitle}`,
+          tableX + 10,
+          cursorY + 8,
+          {
+            width: contentWidth - 20,
+          },
+        );
       cursorY += barHeight + 8;
     };
 
     const columnDefs = [
-      { key: 'day', label: 'Dia', width: 92, align: 'left' as const },
-      { key: 'time', label: 'Horário', width: 82, align: 'left' as const },
-      { key: 'duration', label: 'Duração', width: 64, align: 'center' as const },
-      { key: 'activity', label: 'Atividade', width: 228, align: 'left' as const },
-      { key: 'location', label: 'Local', width: 102, align: 'left' as const },
-      { key: 'responsible', label: 'Responsável', width: 102, align: 'left' as const },
-      { key: 'participants', label: 'Participantes', width: 0, align: 'left' as const },
+      { key: 'time', label: 'Horário', width: 90, align: 'left' as const },
+      {
+        key: 'duration',
+        label: 'Duração',
+        width: 64,
+        align: 'center' as const,
+      },
+      {
+        key: 'activity',
+        label: 'Atividade',
+        width: 235,
+        align: 'left' as const,
+      },
+      { key: 'location', label: 'Local', width: 105, align: 'left' as const },
+      {
+        key: 'responsible',
+        label: 'Responsável',
+        width: 105,
+        align: 'left' as const,
+      },
+      {
+        key: 'participants',
+        label: 'Participantes',
+        width: 0,
+        align: 'left' as const,
+      },
     ];
-    const fixedWidth = columnDefs.slice(0, -1).reduce((acc, col) => acc + col.width, 0);
+    const fixedWidth = columnDefs
+      .slice(0, -1)
+      .reduce((acc, col) => acc + col.width, 0);
     columnDefs[columnDefs.length - 1].width = contentWidth - fixedWidth;
 
     const drawTableHeader = () => {
@@ -940,6 +1098,45 @@ export class MissionsService {
         x += col.width;
       }
       cursorY += headerHeight;
+    };
+
+    const drawDayBlockHeader = (
+      dayLabel: string,
+      requiredContentHeight = 22,
+    ) => {
+      const blockHeight = 20;
+      const tableHeaderHeight = 22;
+      const blockGap = 8;
+      const safetyMargin = 15;
+      let needsGap = cursorY > doc.page.margins.top + 20;
+      const requiredHeight =
+        (needsGap ? blockGap : 0) +
+        blockHeight +
+        tableHeaderHeight +
+        requiredContentHeight +
+        safetyMargin;
+
+      if (cursorY + requiredHeight > tableBottomLimit) {
+        openNewPage(false);
+        needsGap = false;
+      }
+
+      if (needsGap) {
+        cursorY += blockGap;
+      }
+
+      doc
+        .rect(tableX, cursorY, contentWidth, blockHeight)
+        .fillAndStroke(palette.sectionBg, palette.sectionBorder);
+      doc
+        .font('Helvetica-Bold')
+        .fontSize(9)
+        .fillColor(palette.brandDark)
+        .text(`DIA • ${dayLabel}`, tableX + 8, cursorY + 6, {
+          width: contentWidth - 16,
+        });
+      cursorY += blockHeight;
+      drawTableHeader();
     };
 
     const openNewPage = (forceTableHeader = true) => {
@@ -998,7 +1195,10 @@ export class MissionsService {
       const dividerHeight = 20;
       const safetyMargin = 15;
       // Garante que a divisória não fique "órfã": deve caber ao menos 1 item após ela.
-      if (cursorY + dividerHeight + requiredContentHeight + safetyMargin > tableBottomLimit) {
+      if (
+        cursorY + dividerHeight + requiredContentHeight + safetyMargin >
+        tableBottomLimit
+      ) {
         openNewPage(true);
       }
       doc
@@ -1016,7 +1216,10 @@ export class MissionsService {
       const dividerHeight = 20;
       const safetyMargin = 15;
       // Garante que a divisória não fique "órfã": deve caber ao menos 1 item após ela.
-      if (cursorY + dividerHeight + requiredContentHeight + safetyMargin > tableBottomLimit) {
+      if (
+        cursorY + dividerHeight + requiredContentHeight + safetyMargin >
+        tableBottomLimit
+      ) {
         openNewPage(true);
       }
       doc
@@ -1064,7 +1267,9 @@ export class MissionsService {
       ensureRowFits(measured);
 
       const background = rowIndex % 2 === 0 ? palette.rowOdd : palette.rowEven;
-      doc.rect(tableX, cursorY, contentWidth, rowHeight).fillAndStroke(background, palette.rowBorder);
+      doc
+        .rect(tableX, cursorY, contentWidth, rowHeight)
+        .fillAndStroke(background, palette.rowBorder);
 
       let x = tableX;
       for (const col of columnDefs) {
@@ -1072,83 +1277,113 @@ export class MissionsService {
           .font('Helvetica')
           .fontSize(8.5)
           .fillColor(palette.text)
-          .text(String(row[col.key] ?? '-'), x + textPaddingX, cursorY + textPaddingY, {
-            width: col.width - textPaddingX * 2,
-            align: col.align,
-            lineGap: lineGap,
-          });
+          .text(
+            String(row[col.key] ?? '-'),
+            x + textPaddingX,
+            cursorY + textPaddingY,
+            {
+              width: col.width - textPaddingX * 2,
+              align: col.align,
+              lineGap: lineGap,
+            },
+          );
         x += col.width;
       }
 
       cursorY += rowHeight + rowSpacing;
     };
 
-    openNewPage(true);
+    const buildScheduleRowData = (item: (typeof mission.scheduleItems)[number]) => {
+      const endAt = new Date(item.startAt.getTime() + item.durationMinutes * 60_000);
+      return {
+        time: `${this.formatTime(item.startAt, missionTimeZone)} - ${this.formatTime(endAt, missionTimeZone)}`,
+        duration: this.formatDuration(item.durationMinutes),
+        activity: item.title || '-',
+        location: item.location || '-',
+        responsible: item.responsible || '-',
+        participants: item.participants || '-',
+      };
+    };
+
+    openNewPage(false);
 
     if (mission.scheduleItems.length === 0) {
       doc
         .font('Helvetica')
         .fontSize(11)
         .fillColor(palette.muted)
-        .text('Nenhum item de cronograma cadastrado para esta missão.', tableX, cursorY + 12, {
-          width: contentWidth,
-          align: 'center',
-        });
+        .text(
+          'Nenhum item de cronograma cadastrado para esta missão.',
+          tableX,
+          cursorY + 12,
+          {
+            width: contentWidth,
+            align: 'center',
+          },
+        );
     } else {
-      let rowIndex = 0;
-      let lastItemDate: string | null = null;
-      let lastItemHour = -1;
+      const groupedByDay: Array<{
+        key: string;
+        label: string;
+        items: Array<(typeof mission.scheduleItems)[number]>;
+      }> = [];
 
-      mission.scheduleItems.forEach((item) => {
-        // Verificar divisórias com base no horário local da missão (America/Sao_Paulo)
-        const itemDateParts = this.getDateTimePartsInTimeZone(item.startAt, missionTimeZone);
-        const itemHour = Number(itemDateParts.hour);
-        const itemDateStr = `${itemDateParts.year}-${itemDateParts.month}-${itemDateParts.day}`;
-        const endAt = new Date(item.startAt.getTime() + item.durationMinutes * 60_000);
-        const rowData = {
-          day: this.formatWeekdayDate(item.startAt, missionTimeZone),
-          time: `${this.formatTime(item.startAt, missionTimeZone)} - ${this.formatTime(endAt, missionTimeZone)}`,
-          duration: this.formatDuration(item.durationMinutes),
-          activity: item.title || '-',
-          location: item.location || '-',
-          responsible: item.responsible || '-',
-          participants: item.participants || '-',
-        };
-        const requiredRowHeight = measureScheduleRowHeight(rowData);
-        
-        // Adicionar divisória de MANHÃ quando:
-        // 1. Primeiro item do dia e é < 12h
-        // 2. Mudou de dia e o novo item é < 12h
-        const shouldAddMorningDivider =
-          (!lastItemDate && itemHour < 12) ||
-          (lastItemDate && itemDateStr !== lastItemDate && itemHour < 12);
-        
-        // Adicionar divisória de TARDE quando:
-        // 1. Primeiro item do dia e já é >= 12h
-        // 2. Mesmo dia e passou de manhã (< 12h) para tarde (>= 12h)
-        // 3. Mudou de dia e o novo item é >= 12h
-        const shouldAddAfternoonDivider =
-          (!lastItemDate && itemHour >= 12) ||
-          (lastItemDate &&
-            itemDateStr === lastItemDate &&
-            lastItemHour < 12 &&
-            itemHour >= 12) ||
-          (lastItemDate && itemDateStr !== lastItemDate && itemHour >= 12);
-        
-        if (shouldAddMorningDivider) {
-          drawMorningDivider(requiredRowHeight);
+      for (const item of mission.scheduleItems) {
+        const dateParts = this.getDateTimePartsInTimeZone(
+          item.startAt,
+          missionTimeZone,
+        );
+        const dayKey = `${dateParts.year}-${dateParts.month}-${dateParts.day}`;
+        const dayLabel = `${this.formatWeekdayDate(item.startAt, missionTimeZone)}/${dateParts.year}`;
+        const currentGroup = groupedByDay[groupedByDay.length - 1];
+        if (currentGroup && currentGroup.key === dayKey) {
+          currentGroup.items.push(item);
+          continue;
         }
-        
-        if (shouldAddAfternoonDivider) {
-          drawAfternoonDivider(requiredRowHeight);
-        }
+        groupedByDay.push({
+          key: dayKey,
+          label: dayLabel,
+          items: [item],
+        });
+      }
 
-        drawScheduleRow(rowIndex, rowData);
-        
-        lastItemDate = itemDateStr;
-        lastItemHour = itemHour;
-        rowIndex += 1;
-      });
+      for (const dayGroup of groupedByDay) {
+        const firstItem = dayGroup.items[0];
+        if (!firstItem) continue;
+        const firstRowData = buildScheduleRowData(firstItem);
+        drawDayBlockHeader(dayGroup.label, measureScheduleRowHeight(firstRowData));
+
+        let rowIndex = 0;
+        let lastItemHour = -1;
+
+        for (const item of dayGroup.items) {
+          const itemDateParts = this.getDateTimePartsInTimeZone(
+            item.startAt,
+            missionTimeZone,
+          );
+          const itemHour = Number(itemDateParts.hour);
+          const rowData = buildScheduleRowData(item);
+          const requiredRowHeight = measureScheduleRowHeight(rowData);
+
+          // Adiciona divisória no primeiro item do período, dentro do bloco do dia.
+          const shouldAddMorningDivider = rowIndex === 0 && itemHour < 12;
+          const shouldAddAfternoonDivider =
+            (rowIndex === 0 && itemHour >= 12) ||
+            (rowIndex > 0 && lastItemHour < 12 && itemHour >= 12);
+
+          if (shouldAddMorningDivider) {
+            drawMorningDivider(requiredRowHeight);
+          }
+
+          if (shouldAddAfternoonDivider) {
+            drawAfternoonDivider(requiredRowHeight);
+          }
+
+          drawScheduleRow(rowIndex, rowData);
+          lastItemHour = itemHour;
+          rowIndex += 1;
+        }
+      }
     }
 
     // Só desenhar o footer se houver conteúdo suficiente na página atual
@@ -1172,7 +1407,13 @@ export class MissionsService {
   }
 
   private assertMissionAccess(user?: RbacUser) {
-    if (hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI])) {
+    if (
+      hasAnyRole(user, [
+        ROLE_COORDENACAO_CIPAVD,
+        ROLE_COMANDANTE_COMGEP,
+        ROLE_TI,
+      ])
+    ) {
       return;
     }
     throwError('RBAC_FORBIDDEN');
@@ -1180,7 +1421,12 @@ export class MissionsService {
 
   private async getTargetLocalityIds() {
     const localities = await this.prisma.locality.findMany({
-      select: { id: true, name: true, recruitsFemaleCountCurrent: true, updatedAt: true },
+      select: {
+        id: true,
+        name: true,
+        recruitsFemaleCountCurrent: true,
+        updatedAt: true,
+      },
     });
     return selectTargetLocalities(localities).map((locality) => locality.id);
   }
@@ -1204,7 +1450,10 @@ export class MissionsService {
   private normalizeDurationMinutes(value: number) {
     const parsed = Number(value);
     if (!Number.isFinite(parsed) || parsed < 1) {
-      throwError('VALIDATION_ERROR', { field: 'durationMinutes', reason: 'DURATION_INVALID' });
+      throwError('VALIDATION_ERROR', {
+        field: 'durationMinutes',
+        reason: 'DURATION_INVALID',
+      });
     }
     return Math.round(parsed);
   }
@@ -1233,7 +1482,10 @@ export class MissionsService {
   }
 
   private formatWeekdayDate(value: Date, timeZone = this.missionPdfTimeZone) {
-    const weekday = new Intl.DateTimeFormat('pt-BR', { weekday: 'short', timeZone })
+    const weekday = new Intl.DateTimeFormat('pt-BR', {
+      weekday: 'short',
+      timeZone,
+    })
       .format(value)
       .replace('.', '')
       .toUpperCase();
@@ -1250,15 +1502,24 @@ export class MissionsService {
   }
 
   private formatDate(value: Date, timeZone = this.missionPdfTimeZone) {
-    return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeZone }).format(value);
+    return new Intl.DateTimeFormat('pt-BR', {
+      dateStyle: 'short',
+      timeZone,
+    }).format(value);
   }
 
   private formatTime(value: Date, timeZone = this.missionPdfTimeZone) {
-    const { hour: hours, minute: minutes } = this.getDateTimePartsInTimeZone(value, timeZone);
+    const { hour: hours, minute: minutes } = this.getDateTimePartsInTimeZone(
+      value,
+      timeZone,
+    );
     return `${hours}:${minutes}`;
   }
 
-  private getDateTimePartsInTimeZone(value: Date, timeZone = this.missionPdfTimeZone) {
+  private getDateTimePartsInTimeZone(
+    value: Date,
+    timeZone = this.missionPdfTimeZone,
+  ) {
     const parts = new Intl.DateTimeFormat('en-CA', {
       timeZone,
       year: 'numeric',
@@ -1269,7 +1530,9 @@ export class MissionsService {
       hour12: false,
     }).formatToParts(value);
 
-    const byType = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    const byType = Object.fromEntries(
+      parts.map((part) => [part.type, part.value]),
+    );
     return {
       year: byType.year ?? '0000',
       month: byType.month ?? '01',
@@ -1296,7 +1559,11 @@ export class MissionsService {
     }
 
     const escapedFabom = normalizedFabom.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    return normalizedName.replace(new RegExp(`\\s+${escapedFabom}$`, 'i'), '').trim() || normalizedName;
+    return (
+      normalizedName
+        .replace(new RegExp(`\\s+${escapedFabom}$`, 'i'), '')
+        .trim() || normalizedName
+    );
   }
 
   private extractCpf(value: string | null | undefined) {
@@ -1311,7 +1578,11 @@ export class MissionsService {
       startDate.getUTCMonth(),
       startDate.getUTCDate(),
     );
-    const endUtc = Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth(), endDate.getUTCDate());
+    const endUtc = Date.UTC(
+      endDate.getUTCFullYear(),
+      endDate.getUTCMonth(),
+      endDate.getUTCDate(),
+    );
     const diffMs = endUtc - startUtc;
     const diffDays = Math.floor(diffMs / 86_400_000);
     return Math.max(1, diffDays + 1);
