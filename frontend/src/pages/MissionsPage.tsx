@@ -26,7 +26,7 @@ import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded';
 import PersonAddAlt1RoundedIcon from '@mui/icons-material/PersonAddAlt1Rounded';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   useAddMissionParticipantFromLdap,
@@ -70,6 +70,50 @@ const blankScheduleForm = {
   responsible: '',
   participants: '',
 };
+
+function formatDateTimeLocalValue(value: string | Date | null | undefined) {
+  if (!value) return '';
+  const date = value instanceof Date ? value : new Date(String(value));
+  if (Number.isNaN(date.getTime())) return '';
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+function getNextMissionScheduleStart(scheduleItems: any[] | null | undefined) {
+  let latestEndTime = 0;
+
+  for (const item of scheduleItems ?? []) {
+    const startAt = new Date(String(item?.startAt ?? ''));
+    if (Number.isNaN(startAt.getTime())) continue;
+
+    const durationMinutes = Math.max(Number(item?.durationMinutes ?? 0) || 0, 0);
+    const endTime = startAt.getTime() + durationMinutes * 60_000;
+    latestEndTime = Math.max(latestEndTime, endTime);
+  }
+
+  return latestEndTime > 0 ? formatDateTimeLocalValue(new Date(latestEndTime)) : '';
+}
+
+function buildBlankScheduleForm(scheduleItems?: any[] | null) {
+  return {
+    ...blankScheduleForm,
+    startAt: getNextMissionScheduleStart(scheduleItems),
+  };
+}
+
+function isScheduleFormEmpty(form: typeof blankScheduleForm) {
+  return (
+    !form.title.trim() &&
+    !form.location.trim() &&
+    !form.responsible.trim() &&
+    !form.participants.trim()
+  );
+}
 
 function formatDateOnlyPtBr(value: string | Date | null | undefined) {
   if (!value) return '-';
@@ -144,19 +188,27 @@ export function MissionsPage() {
     const missions = (cloneMissionOptionsQuery.data?.items ?? []) as any[];
     return missions.filter((mission) => String(mission.id) !== String(selectedMission?.id ?? ''));
   }, [cloneMissionOptionsQuery.data?.items, selectedMission?.id]);
+  const nextScheduleStartAt = useMemo(
+    () => getNextMissionScheduleStart((selectedMission?.scheduleItems ?? []) as any[]),
+    [selectedMission?.scheduleItems],
+  );
+
+  const resetScheduleForm = useCallback((scheduleItems?: any[] | null) => {
+    setEditingScheduleItemId(null);
+    setScheduleForm(buildBlankScheduleForm(scheduleItems));
+  }, []);
 
   useEffect(() => {
     if (!missionIdFromUrl) {
       setDrawerOpen(false);
       if (!isCreateMode) {
-        setScheduleForm(blankScheduleForm);
-        setEditingScheduleItemId(null);
+        resetScheduleForm();
       }
       return;
     }
     setDrawerOpen(true);
     setIsCreateMode(false);
-  }, [isCreateMode, missionIdFromUrl]);
+  }, [isCreateMode, missionIdFromUrl, resetScheduleForm]);
 
   useEffect(() => {
     if (!selectedMission) return;
@@ -176,8 +228,7 @@ export function MissionsPage() {
       localityId: localityId || localityOptions[0]?.id || '',
     });
     setLdapIdentifier('');
-    setScheduleForm(blankScheduleForm);
-    setEditingScheduleItemId(null);
+    resetScheduleForm();
     setCloneSourceMissionId('');
     setDrawerOpen(true);
 
@@ -189,8 +240,7 @@ export function MissionsPage() {
   const openMission = (id: string) => {
     setIsCreateMode(false);
     setDrawerOpen(true);
-    setEditingScheduleItemId(null);
-    setScheduleForm(blankScheduleForm);
+    resetScheduleForm();
     setCloneSourceMissionId('');
 
     const next = new URLSearchParams(params);
@@ -201,8 +251,7 @@ export function MissionsPage() {
   const closeDrawer = () => {
     setDrawerOpen(false);
     setIsCreateMode(false);
-    setEditingScheduleItemId(null);
-    setScheduleForm(blankScheduleForm);
+    resetScheduleForm();
     setCloneSourceMissionId('');
     setMissionDeleteTarget(null);
     setScheduleDeleteTarget(null);
@@ -398,14 +447,15 @@ export function MissionsPage() {
 
   const handleSaveScheduleItem = async () => {
     if (!selectedMission) return;
-    if (!scheduleForm.title.trim() || !scheduleForm.startAt) {
+    const scheduleStartAt = scheduleForm.startAt || nextScheduleStartAt;
+    if (!scheduleForm.title.trim() || !scheduleStartAt) {
       toast.push({ message: 'Preencha atividade e horário.', severity: 'warning' });
       return;
     }
 
     // Converter datetime-local (horário local) para ISO UTC real
     // Ex.: 07:15 local (UTC-3) -> 10:15:00.000Z
-    const utcDateTime = new Date(scheduleForm.startAt).toISOString();
+    const utcDateTime = new Date(scheduleStartAt).toISOString();
 
     const payload = {
       title: scheduleForm.title,
@@ -428,8 +478,12 @@ export function MissionsPage() {
         await createScheduleItem.mutateAsync({ id: selectedMission.id, payload });
         toast.push({ message: 'Item de cronograma adicionado.', severity: 'success' });
       }
-      setScheduleForm(blankScheduleForm);
-      setEditingScheduleItemId(null);
+      const nextScheduleItems = editingScheduleItemId
+        ? ((selectedMission.scheduleItems ?? []) as any[]).map((item: any) =>
+            item.id === editingScheduleItemId ? { ...item, ...payload } : item,
+          )
+        : [...((selectedMission.scheduleItems ?? []) as any[]), payload];
+      resetScheduleForm(nextScheduleItems);
     } catch (error) {
       toast.push({ message: parseApiError(error).message ?? 'Erro ao salvar item.', severity: 'error' });
     }
@@ -446,9 +500,13 @@ export function MissionsPage() {
     try {
       await deleteScheduleItem.mutateAsync({ id: selectedMission.id, itemId: scheduleDeleteTarget.id });
       toast.push({ message: 'Item removido.', severity: 'success' });
+      const nextScheduleItems = ((selectedMission.scheduleItems ?? []) as any[]).filter(
+        (item: any) => item.id !== scheduleDeleteTarget.id,
+      );
       if (editingScheduleItemId === scheduleDeleteTarget.id) {
-        setEditingScheduleItemId(null);
-        setScheduleForm(blankScheduleForm);
+        resetScheduleForm(nextScheduleItems);
+      } else {
+        setScheduleForm((current) => (isScheduleFormEmpty(current) ? buildBlankScheduleForm(nextScheduleItems) : current));
       }
       setScheduleDeleteTarget(null);
     } catch (error) {
@@ -1063,7 +1121,7 @@ export function MissionsPage() {
                             size="small"
                             type="datetime-local"
                             label="Início"
-                            value={scheduleForm.startAt}
+                            value={editingScheduleItemId ? scheduleForm.startAt : scheduleForm.startAt || nextScheduleStartAt}
                             onChange={(event) => setScheduleForm({ ...scheduleForm, startAt: event.target.value })}
                             InputLabelProps={{ shrink: true }}
                             sx={{ minWidth: 220 }}
@@ -1116,10 +1174,7 @@ export function MissionsPage() {
                           {editingScheduleItemId && (
                             <Button
                               variant="text"
-                              onClick={() => {
-                                setEditingScheduleItemId(null);
-                                setScheduleForm(blankScheduleForm);
-                              }}
+                              onClick={() => resetScheduleForm((selectedMission?.scheduleItems ?? []) as any[])}
                             >
                               Cancelar
                             </Button>
@@ -1168,20 +1223,9 @@ export function MissionsPage() {
                                     size="small"
                                     onClick={() => {
                                       setEditingScheduleItemId(item.id);
-                                      // Converter ISO UTC para datetime-local no fuso do navegador
-                                      let startAtFormatted = '';
-                                      if (item.startAt) {
-                                        const date = new Date(item.startAt);
-                                        const year = date.getFullYear();
-                                        const month = String(date.getMonth() + 1).padStart(2, '0');
-                                        const day = String(date.getDate()).padStart(2, '0');
-                                        const hours = String(date.getHours()).padStart(2, '0');
-                                        const minutes = String(date.getMinutes()).padStart(2, '0');
-                                        startAtFormatted = `${year}-${month}-${day}T${hours}:${minutes}`;
-                                      }
                                       setScheduleForm({
                                         title: item.title ?? '',
-                                        startAt: startAtFormatted,
+                                        startAt: formatDateTimeLocalValue(item.startAt),
                                         durationMinutes: Number(item.durationMinutes ?? 60),
                                         location: item.location ?? '',
                                         responsible: item.responsible ?? '',
