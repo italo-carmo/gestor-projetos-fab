@@ -1516,7 +1516,12 @@ export function useCreateBestPractice() {
       localityId?: string | null;
       isCommission?: boolean;
     }) => (await api.post("/best-practices", payload)).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["bestPractices"] }),
+    onSuccess: () =>
+      qc.invalidateQueries({
+        predicate: (query) =>
+          Array.isArray(query.queryKey) &&
+          query.queryKey[0] === "bestPractices",
+      }),
   });
 }
 
@@ -1532,7 +1537,12 @@ export function useUpdateBestPractice() {
         isCommission?: boolean;
       };
     }) => (await api.put(`/best-practices/${args.id}`, args.payload)).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["bestPractices"] }),
+    onSuccess: () =>
+      qc.invalidateQueries({
+        predicate: (query) =>
+          Array.isArray(query.queryKey) &&
+          query.queryKey[0] === "bestPractices",
+      }),
   });
 }
 
@@ -1540,7 +1550,12 @@ export function useDeleteBestPractice() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => (await api.delete(`/best-practices/${id}`)).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["bestPractices"] }),
+    onSuccess: () =>
+      qc.invalidateQueries({
+        predicate: (query) =>
+          Array.isArray(query.queryKey) &&
+          query.queryKey[0] === "bestPractices",
+      }),
   });
 }
 
@@ -1560,7 +1575,11 @@ export function useCreateBestPracticeType() {
       (await api.post("/best-practices/types", payload)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["bestPracticeTypes"] });
-      qc.invalidateQueries({ queryKey: ["bestPractices"] });
+      qc.invalidateQueries({
+        predicate: (query) =>
+          Array.isArray(query.queryKey) &&
+          query.queryKey[0] === "bestPractices",
+      });
     },
   });
 }
@@ -1574,7 +1593,11 @@ export function useUpdateBestPracticeType() {
     }) => (await api.put(`/best-practices/types/${args.id}`, args.payload)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["bestPracticeTypes"] });
-      qc.invalidateQueries({ queryKey: ["bestPractices"] });
+      qc.invalidateQueries({
+        predicate: (query) =>
+          Array.isArray(query.queryKey) &&
+          query.queryKey[0] === "bestPractices",
+      });
     },
   });
 }
@@ -1585,7 +1608,11 @@ export function useDeleteBestPracticeType() {
     mutationFn: async (id: string) => (await api.delete(`/best-practices/types/${id}`)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["bestPracticeTypes"] });
-      qc.invalidateQueries({ queryKey: ["bestPractices"] });
+      qc.invalidateQueries({
+        predicate: (query) =>
+          Array.isArray(query.queryKey) &&
+          query.queryKey[0] === "bestPractices",
+      });
     },
   });
 }

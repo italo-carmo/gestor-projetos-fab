@@ -217,6 +217,7 @@ export function BestPracticesPage() {
         await createBestPractice.mutateAsync(payload);
         toast.push({ message: "Postagem criada", severity: "success" });
       }
+      await postsQuery.refetch();
       setDrawerOpen(false);
       resetForm();
     } catch (error) {
@@ -233,6 +234,7 @@ export function BestPracticesPage() {
     if (!ok) return;
     try {
       await deleteBestPractice.mutateAsync(id);
+      await postsQuery.refetch();
       toast.push({ message: "Postagem removida", severity: "success" });
     } catch (error) {
       const payload = parseApiError(error);
