@@ -135,9 +135,11 @@ export function BestPracticesPage() {
   }));
   const posts = (postsQuery.data?.items ?? []) as BestPracticePost[];
   const canCreate =
-    hasRole(me, ROLE_COORDENACAO_CIPAVD) && can(me, "best_practices", "create");
+    hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]) &&
+    can(me, "best_practices", "create");
   const canUpdate =
-    hasRole(me, ROLE_COORDENACAO_CIPAVD) && can(me, "best_practices", "update");
+    hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]) &&
+    can(me, "best_practices", "update");
   const canDelete =
     hasRole(me, ROLE_COORDENACAO_CIPAVD) && can(me, "best_practices", "delete");
 
@@ -791,5 +793,3 @@ export function BestPracticesPage() {
     </Box>
   );
 }
-
-

@@ -382,6 +382,7 @@ model TaskTemplate {
   eloRoleId              String?
   appliesToAllLocalities Boolean
   reportRequiredDefault  Boolean
+  deletedAt              DateTime?
   createdAt              DateTime      @default(now())
   updatedAt              DateTime      @updatedAt
 
@@ -392,6 +393,7 @@ model TaskTemplate {
   checklistItems ChecklistItem[]
 
   @@index([phaseId])
+  @@index([deletedAt])
 }
 
 model TaskInstance {

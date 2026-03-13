@@ -98,7 +98,6 @@ const navSections: NavSection[] = [
     items: [
       { label: "Checklists", to: "/checklists", icon: <ChecklistIcon fontSize="small" /> },
       { label: "Atividades de Campo", to: "/activities", icon: <EventNoteIcon fontSize="small" /> },
-      { label: "Modelo de Atividades de Campo", to: "/templates", icon: <TaskIcon fontSize="small" /> },
       { label: "GSD e Recrutas", to: "/gsd-recruits", icon: <PeopleIcon fontSize="small" /> },
       { label: "Elos", to: "/elos", icon: <ContactPhoneIcon fontSize="small" /> },
     ],
@@ -327,9 +326,6 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
     if (item.to === "/org-chart") {
       return can(me, "org_chart", "view");
-    }
-    if (item.to === "/templates") {
-      return can(me, "task_templates", "view");
     }
     if (item.to === "/social-communication") {
       return true;

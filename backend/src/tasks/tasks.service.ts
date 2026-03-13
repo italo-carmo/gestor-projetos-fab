@@ -76,6 +76,7 @@ export class TasksService {
 
   listTaskTemplates() {
     return this.prisma.taskTemplate.findMany({
+      where: { deletedAt: null },
       orderBy: { title: 'asc' },
       include: { eloRole: { select: { id: true, code: true, name: true } } },
     });
@@ -97,6 +98,7 @@ export class TasksService {
     if (phaseId && title) {
       const existing = await this.prisma.taskTemplate.findFirst({
         where: {
+          deletedAt: null,
           title: { equals: title, mode: 'insensitive' },
           phaseId,
           specialtyId: specialtyId ?? null,
@@ -139,8 +141,8 @@ export class TasksService {
   ) {
     this.assertTemplateManageAccess(user);
 
-    const existing = await this.prisma.taskTemplate.findUnique({
-      where: { id },
+    const existing = await this.prisma.taskTemplate.findFirst({
+      where: { id, deletedAt: null },
       select: {
         id: true,
         title: true,
@@ -182,6 +184,7 @@ export class TasksService {
 
     const duplicate = await this.prisma.taskTemplate.findFirst({
       where: {
+        deletedAt: null,
         id: { not: id },
         title: { equals: normalizedTitle, mode: 'insensitive' },
         phaseId,
@@ -231,8 +234,8 @@ export class TasksService {
   }
 
   async cloneTaskTemplate(id: string, user?: RbacUser) {
-    const template = await this.prisma.taskTemplate.findUnique({
-      where: { id },
+    const template = await this.prisma.taskTemplate.findFirst({
+      where: { id, deletedAt: null },
     });
     if (!template) throwError('NOT_FOUND');
 
@@ -262,11 +265,12 @@ export class TasksService {
   async deleteTaskTemplate(id: string, user?: RbacUser) {
     this.assertTemplateManageAccess(user);
 
-    const template = await this.prisma.taskTemplate.findUnique({
+    const template = await this.prisma.taskTemplate.findFirst({
       where: { id },
       select: {
         id: true,
         title: true,
+        deletedAt: true,
         _count: {
           select: {
             instances: true,
@@ -276,23 +280,13 @@ export class TasksService {
       },
     });
     if (!template) throwError('NOT_FOUND');
+    if (template.deletedAt) return { ok: true };
 
     const linkedInstances = template._count.instances ?? 0;
     const linkedChecklistItems = template._count.checklistItems ?? 0;
-    if (linkedInstances > 0) {
-      throwError('TASK_TEMPLATE_IN_USE', {
-        linkedInstances,
-      });
-    }
-
-    await this.prisma.$transaction(async (tx) => {
-      if (linkedChecklistItems > 0) {
-        await tx.checklistItem.deleteMany({
-          where: { taskTemplateId: id },
-        });
-      }
-
-      await tx.taskTemplate.delete({ where: { id } });
+    await this.prisma.taskTemplate.update({
+      where: { id },
+      data: { deletedAt: new Date() },
     });
 
     await this.audit.log({
@@ -303,7 +297,9 @@ export class TasksService {
       localityId: user?.localityId ?? undefined,
       diffJson: {
         title: template.title,
-        removedChecklistLinks: linkedChecklistItems,
+        softDeleted: true,
+        linkedInstances,
+        linkedChecklistItems,
       },
     });
 
@@ -322,8 +318,8 @@ export class TasksService {
     },
     user?: RbacUser,
   ) {
-    const template = await this.prisma.taskTemplate.findUnique({
-      where: { id: templateId },
+    const template = await this.prisma.taskTemplate.findFirst({
+      where: { id: templateId, deletedAt: null },
     });
     if (!template) throwError('NOT_FOUND');
 
@@ -4016,6 +4012,7 @@ export class TasksService {
   private async resolveManualTaskTemplate(phaseId: string) {
     const existing = await this.prisma.taskTemplate.findFirst({
       where: {
+        deletedAt: null,
         title: this.manualTaskTemplateTitle,
         description: this.manualTaskTemplateDescription,
         phaseId,

@@ -95,12 +95,19 @@ export class BestPracticesService {
     },
     user?: RbacUser,
   ) {
-    this.assertEditorAccess(user);
+    this.assertCreatorAccess(user);
 
     const title = this.normalizeRequiredText(payload.title, 'title', 140);
-    const content = this.normalizeRequiredText(payload.content, 'content', 1200);
+    const content = this.normalizeRequiredText(
+      payload.content,
+      'content',
+      1200,
+    );
     const isCommission = Boolean(payload.isCommission);
-    const localityId = this.resolveLocalityTarget(payload.localityId, isCommission);
+    const localityId = this.resolveLocalityTarget(
+      payload.localityId,
+      isCommission,
+    );
 
     const created = await (this.prisma as any).bestPracticePost.create({
       data: {
@@ -142,14 +149,20 @@ export class BestPracticesService {
     },
     user?: RbacUser,
   ) {
-    this.assertEditorAccess(user);
-    const existing = await (this.prisma as any).bestPracticePost.findUnique({ where: { id } });
+    this.assertUpdaterAccess(user);
+    const existing = await (this.prisma as any).bestPracticePost.findUnique({
+      where: { id },
+    });
     if (!existing) throwError('NOT_FOUND');
 
     const nextIsCommission =
-      payload.isCommission !== undefined ? Boolean(payload.isCommission) : existing.isCommission;
+      payload.isCommission !== undefined
+        ? Boolean(payload.isCommission)
+        : existing.isCommission;
     const nextLocalityId = this.resolveLocalityTarget(
-      payload.localityId !== undefined ? payload.localityId : existing.localityId,
+      payload.localityId !== undefined
+        ? payload.localityId
+        : existing.localityId,
       nextIsCommission,
     );
 
@@ -165,7 +178,9 @@ export class BestPracticesService {
             ? this.normalizeRequiredText(payload.content, 'content', 1200)
             : undefined,
         isCommission:
-          payload.isCommission !== undefined ? Boolean(payload.isCommission) : undefined,
+          payload.isCommission !== undefined
+            ? Boolean(payload.isCommission)
+            : undefined,
         localityId: nextLocalityId,
       },
       include: {
@@ -190,8 +205,10 @@ export class BestPracticesService {
   }
 
   async remove(id: string, user?: RbacUser) {
-    this.assertEditorAccess(user);
-    const existing = await (this.prisma as any).bestPracticePost.findUnique({ where: { id } });
+    this.assertDeleteAccess(user);
+    const existing = await (this.prisma as any).bestPracticePost.findUnique({
+      where: { id },
+    });
     if (!existing) throwError('NOT_FOUND');
 
     await (this.prisma as any).bestPracticePost.delete({ where: { id } });
@@ -221,8 +238,20 @@ export class BestPracticesService {
     }
   }
 
-  private assertEditorAccess(user?: RbacUser) {
+  private assertUpdaterAccess(user?: RbacUser) {
+    if (!hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_TI])) {
+      throwError('RBAC_FORBIDDEN');
+    }
+  }
+
+  private assertDeleteAccess(user?: RbacUser) {
     if (!hasRole(user, ROLE_COORDENACAO_CIPAVD)) {
+      throwError('RBAC_FORBIDDEN');
+    }
+  }
+
+  private assertCreatorAccess(user?: RbacUser) {
+    if (!hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_TI])) {
       throwError('RBAC_FORBIDDEN');
     }
   }
@@ -271,7 +300,9 @@ export class BestPracticesService {
 
     const normalized = this.normalizeRequiredText(payload.name, 'name', 80);
     const colorHex = this.normalizeColorHex(payload.colorHex);
-    const textColorHex = payload.textColorHex ? this.normalizeColorHex(payload.textColorHex) : '#FFFFFF';
+    const textColorHex = payload.textColorHex
+      ? this.normalizeColorHex(payload.textColorHex)
+      : '#FFFFFF';
 
     const existing = await (this.prisma as any).bestPracticeType.findFirst({
       where: { name: { equals: normalized, mode: 'insensitive' } },
@@ -324,7 +355,10 @@ export class BestPracticesService {
     if (payload.name !== undefined) {
       const normalized = this.normalizeRequiredText(payload.name, 'name', 80);
       const duplicate = await (this.prisma as any).bestPracticeType.findFirst({
-        where: { name: { equals: normalized, mode: 'insensitive' }, id: { not: id } },
+        where: {
+          name: { equals: normalized, mode: 'insensitive' },
+          id: { not: id },
+        },
         select: { id: true },
       });
       if (duplicate) {
@@ -336,7 +370,9 @@ export class BestPracticesService {
       updateData.colorHex = this.normalizeColorHex(payload.colorHex);
     }
     if (payload.textColorHex !== undefined) {
-      updateData.textColorHex = payload.textColorHex ? this.normalizeColorHex(payload.textColorHex) : '#FFFFFF';
+      updateData.textColorHex = payload.textColorHex
+        ? this.normalizeColorHex(payload.textColorHex)
+        : '#FFFFFF';
     }
 
     const updated = await (this.prisma as any).bestPracticeType.update({
@@ -400,7 +436,10 @@ export class BestPracticesService {
   private normalizeColorHex(value: string) {
     const hex = String(value).trim();
     if (!/^#[0-9A-Fa-f]{6}$/.test(hex)) {
-      throwError('VALIDATION_ERROR', { field: 'colorHex', reason: 'invalid_format' });
+      throwError('VALIDATION_ERROR', {
+        field: 'colorHex',
+        reason: 'invalid_format',
+      });
     }
     return hex.toUpperCase();
   }
@@ -412,7 +451,10 @@ export class BestPracticesService {
     if (tokens.length >= 3) {
       const last = String(tokens[tokens.length - 1] ?? '').toUpperCase();
       const first = String(tokens[0] ?? '').toUpperCase();
-      const looksLikeRank = /^(ALUNO|SD|CB|3S|2S|1S|SO|ASP|CP|CL|MB|TB|2T|1T|CAP|MAJ|TCEL|TEN|CEL|BRIG|GEN)$/.test(first);
+      const looksLikeRank =
+        /^(ALUNO|SD|CB|3S|2S|1S|SO|ASP|CP|CL|MB|TB|2T|1T|CAP|MAJ|TCEL|TEN|CEL|BRIG|GEN)$/.test(
+          first,
+        );
       const looksLikeOm = /^[A-Z0-9-]{2,14}$/.test(last);
       if (looksLikeRank && looksLikeOm) {
         return tokens.slice(0, -1).join(' ').trim() || raw;
@@ -421,5 +463,3 @@ export class BestPracticesService {
     return raw;
   }
 }
-
-
