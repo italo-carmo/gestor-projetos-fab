@@ -1139,6 +1139,14 @@ export class MissionsService {
       drawTableHeader();
     };
 
+    const getContinuationPageAvailableHeight = () => {
+      const continuationHeaderHeight = 28;
+      const continuationHeaderGap = 8;
+      const continuationStartY =
+        doc.page.margins.top + continuationHeaderHeight + continuationHeaderGap;
+      return tableBottomLimit - continuationStartY;
+    };
+
     const openNewPage = (forceTableHeader = true) => {
       if (!isFirstPage) {
         // Só desenhar footer e criar nova página se houver conteúdo significativo na página atual
@@ -1305,6 +1313,59 @@ export class MissionsService {
       };
     };
 
+    const measureDayBlockHeight = (
+      dayItems: Array<(typeof mission.scheduleItems)[number]>,
+    ) => {
+      if (dayItems.length === 0) return 0;
+
+      const dayHeaderHeight = 20;
+      const tableHeaderHeight = 22;
+      const periodDividerHeight = 20;
+      let totalHeight = dayHeaderHeight + tableHeaderHeight;
+      let lastItemHour = -1;
+      let rowIndex = 0;
+
+      for (const item of dayItems) {
+        const itemDateParts = this.getDateTimePartsInTimeZone(
+          item.startAt,
+          missionTimeZone,
+        );
+        const itemHour = Number(itemDateParts.hour);
+        const rowData = buildScheduleRowData(item);
+        const rowHeight = measureScheduleRowHeight(rowData);
+        const shouldAddMorningDivider = rowIndex === 0 && itemHour < 12;
+        const shouldAddAfternoonDivider =
+          (rowIndex === 0 && itemHour >= 12) ||
+          (rowIndex > 0 && lastItemHour < 12 && itemHour >= 12);
+
+        if (shouldAddMorningDivider) {
+          totalHeight += periodDividerHeight;
+        }
+        if (shouldAddAfternoonDivider) {
+          totalHeight += periodDividerHeight;
+        }
+
+        totalHeight += rowHeight;
+        lastItemHour = itemHour;
+        rowIndex += 1;
+      }
+
+      return totalHeight;
+    };
+
+    const moveDayBlockToNextPageWhenPossible = (dayBlockHeight: number) => {
+      if (dayBlockHeight <= 0) return;
+
+      const blockGap = cursorY > doc.page.margins.top + 20 ? 8 : 0;
+      const requiredOnCurrentPage = dayBlockHeight + blockGap;
+      if (cursorY + requiredOnCurrentPage <= tableBottomLimit) return;
+
+      // Só quebra antes do bloco quando ele cabe por inteiro em uma nova página.
+      if (dayBlockHeight <= getContinuationPageAvailableHeight()) {
+        openNewPage(false);
+      }
+    };
+
     openNewPage(false);
 
     if (mission.scheduleItems.length === 0) {
@@ -1350,6 +1411,7 @@ export class MissionsService {
       for (const dayGroup of groupedByDay) {
         const firstItem = dayGroup.items[0];
         if (!firstItem) continue;
+        moveDayBlockToNextPageWhenPossible(measureDayBlockHeight(dayGroup.items));
         const firstRowData = buildScheduleRowData(firstItem);
         drawDayBlockHeader(dayGroup.label, measureScheduleRowHeight(firstRowData));
 
