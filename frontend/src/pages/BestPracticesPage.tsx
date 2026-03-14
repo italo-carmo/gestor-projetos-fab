@@ -20,6 +20,7 @@ import {
 import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import LightbulbRoundedIcon from "@mui/icons-material/LightbulbRounded";
+import ApartmentRoundedIcon from "@mui/icons-material/ApartmentRounded";
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { parseApiError } from "../app/apiErrors";
@@ -33,6 +34,7 @@ import {
   useCreateBestPracticeType,
   useDeleteBestPractice,
   useDeleteBestPracticeType,
+  useLocalities,
   useMe,
   useUpdateBestPractice,
   useUpdateBestPracticeType,
@@ -66,8 +68,11 @@ type BestPracticePost = {
 };
 
 export function BestPracticesPage() {
+  const ORIGIN_TYPE_PREFIX = "type:";
+  const ORIGIN_LOCALITY_PREFIX = "loc:";
   const toast = useToast();
   const { data: me } = useMe();
+  const localitiesQuery = useLocalities();
   const [q, setQ] = useState("");
   const [originFilter, setOriginFilter] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -76,16 +81,27 @@ export function BestPracticesPage() {
   const [form, setForm] = useState({
     title: "",
     content: "",
-    typeId: "",
+    target: "",
   });
   const [typesSectionOpen, setTypesSectionOpen] = useState(false);
   const [typeForm, setTypeForm] = useState({ id: "", name: "", colorHex: "#537F97", textColorHex: "#FFFFFF" });
 
   const filters = useMemo(
-    () => ({
-      q: q.trim() || undefined,
-      typeId: originFilter || undefined,
-    }),
+    () => {
+      const payload: Record<string, string | undefined> = {
+        q: q.trim() || undefined,
+      };
+      if (!originFilter) return payload;
+      if (originFilter.startsWith(ORIGIN_TYPE_PREFIX)) {
+        payload.typeId = originFilter.slice(ORIGIN_TYPE_PREFIX.length) || undefined;
+        return payload;
+      }
+      if (originFilter.startsWith(ORIGIN_LOCALITY_PREFIX)) {
+        payload.localityId = originFilter.slice(ORIGIN_LOCALITY_PREFIX.length) || undefined;
+        return payload;
+      }
+      return payload;
+    },
     [q, originFilter],
   );
 
@@ -113,6 +129,26 @@ export function BestPracticesPage() {
   }
 
   const posts = (postsQuery.data?.items ?? []) as BestPracticePost[];
+  const localities = ((localitiesQuery.data?.items ?? []) as Array<{
+    id: string;
+    name: string;
+  }>)
+    .map((item) => ({
+      id: String(item.id ?? "").trim(),
+      name: String(item.name ?? "").trim(),
+    }))
+    .filter((item) => item.id && item.name)
+    .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+  const originOptions = [
+    ...types.map((type) => ({
+      value: `${ORIGIN_TYPE_PREFIX}${type.id}`,
+      label: type.name,
+    })),
+    ...localities.map((locality) => ({
+      value: `${ORIGIN_LOCALITY_PREFIX}${locality.id}`,
+      label: locality.name,
+    })),
+  ];
   const canCreate =
     hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]) &&
     can(me, "best_practices", "create");
@@ -123,16 +159,24 @@ export function BestPracticesPage() {
     hasRole(me, ROLE_COORDENACAO_CIPAVD) && can(me, "best_practices", "delete");
 
   const postsByTypeId = new Map<string, BestPracticePost[]>();
-  const postsWithoutType: BestPracticePost[] = [];
+  const postsByLocalityId = new Map<string, BestPracticePost[]>();
+  const postsWithoutOrigin: BestPracticePost[] = [];
   for (const item of posts) {
-    const typeId = String(item.typeId ?? "").trim();
-    if (!typeId) {
-      postsWithoutType.push(item);
+    const localityId = String(item.localityId ?? "").trim();
+    if (localityId) {
+      const list = postsByLocalityId.get(localityId) ?? [];
+      list.push(item);
+      postsByLocalityId.set(localityId, list);
       continue;
     }
-    const list = postsByTypeId.get(typeId) ?? [];
-    list.push(item);
-    postsByTypeId.set(typeId, list);
+    const typeId = String(item.typeId ?? "").trim();
+    if (typeId) {
+      const list = postsByTypeId.get(typeId) ?? [];
+      list.push(item);
+      postsByTypeId.set(typeId, list);
+      continue;
+    }
+    postsWithoutOrigin.push(item);
   }
 
   const sections: Array<{
@@ -141,26 +185,33 @@ export function BestPracticesPage() {
     icon: ReactNode;
     type: BestPracticeType | null;
     posts: BestPracticePost[];
-  }> = types
-    .map((type) => ({
-      key: type.id,
+  }> = [
+    ...types.map((type) => ({
+      key: `${ORIGIN_TYPE_PREFIX}${type.id}`,
       title: type.name,
       icon: <LightbulbRoundedIcon fontSize="small" />,
       type,
       posts: postsByTypeId.get(type.id) ?? [],
-    }))
-    .filter((section) => {
-      if (originFilter) return section.key === originFilter;
-      return section.posts.length > 0;
-    });
+    })),
+    ...localities.map((locality) => ({
+      key: `${ORIGIN_LOCALITY_PREFIX}${locality.id}`,
+      title: locality.name,
+      icon: <ApartmentRoundedIcon fontSize="small" />,
+      type: null,
+      posts: postsByLocalityId.get(locality.id) ?? [],
+    })),
+  ].filter((section) => {
+    if (originFilter) return section.key === originFilter;
+    return section.posts.length > 0;
+  });
 
-  if (!originFilter && postsWithoutType.length > 0) {
+  if (!originFilter && postsWithoutOrigin.length > 0) {
     sections.push({
-      key: "__without_type__",
-      title: "Sem tipo",
+      key: "__without_origin__",
+      title: "Sem origem",
       icon: <LightbulbRoundedIcon fontSize="small" />,
       type: null,
-      posts: postsWithoutType,
+      posts: postsWithoutOrigin,
     });
   }
 
@@ -169,7 +220,7 @@ export function BestPracticesPage() {
     setForm({
       title: "",
       content: "",
-      typeId: "",
+      target: "",
     });
   };
 
@@ -179,24 +230,40 @@ export function BestPracticesPage() {
   };
 
   const openEdit = (post: BestPracticePost) => {
+    const localityId = String(post.localityId ?? "").trim();
+    const typeId = String(post.typeId ?? "").trim();
     setEditing(post);
     setForm({
       title: post.title ?? "",
       content: post.content ?? "",
-      typeId: post.typeId ? String(post.typeId) : "",
+      target: localityId
+        ? `${ORIGIN_LOCALITY_PREFIX}${localityId}`
+        : typeId
+          ? `${ORIGIN_TYPE_PREFIX}${typeId}`
+          : "",
     });
     setDrawerOpen(true);
   };
 
   const handleSave = async () => {
     try {
-      const selectedTypeId = String(form.typeId ?? "").trim();
-      const isEditing = Boolean(editing);
+      const selectedTarget = String(form.target ?? "").trim();
+      if (!selectedTarget) {
+        toast.push({ message: "Selecione a origem da postagem.", severity: "warning" });
+        return;
+      }
+      const isTypeTarget = selectedTarget.startsWith(ORIGIN_TYPE_PREFIX);
+      const selectedTypeId = isTypeTarget
+        ? selectedTarget.slice(ORIGIN_TYPE_PREFIX.length).trim()
+        : "";
+      const selectedLocalityId = selectedTarget.startsWith(ORIGIN_LOCALITY_PREFIX)
+        ? selectedTarget.slice(ORIGIN_LOCALITY_PREFIX.length).trim()
+        : "";
       const payload = {
         title: form.title,
         content: form.content,
-        isCommission: isEditing ? Boolean(editing?.isCommission) : true,
-        localityId: isEditing ? (editing?.localityId ?? null) : null,
+        isCommission: isTypeTarget || !selectedLocalityId,
+        localityId: selectedLocalityId || null,
         typeId: selectedTypeId || null,
       };
       if (editing) {
@@ -288,9 +355,9 @@ export function BestPracticesPage() {
               sx={{ minWidth: 260 }}
             >
               <MenuItem value="">Todas</MenuItem>
-              {types.map((type) => (
-                <MenuItem key={`filter-${type.id}`} value={type.id}>
-                  {type.name}
+              {originOptions.map((option) => (
+                <MenuItem key={`filter-${option.value}`} value={option.value}>
+                  {option.label}
                 </MenuItem>
               ))}
             </TextField>
@@ -716,13 +783,13 @@ export function BestPracticesPage() {
             select
             size="small"
             label="Relacionar a"
-            value={form.typeId}
-            onChange={(event) => setForm((prev) => ({ ...prev, typeId: event.target.value }))}
+            value={form.target}
+            onChange={(event) => setForm((prev) => ({ ...prev, target: event.target.value }))}
           >
-            <MenuItem value="">Sem tipo</MenuItem>
-            {types.map((type) => (
-              <MenuItem key={`target-${type.id}`} value={type.id}>
-                {type.name}
+            <MenuItem value="">Selecione</MenuItem>
+            {originOptions.map((option) => (
+              <MenuItem key={`target-${option.value}`} value={option.value}>
+                {option.label}
               </MenuItem>
             ))}
           </TextField>
