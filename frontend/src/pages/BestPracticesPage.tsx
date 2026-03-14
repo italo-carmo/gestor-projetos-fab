@@ -27,6 +27,7 @@ import { parseApiError } from "../app/apiErrors";
 import { can } from "../app/rbac";
 import { hasAnyRole, hasRole, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from "../app/roleAccess";
 import { useToast } from "../app/toast";
+import { selectTargetLocalities } from "../constants/localities";
 import {
   useBestPractices,
   useBestPracticeTypes,
@@ -129,16 +130,17 @@ export function BestPracticesPage() {
   }
 
   const posts = (postsQuery.data?.items ?? []) as BestPracticePost[];
-  const localities = ((localitiesQuery.data?.items ?? []) as Array<{
-    id: string;
-    name: string;
-  }>)
+  const allLocalities = (localitiesQuery.data?.items ?? []) as any[];
+  const localities = selectTargetLocalities(allLocalities)
+    .slice()
+    .sort((a: any, b: any) =>
+      String(a?.name ?? "").localeCompare(String(b?.name ?? ""), "pt-BR"),
+    )
     .map((item) => ({
-      id: String(item.id ?? "").trim(),
-      name: String(item.name ?? "").trim(),
+      id: String(item?.id ?? "").trim(),
+      name: String(item?.name ?? "").trim(),
     }))
-    .filter((item) => item.id && item.name)
-    .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+    .filter((item) => item.id && item.name);
   const hiddenTypeLabel = "boas praticas da localidade";
   const originOptions = [
     ...types.map((type) => ({
