@@ -624,8 +624,9 @@ export function ActivitiesPage() {
   const canUpdate = canManageActivityDataByRole;
   const canDelete = canUpdate;
   const isTiProfile = hasAnyRole(me, [ROLE_TI]);
+  const canSignByRole = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]);
   const canEditReport = can(me, 'reports', 'create') && canManageActivityDataByRole;
-  const canSign = can(me, 'reports', 'approve') && canManageActivityDataByRole;
+  const canSign = can(me, 'reports', 'approve') && canSignByRole;
   const canUpload = can(me, 'reports', 'upload') && canManageActivityDataByRole;
   const canDownload = can(me, 'reports', 'download') && canManageActivityDataByRole;
   const reportIsSigned = Boolean(selected?.report?.hasSignature);

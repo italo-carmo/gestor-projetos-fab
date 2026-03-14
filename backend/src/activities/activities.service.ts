@@ -11,7 +11,12 @@ import { AuditService } from '../audit/audit.service';
 import type { RbacUser } from '../rbac/rbac.types';
 import { sanitizeText } from '../common/sanitize';
 import { parsePagination } from '../common/pagination';
-import { resolveAccessProfile } from '../rbac/role-access';
+import {
+  hasAnyRole,
+  resolveAccessProfile,
+  ROLE_COORDENACAO_CIPAVD,
+  ROLE_TI,
+} from '../rbac/role-access';
 import { selectTargetLocalities } from '../common/priority-localities';
 
 const activityPhotosDir = path.resolve(
@@ -1746,6 +1751,9 @@ export class ActivitiesService {
 
   async signReport(activityId: string, user?: RbacUser) {
     if (!user?.id) throwError('RBAC_FORBIDDEN');
+    if (!hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_TI])) {
+      throwError('RBAC_FORBIDDEN');
+    }
 
     const activity = await this.prisma.activity.findUnique({
       where: { id: activityId },

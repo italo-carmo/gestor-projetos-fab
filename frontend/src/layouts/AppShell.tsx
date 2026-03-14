@@ -44,7 +44,6 @@ import ChevronRightRoundedIcon from "@mui/icons-material/ChevronRightRounded";
 import InsightsRoundedIcon from "@mui/icons-material/InsightsRounded";
 import PolicyRoundedIcon from "@mui/icons-material/PolicyRounded";
 import PhotoLibraryRoundedIcon from "@mui/icons-material/PhotoLibraryRounded";
-import AutoStoriesRoundedIcon from "@mui/icons-material/AutoStoriesRounded";
 import LightbulbRoundedIcon from "@mui/icons-material/LightbulbRounded";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { useDebounce } from "../app/useDebounce";
@@ -86,7 +85,6 @@ const navSections: NavSection[] = [
       { label: "SMIF", to: "/dashboard/smif", icon: <DashboardIcon fontSize="small" /> },
       { label: "CIPAVD", to: "/dashboard/cipavd", icon: <InsightsRoundedIcon fontSize="small" /> },
       { label: "Impacto Positivo", to: "/social-communication", icon: <NewspaperRoundedIcon fontSize="small" /> },
-      { label: "Lições Aprendidas", to: "/lessons-learned", icon: <AutoStoriesRoundedIcon fontSize="small" /> },
       { label: "Boas Práticas", to: "/best-practices", icon: <LightbulbRoundedIcon fontSize="small" /> },
       { label: "Biblioteca", to: "/library", icon: <PhotoLibraryRoundedIcon fontSize="small" /> },
       { label: "CPCA", to: "/dashboard/cpca", icon: <PolicyRoundedIcon fontSize="small" /> },
@@ -259,9 +257,6 @@ export function AppShell({ children }: { children: ReactNode }) {
       ROLE_COORDENACAO_CIPAVD,
       ROLE_TI,
     ]);
-    const activeRoleName = normalizeRoleName(
-      me?.activeRole?.name ?? me?.roles?.[0]?.name,
-    );
     if (item.to === "/dashboard/smif") {
       return isNationalManager && can(me, "dashboard", "view");
     }
@@ -340,15 +335,6 @@ export function AppShell({ children }: { children: ReactNode }) {
           ROLE_TI,
           ROLE_COMANDANTE_COMGEP,
         ]) && can(me, "best_practices", "view")
-      );
-    }
-    if (item.to === "/lessons-learned") {
-      return (
-        hasAnyRole(me, [
-          ROLE_COORDENACAO_CIPAVD,
-          ROLE_TI,
-          ROLE_COMANDANTE_COMGEP,
-        ]) && can(me, "lessons_learned", "view")
       );
     }
     if (item.to === "/activities") {
