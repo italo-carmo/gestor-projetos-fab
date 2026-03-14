@@ -20,16 +20,12 @@ import {
 import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import LightbulbRoundedIcon from "@mui/icons-material/LightbulbRounded";
-import ApartmentRoundedIcon from "@mui/icons-material/ApartmentRounded";
-import SettingsRoundedIcon from "@mui/icons-material/SettingsRounded";
-import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
-import ExpandLessRoundedIcon from "@mui/icons-material/ExpandLessRounded";
 import { useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import { parseApiError } from "../app/apiErrors";
 import { can } from "../app/rbac";
 import { hasAnyRole, hasRole, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from "../app/roleAccess";
 import { useToast } from "../app/toast";
-import { selectTargetLocalities } from "../constants/localities";
 import {
   useBestPractices,
   useBestPracticeTypes,
@@ -37,7 +33,6 @@ import {
   useCreateBestPracticeType,
   useDeleteBestPractice,
   useDeleteBestPracticeType,
-  useLocalities,
   useMe,
   useUpdateBestPractice,
   useUpdateBestPracticeType,
@@ -48,10 +43,6 @@ import { SkeletonState } from "../components/states/SkeletonState";
 
 const BEST_PRACTICES_BLUE_CARD_SX = {
   backgroundColor: "rgb(83, 127, 151) !important",
-};
-
-const REPLICATION_PRACTICES_CARD_SX = {
-  backgroundColor: "rgb(102, 133, 114) !important",
 };
 
 type BestPracticeType = {
@@ -75,11 +66,8 @@ type BestPracticePost = {
 };
 
 export function BestPracticesPage() {
-  const TYPE_FILTER_PREFIX = "__type__:";
-  const TYPE_TARGET_PREFIX = "__type_target__:";
   const toast = useToast();
   const { data: me } = useMe();
-  const localitiesQuery = useLocalities();
   const [q, setQ] = useState("");
   const [originFilter, setOriginFilter] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -88,32 +76,17 @@ export function BestPracticesPage() {
   const [form, setForm] = useState({
     title: "",
     content: "",
-    target: "commission",
     typeId: "",
   });
   const [typesSectionOpen, setTypesSectionOpen] = useState(false);
   const [typeForm, setTypeForm] = useState({ id: "", name: "", colorHex: "#537F97", textColorHex: "#FFFFFF" });
 
   const filters = useMemo(
-    () => {
-      const normalizedOrigin = String(originFilter ?? "").trim();
-      const payload: Record<string, string | undefined> = {
-        q: q.trim() || undefined,
-      };
-      if (!normalizedOrigin) return payload;
-      if (normalizedOrigin === "__commission__") {
-        payload.localityId = "__commission__";
-        return payload;
-      }
-      if (normalizedOrigin.startsWith(TYPE_FILTER_PREFIX)) {
-        const typeId = normalizedOrigin.slice(TYPE_FILTER_PREFIX.length).trim();
-        payload.typeId = typeId || undefined;
-        return payload;
-      }
-      payload.localityId = normalizedOrigin;
-      return payload;
-    },
-    [q, originFilter, TYPE_FILTER_PREFIX],
+    () => ({
+      q: q.trim() || undefined,
+      typeId: originFilter || undefined,
+    }),
+    [q, originFilter],
   );
 
   const postsQuery = useBestPractices(filters);
@@ -139,17 +112,6 @@ export function BestPracticesPage() {
     );
   }
 
-  const localities = selectTargetLocalities(
-    (localitiesQuery.data?.items ?? []) as Array<{
-      id: string;
-      name: string;
-      recruitsFemaleCountCurrent?: number | null;
-      updatedAt?: string | Date | null;
-    }>,
-  ).map((item) => ({
-    id: String(item.id),
-    name: String(item.name ?? ""),
-  }));
   const posts = (postsQuery.data?.items ?? []) as BestPracticePost[];
   const canCreate =
     hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]) &&
@@ -160,48 +122,53 @@ export function BestPracticesPage() {
   const canDelete =
     hasRole(me, ROLE_COORDENACAO_CIPAVD) && can(me, "best_practices", "delete");
 
-  const postsByLocalityId = new Map<string, BestPracticePost[]>();
-  for (const item of posts.filter((entry) => !entry.isCommission && entry.localityId)) {
-    const list = postsByLocalityId.get(String(item.localityId)) ?? [];
+  const postsByTypeId = new Map<string, BestPracticePost[]>();
+  const postsWithoutType: BestPracticePost[] = [];
+  for (const item of posts) {
+    const typeId = String(item.typeId ?? "").trim();
+    if (!typeId) {
+      postsWithoutType.push(item);
+      continue;
+    }
+    const list = postsByTypeId.get(typeId) ?? [];
     list.push(item);
-    postsByLocalityId.set(String(item.localityId), list);
+    postsByTypeId.set(typeId, list);
   }
-  const commissionPosts = posts.filter((item) => item.isCommission);
-  const isTypeOriginFilter = originFilter.startsWith(TYPE_FILTER_PREFIX);
 
-  const sections = [
-    {
-      key: "__commission__",
-      title: "Práticas com potencial de replicação",
-      subtitle: "Boas práticas de aplicação geral da comissão",
+  const sections: Array<{
+    key: string;
+    title: string;
+    icon: ReactNode;
+    type: BestPracticeType | null;
+    posts: BestPracticePost[];
+  }> = types
+    .map((type) => ({
+      key: type.id,
+      title: type.name,
       icon: <LightbulbRoundedIcon fontSize="small" />,
-      posts: commissionPosts,
-    },
-    ...localities
-      .map((locality) => ({
-        key: locality.id,
-        title: locality.name,
-        subtitle: "Boas práticas da localidade",
-        icon: <ApartmentRoundedIcon fontSize="small" />,
-        posts: postsByLocalityId.get(locality.id) ?? [],
-      }))
-      .filter((section) => {
-        if (originFilter === "__commission__") return false;
-        if (originFilter && !isTypeOriginFilter) return section.key === originFilter;
-        return section.posts.length > 0;
-      }),
-  ].filter((section) => {
-    if (originFilter === "__commission__") return section.key === "__commission__";
-    if (originFilter && !isTypeOriginFilter) return section.key === originFilter;
-    return true;
-  });
+      type,
+      posts: postsByTypeId.get(type.id) ?? [],
+    }))
+    .filter((section) => {
+      if (originFilter) return section.key === originFilter;
+      return section.posts.length > 0;
+    });
+
+  if (!originFilter && postsWithoutType.length > 0) {
+    sections.push({
+      key: "__without_type__",
+      title: "Sem tipo",
+      icon: <LightbulbRoundedIcon fontSize="small" />,
+      type: null,
+      posts: postsWithoutType,
+    });
+  }
 
   const resetForm = () => {
     setEditing(null);
     setForm({
       title: "",
       content: "",
-      target: "commission",
       typeId: "",
     });
   };
@@ -212,17 +179,10 @@ export function BestPracticesPage() {
   };
 
   const openEdit = (post: BestPracticePost) => {
-    const nextTarget =
-      post.isCommission && post.typeId
-        ? `${TYPE_TARGET_PREFIX}${String(post.typeId)}`
-        : post.isCommission
-          ? "commission"
-          : String(post.localityId ?? "");
     setEditing(post);
     setForm({
       title: post.title ?? "",
       content: post.content ?? "",
-      target: nextTarget,
       typeId: post.typeId ? String(post.typeId) : "",
     });
     setDrawerOpen(true);
@@ -230,17 +190,13 @@ export function BestPracticesPage() {
 
   const handleSave = async () => {
     try {
-      const isTypeTarget = form.target.startsWith(TYPE_TARGET_PREFIX);
-      const typeIdFromTarget = isTypeTarget
-        ? form.target.slice(TYPE_TARGET_PREFIX.length).trim()
-        : "";
-      const selectedTypeId = typeIdFromTarget || String(form.typeId ?? "").trim();
-      const isCommission = form.target === "commission" || isTypeTarget;
+      const selectedTypeId = String(form.typeId ?? "").trim();
+      const isEditing = Boolean(editing);
       const payload = {
         title: form.title,
         content: form.content,
-        isCommission,
-        localityId: isCommission ? null : form.target,
+        isCommission: isEditing ? Boolean(editing?.isCommission) : true,
+        localityId: isEditing ? (editing?.localityId ?? null) : null,
         typeId: selectedTypeId || null,
       };
       if (editing) {
@@ -320,7 +276,7 @@ export function BestPracticesPage() {
               label="Buscar"
               value={q}
               onChange={(event) => setQ(event.target.value)}
-              placeholder="Título, conteúdo, autor ou localidade"
+              placeholder="Título, conteúdo ou autor"
               fullWidth
             />
             <TextField
@@ -332,15 +288,9 @@ export function BestPracticesPage() {
               sx={{ minWidth: 260 }}
             >
               <MenuItem value="">Todas</MenuItem>
-              <MenuItem value="__commission__">Práticas com potencial de replicação</MenuItem>
-              {localities.map((locality) => (
-                <MenuItem key={locality.id} value={locality.id}>
-                  {locality.name}
-                </MenuItem>
-              ))}
               {types.map((type) => (
-                <MenuItem key={`filter-${type.id}`} value={`${TYPE_FILTER_PREFIX}${type.id}`}>
-                  Tipo: {type.name}
+                <MenuItem key={`filter-${type.id}`} value={type.id}>
+                  {type.name}
                 </MenuItem>
               ))}
             </TextField>
@@ -588,9 +538,6 @@ export function BestPracticesPage() {
                       variant="outlined"
                     />
                   </Stack>
-                  <Typography variant="caption" color="text.secondary">
-                    {section.subtitle}
-                  </Typography>
                 </Box>
               </Stack>
               <Divider sx={{ mb: 1.4 }} />
@@ -612,13 +559,12 @@ export function BestPracticesPage() {
                   }}
                 >
                   {section.posts.map((post) => {
-                    const isCommission = section.key === "__commission__";
-                    const type = post.typeId ? typeById.get(post.typeId) : null;
+                    const type =
+                      section.type ??
+                      (post.typeId ? typeById.get(post.typeId) : null);
                     const cardSx = type
                       ? { backgroundColor: `${type.colorHex} !important` }
-                      : isCommission
-                        ? REPLICATION_PRACTICES_CARD_SX
-                        : BEST_PRACTICES_BLUE_CARD_SX;
+                      : BEST_PRACTICES_BLUE_CARD_SX;
                     const textColor = type?.textColorHex || "#F4FAFD";
                     return (
                     <Card
@@ -637,7 +583,7 @@ export function BestPracticesPage() {
                         ...cardSx,
                         height: "100%",
                         borderRadius: 2,
-                        borderColor: type ? `${type.colorHex}CC` : isCommission ? "rgba(102, 133, 114, 0.9)" : "rgba(83, 127, 151, 0.9)",
+                        borderColor: type ? `${type.colorHex}CC` : "rgba(83, 127, 151, 0.9)",
                         boxShadow: "0 12px 24px rgba(22, 60, 82, 0.3)",
                         cursor: "pointer",
                         transition: "transform 160ms ease, box-shadow 160ms ease",
@@ -770,57 +716,12 @@ export function BestPracticesPage() {
             select
             size="small"
             label="Relacionar a"
-            value={form.target}
-            onChange={(event) => {
-              const nextTarget = event.target.value;
-              if (nextTarget.startsWith(TYPE_TARGET_PREFIX)) {
-                const nextTypeId = nextTarget.slice(TYPE_TARGET_PREFIX.length).trim();
-                setForm((prev) => ({ ...prev, target: nextTarget, typeId: nextTypeId }));
-                return;
-              }
-              setForm((prev) => ({ ...prev, target: nextTarget }));
-            }}
-          >
-            <MenuItem value="commission">Práticas com potencial de replicação</MenuItem>
-            {localities.map((locality) => (
-              <MenuItem key={locality.id} value={locality.id}>
-                {locality.name}
-              </MenuItem>
-            ))}
-            {types.map((type) => (
-              <MenuItem key={`target-${type.id}`} value={`${TYPE_TARGET_PREFIX}${type.id}`}>
-                Tipo: {type.name}
-              </MenuItem>
-            ))}
-          </TextField>
-          <TextField
-            select
-            size="small"
-            label="Tipo"
-            value={
-              form.target.startsWith(TYPE_TARGET_PREFIX)
-                ? form.target.slice(TYPE_TARGET_PREFIX.length)
-                : form.typeId
-            }
-            onChange={(event) =>
-              setForm((prev) => {
-                const nextTypeId = event.target.value;
-                if (prev.target.startsWith(TYPE_TARGET_PREFIX)) {
-                  return {
-                    ...prev,
-                    target: nextTypeId
-                      ? `${TYPE_TARGET_PREFIX}${nextTypeId}`
-                      : "commission",
-                    typeId: nextTypeId,
-                  };
-                }
-                return { ...prev, typeId: nextTypeId };
-              })
-            }
+            value={form.typeId}
+            onChange={(event) => setForm((prev) => ({ ...prev, typeId: event.target.value }))}
           >
             <MenuItem value="">Sem tipo</MenuItem>
             {types.map((type) => (
-              <MenuItem key={type.id} value={type.id}>
+              <MenuItem key={`target-${type.id}`} value={type.id}>
                 {type.name}
               </MenuItem>
             ))}
