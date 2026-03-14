@@ -22,9 +22,7 @@ import {
 } from '@mui/material';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import DescriptionIcon from '@mui/icons-material/Description';
-import TaskAltIcon from '@mui/icons-material/TaskAlt';
 import TerrainIcon from '@mui/icons-material/Terrain';
-import PlaceIcon from '@mui/icons-material/Place';
 import PsychologyIcon from '@mui/icons-material/Psychology';
 import VolunteerActivismIcon from '@mui/icons-material/VolunteerActivism';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
@@ -284,9 +282,6 @@ export function DashboardNationalPage() {
           return lessons[safeIndex];
         });
 
-  const averageProgress = smifLocalities.length
-    ? Math.round(smifLocalities.reduce((acc, item) => acc + Number(item.progress ?? 0), 0) / smifLocalities.length)
-    : 0;
   const formatGsdLabel = (localityName?: string | null, localityCode?: string | null) => {
     const code = String(localityCode ?? '').trim();
     const normalized = String(localityName ?? '').trim();
@@ -451,20 +446,6 @@ export function DashboardNationalPage() {
 
   const completedIndicators: IndicatorTile[] = [
     {
-      id: 'reports',
-      label: 'Relatórios',
-      value: String(totals.completedReports ?? 0),
-      helper: 'Concluídos',
-      icon: <DescriptionIcon sx={{ fontSize: 22 }} />,
-    },
-    {
-      id: 'tasks',
-      label: 'Tarefas',
-      value: String(totals.completedTasks ?? 0),
-      helper: 'Concluídas nas localidades',
-      icon: <TaskAltIcon sx={{ fontSize: 22 }} />,
-    },
-    {
       id: 'fieldActivities',
       label: 'Atividades de campo',
       value: String(totals.completedFieldActivities ?? 0),
@@ -472,11 +453,25 @@ export function DashboardNationalPage() {
       icon: <TerrainIcon sx={{ fontSize: 22 }} />,
     },
     {
-      id: 'visits',
-      label: 'Visitas',
-      value: String(totals.completedVisits ?? 0),
+      id: 'reports',
+      label: 'Relatórios',
+      value: String(totals.completedReports ?? 0),
       helper: 'Concluídas',
-      icon: <PlaceIcon sx={{ fontSize: 22 }} />,
+      icon: <DescriptionIcon sx={{ fontSize: 22 }} />,
+    },
+    {
+      id: 'placeholder-1',
+      label: '',
+      value: '',
+      helper: '',
+      icon: <Box sx={{ width: 22, height: 22 }} />,
+    },
+    {
+      id: 'placeholder-2',
+      label: '',
+      value: '',
+      helper: '',
+      icon: <Box sx={{ width: 22, height: 22 }} />,
     },
   ];
   const fieldBySpecialtyIndicators: IndicatorTile[] = [
@@ -631,8 +626,8 @@ export function DashboardNationalPage() {
         {[
           {
             id: 'smif-completed',
-            title: 'Concluídos no SMIF',
-            subtitle: `Execução média atual: ${averageProgress}%`,
+            title: 'Entregas Realizadas',
+            subtitle: 'Resumo de atuação da CIPAVD.',
             items: completedIndicators,
             bg: '#1F4A61',
             border: '1px solid rgba(139, 184, 207, 0.38)',
@@ -642,8 +637,8 @@ export function DashboardNationalPage() {
           },
           {
             id: 'smif-field',
-            title: 'Atividades de Campo por Área',
-            subtitle: 'Somente atividades de campo concluídas',
+            title: 'Atividades de campo realizadas pela CIPAVD.',
+            subtitle: 'Apoio realizado pela área técnica dos integrantes.',
             items: fieldBySpecialtyIndicators,
             bg: '#2F6F8A',
             border: '1px solid rgba(132, 178, 201, 0.36)',
@@ -711,7 +706,7 @@ export function DashboardNationalPage() {
                   const isInteractive = Boolean(onItemClick);
                   return (
                     <Box
-                      key={item.label}
+                      key={item.id}
                       role={isInteractive ? 'button' : undefined}
                       tabIndex={isInteractive ? 0 : undefined}
                       onClick={onItemClick ?? undefined}
@@ -803,10 +798,10 @@ export function DashboardNationalPage() {
             <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
               <Box>
                 <Typography variant="subtitle1" fontWeight={700} sx={{ letterSpacing: 0.2, color: style.textColor }}>
-                  Número de Participações
+                  Público alcançado
                 </Typography>
                 <Typography variant="caption" sx={{ color: style.textColor }}>
-                  Total de participações em atividades
+                  Total de participações em atividades de campo.
                 </Typography>
               </Box>
               {isTiProfile ? (
@@ -910,7 +905,7 @@ export function DashboardNationalPage() {
           <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
               <Typography variant="h6" sx={{ color: style.textColor }}>
-                Resultados Positivos
+                Resultados positivos alcançados
               </Typography>
               {isTiProfile ? (
                 <Tooltip title="Editar cores do card">
