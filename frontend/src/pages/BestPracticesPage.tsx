@@ -139,6 +139,7 @@ export function BestPracticesPage() {
     }))
     .filter((item) => item.id && item.name)
     .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+  const hiddenTypeLabel = "boas praticas da localidade";
   const originOptions = [
     ...types.map((type) => ({
       value: `${ORIGIN_TYPE_PREFIX}${type.id}`,
@@ -148,7 +149,15 @@ export function BestPracticesPage() {
       value: `${ORIGIN_LOCALITY_PREFIX}${locality.id}`,
       label: locality.name,
     })),
-  ];
+  ].filter((option) => {
+    if (!option.value.startsWith(ORIGIN_TYPE_PREFIX)) return true;
+    const normalized = String(option.label)
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim()
+      .toLowerCase();
+    return normalized !== hiddenTypeLabel;
+  });
   const canCreate =
     hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]) &&
     can(me, "best_practices", "create");
