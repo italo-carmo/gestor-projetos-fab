@@ -16,6 +16,8 @@ export class CreateBestPracticeDto {
   @IsOptional()
   @IsBoolean()
   isCommission?: boolean;
+
+  @IsOptional()
+  @IsString()
+  typeId?: string | null;
 }
-
-

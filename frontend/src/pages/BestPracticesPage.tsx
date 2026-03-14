@@ -75,11 +75,13 @@ type BestPracticePost = {
 };
 
 export function BestPracticesPage() {
+  const TYPE_FILTER_PREFIX = "__type__:";
+  const TYPE_TARGET_PREFIX = "__type_target__:";
   const toast = useToast();
   const { data: me } = useMe();
   const localitiesQuery = useLocalities();
   const [q, setQ] = useState("");
-  const [localityFilter, setLocalityFilter] = useState("");
+  const [originFilter, setOriginFilter] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<BestPracticePost | null>(null);
   const [readingPost, setReadingPost] = useState<BestPracticePost | null>(null);
@@ -87,16 +89,31 @@ export function BestPracticesPage() {
     title: "",
     content: "",
     target: "commission",
+    typeId: "",
   });
   const [typesSectionOpen, setTypesSectionOpen] = useState(false);
   const [typeForm, setTypeForm] = useState({ id: "", name: "", colorHex: "#537F97", textColorHex: "#FFFFFF" });
 
   const filters = useMemo(
-    () => ({
-      q: q.trim() || undefined,
-      localityId: localityFilter || undefined,
-    }),
-    [q, localityFilter],
+    () => {
+      const normalizedOrigin = String(originFilter ?? "").trim();
+      const payload: Record<string, string | undefined> = {
+        q: q.trim() || undefined,
+      };
+      if (!normalizedOrigin) return payload;
+      if (normalizedOrigin === "__commission__") {
+        payload.localityId = "__commission__";
+        return payload;
+      }
+      if (normalizedOrigin.startsWith(TYPE_FILTER_PREFIX)) {
+        const typeId = normalizedOrigin.slice(TYPE_FILTER_PREFIX.length).trim();
+        payload.typeId = typeId || undefined;
+        return payload;
+      }
+      payload.localityId = normalizedOrigin;
+      return payload;
+    },
+    [q, originFilter, TYPE_FILTER_PREFIX],
   );
 
   const postsQuery = useBestPractices(filters);
@@ -150,6 +167,7 @@ export function BestPracticesPage() {
     postsByLocalityId.set(String(item.localityId), list);
   }
   const commissionPosts = posts.filter((item) => item.isCommission);
+  const isTypeOriginFilter = originFilter.startsWith(TYPE_FILTER_PREFIX);
 
   const sections = [
     {
@@ -168,12 +186,13 @@ export function BestPracticesPage() {
         posts: postsByLocalityId.get(locality.id) ?? [],
       }))
       .filter((section) => {
-        if (localityFilter === "__commission__") return false;
-        if (localityFilter) return section.key === localityFilter;
+        if (originFilter === "__commission__") return false;
+        if (originFilter && !isTypeOriginFilter) return section.key === originFilter;
         return section.posts.length > 0;
       }),
   ].filter((section) => {
-    if (localityFilter === "__commission__") return section.key === "__commission__";
+    if (originFilter === "__commission__") return section.key === "__commission__";
+    if (originFilter && !isTypeOriginFilter) return section.key === originFilter;
     return true;
   });
 
@@ -183,6 +202,7 @@ export function BestPracticesPage() {
       title: "",
       content: "",
       target: "commission",
+      typeId: "",
     });
   };
 
@@ -192,23 +212,36 @@ export function BestPracticesPage() {
   };
 
   const openEdit = (post: BestPracticePost) => {
+    const nextTarget =
+      post.isCommission && post.typeId
+        ? `${TYPE_TARGET_PREFIX}${String(post.typeId)}`
+        : post.isCommission
+          ? "commission"
+          : String(post.localityId ?? "");
     setEditing(post);
     setForm({
       title: post.title ?? "",
       content: post.content ?? "",
-      target: post.isCommission ? "commission" : String(post.localityId ?? ""),
+      target: nextTarget,
+      typeId: post.typeId ? String(post.typeId) : "",
     });
     setDrawerOpen(true);
   };
 
   const handleSave = async () => {
     try {
-      const isCommission = form.target === "commission";
+      const isTypeTarget = form.target.startsWith(TYPE_TARGET_PREFIX);
+      const typeIdFromTarget = isTypeTarget
+        ? form.target.slice(TYPE_TARGET_PREFIX.length).trim()
+        : "";
+      const selectedTypeId = typeIdFromTarget || String(form.typeId ?? "").trim();
+      const isCommission = form.target === "commission" || isTypeTarget;
       const payload = {
         title: form.title,
         content: form.content,
         isCommission,
         localityId: isCommission ? null : form.target,
+        typeId: selectedTypeId || null,
       };
       if (editing) {
         await updateBestPractice.mutateAsync({ id: editing.id, payload });
@@ -294,8 +327,8 @@ export function BestPracticesPage() {
               select
               size="small"
               label="Origem"
-              value={localityFilter}
-              onChange={(event) => setLocalityFilter(event.target.value)}
+              value={originFilter}
+              onChange={(event) => setOriginFilter(event.target.value)}
               sx={{ minWidth: 260 }}
             >
               <MenuItem value="">Todas</MenuItem>
@@ -303,6 +336,11 @@ export function BestPracticesPage() {
               {localities.map((locality) => (
                 <MenuItem key={locality.id} value={locality.id}>
                   {locality.name}
+                </MenuItem>
+              ))}
+              {types.map((type) => (
+                <MenuItem key={`filter-${type.id}`} value={`${TYPE_FILTER_PREFIX}${type.id}`}>
+                  Tipo: {type.name}
                 </MenuItem>
               ))}
             </TextField>
@@ -733,12 +771,57 @@ export function BestPracticesPage() {
             size="small"
             label="Relacionar a"
             value={form.target}
-            onChange={(event) => setForm((prev) => ({ ...prev, target: event.target.value }))}
+            onChange={(event) => {
+              const nextTarget = event.target.value;
+              if (nextTarget.startsWith(TYPE_TARGET_PREFIX)) {
+                const nextTypeId = nextTarget.slice(TYPE_TARGET_PREFIX.length).trim();
+                setForm((prev) => ({ ...prev, target: nextTarget, typeId: nextTypeId }));
+                return;
+              }
+              setForm((prev) => ({ ...prev, target: nextTarget }));
+            }}
           >
             <MenuItem value="commission">Práticas com potencial de replicação</MenuItem>
             {localities.map((locality) => (
               <MenuItem key={locality.id} value={locality.id}>
                 {locality.name}
+              </MenuItem>
+            ))}
+            {types.map((type) => (
+              <MenuItem key={`target-${type.id}`} value={`${TYPE_TARGET_PREFIX}${type.id}`}>
+                Tipo: {type.name}
+              </MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            select
+            size="small"
+            label="Tipo"
+            value={
+              form.target.startsWith(TYPE_TARGET_PREFIX)
+                ? form.target.slice(TYPE_TARGET_PREFIX.length)
+                : form.typeId
+            }
+            onChange={(event) =>
+              setForm((prev) => {
+                const nextTypeId = event.target.value;
+                if (prev.target.startsWith(TYPE_TARGET_PREFIX)) {
+                  return {
+                    ...prev,
+                    target: nextTypeId
+                      ? `${TYPE_TARGET_PREFIX}${nextTypeId}`
+                      : "commission",
+                    typeId: nextTypeId,
+                  };
+                }
+                return { ...prev, typeId: nextTypeId };
+              })
+            }
+          >
+            <MenuItem value="">Sem tipo</MenuItem>
+            {types.map((type) => (
+              <MenuItem key={type.id} value={type.id}>
+                {type.name}
               </MenuItem>
             ))}
           </TextField>

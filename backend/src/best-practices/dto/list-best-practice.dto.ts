@@ -8,6 +8,8 @@ export class ListBestPracticeDto {
   @IsOptional()
   @IsString()
   localityId?: string;
+
+  @IsOptional()
+  @IsString()
+  typeId?: string;
 }
-
-

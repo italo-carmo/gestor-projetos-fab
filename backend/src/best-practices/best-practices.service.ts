@@ -20,7 +20,10 @@ export class BestPracticesService {
     private readonly audit: AuditService,
   ) {}
 
-  async list(filters: { q?: string; localityId?: string }, user?: RbacUser) {
+  async list(
+    filters: { q?: string; localityId?: string; typeId?: string },
+    user?: RbacUser,
+  ) {
     this.assertViewerAccess(user);
 
     const where: any = {};
@@ -39,6 +42,9 @@ export class BestPracticesService {
       } else {
         where.localityId = filters.localityId;
       }
+    }
+    if (filters.typeId) {
+      where.typeId = String(filters.typeId).trim();
     }
 
     try {
@@ -92,6 +98,7 @@ export class BestPracticesService {
       content: string;
       localityId?: string | null;
       isCommission?: boolean;
+      typeId?: string | null;
     },
     user?: RbacUser,
   ) {
@@ -108,6 +115,7 @@ export class BestPracticesService {
       payload.localityId,
       isCommission,
     );
+    const typeId = await this.resolveTypeTarget(payload.typeId);
 
     const created = await (this.prisma as any).bestPracticePost.create({
       data: {
@@ -115,6 +123,7 @@ export class BestPracticesService {
         content,
         isCommission,
         localityId,
+        typeId,
         createdById: user?.id ?? null,
         authorLabel: this.buildAuthorLabel(user),
       },
@@ -133,6 +142,7 @@ export class BestPracticesService {
       diffJson: {
         title: created.title,
         isCommission: created.isCommission,
+        typeId: created.typeId ?? null,
       },
     });
 
@@ -146,6 +156,7 @@ export class BestPracticesService {
       content?: string;
       localityId?: string | null;
       isCommission?: boolean;
+      typeId?: string | null;
     },
     user?: RbacUser,
   ) {
@@ -165,6 +176,10 @@ export class BestPracticesService {
         : existing.localityId,
       nextIsCommission,
     );
+    const nextTypeId =
+      payload.typeId !== undefined
+        ? await this.resolveTypeTarget(payload.typeId)
+        : (existing.typeId ?? null);
 
     const updated = await (this.prisma as any).bestPracticePost.update({
       where: { id },
@@ -182,6 +197,7 @@ export class BestPracticesService {
             ? Boolean(payload.isCommission)
             : undefined,
         localityId: nextLocalityId,
+        typeId: nextTypeId,
       },
       include: {
         locality: { select: { id: true, name: true, code: true } },
@@ -198,6 +214,7 @@ export class BestPracticesService {
       diffJson: {
         title: updated.title,
         isCommission: updated.isCommission,
+        typeId: updated.typeId ?? null,
       },
     });
 
@@ -254,6 +271,27 @@ export class BestPracticesService {
     if (!hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_TI])) {
       throwError('RBAC_FORBIDDEN');
     }
+  }
+
+  private async resolveTypeTarget(typeId: string | null | undefined) {
+    const id = String(typeId ?? '').trim();
+    if (!id) return null;
+    if (!(this.prisma as any).bestPracticeType) {
+      throwError('VALIDATION_ERROR', {
+        field: 'typeId',
+        reason: 'feature_unavailable',
+      });
+    }
+
+    const found = await (this.prisma as any).bestPracticeType.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (!found) {
+      throwError('NOT_FOUND');
+    }
+
+    return id;
   }
 
   private resolveLocalityTarget(
