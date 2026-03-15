@@ -953,12 +953,19 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <Box
         component="main"
-        sx={{ flexGrow: 1, px: { xs: 1.5, md: 3 }, pb: 3.5 }}
+        sx={{
+          flexGrow: 1,
+          minWidth: 0,
+          maxWidth: "100%",
+          overflowX: "hidden",
+          px: { xs: 1.5, md: 3 },
+          pb: 3.5,
+        }}
       >
         <Toolbar sx={{ minHeight: `${headerHeight}px !important`, height: `${headerHeight}px` }} />
         <Box
           className="page-enter"
-          sx={{ maxWidth: 1650, mx: "auto", pt: { xs: 1.2, md: 1.8 } }}
+          sx={{ width: "100%", minWidth: 0, maxWidth: 1650, mx: "auto", pt: { xs: 1.2, md: 1.8 } }}
         >
           {children}
         </Box>

@@ -773,7 +773,7 @@ export function DashboardNationalPage() {
         width: '100%',
         maxWidth: '100%',
         minWidth: 0,
-        overflowX: 'hidden',
+        overflowX: 'clip',
       }}
     >
       <Typography variant="h4" gutterBottom fontWeight={700}>
@@ -1248,8 +1248,17 @@ export function DashboardNationalPage() {
           ) : (
             <Stack spacing={1.8} sx={{ minWidth: 0 }}>
               {institutionalSections.map((section) => (
-                <Card key={section.id} variant="outlined" sx={{ borderRadius: 2.4, minWidth: 0 }}>
-                  <CardContent sx={{ p: 1.6 }}>
+                <Card
+                  key={section.id}
+                  variant="outlined"
+                  sx={{
+                    borderRadius: 2.4,
+                    minWidth: 0,
+                    maxWidth: '100%',
+                    overflowX: 'hidden',
+                  }}
+                >
+                  <CardContent sx={{ p: 1.6, minWidth: 0, maxWidth: '100%', overflowX: 'hidden' }}>
                     <Typography variant="subtitle1" fontWeight={700} sx={{ color: '#0F3950', mb: 0.8 }}>
                       {section.title}
                     </Typography>
@@ -1268,7 +1277,8 @@ export function DashboardNationalPage() {
                       <Table
                         size="small"
                         sx={{
-                          minWidth: 'max-content',
+                          width: 'max-content',
+                          minWidth: '100%',
                         }}
                       >
                         <TableHead>
