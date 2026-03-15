@@ -218,6 +218,7 @@ model Mission {
   id          String   @id @default(cuid())
   title       String
   description String?
+  checklistJson Json?
   localityId  String
   startDate   DateTime
   endDate     DateTime

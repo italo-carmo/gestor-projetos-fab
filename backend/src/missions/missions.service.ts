@@ -17,6 +17,14 @@ import { sanitizeText } from '../common/sanitize';
 import { parsePagination } from '../common/pagination';
 import { FabLdapService } from '../ldap/fab-ldap.service';
 import { selectTargetLocalities } from '../common/priority-localities';
+import {
+  DEFAULT_MISSION_CHECKLIST_CLASSIFICATION,
+  MISSION_CHECKLIST_CLASSIFICATIONS,
+  MISSION_CHECKLIST_ITEM_ID_SET,
+  MISSION_CHECKLIST_ITEM_IDS,
+  MISSION_CHECKLIST_SECTIONS,
+  type MissionChecklistClassification,
+} from './mission-checklist.constants';
 
 const scheduleLogoCandidates = [
   path.resolve(process.cwd(), 'frontend', 'public', 'brand', 'cipavd-7.png'),
@@ -30,6 +38,12 @@ const scheduleLogoCandidates = [
     'cipavd-7.png',
   ),
 ];
+
+type MissionChecklistStoredItem = {
+  id: string;
+  classification: MissionChecklistClassification;
+  notes: string;
+};
 
 @Injectable()
 export class MissionsService {
@@ -254,6 +268,191 @@ export class MissionsService {
     };
   }
 
+  async getChecklistMapping(
+    filters: {
+      localityId?: string;
+    },
+    user?: RbacUser,
+  ) {
+    this.assertMissionAccess(user);
+
+    const targetLocalityIds = await this.getTargetLocalityIds();
+    const selectedLocalityIds = filters.localityId
+      ? targetLocalityIds.includes(filters.localityId)
+        ? [filters.localityId]
+        : []
+      : targetLocalityIds;
+
+    if (selectedLocalityIds.length === 0) {
+      return {
+        generatedAt: new Date().toISOString(),
+        localities: [],
+        sections: [],
+        missionsByLocality: [],
+      };
+    }
+
+    const [localities, missions] = await this.prisma.$transaction([
+      this.prisma.locality.findMany({
+        where: { id: { in: selectedLocalityIds } },
+        select: { id: true, name: true, code: true },
+        orderBy: { name: 'asc' },
+      }),
+      this.prisma.mission.findMany({
+        where: { localityId: { in: selectedLocalityIds } },
+        include: {
+          locality: { select: { id: true, name: true, code: true } },
+          participants: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              cpf: true,
+              fabom: true,
+              ldapUid: true,
+            },
+            orderBy: [{ createdAt: 'asc' }],
+          },
+          scheduleItems: {
+            select: {
+              id: true,
+              title: true,
+              startAt: true,
+              durationMinutes: true,
+              location: true,
+              responsible: true,
+              participants: true,
+            },
+            orderBy: [{ startAt: 'asc' }, { createdAt: 'asc' }],
+          },
+        },
+        orderBy: [
+          { localityId: 'asc' },
+          { updatedAt: 'desc' },
+          { createdAt: 'desc' },
+        ],
+      }),
+    ]);
+
+    const latestMissionByLocality = new Map<
+      string,
+      {
+        mission: (typeof missions)[number];
+        checklistSections: ReturnType<
+          MissionsService['buildMissionChecklistSections']
+        >;
+        checklistItemById: Map<
+          string,
+          { classification: MissionChecklistClassification; notes: string }
+        >;
+      }
+    >();
+
+    for (const mission of missions) {
+      if (latestMissionByLocality.has(mission.localityId)) continue;
+      const storedChecklistItems = this.readStoredMissionChecklistItems(
+        mission.checklistJson,
+      );
+      if (storedChecklistItems.size === 0) continue;
+
+      const checklistSections = this.buildMissionChecklistSections(
+        mission.checklistJson,
+      );
+      const checklistItemById = new Map<
+        string,
+        { classification: MissionChecklistClassification; notes: string }
+      >();
+      for (const section of checklistSections) {
+        for (const item of section.items) {
+          checklistItemById.set(item.id, {
+            classification: item.classification,
+            notes: item.notes,
+          });
+        }
+      }
+
+      latestMissionByLocality.set(mission.localityId, {
+        mission,
+        checklistSections,
+        checklistItemById,
+      });
+    }
+
+    const sections = MISSION_CHECKLIST_SECTIONS.map((section) => ({
+      id: section.id,
+      title: section.title,
+      items: section.items.map((item) => ({
+        id: item.id,
+        title: item.title,
+        prompt: item.prompt ?? null,
+        cells: localities.map((locality) => {
+          const missionEntry = latestMissionByLocality.get(locality.id);
+          if (!missionEntry) {
+            return {
+              localityId: locality.id,
+              missionId: null,
+              classification: null,
+              notes: '',
+              hasNotes: false,
+            };
+          }
+          const checklistItem = missionEntry.checklistItemById.get(item.id);
+          if (!checklistItem) {
+            return {
+              localityId: locality.id,
+              missionId: missionEntry.mission.id,
+              classification: null,
+              notes: '',
+              hasNotes: false,
+            };
+          }
+          return {
+            localityId: locality.id,
+            missionId: missionEntry.mission.id,
+            classification: checklistItem.classification,
+            notes: checklistItem.notes,
+            hasNotes: Boolean(checklistItem.notes.trim()),
+          };
+        }),
+      })),
+    }));
+
+    const missionsByLocality = localities.map((locality) => {
+      const missionEntry = latestMissionByLocality.get(locality.id);
+      if (!missionEntry) {
+        return {
+          localityId: locality.id,
+          mission: null,
+        };
+      }
+      const mission = missionEntry.mission;
+      return {
+        localityId: locality.id,
+        mission: {
+          id: mission.id,
+          title: mission.title,
+          description: mission.description,
+          startDate: mission.startDate,
+          endDate: mission.endDate,
+          updatedAt: mission.updatedAt,
+          locality: mission.locality,
+          participants: mission.participants,
+          participantsCount: mission.participants.length,
+          scheduleItems: mission.scheduleItems,
+          scheduleItemsCount: mission.scheduleItems.length,
+          checklistSections: missionEntry.checklistSections,
+        },
+      };
+    });
+
+    return {
+      generatedAt: new Date().toISOString(),
+      localities,
+      sections,
+      missionsByLocality,
+    };
+  }
+
   async getById(id: string, user?: RbacUser) {
     this.assertMissionAccess(user);
 
@@ -275,6 +474,88 @@ export class MissionsService {
 
     if (!mission) throwError('NOT_FOUND');
     return mission;
+  }
+
+  async getChecklist(id: string, user?: RbacUser) {
+    this.assertMissionAccess(user);
+
+    const mission = await this.prisma.mission.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        localityId: true,
+        updatedAt: true,
+        checklistJson: true,
+      },
+    });
+
+    if (!mission) throwError('NOT_FOUND');
+
+    return {
+      missionId: mission.id,
+      localityId: mission.localityId,
+      updatedAt: mission.updatedAt,
+      sections: this.buildMissionChecklistSections(mission.checklistJson),
+    };
+  }
+
+  async upsertChecklist(
+    id: string,
+    payload: {
+      items: {
+        id: string;
+        classification: MissionChecklistClassification;
+        notes?: string;
+      }[];
+    },
+    user?: RbacUser,
+  ) {
+    this.assertMissionAccess(user);
+
+    const mission = await this.prisma.mission.findUnique({
+      where: { id },
+      select: { id: true, localityId: true },
+    });
+    if (!mission) throwError('NOT_FOUND');
+
+    const normalizedItems = this.normalizeMissionChecklistItems(payload.items);
+
+    const updated = await this.prisma.mission.update({
+      where: { id },
+      data: {
+        checklistJson: {
+          version: 1,
+          items: normalizedItems,
+        } as Prisma.InputJsonValue,
+      },
+      select: {
+        id: true,
+        localityId: true,
+        updatedAt: true,
+        checklistJson: true,
+      },
+    });
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'missions',
+      action: 'update_checklist',
+      entityId: updated.id,
+      localityId: updated.localityId,
+      diffJson: {
+        checklistItemsCount: normalizedItems.length,
+        checklistNotesFilledCount: normalizedItems.filter((item) =>
+          item.notes.trim(),
+        ).length,
+      },
+    });
+
+    return {
+      missionId: updated.id,
+      localityId: updated.localityId,
+      updatedAt: updated.updatedAt,
+      sections: this.buildMissionChecklistSections(updated.checklistJson),
+    };
   }
 
   async create(
@@ -1466,6 +1747,116 @@ export class MissionsService {
       .toLowerCase();
     const fileName = `cronograma-missao-${sanitizedTitle || mission.id}.pdf`;
     return { fileName, buffer };
+  }
+
+  private buildMissionChecklistSections(
+    checklistJson: Prisma.JsonValue | null | undefined,
+  ) {
+    const storedItemsById = this.readStoredMissionChecklistItems(checklistJson);
+
+    return MISSION_CHECKLIST_SECTIONS.map((section) => ({
+      id: section.id,
+      title: section.title,
+      items: section.items.map((item) => {
+        const stored = storedItemsById.get(item.id);
+        return {
+          id: item.id,
+          title: item.title,
+          prompt: item.prompt ?? null,
+          classification:
+            stored?.classification ?? DEFAULT_MISSION_CHECKLIST_CLASSIFICATION,
+          notes: stored?.notes ?? '',
+        };
+      }),
+    }));
+  }
+
+  private normalizeMissionChecklistItems(
+    rawItems: {
+      id: string;
+      classification: MissionChecklistClassification;
+      notes?: string;
+    }[],
+  ): MissionChecklistStoredItem[] {
+    const normalizedById = new Map<string, MissionChecklistStoredItem>();
+
+    for (const item of rawItems) {
+      if (!MISSION_CHECKLIST_ITEM_ID_SET.has(item.id)) {
+        throwError('VALIDATION_ERROR', {
+          field: 'items',
+          reason: 'INVALID_CHECKLIST_ITEM',
+          itemId: item.id,
+        });
+      }
+
+      const classification = String(item.classification ?? '');
+      if (!this.isMissionChecklistClassification(classification)) {
+        throwError('VALIDATION_ERROR', {
+          field: 'classification',
+          reason: 'INVALID_CLASSIFICATION',
+          itemId: item.id,
+        });
+      }
+
+      normalizedById.set(item.id, {
+        id: item.id,
+        classification,
+        notes: sanitizeText(item.notes ?? ''),
+      });
+    }
+
+    return MISSION_CHECKLIST_ITEM_IDS.map((itemId) => {
+      const existing = normalizedById.get(itemId);
+      if (existing) return existing;
+      return {
+        id: itemId,
+        classification: DEFAULT_MISSION_CHECKLIST_CLASSIFICATION,
+        notes: '',
+      };
+    });
+  }
+
+  private readStoredMissionChecklistItems(
+    checklistJson: Prisma.JsonValue | null | undefined,
+  ) {
+    const result = new Map<string, MissionChecklistStoredItem>();
+    if (!this.isJsonObject(checklistJson)) return result;
+
+    const rawItems = checklistJson.items;
+    if (!Array.isArray(rawItems)) return result;
+
+    for (const rawItem of rawItems) {
+      if (!this.isJsonObject(rawItem)) continue;
+
+      const itemId = typeof rawItem.id === 'string' ? rawItem.id : '';
+      const classificationRaw =
+        typeof rawItem.classification === 'string' ? rawItem.classification : '';
+
+      if (!MISSION_CHECKLIST_ITEM_ID_SET.has(itemId)) continue;
+      if (!this.isMissionChecklistClassification(classificationRaw)) continue;
+
+      result.set(itemId, {
+        id: itemId,
+        classification: classificationRaw,
+        notes: typeof rawItem.notes === 'string' ? rawItem.notes : '',
+      });
+    }
+
+    return result;
+  }
+
+  private isMissionChecklistClassification(
+    value: string,
+  ): value is MissionChecklistClassification {
+    return (
+      MISSION_CHECKLIST_CLASSIFICATIONS as readonly string[]
+    ).includes(value);
+  }
+
+  private isJsonObject(
+    value: Prisma.JsonValue | null | undefined,
+  ): value is Prisma.JsonObject {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
   }
 
   private assertMissionAccess(user?: RbacUser) {

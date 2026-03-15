@@ -1,4 +1,15 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query, Res, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Put,
+  Query,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../common/current-user.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
@@ -10,6 +21,7 @@ import { CreateMissionScheduleItemDto } from './dto/create-mission-schedule-item
 import { UpdateMissionScheduleItemDto } from './dto/update-mission-schedule-item.dto';
 import { MissionLdapParticipantDto } from './dto/mission-ldap-participant.dto';
 import { MissionUserParticipantDto } from './dto/mission-user-participant.dto';
+import { UpsertMissionChecklistDto } from './dto/upsert-mission-checklist.dto';
 import type { Response } from 'express';
 
 @Controller('missions')
@@ -33,13 +45,25 @@ export class MissionsController {
     return this.missions.getStatistics(user);
   }
 
+  @Get('checklist/mapping')
+  getChecklistMapping(
+    @Query('localityId') localityId: string | undefined,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.missions.getChecklistMapping({ localityId }, user);
+  }
+
   @Post()
   create(@Body() dto: CreateMissionDto, @CurrentUser() user: RbacUser) {
     return this.missions.create(dto, user);
   }
 
   @Put(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateMissionDto, @CurrentUser() user: RbacUser) {
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateMissionDto,
+    @CurrentUser() user: RbacUser,
+  ) {
     return this.missions.update(id, dto, user);
   }
 
@@ -59,6 +83,20 @@ export class MissionsController {
   @Get(':id')
   getById(@Param('id') id: string, @CurrentUser() user: RbacUser) {
     return this.missions.getById(id, user);
+  }
+
+  @Get(':id/checklist')
+  getChecklist(@Param('id') id: string, @CurrentUser() user: RbacUser) {
+    return this.missions.getChecklist(id, user);
+  }
+
+  @Put(':id/checklist')
+  upsertChecklist(
+    @Param('id') id: string,
+    @Body() dto: UpsertMissionChecklistDto,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.missions.upsertChecklist(id, dto, user);
   }
 
   @Post(':id/participants/ldap')

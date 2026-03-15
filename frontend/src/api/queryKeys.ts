@@ -9,6 +9,9 @@ export const qk = {
   missions: (filters: Record<string, any>) => ["missions", filters] as const,
   mission: (id: string) => ["mission", id] as const,
   missionSchedule: (missionId: string) => ["missionSchedule", missionId] as const,
+  missionChecklist: (missionId: string) => ["missionChecklist", missionId] as const,
+  missionChecklistMapping: (filters: Record<string, any>) =>
+    ["missionChecklistMapping", filters] as const,
   activities: (filters: Record<string, any>) => ["activities", filters] as const,
   task: (id: string) => ["task", id] as const,
   gantt: (filters: Record<string, any>) => ["gantt", filters] as const,

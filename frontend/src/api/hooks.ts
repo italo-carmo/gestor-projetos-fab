@@ -95,6 +95,58 @@ export function useMission(id: string, enabled = true) {
   });
 }
 
+export function useMissionChecklist(missionId: string, enabled = true) {
+  return useQuery({
+    queryKey: qk.missionChecklist(missionId || ""),
+    queryFn: async () => (await api.get(`/missions/${missionId}/checklist`)).data,
+    enabled: Boolean(missionId) && enabled,
+    staleTime: 10_000,
+    refetchOnWindowFocus: false,
+  });
+}
+
+export function useMissionChecklistMapping(
+  filters: { localityId?: string },
+  enabled = true,
+) {
+  const normalized = {
+    localityId: filters.localityId || undefined,
+  };
+  return useQuery({
+    queryKey: qk.missionChecklistMapping(normalized),
+    queryFn: async () =>
+      (await api.get('/missions/checklist/mapping', { params: normalized })).data,
+    enabled,
+    staleTime: 20_000,
+    refetchOnWindowFocus: false,
+  });
+}
+
+export function useUpdateMissionChecklist() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      payload: {
+        items: Array<{
+          id: string;
+          classification:
+            | "FORTE_CONSOLIDADA"
+            | "OPORTUNIDADE_MELHORIA"
+            | "NECESSITA_ANALISE"
+            | "POSSIVEL_RISCO";
+          notes?: string;
+        }>;
+      };
+    }) => (await api.put(`/missions/${args.id}/checklist`, args.payload)).data,
+    onSuccess: (_data, args) => {
+      qc.invalidateQueries({ queryKey: qk.missionChecklist(args.id) });
+      qc.invalidateQueries({ queryKey: qk.mission(args.id) });
+      qc.invalidateQueries({ queryKey: ["missions"] });
+    },
+  });
+}
+
 export function useCreateMission() {
   const qc = useQueryClient();
   return useMutation({

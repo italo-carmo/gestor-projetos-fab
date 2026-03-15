@@ -39,9 +39,11 @@ import {
   useLocalities,
   useLookupMissionLdapParticipant,
   useMission,
+  useMissionChecklist,
   useMissionStatistics,
   useMissions,
   useRemoveMissionParticipant,
+  useUpdateMissionChecklist,
   useUpdateMission,
   useUpdateMissionScheduleItem,
   useUsers,
@@ -70,6 +72,190 @@ const blankScheduleForm = {
   responsible: '',
   participants: '',
 };
+
+type MissionChecklistClassification =
+  | 'FORTE_CONSOLIDADA'
+  | 'OPORTUNIDADE_MELHORIA'
+  | 'NECESSITA_ANALISE'
+  | 'POSSIVEL_RISCO';
+
+type MissionChecklistItemState = {
+  classification: MissionChecklistClassification;
+  notes: string;
+};
+
+type MissionChecklistItemConfig = {
+  id: string;
+  title: string;
+  prompt?: string;
+};
+
+type MissionChecklistSectionConfig = {
+  id: string;
+  title: string;
+  items: MissionChecklistItemConfig[];
+};
+
+const checklistClassificationMeta: Record<
+  MissionChecklistClassification,
+  { label: string; color: string; bgColor: string }
+> = {
+  FORTE_CONSOLIDADA: {
+    label: 'Dimensão forte/consolidada',
+    color: '#1b5e20',
+    bgColor: '#e8f5e9',
+  },
+  OPORTUNIDADE_MELHORIA: {
+    label: 'Dimensão com oportunidades de melhoria',
+    color: '#8a5800',
+    bgColor: '#fff8e1',
+  },
+  NECESSITA_ANALISE: {
+    label: 'Dimensão necessita de maior análise',
+    color: '#334155',
+    bgColor: '#f1f5f9',
+  },
+  POSSIVEL_RISCO: {
+    label: 'Possível risco',
+    color: '#b71c1c',
+    bgColor: '#ffebee',
+  },
+};
+
+const checklistClassificationEntries = Object.entries(
+  checklistClassificationMeta,
+) as Array<
+  [MissionChecklistClassification, { label: string; color: string; bgColor: string }]
+>;
+
+const missionChecklistSections: MissionChecklistSectionConfig[] = [
+  {
+    id: 'lideranca',
+    title: 'Liderança',
+    items: [
+      { id: 'lideranca_atuacao', title: 'Atuação de lideranças' },
+      {
+        id: 'lideranca_coesao_equipe',
+        title:
+          'Coesão da equipe de instrução e inclusão de instrutoras do sexo feminino',
+      },
+      {
+        id: 'lideranca_preparo_instrutoras',
+        title: 'Preparo das instrutoras mulheres',
+      },
+    ],
+  },
+  {
+    id: 'acompanhamento_recrutas',
+    title: 'Acompanhamento de Recrutas',
+    items: [
+      {
+        id: 'acompanhamento_motivacao',
+        title: 'Percepção de motivação das recrutas',
+      },
+      {
+        id: 'acompanhamento_suporte_psicossocial',
+        title: 'Suporte psicossocial (psicólogo, assistente social e jurídico)',
+      },
+      {
+        id: 'acompanhamento_engajamento_familiar',
+        title: 'Engajamento familiar',
+      },
+      {
+        id: 'acompanhamento_infraestrutura',
+        title: 'Infraestrutura e condições',
+      },
+    ],
+  },
+  {
+    id: 'analise_riscos',
+    title: 'Análise de Riscos',
+    items: [
+      {
+        id: 'riscos_reputacional_juridico',
+        title:
+          'Avaliação do risco reputacional e jurídico para a equipe de instrução',
+        prompt:
+          'Existe clareza sobre os limites da atuação dos instrutores? A equipe compreende que determinadas condutas, mesmo sem intenção, podem configurar assédio?',
+      },
+      {
+        id: 'riscos_subnotificacao',
+        title: 'Risco de subnotificação: ambiente que inibe denúncias',
+        prompt:
+          'O ambiente de instrução é percebido pelas recrutas como seguro para denunciar? Há sinais de que denúncias são desencorajadas, minimizadas ou expostas?',
+      },
+      {
+        id: 'riscos_tratamento_desigual',
+        title: 'Risco de tratamento desigual percebido como discriminação',
+        prompt:
+          'As diferenças de tratamento entre recrutas masculinos e femininos são explicadas institucionalmente? Há risco de que sejam lidas como privilégio ou discriminação por qualquer das partes?',
+      },
+      {
+        id: 'riscos_abertura_mudancas',
+        title: 'Abertura para mudanças e adaptações do processo',
+        prompt:
+          'A liderança demonstra flexibilidade para ajustar práticas com base nos aprendizados do SMIF?',
+      },
+      {
+        id: 'riscos_participacao_boas_praticas',
+        title: 'Participação ativa no ciclo de boas práticas',
+        prompt:
+          'A equipe engajou com qualidade nas atividades propostas? Trouxe reflexões genuínas?',
+      },
+      {
+        id: 'riscos_valorizacao_presenca_feminina',
+        title: 'Valorização da presença feminina na instrução e na formação',
+        prompt:
+          'Há reconhecimento genuíno, e não apenas formal, da importância deste momento histórico?',
+      },
+    ],
+  },
+];
+
+const missionChecklistItems = missionChecklistSections.flatMap((section) =>
+  section.items.map((item) => item.id),
+);
+const missionChecklistItemSet = new Set<string>(missionChecklistItems);
+
+function buildDefaultMissionChecklistState(): Record<string, MissionChecklistItemState> {
+  return missionChecklistItems.reduce<Record<string, MissionChecklistItemState>>(
+    (acc, itemId) => {
+      acc[itemId] = {
+        classification: 'NECESSITA_ANALISE',
+        notes: '',
+      };
+      return acc;
+    },
+    {},
+  );
+}
+
+function isMissionChecklistClassification(value: string): value is MissionChecklistClassification {
+  return Object.hasOwn(checklistClassificationMeta, value);
+}
+
+function buildMissionChecklistStateFromApi(data: any): Record<string, MissionChecklistItemState> {
+  const base = buildDefaultMissionChecklistState();
+  const sections = Array.isArray(data?.sections) ? data.sections : [];
+
+  for (const section of sections) {
+    const items = Array.isArray(section?.items) ? section.items : [];
+    for (const item of items) {
+      const itemId = String(item?.id ?? '');
+      if (!missionChecklistItemSet.has(itemId)) continue;
+      const classificationRaw = String(item?.classification ?? '');
+      const classification = isMissionChecklistClassification(classificationRaw)
+        ? classificationRaw
+        : 'NECESSITA_ANALISE';
+      base[itemId] = {
+        classification,
+        notes: String(item?.notes ?? ''),
+      };
+    }
+  }
+
+  return base;
+}
 
 function formatDateTimeLocalValue(value: string | Date | null | undefined) {
   if (!value) return '';
@@ -156,9 +342,11 @@ export function MissionsPage() {
   const updateScheduleItem = useUpdateMissionScheduleItem();
   const deleteScheduleItem = useDeleteMissionScheduleItem();
   const exportSchedulePdf = useExportMissionSchedulePdf();
+  const updateMissionChecklist = useUpdateMissionChecklist();
 
   const [drawerOpen, setDrawerOpen] = useState(Boolean(missionIdFromUrl));
   const [isCreateMode, setIsCreateMode] = useState(false);
+  const [missionTab, setMissionTab] = useState(0);
   const [missionForm, setMissionForm] = useState(blankMissionForm);
   const [ldapIdentifier, setLdapIdentifier] = useState('');
   const [participantTab, setParticipantTab] = useState(0);
@@ -166,6 +354,10 @@ export function MissionsPage() {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [scheduleForm, setScheduleForm] = useState(blankScheduleForm);
   const [editingScheduleItemId, setEditingScheduleItemId] = useState<string | null>(null);
+  const [checklistState, setChecklistState] = useState<Record<string, MissionChecklistItemState>>(
+    () => buildDefaultMissionChecklistState(),
+  );
+  const [checklistDirty, setChecklistDirty] = useState(false);
   const [cloneSourceMissionId, setCloneSourceMissionId] = useState('');
   const [missionDeleteTarget, setMissionDeleteTarget] = useState<{ id: string; title: string } | null>(null);
   const [scheduleDeleteTarget, setScheduleDeleteTarget] = useState<{ id: string; title: string } | null>(null);
@@ -183,6 +375,10 @@ export function MissionsPage() {
 
   const items = missionsQuery.data?.items ?? [];
   const selectedMission = missionDetailQuery.data ?? null;
+  const missionChecklistQuery = useMissionChecklist(
+    String(selectedMission?.id ?? ''),
+    Boolean(selectedMission?.id) && !isCreateMode,
+  );
   const cloneSourceMissionQuery = useMission(cloneSourceMissionId, Boolean(cloneSourceMissionId));
   const cloneMissionOptions = useMemo(() => {
     const missions = (cloneMissionOptionsQuery.data?.items ?? []) as any[];
@@ -201,6 +397,7 @@ export function MissionsPage() {
   useEffect(() => {
     if (!missionIdFromUrl) {
       setDrawerOpen(false);
+      setMissionTab(0);
       if (!isCreateMode) {
         resetScheduleForm();
       }
@@ -221,13 +418,33 @@ export function MissionsPage() {
     });
   }, [selectedMission]);
 
+  useEffect(() => {
+    if (!selectedMission?.id) {
+      setChecklistState(buildDefaultMissionChecklistState());
+      setChecklistDirty(false);
+      return;
+    }
+    setChecklistState(buildDefaultMissionChecklistState());
+    setChecklistDirty(false);
+  }, [selectedMission?.id]);
+
+  useEffect(() => {
+    if (!selectedMission?.id) return;
+    if (!missionChecklistQuery.data) return;
+    setChecklistState(buildMissionChecklistStateFromApi(missionChecklistQuery.data));
+    setChecklistDirty(false);
+  }, [missionChecklistQuery.data, selectedMission?.id]);
+
   const openCreate = () => {
     setIsCreateMode(true);
+    setMissionTab(0);
     setMissionForm({
       ...blankMissionForm,
       localityId: localityId || localityOptions[0]?.id || '',
     });
     setLdapIdentifier('');
+    setChecklistState(buildDefaultMissionChecklistState());
+    setChecklistDirty(false);
     resetScheduleForm();
     setCloneSourceMissionId('');
     setDrawerOpen(true);
@@ -239,7 +456,9 @@ export function MissionsPage() {
 
   const openMission = (id: string) => {
     setIsCreateMode(false);
+    setMissionTab(0);
     setDrawerOpen(true);
+    setChecklistDirty(false);
     resetScheduleForm();
     setCloneSourceMissionId('');
 
@@ -251,7 +470,10 @@ export function MissionsPage() {
   const closeDrawer = () => {
     setDrawerOpen(false);
     setIsCreateMode(false);
+    setMissionTab(0);
     resetScheduleForm();
+    setChecklistState(buildDefaultMissionChecklistState());
+    setChecklistDirty(false);
     setCloneSourceMissionId('');
     setMissionDeleteTarget(null);
     setScheduleDeleteTarget(null);
@@ -511,6 +733,52 @@ export function MissionsPage() {
       setScheduleDeleteTarget(null);
     } catch (error) {
       toast.push({ message: parseApiError(error).message ?? 'Erro ao remover item.', severity: 'error' });
+    }
+  };
+
+  const handleChecklistClassificationChange = (
+    itemId: string,
+    classification: MissionChecklistClassification,
+  ) => {
+    setChecklistState((current) => ({
+      ...current,
+      [itemId]: {
+        classification,
+        notes: current[itemId]?.notes ?? '',
+      },
+    }));
+    setChecklistDirty(true);
+  };
+
+  const handleChecklistNotesChange = (itemId: string, notes: string) => {
+    setChecklistState((current) => ({
+      ...current,
+      [itemId]: {
+        classification: current[itemId]?.classification ?? 'NECESSITA_ANALISE',
+        notes,
+      },
+    }));
+    setChecklistDirty(true);
+  };
+
+  const handleSaveChecklist = async () => {
+    if (!selectedMission?.id) return;
+
+    try {
+      await updateMissionChecklist.mutateAsync({
+        id: String(selectedMission.id),
+        payload: {
+          items: missionChecklistItems.map((itemId) => ({
+            id: itemId,
+            classification: checklistState[itemId]?.classification ?? 'NECESSITA_ANALISE',
+            notes: checklistState[itemId]?.notes ?? '',
+          })),
+        },
+      });
+      setChecklistDirty(false);
+      toast.push({ message: 'Checklist da missão salvo.', severity: 'success' });
+    } catch (error) {
+      toast.push({ message: parseApiError(error).message ?? 'Erro ao salvar checklist.', severity: 'error' });
     }
   };
 
@@ -962,6 +1230,21 @@ export function MissionsPage() {
               {!isCreateMode && selectedMission && (
                 <>
                   <Card sx={{ mb: 2 }}>
+                    <CardContent sx={{ pb: '8px !important' }}>
+                      <Tabs
+                        value={missionTab}
+                        onChange={(_, newValue) => setMissionTab(newValue)}
+                        sx={{ borderBottom: 1, borderColor: 'divider' }}
+                      >
+                        <Tab label="Participantes" />
+                        <Tab label="Cronograma" />
+                        <Tab label="Checklist" />
+                      </Tabs>
+                    </CardContent>
+                  </Card>
+
+                  {missionTab === 0 && (
+                  <Card sx={{ mb: 2 }}>
                     <CardContent>
                       <Typography variant="subtitle1" fontWeight={700} mb={1.5}>
                         Participantes
@@ -1080,7 +1363,9 @@ export function MissionsPage() {
                       </Stack>
                     </CardContent>
                   </Card>
+                  )}
 
+                  {missionTab === 1 && (
                   <Card>
                     <CardContent>
                       <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', md: 'center' }} mb={1.2} gap={1}>
@@ -1246,6 +1531,139 @@ export function MissionsPage() {
                       )}
                     </CardContent>
                   </Card>
+                  )}
+
+                  {missionTab === 2 && (
+                    <Card>
+                      <CardContent>
+                        <Stack
+                          direction={{ xs: 'column', md: 'row' }}
+                          justifyContent="space-between"
+                          alignItems={{ xs: 'stretch', md: 'center' }}
+                          mb={1.5}
+                          gap={1}
+                        >
+                          <Box>
+                            <Typography variant="subtitle1" fontWeight={700}>
+                              Checklist da missão
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              Observações vinculadas à localidade da missão:{' '}
+                              {selectedMission.locality?.name ?? '-'}
+                            </Typography>
+                          </Box>
+                          <Button
+                            variant="contained"
+                            onClick={handleSaveChecklist}
+                            disabled={updateMissionChecklist.isPending || !checklistDirty}
+                          >
+                            Salvar checklist
+                          </Button>
+                        </Stack>
+
+                        {missionChecklistQuery.isLoading && <LinearProgress sx={{ mb: 1.5 }} />}
+                        {missionChecklistQuery.isError && (
+                          <Typography variant="body2" color="error" sx={{ mb: 1.5 }}>
+                            Não foi possível carregar o checklist da missão.
+                          </Typography>
+                        )}
+
+                        <Stack spacing={1.6}>
+                          {missionChecklistSections.map((section) => (
+                            <Card key={section.id} variant="outlined">
+                              <CardContent>
+                                <Typography variant="subtitle1" fontWeight={700} mb={1.1}>
+                                  {section.title}
+                                </Typography>
+                                <Stack spacing={1.2}>
+                                  {section.items.map((item) => {
+                                    const current = checklistState[item.id] ?? {
+                                      classification: 'NECESSITA_ANALISE',
+                                      notes: '',
+                                    };
+                                    const classificationMeta = checklistClassificationMeta[current.classification];
+                                    return (
+                                      <Box
+                                        key={item.id}
+                                        sx={{
+                                          border: 1,
+                                          borderColor: 'divider',
+                                          borderRadius: 1.2,
+                                          p: 1.2,
+                                        }}
+                                      >
+                                        <Typography variant="body2" fontWeight={700}>
+                                          {item.title}
+                                        </Typography>
+                                        {item.prompt && (
+                                          <Typography
+                                            variant="body2"
+                                            color="text.secondary"
+                                            sx={{ mt: 0.4 }}
+                                          >
+                                            {item.prompt}
+                                          </Typography>
+                                        )}
+                                        <Stack
+                                          direction={{ xs: 'column', md: 'row' }}
+                                          spacing={1}
+                                          sx={{ mt: 1.1 }}
+                                        >
+                                          <TextField
+                                            select
+                                            size="small"
+                                            label="Classificação"
+                                            value={current.classification}
+                                            onChange={(event) =>
+                                              handleChecklistClassificationChange(
+                                                item.id,
+                                                event.target.value as MissionChecklistClassification,
+                                              )
+                                            }
+                                            sx={{
+                                              minWidth: { xs: '100%', md: 360 },
+                                              '& .MuiOutlinedInput-root': {
+                                                backgroundColor: classificationMeta.bgColor,
+                                              },
+                                              '& .MuiSelect-select': {
+                                                color: classificationMeta.color,
+                                                fontWeight: 700,
+                                              },
+                                            }}
+                                          >
+                                            {checklistClassificationEntries.map(([value, meta]) => (
+                                              <MenuItem
+                                                key={value}
+                                                value={value}
+                                                sx={{ color: meta.color, fontWeight: 700 }}
+                                              >
+                                                {meta.label}
+                                              </MenuItem>
+                                            ))}
+                                          </TextField>
+                                          <TextField
+                                            size="small"
+                                            label="Observações"
+                                            value={current.notes}
+                                            onChange={(event) =>
+                                              handleChecklistNotesChange(item.id, event.target.value)
+                                            }
+                                            multiline
+                                            minRows={2}
+                                            fullWidth
+                                          />
+                                        </Stack>
+                                      </Box>
+                                    );
+                                  })}
+                                </Stack>
+                              </CardContent>
+                            </Card>
+                          ))}
+                        </Stack>
+                      </CardContent>
+                    </Card>
+                  )}
                 </>
               )}
             </>

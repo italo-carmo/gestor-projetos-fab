@@ -37,24 +37,13 @@ import {
   useDashboardNational,
   useLessonsLearned,
   useMe,
+  useMissionChecklistMapping,
 } from '../api/hooks';
 import { can } from '../app/rbac';
 import { hasAnyRole, ROLE_COMANDANTE_COMGEP, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from '../app/roleAccess';
 import { SkeletonState } from '../components/states/SkeletonState';
 import { ErrorState } from '../components/states/ErrorState';
 import { EmptyState } from '../components/states/EmptyState';
-type NationalLocalityItem = {
-  localityId: string;
-  localityCode?: string | null;
-  localityName: string;
-  commandName?: string | null;
-  progress: number;
-  recruitsFemaleCountCurrent?: number | null;
-  commanderName?: string | null;
-  visitDate?: string | null;
-  late: number;
-  unassigned: number;
-};
 type NationalDashboardTotals = {
   localities: number;
   coverageLocalities: number;
@@ -168,6 +157,141 @@ type LessonPost = {
   } | null;
 };
 
+type InstitutionalChecklistClassification =
+  | 'FORTE_CONSOLIDADA'
+  | 'OPORTUNIDADE_MELHORIA'
+  | 'NECESSITA_ANALISE'
+  | 'POSSIVEL_RISCO';
+
+type InstitutionalChecklistCell = {
+  localityId: string;
+  missionId: string | null;
+  classification: InstitutionalChecklistClassification | null;
+  notes: string;
+  hasNotes: boolean;
+};
+
+type InstitutionalChecklistItem = {
+  id: string;
+  title: string;
+  prompt?: string | null;
+  cells: InstitutionalChecklistCell[];
+};
+
+type InstitutionalChecklistSection = {
+  id: string;
+  title: string;
+  items: InstitutionalChecklistItem[];
+};
+
+type InstitutionalChecklistMission = {
+  id: string;
+  title: string;
+  description?: string | null;
+  startDate: string;
+  endDate: string;
+  updatedAt: string;
+  locality: {
+    id: string;
+    name: string;
+    code?: string | null;
+  };
+  participants: Array<{
+    id: string;
+    name: string;
+    email?: string | null;
+    cpf?: string | null;
+    fabom?: string | null;
+    ldapUid?: string | null;
+  }>;
+  participantsCount: number;
+  scheduleItems: Array<{
+    id: string;
+    title: string;
+    startAt: string;
+    durationMinutes: number;
+    location: string;
+    responsible: string;
+    participants: string;
+  }>;
+  scheduleItemsCount: number;
+  checklistSections: Array<{
+    id: string;
+    title: string;
+    items: Array<{
+      id: string;
+      title: string;
+      prompt?: string | null;
+      classification: InstitutionalChecklistClassification;
+      notes: string;
+    }>;
+  }>;
+};
+
+type InstitutionalChecklistMapping = {
+  generatedAt: string;
+  localities: Array<{
+    id: string;
+    name: string;
+    code?: string | null;
+  }>;
+  sections: InstitutionalChecklistSection[];
+  missionsByLocality: Array<{
+    localityId: string;
+    mission: InstitutionalChecklistMission | null;
+  }>;
+};
+
+type InstitutionalChecklistDetailState = {
+  sectionTitle: string;
+  itemTitle: string;
+  itemPrompt?: string | null;
+  localityName: string;
+  localityCode?: string | null;
+  cell: InstitutionalChecklistCell;
+  mission: InstitutionalChecklistMission | null;
+} | null;
+
+const institutionalChecklistClassificationMeta: Record<
+  InstitutionalChecklistClassification,
+  {
+    label: string;
+    chipLabel: string;
+    color: string;
+    bgColor: string;
+    borderColor: string;
+  }
+> = {
+  FORTE_CONSOLIDADA: {
+    label: 'Dimensão forte/consolidada',
+    chipLabel: 'Forte',
+    color: '#166534',
+    bgColor: '#e8f5e9',
+    borderColor: '#81c784',
+  },
+  OPORTUNIDADE_MELHORIA: {
+    label: 'Dimensão com oportunidades de melhoria',
+    chipLabel: 'Melhoria',
+    color: '#8a5800',
+    bgColor: '#fff8e1',
+    borderColor: '#ffcc80',
+  },
+  NECESSITA_ANALISE: {
+    label: 'Dimensão necessita de maior análise',
+    chipLabel: 'Análise',
+    color: '#334155',
+    bgColor: '#f5f7fa',
+    borderColor: '#cbd5e1',
+  },
+  POSSIVEL_RISCO: {
+    label: 'Possível risco',
+    chipLabel: 'Risco',
+    color: '#b71c1c',
+    bgColor: '#ffebee',
+    borderColor: '#ef9a9a',
+  },
+};
+
 type EditableCardStyle = {
   backgroundColor: string;
   textColor: string;
@@ -192,6 +316,9 @@ export function DashboardNationalPage() {
   const navigate = useNavigate();
   const localityId = params.get('localityId') ?? '';
   const dashboardQuery = useDashboardNational({ localityId: localityId || undefined });
+  const missionChecklistMappingQuery = useMissionChecklistMapping({
+    localityId: localityId || undefined,
+  });
   const canViewLessons =
     hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI, ROLE_COMANDANTE_COMGEP]) &&
     can(me, 'lessons_learned', 'view');
@@ -207,6 +334,8 @@ export function DashboardNationalPage() {
   });
   const [kpiDetail, setKpiDetail] = useState<KpiDetailState>(null);
   const [kpiDetailSearch, setKpiDetailSearch] = useState('');
+  const [institutionalDetail, setInstitutionalDetail] =
+    useState<InstitutionalChecklistDetailState>(null);
 
   const lessons = ((lessonsQuery.data?.items ?? []) as LessonPost[])
     .filter((item) => item?.id)
@@ -231,10 +360,6 @@ export function DashboardNationalPage() {
   if (dashboardQuery.isLoading) return <SkeletonState />;
   if (dashboardQuery.isError) return <ErrorState error={dashboardQuery.error} onRetry={() => dashboardQuery.refetch()} />;
 
-  const items = (dashboardQuery.data?.items ?? []) as NationalLocalityItem[];
-  const smifLocalities = [...items]
-    .sort((a, b) => a.localityName.localeCompare(b.localityName, 'pt-BR'))
-    .slice(0, 8);
   const totals: NationalDashboardTotals = dashboardQuery.data?.totals ?? {
     localities: 0,
     coverageLocalities: 0,
@@ -273,6 +398,17 @@ export function DashboardNationalPage() {
       law: [],
     },
   };
+  const institutionalMapping =
+    (missionChecklistMappingQuery.data as InstitutionalChecklistMapping | undefined) ??
+    null;
+  const institutionalLocalities = institutionalMapping?.localities ?? [];
+  const institutionalSections = institutionalMapping?.sections ?? [];
+  const missionByLocality = new Map<string, InstitutionalChecklistMission | null>(
+    (institutionalMapping?.missionsByLocality ?? []).map((entry) => [
+      entry.localityId,
+      entry.mission,
+    ]),
+  );
   const lessonsPerView = 3;
   const visibleLessons =
     lessons.length <= lessonsPerView
@@ -292,6 +428,33 @@ export function DashboardNationalPage() {
     const parsed = new Date(value);
     if (Number.isNaN(parsed.getTime())) return 'Sem data';
     return parsed.toLocaleDateString('pt-BR');
+  };
+  const formatDateTimePtBr = (value?: string | null) => {
+    if (!value) return 'Sem data';
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return 'Sem data';
+    return parsed.toLocaleString('pt-BR');
+  };
+  const formatMissionPeriod = (startDate?: string, endDate?: string) => {
+    if (!startDate || !endDate) return 'Período não informado';
+    return `${formatDrilldownDate(startDate)} a ${formatDrilldownDate(endDate)}`;
+  };
+  const openInstitutionalDetail = (
+    section: InstitutionalChecklistSection,
+    item: InstitutionalChecklistItem,
+    locality: { id: string; name: string; code?: string | null },
+    cell: InstitutionalChecklistCell,
+  ) => {
+    if (!cell.missionId) return;
+    setInstitutionalDetail({
+      sectionTitle: section.title,
+      itemTitle: item.title,
+      itemPrompt: item.prompt ?? null,
+      localityName: locality.name,
+      localityCode: locality.code ?? null,
+      cell,
+      mission: missionByLocality.get(locality.id) ?? null,
+    });
   };
   const openKpiDetail = (nextDetail: Exclude<KpiDetailState, null>) => {
     setKpiDetail(nextDetail);
@@ -1026,6 +1189,248 @@ export function DashboardNationalPage() {
         })()}
       </Box>
 
+      <Card
+        sx={{
+          mb: 2,
+          borderRadius: 3,
+          border: '1px solid rgba(20,74,102,0.16)',
+          boxShadow: '0 12px 28px rgba(16, 40, 53, 0.12)',
+          overflow: 'hidden',
+        }}
+      >
+        <Box
+          sx={{
+            px: 2.25,
+            py: 1.6,
+            background:
+              'linear-gradient(135deg, rgba(22,76,104,0.96) 0%, rgba(40,116,151,0.95) 100%)',
+            borderBottom: '1px solid rgba(255,255,255,0.16)',
+          }}
+        >
+          <Typography variant="h6" fontWeight={700} sx={{ color: '#F2FBFF' }}>
+            Mapeamento institucional
+          </Typography>
+          <Typography variant="body2" sx={{ color: 'rgba(235, 248, 255, 0.9)' }}>
+            Leitura consolidada por localidade com base no checklist preenchido nas missões.
+          </Typography>
+        </Box>
+        <CardContent sx={{ p: 2 }}>
+          {missionChecklistMappingQuery.isLoading ? (
+            <Typography variant="body2" color="text.secondary">
+              Carregando mapeamento institucional...
+            </Typography>
+          ) : missionChecklistMappingQuery.isError ? (
+            <Typography variant="body2" color="error.main">
+              Não foi possível carregar o mapeamento institucional.
+            </Typography>
+          ) : institutionalSections.length === 0 || institutionalLocalities.length === 0 ? (
+            <Typography variant="body2" color="text.secondary">
+              Nenhum checklist de missão preenchido para exibir no mapeamento institucional.
+            </Typography>
+          ) : (
+            <Stack spacing={1.8}>
+              {institutionalSections.map((section) => (
+                <Card key={section.id} variant="outlined" sx={{ borderRadius: 2.4 }}>
+                  <CardContent sx={{ p: 1.6 }}>
+                    <Typography variant="subtitle1" fontWeight={700} sx={{ color: '#0F3950', mb: 0.8 }}>
+                      {section.title}
+                    </Typography>
+                    <TableContainer
+                      sx={{
+                        border: '1px solid rgba(15, 23, 42, 0.08)',
+                        borderRadius: 2,
+                        maxHeight: 420,
+                      }}
+                    >
+                      <Table size="small" stickyHeader>
+                        <TableHead>
+                          <TableRow>
+                            <TableCell
+                              sx={{
+                                fontWeight: 700,
+                                minWidth: 320,
+                                position: 'sticky',
+                                left: 0,
+                                zIndex: 3,
+                                bgcolor: '#eef6fb',
+                              }}
+                            >
+                              Dimensão
+                            </TableCell>
+                            {institutionalLocalities.map((locality) => (
+                              <TableCell
+                                key={locality.id}
+                                sx={{
+                                  minWidth: 220,
+                                  bgcolor: '#f3f8fc',
+                                }}
+                              >
+                                <Typography variant="subtitle2" fontWeight={700} noWrap>
+                                  {String(locality.code ?? '').trim() || locality.name}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary" noWrap>
+                                  {locality.name}
+                                </Typography>
+                              </TableCell>
+                            ))}
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {section.items.map((item) => (
+                            <TableRow key={item.id} hover>
+                              <TableCell
+                                sx={{
+                                  position: 'sticky',
+                                  left: 0,
+                                  zIndex: 2,
+                                  bgcolor: '#f8fbfe',
+                                  minWidth: 320,
+                                  borderRight: '1px solid rgba(15,23,42,0.06)',
+                                }}
+                              >
+                                <Typography variant="body2" fontWeight={700}>
+                                  {item.title}
+                                </Typography>
+                                {item.prompt ? (
+                                  <Typography
+                                    variant="caption"
+                                    color="text.secondary"
+                                    sx={{ display: 'block', mt: 0.35 }}
+                                  >
+                                    {item.prompt}
+                                  </Typography>
+                                ) : null}
+                              </TableCell>
+                              {institutionalLocalities.map((locality) => {
+                                const cell =
+                                  item.cells.find(
+                                    (currentCell) => currentCell.localityId === locality.id,
+                                  ) ?? {
+                                    localityId: locality.id,
+                                    missionId: null,
+                                    classification: null,
+                                    notes: '',
+                                    hasNotes: false,
+                                  };
+                                const classificationMeta = cell.classification
+                                  ? institutionalChecklistClassificationMeta[cell.classification]
+                                  : null;
+                                const isClickable = Boolean(cell.missionId);
+                                const previewText =
+                                  cell.notes.trim() ||
+                                  (cell.classification
+                                    ? 'Sem observações registradas.'
+                                    : 'Sem preenchimento.');
+
+                                return (
+                                  <TableCell key={`${item.id}-${locality.id}`}>
+                                    <Box
+                                      role={isClickable ? 'button' : undefined}
+                                      tabIndex={isClickable ? 0 : undefined}
+                                      onClick={
+                                        isClickable
+                                          ? () =>
+                                              openInstitutionalDetail(
+                                                section,
+                                                item,
+                                                locality,
+                                                cell,
+                                              )
+                                          : undefined
+                                      }
+                                      onKeyDown={
+                                        isClickable
+                                          ? (event) => {
+                                              if (event.key === 'Enter' || event.key === ' ') {
+                                                event.preventDefault();
+                                                openInstitutionalDetail(
+                                                  section,
+                                                  item,
+                                                  locality,
+                                                  cell,
+                                                );
+                                              }
+                                            }
+                                          : undefined
+                                      }
+                                      sx={{
+                                        p: 1,
+                                        borderRadius: 1.6,
+                                        border: `1px solid ${classificationMeta?.borderColor ?? 'rgba(148,163,184,0.35)'}`,
+                                        backgroundColor:
+                                          classificationMeta?.bgColor ?? '#ffffff',
+                                        cursor: isClickable ? 'pointer' : 'default',
+                                        minHeight: 94,
+                                        transition:
+                                          'transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease',
+                                        '&:hover': isClickable
+                                          ? {
+                                              transform: 'translateY(-1px)',
+                                              boxShadow: '0 6px 16px rgba(18, 42, 56, 0.12)',
+                                              borderColor:
+                                                classificationMeta?.color ?? 'rgba(30,64,175,0.45)',
+                                            }
+                                          : undefined,
+                                        '&:focus-visible': isClickable
+                                          ? {
+                                              outline: '2px solid #0D5B84',
+                                              outlineOffset: '2px',
+                                            }
+                                          : undefined,
+                                      }}
+                                    >
+                                      <Chip
+                                        size="small"
+                                        label={
+                                          classificationMeta
+                                            ? classificationMeta.chipLabel
+                                            : 'Sem registro'
+                                        }
+                                        sx={{
+                                          height: 20,
+                                          mb: 0.8,
+                                          color: classificationMeta?.color ?? '#475569',
+                                          bgcolor: classificationMeta?.bgColor ?? '#f1f5f9',
+                                          border: `1px solid ${classificationMeta?.borderColor ?? '#cbd5e1'}`,
+                                          fontWeight: 700,
+                                        }}
+                                      />
+                                      <Typography
+                                        variant="caption"
+                                        sx={{
+                                          color: '#334155',
+                                          display: '-webkit-box',
+                                          WebkitLineClamp: 3,
+                                          WebkitBoxOrient: 'vertical',
+                                          overflow: 'hidden',
+                                          textOverflow: 'ellipsis',
+                                          minHeight: 42,
+                                        }}
+                                      >
+                                        {previewText}
+                                      </Typography>
+                                      {isClickable ? (
+                                        <Typography variant="caption" sx={{ color: '#0D5B84', mt: 0.5, display: 'block' }}>
+                                          Clique para ver detalhes
+                                        </Typography>
+                                      ) : null}
+                                    </Box>
+                                  </TableCell>
+                                );
+                              })}
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </CardContent>
+                </Card>
+              ))}
+            </Stack>
+          )}
+        </CardContent>
+      </Card>
+
       <Dialog
         open={Boolean(kpiDetail)}
         onClose={() => setKpiDetail(null)}
@@ -1155,6 +1560,293 @@ export function DashboardNationalPage() {
               : 'Ver todas as atividades'}
           </Button>
           <Button onClick={() => setKpiDetail(null)}>Fechar</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(institutionalDetail)}
+        onClose={() => setInstitutionalDetail(null)}
+        fullWidth
+        maxWidth="lg"
+      >
+        <DialogTitle sx={{ pb: 0.6 }}>
+          Mapeamento institucional -{' '}
+          {institutionalDetail
+            ? `${institutionalDetail.localityCode || institutionalDetail.localityName}`
+            : 'Detalhes'}
+        </DialogTitle>
+        <DialogContent dividers>
+          {institutionalDetail ? (
+            <Stack spacing={1.5}>
+              <Card variant="outlined" sx={{ borderRadius: 2 }}>
+                <CardContent sx={{ p: 1.4 }}>
+                  <Stack
+                    direction={{ xs: 'column', md: 'row' }}
+                    spacing={1}
+                    justifyContent="space-between"
+                  >
+                    <Box>
+                      <Typography variant="subtitle2" fontWeight={700}>
+                        {institutionalDetail.sectionTitle}
+                      </Typography>
+                      <Typography variant="body2" fontWeight={700} sx={{ mt: 0.2 }}>
+                        {institutionalDetail.itemTitle}
+                      </Typography>
+                      {institutionalDetail.itemPrompt ? (
+                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.2 }}>
+                          {institutionalDetail.itemPrompt}
+                        </Typography>
+                      ) : null}
+                    </Box>
+                    <Chip
+                      size="small"
+                      label={
+                        institutionalDetail.cell.classification
+                          ? institutionalChecklistClassificationMeta[
+                              institutionalDetail.cell.classification
+                            ].label
+                          : 'Sem classificação'
+                      }
+                      sx={{
+                        alignSelf: { xs: 'flex-start', md: 'center' },
+                        color: institutionalDetail.cell.classification
+                          ? institutionalChecklistClassificationMeta[
+                              institutionalDetail.cell.classification
+                            ].color
+                          : '#475569',
+                        bgcolor: institutionalDetail.cell.classification
+                          ? institutionalChecklistClassificationMeta[
+                              institutionalDetail.cell.classification
+                            ].bgColor
+                          : '#f1f5f9',
+                        border: `1px solid ${
+                          institutionalDetail.cell.classification
+                            ? institutionalChecklistClassificationMeta[
+                                institutionalDetail.cell.classification
+                              ].borderColor
+                            : '#cbd5e1'
+                        }`,
+                        fontWeight: 700,
+                      }}
+                    />
+                  </Stack>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      mt: 1,
+                      p: 1,
+                      borderRadius: 1.2,
+                      backgroundColor: '#f8fbfe',
+                      border: '1px solid rgba(15,23,42,0.08)',
+                      whiteSpace: 'pre-wrap',
+                    }}
+                  >
+                    {institutionalDetail.cell.notes.trim() || 'Sem observações registradas para este item.'}
+                  </Typography>
+                </CardContent>
+              </Card>
+
+              {institutionalDetail.mission ? (
+                <>
+                  <Card variant="outlined" sx={{ borderRadius: 2 }}>
+                    <CardContent sx={{ p: 1.4 }}>
+                      <Typography variant="subtitle1" fontWeight={700}>
+                        Missão relacionada
+                      </Typography>
+                      <Typography variant="h6" sx={{ mt: 0.5 }}>
+                        {institutionalDetail.mission.title}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.4 }}>
+                        {institutionalDetail.mission.description || 'Sem descrição.'}
+                      </Typography>
+                      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 1 }}>
+                        <Chip
+                          size="small"
+                          label={`Período: ${formatMissionPeriod(
+                            institutionalDetail.mission.startDate,
+                            institutionalDetail.mission.endDate,
+                          )}`}
+                        />
+                        <Chip
+                          size="small"
+                          label={`Atualização: ${formatDateTimePtBr(
+                            institutionalDetail.mission.updatedAt,
+                          )}`}
+                        />
+                        <Chip
+                          size="small"
+                          label={`Participantes: ${institutionalDetail.mission.participantsCount}`}
+                        />
+                        <Chip
+                          size="small"
+                          label={`Itens de cronograma: ${institutionalDetail.mission.scheduleItemsCount}`}
+                        />
+                      </Stack>
+                    </CardContent>
+                  </Card>
+
+                  <Card variant="outlined" sx={{ borderRadius: 2 }}>
+                    <CardContent sx={{ p: 1.4 }}>
+                      <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>
+                        Participantes da missão
+                      </Typography>
+                      {institutionalDetail.mission.participants.length === 0 ? (
+                        <Typography variant="body2" color="text.secondary">
+                          Nenhum participante cadastrado.
+                        </Typography>
+                      ) : (
+                        <Stack direction="row" spacing={0.8} useFlexGap flexWrap="wrap">
+                          {institutionalDetail.mission.participants.map((participant) => (
+                            <Chip
+                              key={participant.id}
+                              size="small"
+                              label={`${participant.name || 'Sem nome'}${
+                                participant.email
+                                  ? ` • ${participant.email}`
+                                  : participant.cpf
+                                    ? ` • ${participant.cpf}`
+                                    : ''
+                              }`}
+                            />
+                          ))}
+                        </Stack>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  <Card variant="outlined" sx={{ borderRadius: 2 }}>
+                    <CardContent sx={{ p: 1.4 }}>
+                      <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>
+                        Cronograma da missão
+                      </Typography>
+                      {institutionalDetail.mission.scheduleItems.length === 0 ? (
+                        <Typography variant="body2" color="text.secondary">
+                          Missão sem itens de cronograma.
+                        </Typography>
+                      ) : (
+                        <TableContainer
+                          sx={{
+                            border: '1px solid rgba(15, 23, 42, 0.08)',
+                            borderRadius: 1.5,
+                            maxHeight: 240,
+                          }}
+                        >
+                          <Table size="small" stickyHeader>
+                            <TableHead>
+                              <TableRow>
+                                <TableCell sx={{ fontWeight: 700 }}>Início</TableCell>
+                                <TableCell sx={{ fontWeight: 700 }}>Atividade</TableCell>
+                                <TableCell sx={{ fontWeight: 700 }}>Local</TableCell>
+                                <TableCell sx={{ fontWeight: 700 }}>Responsável</TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {institutionalDetail.mission.scheduleItems.map((item) => (
+                                <TableRow key={item.id} hover>
+                                  <TableCell>{formatDateTimePtBr(item.startAt)}</TableCell>
+                                  <TableCell>
+                                    <Typography variant="body2" fontWeight={600}>
+                                      {item.title}
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary">
+                                      {item.durationMinutes} min
+                                    </Typography>
+                                  </TableCell>
+                                  <TableCell>{item.location || '-'}</TableCell>
+                                  <TableCell>{item.responsible || '-'}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </TableContainer>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  <Card variant="outlined" sx={{ borderRadius: 2 }}>
+                    <CardContent sx={{ p: 1.4 }}>
+                      <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>
+                        Checklist completo da missão
+                      </Typography>
+                      <Stack spacing={1}>
+                        {institutionalDetail.mission.checklistSections.map((section) => (
+                          <Box key={section.id}>
+                            <Typography variant="body2" fontWeight={700} sx={{ mb: 0.5 }}>
+                              {section.title}
+                            </Typography>
+                            <Stack spacing={0.7}>
+                              {section.items.map((item) => {
+                                const meta =
+                                  institutionalChecklistClassificationMeta[
+                                    item.classification
+                                  ];
+                                return (
+                                  <Box
+                                    key={item.id}
+                                    sx={{
+                                      border: `1px solid ${meta.borderColor}`,
+                                      borderRadius: 1.2,
+                                      p: 0.8,
+                                      backgroundColor: meta.bgColor,
+                                    }}
+                                  >
+                                    <Stack
+                                      direction={{ xs: 'column', md: 'row' }}
+                                      justifyContent="space-between"
+                                      spacing={0.8}
+                                    >
+                                      <Typography variant="caption" fontWeight={700}>
+                                        {item.title}
+                                      </Typography>
+                                      <Typography
+                                        variant="caption"
+                                        sx={{ color: meta.color, fontWeight: 700 }}
+                                      >
+                                        {meta.label}
+                                      </Typography>
+                                    </Stack>
+                                    {item.prompt ? (
+                                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.2 }}>
+                                        {item.prompt}
+                                      </Typography>
+                                    ) : null}
+                                    <Typography
+                                      variant="caption"
+                                      sx={{ display: 'block', mt: 0.45, whiteSpace: 'pre-wrap' }}
+                                    >
+                                      {item.notes || 'Sem observações.'}
+                                    </Typography>
+                                  </Box>
+                                );
+                              })}
+                            </Stack>
+                          </Box>
+                        ))}
+                      </Stack>
+                    </CardContent>
+                  </Card>
+                </>
+              ) : (
+                <Typography variant="body2" color="text.secondary">
+                  Não foi encontrada missão com checklist preenchido para esta localidade.
+                </Typography>
+              )}
+            </Stack>
+          ) : null}
+        </DialogContent>
+        <DialogActions>
+          {institutionalDetail?.mission?.id ? (
+            <Button
+              onClick={() => {
+                const next = new URLSearchParams();
+                next.set('missionId', institutionalDetail.mission?.id || '');
+                navigate(`/missions?${next.toString()}`);
+              }}
+            >
+              Abrir missão
+            </Button>
+          ) : null}
+          <Button onClick={() => setInstitutionalDetail(null)}>Fechar</Button>
         </DialogActions>
       </Dialog>
 
