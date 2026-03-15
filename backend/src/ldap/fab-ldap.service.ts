@@ -10,6 +10,7 @@ export type FabLdapProfile = {
   name: string | null;
   email: string | null;
   fabom: string | null;
+  numeroOrdem: string | null;
 };
 
 type LdapEntry = Record<string, unknown> & { dn?: string };
@@ -37,6 +38,7 @@ export class FabLdapService {
         name: null,
         email: null,
         fabom: null,
+        numeroOrdem: null,
       };
     } catch (error) {
       this.handleLdapError(error, { invalidCredentials: true });
@@ -64,7 +66,9 @@ export class FabLdapService {
   }
 
   async lookupByEmail(email: string): Promise<FabLdapProfile | null> {
-    const normalizedEmail = String(email ?? '').trim().toLowerCase();
+    const normalizedEmail = String(email ?? '')
+      .trim()
+      .toLowerCase();
     if (!normalizedEmail) {
       throwError('VALIDATION_ERROR', { reason: 'LDAP_EMAIL_REQUIRED' });
     }
@@ -77,7 +81,18 @@ export class FabLdapService {
       const { searchEntries } = await client.search(this.getBaseDn(), {
         scope: 'sub',
         filter,
-        attributes: ['uid', 'cn', 'displayName', 'mail', 'fabom', 'givenName', 'sn'],
+        attributes: [
+          'uid',
+          'cn',
+          'displayName',
+          'mail',
+          'FABom',
+          'fabom',
+          'FABnrordem',
+          'fabnrordem',
+          'givenName',
+          'sn',
+        ],
       });
       if (!searchEntries.length) return null;
       return this.mapEntry(searchEntries[0] as LdapEntry, normalizedEmail);
@@ -98,19 +113,35 @@ export class FabLdapService {
 
   private async bindForLookup(client: Client) {
     const bindDn = this.config.get<string>('LDAP_FAB_BIND_DN')?.trim();
-    const bindPassword = this.config.get<string>('LDAP_FAB_BIND_PASSWORD')?.trim();
+    const bindPassword = this.config
+      .get<string>('LDAP_FAB_BIND_PASSWORD')
+      ?.trim();
 
     if (bindDn && bindPassword) {
       await client.bind(bindDn, bindPassword);
     }
   }
 
-  private async searchByUid(client: Client, uid: string): Promise<FabLdapProfile | null> {
+  private async searchByUid(
+    client: Client,
+    uid: string,
+  ): Promise<FabLdapProfile | null> {
     const filter = `(uid=${this.escapeFilterValue(uid)})`;
     const { searchEntries } = await client.search(this.getBaseDn(), {
       scope: 'sub',
       filter,
-      attributes: ['uid', 'cn', 'displayName', 'mail', 'fabom', 'givenName', 'sn'],
+      attributes: [
+        'uid',
+        'cn',
+        'displayName',
+        'mail',
+        'FABom',
+        'fabom',
+        'FABnrordem',
+        'fabnrordem',
+        'givenName',
+        'sn',
+      ],
     });
 
     if (!searchEntries.length) {
@@ -122,7 +153,11 @@ export class FabLdapService {
 
   private mapEntry(entry: LdapEntry, fallbackUid: string): FabLdapProfile {
     const uid = this.readAttribute(entry, 'uid') ?? fallbackUid;
-    const fabom = this.readAttribute(entry, 'fabom');
+    const fabom = this.readFirstAvailableAttribute(entry, ['FABom', 'fabom']);
+    const numeroOrdem = this.readFirstAvailableAttribute(entry, [
+      'FABnrordem',
+      'fabnrordem',
+    ]);
     const givenName = this.readAttribute(entry, 'givenName');
     const surname = this.readAttribute(entry, 'sn');
     const composedName = [givenName, surname].filter(Boolean).join(' ').trim();
@@ -133,15 +168,30 @@ export class FabLdapService {
 
     return {
       uid,
-      dn: typeof entry.dn === 'string' && entry.dn.trim() ? entry.dn : this.buildUserDn(uid),
+      dn:
+        typeof entry.dn === 'string' && entry.dn.trim()
+          ? entry.dn
+          : this.buildUserDn(uid),
       name: stripOmSuffixFromLdapName(rawName, fabom) || null,
       email: this.readAttribute(entry, 'mail')?.toLowerCase() ?? null,
       fabom,
+      numeroOrdem,
     };
   }
 
+  private readFirstAvailableAttribute(
+    entry: LdapEntry,
+    attributes: string[],
+  ): string | null {
+    for (const attribute of attributes) {
+      const value = this.readAttribute(entry, attribute);
+      if (value) return value;
+    }
+    return null;
+  }
+
   private readAttribute(entry: LdapEntry, attribute: string): string | null {
-    const value = entry[attribute];
+    const value = this.readEntryValue(entry, attribute);
 
     if (typeof value === 'string') {
       const trimmed = value.trim();
@@ -168,6 +218,17 @@ export class FabLdapService {
     return null;
   }
 
+  private readEntryValue(entry: LdapEntry, attribute: string): unknown {
+    if (attribute in entry) {
+      return entry[attribute];
+    }
+    const target = attribute.toLowerCase();
+    const matchingKey = Object.keys(entry).find(
+      (key) => key.toLowerCase() === target,
+    );
+    return matchingKey ? entry[matchingKey] : undefined;
+  }
+
   private normalizeUid(uid: string) {
     return String(uid ?? '').trim();
   }
@@ -177,11 +238,17 @@ export class FabLdapService {
   }
 
   private getLdapUrl() {
-    return this.config.get<string>('LDAP_FAB_URL')?.trim() || 'ldap://10.228.64.168:389';
+    return (
+      this.config.get<string>('LDAP_FAB_URL')?.trim() ||
+      'ldap://10.228.64.168:389'
+    );
   }
 
   private getBaseDn() {
-    return this.config.get<string>('LDAP_FAB_BASE_DN')?.trim() || 'ou=contas,dc=fab,dc=intraer';
+    return (
+      this.config.get<string>('LDAP_FAB_BASE_DN')?.trim() ||
+      'ou=contas,dc=fab,dc=intraer'
+    );
   }
 
   private escapeFilterValue(value: string) {
@@ -193,7 +260,10 @@ export class FabLdapService {
       .replace(/\u0000/g, '\\00');
   }
 
-  private handleLdapError(error: unknown, options: { invalidCredentials: boolean }): never {
+  private handleLdapError(
+    error: unknown,
+    options: { invalidCredentials: boolean },
+  ): never {
     if (this.isConnectivityError(error)) {
       throwError('VALIDATION_ERROR', {
         reason: 'LDAP_UNREACHABLE',

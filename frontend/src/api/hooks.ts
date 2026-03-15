@@ -10,6 +10,28 @@ export function useMe() {
   });
 }
 
+export function useMyFabProfile() {
+  return useQuery({
+    queryKey: qk.myFabProfile,
+    queryFn: async () => (await api.get("/auth/me/fab-profile")).data,
+    staleTime: 60_000,
+    retry: false,
+  });
+}
+
+export function useSigpesPhoto(numeroOrdem: string | null | undefined) {
+  const normalizedNumeroOrdem = String(numeroOrdem ?? "").trim();
+  return useQuery({
+    queryKey: qk.sigpesPhoto(normalizedNumeroOrdem),
+    queryFn: async () =>
+      (await api.get(`/auth/fotoes/${encodeURIComponent(normalizedNumeroOrdem)}`))
+        .data,
+    enabled: Boolean(normalizedNumeroOrdem),
+    staleTime: 15 * 60_000,
+    retry: 1,
+  });
+}
+
 export function useLogin() {
   return useMutation({
     mutationFn: async (args: { login: string; password: string }) =>

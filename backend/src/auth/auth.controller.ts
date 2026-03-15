@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { Request } from 'express';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
@@ -31,5 +39,17 @@ export class AuthController {
       ? String(activeRoleHeader[0] ?? '').trim()
       : String(activeRoleHeader ?? '').trim();
     return this.auth.me(req.user?.userId ?? '', activeRoleId || undefined);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('me/fab-profile')
+  meFabProfile(@Req() req: Request & { user?: { userId: string } }) {
+    return this.auth.meFabProfile(req.user?.userId ?? '');
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('fotoes/:numeroOrdem')
+  getSigpesPhoto(@Param('numeroOrdem') numeroOrdem: string) {
+    return this.auth.getSigpesPhotoByOrder(numeroOrdem);
   }
 }

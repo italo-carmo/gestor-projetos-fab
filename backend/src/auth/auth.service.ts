@@ -11,6 +11,7 @@ import { RbacService } from '../rbac/rbac.service';
 import { FabLdapService } from '../ldap/fab-ldap.service';
 
 const REFRESH_TOKEN_SALT_ROUNDS = 10;
+const SIGPES_FOTO_TIMEOUT_MS = 8_000;
 
 @Injectable()
 export class AuthService {
@@ -61,9 +62,15 @@ export class AuthService {
       throwError('RBAC_FORBIDDEN');
     }
 
-    const tokens = await this.issueTokens(refreshedUser.id, refreshedUser.email);
+    const tokens = await this.issueTokens(
+      refreshedUser.id,
+      refreshedUser.email,
+    );
     const role = refreshedUser.roles[0]?.role
-      ? { id: refreshedUser.roles[0].role.id, name: refreshedUser.roles[0].role.name }
+      ? {
+          id: refreshedUser.roles[0].role.id,
+          name: refreshedUser.roles[0].role.name,
+        }
       : null;
 
     await this.audit.log({
@@ -132,13 +139,19 @@ export class AuthService {
       select: { id: true },
     });
 
-    const refreshPayload: JwtRefreshPayload = { sub: stored.userId, jti: newRefreshId.id };
+    const refreshPayload: JwtRefreshPayload = {
+      sub: stored.userId,
+      jti: newRefreshId.id,
+    };
     const newRefreshToken = await this.jwt.signAsync(refreshPayload, {
       secret: this.config.get<string>('JWT_REFRESH_SECRET'),
       expiresIn: this.config.get<string>('JWT_REFRESH_TTL') ?? '7d',
     } as any);
 
-    const tokenHash = await bcrypt.hash(newRefreshToken, REFRESH_TOKEN_SALT_ROUNDS);
+    const tokenHash = await bcrypt.hash(
+      newRefreshToken,
+      REFRESH_TOKEN_SALT_ROUNDS,
+    );
     await this.prisma.refreshToken.update({
       where: { id: newRefreshId.id },
       data: { tokenHash },
@@ -180,6 +193,95 @@ export class AuthService {
     };
   }
 
+  async meFabProfile(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, ldapUid: true, email: true },
+    });
+    if (!user) {
+      throwError('RBAC_FORBIDDEN');
+    }
+
+    let profile: Awaited<ReturnType<FabLdapService['lookupByUid']>> | null =
+      null;
+    try {
+      profile = await this.resolveFabProfileForUser({
+        ldapUid: user.ldapUid,
+        email: user.email,
+      });
+    } catch {
+      profile = null;
+    }
+
+    return {
+      uid: profile?.uid ?? user.ldapUid ?? null,
+      fabom: profile?.fabom ?? null,
+      numeroOrdem: profile?.numeroOrdem ?? null,
+    };
+  }
+
+  async getSigpesPhotoByOrder(numeroOrdem: string) {
+    const normalizedNumeroOrdem = this.normalizeNumeroOrdem(numeroOrdem);
+    if (!normalizedNumeroOrdem) {
+      throwError('VALIDATION_ERROR', { reason: 'NUMERO_ORDEM_REQUIRED' });
+    }
+
+    const apiBaseUrl = this.getSigpesFotoApiBaseUrl();
+    const endpoint = `${apiBaseUrl}/${encodeURIComponent(normalizedNumeroOrdem)}`;
+
+    let response: Response;
+    try {
+      response = await fetch(endpoint, {
+        method: 'GET',
+        signal: AbortSignal.timeout(SIGPES_FOTO_TIMEOUT_MS),
+      });
+    } catch (error) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'SIGPES_FOTO_API_UNREACHABLE',
+        message: this.stringifyError(error),
+      });
+    }
+
+    if (!response.ok) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'SIGPES_FOTO_API_ERROR',
+        status: response.status,
+      });
+    }
+
+    let payload: any;
+    try {
+      payload = await response.json();
+    } catch (error) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'SIGPES_FOTO_INVALID_RESPONSE',
+        message: this.stringifyError(error),
+      });
+    }
+
+    const mimeType = String(payload?.tpArq ?? '').trim() || 'image/jpeg';
+    const fileName = String(payload?.txNomeArq ?? '').trim() || null;
+    const base64 = this.normalizeBase64(String(payload?.imFoto ?? ''));
+
+    if (!base64) {
+      return {
+        numeroOrdem: normalizedNumeroOrdem,
+        mimeType: null,
+        fileName,
+        base64: null,
+        dataUrl: null,
+      };
+    }
+
+    return {
+      numeroOrdem: normalizedNumeroOrdem,
+      mimeType,
+      fileName,
+      base64,
+      dataUrl: `data:${mimeType};base64,${base64}`,
+    };
+  }
+
   private async issueTokens(userId: string, email: string) {
     const accessPayload: JwtPayload = { sub: userId, email };
     const accessToken = await this.jwt.signAsync(accessPayload, {
@@ -196,13 +298,19 @@ export class AuthService {
       select: { id: true },
     });
 
-    const refreshPayload: JwtRefreshPayload = { sub: userId, jti: refreshId.id };
+    const refreshPayload: JwtRefreshPayload = {
+      sub: userId,
+      jti: refreshId.id,
+    };
     const refreshToken = await this.jwt.signAsync(refreshPayload, {
       secret: this.config.get<string>('JWT_REFRESH_SECRET'),
       expiresIn: this.config.get<string>('JWT_REFRESH_TTL') ?? '7d',
     } as any);
 
-    const tokenHash = await bcrypt.hash(refreshToken, REFRESH_TOKEN_SALT_ROUNDS);
+    const tokenHash = await bcrypt.hash(
+      refreshToken,
+      REFRESH_TOKEN_SALT_ROUNDS,
+    );
     await this.prisma.refreshToken.update({
       where: { id: refreshId.id },
       data: { tokenHash },
@@ -226,7 +334,48 @@ export class AuthService {
     return value * multipliers[unit];
   }
 
-  private async registerFailedLogin(userId: string, currentFailedCount: number) {
+  private async resolveFabProfileForUser(params: {
+    ldapUid: string | null;
+    email: string;
+  }) {
+    const normalizedUid = String(params.ldapUid ?? '').trim();
+    if (normalizedUid) {
+      const byUid = await this.fabLdap.lookupByUid(normalizedUid);
+      if (byUid) return byUid;
+    }
+
+    const normalizedEmail = String(params.email ?? '')
+      .trim()
+      .toLowerCase();
+    if (!normalizedEmail) return null;
+    return this.fabLdap.lookupByEmail(normalizedEmail);
+  }
+
+  private normalizeNumeroOrdem(value: string) {
+    const raw = String(value ?? '').trim();
+    const digits = raw.replace(/\D/g, '');
+    return digits || raw;
+  }
+
+  private getSigpesFotoApiBaseUrl() {
+    const configured = this.config
+      .get<string>('SIGPES_FOTO_API_BASE_URL')
+      ?.trim();
+    const baseUrl =
+      configured && configured.length > 0
+        ? configured
+        : 'http://api.servicos.ccarj.intraer/sigpesApi/fotoes';
+    return baseUrl.replace(/\/+$/, '');
+  }
+
+  private normalizeBase64(value: string) {
+    return String(value ?? '').replace(/\s+/g, '');
+  }
+
+  private async registerFailedLogin(
+    userId: string,
+    currentFailedCount: number,
+  ) {
     const nextCount = currentFailedCount + 1;
     const shouldLock = nextCount >= 5;
     await this.prisma.user.update({
@@ -290,5 +439,12 @@ export class AuthService {
       return typeof code === 'string' ? code : null;
     }
     return null;
+  }
+
+  private stringifyError(error: unknown) {
+    if (error instanceof Error) {
+      return error.message;
+    }
+    return String(error ?? '');
   }
 }

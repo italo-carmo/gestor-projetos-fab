@@ -1,5 +1,8 @@
 export const qk = {
   me: ["auth","me"] as const,
+  myFabProfile: ["auth", "me", "fab-profile"] as const,
+  sigpesPhoto: (numeroOrdem: string) =>
+    ["auth", "sigpesPhoto", numeroOrdem] as const,
   tasks: (filters: Record<string, any>) => ["tasks", filters] as const,
   taskAssignees: (localityId: string) => ["taskAssignees", localityId] as const,
   taskComments: (taskId: string) => ["taskComments", taskId] as const,

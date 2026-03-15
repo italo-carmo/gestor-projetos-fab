@@ -59,7 +59,13 @@ import {
   ROLE_COORDENACAO_CIPAVD,
   ROLE_TI,
 } from "../app/roleAccess";
-import { useLocalities, useMe, useSearch } from "../api/hooks";
+import {
+  useLocalities,
+  useMe,
+  useMyFabProfile,
+  useSearch,
+  useSigpesPhoto,
+} from "../api/hooks";
 import {
   ACTIVE_ROLE_STORAGE_KEY,
   GLOBAL_LOCALITY_STORAGE_KEY,
@@ -146,6 +152,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   const searchQuery = useSearch(debounced);
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const { data: me } = useMe();
+  const fabProfileQuery = useMyFabProfile();
+  const numeroOrdem = String(fabProfileQuery.data?.numeroOrdem ?? "").trim();
+  const sigpesPhotoQuery = useSigpesPhoto(numeroOrdem);
+  const userPhotoDataUrl = String(sigpesPhotoQuery.data?.dataUrl ?? "").trim();
   const localitiesQuery = useLocalities();
   const roleOptions = useMemo(() => {
     const optionsByKey = new Map<
@@ -885,6 +895,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             }}
           >
             <Avatar
+              src={userPhotoDataUrl || undefined}
               sx={{
                 width: 32,
                 height: 32,
