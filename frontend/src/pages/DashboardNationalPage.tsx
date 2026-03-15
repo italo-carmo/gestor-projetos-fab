@@ -4,6 +4,7 @@ import {
   Card,
   CardContent,
   Chip,
+  Collapse,
   Dialog,
   DialogActions,
   DialogContent,
@@ -358,6 +359,7 @@ export function DashboardNationalPage() {
   const [kpiDetailSearch, setKpiDetailSearch] = useState('');
   const [institutionalDetail, setInstitutionalDetail] =
     useState<InstitutionalChecklistDetailState>(null);
+  const [institutionalScheduleExpanded, setInstitutionalScheduleExpanded] = useState(false);
 
   const lessons = ((lessonsQuery.data?.items ?? []) as LessonPost[])
     .filter((item) => item?.id)
@@ -378,6 +380,10 @@ export function DashboardNationalPage() {
     }, 3800);
     return () => window.clearInterval(timer);
   }, [lessons.length]);
+
+  useEffect(() => {
+    setInstitutionalScheduleExpanded(false);
+  }, [institutionalDetail?.mission?.id]);
 
   if (dashboardQuery.isLoading) return <SkeletonState />;
   if (dashboardQuery.isError) return <ErrorState error={dashboardQuery.error} onRetry={() => dashboardQuery.refetch()} />;
@@ -1410,7 +1416,7 @@ export function DashboardNationalPage() {
                         bgcolor: '#eaf4fa',
                         py: 0.6,
                         px: 0.7,
-                        fontSize: '0.68rem',
+                        fontSize: '0.7rem',
                         zIndex: 3,
                       }}
                     >
@@ -1428,7 +1434,7 @@ export function DashboardNationalPage() {
                           zIndex: 3,
                         }}
                       >
-                        <Typography variant="caption" sx={{ display: 'block', fontWeight: 800, lineHeight: 1.1, fontSize: '0.65rem' }} noWrap>
+                        <Typography variant="caption" sx={{ display: 'block', fontWeight: 800, lineHeight: 1.08, fontSize: '0.68rem' }} noWrap>
                           {String(locality.code ?? '').trim() || locality.name}
                         </Typography>
                       </TableCell>
@@ -1452,7 +1458,7 @@ export function DashboardNationalPage() {
                           py: 0.1,
                           px: 0.7,
                           fontWeight: 700,
-                          fontSize: '0.61rem',
+                          fontSize: '0.63rem',
                           letterSpacing: 0.22,
                           textTransform: 'uppercase',
                           color: sectionMeta.color,
@@ -1478,37 +1484,54 @@ export function DashboardNationalPage() {
                             width: `${INSTITUTIONAL_DESCRIPTION_COLUMN_WIDTH}px`,
                             minWidth: `${INSTITUTIONAL_DESCRIPTION_COLUMN_WIDTH}px`,
                             borderRight: '1px solid rgba(15,23,42,0.06)',
-                            py: 0.2,
-                            px: 0.45,
-                            verticalAlign: 'top',
+                            py: 0.18,
+                            px: 0.4,
+                            verticalAlign: 'middle',
                           }}
                         >
-                          {section.id === 'analise_riscos' && item.prompt ? (
-                            <Tooltip
-                              arrow
-                              placement="top-start"
-                              title={
-                                <Typography sx={{ fontSize: '0.72rem', lineHeight: 1.25 }}>
-                                  {item.prompt}
+                          <Box
+                            sx={{
+                              minHeight: 32,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'flex-start',
+                            }}
+                          >
+                            {section.id === 'analise_riscos' && item.prompt ? (
+                              <Tooltip
+                                arrow
+                                placement="top-start"
+                                title={
+                                  <Typography sx={{ fontSize: '0.72rem', lineHeight: 1.25 }}>
+                                    {item.prompt}
+                                  </Typography>
+                                }
+                              >
+                                <Typography
+                                  sx={{
+                                    fontWeight: 700,
+                                    fontSize: '0.66rem',
+                                    lineHeight: 1.06,
+                                    cursor: 'help',
+                                    textAlign: 'left',
+                                  }}
+                                >
+                                  {item.title}
                                 </Typography>
-                              }
-                            >
+                              </Tooltip>
+                            ) : (
                               <Typography
                                 sx={{
                                   fontWeight: 700,
-                                  fontSize: '0.62rem',
-                                  lineHeight: 1.12,
-                                  cursor: 'help',
+                                  fontSize: '0.66rem',
+                                  lineHeight: 1.06,
+                                  textAlign: 'left',
                                 }}
                               >
                                 {item.title}
                               </Typography>
-                            </Tooltip>
-                          ) : (
-                            <Typography sx={{ fontWeight: 700, fontSize: '0.62rem', lineHeight: 1.12 }}>
-                              {item.title}
-                            </Typography>
-                          )}
+                            )}
+                          </Box>
                         </TableCell>
                         {institutionalLocalities.map((locality) => {
                           const cell =
@@ -1532,7 +1555,10 @@ export function DashboardNationalPage() {
                               : 'Sem preenchimento.');
 
                           return (
-                            <TableCell key={`${item.id}-${locality.id}`} sx={{ py: 0.14, px: 0.22 }}>
+                            <TableCell
+                              key={`${item.id}-${locality.id}`}
+                              sx={{ py: 0.12, px: 0.2, verticalAlign: 'middle' }}
+                            >
                               <Box
                                 role={isClickable ? 'button' : undefined}
                                 tabIndex={isClickable ? 0 : undefined}
@@ -1563,12 +1589,15 @@ export function DashboardNationalPage() {
                                     : undefined
                                 }
                                 sx={{
-                                  p: 0.28,
+                                  p: 0.22,
                                   borderRadius: 0.8,
                                   border: `1px solid ${classificationMeta?.borderColor ?? 'rgba(148,163,184,0.35)'}`,
                                   backgroundColor: classificationMeta?.bgColor ?? '#ffffff',
                                   cursor: isClickable ? 'pointer' : 'default',
-                                  minHeight: 34,
+                                  minHeight: 32,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'flex-start',
                                   transition:
                                     'transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease',
                                   '&:hover': isClickable
@@ -1595,8 +1624,9 @@ export function DashboardNationalPage() {
                                     WebkitBoxOrient: 'vertical',
                                     overflow: 'hidden',
                                     textOverflow: 'ellipsis',
-                                    fontSize: '0.54rem',
-                                    lineHeight: 1.1,
+                                    fontSize: '0.58rem',
+                                    lineHeight: 1.02,
+                                    textAlign: 'left',
                                   }}
                                 >
                                   {previewText}
@@ -1901,49 +1931,72 @@ export function DashboardNationalPage() {
 
                   <Card variant="outlined" sx={{ borderRadius: 2 }}>
                     <CardContent sx={{ p: 1.4 }}>
-                      <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>
-                        Cronograma da missão
-                      </Typography>
+                      <Stack
+                        direction={{ xs: 'column', sm: 'row' }}
+                        spacing={1}
+                        justifyContent="space-between"
+                        alignItems={{ xs: 'stretch', sm: 'center' }}
+                        sx={{ mb: institutionalScheduleExpanded ? 1 : 0 }}
+                      >
+                        <Typography variant="subtitle2" fontWeight={700}>
+                          Cronograma da missão
+                        </Typography>
+                        {institutionalDetail.mission.scheduleItems.length > 0 ? (
+                          <Button
+                            size="small"
+                            variant={institutionalScheduleExpanded ? 'outlined' : 'contained'}
+                            onClick={() =>
+                              setInstitutionalScheduleExpanded((current) => !current)
+                            }
+                          >
+                            {institutionalScheduleExpanded
+                              ? 'Ocultar cronograma'
+                              : 'Ver cronograma'}
+                          </Button>
+                        ) : null}
+                      </Stack>
                       {institutionalDetail.mission.scheduleItems.length === 0 ? (
                         <Typography variant="body2" color="text.secondary">
                           Missão sem itens de cronograma.
                         </Typography>
                       ) : (
-                        <TableContainer
-                          sx={{
-                            border: '1px solid rgba(15, 23, 42, 0.08)',
-                            borderRadius: 1.5,
-                            maxHeight: 240,
-                          }}
-                        >
-                          <Table size="small" stickyHeader>
-                            <TableHead>
-                              <TableRow>
-                                <TableCell sx={{ fontWeight: 700 }}>Início</TableCell>
-                                <TableCell sx={{ fontWeight: 700 }}>Atividade</TableCell>
-                                <TableCell sx={{ fontWeight: 700 }}>Local</TableCell>
-                                <TableCell sx={{ fontWeight: 700 }}>Responsável</TableCell>
-                              </TableRow>
-                            </TableHead>
-                            <TableBody>
-                              {institutionalDetail.mission.scheduleItems.map((item) => (
-                                <TableRow key={item.id} hover>
-                                  <TableCell>{formatDateTimePtBr(item.startAt)}</TableCell>
-                                  <TableCell>
-                                    <Typography variant="body2" fontWeight={600}>
-                                      {item.title}
-                                    </Typography>
-                                    <Typography variant="caption" color="text.secondary">
-                                      {item.durationMinutes} min
-                                    </Typography>
-                                  </TableCell>
-                                  <TableCell>{item.location || '-'}</TableCell>
-                                  <TableCell>{item.responsible || '-'}</TableCell>
+                        <Collapse in={institutionalScheduleExpanded} timeout="auto" unmountOnExit>
+                          <TableContainer
+                            sx={{
+                              border: '1px solid rgba(15, 23, 42, 0.08)',
+                              borderRadius: 1.5,
+                              overflowY: 'visible',
+                            }}
+                          >
+                            <Table size="small">
+                              <TableHead>
+                                <TableRow>
+                                  <TableCell sx={{ fontWeight: 700 }}>Início</TableCell>
+                                  <TableCell sx={{ fontWeight: 700 }}>Atividade</TableCell>
+                                  <TableCell sx={{ fontWeight: 700 }}>Local</TableCell>
+                                  <TableCell sx={{ fontWeight: 700 }}>Responsável</TableCell>
                                 </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </TableContainer>
+                              </TableHead>
+                              <TableBody>
+                                {institutionalDetail.mission.scheduleItems.map((item) => (
+                                  <TableRow key={item.id} hover>
+                                    <TableCell>{formatDateTimePtBr(item.startAt)}</TableCell>
+                                    <TableCell>
+                                      <Typography variant="body2" fontWeight={600}>
+                                        {item.title}
+                                      </Typography>
+                                      <Typography variant="caption" color="text.secondary">
+                                        {item.durationMinutes} min
+                                      </Typography>
+                                    </TableCell>
+                                    <TableCell>{item.location || '-'}</TableCell>
+                                    <TableCell>{item.responsible || '-'}</TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </TableContainer>
+                        </Collapse>
                       )}
                     </CardContent>
                   </Card>
