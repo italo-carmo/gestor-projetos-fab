@@ -279,12 +279,12 @@ const institutionalChecklistClassificationMeta: Record<
   NECESSITA_ANALISE: {
     label: 'Dimensão necessita de maior análise',
     chipLabel: 'Análise',
-    color: '#334155',
-    bgColor: '#f5f7fa',
+    color: '#475569',
+    bgColor: '#ffffff',
     borderColor: '#cbd5e1',
   },
   POSSIVEL_RISCO: {
-    label: 'Possível risco',
+    label: 'Possível Risco',
     chipLabel: 'Risco',
     color: '#b71c1c',
     bgColor: '#ffebee',
@@ -298,8 +298,8 @@ type EditableCardStyle = {
 };
 
 const SMIF_CARD_STYLES_STORAGE_KEY = 'smif-card-styles-v1';
-const INSTITUTIONAL_DESCRIPTION_COLUMN_WIDTH = 340;
-const INSTITUTIONAL_LOCALITY_COLUMN_WIDTH = 220;
+const INSTITUTIONAL_DESCRIPTION_COLUMN_WIDTH = 230;
+const INSTITUTIONAL_LOCALITY_COLUMN_WIDTH = 150;
 
 function loadSmifCardStyles(): Record<string, EditableCardStyle> {
   try {
@@ -408,6 +408,22 @@ export function DashboardNationalPage() {
   const institutionalTableWidth =
     INSTITUTIONAL_DESCRIPTION_COLUMN_WIDTH +
     institutionalLocalities.length * INSTITUTIONAL_LOCALITY_COLUMN_WIDTH;
+  const institutionalTotalColumns = institutionalLocalities.length + 1;
+  const institutionalLegendItems: Array<{
+    key: InstitutionalChecklistClassification;
+    label: string;
+  }> = [
+    { key: 'FORTE_CONSOLIDADA', label: 'Dimensão forte/consolidada (verde)' },
+    {
+      key: 'OPORTUNIDADE_MELHORIA',
+      label: 'Dimensão com oportunidades de melhoria (amarelo)',
+    },
+    {
+      key: 'NECESSITA_ANALISE',
+      label: 'Dimensão necessita de maior análise (sem cor)',
+    },
+    { key: 'POSSIVEL_RISCO', label: 'Possível Risco (vermelho)' },
+  ];
   const missionByLocality = new Map<string, InstitutionalChecklistMission | null>(
     (institutionalMapping?.missionsByLocality ?? []).map((entry) => [
       entry.localityId,
@@ -1234,7 +1250,7 @@ export function DashboardNationalPage() {
             Mapeamento institucional
           </Typography>
           <Typography variant="body2" sx={{ color: 'rgba(235, 248, 255, 0.9)' }}>
-            Leitura consolidada por localidade com base no checklist preenchido nas missões.
+            Leitura consolidada por OM com base no checklist preenchido nas missões.
           </Typography>
         </Box>
         <CardContent sx={{ p: 2, maxWidth: '100%', minWidth: 0, overflowX: 'hidden' }}>
@@ -1251,231 +1267,325 @@ export function DashboardNationalPage() {
               Nenhum checklist de missão preenchido para exibir no mapeamento institucional.
             </Typography>
           ) : (
-            <Stack spacing={1.8} sx={{ minWidth: 0 }}>
-              {institutionalSections.map((section) => (
-                <Card
-                  key={section.id}
-                  variant="outlined"
+            <Stack spacing={1.05} sx={{ minWidth: 0 }}>
+              <Box
+                sx={{
+                  p: 1,
+                  borderRadius: 2,
+                  border: '1px solid rgba(22,76,104,0.14)',
+                  background:
+                    'linear-gradient(135deg, rgba(245,252,255,0.95) 0%, rgba(251,254,255,0.95) 100%)',
+                }}
+              >
+                <Typography
                   sx={{
-                    borderRadius: 2.4,
-                    minWidth: 0,
-                    maxWidth: '100%',
-                    overflowX: 'hidden',
+                    fontSize: '0.72rem',
+                    fontWeight: 800,
+                    color: '#164c68',
+                    mb: 0.7,
+                    letterSpacing: 0.2,
+                    textTransform: 'uppercase',
                   }}
                 >
-                  <CardContent sx={{ p: 1.6, minWidth: 0, maxWidth: '100%', overflowX: 'hidden' }}>
-                    <Typography variant="subtitle1" fontWeight={700} sx={{ color: '#0F3950', mb: 0.8 }}>
-                      {section.title}
-                    </Typography>
-                    <TableContainer
-                      sx={{
-                        border: '1px solid rgba(15, 23, 42, 0.08)',
-                        borderRadius: 2,
-                        width: '100%',
-                        maxWidth: '100%',
-                        minWidth: 0,
-                        display: 'block',
-                        overflowX: 'auto',
-                        overflowY: 'visible',
-                      }}
-                    >
-                      <Table
-                        size="small"
+                  Legenda de classificação
+                </Typography>
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gap: 0.55,
+                    gridTemplateColumns: {
+                      xs: '1fr',
+                      md: 'repeat(2, minmax(0, 1fr))',
+                    },
+                  }}
+                >
+                  {institutionalLegendItems.map((legendItem) => {
+                    const legendMeta =
+                      institutionalChecklistClassificationMeta[legendItem.key];
+                    return (
+                      <Box
+                        key={legendItem.key}
                         sx={{
-                          width: `${institutionalTableWidth}px`,
-                          minWidth: '100%',
-                          tableLayout: 'fixed',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 0.55,
+                          minWidth: 0,
+                          px: 0.7,
+                          py: 0.48,
+                          borderRadius: 1.25,
+                          border: `1px solid ${legendMeta.borderColor}`,
+                          bgcolor:
+                            legendItem.key === 'NECESSITA_ANALISE'
+                              ? '#ffffff'
+                              : legendMeta.bgColor,
                         }}
                       >
-                        <colgroup>
-                          <col style={{ width: `${INSTITUTIONAL_DESCRIPTION_COLUMN_WIDTH}px` }} />
-                          {institutionalLocalities.map((locality) => (
-                            <col
-                              key={`column-${section.id}-${locality.id}`}
-                              style={{ width: `${INSTITUTIONAL_LOCALITY_COLUMN_WIDTH}px` }}
-                            />
-                          ))}
-                        </colgroup>
-                        <TableHead>
-                          <TableRow>
-                            <TableCell
+                        <Box
+                          sx={{
+                            width: 10,
+                            height: 10,
+                            borderRadius: '50%',
+                            bgcolor:
+                              legendItem.key === 'NECESSITA_ANALISE'
+                                ? '#ffffff'
+                                : legendMeta.color,
+                            border: `1px solid ${legendMeta.borderColor}`,
+                            flexShrink: 0,
+                          }}
+                        />
+                        <Typography
+                          sx={{
+                            fontSize: '0.67rem',
+                            lineHeight: 1.15,
+                            color: '#244459',
+                            fontWeight: 700,
+                          }}
+                        >
+                          {legendItem.label}
+                        </Typography>
+                      </Box>
+                    );
+                  })}
+                </Box>
+              </Box>
+              <TableContainer
+                sx={{
+                  border: '1px solid rgba(15, 23, 42, 0.08)',
+                  borderRadius: 2,
+                  width: '100%',
+                  maxWidth: '100%',
+                  minWidth: 0,
+                  display: 'block',
+                  overflowX: 'auto',
+                  overflowY: 'auto',
+                  maxHeight: { xs: '64vh', md: '72vh' },
+                }}
+              >
+                <Table
+                  size="small"
+                  stickyHeader
+                  sx={{
+                    width: `${institutionalTableWidth}px`,
+                    minWidth: '100%',
+                    tableLayout: 'fixed',
+                  }}
+                >
+                <colgroup>
+                  <col style={{ width: `${INSTITUTIONAL_DESCRIPTION_COLUMN_WIDTH}px` }} />
+                  {institutionalLocalities.map((locality) => (
+                    <col
+                      key={`column-${locality.id}`}
+                      style={{ width: `${INSTITUTIONAL_LOCALITY_COLUMN_WIDTH}px` }}
+                    />
+                  ))}
+                </colgroup>
+                <TableHead>
+                  <TableRow>
+                    <TableCell
+                      sx={{
+                        fontWeight: 800,
+                        width: `${INSTITUTIONAL_DESCRIPTION_COLUMN_WIDTH}px`,
+                        minWidth: `${INSTITUTIONAL_DESCRIPTION_COLUMN_WIDTH}px`,
+                        bgcolor: '#eaf4fa',
+                        py: 0.6,
+                        px: 0.7,
+                        fontSize: '0.68rem',
+                        zIndex: 3,
+                      }}
+                    >
+                      Dimensão observada
+                    </TableCell>
+                    {institutionalLocalities.map((locality) => (
+                      <TableCell
+                        key={locality.id}
+                        sx={{
+                          width: `${INSTITUTIONAL_LOCALITY_COLUMN_WIDTH}px`,
+                          minWidth: `${INSTITUTIONAL_LOCALITY_COLUMN_WIDTH}px`,
+                          bgcolor: '#f1f8fc',
+                          py: 0.45,
+                          px: 0.55,
+                          zIndex: 3,
+                        }}
+                      >
+                        <Typography variant="caption" sx={{ display: 'block', fontWeight: 800, lineHeight: 1.1, fontSize: '0.65rem' }} noWrap>
+                          {String(locality.code ?? '').trim() || locality.name}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.66rem', lineHeight: 1.1 }} noWrap>
+                          {locality.name}
+                        </Typography>
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                </TableHead>
+                  <TableBody>
+                  {institutionalSections.flatMap((section, sectionIndex) => [
+                    <TableRow key={`section-divider-${section.id}`}>
+                      <TableCell
+                        colSpan={institutionalTotalColumns}
+                        sx={{
+                          py: 0.15,
+                          px: 0.7,
+                          fontWeight: 700,
+                          fontSize: '0.61rem',
+                          letterSpacing: 0.22,
+                          textTransform: 'uppercase',
+                          color: '#486477',
+                          bgcolor: '#ffffff',
+                          borderTop:
+                            sectionIndex === 0
+                              ? '1px solid rgba(15,23,42,0.12)'
+                              : '1px solid rgba(15,23,42,0.1)',
+                          borderBottom: '1px solid rgba(15,23,42,0.05)',
+                        }}
+                      >
+                        {section.title}
+                      </TableCell>
+                    </TableRow>,
+                    ...section.items.map((item) => (
+                      <TableRow key={item.id} hover>
+                        <TableCell
+                          sx={{
+                            bgcolor: '#f8fbfe',
+                            width: `${INSTITUTIONAL_DESCRIPTION_COLUMN_WIDTH}px`,
+                            minWidth: `${INSTITUTIONAL_DESCRIPTION_COLUMN_WIDTH}px`,
+                            borderRight: '1px solid rgba(15,23,42,0.06)',
+                            py: 0.28,
+                            px: 0.55,
+                            verticalAlign: 'top',
+                          }}
+                        >
+                          <Typography sx={{ fontWeight: 700, fontSize: '0.66rem', lineHeight: 1.15 }}>
+                            {item.title}
+                          </Typography>
+                          {item.prompt ? (
+                            <Typography
+                              color="text.secondary"
                               sx={{
-                                fontWeight: 700,
-                                width: `${INSTITUTIONAL_DESCRIPTION_COLUMN_WIDTH}px`,
-                                minWidth: `${INSTITUTIONAL_DESCRIPTION_COLUMN_WIDTH}px`,
-                                bgcolor: '#eef6fb',
+                                mt: 0.12,
+                                fontSize: '0.6rem',
+                                lineHeight: 1.15,
+                                display: '-webkit-box',
+                                WebkitLineClamp: 1,
+                                WebkitBoxOrient: 'vertical',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
                               }}
                             >
-                              Dimensão
-                            </TableCell>
-                            {institutionalLocalities.map((locality) => (
-                              <TableCell
-                                key={locality.id}
-                                sx={{
-                                  width: `${INSTITUTIONAL_LOCALITY_COLUMN_WIDTH}px`,
-                                  minWidth: `${INSTITUTIONAL_LOCALITY_COLUMN_WIDTH}px`,
-                                  bgcolor: '#f3f8fc',
-                                }}
-                              >
-                                <Typography variant="subtitle2" fontWeight={700} noWrap>
-                                  {String(locality.code ?? '').trim() || locality.name}
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary" noWrap>
-                                  {locality.name}
-                                </Typography>
-                              </TableCell>
-                            ))}
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {section.items.map((item) => (
-                            <TableRow key={item.id} hover>
-                              <TableCell
-                                sx={{
-                                  bgcolor: '#f8fbfe',
-                                  width: `${INSTITUTIONAL_DESCRIPTION_COLUMN_WIDTH}px`,
-                                  minWidth: `${INSTITUTIONAL_DESCRIPTION_COLUMN_WIDTH}px`,
-                                  borderRight: '1px solid rgba(15,23,42,0.06)',
-                                }}
-                              >
-                                <Typography variant="body2" fontWeight={700}>
-                                  {item.title}
-                                </Typography>
-                                {item.prompt ? (
-                                  <Typography
-                                    variant="caption"
-                                    color="text.secondary"
-                                    sx={{ display: 'block', mt: 0.35 }}
-                                  >
-                                    {item.prompt}
-                                  </Typography>
-                                ) : null}
-                              </TableCell>
-                              {institutionalLocalities.map((locality) => {
-                                const cell =
-                                  item.cells.find(
-                                    (currentCell) => currentCell.localityId === locality.id,
-                                  ) ?? {
-                                    localityId: locality.id,
-                                    missionId: null,
-                                    classification: null,
-                                    notes: '',
-                                    hasNotes: false,
-                                  };
-                                const classificationMeta = cell.classification
-                                  ? institutionalChecklistClassificationMeta[cell.classification]
-                                  : null;
-                                const isClickable = Boolean(cell.missionId);
-                                const previewText =
-                                  cell.notes.trim() ||
-                                  (cell.classification
-                                    ? 'Sem observações registradas.'
-                                    : 'Sem preenchimento.');
+                              {item.prompt}
+                            </Typography>
+                          ) : null}
+                        </TableCell>
+                        {institutionalLocalities.map((locality) => {
+                          const cell =
+                            item.cells.find(
+                              (currentCell) => currentCell.localityId === locality.id,
+                            ) ?? {
+                              localityId: locality.id,
+                              missionId: null,
+                              classification: null,
+                              notes: '',
+                              hasNotes: false,
+                            };
+                          const classificationMeta = cell.classification
+                            ? institutionalChecklistClassificationMeta[cell.classification]
+                            : null;
+                          const isClickable = Boolean(cell.missionId);
+                          const previewText =
+                            cell.notes.trim() ||
+                            (cell.classification
+                              ? 'Sem observações registradas.'
+                              : 'Sem preenchimento.');
 
-                                return (
-                                  <TableCell key={`${item.id}-${locality.id}`}>
-                                    <Box
-                                      role={isClickable ? 'button' : undefined}
-                                      tabIndex={isClickable ? 0 : undefined}
-                                      onClick={
-                                        isClickable
-                                          ? () =>
-                                              openInstitutionalDetail(
-                                                section,
-                                                item,
-                                                locality,
-                                                cell,
-                                              )
-                                          : undefined
-                                      }
-                                      onKeyDown={
-                                        isClickable
-                                          ? (event) => {
-                                              if (event.key === 'Enter' || event.key === ' ') {
-                                                event.preventDefault();
-                                                openInstitutionalDetail(
-                                                  section,
-                                                  item,
-                                                  locality,
-                                                  cell,
-                                                );
-                                              }
-                                            }
-                                          : undefined
-                                      }
-                                      sx={{
-                                        p: 1,
-                                        borderRadius: 1.6,
-                                        border: `1px solid ${classificationMeta?.borderColor ?? 'rgba(148,163,184,0.35)'}`,
-                                        backgroundColor:
-                                          classificationMeta?.bgColor ?? '#ffffff',
-                                        cursor: isClickable ? 'pointer' : 'default',
-                                        minHeight: 94,
-                                        transition:
-                                          'transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease',
-                                        '&:hover': isClickable
-                                          ? {
-                                              transform: 'translateY(-1px)',
-                                              boxShadow: '0 6px 16px rgba(18, 42, 56, 0.12)',
-                                              borderColor:
-                                                classificationMeta?.color ?? 'rgba(30,64,175,0.45)',
-                                            }
-                                          : undefined,
-                                        '&:focus-visible': isClickable
-                                          ? {
-                                              outline: '2px solid #0D5B84',
-                                              outlineOffset: '2px',
-                                            }
-                                          : undefined,
-                                      }}
-                                    >
-                                      <Chip
-                                        size="small"
-                                        label={
-                                          classificationMeta
-                                            ? classificationMeta.chipLabel
-                                            : 'Sem registro'
+                          return (
+                            <TableCell key={`${item.id}-${locality.id}`} sx={{ py: 0.2, px: 0.3 }}>
+                              <Box
+                                role={isClickable ? 'button' : undefined}
+                                tabIndex={isClickable ? 0 : undefined}
+                                onClick={
+                                  isClickable
+                                    ? () =>
+                                        openInstitutionalDetail(
+                                          section,
+                                          item,
+                                          locality,
+                                          cell,
+                                        )
+                                    : undefined
+                                }
+                                onKeyDown={
+                                  isClickable
+                                    ? (event) => {
+                                        if (event.key === 'Enter' || event.key === ' ') {
+                                          event.preventDefault();
+                                          openInstitutionalDetail(
+                                            section,
+                                            item,
+                                            locality,
+                                            cell,
+                                          );
                                         }
-                                        sx={{
-                                          height: 20,
-                                          mb: 0.8,
-                                          color: classificationMeta?.color ?? '#475569',
-                                          bgcolor: classificationMeta?.bgColor ?? '#f1f5f9',
-                                          border: `1px solid ${classificationMeta?.borderColor ?? '#cbd5e1'}`,
-                                          fontWeight: 700,
-                                        }}
-                                      />
-                                      <Typography
-                                        variant="caption"
-                                        sx={{
-                                          color: '#334155',
-                                          display: '-webkit-box',
-                                          WebkitLineClamp: 3,
-                                          WebkitBoxOrient: 'vertical',
-                                          overflow: 'hidden',
-                                          textOverflow: 'ellipsis',
-                                          minHeight: 42,
-                                        }}
-                                      >
-                                        {previewText}
-                                      </Typography>
-                                      {isClickable ? (
-                                        <Typography variant="caption" sx={{ color: '#0D5B84', mt: 0.5, display: 'block' }}>
-                                          Clique para ver detalhes
-                                        </Typography>
-                                      ) : null}
-                                    </Box>
-                                  </TableCell>
-                                );
-                              })}
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                  </CardContent>
-                </Card>
-              ))}
+                                      }
+                                    : undefined
+                                }
+                                sx={{
+                                  p: 0.38,
+                                  borderRadius: 0.8,
+                                  border: `1px solid ${classificationMeta?.borderColor ?? 'rgba(148,163,184,0.35)'}`,
+                                  backgroundColor: classificationMeta?.bgColor ?? '#ffffff',
+                                  cursor: isClickable ? 'pointer' : 'default',
+                                  minHeight: 46,
+                                  transition:
+                                    'transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease',
+                                  '&:hover': isClickable
+                                    ? {
+                                        transform: 'translateY(-1px)',
+                                        boxShadow: '0 5px 12px rgba(18, 42, 56, 0.11)',
+                                        borderColor:
+                                          classificationMeta?.color ?? 'rgba(30,64,175,0.45)',
+                                      }
+                                    : undefined,
+                                  '&:focus-visible': isClickable
+                                    ? {
+                                        outline: '2px solid #0D5B84',
+                                        outlineOffset: '2px',
+                                      }
+                                    : undefined,
+                                }}
+                              >
+                                <Box
+                                  sx={{
+                                    mb: 0.22,
+                                    height: 5,
+                                    borderRadius: 999,
+                                    border: `1px solid ${classificationMeta?.borderColor ?? '#cbd5e1'}`,
+                                    backgroundColor:
+                                      classificationMeta?.bgColor ?? '#ffffff',
+                                  }}
+                                />
+                                <Typography
+                                  sx={{
+                                    color: '#334155',
+                                    display: '-webkit-box',
+                                    WebkitLineClamp: 1,
+                                    WebkitBoxOrient: 'vertical',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    fontSize: '0.58rem',
+                                    lineHeight: 1.15,
+                                  }}
+                                >
+                                  {previewText}
+                                </Typography>
+                              </Box>
+                            </TableCell>
+                          );
+                        })}
+                      </TableRow>
+                    )),
+                  ])}
+                  </TableBody>
+                </Table>
+              </TableContainer>
             </Stack>
           )}
         </CardContent>

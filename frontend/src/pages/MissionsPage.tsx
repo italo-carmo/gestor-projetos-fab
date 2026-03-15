@@ -1597,7 +1597,7 @@ export function MissionsPage() {
                               Selecione a OM de referência do checklist. Essa OM será usada como coluna no mapeamento institucional do SMIF.
                             </Typography>
                           </Box>
-                          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ xs: 'stretch', sm: 'center' }}>
+                          <Stack spacing={0.7} alignItems={{ xs: 'stretch', sm: 'flex-end' }}>
                             <TextField
                               select
                               size="small"
@@ -1615,12 +1615,19 @@ export function MissionsPage() {
                             </TextField>
                             <Button
                               variant="contained"
+                              size="small"
                               onClick={handleSaveChecklist}
                               disabled={
                                 updateMissionChecklist.isPending ||
                                 !checklistDirty ||
                                 !checklistOmId
                               }
+                              sx={{
+                                alignSelf: { xs: 'stretch', sm: 'flex-end' },
+                                minHeight: 30,
+                                px: 1.4,
+                                py: 0.35,
+                              }}
                             >
                               Salvar checklist
                             </Button>
