@@ -300,6 +300,26 @@ type EditableCardStyle = {
 const SMIF_CARD_STYLES_STORAGE_KEY = 'smif-card-styles-v1';
 const INSTITUTIONAL_DESCRIPTION_COLUMN_WIDTH = 230;
 const INSTITUTIONAL_LOCALITY_COLUMN_WIDTH = 150;
+const institutionalSectionHighlightMeta: Record<
+  string,
+  { color: string; bgColor: string; borderColor: string }
+> = {
+  lideranca: {
+    color: '#24507A',
+    bgColor: '#eef5ff',
+    borderColor: '#bfd7f5',
+  },
+  acompanhamento_recrutas: {
+    color: '#246548',
+    bgColor: '#eefaf2',
+    borderColor: '#c4e8d1',
+  },
+  analise_riscos: {
+    color: '#8a4c18',
+    bgColor: '#fff5ea',
+    borderColor: '#f2d8bc',
+  },
+};
 
 function loadSmifCardStyles(): Record<string, EditableCardStyle> {
   try {
@@ -1358,8 +1378,8 @@ export function DashboardNationalPage() {
                   minWidth: 0,
                   display: 'block',
                   overflowX: 'auto',
-                  overflowY: 'auto',
-                  maxHeight: { xs: '64vh', md: '72vh' },
+                  overflowY: { xs: 'auto', md: 'visible' },
+                  maxHeight: { xs: '64vh', md: 'none' },
                 }}
               >
                 <Table
@@ -1415,9 +1435,17 @@ export function DashboardNationalPage() {
                     ))}
                   </TableRow>
                 </TableHead>
-                  <TableBody>
+                <TableBody>
                   {institutionalSections.flatMap((section, sectionIndex) => [
                     <TableRow key={`section-divider-${section.id}`}>
+                      {(() => {
+                        const sectionMeta =
+                          institutionalSectionHighlightMeta[section.id] ?? {
+                            color: '#486477',
+                            bgColor: '#ffffff',
+                            borderColor: 'rgba(15,23,42,0.1)',
+                          };
+                        return (
                       <TableCell
                         colSpan={institutionalTotalColumns}
                         sx={{
@@ -1427,8 +1455,9 @@ export function DashboardNationalPage() {
                           fontSize: '0.61rem',
                           letterSpacing: 0.22,
                           textTransform: 'uppercase',
-                          color: '#486477',
-                          bgcolor: '#ffffff',
+                          color: sectionMeta.color,
+                          bgcolor: sectionMeta.bgColor,
+                          borderLeft: `3px solid ${sectionMeta.borderColor}`,
                           borderTop:
                             sectionIndex === 0
                               ? '1px solid rgba(15,23,42,0.12)'
@@ -1438,6 +1467,8 @@ export function DashboardNationalPage() {
                       >
                         {section.title}
                       </TableCell>
+                        );
+                      })()}
                     </TableRow>,
                     ...section.items.map((item) => (
                       <TableRow key={item.id} hover>
