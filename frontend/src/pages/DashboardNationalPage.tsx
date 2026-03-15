@@ -1410,9 +1410,6 @@ export function DashboardNationalPage() {
                         <Typography variant="caption" sx={{ display: 'block', fontWeight: 800, lineHeight: 1.1, fontSize: '0.65rem' }} noWrap>
                           {String(locality.code ?? '').trim() || locality.name}
                         </Typography>
-                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.66rem', lineHeight: 1.1 }} noWrap>
-                          {locality.name}
-                        </Typography>
                       </TableCell>
                     ))}
                   </TableRow>
@@ -1465,7 +1462,7 @@ export function DashboardNationalPage() {
                                 fontSize: '0.6rem',
                                 lineHeight: 1.15,
                                 display: '-webkit-box',
-                                WebkitLineClamp: 1,
+                                WebkitLineClamp: 3,
                                 WebkitBoxOrient: 'vertical',
                                 overflow: 'hidden',
                                 textOverflow: 'ellipsis',
@@ -1552,16 +1549,6 @@ export function DashboardNationalPage() {
                                     : undefined,
                                 }}
                               >
-                                <Box
-                                  sx={{
-                                    mb: 0.22,
-                                    height: 5,
-                                    borderRadius: 999,
-                                    border: `1px solid ${classificationMeta?.borderColor ?? '#cbd5e1'}`,
-                                    backgroundColor:
-                                      classificationMeta?.bgColor ?? '#ffffff',
-                                  }}
-                                />
                                 <Typography
                                   sx={{
                                     color: '#334155',
