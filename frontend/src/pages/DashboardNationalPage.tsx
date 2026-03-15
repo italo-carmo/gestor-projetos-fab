@@ -1449,7 +1449,7 @@ export function DashboardNationalPage() {
                       <TableCell
                         colSpan={institutionalTotalColumns}
                         sx={{
-                          py: 0.15,
+                          py: 0.1,
                           px: 0.7,
                           fontWeight: 700,
                           fontSize: '0.61rem',
@@ -1478,31 +1478,37 @@ export function DashboardNationalPage() {
                             width: `${INSTITUTIONAL_DESCRIPTION_COLUMN_WIDTH}px`,
                             minWidth: `${INSTITUTIONAL_DESCRIPTION_COLUMN_WIDTH}px`,
                             borderRight: '1px solid rgba(15,23,42,0.06)',
-                            py: 0.28,
-                            px: 0.55,
+                            py: 0.2,
+                            px: 0.45,
                             verticalAlign: 'top',
                           }}
                         >
-                          <Typography sx={{ fontWeight: 700, fontSize: '0.66rem', lineHeight: 1.15 }}>
-                            {item.title}
-                          </Typography>
-                          {item.prompt ? (
-                            <Typography
-                              color="text.secondary"
-                              sx={{
-                                mt: 0.12,
-                                fontSize: '0.6rem',
-                                lineHeight: 1.15,
-                                display: '-webkit-box',
-                                WebkitLineClamp: 3,
-                                WebkitBoxOrient: 'vertical',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                              }}
+                          {section.id === 'analise_riscos' && item.prompt ? (
+                            <Tooltip
+                              arrow
+                              placement="top-start"
+                              title={
+                                <Typography sx={{ fontSize: '0.72rem', lineHeight: 1.25 }}>
+                                  {item.prompt}
+                                </Typography>
+                              }
                             >
-                              {item.prompt}
+                              <Typography
+                                sx={{
+                                  fontWeight: 700,
+                                  fontSize: '0.62rem',
+                                  lineHeight: 1.12,
+                                  cursor: 'help',
+                                }}
+                              >
+                                {item.title}
+                              </Typography>
+                            </Tooltip>
+                          ) : (
+                            <Typography sx={{ fontWeight: 700, fontSize: '0.62rem', lineHeight: 1.12 }}>
+                              {item.title}
                             </Typography>
-                          ) : null}
+                          )}
                         </TableCell>
                         {institutionalLocalities.map((locality) => {
                           const cell =
@@ -1526,7 +1532,7 @@ export function DashboardNationalPage() {
                               : 'Sem preenchimento.');
 
                           return (
-                            <TableCell key={`${item.id}-${locality.id}`} sx={{ py: 0.2, px: 0.3 }}>
+                            <TableCell key={`${item.id}-${locality.id}`} sx={{ py: 0.14, px: 0.22 }}>
                               <Box
                                 role={isClickable ? 'button' : undefined}
                                 tabIndex={isClickable ? 0 : undefined}
@@ -1557,12 +1563,12 @@ export function DashboardNationalPage() {
                                     : undefined
                                 }
                                 sx={{
-                                  p: 0.38,
+                                  p: 0.28,
                                   borderRadius: 0.8,
                                   border: `1px solid ${classificationMeta?.borderColor ?? 'rgba(148,163,184,0.35)'}`,
                                   backgroundColor: classificationMeta?.bgColor ?? '#ffffff',
                                   cursor: isClickable ? 'pointer' : 'default',
-                                  minHeight: 46,
+                                  minHeight: 34,
                                   transition:
                                     'transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease',
                                   '&:hover': isClickable
@@ -1589,8 +1595,8 @@ export function DashboardNationalPage() {
                                     WebkitBoxOrient: 'vertical',
                                     overflow: 'hidden',
                                     textOverflow: 'ellipsis',
-                                    fontSize: '0.58rem',
-                                    lineHeight: 1.15,
+                                    fontSize: '0.54rem',
+                                    lineHeight: 1.1,
                                   }}
                                 >
                                   {previewText}
