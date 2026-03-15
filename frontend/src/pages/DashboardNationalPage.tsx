@@ -768,7 +768,7 @@ export function DashboardNationalPage() {
   };
 
   return (
-    <Box>
+    <Box sx={{ overflowX: 'hidden' }}>
       <Typography variant="h4" gutterBottom fontWeight={700}>
         Painel de Comando - SMIF
       </Typography>
@@ -1214,7 +1214,7 @@ export function DashboardNationalPage() {
             Leitura consolidada por localidade com base no checklist preenchido nas missões.
           </Typography>
         </Box>
-        <CardContent sx={{ p: 2 }}>
+        <CardContent sx={{ p: 2, overflowX: 'hidden' }}>
           {missionChecklistMappingQuery.isLoading ? (
             <Typography variant="body2" color="text.secondary">
               Carregando mapeamento institucional...
@@ -1240,9 +1240,19 @@ export function DashboardNationalPage() {
                         border: '1px solid rgba(15, 23, 42, 0.08)',
                         borderRadius: 2,
                         maxHeight: 420,
+                        maxWidth: '100%',
+                        overflowX: 'auto',
+                        overflowY: 'auto',
                       }}
                     >
-                      <Table size="small" stickyHeader>
+                      <Table
+                        size="small"
+                        stickyHeader
+                        sx={{
+                          width: 'max-content',
+                          minWidth: '100%',
+                        }}
+                      >
                         <TableHead>
                           <TableRow>
                             <TableCell
