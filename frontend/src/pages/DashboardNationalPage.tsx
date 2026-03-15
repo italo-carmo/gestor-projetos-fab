@@ -413,16 +413,16 @@ export function DashboardNationalPage() {
     key: InstitutionalChecklistClassification;
     label: string;
   }> = [
-    { key: 'FORTE_CONSOLIDADA', label: 'Dimensão forte/consolidada (verde)' },
+    { key: 'FORTE_CONSOLIDADA', label: 'Dimensão forte/consolidada' },
     {
       key: 'OPORTUNIDADE_MELHORIA',
-      label: 'Dimensão com oportunidades de melhoria (amarelo)',
+      label: 'Dimensão com oportunidades de melhoria',
     },
     {
       key: 'NECESSITA_ANALISE',
-      label: 'Dimensão necessita de maior análise (sem cor)',
+      label: 'Dimensão necessita de maior análise',
     },
-    { key: 'POSSIVEL_RISCO', label: 'Possível Risco (vermelho)' },
+    { key: 'POSSIVEL_RISCO', label: 'Possível Risco' },
   ];
   const missionByLocality = new Map<string, InstitutionalChecklistMission | null>(
     (institutionalMapping?.missionsByLocality ?? []).map((entry) => [
@@ -1295,7 +1295,8 @@ export function DashboardNationalPage() {
                     gap: 0.55,
                     gridTemplateColumns: {
                       xs: '1fr',
-                      md: 'repeat(2, minmax(0, 1fr))',
+                      sm: 'repeat(2, minmax(0, 1fr))',
+                      lg: 'repeat(4, minmax(0, 1fr))',
                     },
                   }}
                 >
