@@ -59,7 +59,10 @@ export class ActivitiesController {
     @Query('pageSize') pageSize: string | undefined,
     @CurrentUser() user: RbacUser,
   ) {
-    return this.activities.list({ localityId, specialtyId, status, q, page, pageSize }, user);
+    return this.activities.list(
+      { localityId, specialtyId, status, q, page, pageSize },
+      user,
+    );
   }
 
   @Post()
@@ -86,11 +89,18 @@ export class ActivitiesController {
     @Query('specialtyId') specialtyId: string | undefined,
     @CurrentUser() user: RbacUser,
   ) {
-    return this.activities.listResponsibleUsers({ localityId, specialtyId }, user);
+    return this.activities.listResponsibleUsers(
+      { localityId, specialtyId },
+      user,
+    );
   }
 
   @Put(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateActivityDto, @CurrentUser() user: RbacUser) {
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateActivityDto,
+    @CurrentUser() user: RbacUser,
+  ) {
     return this.activities.update(id, dto, user);
   }
 
@@ -108,12 +118,18 @@ export class ActivitiesController {
 
   @Put('batch/specialty')
   batchSpecialty(
-    @Body() body: { ids: string[]; specialtyId: string | null },
+    @Body()
+    body: {
+      ids: string[];
+      specialtyId?: string | null;
+      specialtyIds?: string[];
+    },
     @CurrentUser() user: RbacUser,
   ) {
     return this.activities.batchUpdateSpecialty(
       body.ids ?? [],
-      body.specialtyId ?? null,
+      body.specialtyIds ??
+        (body.specialtyId ? [body.specialtyId] : []),
       user,
     );
   }
@@ -131,10 +147,7 @@ export class ActivitiesController {
   }
 
   @Post('batch/delete')
-  batchDelete(
-    @Body() body: { ids: string[] },
-    @CurrentUser() user: RbacUser,
-  ) {
+  batchDelete(@Body() body: { ids: string[] }, @CurrentUser() user: RbacUser) {
     return this.activities.batchDelete(body.ids ?? [], user);
   }
 
@@ -164,15 +177,16 @@ export class ActivitiesController {
 
   @Put('batch/reorder')
   @RequirePermission('task_instances', 'update')
-  batchReorder(
-    @Body() body: { ids: string[] },
-    @CurrentUser() user: RbacUser,
-  ) {
+  batchReorder(@Body() body: { ids: string[] }, @CurrentUser() user: RbacUser) {
     return this.activities.batchReorder(body.ids ?? [], user);
   }
 
   @Put(':id/status')
-  updateStatus(@Param('id') id: string, @Body() dto: UpdateActivityStatusDto, @CurrentUser() user: RbacUser) {
+  updateStatus(
+    @Param('id') id: string,
+    @Body() dto: UpdateActivityStatusDto,
+    @CurrentUser() user: RbacUser,
+  ) {
     return this.activities.updateStatus(id, dto.status as any, user);
   }
 
@@ -188,7 +202,11 @@ export class ActivitiesController {
   }
 
   @Post(':id/comments')
-  addComment(@Param('id') id: string, @Body() dto: ActivityCommentDto, @CurrentUser() user: RbacUser) {
+  addComment(
+    @Param('id') id: string,
+    @Body() dto: ActivityCommentDto,
+    @CurrentUser() user: RbacUser,
+  ) {
     return this.activities.addComment(id, dto.text, user);
   }
 
@@ -239,7 +257,10 @@ export class ActivitiesController {
     @CurrentUser() user: RbacUser,
     @Res() res: Response,
   ) {
-    const { fileName, buffer } = await this.activities.buildSchedulePdf(id, user);
+    const { fileName, buffer } = await this.activities.buildSchedulePdf(
+      id,
+      user,
+    );
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
     return res.send(buffer);
@@ -247,7 +268,11 @@ export class ActivitiesController {
 
   @Put(':id/report')
   @RequirePermission('reports', 'create')
-  upsertReport(@Param('id') id: string, @Body() dto: UpsertActivityReportDto, @CurrentUser() user: RbacUser) {
+  upsertReport(
+    @Param('id') id: string,
+    @Body() dto: UpsertActivityReportDto,
+    @CurrentUser() user: RbacUser,
+  ) {
     return this.activities.upsertReport(id, dto, user);
   }
 
@@ -275,7 +300,9 @@ export class ActivitiesController {
       fileFilter: (req, file, cb) => {
         const allowed = ['image/png', 'image/jpeg'];
         if (!allowed.includes(file.mimetype)) {
-          (req as Request & { fileValidationError?: string }).fileValidationError = 'FILE_TYPE_INVALID';
+          (
+            req as Request & { fileValidationError?: string }
+          ).fileValidationError = 'FILE_TYPE_INVALID';
           return cb(null, false);
         }
         cb(null, true);
@@ -339,7 +366,10 @@ export class ActivitiesController {
 
   @Get('report-files/:filename')
   @RequirePermission('reports', 'download')
-  downloadReportFile(@Param('filename') filename: string, @Res() res: Response) {
+  downloadReportFile(
+    @Param('filename') filename: string,
+    @Res() res: Response,
+  ) {
     const filePath = path.join(uploadDir, filename);
     if (!fs.existsSync(filePath)) {
       throwError('NOT_FOUND');

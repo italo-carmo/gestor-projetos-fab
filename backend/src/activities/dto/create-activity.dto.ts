@@ -1,4 +1,11 @@
-import { IsArray, IsBoolean, IsDateString, IsOptional, IsString, MaxLength } from 'class-validator';
+import {
+  IsArray,
+  IsBoolean,
+  IsDateString,
+  IsOptional,
+  IsString,
+  MaxLength,
+} from 'class-validator';
 
 export class CreateActivityDto {
   @IsString()
@@ -21,6 +28,11 @@ export class CreateActivityDto {
   @IsOptional()
   @IsString()
   specialtyId?: string | null;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  specialtyIds?: string[];
 
   @IsOptional()
   @IsString()

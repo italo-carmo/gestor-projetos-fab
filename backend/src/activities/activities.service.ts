@@ -68,8 +68,14 @@ export class ActivitiesService {
     const andClauses: Prisma.ActivityWhereInput[] = [];
     andClauses.push({ localityId: { in: targetLocalityIds } });
     if (filters.localityId) andClauses.push({ localityId: filters.localityId });
-    if (filters.specialtyId)
-      andClauses.push({ specialtyId: filters.specialtyId });
+    if (filters.specialtyId) {
+      andClauses.push({
+        OR: [
+          { specialtyId: filters.specialtyId },
+          { specialties: { some: { specialtyId: filters.specialtyId } } },
+        ],
+      } as any);
+    }
     if (filters.status)
       andClauses.push({ status: filters.status as ActivityStatus });
     if (filters.q) {
@@ -98,6 +104,12 @@ export class ActivitiesService {
           locality: { select: { id: true, code: true, name: true } },
           activityType: { select: { id: true, name: true } },
           specialty: { select: { id: true, name: true, color: true } },
+          specialties: {
+            include: {
+              specialty: { select: { id: true, name: true, color: true } },
+            },
+            orderBy: { createdAt: 'asc' },
+          },
           createdBy: { select: { id: true, name: true } },
           responsibles: {
             include: {
@@ -212,6 +224,7 @@ export class ActivitiesService {
       localityIds?: string[];
       activityTypeId?: string | null;
       specialtyId?: string | null;
+      specialtyIds?: string[];
       eventDate?: string | null;
       reportRequired?: boolean;
       responsibleUserIds?: string[];
@@ -231,9 +244,19 @@ export class ActivitiesService {
       normalizedLocalityIds.length > 0
         ? normalizedLocalityIds
         : [fallbackLocalityId];
-    const specialtyId = payload.specialtyId ?? null;
+    const activitySpecialtyIds = await this.resolveActivitySpecialtyIds({
+      specialtyId: payload.specialtyId,
+      specialtyIds: payload.specialtyIds,
+      fallbackToCommission: true,
+    });
+    const primarySpecialtyId = activitySpecialtyIds[0] ?? null;
     for (const localityId of createLocalityIds) {
-      this.assertScopeConstraint(localityId, specialtyId, user);
+      this.assertScopeConstraint(
+        localityId,
+        primarySpecialtyId,
+        user,
+        activitySpecialtyIds,
+      );
     }
 
     const normalizedResponsibleIds = Array.from(
@@ -271,10 +294,21 @@ export class ActivitiesService {
               : null,
             localityId,
             activityTypeId: activityTypeId,
-            specialtyId,
+            specialtyId: primarySpecialtyId,
             eventDate: payload.eventDate ? new Date(payload.eventDate) : null,
             reportRequired: payload.reportRequired ?? false,
             createdById: user?.id ?? null,
+            specialties:
+              activitySpecialtyIds.length > 0
+                ? {
+                    createMany: {
+                      data: activitySpecialtyIds.map((itemId) => ({
+                        specialtyId: itemId,
+                      })),
+                      skipDuplicates: true,
+                    },
+                  }
+                : undefined,
             responsibles:
               responsibleUserIds.length > 0
                 ? {
@@ -289,6 +323,12 @@ export class ActivitiesService {
             locality: { select: { id: true, code: true, name: true } },
             activityType: { select: { id: true, name: true } },
             specialty: { select: { id: true, name: true, color: true } },
+            specialties: {
+              include: {
+                specialty: { select: { id: true, name: true, color: true } },
+              },
+              orderBy: { createdAt: 'asc' },
+            },
             createdBy: { select: { id: true, name: true } },
             responsibles: {
               include: {
@@ -362,6 +402,7 @@ export class ActivitiesService {
       localityId?: string | null;
       activityTypeId?: string | null;
       specialtyId?: string | null;
+      specialtyIds?: string[];
       eventDate?: string | null;
       reportRequired?: boolean;
       responsibleUserIds?: string[];
@@ -372,6 +413,7 @@ export class ActivitiesService {
       where: { id },
       include: {
         responsibles: { select: { userId: true } },
+        specialties: { select: { specialtyId: true } },
       } as any,
     } as any);
     if (!existing) throwError('NOT_FOUND');
@@ -381,16 +423,23 @@ export class ActivitiesService {
       payload.localityId === undefined
         ? existing.localityId
         : payload.localityId;
-    const specialtyId =
-      payload.specialtyId === undefined
-        ? ((existing as any).specialtyId ?? null)
-        : payload.specialtyId;
+    const currentSpecialtyIds = this.extractActivitySpecialtyIds(existing);
+    const specialtyInputWasProvided =
+      payload.specialtyIds !== undefined || payload.specialtyId !== undefined;
+    const activitySpecialtyIds = specialtyInputWasProvided
+      ? await this.resolveActivitySpecialtyIds({
+          specialtyId: payload.specialtyId,
+          specialtyIds: payload.specialtyIds,
+          fallbackToCommission: true,
+        })
+      : currentSpecialtyIds;
+    const specialtyId = activitySpecialtyIds[0] ?? null;
     const activityTypeId = await this.resolveActivityTypeId(
       payload.activityTypeId === undefined
         ? ((existing as any).activityTypeId ?? null)
         : payload.activityTypeId,
     );
-    this.assertScopeConstraint(localityId, specialtyId, user);
+    this.assertScopeConstraint(localityId, specialtyId, user, activitySpecialtyIds);
     const responsibleUserIds = await this.resolveActivityResponsibleIds(
       localityId,
       payload.responsibleUserIds ??
@@ -420,6 +469,19 @@ export class ActivitiesService {
               ? null
               : new Date(payload.eventDate),
         reportRequired: payload.reportRequired ?? undefined,
+        specialties: {
+          deleteMany: {},
+          ...(activitySpecialtyIds.length > 0
+            ? {
+                createMany: {
+                  data: activitySpecialtyIds.map((itemId) => ({
+                    specialtyId: itemId,
+                  })),
+                  skipDuplicates: true,
+                },
+              }
+            : {}),
+        },
         responsibles: {
           deleteMany: {},
           ...(responsibleUserIds.length > 0
@@ -436,6 +498,12 @@ export class ActivitiesService {
         locality: { select: { id: true, code: true, name: true } },
         activityType: { select: { id: true, name: true } },
         specialty: { select: { id: true, name: true, color: true } },
+        specialties: {
+          include: {
+            specialty: { select: { id: true, name: true, color: true } },
+          },
+          orderBy: { createdAt: 'asc' },
+        },
         createdBy: { select: { id: true, name: true } },
         responsibles: {
           include: {
@@ -516,6 +584,12 @@ export class ActivitiesService {
         locality: { select: { id: true, code: true, name: true } },
         activityType: { select: { id: true, name: true } },
         specialty: { select: { id: true, name: true, color: true } },
+        specialties: {
+          include: {
+            specialty: { select: { id: true, name: true, color: true } },
+          },
+          orderBy: { createdAt: 'asc' },
+        },
         createdBy: { select: { id: true, name: true } },
         responsibles: {
           include: {
@@ -691,20 +765,18 @@ export class ActivitiesService {
 
   async batchUpdateSpecialty(
     ids: string[],
-    specialtyId: string | null,
+    specialtyIdsInput: string[],
     user?: RbacUser,
   ) {
     this.assertActivityOperateAccess(null, user);
     const normalizedIds = this.normalizeActivityIds(ids);
     if (!normalizedIds.length) return { updated: 0 };
 
-    if (specialtyId) {
-      const specialty = await this.prisma.specialty.findUnique({
-        where: { id: specialtyId },
-        select: { id: true },
-      });
-      if (!specialty) throwError('NOT_FOUND');
-    }
+    const specialtyIds = await this.resolveActivitySpecialtyIds({
+      specialtyIds: specialtyIdsInput,
+      fallbackToCommission: true,
+    });
+    const primarySpecialtyId = specialtyIds[0] ?? null;
 
     const existing = await this.prisma.activity.findMany({
       where: { id: { in: normalizedIds } },
@@ -717,13 +789,37 @@ export class ActivitiesService {
 
     for (const activity of existing) {
       this.assertActivityOperateAccess(activity, user);
-      this.assertScopeConstraint(activity.localityId, specialtyId, user);
+      this.assertScopeConstraint(
+        activity.localityId,
+        primarySpecialtyId,
+        user,
+        specialtyIds,
+      );
     }
 
     const targetIds = existing.map((item) => item.id);
-    await this.prisma.activity.updateMany({
-      where: { id: { in: targetIds } },
-      data: { specialtyId },
+    await this.prisma.$transaction(async (tx) => {
+      for (const targetId of targetIds) {
+        await tx.activity.update({
+          where: { id: targetId },
+          data: {
+            specialtyId: primarySpecialtyId,
+            specialties: {
+              deleteMany: {},
+              ...(specialtyIds.length > 0
+                ? {
+                    createMany: {
+                      data: specialtyIds.map((itemId) => ({
+                        specialtyId: itemId,
+                      })),
+                      skipDuplicates: true,
+                    },
+                  }
+                : {}),
+            },
+          } as any,
+        });
+      }
     });
 
     await this.audit.log({
@@ -732,7 +828,8 @@ export class ActivitiesService {
       action: 'batch_update_specialty',
       diffJson: {
         count: targetIds.length,
-        specialtyId: specialtyId ?? null,
+        specialtyIds,
+        specialtyId: primarySpecialtyId,
         ids: targetIds,
       } as any,
     } as any);
@@ -904,6 +1001,7 @@ export class ActivitiesService {
         eventDate: true,
         status: true,
         reportRequired: true,
+        specialties: { select: { specialtyId: true } },
       } as any,
     } as any);
     if (!existing.length) {
@@ -928,20 +1026,39 @@ export class ActivitiesService {
     }
 
     for (const activity of existing) {
+      const activitySpecialtyIds = this.extractActivitySpecialtyIds(activity);
       this.assertActivityOperateAccess(activity, user);
       this.assertScopeConstraint(
         activity.localityId,
         activity.specialtyId,
         user,
+        activitySpecialtyIds,
       );
       for (const localityId of normalizedTargetLocalityIds) {
-        this.assertScopeConstraint(localityId, activity.specialtyId, user);
+        this.assertScopeConstraint(
+          localityId,
+          activity.specialtyId,
+          user,
+          activitySpecialtyIds,
+        );
       }
     }
 
     let skippedSameLocality = 0;
-    const cloneRows: Prisma.ActivityCreateManyInput[] = [];
+    const clonePayloads: Array<{
+      title: string;
+      description: string | null;
+      localityId: string;
+      activityTypeId: string | null;
+      specialtyId: string | null;
+      specialtyIds: string[];
+      eventDate: Date | null;
+      status: ActivityStatus;
+      reportRequired: boolean;
+      createdById: string | null;
+    }> = [];
     for (const activity of existing) {
+      const specialtyIds = this.extractActivitySpecialtyIds(activity);
       for (const targetLocalityId of normalizedTargetLocalityIds) {
         if (activity.localityId && activity.localityId === targetLocalityId) {
           skippedSameLocality += 1;
@@ -953,12 +1070,15 @@ export class ActivitiesService {
             : dateMode === 'SET_DATE' && targetDate
               ? targetDate
               : (activity.eventDate ?? null);
-        cloneRows.push({
+        clonePayloads.push({
           title: activity.title,
           description: activity.description ?? null,
           localityId: targetLocalityId,
           activityTypeId: (activity as any).activityTypeId ?? null,
-          specialtyId: activity.specialtyId ?? null,
+          specialtyId: (specialtyIds[0] ?? activity.specialtyId ?? null) as
+            | string
+            | null,
+          specialtyIds,
           eventDate,
           status:
             statusMode === 'KEEP'
@@ -966,11 +1086,11 @@ export class ActivitiesService {
               : ActivityStatus.NOT_STARTED,
           reportRequired: activity.reportRequired,
           createdById: user?.id ?? null,
-        } as any);
+        });
       }
     }
 
-    if (!cloneRows.length) {
+    if (!clonePayloads.length) {
       return {
         created: 0,
         skippedSameLocality,
@@ -978,8 +1098,33 @@ export class ActivitiesService {
       };
     }
 
-    const result = await this.prisma.activity.createMany({
-      data: cloneRows,
+    await this.prisma.$transaction(async (tx) => {
+      for (const payload of clonePayloads) {
+        await tx.activity.create({
+          data: {
+            title: payload.title,
+            description: payload.description,
+            localityId: payload.localityId,
+            activityTypeId: payload.activityTypeId,
+            specialtyId: payload.specialtyId,
+            eventDate: payload.eventDate,
+            status: payload.status,
+            reportRequired: payload.reportRequired,
+            createdById: payload.createdById,
+            specialties:
+              payload.specialtyIds.length > 0
+                ? {
+                    createMany: {
+                      data: payload.specialtyIds.map((itemId) => ({
+                        specialtyId: itemId,
+                      })),
+                      skipDuplicates: true,
+                    },
+                  }
+                : undefined,
+          } as any,
+        } as any);
+      }
     });
 
     await this.audit.log({
@@ -992,13 +1137,13 @@ export class ActivitiesService {
         statusMode,
         dateMode,
         targetDate: targetDate ? targetDate.toISOString().slice(0, 10) : null,
-        created: result.count,
+        created: clonePayloads.length,
         skippedSameLocality,
       } as any,
     } as any);
 
     return {
-      created: result.count,
+      created: clonePayloads.length,
       skippedSameLocality,
       requestedPairs: existing.length * normalizedTargetLocalityIds.length,
     };
@@ -1045,6 +1190,7 @@ export class ActivitiesService {
         id: true,
         localityId: true,
         specialtyId: true,
+        specialties: { select: { specialtyId: true } },
         responsibles: {
           select: {
             userId: true,
@@ -1101,6 +1247,7 @@ export class ActivitiesService {
         id: true,
         localityId: true,
         specialtyId: true,
+        specialties: { select: { specialtyId: true } },
         responsibles: {
           select: {
             userId: true,
@@ -1155,6 +1302,7 @@ export class ActivitiesService {
         id: true,
         localityId: true,
         specialtyId: true,
+        specialties: { select: { specialtyId: true } },
         responsibles: { select: { userId: true } },
       } as any,
     } as any);
@@ -1179,6 +1327,13 @@ export class ActivitiesService {
         title: true,
         eventDate: true,
         localityId: true,
+        specialtyId: true,
+        specialties: {
+          include: {
+            specialty: { select: { id: true, name: true, color: true } },
+          },
+          orderBy: { createdAt: 'asc' },
+        },
         responsibles: {
           select: {
             userId: true,
@@ -1204,6 +1359,7 @@ export class ActivitiesService {
         eventDate: activity.eventDate,
         locality: (activity as any).locality,
         specialty: (activity as any).specialty,
+        specialties: this.mapActivitySpecialties(activity),
       },
       items: items.map((item) => this.mapScheduleItem(item)),
     };
@@ -1227,6 +1383,7 @@ export class ActivitiesService {
         id: true,
         localityId: true,
         specialtyId: true,
+        specialties: { select: { specialtyId: true } },
         responsibles: { select: { userId: true } },
       } as any,
     } as any);
@@ -1282,6 +1439,7 @@ export class ActivitiesService {
         id: true,
         localityId: true,
         specialtyId: true,
+        specialties: { select: { specialtyId: true } },
         responsibles: { select: { userId: true } },
       } as any,
     } as any);
@@ -1346,6 +1504,7 @@ export class ActivitiesService {
         id: true,
         localityId: true,
         specialtyId: true,
+        specialties: { select: { specialtyId: true } },
         responsibles: { select: { userId: true } },
       } as any,
     } as any);
@@ -1386,6 +1545,12 @@ export class ActivitiesService {
         },
         locality: { select: { id: true, code: true, name: true } },
         specialty: { select: { id: true, name: true, color: true } },
+        specialties: {
+          include: {
+            specialty: { select: { id: true, name: true, color: true } },
+          },
+          orderBy: { createdAt: 'asc' },
+        },
         visitScheduleItems: {
           orderBy: [{ startTime: 'asc' }, { createdAt: 'asc' }],
         },
@@ -1441,7 +1606,7 @@ export class ActivitiesService {
     );
     writeLine(
       'Especialidade',
-      (activity as any).specialty?.name ?? 'Todas as especialidades',
+      this.formatActivitySpecialtiesLabel(activity),
     );
     writeLine(
       'Data da visita',
@@ -1658,6 +1823,12 @@ export class ActivitiesService {
         locality: { select: { id: true, code: true, name: true } },
         activityType: { select: { id: true, name: true } },
         specialty: { select: { id: true, name: true, color: true } },
+        specialties: {
+          include: {
+            specialty: { select: { id: true, name: true, color: true } },
+          },
+          orderBy: { createdAt: 'asc' },
+        },
         createdBy: { select: { id: true, name: true } },
         responsibles: {
           include: {
@@ -1927,6 +2098,12 @@ export class ActivitiesService {
         },
         locality: { select: { id: true, code: true, name: true } },
         specialty: { select: { id: true, name: true, color: true } },
+        specialties: {
+          include: {
+            specialty: { select: { id: true, name: true, color: true } },
+          },
+          orderBy: { createdAt: 'asc' },
+        },
         activityType: { select: { id: true, name: true } },
         createdBy: { select: { id: true, name: true } },
         report: {
@@ -2023,7 +2200,7 @@ export class ActivitiesService {
         .fontSize(9)
         .text(
           `${normalizeText((activity as any).locality?.name)} • ${normalizeText(
-            (activity as any).specialty?.name,
+            this.formatActivitySpecialtiesLabel(activity),
           )}`,
           contentLeft,
           headerY + barH + 6,
@@ -2500,6 +2677,8 @@ export class ActivitiesService {
 
   private mapActivity(activity: any, executiveHidePii?: boolean) {
     const { responsibles, ...rest } = activity ?? {};
+    const specialties = this.mapActivitySpecialties(activity);
+    const primarySpecialty = specialties[0] ?? null;
     const responsibleUsers = Array.isArray(activity?.responsibles)
       ? activity.responsibles
           .map((entry: any) => entry?.user)
@@ -2515,6 +2694,10 @@ export class ActivitiesService {
       : [];
     return {
       ...rest,
+      specialtyId: primarySpecialty?.id ?? activity?.specialtyId ?? null,
+      specialty: primarySpecialty,
+      specialtyIds: specialties.map((item) => item.id),
+      specialties,
       activityType: activity?.activityType
         ? {
             id: activity.activityType.id,
@@ -2532,6 +2715,59 @@ export class ActivitiesService {
           }
         : null,
     };
+  }
+
+  private mapActivitySpecialties(activity: any) {
+    const links = Array.isArray(activity?.specialties) ? activity.specialties : [];
+    const fromLinks = links
+      .map((entry: any) => entry?.specialty)
+      .filter((entry: any) => Boolean(entry?.id))
+      .map((entry: any) => ({
+        id: String(entry.id),
+        name: String(entry.name ?? '').trim() || 'Especialidade',
+        color: entry.color ?? null,
+      }));
+    const fallback =
+      activity?.specialty && String(activity.specialty?.id ?? '').trim()
+        ? [
+            {
+              id: String(activity.specialty.id),
+              name:
+                String(activity.specialty.name ?? '').trim() || 'Especialidade',
+              color: activity.specialty.color ?? null,
+            },
+          ]
+        : [];
+    const merged = [...fromLinks, ...fallback];
+    const unique = new Map<string, { id: string; name: string; color: string | null }>();
+    for (const specialty of merged) {
+      if (!specialty.id) continue;
+      if (!unique.has(specialty.id)) {
+        unique.set(specialty.id, specialty);
+      }
+    }
+    return Array.from(unique.values());
+  }
+
+  private extractActivitySpecialtyIds(activity: any) {
+    const linkIds = Array.isArray(activity?.specialties)
+      ? activity.specialties
+          .map((entry: any) => String(entry?.specialtyId ?? '').trim())
+          .filter(Boolean)
+      : [];
+    const fallbackId = String(activity?.specialtyId ?? '').trim();
+    const normalized = Array.from(
+      new Set([...linkIds, ...(fallbackId ? [fallbackId] : [])]),
+    );
+    return normalized;
+  }
+
+  private formatActivitySpecialtiesLabel(activity: any) {
+    const names = this.mapActivitySpecialties(activity)
+      .map((entry) => String(entry.name ?? '').trim())
+      .filter(Boolean);
+    if (!names.length) return 'Comissão CIPAVD';
+    return names.join(' / ');
   }
 
   async listTypes() {
@@ -2697,6 +2933,7 @@ export class ActivitiesService {
     localityId: string | null | undefined,
     specialtyId: string | null | undefined,
     user?: RbacUser,
+    specialtyIds?: string[] | null,
   ) {
     const constraints = this.getScopeConstraints(user);
     if (
@@ -2706,12 +2943,21 @@ export class ActivitiesService {
     ) {
       throwError('RBAC_FORBIDDEN');
     }
-    if (
-      constraints.specialtyId &&
-      specialtyId &&
-      constraints.specialtyId !== specialtyId
-    ) {
-      throwError('RBAC_FORBIDDEN');
+    if (constraints.specialtyId) {
+      const normalizedSpecialtyIds = new Set(
+        [
+          String(specialtyId ?? '').trim(),
+          ...((specialtyIds ?? [])
+            .map((value) => String(value ?? '').trim())
+            .filter(Boolean) as string[]),
+        ].filter(Boolean),
+      );
+      if (
+        normalizedSpecialtyIds.size > 0 &&
+        !normalizedSpecialtyIds.has(constraints.specialtyId)
+      ) {
+        throwError('RBAC_FORBIDDEN');
+      }
     }
   }
 
@@ -2741,7 +2987,12 @@ export class ActivitiesService {
           OR: [
             { specialtyId: null },
             { specialtyId: profile.groupSpecialtyId },
-          ],
+            {
+              specialties: {
+                some: { specialtyId: profile.groupSpecialtyId },
+              },
+            },
+          ] as any,
         });
       }
       if (profile.groupEloRoleId) {
@@ -2763,7 +3014,11 @@ export class ActivitiesService {
       const groupOr: Prisma.ActivityWhereInput[] = [];
       if (user.specialtyId) {
         groupOr.push({
-          OR: [{ specialtyId: null }, { specialtyId: user.specialtyId }],
+          OR: [
+            { specialtyId: null },
+            { specialtyId: user.specialtyId },
+            { specialties: { some: { specialtyId: user.specialtyId } } },
+          ] as any,
         });
       }
       if (user.eloRoleId) {
@@ -2795,17 +3050,11 @@ export class ActivitiesService {
   ) {
     let specialtyMatch = false;
     if (specialtyId) {
-      if (activity?.specialtyId === undefined) {
-        // Backward-compatible fallback for records loaded without specialtyId.
-        specialtyMatch = Array.isArray(activity?.responsibles)
-          ? activity.responsibles.some(
-              (entry: any) => entry?.user?.specialtyId === specialtyId,
-            )
-          : false;
+      const activitySpecialtyIds = this.extractActivitySpecialtyIds(activity);
+      if (activitySpecialtyIds.length === 0) {
+        specialtyMatch = true;
       } else {
-        const activitySpecialtyId = activity.specialtyId as string | null;
-        specialtyMatch =
-          !activitySpecialtyId || activitySpecialtyId === specialtyId;
+        specialtyMatch = activitySpecialtyIds.includes(String(specialtyId));
       }
     }
 
@@ -2868,6 +3117,51 @@ export class ActivitiesService {
     const profile = resolveAccessProfile(user);
     if (profile.ti || profile.nationalCommission) return;
     throwError('RBAC_FORBIDDEN');
+  }
+
+  private async resolveActivitySpecialtyIds(args: {
+    specialtyId?: string | null;
+    specialtyIds?: string[];
+    fallbackToCommission?: boolean;
+  }) {
+    const normalized = Array.from(
+      new Set(
+        [
+          ...((args.specialtyIds ?? [])
+            .map((value) => String(value ?? '').trim())
+            .filter(Boolean) as string[]),
+          String(args.specialtyId ?? '').trim(),
+        ].filter(Boolean),
+      ),
+    );
+
+    if (normalized.length === 0 && args.fallbackToCommission) {
+      const commission = await this.prisma.specialty.findFirst({
+        where: {
+          OR: [
+            { name: { equals: 'Comissão CIPAVD', mode: 'insensitive' } },
+            { name: { equals: 'Comissao CIPAVD', mode: 'insensitive' } },
+            { name: { contains: 'Comissão CIPAVD', mode: 'insensitive' } },
+            { name: { contains: 'Comissao CIPAVD', mode: 'insensitive' } },
+          ],
+        },
+        select: { id: true },
+      });
+      if (!commission) return [];
+      normalized.push(commission.id);
+    }
+
+    if (normalized.length === 0) return [];
+
+    const existing = await this.prisma.specialty.findMany({
+      where: { id: { in: normalized } },
+      select: { id: true },
+    });
+    const existingIds = new Set(existing.map((item) => item.id));
+    const invalid = normalized.filter((id) => !existingIds.has(id));
+    if (invalid.length > 0) throwError('NOT_FOUND');
+
+    return normalized;
   }
 
   private async resolveActivityResponsibleIds(

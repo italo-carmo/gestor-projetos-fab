@@ -590,6 +590,7 @@ export function useCreateActivity() {
       localityIds?: string[];
       activityTypeId?: string | null;
       specialtyId?: string | null;
+      specialtyIds?: string[];
       responsibleUserIds?: string[];
       eventDate?: string | null;
       reportRequired?: boolean;
@@ -609,6 +610,7 @@ export function useUpdateActivity() {
         localityId?: string | null;
         activityTypeId?: string | null;
         specialtyId?: string | null;
+        specialtyIds?: string[];
         responsibleUserIds?: string[];
         eventDate?: string | null;
         reportRequired?: boolean;
@@ -694,7 +696,7 @@ export function useBatchUpdateActivityStatus() {
 export function useBatchUpdateActivitySpecialty() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (args: { ids: string[]; specialtyId: string | null }) =>
+    mutationFn: async (args: { ids: string[]; specialtyId?: string | null; specialtyIds?: string[] }) =>
       (await api.put("/activities/batch/specialty", args)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["activities"] }),
   });

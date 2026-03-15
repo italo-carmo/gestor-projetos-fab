@@ -190,6 +190,7 @@ model Activity {
   locality      Locality?     @relation(fields: [localityId], references: [id])
   activityType  ActivityType? @relation(fields: [activityTypeId], references: [id])
   specialty     Specialty?    @relation(fields: [specialtyId], references: [id])
+  specialties   ActivitySpecialty[]
   createdBy     User?         @relation("ActivityCreator", fields: [createdById], references: [id])
   report        ActivityReport?
   documents     DocumentAsset[]
@@ -203,6 +204,18 @@ model Activity {
   @@index([specialtyId])
   @@index([status])
   @@index([eventDate])
+}
+
+model ActivitySpecialty {
+  activityId   String
+  specialtyId  String
+  createdAt    DateTime @default(now())
+
+  activity     Activity  @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  specialty    Specialty @relation(fields: [specialtyId], references: [id], onDelete: Cascade)
+
+  @@id([activityId, specialtyId])
+  @@index([specialtyId])
 }
 
 model ActivityType {
@@ -391,6 +404,7 @@ model Specialty {
 
   users      User[]
   activities Activity[]
+  activityLinks ActivitySpecialty[]
   templates  TaskTemplate[]
   taskInstances TaskInstance[]
   notices    Notice[]

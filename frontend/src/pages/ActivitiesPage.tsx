@@ -302,6 +302,32 @@ function getLocalityChipStyle(localityLabel: string) {
   return localityBadgePalette[hash % localityBadgePalette.length];
 }
 
+function mapActivitySpecialties(activity: any) {
+  const linked = Array.isArray(activity?.specialties)
+    ? activity.specialties
+        .map((entry: any) => entry?.specialty ?? entry)
+        .filter((entry: any) => String(entry?.id ?? '').trim())
+        .map((entry: any) => ({
+          id: String(entry.id),
+          name: String(entry.name ?? '').trim() || 'Especialidade',
+        }))
+    : [];
+  const fallbackId = String(activity?.specialty?.id ?? activity?.specialtyId ?? '').trim();
+  const fallbackName = String(activity?.specialty?.name ?? '').trim();
+  if (fallbackId && !linked.some((entry: any) => entry.id === fallbackId)) {
+    linked.push({ id: fallbackId, name: fallbackName || 'Especialidade' });
+  }
+  return linked;
+}
+
+function getActivitySpecialtyLabel(activity: any) {
+  const names = mapActivitySpecialties(activity)
+    .map((item: any) => String(item.name ?? '').trim())
+    .filter(Boolean);
+  if (!names.length) return 'Comissão CIPAVD';
+  return names.join(' / ');
+}
+
 export function ActivitiesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const activityIdFromUrl = searchParams.get('activityId') ?? '';
@@ -358,7 +384,7 @@ export function ActivitiesPage() {
   const [batchDeleteConfirmOpen, setBatchDeleteConfirmOpen] = useState(false);
   const [replicateDialogOpen, setReplicateDialogOpen] = useState(false);
   const [batchStatus, setBatchStatus] = useState('');
-  const [batchSpecialtyId, setBatchSpecialtyId] = useState('');
+  const [batchSpecialtyIds, setBatchSpecialtyIds] = useState<string[]>([]);
   const [batchResponsibleUserId, setBatchResponsibleUserId] = useState('');
   const [replicateTargetLocalityIds, setReplicateTargetLocalityIds] = useState<string[]>([]);
   const [replicateStatusMode, setReplicateStatusMode] = useState<'RESET' | 'KEEP'>('RESET');
@@ -440,8 +466,8 @@ export function ActivitiesPage() {
         result = compareTextValues(first?.locality?.name ?? '', second?.locality?.name ?? '');
       } else if (sortState.column === 'specialty') {
         result = compareTextValues(
-          first?.specialty?.name ?? 'Comissão CIPAVD',
-          second?.specialty?.name ?? 'Comissão CIPAVD',
+          getActivitySpecialtyLabel(first),
+          getActivitySpecialtyLabel(second),
         );
       } else if (sortState.column === 'status') {
         result = compareTextValues(
@@ -563,7 +589,7 @@ export function ActivitiesPage() {
     localityId: '',
     localityIds: [] as string[],
     activityTypeId: '',
-    specialtyId: '',
+    specialtyIds: [] as string[],
     responsibleUserId: '',
     eventDate: '',
     reportRequired: false,
@@ -577,7 +603,7 @@ export function ActivitiesPage() {
       localityId: selected.localityId ?? '',
       localityIds: selected.localityId ? [selected.localityId] : [],
       activityTypeId: selected.activityType?.id ?? '',
-      specialtyId: selected.specialtyId ? String(selected.specialtyId) : '',
+      specialtyIds: mapActivitySpecialties(selected).map((item: any) => item.id),
       responsibleUserId: selected.responsibleUsers?.[0]?.id ?? '',
       eventDate: selected.eventDate ? String(selected.eventDate).slice(0, 10) : '',
       reportRequired: Boolean(selected.reportRequired),
@@ -722,7 +748,8 @@ export function ActivitiesPage() {
         localityId: activityForm.localityId || null,
         localityIds: activityForm.localityIds,
         activityTypeId: activityForm.activityTypeId || null,
-        specialtyId: activityForm.specialtyId || null,
+        specialtyIds: activityForm.specialtyIds,
+        specialtyId: activityForm.specialtyIds[0] || null,
         responsibleUserIds: activityForm.responsibleUserId ? [activityForm.responsibleUserId] : [],
         eventDate: activityForm.eventDate || null,
         reportRequired: activityForm.reportRequired,
@@ -754,7 +781,8 @@ export function ActivitiesPage() {
           description: activityForm.description || null,
           localityId: activityForm.localityId || null,
           activityTypeId: activityForm.activityTypeId || null,
-          specialtyId: activityForm.specialtyId || null,
+          specialtyIds: activityForm.specialtyIds,
+          specialtyId: activityForm.specialtyIds[0] || null,
           responsibleUserIds: activityForm.responsibleUserId ? [activityForm.responsibleUserId] : [],
           eventDate: activityForm.eventDate || null,
           reportRequired: activityForm.reportRequired,
@@ -864,10 +892,11 @@ export function ActivitiesPage() {
     try {
       await batchUpdateActivitySpecialty.mutateAsync({
         ids: selectedIds,
-        specialtyId: batchSpecialtyId || null,
+        specialtyIds: batchSpecialtyIds,
+        specialtyId: batchSpecialtyIds[0] || null,
       });
-      toast.push({ message: `${count} atividade(s) atualizada(s) com nova especialidade.`, severity: 'success' });
-      setBatchSpecialtyId('');
+      toast.push({ message: `${count} atividade(s) atualizada(s) com novas especialidades.`, severity: 'success' });
+      setBatchSpecialtyIds([]);
       setSelectedIds([]);
     } catch (error) {
       const payload = parseApiError(error);
@@ -1253,7 +1282,7 @@ export function ActivitiesPage() {
       localityId: '',
       localityIds: [],
       activityTypeId: '',
-      specialtyId: '',
+      specialtyIds: [],
       responsibleUserId: '',
       eventDate: '',
       reportRequired: false,
@@ -1402,12 +1431,30 @@ export function ActivitiesPage() {
                       select
                       size="small"
                       label="Especialidade"
-                      value={batchSpecialtyId}
-                      onChange={(e) => setBatchSpecialtyId(e.target.value)}
+                      value={batchSpecialtyIds}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setBatchSpecialtyIds(
+                          Array.isArray(value)
+                            ? value.map((item) => String(item))
+                            : [String(value)],
+                        );
+                      }}
                       sx={{ width: { xs: '100%', sm: 210 } }}
                       disabled={!selectedIds.length}
+                      SelectProps={{
+                        multiple: true,
+                        renderValue: (selected) => {
+                          const selectedValues = Array.isArray(selected)
+                            ? selected.map((item) => String(item))
+                            : [];
+                          if (!selectedValues.length) return 'Comissão CIPAVD';
+                          return selectedValues
+                            .map((id) => specialtyNameById.get(id) ?? 'Especialidade')
+                            .join(', ');
+                        },
+                      }}
                     >
-                      <MenuItem value="">Comissão CIPAVD</MenuItem>
                       {specialties.map((specialty: any) => (
                         <MenuItem key={specialty.id} value={specialty.id}>
                           {specialty.name}
@@ -1650,7 +1697,7 @@ export function ActivitiesPage() {
                           );
                         })()}
                       </TableCell>
-                      <TableCell>{item.specialty?.name ?? 'Comissão CIPAVD'}</TableCell>
+                      <TableCell>{getActivitySpecialtyLabel(item)}</TableCell>
                       <TableCell>
                         {Array.isArray(item.responsibleUsers) && item.responsibleUsers.length > 0
                           ? item.responsibleUsers.map((user: any) => toMilitaryDisplayName(user.name)).join(', ')
@@ -1878,20 +1925,31 @@ export function ActivitiesPage() {
                   size="small"
                   label="Especialidade"
                   InputLabelProps={{ shrink: true }}
-                  value={activityForm.specialtyId || ''}
-                  onChange={(e) => setActivityForm({ ...activityForm, specialtyId: e.target.value })}
+                  value={activityForm.specialtyIds}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setActivityForm({
+                      ...activityForm,
+                      specialtyIds: Array.isArray(value)
+                        ? value.map((item) => String(item))
+                        : [String(value)],
+                    });
+                  }}
                   sx={{ minWidth: 220 }}
                   disabled={!canEditActivityForm}
                   SelectProps={{
-                    displayEmpty: true,
+                    multiple: true,
                     renderValue: (value) => {
-                      const selectedValue = String(value ?? '').trim();
-                      if (!selectedValue) return 'Comissão CIPAVD';
-                      return specialtyNameById.get(selectedValue) ?? 'Comissão CIPAVD';
+                      const selectedValues = Array.isArray(value)
+                        ? value.map((item) => String(item).trim()).filter(Boolean)
+                        : [];
+                      if (!selectedValues.length) return 'Comissão CIPAVD';
+                      return selectedValues
+                        .map((id) => specialtyNameById.get(id) ?? 'Especialidade')
+                        .join(', ');
                     },
                   }}
                 >
-                  <MenuItem value="">Comissão CIPAVD</MenuItem>
                   {specialties.map((s: any) => (
                     <MenuItem key={s.id} value={s.id}>
                       {s.name}

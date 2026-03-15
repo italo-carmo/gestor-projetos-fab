@@ -307,17 +307,25 @@ export function DashboardExecutivePage() {
       .toLowerCase();
   const specialtyMatches = (activity: any, specialty: any) => {
     const selectedName = normalizeText(specialty?.specialtyName);
-    const activityName = normalizeText(activity?.specialtyName);
-    if (specialty?.specialtyId && activity?.specialtyId) {
-      return String(specialty.specialtyId) === String(activity.specialtyId);
+    const activityIds = Array.isArray(activity?.specialtyIds)
+      ? activity.specialtyIds.map((item: any) => String(item))
+      : activity?.specialtyId
+        ? [String(activity.specialtyId)]
+        : [];
+    const activityNames = Array.isArray(activity?.specialtyNames)
+      ? activity.specialtyNames.map((item: any) => normalizeText(item))
+      : [normalizeText(activity?.specialtyName)];
+    if (specialty?.specialtyId && activityIds.length > 0) {
+      return activityIds.includes(String(specialty.specialtyId));
     }
     if (selectedName === 'comissao cipavd') {
-      return activityName === '' || activityName === 'comissao cipavd';
+      if (activityIds.length === 0) return true;
+      return activityNames.some((name: string) => name === 'comissao cipavd');
     }
     if (selectedName === 'psicologia') {
-      return activityName.includes('psicologia');
+      return activityNames.some((name: string) => name.includes('psicologia'));
     }
-    return activityName === selectedName;
+    return activityNames.some((name: string) => name === selectedName);
   };
   const chartDetailActivities =
     chartDetail?.kind === 'locality'
