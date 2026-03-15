@@ -88,7 +88,7 @@ type MissionChecklistItemState = {
 type MissionChecklistItemConfig = {
   id: string;
   title: string;
-  prompt?: string;
+  prompt?: string | null;
 };
 
 type MissionChecklistSectionConfig = {
@@ -97,39 +97,62 @@ type MissionChecklistSectionConfig = {
   items: MissionChecklistItemConfig[];
 };
 
-const checklistClassificationMeta: Record<
+type MissionChecklistClassificationConfig = {
+  id: MissionChecklistClassification;
+  label: string;
+  colorHex: string | null;
+};
+
+const fallbackChecklistClassifications: MissionChecklistClassificationConfig[] = [
+  {
+    id: 'FORTE_CONSOLIDADA',
+    label: 'Dimensão forte/consolidada',
+    colorHex: '#2E7D32',
+  },
+  {
+    id: 'OPORTUNIDADE_MELHORIA',
+    label: 'Dimensão com oportunidades de melhoria',
+    colorHex: '#F9A825',
+  },
+  {
+    id: 'NECESSITA_ANALISE',
+    label: 'Dimensão necessita de maior análise',
+    colorHex: null,
+  },
+  {
+    id: 'POSSIVEL_RISCO',
+    label: 'Possível Risco',
+    colorHex: '#C62828',
+  },
+];
+
+const fallbackChecklistClassificationMeta: Record<
   MissionChecklistClassification,
-  { label: string; color: string; bgColor: string }
+  MissionChecklistClassificationConfig
 > = {
   FORTE_CONSOLIDADA: {
+    id: 'FORTE_CONSOLIDADA',
     label: 'Dimensão forte/consolidada',
-    color: '#1b5e20',
-    bgColor: '#e8f5e9',
+    colorHex: '#2E7D32',
   },
   OPORTUNIDADE_MELHORIA: {
+    id: 'OPORTUNIDADE_MELHORIA',
     label: 'Dimensão com oportunidades de melhoria',
-    color: '#8a5800',
-    bgColor: '#fff8e1',
+    colorHex: '#F9A825',
   },
   NECESSITA_ANALISE: {
+    id: 'NECESSITA_ANALISE',
     label: 'Dimensão necessita de maior análise',
-    color: '#334155',
-    bgColor: '#f1f5f9',
+    colorHex: null,
   },
   POSSIVEL_RISCO: {
-    label: 'Possível risco',
-    color: '#b71c1c',
-    bgColor: '#ffebee',
+    id: 'POSSIVEL_RISCO',
+    label: 'Possível Risco',
+    colorHex: '#C62828',
   },
 };
 
-const checklistClassificationEntries = Object.entries(
-  checklistClassificationMeta,
-) as Array<
-  [MissionChecklistClassification, { label: string; color: string; bgColor: string }]
->;
-
-const missionChecklistSections: MissionChecklistSectionConfig[] = [
+const fallbackMissionChecklistSections: MissionChecklistSectionConfig[] = [
   {
     id: 'lideranca',
     title: 'Liderança',
@@ -213,16 +236,15 @@ const missionChecklistSections: MissionChecklistSectionConfig[] = [
   },
 ];
 
-const missionChecklistItems = missionChecklistSections.flatMap((section) =>
-  section.items.map((item) => item.id),
-);
-const missionChecklistItemSet = new Set<string>(missionChecklistItems);
-
-function buildDefaultMissionChecklistState(): Record<string, MissionChecklistItemState> {
-  return missionChecklistItems.reduce<Record<string, MissionChecklistItemState>>(
+function buildDefaultMissionChecklistState(
+  sections: MissionChecklistSectionConfig[],
+  defaultClassification: MissionChecklistClassification,
+): Record<string, MissionChecklistItemState> {
+  const itemIds = sections.flatMap((section) => section.items.map((item) => item.id));
+  return itemIds.reduce<Record<string, MissionChecklistItemState>>(
     (acc, itemId) => {
       acc[itemId] = {
-        classification: 'NECESSITA_ANALISE',
+        classification: defaultClassification,
         notes: '',
       };
       return acc;
@@ -232,22 +254,47 @@ function buildDefaultMissionChecklistState(): Record<string, MissionChecklistIte
 }
 
 function isMissionChecklistClassification(value: string): value is MissionChecklistClassification {
-  return Object.hasOwn(checklistClassificationMeta, value);
+  return Object.hasOwn(fallbackChecklistClassificationMeta, value);
 }
 
 function buildMissionChecklistStateFromApi(data: any): Record<string, MissionChecklistItemState> {
-  const base = buildDefaultMissionChecklistState();
-  const sections = Array.isArray(data?.sections) ? data.sections : [];
-
-  for (const section of sections) {
+  const sections =
+    Array.isArray(data?.sections) && data.sections.length > 0
+      ? (data.sections as MissionChecklistSectionConfig[])
+      : fallbackMissionChecklistSections;
+  const defaultClassification = isMissionChecklistClassification(
+    String(data?.defaultClassification ?? ''),
+  )
+    ? (String(data?.defaultClassification) as MissionChecklistClassification)
+    : 'NECESSITA_ANALISE';
+  const base = buildDefaultMissionChecklistState(sections, defaultClassification);
+  const itemIdSet = new Set(
+    sections.flatMap((section) =>
+      (section.items ?? []).map((item) => String(item?.id ?? '')),
+    ),
+  );
+  const validClassifications = new Set(
+    (
+      Array.isArray(data?.classifications)
+        ? data.classifications
+        : fallbackChecklistClassifications
+    )
+      .map((classification: any) => String(classification?.id ?? ''))
+      .filter((id: string): id is MissionChecklistClassification =>
+        isMissionChecklistClassification(id),
+      ),
+  );
+  for (const section of sections as any[]) {
     const items = Array.isArray(section?.items) ? section.items : [];
     for (const item of items) {
       const itemId = String(item?.id ?? '');
-      if (!missionChecklistItemSet.has(itemId)) continue;
+      if (!itemIdSet.has(itemId)) continue;
       const classificationRaw = String(item?.classification ?? '');
-      const classification = isMissionChecklistClassification(classificationRaw)
-        ? classificationRaw
-        : 'NECESSITA_ANALISE';
+      const classification =
+        isMissionChecklistClassification(classificationRaw) &&
+        validClassifications.has(classificationRaw)
+          ? classificationRaw
+          : defaultClassification;
       base[itemId] = {
         classification,
         notes: String(item?.notes ?? ''),
@@ -256,6 +303,27 @@ function buildMissionChecklistStateFromApi(data: any): Record<string, MissionChe
   }
 
   return base;
+}
+
+function normalizeChecklistColorHex(colorHex: string | null | undefined) {
+  const value = String(colorHex ?? '').trim();
+  if (!/^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/.test(value)) return null;
+  return value.toUpperCase();
+}
+
+function hexToRgba(hexColor: string, alpha: number) {
+  const normalized = hexColor.replace('#', '');
+  const safeHex =
+    normalized.length === 3
+      ? normalized
+          .split('')
+          .map((char) => `${char}${char}`)
+          .join('')
+      : normalized;
+  const r = Number.parseInt(safeHex.slice(0, 2), 16);
+  const g = Number.parseInt(safeHex.slice(2, 4), 16);
+  const b = Number.parseInt(safeHex.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
 function formatDateTimeLocalValue(value: string | Date | null | undefined) {
@@ -357,7 +425,11 @@ export function MissionsPage() {
   const [scheduleForm, setScheduleForm] = useState(blankScheduleForm);
   const [editingScheduleItemId, setEditingScheduleItemId] = useState<string | null>(null);
   const [checklistState, setChecklistState] = useState<Record<string, MissionChecklistItemState>>(
-    () => buildDefaultMissionChecklistState(),
+    () =>
+      buildDefaultMissionChecklistState(
+        fallbackMissionChecklistSections,
+        'NECESSITA_ANALISE',
+      ),
   );
   const [checklistOmId, setChecklistOmId] = useState('');
   const [checklistDirty, setChecklistDirty] = useState(false);
@@ -406,6 +478,73 @@ export function MissionsPage() {
     String(selectedMission?.id ?? ''),
     Boolean(selectedMission?.id) && !isCreateMode,
   );
+  const missionChecklistSections = useMemo(() => {
+    const sectionsRaw = Array.isArray((missionChecklistQuery.data as any)?.sections)
+      ? ((missionChecklistQuery.data as any).sections as any[])
+      : [];
+    if (sectionsRaw.length === 0) return fallbackMissionChecklistSections;
+    return sectionsRaw.map((section) => ({
+      id: String(section?.id ?? ''),
+      title: String(section?.title ?? ''),
+      items: (Array.isArray(section?.items) ? section.items : []).map((item: any) => ({
+        id: String(item?.id ?? ''),
+        title: String(item?.title ?? ''),
+        prompt: item?.prompt ? String(item.prompt) : null,
+      })),
+    })) as MissionChecklistSectionConfig[];
+  }, [missionChecklistQuery.data]);
+  const checklistClassifications = useMemo(() => {
+    const classificationsRaw = Array.isArray(
+      (missionChecklistQuery.data as any)?.classifications,
+    )
+      ? ((missionChecklistQuery.data as any).classifications as any[])
+      : [];
+    const normalized = classificationsRaw
+      .map((classification) => {
+        const id = String(classification?.id ?? '');
+        if (!isMissionChecklistClassification(id)) return null;
+        return {
+          id,
+          label:
+            String(classification?.label ?? '').trim() ||
+            fallbackChecklistClassificationMeta[id].label,
+          colorHex:
+            normalizeChecklistColorHex(
+              classification?.colorHex as string | null | undefined,
+            ) ?? fallbackChecklistClassificationMeta[id].colorHex,
+        };
+      })
+      .filter(Boolean) as MissionChecklistClassificationConfig[];
+
+    if (normalized.length === 0) return fallbackChecklistClassifications;
+    return normalized;
+  }, [missionChecklistQuery.data]);
+  const checklistClassificationMap = useMemo(() => {
+    const map = new Map<
+      MissionChecklistClassification,
+      MissionChecklistClassificationConfig
+    >();
+    for (const classification of checklistClassifications) {
+      map.set(classification.id, classification);
+    }
+    return map;
+  }, [checklistClassifications]);
+  const checklistDefaultClassification = useMemo(() => {
+    if (checklistClassificationMap.has('NECESSITA_ANALISE')) {
+      return 'NECESSITA_ANALISE' as MissionChecklistClassification;
+    }
+    const first = checklistClassifications[0]?.id;
+    return first && isMissionChecklistClassification(first)
+      ? first
+      : ('NECESSITA_ANALISE' as MissionChecklistClassification);
+  }, [checklistClassificationMap, checklistClassifications]);
+  const checklistClassificationEntries = useMemo(
+    () =>
+      checklistClassifications.filter((classification) =>
+        isMissionChecklistClassification(classification.id),
+      ),
+    [checklistClassifications],
+  );
   const cloneSourceMissionQuery = useMission(cloneSourceMissionId, Boolean(cloneSourceMissionId));
   const cloneMissionOptions = useMemo(() => {
     const missions = (cloneMissionOptionsQuery.data?.items ?? []) as any[];
@@ -447,15 +586,30 @@ export function MissionsPage() {
 
   useEffect(() => {
     if (!selectedMission?.id) {
-      setChecklistState(buildDefaultMissionChecklistState());
+      setChecklistState(
+        buildDefaultMissionChecklistState(
+          missionChecklistSections,
+          checklistDefaultClassification,
+        ),
+      );
       setChecklistOmId('');
       setChecklistDirty(false);
       return;
     }
-    setChecklistState(buildDefaultMissionChecklistState());
+    setChecklistState(
+      buildDefaultMissionChecklistState(
+        missionChecklistSections,
+        checklistDefaultClassification,
+      ),
+    );
     setChecklistOmId(String(selectedMission.localityId ?? '').trim());
     setChecklistDirty(false);
-  }, [selectedMission?.id, selectedMission?.localityId]);
+  }, [
+    selectedMission?.id,
+    selectedMission?.localityId,
+    missionChecklistSections,
+    checklistDefaultClassification,
+  ]);
 
   useEffect(() => {
     if (!selectedMission?.id) return;
@@ -475,7 +629,12 @@ export function MissionsPage() {
       localityId: localityId || localityOptions[0]?.id || '',
     });
     setLdapIdentifier('');
-    setChecklistState(buildDefaultMissionChecklistState());
+    setChecklistState(
+      buildDefaultMissionChecklistState(
+        missionChecklistSections,
+        checklistDefaultClassification,
+      ),
+    );
     setChecklistOmId(localityId || localityOptions[0]?.id || '');
     setChecklistDirty(false);
     resetScheduleForm();
@@ -505,7 +664,12 @@ export function MissionsPage() {
     setIsCreateMode(false);
     setMissionTab(0);
     resetScheduleForm();
-    setChecklistState(buildDefaultMissionChecklistState());
+    setChecklistState(
+      buildDefaultMissionChecklistState(
+        missionChecklistSections,
+        checklistDefaultClassification,
+      ),
+    );
     setChecklistOmId('');
     setChecklistDirty(false);
     setCloneSourceMissionId('');
@@ -788,7 +952,8 @@ export function MissionsPage() {
     setChecklistState((current) => ({
       ...current,
       [itemId]: {
-        classification: current[itemId]?.classification ?? 'NECESSITA_ANALISE',
+        classification:
+          current[itemId]?.classification ?? checklistDefaultClassification,
         notes,
       },
     }));
@@ -814,9 +979,13 @@ export function MissionsPage() {
         id: String(selectedMission.id),
         payload: {
           omId: normalizedChecklistOmId,
-          items: missionChecklistItems.map((itemId) => ({
+          items: missionChecklistSections.flatMap((section) =>
+            section.items.map((item) => item.id),
+          ).map((itemId) => ({
             id: itemId,
-            classification: checklistState[itemId]?.classification ?? 'NECESSITA_ANALISE',
+            classification:
+              checklistState[itemId]?.classification ??
+              checklistDefaultClassification,
             notes: checklistState[itemId]?.notes ?? '',
           })),
         },
@@ -1651,10 +1820,22 @@ export function MissionsPage() {
                                 <Stack spacing={1.2}>
                                   {section.items.map((item) => {
                                     const current = checklistState[item.id] ?? {
-                                      classification: 'NECESSITA_ANALISE',
+                                      classification: checklistDefaultClassification,
                                       notes: '',
                                     };
-                                    const classificationMeta = checklistClassificationMeta[current.classification];
+                                    const classificationMeta =
+                                      checklistClassificationMap.get(current.classification) ??
+                                      fallbackChecklistClassificationMeta[current.classification];
+                                    const classificationColor =
+                                      normalizeChecklistColorHex(
+                                        classificationMeta?.colorHex,
+                                      ) ?? '#475569';
+                                    const classificationBg =
+                                      normalizeChecklistColorHex(
+                                        classificationMeta?.colorHex,
+                                      )
+                                        ? hexToRgba(classificationColor, 0.13)
+                                        : '#F8FAFC';
                                     return (
                                       <Box
                                         key={item.id}
@@ -1696,23 +1877,29 @@ export function MissionsPage() {
                                             sx={{
                                               minWidth: { xs: '100%', md: 360 },
                                               '& .MuiOutlinedInput-root': {
-                                                backgroundColor: classificationMeta.bgColor,
+                                                backgroundColor: classificationBg,
                                               },
                                               '& .MuiSelect-select': {
-                                                color: classificationMeta.color,
+                                                color: classificationColor,
                                                 fontWeight: 700,
                                               },
                                             }}
                                           >
-                                            {checklistClassificationEntries.map(([value, meta]) => (
+                                            {checklistClassificationEntries.map((entry) => {
+                                              const optionColor =
+                                                normalizeChecklistColorHex(
+                                                  entry.colorHex,
+                                                ) ?? '#475569';
+                                              return (
                                               <MenuItem
-                                                key={value}
-                                                value={value}
-                                                sx={{ color: meta.color, fontWeight: 700 }}
+                                                key={entry.id}
+                                                value={entry.id}
+                                                sx={{ color: optionColor, fontWeight: 700 }}
                                               >
-                                                {meta.label}
+                                                {entry.label}
                                               </MenuItem>
-                                            ))}
+                                              );
+                                            })}
                                           </TextField>
                                           <TextField
                                             size="small"

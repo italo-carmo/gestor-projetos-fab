@@ -1,12 +1,21 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Put,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../common/current-user.decorator';
 import { throwError } from '../common/http-error';
 import { RequirePermission } from '../rbac/require-permission.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
-import { hasNationalManagementScope } from '../rbac/role-access';
+import { hasAnyRole, hasNationalManagementScope, ROLE_TI } from '../rbac/role-access';
 import type { RbacUser } from '../rbac/rbac.types';
 import { TasksService } from './tasks.service';
+import { UpdateDashboardNationalCardDto } from './dto/update-dashboard-national-card.dto';
 
 @Controller()
 @UseGuards(JwtAuthGuard, RbacGuard)
@@ -31,6 +40,19 @@ export class DashboardsController {
     return this.tasks.getDashboardNational(user, localityId);
   }
 
+  @Put('dashboard/national/cards/:id')
+  @RequirePermission('dashboard', 'view')
+  updateNationalCard(
+    @Param('id') id: string,
+    @Body() dto: UpdateDashboardNationalCardDto,
+    @CurrentUser() user: RbacUser,
+  ) {
+    if (!hasAnyRole(user, [ROLE_TI])) {
+      throwError('RBAC_FORBIDDEN');
+    }
+    return this.tasks.updateDashboardNationalCardSetting(id, dto, user);
+  }
+
   @Get('dashboard/recruits')
   @RequirePermission('dashboard', 'view')
   recruits(
@@ -51,7 +73,10 @@ export class DashboardsController {
     @Query('localityId') localityId: string | undefined,
     @CurrentUser() user: RbacUser,
   ) {
-    return this.tasks.getDashboardExecutive({ from, to, phaseId, threshold, command, localityId }, user);
+    return this.tasks.getDashboardExecutive(
+      { from, to, phaseId, threshold, command, localityId },
+      user,
+    );
   }
 
   @Get('dashboard/executive/debug-specialties')
@@ -61,9 +86,12 @@ export class DashboardsController {
     @Query('to') to: string | undefined,
     @CurrentUser() user: RbacUser,
   ) {
-    const result = await this.tasks.getDashboardExecutive({ from, to, threshold: '70' }, user);
-    const psicologia = result.specialties.items.find((s: any) => 
-      s.specialtyName?.toLowerCase().includes('psicologia')
+    const result = await this.tasks.getDashboardExecutive(
+      { from, to, threshold: '70' },
+      user,
+    );
+    const psicologia = result.specialties.items.find((s: any) =>
+      s.specialtyName?.toLowerCase().includes('psicologia'),
     );
     return {
       specialties: result.specialties.items.map((s: any) => ({
@@ -76,7 +104,10 @@ export class DashboardsController {
         specialtyId: psicologia?.specialtyId,
         specialtyName: psicologia?.specialtyName,
       },
-      total: (result.specialties.items as any[]).reduce((sum: number, s: any) => sum + s.count, 0),
+      total: (result.specialties.items as any[]).reduce(
+        (sum: number, s: any) => sum + s.count,
+        0,
+      ),
       totalActivities: result.summary.totalActivities,
     };
   }
@@ -99,15 +130,20 @@ export class DashboardsController {
     @CurrentUser() user: RbacUser,
   ) {
     const dbCounts = await this.tasks.debugActivityCounts({ from, to }, user);
-    const dashboardResult = await this.tasks.getDashboardExecutive({ from, to, threshold: '70' }, user);
-    
-    const dashboardPsicologia = dashboardResult.specialties.items.find((s: any) => 
-      s.specialtyName?.toLowerCase().includes('psicologia')
+    const dashboardResult = await this.tasks.getDashboardExecutive(
+      { from, to, threshold: '70' },
+      user,
     );
-    const dashboardCommission = dashboardResult.specialties.items.find((s: any) => 
-      s.specialtyName?.toLowerCase().includes('comissão') || s.specialtyName?.toLowerCase().includes('cipavd')
+
+    const dashboardPsicologia = dashboardResult.specialties.items.find(
+      (s: any) => s.specialtyName?.toLowerCase().includes('psicologia'),
     );
-    
+    const dashboardCommission = dashboardResult.specialties.items.find(
+      (s: any) =>
+        s.specialtyName?.toLowerCase().includes('comissão') ||
+        s.specialtyName?.toLowerCase().includes('cipavd'),
+    );
+
     return {
       database: {
         psicologia: dbCounts.counts.psicologia,
@@ -127,8 +163,10 @@ export class DashboardsController {
       bySpecialtyId: dbCounts.bySpecialtyId,
       activitiesSample: dbCounts.activitiesSample,
       match: {
-        psicologia: dbCounts.counts.psicologia === (dashboardPsicologia?.count || 0),
-        commission: dbCounts.counts.commission === (dashboardCommission?.count || 0),
+        psicologia:
+          dbCounts.counts.psicologia === (dashboardPsicologia?.count || 0),
+        commission:
+          dbCounts.counts.commission === (dashboardCommission?.count || 0),
       },
       expected: {
         psicologia: 3,

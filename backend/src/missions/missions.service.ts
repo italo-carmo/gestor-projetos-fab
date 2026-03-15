@@ -19,10 +19,12 @@ import { FabLdapService } from '../ldap/fab-ldap.service';
 import { selectTargetLocalities } from '../common/priority-localities';
 import {
   DEFAULT_MISSION_CHECKLIST_CLASSIFICATION,
+  MISSION_CHECKLIST_CLASSIFICATION_DEFAULT_META,
   MISSION_CHECKLIST_CLASSIFICATIONS,
-  MISSION_CHECKLIST_ITEM_ID_SET,
-  MISSION_CHECKLIST_ITEM_IDS,
-  MISSION_CHECKLIST_SECTIONS,
+  MISSION_CHECKLIST_DEFAULT_SECTIONS,
+  MISSION_CHECKLIST_SECTION_IDS,
+  MISSION_CHECKLIST_SECTION_TITLE_BY_ID,
+  type MissionChecklistSectionId,
   type MissionChecklistClassification,
 } from './mission-checklist.constants';
 
@@ -43,6 +45,48 @@ type MissionChecklistStoredItem = {
   id: string;
   classification: MissionChecklistClassification;
   notes: string;
+};
+
+type MissionChecklistSectionRuntime = {
+  id: MissionChecklistSectionId;
+  title: string;
+  items: Array<{
+    id: string;
+    title: string;
+    prompt: string | null;
+    sortOrder: number;
+  }>;
+};
+
+type MissionChecklistConfigRuntime = {
+  sections: MissionChecklistSectionRuntime[];
+  itemIds: string[];
+  itemIdSet: Set<string>;
+  classifications: Array<{
+    id: MissionChecklistClassification;
+    label: string;
+    colorHex: string | null;
+    sortOrder: number;
+  }>;
+  classificationIdSet: Set<MissionChecklistClassification>;
+  defaultClassification: MissionChecklistClassification;
+};
+
+type ChecklistDimensionRow = {
+  id: string;
+  sectionId: string;
+  title: string;
+  prompt: string | null;
+  sortOrder: number;
+  createdAt: Date;
+};
+
+type ChecklistClassificationRow = {
+  id: string;
+  label: string;
+  colorHex: string | null;
+  sortOrder: number;
+  createdAt: Date;
 };
 
 @Injectable()
@@ -276,6 +320,7 @@ export class MissionsService {
   ) {
     this.assertMissionAccess(user);
     const selectedOmId = String(filters.localityId ?? '').trim() || null;
+    const checklistConfig = await this.getMissionChecklistConfig();
 
     const [omsCatalog, missions] = await this.prisma.$transaction([
       this.prisma.locality.findMany({
@@ -319,9 +364,7 @@ export class MissionsService {
       {
         om: { id: string; name: string; code: string | null };
         mission: (typeof missions)[number];
-        checklistSections: ReturnType<
-          MissionsService['buildMissionChecklistSections']
-        >;
+        checklistSections: MissionChecklistSectionRuntime[];
         checklistItemById: Map<
           string,
           { classification: MissionChecklistClassification; notes: string }
@@ -332,6 +375,7 @@ export class MissionsService {
     for (const mission of missions) {
       const storedChecklistItems = this.readStoredMissionChecklistItems(
         mission.checklistJson,
+        checklistConfig,
       );
       if (storedChecklistItems.size === 0) continue;
 
@@ -347,6 +391,7 @@ export class MissionsService {
 
       const checklistSections = this.buildMissionChecklistSections(
         mission.checklistJson,
+        checklistConfig,
       );
       const checklistItemById = new Map<
         string,
@@ -386,12 +431,14 @@ export class MissionsService {
       return {
         generatedAt: new Date().toISOString(),
         localities: [],
+        classifications: checklistConfig.classifications,
+        defaultClassification: checklistConfig.defaultClassification,
         sections: [],
         missionsByLocality: [],
       };
     }
 
-    const sections = MISSION_CHECKLIST_SECTIONS.map((section) => ({
+    const sections = checklistConfig.sections.map((section) => ({
       id: section.id,
       title: section.title,
       items: section.items.map((item) => ({
@@ -462,9 +509,291 @@ export class MissionsService {
     return {
       generatedAt: new Date().toISOString(),
       localities,
+      classifications: checklistConfig.classifications,
+      defaultClassification: checklistConfig.defaultClassification,
       sections,
       missionsByLocality,
     };
+  }
+
+  async getChecklistConfig(user?: RbacUser) {
+    this.assertMissionAccess(user);
+    const checklistConfig = await this.getMissionChecklistConfig();
+    return {
+      generatedAt: new Date().toISOString(),
+      classifications: checklistConfig.classifications,
+      defaultClassification: checklistConfig.defaultClassification,
+      sections: checklistConfig.sections,
+    };
+  }
+
+  async createChecklistDimension(
+    payload: {
+      sectionId: MissionChecklistSectionId;
+      title: string;
+      prompt?: string;
+      sortOrder?: number;
+    },
+    user?: RbacUser,
+  ) {
+    this.assertMissionChecklistConfigAccess(user);
+    const sectionId = this.normalizeChecklistSectionId(payload.sectionId);
+    const title = this.sanitizeRequiredText(payload.title, 'title');
+    const prompt =
+      payload.prompt === undefined ? null : sanitizeText(payload.prompt ?? '');
+
+    const sortOrder =
+      typeof payload.sortOrder === 'number' && Number.isFinite(payload.sortOrder)
+        ? Math.max(0, Math.floor(payload.sortOrder))
+        : await this.nextChecklistDimensionSortOrder(sectionId);
+    const id = `dim_${Date.now().toString(36)}_${Math.random()
+      .toString(36)
+      .slice(2, 8)}`;
+
+    const [created] = await this.prisma.$queryRaw<
+      Array<{
+        id: string;
+        sectionId: string;
+        title: string;
+        prompt: string | null;
+        sortOrder: number;
+      }>
+    >(Prisma.sql`
+      INSERT INTO "MissionChecklistDimension"
+        ("id", "sectionId", "title", "prompt", "sortOrder", "isActive", "createdAt", "updatedAt")
+      VALUES
+        (${id}, ${sectionId}, ${title}, ${prompt ? prompt : null}, ${sortOrder}, true, NOW(), NOW())
+      RETURNING "id", "sectionId", "title", "prompt", "sortOrder"
+    `);
+    if (!created) throwError('UNEXPECTED');
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'missions',
+      action: 'create_checklist_dimension',
+      entityId: created.id,
+      diffJson: created,
+    });
+
+    return created;
+  }
+
+  async updateChecklistDimension(
+    id: string,
+    payload: {
+      sectionId?: MissionChecklistSectionId;
+      title?: string;
+      prompt?: string;
+      sortOrder?: number;
+    },
+    user?: RbacUser,
+  ) {
+    this.assertMissionChecklistConfigAccess(user);
+    const dimensionId = String(id ?? '').trim();
+    if (!dimensionId) {
+      throwError('VALIDATION_ERROR', { field: 'id', reason: 'REQUIRED' });
+    }
+
+    const [existing] = await this.prisma.$queryRaw<
+      Array<{
+        id: string;
+        sectionId: string;
+        title: string;
+        prompt: string | null;
+        sortOrder: number;
+      }>
+    >(Prisma.sql`
+      SELECT "id", "sectionId", "title", "prompt", "sortOrder"
+      FROM "MissionChecklistDimension"
+      WHERE "id" = ${dimensionId} AND "isActive" = true
+      LIMIT 1
+    `);
+    if (!existing) throwError('NOT_FOUND');
+
+    const nextSectionId =
+      payload.sectionId === undefined
+        ? existing.sectionId
+        : this.normalizeChecklistSectionId(payload.sectionId);
+
+    const nextSortOrder =
+      typeof payload.sortOrder === 'number' && Number.isFinite(payload.sortOrder)
+        ? Math.max(0, Math.floor(payload.sortOrder))
+        : existing.sortOrder;
+    const nextTitle =
+      payload.title === undefined
+        ? existing.title
+        : this.sanitizeRequiredText(payload.title, 'title');
+    const nextPrompt =
+      payload.prompt === undefined
+        ? existing.prompt
+        : (() => {
+            const normalizedPrompt = sanitizeText(payload.prompt ?? '');
+            return normalizedPrompt ? normalizedPrompt : null;
+          })();
+
+    const [updated] = await this.prisma.$queryRaw<
+      Array<{
+        id: string;
+        sectionId: string;
+        title: string;
+        prompt: string | null;
+        sortOrder: number;
+      }>
+    >(Prisma.sql`
+      UPDATE "MissionChecklistDimension"
+      SET
+        "sectionId" = ${nextSectionId},
+        "title" = ${nextTitle},
+        "prompt" = ${nextPrompt},
+        "sortOrder" = ${nextSortOrder},
+        "updatedAt" = NOW()
+      WHERE "id" = ${dimensionId} AND "isActive" = true
+      RETURNING "id", "sectionId", "title", "prompt", "sortOrder"
+    `);
+    if (!updated) throwError('NOT_FOUND');
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'missions',
+      action: 'update_checklist_dimension',
+      entityId: updated.id,
+      diffJson: {
+        before: existing,
+        after: updated,
+      },
+    });
+
+    return updated;
+  }
+
+  async deleteChecklistDimension(id: string, user?: RbacUser) {
+    this.assertMissionChecklistConfigAccess(user);
+    const dimensionId = String(id ?? '').trim();
+    if (!dimensionId) {
+      throwError('VALIDATION_ERROR', { field: 'id', reason: 'REQUIRED' });
+    }
+
+    const [existing] = await this.prisma.$queryRaw<
+      Array<{ id: string; sectionId: string; title: string }>
+    >(Prisma.sql`
+      SELECT "id", "sectionId", "title"
+      FROM "MissionChecklistDimension"
+      WHERE "id" = ${dimensionId} AND "isActive" = true
+      LIMIT 1
+    `);
+    if (!existing) throwError('NOT_FOUND');
+
+    await this.prisma.$executeRaw(Prisma.sql`
+      UPDATE "MissionChecklistDimension"
+      SET "isActive" = false, "updatedAt" = NOW()
+      WHERE "id" = ${dimensionId}
+    `);
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'missions',
+      action: 'delete_checklist_dimension',
+      entityId: dimensionId,
+      diffJson: existing,
+    });
+
+    return { ok: true };
+  }
+
+  async updateChecklistClassification(
+    id: string,
+    payload: {
+      label: string;
+      colorHex?: string;
+    },
+    user?: RbacUser,
+  ) {
+    this.assertMissionChecklistConfigAccess(user);
+    const classificationId = String(id ?? '').trim();
+    if (!this.isMissionChecklistClassification(classificationId)) {
+      throwError('VALIDATION_ERROR', {
+        field: 'id',
+        reason: 'INVALID_CLASSIFICATION',
+      });
+    }
+
+    const label = this.sanitizeRequiredText(payload.label, 'label');
+    const normalizedColor =
+      payload.colorHex === undefined
+        ? undefined
+        : this.normalizeHexColor(payload.colorHex, 'colorHex');
+    const defaults =
+      MISSION_CHECKLIST_CLASSIFICATION_DEFAULT_META[classificationId];
+
+    const [existing] = await this.prisma.$queryRaw<
+      Array<{
+        id: string;
+        label: string;
+        colorHex: string | null;
+        sortOrder: number;
+      }>
+    >(Prisma.sql`
+      SELECT "id", "label", "colorHex", "sortOrder"
+      FROM "MissionChecklistClassificationSetting"
+      WHERE "id" = ${classificationId}
+      LIMIT 1
+    `);
+
+    if (!existing) {
+      const [created] = await this.prisma.$queryRaw<
+        Array<{
+          id: string;
+          label: string;
+          colorHex: string | null;
+          sortOrder: number;
+        }>
+      >(Prisma.sql`
+        INSERT INTO "MissionChecklistClassificationSetting"
+          ("id", "label", "colorHex", "sortOrder", "createdAt", "updatedAt")
+        VALUES
+          (${classificationId}, ${label}, ${normalizedColor === undefined ? defaults.colorHex : normalizedColor}, ${defaults.sortOrder}, NOW(), NOW())
+        RETURNING "id", "label", "colorHex", "sortOrder"
+      `);
+      if (!created) throwError('UNEXPECTED');
+      await this.audit.log({
+        userId: user?.id,
+        resource: 'missions',
+        action: 'update_checklist_classification',
+        entityId: created.id,
+        diffJson: created,
+      });
+      return created;
+    }
+
+    const [updated] = await this.prisma.$queryRaw<
+      Array<{
+        id: string;
+        label: string;
+        colorHex: string | null;
+        sortOrder: number;
+      }>
+    >(Prisma.sql`
+      UPDATE "MissionChecklistClassificationSetting"
+      SET
+        "label" = ${label},
+        "colorHex" = ${
+          normalizedColor === undefined ? existing.colorHex : normalizedColor
+        },
+        "updatedAt" = NOW()
+      WHERE "id" = ${classificationId}
+      RETURNING "id", "label", "colorHex", "sortOrder"
+    `);
+    if (!updated) throwError('UNEXPECTED');
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'missions',
+      action: 'update_checklist_classification',
+      entityId: updated.id,
+      diffJson: updated,
+    });
+
+    return updated;
   }
 
   async getById(id: string, user?: RbacUser) {
@@ -492,6 +821,7 @@ export class MissionsService {
 
   async getChecklist(id: string, user?: RbacUser) {
     this.assertMissionAccess(user);
+    const checklistConfig = await this.getMissionChecklistConfig();
 
     const mission = await this.prisma.mission.findUnique({
       where: { id },
@@ -520,7 +850,12 @@ export class MissionsService {
       omId: checklistOmId,
       om: checklistOm,
       updatedAt: mission.updatedAt,
-      sections: this.buildMissionChecklistSections(mission.checklistJson),
+      classifications: checklistConfig.classifications,
+      defaultClassification: checklistConfig.defaultClassification,
+      sections: this.buildMissionChecklistSections(
+        mission.checklistJson,
+        checklistConfig,
+      ),
     };
   }
 
@@ -536,7 +871,8 @@ export class MissionsService {
     },
     user?: RbacUser,
   ) {
-    this.assertMissionAccess(user);
+    this.assertMissionChecklistEditAccess(user);
+    const checklistConfig = await this.getMissionChecklistConfig();
 
     const mission = await this.prisma.mission.findUnique({
       where: { id },
@@ -562,7 +898,10 @@ export class MissionsService {
       });
     }
 
-    const normalizedItems = this.normalizeMissionChecklistItems(payload.items);
+    const normalizedItems = this.normalizeMissionChecklistItems(
+      payload.items,
+      checklistConfig,
+    );
 
     const updated = await this.prisma.mission.update({
       where: { id },
@@ -601,7 +940,12 @@ export class MissionsService {
       localityId: updated.localityId,
       omId: checklistOmId,
       updatedAt: updated.updatedAt,
-      sections: this.buildMissionChecklistSections(updated.checklistJson),
+      classifications: checklistConfig.classifications,
+      defaultClassification: checklistConfig.defaultClassification,
+      sections: this.buildMissionChecklistSections(
+        updated.checklistJson,
+        checklistConfig,
+      ),
     };
   }
 
@@ -1798,10 +2142,14 @@ export class MissionsService {
 
   private buildMissionChecklistSections(
     checklistJson: Prisma.JsonValue | null | undefined,
+    checklistConfig: MissionChecklistConfigRuntime,
   ) {
-    const storedItemsById = this.readStoredMissionChecklistItems(checklistJson);
+    const storedItemsById = this.readStoredMissionChecklistItems(
+      checklistJson,
+      checklistConfig,
+    );
 
-    return MISSION_CHECKLIST_SECTIONS.map((section) => ({
+    return checklistConfig.sections.map((section) => ({
       id: section.id,
       title: section.title,
       items: section.items.map((item) => {
@@ -1810,8 +2158,9 @@ export class MissionsService {
           id: item.id,
           title: item.title,
           prompt: item.prompt ?? null,
+          sortOrder: item.sortOrder,
           classification:
-            stored?.classification ?? DEFAULT_MISSION_CHECKLIST_CLASSIFICATION,
+            stored?.classification ?? checklistConfig.defaultClassification,
           notes: stored?.notes ?? '',
         };
       }),
@@ -1824,11 +2173,12 @@ export class MissionsService {
       classification: MissionChecklistClassification;
       notes?: string;
     }[],
+    checklistConfig: MissionChecklistConfigRuntime,
   ): MissionChecklistStoredItem[] {
     const normalizedById = new Map<string, MissionChecklistStoredItem>();
 
     for (const item of rawItems) {
-      if (!MISSION_CHECKLIST_ITEM_ID_SET.has(item.id)) {
+      if (!checklistConfig.itemIdSet.has(item.id)) {
         throwError('VALIDATION_ERROR', {
           field: 'items',
           reason: 'INVALID_CHECKLIST_ITEM',
@@ -1837,7 +2187,7 @@ export class MissionsService {
       }
 
       const classification = String(item.classification ?? '');
-      if (!this.isMissionChecklistClassification(classification)) {
+      if (!checklistConfig.classificationIdSet.has(classification as any)) {
         throwError('VALIDATION_ERROR', {
           field: 'classification',
           reason: 'INVALID_CLASSIFICATION',
@@ -1847,17 +2197,17 @@ export class MissionsService {
 
       normalizedById.set(item.id, {
         id: item.id,
-        classification,
+        classification: classification as MissionChecklistClassification,
         notes: sanitizeText(item.notes ?? ''),
       });
     }
 
-    return MISSION_CHECKLIST_ITEM_IDS.map((itemId) => {
+    return checklistConfig.itemIds.map((itemId) => {
       const existing = normalizedById.get(itemId);
       if (existing) return existing;
       return {
         id: itemId,
-        classification: DEFAULT_MISSION_CHECKLIST_CLASSIFICATION,
+        classification: checklistConfig.defaultClassification,
         notes: '',
       };
     });
@@ -1865,6 +2215,7 @@ export class MissionsService {
 
   private readStoredMissionChecklistItems(
     checklistJson: Prisma.JsonValue | null | undefined,
+    checklistConfig: MissionChecklistConfigRuntime,
   ) {
     const result = new Map<string, MissionChecklistStoredItem>();
     if (!this.isJsonObject(checklistJson)) return result;
@@ -1879,17 +2230,137 @@ export class MissionsService {
       const classificationRaw =
         typeof rawItem.classification === 'string' ? rawItem.classification : '';
 
-      if (!MISSION_CHECKLIST_ITEM_ID_SET.has(itemId)) continue;
-      if (!this.isMissionChecklistClassification(classificationRaw)) continue;
+      if (!checklistConfig.itemIdSet.has(itemId)) continue;
+      if (
+        !checklistConfig.classificationIdSet.has(
+          classificationRaw as MissionChecklistClassification,
+        )
+      ) {
+        continue;
+      }
 
       result.set(itemId, {
         id: itemId,
-        classification: classificationRaw,
+        classification: classificationRaw as MissionChecklistClassification,
         notes: typeof rawItem.notes === 'string' ? rawItem.notes : '',
       });
     }
 
     return result;
+  }
+
+  private async getMissionChecklistConfig(): Promise<MissionChecklistConfigRuntime> {
+    const [dimensionRows, classificationRows] = await Promise.all([
+      this.prisma.$queryRaw<ChecklistDimensionRow[]>(Prisma.sql`
+        SELECT
+          "id",
+          "sectionId",
+          "title",
+          "prompt",
+          "sortOrder",
+          "createdAt"
+        FROM "MissionChecklistDimension"
+        WHERE "isActive" = true
+        ORDER BY "sectionId" ASC, "sortOrder" ASC, "createdAt" ASC
+      `),
+      this.prisma.$queryRaw<ChecklistClassificationRow[]>(Prisma.sql`
+        SELECT
+          "id",
+          "label",
+          "colorHex",
+          "sortOrder",
+          "createdAt"
+        FROM "MissionChecklistClassificationSetting"
+        ORDER BY "sortOrder" ASC, "createdAt" ASC
+      `),
+    ]);
+
+    const sectionGroups = new Map<MissionChecklistSectionId, MissionChecklistSectionRuntime['items']>(
+      MISSION_CHECKLIST_SECTION_IDS.map((sectionId) => [sectionId, []]),
+    );
+
+    for (const row of dimensionRows) {
+      if (!this.isMissionChecklistSectionId(row.sectionId)) continue;
+      const title = sanitizeText(row.title ?? '').trim();
+      if (!title) continue;
+
+      sectionGroups.get(row.sectionId)?.push({
+        id: row.id,
+        title,
+        prompt: row.prompt ? sanitizeText(row.prompt).trim() || null : null,
+        sortOrder: row.sortOrder,
+      });
+    }
+
+    let sections: MissionChecklistSectionRuntime[] = MISSION_CHECKLIST_SECTION_IDS.map(
+      (sectionId) => ({
+        id: sectionId,
+        title: MISSION_CHECKLIST_SECTION_TITLE_BY_ID[sectionId],
+        items: sectionGroups.get(sectionId) ?? [],
+      }),
+    );
+
+    const hasAtLeastOneDimension = sections.some(
+      (section) => section.items.length > 0,
+    );
+    if (!hasAtLeastOneDimension) {
+      sections = MISSION_CHECKLIST_DEFAULT_SECTIONS.map((section) => ({
+        id: section.id,
+        title: section.title,
+        items: section.items.map((item, index) => ({
+          id: item.id,
+          title: item.title,
+          prompt: item.prompt ?? null,
+          sortOrder: (index + 1) * 10,
+        })),
+      }));
+    }
+
+    const classificationById = new Map<string, ChecklistClassificationRow>(
+      classificationRows.map((row) => [row.id, row]),
+    );
+    const classifications = (
+      MISSION_CHECKLIST_CLASSIFICATIONS as readonly MissionChecklistClassification[]
+    )
+      .map((id) => {
+        const dbRow = classificationById.get(id);
+        const defaults = MISSION_CHECKLIST_CLASSIFICATION_DEFAULT_META[id];
+        const normalizedDbColor = this.sanitizeHexColorOrNull(dbRow?.colorHex);
+        const resolvedColor =
+          dbRow === undefined ? defaults.colorHex : normalizedDbColor;
+        return {
+          id,
+          label: sanitizeText(dbRow?.label ?? '').trim() || defaults.label,
+          colorHex: resolvedColor,
+          sortOrder:
+            typeof dbRow?.sortOrder === 'number'
+              ? dbRow.sortOrder
+              : defaults.sortOrder,
+        };
+      })
+      .sort((a, b) => a.sortOrder - b.sortOrder || a.label.localeCompare(b.label, 'pt-BR'));
+
+    const itemIds = sections.flatMap((section) =>
+      section.items.map((item) => item.id),
+    );
+    const itemIdSet = new Set(itemIds);
+    const classificationIdSet = new Set(
+      classifications.map((classification) => classification.id),
+    );
+    const defaultClassification = classificationIdSet.has(
+      DEFAULT_MISSION_CHECKLIST_CLASSIFICATION,
+    )
+      ? DEFAULT_MISSION_CHECKLIST_CLASSIFICATION
+      : classifications[0]?.id ?? DEFAULT_MISSION_CHECKLIST_CLASSIFICATION;
+
+    return {
+      sections,
+      itemIds,
+      itemIdSet,
+      classifications,
+      classificationIdSet,
+      defaultClassification,
+    };
   }
 
   private readStoredMissionChecklistOmId(
@@ -1910,6 +2381,58 @@ export class MissionsService {
     ).includes(value);
   }
 
+  private isMissionChecklistSectionId(
+    value: string,
+  ): value is MissionChecklistSectionId {
+    return (MISSION_CHECKLIST_SECTION_IDS as readonly string[]).includes(value);
+  }
+
+  private normalizeChecklistSectionId(value: string) {
+    const normalized = String(value ?? '').trim();
+    if (!this.isMissionChecklistSectionId(normalized)) {
+      throwError('VALIDATION_ERROR', {
+        field: 'sectionId',
+        reason: 'INVALID_SECTION',
+      });
+    }
+    return normalized;
+  }
+
+  private async nextChecklistDimensionSortOrder(
+    sectionId: MissionChecklistSectionId,
+  ) {
+    const [row] = await this.prisma.$queryRaw<Array<{ sortOrder: number }>>(
+      Prisma.sql`
+        SELECT "sortOrder"
+        FROM "MissionChecklistDimension"
+        WHERE "sectionId" = ${sectionId}
+          AND "isActive" = true
+        ORDER BY "sortOrder" DESC, "createdAt" DESC
+        LIMIT 1
+      `,
+    );
+    return (row?.sortOrder ?? 0) + 10;
+  }
+
+  private normalizeHexColor(value: string, field: string) {
+    const normalized = String(value ?? '').trim();
+    if (!normalized) return null;
+    if (!/^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/.test(normalized)) {
+      throwError('VALIDATION_ERROR', {
+        field,
+        reason: 'INVALID_HEX_COLOR',
+      });
+    }
+    return normalized.toUpperCase();
+  }
+
+  private sanitizeHexColorOrNull(value: string | null | undefined) {
+    const normalized = String(value ?? '').trim();
+    if (!normalized) return null;
+    if (!/^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/.test(normalized)) return null;
+    return normalized.toUpperCase();
+  }
+
   private isJsonObject(
     value: Prisma.JsonValue | null | undefined,
   ): value is Prisma.JsonObject {
@@ -1924,6 +2447,20 @@ export class MissionsService {
         ROLE_TI,
       ])
     ) {
+      return;
+    }
+    throwError('RBAC_FORBIDDEN');
+  }
+
+  private assertMissionChecklistEditAccess(user?: RbacUser) {
+    if (hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_TI])) {
+      return;
+    }
+    throwError('RBAC_FORBIDDEN');
+  }
+
+  private assertMissionChecklistConfigAccess(user?: RbacUser) {
+    if (hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_TI])) {
       return;
     }
     throwError('RBAC_FORBIDDEN');

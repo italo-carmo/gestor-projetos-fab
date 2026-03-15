@@ -4,6 +4,8 @@ import {
   Card,
   CardContent,
   Drawer,
+  MenuItem,
+  Stack,
   Tab,
   Tabs,
   Table,
@@ -18,8 +20,13 @@ import { useState } from 'react';
 import { useMe, usePhases, useUpdatePhase } from '../api/hooks';
 import {
   useCreatePosto,
+  useCreateMissionChecklistDimension,
   useDeletePosto,
+  useDeleteMissionChecklistDimension,
+  useMissionChecklistConfig,
   usePostos,
+  useUpdateMissionChecklistClassification,
+  useUpdateMissionChecklistDimension,
   useUpdatePosto,
 } from '../api/hooks';
 import {
@@ -33,6 +40,7 @@ import {
   useUpdateEloRole,
 } from '../api/hooks';
 import { can } from '../app/rbac';
+import { hasAnyRole, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from '../app/roleAccess';
 import { useToast } from '../app/toast';
 import { parseApiError } from '../app/apiErrors';
 import { SkeletonState } from '../components/states/SkeletonState';
@@ -142,7 +150,7 @@ function LocalitiesTab() {
           setDrawerOpen(false);
           return;
         } catch (error) {
-          toast.push({ message: parseApiError(error).message, severity: 'error' });
+          toast.push({ message: parseApiError(error).message ?? 'Erro ao atualizar localidade.', severity: 'error' });
           return;
         }
       }
@@ -167,7 +175,7 @@ function LocalitiesTab() {
       }
       setDrawerOpen(false);
     } catch (error) {
-      toast.push({ message: parseApiError(error).message, severity: 'error' });
+      toast.push({ message: parseApiError(error).message ?? 'Erro ao salvar localidade.', severity: 'error' });
     }
   };
 
@@ -177,7 +185,7 @@ function LocalitiesTab() {
       toast.push({ message: 'Localidade excluída.', severity: 'success' });
       setDeleteId(null);
     } catch (error) {
-      toast.push({ message: parseApiError(error).message, severity: 'error' });
+      toast.push({ message: parseApiError(error).message ?? 'Erro ao excluir localidade.', severity: 'error' });
     }
   };
 
@@ -334,7 +342,7 @@ function PostosTab() {
       }
       setDrawerOpen(false);
     } catch (error) {
-      toast.push({ message: parseApiError(error).message, severity: 'error' });
+      toast.push({ message: parseApiError(error).message ?? 'Erro ao salvar posto.', severity: 'error' });
     }
   };
 
@@ -344,7 +352,7 @@ function PostosTab() {
       toast.push({ message: 'Posto excluído', severity: 'success' });
       setDeleteId(null);
     } catch (error) {
-      toast.push({ message: parseApiError(error).message, severity: 'error' });
+      toast.push({ message: parseApiError(error).message ?? 'Erro ao excluir posto.', severity: 'error' });
     }
   };
 
@@ -622,7 +630,7 @@ function EloRolesTab() {
       }
       setDrawerOpen(false);
     } catch (error) {
-      toast.push({ message: parseApiError(error).message, severity: 'error' });
+      toast.push({ message: parseApiError(error).message ?? 'Erro ao salvar tipo de elo.', severity: 'error' });
     }
   };
 
@@ -632,7 +640,7 @@ function EloRolesTab() {
       toast.push({ message: 'Tipo de elo excluído', severity: 'success' });
       setDeleteId(null);
     } catch (error) {
-      toast.push({ message: parseApiError(error).message, severity: 'error' });
+      toast.push({ message: parseApiError(error).message ?? 'Erro ao excluir tipo de elo.', severity: 'error' });
     }
   };
 
@@ -748,6 +756,465 @@ function EloRolesTab() {
   );
 }
 
+const institutionalAreaOptions = [
+  { id: 'lideranca', label: 'Liderança' },
+  { id: 'acompanhamento_recrutas', label: 'Acompanhamento de Recrutas' },
+  { id: 'analise_riscos', label: 'Análise de Riscos' },
+] as const;
+
+type InstitutionalAreaId = (typeof institutionalAreaOptions)[number]['id'];
+
+function normalizeHexColor(value: string | null | undefined) {
+  const normalized = String(value ?? '').trim();
+  if (!/^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/.test(normalized)) return null;
+  return normalized.toUpperCase();
+}
+
+function InstitutionalMappingTab() {
+  const { data: me } = useMe();
+  const canManage = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]);
+  const configQuery = useMissionChecklistConfig(canManage);
+  const createDimension = useCreateMissionChecklistDimension();
+  const updateDimension = useUpdateMissionChecklistDimension();
+  const deleteDimension = useDeleteMissionChecklistDimension();
+  const updateClassification = useUpdateMissionChecklistClassification();
+  const toast = useToast();
+
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [editingDimension, setEditingDimension] = useState<any | null>(null);
+  const [deleteDimensionId, setDeleteDimensionId] = useState<string | null>(null);
+  const [dimensionForm, setDimensionForm] = useState({
+    sectionId: 'lideranca' as InstitutionalAreaId,
+    title: '',
+    prompt: '',
+    sortOrder: 0,
+  });
+  const [classificationDrafts, setClassificationDrafts] = useState<
+    Record<string, { label: string; colorHex: string }>
+  >({});
+
+  const sections = (configQuery.data?.sections ?? []) as any[];
+  const classifications = (configQuery.data?.classifications ?? []) as Array<any>;
+  const dimensions = sections.flatMap((section) =>
+    (section?.items ?? []).map((item: any, index: number) => ({
+      id: String(item?.id ?? ''),
+      sectionId: String(section?.id ?? ''),
+      sectionTitle: String(section?.title ?? ''),
+      title: String(item?.title ?? ''),
+      prompt: String(item?.prompt ?? ''),
+      sortOrder: Number(item?.sortOrder ?? (index + 1) * 10),
+    })),
+  );
+
+  const draftById = (classification: any) => {
+    const id = String(classification?.id ?? '');
+    const existing = classificationDrafts[id];
+    if (existing) return existing;
+    return {
+      label: String(classification?.label ?? ''),
+      colorHex:
+        normalizeHexColor(classification?.colorHex as string | null | undefined) ??
+        '#FFFFFF',
+    };
+  };
+
+  const setClassificationDraft = (
+    id: string,
+    patch: Partial<{ label: string; colorHex: string }>,
+  ) => {
+    setClassificationDrafts((current) => {
+      const currentValue = current[id] ?? { label: '', colorHex: '#FFFFFF' };
+      return {
+        ...current,
+        [id]: { ...currentValue, ...patch },
+      };
+    });
+  };
+
+  const isClassificationDirty = (classification: any) => {
+    const draft = draftById(classification);
+    const currentLabel = String(classification?.label ?? '').trim();
+    const currentColor =
+      normalizeHexColor(classification?.colorHex as string | null | undefined) ??
+      '#FFFFFF';
+    return (
+      draft.label.trim() !== currentLabel ||
+      draft.colorHex.trim().toUpperCase() !== currentColor
+    );
+  };
+
+  const openCreateDimension = () => {
+    setEditingDimension(null);
+    setDimensionForm({
+      sectionId: 'lideranca',
+      title: '',
+      prompt: '',
+      sortOrder: dimensions.length * 10 + 10,
+    });
+    setDrawerOpen(true);
+  };
+
+  const openEditDimension = (dimension: any) => {
+    const area = institutionalAreaOptions.find(
+      (option) => option.id === dimension.sectionId,
+    )?.id;
+    setEditingDimension(dimension);
+    setDimensionForm({
+      sectionId: area ?? 'lideranca',
+      title: dimension.title ?? '',
+      prompt: dimension.prompt ?? '',
+      sortOrder: Number(dimension.sortOrder ?? 0),
+    });
+    setDrawerOpen(true);
+  };
+
+  const saveDimension = async () => {
+    if (!canManage) return;
+    if (!dimensionForm.title.trim()) {
+      toast.push({
+        message: 'Informe o nome da dimensão.',
+        severity: 'warning',
+      });
+      return;
+    }
+    try {
+      if (editingDimension?.id) {
+        await updateDimension.mutateAsync({
+          id: String(editingDimension.id),
+          payload: {
+            sectionId: dimensionForm.sectionId,
+            title: dimensionForm.title.trim(),
+            prompt: dimensionForm.prompt.trim() || undefined,
+            sortOrder: Number(dimensionForm.sortOrder) || 0,
+          },
+        });
+        toast.push({ message: 'Dimensão atualizada.', severity: 'success' });
+      } else {
+        await createDimension.mutateAsync({
+          sectionId: dimensionForm.sectionId,
+          title: dimensionForm.title.trim(),
+          prompt: dimensionForm.prompt.trim() || undefined,
+          sortOrder: Number(dimensionForm.sortOrder) || 0,
+        });
+        toast.push({ message: 'Dimensão criada.', severity: 'success' });
+      }
+      setDrawerOpen(false);
+    } catch (error) {
+      toast.push({
+        message: parseApiError(error).message ?? 'Erro ao salvar dimensão.',
+        severity: 'error',
+      });
+    }
+  };
+
+  const confirmDeleteDimension = async () => {
+    if (!canManage || !deleteDimensionId) return;
+    try {
+      await deleteDimension.mutateAsync(deleteDimensionId);
+      setDeleteDimensionId(null);
+      toast.push({ message: 'Dimensão excluída.', severity: 'success' });
+    } catch (error) {
+      toast.push({
+        message: parseApiError(error).message ?? 'Erro ao excluir dimensão.',
+        severity: 'error',
+      });
+    }
+  };
+
+  const saveClassification = async (classification: any) => {
+    if (!canManage) return;
+    const id = String(classification?.id ?? '');
+    const draft = draftById(classification);
+    if (!draft.label.trim()) {
+      toast.push({
+        message: 'Informe o nome da classificação.',
+        severity: 'warning',
+      });
+      return;
+    }
+    try {
+      await updateClassification.mutateAsync({
+        id: id as any,
+        payload: {
+          label: draft.label.trim(),
+          colorHex:
+            draft.colorHex.trim().toUpperCase() === '#FFFFFF'
+              ? ''
+              : draft.colorHex.trim().toUpperCase(),
+        },
+      });
+      toast.push({ message: 'Classificação atualizada.', severity: 'success' });
+    } catch (error) {
+      toast.push({
+        message:
+          parseApiError(error).message ?? 'Erro ao atualizar classificação.',
+        severity: 'error',
+      });
+    }
+  };
+
+  if (!canManage) {
+    return (
+      <Typography variant="body2" color="text.secondary">
+        Acesso restrito. Apenas Coordenação CIPAVD e TI podem alterar o
+        mapeamento institucional.
+      </Typography>
+    );
+  }
+  if (configQuery.isLoading) return <SkeletonState />;
+  if (configQuery.isError) {
+    return (
+      <ErrorState
+        error={configQuery.error}
+        onRetry={() => configQuery.refetch()}
+      />
+    );
+  }
+
+  return (
+    <Box>
+      <Stack
+        direction={{ xs: 'column', md: 'row' }}
+        justifyContent="space-between"
+        alignItems={{ xs: 'stretch', md: 'center' }}
+        spacing={1}
+        sx={{ mb: 2 }}
+      >
+        <Box>
+          <Typography variant="h6" fontWeight={700}>
+            Mapeamento Institucional
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Gerencie dimensões por área e personalize as classificações usadas
+            no checklist e no SMIF.
+          </Typography>
+        </Box>
+        <Button variant="contained" size="small" onClick={openCreateDimension}>
+          Nova dimensão
+        </Button>
+      </Stack>
+
+      <Card sx={{ mb: 2 }}>
+        <CardContent>
+          {dimensions.length === 0 ? (
+            <EmptyState
+              title="Sem dimensões"
+              description="Crie a primeira dimensão para usar no checklist."
+            />
+          ) : (
+            <Table size="small">
+              <TableHead>
+                <TableRow sx={{ bgcolor: 'primary.main' }}>
+                  <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Área</TableCell>
+                  <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Dimensão</TableCell>
+                  <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Descrição auxiliar</TableCell>
+                  <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Ordem</TableCell>
+                  <TableCell sx={{ color: '#fff', fontWeight: 700 }} align="right">
+                    Ações
+                  </TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {dimensions.map((dimension) => (
+                  <TableRow key={dimension.id} hover>
+                    <TableCell>{dimension.sectionTitle}</TableCell>
+                    <TableCell>{dimension.title}</TableCell>
+                    <TableCell sx={{ maxWidth: 420 }}>
+                      <Typography variant="body2" color="text.secondary" noWrap>
+                        {dimension.prompt || 'Sem descrição auxiliar'}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>{dimension.sortOrder}</TableCell>
+                    <TableCell align="right">
+                      <Button size="small" onClick={() => openEditDimension(dimension)}>
+                        Editar
+                      </Button>
+                      <Button
+                        size="small"
+                        color="error"
+                        onClick={() => setDeleteDimensionId(dimension.id)}
+                      >
+                        Excluir
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent>
+          <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1.2 }}>
+            Classificações
+          </Typography>
+          <Table size="small">
+            <TableHead>
+              <TableRow sx={{ bgcolor: 'primary.main' }}>
+                <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Código</TableCell>
+                <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Nome exibido</TableCell>
+                <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Cor</TableCell>
+                <TableCell sx={{ color: '#fff', fontWeight: 700 }} align="right">
+                  Ações
+                </TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {classifications.map((classification) => {
+                const id = String(classification?.id ?? '');
+                const draft = draftById(classification);
+                return (
+                  <TableRow key={id} hover>
+                    <TableCell>{id}</TableCell>
+                    <TableCell sx={{ minWidth: 320 }}>
+                      <TextField
+                        size="small"
+                        fullWidth
+                        value={draft.label}
+                        onChange={(event) =>
+                          setClassificationDraft(id, { label: event.target.value })
+                        }
+                      />
+                    </TableCell>
+                    <TableCell sx={{ minWidth: 180 }}>
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <TextField
+                          size="small"
+                          type="color"
+                          value={draft.colorHex}
+                          onChange={(event) =>
+                            setClassificationDraft(id, {
+                              colorHex: event.target.value.toUpperCase(),
+                            })
+                          }
+                          sx={{ width: 86 }}
+                        />
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={() =>
+                            setClassificationDraft(id, { colorHex: '#FFFFFF' })
+                          }
+                        >
+                          Sem cor
+                        </Button>
+                      </Stack>
+                    </TableCell>
+                    <TableCell align="right">
+                      <Button
+                        size="small"
+                        variant="contained"
+                        onClick={() => saveClassification(classification)}
+                        disabled={
+                          !isClassificationDirty(classification) ||
+                          updateClassification.isPending
+                        }
+                      >
+                        Salvar
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      <Drawer
+        anchor="right"
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        PaperProps={{ sx: { width: { xs: '100%', md: 430 } } }}
+      >
+        <Box p={3} display="flex" flexDirection="column" gap={2}>
+          <Typography variant="h6">
+            {editingDimension ? 'Editar dimensão' : 'Nova dimensão'}
+          </Typography>
+          <TextField
+            select
+            size="small"
+            label="Área"
+            value={dimensionForm.sectionId}
+            onChange={(event) =>
+              setDimensionForm((current) => ({
+                ...current,
+                sectionId: event.target.value as InstitutionalAreaId,
+              }))
+            }
+          >
+            {institutionalAreaOptions.map((area) => (
+              <MenuItem key={area.id} value={area.id}>
+                {area.label}
+              </MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            size="small"
+            label="Nome da dimensão"
+            value={dimensionForm.title}
+            onChange={(event) =>
+              setDimensionForm((current) => ({
+                ...current,
+                title: event.target.value,
+              }))
+            }
+          />
+          <TextField
+            size="small"
+            label="Descrição auxiliar (opcional)"
+            value={dimensionForm.prompt}
+            onChange={(event) =>
+              setDimensionForm((current) => ({
+                ...current,
+                prompt: event.target.value,
+              }))
+            }
+            multiline
+            minRows={3}
+          />
+          <TextField
+            size="small"
+            type="number"
+            label="Ordem"
+            value={dimensionForm.sortOrder}
+            onChange={(event) =>
+              setDimensionForm((current) => ({
+                ...current,
+                sortOrder: Number(event.target.value) || 0,
+              }))
+            }
+            inputProps={{ min: 0 }}
+          />
+          <Stack direction="row" spacing={1} justifyContent="flex-end">
+            <Button variant="outlined" color="error" onClick={() => setDrawerOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="contained"
+              color="success"
+              onClick={saveDimension}
+              disabled={createDimension.isPending || updateDimension.isPending}
+            >
+              Salvar
+            </Button>
+          </Stack>
+        </Box>
+      </Drawer>
+
+      <ConfirmDialog
+        open={Boolean(deleteDimensionId)}
+        title="Excluir dimensão"
+        message="Deseja remover esta dimensão do mapeamento institucional?"
+        onConfirm={confirmDeleteDimension}
+        onCancel={() => setDeleteDimensionId(null)}
+      />
+    </Box>
+  );
+}
+
 export function AdminPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab') || 'postos';
@@ -766,7 +1233,8 @@ export function AdminPage() {
         Administração
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Gerencie localidades SMIF, postos, fases e papéis de elo do sistema.
+        Gerencie localidades SMIF, postos, fases, papéis de elo e o mapeamento
+        institucional do sistema.
       </Typography>
 
       <Card>
@@ -780,12 +1248,14 @@ export function AdminPage() {
             <Tab label="Postos" value="postos" />
             <Tab label="Fases" value="phases" />
             <Tab label="Papéis de Elo" value="elo-roles" />
+            <Tab label="Mapeamento Institucional" value="institutional-mapping" />
           </Tabs>
 
           {currentTab === 'localities' && <LocalitiesTab />}
           {currentTab === 'postos' && <PostosTab />}
           {currentTab === 'phases' && <PhasesTab />}
           {currentTab === 'elo-roles' && <EloRolesTab />}
+          {currentTab === 'institutional-mapping' && <InstitutionalMappingTab />}
         </CardContent>
       </Card>
     </Box>

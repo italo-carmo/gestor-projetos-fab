@@ -1,6 +1,5 @@
 import { Type } from 'class-transformer';
 import {
-  ArrayMaxSize,
   ArrayMinSize,
   IsArray,
   IsIn,
@@ -9,14 +8,11 @@ import {
   MaxLength,
   ValidateNested,
 } from 'class-validator';
-import {
-  MISSION_CHECKLIST_CLASSIFICATIONS,
-  MISSION_CHECKLIST_ITEM_IDS,
-} from '../mission-checklist.constants';
+import { MISSION_CHECKLIST_CLASSIFICATIONS } from '../mission-checklist.constants';
 
 export class UpsertMissionChecklistItemDto {
   @IsString()
-  @IsIn(MISSION_CHECKLIST_ITEM_IDS)
+  @MaxLength(120)
   id: string;
 
   @IsString()
@@ -36,7 +32,6 @@ export class UpsertMissionChecklistDto {
 
   @IsArray()
   @ArrayMinSize(1)
-  @ArrayMaxSize(MISSION_CHECKLIST_ITEM_IDS.length)
   @ValidateNested({ each: true })
   @Type(() => UpsertMissionChecklistItemDto)
   items: UpsertMissionChecklistItemDto[];

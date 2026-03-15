@@ -22,6 +22,9 @@ import { UpdateMissionScheduleItemDto } from './dto/update-mission-schedule-item
 import { MissionLdapParticipantDto } from './dto/mission-ldap-participant.dto';
 import { MissionUserParticipantDto } from './dto/mission-user-participant.dto';
 import { UpsertMissionChecklistDto } from './dto/upsert-mission-checklist.dto';
+import { CreateMissionChecklistDimensionDto } from './dto/create-mission-checklist-dimension.dto';
+import { UpdateMissionChecklistDimensionDto } from './dto/update-mission-checklist-dimension.dto';
+import { UpdateMissionChecklistClassificationDto } from './dto/update-mission-checklist-classification.dto';
 import type { Response } from 'express';
 
 @Controller('missions')
@@ -51,6 +54,45 @@ export class MissionsController {
     @CurrentUser() user: RbacUser,
   ) {
     return this.missions.getChecklistMapping({ localityId }, user);
+  }
+
+  @Get('checklist/config')
+  getChecklistConfig(@CurrentUser() user: RbacUser) {
+    return this.missions.getChecklistConfig(user);
+  }
+
+  @Post('checklist/config/dimensions')
+  createChecklistDimension(
+    @Body() dto: CreateMissionChecklistDimensionDto,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.missions.createChecklistDimension(dto, user);
+  }
+
+  @Put('checklist/config/dimensions/:id')
+  updateChecklistDimension(
+    @Param('id') id: string,
+    @Body() dto: UpdateMissionChecklistDimensionDto,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.missions.updateChecklistDimension(id, dto, user);
+  }
+
+  @Delete('checklist/config/dimensions/:id')
+  deleteChecklistDimension(
+    @Param('id') id: string,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.missions.deleteChecklistDimension(id, user);
+  }
+
+  @Put('checklist/config/classifications/:id')
+  updateChecklistClassification(
+    @Param('id') id: string,
+    @Body() dto: UpdateMissionChecklistClassificationDto,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.missions.updateChecklistClassification(id, dto, user);
   }
 
   @Post()

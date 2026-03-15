@@ -11,7 +11,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { throwError } from '../common/http-error';
 import { AuditService } from '../audit/audit.service';
 import { RbacUser } from '../rbac/rbac.types';
-import { resolveAccessProfile } from '../rbac/role-access';
+import { hasAnyRole, resolveAccessProfile, ROLE_TI } from '../rbac/role-access';
 import { sanitizeForExecutive } from '../common/executive';
 import { sanitizeText } from '../common/sanitize';
 import {
@@ -19,6 +19,43 @@ import {
   groupTargetLocalities,
   selectTargetLocalities,
 } from '../common/priority-localities';
+
+type DashboardNationalCardSettingDefault = {
+  id: string;
+  title: string;
+  description: string;
+  backgroundColor: string;
+  textColor: string;
+};
+
+const DASHBOARD_NATIONAL_CARD_SETTING_DEFAULTS: DashboardNationalCardSettingDefault[] =
+  [
+    {
+      id: 'smif-completed',
+      title: 'Entregas Realizadas',
+      description: 'Resumo de atuação da CIPAVD.',
+      backgroundColor: '#1F4A61',
+      textColor: '#F4FAFD',
+    },
+    {
+      id: 'smif-field',
+      title: 'Atividades de campo realizadas pela CIPAVD.',
+      description: 'Apoio realizado pela área técnica dos integrantes.',
+      backgroundColor: '#2F6F8A',
+      textColor: '#F2FBFE',
+    },
+    {
+      id: 'smif-participants',
+      title: 'Público alcançado',
+      description: 'Total de participações em atividades de campo.',
+      backgroundColor: '#3A7A9A',
+      textColor: '#F0F9FC',
+    },
+  ];
+
+const DASHBOARD_NATIONAL_CARD_SETTING_ID_SET = new Set(
+  DASHBOARD_NATIONAL_CARD_SETTING_DEFAULTS.map((item) => item.id),
+);
 
 @Injectable()
 export class TasksService {
@@ -2507,6 +2544,7 @@ export class TasksService {
         };
       },
     );
+    const smifCards = await this.getDashboardNationalCardSettings();
 
     return {
       items: perLocality,
@@ -2550,8 +2588,118 @@ export class TasksService {
       lateItems,
       unassignedItems,
       riskTasks,
+      smifCards,
       executive_hide_pii: user?.executiveHidePii ?? false,
     };
+  }
+
+  async updateDashboardNationalCardSetting(
+    id: string,
+    payload: {
+      title?: string;
+      description?: string;
+      backgroundColor?: string;
+      textColor?: string;
+    },
+    user?: RbacUser,
+  ) {
+    this.assertDashboardNationalCardManageAccess(user);
+
+    const cardId = String(id ?? '').trim();
+    if (!DASHBOARD_NATIONAL_CARD_SETTING_ID_SET.has(cardId)) {
+      throwError('VALIDATION_ERROR', {
+        field: 'id',
+        reason: 'INVALID_SMIF_CARD',
+      });
+    }
+
+    const defaults = DASHBOARD_NATIONAL_CARD_SETTING_DEFAULTS.find(
+      (item) => item.id === cardId,
+    );
+    if (!defaults) {
+      throwError('UNEXPECTED');
+    }
+
+    const [existing] = await this.prisma.$queryRaw<
+      Array<{
+        id: string;
+        title: string;
+        description: string;
+        backgroundColor: string;
+        textColor: string;
+      }>
+    >(Prisma.sql`
+      SELECT "id", "title", "description", "backgroundColor", "textColor"
+      FROM "DashboardNationalCardSetting"
+      WHERE "id" = ${cardId}
+      LIMIT 1
+    `);
+
+    const current = existing ?? defaults;
+    const nextTitle =
+      payload.title === undefined
+        ? current.title
+        : this.sanitizeRequiredText(payload.title, 'title');
+    const nextDescription =
+      payload.description === undefined
+        ? current.description
+        : this.sanitizeRequiredText(payload.description, 'description');
+    const nextBackgroundColor =
+      payload.backgroundColor === undefined
+        ? this.normalizeHexColor(
+            current.backgroundColor,
+            defaults.backgroundColor,
+          )
+        : this.normalizeHexColor(
+            payload.backgroundColor,
+            defaults.backgroundColor,
+          );
+    const nextTextColor =
+      payload.textColor === undefined
+        ? this.normalizeHexColor(current.textColor, defaults.textColor)
+        : this.normalizeHexColor(payload.textColor, defaults.textColor);
+
+    const [saved] = await this.prisma.$queryRaw<
+      Array<{
+        id: string;
+        title: string;
+        description: string;
+        backgroundColor: string;
+        textColor: string;
+      }>
+    >(
+      existing
+        ? Prisma.sql`
+            UPDATE "DashboardNationalCardSetting"
+            SET
+              "title" = ${nextTitle},
+              "description" = ${nextDescription},
+              "backgroundColor" = ${nextBackgroundColor},
+              "textColor" = ${nextTextColor},
+              "updatedAt" = NOW()
+            WHERE "id" = ${cardId}
+            RETURNING "id", "title", "description", "backgroundColor", "textColor"
+          `
+        : Prisma.sql`
+            INSERT INTO "DashboardNationalCardSetting"
+              ("id", "title", "description", "backgroundColor", "textColor", "createdAt", "updatedAt")
+            VALUES
+              (${cardId}, ${nextTitle}, ${nextDescription}, ${nextBackgroundColor}, ${nextTextColor}, NOW(), NOW())
+            RETURNING "id", "title", "description", "backgroundColor", "textColor"
+          `,
+    );
+
+    if (!saved) throwError('UNEXPECTED');
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'dashboard',
+      action: 'update_smif_card',
+      entityId: cardId,
+      diffJson: saved,
+    });
+
+    return saved;
   }
 
   async getDashboardRecruits(user?: RbacUser, localityId?: string) {
@@ -4767,6 +4915,79 @@ export class TasksService {
     return items.map((item) =>
       this.mapTaskInstance(item, user?.executiveHidePii),
     );
+  }
+
+  private async getDashboardNationalCardSettings() {
+    const rows = await this.prisma.$queryRaw<
+      Array<{
+        id: string;
+        title: string;
+        description: string;
+        backgroundColor: string;
+        textColor: string;
+      }>
+    >(Prisma.sql`
+      SELECT "id", "title", "description", "backgroundColor", "textColor"
+      FROM "DashboardNationalCardSetting"
+    `);
+
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    return DASHBOARD_NATIONAL_CARD_SETTING_DEFAULTS.map((defaults) => {
+      const row = byId.get(defaults.id);
+      return {
+        id: defaults.id,
+        title:
+          this.sanitizeRequiredTextOrFallback(row?.title, defaults.title),
+        description: this.sanitizeRequiredTextOrFallback(
+          row?.description,
+          defaults.description,
+        ),
+        backgroundColor: this.normalizeHexColor(
+          row?.backgroundColor,
+          defaults.backgroundColor,
+        ),
+        textColor: this.normalizeHexColor(
+          row?.textColor,
+          defaults.textColor,
+        ),
+      };
+    });
+  }
+
+  private assertDashboardNationalCardManageAccess(user?: RbacUser) {
+    if (hasAnyRole(user, [ROLE_TI])) {
+      return;
+    }
+    throwError('RBAC_FORBIDDEN');
+  }
+
+  private sanitizeRequiredText(value: string, field: string) {
+    const normalized = sanitizeText(value ?? '');
+    if (!normalized.trim()) {
+      throwError('VALIDATION_ERROR', { field, reason: 'REQUIRED' });
+    }
+    return normalized;
+  }
+
+  private sanitizeRequiredTextOrFallback(
+    value: string | null | undefined,
+    fallback: string,
+  ) {
+    const normalized = sanitizeText(value ?? '').trim();
+    if (normalized) return normalized;
+    return fallback;
+  }
+
+  private normalizeHexColor(
+    value: string | null | undefined,
+    fallback: string,
+  ) {
+    const normalized = String(value ?? '').trim();
+    if (!normalized) return fallback;
+    if (!/^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/.test(normalized)) {
+      return fallback;
+    }
+    return normalized.toUpperCase();
   }
 
   private parsePagination(pageRaw?: string, pageSizeRaw?: string) {

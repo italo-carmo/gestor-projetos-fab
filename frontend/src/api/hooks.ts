@@ -105,6 +105,16 @@ export function useMissionChecklist(missionId: string, enabled = true) {
   });
 }
 
+export function useMissionChecklistConfig(enabled = true) {
+  return useQuery({
+    queryKey: qk.missionChecklistConfig,
+    queryFn: async () => (await api.get('/missions/checklist/config')).data,
+    enabled,
+    staleTime: 20_000,
+    refetchOnWindowFocus: false,
+  });
+}
+
 export function useMissionChecklistMapping(
   filters: { localityId?: string },
   enabled = true,
@@ -142,9 +152,95 @@ export function useUpdateMissionChecklist() {
     }) => (await api.put(`/missions/${args.id}/checklist`, args.payload)).data,
     onSuccess: (_data, args) => {
       qc.invalidateQueries({ queryKey: qk.missionChecklist(args.id) });
+      qc.invalidateQueries({ queryKey: qk.missionChecklistConfig });
       qc.invalidateQueries({ queryKey: qk.mission(args.id) });
       qc.invalidateQueries({ queryKey: ["missions"] });
       qc.invalidateQueries({ queryKey: ["missionChecklistMapping"] });
+    },
+  });
+}
+
+export function useCreateMissionChecklistDimension() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      sectionId: 'lideranca' | 'acompanhamento_recrutas' | 'analise_riscos';
+      title: string;
+      prompt?: string;
+      sortOrder?: number;
+    }) =>
+      (await api.post('/missions/checklist/config/dimensions', payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.missionChecklistConfig });
+      qc.invalidateQueries({ queryKey: ['missionChecklistMapping'] });
+      qc.invalidateQueries({ queryKey: ['missions'] });
+    },
+  });
+}
+
+export function useUpdateMissionChecklistDimension() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      payload: {
+        sectionId?: 'lideranca' | 'acompanhamento_recrutas' | 'analise_riscos';
+        title?: string;
+        prompt?: string;
+        sortOrder?: number;
+      };
+    }) =>
+      (
+        await api.put(
+          `/missions/checklist/config/dimensions/${args.id}`,
+          args.payload,
+        )
+      ).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.missionChecklistConfig });
+      qc.invalidateQueries({ queryKey: ['missionChecklistMapping'] });
+      qc.invalidateQueries({ queryKey: ['missions'] });
+    },
+  });
+}
+
+export function useDeleteMissionChecklistDimension() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      (await api.delete(`/missions/checklist/config/dimensions/${id}`)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.missionChecklistConfig });
+      qc.invalidateQueries({ queryKey: ['missionChecklistMapping'] });
+      qc.invalidateQueries({ queryKey: ['missions'] });
+    },
+  });
+}
+
+export function useUpdateMissionChecklistClassification() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id:
+        | 'FORTE_CONSOLIDADA'
+        | 'OPORTUNIDADE_MELHORIA'
+        | 'NECESSITA_ANALISE'
+        | 'POSSIVEL_RISCO';
+      payload: {
+        label: string;
+        colorHex?: string;
+      };
+    }) =>
+      (
+        await api.put(
+          `/missions/checklist/config/classifications/${args.id}`,
+          args.payload,
+        )
+      ).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.missionChecklistConfig });
+      qc.invalidateQueries({ queryKey: ['missionChecklistMapping'] });
+      qc.invalidateQueries({ queryKey: ['missions'] });
     },
   });
 }
@@ -1098,6 +1194,25 @@ export function useDashboardNational(
       (await api.get(`/dashboard/national`, { params: filters })).data,
     enabled,
     staleTime: 15_000,
+  });
+}
+
+export function useUpdateDashboardNationalCardSetting() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: 'smif-completed' | 'smif-field' | 'smif-participants';
+      payload: {
+        title?: string;
+        description?: string;
+        backgroundColor?: string;
+        textColor?: string;
+      };
+    }) =>
+      (await api.put(`/dashboard/national/cards/${args.id}`, args.payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['dashboardNational'] });
+    },
   });
 }
 

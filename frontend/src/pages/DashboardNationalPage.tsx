@@ -18,6 +18,7 @@ import {
   TableRow,
   Typography,
   IconButton,
+  MenuItem,
   Tooltip,
   TextField,
 } from '@mui/material';
@@ -39,9 +40,13 @@ import {
   useLessonsLearned,
   useMe,
   useMissionChecklistMapping,
+  useUpdateDashboardNationalCardSetting,
+  useUpdateMissionChecklist,
 } from '../api/hooks';
 import { can } from '../app/rbac';
 import { hasAnyRole, ROLE_COMANDANTE_COMGEP, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from '../app/roleAccess';
+import { parseApiError } from '../app/apiErrors';
+import { useToast } from '../app/toast';
 import { SkeletonState } from '../components/states/SkeletonState';
 import { ErrorState } from '../components/states/ErrorState';
 import { EmptyState } from '../components/states/EmptyState';
@@ -231,6 +236,12 @@ type InstitutionalChecklistMission = {
 
 type InstitutionalChecklistMapping = {
   generatedAt: string;
+  classifications?: Array<{
+    id: InstitutionalChecklistClassification;
+    label: string;
+    colorHex?: string | null;
+  }>;
+  defaultClassification?: InstitutionalChecklistClassification;
   localities: Array<{
     id: string;
     name: string;
@@ -244,6 +255,7 @@ type InstitutionalChecklistMapping = {
 };
 
 type InstitutionalChecklistDetailState = {
+  itemId: string;
   sectionTitle: string;
   itemTitle: string;
   itemPrompt?: string | null;
@@ -253,52 +265,108 @@ type InstitutionalChecklistDetailState = {
   mission: InstitutionalChecklistMission | null;
 } | null;
 
-const institutionalChecklistClassificationMeta: Record<
+type InstitutionalChecklistClassificationConfig = {
+  id: InstitutionalChecklistClassification;
+  label: string;
+  colorHex: string | null;
+};
+
+const fallbackInstitutionalChecklistClassificationMeta: Record<
   InstitutionalChecklistClassification,
   {
     label: string;
-    chipLabel: string;
-    color: string;
-    bgColor: string;
-    borderColor: string;
+    colorHex: string | null;
   }
 > = {
   FORTE_CONSOLIDADA: {
     label: 'Dimensão forte/consolidada',
-    chipLabel: 'Forte',
-    color: '#166534',
-    bgColor: '#e8f5e9',
-    borderColor: '#81c784',
+    colorHex: '#2E7D32',
   },
   OPORTUNIDADE_MELHORIA: {
     label: 'Dimensão com oportunidades de melhoria',
-    chipLabel: 'Melhoria',
-    color: '#8a5800',
-    bgColor: '#fff8e1',
-    borderColor: '#ffcc80',
+    colorHex: '#F9A825',
   },
   NECESSITA_ANALISE: {
     label: 'Dimensão necessita de maior análise',
-    chipLabel: 'Análise',
-    color: '#475569',
-    bgColor: '#ffffff',
-    borderColor: '#cbd5e1',
+    colorHex: null,
   },
   POSSIVEL_RISCO: {
     label: 'Possível Risco',
-    chipLabel: 'Risco',
-    color: '#b71c1c',
-    bgColor: '#ffebee',
-    borderColor: '#ef9a9a',
+    colorHex: '#C62828',
   },
 };
 
-type EditableCardStyle = {
+function normalizeChecklistColorHex(colorHex: string | null | undefined) {
+  const normalized = String(colorHex ?? '').trim();
+  if (!/^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/.test(normalized)) return null;
+  return normalized.toUpperCase();
+}
+
+function hexToRgba(hexColor: string, alpha: number) {
+  const normalized = hexColor.replace('#', '');
+  const safeHex =
+    normalized.length === 3
+      ? normalized
+          .split('')
+          .map((char) => `${char}${char}`)
+          .join('')
+      : normalized;
+  const r = Number.parseInt(safeHex.slice(0, 2), 16);
+  const g = Number.parseInt(safeHex.slice(2, 4), 16);
+  const b = Number.parseInt(safeHex.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function resolveChecklistClassificationStyle(colorHex: string | null | undefined) {
+  const normalizedColor = normalizeChecklistColorHex(colorHex);
+  if (!normalizedColor) {
+    return {
+      color: '#475569',
+      bgColor: '#ffffff',
+      borderColor: '#CBD5E1',
+    };
+  }
+  return {
+    color: normalizedColor,
+    bgColor: hexToRgba(normalizedColor, 0.14),
+    borderColor: hexToRgba(normalizedColor, 0.5),
+  };
+}
+
+type SmifCardId = 'smif-completed' | 'smif-field' | 'smif-participants';
+
+type SmifCardSetting = {
+  id: SmifCardId;
+  title: string;
+  description: string;
   backgroundColor: string;
   textColor: string;
 };
 
-const SMIF_CARD_STYLES_STORAGE_KEY = 'smif-card-styles-v1';
+const DEFAULT_SMIF_CARD_SETTINGS: Record<SmifCardId, SmifCardSetting> = {
+  'smif-completed': {
+    id: 'smif-completed',
+    title: 'Entregas Realizadas',
+    description: 'Resumo de atuação da CIPAVD.',
+    backgroundColor: '#1F4A61',
+    textColor: '#F4FAFD',
+  },
+  'smif-field': {
+    id: 'smif-field',
+    title: 'Atividades de campo realizadas pela CIPAVD.',
+    description: 'Apoio realizado pela área técnica dos integrantes.',
+    backgroundColor: '#2F6F8A',
+    textColor: '#F2FBFE',
+  },
+  'smif-participants': {
+    id: 'smif-participants',
+    title: 'Público alcançado',
+    description: 'Total de participações em atividades de campo.',
+    backgroundColor: '#3A7A9A',
+    textColor: '#F0F9FC',
+  },
+};
+
 const INSTITUTIONAL_DESCRIPTION_COLUMN_WIDTH = 230;
 const INSTITUTIONAL_LOCALITY_COLUMN_WIDTH = 150;
 const institutionalSectionHighlightMeta: Record<
@@ -322,19 +390,15 @@ const institutionalSectionHighlightMeta: Record<
   },
 };
 
-function loadSmifCardStyles(): Record<string, EditableCardStyle> {
-  try {
-    const raw = window.localStorage.getItem(SMIF_CARD_STYLES_STORAGE_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw) as Record<string, EditableCardStyle>;
-    return parsed && typeof parsed === 'object' ? parsed : {};
-  } catch {
-    return {};
-  }
+function isSmifCardId(value: string): value is SmifCardId {
+  return Object.hasOwn(DEFAULT_SMIF_CARD_SETTINGS, value);
 }
 
 export function DashboardNationalPage() {
   const { data: me } = useMe();
+  const toast = useToast();
+  const updateMissionChecklist = useUpdateMissionChecklist();
+  const updateSmifCardSetting = useUpdateDashboardNationalCardSetting();
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const localityId = params.get('localityId') ?? '';
@@ -349,17 +413,22 @@ export function DashboardNationalPage() {
   const [lessonOffset, setLessonOffset] = useState(0);
   const [readingLesson, setReadingLesson] = useState<LessonPost | null>(null);
   const isTiProfile = hasAnyRole(me, [ROLE_TI]);
-  const [cardStyles, setCardStyles] = useState<Record<string, EditableCardStyle>>(() => loadSmifCardStyles());
-  const [editingCardId, setEditingCardId] = useState<string | null>(null);
-  const [editingCardDraft, setEditingCardDraft] = useState<EditableCardStyle>({
-    backgroundColor: '#FFFFFF',
-    textColor: '#111827',
+  const [editingCardId, setEditingCardId] = useState<SmifCardId | null>(null);
+  const [editingCardDraft, setEditingCardDraft] = useState<SmifCardSetting>({
+    id: 'smif-completed',
+    title: DEFAULT_SMIF_CARD_SETTINGS['smif-completed'].title,
+    description: DEFAULT_SMIF_CARD_SETTINGS['smif-completed'].description,
+    backgroundColor: DEFAULT_SMIF_CARD_SETTINGS['smif-completed'].backgroundColor,
+    textColor: DEFAULT_SMIF_CARD_SETTINGS['smif-completed'].textColor,
   });
   const [kpiDetail, setKpiDetail] = useState<KpiDetailState>(null);
   const [kpiDetailSearch, setKpiDetailSearch] = useState('');
   const [institutionalDetail, setInstitutionalDetail] =
     useState<InstitutionalChecklistDetailState>(null);
   const [institutionalScheduleExpanded, setInstitutionalScheduleExpanded] = useState(false);
+  const [institutionalDraftClassification, setInstitutionalDraftClassification] =
+    useState<InstitutionalChecklistClassification>('NECESSITA_ANALISE');
+  const [institutionalDraftNotes, setInstitutionalDraftNotes] = useState('');
 
   const lessons = ((lessonsQuery.data?.items ?? []) as LessonPost[])
     .filter((item) => item?.id)
@@ -384,6 +453,17 @@ export function DashboardNationalPage() {
   useEffect(() => {
     setInstitutionalScheduleExpanded(false);
   }, [institutionalDetail?.mission?.id]);
+
+  useEffect(() => {
+    setInstitutionalDraftClassification(
+      institutionalDetail?.cell.classification ?? 'NECESSITA_ANALISE',
+    );
+    setInstitutionalDraftNotes(institutionalDetail?.cell.notes ?? '');
+  }, [
+    institutionalDetail?.itemId,
+    institutionalDetail?.cell.classification,
+    institutionalDetail?.cell.notes,
+  ]);
 
   if (dashboardQuery.isLoading) return <SkeletonState />;
   if (dashboardQuery.isError) return <ErrorState error={dashboardQuery.error} onRetry={() => dashboardQuery.refetch()} />;
@@ -426,6 +506,31 @@ export function DashboardNationalPage() {
       law: [],
     },
   };
+  const smifCardsFromApi = Array.isArray((dashboardQuery.data as any)?.smifCards)
+    ? ((dashboardQuery.data as any).smifCards as Array<any>)
+    : [];
+  const smifCardSettingsById = new Map<SmifCardId, SmifCardSetting>(
+    (Object.keys(DEFAULT_SMIF_CARD_SETTINGS) as SmifCardId[]).map((id) => [
+      id,
+      DEFAULT_SMIF_CARD_SETTINGS[id],
+    ]),
+  );
+  for (const rawCard of smifCardsFromApi) {
+    const rawId = String(rawCard?.id ?? '');
+    if (!isSmifCardId(rawId)) continue;
+    const defaults = DEFAULT_SMIF_CARD_SETTINGS[rawId];
+    smifCardSettingsById.set(rawId, {
+      id: rawId,
+      title: String(rawCard?.title ?? '').trim() || defaults.title,
+      description:
+        String(rawCard?.description ?? '').trim() || defaults.description,
+      backgroundColor:
+        normalizeChecklistColorHex(rawCard?.backgroundColor) ??
+        defaults.backgroundColor,
+      textColor:
+        normalizeChecklistColorHex(rawCard?.textColor) ?? defaults.textColor,
+    });
+  }
   const institutionalMapping =
     (missionChecklistMappingQuery.data as InstitutionalChecklistMapping | undefined) ??
     null;
@@ -435,21 +540,64 @@ export function DashboardNationalPage() {
     INSTITUTIONAL_DESCRIPTION_COLUMN_WIDTH +
     institutionalLocalities.length * INSTITUTIONAL_LOCALITY_COLUMN_WIDTH;
   const institutionalTotalColumns = institutionalLocalities.length + 1;
-  const institutionalLegendItems: Array<{
-    key: InstitutionalChecklistClassification;
-    label: string;
-  }> = [
-    { key: 'FORTE_CONSOLIDADA', label: 'Dimensão forte/consolidada' },
-    {
-      key: 'OPORTUNIDADE_MELHORIA',
-      label: 'Dimensão com oportunidades de melhoria',
-    },
-    {
-      key: 'NECESSITA_ANALISE',
-      label: 'Dimensão necessita de maior análise',
-    },
-    { key: 'POSSIVEL_RISCO', label: 'Possível Risco' },
-  ];
+  const institutionalClassifications: InstitutionalChecklistClassificationConfig[] =
+    (
+      Array.isArray(institutionalMapping?.classifications)
+        ? institutionalMapping?.classifications
+        : null
+    )
+      ?.map((classification) => {
+        const fallback =
+          fallbackInstitutionalChecklistClassificationMeta[classification.id];
+        return {
+          id: classification.id,
+          label:
+            String(classification.label ?? '').trim() || fallback.label,
+          colorHex:
+            normalizeChecklistColorHex(classification.colorHex) ??
+            fallback.colorHex,
+        };
+      })
+      .filter(Boolean) ?? [
+      {
+        id: 'FORTE_CONSOLIDADA',
+        label: fallbackInstitutionalChecklistClassificationMeta.FORTE_CONSOLIDADA.label,
+        colorHex:
+          fallbackInstitutionalChecklistClassificationMeta.FORTE_CONSOLIDADA.colorHex,
+      },
+      {
+        id: 'OPORTUNIDADE_MELHORIA',
+        label:
+          fallbackInstitutionalChecklistClassificationMeta.OPORTUNIDADE_MELHORIA
+            .label,
+        colorHex:
+          fallbackInstitutionalChecklistClassificationMeta.OPORTUNIDADE_MELHORIA
+            .colorHex,
+      },
+      {
+        id: 'NECESSITA_ANALISE',
+        label:
+          fallbackInstitutionalChecklistClassificationMeta.NECESSITA_ANALISE
+            .label,
+        colorHex:
+          fallbackInstitutionalChecklistClassificationMeta.NECESSITA_ANALISE
+            .colorHex,
+      },
+      {
+        id: 'POSSIVEL_RISCO',
+        label:
+          fallbackInstitutionalChecklistClassificationMeta.POSSIVEL_RISCO.label,
+        colorHex:
+          fallbackInstitutionalChecklistClassificationMeta.POSSIVEL_RISCO
+            .colorHex,
+      },
+    ];
+  const institutionalClassificationById = new Map(
+    institutionalClassifications.map((classification) => [
+      classification.id,
+      classification,
+    ]),
+  );
   const missionByLocality = new Map<string, InstitutionalChecklistMission | null>(
     (institutionalMapping?.missionsByLocality ?? []).map((entry) => [
       entry.localityId,
@@ -494,6 +642,7 @@ export function DashboardNationalPage() {
   ) => {
     if (!cell.missionId) return;
     setInstitutionalDetail({
+      itemId: item.id,
       sectionTitle: section.title,
       itemTitle: item.title,
       itemPrompt: item.prompt ?? null,
@@ -502,6 +651,69 @@ export function DashboardNationalPage() {
       cell,
       mission: missionByLocality.get(locality.id) ?? null,
     });
+  };
+  const canEditInstitutionalChecklist = hasAnyRole(me, [
+    ROLE_COORDENACAO_CIPAVD,
+    ROLE_TI,
+  ]);
+  const saveInstitutionalChecklistItem = async () => {
+    const detail = institutionalDetail;
+    if (!detail?.mission?.id || !canEditInstitutionalChecklist) return;
+
+    const nextClassification = institutionalDraftClassification;
+    const nextNotes = institutionalDraftNotes;
+    const itemsPayload = detail.mission.checklistSections.flatMap((section) =>
+      section.items.map((item) => ({
+        id: item.id,
+        classification:
+          item.id === detail.itemId ? nextClassification : item.classification,
+        notes: item.id === detail.itemId ? nextNotes : item.notes,
+      })),
+    );
+
+    try {
+      const response = await updateMissionChecklist.mutateAsync({
+        id: detail.mission.id,
+        payload: {
+          omId: detail.cell.localityId,
+          items: itemsPayload,
+        },
+      });
+      setInstitutionalDetail((current) => {
+        if (
+          !current ||
+          !current.mission ||
+          current.itemId !== detail.itemId ||
+          current.mission.id !== detail.mission?.id
+        ) {
+          return current;
+        }
+        return {
+          ...current,
+          cell: {
+            ...current.cell,
+            classification: nextClassification,
+            notes: nextNotes,
+            hasNotes: Boolean(nextNotes.trim()),
+          },
+          mission: {
+            ...current.mission,
+            updatedAt: response.updatedAt ?? current.mission.updatedAt,
+            checklistSections:
+              response.sections ?? current.mission.checklistSections,
+          },
+        };
+      });
+      toast.push({
+        message: 'Checklist atualizado com sucesso.',
+        severity: 'success',
+      });
+    } catch (error) {
+      toast.push({
+        message: parseApiError(error).message ?? 'Erro ao atualizar checklist.',
+        severity: 'error',
+      });
+    }
   };
   const openKpiDetail = (nextDetail: Exclude<KpiDetailState, null>) => {
     setKpiDetail(nextDetail);
@@ -749,22 +961,51 @@ export function DashboardNationalPage() {
     },
   ];
 
-  const getCardStyle = (cardId: string, defaults: EditableCardStyle) => cardStyles[cardId] ?? defaults;
+  const getCardSetting = (cardId: SmifCardId): SmifCardSetting =>
+    smifCardSettingsById.get(cardId) ?? DEFAULT_SMIF_CARD_SETTINGS[cardId];
 
-  const openStyleEditor = (cardId: string, defaults: EditableCardStyle) => {
+  const openStyleEditor = (cardId: SmifCardId) => {
     setEditingCardId(cardId);
-    setEditingCardDraft(getCardStyle(cardId, defaults));
+    setEditingCardDraft({ ...getCardSetting(cardId) });
   };
 
-  const saveStyleEditor = () => {
+  const saveStyleEditor = async () => {
     if (!editingCardId) return;
-    const next = {
-      ...cardStyles,
-      [editingCardId]: editingCardDraft,
-    };
-    setCardStyles(next);
-    window.localStorage.setItem(SMIF_CARD_STYLES_STORAGE_KEY, JSON.stringify(next));
-    setEditingCardId(null);
+    if (!editingCardDraft.title.trim()) {
+      toast.push({
+        message: 'Informe o nome do card.',
+        severity: 'warning',
+      });
+      return;
+    }
+    if (!editingCardDraft.description.trim()) {
+      toast.push({
+        message: 'Informe a descrição do card.',
+        severity: 'warning',
+      });
+      return;
+    }
+    try {
+      await updateSmifCardSetting.mutateAsync({
+        id: editingCardId,
+        payload: {
+          title: editingCardDraft.title.trim(),
+          description: editingCardDraft.description.trim(),
+          backgroundColor: editingCardDraft.backgroundColor,
+          textColor: editingCardDraft.textColor,
+        },
+      });
+      toast.push({
+        message: 'Card atualizado com sucesso.',
+        severity: 'success',
+      });
+      setEditingCardId(null);
+    } catch (error) {
+      toast.push({
+        message: parseApiError(error).message ?? 'Erro ao atualizar card.',
+        severity: 'error',
+      });
+    }
   };
   const getIndicatorClickAction = (groupId: string, itemId: string) => {
     if (groupId === 'smif-completed') {
@@ -845,37 +1086,24 @@ export function DashboardNationalPage() {
       >
         {[
           {
-            id: 'smif-completed',
-            title: 'Entregas Realizadas',
-            subtitle: 'Resumo de atuação da CIPAVD.',
+            id: 'smif-completed' as SmifCardId,
             items: completedIndicators,
-            bg: '#1F4A61',
             border: '1px solid rgba(139, 184, 207, 0.38)',
             shadow: '0 18px 34px rgba(15,44,59,0.36)',
-            titleColor: '#F4FAFD',
-            subtitleColor: 'rgba(231,244,250,0.92)',
           },
           {
-            id: 'smif-field',
-            title: 'Atividades de campo realizadas pela CIPAVD.',
-            subtitle: 'Apoio realizado pela área técnica dos integrantes.',
+            id: 'smif-field' as SmifCardId,
             items: fieldBySpecialtyIndicators,
-            bg: '#2F6F8A',
             border: '1px solid rgba(132, 178, 201, 0.36)',
             shadow: '0 18px 34px rgba(16,40,53,0.38)',
-            titleColor: '#F2FBFE',
-            subtitleColor: 'rgba(236,250,255,0.9)',
           },
         ].map((group) => {
-          const groupStyle = getCardStyle(group.id, {
-            backgroundColor: group.bg,
-            textColor: group.titleColor,
-          });
+          const cardSetting = getCardSetting(group.id);
           return (
           <Card
-            key={group.title}
+            key={group.id}
             sx={{
-              background: groupStyle.backgroundColor,
+              background: cardSetting.backgroundColor,
               border: group.border,
               width: '100%',
               minWidth: 0,
@@ -887,24 +1115,19 @@ export function DashboardNationalPage() {
             <CardContent sx={{ p: 2.25 }}>
               <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
                 <Box>
-                  <Typography variant="subtitle1" fontWeight={700} sx={{ letterSpacing: 0.2, color: groupStyle.textColor }}>
-                    {group.title}
+                  <Typography variant="subtitle1" fontWeight={700} sx={{ letterSpacing: 0.2, color: cardSetting.textColor }}>
+                    {cardSetting.title}
                   </Typography>
-                  <Typography variant="caption" sx={{ color: groupStyle.textColor }}>
-                    {group.subtitle}
+                  <Typography variant="caption" sx={{ color: cardSetting.textColor }}>
+                    {cardSetting.description}
                   </Typography>
                 </Box>
                 {isTiProfile ? (
-                  <Tooltip title="Editar cores do card">
+                  <Tooltip title="Editar card">
                     <IconButton
                       size="small"
-                      sx={{ color: groupStyle.textColor, opacity: 0.72 }}
-                      onClick={() =>
-                        openStyleEditor(group.id, {
-                          backgroundColor: group.bg,
-                          textColor: group.titleColor,
-                        })
-                      }
+                      sx={{ color: cardSetting.textColor, opacity: 0.72 }}
+                      onClick={() => openStyleEditor(group.id)}
                     >
                       <EditOutlinedIcon fontSize="small" />
                     </IconButton>
@@ -1004,10 +1227,7 @@ export function DashboardNationalPage() {
         }}
       >
         {(() => {
-          const style = getCardStyle('smif-participants', {
-            backgroundColor: '#3A7A9A',
-            textColor: '#F0F9FC',
-          });
+          const style = getCardSetting('smif-participants');
           return (
         <Card
           sx={{
@@ -1023,23 +1243,18 @@ export function DashboardNationalPage() {
             <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
               <Box>
                 <Typography variant="subtitle1" fontWeight={700} sx={{ letterSpacing: 0.2, color: style.textColor }}>
-                  Público alcançado
+                  {style.title}
                 </Typography>
                 <Typography variant="caption" sx={{ color: style.textColor }}>
-                  Total de participações em atividades de campo.
+                  {style.description}
                 </Typography>
               </Box>
               {isTiProfile ? (
-                <Tooltip title="Editar cores do card">
+                <Tooltip title="Editar card">
                   <IconButton
                     size="small"
                     sx={{ color: style.textColor, opacity: 0.72 }}
-                    onClick={() =>
-                      openStyleEditor('smif-participants', {
-                        backgroundColor: '#3A7A9A',
-                        textColor: '#F0F9FC',
-                      })
-                    }
+                    onClick={() => openStyleEditor('smif-participants')}
                   >
                     <EditOutlinedIcon fontSize="small" />
                   </IconButton>
@@ -1121,10 +1336,10 @@ export function DashboardNationalPage() {
           );
         })()}
         {(() => {
-          const style = getCardStyle('smif-positive-results', {
+          const style = {
             backgroundColor: '#FFFFFF',
             textColor: '#111827',
-          });
+          };
           return (
         <Card sx={{ width: '100%', minWidth: 0, height: '100%', backgroundColor: style.backgroundColor, borderRadius: 3 }}>
           <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -1132,22 +1347,6 @@ export function DashboardNationalPage() {
               <Typography variant="h6" sx={{ color: style.textColor }}>
                 Resultados positivos alcançados
               </Typography>
-              {isTiProfile ? (
-                <Tooltip title="Editar cores do card">
-                  <IconButton
-                    size="small"
-                    sx={{ color: style.textColor, opacity: 0.72 }}
-                    onClick={() =>
-                      openStyleEditor('smif-positive-results', {
-                        backgroundColor: '#FFFFFF',
-                        textColor: '#111827',
-                      })
-                    }
-                  >
-                    <EditOutlinedIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-              ) : null}
             </Stack>
               {!canViewLessons ? (
                 <Typography variant="body2" color="text.secondary">
@@ -1326,12 +1525,13 @@ export function DashboardNationalPage() {
                     },
                   }}
                 >
-                  {institutionalLegendItems.map((legendItem) => {
-                    const legendMeta =
-                      institutionalChecklistClassificationMeta[legendItem.key];
+                  {institutionalClassifications.map((legendItem) => {
+                    const legendStyle = resolveChecklistClassificationStyle(
+                      legendItem.colorHex,
+                    );
                     return (
                       <Box
-                        key={legendItem.key}
+                        key={legendItem.id}
                         sx={{
                           display: 'flex',
                           alignItems: 'center',
@@ -1340,11 +1540,8 @@ export function DashboardNationalPage() {
                           px: 0.7,
                           py: 0.48,
                           borderRadius: 1.25,
-                          border: `1px solid ${legendMeta.borderColor}`,
-                          bgcolor:
-                            legendItem.key === 'NECESSITA_ANALISE'
-                              ? '#ffffff'
-                              : legendMeta.bgColor,
+                          border: `1px solid ${legendStyle.borderColor}`,
+                          bgcolor: legendStyle.bgColor,
                         }}
                       >
                         <Box
@@ -1352,11 +1549,8 @@ export function DashboardNationalPage() {
                             width: 10,
                             height: 10,
                             borderRadius: '50%',
-                            bgcolor:
-                              legendItem.key === 'NECESSITA_ANALISE'
-                                ? '#ffffff'
-                                : legendMeta.color,
-                            border: `1px solid ${legendMeta.borderColor}`,
+                            bgcolor: legendStyle.color,
+                            border: `1px solid ${legendStyle.borderColor}`,
                             flexShrink: 0,
                           }}
                         />
@@ -1544,8 +1738,24 @@ export function DashboardNationalPage() {
                               notes: '',
                               hasNotes: false,
                             };
-                          const classificationMeta = cell.classification
-                            ? institutionalChecklistClassificationMeta[cell.classification]
+                          const classificationConfig = cell.classification
+                            ? institutionalClassificationById.get(cell.classification) ??
+                              {
+                                id: cell.classification,
+                                label:
+                                  fallbackInstitutionalChecklistClassificationMeta[
+                                    cell.classification
+                                  ].label,
+                                colorHex:
+                                  fallbackInstitutionalChecklistClassificationMeta[
+                                    cell.classification
+                                  ].colorHex,
+                              }
+                            : null;
+                          const classificationMeta = classificationConfig
+                            ? resolveChecklistClassificationStyle(
+                                classificationConfig.colorHex,
+                              )
                             : null;
                           const isClickable = Boolean(cell.missionId);
                           const previewText =
@@ -1605,7 +1815,8 @@ export function DashboardNationalPage() {
                                         transform: 'translateY(-1px)',
                                         boxShadow: '0 5px 12px rgba(18, 42, 56, 0.11)',
                                         borderColor:
-                                          classificationMeta?.color ?? 'rgba(30,64,175,0.45)',
+                                          classificationMeta?.color ??
+                                          'rgba(30,64,175,0.45)',
                                       }
                                     : undefined,
                                   '&:focus-visible': isClickable
@@ -1813,51 +2024,104 @@ export function DashboardNationalPage() {
                         </Typography>
                       ) : null}
                     </Box>
-                    <Chip
-                      size="small"
-                      label={
-                        institutionalDetail.cell.classification
-                          ? institutionalChecklistClassificationMeta[
-                              institutionalDetail.cell.classification
-                            ].label
-                          : 'Sem classificação'
-                      }
-                      sx={{
-                        alignSelf: { xs: 'flex-start', md: 'center' },
-                        color: institutionalDetail.cell.classification
-                          ? institutionalChecklistClassificationMeta[
-                              institutionalDetail.cell.classification
-                            ].color
-                          : '#475569',
-                        bgcolor: institutionalDetail.cell.classification
-                          ? institutionalChecklistClassificationMeta[
-                              institutionalDetail.cell.classification
-                            ].bgColor
-                          : '#f1f5f9',
-                        border: `1px solid ${
-                          institutionalDetail.cell.classification
-                            ? institutionalChecklistClassificationMeta[
-                                institutionalDetail.cell.classification
-                              ].borderColor
-                            : '#cbd5e1'
-                        }`,
-                        fontWeight: 700,
-                      }}
-                    />
+                    {canEditInstitutionalChecklist &&
+                    Boolean(institutionalDetail.mission?.id) ? (
+                      <TextField
+                        select
+                        size="small"
+                        label="Classificação"
+                        value={institutionalDraftClassification}
+                        onChange={(event) =>
+                          setInstitutionalDraftClassification(
+                            event.target
+                              .value as InstitutionalChecklistClassification,
+                          )
+                        }
+                        sx={{ minWidth: { xs: '100%', md: 320 } }}
+                        disabled={updateMissionChecklist.isPending}
+                      >
+                        {institutionalClassifications.map((classification) => (
+                          <MenuItem
+                            key={classification.id}
+                            value={classification.id}
+                          >
+                            {classification.label}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                    ) : (
+                      (() => {
+                        const currentClassification =
+                          institutionalDetail.cell.classification;
+                        const classificationConfig = currentClassification
+                          ? institutionalClassificationById.get(
+                              currentClassification,
+                            ) ??
+                            {
+                              id: currentClassification,
+                              label:
+                                fallbackInstitutionalChecklistClassificationMeta[
+                                  currentClassification
+                                ].label,
+                              colorHex:
+                                fallbackInstitutionalChecklistClassificationMeta[
+                                  currentClassification
+                                ].colorHex,
+                            }
+                          : null;
+                        const style = classificationConfig
+                          ? resolveChecklistClassificationStyle(
+                              classificationConfig.colorHex,
+                            )
+                          : null;
+                        return (
+                          <Chip
+                            size="small"
+                            label={classificationConfig?.label ?? 'Sem classificação'}
+                            sx={{
+                              alignSelf: { xs: 'flex-start', md: 'center' },
+                              color: style?.color ?? '#475569',
+                              bgcolor: style?.bgColor ?? '#f1f5f9',
+                              border: `1px solid ${
+                                style?.borderColor ?? '#cbd5e1'
+                              }`,
+                              fontWeight: 700,
+                            }}
+                          />
+                        );
+                      })()
+                    )}
                   </Stack>
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      mt: 1,
-                      p: 1,
-                      borderRadius: 1.2,
-                      backgroundColor: '#f8fbfe',
-                      border: '1px solid rgba(15,23,42,0.08)',
-                      whiteSpace: 'pre-wrap',
-                    }}
-                  >
-                    {institutionalDetail.cell.notes.trim() || 'Sem observações registradas para este item.'}
-                  </Typography>
+                  {canEditInstitutionalChecklist &&
+                  Boolean(institutionalDetail.mission?.id) ? (
+                    <TextField
+                      label="Observações"
+                      value={institutionalDraftNotes}
+                      onChange={(event) =>
+                        setInstitutionalDraftNotes(event.target.value)
+                      }
+                      multiline
+                      minRows={4}
+                      fullWidth
+                      sx={{ mt: 1 }}
+                      disabled={updateMissionChecklist.isPending}
+                    />
+                  ) : (
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        mt: 1,
+                        p: 1,
+                        borderRadius: 1.2,
+                        backgroundColor: '#f8fbfe',
+                        border: '1px solid rgba(15,23,42,0.08)',
+                        whiteSpace: 'pre-wrap',
+                      }}
+                    >
+                      {institutionalDetail.cell.notes.trim() ||
+                        'Sem observações registradas para este item.'}
+                    </Typography>
+                  )}
                 </CardContent>
               </Card>
 
@@ -2014,10 +2278,16 @@ export function DashboardNationalPage() {
                             </Typography>
                             <Stack spacing={0.7}>
                               {section.items.map((item) => {
-                                const meta =
-                                  institutionalChecklistClassificationMeta[
+                                const classificationConfig =
+                                  institutionalClassificationById.get(
+                                    item.classification,
+                                  ) ??
+                                  fallbackInstitutionalChecklistClassificationMeta[
                                     item.classification
                                   ];
+                                const meta = resolveChecklistClassificationStyle(
+                                  classificationConfig.colorHex,
+                                );
                                 return (
                                   <Box
                                     key={item.id}
@@ -2040,7 +2310,7 @@ export function DashboardNationalPage() {
                                         variant="caption"
                                         sx={{ color: meta.color, fontWeight: 700 }}
                                       >
-                                        {meta.label}
+                                        {classificationConfig.label}
                                       </Typography>
                                     </Stack>
                                     {item.prompt ? (
@@ -2073,6 +2343,17 @@ export function DashboardNationalPage() {
           ) : null}
         </DialogContent>
         <DialogActions>
+          {canEditInstitutionalChecklist && institutionalDetail?.mission?.id ? (
+            <Button
+              variant="contained"
+              onClick={saveInstitutionalChecklistItem}
+              disabled={updateMissionChecklist.isPending}
+            >
+              {updateMissionChecklist.isPending
+                ? 'Salvando...'
+                : 'Salvar alterações'}
+            </Button>
+          ) : null}
           {institutionalDetail?.mission?.id ? (
             <Button
               onClick={() => {
@@ -2124,9 +2405,30 @@ export function DashboardNationalPage() {
       </Dialog>
 
       <Dialog open={Boolean(editingCardId)} onClose={() => setEditingCardId(null)} fullWidth maxWidth="xs">
-        <DialogTitle>Editar cores do card</DialogTitle>
+        <DialogTitle>Editar card do SMIF</DialogTitle>
         <DialogContent sx={{ pt: 1 }}>
           <Stack spacing={1.5} sx={{ mt: 0.5 }}>
+            <TextField
+              label="Nome do card"
+              value={editingCardDraft.title}
+              onChange={(e) =>
+                setEditingCardDraft((prev) => ({ ...prev, title: e.target.value }))
+              }
+              fullWidth
+            />
+            <TextField
+              label="Descrição"
+              value={editingCardDraft.description}
+              onChange={(e) =>
+                setEditingCardDraft((prev) => ({
+                  ...prev,
+                  description: e.target.value,
+                }))
+              }
+              multiline
+              minRows={2}
+              fullWidth
+            />
             <TextField
               label="Cor do fundo"
               type="color"
@@ -2148,8 +2450,17 @@ export function DashboardNationalPage() {
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setEditingCardId(null)}>Cancelar</Button>
-          <Button variant="contained" onClick={saveStyleEditor}>
+          <Button
+            onClick={() => setEditingCardId(null)}
+            disabled={updateSmifCardSetting.isPending}
+          >
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            onClick={saveStyleEditor}
+            disabled={updateSmifCardSetting.isPending}
+          >
             Salvar
           </Button>
         </DialogActions>

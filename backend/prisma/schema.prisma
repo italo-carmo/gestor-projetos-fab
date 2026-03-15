@@ -270,6 +270,40 @@ model MissionScheduleItem {
   @@index([missionId, startAt])
 }
 
+model MissionChecklistDimension {
+  id        String   @id @default(cuid())
+  sectionId String
+  title     String
+  prompt    String?
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([sectionId, isActive, sortOrder, createdAt])
+}
+
+model MissionChecklistClassificationSetting {
+  id        String   @id
+  label     String
+  colorHex  String?
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([sortOrder, createdAt])
+}
+
+model DashboardNationalCardSetting {
+  id              String   @id
+  title           String
+  description     String
+  backgroundColor String
+  textColor       String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
 model ActivityVisitScheduleItem {
   id               String   @id @default(cuid())
   activityId       String

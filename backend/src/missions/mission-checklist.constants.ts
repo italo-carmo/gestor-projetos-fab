@@ -11,10 +11,53 @@ export type MissionChecklistClassification =
 export const DEFAULT_MISSION_CHECKLIST_CLASSIFICATION: MissionChecklistClassification =
   'NECESSITA_ANALISE';
 
+export const MISSION_CHECKLIST_SECTION_IDS = [
+  'lideranca',
+  'acompanhamento_recrutas',
+  'analise_riscos',
+] as const;
+
 export type MissionChecklistSectionId =
-  | 'lideranca'
-  | 'acompanhamento_recrutas'
-  | 'analise_riscos';
+  (typeof MISSION_CHECKLIST_SECTION_IDS)[number];
+
+export const MISSION_CHECKLIST_SECTION_TITLE_BY_ID: Record<
+  MissionChecklistSectionId,
+  string
+> = {
+  lideranca: 'Liderança',
+  acompanhamento_recrutas: 'Acompanhamento de Recrutas',
+  analise_riscos: 'Análise de Riscos',
+};
+
+export const MISSION_CHECKLIST_CLASSIFICATION_DEFAULT_META: Record<
+  MissionChecklistClassification,
+  {
+    label: string;
+    colorHex: string | null;
+    sortOrder: number;
+  }
+> = {
+  FORTE_CONSOLIDADA: {
+    label: 'Dimensão forte/consolidada',
+    colorHex: '#2E7D32',
+    sortOrder: 10,
+  },
+  OPORTUNIDADE_MELHORIA: {
+    label: 'Dimensão com oportunidades de melhoria',
+    colorHex: '#F9A825',
+    sortOrder: 20,
+  },
+  NECESSITA_ANALISE: {
+    label: 'Dimensão necessita de maior análise',
+    colorHex: null,
+    sortOrder: 30,
+  },
+  POSSIVEL_RISCO: {
+    label: 'Possível Risco',
+    colorHex: '#C62828',
+    sortOrder: 40,
+  },
+};
 
 export type MissionChecklistItemTemplate = {
   id: string;
@@ -28,7 +71,7 @@ export type MissionChecklistSectionTemplate = {
   items: MissionChecklistItemTemplate[];
 };
 
-export const MISSION_CHECKLIST_SECTIONS: MissionChecklistSectionTemplate[] = [
+export const MISSION_CHECKLIST_DEFAULT_SECTIONS: MissionChecklistSectionTemplate[] = [
   {
     id: 'lideranca',
     title: 'Liderança',
@@ -114,11 +157,3 @@ export const MISSION_CHECKLIST_SECTIONS: MissionChecklistSectionTemplate[] = [
     ],
   },
 ];
-
-export const MISSION_CHECKLIST_ITEM_IDS = MISSION_CHECKLIST_SECTIONS.flatMap(
-  (section) => section.items.map((item) => item.id),
-);
-
-export const MISSION_CHECKLIST_ITEM_ID_SET = new Set(
-  MISSION_CHECKLIST_ITEM_IDS,
-);
