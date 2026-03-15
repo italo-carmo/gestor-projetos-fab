@@ -166,10 +166,7 @@ export class ActivitiesService {
 
     if (specialtyId) {
       andClauses.push({
-        OR: [
-          { specialtyId: null },
-          { specialtyId },
-        ],
+        OR: [{ specialtyId: null }, { specialtyId }],
       });
     }
 
@@ -273,7 +270,7 @@ export class ActivitiesService {
               ? sanitizeText(payload.description)
               : null,
             localityId,
-            activityTypeId: activityTypeId as any,
+            activityTypeId: activityTypeId,
             specialtyId,
             eventDate: payload.eventDate ? new Date(payload.eventDate) : null,
             reportRequired: payload.reportRequired ?? false,
@@ -397,7 +394,9 @@ export class ActivitiesService {
     const responsibleUserIds = await this.resolveActivityResponsibleIds(
       localityId,
       payload.responsibleUserIds ??
-        ((existing as any).responsibles ?? []).map((entry: any) => entry.userId),
+        ((existing as any).responsibles ?? []).map(
+          (entry: any) => entry.userId,
+        ),
       user,
     );
 
@@ -412,7 +411,7 @@ export class ActivitiesService {
               ? null
               : sanitizeText(payload.description),
         localityId,
-        activityTypeId: activityTypeId as any,
+        activityTypeId: activityTypeId,
         specialtyId,
         eventDate:
           payload.eventDate === undefined
@@ -502,7 +501,10 @@ export class ActivitiesService {
       if (!(existing as any).report) {
         throwError('ACTIVITY_REPORT_REQUIRED');
       }
-      if (!(existing as any).report.signedAt || !(existing as any).report.signatureHash) {
+      if (
+        !(existing as any).report.signedAt ||
+        !(existing as any).report.signatureHash
+      ) {
         throwError('ACTIVITY_REPORT_SIGNATURE_REQUIRED');
       }
     }
@@ -582,7 +584,9 @@ export class ActivitiesService {
         await tx.activityReportPhoto.deleteMany({
           where: { reportId: (existing as any).report.id },
         });
-        await tx.activityReport.delete({ where: { id: (existing as any).report.id } });
+        await tx.activityReport.delete({
+          where: { id: (existing as any).report.id },
+        });
       }
       await tx.activity.delete({ where: { id } });
     });
@@ -656,7 +660,10 @@ export class ActivitiesService {
         if (!(activity as any).report) {
           throwError('ACTIVITY_REPORT_REQUIRED');
         }
-        if (!(activity as any).report.signedAt || !(activity as any).report.signatureHash) {
+        if (
+          !(activity as any).report.signedAt ||
+          !(activity as any).report.signatureHash
+        ) {
           throwError('ACTIVITY_REPORT_SIGNATURE_REQUIRED');
         }
       }
@@ -820,7 +827,7 @@ export class ActivitiesService {
     if (!existing.length) return { deleted: 0 };
 
     const targetIds = existing.map((item) => item.id);
-    const photos = existing.flatMap((item: any) => (item as any).report?.photos ?? []);
+    const photos = existing.flatMap((item: any) => item.report?.photos ?? []);
 
     await this.prisma.activity.deleteMany({
       where: { id: { in: targetIds } },
@@ -922,7 +929,11 @@ export class ActivitiesService {
 
     for (const activity of existing) {
       this.assertActivityOperateAccess(activity, user);
-      this.assertScopeConstraint(activity.localityId, activity.specialtyId, user);
+      this.assertScopeConstraint(
+        activity.localityId,
+        activity.specialtyId,
+        user,
+      );
       for (const localityId of normalizedTargetLocalityIds) {
         this.assertScopeConstraint(localityId, activity.specialtyId, user);
       }
@@ -941,7 +952,7 @@ export class ActivitiesService {
             ? null
             : dateMode === 'SET_DATE' && targetDate
               ? targetDate
-              : activity.eventDate ?? null;
+              : (activity.eventDate ?? null);
         cloneRows.push({
           title: activity.title,
           description: activity.description ?? null,
@@ -949,7 +960,10 @@ export class ActivitiesService {
           activityTypeId: (activity as any).activityTypeId ?? null,
           specialtyId: activity.specialtyId ?? null,
           eventDate,
-          status: statusMode === 'KEEP' ? activity.status : ActivityStatus.NOT_STARTED,
+          status:
+            statusMode === 'KEEP'
+              ? activity.status
+              : ActivityStatus.NOT_STARTED,
           reportRequired: activity.reportRequired,
           createdById: user?.id ?? null,
         } as any);
@@ -1448,70 +1462,72 @@ export class ActivitiesService {
         .fontSize(11)
         .text('Nenhum item de cronograma cadastrado para esta visita.');
     } else {
-      ((activity as any).visitScheduleItems ?? []).forEach((item: any, index: number) => {
-        if (doc.y > doc.page.height - 150) {
-          doc.addPage();
-        }
+      ((activity as any).visitScheduleItems ?? []).forEach(
+        (item: any, index: number) => {
+          if (doc.y > doc.page.height - 150) {
+            doc.addPage();
+          }
 
-        const rowY = doc.y;
-        doc
-          .roundedRect(
-            doc.page.margins.left,
-            rowY,
-            doc.page.width - doc.page.margins.left - doc.page.margins.right,
-            96,
-            6,
-          )
-          .fillAndStroke('#F5F8FC', '#D7E0EC');
+          const rowY = doc.y;
+          doc
+            .roundedRect(
+              doc.page.margins.left,
+              rowY,
+              doc.page.width - doc.page.margins.left - doc.page.margins.right,
+              96,
+              6,
+            )
+            .fillAndStroke('#F5F8FC', '#D7E0EC');
 
-        const blockStart = rowY + 10;
-        doc.fillColor('#111827');
-        doc
-          .font('Helvetica-Bold')
-          .fontSize(11)
-          .text(
-            `${index + 1}. ${item.startTime} • ${this.formatDuration(item.durationMinutes)}`,
-            doc.page.margins.left + 10,
-            blockStart,
-          );
-        doc
-          .font('Helvetica')
-          .fontSize(10)
-          .text(
-            `Atividade: ${item.title}`,
-            doc.page.margins.left + 10,
-            blockStart + 18,
-            {
+          const blockStart = rowY + 10;
+          doc.fillColor('#111827');
+          doc
+            .font('Helvetica-Bold')
+            .fontSize(11)
+            .text(
+              `${index + 1}. ${item.startTime} • ${this.formatDuration(item.durationMinutes)}`,
+              doc.page.margins.left + 10,
+              blockStart,
+            );
+          doc
+            .font('Helvetica')
+            .fontSize(10)
+            .text(
+              `Atividade: ${item.title}`,
+              doc.page.margins.left + 10,
+              blockStart + 18,
+              {
+                width:
+                  doc.page.width -
+                  doc.page.margins.left -
+                  doc.page.margins.right -
+                  20,
+              },
+            )
+            .text(`Local: ${item.location}`, {
               width:
                 doc.page.width -
                 doc.page.margins.left -
                 doc.page.margins.right -
                 20,
-            },
-          )
-          .text(`Local: ${item.location}`, {
-            width:
-              doc.page.width -
-              doc.page.margins.left -
-              doc.page.margins.right -
-              20,
-          })
-          .text(`Responsável: ${item.responsible}`, {
-            width:
-              doc.page.width -
-              doc.page.margins.left -
-              doc.page.margins.right -
-              20,
-          })
-          .text(`Participantes: ${item.participants}`, {
-            width:
-              doc.page.width -
-              doc.page.margins.left -
-              doc.page.margins.right -
-              20,
-          });
-        doc.y = rowY + 106;
-      });
+            })
+            .text(`Responsável: ${item.responsible}`, {
+              width:
+                doc.page.width -
+                doc.page.margins.left -
+                doc.page.margins.right -
+                20,
+            })
+            .text(`Participantes: ${item.participants}`, {
+              width:
+                doc.page.width -
+                doc.page.margins.left -
+                doc.page.margins.right -
+                20,
+            });
+          doc.y = rowY + 106;
+        },
+      );
     }
 
     doc.end();
@@ -1543,6 +1559,8 @@ export class ActivitiesService {
       recruitsCount: number;
       eloPsychologyCount: number;
       eloSocialAssistanceCount: number;
+      eloJuridicoCount: number;
+      eloCpcaCount: number;
       eloGraduadoMasterCount: number;
       participantsCharacteristics: string;
       mainPointsObserved?: string;
@@ -1572,9 +1590,17 @@ export class ActivitiesService {
       executionSchedule: sanitizeText(payload.executionSchedule ?? ''),
       activitiesPerformed: sanitizeText(payload.activitiesPerformed),
       participantsCount: Math.max(0, Number(payload.participantsCount) || 0),
-      participantsMaleCount: payload.participantsMaleCount != null ? Math.max(0, Number(payload.participantsMaleCount) || 0) : null,
-      participantsFemaleCount: payload.participantsFemaleCount != null ? Math.max(0, Number(payload.participantsFemaleCount) || 0) : null,
-      publicProfile: payload.publicProfile ? sanitizeText(payload.publicProfile) : null,
+      participantsMaleCount:
+        payload.participantsMaleCount != null
+          ? Math.max(0, Number(payload.participantsMaleCount) || 0)
+          : null,
+      participantsFemaleCount:
+        payload.participantsFemaleCount != null
+          ? Math.max(0, Number(payload.participantsFemaleCount) || 0)
+          : null,
+      publicProfile: payload.publicProfile
+        ? sanitizeText(payload.publicProfile)
+        : null,
       instructorsCount: Math.max(0, Number(payload.instructorsCount) || 0),
       recruitsCount: Math.max(0, Number(payload.recruitsCount) || 0),
       eloPsychologyCount: Math.max(0, Number(payload.eloPsychologyCount) || 0),
@@ -1582,6 +1608,8 @@ export class ActivitiesService {
         0,
         Number(payload.eloSocialAssistanceCount) || 0,
       ),
+      eloJuridicoCount: Math.max(0, Number(payload.eloJuridicoCount) || 0),
+      eloCpcaCount: Math.max(0, Number(payload.eloCpcaCount) || 0),
       eloGraduadoMasterCount: Math.max(
         0,
         Number(payload.eloGraduadoMasterCount) || 0,
@@ -1589,10 +1617,16 @@ export class ActivitiesService {
       participantsCharacteristics: sanitizeText(
         payload.participantsCharacteristics,
       ),
-      mainPointsObserved: payload.mainPointsObserved ? sanitizeText(payload.mainPointsObserved) : null,
-      attentionPoints: payload.attentionPoints ? sanitizeText(payload.attentionPoints) : null,
+      mainPointsObserved: payload.mainPointsObserved
+        ? sanitizeText(payload.mainPointsObserved)
+        : null,
+      attentionPoints: payload.attentionPoints
+        ? sanitizeText(payload.attentionPoints)
+        : null,
       nextSteps: payload.nextSteps ? sanitizeText(payload.nextSteps) : null,
-      referencesAndAttachments: payload.referencesAndAttachments ? sanitizeText(payload.referencesAndAttachments) : null,
+      referencesAndAttachments: payload.referencesAndAttachments
+        ? sanitizeText(payload.referencesAndAttachments)
+        : null,
       conclusion: sanitizeText(payload.conclusion),
       city: sanitizeText(payload.city),
       closingDate: new Date(payload.closingDate),
@@ -1807,11 +1841,13 @@ export class ActivitiesService {
         activityAnalysis: report.missionSupport,
         activitiesPerformed: report.activitiesPerformed,
         participantsCount: report.participantsCount,
-        instructorsCount: (report as any).instructorsCount ?? 0,
-        recruitsCount: (report as any).recruitsCount ?? 0,
-        eloPsychologyCount: (report as any).eloPsychologyCount ?? 0,
-        eloSocialAssistanceCount: (report as any).eloSocialAssistanceCount ?? 0,
-        eloGraduadoMasterCount: (report as any).eloGraduadoMasterCount ?? 0,
+        instructorsCount: report.instructorsCount ?? 0,
+        recruitsCount: report.recruitsCount ?? 0,
+        eloPsychologyCount: report.eloPsychologyCount ?? 0,
+        eloSocialAssistanceCount: report.eloSocialAssistanceCount ?? 0,
+        eloJuridicoCount: report.eloJuridicoCount ?? 0,
+        eloCpcaCount: report.eloCpcaCount ?? 0,
+        eloGraduadoMasterCount: report.eloGraduadoMasterCount ?? 0,
         participantsCharacteristics: report.participantsCharacteristics,
         conclusion: report.conclusion,
         city: report.city,
@@ -1972,10 +2008,15 @@ export class ActivitiesService {
         .fillColor('#FFFFFF')
         .font('Helvetica-Bold')
         .fontSize(13)
-        .text(`RELATÓRIO DE ATIVIDADE — CIPAVD / SMIF ${reportYear}`, barX, headerY + 9, {
-          width: barW,
-          align: 'center',
-        });
+        .text(
+          `RELATÓRIO DE ATIVIDADE — CIPAVD / SMIF ${reportYear}`,
+          barX,
+          headerY + 9,
+          {
+            width: barW,
+            align: 'center',
+          },
+        );
       doc
         .fillColor(colors.muted)
         .font('Helvetica')
@@ -2022,7 +2063,10 @@ export class ActivitiesService {
       const metrics = cells.map((cell) => {
         const width = (contentWidth * (cell.ratio ?? 1)) / ratioSum;
         const labelWidth = Math.min(124, Math.max(76, width * 0.38));
-        const valueWidth = Math.max(40, width - labelWidth - horizontalPadding * 2);
+        const valueWidth = Math.max(
+          40,
+          width - labelWidth - horizontalPadding * 2,
+        );
         const labelHeight = doc.heightOfString(normalizeText(cell.label), {
           width: Math.max(30, labelWidth - horizontalPadding * 2),
         });
@@ -2050,7 +2094,8 @@ export class ActivitiesService {
         const metric = metrics[index];
         const label = normalizeText(cell.label);
         const value = normalizeText(cell.value);
-        const valueWidth = metric.width - metric.labelWidth - horizontalPadding * 2;
+        const valueWidth =
+          metric.width - metric.labelWidth - horizontalPadding * 2;
 
         doc.save();
         doc
@@ -2085,10 +2130,15 @@ export class ActivitiesService {
           .fillColor(colors.text)
           .font('Helvetica')
           .fontSize(9.2)
-          .text(value, cursorX + metric.labelWidth + horizontalPadding, rowY + 4, {
-            width: valueWidth,
-            align: 'left',
-          });
+          .text(
+            value,
+            cursorX + metric.labelWidth + horizontalPadding,
+            rowY + 4,
+            {
+              width: valueWidth,
+              align: 'left',
+            },
+          );
 
         cursorX += metric.width;
       });
@@ -2158,24 +2208,39 @@ export class ActivitiesService {
         value: normalizeText((activity as any).activityType?.name),
       },
     ]);
-    drawTableRow([{ label: 'Título / Tema', value: normalizeText(activity.title) }]);
+    drawTableRow([
+      { label: 'Título / Tema', value: normalizeText(activity.title) },
+    ]);
     drawTableRow([
       { label: 'Data', value: this.formatDate(report.date), ratio: 1 },
       { label: 'Local', value: normalizeText(report.location), ratio: 1 },
     ]);
 
     drawSectionTitle('2. EQUIPE RESPONSÁVEL');
-    drawTableRow([{ label: 'Responsável(is)', value: normalizeText(report.responsible) }]);
+    drawTableRow([
+      { label: 'Responsável(is)', value: normalizeText(report.responsible) },
+    ]);
     if (report.missionSupport) {
-      drawTableRow([{ label: 'Apoio à Missão', value: normalizeText(report.missionSupport) }]);
+      drawTableRow([
+        {
+          label: 'Apoio à Missão',
+          value: normalizeText(report.missionSupport),
+        },
+      ]);
     }
 
     drawSectionTitle('3. PÚBLICO PARTICIPANTE');
     const compositionParts: string[] = [];
-    if (report.participantsMaleCount != null && report.participantsMaleCount > 0) {
+    if (
+      report.participantsMaleCount != null &&
+      report.participantsMaleCount > 0
+    ) {
       compositionParts.push(`${report.participantsMaleCount} homens`);
     }
-    if (report.participantsFemaleCount != null && report.participantsFemaleCount > 0) {
+    if (
+      report.participantsFemaleCount != null &&
+      report.participantsFemaleCount > 0
+    ) {
       compositionParts.push(`${report.participantsFemaleCount} mulheres`);
     }
     drawTableRow([
@@ -2186,13 +2251,17 @@ export class ActivitiesService {
       {
         label: 'Composição',
         value:
-          compositionParts.length > 0 ? compositionParts.join(' e ') : 'Não informada',
+          compositionParts.length > 0
+            ? compositionParts.join(' e ')
+            : 'Não informada',
       },
     ]);
     drawTableRow([
       {
         label: 'Perfil do Público',
-        value: normalizeText(report.publicProfile || report.participantsCharacteristics),
+        value: normalizeText(
+          report.publicProfile || report.participantsCharacteristics,
+        ),
       },
     ]);
     drawTableRow([
@@ -2203,6 +2272,8 @@ export class ActivitiesService {
           `Recrutas: ${report.recruitsCount ?? 0} | ` +
           `Elo Psicologia: ${report.eloPsychologyCount ?? 0} | ` +
           `Elo Assistência Social: ${report.eloSocialAssistanceCount ?? 0} | ` +
+          `Elo Jurídico: ${report.eloJuridicoCount ?? 0} | ` +
+          `Elo CPCA: ${report.eloCpcaCount ?? 0} | ` +
           `Elo Graduado Master: ${report.eloGraduadoMasterCount ?? 0}`,
       },
     ]);
@@ -2446,8 +2517,8 @@ export class ActivitiesService {
       ...rest,
       activityType: activity?.activityType
         ? {
-            id: (activity as any).activityType.id,
-            name: (activity as any).activityType.name,
+            id: activity.activityType.id,
+            name: activity.activityType.name,
           }
         : null,
       responsibleUsers: executiveHidePii ? [] : responsibleUsers,
@@ -2583,9 +2654,7 @@ export class ActivitiesService {
   private normalizeActivityIds(ids: string[]) {
     return Array.from(
       new Set(
-        (ids ?? [])
-          .map((value) => String(value ?? '').trim())
-          .filter(Boolean),
+        (ids ?? []).map((value) => String(value ?? '').trim()).filter(Boolean),
       ),
     );
   }

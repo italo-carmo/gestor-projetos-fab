@@ -1,0 +1,3 @@
+ALTER TABLE "ActivityReport"
+  ADD COLUMN "eloJuridicoCount" INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN "eloCpcaCount" INTEGER NOT NULL DEFAULT 0;

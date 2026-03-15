@@ -91,6 +91,8 @@ const blankReport: {
   recruitsCount: number;
   eloPsychologyCount: number;
   eloSocialAssistanceCount: number;
+  eloJuridicoCount: number;
+  eloCpcaCount: number;
   eloGraduadoMasterCount: number;
   participantsCharacteristics: string;
   mainPointsObserved: string;
@@ -112,6 +114,8 @@ const blankReport: {
   recruitsCount: 0,
   eloPsychologyCount: 0,
   eloSocialAssistanceCount: 0,
+  eloJuridicoCount: 0,
+  eloCpcaCount: 0,
   eloGraduadoMasterCount: 0,
   participantsCharacteristics: '',
   mainPointsObserved: '',
@@ -601,6 +605,8 @@ export function ActivitiesPage() {
       recruitsCount: Number(selected.report.recruitsCount ?? 0),
       eloPsychologyCount: Number(selected.report.eloPsychologyCount ?? 0),
       eloSocialAssistanceCount: Number(selected.report.eloSocialAssistanceCount ?? 0),
+      eloJuridicoCount: Number(selected.report.eloJuridicoCount ?? 0),
+      eloCpcaCount: Number(selected.report.eloCpcaCount ?? 0),
       eloGraduadoMasterCount: Number(selected.report.eloGraduadoMasterCount ?? 0),
       participantsCharacteristics: selected.report.participantsCharacteristics ?? '',
       mainPointsObserved: selected.report.mainPointsObserved ?? '',
@@ -996,6 +1002,8 @@ export function ActivitiesPage() {
           recruitsCount: toNonNegativeInt(reportForm.recruitsCount),
           eloPsychologyCount: toNonNegativeInt(reportForm.eloPsychologyCount),
           eloSocialAssistanceCount: toNonNegativeInt(reportForm.eloSocialAssistanceCount),
+          eloJuridicoCount: toNonNegativeInt(reportForm.eloJuridicoCount),
+          eloCpcaCount: toNonNegativeInt(reportForm.eloCpcaCount),
           eloGraduadoMasterCount: toNonNegativeInt(reportForm.eloGraduadoMasterCount),
           participantsCharacteristics: String(reportForm.participantsCharacteristics ?? ''),
           mainPointsObserved: String(reportForm.mainPointsObserved ?? ''),
@@ -1060,6 +1068,8 @@ export function ActivitiesPage() {
             recruitsCount: toNonNegativeInt(reportForm.recruitsCount),
             eloPsychologyCount: toNonNegativeInt(reportForm.eloPsychologyCount),
             eloSocialAssistanceCount: toNonNegativeInt(reportForm.eloSocialAssistanceCount),
+            eloJuridicoCount: toNonNegativeInt(reportForm.eloJuridicoCount),
+            eloCpcaCount: toNonNegativeInt(reportForm.eloCpcaCount),
             eloGraduadoMasterCount: toNonNegativeInt(reportForm.eloGraduadoMasterCount),
             participantsCharacteristics: String(reportForm.participantsCharacteristics ?? ''),
             mainPointsObserved: String(reportForm.mainPointsObserved ?? ''),
@@ -1147,6 +1157,8 @@ export function ActivitiesPage() {
           recruitsCount: toNonNegativeInt(source.recruitsCount),
           eloPsychologyCount: toNonNegativeInt(source.eloPsychologyCount),
           eloSocialAssistanceCount: toNonNegativeInt(source.eloSocialAssistanceCount),
+          eloJuridicoCount: toNonNegativeInt(source.eloJuridicoCount),
+          eloCpcaCount: toNonNegativeInt(source.eloCpcaCount),
           eloGraduadoMasterCount: toNonNegativeInt(source.eloGraduadoMasterCount),
           participantsCharacteristics: String(source.participantsCharacteristics ?? ''),
           mainPointsObserved: String(source.mainPointsObserved ?? ''),
@@ -2325,6 +2337,36 @@ export function ActivitiesPage() {
                             setReportForm({
                               ...reportForm,
                               eloSocialAssistanceCount: Number(e.target.value) || 0,
+                            })
+                          }
+                          inputProps={{ min: 0 }}
+                          fullWidth
+                          disabled={!canEditReportContent}
+                        />
+                        <TextField
+                          size="small"
+                          type="number"
+                          label="Elo Jurídico"
+                          value={reportForm.eloJuridicoCount}
+                          onChange={(e) =>
+                            setReportForm({
+                              ...reportForm,
+                              eloJuridicoCount: Number(e.target.value) || 0,
+                            })
+                          }
+                          inputProps={{ min: 0 }}
+                          fullWidth
+                          disabled={!canEditReportContent}
+                        />
+                        <TextField
+                          size="small"
+                          type="number"
+                          label="Elo CPCA"
+                          value={reportForm.eloCpcaCount}
+                          onChange={(e) =>
+                            setReportForm({
+                              ...reportForm,
+                              eloCpcaCount: Number(e.target.value) || 0,
                             })
                           }
                           inputProps={{ min: 0 }}

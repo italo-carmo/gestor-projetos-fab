@@ -74,6 +74,14 @@ export class UpsertActivityReportDto {
 
   @IsInt()
   @Min(0)
+  eloJuridicoCount: number;
+
+  @IsInt()
+  @Min(0)
+  eloCpcaCount: number;
+
+  @IsInt()
+  @Min(0)
   eloGraduadoMasterCount: number;
 
   @IsString()

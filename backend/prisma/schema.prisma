@@ -340,6 +340,8 @@ model ActivityReport {
   recruitsCount             Int      @default(0)
   eloPsychologyCount        Int      @default(0)
   eloSocialAssistanceCount  Int      @default(0)
+  eloJuridicoCount          Int      @default(0)
+  eloCpcaCount              Int      @default(0)
   eloGraduadoMasterCount    Int      @default(0)
   participantsCharacteristics String
   mainPointsObserved        String?

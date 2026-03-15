@@ -730,6 +730,8 @@ export function useUpsertActivityReport() {
         recruitsCount?: number;
         eloPsychologyCount?: number;
         eloSocialAssistanceCount?: number;
+        eloJuridicoCount?: number;
+        eloCpcaCount?: number;
         eloGraduadoMasterCount?: number;
         participantsCharacteristics: string;
         mainPointsObserved?: string;
