@@ -128,6 +128,7 @@ export function useUpdateMissionChecklist() {
     mutationFn: async (args: {
       id: string;
       payload: {
+        omId: string;
         items: Array<{
           id: string;
           classification:
@@ -143,6 +144,7 @@ export function useUpdateMissionChecklist() {
       qc.invalidateQueries({ queryKey: qk.missionChecklist(args.id) });
       qc.invalidateQueries({ queryKey: qk.mission(args.id) });
       qc.invalidateQueries({ queryKey: ["missions"] });
+      qc.invalidateQueries({ queryKey: ["missionChecklistMapping"] });
     },
   });
 }

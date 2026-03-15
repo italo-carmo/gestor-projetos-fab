@@ -42,6 +42,7 @@ import {
   useMissionChecklist,
   useMissionStatistics,
   useMissions,
+  useOmsCatalog,
   useRemoveMissionParticipant,
   useUpdateMissionChecklist,
   useUpdateMission,
@@ -327,6 +328,7 @@ export function MissionsPage() {
 
   const missionsQuery = useMissions({ localityId: localityId || undefined, q: q || undefined });
   const localitiesQuery = useLocalities();
+  const omsCatalogQuery = useOmsCatalog();
   const missionDetailQuery = useMission(missionIdFromUrl, Boolean(missionIdFromUrl));
   const cloneMissionOptionsQuery = useMissions({ pageSize: '200' });
   const statisticsQuery = useMissionStatistics();
@@ -357,6 +359,7 @@ export function MissionsPage() {
   const [checklistState, setChecklistState] = useState<Record<string, MissionChecklistItemState>>(
     () => buildDefaultMissionChecklistState(),
   );
+  const [checklistOmId, setChecklistOmId] = useState('');
   const [checklistDirty, setChecklistDirty] = useState(false);
   const [cloneSourceMissionId, setCloneSourceMissionId] = useState('');
   const [missionDeleteTarget, setMissionDeleteTarget] = useState<{ id: string; title: string } | null>(null);
@@ -371,6 +374,30 @@ export function MissionsPage() {
         .map((locality: any) => ({ id: String(locality.id), name: String(locality.name) }))
         .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')),
     [localitiesQuery.data?.items],
+  );
+  const checklistOmOptions = useMemo(
+    () =>
+      ((omsCatalogQuery.data?.items ?? []) as Array<any>)
+        .map((item) => {
+          const id = String(item?.id ?? '').trim();
+          if (!id) return null;
+          const code = String(item?.code ?? '').trim();
+          const name = String(item?.name ?? '').trim();
+          return {
+            id,
+            code,
+            name,
+            label: code || name || id,
+          };
+        })
+        .filter(Boolean)
+        .sort((a, b) => String(a?.label ?? '').localeCompare(String(b?.label ?? ''), 'pt-BR')) as Array<{
+        id: string;
+        code: string;
+        name: string;
+        label: string;
+      }>,
+    [omsCatalogQuery.data?.items],
   );
 
   const items = missionsQuery.data?.items ?? [];
@@ -421,19 +448,24 @@ export function MissionsPage() {
   useEffect(() => {
     if (!selectedMission?.id) {
       setChecklistState(buildDefaultMissionChecklistState());
+      setChecklistOmId('');
       setChecklistDirty(false);
       return;
     }
     setChecklistState(buildDefaultMissionChecklistState());
+    setChecklistOmId(String(selectedMission.localityId ?? '').trim());
     setChecklistDirty(false);
-  }, [selectedMission?.id]);
+  }, [selectedMission?.id, selectedMission?.localityId]);
 
   useEffect(() => {
     if (!selectedMission?.id) return;
     if (!missionChecklistQuery.data) return;
     setChecklistState(buildMissionChecklistStateFromApi(missionChecklistQuery.data));
+    const apiOmId = String((missionChecklistQuery.data as any)?.omId ?? '').trim();
+    const fallbackOmId = String(selectedMission.localityId ?? '').trim();
+    setChecklistOmId(apiOmId || fallbackOmId);
     setChecklistDirty(false);
-  }, [missionChecklistQuery.data, selectedMission?.id]);
+  }, [missionChecklistQuery.data, selectedMission?.id, selectedMission?.localityId]);
 
   const openCreate = () => {
     setIsCreateMode(true);
@@ -444,6 +476,7 @@ export function MissionsPage() {
     });
     setLdapIdentifier('');
     setChecklistState(buildDefaultMissionChecklistState());
+    setChecklistOmId(localityId || localityOptions[0]?.id || '');
     setChecklistDirty(false);
     resetScheduleForm();
     setCloneSourceMissionId('');
@@ -473,6 +506,7 @@ export function MissionsPage() {
     setMissionTab(0);
     resetScheduleForm();
     setChecklistState(buildDefaultMissionChecklistState());
+    setChecklistOmId('');
     setChecklistDirty(false);
     setCloneSourceMissionId('');
     setMissionDeleteTarget(null);
@@ -761,13 +795,25 @@ export function MissionsPage() {
     setChecklistDirty(true);
   };
 
+  const handleChecklistOmChange = (nextOmId: string) => {
+    const normalized = String(nextOmId ?? '').trim();
+    setChecklistOmId(normalized);
+    setChecklistDirty(true);
+  };
+
   const handleSaveChecklist = async () => {
     if (!selectedMission?.id) return;
+    const normalizedChecklistOmId = String(checklistOmId ?? '').trim();
+    if (!normalizedChecklistOmId) {
+      toast.push({ message: 'Selecione a OM do checklist antes de salvar.', severity: 'error' });
+      return;
+    }
 
     try {
       await updateMissionChecklist.mutateAsync({
         id: String(selectedMission.id),
         payload: {
+          omId: normalizedChecklistOmId,
           items: missionChecklistItems.map((itemId) => ({
             id: itemId,
             classification: checklistState[itemId]?.classification ?? 'NECESSITA_ANALISE',
@@ -1548,17 +1594,37 @@ export function MissionsPage() {
                               Checklist da missão
                             </Typography>
                             <Typography variant="body2" color="text.secondary">
-                              Observações vinculadas à localidade da missão:{' '}
-                              {selectedMission.locality?.name ?? '-'}
+                              Selecione a OM de referência do checklist. Essa OM será usada como coluna no mapeamento institucional do SMIF.
                             </Typography>
                           </Box>
-                          <Button
-                            variant="contained"
-                            onClick={handleSaveChecklist}
-                            disabled={updateMissionChecklist.isPending || !checklistDirty}
-                          >
-                            Salvar checklist
-                          </Button>
+                          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ xs: 'stretch', sm: 'center' }}>
+                            <TextField
+                              select
+                              size="small"
+                              label="OM do checklist"
+                              value={checklistOmId}
+                              onChange={(event) => handleChecklistOmChange(event.target.value)}
+                              sx={{ minWidth: { xs: '100%', sm: 260 } }}
+                            >
+                              <MenuItem value="">Selecione</MenuItem>
+                              {checklistOmOptions.map((option) => (
+                                <MenuItem key={option.id} value={option.id}>
+                                  {option.label}
+                                </MenuItem>
+                              ))}
+                            </TextField>
+                            <Button
+                              variant="contained"
+                              onClick={handleSaveChecklist}
+                              disabled={
+                                updateMissionChecklist.isPending ||
+                                !checklistDirty ||
+                                !checklistOmId
+                              }
+                            >
+                              Salvar checklist
+                            </Button>
+                          </Stack>
                         </Stack>
 
                         {missionChecklistQuery.isLoading && <LinearProgress sx={{ mb: 1.5 }} />}

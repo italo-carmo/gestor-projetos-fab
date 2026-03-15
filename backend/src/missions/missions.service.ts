@@ -275,31 +275,14 @@ export class MissionsService {
     user?: RbacUser,
   ) {
     this.assertMissionAccess(user);
+    const selectedOmId = String(filters.localityId ?? '').trim() || null;
 
-    const targetLocalityIds = await this.getTargetLocalityIds();
-    const selectedLocalityIds = filters.localityId
-      ? targetLocalityIds.includes(filters.localityId)
-        ? [filters.localityId]
-        : []
-      : targetLocalityIds;
-
-    if (selectedLocalityIds.length === 0) {
-      return {
-        generatedAt: new Date().toISOString(),
-        localities: [],
-        sections: [],
-        missionsByLocality: [],
-      };
-    }
-
-    const [localities, missions] = await this.prisma.$transaction([
+    const [omsCatalog, missions] = await this.prisma.$transaction([
       this.prisma.locality.findMany({
-        where: { id: { in: selectedLocalityIds } },
         select: { id: true, name: true, code: true },
         orderBy: { name: 'asc' },
       }),
       this.prisma.mission.findMany({
-        where: { localityId: { in: selectedLocalityIds } },
         include: {
           locality: { select: { id: true, name: true, code: true } },
           participants: {
@@ -326,17 +309,15 @@ export class MissionsService {
             orderBy: [{ startAt: 'asc' }, { createdAt: 'asc' }],
           },
         },
-        orderBy: [
-          { localityId: 'asc' },
-          { updatedAt: 'desc' },
-          { createdAt: 'desc' },
-        ],
+        orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
       }),
     ]);
 
-    const latestMissionByLocality = new Map<
+    const omById = new Map(omsCatalog.map((om) => [om.id, om]));
+    const latestMissionByOm = new Map<
       string,
       {
+        om: { id: string; name: string; code: string | null };
         mission: (typeof missions)[number];
         checklistSections: ReturnType<
           MissionsService['buildMissionChecklistSections']
@@ -349,11 +330,20 @@ export class MissionsService {
     >();
 
     for (const mission of missions) {
-      if (latestMissionByLocality.has(mission.localityId)) continue;
       const storedChecklistItems = this.readStoredMissionChecklistItems(
         mission.checklistJson,
       );
       if (storedChecklistItems.size === 0) continue;
+
+      const checklistOmId =
+        this.readStoredMissionChecklistOmId(mission.checklistJson) ??
+        mission.localityId;
+      if (!checklistOmId) continue;
+      if (selectedOmId && checklistOmId !== selectedOmId) continue;
+      if (latestMissionByOm.has(checklistOmId)) continue;
+
+      const om = omById.get(checklistOmId) ?? null;
+      if (!om) continue;
 
       const checklistSections = this.buildMissionChecklistSections(
         mission.checklistJson,
@@ -371,11 +361,34 @@ export class MissionsService {
         }
       }
 
-      latestMissionByLocality.set(mission.localityId, {
+      latestMissionByOm.set(checklistOmId, {
+        om,
         mission,
         checklistSections,
         checklistItemById,
       });
+    }
+
+    const localities = Array.from(latestMissionByOm.entries())
+      .map(([omId, entry]) => ({
+        id: omId,
+        name: entry.om.name,
+        code: entry.om.code ?? null,
+      }))
+      .sort((a, b) =>
+        (a.code?.trim() || a.name).localeCompare(
+          b.code?.trim() || b.name,
+          'pt-BR',
+        ),
+      );
+
+    if (localities.length === 0) {
+      return {
+        generatedAt: new Date().toISOString(),
+        localities: [],
+        sections: [],
+        missionsByLocality: [],
+      };
     }
 
     const sections = MISSION_CHECKLIST_SECTIONS.map((section) => ({
@@ -386,7 +399,7 @@ export class MissionsService {
         title: item.title,
         prompt: item.prompt ?? null,
         cells: localities.map((locality) => {
-          const missionEntry = latestMissionByLocality.get(locality.id);
+          const missionEntry = latestMissionByOm.get(locality.id);
           if (!missionEntry) {
             return {
               localityId: locality.id,
@@ -418,7 +431,7 @@ export class MissionsService {
     }));
 
     const missionsByLocality = localities.map((locality) => {
-      const missionEntry = latestMissionByLocality.get(locality.id);
+      const missionEntry = latestMissionByOm.get(locality.id);
       if (!missionEntry) {
         return {
           localityId: locality.id,
@@ -436,6 +449,7 @@ export class MissionsService {
           endDate: mission.endDate,
           updatedAt: mission.updatedAt,
           locality: mission.locality,
+          checklistOm: missionEntry.om,
           participants: mission.participants,
           participantsCount: mission.participants.length,
           scheduleItems: mission.scheduleItems,
@@ -491,9 +505,20 @@ export class MissionsService {
 
     if (!mission) throwError('NOT_FOUND');
 
+    const checklistOmId =
+      this.readStoredMissionChecklistOmId(mission.checklistJson) ??
+      mission.localityId;
+    const checklistOm =
+      checklistOmId && (await this.prisma.locality.findUnique({
+        where: { id: checklistOmId },
+        select: { id: true, code: true, name: true },
+      }));
+
     return {
       missionId: mission.id,
       localityId: mission.localityId,
+      omId: checklistOmId,
+      om: checklistOm,
       updatedAt: mission.updatedAt,
       sections: this.buildMissionChecklistSections(mission.checklistJson),
     };
@@ -502,6 +527,7 @@ export class MissionsService {
   async upsertChecklist(
     id: string,
     payload: {
+      omId: string;
       items: {
         id: string;
         classification: MissionChecklistClassification;
@@ -518,13 +544,32 @@ export class MissionsService {
     });
     if (!mission) throwError('NOT_FOUND');
 
+    const checklistOmId = String(payload.omId ?? '').trim();
+    if (!checklistOmId) {
+      throwError('VALIDATION_ERROR', {
+        field: 'omId',
+        reason: 'REQUIRED',
+      });
+    }
+    const omExists = await this.prisma.locality.findUnique({
+      where: { id: checklistOmId },
+      select: { id: true },
+    });
+    if (!omExists) {
+      throwError('VALIDATION_ERROR', {
+        field: 'omId',
+        reason: 'OM_NOT_FOUND',
+      });
+    }
+
     const normalizedItems = this.normalizeMissionChecklistItems(payload.items);
 
     const updated = await this.prisma.mission.update({
       where: { id },
       data: {
         checklistJson: {
-          version: 1,
+          version: 2,
+          omId: checklistOmId,
           items: normalizedItems,
         } as Prisma.InputJsonValue,
       },
@@ -543,6 +588,7 @@ export class MissionsService {
       entityId: updated.id,
       localityId: updated.localityId,
       diffJson: {
+        checklistOmId,
         checklistItemsCount: normalizedItems.length,
         checklistNotesFilledCount: normalizedItems.filter((item) =>
           item.notes.trim(),
@@ -553,6 +599,7 @@ export class MissionsService {
     return {
       missionId: updated.id,
       localityId: updated.localityId,
+      omId: checklistOmId,
       updatedAt: updated.updatedAt,
       sections: this.buildMissionChecklistSections(updated.checklistJson),
     };
@@ -1843,6 +1890,16 @@ export class MissionsService {
     }
 
     return result;
+  }
+
+  private readStoredMissionChecklistOmId(
+    checklistJson: Prisma.JsonValue | null | undefined,
+  ) {
+    if (!this.isJsonObject(checklistJson)) return null;
+    const rawOmId = checklistJson.omId;
+    if (typeof rawOmId !== 'string') return null;
+    const normalizedOmId = rawOmId.trim();
+    return normalizedOmId || null;
   }
 
   private isMissionChecklistClassification(

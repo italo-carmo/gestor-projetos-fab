@@ -30,6 +30,10 @@ export class UpsertMissionChecklistItemDto {
 }
 
 export class UpsertMissionChecklistDto {
+  @IsString()
+  @MaxLength(64)
+  omId: string;
+
   @IsArray()
   @ArrayMinSize(1)
   @ArrayMaxSize(MISSION_CHECKLIST_ITEM_IDS.length)
