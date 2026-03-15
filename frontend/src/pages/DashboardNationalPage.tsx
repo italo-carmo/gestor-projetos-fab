@@ -768,7 +768,14 @@ export function DashboardNationalPage() {
   };
 
   return (
-    <Box sx={{ overflowX: 'hidden' }}>
+    <Box
+      sx={{
+        width: '100%',
+        maxWidth: '100%',
+        minWidth: 0,
+        overflowX: 'hidden',
+      }}
+    >
       <Typography variant="h4" gutterBottom fontWeight={700}>
         Painel de Comando - SMIF
       </Typography>
@@ -778,6 +785,9 @@ export function DashboardNationalPage() {
       <Box
         sx={{
           display: 'grid',
+          width: '100%',
+          maxWidth: '100%',
+          minWidth: 0,
           gap: 2,
           gridTemplateColumns: {
             xs: '1fr',
@@ -821,6 +831,7 @@ export function DashboardNationalPage() {
               background: groupStyle.backgroundColor,
               border: group.border,
               width: '100%',
+              minWidth: 0,
               borderRadius: 3,
               boxShadow: group.shadow,
               position: 'relative',
@@ -934,6 +945,9 @@ export function DashboardNationalPage() {
       <Box
         sx={{
           display: 'grid',
+          width: '100%',
+          maxWidth: '100%',
+          minWidth: 0,
           gap: 2,
           gridTemplateColumns: {
             xs: '1fr',
@@ -953,6 +967,7 @@ export function DashboardNationalPage() {
             background: style.backgroundColor,
             border: '1px solid rgba(145, 195, 220, 0.36)',
             width: '100%',
+            minWidth: 0,
             borderRadius: 3,
             boxShadow: '0 18px 34px rgba(18,42,56,0.38)',
           }}
@@ -1064,7 +1079,7 @@ export function DashboardNationalPage() {
             textColor: '#111827',
           });
           return (
-        <Card sx={{ width: '100%', height: '100%', backgroundColor: style.backgroundColor, borderRadius: 3 }}>
+        <Card sx={{ width: '100%', minWidth: 0, height: '100%', backgroundColor: style.backgroundColor, borderRadius: 3 }}>
           <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
               <Typography variant="h6" sx={{ color: style.textColor }}>
@@ -1191,6 +1206,9 @@ export function DashboardNationalPage() {
 
       <Card
         sx={{
+          width: '100%',
+          maxWidth: '100%',
+          minWidth: 0,
           mb: 2,
           borderRadius: 3,
           border: '1px solid rgba(20,74,102,0.16)',
@@ -1214,7 +1232,7 @@ export function DashboardNationalPage() {
             Leitura consolidada por localidade com base no checklist preenchido nas missões.
           </Typography>
         </Box>
-        <CardContent sx={{ p: 2, overflowX: 'hidden' }}>
+        <CardContent sx={{ p: 2, maxWidth: '100%', minWidth: 0, overflowX: 'hidden' }}>
           {missionChecklistMappingQuery.isLoading ? (
             <Typography variant="body2" color="text.secondary">
               Carregando mapeamento institucional...
@@ -1228,9 +1246,9 @@ export function DashboardNationalPage() {
               Nenhum checklist de missão preenchido para exibir no mapeamento institucional.
             </Typography>
           ) : (
-            <Stack spacing={1.8}>
+            <Stack spacing={1.8} sx={{ minWidth: 0 }}>
               {institutionalSections.map((section) => (
-                <Card key={section.id} variant="outlined" sx={{ borderRadius: 2.4 }}>
+                <Card key={section.id} variant="outlined" sx={{ borderRadius: 2.4, minWidth: 0 }}>
                   <CardContent sx={{ p: 1.6 }}>
                     <Typography variant="subtitle1" fontWeight={700} sx={{ color: '#0F3950', mb: 0.8 }}>
                       {section.title}
@@ -1239,7 +1257,10 @@ export function DashboardNationalPage() {
                       sx={{
                         border: '1px solid rgba(15, 23, 42, 0.08)',
                         borderRadius: 2,
+                        width: '100%',
                         maxWidth: '100%',
+                        minWidth: 0,
+                        display: 'block',
                         overflowX: 'auto',
                         overflowY: 'visible',
                       }}
@@ -1247,8 +1268,7 @@ export function DashboardNationalPage() {
                       <Table
                         size="small"
                         sx={{
-                          width: 'max-content',
-                          minWidth: '100%',
+                          minWidth: 'max-content',
                         }}
                       >
                         <TableHead>
@@ -1257,9 +1277,6 @@ export function DashboardNationalPage() {
                               sx={{
                                 fontWeight: 700,
                                 minWidth: 320,
-                                position: 'sticky',
-                                left: 0,
-                                zIndex: 3,
                                 bgcolor: '#eef6fb',
                               }}
                             >
@@ -1288,9 +1305,6 @@ export function DashboardNationalPage() {
                             <TableRow key={item.id} hover>
                               <TableCell
                                 sx={{
-                                  position: 'sticky',
-                                  left: 0,
-                                  zIndex: 2,
                                   bgcolor: '#f8fbfe',
                                   minWidth: 320,
                                   borderRight: '1px solid rgba(15,23,42,0.06)',
