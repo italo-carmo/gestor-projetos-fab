@@ -1239,15 +1239,13 @@ export function DashboardNationalPage() {
                       sx={{
                         border: '1px solid rgba(15, 23, 42, 0.08)',
                         borderRadius: 2,
-                        maxHeight: 420,
                         maxWidth: '100%',
                         overflowX: 'auto',
-                        overflowY: 'auto',
+                        overflowY: 'visible',
                       }}
                     >
                       <Table
                         size="small"
-                        stickyHeader
                         sx={{
                           width: 'max-content',
                           minWidth: '100%',
