@@ -298,6 +298,8 @@ type EditableCardStyle = {
 };
 
 const SMIF_CARD_STYLES_STORAGE_KEY = 'smif-card-styles-v1';
+const INSTITUTIONAL_DESCRIPTION_COLUMN_WIDTH = 340;
+const INSTITUTIONAL_LOCALITY_COLUMN_WIDTH = 220;
 
 function loadSmifCardStyles(): Record<string, EditableCardStyle> {
   try {
@@ -403,6 +405,9 @@ export function DashboardNationalPage() {
     null;
   const institutionalLocalities = institutionalMapping?.localities ?? [];
   const institutionalSections = institutionalMapping?.sections ?? [];
+  const institutionalTableWidth =
+    INSTITUTIONAL_DESCRIPTION_COLUMN_WIDTH +
+    institutionalLocalities.length * INSTITUTIONAL_LOCALITY_COLUMN_WIDTH;
   const missionByLocality = new Map<string, InstitutionalChecklistMission | null>(
     (institutionalMapping?.missionsByLocality ?? []).map((entry) => [
       entry.localityId,
@@ -1277,16 +1282,27 @@ export function DashboardNationalPage() {
                       <Table
                         size="small"
                         sx={{
-                          width: 'max-content',
+                          width: `${institutionalTableWidth}px`,
                           minWidth: '100%',
+                          tableLayout: 'fixed',
                         }}
                       >
+                        <colgroup>
+                          <col style={{ width: `${INSTITUTIONAL_DESCRIPTION_COLUMN_WIDTH}px` }} />
+                          {institutionalLocalities.map((locality) => (
+                            <col
+                              key={`column-${section.id}-${locality.id}`}
+                              style={{ width: `${INSTITUTIONAL_LOCALITY_COLUMN_WIDTH}px` }}
+                            />
+                          ))}
+                        </colgroup>
                         <TableHead>
                           <TableRow>
                             <TableCell
                               sx={{
                                 fontWeight: 700,
-                                minWidth: 320,
+                                width: `${INSTITUTIONAL_DESCRIPTION_COLUMN_WIDTH}px`,
+                                minWidth: `${INSTITUTIONAL_DESCRIPTION_COLUMN_WIDTH}px`,
                                 bgcolor: '#eef6fb',
                               }}
                             >
@@ -1296,7 +1312,8 @@ export function DashboardNationalPage() {
                               <TableCell
                                 key={locality.id}
                                 sx={{
-                                  minWidth: 220,
+                                  width: `${INSTITUTIONAL_LOCALITY_COLUMN_WIDTH}px`,
+                                  minWidth: `${INSTITUTIONAL_LOCALITY_COLUMN_WIDTH}px`,
                                   bgcolor: '#f3f8fc',
                                 }}
                               >
@@ -1316,7 +1333,8 @@ export function DashboardNationalPage() {
                               <TableCell
                                 sx={{
                                   bgcolor: '#f8fbfe',
-                                  minWidth: 320,
+                                  width: `${INSTITUTIONAL_DESCRIPTION_COLUMN_WIDTH}px`,
+                                  minWidth: `${INSTITUTIONAL_DESCRIPTION_COLUMN_WIDTH}px`,
                                   borderRight: '1px solid rgba(15,23,42,0.06)',
                                 }}
                               >
