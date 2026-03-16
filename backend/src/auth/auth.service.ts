@@ -2,6 +2,8 @@ import { HttpException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import * as http from 'http';
+import * as https from 'https';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
 import { JwtPayload, JwtRefreshPayload } from './auth.types';
@@ -227,61 +229,64 @@ export class AuthService {
       throwError('VALIDATION_ERROR', { reason: 'NUMERO_ORDEM_REQUIRED' });
     }
 
-    const apiBaseUrl = this.getSigpesFotoApiBaseUrl();
+    const apiTargets = this.getSigpesFotoApiTargets();
     const candidates = [...new Set([normalizedNumeroOrdem, rawNumeroOrdem])].filter(
       Boolean,
     );
     let lastStatus: number | null = null;
     let sawInvalidPayload = false;
+    let lastFetchErrorMessage: string | null = null;
 
-    for (const candidate of candidates) {
-      const endpoint = `${apiBaseUrl}/${encodeURIComponent(candidate)}`;
-      let response: Response;
-      try {
-        response = await fetch(endpoint, {
-          method: 'GET',
-          signal: AbortSignal.timeout(SIGPES_FOTO_TIMEOUT_MS),
-        });
-      } catch (error) {
-        throwError('VALIDATION_ERROR', {
-          reason: 'SIGPES_FOTO_API_UNREACHABLE',
-          message: this.stringifyError(error),
-        });
-      }
+    for (const target of apiTargets) {
+      for (const candidate of candidates) {
+        const endpoint = `${target.baseUrl}/${encodeURIComponent(candidate)}`;
+        let statusCode: number;
+        let rawBody: string;
+        try {
+          const response = await this.requestSigpesEndpoint(
+            endpoint,
+            target.hostHeader,
+          );
+          statusCode = response.status;
+          rawBody = response.body;
+        } catch (error) {
+          lastFetchErrorMessage = this.stringifyError(error);
+          continue;
+        }
 
-      if (!response.ok) {
-        lastStatus = response.status;
-        continue;
-      }
+        if (statusCode < 200 || statusCode >= 300) {
+          lastStatus = statusCode;
+          continue;
+        }
 
-      const rawBody = await response.text();
-      const payload = this.parseSigpesPayload(rawBody);
-      if (!payload) {
-        sawInvalidPayload = true;
-        continue;
-      }
+        const payload = this.parseSigpesPayload(rawBody);
+        if (!payload) {
+          sawInvalidPayload = true;
+          continue;
+        }
 
-      const mimeType = String(payload?.tpArq ?? '').trim() || 'image/jpeg';
-      const fileName = String(payload?.txNomeArq ?? '').trim() || null;
-      const base64 = this.normalizeBase64(String(payload?.imFoto ?? ''));
+        const mimeType = String(payload?.tpArq ?? '').trim() || 'image/jpeg';
+        const fileName = String(payload?.txNomeArq ?? '').trim() || null;
+        const base64 = this.normalizeBase64(String(payload?.imFoto ?? ''));
 
-      if (!base64) {
+        if (!base64) {
+          return {
+            numeroOrdem: candidate,
+            mimeType: null,
+            fileName,
+            base64: null,
+            dataUrl: null,
+          };
+        }
+
         return {
           numeroOrdem: candidate,
-          mimeType: null,
+          mimeType,
           fileName,
-          base64: null,
-          dataUrl: null,
+          base64,
+          dataUrl: `data:${mimeType};base64,${base64}`,
         };
       }
-
-      return {
-        numeroOrdem: candidate,
-        mimeType,
-        fileName,
-        base64,
-        dataUrl: `data:${mimeType};base64,${base64}`,
-      };
     }
 
     if (sawInvalidPayload) {
@@ -289,9 +294,15 @@ export class AuthService {
         reason: 'SIGPES_FOTO_INVALID_RESPONSE',
       });
     }
+    if (lastStatus !== null) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'SIGPES_FOTO_API_ERROR',
+        status: lastStatus,
+      });
+    }
     throwError('VALIDATION_ERROR', {
-      reason: 'SIGPES_FOTO_API_ERROR',
-      status: lastStatus ?? 500,
+      reason: 'SIGPES_FOTO_API_UNREACHABLE',
+      message: lastFetchErrorMessage ?? 'SIGPES_FOTO_NO_ROUTE',
     });
   }
 
@@ -406,6 +417,102 @@ export class AuthService {
       // keep configured value when URL parsing fails
     }
     return normalizedBaseUrl;
+  }
+
+  private getSigpesFotoApiTargets() {
+    const primaryBaseUrl = this.getSigpesFotoApiBaseUrl();
+    const fallbackIp =
+      this.config.get<string>('SIGPES_FOTO_API_FALLBACK_IP')?.trim() ||
+      '10.52.199.79';
+    const preferredHostHeader =
+      this.config.get<string>('SIGPES_FOTO_API_HOST_HEADER')?.trim() ||
+      'api.servicos.ccarj.intraer';
+
+    const targets: Array<{ baseUrl: string; hostHeader?: string }> = [
+      { baseUrl: primaryBaseUrl },
+    ];
+
+    if (!fallbackIp) return targets;
+
+    let fallbackPath = '/sigpesApi/fotoes';
+    try {
+      const parsedPrimary = new URL(primaryBaseUrl);
+      const normalizedPath = parsedPrimary.pathname.replace(/\/+$/, '');
+      if (normalizedPath) {
+        fallbackPath = normalizedPath.startsWith('/')
+          ? normalizedPath
+          : `/${normalizedPath}`;
+      }
+    } catch {
+      // keep default fallback path
+    }
+
+    const fallbackBaseUrl = `http://${fallbackIp}${fallbackPath}`;
+    const fallbackHostHeader = preferredHostHeader || undefined;
+    const signature = `${fallbackBaseUrl}::${fallbackHostHeader ?? ''}`;
+    const existingSignatures = new Set(
+      targets.map((target) => `${target.baseUrl}::${target.hostHeader ?? ''}`),
+    );
+    if (!existingSignatures.has(signature)) {
+      targets.push({ baseUrl: fallbackBaseUrl, hostHeader: fallbackHostHeader });
+    }
+
+    return targets;
+  }
+
+  private async requestSigpesEndpoint(
+    endpoint: string,
+    hostHeader?: string,
+  ): Promise<{ status: number; body: string }> {
+    if (!hostHeader) {
+      const response = await fetch(endpoint, {
+        method: 'GET',
+        signal: AbortSignal.timeout(SIGPES_FOTO_TIMEOUT_MS),
+      });
+      return {
+        status: response.status,
+        body: await response.text(),
+      };
+    }
+
+    const url = new URL(endpoint);
+    const transport = url.protocol === 'https:' ? https : http;
+
+    return new Promise<{ status: number; body: string }>((resolve, reject) => {
+      const request = transport.request(
+        {
+          protocol: url.protocol,
+          hostname: url.hostname,
+          port: url.port ? Number(url.port) : undefined,
+          method: 'GET',
+          path: `${url.pathname}${url.search}`,
+          headers: {
+            Host: hostHeader,
+          },
+        },
+        (response) => {
+          const chunks: Buffer[] = [];
+          response.on('data', (chunk) => {
+            chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+          });
+          response.on('end', () => {
+            resolve({
+              status: Number(response.statusCode ?? 0),
+              body: Buffer.concat(chunks).toString('utf-8'),
+            });
+          });
+        },
+      );
+
+      request.on('timeout', () => {
+        request.destroy(new Error('SIGPES_REQUEST_TIMEOUT'));
+      });
+      request.on('error', (error) => {
+        reject(error);
+      });
+      request.setTimeout(SIGPES_FOTO_TIMEOUT_MS);
+      request.end();
+    });
   }
 
   private normalizeBase64(value: string) {
