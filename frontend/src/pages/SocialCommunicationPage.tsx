@@ -833,6 +833,8 @@ export function SocialCommunicationPage() {
             avatarColor: "#0E4F7D",
             titleColor: "#1D4562",
             textColor: "#4E6678",
+            cardBackground:
+              "linear-gradient(155deg, rgba(223,238,248,0.96) 0%, rgba(255,255,255,0.95) 56%, rgba(205,228,243,0.92) 100%)",
             chipBorder: "rgba(43, 120, 184, 0.34)",
             chipColor: "#245A84",
             impactChipBg: "rgba(43, 120, 184, 0.16)",
@@ -853,6 +855,8 @@ export function SocialCommunicationPage() {
             avatarColor: "#206346",
             titleColor: "#245C43",
             textColor: "#4A6A5B",
+            cardBackground:
+              "linear-gradient(155deg, rgba(227,247,236,0.96) 0%, rgba(255,255,255,0.95) 56%, rgba(205,237,220,0.92) 100%)",
             chipBorder: "rgba(46, 139, 87, 0.34)",
             chipColor: "#2A654B",
             impactChipBg: "rgba(46, 139, 87, 0.16)",
@@ -930,7 +934,7 @@ export function SocialCommunicationPage() {
                   scrollSnapAlign: "start",
                   borderRadius: 3,
                   border: `1px solid ${theme.cardBorder}`,
-                  backgroundColor: "#FFFFFF",
+                  background: theme.cardBackground,
                   borderTop: `4px solid ${theme.accent}`,
                   position: "relative",
                   overflow: "hidden",
@@ -1375,9 +1379,10 @@ export function SocialCommunicationPage() {
         sx={{
           mb: 2.5,
           borderRadius: 3.4,
-          border: "1px solid rgba(17,66,89,0.14)",
-          backgroundColor: "#FFFFFF",
-          boxShadow: "0 10px 24px rgba(17,66,89,0.1)",
+          border: "1px solid rgba(17,66,89,0.16)",
+          background:
+            "linear-gradient(155deg, rgba(231,242,249,0.94) 0%, rgba(255,255,255,0.98) 56%, rgba(228,244,236,0.9) 100%)",
+          boxShadow: "0 10px 24px rgba(17,66,89,0.12)",
         }}
       >
         <CardContent sx={{ py: 2.2 }}>
@@ -1737,10 +1742,10 @@ export function SocialCommunicationPage() {
             sx={{
               p: { xs: 1.8, md: 2.4 },
               borderRadius: 3.2,
-              border: "1px solid rgba(17,66,89,0.3)",
+              border: "1px solid rgba(27,94,133,0.26)",
               background:
-                "linear-gradient(145deg, rgba(17,66,89,0.18) 0%, rgba(245,250,253,0.96) 50%, rgba(77,134,160,0.14) 100%)",
-              boxShadow: "0 16px 32px rgba(17,66,89,0.16)",
+                "linear-gradient(145deg, rgba(27,94,133,0.16) 0%, rgba(246,251,255,0.97) 48%, rgba(220,235,245,0.92) 100%)",
+              boxShadow: "0 14px 28px rgba(17,66,89,0.12)",
             }}
           >
             <Stack
@@ -1756,7 +1761,7 @@ export function SocialCommunicationPage() {
                     width: 10,
                     height: 10,
                     borderRadius: "50%",
-                    bgcolor: "#114259",
+                    bgcolor: "#1B5E85",
                   }}
                 />
                 <Typography variant="h5" fontWeight={700}>
@@ -1767,10 +1772,10 @@ export function SocialCommunicationPage() {
                 size="small"
                 label={`${internalItems.length} matéria${internalItems.length === 1 ? "" : "s"}`}
                 sx={{
-                  bgcolor: "rgba(17,66,89,0.16)",
-                  color: "#114259",
+                  bgcolor: "rgba(27,94,133,0.18)",
+                  color: "#1B5E85",
                   fontWeight: 700,
-                  border: "1px solid rgba(17,66,89,0.2)",
+                  border: "1px solid rgba(27,94,133,0.26)",
                 }}
               />
             </Stack>
@@ -1880,10 +1885,10 @@ export function SocialCommunicationPage() {
             sx={{
               p: { xs: 1.8, md: 2.4 },
               borderRadius: 3.2,
-              border: "1px solid rgba(77,134,160,0.32)",
+              border: "1px solid rgba(39,125,161,0.26)",
               background:
-                "linear-gradient(145deg, rgba(77,134,160,0.2) 0%, rgba(248,252,255,0.97) 52%, rgba(17,66,89,0.13) 100%)",
-              boxShadow: "0 16px 32px rgba(17,66,89,0.16)",
+                "linear-gradient(145deg, rgba(39,125,161,0.17) 0%, rgba(246,253,255,0.97) 50%, rgba(211,236,244,0.92) 100%)",
+              boxShadow: "0 14px 28px rgba(17,66,89,0.12)",
             }}
           >
             <Stack
@@ -1899,7 +1904,7 @@ export function SocialCommunicationPage() {
                     width: 10,
                     height: 10,
                     borderRadius: "50%",
-                    bgcolor: "#4D86A0",
+                    bgcolor: "#277DA1",
                   }}
                 />
                 <Typography variant="h5" fontWeight={700}>
@@ -1910,10 +1915,10 @@ export function SocialCommunicationPage() {
                 size="small"
                 label={`${externalItems.length} matéria${externalItems.length === 1 ? "" : "s"}`}
                 sx={{
-                  bgcolor: "rgba(77,134,160,0.2)",
-                  color: "#114259",
+                  bgcolor: "rgba(39,125,161,0.18)",
+                  color: "#1C5D78",
                   fontWeight: 700,
-                  border: "1px solid rgba(77,134,160,0.28)",
+                  border: "1px solid rgba(39,125,161,0.28)",
                 }}
               />
             </Stack>
