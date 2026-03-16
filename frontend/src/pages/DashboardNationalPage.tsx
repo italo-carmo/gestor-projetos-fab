@@ -1361,7 +1361,16 @@ export function DashboardNationalPage() {
             textColor: '#111827',
           };
           return (
-        <Card sx={{ width: '100%', minWidth: 0, height: '100%', backgroundColor: style.backgroundColor, borderRadius: 3 }}>
+        <Card
+          sx={{
+            width: '100%',
+            minWidth: 0,
+            height: '100%',
+            backgroundColor: style.backgroundColor,
+            borderRadius: 3,
+            border: '1px solid rgb(58, 122, 154)',
+          }}
+        >
           <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
               <Typography variant="h6" sx={{ color: style.textColor }}>
