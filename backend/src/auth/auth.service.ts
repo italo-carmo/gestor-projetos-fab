@@ -221,65 +221,78 @@ export class AuthService {
   }
 
   async getSigpesPhotoByOrder(numeroOrdem: string) {
-    const normalizedNumeroOrdem = this.normalizeNumeroOrdem(numeroOrdem);
+    const rawNumeroOrdem = String(numeroOrdem ?? '').trim();
+    const normalizedNumeroOrdem = this.normalizeNumeroOrdem(rawNumeroOrdem);
     if (!normalizedNumeroOrdem) {
       throwError('VALIDATION_ERROR', { reason: 'NUMERO_ORDEM_REQUIRED' });
     }
 
     const apiBaseUrl = this.getSigpesFotoApiBaseUrl();
-    const endpoint = `${apiBaseUrl}/${encodeURIComponent(normalizedNumeroOrdem)}`;
+    const candidates = [...new Set([normalizedNumeroOrdem, rawNumeroOrdem])].filter(
+      Boolean,
+    );
+    let lastStatus: number | null = null;
+    let sawInvalidPayload = false;
 
-    let response: Response;
-    try {
-      response = await fetch(endpoint, {
-        method: 'GET',
-        signal: AbortSignal.timeout(SIGPES_FOTO_TIMEOUT_MS),
-      });
-    } catch (error) {
-      throwError('VALIDATION_ERROR', {
-        reason: 'SIGPES_FOTO_API_UNREACHABLE',
-        message: this.stringifyError(error),
-      });
-    }
+    for (const candidate of candidates) {
+      const endpoint = `${apiBaseUrl}/${encodeURIComponent(candidate)}`;
+      let response: Response;
+      try {
+        response = await fetch(endpoint, {
+          method: 'GET',
+          signal: AbortSignal.timeout(SIGPES_FOTO_TIMEOUT_MS),
+        });
+      } catch (error) {
+        throwError('VALIDATION_ERROR', {
+          reason: 'SIGPES_FOTO_API_UNREACHABLE',
+          message: this.stringifyError(error),
+        });
+      }
 
-    if (!response.ok) {
-      throwError('VALIDATION_ERROR', {
-        reason: 'SIGPES_FOTO_API_ERROR',
-        status: response.status,
-      });
-    }
+      if (!response.ok) {
+        lastStatus = response.status;
+        continue;
+      }
 
-    let payload: any;
-    try {
-      payload = await response.json();
-    } catch (error) {
-      throwError('VALIDATION_ERROR', {
-        reason: 'SIGPES_FOTO_INVALID_RESPONSE',
-        message: this.stringifyError(error),
-      });
-    }
+      const rawBody = await response.text();
+      const payload = this.parseSigpesPayload(rawBody);
+      if (!payload) {
+        sawInvalidPayload = true;
+        continue;
+      }
 
-    const mimeType = String(payload?.tpArq ?? '').trim() || 'image/jpeg';
-    const fileName = String(payload?.txNomeArq ?? '').trim() || null;
-    const base64 = this.normalizeBase64(String(payload?.imFoto ?? ''));
+      const mimeType = String(payload?.tpArq ?? '').trim() || 'image/jpeg';
+      const fileName = String(payload?.txNomeArq ?? '').trim() || null;
+      const base64 = this.normalizeBase64(String(payload?.imFoto ?? ''));
 
-    if (!base64) {
+      if (!base64) {
+        return {
+          numeroOrdem: candidate,
+          mimeType: null,
+          fileName,
+          base64: null,
+          dataUrl: null,
+        };
+      }
+
       return {
-        numeroOrdem: normalizedNumeroOrdem,
-        mimeType: null,
+        numeroOrdem: candidate,
+        mimeType,
         fileName,
-        base64: null,
-        dataUrl: null,
+        base64,
+        dataUrl: `data:${mimeType};base64,${base64}`,
       };
     }
 
-    return {
-      numeroOrdem: normalizedNumeroOrdem,
-      mimeType,
-      fileName,
-      base64,
-      dataUrl: `data:${mimeType};base64,${base64}`,
-    };
+    if (sawInvalidPayload) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'SIGPES_FOTO_INVALID_RESPONSE',
+      });
+    }
+    throwError('VALIDATION_ERROR', {
+      reason: 'SIGPES_FOTO_API_ERROR',
+      status: lastStatus ?? 500,
+    });
   }
 
   private async issueTokens(userId: string, email: string) {
@@ -353,6 +366,20 @@ export class AuthService {
 
   private normalizeNumeroOrdem(value: string) {
     const raw = String(value ?? '').trim();
+    if (!raw) return '';
+
+    if (/^\d+[.,]\d+$/.test(raw)) {
+      const parsed = Number.parseFloat(raw.replace(',', '.'));
+      if (Number.isFinite(parsed) && Number.isInteger(parsed)) {
+        return String(parsed);
+      }
+    }
+
+    const trailingZeroSuffix = raw.match(/^(\d+)[-\s]0+$/);
+    if (trailingZeroSuffix) {
+      return trailingZeroSuffix[1];
+    }
+
     const digits = raw.replace(/\D/g, '');
     return digits || raw;
   }
@@ -383,6 +410,30 @@ export class AuthService {
 
   private normalizeBase64(value: string) {
     return String(value ?? '').replace(/\s+/g, '');
+  }
+
+  private parseSigpesPayload(rawBody: string) {
+    const text = String(rawBody ?? '').trim();
+    if (!text) return null;
+
+    try {
+      return JSON.parse(text);
+    } catch {
+      const mimeMatch = text.match(/"tpArq"\s*:\s*"([^"]*)"/i);
+      const nameMatch = text.match(/"txNomeArq"\s*:\s*"([^"]*)"/i);
+      const fotoMatch = text.match(/"imFoto"\s*:\s*"([\s\S]*?)"\s*(?:,|\})/i);
+
+      if (!fotoMatch) return null;
+
+      return {
+        tpArq: mimeMatch?.[1] ?? 'image/jpeg',
+        txNomeArq: nameMatch?.[1] ?? null,
+        imFoto: String(fotoMatch[1] ?? '')
+          .replace(/\\\//g, '/')
+          .replace(/\\r/g, '')
+          .replace(/\\n/g, ''),
+      };
+    }
   }
 
   private async registerFailedLogin(

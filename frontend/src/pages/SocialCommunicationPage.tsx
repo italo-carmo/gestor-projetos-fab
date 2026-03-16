@@ -157,6 +157,26 @@ function normalizeEmail(value: string) {
   return String(value ?? "").trim().toLowerCase();
 }
 
+function normalizeSigpesNumeroOrdem(value: unknown) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+
+  if (/^\d+[.,]\d+$/.test(raw)) {
+    const parsed = Number.parseFloat(raw.replace(",", "."));
+    if (Number.isFinite(parsed) && Number.isInteger(parsed)) {
+      return String(parsed);
+    }
+  }
+
+  const trailingZeroSuffix = raw.match(/^(\d+)[-\s]0+$/);
+  if (trailingZeroSuffix) {
+    return trailingZeroSuffix[1];
+  }
+
+  const onlyDigits = raw.replace(/\D/g, "");
+  return onlyDigits || raw;
+}
+
 function normalizeHighlightPhotoBase64(value: unknown) {
   return String(value ?? "").replace(/\s+/g, "").trim();
 }
@@ -466,7 +486,7 @@ export function SocialCommunicationPage() {
     setHighlightLookupBusy(true);
     try {
       const profile = await lookupHighlightLdap.mutateAsync(email);
-      const numeroOrdem = String(profile?.numeroOrdem ?? "").trim();
+      const numeroOrdem = normalizeSigpesNumeroOrdem(profile?.numeroOrdem);
       let photoBase64 = "";
       let photoMimeType = "";
 
