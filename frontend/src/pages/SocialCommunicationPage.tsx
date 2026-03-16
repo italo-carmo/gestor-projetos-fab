@@ -1378,10 +1378,9 @@ export function SocialCommunicationPage() {
         sx={{
           mb: 2.5,
           borderRadius: 3.4,
-          border: "1px solid rgba(17,66,89,0.16)",
-          background:
-            "linear-gradient(155deg, rgba(231,242,249,0.94) 0%, rgba(255,255,255,0.98) 56%, rgba(228,244,236,0.9) 100%)",
-          boxShadow: "0 10px 24px rgba(17,66,89,0.12)",
+          border: "1px solid rgba(231, 244, 252, 0.34)",
+          backgroundColor: "rgb(112, 152, 175)",
+          boxShadow: "0 12px 24px rgba(17,66,89,0.16)",
         }}
       >
         <CardContent sx={{ py: 2.2 }}>
@@ -1393,10 +1392,10 @@ export function SocialCommunicationPage() {
             sx={{ mb: 1.8 }}
           >
             <Box>
-              <Typography variant="h6" fontWeight={800}>
+              <Typography variant="h6" fontWeight={800} sx={{ color: "#F3FAFF" }}>
                 Militares Destaques
               </Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" sx={{ color: "rgba(236, 245, 252, 0.96)" }}>
                 Destaques institucionais com impacto Multiplicador e Simbólico.
               </Typography>
             </Box>
@@ -1407,10 +1406,10 @@ export function SocialCommunicationPage() {
                   highlightItems.length === 1 ? "" : "s"
                 }`}
                 sx={{
-                  bgcolor: "rgba(17,66,89,0.12)",
-                  color: "#114259",
+                  bgcolor: "rgba(244, 250, 255, 0.2)",
+                  color: "#F4FAFF",
                   fontWeight: 700,
-                  border: "1px solid rgba(17,66,89,0.2)",
+                  border: "1px solid rgba(244, 250, 255, 0.42)",
                 }}
               />
               {canEditHighlights && (
@@ -1642,7 +1641,7 @@ export function SocialCommunicationPage() {
                 spacing={1}
                 sx={{ mb: 0.2 }}
               >
-                <Typography variant="subtitle1" fontWeight={700}>
+                <Typography variant="subtitle1" fontWeight={700} sx={{ color: "#EEF8FF" }}>
                   Impacto Multiplicador
                 </Typography>
                 <Chip
@@ -1650,7 +1649,11 @@ export function SocialCommunicationPage() {
                   label={`${multiplicadorHighlights.length} destaque${
                     multiplicadorHighlights.length === 1 ? "" : "s"
                   }`}
-                  sx={{ bgcolor: "rgba(43, 120, 184, 0.16)", color: "#0E4F7D" }}
+                  sx={{
+                    bgcolor: "rgba(236, 246, 255, 0.22)",
+                    color: "#F4FAFF",
+                    border: "1px solid rgba(236, 246, 255, 0.4)",
+                  }}
                 />
               </Stack>
               {multiplicadorHighlights.length === 0 ? (
@@ -1671,7 +1674,7 @@ export function SocialCommunicationPage() {
                 spacing={1}
                 sx={{ mb: 0.2 }}
               >
-                <Typography variant="subtitle1" fontWeight={700}>
+                <Typography variant="subtitle1" fontWeight={700} sx={{ color: "#EEF8FF" }}>
                   Impacto Simbólico
                 </Typography>
                 <Chip
@@ -1679,7 +1682,11 @@ export function SocialCommunicationPage() {
                   label={`${simbolicoHighlights.length} destaque${
                     simbolicoHighlights.length === 1 ? "" : "s"
                   }`}
-                  sx={{ bgcolor: "rgba(46, 139, 87, 0.16)", color: "#206346" }}
+                  sx={{
+                    bgcolor: "rgba(236, 246, 255, 0.22)",
+                    color: "#F4FAFF",
+                    border: "1px solid rgba(236, 246, 255, 0.4)",
+                  }}
                 />
               </Stack>
               {simbolicoHighlights.length === 0 ? (
@@ -1744,10 +1751,9 @@ export function SocialCommunicationPage() {
             sx={{
               p: { xs: 1.8, md: 2.4 },
               borderRadius: 3.2,
-              border: "1px solid rgba(27,94,133,0.26)",
-              background:
-                "linear-gradient(145deg, rgba(27,94,133,0.16) 0%, rgba(246,251,255,0.97) 48%, rgba(220,235,245,0.92) 100%)",
-              boxShadow: "0 14px 28px rgba(17,66,89,0.12)",
+              border: "1px solid rgba(233, 246, 255, 0.36)",
+              backgroundColor: "rgb(106, 147, 171)",
+              boxShadow: "0 14px 28px rgba(17,66,89,0.14)",
             }}
           >
             <Stack
@@ -1763,10 +1769,10 @@ export function SocialCommunicationPage() {
                     width: 10,
                     height: 10,
                     borderRadius: "50%",
-                    bgcolor: "#1B5E85",
+                    bgcolor: "#D7EEFF",
                   }}
                 />
-                <Typography variant="h6" fontWeight={700}>
+                <Typography variant="h6" fontWeight={700} sx={{ color: "#F3FAFF" }}>
                   Público Interno
                 </Typography>
               </Stack>
@@ -1774,10 +1780,10 @@ export function SocialCommunicationPage() {
                 size="small"
                 label={`${internalItems.length} matéria${internalItems.length === 1 ? "" : "s"}`}
                 sx={{
-                  bgcolor: "rgba(27,94,133,0.18)",
-                  color: "#1B5E85",
+                  bgcolor: "rgba(245, 251, 255, 0.18)",
+                  color: "#F4FAFF",
                   fontWeight: 700,
-                  border: "1px solid rgba(27,94,133,0.26)",
+                  border: "1px solid rgba(245, 251, 255, 0.38)",
                 }}
               />
             </Stack>
@@ -1887,10 +1893,9 @@ export function SocialCommunicationPage() {
             sx={{
               p: { xs: 1.8, md: 2.4 },
               borderRadius: 3.2,
-              border: "1px solid rgba(39,125,161,0.26)",
-              background:
-                "linear-gradient(145deg, rgba(39,125,161,0.17) 0%, rgba(246,253,255,0.97) 50%, rgba(211,236,244,0.92) 100%)",
-              boxShadow: "0 14px 28px rgba(17,66,89,0.12)",
+              border: "1px solid rgba(233, 246, 255, 0.36)",
+              backgroundColor: "rgb(120, 160, 183)",
+              boxShadow: "0 14px 28px rgba(17,66,89,0.14)",
             }}
           >
             <Stack
@@ -1906,10 +1911,10 @@ export function SocialCommunicationPage() {
                     width: 10,
                     height: 10,
                     borderRadius: "50%",
-                    bgcolor: "#277DA1",
+                    bgcolor: "#E0F2FF",
                   }}
                 />
-                <Typography variant="h6" fontWeight={700}>
+                <Typography variant="h6" fontWeight={700} sx={{ color: "#F6FBFF" }}>
                   Público Externo
                 </Typography>
               </Stack>
@@ -1917,10 +1922,10 @@ export function SocialCommunicationPage() {
                 size="small"
                 label={`${externalItems.length} matéria${externalItems.length === 1 ? "" : "s"}`}
                 sx={{
-                  bgcolor: "rgba(39,125,161,0.18)",
-                  color: "#1C5D78",
+                  bgcolor: "rgba(245, 251, 255, 0.2)",
+                  color: "#F6FBFF",
                   fontWeight: 700,
-                  border: "1px solid rgba(39,125,161,0.28)",
+                  border: "1px solid rgba(245, 251, 255, 0.4)",
                 }}
               />
             </Stack>
