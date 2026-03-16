@@ -10,6 +10,30 @@ const sigpesFotoApiBaseUrl = (
   configuredSigpesFotoApiBaseUrl ||
   "http://api.servicos.ccarj.intraer/sigpesApi/fotoes"
 ).replace(/\/+$/, "");
+const sigpesUseBackendFallback =
+  String(import.meta.env.VITE_SIGPES_USE_BACKEND_FALLBACK ?? "false")
+    .trim()
+    .toLowerCase() === "true";
+
+function normalizeSigpesNumeroOrdem(value: unknown) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+
+  if (/^\d+[.,]\d+$/.test(raw)) {
+    const parsed = Number.parseFloat(raw.replace(",", "."));
+    if (Number.isFinite(parsed) && Number.isInteger(parsed)) {
+      return String(parsed);
+    }
+  }
+
+  const trailingZeroSuffix = raw.match(/^(\d+)[-\s]0+$/);
+  if (trailingZeroSuffix) {
+    return trailingZeroSuffix[1];
+  }
+
+  const onlyDigits = raw.replace(/\D/g, "");
+  return onlyDigits || raw;
+}
 
 function normalizeSigpesBase64(value: unknown) {
   return String(value ?? "").replace(/\s+/g, "");
@@ -39,6 +63,31 @@ function toSigpesPhotoPayload(payload: any, numeroOrdem: string) {
   };
 }
 
+function parseSigpesPayloadFromText(rawText: string) {
+  const text = String(rawText ?? "").trim();
+  if (!text) return null;
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    const tpArqMatch = text.match(/"tpArq"\s*:\s*"([^"]*)"/i);
+    const nomeMatch = text.match(/"txNomeArq"\s*:\s*"([^"]*)"/i);
+    const imFotoMatch = text.match(/"imFoto"\s*:\s*"([\s\S]*?)"\s*(?:,|\})/i);
+
+    if (!imFotoMatch) return null;
+
+    return {
+      tpArq: tpArqMatch?.[1] ?? "image/jpeg",
+      txNomeArq: nomeMatch?.[1] ?? null,
+      imFoto: imFotoMatch[1]
+        .replace(/\\\//g, "/")
+        .replace(/\\r/g, "")
+        .replace(/\\n/g, "")
+        .replace(/\s+/g, ""),
+    };
+  }
+}
+
 export function useMe() {
   return useQuery({
     queryKey: qk.me,
@@ -56,7 +105,7 @@ export function useMyFabProfile() {
 }
 
 export function useSigpesPhoto(numeroOrdem: string | null | undefined) {
-  const normalizedNumeroOrdem = String(numeroOrdem ?? "").trim();
+  const normalizedNumeroOrdem = normalizeSigpesNumeroOrdem(numeroOrdem);
   return useQuery({
     queryKey: qk.sigpesPhoto(normalizedNumeroOrdem),
     queryFn: async () => {
@@ -65,16 +114,46 @@ export function useSigpesPhoto(numeroOrdem: string | null | undefined) {
       try {
         const response = await fetch(endpoint, { method: "GET" });
         if (response.ok) {
-          const payload = await response.json();
+          const rawText = await response.text();
+          const payload = parseSigpesPayloadFromText(rawText);
+          if (!payload) {
+            return {
+              numeroOrdem: normalizedNumeroOrdem,
+              mimeType: null,
+              fileName: null,
+              base64: null,
+              dataUrl: null,
+            };
+          }
           return toSigpesPhotoPayload(payload, normalizedNumeroOrdem);
         }
       } catch {
-        // fallback via backend proxy
+        // fallback via backend proxy (optional)
       }
 
-      return (
-        await api.get(`/auth/fotoes/${encodeURIComponent(normalizedNumeroOrdem)}`)
-      ).data;
+      if (!sigpesUseBackendFallback) {
+        return {
+          numeroOrdem: normalizedNumeroOrdem,
+          mimeType: null,
+          fileName: null,
+          base64: null,
+          dataUrl: null,
+        };
+      }
+
+      try {
+        return (
+          await api.get(`/auth/fotoes/${encodeURIComponent(normalizedNumeroOrdem)}`)
+        ).data;
+      } catch {
+        return {
+          numeroOrdem: normalizedNumeroOrdem,
+          mimeType: null,
+          fileName: null,
+          base64: null,
+          dataUrl: null,
+        };
+      }
     },
     enabled: Boolean(normalizedNumeroOrdem),
     staleTime: 15 * 60_000,
