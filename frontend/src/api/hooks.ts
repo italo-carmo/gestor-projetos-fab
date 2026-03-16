@@ -1639,6 +1639,76 @@ export function useSocialCommunication(filters: Record<string, any>) {
   });
 }
 
+export function useSocialCommunicationHighlights(filters: Record<string, any>) {
+  return useQuery({
+    queryKey: qk.socialCommunicationHighlights(filters),
+    queryFn: async () =>
+      (await api.get("/social-communication/highlights", { params: filters }))
+        .data,
+    staleTime: 10_000,
+  });
+}
+
+export function useLookupSocialCommunicationHighlightLdap() {
+  return useMutation({
+    mutationFn: async (email: string) =>
+      (
+        await api.get("/social-communication/highlights/ldap-profile", {
+          params: { email },
+        })
+      ).data,
+  });
+}
+
+export function useCreateSocialCommunicationHighlight() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      ldapUid?: string | null;
+      militaryEmail: string;
+      militaryName: string;
+      fabom?: string | null;
+      impact: "MULTIPLICADOR" | "SIMBOLICO";
+      localityId: string;
+      text: string;
+    }) => (await api.post("/social-communication/highlights", payload)).data,
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: ["socialCommunicationHighlights"] }),
+  });
+}
+
+export function useUpdateSocialCommunicationHighlight() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      payload: {
+        ldapUid?: string | null;
+        militaryEmail?: string;
+        militaryName?: string;
+        fabom?: string | null;
+        impact?: "MULTIPLICADOR" | "SIMBOLICO";
+        localityId?: string;
+        text?: string;
+      };
+    }) =>
+      (await api.put(`/social-communication/highlights/${args.id}`, args.payload))
+        .data,
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: ["socialCommunicationHighlights"] }),
+  });
+}
+
+export function useDeleteSocialCommunicationHighlight() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      (await api.delete(`/social-communication/highlights/${id}`)).data,
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: ["socialCommunicationHighlights"] }),
+  });
+}
+
 export function useResolveSocialCommunicationMetadata() {
   return useMutation({
     mutationFn: async (url: string) =>

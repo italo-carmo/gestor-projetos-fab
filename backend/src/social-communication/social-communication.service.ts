@@ -15,6 +15,7 @@ import {
   ROLE_TI,
 } from '../rbac/role-access';
 import type { RbacUser } from '../rbac/rbac.types';
+import { FabLdapService } from '../ldap/fab-ldap.service';
 import { getSocialCommunicationCoverCandidates } from './social-communication-storage';
 
 type MetadataExtraction = {
@@ -24,12 +25,15 @@ type MetadataExtraction = {
   publishedAt?: string;
 };
 
+type HighlightImpact = 'MULTIPLICADOR' | 'SIMBOLICO';
+
 @Injectable()
 export class SocialCommunicationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly config: ConfigService,
+    private readonly fabLdap: FabLdapService,
   ) {}
 
   async list(filters: { q?: string; tags?: string[] }) {
@@ -63,6 +67,212 @@ export class SocialCommunicationService {
     }));
 
     return { items };
+  }
+
+  async listHighlights(filters: { q?: string }) {
+    const where: any = {};
+    const normalizedQuery = sanitizeText(filters.q ?? '');
+    if (normalizedQuery) {
+      where.OR = [
+        { militaryName: { contains: normalizedQuery, mode: 'insensitive' } },
+        { militaryEmail: { contains: normalizedQuery, mode: 'insensitive' } },
+        { fabom: { contains: normalizedQuery, mode: 'insensitive' } },
+        { highlightText: { contains: normalizedQuery, mode: 'insensitive' } },
+        { locality: { name: { contains: normalizedQuery, mode: 'insensitive' } } },
+        { locality: { code: { contains: normalizedQuery, mode: 'insensitive' } } },
+      ];
+    }
+
+    const rows = await (this.prisma as any).socialCommunicationHighlight.findMany({
+      where,
+      include: {
+        locality: { select: { id: true, code: true, name: true } },
+        createdBy: { select: { id: true, name: true } },
+      },
+      orderBy: [{ createdAt: 'desc' }],
+    });
+
+    return {
+      items: rows.map((item: any) => this.toHighlightResponse(item)),
+    };
+  }
+
+  async lookupHighlightLdapProfile(email: string, user?: RbacUser) {
+    this.assertHighlightEditorAccess(user);
+
+    const normalizedEmail = this.normalizeHighlightEmail(email, 'email');
+    const profile = await this.fabLdap.lookupByEmail(normalizedEmail);
+    if (!profile) {
+      throwError('VALIDATION_ERROR', {
+        field: 'email',
+        reason: 'ldap_user_not_found',
+      });
+    }
+
+    return {
+      uid: profile.uid ?? null,
+      name: profile.name ?? null,
+      email: profile.email ?? normalizedEmail,
+      fabom: profile.fabom ?? null,
+      numeroOrdem: profile.numeroOrdem ?? null,
+    };
+  }
+
+  async createHighlight(
+    payload: {
+      ldapUid?: string | null;
+      militaryEmail: string;
+      militaryName: string;
+      fabom?: string | null;
+      impact: HighlightImpact;
+      localityId: string;
+      text: string;
+    },
+    user?: RbacUser,
+  ) {
+    this.assertHighlightEditorAccess(user);
+
+    const localityId = this.normalizeRequiredText(payload.localityId, 'localityId');
+    await this.assertHighlightLocalityExists(localityId);
+
+    const created = await (this.prisma as any).socialCommunicationHighlight.create({
+      data: {
+        ldapUid: this.normalizeOptionalText(payload.ldapUid) ?? null,
+        militaryEmail: this.normalizeHighlightEmail(
+          payload.militaryEmail,
+          'militaryEmail',
+        ),
+        militaryName: this.normalizeRequiredText(
+          payload.militaryName,
+          'militaryName',
+        ),
+        fabom: this.normalizeOptionalText(payload.fabom) ?? null,
+        impact: this.normalizeHighlightImpact(payload.impact, 'impact'),
+        localityId,
+        highlightText: this.normalizeHighlightText(payload.text, 'text'),
+        createdById: user?.id ?? null,
+      },
+      include: {
+        locality: { select: { id: true, code: true, name: true } },
+        createdBy: { select: { id: true, name: true } },
+      },
+    });
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'social_communication_highlight',
+      action: 'create',
+      entityId: created.id,
+      diffJson: {
+        militaryName: created.militaryName,
+        militaryEmail: created.militaryEmail,
+        impact: created.impact,
+      },
+    });
+
+    return this.toHighlightResponse(created);
+  }
+
+  async updateHighlight(
+    id: string,
+    payload: {
+      ldapUid?: string | null;
+      militaryEmail?: string;
+      militaryName?: string;
+      fabom?: string | null;
+      impact?: HighlightImpact;
+      localityId?: string;
+      text?: string;
+    },
+    user?: RbacUser,
+  ) {
+    this.assertHighlightEditorAccess(user);
+
+    const existing = await (this.prisma as any).socialCommunicationHighlight.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (!existing) throwError('NOT_FOUND');
+
+    const data: any = {};
+
+    if (payload.ldapUid !== undefined) {
+      data.ldapUid = this.normalizeOptionalText(payload.ldapUid) ?? null;
+    }
+    if (payload.militaryEmail !== undefined) {
+      data.militaryEmail = this.normalizeHighlightEmail(
+        payload.militaryEmail,
+        'militaryEmail',
+      );
+    }
+    if (payload.militaryName !== undefined) {
+      data.militaryName = this.normalizeRequiredText(
+        payload.militaryName,
+        'militaryName',
+      );
+    }
+    if (payload.fabom !== undefined) {
+      data.fabom = this.normalizeOptionalText(payload.fabom) ?? null;
+    }
+    if (payload.impact !== undefined) {
+      data.impact = this.normalizeHighlightImpact(payload.impact, 'impact');
+    }
+    if (payload.localityId !== undefined) {
+      const localityId = this.normalizeRequiredText(payload.localityId, 'localityId');
+      await this.assertHighlightLocalityExists(localityId);
+      data.locality = { connect: { id: localityId } };
+    }
+    if (payload.text !== undefined) {
+      data.highlightText = this.normalizeHighlightText(payload.text, 'text');
+    }
+
+    const updated = await (this.prisma as any).socialCommunicationHighlight.update({
+      where: { id },
+      data,
+      include: {
+        locality: { select: { id: true, code: true, name: true } },
+        createdBy: { select: { id: true, name: true } },
+      },
+    });
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'social_communication_highlight',
+      action: 'update',
+      entityId: id,
+      diffJson: {
+        militaryName: updated.militaryName,
+        militaryEmail: updated.militaryEmail,
+        impact: updated.impact,
+      },
+    });
+
+    return this.toHighlightResponse(updated);
+  }
+
+  async removeHighlight(id: string, user?: RbacUser) {
+    this.assertHighlightEditorAccess(user);
+
+    const existing = await (this.prisma as any).socialCommunicationHighlight.findUnique({
+      where: { id },
+      select: { id: true, militaryName: true, militaryEmail: true },
+    });
+    if (!existing) throwError('NOT_FOUND');
+
+    await (this.prisma as any).socialCommunicationHighlight.delete({ where: { id } });
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'social_communication_highlight',
+      action: 'delete',
+      entityId: id,
+      diffJson: {
+        militaryName: existing.militaryName,
+        militaryEmail: existing.militaryEmail,
+      },
+    });
+
+    return { ok: true };
   }
 
   async create(
@@ -194,8 +404,11 @@ export class SocialCommunicationService {
             null)
           : undefined;
     const tags =
-      payload.tags !== undefined ? (this.normalizeTags(payload.tags) ?? []) : undefined;
-    const audience = payload.audience !== undefined ? payload.audience : undefined;
+      payload.tags !== undefined
+        ? (this.normalizeTags(payload.tags) ?? [])
+        : undefined;
+    const audience =
+      payload.audience !== undefined ? payload.audience : undefined;
 
     const updated = await this.prisma.socialCommunicationArticle.update({
       where: { id },
@@ -311,8 +524,8 @@ export class SocialCommunicationService {
 
     if (article.coverImageUrl.startsWith('/social-communication/uploads/')) {
       const filename = path.basename(article.coverImageUrl);
-      const filePath = getSocialCommunicationCoverCandidates(filename).find((candidate) =>
-        fs.existsSync(candidate),
+      const filePath = getSocialCommunicationCoverCandidates(filename).find(
+        (candidate) => fs.existsSync(candidate),
       );
       if (!filePath) throwError('NOT_FOUND');
       const buffer = fs.readFileSync(filePath);
@@ -333,7 +546,10 @@ export class SocialCommunicationService {
     }
 
     try {
-      return await this.fetchRemoteAsset(article.coverImageUrl, 'image/*,*/*;q=0.8');
+      return await this.fetchRemoteAsset(
+        article.coverImageUrl,
+        'image/*,*/*;q=0.8',
+      );
     } catch {
       // Se falhar ao buscar via proxy, retorna erro para que o frontend tente URL direta.
       throwError('NOT_FOUND');
@@ -386,6 +602,12 @@ export class SocialCommunicationService {
 
   ensureEditorAccess(user?: RbacUser) {
     this.assertEditorAccess(user);
+  }
+
+  private assertHighlightEditorAccess(user?: RbacUser) {
+    if (!hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_TI])) {
+      throwError('RBAC_FORBIDDEN');
+    }
   }
 
   private assertEditorAccess(user?: RbacUser) {
@@ -880,6 +1102,76 @@ export class SocialCommunicationService {
     } catch {
       return null;
     }
+  }
+
+  private toHighlightResponse(item: {
+    id: string;
+    ldapUid: string | null;
+    militaryEmail: string;
+    militaryName: string;
+    fabom: string | null;
+    impact: HighlightImpact;
+    locality: { id: string; code: string; name: string };
+    highlightText: string;
+    createdBy: { id: string; name: string } | null;
+    createdAt: Date;
+    updatedAt: Date;
+  }) {
+    return {
+      id: item.id,
+      ldapUid: item.ldapUid,
+      militaryEmail: item.militaryEmail,
+      militaryName: item.militaryName,
+      fabom: item.fabom,
+      impact: item.impact,
+      locality: item.locality,
+      text: item.highlightText,
+      createdBy: item.createdBy,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+    };
+  }
+
+  private async assertHighlightLocalityExists(localityId: string) {
+    const locality = await this.prisma.locality.findUnique({
+      where: { id: localityId },
+      select: { id: true },
+    });
+    if (!locality) {
+      throwError('VALIDATION_ERROR', {
+        field: 'localityId',
+        reason: 'not_found',
+      });
+    }
+  }
+
+  private normalizeHighlightEmail(value: string, field: string) {
+    const normalized = sanitizeText(value ?? '').toLowerCase();
+    if (!normalized) {
+      throwError('VALIDATION_ERROR', { field, reason: 'required' });
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
+      throwError('VALIDATION_ERROR', { field, reason: 'invalid_email' });
+    }
+    return normalized;
+  }
+
+  private normalizeHighlightImpact(value: string, field: string): HighlightImpact {
+    const normalized = sanitizeText(value ?? '').toUpperCase();
+    if (normalized === 'MULTIPLICADOR' || normalized === 'SIMBOLICO') {
+      return normalized;
+    }
+    throwError('VALIDATION_ERROR', { field, reason: 'invalid_impact' });
+  }
+
+  private normalizeHighlightText(value: string, field: string) {
+    const normalized = String(value ?? '')
+      .replace(/[<>]/g, '')
+      .trim();
+    if (!normalized) {
+      throwError('VALIDATION_ERROR', { field, reason: 'required' });
+    }
+    return normalized;
   }
 
   private normalizeRequiredText(

@@ -42,6 +42,7 @@ model User {
   createdActivities Activity[]    @relation("ActivityCreator")
   createdMissions  Mission[]     @relation("MissionCreator")
   createdSocialCommunicationArticles SocialCommunicationArticle[] @relation("SocialCommunicationArticleCreator")
+  createdSocialCommunicationHighlights SocialCommunicationHighlight[] @relation("SocialCommunicationHighlightCreator")
   missionParticipations MissionParticipant[]
   activityResponsibilities ActivityResponsible[] @relation("ActivityResponsibleUser")
   activityResponsibilityAssignments ActivityResponsible[] @relation("ActivityResponsibleAssigner")
@@ -171,6 +172,7 @@ model Locality {
   recruitsDesignatedHere     RecruitFemale[]       @relation("RecruitDestinationLocality")
   libraryPhotos              LibraryPhoto[]
   bestPracticePosts          BestPracticePost[]
+  socialCommunicationHighlights SocialCommunicationHighlight[]
 }
 
 model Activity {
@@ -777,6 +779,11 @@ enum SocialCommunicationAudience {
   EXTERNAL
 }
 
+enum SocialCommunicationHighlightImpact {
+  MULTIPLICADOR
+  SIMBOLICO
+}
+
 model SocialCommunicationArticle {
   id            String                        @id @default(cuid())
   sourceUrl     String
@@ -795,6 +802,27 @@ model SocialCommunicationArticle {
   @@index([createdAt])
   @@index([publishedAt])
   @@index([audience])
+}
+
+model SocialCommunicationHighlight {
+  id            String                             @id @default(cuid())
+  ldapUid       String?
+  militaryEmail String
+  militaryName  String
+  fabom         String?
+  impact        SocialCommunicationHighlightImpact
+  localityId    String
+  highlightText String                             @db.Text
+  createdById   String?
+  createdAt     DateTime                           @default(now())
+  updatedAt     DateTime                           @updatedAt
+
+  locality      Locality                           @relation(fields: [localityId], references: [id], onDelete: Restrict)
+  createdBy     User?                              @relation("SocialCommunicationHighlightCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([impact, createdAt])
+  @@index([localityId, createdAt])
+  @@index([militaryEmail])
 }
 
 model LibraryPhoto {

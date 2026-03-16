@@ -21,10 +21,14 @@ import {
 import AutoAwesomeRoundedIcon from "@mui/icons-material/AutoAwesomeRounded";
 import ArrowBackIosNewRoundedIcon from "@mui/icons-material/ArrowBackIosNewRounded";
 import ArrowForwardIosRoundedIcon from "@mui/icons-material/ArrowForwardIosRounded";
+import BadgeRoundedIcon from "@mui/icons-material/BadgeRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import LanguageRoundedIcon from "@mui/icons-material/LanguageRounded";
+import MilitaryTechRoundedIcon from "@mui/icons-material/MilitaryTechRounded";
 import NewspaperRoundedIcon from "@mui/icons-material/NewspaperRounded";
+import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
+import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import ViewListRoundedIcon from "@mui/icons-material/ViewListRounded";
 import ViewModuleRoundedIcon from "@mui/icons-material/ViewModuleRounded";
 import UploadFileRoundedIcon from "@mui/icons-material/UploadFileRounded";
@@ -39,11 +43,17 @@ import {
 } from "../app/roleAccess";
 import { useToast } from "../app/toast";
 import {
+  useCreateSocialCommunicationHighlight,
   useCreateSocialCommunicationArticle,
+  useDeleteSocialCommunicationHighlight,
   useDeleteSocialCommunicationArticle,
+  useLookupSocialCommunicationHighlightLdap,
   useMe,
+  useOmsCatalog,
   useResolveSocialCommunicationMetadata,
+  useSocialCommunicationHighlights,
   useSocialCommunication,
+  useUpdateSocialCommunicationHighlight,
   useUploadSocialCommunicationCover,
   useUpdateSocialCommunicationArticle,
 } from "../api/hooks";
@@ -63,6 +73,20 @@ type SocialCommunicationArticle = {
   contentProxyPath?: string | null;
   tags?: string[];
   audience?: 'INTERNAL' | 'EXTERNAL';
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: { id: string; name: string } | null;
+};
+
+type SocialCommunicationHighlight = {
+  id: string;
+  ldapUid?: string | null;
+  militaryEmail: string;
+  militaryName: string;
+  fabom?: string | null;
+  impact: "MULTIPLICADOR" | "SIMBOLICO";
+  locality: { id: string; code: string; name: string };
+  text: string;
   createdAt: string;
   updatedAt: string;
   createdBy?: { id: string; name: string } | null;
@@ -122,6 +146,14 @@ function normalizeTags(values: string[]) {
 }
 
 const QUICK_TAGS = ["smif", "cipavd", "cpca"] as const;
+const HIGHLIGHT_IMPACT_OPTIONS = [
+  { value: "MULTIPLICADOR" as const, label: "Multiplicador" },
+  { value: "SIMBOLICO" as const, label: "Simbolico" },
+];
+
+function normalizeEmail(value: string) {
+  return String(value ?? "").trim().toLowerCase();
+}
 
 function ArticleCoverImage({
   coverProxyPath,
@@ -250,6 +282,7 @@ export function SocialCommunicationPage() {
     ROLE_COMANDANTE_COMGEP,
     ROLE_TI,
   ]);
+  const canEditHighlights = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]);
 
   const [search, setSearch] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -257,9 +290,15 @@ export function SocialCommunicationPage() {
   const filters = useMemo(() => ({ q: search.trim() || undefined }), [search]);
 
   const query = useSocialCommunication(filters);
+  const highlightsQuery = useSocialCommunicationHighlights(filters);
+  const omsCatalogQuery = useOmsCatalog();
   const createArticle = useCreateSocialCommunicationArticle();
   const updateArticle = useUpdateSocialCommunicationArticle();
   const deleteArticle = useDeleteSocialCommunicationArticle();
+  const createHighlight = useCreateSocialCommunicationHighlight();
+  const updateHighlight = useUpdateSocialCommunicationHighlight();
+  const deleteHighlight = useDeleteSocialCommunicationHighlight();
+  const lookupHighlightLdap = useLookupSocialCommunicationHighlightLdap();
   const resolveMetadata = useResolveSocialCommunicationMetadata();
   const uploadCover = useUploadSocialCommunicationCover();
   const coverFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -277,6 +316,24 @@ export function SocialCommunicationPage() {
     tags: [] as string[],
     audience: "INTERNAL" as "INTERNAL" | "EXTERNAL",
   });
+  const [highlightEditorOpen, setHighlightEditorOpen] = useState(false);
+  const [highlightEditing, setHighlightEditing] =
+    useState<SocialCommunicationHighlight | null>(null);
+  const [highlightDeleteTarget, setHighlightDeleteTarget] =
+    useState<SocialCommunicationHighlight | null>(null);
+  const [highlightReadingTarget, setHighlightReadingTarget] =
+    useState<SocialCommunicationHighlight | null>(null);
+  const [highlightForm, setHighlightForm] = useState({
+    ldapEmail: "",
+    ldapUid: "",
+    militaryName: "",
+    fabom: "",
+    impact: "MULTIPLICADOR" as "MULTIPLICADOR" | "SIMBOLICO",
+    localityId: "",
+    text: "",
+  });
+  const highlightMultiplicadorCarouselRef = useRef<HTMLDivElement | null>(null);
+  const highlightSimbolicoCarouselRef = useRef<HTMLDivElement | null>(null);
   const internalCarouselRef = useRef<HTMLDivElement | null>(null);
   const externalCarouselRef = useRef<HTMLDivElement | null>(null);
 
@@ -316,6 +373,136 @@ export function SocialCommunicationPage() {
       audience: item.audience ?? "INTERNAL",
     });
     setEditorOpen(true);
+  };
+
+  const omOptions = useMemo(
+    () =>
+      ((omsCatalogQuery.data?.items ?? []) as Array<any>)
+        .map((item) => ({
+          id: String(item?.id ?? "").trim(),
+          code: String(item?.code ?? "").trim(),
+          name: String(item?.name ?? "").trim(),
+        }))
+        .filter((item) => item.id && item.name),
+    [omsCatalogQuery.data?.items],
+  );
+
+  const openCreateHighlight = () => {
+    setHighlightEditing(null);
+    setHighlightForm({
+      ldapEmail: "",
+      ldapUid: "",
+      militaryName: "",
+      fabom: "",
+      impact: "MULTIPLICADOR",
+      localityId: "",
+      text: "",
+    });
+    setHighlightEditorOpen(true);
+  };
+
+  const openEditHighlight = (item: SocialCommunicationHighlight) => {
+    setHighlightEditing(item);
+    setHighlightForm({
+      ldapEmail: normalizeEmail(item.militaryEmail),
+      ldapUid: String(item.ldapUid ?? "").trim(),
+      militaryName: String(item.militaryName ?? "").trim(),
+      fabom: String(item.fabom ?? "").trim(),
+      impact: item.impact,
+      localityId: String(item.locality?.id ?? "").trim(),
+      text: String(item.text ?? "").trim(),
+    });
+    setHighlightEditorOpen(true);
+  };
+
+  const handleLookupHighlightLdap = async () => {
+    const email = normalizeEmail(highlightForm.ldapEmail);
+    if (!email) {
+      toast.push({ message: "Informe o e-mail LDAP para buscar", severity: "warning" });
+      return;
+    }
+    try {
+      const profile = await lookupHighlightLdap.mutateAsync(email);
+      setHighlightForm((prev) => {
+        const fabom = String(profile?.fabom ?? "").trim();
+        const matchedOm = fabom
+          ? omOptions.find(
+              (item) => item.code.toLowerCase() === fabom.toLowerCase(),
+            )
+          : undefined;
+        return {
+          ...prev,
+          ldapEmail: normalizeEmail(profile?.email ?? email),
+          ldapUid: String(profile?.uid ?? "").trim(),
+          militaryName: String(profile?.name ?? "").trim(),
+          fabom,
+          localityId: prev.localityId || matchedOm?.id || "",
+        };
+      });
+      toast.push({
+        message: "Dados LDAP carregados com sucesso",
+        severity: "success",
+      });
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({
+        message: payload.message ?? "Nao foi possivel buscar o militar no LDAP",
+        severity: "error",
+      });
+    }
+  };
+
+  const handleSaveHighlight = async () => {
+    const payload = {
+      ldapUid: highlightForm.ldapUid.trim() || null,
+      militaryEmail: normalizeEmail(highlightForm.ldapEmail),
+      militaryName: highlightForm.militaryName.trim(),
+      fabom: highlightForm.fabom.trim() || null,
+      impact: highlightForm.impact,
+      localityId: highlightForm.localityId,
+      text: highlightForm.text.trim(),
+    };
+
+    if (!payload.militaryEmail || !payload.militaryName || !payload.localityId || !payload.text) {
+      toast.push({
+        message: "Preencha e-mail LDAP, nome, impacto, OM e texto do destaque",
+        severity: "warning",
+      });
+      return;
+    }
+
+    try {
+      if (highlightEditing) {
+        await updateHighlight.mutateAsync({ id: highlightEditing.id, payload });
+        toast.push({ message: "Destaque atualizado", severity: "success" });
+      } else {
+        await createHighlight.mutateAsync(payload);
+        toast.push({ message: "Destaque criado", severity: "success" });
+      }
+      setHighlightEditorOpen(false);
+      setHighlightEditing(null);
+    } catch (error) {
+      const response = parseApiError(error);
+      toast.push({
+        message: response.message ?? "Erro ao salvar destaque",
+        severity: "error",
+      });
+    }
+  };
+
+  const handleConfirmHighlightDelete = async () => {
+    if (!highlightDeleteTarget) return;
+    try {
+      await deleteHighlight.mutateAsync(highlightDeleteTarget.id);
+      setHighlightDeleteTarget(null);
+      toast.push({ message: "Destaque removido", severity: "success" });
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({
+        message: payload.message ?? "Erro ao remover destaque",
+        severity: "error",
+      });
+    }
   };
 
   const applyMetadata = async (force = false) => {
@@ -428,7 +615,21 @@ export function SocialCommunicationPage() {
         return activeTags.some((tag) => itemTags.includes(tag));
       })
     : items;
-  
+
+  const highlightItems = [
+    ...((highlightsQuery.data?.items ?? []) as SocialCommunicationHighlight[]),
+  ].sort((a, b) => {
+    const left = Date.parse(a.updatedAt ?? a.createdAt);
+    const right = Date.parse(b.updatedAt ?? b.createdAt);
+    return (Number.isNaN(right) ? 0 : right) - (Number.isNaN(left) ? 0 : left);
+  });
+  const multiplicadorHighlights = highlightItems.filter(
+    (item) => item.impact === "MULTIPLICADOR",
+  );
+  const simbolicoHighlights = highlightItems.filter(
+    (item) => item.impact === "SIMBOLICO",
+  );
+
   const internalItems = filteredByTags.filter((item) => (item.audience ?? 'INTERNAL') === 'INTERNAL');
   const externalItems = filteredByTags.filter((item) => (item.audience ?? 'INTERNAL') === 'EXTERNAL');
 
@@ -464,8 +665,12 @@ export function SocialCommunicationPage() {
   );
 
   useEffect(() => {
-    if (viewMode !== "cards") return;
-    const carouselRefs = [internalCarouselRef, externalCarouselRef];
+    const carouselRefs = [
+      highlightMultiplicadorCarouselRef,
+      highlightSimbolicoCarouselRef,
+      internalCarouselRef,
+      externalCarouselRef,
+    ];
     const intervalIds = carouselRefs
       .map((carouselRef) => {
         const container = carouselRef.current;
@@ -480,7 +685,13 @@ export function SocialCommunicationPage() {
     return () => {
       intervalIds.forEach((id) => window.clearInterval(id));
     };
-  }, [externalItems.length, internalItems.length, scrollCarouselByCard, viewMode]);
+  }, [
+    externalItems.length,
+    internalItems.length,
+    multiplicadorHighlights.length,
+    simbolicoHighlights.length,
+    scrollCarouselByCard,
+  ]);
 
   const renderTags = (tags: string[], limit = 4) => {
     if (!tags.length) return null;
@@ -492,6 +703,224 @@ export function SocialCommunicationPage() {
           <Chip key={tag} label={`#${tag}`} size="small" variant="outlined" />
         ))}
         {remaining > 0 && <Chip label={`+${remaining}`} size="small" />}
+      </Stack>
+    );
+  };
+
+  const renderHighlightCarousel = (
+    carouselItems: SocialCommunicationHighlight[],
+    impact: "MULTIPLICADOR" | "SIMBOLICO",
+  ) => {
+    const carouselRef =
+      impact === "MULTIPLICADOR"
+        ? highlightMultiplicadorCarouselRef
+        : highlightSimbolicoCarouselRef;
+    const impactLabel =
+      impact === "MULTIPLICADOR" ? "Impacto Multiplicador" : "Impacto Simbolico";
+    const buttonBg =
+      impact === "MULTIPLICADOR"
+        ? "rgba(17,66,89,0.15)"
+        : "rgba(77,134,160,0.2)";
+
+    return (
+      <Stack spacing={1.1}>
+        <Stack direction="row" justifyContent="flex-end" spacing={0.7}>
+          <IconButton
+            size="small"
+            onClick={() => scrollCarouselByCard(carouselRef, -1)}
+            sx={{ bgcolor: buttonBg, "&:hover": { bgcolor: "rgba(17,66,89,0.25)" } }}
+            aria-label={`Voltar carrossel de ${impactLabel}`}
+          >
+            <ArrowBackIosNewRoundedIcon fontSize="small" />
+          </IconButton>
+          <IconButton
+            size="small"
+            onClick={() => scrollCarouselByCard(carouselRef, 1)}
+            sx={{ bgcolor: buttonBg, "&:hover": { bgcolor: "rgba(17,66,89,0.25)" } }}
+            aria-label={`Avançar carrossel de ${impactLabel}`}
+          >
+            <ArrowForwardIosRoundedIcon fontSize="small" />
+          </IconButton>
+        </Stack>
+        <Box
+          ref={carouselRef}
+          sx={{
+            display: "flex",
+            gap: 2,
+            overflowX: "auto",
+            scrollBehavior: "smooth",
+            scrollSnapType: "x mandatory",
+            pb: 0.5,
+            px: 0.2,
+            "&::-webkit-scrollbar": {
+              height: 8,
+            },
+            "&::-webkit-scrollbar-track": {
+              backgroundColor: "rgba(17,66,89,0.08)",
+              borderRadius: 999,
+            },
+            "&::-webkit-scrollbar-thumb": {
+              backgroundColor: "rgba(17,66,89,0.24)",
+              borderRadius: 999,
+            },
+          }}
+        >
+          {carouselItems.map((item) => {
+            const initials = item.militaryName
+              .split(/\s+/)
+              .filter(Boolean)
+              .slice(0, 2)
+              .map((part) => part[0]?.toUpperCase() ?? "")
+              .join("");
+            return (
+              <Card
+                key={item.id}
+                data-carousel-card="true"
+                sx={{
+                  flex: "0 0 auto",
+                  width: {
+                    xs: "calc(100% - 2px)",
+                    sm: "calc((100% - 16px) / 2)",
+                    md: "calc((100% - 32px) / 3)",
+                    lg: "calc((100% - 48px) / 4)",
+                  },
+                  scrollSnapAlign: "start",
+                  borderRadius: 3,
+                  border: "1px solid rgba(17, 66, 89, 0.14)",
+                  position: "relative",
+                  overflow: "hidden",
+                  transition: "transform 160ms ease, box-shadow 160ms ease",
+                  "&:hover": {
+                    transform: "translateY(-2px)",
+                    boxShadow: "0 10px 24px rgba(17, 66, 89, 0.16)",
+                  },
+                }}
+              >
+                <CardContent
+                  sx={{
+                    minHeight: 250,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 1.1,
+                  }}
+                >
+                  <Box
+                    sx={{
+                      display: "flex",
+                      justifyContent: "center",
+                      pt: 0.6,
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        width: 74,
+                        height: 74,
+                        borderRadius: "50%",
+                        bgcolor: "#CDECF7",
+                        border: "2px solid rgba(77,134,160,0.34)",
+                        color: "#114259",
+                        display: "grid",
+                        placeItems: "center",
+                        fontWeight: 800,
+                        fontSize: 20,
+                      }}
+                    >
+                      {initials || <PersonRoundedIcon fontSize="small" />}
+                    </Box>
+                  </Box>
+                  <Box>
+                    <Typography
+                      variant="subtitle1"
+                      fontWeight={700}
+                      sx={{
+                        textAlign: "center",
+                        minHeight: 50,
+                        display: "-webkit-box",
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: "vertical",
+                        overflow: "hidden",
+                      }}
+                    >
+                      {item.militaryName}
+                    </Typography>
+                    <Stack
+                      direction="row"
+                      spacing={0.7}
+                      justifyContent="center"
+                      flexWrap="wrap"
+                      useFlexGap
+                      sx={{ mt: 0.6 }}
+                    >
+                      <Chip
+                        size="small"
+                        icon={<BadgeRoundedIcon />}
+                        label={item.locality?.code || item.locality?.name || "OM"}
+                        variant="outlined"
+                      />
+                      <Chip
+                        size="small"
+                        icon={<MilitaryTechRoundedIcon />}
+                        label={
+                          impact === "MULTIPLICADOR" ? "Multiplicador" : "Simbolico"
+                        }
+                        sx={{
+                          bgcolor:
+                            impact === "MULTIPLICADOR"
+                              ? "rgba(17,66,89,0.12)"
+                              : "rgba(77,134,160,0.2)",
+                        }}
+                      />
+                    </Stack>
+                  </Box>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{
+                      mt: "auto",
+                      display: "-webkit-box",
+                      WebkitLineClamp: 3,
+                      WebkitBoxOrient: "vertical",
+                      overflow: "hidden",
+                      cursor: "pointer",
+                    }}
+                    onClick={() => setHighlightReadingTarget(item)}
+                  >
+                    {item.text}
+                  </Typography>
+                </CardContent>
+                {canEditHighlights && (
+                  <Stack
+                    direction="row"
+                    spacing={0.4}
+                    sx={{ position: "absolute", top: 8, right: 8, zIndex: 3 }}
+                  >
+                    <IconButton
+                      size="small"
+                      sx={{ bgcolor: "rgba(255,255,255,0.92)" }}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        openEditHighlight(item);
+                      }}
+                    >
+                      <EditRoundedIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton
+                      size="small"
+                      color="error"
+                      sx={{ bgcolor: "rgba(255,255,255,0.92)" }}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setHighlightDeleteTarget(item);
+                      }}
+                    >
+                      <DeleteOutlineRoundedIcon fontSize="small" />
+                    </IconButton>
+                  </Stack>
+                )}
+              </Card>
+            );
+          })}
+        </Box>
       </Stack>
     );
   };
@@ -712,9 +1141,17 @@ export function SocialCommunicationPage() {
     );
   };
 
-  if (query.isLoading) return <SkeletonState />;
+  if (query.isLoading || highlightsQuery.isLoading) return <SkeletonState />;
   if (query.isError) {
     return <ErrorState error={query.error} onRetry={() => query.refetch()} />;
+  }
+  if (highlightsQuery.isError) {
+    return (
+      <ErrorState
+        error={highlightsQuery.error}
+        onRetry={() => highlightsQuery.refetch()}
+      />
+    );
   }
 
   return (
@@ -755,6 +1192,270 @@ export function SocialCommunicationPage() {
           )}
         </Stack>
       </Stack>
+
+      <Card
+        sx={{
+          mb: 2.5,
+          borderRadius: 3.4,
+          border: "1px solid rgba(17,66,89,0.18)",
+          background:
+            "linear-gradient(145deg, rgba(17,66,89,0.1) 0%, rgba(245,250,253,0.92) 40%, rgba(77,134,160,0.1) 100%)",
+          boxShadow: "0 14px 30px rgba(17,66,89,0.14)",
+        }}
+      >
+        <CardContent sx={{ py: 2.2 }}>
+          <Stack
+            direction={{ xs: "column", md: "row" }}
+            alignItems={{ xs: "flex-start", md: "center" }}
+            justifyContent="space-between"
+            spacing={1}
+            sx={{ mb: 1.8 }}
+          >
+            <Box>
+              <Typography variant="h5" fontWeight={800}>
+                Militares Destaques
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Destaques institucionais com impacto Multiplicador e Simbolico.
+              </Typography>
+            </Box>
+            <Stack direction="row" spacing={0.8} alignItems="center">
+              <Chip
+                size="small"
+                label={`${highlightItems.length} destaque${
+                  highlightItems.length === 1 ? "" : "s"
+                }`}
+                sx={{
+                  bgcolor: "rgba(17,66,89,0.12)",
+                  color: "#114259",
+                  fontWeight: 700,
+                  border: "1px solid rgba(17,66,89,0.2)",
+                }}
+              />
+              {canEditHighlights && (
+                <Button
+                  variant="contained"
+                  size="small"
+                  onClick={openCreateHighlight}
+                >
+                  Novo destaque
+                </Button>
+              )}
+            </Stack>
+          </Stack>
+
+          {canEditHighlights && highlightEditorOpen && (
+            <Card
+              sx={{
+                mb: 2,
+                borderRadius: 2.4,
+                border: "1px solid rgba(17,66,89,0.15)",
+                background:
+                  "linear-gradient(135deg, rgba(255,255,255,0.96), rgba(226,244,252,0.72))",
+              }}
+            >
+              <CardContent sx={{ py: 1.7 }}>
+                <Stack spacing={1.2}>
+                  <Stack
+                    direction={{ xs: "column", md: "row" }}
+                    spacing={1}
+                    alignItems={{ xs: "stretch", md: "center" }}
+                  >
+                    <TextField
+                      size="small"
+                      label="E-mail LDAP"
+                      fullWidth
+                      value={highlightForm.ldapEmail}
+                      onChange={(event) =>
+                        setHighlightForm((prev) => ({
+                          ...prev,
+                          ldapEmail: event.target.value,
+                        }))
+                      }
+                    />
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={<SearchRoundedIcon fontSize="small" />}
+                      onClick={() => {
+                        void handleLookupHighlightLdap();
+                      }}
+                      disabled={lookupHighlightLdap.isPending}
+                    >
+                      {lookupHighlightLdap.isPending ? "Buscando..." : "Buscar"}
+                    </Button>
+                  </Stack>
+
+                  <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
+                    <TextField
+                      size="small"
+                      label="Nome do militar"
+                      fullWidth
+                      value={highlightForm.militaryName}
+                      onChange={(event) =>
+                        setHighlightForm((prev) => ({
+                          ...prev,
+                          militaryName: event.target.value,
+                        }))
+                      }
+                    />
+                    <TextField
+                      size="small"
+                      label="OM LDAP (FABom)"
+                      sx={{ minWidth: { md: 220 } }}
+                      value={highlightForm.fabom}
+                      onChange={(event) =>
+                        setHighlightForm((prev) => ({
+                          ...prev,
+                          fabom: event.target.value,
+                        }))
+                      }
+                    />
+                  </Stack>
+
+                  <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
+                    <TextField
+                      size="small"
+                      select
+                      label="Impacto"
+                      value={highlightForm.impact}
+                      sx={{ minWidth: { md: 220 } }}
+                      onChange={(event) =>
+                        setHighlightForm((prev) => ({
+                          ...prev,
+                          impact: event.target.value as "MULTIPLICADOR" | "SIMBOLICO",
+                        }))
+                      }
+                    >
+                      {HIGHLIGHT_IMPACT_OPTIONS.map((option) => (
+                        <MenuItem key={option.value} value={option.value}>
+                          {option.label}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                    <TextField
+                      size="small"
+                      select
+                      fullWidth
+                      label="OM"
+                      value={highlightForm.localityId}
+                      onChange={(event) =>
+                        setHighlightForm((prev) => ({
+                          ...prev,
+                          localityId: event.target.value,
+                        }))
+                      }
+                    >
+                      {omOptions.map((option) => (
+                        <MenuItem key={option.id} value={option.id}>
+                          {option.code ? `${option.code} - ${option.name}` : option.name}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  </Stack>
+
+                  <TextField
+                    size="small"
+                    label="Texto do destaque"
+                    multiline
+                    minRows={3}
+                    value={highlightForm.text}
+                    onChange={(event) =>
+                      setHighlightForm((prev) => ({
+                        ...prev,
+                        text: event.target.value,
+                      }))
+                    }
+                  />
+
+                  <Stack direction="row" spacing={1} justifyContent="flex-end">
+                    <Button
+                      variant="outlined"
+                      color="error"
+                      onClick={() => {
+                        setHighlightEditorOpen(false);
+                        setHighlightEditing(null);
+                      }}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      variant="contained"
+                      color="success"
+                      onClick={() => {
+                        void handleSaveHighlight();
+                      }}
+                      disabled={createHighlight.isPending || updateHighlight.isPending}
+                    >
+                      {highlightEditing ? "Atualizar destaque" : "Salvar destaque"}
+                    </Button>
+                  </Stack>
+                </Stack>
+              </CardContent>
+            </Card>
+          )}
+
+          <Stack spacing={2.2}>
+            <Box>
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                justifyContent="space-between"
+                alignItems={{ xs: "flex-start", sm: "center" }}
+                spacing={1}
+                sx={{ mb: 1 }}
+              >
+                <Typography variant="h6" fontWeight={800}>
+                  Impacto Multiplicador
+                </Typography>
+                <Chip
+                  size="small"
+                  label={`${multiplicadorHighlights.length} destaque${
+                    multiplicadorHighlights.length === 1 ? "" : "s"
+                  }`}
+                  sx={{ bgcolor: "rgba(17,66,89,0.14)", color: "#114259" }}
+                />
+              </Stack>
+              {multiplicadorHighlights.length === 0 ? (
+                <EmptyState
+                  title="Sem destaques multiplicadores"
+                  description="Cadastre destaques para mostrar neste carrossel."
+                />
+              ) : (
+                renderHighlightCarousel(multiplicadorHighlights, "MULTIPLICADOR")
+              )}
+            </Box>
+
+            <Box>
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                justifyContent="space-between"
+                alignItems={{ xs: "flex-start", sm: "center" }}
+                spacing={1}
+                sx={{ mb: 1 }}
+              >
+                <Typography variant="h6" fontWeight={800}>
+                  Impacto Simbolico
+                </Typography>
+                <Chip
+                  size="small"
+                  label={`${simbolicoHighlights.length} destaque${
+                    simbolicoHighlights.length === 1 ? "" : "s"
+                  }`}
+                  sx={{ bgcolor: "rgba(77,134,160,0.22)", color: "#114259" }}
+                />
+              </Stack>
+              {simbolicoHighlights.length === 0 ? (
+                <EmptyState
+                  title="Sem destaques simbolicos"
+                  description="Cadastre destaques para mostrar neste carrossel."
+                />
+              ) : (
+                renderHighlightCarousel(simbolicoHighlights, "SIMBOLICO")
+              )}
+            </Box>
+          </Stack>
+        </CardContent>
+      </Card>
 
       <Card
         sx={{
@@ -1253,6 +1954,67 @@ export function SocialCommunicationPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Dialog
+        open={Boolean(highlightReadingTarget)}
+        onClose={() => setHighlightReadingTarget(null)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Detalhes do Destaque</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={1}>
+            <Typography variant="h6" fontWeight={700}>
+              {highlightReadingTarget?.militaryName ?? "Militar"}
+            </Typography>
+            <Stack direction="row" spacing={0.8} flexWrap="wrap" useFlexGap>
+              {highlightReadingTarget?.locality?.code && (
+                <Chip
+                  size="small"
+                  icon={<BadgeRoundedIcon />}
+                  label={highlightReadingTarget.locality.code}
+                  variant="outlined"
+                />
+              )}
+              {highlightReadingTarget?.impact && (
+                <Chip
+                  size="small"
+                  icon={<MilitaryTechRoundedIcon />}
+                  label={
+                    highlightReadingTarget.impact === "MULTIPLICADOR"
+                      ? "Multiplicador"
+                      : "Simbolico"
+                  }
+                />
+              )}
+            </Stack>
+            <Typography
+              variant="body1"
+              sx={{ whiteSpace: "pre-wrap", lineHeight: 1.7 }}
+            >
+              {highlightReadingTarget?.text ?? ""}
+            </Typography>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setHighlightReadingTarget(null)}>Fechar</Button>
+        </DialogActions>
+      </Dialog>
+
+      <ConfirmDialog
+        open={Boolean(highlightDeleteTarget)}
+        onCancel={() => setHighlightDeleteTarget(null)}
+        onConfirm={() => {
+          void handleConfirmHighlightDelete();
+        }}
+        title="Excluir destaque"
+        message="Deseja remover este destaque de militar?"
+        highlightText={highlightDeleteTarget?.militaryName ?? ""}
+        note="A exclusão é permanente e será registrada em auditoria."
+        confirmLabel="Excluir destaque"
+        severity="error"
+        confirmLoading={deleteHighlight.isPending}
+      />
 
       <ConfirmDialog
         open={Boolean(deleteTarget)}
