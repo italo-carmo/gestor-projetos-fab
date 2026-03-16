@@ -3,19 +3,6 @@ import { api } from "./client";
 import { qk } from "./queryKeys";
 import { splitMilitaryNameAndOm, toMilitaryDisplayName } from "../app/militaryName";
 
-const configuredSigpesFotoApiBaseUrl = (
-  import.meta.env.VITE_SIGPES_FOTO_API_BASE_URL as string | undefined
-)?.trim();
-const sigpesFotoApiBaseUrl = (
-  configuredSigpesFotoApiBaseUrl ||
-  "http://api.servicos.ccarj.intraer/sigpesApi/fotoes"
-).replace(/\/+$/, "");
-const sigpesUseBackendFallback =
-  String(import.meta.env.VITE_SIGPES_USE_BACKEND_FALLBACK ?? "true")
-    .trim()
-    .toLowerCase() !== "false";
-const SIGPES_DIRECT_FETCH_TIMEOUT_MS = 4_000;
-
 function normalizeSigpesNumeroOrdem(value: unknown) {
   const raw = String(value ?? "").trim();
   if (!raw) return "";
@@ -34,89 +21,6 @@ function normalizeSigpesNumeroOrdem(value: unknown) {
 
   const onlyDigits = raw.replace(/\D/g, "");
   return onlyDigits || raw;
-}
-
-function normalizeSigpesBase64(value: unknown) {
-  return String(value ?? "").replace(/\s+/g, "");
-}
-
-function toSigpesPhotoPayload(payload: any, numeroOrdem: string) {
-  const mimeType = String(payload?.tpArq ?? "").trim() || "image/jpeg";
-  const fileName = String(payload?.txNomeArq ?? "").trim() || null;
-  const base64 = normalizeSigpesBase64(payload?.imFoto);
-
-  if (!base64) {
-    return {
-      numeroOrdem,
-      mimeType: null,
-      fileName,
-      base64: null,
-      dataUrl: null,
-    };
-  }
-
-  return {
-    numeroOrdem,
-    mimeType,
-    fileName,
-    base64,
-    dataUrl: `data:${mimeType};base64,${base64}`,
-  };
-}
-
-function parseSigpesPayloadFromText(rawText: string) {
-  const text = String(rawText ?? "").trim();
-  if (!text) return null;
-
-  try {
-    return JSON.parse(text);
-  } catch {
-    const tpArqMatch = text.match(/"tpArq"\s*:\s*"([^"]*)"/i);
-    const nomeMatch = text.match(/"txNomeArq"\s*:\s*"([^"]*)"/i);
-    const imFotoMatch = text.match(/"imFoto"\s*:\s*"([\s\S]*?)"\s*(?:,|\})/i);
-
-    if (!imFotoMatch) return null;
-
-    return {
-      tpArq: tpArqMatch?.[1] ?? "image/jpeg",
-      txNomeArq: nomeMatch?.[1] ?? null,
-      imFoto: imFotoMatch[1]
-        .replace(/\\\//g, "/")
-        .replace(/\\r/g, "")
-        .replace(/\\n/g, "")
-        .replace(/\s+/g, ""),
-    };
-  }
-}
-
-function buildSigpesPhotoEndpoints(numeroOrdem: string) {
-  const encodedNumeroOrdem = encodeURIComponent(numeroOrdem);
-  const directEndpoint = `${sigpesFotoApiBaseUrl}/${encodedNumeroOrdem}`;
-
-  if (typeof window === "undefined") {
-    return [directEndpoint];
-  }
-
-  // Avoid mixed-content: when app is HTTPS, do not call an HTTP endpoint directly.
-  if (
-    window.location.protocol === "https:" &&
-    directEndpoint.toLowerCase().startsWith("http://")
-  ) {
-    const upgradedEndpoint = directEndpoint.replace(/^http:\/\//i, "https://");
-    return [upgradedEndpoint];
-  }
-
-  return [directEndpoint];
-}
-
-async function fetchWithTimeout(input: string, timeoutMs: number) {
-  const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(input, { method: "GET", signal: controller.signal });
-  } finally {
-    window.clearTimeout(timeoutId);
-  }
 }
 
 export function useMe() {
@@ -140,43 +44,6 @@ export function useSigpesPhoto(numeroOrdem: string | null | undefined) {
   return useQuery({
     queryKey: qk.sigpesPhoto(normalizedNumeroOrdem),
     queryFn: async () => {
-      const directEndpoints = buildSigpesPhotoEndpoints(normalizedNumeroOrdem);
-
-      for (const endpoint of directEndpoints) {
-        try {
-          const response = await fetchWithTimeout(
-            endpoint,
-            SIGPES_DIRECT_FETCH_TIMEOUT_MS,
-          );
-          if (response.ok) {
-            const rawText = await response.text();
-            const payload = parseSigpesPayloadFromText(rawText);
-            if (!payload) {
-              return {
-                numeroOrdem: normalizedNumeroOrdem,
-                mimeType: null,
-                fileName: null,
-                base64: null,
-                dataUrl: null,
-              };
-            }
-            return toSigpesPhotoPayload(payload, normalizedNumeroOrdem);
-          }
-        } catch {
-          // fallback via backend proxy
-        }
-      }
-
-      if (!sigpesUseBackendFallback) {
-        return {
-          numeroOrdem: normalizedNumeroOrdem,
-          mimeType: null,
-          fileName: null,
-          base64: null,
-          dataUrl: null,
-        };
-      }
-
       try {
         return (
           await api.get(`/auth/fotoes/${encodeURIComponent(normalizedNumeroOrdem)}`)

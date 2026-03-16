@@ -365,7 +365,20 @@ export class AuthService {
       configured && configured.length > 0
         ? configured
         : 'http://api.servicos.ccarj.intraer/sigpesApi/fotoes';
-    return baseUrl.replace(/\/+$/, '');
+    const normalizedBaseUrl = baseUrl.replace(/\/+$/, '');
+    try {
+      const parsed = new URL(normalizedBaseUrl);
+      if (
+        parsed.hostname.toLowerCase() === 'api.servicos.ccarj.intraer' &&
+        parsed.protocol === 'https:'
+      ) {
+        parsed.protocol = 'http:';
+        return parsed.toString().replace(/\/+$/, '');
+      }
+    } catch {
+      // keep configured value when URL parsing fails
+    }
+    return normalizedBaseUrl;
   }
 
   private normalizeBase64(value: string) {
