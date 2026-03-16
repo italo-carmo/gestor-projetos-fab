@@ -793,10 +793,52 @@ export function SocialCommunicationPage() {
         : highlightSimbolicoCarouselRef;
     const impactLabel =
       impact === "MULTIPLICADOR" ? "Impacto Multiplicador" : "Impacto Simbolico";
-    const buttonBg =
+    const theme =
       impact === "MULTIPLICADOR"
-        ? "rgba(17,66,89,0.15)"
-        : "rgba(77,134,160,0.2)";
+        ? {
+            buttonBg: "rgba(70, 153, 255, 0.18)",
+            buttonHoverBg: "rgba(70, 153, 255, 0.32)",
+            trackBg: "rgba(70, 153, 255, 0.15)",
+            thumbBg: "rgba(70, 153, 255, 0.35)",
+            cardBorder: "rgba(70, 153, 255, 0.3)",
+            cardGradient:
+              "linear-gradient(155deg, rgba(242,250,255,0.98) 0%, rgba(226,242,255,0.96) 52%, rgba(209,234,255,0.94) 100%)",
+            glowOne: "rgba(124, 187, 255, 0.3)",
+            glowTwo: "rgba(173, 216, 255, 0.25)",
+            avatarBg: "#DDF0FF",
+            avatarBorder: "rgba(70, 153, 255, 0.5)",
+            avatarColor: "#0F4E86",
+            titleColor: "#173E62",
+            textColor: "#3F5E7C",
+            chipBorder: "rgba(70, 153, 255, 0.45)",
+            chipColor: "#1D5588",
+            impactChipBg: "rgba(70, 153, 255, 0.2)",
+            impactChipColor: "#0F4E86",
+            actionButtonBg: "rgba(255,255,255,0.9)",
+            hoverShadow: "0 14px 28px rgba(34, 111, 186, 0.2)",
+          }
+        : {
+            buttonBg: "rgba(73, 186, 126, 0.18)",
+            buttonHoverBg: "rgba(73, 186, 126, 0.32)",
+            trackBg: "rgba(73, 186, 126, 0.15)",
+            thumbBg: "rgba(73, 186, 126, 0.35)",
+            cardBorder: "rgba(73, 186, 126, 0.3)",
+            cardGradient:
+              "linear-gradient(155deg, rgba(245,255,249,0.98) 0%, rgba(229,250,238,0.96) 52%, rgba(210,243,224,0.94) 100%)",
+            glowOne: "rgba(116, 214, 160, 0.28)",
+            glowTwo: "rgba(169, 239, 199, 0.24)",
+            avatarBg: "#DBF6E7",
+            avatarBorder: "rgba(73, 186, 126, 0.52)",
+            avatarColor: "#16593C",
+            titleColor: "#1B5A40",
+            textColor: "#3E6A58",
+            chipBorder: "rgba(73, 186, 126, 0.45)",
+            chipColor: "#216245",
+            impactChipBg: "rgba(73, 186, 126, 0.22)",
+            impactChipColor: "#16593C",
+            actionButtonBg: "rgba(255,255,255,0.9)",
+            hoverShadow: "0 14px 28px rgba(42, 136, 92, 0.2)",
+          };
 
     return (
       <Stack spacing={1.1}>
@@ -804,7 +846,7 @@ export function SocialCommunicationPage() {
           <IconButton
             size="small"
             onClick={() => scrollCarouselByCard(carouselRef, -1)}
-            sx={{ bgcolor: buttonBg, "&:hover": { bgcolor: "rgba(17,66,89,0.25)" } }}
+            sx={{ bgcolor: theme.buttonBg, "&:hover": { bgcolor: theme.buttonHoverBg } }}
             aria-label={`Voltar carrossel de ${impactLabel}`}
           >
             <ArrowBackIosNewRoundedIcon fontSize="small" />
@@ -812,7 +854,7 @@ export function SocialCommunicationPage() {
           <IconButton
             size="small"
             onClick={() => scrollCarouselByCard(carouselRef, 1)}
-            sx={{ bgcolor: buttonBg, "&:hover": { bgcolor: "rgba(17,66,89,0.25)" } }}
+            sx={{ bgcolor: theme.buttonBg, "&:hover": { bgcolor: theme.buttonHoverBg } }}
             aria-label={`Avançar carrossel de ${impactLabel}`}
           >
             <ArrowForwardIosRoundedIcon fontSize="small" />
@@ -832,11 +874,11 @@ export function SocialCommunicationPage() {
               height: 8,
             },
             "&::-webkit-scrollbar-track": {
-              backgroundColor: "rgba(17,66,89,0.08)",
+              backgroundColor: theme.trackBg,
               borderRadius: 999,
             },
             "&::-webkit-scrollbar-thumb": {
-              backgroundColor: "rgba(17,66,89,0.24)",
+              backgroundColor: theme.thumbBg,
               borderRadius: 999,
             },
           }}
@@ -866,13 +908,36 @@ export function SocialCommunicationPage() {
                   },
                   scrollSnapAlign: "start",
                   borderRadius: 3,
-                  border: "1px solid rgba(17, 66, 89, 0.14)",
+                  border: `1px solid ${theme.cardBorder}`,
+                  background: theme.cardGradient,
                   position: "relative",
                   overflow: "hidden",
                   transition: "transform 160ms ease, box-shadow 160ms ease",
+                  "&::before": {
+                    content: '""',
+                    position: "absolute",
+                    width: 118,
+                    height: 118,
+                    borderRadius: "50%",
+                    right: -34,
+                    top: -36,
+                    background: theme.glowOne,
+                    pointerEvents: "none",
+                  },
+                  "&::after": {
+                    content: '""',
+                    position: "absolute",
+                    width: 92,
+                    height: 92,
+                    borderRadius: "50%",
+                    left: -28,
+                    bottom: -34,
+                    background: theme.glowTwo,
+                    pointerEvents: "none",
+                  },
                   "&:hover": {
                     transform: "translateY(-2px)",
-                    boxShadow: "0 10px 24px rgba(17, 66, 89, 0.16)",
+                    boxShadow: theme.hoverShadow,
                   },
                 }}
               >
@@ -896,9 +961,9 @@ export function SocialCommunicationPage() {
                         width: 74,
                         height: 74,
                         borderRadius: "50%",
-                        bgcolor: "#CDECF7",
-                        border: "2px solid rgba(77,134,160,0.34)",
-                        color: "#114259",
+                        bgcolor: theme.avatarBg,
+                        border: `2px solid ${theme.avatarBorder}`,
+                        color: theme.avatarColor,
                         display: "grid",
                         placeItems: "center",
                         overflow: "hidden",
@@ -929,6 +994,7 @@ export function SocialCommunicationPage() {
                       sx={{
                         textAlign: "center",
                         minHeight: 50,
+                        color: theme.titleColor,
                         display: "-webkit-box",
                         WebkitLineClamp: 2,
                         WebkitBoxOrient: "vertical",
@@ -950,6 +1016,11 @@ export function SocialCommunicationPage() {
                         icon={<BadgeRoundedIcon />}
                         label={item.locality?.code || item.locality?.name || "OM"}
                         variant="outlined"
+                        sx={{
+                          bgcolor: "rgba(255,255,255,0.74)",
+                          borderColor: theme.chipBorder,
+                          color: theme.chipColor,
+                        }}
                       />
                       <Chip
                         size="small"
@@ -958,19 +1029,17 @@ export function SocialCommunicationPage() {
                           impact === "MULTIPLICADOR" ? "Multiplicador" : "Simbolico"
                         }
                         sx={{
-                          bgcolor:
-                            impact === "MULTIPLICADOR"
-                              ? "rgba(17,66,89,0.12)"
-                              : "rgba(77,134,160,0.2)",
+                          bgcolor: theme.impactChipBg,
+                          color: theme.impactChipColor,
                         }}
                       />
                     </Stack>
                   </Box>
                   <Typography
                     variant="body2"
-                    color="text.secondary"
                     sx={{
                       mt: "auto",
+                      color: theme.textColor,
                       display: "-webkit-box",
                       WebkitLineClamp: 3,
                       WebkitBoxOrient: "vertical",
@@ -990,7 +1059,7 @@ export function SocialCommunicationPage() {
                   >
                     <IconButton
                       size="small"
-                      sx={{ bgcolor: "rgba(255,255,255,0.92)" }}
+                      sx={{ bgcolor: theme.actionButtonBg }}
                       onClick={(event) => {
                         event.stopPropagation();
                         openEditHighlight(item);
@@ -1001,7 +1070,7 @@ export function SocialCommunicationPage() {
                     <IconButton
                       size="small"
                       color="error"
-                      sx={{ bgcolor: "rgba(255,255,255,0.92)" }}
+                      sx={{ bgcolor: theme.actionButtonBg }}
                       onClick={(event) => {
                         event.stopPropagation();
                         setHighlightDeleteTarget(item);
@@ -1549,7 +1618,7 @@ export function SocialCommunicationPage() {
                   label={`${multiplicadorHighlights.length} destaque${
                     multiplicadorHighlights.length === 1 ? "" : "s"
                   }`}
-                  sx={{ bgcolor: "rgba(17,66,89,0.14)", color: "#114259" }}
+                  sx={{ bgcolor: "rgba(70, 153, 255, 0.18)", color: "#0F4E86" }}
                 />
               </Stack>
               {multiplicadorHighlights.length === 0 ? (
@@ -1578,7 +1647,7 @@ export function SocialCommunicationPage() {
                   label={`${simbolicoHighlights.length} destaque${
                     simbolicoHighlights.length === 1 ? "" : "s"
                   }`}
-                  sx={{ bgcolor: "rgba(77,134,160,0.22)", color: "#114259" }}
+                  sx={{ bgcolor: "rgba(73, 186, 126, 0.2)", color: "#16593C" }}
                 />
               </Stack>
               {simbolicoHighlights.length === 0 ? (
