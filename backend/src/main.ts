@@ -1,11 +1,14 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { ExpressAdapter } from '@nestjs/platform-express';
+import express from 'express';
 import { AppModule } from './app.module';
 import { createRequestLogger } from './common/request-logger';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, new ExpressAdapter());
+  app.use(express.json({ limit: '10mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
   app.use(createRequestLogger());
   app.useGlobalPipes(
     new ValidationPipe({
