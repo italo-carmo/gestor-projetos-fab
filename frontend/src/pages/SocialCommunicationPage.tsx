@@ -1379,7 +1379,7 @@ export function SocialCommunicationPage() {
           mb: 2.5,
           borderRadius: 3.4,
           border: "1px solid rgba(135, 149, 162, 0.52)",
-          backgroundColor: "rgb(214, 220, 227)",
+          backgroundColor: "rgb(202, 210, 219)",
           boxShadow: "0 12px 24px rgba(17,66,89,0.16)",
         }}
       >
