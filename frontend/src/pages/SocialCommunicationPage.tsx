@@ -151,7 +151,7 @@ function normalizeTags(values: string[]) {
 const QUICK_TAGS = ["smif", "cipavd", "cpca"] as const;
 const HIGHLIGHT_IMPACT_OPTIONS = [
   { value: "MULTIPLICADOR" as const, label: "Multiplicador" },
-  { value: "SIMBOLICO" as const, label: "Simbolico" },
+  { value: "SIMBOLICO" as const, label: "Simbólico" },
 ];
 
 function normalizeEmail(value: string) {
@@ -817,7 +817,7 @@ export function SocialCommunicationPage() {
         ? highlightMultiplicadorCarouselRef
         : highlightSimbolicoCarouselRef;
     const impactLabel =
-      impact === "MULTIPLICADOR" ? "Impacto Multiplicador" : "Impacto Simbolico";
+      impact === "MULTIPLICADOR" ? "Impacto Multiplicador" : "Impacto Simbólico";
     const theme =
       impact === "MULTIPLICADOR"
         ? {
@@ -866,7 +866,7 @@ export function SocialCommunicationPage() {
           };
 
     return (
-      <Stack spacing={1.1}>
+      <Stack spacing={0.75}>
         <Stack direction="row" justifyContent="flex-end" spacing={0.7}>
           <IconButton
             size="small"
@@ -1029,7 +1029,7 @@ export function SocialCommunicationPage() {
                         size="small"
                         icon={<MilitaryTechRoundedIcon />}
                         label={
-                          impact === "MULTIPLICADOR" ? "Multiplicador" : "Simbolico"
+                          impact === "MULTIPLICADOR" ? "Multiplicador" : "Simbólico"
                         }
                         sx={{
                           bgcolor: theme.impactChipBg,
@@ -1393,11 +1393,11 @@ export function SocialCommunicationPage() {
             sx={{ mb: 1.8 }}
           >
             <Box>
-              <Typography variant="h5" fontWeight={800}>
+              <Typography variant="h6" fontWeight={800}>
                 Militares Destaques
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Destaques institucionais com impacto Multiplicador e Simbolico.
+                Destaques institucionais com impacto Multiplicador e Simbólico.
               </Typography>
             </Box>
             <Stack direction="row" spacing={0.8} alignItems="center">
@@ -1640,7 +1640,7 @@ export function SocialCommunicationPage() {
                 justifyContent="space-between"
                 alignItems={{ xs: "flex-start", sm: "center" }}
                 spacing={1}
-                sx={{ mb: 0.45 }}
+                sx={{ mb: 0.2 }}
               >
                 <Typography variant="subtitle1" fontWeight={700}>
                   Impacto Multiplicador
@@ -1669,10 +1669,10 @@ export function SocialCommunicationPage() {
                 justifyContent="space-between"
                 alignItems={{ xs: "flex-start", sm: "center" }}
                 spacing={1}
-                sx={{ mb: 0.45 }}
+                sx={{ mb: 0.2 }}
               >
                 <Typography variant="subtitle1" fontWeight={700}>
-                  Impacto Simbolico
+                  Impacto Simbólico
                 </Typography>
                 <Chip
                   size="small"
@@ -1684,7 +1684,7 @@ export function SocialCommunicationPage() {
               </Stack>
               {simbolicoHighlights.length === 0 ? (
                 <EmptyState
-                  title="Sem destaques simbolicos"
+                  title="Sem destaques simbólicos"
                   description="Cadastre destaques para mostrar neste carrossel."
                 />
               ) : (
@@ -1766,7 +1766,7 @@ export function SocialCommunicationPage() {
                     bgcolor: "#1B5E85",
                   }}
                 />
-                <Typography variant="h5" fontWeight={700}>
+                <Typography variant="h6" fontWeight={700}>
                   Público Interno
                 </Typography>
               </Stack>
@@ -1909,7 +1909,7 @@ export function SocialCommunicationPage() {
                     bgcolor: "#277DA1",
                   }}
                 />
-                <Typography variant="h5" fontWeight={700}>
+                <Typography variant="h6" fontWeight={700}>
                   Público Externo
                 </Typography>
               </Stack>
@@ -2258,7 +2258,7 @@ export function SocialCommunicationPage() {
                   label={
                     highlightReadingTarget.impact === "MULTIPLICADOR"
                       ? "Multiplicador"
-                      : "Simbolico"
+                      : "Simbólico"
                   }
                 />
               )}
