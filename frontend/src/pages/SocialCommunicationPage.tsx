@@ -1376,8 +1376,8 @@ export function SocialCommunicationPage() {
         sx={{
           mb: 2.5,
           borderRadius: 3.4,
-          border: "1px solid rgba(135, 149, 162, 0.52)",
-          backgroundColor: "rgb(217, 223, 230)",
+          border: "1px solid rgb(58, 122, 154)",
+          backgroundColor: "#FFFFFF",
           backgroundImage: "none",
           boxShadow: "0 12px 24px rgba(17,66,89,0.16)",
         }}
