@@ -935,7 +935,6 @@ export function SocialCommunicationPage() {
                   borderRadius: 3,
                   border: `1px solid ${theme.cardBorder}`,
                   background: theme.cardBackground,
-                  borderTop: `4px solid ${theme.accent}`,
                   position: "relative",
                   overflow: "hidden",
                   transition: "transform 160ms ease, box-shadow 160ms ease",
@@ -1631,14 +1630,17 @@ export function SocialCommunicationPage() {
             </Card>
           )}
 
-          <Stack spacing={2.2}>
+          <Stack
+            spacing={2.9}
+            sx={{ mt: highlightEditorOpen ? 0.5 : 1.6 }}
+          >
             <Box>
               <Stack
                 direction={{ xs: "column", sm: "row" }}
                 justifyContent="space-between"
                 alignItems={{ xs: "flex-start", sm: "center" }}
                 spacing={1}
-                sx={{ mb: 1 }}
+                sx={{ mb: 0.45 }}
               >
                 <Typography variant="subtitle1" fontWeight={700}>
                   Impacto Multiplicador
@@ -1667,7 +1669,7 @@ export function SocialCommunicationPage() {
                 justifyContent="space-between"
                 alignItems={{ xs: "flex-start", sm: "center" }}
                 spacing={1}
-                sx={{ mb: 1 }}
+                sx={{ mb: 0.45 }}
               >
                 <Typography variant="subtitle1" fontWeight={700}>
                   Impacto Simbolico
