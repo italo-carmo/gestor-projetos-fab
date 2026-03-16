@@ -27,6 +27,11 @@ export class UpdateSocialCommunicationHighlightDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(140)
+  highlightRole?: string;
+
+  @IsOptional()
+  @IsString()
   @MaxLength(60)
   fabom?: string;
 

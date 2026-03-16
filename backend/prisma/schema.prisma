@@ -809,6 +809,7 @@ model SocialCommunicationHighlight {
   ldapUid       String?
   militaryEmail String
   militaryName  String
+  highlightRole String?
   fabom         String?
   photoMimeType String?
   photoBase64   String?                            @db.Text

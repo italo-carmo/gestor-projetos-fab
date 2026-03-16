@@ -75,6 +75,7 @@ export class SocialCommunicationService {
     if (normalizedQuery) {
       where.OR = [
         { militaryName: { contains: normalizedQuery, mode: 'insensitive' } },
+        { highlightRole: { contains: normalizedQuery, mode: 'insensitive' } },
         { militaryEmail: { contains: normalizedQuery, mode: 'insensitive' } },
         { fabom: { contains: normalizedQuery, mode: 'insensitive' } },
         { highlightText: { contains: normalizedQuery, mode: 'insensitive' } },
@@ -123,6 +124,7 @@ export class SocialCommunicationService {
       ldapUid?: string | null;
       militaryEmail: string;
       militaryName: string;
+      highlightRole?: string | null;
       fabom?: string | null;
       photoMimeType?: string | null;
       photoBase64?: string | null;
@@ -157,6 +159,8 @@ export class SocialCommunicationService {
           payload.militaryName,
           'militaryName',
         ),
+        highlightRole:
+          this.normalizeOptionalText(payload.highlightRole) ?? null,
         fabom: this.normalizeOptionalText(payload.fabom) ?? null,
         photoMimeType: normalizedPhotoMimeType,
         photoBase64: normalizedPhotoBase64,
@@ -192,6 +196,7 @@ export class SocialCommunicationService {
       ldapUid?: string | null;
       militaryEmail?: string;
       militaryName?: string;
+      highlightRole?: string | null;
       fabom?: string | null;
       photoMimeType?: string | null;
       photoBase64?: string | null;
@@ -228,6 +233,9 @@ export class SocialCommunicationService {
     }
     if (payload.fabom !== undefined) {
       data.fabom = this.normalizeOptionalText(payload.fabom) ?? null;
+    }
+    if (payload.highlightRole !== undefined) {
+      data.highlightRole = this.normalizeOptionalText(payload.highlightRole) ?? null;
     }
     if (payload.photoBase64 !== undefined) {
       const normalizedPhotoBase64 = this.normalizeHighlightPhotoBase64(
@@ -1147,6 +1155,7 @@ export class SocialCommunicationService {
     ldapUid: string | null;
     militaryEmail: string;
     militaryName: string;
+    highlightRole: string | null;
     fabom: string | null;
     photoMimeType: string | null;
     photoBase64: string | null;
@@ -1162,6 +1171,7 @@ export class SocialCommunicationService {
       ldapUid: item.ldapUid,
       militaryEmail: item.militaryEmail,
       militaryName: item.militaryName,
+      highlightRole: item.highlightRole,
       fabom: item.fabom,
       photoMimeType: item.photoMimeType,
       photoBase64: item.photoBase64,

@@ -1667,6 +1667,7 @@ export function useCreateSocialCommunicationHighlight() {
       ldapUid?: string | null;
       militaryEmail: string;
       militaryName: string;
+      highlightRole?: string | null;
       fabom?: string | null;
       photoMimeType?: string | null;
       photoBase64?: string | null;
@@ -1688,6 +1689,7 @@ export function useUpdateSocialCommunicationHighlight() {
         ldapUid?: string | null;
         militaryEmail?: string;
         militaryName?: string;
+        highlightRole?: string | null;
         fabom?: string | null;
         photoMimeType?: string | null;
         photoBase64?: string | null;

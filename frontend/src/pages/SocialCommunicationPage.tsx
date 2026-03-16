@@ -83,6 +83,7 @@ type SocialCommunicationHighlight = {
   ldapUid?: string | null;
   militaryEmail: string;
   militaryName: string;
+  highlightRole?: string | null;
   fabom?: string | null;
   photoMimeType?: string | null;
   photoBase64?: string | null;
@@ -363,6 +364,7 @@ export function SocialCommunicationPage() {
     ldapEmail: "",
     ldapUid: "",
     militaryName: "",
+    highlightRole: "",
     fabom: "",
     numeroOrdem: "",
     photoMimeType: "",
@@ -449,6 +451,7 @@ export function SocialCommunicationPage() {
       ldapEmail: "",
       ldapUid: "",
       militaryName: "",
+      highlightRole: "",
       fabom: "",
       numeroOrdem: "",
       photoMimeType: "",
@@ -466,6 +469,7 @@ export function SocialCommunicationPage() {
       ldapEmail: normalizeEmail(item.militaryEmail),
       ldapUid: String(item.ldapUid ?? "").trim(),
       militaryName: String(item.militaryName ?? "").trim(),
+      highlightRole: String(item.highlightRole ?? "").trim(),
       fabom: String(item.fabom ?? "").trim(),
       numeroOrdem: "",
       photoMimeType: String(item.photoMimeType ?? "").trim(),
@@ -549,6 +553,7 @@ export function SocialCommunicationPage() {
       ldapUid: highlightForm.ldapUid.trim() || null,
       militaryEmail: normalizeEmail(highlightForm.ldapEmail),
       militaryName: highlightForm.militaryName.trim(),
+      highlightRole: highlightForm.highlightRole.trim() || null,
       fabom: highlightForm.fabom.trim() || null,
       photoMimeType: normalizedPhotoBase64
         ? highlightForm.photoMimeType.trim() || "image/jpeg"
@@ -823,8 +828,6 @@ export function SocialCommunicationPage() {
             cardBorder: "rgba(70, 153, 255, 0.3)",
             cardGradient:
               "linear-gradient(155deg, rgba(242,250,255,0.98) 0%, rgba(226,242,255,0.96) 52%, rgba(209,234,255,0.94) 100%)",
-            glowOne: "rgba(124, 187, 255, 0.3)",
-            glowTwo: "rgba(173, 216, 255, 0.25)",
             avatarBg: "#DDF0FF",
             avatarBorder: "rgba(70, 153, 255, 0.5)",
             avatarColor: "#0F4E86",
@@ -845,8 +848,6 @@ export function SocialCommunicationPage() {
             cardBorder: "rgba(73, 186, 126, 0.3)",
             cardGradient:
               "linear-gradient(155deg, rgba(245,255,249,0.98) 0%, rgba(229,250,238,0.96) 52%, rgba(210,243,224,0.94) 100%)",
-            glowOne: "rgba(116, 214, 160, 0.28)",
-            glowTwo: "rgba(169, 239, 199, 0.24)",
             avatarBg: "#DBF6E7",
             avatarBorder: "rgba(73, 186, 126, 0.52)",
             avatarColor: "#16593C",
@@ -933,28 +934,6 @@ export function SocialCommunicationPage() {
                   position: "relative",
                   overflow: "hidden",
                   transition: "transform 160ms ease, box-shadow 160ms ease",
-                  "&::before": {
-                    content: '""',
-                    position: "absolute",
-                    width: 118,
-                    height: 118,
-                    borderRadius: "50%",
-                    right: -34,
-                    top: -36,
-                    background: theme.glowOne,
-                    pointerEvents: "none",
-                  },
-                  "&::after": {
-                    content: '""',
-                    position: "absolute",
-                    width: 92,
-                    height: 92,
-                    borderRadius: "50%",
-                    left: -28,
-                    bottom: -34,
-                    background: theme.glowTwo,
-                    pointerEvents: "none",
-                  },
                   "&:hover": {
                     transform: "translateY(-2px)",
                     boxShadow: theme.hoverShadow,
@@ -1053,6 +1032,21 @@ export function SocialCommunicationPage() {
                           color: theme.impactChipColor,
                         }}
                       />
+                      {item.highlightRole && (
+                        <Chip
+                          size="small"
+                          icon={<PersonRoundedIcon />}
+                          label={item.highlightRole}
+                          sx={{
+                            bgcolor: "rgba(255,255,255,0.78)",
+                            borderColor: theme.chipBorder,
+                            color: theme.chipColor,
+                            borderWidth: 1,
+                            borderStyle: "solid",
+                            maxWidth: "100%",
+                          }}
+                        />
+                      )}
                     </Stack>
                   </Box>
                   <Typography
@@ -1522,6 +1516,18 @@ export function SocialCommunicationPage() {
                         setHighlightForm((prev) => ({
                           ...prev,
                           militaryName: event.target.value,
+                        }))
+                      }
+                    />
+                    <TextField
+                      size="small"
+                      label="Funcao no destaque"
+                      fullWidth
+                      value={highlightForm.highlightRole}
+                      onChange={(event) =>
+                        setHighlightForm((prev) => ({
+                          ...prev,
+                          highlightRole: event.target.value,
                         }))
                       }
                     />
@@ -2228,6 +2234,14 @@ export function SocialCommunicationPage() {
                   size="small"
                   icon={<BadgeRoundedIcon />}
                   label={highlightReadingTarget.locality.code}
+                  variant="outlined"
+                />
+              )}
+              {highlightReadingTarget?.highlightRole && (
+                <Chip
+                  size="small"
+                  icon={<PersonRoundedIcon />}
+                  label={highlightReadingTarget.highlightRole}
                   variant="outlined"
                 />
               )}
