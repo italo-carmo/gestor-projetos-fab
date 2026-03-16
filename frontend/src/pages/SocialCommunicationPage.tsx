@@ -821,44 +821,44 @@ export function SocialCommunicationPage() {
     const theme =
       impact === "MULTIPLICADOR"
         ? {
-            buttonBg: "rgba(70, 153, 255, 0.18)",
-            buttonHoverBg: "rgba(70, 153, 255, 0.32)",
-            trackBg: "rgba(70, 153, 255, 0.15)",
-            thumbBg: "rgba(70, 153, 255, 0.35)",
-            cardBorder: "rgba(70, 153, 255, 0.3)",
-            cardGradient:
-              "linear-gradient(155deg, rgba(242,250,255,0.98) 0%, rgba(226,242,255,0.96) 52%, rgba(209,234,255,0.94) 100%)",
-            avatarBg: "#DDF0FF",
-            avatarBorder: "rgba(70, 153, 255, 0.5)",
-            avatarColor: "#0F4E86",
-            titleColor: "#173E62",
-            textColor: "#3F5E7C",
-            chipBorder: "rgba(70, 153, 255, 0.45)",
-            chipColor: "#1D5588",
-            impactChipBg: "rgba(70, 153, 255, 0.2)",
-            impactChipColor: "#0F4E86",
-            actionButtonBg: "rgba(255,255,255,0.9)",
-            hoverShadow: "0 14px 28px rgba(34, 111, 186, 0.2)",
+            accent: "#2B78B8",
+            accentSoft: "rgba(43, 120, 184, 0.14)",
+            buttonBg: "rgba(43, 120, 184, 0.14)",
+            buttonHoverBg: "rgba(43, 120, 184, 0.22)",
+            trackBg: "rgba(43, 120, 184, 0.12)",
+            thumbBg: "rgba(43, 120, 184, 0.28)",
+            cardBorder: "rgba(17, 66, 89, 0.16)",
+            avatarBg: "#E8F4FC",
+            avatarBorder: "rgba(43, 120, 184, 0.44)",
+            avatarColor: "#0E4F7D",
+            titleColor: "#1D4562",
+            textColor: "#4E6678",
+            chipBorder: "rgba(43, 120, 184, 0.34)",
+            chipColor: "#245A84",
+            impactChipBg: "rgba(43, 120, 184, 0.16)",
+            impactChipColor: "#0E4F7D",
+            actionButtonBg: "rgba(255,255,255,0.92)",
+            hoverShadow: "0 14px 24px rgba(17, 66, 89, 0.16)",
           }
         : {
-            buttonBg: "rgba(73, 186, 126, 0.18)",
-            buttonHoverBg: "rgba(73, 186, 126, 0.32)",
-            trackBg: "rgba(73, 186, 126, 0.15)",
-            thumbBg: "rgba(73, 186, 126, 0.35)",
-            cardBorder: "rgba(73, 186, 126, 0.3)",
-            cardGradient:
-              "linear-gradient(155deg, rgba(245,255,249,0.98) 0%, rgba(229,250,238,0.96) 52%, rgba(210,243,224,0.94) 100%)",
-            avatarBg: "#DBF6E7",
-            avatarBorder: "rgba(73, 186, 126, 0.52)",
-            avatarColor: "#16593C",
-            titleColor: "#1B5A40",
-            textColor: "#3E6A58",
-            chipBorder: "rgba(73, 186, 126, 0.45)",
-            chipColor: "#216245",
-            impactChipBg: "rgba(73, 186, 126, 0.22)",
-            impactChipColor: "#16593C",
-            actionButtonBg: "rgba(255,255,255,0.9)",
-            hoverShadow: "0 14px 28px rgba(42, 136, 92, 0.2)",
+            accent: "#2E8B57",
+            accentSoft: "rgba(46, 139, 87, 0.14)",
+            buttonBg: "rgba(46, 139, 87, 0.14)",
+            buttonHoverBg: "rgba(46, 139, 87, 0.24)",
+            trackBg: "rgba(46, 139, 87, 0.12)",
+            thumbBg: "rgba(46, 139, 87, 0.28)",
+            cardBorder: "rgba(17, 66, 89, 0.16)",
+            avatarBg: "#EAF8F1",
+            avatarBorder: "rgba(46, 139, 87, 0.44)",
+            avatarColor: "#206346",
+            titleColor: "#245C43",
+            textColor: "#4A6A5B",
+            chipBorder: "rgba(46, 139, 87, 0.34)",
+            chipColor: "#2A654B",
+            impactChipBg: "rgba(46, 139, 87, 0.16)",
+            impactChipColor: "#206346",
+            actionButtonBg: "rgba(255,255,255,0.92)",
+            hoverShadow: "0 14px 24px rgba(17, 66, 89, 0.16)",
           };
 
     return (
@@ -930,7 +930,8 @@ export function SocialCommunicationPage() {
                   scrollSnapAlign: "start",
                   borderRadius: 3,
                   border: `1px solid ${theme.cardBorder}`,
-                  background: theme.cardGradient,
+                  backgroundColor: "#FFFFFF",
+                  borderTop: `4px solid ${theme.accent}`,
                   position: "relative",
                   overflow: "hidden",
                   transition: "transform 160ms ease, box-shadow 160ms ease",
@@ -1016,7 +1017,7 @@ export function SocialCommunicationPage() {
                         label={item.locality?.code || item.locality?.name || "OM"}
                         variant="outlined"
                         sx={{
-                          bgcolor: "rgba(255,255,255,0.74)",
+                          bgcolor: theme.accentSoft,
                           borderColor: theme.chipBorder,
                           color: theme.chipColor,
                         }}
@@ -1038,7 +1039,7 @@ export function SocialCommunicationPage() {
                           icon={<PersonRoundedIcon />}
                           label={item.highlightRole}
                           sx={{
-                            bgcolor: "rgba(255,255,255,0.78)",
+                            bgcolor: "rgba(255,255,255,0.98)",
                             borderColor: theme.chipBorder,
                             color: theme.chipColor,
                             borderWidth: 1,
@@ -1374,10 +1375,9 @@ export function SocialCommunicationPage() {
         sx={{
           mb: 2.5,
           borderRadius: 3.4,
-          border: "1px solid rgba(17,66,89,0.18)",
-          background:
-            "linear-gradient(145deg, rgba(17,66,89,0.1) 0%, rgba(245,250,253,0.92) 40%, rgba(77,134,160,0.1) 100%)",
-          boxShadow: "0 14px 30px rgba(17,66,89,0.14)",
+          border: "1px solid rgba(17,66,89,0.14)",
+          backgroundColor: "#FFFFFF",
+          boxShadow: "0 10px 24px rgba(17,66,89,0.1)",
         }}
       >
         <CardContent sx={{ py: 2.2 }}>
@@ -1427,8 +1427,7 @@ export function SocialCommunicationPage() {
                 mb: 2,
                 borderRadius: 2.4,
                 border: "1px solid rgba(17,66,89,0.15)",
-                background:
-                  "linear-gradient(135deg, rgba(255,255,255,0.96), rgba(226,244,252,0.72))",
+                backgroundColor: "rgba(246, 251, 253, 0.94)",
               }}
             >
               <CardContent sx={{ py: 1.7 }}>
@@ -1636,7 +1635,7 @@ export function SocialCommunicationPage() {
                 spacing={1}
                 sx={{ mb: 1 }}
               >
-                <Typography variant="h6" fontWeight={800}>
+                <Typography variant="subtitle1" fontWeight={700}>
                   Impacto Multiplicador
                 </Typography>
                 <Chip
@@ -1644,7 +1643,7 @@ export function SocialCommunicationPage() {
                   label={`${multiplicadorHighlights.length} destaque${
                     multiplicadorHighlights.length === 1 ? "" : "s"
                   }`}
-                  sx={{ bgcolor: "rgba(70, 153, 255, 0.18)", color: "#0F4E86" }}
+                  sx={{ bgcolor: "rgba(43, 120, 184, 0.16)", color: "#0E4F7D" }}
                 />
               </Stack>
               {multiplicadorHighlights.length === 0 ? (
@@ -1665,7 +1664,7 @@ export function SocialCommunicationPage() {
                 spacing={1}
                 sx={{ mb: 1 }}
               >
-                <Typography variant="h6" fontWeight={800}>
+                <Typography variant="subtitle1" fontWeight={700}>
                   Impacto Simbolico
                 </Typography>
                 <Chip
@@ -1673,7 +1672,7 @@ export function SocialCommunicationPage() {
                   label={`${simbolicoHighlights.length} destaque${
                     simbolicoHighlights.length === 1 ? "" : "s"
                   }`}
-                  sx={{ bgcolor: "rgba(73, 186, 126, 0.2)", color: "#16593C" }}
+                  sx={{ bgcolor: "rgba(46, 139, 87, 0.16)", color: "#206346" }}
                 />
               </Stack>
               {simbolicoHighlights.length === 0 ? (
