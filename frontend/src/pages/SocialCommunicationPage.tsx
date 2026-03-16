@@ -1378,8 +1378,8 @@ export function SocialCommunicationPage() {
         sx={{
           mb: 2.5,
           borderRadius: 3.4,
-          border: "1px solid rgba(134, 175, 150, 0.42)",
-          backgroundColor: "rgb(196, 226, 206)",
+          border: "1px solid rgba(111, 162, 135, 0.46)",
+          backgroundColor: "rgb(169, 210, 186)",
           boxShadow: "0 12px 24px rgba(17,66,89,0.16)",
         }}
       >
@@ -1893,8 +1893,8 @@ export function SocialCommunicationPage() {
             sx={{
               p: { xs: 1.8, md: 2.4 },
               borderRadius: 3.2,
-              border: "1px solid rgba(212, 239, 225, 0.48)",
-              backgroundColor: "rgb(127, 172, 151)",
+              border: "1px solid rgba(214, 237, 248, 0.46)",
+              backgroundColor: "rgb(92, 145, 171)",
               boxShadow: "0 14px 28px rgba(17,66,89,0.14)",
             }}
           >
@@ -1911,7 +1911,7 @@ export function SocialCommunicationPage() {
                     width: 10,
                     height: 10,
                     borderRadius: "50%",
-                    bgcolor: "#E4F8EC",
+                    bgcolor: "#DDF2FF",
                   }}
                 />
                 <Typography variant="h6" fontWeight={700} sx={{ color: "#F6FBFF" }}>
@@ -1922,10 +1922,10 @@ export function SocialCommunicationPage() {
                 size="small"
                 label={`${externalItems.length} matéria${externalItems.length === 1 ? "" : "s"}`}
                 sx={{
-                  bgcolor: "rgba(234, 250, 241, 0.24)",
+                  bgcolor: "rgba(235, 247, 255, 0.24)",
                   color: "#F6FBFF",
                   fontWeight: 700,
-                  border: "1px solid rgba(234, 250, 241, 0.44)",
+                  border: "1px solid rgba(235, 247, 255, 0.44)",
                 }}
               />
             </Stack>
