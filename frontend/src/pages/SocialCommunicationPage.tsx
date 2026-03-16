@@ -49,7 +49,7 @@ import {
   useDeleteSocialCommunicationArticle,
   useLookupSocialCommunicationHighlightLdap,
   useMe,
-  useOmsCatalog,
+  useLocalities,
   useResolveSocialCommunicationMetadata,
   useSocialCommunicationHighlights,
   useSocialCommunication,
@@ -84,6 +84,8 @@ type SocialCommunicationHighlight = {
   militaryEmail: string;
   militaryName: string;
   fabom?: string | null;
+  photoMimeType?: string | null;
+  photoBase64?: string | null;
   impact: "MULTIPLICADOR" | "SIMBOLICO";
   locality: { id: string; code: string; name: string };
   text: string;
@@ -153,6 +155,20 @@ const HIGHLIGHT_IMPACT_OPTIONS = [
 
 function normalizeEmail(value: string) {
   return String(value ?? "").trim().toLowerCase();
+}
+
+function normalizeHighlightPhotoBase64(value: unknown) {
+  return String(value ?? "").replace(/\s+/g, "").trim();
+}
+
+function buildHighlightPhotoDataUrl(
+  photoBase64?: string | null,
+  photoMimeType?: string | null,
+) {
+  const normalizedBase64 = normalizeHighlightPhotoBase64(photoBase64);
+  if (!normalizedBase64) return "";
+  const mimeType = String(photoMimeType ?? "").trim() || "image/jpeg";
+  return `data:${mimeType};base64,${normalizedBase64}`;
 }
 
 function ArticleCoverImage({
@@ -291,7 +307,7 @@ export function SocialCommunicationPage() {
 
   const query = useSocialCommunication(filters);
   const highlightsQuery = useSocialCommunicationHighlights(filters);
-  const omsCatalogQuery = useOmsCatalog();
+  const omsCatalogQuery = useLocalities();
   const createArticle = useCreateSocialCommunicationArticle();
   const updateArticle = useUpdateSocialCommunicationArticle();
   const deleteArticle = useDeleteSocialCommunicationArticle();
@@ -328,14 +344,26 @@ export function SocialCommunicationPage() {
     ldapUid: "",
     militaryName: "",
     fabom: "",
+    numeroOrdem: "",
+    photoMimeType: "",
+    photoBase64: "",
     impact: "MULTIPLICADOR" as "MULTIPLICADOR" | "SIMBOLICO",
     localityId: "",
     text: "",
   });
+  const [highlightLookupBusy, setHighlightLookupBusy] = useState(false);
   const highlightMultiplicadorCarouselRef = useRef<HTMLDivElement | null>(null);
   const highlightSimbolicoCarouselRef = useRef<HTMLDivElement | null>(null);
   const internalCarouselRef = useRef<HTMLDivElement | null>(null);
   const externalCarouselRef = useRef<HTMLDivElement | null>(null);
+  const highlightPhotoPreviewUrl = useMemo(
+    () =>
+      buildHighlightPhotoDataUrl(
+        highlightForm.photoBase64,
+        highlightForm.photoMimeType,
+      ),
+    [highlightForm.photoBase64, highlightForm.photoMimeType],
+  );
 
   const openPreview = (item: SocialCommunicationArticle) => {
     const url =
@@ -376,14 +404,22 @@ export function SocialCommunicationPage() {
   };
 
   const omOptions = useMemo(
-    () =>
-      ((omsCatalogQuery.data?.items ?? []) as Array<any>)
+    () => {
+      const mapped = ((omsCatalogQuery.data?.items ?? []) as Array<any>)
         .map((item) => ({
           id: String(item?.id ?? "").trim(),
           code: String(item?.code ?? "").trim(),
           name: String(item?.name ?? "").trim(),
         }))
-        .filter((item) => item.id && item.name),
+        .filter((item) => item.id && item.code && item.name);
+      const uniqueById = new Map<string, { id: string; code: string; name: string }>();
+      mapped.forEach((item) => {
+        if (!uniqueById.has(item.id)) uniqueById.set(item.id, item);
+      });
+      return [...uniqueById.values()].sort((a, b) =>
+        a.name.localeCompare(b.name, "pt-BR"),
+      );
+    },
     [omsCatalogQuery.data?.items],
   );
 
@@ -394,6 +430,9 @@ export function SocialCommunicationPage() {
       ldapUid: "",
       militaryName: "",
       fabom: "",
+      numeroOrdem: "",
+      photoMimeType: "",
+      photoBase64: "",
       impact: "MULTIPLICADOR",
       localityId: "",
       text: "",
@@ -408,6 +447,9 @@ export function SocialCommunicationPage() {
       ldapUid: String(item.ldapUid ?? "").trim(),
       militaryName: String(item.militaryName ?? "").trim(),
       fabom: String(item.fabom ?? "").trim(),
+      numeroOrdem: "",
+      photoMimeType: String(item.photoMimeType ?? "").trim(),
+      photoBase64: normalizeHighlightPhotoBase64(item.photoBase64),
       impact: item.impact,
       localityId: String(item.locality?.id ?? "").trim(),
       text: String(item.text ?? "").trim(),
@@ -418,11 +460,31 @@ export function SocialCommunicationPage() {
   const handleLookupHighlightLdap = async () => {
     const email = normalizeEmail(highlightForm.ldapEmail);
     if (!email) {
-      toast.push({ message: "Informe o e-mail LDAP para buscar", severity: "warning" });
+      toast.push({ message: "Informe o e-mail Zimbra para buscar", severity: "warning" });
       return;
     }
+    setHighlightLookupBusy(true);
     try {
       const profile = await lookupHighlightLdap.mutateAsync(email);
+      const numeroOrdem = String(profile?.numeroOrdem ?? "").trim();
+      let photoBase64 = "";
+      let photoMimeType = "";
+
+      if (numeroOrdem) {
+        try {
+          const photoResponse = (
+            await api.get(`/auth/fotoes/${encodeURIComponent(numeroOrdem)}`)
+          ).data;
+          photoBase64 = normalizeHighlightPhotoBase64(photoResponse?.base64);
+          photoMimeType = photoBase64
+            ? String(photoResponse?.mimeType ?? "").trim() || "image/jpeg"
+            : "";
+        } catch {
+          photoBase64 = "";
+          photoMimeType = "";
+        }
+      }
+
       setHighlightForm((prev) => {
         const fabom = String(profile?.fabom ?? "").trim();
         const matchedOm = fabom
@@ -436,12 +498,17 @@ export function SocialCommunicationPage() {
           ldapUid: String(profile?.uid ?? "").trim(),
           militaryName: String(profile?.name ?? "").trim(),
           fabom,
+          numeroOrdem,
+          photoBase64,
+          photoMimeType,
           localityId: prev.localityId || matchedOm?.id || "",
         };
       });
       toast.push({
-        message: "Dados LDAP carregados com sucesso",
-        severity: "success",
+        message: photoBase64
+          ? "Dados LDAP e foto carregados com sucesso"
+          : "Dados LDAP carregados (foto indisponivel)",
+        severity: photoBase64 ? "success" : "warning",
       });
     } catch (error) {
       const payload = parseApiError(error);
@@ -449,15 +516,24 @@ export function SocialCommunicationPage() {
         message: payload.message ?? "Nao foi possivel buscar o militar no LDAP",
         severity: "error",
       });
+    } finally {
+      setHighlightLookupBusy(false);
     }
   };
 
   const handleSaveHighlight = async () => {
+    const normalizedPhotoBase64 = normalizeHighlightPhotoBase64(
+      highlightForm.photoBase64,
+    );
     const payload = {
       ldapUid: highlightForm.ldapUid.trim() || null,
       militaryEmail: normalizeEmail(highlightForm.ldapEmail),
       militaryName: highlightForm.militaryName.trim(),
       fabom: highlightForm.fabom.trim() || null,
+      photoMimeType: normalizedPhotoBase64
+        ? highlightForm.photoMimeType.trim() || "image/jpeg"
+        : null,
+      photoBase64: normalizedPhotoBase64 || null,
       impact: highlightForm.impact,
       localityId: highlightForm.localityId,
       text: highlightForm.text.trim(),
@@ -465,7 +541,7 @@ export function SocialCommunicationPage() {
 
     if (!payload.militaryEmail || !payload.militaryName || !payload.localityId || !payload.text) {
       toast.push({
-        message: "Preencha e-mail LDAP, nome, impacto, OM e texto do destaque",
+        message: "Preencha e-mail Zimbra, nome, impacto, OM e texto do destaque",
         severity: "warning",
       });
       return;
@@ -766,6 +842,10 @@ export function SocialCommunicationPage() {
           }}
         >
           {carouselItems.map((item) => {
+            const photoDataUrl = buildHighlightPhotoDataUrl(
+              item.photoBase64,
+              item.photoMimeType,
+            );
             const initials = item.militaryName
               .split(/\s+/)
               .filter(Boolean)
@@ -821,11 +901,25 @@ export function SocialCommunicationPage() {
                         color: "#114259",
                         display: "grid",
                         placeItems: "center",
+                        overflow: "hidden",
                         fontWeight: 800,
                         fontSize: 20,
                       }}
                     >
-                      {initials || <PersonRoundedIcon fontSize="small" />}
+                      {photoDataUrl ? (
+                        <Box
+                          component="img"
+                          src={photoDataUrl}
+                          alt={item.militaryName}
+                          sx={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                          }}
+                        />
+                      ) : (
+                        initials || <PersonRoundedIcon fontSize="small" />
+                      )}
                     </Box>
                   </Box>
                   <Box>
@@ -1263,7 +1357,7 @@ export function SocialCommunicationPage() {
                   >
                     <TextField
                       size="small"
-                      label="E-mail LDAP"
+                      label="E-mail Zimbra"
                       fullWidth
                       value={highlightForm.ldapEmail}
                       onChange={(event) =>
@@ -1280,10 +1374,53 @@ export function SocialCommunicationPage() {
                       onClick={() => {
                         void handleLookupHighlightLdap();
                       }}
-                      disabled={lookupHighlightLdap.isPending}
+                      disabled={highlightLookupBusy}
                     >
-                      {lookupHighlightLdap.isPending ? "Buscando..." : "Buscar"}
+                      {highlightLookupBusy ? "Buscando..." : "Buscar"}
                     </Button>
+                  </Stack>
+
+                  <Stack
+                    direction={{ xs: "column", md: "row" }}
+                    spacing={1.2}
+                    alignItems={{ xs: "flex-start", md: "center" }}
+                  >
+                    <Box
+                      sx={{
+                        width: 86,
+                        height: 86,
+                        borderRadius: "50%",
+                        bgcolor: "#CDECF7",
+                        border: "2px solid rgba(77,134,160,0.34)",
+                        color: "#114259",
+                        display: "grid",
+                        placeItems: "center",
+                        overflow: "hidden",
+                        flexShrink: 0,
+                      }}
+                    >
+                      {highlightPhotoPreviewUrl ? (
+                        <Box
+                          component="img"
+                          src={highlightPhotoPreviewUrl}
+                          alt={highlightForm.militaryName || "Foto do militar"}
+                          sx={{ width: "100%", height: "100%", objectFit: "cover" }}
+                        />
+                      ) : (
+                        <PersonRoundedIcon />
+                      )}
+                    </Box>
+                    <Stack spacing={0.6} flex={1}>
+                      <TextField
+                        size="small"
+                        label="Numero de Ordem"
+                        value={highlightForm.numeroOrdem}
+                        InputProps={{ readOnly: true }}
+                      />
+                      <Typography variant="caption" color="text.secondary">
+                        A foto e carregada automaticamente quando houver numero de ordem no LDAP.
+                      </Typography>
+                    </Stack>
                   </Stack>
 
                   <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
@@ -1301,7 +1438,7 @@ export function SocialCommunicationPage() {
                     />
                     <TextField
                       size="small"
-                      label="OM LDAP (FABom)"
+                      label="OM"
                       sx={{ minWidth: { md: 220 } }}
                       value={highlightForm.fabom}
                       onChange={(event) =>
@@ -1348,7 +1485,7 @@ export function SocialCommunicationPage() {
                     >
                       {omOptions.map((option) => (
                         <MenuItem key={option.id} value={option.id}>
-                          {option.code ? `${option.code} - ${option.name}` : option.name}
+                          {option.name}
                         </MenuItem>
                       ))}
                     </TextField>
@@ -1964,6 +2101,35 @@ export function SocialCommunicationPage() {
         <DialogTitle>Detalhes do Destaque</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={1}>
+            <Box
+              sx={{
+                width: 90,
+                height: 90,
+                borderRadius: "50%",
+                bgcolor: "#CDECF7",
+                border: "2px solid rgba(77,134,160,0.34)",
+                display: "grid",
+                placeItems: "center",
+                overflow: "hidden",
+              }}
+            >
+              {buildHighlightPhotoDataUrl(
+                highlightReadingTarget?.photoBase64,
+                highlightReadingTarget?.photoMimeType,
+              ) ? (
+                <Box
+                  component="img"
+                  src={buildHighlightPhotoDataUrl(
+                    highlightReadingTarget?.photoBase64,
+                    highlightReadingTarget?.photoMimeType,
+                  )}
+                  alt={highlightReadingTarget?.militaryName ?? "Militar"}
+                  sx={{ width: "100%", height: "100%", objectFit: "cover" }}
+                />
+              ) : (
+                <PersonRoundedIcon />
+              )}
+            </Box>
             <Typography variant="h6" fontWeight={700}>
               {highlightReadingTarget?.militaryName ?? "Militar"}
             </Typography>

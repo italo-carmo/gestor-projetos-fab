@@ -31,6 +31,16 @@ export class UpdateSocialCommunicationHighlightDto {
   fabom?: string;
 
   @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  photoMimeType?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(4_000_000)
+  photoBase64?: string;
+
+  @IsOptional()
   @IsEnum(SocialCommunicationHighlightImpactDto)
   impact?: SocialCommunicationHighlightImpactDto;
 

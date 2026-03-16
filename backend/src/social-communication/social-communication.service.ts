@@ -124,6 +124,8 @@ export class SocialCommunicationService {
       militaryEmail: string;
       militaryName: string;
       fabom?: string | null;
+      photoMimeType?: string | null;
+      photoBase64?: string | null;
       impact: HighlightImpact;
       localityId: string;
       text: string;
@@ -134,6 +136,15 @@ export class SocialCommunicationService {
 
     const localityId = this.normalizeRequiredText(payload.localityId, 'localityId');
     await this.assertHighlightLocalityExists(localityId);
+    const normalizedPhotoBase64 =
+      this.normalizeHighlightPhotoBase64(payload.photoBase64, 'photoBase64') ??
+      null;
+    const normalizedPhotoMimeType = normalizedPhotoBase64
+      ? (this.normalizeHighlightPhotoMimeType(
+          payload.photoMimeType,
+          'photoMimeType',
+        ) ?? 'image/jpeg')
+      : null;
 
     const created = await (this.prisma as any).socialCommunicationHighlight.create({
       data: {
@@ -147,6 +158,8 @@ export class SocialCommunicationService {
           'militaryName',
         ),
         fabom: this.normalizeOptionalText(payload.fabom) ?? null,
+        photoMimeType: normalizedPhotoMimeType,
+        photoBase64: normalizedPhotoBase64,
         impact: this.normalizeHighlightImpact(payload.impact, 'impact'),
         localityId,
         highlightText: this.normalizeHighlightText(payload.text, 'text'),
@@ -180,6 +193,8 @@ export class SocialCommunicationService {
       militaryEmail?: string;
       militaryName?: string;
       fabom?: string | null;
+      photoMimeType?: string | null;
+      photoBase64?: string | null;
       impact?: HighlightImpact;
       localityId?: string;
       text?: string;
@@ -213,6 +228,29 @@ export class SocialCommunicationService {
     }
     if (payload.fabom !== undefined) {
       data.fabom = this.normalizeOptionalText(payload.fabom) ?? null;
+    }
+    if (payload.photoBase64 !== undefined) {
+      const normalizedPhotoBase64 = this.normalizeHighlightPhotoBase64(
+        payload.photoBase64,
+        'photoBase64',
+      );
+      if (normalizedPhotoBase64) {
+        data.photoBase64 = normalizedPhotoBase64;
+        data.photoMimeType =
+          this.normalizeHighlightPhotoMimeType(
+            payload.photoMimeType,
+            'photoMimeType',
+          ) ?? 'image/jpeg';
+      } else {
+        data.photoBase64 = null;
+        data.photoMimeType = null;
+      }
+    } else if (payload.photoMimeType !== undefined) {
+      data.photoMimeType =
+        this.normalizeHighlightPhotoMimeType(
+          payload.photoMimeType,
+          'photoMimeType',
+        ) ?? null;
     }
     if (payload.impact !== undefined) {
       data.impact = this.normalizeHighlightImpact(payload.impact, 'impact');
@@ -1110,6 +1148,8 @@ export class SocialCommunicationService {
     militaryEmail: string;
     militaryName: string;
     fabom: string | null;
+    photoMimeType: string | null;
+    photoBase64: string | null;
     impact: HighlightImpact;
     locality: { id: string; code: string; name: string };
     highlightText: string;
@@ -1123,6 +1163,8 @@ export class SocialCommunicationService {
       militaryEmail: item.militaryEmail,
       militaryName: item.militaryName,
       fabom: item.fabom,
+      photoMimeType: item.photoMimeType,
+      photoBase64: item.photoBase64,
       impact: item.impact,
       locality: item.locality,
       text: item.highlightText,
@@ -1162,6 +1204,39 @@ export class SocialCommunicationService {
       return normalized;
     }
     throwError('VALIDATION_ERROR', { field, reason: 'invalid_impact' });
+  }
+
+  private normalizeHighlightPhotoMimeType(
+    value: string | null | undefined,
+    field: string,
+  ) {
+    if (value === undefined) return undefined;
+    if (value === null) return null;
+    const normalized = sanitizeText(value ?? '').toLowerCase();
+    if (!normalized) return null;
+    if (!/^image\/[a-z0-9.+-]+$/i.test(normalized)) {
+      throwError('VALIDATION_ERROR', { field, reason: 'invalid_mime_type' });
+    }
+    return normalized;
+  }
+
+  private normalizeHighlightPhotoBase64(
+    value: string | null | undefined,
+    field: string,
+  ) {
+    if (value === undefined) return undefined;
+    if (value === null) return null;
+    const normalized = String(value ?? '')
+      .replace(/\s+/g, '')
+      .trim();
+    if (!normalized) return null;
+    if (normalized.length > 4_000_000) {
+      throwError('VALIDATION_ERROR', { field, reason: 'payload_too_large' });
+    }
+    if (!/^[A-Za-z0-9+/=_-]+$/.test(normalized)) {
+      throwError('VALIDATION_ERROR', { field, reason: 'invalid_base64' });
+    }
+    return normalized;
   }
 
   private normalizeHighlightText(value: string, field: string) {

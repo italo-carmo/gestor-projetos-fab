@@ -810,6 +810,8 @@ model SocialCommunicationHighlight {
   militaryEmail String
   militaryName  String
   fabom         String?
+  photoMimeType String?
+  photoBase64   String?                            @db.Text
   impact        SocialCommunicationHighlightImpact
   localityId    String
   highlightText String                             @db.Text

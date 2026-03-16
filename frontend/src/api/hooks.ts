@@ -1668,6 +1668,8 @@ export function useCreateSocialCommunicationHighlight() {
       militaryEmail: string;
       militaryName: string;
       fabom?: string | null;
+      photoMimeType?: string | null;
+      photoBase64?: string | null;
       impact: "MULTIPLICADOR" | "SIMBOLICO";
       localityId: string;
       text: string;
@@ -1687,6 +1689,8 @@ export function useUpdateSocialCommunicationHighlight() {
         militaryEmail?: string;
         militaryName?: string;
         fabom?: string | null;
+        photoMimeType?: string | null;
+        photoBase64?: string | null;
         impact?: "MULTIPLICADOR" | "SIMBOLICO";
         localityId?: string;
         text?: string;
