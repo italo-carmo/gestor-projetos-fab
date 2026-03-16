@@ -798,10 +798,10 @@ export function DashboardNationalPage() {
     openKpiDetail({
       title: 'Mapeamento concluído',
       subtitle:
-        'Soma de atividades concluídas dos tipos Visita e Acompanhamento.',
+        'Soma de atividades concluídas dos tipos Visita, Acompanhamento e Mapeamento.',
       items: drilldown.completedMappings,
       emptyMessage:
-        'Nenhuma atividade concluída de visita ou acompanhamento encontrada.',
+        'Nenhuma atividade concluída de visita, acompanhamento ou mapeamento encontrada.',
       countField: null,
     });
   };

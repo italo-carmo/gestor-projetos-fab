@@ -1987,6 +1987,9 @@ export class TasksService {
           completedTasks: 0,
           completedFieldActivities: 0,
           completedVisits: 0,
+          completedLectures: 0,
+          completedBestPracticeCycles: 0,
+          completedMappings: 0,
           fieldActivitiesBySpecialty: {
             psychology: 0,
             socialService: 0,
@@ -2018,6 +2021,9 @@ export class TasksService {
           completedTasks: [],
           completedFieldActivities: [],
           completedVisits: [],
+          completedLectures: [],
+          completedBestPracticeCycles: [],
+          completedMappings: [],
           fieldActivitiesBySpecialty: {
             psychology: [],
             socialService: [],
@@ -2166,13 +2172,50 @@ export class TasksService {
       activity: (typeof filteredActivities)[number],
     ): boolean =>
       Boolean(activity.report?.signedAt && activity.report?.signatureHash);
+    const resolveNormalizedActivityClassifier = (
+      activity: (typeof filteredActivities)[number],
+    ) =>
+      `${String(activity.activityType?.name ?? '').trim()} ${String(
+        activity.title ?? '',
+      ).trim()}`
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim()
+        .toLowerCase();
     const isVisitActivity = (
       activity: (typeof filteredActivities)[number],
     ): boolean => {
-      const typeName = String(activity.activityType?.name ?? '')
-        .trim()
-        .toLowerCase();
-      return typeName.includes('visita');
+      return resolveNormalizedActivityClassifier(activity).includes('visita');
+    };
+    const isLectureActivity = (
+      activity: (typeof filteredActivities)[number],
+    ): boolean => {
+      return resolveNormalizedActivityClassifier(activity).includes('palestra');
+    };
+    const isBestPracticeCycleActivity = (
+      activity: (typeof filteredActivities)[number],
+    ): boolean => {
+      const normalizedTypeName = resolveNormalizedActivityClassifier(activity);
+      return (
+        normalizedTypeName.includes('ciclo') &&
+        /boa[s]?\s+pratica[s]?/.test(normalizedTypeName)
+      );
+    };
+    const isFollowUpActivity = (
+      activity: (typeof filteredActivities)[number],
+    ): boolean => {
+      const normalizedTypeName = resolveNormalizedActivityClassifier(activity);
+      return normalizedTypeName.includes('acompanh');
+    };
+    const isMappingActivity = (
+      activity: (typeof filteredActivities)[number],
+    ): boolean => {
+      const normalizedTypeName = resolveNormalizedActivityClassifier(activity);
+      return (
+        isVisitActivity(activity) ||
+        isFollowUpActivity(activity) ||
+        normalizedTypeName.includes('mapeamento')
+      );
     };
     const isCompletedActivity = (
       activity: (typeof filteredActivities)[number],
@@ -2231,6 +2274,7 @@ export class TasksService {
           specialtyNames.length > 0 ? specialtyNames.join(' / ') : '',
         specialtyIds: specialties.map((entry) => entry.id),
         specialtyNames,
+        activityTypeName: activity.activityType?.name ?? null,
         eventDate: activity.eventDate ?? null,
         createdAt: activity.createdAt,
         status: activity.status,
@@ -2268,6 +2312,7 @@ export class TasksService {
           specialtyNames.length > 0 ? specialtyNames.join(' / ') : '',
         specialtyIds: specialties.map((entry) => entry.id),
         specialtyNames,
+        activityTypeName: activity.activityType?.name ?? null,
         eventDate: activity.eventDate ?? null,
         status: activity.status,
         hasSignedReport: hasSignedReport(activity),
@@ -2412,12 +2457,34 @@ export class TasksService {
     const completedVisits = completedActivities.filter((activity) =>
       isVisitActivity(activity),
     ).length;
+    const completedLecturesActivities = completedActivities.filter((activity) =>
+      isLectureActivity(activity),
+    );
+    const completedBestPracticeCycleActivities = completedActivities.filter(
+      (activity) => isBestPracticeCycleActivity(activity),
+    );
+    const completedMappingActivities = completedActivities.filter((activity) =>
+      isMappingActivity(activity),
+    );
     const completedReportsDrilldown = completedActivities
       .filter((activity) => hasSignedReport(activity))
       .sort(sortByMostRecentEvent)
       .map((activity) => mapNationalDrilldownDetail(activity));
     const completedVisitsDrilldown = completedActivities
       .filter((activity) => isVisitActivity(activity))
+      .sort(sortByMostRecentEvent)
+      .map((activity) => mapNationalDrilldownDetail(activity));
+    const completedLecturesDrilldown = completedLecturesActivities
+      .slice()
+      .sort(sortByMostRecentEvent)
+      .map((activity) => mapNationalDrilldownDetail(activity));
+    const completedBestPracticeCyclesDrilldown =
+      completedBestPracticeCycleActivities
+        .slice()
+        .sort(sortByMostRecentEvent)
+        .map((activity) => mapNationalDrilldownDetail(activity));
+    const completedMappingsDrilldown = completedMappingActivities
+      .slice()
       .sort(sortByMostRecentEvent)
       .map((activity) => mapNationalDrilldownDetail(activity));
 
@@ -2599,6 +2666,10 @@ export class TasksService {
         completedTasks,
         completedFieldActivities: completedFieldActivities.length,
         completedVisits,
+        completedLectures: completedLecturesActivities.length,
+        completedBestPracticeCycles:
+          completedBestPracticeCycleActivities.length,
+        completedMappings: completedMappingActivities.length,
         fieldActivitiesBySpecialty,
         participantsKpis: {
           instructors: totalInstructors,
@@ -2620,6 +2691,9 @@ export class TasksService {
         completedTasks: completedTasksDrilldown,
         completedFieldActivities: completedFieldActivitiesDrilldown,
         completedVisits: completedVisitsDrilldown,
+        completedLectures: completedLecturesDrilldown,
+        completedBestPracticeCycles: completedBestPracticeCyclesDrilldown,
+        completedMappings: completedMappingsDrilldown,
         fieldActivitiesBySpecialty: fieldActivitiesBySpecialtyDrilldown,
       },
       lateItems,
