@@ -11,9 +11,9 @@ const sigpesFotoApiBaseUrl = (
   "http://api.servicos.ccarj.intraer/sigpesApi/fotoes"
 ).replace(/\/+$/, "");
 const sigpesUseBackendFallback =
-  String(import.meta.env.VITE_SIGPES_USE_BACKEND_FALLBACK ?? "false")
+  String(import.meta.env.VITE_SIGPES_USE_BACKEND_FALLBACK ?? "true")
     .trim()
-    .toLowerCase() === "true";
+    .toLowerCase() !== "false";
 
 function normalizeSigpesNumeroOrdem(value: unknown) {
   const raw = String(value ?? "").trim();
@@ -88,6 +88,26 @@ function parseSigpesPayloadFromText(rawText: string) {
   }
 }
 
+function buildSigpesPhotoEndpoints(numeroOrdem: string) {
+  const encodedNumeroOrdem = encodeURIComponent(numeroOrdem);
+  const directEndpoint = `${sigpesFotoApiBaseUrl}/${encodedNumeroOrdem}`;
+
+  if (typeof window === "undefined") {
+    return [directEndpoint];
+  }
+
+  // Avoid mixed-content: when app is HTTPS, do not call an HTTP endpoint directly.
+  if (
+    window.location.protocol === "https:" &&
+    directEndpoint.toLowerCase().startsWith("http://")
+  ) {
+    const upgradedEndpoint = directEndpoint.replace(/^http:\/\//i, "https://");
+    return [upgradedEndpoint];
+  }
+
+  return [directEndpoint];
+}
+
 export function useMe() {
   return useQuery({
     queryKey: qk.me,
@@ -109,26 +129,28 @@ export function useSigpesPhoto(numeroOrdem: string | null | undefined) {
   return useQuery({
     queryKey: qk.sigpesPhoto(normalizedNumeroOrdem),
     queryFn: async () => {
-      const endpoint = `${sigpesFotoApiBaseUrl}/${encodeURIComponent(normalizedNumeroOrdem)}`;
+      const directEndpoints = buildSigpesPhotoEndpoints(normalizedNumeroOrdem);
 
-      try {
-        const response = await fetch(endpoint, { method: "GET" });
-        if (response.ok) {
-          const rawText = await response.text();
-          const payload = parseSigpesPayloadFromText(rawText);
-          if (!payload) {
-            return {
-              numeroOrdem: normalizedNumeroOrdem,
-              mimeType: null,
-              fileName: null,
-              base64: null,
-              dataUrl: null,
-            };
+      for (const endpoint of directEndpoints) {
+        try {
+          const response = await fetch(endpoint, { method: "GET" });
+          if (response.ok) {
+            const rawText = await response.text();
+            const payload = parseSigpesPayloadFromText(rawText);
+            if (!payload) {
+              return {
+                numeroOrdem: normalizedNumeroOrdem,
+                mimeType: null,
+                fileName: null,
+                base64: null,
+                dataUrl: null,
+              };
+            }
+            return toSigpesPhotoPayload(payload, normalizedNumeroOrdem);
           }
-          return toSigpesPhotoPayload(payload, normalizedNumeroOrdem);
+        } catch {
+          // fallback via backend proxy
         }
-      } catch {
-        // fallback via backend proxy (optional)
       }
 
       if (!sigpesUseBackendFallback) {
