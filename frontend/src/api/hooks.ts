@@ -3,6 +3,42 @@ import { api } from "./client";
 import { qk } from "./queryKeys";
 import { splitMilitaryNameAndOm, toMilitaryDisplayName } from "../app/militaryName";
 
+const configuredSigpesFotoApiBaseUrl = (
+  import.meta.env.VITE_SIGPES_FOTO_API_BASE_URL as string | undefined
+)?.trim();
+const sigpesFotoApiBaseUrl = (
+  configuredSigpesFotoApiBaseUrl ||
+  "http://api.servicos.ccarj.intraer/sigpesApi/fotoes"
+).replace(/\/+$/, "");
+
+function normalizeSigpesBase64(value: unknown) {
+  return String(value ?? "").replace(/\s+/g, "");
+}
+
+function toSigpesPhotoPayload(payload: any, numeroOrdem: string) {
+  const mimeType = String(payload?.tpArq ?? "").trim() || "image/jpeg";
+  const fileName = String(payload?.txNomeArq ?? "").trim() || null;
+  const base64 = normalizeSigpesBase64(payload?.imFoto);
+
+  if (!base64) {
+    return {
+      numeroOrdem,
+      mimeType: null,
+      fileName,
+      base64: null,
+      dataUrl: null,
+    };
+  }
+
+  return {
+    numeroOrdem,
+    mimeType,
+    fileName,
+    base64,
+    dataUrl: `data:${mimeType};base64,${base64}`,
+  };
+}
+
 export function useMe() {
   return useQuery({
     queryKey: qk.me,
@@ -23,9 +59,23 @@ export function useSigpesPhoto(numeroOrdem: string | null | undefined) {
   const normalizedNumeroOrdem = String(numeroOrdem ?? "").trim();
   return useQuery({
     queryKey: qk.sigpesPhoto(normalizedNumeroOrdem),
-    queryFn: async () =>
-      (await api.get(`/auth/fotoes/${encodeURIComponent(normalizedNumeroOrdem)}`))
-        .data,
+    queryFn: async () => {
+      const endpoint = `${sigpesFotoApiBaseUrl}/${encodeURIComponent(normalizedNumeroOrdem)}`;
+
+      try {
+        const response = await fetch(endpoint, { method: "GET" });
+        if (response.ok) {
+          const payload = await response.json();
+          return toSigpesPhotoPayload(payload, normalizedNumeroOrdem);
+        }
+      } catch {
+        // fallback via backend proxy
+      }
+
+      return (
+        await api.get(`/auth/fotoes/${encodeURIComponent(normalizedNumeroOrdem)}`)
+      ).data;
+    },
     enabled: Boolean(normalizedNumeroOrdem),
     staleTime: 15 * 60_000,
     retry: 1,
