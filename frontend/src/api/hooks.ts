@@ -14,6 +14,7 @@ const sigpesUseBackendFallback =
   String(import.meta.env.VITE_SIGPES_USE_BACKEND_FALLBACK ?? "true")
     .trim()
     .toLowerCase() !== "false";
+const SIGPES_DIRECT_FETCH_TIMEOUT_MS = 4_000;
 
 function normalizeSigpesNumeroOrdem(value: unknown) {
   const raw = String(value ?? "").trim();
@@ -108,6 +109,16 @@ function buildSigpesPhotoEndpoints(numeroOrdem: string) {
   return [directEndpoint];
 }
 
+async function fetchWithTimeout(input: string, timeoutMs: number) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, { method: "GET", signal: controller.signal });
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
 export function useMe() {
   return useQuery({
     queryKey: qk.me,
@@ -133,7 +144,10 @@ export function useSigpesPhoto(numeroOrdem: string | null | undefined) {
 
       for (const endpoint of directEndpoints) {
         try {
-          const response = await fetch(endpoint, { method: "GET" });
+          const response = await fetchWithTimeout(
+            endpoint,
+            SIGPES_DIRECT_FETCH_TIMEOUT_MS,
+          );
           if (response.ok) {
             const rawText = await response.text();
             const payload = parseSigpesPayloadFromText(rawText);
