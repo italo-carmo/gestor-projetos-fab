@@ -24,7 +24,9 @@ import {
 } from '@mui/material';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import DescriptionIcon from '@mui/icons-material/Description';
-import TerrainIcon from '@mui/icons-material/Terrain';
+import CampaignIcon from '@mui/icons-material/Campaign';
+import AutorenewIcon from '@mui/icons-material/Autorenew';
+import MapIcon from '@mui/icons-material/Map';
 import PsychologyIcon from '@mui/icons-material/Psychology';
 import VolunteerActivismIcon from '@mui/icons-material/VolunteerActivism';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
@@ -63,6 +65,9 @@ type NationalDashboardTotals = {
   completedTasks: number;
   completedFieldActivities: number;
   completedVisits: number;
+  completedLectures: number;
+  completedBestPracticeCycles: number;
+  completedMappings: number;
   fieldActivitiesBySpecialty: {
     psychology: number;
     socialService: number;
@@ -100,6 +105,7 @@ type NationalDrilldownItem = {
   localityName: string;
   specialtyId?: string | null;
   specialtyName?: string | null;
+  activityTypeName?: string | null;
   eventDate?: string | null;
   status?: string;
   hasSignedReport?: boolean;
@@ -124,6 +130,9 @@ type NationalDashboardDrilldown = {
   completedTasks: NationalDrilldownItem[];
   completedFieldActivities: NationalDrilldownItem[];
   completedVisits: NationalDrilldownItem[];
+  completedLectures: NationalDrilldownItem[];
+  completedBestPracticeCycles: NationalDrilldownItem[];
+  completedMappings: NationalDrilldownItem[];
   fieldActivitiesBySpecialty: {
     psychology: NationalDrilldownItem[];
     socialService: NationalDrilldownItem[];
@@ -481,6 +490,9 @@ export function DashboardNationalPage() {
     completedTasks: 0,
     completedFieldActivities: 0,
     completedVisits: 0,
+    completedLectures: 0,
+    completedBestPracticeCycles: 0,
+    completedMappings: 0,
     fieldActivitiesBySpecialty: {
       psychology: 0,
       socialService: 0,
@@ -499,6 +511,9 @@ export function DashboardNationalPage() {
     completedTasks: [],
     completedFieldActivities: [],
     completedVisits: [],
+    completedLectures: [],
+    completedBestPracticeCycles: [],
+    completedMappings: [],
     fieldActivitiesBySpecialty: {
       psychology: [],
       socialService: [],
@@ -760,12 +775,33 @@ export function DashboardNationalPage() {
       countField: 'eloGraduadoMaster',
     });
   };
-  const openCompletedFieldActivitiesDetail = () => {
+  const openCompletedLecturesDetail = () => {
     openKpiDetail({
-      title: 'Atividades de campo concluídas',
-      subtitle: 'Lista das atividades de campo concluídas no recorte atual.',
-      items: drilldown.completedFieldActivities,
-      emptyMessage: 'Nenhuma atividade de campo concluída encontrada.',
+      title: 'Palestras concluídas',
+      subtitle: 'Atividades concluídas classificadas com tipo Palestra.',
+      items: drilldown.completedLectures,
+      emptyMessage: 'Nenhuma palestra concluída encontrada.',
+      countField: null,
+    });
+  };
+  const openCompletedBestPracticeCyclesDetail = () => {
+    openKpiDetail({
+      title: 'Ciclo de Boas Práticas concluído',
+      subtitle:
+        'Atividades concluídas classificadas com tipo Ciclo de Boas Práticas.',
+      items: drilldown.completedBestPracticeCycles,
+      emptyMessage: 'Nenhum ciclo de boas práticas concluído encontrado.',
+      countField: null,
+    });
+  };
+  const openCompletedMappingsDetail = () => {
+    openKpiDetail({
+      title: 'Mapeamento concluído',
+      subtitle:
+        'Soma de atividades concluídas dos tipos Visita e Acompanhamento.',
+      items: drilldown.completedMappings,
+      emptyMessage:
+        'Nenhuma atividade concluída de visita ou acompanhamento encontrada.',
       countField: null,
     });
   };
@@ -775,24 +811,6 @@ export function DashboardNationalPage() {
       subtitle: 'Atividades concluídas com relatório assinado.',
       items: drilldown.completedReports,
       emptyMessage: 'Nenhuma atividade concluída com relatório assinado.',
-      countField: null,
-    });
-  };
-  const openCompletedTasksDetail = () => {
-    openKpiDetail({
-      title: 'Tarefas concluídas',
-      subtitle: 'Tarefas finalizadas em todas as localidades do recorte.',
-      items: drilldown.completedTasks,
-      emptyMessage: 'Nenhuma tarefa concluída em todas as localidades.',
-      countField: 'detailLabel',
-    });
-  };
-  const openCompletedVisitsDetail = () => {
-    openKpiDetail({
-      title: 'Visitas concluídas',
-      subtitle: 'Atividades do tipo visita com status concluído.',
-      items: drilldown.completedVisits,
-      emptyMessage: 'Nenhuma visita concluída encontrada.',
       countField: null,
     });
   };
@@ -857,6 +875,7 @@ export function DashboardNationalPage() {
             item.localityCode,
             item.localityName,
             item.specialtyName,
+            item.activityTypeName,
           ]
             .map((value) => String(value ?? ''))
             .join(' ')
@@ -868,32 +887,32 @@ export function DashboardNationalPage() {
 
   const completedIndicators: IndicatorTile[] = [
     {
-      id: 'fieldActivities',
-      label: 'Atividades de campo',
-      value: String(totals.completedFieldActivities ?? 0),
-      helper: 'Concluídas',
-      icon: <TerrainIcon sx={{ fontSize: 22 }} />,
+      id: 'lectures',
+      label: 'Palestras',
+      value: String(totals.completedLectures ?? 0),
+      helper: 'Concluídas no período',
+      icon: <CampaignIcon sx={{ fontSize: 22 }} />,
+    },
+    {
+      id: 'bestPracticeCycles',
+      label: 'Ciclo de Boas Práticas',
+      value: String(totals.completedBestPracticeCycles ?? 0),
+      helper: 'Concluídos no período',
+      icon: <AutorenewIcon sx={{ fontSize: 22 }} />,
+    },
+    {
+      id: 'mappings',
+      label: 'Mapeamento',
+      value: String(totals.completedMappings ?? 0),
+      helper: 'Visitas + Acompanhamento',
+      icon: <MapIcon sx={{ fontSize: 22 }} />,
     },
     {
       id: 'reports',
       label: 'Relatórios',
       value: String(totals.completedReports ?? 0),
-      helper: 'Concluídas',
+      helper: 'Concluídos no período',
       icon: <DescriptionIcon sx={{ fontSize: 22 }} />,
-    },
-    {
-      id: 'placeholder-1',
-      label: '',
-      value: '',
-      helper: '',
-      icon: <Box sx={{ width: 22, height: 22 }} />,
-    },
-    {
-      id: 'placeholder-2',
-      label: '',
-      value: '',
-      helper: '',
-      icon: <Box sx={{ width: 22, height: 22 }} />,
     },
   ];
   const fieldBySpecialtyIndicators: IndicatorTile[] = [
@@ -1010,9 +1029,10 @@ export function DashboardNationalPage() {
   const getIndicatorClickAction = (groupId: string, itemId: string) => {
     if (groupId === 'smif-completed') {
       if (itemId === 'reports') return openCompletedReportsDetail;
-      if (itemId === 'tasks') return openCompletedTasksDetail;
-      if (itemId === 'fieldActivities') return openCompletedFieldActivitiesDetail;
-      if (itemId === 'visits') return openCompletedVisitsDetail;
+      if (itemId === 'lectures') return openCompletedLecturesDetail;
+      if (itemId === 'bestPracticeCycles')
+        return openCompletedBestPracticeCyclesDetail;
+      if (itemId === 'mappings') return openCompletedMappingsDetail;
       return null;
     }
     if (groupId === 'smif-field') {
@@ -1887,7 +1907,7 @@ export function DashboardNationalPage() {
             <TextField
               size="small"
               label="Buscar atividade"
-              placeholder="Nome da atividade, localidade ou área"
+              placeholder="Nome, localidade, área ou tipo"
               value={kpiDetailSearch}
               onChange={(event) => setKpiDetailSearch(event.target.value)}
               sx={{ minWidth: { xs: '100%', sm: 320 } }}
@@ -1906,6 +1926,7 @@ export function DashboardNationalPage() {
                     <TableCell sx={{ fontWeight: 700 }}>Atividade</TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>Localidade</TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>Data</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Tipo</TableCell>
                     <TableCell sx={{ fontWeight: 700, textAlign: 'right' }}>
                       {kpiDetail?.countField === 'detailLabel'
                         ? 'Detalhe'
@@ -1941,6 +1962,12 @@ export function DashboardNationalPage() {
                         {formatGsdLabel(item.localityName, item.localityCode)}
                       </TableCell>
                       <TableCell>{formatDrilldownDate(item.eventDate)}</TableCell>
+                      <TableCell>
+                        <Chip
+                          size="small"
+                          label={String(item.activityTypeName ?? '').trim() || 'Não informado'}
+                        />
+                      </TableCell>
                       <TableCell sx={{ textAlign: 'right' }}>
                         {kpiDetail?.countField
                           ? getKpiCountValue(item, kpiDetail.countField)
