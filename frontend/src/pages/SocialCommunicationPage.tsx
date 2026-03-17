@@ -839,8 +839,8 @@ export function SocialCommunicationPage() {
             titleColor: "#3E2A05",
             textColor: "rgba(74, 53, 8, 0.95)",
             cardBackground:
-              "linear-gradient(120deg, #6f510d 0%, #9b7418 14%, #d4af37 28%, #fff3bf 42%, #f0cd63 54%, #c69a2d 67%, #8a6717 80%, #d8b14f 92%, #62470a 100%)",
-            cardBackgroundSize: "180% 180%",
+              "linear-gradient(145deg, #7c6019 0%, #9a7a2a 26%, #b9953b 52%, #9f7f2f 76%, #7b5f1f 100%)",
+            cardBackgroundSize: "100% 100%",
             chipBorder: "rgba(96, 69, 15, 0.45)",
             chipColor: "#4A3508",
             impactChipBg: "rgba(255, 247, 219, 0.88)",
@@ -862,8 +862,8 @@ export function SocialCommunicationPage() {
             titleColor: "#2D2D34",
             textColor: "rgba(49, 49, 58, 0.95)",
             cardBackground:
-              "linear-gradient(120deg, #4b4b53 0%, #787882 14%, #b9b9c5 28%, #ffffff 42%, #d8d8e3 54%, #a4a4af 67%, #71717c 80%, #ececf3 92%, #43434b 100%)",
-            cardBackgroundSize: "180% 180%",
+              "linear-gradient(145deg, #676874 0%, #8a8b96 26%, #a8a9b3 52%, #8f909b 76%, #6a6b76 100%)",
+            cardBackgroundSize: "100% 100%",
             chipBorder: "rgba(95, 95, 110, 0.48)",
             chipColor: "#2D2D34",
             impactChipBg: "rgba(245, 245, 250, 0.9)",
@@ -934,9 +934,9 @@ export function SocialCommunicationPage() {
                   flex: "0 0 auto",
                   width: {
                     xs: "calc(100% - 2px)",
-                    sm: "calc((100% - 18px) / 2.08)",
-                    md: "calc((100% - 36px) / 3.12)",
-                    lg: "calc((100% - 54px) / 4.12)",
+                    sm: "calc((100% - 20px) / 2.16)",
+                    md: "calc((100% - 40px) / 3.24)",
+                    lg: "calc((100% - 60px) / 4.28)",
                   },
                   scrollSnapAlign: "start",
                   borderRadius: 3,
@@ -954,7 +954,7 @@ export function SocialCommunicationPage() {
               >
                 <CardContent
                   sx={{
-                    minHeight: 226,
+                    minHeight: 212,
                     display: "flex",
                     flexDirection: "column",
                     gap: 0.9,
