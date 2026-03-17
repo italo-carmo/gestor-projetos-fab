@@ -1,4 +1,14 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Put,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../common/current-user.decorator';
 import { RequirePermission } from '../rbac/require-permission.decorator';
@@ -36,7 +46,10 @@ export class LessonsLearnedController {
 
   @Post('types')
   @RequirePermission('lessons_learned', 'create')
-  createType(@Body() dto: CreateLessonLearnedTypeDto, @CurrentUser() user: RbacUser) {
+  createType(
+    @Body() dto: CreateLessonLearnedTypeDto,
+    @CurrentUser() user: RbacUser,
+  ) {
     return this.lessons.createType(dto, user);
   }
 
@@ -72,5 +85,3 @@ export class LessonsLearnedController {
     return this.lessons.removeType(id, user);
   }
 }
-
-

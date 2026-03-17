@@ -4,4 +4,3 @@ export class MeetingDecisionDto {
   @IsString()
   text: string;
 }
-

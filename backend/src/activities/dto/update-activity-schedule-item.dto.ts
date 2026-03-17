@@ -1,4 +1,11 @@
-import { IsInt, IsOptional, IsString, Matches, MaxLength, Min } from 'class-validator';
+import {
+  IsInt,
+  IsOptional,
+  IsString,
+  Matches,
+  MaxLength,
+  Min,
+} from 'class-validator';
 
 export class UpdateActivityScheduleItemDto {
   @IsOptional()

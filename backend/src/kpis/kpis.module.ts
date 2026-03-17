@@ -9,4 +9,3 @@ import { KpisService } from './kpis.service';
   providers: [KpisService],
 })
 export class KpisModule {}
-

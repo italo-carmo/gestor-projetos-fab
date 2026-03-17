@@ -20,5 +20,10 @@ export class TaskAssignDto {
 
   @IsOptional()
   @IsIn(['USER', 'ELO', 'LOCALITY_COMMAND', 'LOCALITY_COMMANDER'])
-  assigneeType?: 'USER' | 'ELO' | 'LOCALITY_COMMAND' | 'LOCALITY_COMMANDER' | null;
+  assigneeType?:
+    | 'USER'
+    | 'ELO'
+    | 'LOCALITY_COMMAND'
+    | 'LOCALITY_COMMANDER'
+    | null;
 }

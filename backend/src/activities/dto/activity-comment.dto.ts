@@ -5,4 +5,3 @@ export class ActivityCommentDto {
   @MaxLength(4000)
   text: string;
 }
-

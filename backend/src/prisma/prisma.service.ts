@@ -3,9 +3,14 @@ import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 
 @Injectable()
-export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+export class PrismaService
+  extends PrismaClient
+  implements OnModuleInit, OnModuleDestroy
+{
   constructor() {
-    const connectionString = process.env.DATABASE_URL ?? 'postgresql://smif:smif@localhost:5432/smif_gestao';
+    const connectionString =
+      process.env.DATABASE_URL ??
+      'postgresql://smif:smif@localhost:5432/smif_gestao';
     const adapter = new PrismaPg({ connectionString });
     super({ adapter });
   }

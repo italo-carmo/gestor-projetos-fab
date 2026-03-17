@@ -82,11 +82,13 @@ describe('RBAC import + Meetings generate tasks (e2e)', () => {
         templateId,
         priority: 'MEDIUM',
         localities: [
-          { localityId, dueDate: new Date(Date.now() + 86400000).toISOString() },
+          {
+            localityId,
+            dueDate: new Date(Date.now() + 86400000).toISOString(),
+          },
         ],
       });
 
     expect(generate.status).toBe(201);
   });
 });
-

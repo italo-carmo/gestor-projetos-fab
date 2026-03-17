@@ -8,4 +8,3 @@ export class CreateChecklistItemDto {
   @IsString()
   taskTemplateId?: string | null;
 }
-

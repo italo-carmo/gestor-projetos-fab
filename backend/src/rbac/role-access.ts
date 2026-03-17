@@ -28,7 +28,9 @@ export function normalizeRoleName(roleName: string | null | undefined) {
 export function canonicalRoleName(roleName: string | null | undefined) {
   const normalized = normalizeRoleName(roleName);
   if (normalized === 'comgep') return ROLE_COMGEP;
-  return String(roleName ?? '').replace(/\s+/g, ' ').trim();
+  return String(roleName ?? '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 export function hasRole(user: RbacUser | undefined, roleName: string) {
@@ -68,10 +70,17 @@ export function isLocalityAdmin(user: RbacUser | undefined) {
 
 export function isSpecialtyAdmin(user: RbacUser | undefined) {
   if (!user) return false;
-  if (hasAnyRole(user, [ROLE_ADMIN_ESPECIALIDADE_LOCAL, ROLE_ADMIN_ESPECIALIDADE_NACIONAL])) {
+  if (
+    hasAnyRole(user, [
+      ROLE_ADMIN_ESPECIALIDADE_LOCAL,
+      ROLE_ADMIN_ESPECIALIDADE_NACIONAL,
+    ])
+  ) {
     return true;
   }
-  return user.roles.some((role) => role.name.toLowerCase().includes('admin especialidade'));
+  return user.roles.some((role) =>
+    role.name.toLowerCase().includes('admin especialidade'),
+  );
 }
 
 export function isNationalSpecialtyAdmin(user: RbacUser | undefined) {
@@ -85,7 +94,8 @@ export function isLocalSpecialtyAdmin(user: RbacUser | undefined) {
 export function resolveAccessProfile(user: RbacUser | undefined) {
   const ti = isTiUser(user);
   const nationalCommission = isNationalCommissionMember(user);
-  const effectiveLocalityId = ti || nationalCommission ? undefined : user?.localityId ?? undefined;
+  const effectiveLocalityId =
+    ti || nationalCommission ? undefined : (user?.localityId ?? undefined);
   const localityAdmin = isLocalityAdmin(user);
   const specialtyAdmin = isSpecialtyAdmin(user);
   const nationalSpecialtyAdmin = isNationalSpecialtyAdmin(user);
@@ -102,11 +112,7 @@ export function resolveAccessProfile(user: RbacUser | undefined) {
     groupSpecialtyId: user?.specialtyId ?? undefined,
     groupEloRoleId: user?.eloRoleId ?? undefined,
     localityId: effectiveLocalityId,
-    isAdminLike:
-      ti ||
-      nationalCommission ||
-      localityAdmin ||
-      specialtyAdmin,
+    isAdminLike: ti || nationalCommission || localityAdmin || specialtyAdmin,
   };
 }
 
@@ -115,15 +121,25 @@ export function canEditRecruitsByRole(
   targetLocalityId: string,
 ) {
   if (!user) return false;
-  if (hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_COMISSAO_CIPAVD, ROLE_TI])) {
+  if (
+    hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_COMISSAO_CIPAVD, ROLE_TI])
+  ) {
     return true;
   }
-  if (hasRole(user, ROLE_GSD_LOCALIDADE) && user.localityId === targetLocalityId) {
+  if (
+    hasRole(user, ROLE_GSD_LOCALIDADE) &&
+    user.localityId === targetLocalityId
+  ) {
     return true;
   }
   return false;
 }
 
 export function hasCpcaWorkflowAccess(user: RbacUser | undefined) {
-  return hasAnyRole(user, [ROLE_CPCA, ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI]);
+  return hasAnyRole(user, [
+    ROLE_CPCA,
+    ROLE_COORDENACAO_CIPAVD,
+    ROLE_COMANDANTE_COMGEP,
+    ROLE_TI,
+  ]);
 }

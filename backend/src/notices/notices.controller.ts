@@ -1,4 +1,15 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Put,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../common/current-user.decorator';
 import { RequirePermission } from '../rbac/require-permission.decorator';
@@ -28,7 +39,16 @@ export class NoticesController {
     @CurrentUser() user: RbacUser,
   ) {
     return this.notices.list(
-      { localityId, specialtyId, pinned, priority, dueFrom, dueTo, page, pageSize },
+      {
+        localityId,
+        specialtyId,
+        pinned,
+        priority,
+        dueFrom,
+        dueTo,
+        page,
+        pageSize,
+      },
       user,
     );
   }
@@ -41,7 +61,11 @@ export class NoticesController {
 
   @Put(':id')
   @RequirePermission('notices', 'update')
-  update(@Param('id') id: string, @Body() dto: UpdateNoticeDto, @CurrentUser() user: RbacUser) {
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateNoticeDto,
+    @CurrentUser() user: RbacUser,
+  ) {
     return this.notices.update(id, dto, user);
   }
 
@@ -53,8 +77,11 @@ export class NoticesController {
 
   @Patch(':id/pin')
   @RequirePermission('notices', 'pin')
-  pin(@Param('id') id: string, @Body() dto: PinNoticeDto, @CurrentUser() user: RbacUser) {
+  pin(
+    @Param('id') id: string,
+    @Body() dto: PinNoticeDto,
+    @CurrentUser() user: RbacUser,
+  ) {
     return this.notices.pin(id, dto.pinned, user);
   }
 }
-

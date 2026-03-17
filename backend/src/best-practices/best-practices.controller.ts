@@ -1,4 +1,14 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Put,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../common/current-user.decorator';
 import { RequirePermission } from '../rbac/require-permission.decorator';
@@ -52,7 +62,10 @@ export class BestPracticesController {
 
   @Post('types')
   @RequirePermission('best_practices', 'create')
-  createType(@Body() dto: CreateBestPracticeTypeDto, @CurrentUser() user: RbacUser) {
+  createType(
+    @Body() dto: CreateBestPracticeTypeDto,
+    @CurrentUser() user: RbacUser,
+  ) {
     return this.bestPractices.createType(dto, user);
   }
 
@@ -72,5 +85,3 @@ export class BestPracticesController {
     return this.bestPractices.removeType(id, user);
   }
 }
-
-

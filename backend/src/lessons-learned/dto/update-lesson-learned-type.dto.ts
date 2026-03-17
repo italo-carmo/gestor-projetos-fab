@@ -14,4 +14,3 @@ export class UpdateLessonLearnedTypeDto {
   @IsHexColor()
   textColorHex?: string;
 }
-

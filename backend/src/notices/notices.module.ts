@@ -9,4 +9,3 @@ import { NoticesService } from './notices.service';
   providers: [NoticesService],
 })
 export class NoticesModule {}
-

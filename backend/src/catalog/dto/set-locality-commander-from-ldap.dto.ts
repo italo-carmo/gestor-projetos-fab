@@ -4,4 +4,3 @@ export class SetLocalityCommanderFromLdapDto {
   @IsString()
   uidOrEmail!: string;
 }
-

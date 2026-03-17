@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Put,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../common/current-user.decorator';
 import { RequirePermission } from '../rbac/require-permission.decorator';
@@ -23,7 +32,10 @@ export class ChecklistsController {
     @Query('localityId') localityId: string | undefined,
     @CurrentUser() user: RbacUser,
   ) {
-    return this.checklists.list({ phaseId, specialtyId, eloRoleId, localityId }, user);
+    return this.checklists.list(
+      { phaseId, specialtyId, eloRoleId, localityId },
+      user,
+    );
   }
 
   @Post()
@@ -34,7 +46,11 @@ export class ChecklistsController {
 
   @Post(':id/items')
   @RequirePermission('checklists', 'update')
-  addItem(@Param('id') id: string, @Body() dto: CreateChecklistItemDto, @CurrentUser() user: RbacUser) {
+  addItem(
+    @Param('id') id: string,
+    @Body() dto: CreateChecklistItemDto,
+    @CurrentUser() user: RbacUser,
+  ) {
     return this.checklists.addItem(id, dto, user);
   }
 }

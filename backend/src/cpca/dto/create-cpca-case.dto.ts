@@ -10,7 +10,11 @@ import {
 } from 'class-validator';
 
 export const CPCA_COMPLAINT_TYPES = ['MORAL', 'SEXUAL'] as const;
-export const CPCA_NOTIFIER_TYPES = ['VITIMA', 'TESTEMUNHA', 'TERCEIRO'] as const;
+export const CPCA_NOTIFIER_TYPES = [
+  'VITIMA',
+  'TESTEMUNHA',
+  'TERCEIRO',
+] as const;
 export const CPCA_CASE_STATUSES = [
   'RECEIVED',
   'PROTECTION_MEASURES',
@@ -138,7 +142,11 @@ export const CPCA_PROCEDURE_CURRENT_SITUATIONS = [
   'OUTROS',
   'NAO_APLICAVEL',
 ] as const;
-export const CPCA_RETALIATION_REPORTED_OPTIONS = ['SIM', 'NAO', 'NAO_INFORMADO'] as const;
+export const CPCA_RETALIATION_REPORTED_OPTIONS = [
+  'SIM',
+  'NAO',
+  'NAO_INFORMADO',
+] as const;
 export const CPCA_RETALIATION_AGAINST_OPTIONS = [
   'VITIMA',
   'TESTEMUNHAS',

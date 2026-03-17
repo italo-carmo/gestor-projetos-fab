@@ -274,6 +274,14 @@ export class CpcaService {
         topAggressorRanks: [],
         topVictimRanks: [],
         criticalOpenCases: [],
+        kpiDetails: {
+          totalCases: [],
+          openCases: [],
+          closureRate: [],
+          averageClosureTime: [],
+          triageOver7Days: [],
+          investigationOver30Days: [],
+        },
       };
     }
 
@@ -302,6 +310,112 @@ export class CpcaService {
     }
 
     const now = new Date();
+    const KPI_DETAILS_LIMIT = 300;
+    const toDateIso = (value: Date | null | undefined) =>
+      value instanceof Date && !Number.isNaN(value.getTime())
+        ? value.toISOString()
+        : null;
+    const toCaseDetailItem = (item: any) => {
+      const status = String(item.status ?? '');
+      const reportedAt =
+        item.reportedAt instanceof Date &&
+        !Number.isNaN(item.reportedAt.getTime())
+          ? item.reportedAt
+          : null;
+      const updatedAt =
+        item.updatedAt instanceof Date &&
+        !Number.isNaN(item.updatedAt.getTime())
+          ? item.updatedAt
+          : null;
+      const isOpen = CPCA_OPEN_STATUS_SET.has(status);
+      const openDays =
+        reportedAt && isOpen ? this.daysBetween(reportedAt, now) : 0;
+      const idleDays =
+        reportedAt && isOpen
+          ? this.daysBetween(updatedAt ?? reportedAt, now)
+          : 0;
+      const closedAt =
+        closedAtByCaseId.get(item.id) ??
+        (status === 'ARCHIVED'
+          ? (item.archivedAt ?? updatedAt ?? null)
+          : status === 'CONCLUDED'
+            ? (updatedAt ?? null)
+            : null);
+      const daysToClosure =
+        reportedAt &&
+        closedAt instanceof Date &&
+        !Number.isNaN(closedAt.getTime())
+          ? this.daysBetween(reportedAt, closedAt)
+          : null;
+
+      return {
+        caseId: String(item.id ?? ''),
+        caseNumber: String(item.caseNumber ?? ''),
+        localityId: String(item.localityId ?? ''),
+        localityCode: String(item.locality?.code ?? ''),
+        localityName: String(item.locality?.name ?? ''),
+        status,
+        complaintType: String(item.complaintType ?? ''),
+        detailedViolenceType: String(item.detailedViolenceType ?? ''),
+        procedureType: String(item.procedureType ?? ''),
+        retaliationRisk: Boolean(item.retaliationRisk),
+        reportedAt: toDateIso(reportedAt),
+        updatedAt: toDateIso(updatedAt),
+        closedAt: toDateIso(closedAt instanceof Date ? closedAt : null),
+        openDays,
+        idleDays,
+        daysToClosure,
+      };
+    };
+    const sortByReportedAtDesc = (a: any, b: any) =>
+      new Date(b.reportedAt ?? 0).getTime() -
+      new Date(a.reportedAt ?? 0).getTime();
+    const sortByOpenCriticality = (a: any, b: any) => {
+      if (Number(b.retaliationRisk) !== Number(a.retaliationRisk)) {
+        return Number(b.retaliationRisk) - Number(a.retaliationRisk);
+      }
+      if (b.openDays !== a.openDays) return b.openDays - a.openDays;
+      if (b.idleDays !== a.idleDays) return b.idleDays - a.idleDays;
+      return sortByReportedAtDesc(a, b);
+    };
+    const sortByClosureTimeDesc = (a: any, b: any) => {
+      if (Number(b.daysToClosure ?? 0) !== Number(a.daysToClosure ?? 0)) {
+        return Number(b.daysToClosure ?? 0) - Number(a.daysToClosure ?? 0);
+      }
+      return sortByReportedAtDesc(a, b);
+    };
+    const caseDetailItems = items.map((item: any) => toCaseDetailItem(item));
+    const totalCaseDetailItems = caseDetailItems
+      .slice()
+      .sort(sortByReportedAtDesc)
+      .slice(0, KPI_DETAILS_LIMIT);
+    const openCaseDetailItems = caseDetailItems
+      .filter((item: any) =>
+        CPCA_OPEN_STATUS_SET.has(String(item.status ?? '')),
+      )
+      .sort(sortByOpenCriticality)
+      .slice(0, KPI_DETAILS_LIMIT);
+    const closedCaseDetailItems = caseDetailItems
+      .filter((item: any) =>
+        ['CONCLUDED', 'ARCHIVED'].includes(String(item.status ?? '')),
+      )
+      .sort(sortByClosureTimeDesc)
+      .slice(0, KPI_DETAILS_LIMIT);
+    const triageOver7CaseDetailItems = openCaseDetailItems
+      .filter(
+        (item: any) =>
+          CPCA_TRIAGE_STATUS_SET.has(String(item.status ?? '')) &&
+          Number(item.openDays ?? 0) > 7,
+      )
+      .slice(0, KPI_DETAILS_LIMIT);
+    const investigationOver30CaseDetailItems = openCaseDetailItems
+      .filter(
+        (item: any) =>
+          CPCA_INVESTIGATION_STATUS_SET.has(String(item.status ?? '')) &&
+          Number(item.openDays ?? 0) > 30,
+      )
+      .slice(0, KPI_DETAILS_LIMIT);
+
     const monthCounter = new Map<
       string,
       {
@@ -619,6 +733,14 @@ export class CpcaService {
       topAggressorRanks: this.toTopRankDistribution(aggressorRankCounter, 10),
       topVictimRanks: this.toTopRankDistribution(victimRankCounter, 10),
       criticalOpenCases: sortedCriticalOpenCases,
+      kpiDetails: {
+        totalCases: totalCaseDetailItems,
+        openCases: openCaseDetailItems,
+        closureRate: closedCaseDetailItems,
+        averageClosureTime: closedCaseDetailItems,
+        triageOver7Days: triageOver7CaseDetailItems,
+        investigationOver30Days: investigationOver30CaseDetailItems,
+      },
     };
   }
 
@@ -1323,20 +1445,14 @@ export class CpcaService {
     outcomeSummary: string | null | undefined;
     accusedDefenseEnsured: boolean | null | undefined;
   }) {
-    if (
-      input.complaintType === 'SEXUAL' &&
-      !Boolean(input.confidentialityTermSigned)
-    ) {
+    if (input.complaintType === 'SEXUAL' && !input.confidentialityTermSigned) {
       throwError('VALIDATION_ERROR', {
         field: 'confidentialityTermSigned',
         reason: 'CONFIDENTIALITY_TERM_REQUIRED_FOR_SEXUAL',
       });
     }
 
-    if (
-      input.preliminaryReportDate &&
-      !Boolean(input.preliminaryReportGenerated)
-    ) {
+    if (input.preliminaryReportDate && !input.preliminaryReportGenerated) {
       throwError('VALIDATION_ERROR', {
         field: 'preliminaryReportGenerated',
         reason: 'PRELIMINARY_REPORT_DATE_REQUIRES_FLAG',
@@ -1345,7 +1461,7 @@ export class CpcaService {
 
     if (
       Boolean(input.victimAccusedSeparationApplied) &&
-      !Boolean(input.victimAccusedSeparationEvaluated)
+      !input.victimAccusedSeparationEvaluated
     ) {
       throwError('VALIDATION_ERROR', {
         field: 'victimAccusedSeparationEvaluated',
@@ -1353,7 +1469,7 @@ export class CpcaService {
       });
     }
 
-    if (input.contractorReferralDate && !Boolean(input.outsourcedAccused)) {
+    if (input.contractorReferralDate && !input.outsourcedAccused) {
       throwError('VALIDATION_ERROR', {
         field: 'outsourcedAccused',
         reason: 'CONTRACTOR_REFERRAL_REQUIRES_OUTSOURCED_FLAG',
@@ -1367,7 +1483,7 @@ export class CpcaService {
           reason: 'OUTCOME_SUMMARY_REQUIRED_FOR_CLOSURE',
         });
       }
-      if (!Boolean(input.accusedDefenseEnsured)) {
+      if (!input.accusedDefenseEnsured) {
         throwError('VALIDATION_ERROR', {
           field: 'accusedDefenseEnsured',
           reason: 'DEFENSE_CONFIRMATION_REQUIRED_FOR_CLOSURE',

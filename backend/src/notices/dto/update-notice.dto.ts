@@ -1,4 +1,10 @@
-import { IsBoolean, IsEnum, IsOptional, IsString, IsDateString } from 'class-validator';
+import {
+  IsBoolean,
+  IsEnum,
+  IsOptional,
+  IsString,
+  IsDateString,
+} from 'class-validator';
 
 export class UpdateNoticeDto {
   @IsOptional()
@@ -29,4 +35,3 @@ export class UpdateNoticeDto {
   @IsBoolean()
   pinned?: boolean;
 }
-

@@ -6,10 +6,6 @@ import {
   CardContent,
   Chip,
   FormControlLabel,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   LinearProgress,
   MenuItem,
   Stack,
@@ -23,18 +19,15 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import AddIcon from '@mui/icons-material/Add';
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import RadioButtonUncheckedRoundedIcon from '@mui/icons-material/RadioButtonUncheckedRounded';
 import ScheduleRoundedIcon from '@mui/icons-material/ScheduleRounded';
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useChecklists, usePhases, useSpecialties, useEloRoles, useCreateChecklist, useUpdateChecklistStatus, useMe } from '../api/hooks';
+import { useChecklists, usePhases, useSpecialties, useEloRoles, useMe } from '../api/hooks';
 import { EmptyState } from '../components/states/EmptyState';
 import { ErrorState } from '../components/states/ErrorState';
 import { SkeletonState } from '../components/states/SkeletonState';
-import { parseApiError } from '../app/apiErrors';
-import { useToast } from '../app/toast';
 import { can } from '../app/rbac';
 import { api } from '../api/client';
 import { CHECKLIST_ITEM_STATUS_LABELS } from '../constants/enums';
@@ -98,7 +91,6 @@ export function ChecklistsPage() {
   const [params, setParams] = useSearchParams();
   const [viewByLocality, setViewByLocality] = useState(false);
   const [showDuplicates, setShowDuplicates] = useState(false);
-  const toast = useToast();
   const { data: me } = useMe();
 
   const phaseId = params.get('phaseId') ?? '';
@@ -126,14 +118,6 @@ export function ChecklistsPage() {
   const phasesQuery = usePhases();
   const specialtiesQuery = useSpecialties();
   const eloRolesQuery = useEloRoles();
-  const createChecklist = useCreateChecklist();
-  const updateChecklistStatus = useUpdateChecklistStatus();
-  const [createOpen, setCreateOpen] = useState(false);
-  const [createTitle, setCreateTitle] = useState('');
-  const [createPhaseId, setCreatePhaseId] = useState('');
-  const [createSpecialtyId, setCreateSpecialtyId] = useState('');
-  const [createEloRoleId, setCreateEloRoleId] = useState('');
-
   const updateParam = (key: string, value: string) => {
     const next = new URLSearchParams(params);
     if (value) next.set(key, value);
@@ -154,34 +138,6 @@ export function ChecklistsPage() {
   const specialtyMap = new Map<string, string>(specialties.map((s: any) => [String(s.id), String(s.name)]));
   const localities = selectTargetLocalities((data.localities ?? []) as any[]);
   const checklists = data.items ?? [];
-
-  const canUpdateChecklistStatus = can(me, 'checklists', 'update');
-
-  const getNextChecklistStatus = (current: string): string => {
-    if (current === 'DONE') return 'NOT_STARTED';
-    if (current === 'IN_PROGRESS' || current === 'STARTED') return 'DONE';
-    return 'IN_PROGRESS';
-  };
-
-  const handleToggleStatus = async (
-    checklistItemId: string,
-    localityId: string,
-    currentStatus: string,
-  ) => {
-    if (!canUpdateChecklistStatus) return;
-    const nextStatus = getNextChecklistStatus(currentStatus);
-    try {
-      await updateChecklistStatus.mutateAsync({
-        updates: [{ checklistItemId, localityId, status: nextStatus }],
-      });
-    } catch (error) {
-      const payload = parseApiError(error);
-      toast.push({
-        message: payload.message ?? 'Erro ao atualizar status pelo checklist',
-        severity: 'error',
-      });
-    }
-  };
 
   const checklistsToRender = useMemo(() => {
     if (showDuplicates) return checklists;
@@ -218,27 +174,6 @@ export function ChecklistsPage() {
     ? checklistsToRender.filter((c: any) => c.phaseId === phaseId)
     : checklistsToRender;
 
-  const handleCreateChecklist = async () => {
-    if (!createTitle.trim()) return;
-    try {
-      await createChecklist.mutateAsync({
-        title: createTitle.trim(),
-        phaseId: createPhaseId || undefined,
-        specialtyId: createSpecialtyId || undefined,
-        eloRoleId: createEloRoleId || undefined,
-      });
-      toast.push({ message: 'Checklist criado', severity: 'success' });
-      setCreateOpen(false);
-      setCreateTitle('');
-      setCreatePhaseId('');
-      setCreateSpecialtyId('');
-      setCreateEloRoleId('');
-    } catch (error) {
-      const payload = parseApiError(error);
-      toast.push({ message: payload.message ?? 'Erro ao criar checklist', severity: 'error' });
-    }
-  };
-
   if (checklistsQuery.isLoading) return <SkeletonState />;
   if (checklistsQuery.isError)
     return <ErrorState error={checklistsQuery.error} onRetry={() => checklistsQuery.refetch()} />;
@@ -248,18 +183,13 @@ export function ChecklistsPage() {
       <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1.2} mb={1.2}>
         <Box>
           <Typography variant="h4" fontWeight={700}>
-            Checklist por fase
+            Checklist de execução
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Filtre por fase e veja o panorama de execução de tarefas e atividades por localidade.
+            Visualização do andamento real de tarefas e atividades de campo por OM (somente leitura).
           </Typography>
         </Box>
         <Stack direction="row" spacing={1}>
-          {can(me, 'checklists', 'create') && (
-            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setCreateOpen(true)}>
-              Criar checklist
-            </Button>
-          )}
           {can(me, 'checklists', 'export') && (
             <Button
               variant="outlined"
@@ -278,7 +208,8 @@ export function ChecklistsPage() {
       <Card sx={{ mb: 1.2, borderRadius: 2, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
         <CardContent sx={{ py: 1.5 }}>
           <Alert severity="info" sx={{ mb: 1.2 }}>
-            Este checklist é automático: os checks são renderizados pelo andamento real de tarefas e atividades de cada localidade.
+            Os ícones refletem o status real das tarefas e das atividades cadastradas no sistema. Não é possível
+            alterar o checklist aqui — conclua ou atualize as tarefas e atividades nas respectivas telas.
           </Alert>
           <Stack direction="row" spacing={1.2} alignItems="center" flexWrap="wrap" sx={{ mb: 1.2 }}>
             <Typography variant="caption" color="text.secondary">
@@ -296,12 +227,7 @@ export function ChecklistsPage() {
               <RadioButtonUncheckedRoundedIcon sx={{ fontSize: 20, color: PENDING_COLOR }} />
               <Typography variant="caption">Pendente</Typography>
             </Stack>
-            <Chip
-              size="small"
-              color="info"
-              variant="outlined"
-              label="Atualização automática: concluído quando tarefa/atividade for finalizada"
-            />
+            <Chip size="small" color="info" variant="outlined" label="Somente leitura" />
           </Stack>
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} alignItems="center" flexWrap="wrap">
             <TextField
@@ -388,19 +314,17 @@ export function ChecklistsPage() {
         </CardContent>
       </Card>
 
-      {!phaseId && checklists.length > 0 && (
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Selecione uma fase para ver o checklist daquela fase.
-        </Typography>
-      )}
-
       {filteredByPhase.length === 0 && (
         <EmptyState
-          title="Nenhum checklist"
+          title="Nenhum item para exibir"
           description={
-            phaseId
-              ? 'Nenhum checklist encontrado para esta fase. Crie um checklist vinculado a esta fase.'
-              : 'Selecione uma fase no filtro acima ou crie um checklist para acompanhar a execução.'
+            localities.length === 0
+              ? 'Nenhuma localidade no escopo. Verifique o cadastro das OMs-alvo.'
+              : itemSourceType === 'ACTIVITY'
+                ? 'Não há atividades de campo registradas para os filtros selecionados (ou tente "Todos" / "Somente tarefas").'
+                : itemSourceType === 'TASK'
+                  ? 'Não há tarefas no escopo para os filtros selecionados. Ajuste fase, especialidade ou elo.'
+                  : 'Não há tarefas nem atividades que correspondam aos filtros selecionados.'
           }
         />
       )}
@@ -546,23 +470,9 @@ export function ChecklistsPage() {
                         </TableCell>
                         {filteredItems.map((item: any) => {
                           const status = item.statuses?.[loc.id] ?? 'NOT_STARTED';
-                          const canToggle = canUpdateChecklistStatus;
                           return (
                             <TableCell key={item.id} align="center" sx={{ py: 0.75 }}>
-                              <StatusIcon
-                                status={status}
-                                localityName={loc.name}
-                                onClick={
-                                  canToggle
-                                    ? () =>
-                                        handleToggleStatus(
-                                          item.id,
-                                          loc.id,
-                                          status,
-                                        )
-                                    : undefined
-                                }
-                              />
+                              <StatusIcon status={status} localityName={loc.name} />
                             </TableCell>
                           );
                         })}
@@ -635,23 +545,9 @@ export function ChecklistsPage() {
                         </TableCell>
                         {localities.map((loc: any) => {
                           const status = item.statuses?.[loc.id] ?? 'NOT_STARTED';
-                          const canToggle = canUpdateChecklistStatus;
                           return (
                             <TableCell key={loc.id} align="center" sx={{ py: 0.75 }}>
-                              <StatusIcon
-                                status={status}
-                                localityName={loc.name}
-                                onClick={
-                                  canToggle
-                                    ? () =>
-                                        handleToggleStatus(
-                                          item.id,
-                                          loc.id,
-                                          status,
-                                        )
-                                    : undefined
-                                }
-                              />
+                              <StatusIcon status={status} localityName={loc.name} />
                             </TableCell>
                           );
                         })}
@@ -666,71 +562,6 @@ export function ChecklistsPage() {
         );
       })}
 
-      <Dialog open={createOpen} onClose={() => setCreateOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Criar checklist</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ mt: 1 }}>
-            <TextField
-              label="Título"
-              value={createTitle}
-              onChange={(e) => setCreateTitle(e.target.value)}
-              required
-              fullWidth
-              autoFocus
-            />
-            <TextField
-              select
-              label="Fase"
-              value={createPhaseId}
-              onChange={(e) => setCreatePhaseId(e.target.value)}
-              fullWidth
-            >
-              <MenuItem value="">Nenhuma</MenuItem>
-              {(phasesQuery.data?.items ?? []).map((p: any) => (
-                <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>
-              ))}
-            </TextField>
-            <TextField
-              select
-              label="Especialidade"
-              value={createSpecialtyId}
-              onChange={(e) => setCreateSpecialtyId(e.target.value)}
-              fullWidth
-            >
-              <MenuItem value="">Nenhuma</MenuItem>
-              {(specialtiesQuery.data?.items ?? []).map((s: any) => (
-                <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>
-              ))}
-            </TextField>
-            <TextField
-              select
-              label="Elo responsável"
-              value={createEloRoleId}
-              onChange={(e) => setCreateEloRoleId(e.target.value)}
-              fullWidth
-              helperText="Ex.: Psicologia, SSO — quem acompanha este checklist a nível Brasil"
-            >
-              <MenuItem value="">Nenhum</MenuItem>
-              {(eloRolesQuery.data?.items ?? []).map((r: any) => (
-                <MenuItem key={r.id} value={r.id}>{r.name} ({r.code})</MenuItem>
-              ))}
-            </TextField>
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button color="error" variant="outlined" onClick={() => setCreateOpen(false)}>
-            Cancelar
-          </Button>
-          <Button
-            variant="contained"
-            color="success"
-            onClick={handleCreateChecklist}
-            disabled={!createTitle.trim() || createChecklist.isPending}
-          >
-            {createChecklist.isPending ? 'Criando…' : 'Criar'}
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   );
 }

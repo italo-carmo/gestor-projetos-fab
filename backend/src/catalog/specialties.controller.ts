@@ -1,4 +1,13 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Put,
+  UseGuards,
+} from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RequirePermission } from '../rbac/require-permission.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
@@ -15,7 +24,9 @@ export class SpecialtiesController {
   @Get()
   @RequirePermission('specialties', 'view')
   async list() {
-    const items = await this.prisma.specialty.findMany({ orderBy: { name: 'asc' } });
+    const items = await this.prisma.specialty.findMany({
+      orderBy: { name: 'asc' },
+    });
     return { items };
   }
 
@@ -38,8 +49,16 @@ export class SpecialtiesController {
       where: { id },
       data: {
         name: dto.name ? sanitizeText(dto.name) : undefined,
-        color: dto.color ? sanitizeText(dto.color) : dto.color === null ? null : undefined,
-        icon: dto.icon ? sanitizeText(dto.icon) : dto.icon === null ? null : undefined,
+        color: dto.color
+          ? sanitizeText(dto.color)
+          : dto.color === null
+            ? null
+            : undefined,
+        icon: dto.icon
+          ? sanitizeText(dto.icon)
+          : dto.icon === null
+            ? null
+            : undefined,
       },
     });
   }

@@ -17,7 +17,11 @@ import {
   ROLE_TI,
 } from './role-access';
 
-type PermissionEntry = { resource: string; action: string; scope: PermissionScope };
+type PermissionEntry = {
+  resource: string;
+  action: string;
+  scope: PermissionScope;
+};
 type UserAccessPayload = Prisma.UserGetPayload<{
   include: {
     roles: {
@@ -62,7 +66,10 @@ export class RbacService {
     private readonly fabLdap: FabLdapService,
   ) {}
 
-  async getUserAccess(userId: string, activeRoleId?: string | null): Promise<RbacUser> {
+  async getUserAccess(
+    userId: string,
+    activeRoleId?: string | null,
+  ): Promise<RbacUser> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       include: {
@@ -130,9 +137,12 @@ export class RbacService {
         isSystemRole: false,
         wildcard: role.wildcard,
         flagsJson: (role.flagsJson ?? undefined) as any,
-        constraintsTemplateJson: (role.constraintsTemplateJson ?? undefined) as any,
+        constraintsTemplateJson: (role.constraintsTemplateJson ??
+          undefined) as any,
         permissions: {
-          create: role.permissions.map((rp) => ({ permissionId: rp.permissionId })),
+          create: role.permissions.map((rp) => ({
+            permissionId: rp.permissionId,
+          })),
         },
       },
     });
@@ -144,7 +154,10 @@ export class RbacService {
     return this.prisma.permission.findMany({ orderBy: { resource: 'asc' } });
   }
 
-  async setRolePermissions(roleId: string, permissions: { resource: string; action: string; scope: PermissionScope }[]) {
+  async setRolePermissions(
+    roleId: string,
+    permissions: { resource: string; action: string; scope: PermissionScope }[],
+  ) {
     const role = await this.prisma.role.findUnique({ where: { id: roleId } });
     if (!role) throwError('NOT_FOUND');
 
@@ -178,7 +191,10 @@ export class RbacService {
 
     await this.prisma.rolePermission.deleteMany({ where: { roleId } });
     await this.prisma.rolePermission.createMany({
-      data: permissionRecords.map((record) => ({ roleId, permissionId: record.id })),
+      data: permissionRecords.map((record) => ({
+        roleId,
+        permissionId: record.id,
+      })),
     });
 
     return this.prisma.role.findUnique({ where: { id: roleId } });
@@ -211,7 +227,11 @@ export class RbacService {
     };
   }
 
-  async importMatrix(payload: any, mode: 'replace' | 'merge' = 'replace', userId?: string) {
+  async importMatrix(
+    payload: any,
+    mode: 'replace' | 'merge' = 'replace',
+    userId?: string,
+  ) {
     if (!payload || !Array.isArray(payload.roles)) {
       throwError('VALIDATION_ERROR', { reason: 'INVALID_PAYLOAD' });
     }
@@ -222,7 +242,11 @@ export class RbacService {
       isSystemRole?: boolean;
       wildcard?: boolean;
       flags?: Record<string, unknown>;
-      permissions?: { resource: string; action: string; scope: PermissionScope }[];
+      permissions?: {
+        resource: string;
+        action: string;
+        scope: PermissionScope;
+      }[];
       constraintsTemplate?: Record<string, unknown>;
     }>;
 
@@ -232,7 +256,10 @@ export class RbacService {
     for (const role of incomingRoles) {
       for (const perm of role.permissions ?? []) {
         const exists = allPermissions.some(
-          (p) => p.resource === perm.resource && p.action === perm.action && p.scope === perm.scope,
+          (p) =>
+            p.resource === perm.resource &&
+            p.action === perm.action &&
+            p.scope === perm.scope,
         );
         if (!exists) {
           invalidPermissions.push({ role: role.name, ...perm });
@@ -249,12 +276,16 @@ export class RbacService {
     let createdRoles = 0;
 
     for (const role of incomingRoles) {
-      const existing = await this.prisma.role.findUnique({ where: { name: role.name } });
+      const existing = await this.prisma.role.findUnique({
+        where: { name: role.name },
+      });
       const permissionIds = allPermissions
         .filter((p) =>
           (role.permissions ?? []).some(
             (perm) =>
-              perm.resource === p.resource && perm.action === p.action && perm.scope === p.scope,
+              perm.resource === p.resource &&
+              perm.action === p.action &&
+              perm.scope === p.scope,
           ),
         )
         .map((p) => p.id);
@@ -267,7 +298,8 @@ export class RbacService {
             isSystemRole: role.isSystemRole ?? false,
             wildcard: role.wildcard ?? false,
             flagsJson: (role.flags ?? undefined) as any,
-            constraintsTemplateJson: (role.constraintsTemplate ?? undefined) as any,
+            constraintsTemplateJson: (role.constraintsTemplate ??
+              undefined) as any,
             permissions: {
               create: permissionIds.map((id) => ({ permissionId: id })),
             },
@@ -281,21 +313,30 @@ export class RbacService {
             description: role.description ?? existing.description,
             wildcard: role.wildcard ?? existing.wildcard,
             flagsJson: (role.flags ?? existing.flagsJson ?? undefined) as any,
-            constraintsTemplateJson: (role.constraintsTemplate ?? existing.constraintsTemplateJson ?? undefined) as any,
+            constraintsTemplateJson: (role.constraintsTemplate ??
+              existing.constraintsTemplateJson ??
+              undefined) as any,
           },
         });
 
         if (mode === 'replace') {
-          await this.prisma.rolePermission.deleteMany({ where: { roleId: existing.id } });
+          await this.prisma.rolePermission.deleteMany({
+            where: { roleId: existing.id },
+          });
         }
 
-        const current = await this.prisma.rolePermission.findMany({ where: { roleId: existing.id } });
+        const current = await this.prisma.rolePermission.findMany({
+          where: { roleId: existing.id },
+        });
         const currentIds = new Set(current.map((rp) => rp.permissionId));
 
         const toAdd = permissionIds.filter((id) => !currentIds.has(id));
         if (toAdd.length > 0) {
           await this.prisma.rolePermission.createMany({
-            data: toAdd.map((id) => ({ roleId: existing.id, permissionId: id })),
+            data: toAdd.map((id) => ({
+              roleId: existing.id,
+              permissionId: id,
+            })),
           });
         }
 
@@ -333,7 +374,9 @@ export class RbacService {
     const resources = await this.listPermissionResources();
     const wildcard = user.roles.some((ur) => ur.role.wildcard);
     const roleResources = new Set(
-      user.roles.flatMap((ur) => ur.role.permissions.map((rp) => rp.permission.resource)),
+      user.roles.flatMap((ur) =>
+        ur.role.permissions.map((rp) => rp.permission.resource),
+      ),
     );
     const overrideByResource = new Map(
       user.moduleAccessOverrides.map((item) => [item.resource, item.enabled]),
@@ -404,7 +447,9 @@ export class RbacService {
 
     const wildcard = user.roles.some((ur) => ur.role.wildcard);
     const roleResources = new Set(
-      user.roles.flatMap((ur) => ur.role.permissions.map((rp) => rp.permission.resource)),
+      user.roles.flatMap((ur) =>
+        ur.role.permissions.map((rp) => rp.permission.resource),
+      ),
     );
     const baseEnabled = wildcard || roleResources.has(resource);
 
@@ -472,7 +517,10 @@ export class RbacService {
 
     const selectedRoleIds = Array.from(
       new Set(
-        [payload.roleId, ...(Array.isArray(payload.roleIds) ? payload.roleIds : [])]
+        [
+          payload.roleId,
+          ...(Array.isArray(payload.roleIds) ? payload.roleIds : []),
+        ]
           .map((value) => String(value ?? '').trim())
           .filter(Boolean),
       ),
@@ -490,11 +538,15 @@ export class RbacService {
     }
     const profile = await this.lookupLdapByIdentifier(identifier);
     if (!profile) {
-      throwError('VALIDATION_ERROR', { reason: 'LDAP_USER_NOT_FOUND', uid: identifier });
+      throwError('VALIDATION_ERROR', {
+        reason: 'LDAP_USER_NOT_FOUND',
+        uid: identifier,
+      });
     }
     const uid = profile.uid;
 
-    const preferredEmail = this.normalizeEmail(profile.email) ?? `${uid}@fab.intraer`;
+    const preferredEmail =
+      this.normalizeEmail(profile.email) ?? `${uid}@fab.intraer`;
     const preferredName = profile.name?.trim() || `Militar ${uid}`;
 
     const existing = await this.prisma.user.findFirst({
@@ -512,14 +564,23 @@ export class RbacService {
     });
 
     const targetLocalityId =
-      payload.localityId !== undefined ? payload.localityId : (existing?.localityId ?? null);
-    if (roles.some((role) => roleRequiresLocality(role.name)) && !targetLocalityId) {
+      payload.localityId !== undefined
+        ? payload.localityId
+        : (existing?.localityId ?? null);
+    if (
+      roles.some((role) => roleRequiresLocality(role.name)) &&
+      !targetLocalityId
+    ) {
       throwError('USER_LOCAL_ROLE_REQUIRES_LOCALITY');
     }
     const targetSpecialtyId =
-      payload.specialtyId !== undefined ? payload.specialtyId : (existing?.specialtyId ?? null);
+      payload.specialtyId !== undefined
+        ? payload.specialtyId
+        : (existing?.specialtyId ?? null);
     const targetEloRoleId =
-      payload.eloRoleId !== undefined ? payload.eloRoleId : (existing?.eloRoleId ?? null);
+      payload.eloRoleId !== undefined
+        ? payload.eloRoleId
+        : (existing?.eloRoleId ?? null);
     if (
       roles.some((role) => roleRequiresSpecialty(role.name)) &&
       !targetSpecialtyId &&
@@ -528,7 +589,11 @@ export class RbacService {
       throwError('USER_SPECIALTY_ROLE_REQUIRES_SPECIALTY');
     }
 
-    const uniqueEmail = await this.resolveUniqueEmail(preferredEmail, uid, existing?.id);
+    const uniqueEmail = await this.resolveUniqueEmail(
+      preferredEmail,
+      uid,
+      existing?.id,
+    );
     const user = existing
       ? await this.prisma.user.update({
           where: { id: existing.id },
@@ -540,7 +605,9 @@ export class RbacService {
             localityId:
               payload.localityId !== undefined ? payload.localityId : undefined,
             specialtyId:
-              payload.specialtyId !== undefined ? payload.specialtyId : undefined,
+              payload.specialtyId !== undefined
+                ? payload.specialtyId
+                : undefined,
             eloRoleId:
               payload.eloRoleId !== undefined ? payload.eloRoleId : undefined,
           },
@@ -682,7 +749,8 @@ export class RbacService {
         id: userRole.role.id,
         name: canonicalRoleName(userRole.role.name),
         wildcard: userRole.role.wildcard,
-        constraintsTemplateJson: userRole.role.constraintsTemplateJson as Record<string, unknown> | null,
+        constraintsTemplateJson: userRole.role
+          .constraintsTemplateJson as Record<string, unknown> | null,
         flagsJson: userRole.role.flagsJson as Record<string, unknown> | null,
         permissions: userRole.role.permissions.map((rp) => ({
           resource: rp.permission.resource,
@@ -698,7 +766,9 @@ export class RbacService {
     const activeRole = requestedRole ?? this.pickDefaultActiveRole(allRoles);
     const roles = activeRole ? [activeRole] : [];
 
-    const normalizedRoles = new Set(roles.map((role) => normalizeRoleName(role.name)));
+    const normalizedRoles = new Set(
+      roles.map((role) => normalizeRoleName(role.name)),
+    );
     const hasNationalScope =
       normalizedRoles.has(normalizeRoleName(ROLE_TI)) ||
       normalizedRoles.has(normalizeRoleName(ROLE_COORDENACAO_CIPAVD)) ||
@@ -713,10 +783,13 @@ export class RbacService {
     const enabledOverrideResources = moduleAccessOverrides
       .filter((item) => item.enabled)
       .map((item) => item.resource);
-    const needsCatalogPermissions = roleWildcard || enabledOverrideResources.length > 0;
+    const needsCatalogPermissions =
+      roleWildcard || enabledOverrideResources.length > 0;
     const catalogPermissions = needsCatalogPermissions
       ? await this.listPermissionEntries(
-          roleWildcard ? undefined : { resource: { in: enabledOverrideResources } },
+          roleWildcard
+            ? undefined
+            : { resource: { in: enabledOverrideResources } },
         )
       : [];
 
@@ -733,7 +806,10 @@ export class RbacService {
     );
 
     const executiveFromRole = roles.some(
-      (role) => role.flagsJson && (role.flagsJson as { executive_hide_pii?: boolean }).executive_hide_pii === true,
+      (role) =>
+        role.flagsJson &&
+        (role.flagsJson as { executive_hide_pii?: boolean })
+          .executive_hide_pii === true,
     );
 
     return {
@@ -796,8 +872,10 @@ export class RbacService {
     ]);
 
     const sorted = [...roles].sort((a, b) => {
-      const priorityA = priorityOrder.get(normalizeRoleName(a.name)) ?? Number.MAX_SAFE_INTEGER;
-      const priorityB = priorityOrder.get(normalizeRoleName(b.name)) ?? Number.MAX_SAFE_INTEGER;
+      const priorityA =
+        priorityOrder.get(normalizeRoleName(a.name)) ?? Number.MAX_SAFE_INTEGER;
+      const priorityB =
+        priorityOrder.get(normalizeRoleName(b.name)) ?? Number.MAX_SAFE_INTEGER;
       if (priorityA !== priorityB) {
         return priorityA - priorityB;
       }
@@ -841,7 +919,9 @@ export class RbacService {
   }
 
   private normalizeEmail(email: string | null | undefined) {
-    const value = String(email ?? '').trim().toLowerCase();
+    const value = String(email ?? '')
+      .trim()
+      .toLowerCase();
     return value || null;
   }
 

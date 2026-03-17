@@ -83,7 +83,11 @@ export class ExportsController {
     const data = await this.checklists.list({ phaseId, specialtyId }, user);
     const localities = data.localities ?? [];
 
-    const headers = ['checklist', 'item', ...localities.map((l: any) => l.name)];
+    const headers = [
+      'checklist',
+      'item',
+      ...localities.map((l: any) => l.name),
+    ];
     const rows: string[][] = [];
     for (const checklist of data.items ?? []) {
       for (const item of checklist.items ?? []) {
@@ -97,7 +101,10 @@ export class ExportsController {
 
     const csv = toCsv(headers, rows);
     res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', 'attachment; filename="checklists.csv"');
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename="checklists.csv"',
+    );
     res.send(csv);
   }
 }
@@ -105,7 +112,11 @@ export class ExportsController {
 function toCsv(headers: string[], rows: string[][]) {
   const escape = (value: string) => {
     const sanitized = value ?? '';
-    if (sanitized.includes('"') || sanitized.includes(',') || sanitized.includes('\n')) {
+    if (
+      sanitized.includes('"') ||
+      sanitized.includes(',') ||
+      sanitized.includes('\n')
+    ) {
       return `"${sanitized.replace(/"/g, '""')}"`;
     }
     return sanitized;

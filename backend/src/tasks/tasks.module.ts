@@ -8,7 +8,12 @@ import { DashboardsController } from './dashboards.controller';
 
 @Module({
   imports: [RbacModule],
-  controllers: [PhasesController, TaskTemplatesController, TaskInstancesController, DashboardsController],
+  controllers: [
+    PhasesController,
+    TaskTemplatesController,
+    TaskInstancesController,
+    DashboardsController,
+  ],
   providers: [TasksService],
   exports: [TasksService],
 })

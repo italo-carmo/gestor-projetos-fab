@@ -12,5 +12,3 @@ export class CreateLessonLearnedDto {
   @IsString()
   typeId: string;
 }
-
-

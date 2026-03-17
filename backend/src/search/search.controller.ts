@@ -17,4 +17,3 @@ export class SearchController {
     return this.search.query(q, user);
   }
 }
-

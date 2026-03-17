@@ -4,4 +4,3 @@ export function parsePagination(pageRaw?: string, pageSizeRaw?: string) {
   const skip = (page - 1) * pageSize;
   return { page, pageSize, skip, take: pageSize };
 }
-

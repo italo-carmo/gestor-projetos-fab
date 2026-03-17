@@ -605,7 +605,10 @@ export class DocumentsService {
     const label = payload.label?.trim() || null;
 
     if (!documentId) {
-      throwError('VALIDATION_ERROR', { field: 'documentId', reason: 'required' });
+      throwError('VALIDATION_ERROR', {
+        field: 'documentId',
+        reason: 'required',
+      });
     }
     if (!entityId) {
       throwError('VALIDATION_ERROR', { field: 'entityId', reason: 'required' });
@@ -688,10 +691,15 @@ export class DocumentsService {
         ? existing.entityId
         : String(payload.entityId ?? '').trim();
     const nextLabel =
-      payload.label === undefined ? existing.label : payload.label?.trim() || null;
+      payload.label === undefined
+        ? existing.label
+        : payload.label?.trim() || null;
 
     if (!nextDocumentId) {
-      throwError('VALIDATION_ERROR', { field: 'documentId', reason: 'required' });
+      throwError('VALIDATION_ERROR', {
+        field: 'documentId',
+        reason: 'required',
+      });
     }
     if (!nextEntityId) {
       throwError('VALIDATION_ERROR', { field: 'entityId', reason: 'required' });
@@ -805,7 +813,9 @@ export class DocumentsService {
       if (this.shouldApplyLocalityScope(user))
         where.localityId = user?.localityId as string;
       if (user?.specialtyId) {
-        andClauses.push({ OR: [{ specialtyId: null }, { specialtyId: user.specialtyId }] });
+        andClauses.push({
+          OR: [{ specialtyId: null }, { specialtyId: user.specialtyId }],
+        });
       }
       if (q) {
         andClauses.push({
@@ -879,14 +889,19 @@ export class DocumentsService {
           id: row.id,
           label: row.title,
           subtitle: row.locality?.code ?? row.locality?.name ?? null,
-          extra: row.eventDate ? row.eventDate.toISOString().slice(0, 10) : null,
+          extra: row.eventDate
+            ? row.eventDate.toISOString().slice(0, 10)
+            : null,
         })),
       };
     }
 
     const where: Prisma.MeetingWhereInput = {};
     if (this.shouldApplyLocalityScope(user)) {
-      where.OR = [{ localityId: null }, { localityId: user?.localityId as string }];
+      where.OR = [
+        { localityId: null },
+        { localityId: user?.localityId as string },
+      ];
     }
     if (q) {
       const qWhere: Prisma.MeetingWhereInput = {
@@ -1285,7 +1300,9 @@ export class DocumentsService {
   }
 
   private parseEntityType(value: string): DocumentLinkEntity {
-    const normalized = String(value ?? '').trim().toUpperCase();
+    const normalized = String(value ?? '')
+      .trim()
+      .toUpperCase();
     if (
       normalized !== DocumentLinkEntity.TASK_INSTANCE &&
       normalized !== DocumentLinkEntity.TASK_TEMPLATE &&

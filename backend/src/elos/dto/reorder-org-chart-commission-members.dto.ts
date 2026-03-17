@@ -5,4 +5,3 @@ export class ReorderOrgChartCommissionMembersDto {
   @IsString({ each: true })
   userIds!: string[];
 }
-

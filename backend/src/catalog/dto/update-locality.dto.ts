@@ -32,4 +32,3 @@ export class UpdateLocalityDto {
   @IsString()
   notes?: string | null;
 }
-

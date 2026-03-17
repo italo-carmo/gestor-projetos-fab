@@ -30,4 +30,3 @@ export class CreateLocalityDto {
   @IsString()
   notes?: string | null;
 }
-

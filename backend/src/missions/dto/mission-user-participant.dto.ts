@@ -4,4 +4,3 @@ export class MissionUserParticipantDto {
   @IsString()
   userId: string;
 }
-

@@ -1,4 +1,11 @@
-import { IsArray, IsDateString, IsEnum, IsOptional, IsString, IsUrl } from 'class-validator';
+import {
+  IsArray,
+  IsDateString,
+  IsEnum,
+  IsOptional,
+  IsString,
+  IsUrl,
+} from 'class-validator';
 import { SocialCommunicationAudience } from './create-social-communication-article.dto';
 
 export class UpdateSocialCommunicationArticleDto {

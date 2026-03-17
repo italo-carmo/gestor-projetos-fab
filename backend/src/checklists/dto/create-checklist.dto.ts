@@ -16,4 +16,3 @@ export class CreateChecklistDto {
   @IsString()
   eloRoleId?: string | null;
 }
-

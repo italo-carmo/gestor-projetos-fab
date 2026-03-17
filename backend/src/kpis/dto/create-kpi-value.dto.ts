@@ -15,4 +15,3 @@ export class CreateKpiValueDto {
   @IsString()
   specialtyId?: string | null;
 }
-

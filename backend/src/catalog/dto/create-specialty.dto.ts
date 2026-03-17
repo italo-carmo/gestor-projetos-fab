@@ -12,4 +12,3 @@ export class CreateSpecialtyDto {
   @IsString()
   icon?: string | null;
 }
-

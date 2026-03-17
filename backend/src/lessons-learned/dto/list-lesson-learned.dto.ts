@@ -9,5 +9,3 @@ export class ListLessonLearnedDto {
   @IsString()
   typeId?: string;
 }
-
-

@@ -10,4 +10,3 @@ import { MeetingsService } from './meetings.service';
   providers: [MeetingsService],
 })
 export class MeetingsModule {}
-

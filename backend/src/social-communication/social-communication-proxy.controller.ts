@@ -75,17 +75,19 @@ export class SocialCommunicationProxyController {
     res.setHeader('Cache-Control', 'public, max-age=600');
     return res.send(payload.html);
   }
-
 }
 
 @Controller('social-communication/uploads')
 export class SocialCommunicationUploadsController {
   @Get(':filename')
-  async uploadedCover(@Param('filename') filename: string, @Res() res: Response) {
+  async uploadedCover(
+    @Param('filename') filename: string,
+    @Res() res: Response,
+  ) {
     const safeName = path.basename(String(filename ?? ''));
     if (!safeName || safeName !== filename) throwError('NOT_FOUND');
-    const filePath = getSocialCommunicationCoverCandidates(safeName).find((candidate) =>
-      fs.existsSync(candidate),
+    const filePath = getSocialCommunicationCoverCandidates(safeName).find(
+      (candidate) => fs.existsSync(candidate),
     );
     if (!filePath) throwError('NOT_FOUND');
     res.setHeader('Cache-Control', 'public, max-age=3600');

@@ -21,7 +21,11 @@ export class PhasesController {
 
   @Patch(':id')
   @RequirePermission('phases', 'update')
-  update(@Param('id') id: string, @Body() dto: UpdatePhaseDto, @CurrentUser() user: RbacUser) {
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdatePhaseDto,
+    @CurrentUser() user: RbacUser,
+  ) {
     return this.tasks.updatePhase(id, dto, user);
   }
 }

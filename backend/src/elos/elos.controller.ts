@@ -1,4 +1,14 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Put,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../common/current-user.decorator';
 import { RequirePermission } from '../rbac/require-permission.decorator';
@@ -38,7 +48,11 @@ export class ElosController {
 
   @Put(':id')
   @RequirePermission('elos', 'update')
-  update(@Param('id') id: string, @Body() dto: UpdateEloDto, @CurrentUser() user: RbacUser) {
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateEloDto,
+    @CurrentUser() user: RbacUser,
+  ) {
     return this.elos.update(id, dto, user);
   }
 

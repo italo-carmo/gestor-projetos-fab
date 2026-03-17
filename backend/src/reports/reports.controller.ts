@@ -1,4 +1,18 @@
-import { Body, Controller, Get, Param, Post, Put, Query, Req, Res, UploadedFile, UseFilters, UseGuards, UseInterceptors } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Put,
+  Query,
+  Req,
+  Res,
+  UploadedFile,
+  UseFilters,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import path from 'node:path';
@@ -43,7 +57,9 @@ export class ReportsController {
       fileFilter: (req, file, cb) => {
         const allowed = ['application/pdf', 'image/png', 'image/jpeg'];
         if (!allowed.includes(file.mimetype)) {
-          (req as Request & { fileValidationError?: string }).fileValidationError = 'FILE_TYPE_INVALID';
+          (
+            req as Request & { fileValidationError?: string }
+          ).fileValidationError = 'FILE_TYPE_INVALID';
           return cb(null, false);
         }
         cb(null, true);
@@ -66,15 +82,18 @@ export class ReportsController {
     const filePath = path.join(uploadDir, file.filename);
     const buffer = fs.readFileSync(filePath);
     const checksum = crypto.createHash('sha256').update(buffer).digest('hex');
-    return this.reports.createReport({
-      taskInstanceId,
-      fileName: file.originalname,
-      fileUrl,
-      storageKey: file.filename,
-      mimeType: file.mimetype,
-      fileSize: file.size,
-      checksum,
-    }, user);
+    return this.reports.createReport(
+      {
+        taskInstanceId,
+        fileName: file.originalname,
+        fileUrl,
+        storageKey: file.filename,
+        mimeType: file.mimetype,
+        fileSize: file.size,
+        checksum,
+      },
+      user,
+    );
   }
 
   @Get(':id/download')
@@ -86,11 +105,15 @@ export class ReportsController {
     @CurrentUser() user: RbacUser,
   ) {
     if (!token) {
-      return res.status(401).send({ message: 'Token ausente', code: 'AUTH_INVALID_CREDENTIALS' });
+      return res
+        .status(401)
+        .send({ message: 'Token ausente', code: 'AUTH_INVALID_CREDENTIALS' });
     }
     const reportId = await this.reports.verifyDownloadToken(token);
     if (reportId !== id) {
-      return res.status(401).send({ message: 'Token invalido', code: 'AUTH_INVALID_CREDENTIALS' });
+      return res
+        .status(401)
+        .send({ message: 'Token invalido', code: 'AUTH_INVALID_CREDENTIALS' });
     }
     const report = await this.reports.getReport(id, user);
     const fileName = report.storageKey ?? path.basename(report.fileUrl);
@@ -106,7 +129,11 @@ export class ReportsController {
 
   @Put(':id/approve')
   @RequirePermission('reports', 'approve')
-  approve(@Param('id') id: string, @Body('approved') approved: boolean, @CurrentUser() user: RbacUser) {
+  approve(
+    @Param('id') id: string,
+    @Body('approved') approved: boolean,
+    @CurrentUser() user: RbacUser,
+  ) {
     return this.reports.approveReport(id, approved, user);
   }
 }

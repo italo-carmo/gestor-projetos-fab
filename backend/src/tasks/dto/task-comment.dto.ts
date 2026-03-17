@@ -5,4 +5,3 @@ export class TaskCommentDto {
   @MaxLength(4000)
   text: string;
 }
-

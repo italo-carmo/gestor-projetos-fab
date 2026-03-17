@@ -213,7 +213,12 @@ export class MeetingsService {
         meetingType: payload.meetingType
           ? (payload.meetingType as MeetingType)
           : undefined,
-        location: payload.location !== undefined ? (location ? sanitizeText(location) : null) : undefined,
+        location:
+          payload.location !== undefined
+            ? location
+              ? sanitizeText(location)
+              : null
+            : undefined,
         meetingLink:
           payload.meetingLink !== undefined ? meetingLink : undefined,
         agenda: payload.agenda

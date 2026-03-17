@@ -15,16 +15,19 @@ export class NoticesService {
     private readonly audit: AuditService,
   ) {}
 
-  async list(filters: {
-    localityId?: string;
-    specialtyId?: string;
-    pinned?: string;
-    priority?: string;
-    dueFrom?: string;
-    dueTo?: string;
-    page?: string;
-    pageSize?: string;
-  }, user?: RbacUser) {
+  async list(
+    filters: {
+      localityId?: string;
+      specialtyId?: string;
+      pinned?: string;
+      priority?: string;
+      dueFrom?: string;
+      dueTo?: string;
+      page?: string;
+      pageSize?: string;
+    },
+    user?: RbacUser,
+  ) {
     const where: Prisma.NoticeWhereInput = {};
 
     if (filters.localityId) where.localityId = filters.localityId;
@@ -50,16 +53,27 @@ export class NoticesService {
       });
     }
     if (scopeFilters.length > 0) {
-      const andArr = Array.isArray(where.AND) ? where.AND : (where.AND ? [where.AND] : []);
+      const andArr = Array.isArray(where.AND)
+        ? where.AND
+        : where.AND
+          ? [where.AND]
+          : [];
       where.AND = [...andArr, ...scopeFilters];
     }
 
-    const { page, pageSize, skip, take } = parsePagination(filters.page, filters.pageSize);
+    const { page, pageSize, skip, take } = parsePagination(
+      filters.page,
+      filters.pageSize,
+    );
 
     const [items, total] = await this.prisma.$transaction([
       this.prisma.notice.findMany({
         where,
-        orderBy: [{ pinned: 'desc' }, { dueDate: 'asc' }, { createdAt: 'desc' }],
+        orderBy: [
+          { pinned: 'desc' },
+          { dueDate: 'asc' },
+          { createdAt: 'desc' },
+        ],
         skip,
         take,
       }),
@@ -77,15 +91,18 @@ export class NoticesService {
     };
   }
 
-  async create(payload: {
-    title: string;
-    body: string;
-    localityId?: string | null;
-    specialtyId?: string | null;
-    dueDate?: string | null;
-    priority?: string;
-    pinned?: boolean;
-  }, user?: RbacUser) {
+  async create(
+    payload: {
+      title: string;
+      body: string;
+      localityId?: string | null;
+      specialtyId?: string | null;
+      dueDate?: string | null;
+      priority?: string;
+      pinned?: boolean;
+    },
+    user?: RbacUser,
+  ) {
     const localityId = payload.localityId ?? null;
     const specialtyId = payload.specialtyId ?? null;
     this.assertConstraints(localityId, specialtyId, user);
@@ -114,15 +131,19 @@ export class NoticesService {
     return created;
   }
 
-  async update(id: string, payload: {
-    title?: string;
-    body?: string;
-    localityId?: string | null;
-    specialtyId?: string | null;
-    dueDate?: string | null;
-    priority?: string;
-    pinned?: boolean;
-  }, user?: RbacUser) {
+  async update(
+    id: string,
+    payload: {
+      title?: string;
+      body?: string;
+      localityId?: string | null;
+      specialtyId?: string | null;
+      dueDate?: string | null;
+      priority?: string;
+      pinned?: boolean;
+    },
+    user?: RbacUser,
+  ) {
     const existing = await this.prisma.notice.findUnique({ where: { id } });
     if (!existing) throwError('NOT_FOUND');
 
@@ -137,8 +158,14 @@ export class NoticesService {
         body: payload.body ? sanitizeText(payload.body) : undefined,
         localityId,
         specialtyId,
-        dueDate: payload.dueDate ? new Date(payload.dueDate) : payload.dueDate === null ? null : undefined,
-        priority: payload.priority ? (payload.priority as NoticePriority) : undefined,
+        dueDate: payload.dueDate
+          ? new Date(payload.dueDate)
+          : payload.dueDate === null
+            ? null
+            : undefined,
+        priority: payload.priority
+          ? (payload.priority as NoticePriority)
+          : undefined,
         pinned: payload.pinned ?? undefined,
       },
     });
@@ -149,7 +176,11 @@ export class NoticesService {
       action: 'update',
       entityId: id,
       localityId: updated.localityId ?? undefined,
-      diffJson: { title: updated.title, priority: updated.priority, pinned: updated.pinned },
+      diffJson: {
+        title: updated.title,
+        priority: updated.priority,
+        pinned: updated.pinned,
+      },
     });
 
     return updated;
@@ -219,7 +250,11 @@ export class NoticesService {
     };
   }
 
-  private assertConstraints(localityId: string | null, specialtyId: string | null, user?: RbacUser) {
+  private assertConstraints(
+    localityId: string | null,
+    specialtyId: string | null,
+    user?: RbacUser,
+  ) {
     const constraints = this.getScopeConstraints(user);
     if (constraints.localityId && constraints.localityId !== localityId) {
       throwError('RBAC_FORBIDDEN');

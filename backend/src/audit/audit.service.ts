@@ -15,7 +15,9 @@ export class AuditService {
     entityId?: string | null;
     diffJson?: Record<string, unknown> | null;
   }) {
-    const diffJson = params.diffJson ? this.truncateDiff(params.diffJson) : Prisma.JsonNull;
+    const diffJson = params.diffJson
+      ? this.truncateDiff(params.diffJson)
+      : Prisma.JsonNull;
     return this.prisma.auditLog.create({
       data: {
         userId: params.userId ?? null,
@@ -55,7 +57,10 @@ export class AuditService {
       if (filters.to) where.createdAt.lte = new Date(filters.to);
     }
 
-    const { page, pageSize, skip, take } = parsePagination(filters.page, filters.pageSize);
+    const { page, pageSize, skip, take } = parsePagination(
+      filters.page,
+      filters.pageSize,
+    );
 
     const [items, total] = await this.prisma.$transaction([
       this.prisma.auditLog.findMany({

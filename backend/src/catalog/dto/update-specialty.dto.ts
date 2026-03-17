@@ -13,4 +13,3 @@ export class UpdateSpecialtyDto {
   @IsString()
   icon?: string | null;
 }
-

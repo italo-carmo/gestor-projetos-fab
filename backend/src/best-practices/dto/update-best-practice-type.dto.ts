@@ -14,4 +14,3 @@ export class UpdateBestPracticeTypeDto {
   @IsHexColor()
   textColorHex?: string;
 }
-

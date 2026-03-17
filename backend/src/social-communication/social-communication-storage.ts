@@ -24,4 +24,3 @@ export function getSocialCommunicationCoverCandidates(fileName: string) {
     path.resolve(legacyBaseDir, safeName),
   ];
 }
-

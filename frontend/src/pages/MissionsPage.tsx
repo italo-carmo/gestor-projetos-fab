@@ -970,7 +970,7 @@ export function MissionsPage() {
     if (!selectedMission?.id) return;
     const normalizedChecklistOmId = String(checklistOmId ?? '').trim();
     if (!normalizedChecklistOmId) {
-      toast.push({ message: 'Selecione a OM do checklist antes de salvar.', severity: 'error' });
+      toast.push({ message: 'Selecione a OM do mapeamento institucional antes de salvar.', severity: 'error' });
       return;
     }
 
@@ -991,9 +991,9 @@ export function MissionsPage() {
         },
       });
       setChecklistDirty(false);
-      toast.push({ message: 'Checklist da missão salvo.', severity: 'success' });
+      toast.push({ message: 'Mapeamento institucional da missão salvo.', severity: 'success' });
     } catch (error) {
-      toast.push({ message: parseApiError(error).message ?? 'Erro ao salvar checklist.', severity: 'error' });
+      toast.push({ message: parseApiError(error).message ?? 'Erro ao salvar mapeamento institucional.', severity: 'error' });
     }
   };
 
@@ -1453,7 +1453,7 @@ export function MissionsPage() {
                       >
                         <Tab label="Participantes" />
                         <Tab label="Cronograma" />
-                        <Tab label="Checklist" />
+                        <Tab label="Mapeamento Institucional" />
                       </Tabs>
                     </CardContent>
                   </Card>
@@ -1760,17 +1760,17 @@ export function MissionsPage() {
                         >
                           <Box>
                             <Typography variant="subtitle1" fontWeight={700}>
-                              Checklist da missão
+                              Mapeamento institucional da missão
                             </Typography>
                             <Typography variant="body2" color="text.secondary">
-                              Selecione a OM de referência do checklist. Essa OM será usada como coluna no mapeamento institucional do SMIF.
+                              Selecione a OM de referência do mapeamento institucional. Essa OM será usada como coluna no mapeamento institucional do SMIF.
                             </Typography>
                           </Box>
                           <Stack spacing={0.7} alignItems={{ xs: 'stretch', sm: 'flex-end' }}>
                             <TextField
                               select
                               size="small"
-                              label="OM do checklist"
+                              label="OM do mapeamento"
                               value={checklistOmId}
                               onChange={(event) => handleChecklistOmChange(event.target.value)}
                               sx={{ minWidth: { xs: '100%', sm: 260 } }}
@@ -1798,7 +1798,7 @@ export function MissionsPage() {
                                 py: 0.35,
                               }}
                             >
-                              Salvar checklist
+                              Salvar mapeamento
                             </Button>
                           </Stack>
                         </Stack>
@@ -1806,7 +1806,7 @@ export function MissionsPage() {
                         {missionChecklistQuery.isLoading && <LinearProgress sx={{ mb: 1.5 }} />}
                         {missionChecklistQuery.isError && (
                           <Typography variant="body2" color="error" sx={{ mb: 1.5 }}>
-                            Não foi possível carregar o checklist da missão.
+                            Não foi possível carregar o mapeamento institucional da missão.
                           </Typography>
                         )}
 

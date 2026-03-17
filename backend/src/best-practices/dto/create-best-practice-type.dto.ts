@@ -12,4 +12,3 @@ export class CreateBestPracticeTypeDto {
   @IsHexColor()
   textColorHex?: string;
 }
-

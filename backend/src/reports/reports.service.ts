@@ -80,23 +80,35 @@ export class ReportsService {
   }
 
   async getSignedUrl(id: string, user?: RbacUser) {
-    if (user?.executiveHidePii && this.config.get<string>('REPORTS_ALLOW_EXEC_DOWNLOAD') !== 'true') {
+    if (
+      user?.executiveHidePii &&
+      this.config.get<string>('REPORTS_ALLOW_EXEC_DOWNLOAD') !== 'true'
+    ) {
       throwError('RBAC_FORBIDDEN');
     }
     const report = await this.getReport(id, user);
-    const secret = this.config.get<string>('REPORTS_SIGNED_URL_SECRET') ?? this.config.get<string>('JWT_ACCESS_SECRET');
+    const secret =
+      this.config.get<string>('REPORTS_SIGNED_URL_SECRET') ??
+      this.config.get<string>('JWT_ACCESS_SECRET');
     const ttl = this.config.get<string>('REPORTS_SIGNED_URL_TTL') ?? '600s';
-    const token = await this.jwt.signAsync(
-      { rid: report.id },
-      { secret, expiresIn: ttl } as any,
-    );
-    return { url: `/reports/${report.id}/download?token=${token}`, expiresIn: ttl };
+    const token = await this.jwt.signAsync({ rid: report.id }, {
+      secret,
+      expiresIn: ttl,
+    } as any);
+    return {
+      url: `/reports/${report.id}/download?token=${token}`,
+      expiresIn: ttl,
+    };
   }
 
   async verifyDownloadToken(token: string) {
-    const secret = this.config.get<string>('REPORTS_SIGNED_URL_SECRET') ?? this.config.get<string>('JWT_ACCESS_SECRET');
+    const secret =
+      this.config.get<string>('REPORTS_SIGNED_URL_SECRET') ??
+      this.config.get<string>('JWT_ACCESS_SECRET');
     try {
-      const payload = await this.jwt.verifyAsync<{ rid: string }>(token, { secret });
+      const payload = await this.jwt.verifyAsync<{ rid: string }>(token, {
+        secret,
+      });
       return payload.rid;
     } catch {
       throwError('AUTH_INVALID_CREDENTIALS');
@@ -118,7 +130,10 @@ export class ReportsService {
     if (!instance) throwError('NOT_FOUND');
     this.assertTaskViewAccess(instance, user);
 
-    const updated = await this.prisma.report.update({ where: { id }, data: { approved } });
+    const updated = await this.prisma.report.update({
+      where: { id },
+      data: { approved },
+    });
 
     await this.audit.log({
       userId: user?.id,
@@ -136,14 +151,17 @@ export class ReportsService {
     if (!user?.id) return false;
     if (instance.assignedToId === user.id) return true;
     if (Array.isArray(instance.responsibles)) {
-      return instance.responsibles.some((entry: any) => entry.userId === user.id);
+      return instance.responsibles.some(
+        (entry: any) => entry.userId === user.id,
+      );
     }
     return false;
   }
 
   private matchesTaskSpecialty(instance: any, specialtyId?: string | null) {
     if (!specialtyId) return false;
-    const taskSpecialtyId = instance?.specialtyId ?? instance?.taskTemplate?.specialtyId ?? null;
+    const taskSpecialtyId =
+      instance?.specialtyId ?? instance?.taskTemplate?.specialtyId ?? null;
     return !taskSpecialtyId || taskSpecialtyId === specialtyId;
   }
 
@@ -162,11 +180,15 @@ export class ReportsService {
     if (profile.ti || profile.nationalCommission) return;
 
     if (profile.localityAdmin) {
-      if (!profile.localityId || instance.localityId === profile.localityId) return;
+      if (!profile.localityId || instance.localityId === profile.localityId)
+        return;
       throwError('RBAC_FORBIDDEN');
     }
 
-    const specialtyMatch = this.matchesTaskSpecialty(instance, profile.groupSpecialtyId);
+    const specialtyMatch = this.matchesTaskSpecialty(
+      instance,
+      profile.groupSpecialtyId,
+    );
     const eloRoleMatch = profile.groupEloRoleId
       ? instance.eloRoleId === profile.groupEloRoleId ||
         instance.assignedElo?.eloRoleId === profile.groupEloRoleId
@@ -181,7 +203,12 @@ export class ReportsService {
     }
 
     if (this.isTaskResponsible(instance, user)) return;
-    if (user.localityId && instance.localityId === user.localityId && (specialtyMatch || eloRoleMatch)) return;
+    if (
+      user.localityId &&
+      instance.localityId === user.localityId &&
+      (specialtyMatch || eloRoleMatch)
+    )
+      return;
 
     throwError('RBAC_FORBIDDEN');
   }

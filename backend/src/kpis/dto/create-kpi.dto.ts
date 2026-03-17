@@ -10,4 +10,3 @@ export class CreateKpiDto {
   @IsEnum(['DEFAULT', 'EXECUTIVE'])
   visibility: string;
 }
-

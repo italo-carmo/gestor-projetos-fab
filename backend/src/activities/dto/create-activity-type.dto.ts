@@ -5,4 +5,3 @@ export class CreateActivityTypeDto {
   @MaxLength(120)
   name: string;
 }
-

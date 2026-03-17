@@ -1,5 +1,7 @@
 function normalizeWhitespace(value: string) {
-  return String(value ?? '').replace(/\s+/g, ' ').trim();
+  return String(value ?? '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 export function stripOmSuffixFromLdapName(
@@ -16,18 +18,17 @@ export function stripOmSuffixFromLdapName(
   if (upperName === om) return '';
 
   if (upperName.endsWith(` (${om})`)) {
-    return name.slice(0, name.length - (` (${om})`.length)).trim();
+    return name.slice(0, name.length - ` (${om})`.length).trim();
   }
   if (upperName.endsWith(` - ${om}`)) {
-    return name.slice(0, name.length - (` - ${om}`.length)).trim();
+    return name.slice(0, name.length - ` - ${om}`.length).trim();
   }
   if (upperName.endsWith(` / ${om}`)) {
-    return name.slice(0, name.length - (` / ${om}`.length)).trim();
+    return name.slice(0, name.length - ` / ${om}`.length).trim();
   }
   if (upperName.endsWith(` ${om}`)) {
-    return name.slice(0, name.length - (` ${om}`.length)).trim();
+    return name.slice(0, name.length - ` ${om}`.length).trim();
   }
 
   return name;
 }
-

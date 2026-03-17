@@ -52,9 +52,7 @@ export class LibraryService {
       photos,
       documents,
       settings: {
-        carouselIntervalSeconds: Number(
-          settings?.carouselIntervalSeconds ?? 5,
-        ),
+        carouselIntervalSeconds: Number(settings?.carouselIntervalSeconds ?? 5),
       },
     };
   }
@@ -118,7 +116,7 @@ export class LibraryService {
       // Read and compress image
       const image = sharp(filePath);
       const metadata = await image.metadata();
-      
+
       // Determine output format (convert to JPEG for better compression, except for PNG with transparency)
       const isPng = metadata.format === 'png' && metadata.hasAlpha;
       mimeType = isPng ? 'image/png' : 'image/jpeg';
@@ -126,7 +124,10 @@ export class LibraryService {
       // Resize if needed (maintain aspect ratio)
       let resized = image;
       if (metadata.width && metadata.height) {
-        if (metadata.width > MAX_IMAGE_WIDTH || metadata.height > MAX_IMAGE_HEIGHT) {
+        if (
+          metadata.width > MAX_IMAGE_WIDTH ||
+          metadata.height > MAX_IMAGE_HEIGHT
+        ) {
           resized = image.resize(MAX_IMAGE_WIDTH, MAX_IMAGE_HEIGHT, {
             fit: 'inside',
             withoutEnlargement: true,
@@ -136,29 +137,41 @@ export class LibraryService {
 
       // Compress image
       if (isPng) {
-        fileBuffer = await resized.png({ quality: PNG_QUALITY, compressionLevel: 9 }).toBuffer();
+        fileBuffer = await resized
+          .png({ quality: PNG_QUALITY, compressionLevel: 9 })
+          .toBuffer();
       } else {
-        fileBuffer = await resized.jpeg({ quality: JPEG_QUALITY, mozjpeg: true }).toBuffer();
+        fileBuffer = await resized
+          .jpeg({ quality: JPEG_QUALITY, mozjpeg: true })
+          .toBuffer();
         mimeType = 'image/jpeg';
       }
 
       // Check final size (should be under 2MB after compression)
       if (fileBuffer.length > MAX_IMAGE_SIZE) {
         // If still too large, reduce quality further
-        let quality = isPng ? Math.max(60, PNG_QUALITY - 20) : Math.max(60, JPEG_QUALITY - 20);
+        let quality = isPng
+          ? Math.max(60, PNG_QUALITY - 20)
+          : Math.max(60, JPEG_QUALITY - 20);
         let attempts = 0;
         while (fileBuffer.length > MAX_IMAGE_SIZE && attempts < 3) {
           quality = Math.max(40, quality - 10);
           if (isPng) {
-            fileBuffer = await image.resize(MAX_IMAGE_WIDTH, MAX_IMAGE_HEIGHT, {
-              fit: 'inside',
-              withoutEnlargement: true,
-            }).png({ quality, compressionLevel: 9 }).toBuffer();
+            fileBuffer = await image
+              .resize(MAX_IMAGE_WIDTH, MAX_IMAGE_HEIGHT, {
+                fit: 'inside',
+                withoutEnlargement: true,
+              })
+              .png({ quality, compressionLevel: 9 })
+              .toBuffer();
           } else {
-            fileBuffer = await image.resize(MAX_IMAGE_WIDTH, MAX_IMAGE_HEIGHT, {
-              fit: 'inside',
-              withoutEnlargement: true,
-            }).jpeg({ quality, mozjpeg: true }).toBuffer();
+            fileBuffer = await image
+              .resize(MAX_IMAGE_WIDTH, MAX_IMAGE_HEIGHT, {
+                fit: 'inside',
+                withoutEnlargement: true,
+              })
+              .jpeg({ quality, mozjpeg: true })
+              .toBuffer();
           }
           attempts++;
         }
@@ -166,7 +179,7 @@ export class LibraryService {
 
       // Convert to base64
       const base64Data = fileBuffer.toString('base64');
-      
+
       // Clean up uploaded file since we're storing in DB
       try {
         if (fs.existsSync(filePath)) {
@@ -179,10 +192,11 @@ export class LibraryService {
       const currentMaxSortOrder = await this.prisma.libraryPhoto.aggregate({
         _max: { sortOrder: true },
       });
-      const nextSortOrder = Number(currentMaxSortOrder._max.sortOrder ?? -1) + 1;
+      const nextSortOrder =
+        Number(currentMaxSortOrder._max.sortOrder ?? -1) + 1;
       const title = String(payload.title ?? '').trim();
       const localityId = String(payload.localityId ?? '').trim() || null;
-      
+
       const created = await this.prisma.libraryPhoto.create({
         data: {
           title,
@@ -200,7 +214,11 @@ export class LibraryService {
         resource: 'library',
         action: 'create_photo',
         entityId: created.id,
-        diffJson: { title: created.title, sortOrder: created.sortOrder, localityId: created.localityId },
+        diffJson: {
+          title: created.title,
+          sortOrder: created.sortOrder,
+          localityId: created.localityId,
+        },
       });
       return created;
     } catch (error) {
@@ -215,7 +233,8 @@ export class LibraryService {
       throwError('VALIDATION_ERROR', {
         field: 'file',
         reason: 'image_processing_failed',
-        message: 'Erro ao processar a imagem. Verifique se o arquivo é uma imagem válida.',
+        message:
+          'Erro ao processar a imagem. Verifique se o arquivo é uma imagem válida.',
       });
     }
   }
@@ -226,10 +245,14 @@ export class LibraryService {
     user?: RbacUser,
   ) {
     this.ensureEditorAccess(user);
-    const current = await this.prisma.libraryPhoto.findUnique({ where: { id } });
+    const current = await this.prisma.libraryPhoto.findUnique({
+      where: { id },
+    });
     if (!current) throwError('NOT_FOUND');
     const nextTitle =
-      payload.title === undefined ? current.title : String(payload.title).trim();
+      payload.title === undefined
+        ? current.title
+        : String(payload.title).trim();
     const nextSortOrder =
       payload.sortOrder === undefined
         ? current.sortOrder
@@ -238,8 +261,8 @@ export class LibraryService {
       payload.localityId === undefined
         ? current.localityId
         : payload.localityId === null || payload.localityId === ''
-        ? null
-        : String(payload.localityId).trim() || null;
+          ? null
+          : String(payload.localityId).trim() || null;
     const updated = await this.prisma.libraryPhoto.update({
       where: { id },
       data: {
@@ -253,14 +276,20 @@ export class LibraryService {
       resource: 'library',
       action: 'update_photo',
       entityId: updated.id,
-      diffJson: { title: updated.title, sortOrder: updated.sortOrder, localityId: updated.localityId },
+      diffJson: {
+        title: updated.title,
+        sortOrder: updated.sortOrder,
+        localityId: updated.localityId,
+      },
     });
     return updated;
   }
 
   async deletePhoto(id: string, _photosDir: string, user?: RbacUser) {
     this.ensureEditorAccess(user);
-    const current = await this.prisma.libraryPhoto.findUnique({ where: { id } });
+    const current = await this.prisma.libraryPhoto.findUnique({
+      where: { id },
+    });
     if (!current) throwError('NOT_FOUND');
     await this.prisma.libraryPhoto.delete({ where: { id } });
     // No file cleanup needed since images are stored in DB as base64
@@ -306,12 +335,20 @@ export class LibraryService {
     return created;
   }
 
-  async updateDocument(id: string, payload: { title?: string }, user?: RbacUser) {
+  async updateDocument(
+    id: string,
+    payload: { title?: string },
+    user?: RbacUser,
+  ) {
     this.ensureEditorAccess(user);
-    const current = await this.prisma.libraryDocument.findUnique({ where: { id } });
+    const current = await this.prisma.libraryDocument.findUnique({
+      where: { id },
+    });
     if (!current) throwError('NOT_FOUND');
     const nextTitle =
-      payload.title === undefined ? current.title : String(payload.title).trim();
+      payload.title === undefined
+        ? current.title
+        : String(payload.title).trim();
     if (!nextTitle) {
       throwError('VALIDATION_ERROR', { field: 'title', reason: 'required' });
     }
@@ -331,12 +368,16 @@ export class LibraryService {
 
   async deleteDocument(id: string, documentsDir: string, user?: RbacUser) {
     this.ensureEditorAccess(user);
-    const current = await this.prisma.libraryDocument.findUnique({ where: { id } });
+    const current = await this.prisma.libraryDocument.findUnique({
+      where: { id },
+    });
     if (!current) throwError('NOT_FOUND');
     await this.prisma.libraryDocument.delete({ where: { id } });
     const storageKey = String(current.storageKey ?? '').trim();
     if (storageKey) {
-      const filePath = resolveExistingLibraryDocumentPath(storageKey) || path.join(documentsDir, storageKey);
+      const filePath =
+        resolveExistingLibraryDocumentPath(storageKey) ||
+        path.join(documentsDir, storageKey);
       try {
         if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
       } catch {
@@ -354,9 +395,10 @@ export class LibraryService {
   }
 
   async getDocumentById(id: string) {
-    const document = await this.prisma.libraryDocument.findUnique({ where: { id } });
+    const document = await this.prisma.libraryDocument.findUnique({
+      where: { id },
+    });
     if (!document) throwError('NOT_FOUND');
     return document;
   }
 }
-

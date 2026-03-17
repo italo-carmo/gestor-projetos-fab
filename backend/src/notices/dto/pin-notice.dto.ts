@@ -4,4 +4,3 @@ export class PinNoticeDto {
   @IsBoolean()
   pinned: boolean;
 }
-

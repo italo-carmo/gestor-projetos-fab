@@ -6,10 +6,16 @@ import { throwError } from '../common/http-error';
 
 @Injectable()
 export class RbacGuard implements CanActivate {
-  constructor(private readonly reflector: Reflector, private readonly rbac: RbacService) {}
+  constructor(
+    private readonly reflector: Reflector,
+    private readonly rbac: RbacService,
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const requirement = this.reflector.get(PERMISSION_METADATA_KEY, context.getHandler());
+    const requirement = this.reflector.get(
+      PERMISSION_METADATA_KEY,
+      context.getHandler(),
+    );
     const request = context.switchToHttp().getRequest();
     const userId = request.user?.userId as string | undefined;
 
@@ -21,7 +27,10 @@ export class RbacGuard implements CanActivate {
     const requestedRoleId = Array.isArray(requestedRoleHeader)
       ? String(requestedRoleHeader[0] ?? '').trim()
       : String(requestedRoleHeader ?? '').trim();
-    const access = await this.rbac.getUserAccess(userId, requestedRoleId || undefined);
+    const access = await this.rbac.getUserAccess(
+      userId,
+      requestedRoleId || undefined,
+    );
     request.rbacUser = access;
 
     if (!requirement) {

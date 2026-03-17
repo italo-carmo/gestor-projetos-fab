@@ -378,25 +378,19 @@ const DEFAULT_SMIF_CARD_SETTINGS: Record<SmifCardId, SmifCardSetting> = {
 
 const INSTITUTIONAL_DESCRIPTION_COLUMN_WIDTH = 230;
 const INSTITUTIONAL_LOCALITY_COLUMN_WIDTH = 150;
+/** Cabeçalhos de bloco (Liderança, Acompanhamento de recrutas, Análise de riscos) — mesmo visual azul */
+const SMIF_INSTITUTIONAL_SECTION_HEADER_STYLE = {
+  color: '#24507A',
+  bgColor: '#eef5ff',
+  borderColor: '#bfd7f5',
+} as const;
 const institutionalSectionHighlightMeta: Record<
   string,
   { color: string; bgColor: string; borderColor: string }
 > = {
-  lideranca: {
-    color: '#24507A',
-    bgColor: '#eef5ff',
-    borderColor: '#bfd7f5',
-  },
-  acompanhamento_recrutas: {
-    color: '#246548',
-    bgColor: '#eefaf2',
-    borderColor: '#c4e8d1',
-  },
-  analise_riscos: {
-    color: '#8a4c18',
-    bgColor: '#fff5ea',
-    borderColor: '#f2d8bc',
-  },
+  lideranca: { ...SMIF_INSTITUTIONAL_SECTION_HEADER_STYLE },
+  acompanhamento_recrutas: { ...SMIF_INSTITUTIONAL_SECTION_HEADER_STYLE },
+  analise_riscos: { ...SMIF_INSTITUTIONAL_SECTION_HEADER_STYLE },
 };
 
 function isSmifCardId(value: string): value is SmifCardId {

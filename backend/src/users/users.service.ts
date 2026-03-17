@@ -43,7 +43,9 @@ export class UsersService {
     };
   }
 
-  private mapUserRoles<T extends { roles: Array<{ role: { id: string; name: string } }> }>(user: T) {
+  private mapUserRoles<
+    T extends { roles: Array<{ role: { id: string; name: string } }> },
+  >(user: T) {
     return {
       ...user,
       roles: user.roles.map((item) => ({
@@ -201,14 +203,23 @@ export class UsersService {
     }
 
     const targetLocalityId =
-      payload.localityId !== undefined ? payload.localityId : existingUser.localityId;
-    if (targetRoleNames.some((roleName) => roleRequiresLocality(roleName)) && !targetLocalityId) {
+      payload.localityId !== undefined
+        ? payload.localityId
+        : existingUser.localityId;
+    if (
+      targetRoleNames.some((roleName) => roleRequiresLocality(roleName)) &&
+      !targetLocalityId
+    ) {
       throwError('USER_LOCAL_ROLE_REQUIRES_LOCALITY');
     }
     const targetSpecialtyId =
-      payload.specialtyId !== undefined ? payload.specialtyId : existingUser.specialtyId;
+      payload.specialtyId !== undefined
+        ? payload.specialtyId
+        : existingUser.specialtyId;
     const targetEloRoleId =
-      payload.eloRoleId !== undefined ? payload.eloRoleId : existingUser.eloRoleId;
+      payload.eloRoleId !== undefined
+        ? payload.eloRoleId
+        : existingUser.eloRoleId;
     if (
       targetRoleNames.some((roleName) => roleRequiresSpecialty(roleName)) &&
       !targetSpecialtyId &&

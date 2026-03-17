@@ -9,7 +9,13 @@ import { UsersModule } from '../users/users.module';
 import { RbacModule } from '../rbac/rbac.module';
 
 @Module({
-  imports: [ConfigModule, PassportModule, JwtModule.register({}), UsersModule, RbacModule],
+  imports: [
+    ConfigModule,
+    PassportModule,
+    JwtModule.register({}),
+    UsersModule,
+    RbacModule,
+  ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy],
   exports: [AuthService],

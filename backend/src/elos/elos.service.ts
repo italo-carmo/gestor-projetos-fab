@@ -21,7 +21,16 @@ export class ElosService {
     private readonly audit: AuditService,
   ) {}
 
-  async list(filters: { localityId?: string; roleType?: string; eloRoleId?: string; page?: string; pageSize?: string }, user?: RbacUser) {
+  async list(
+    filters: {
+      localityId?: string;
+      roleType?: string;
+      eloRoleId?: string;
+      page?: string;
+      pageSize?: string;
+    },
+    user?: RbacUser,
+  ) {
     const where: Prisma.EloWhereInput = {};
     if (filters.localityId) where.localityId = filters.localityId;
     if (filters.eloRoleId) where.eloRoleId = filters.eloRoleId;
@@ -30,13 +39,19 @@ export class ElosService {
     const constraints = this.getScopeConstraints(user);
     if (constraints.localityId) where.localityId = constraints.localityId;
 
-    const { page, pageSize, skip, take } = parsePagination(filters.page, filters.pageSize);
+    const { page, pageSize, skip, take } = parsePagination(
+      filters.page,
+      filters.pageSize,
+    );
 
     const [items, total] = await this.prisma.$transaction([
       this.prisma.elo.findMany({
         where,
         include: { locality: true, eloRole: true },
-        orderBy: [{ locality: { name: 'asc' } }, { eloRole: { sortOrder: 'asc' } }],
+        orderBy: [
+          { locality: { name: 'asc' } },
+          { eloRole: { sortOrder: 'asc' } },
+        ],
         skip,
         take,
       }),
@@ -52,19 +67,26 @@ export class ElosService {
     };
   }
 
-  async create(payload: {
-    localityId: string;
-    eloRoleId: string;
-    name: string;
-    userId?: string;
-    rank?: string | null;
-    phone?: string | null;
-    email?: string | null;
-    om?: string | null;
-  }, user?: RbacUser) {
+  async create(
+    payload: {
+      localityId: string;
+      eloRoleId: string;
+      name: string;
+      userId?: string;
+      rank?: string | null;
+      phone?: string | null;
+      email?: string | null;
+      om?: string | null;
+    },
+    user?: RbacUser,
+  ) {
     this.assertConstraints(payload.localityId, user);
     const linkedUser = payload.userId
-      ? await this.assertUserMatchesAssignment(payload.userId, payload.localityId, payload.eloRoleId)
+      ? await this.assertUserMatchesAssignment(
+          payload.userId,
+          payload.localityId,
+          payload.eloRoleId,
+        )
       : null;
 
     const nameFromPayload = String(payload.name ?? '').trim();
@@ -80,7 +102,9 @@ export class ElosService {
         name: sanitizeText(resolvedName),
         rank: payload.rank ? sanitizeText(payload.rank) : null,
         phone: payload.phone ? sanitizeText(payload.phone) : null,
-        email: linkedUser?.email ?? (payload.email ? sanitizeText(payload.email) : null),
+        email:
+          linkedUser?.email ??
+          (payload.email ? sanitizeText(payload.email) : null),
         om: payload.om ? sanitizeText(payload.om) : null,
       },
       include: { locality: true, eloRole: true },
@@ -98,16 +122,20 @@ export class ElosService {
     return this.mapElo(created, user?.executiveHidePii);
   }
 
-  async update(id: string, payload: {
-    localityId?: string;
-    eloRoleId?: string;
-    name?: string;
-    userId?: string;
-    rank?: string | null;
-    phone?: string | null;
-    email?: string | null;
-    om?: string | null;
-  }, user?: RbacUser) {
+  async update(
+    id: string,
+    payload: {
+      localityId?: string;
+      eloRoleId?: string;
+      name?: string;
+      userId?: string;
+      rank?: string | null;
+      phone?: string | null;
+      email?: string | null;
+      om?: string | null;
+    },
+    user?: RbacUser,
+  ) {
     const existing = await this.prisma.elo.findUnique({ where: { id } });
     if (!existing) throwError('NOT_FOUND');
 
@@ -115,7 +143,11 @@ export class ElosService {
     const eloRoleId = payload.eloRoleId ?? existing.eloRoleId;
     this.assertConstraints(localityId, user);
     const linkedUser = payload.userId
-      ? await this.assertUserMatchesAssignment(payload.userId, localityId, eloRoleId)
+      ? await this.assertUserMatchesAssignment(
+          payload.userId,
+          localityId,
+          eloRoleId,
+        )
       : null;
 
     const resolvedName = linkedUser
@@ -137,10 +169,22 @@ export class ElosService {
         localityId,
         eloRoleId: payload.eloRoleId ?? undefined,
         name: resolvedName,
-        rank: payload.rank ? sanitizeText(payload.rank) : payload.rank === null ? null : undefined,
-        phone: payload.phone ? sanitizeText(payload.phone) : payload.phone === null ? null : undefined,
+        rank: payload.rank
+          ? sanitizeText(payload.rank)
+          : payload.rank === null
+            ? null
+            : undefined,
+        phone: payload.phone
+          ? sanitizeText(payload.phone)
+          : payload.phone === null
+            ? null
+            : undefined,
         email: resolvedEmail,
-        om: payload.om ? sanitizeText(payload.om) : payload.om === null ? null : undefined,
+        om: payload.om
+          ? sanitizeText(payload.om)
+          : payload.om === null
+            ? null
+            : undefined,
       },
       include: { locality: true, eloRole: true },
     });
@@ -173,7 +217,10 @@ export class ElosService {
     return { ok: true };
   }
 
-  async orgChart(filters: { localityId?: string; roleType?: string; eloRoleId?: string }, user?: RbacUser) {
+  async orgChart(
+    filters: { localityId?: string; roleType?: string; eloRoleId?: string },
+    user?: RbacUser,
+  ) {
     const where: Prisma.EloWhereInput = {};
     if (filters.localityId) where.localityId = filters.localityId;
     if (filters.eloRoleId) where.eloRoleId = filters.eloRoleId;
@@ -196,7 +243,10 @@ export class ElosService {
       this.prisma.elo.findMany({
         where,
         include: { locality: true, eloRole: true },
-        orderBy: [{ locality: { name: 'asc' } }, { eloRole: { sortOrder: 'asc' } }],
+        orderBy: [
+          { locality: { name: 'asc' } },
+          { eloRole: { sortOrder: 'asc' } },
+        ],
       }),
       this.prisma.user.findMany({
         where: userWhere,
@@ -207,20 +257,38 @@ export class ElosService {
           localityId: true,
           eloRoleId: true,
           locality: { select: { id: true, name: true, code: true } },
-          eloRole: { select: { id: true, code: true, name: true, sortOrder: true } },
+          eloRole: {
+            select: { id: true, code: true, name: true, sortOrder: true },
+          },
         },
-        orderBy: [{ locality: { name: 'asc' } }, { eloRole: { sortOrder: 'asc' } }, { name: 'asc' }],
+        orderBy: [
+          { locality: { name: 'asc' } },
+          { eloRole: { sortOrder: 'asc' } },
+          { name: 'asc' },
+        ],
       }),
     ]);
 
     const existingKeySet = new Set<string>();
     for (const item of items) {
-      existingKeySet.add(this.buildEloMatchKey(item.localityId, item.eloRoleId, item.name, item.email));
+      existingKeySet.add(
+        this.buildEloMatchKey(
+          item.localityId,
+          item.eloRoleId,
+          item.name,
+          item.email,
+        ),
+      );
     }
 
     const grouped = new Map<
       string,
-      { localityId: string; localityName: string; localityCode: string; elos: any[] }
+      {
+        localityId: string;
+        localityName: string;
+        localityCode: string;
+        elos: any[];
+      }
     >();
     for (const item of items) {
       const localityName = item.locality?.name ?? item.localityId;
@@ -234,7 +302,11 @@ export class ElosService {
           elos: [],
         });
       }
-      grouped.get(key)!.elos.push(this.mapElo({ ...item, autoFromUser: false }, user?.executiveHidePii));
+      grouped
+        .get(key)!
+        .elos.push(
+          this.mapElo({ ...item, autoFromUser: false }, user?.executiveHidePii),
+        );
     }
 
     for (const candidate of candidates) {
@@ -423,7 +495,13 @@ export class ElosService {
     const commissionRole = await this.getCommissionRoleOrFail();
     const target = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, isActive: true, name: true, email: true, commissionSeniority: true },
+      select: {
+        id: true,
+        isActive: true,
+        name: true,
+        email: true,
+        commissionSeniority: true,
+      },
     });
     if (!target || !target.isActive) {
       throwError('NOT_FOUND');
@@ -750,7 +828,9 @@ export class ElosService {
       },
     });
     const role = roles.find(
-      (item) => normalizeRoleName(item.name) === normalizeRoleName(ROLE_COORDENACAO_CIPAVD),
+      (item) =>
+        normalizeRoleName(item.name) ===
+        normalizeRoleName(ROLE_COORDENACAO_CIPAVD),
     );
     return role ?? null;
   }
@@ -763,7 +843,11 @@ export class ElosService {
     return role;
   }
 
-  private async assertUserMatchesAssignment(userId: string, localityId: string, eloRoleId: string) {
+  private async assertUserMatchesAssignment(
+    userId: string,
+    localityId: string,
+    eloRoleId: string,
+  ) {
     const linkedUser = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -795,9 +879,18 @@ export class ElosService {
     return linkedUser;
   }
 
-  private buildEloMatchKey(localityId: string, eloRoleId: string, name?: string | null, email?: string | null) {
-    const nameKey = String(name ?? '').trim().toLowerCase();
-    const emailKey = String(email ?? '').trim().toLowerCase();
+  private buildEloMatchKey(
+    localityId: string,
+    eloRoleId: string,
+    name?: string | null,
+    email?: string | null,
+  ) {
+    const nameKey = String(name ?? '')
+      .trim()
+      .toLowerCase();
+    const emailKey = String(email ?? '')
+      .trim()
+      .toLowerCase();
     return `${localityId}:${eloRoleId}:${nameKey}:${emailKey}`;
   }
 

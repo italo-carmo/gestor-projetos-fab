@@ -1,4 +1,14 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Post, Put, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  Post,
+  Put,
+  UseGuards,
+} from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RequirePermission } from './require-permission.decorator';
 import { RbacGuard } from './rbac.guard';
@@ -49,7 +59,10 @@ export class RolesController {
 
   @Post(':id/clone')
   @RequirePermission('roles', 'clone')
-  clone(@Param('id') id: string, @Body() body?: { name?: string; description?: string }) {
+  clone(
+    @Param('id') id: string,
+    @Body() body?: { name?: string; description?: string },
+  ) {
     return this.rbac.cloneRole(id, body?.name, body?.description);
   }
 

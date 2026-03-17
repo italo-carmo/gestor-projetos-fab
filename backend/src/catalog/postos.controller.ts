@@ -1,4 +1,13 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Put,
+  UseGuards,
+} from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RequirePermission } from '../rbac/require-permission.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
@@ -15,7 +24,9 @@ export class PostosController {
   @Get()
   @RequirePermission('postos', 'view')
   async list() {
-    const items = await this.prisma.posto.findMany({ orderBy: { sortOrder: 'asc' } });
+    const items = await this.prisma.posto.findMany({
+      orderBy: { sortOrder: 'asc' },
+    });
     return { items };
   }
 

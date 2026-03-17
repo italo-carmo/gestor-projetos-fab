@@ -1,4 +1,11 @@
-import { IsArray, IsDateString, IsEnum, IsOptional, IsString, IsUrl } from 'class-validator';
+import {
+  IsArray,
+  IsDateString,
+  IsEnum,
+  IsOptional,
+  IsString,
+  IsUrl,
+} from 'class-validator';
 
 export enum SocialCommunicationAudience {
   INTERNAL = 'INTERNAL',

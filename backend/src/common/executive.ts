@@ -14,7 +14,9 @@ export function sanitizeForExecutive<T>(payload: T): T {
   }
   if (typeof payload === 'object') {
     const result: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(payload as Record<string, unknown>)) {
+    for (const [key, value] of Object.entries(
+      payload as Record<string, unknown>,
+    )) {
       if (PII_KEYS.has(key)) continue;
       result[key] = sanitizeForExecutive(value as any);
     }
@@ -22,4 +24,3 @@ export function sanitizeForExecutive<T>(payload: T): T {
   }
   return payload;
 }
-

@@ -1,4 +1,14 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Put,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../common/current-user.decorator';
 import { throwError } from '../common/http-error';
@@ -30,7 +40,10 @@ export class MeetingsController {
     @CurrentUser() user: RbacUser,
   ) {
     this.assertMeetingsAccess(user);
-    return this.meetings.list({ status, scope, localityId, from, to, page, pageSize }, user);
+    return this.meetings.list(
+      { status, scope, localityId, from, to, page, pageSize },
+      user,
+    );
   }
 
   @Post()
@@ -42,21 +55,33 @@ export class MeetingsController {
 
   @Put(':id')
   @RequirePermission('meetings', 'view')
-  update(@Param('id') id: string, @Body() dto: UpdateMeetingDto, @CurrentUser() user: RbacUser) {
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateMeetingDto,
+    @CurrentUser() user: RbacUser,
+  ) {
     this.assertMeetingsAccess(user);
     return this.meetings.update(id, dto, user);
   }
 
   @Post(':id/decisions')
   @RequirePermission('meetings', 'view')
-  addDecision(@Param('id') id: string, @Body() dto: MeetingDecisionDto, @CurrentUser() user: RbacUser) {
+  addDecision(
+    @Param('id') id: string,
+    @Body() dto: MeetingDecisionDto,
+    @CurrentUser() user: RbacUser,
+  ) {
     this.assertMeetingsAccess(user);
     return this.meetings.addDecision(id, dto.text, user);
   }
 
   @Post(':id/generate-tasks')
   @RequirePermission('tasks', 'generate_from_meeting')
-  generateTasks(@Param('id') id: string, @Body() dto: GenerateMeetingTasksDto, @CurrentUser() user: RbacUser) {
+  generateTasks(
+    @Param('id') id: string,
+    @Body() dto: GenerateMeetingTasksDto,
+    @CurrentUser() user: RbacUser,
+  ) {
     this.assertMeetingsAccess(user);
     return this.meetings.generateTasks(id, dto, user);
   }

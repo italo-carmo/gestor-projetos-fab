@@ -9,4 +9,3 @@ import { ElosService } from './elos.service';
   providers: [ElosService],
 })
 export class ElosModule {}
-

@@ -1,4 +1,12 @@
-import { Body, Controller, Delete, Get, Param, Patch, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  UseGuards,
+} from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RequirePermission } from '../rbac/require-permission.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
@@ -31,10 +39,7 @@ export class UsersController {
 
   @Delete(':id/roles/:roleId')
   @RequirePermission('users', 'update')
-  async removeRole(
-    @Param('id') id: string,
-    @Param('roleId') roleId: string,
-  ) {
+  async removeRole(@Param('id') id: string, @Param('roleId') roleId: string) {
     return this.users.removeRole(id, roleId);
   }
 }

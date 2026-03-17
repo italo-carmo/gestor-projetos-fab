@@ -21,8 +21,9 @@ export function getLibraryDocumentsDir() {
 export function resolveExistingLibraryDocumentPath(fileName: string) {
   const safeName = path.basename(String(fileName ?? '').trim());
   if (!safeName) return '';
-  const candidates = [path.join(getLibraryDocumentsDir(), safeName), ...legacyDocumentDirs.map((dir) => path.join(dir, safeName))];
+  const candidates = [
+    path.join(getLibraryDocumentsDir(), safeName),
+    ...legacyDocumentDirs.map((dir) => path.join(dir, safeName)),
+  ];
   return candidates.find((candidate) => fs.existsSync(candidate)) || '';
 }
-
-

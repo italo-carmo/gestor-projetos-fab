@@ -9,5 +9,3 @@ import { BestPracticesService } from './best-practices.service';
   providers: [BestPracticesService],
 })
 export class BestPracticesModule {}
-
-

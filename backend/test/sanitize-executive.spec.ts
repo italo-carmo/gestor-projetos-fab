@@ -28,4 +28,3 @@ describe('sanitizeForExecutive', () => {
     expect(result.items[0].value).toBe(1);
   });
 });
-

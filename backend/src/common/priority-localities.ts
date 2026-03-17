@@ -67,20 +67,29 @@ function toRecruitsScore(value: number | null | undefined) {
   return Number.isFinite(parsed) ? parsed : -1;
 }
 
-function compareCandidates(next: TargetLocalityCandidate, current: TargetLocalityCandidate) {
+function compareCandidates(
+  next: TargetLocalityCandidate,
+  current: TargetLocalityCandidate,
+) {
   const recruitsDiff =
     toRecruitsScore(next.recruitsFemaleCountCurrent) -
     toRecruitsScore(current.recruitsFemaleCountCurrent);
   if (recruitsDiff !== 0) return recruitsDiff;
 
-  const updatedDiff = parseTimestamp(next.updatedAt) - parseTimestamp(current.updatedAt);
+  const updatedDiff =
+    parseTimestamp(next.updatedAt) - parseTimestamp(current.updatedAt);
   if (updatedDiff !== 0) return updatedDiff;
 
   return 0;
 }
 
-export function groupTargetLocalities<T extends TargetLocalityCandidate>(localities: T[]) {
-  const grouped = new Map<string, { key: string; canonical: T; members: T[] }>();
+export function groupTargetLocalities<T extends TargetLocalityCandidate>(
+  localities: T[],
+) {
+  const grouped = new Map<
+    string,
+    { key: string; canonical: T; members: T[] }
+  >();
 
   for (const locality of localities) {
     const key = getTargetLocalityKey(locality?.name);
@@ -101,7 +110,9 @@ export function groupTargetLocalities<T extends TargetLocalityCandidate>(localit
   return Array.from(grouped.values());
 }
 
-export function selectTargetLocalities<T extends TargetLocalityCandidate>(localities: T[]) {
+export function selectTargetLocalities<T extends TargetLocalityCandidate>(
+  localities: T[],
+) {
   return groupTargetLocalities(localities).map((group) => group.canonical);
 }
 

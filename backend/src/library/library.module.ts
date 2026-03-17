@@ -10,4 +10,3 @@ import { LibraryUploadsController } from './library-uploads.controller';
   providers: [LibraryService],
 })
 export class LibraryModule {}
-

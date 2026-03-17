@@ -24,16 +24,17 @@ import { RbacGuard } from '../rbac/rbac.guard';
 import type { RbacUser } from '../rbac/rbac.types';
 import { MulterExceptionFilter } from '../reports/multer-exception.filter';
 import { LibraryService } from './library.service';
-import { getLibraryDocumentsDir, resolveExistingLibraryDocumentPath } from './library-storage';
+import {
+  getLibraryDocumentsDir,
+  resolveExistingLibraryDocumentPath,
+} from './library-storage';
 
 export const libraryPhotosDir = path.resolve(
   process.cwd(),
   'storage',
   'library-photos',
 );
-export const libraryDocumentsDir = path.resolve(
-  getLibraryDocumentsDir(),
-);
+export const libraryDocumentsDir = path.resolve(getLibraryDocumentsDir());
 
 if (!fs.existsSync(libraryPhotosDir)) {
   fs.mkdirSync(libraryPhotosDir, { recursive: true });
@@ -70,7 +71,8 @@ export class LibraryController {
         destination: libraryPhotosDir,
         filename: (_req, file, cb) => {
           const extension = path.extname(file.originalname || '').toLowerCase();
-          const safeExtension = extension && extension.length <= 10 ? extension : '.jpg';
+          const safeExtension =
+            extension && extension.length <= 10 ? extension : '.jpg';
           cb(null, `${Date.now()}-${randomUUID()}${safeExtension}`);
         },
       }),
@@ -93,7 +95,8 @@ export class LibraryController {
   @Put('photos/:id')
   updatePhoto(
     @Param('id') id: string,
-    @Body() body: { title?: string; sortOrder?: number; localityId?: string | null },
+    @Body()
+    body: { title?: string; sortOrder?: number; localityId?: string | null },
     @CurrentUser() user: RbacUser,
   ) {
     return this.library.updatePhoto(id, body, user);
@@ -111,7 +114,8 @@ export class LibraryController {
         destination: libraryDocumentsDir,
         filename: (_req, file, cb) => {
           const extension = path.extname(file.originalname || '').toLowerCase();
-          const safeExtension = extension && extension.length <= 10 ? extension : '.bin';
+          const safeExtension =
+            extension && extension.length <= 10 ? extension : '.bin';
           cb(null, `${Date.now()}-${randomUUID()}${safeExtension}`);
         },
       }),
@@ -142,18 +146,22 @@ export class LibraryController {
   }
 
   @Get('documents/:id/download')
-  async downloadDocument(
-    @Param('id') id: string,
-    @Res() res: Response,
-  ) {
+  async downloadDocument(@Param('id') id: string, @Res() res: Response) {
     const document = await this.library.getDocumentById(id);
-    const storageKey = String(document.storageKey ?? '').trim() || path.basename(String(document.fileUrl ?? '').trim());
+    const storageKey =
+      String(document.storageKey ?? '').trim() ||
+      path.basename(String(document.fileUrl ?? '').trim());
     const filePath = resolveExistingLibraryDocumentPath(storageKey);
     if (!filePath) {
-      return res.status(404).json({ message: 'Arquivo indisponível para download.', code: 'NOT_FOUND' });
+      return res.status(404).json({
+        message: 'Arquivo indisponível para download.',
+        code: 'NOT_FOUND',
+      });
     }
     res.setHeader('Cache-Control', 'private, no-store');
-    return res.download(filePath, document.fileName || document.title || 'publicacao');
+    return res.download(
+      filePath,
+      document.fileName || document.title || 'publicacao',
+    );
   }
 }
-

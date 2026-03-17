@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Put,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../common/current-user.decorator';
 import { RequirePermission } from './require-permission.decorator';
@@ -25,7 +34,11 @@ export class AdminRbacController {
   @RequirePermission('admin_rbac', 'import')
   @UseGuards(ThrottlerGuard)
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
-  import(@Body() body: any, @CurrentUser() user: RbacUser, @Query('mode') mode?: 'replace' | 'merge') {
+  import(
+    @Body() body: any,
+    @CurrentUser() user: RbacUser,
+    @Query('mode') mode?: 'replace' | 'merge',
+  ) {
     return this.rbac.importMatrix(body, mode ?? 'replace', user?.id);
   }
 

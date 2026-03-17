@@ -30,4 +30,3 @@ export class LibraryUploadsController {
     return res.sendFile(filePath);
   }
 }
-

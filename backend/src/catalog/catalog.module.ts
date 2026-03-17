@@ -7,7 +7,11 @@ import { SpecialtiesController } from './specialties.controller';
 
 @Module({
   imports: [RbacModule],
-  controllers: [LocalitiesController, SpecialtiesController, EloRolesController, PostosController],
+  controllers: [
+    LocalitiesController,
+    SpecialtiesController,
+    EloRolesController,
+    PostosController,
+  ],
 })
 export class CatalogModule {}
-

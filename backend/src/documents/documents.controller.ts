@@ -18,7 +18,11 @@ import { CurrentUser } from '../common/current-user.decorator';
 import { throwError } from '../common/http-error';
 import { RequirePermission } from '../rbac/require-permission.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
-import { hasAnyRole, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from '../rbac/role-access';
+import {
+  hasAnyRole,
+  ROLE_COORDENACAO_CIPAVD,
+  ROLE_TI,
+} from '../rbac/role-access';
 import type { RbacUser } from '../rbac/rbac.types';
 import { DocumentsService } from './documents.service';
 import { CreateDocumentSubcategoryDto } from './dto/create-document-subcategory.dto';
@@ -118,7 +122,10 @@ export class DocumentsController {
 
   @Post('links')
   @RequirePermission('search', 'view')
-  createLink(@Body() dto: CreateDocumentLinkDto, @CurrentUser() user: RbacUser) {
+  createLink(
+    @Body() dto: CreateDocumentLinkDto,
+    @CurrentUser() user: RbacUser,
+  ) {
     this.assertDocumentsAccess(user);
     return this.documents.createLink(dto, user);
   }
