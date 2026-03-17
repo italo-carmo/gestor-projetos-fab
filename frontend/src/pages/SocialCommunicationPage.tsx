@@ -936,7 +936,7 @@ export function SocialCommunicationPage() {
                     xs: "calc(100% - 2px)",
                     sm: "calc((100% - 24px) / 2.36)",
                     md: "calc((100% - 48px) / 3.55)",
-                    lg: "calc((100% - 72px) / 4.62)",
+                    lg: "calc(18.645% - 15.5844px)",
                   },
                   scrollSnapAlign: "start",
                   borderRadius: 3,
@@ -946,7 +946,7 @@ export function SocialCommunicationPage() {
                   position: "relative",
                   overflow: "hidden",
                   boxShadow:
-                    "inset 2px 2px 0 rgba(255,255,255,0.34), inset -2px -2px 0 rgba(0,0,0,0.16), inset 0 14px 18px rgba(255,255,255,0.11), inset 0 -14px 18px rgba(0,0,0,0.16), 0 12px 20px rgba(0,0,0,0.18)",
+                    "inset 2px 2px 0 rgba(255,255,255,0.31), inset -2px -2px 0 rgba(0,0,0,0.14), inset 0 13px 16px rgba(255,255,255,0.1), inset 0 -13px 16px rgba(0,0,0,0.14), 0 11px 18px rgba(0,0,0,0.16)",
                   transition: "transform 160ms ease, box-shadow 160ms ease",
                   "&::before": {
                     content: '""',
@@ -955,26 +955,26 @@ export function SocialCommunicationPage() {
                     borderRadius: "inherit",
                     pointerEvents: "none",
                     background:
-                      "linear-gradient(145deg, rgba(255,255,255,0.24) 0%, rgba(255,255,255,0.08) 28%, rgba(0,0,0,0.06) 72%, rgba(0,0,0,0.16) 100%)",
+                      "linear-gradient(145deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.07) 28%, rgba(0,0,0,0.05) 72%, rgba(0,0,0,0.14) 100%)",
                   },
                   "&::after": {
                     content: '""',
                     position: "absolute",
-                    inset: 8,
+                    inset: 7,
                     borderRadius: 2.2,
                     pointerEvents: "none",
                     boxShadow:
-                      "inset 2px 2px 0 rgba(255,255,255,0.22), inset -2px -2px 0 rgba(0,0,0,0.16)",
+                      "inset 2px 2px 0 rgba(255,255,255,0.2), inset -2px -2px 0 rgba(0,0,0,0.14)",
                   },
                   "&:hover": {
                     transform: "translateY(-2px)",
-                    boxShadow: `${theme.hoverShadow}, inset 2px 2px 0 rgba(255,255,255,0.36), inset -2px -2px 0 rgba(0,0,0,0.18), inset 0 16px 20px rgba(255,255,255,0.12), inset 0 -16px 20px rgba(0,0,0,0.18)`,
+                    boxShadow: `${theme.hoverShadow}, inset 2px 2px 0 rgba(255,255,255,0.32), inset -2px -2px 0 rgba(0,0,0,0.16), inset 0 14px 18px rgba(255,255,255,0.11), inset 0 -14px 18px rgba(0,0,0,0.16)`,
                   },
                 }}
               >
                 <CardContent
                   sx={{
-                    minHeight: 186,
+                    minHeight: 178,
                     display: "flex",
                     flexDirection: "column",
                     gap: 0.8,
