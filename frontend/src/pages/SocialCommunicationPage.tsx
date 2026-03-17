@@ -839,7 +839,7 @@ export function SocialCommunicationPage() {
             titleColor: "#3E2A05",
             textColor: "rgba(74, 53, 8, 0.95)",
             cardBackground:
-              "linear-gradient(145deg, #7c6019 0%, #9a7a2a 26%, #b9953b 52%, #9f7f2f 76%, #7b5f1f 100%)",
+              "linear-gradient(145deg, #97772a 0%, #b08b35 26%, #caa24a 52%, #b6913d 76%, #977b31 100%)",
             cardBackgroundSize: "100% 100%",
             chipBorder: "rgba(96, 69, 15, 0.45)",
             chipColor: "#4A3508",
@@ -862,7 +862,7 @@ export function SocialCommunicationPage() {
             titleColor: "#2D2D34",
             textColor: "rgba(49, 49, 58, 0.95)",
             cardBackground:
-              "linear-gradient(145deg, #676874 0%, #8a8b96 26%, #a8a9b3 52%, #8f909b 76%, #6a6b76 100%)",
+              "linear-gradient(145deg, #7f808b 0%, #9a9ba5 26%, #b8b9c2 52%, #9fa0aa 76%, #7f808b 100%)",
             cardBackgroundSize: "100% 100%",
             chipBorder: "rgba(95, 95, 110, 0.48)",
             chipColor: "#2D2D34",
@@ -934,9 +934,9 @@ export function SocialCommunicationPage() {
                   flex: "0 0 auto",
                   width: {
                     xs: "calc(100% - 2px)",
-                    sm: "calc((100% - 20px) / 2.16)",
-                    md: "calc((100% - 40px) / 3.24)",
-                    lg: "calc((100% - 60px) / 4.28)",
+                    sm: "calc((100% - 22px) / 2.26)",
+                    md: "calc((100% - 44px) / 3.38)",
+                    lg: "calc((100% - 66px) / 4.42)",
                   },
                   scrollSnapAlign: "start",
                   borderRadius: 3,
@@ -954,7 +954,7 @@ export function SocialCommunicationPage() {
               >
                 <CardContent
                   sx={{
-                    minHeight: 212,
+                    minHeight: 198,
                     display: "flex",
                     flexDirection: "column",
                     gap: 0.9,
