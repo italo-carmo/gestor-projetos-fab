@@ -835,11 +835,11 @@ export function SocialCommunicationPage() {
             cardBorder: "rgba(184, 142, 50, 0.55)",
             avatarBg: "rgba(255, 247, 216, 0.42)",
             avatarBorder: "rgba(255, 231, 150, 0.78)",
-            avatarColor: "#4A3308",
-            titleColor: "#3E2A05",
-            textColor: "rgba(74, 53, 8, 0.95)",
+            avatarColor: "#FFF7E6",
+            titleColor: "rgba(255, 248, 232, 0.98)",
+            textColor: "rgba(255, 244, 220, 0.94)",
             cardBackground:
-              "linear-gradient(145deg, #97772a 0%, #b08b35 26%, #caa24a 52%, #b6913d 76%, #977b31 100%)",
+              "linear-gradient(145deg, #b08f40 0%, #c7a654 26%, #dfbc69 52%, #cdac5c 76%, #af9149 100%)",
             cardBackgroundSize: "100% 100%",
             chipBorder: "rgba(96, 69, 15, 0.45)",
             chipColor: "#4A3508",
@@ -858,11 +858,11 @@ export function SocialCommunicationPage() {
             cardBorder: "rgba(145, 145, 160, 0.56)",
             avatarBg: "rgba(248, 248, 252, 0.5)",
             avatarBorder: "rgba(225, 225, 235, 0.84)",
-            avatarColor: "#2D2D34",
-            titleColor: "#2D2D34",
-            textColor: "rgba(49, 49, 58, 0.95)",
+            avatarColor: "#F8FBFF",
+            titleColor: "rgba(248, 252, 255, 0.98)",
+            textColor: "rgba(241, 247, 255, 0.94)",
             cardBackground:
-              "linear-gradient(145deg, #7f808b 0%, #9a9ba5 26%, #b8b9c2 52%, #9fa0aa 76%, #7f808b 100%)",
+              "linear-gradient(145deg, #9ca0ab 0%, #b6bac4 26%, #cfd3dc 52%, #bcc0ca 76%, #9ea2ad 100%)",
             cardBackgroundSize: "100% 100%",
             chipBorder: "rgba(95, 95, 110, 0.48)",
             chipColor: "#2D2D34",
@@ -934,9 +934,9 @@ export function SocialCommunicationPage() {
                   flex: "0 0 auto",
                   width: {
                     xs: "calc(100% - 2px)",
-                    sm: "calc((100% - 22px) / 2.26)",
-                    md: "calc((100% - 44px) / 3.38)",
-                    lg: "calc((100% - 66px) / 4.42)",
+                    sm: "calc((100% - 24px) / 2.36)",
+                    md: "calc((100% - 48px) / 3.55)",
+                    lg: "calc((100% - 72px) / 4.62)",
                   },
                   scrollSnapAlign: "start",
                   borderRadius: 3,
@@ -954,10 +954,10 @@ export function SocialCommunicationPage() {
               >
                 <CardContent
                   sx={{
-                    minHeight: 198,
+                    minHeight: 186,
                     display: "flex",
                     flexDirection: "column",
-                    gap: 0.9,
+                    gap: 0.8,
                   }}
                 >
                   <Box
