@@ -946,7 +946,7 @@ export function SocialCommunicationPage() {
                   position: "relative",
                   overflow: "hidden",
                   boxShadow:
-                    "inset 1px 1px 0 rgba(255,255,255,0.28), inset -1px -1px 0 rgba(0,0,0,0.1), inset 0 8px 12px rgba(255,255,255,0.07), inset 0 -8px 12px rgba(0,0,0,0.1), 0 8px 14px rgba(0,0,0,0.12)",
+                    "inset 2px 2px 0 rgba(255,255,255,0.34), inset -2px -2px 0 rgba(0,0,0,0.16), inset 0 14px 18px rgba(255,255,255,0.11), inset 0 -14px 18px rgba(0,0,0,0.16), 0 12px 20px rgba(0,0,0,0.18)",
                   transition: "transform 160ms ease, box-shadow 160ms ease",
                   "&::before": {
                     content: '""',
@@ -955,11 +955,20 @@ export function SocialCommunicationPage() {
                     borderRadius: "inherit",
                     pointerEvents: "none",
                     background:
-                      "linear-gradient(145deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.04) 30%, rgba(0,0,0,0.03) 74%, rgba(0,0,0,0.1) 100%)",
+                      "linear-gradient(145deg, rgba(255,255,255,0.24) 0%, rgba(255,255,255,0.08) 28%, rgba(0,0,0,0.06) 72%, rgba(0,0,0,0.16) 100%)",
+                  },
+                  "&::after": {
+                    content: '""',
+                    position: "absolute",
+                    inset: 8,
+                    borderRadius: 2.2,
+                    pointerEvents: "none",
+                    boxShadow:
+                      "inset 2px 2px 0 rgba(255,255,255,0.22), inset -2px -2px 0 rgba(0,0,0,0.16)",
                   },
                   "&:hover": {
                     transform: "translateY(-2px)",
-                    boxShadow: `${theme.hoverShadow}, inset 1px 1px 0 rgba(255,255,255,0.3), inset -1px -1px 0 rgba(0,0,0,0.12), inset 0 10px 14px rgba(255,255,255,0.08), inset 0 -10px 14px rgba(0,0,0,0.12)`,
+                    boxShadow: `${theme.hoverShadow}, inset 2px 2px 0 rgba(255,255,255,0.36), inset -2px -2px 0 rgba(0,0,0,0.18), inset 0 16px 20px rgba(255,255,255,0.12), inset 0 -16px 20px rgba(0,0,0,0.18)`,
                   },
                 }}
               >
