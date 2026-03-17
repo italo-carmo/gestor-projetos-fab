@@ -32,7 +32,19 @@ import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import ViewListRoundedIcon from "@mui/icons-material/ViewListRounded";
 import ViewModuleRoundedIcon from "@mui/icons-material/ViewModuleRounded";
 import UploadFileRoundedIcon from "@mui/icons-material/UploadFileRounded";
+import { keyframes } from "@emotion/react";
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
+
+/** Brilho suave no gradiente (ouro / prata) */
+const metalSheen = keyframes`
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+`;
+
+const PUBLIC_INTERNAL_BG = "rgb(103, 147, 173)";
+/** Mesma família cromática do interno, levemente mais clara */
+const PUBLIC_EXTERNAL_BG =
+  "linear-gradient(165deg, rgb(128, 168, 188) 0%, rgb(138, 176, 196) 50%, rgb(130, 170, 190) 100%)";
 import { parseApiError } from "../app/apiErrors";
 import { api } from "../api/client";
 import {
@@ -1640,7 +1652,22 @@ export function SocialCommunicationPage() {
                 spacing={1}
                 sx={{ mb: 0.2 }}
               >
-                <Typography variant="subtitle1" fontWeight={700} sx={{ color: "#1D3A4D" }}>
+                <Typography
+                  variant="subtitle1"
+                  fontWeight={800}
+                  sx={{
+                    backgroundImage:
+                      "linear-gradient(110deg, #6b4e0a 0%, #9a7214 12%, #d4af37 26%, #fff8dc 38%, #f0d060 48%, #c9a227 58%, #8b6914 72%, #d4af37 86%, #5c4308 100%)",
+                    backgroundSize: "220% 200%",
+                    WebkitBackgroundClip: "text",
+                    WebkitTextFillColor: "transparent",
+                    backgroundClip: "text",
+                    animation: `${metalSheen} 5.5s ease-in-out infinite`,
+                    filter:
+                      "drop-shadow(0 1px 0 rgba(90, 60, 10, 0.45)) drop-shadow(0 2px 4px rgba(40, 28, 5, 0.35)) drop-shadow(0 0 10px rgba(212, 175, 55, 0.35))",
+                    letterSpacing: "0.03em",
+                  }}
+                >
                   Impacto Multiplicador
                 </Typography>
                 <Chip
@@ -1649,9 +1676,14 @@ export function SocialCommunicationPage() {
                     multiplicadorHighlights.length === 1 ? "" : "s"
                   }`}
                   sx={{
-                    bgcolor: "rgba(29, 58, 77, 0.1)",
-                    color: "#1D3A4D",
-                    border: "1px solid rgba(29, 58, 77, 0.24)",
+                    background:
+                      "linear-gradient(160deg, rgba(255, 236, 180, 0.55) 0%, rgba(212, 175, 55, 0.28) 45%, rgba(180, 140, 40, 0.22) 100%)",
+                    color: "#4a3506",
+                    fontWeight: 800,
+                    border: "1px solid rgba(180, 140, 50, 0.65)",
+                    boxShadow:
+                      "inset 0 1px 0 rgba(255, 252, 235, 0.75), inset 0 -1px 0 rgba(100, 70, 15, 0.12), 0 2px 6px rgba(60, 40, 8, 0.18)",
+                    textShadow: "0 1px 0 rgba(255, 248, 220, 0.5)",
                   }}
                 />
               </Stack>
@@ -1673,7 +1705,22 @@ export function SocialCommunicationPage() {
                 spacing={1}
                 sx={{ mb: 0.2 }}
               >
-                <Typography variant="subtitle1" fontWeight={700} sx={{ color: "#1D3A4D" }}>
+                <Typography
+                  variant="subtitle1"
+                  fontWeight={800}
+                  sx={{
+                    backgroundImage:
+                      "linear-gradient(115deg, #4a4a52 0%, #787880 14%, #b8b8c2 28%, #ffffff 40%, #d8d8e2 50%, #a0a0aa 62%, #e8e8f0 74%, #909098 88%, #3c3c44 100%)",
+                    backgroundSize: "240% 200%",
+                    WebkitBackgroundClip: "text",
+                    WebkitTextFillColor: "transparent",
+                    backgroundClip: "text",
+                    animation: `${metalSheen} 6s ease-in-out infinite`,
+                    filter:
+                      "drop-shadow(0 1px 0 rgba(255, 255, 255, 0.55)) drop-shadow(0 2px 3px rgba(30, 30, 38, 0.4)) drop-shadow(0 0 8px rgba(200, 200, 210, 0.35))",
+                    letterSpacing: "0.03em",
+                  }}
+                >
                   Impacto Simbólico
                 </Typography>
                 <Chip
@@ -1682,9 +1729,14 @@ export function SocialCommunicationPage() {
                     simbolicoHighlights.length === 1 ? "" : "s"
                   }`}
                   sx={{
-                    bgcolor: "rgba(29, 58, 77, 0.1)",
-                    color: "#1D3A4D",
-                    border: "1px solid rgba(29, 58, 77, 0.24)",
+                    background:
+                      "linear-gradient(165deg, rgba(248, 248, 252, 0.85) 0%, rgba(200, 200, 210, 0.45) 40%, rgba(160, 160, 172, 0.35) 100%)",
+                    color: "#2d2d34",
+                    fontWeight: 800,
+                    border: "1px solid rgba(140, 140, 155, 0.55)",
+                    boxShadow:
+                      "inset 0 1px 0 rgba(255, 255, 255, 0.9), inset 0 -1px 0 rgba(80, 80, 90, 0.15), 0 2px 6px rgba(40, 40, 48, 0.14)",
+                    textShadow: "0 1px 0 rgba(255, 255, 255, 0.6)",
                   }}
                 />
               </Stack>
@@ -1751,7 +1803,7 @@ export function SocialCommunicationPage() {
               p: { xs: 1.8, md: 2.4 },
               borderRadius: 3.2,
               border: "1px solid rgba(233, 246, 255, 0.36)",
-              backgroundColor: "rgb(103, 147, 173)",
+              background: PUBLIC_INTERNAL_BG,
               boxShadow: "0 14px 28px rgba(17,66,89,0.14)",
             }}
           >
@@ -1892,9 +1944,9 @@ export function SocialCommunicationPage() {
             sx={{
               p: { xs: 1.8, md: 2.4 },
               borderRadius: 3.2,
-              border: "1px solid rgba(160, 175, 189, 0.46)",
-              backgroundColor: "rgb(224, 230, 236)",
-              boxShadow: "0 14px 28px rgba(17,66,89,0.14)",
+              border: "1px solid rgba(233, 246, 255, 0.5)",
+              background: PUBLIC_EXTERNAL_BG,
+              boxShadow: "0 14px 28px rgba(17,66,89,0.12)",
             }}
           >
             <Stack
@@ -1910,10 +1962,11 @@ export function SocialCommunicationPage() {
                     width: 10,
                     height: 10,
                     borderRadius: "50%",
-                    bgcolor: "#4F6F87",
+                    bgcolor: "#E8F4FF",
+                    boxShadow: "0 0 0 1px rgba(255,255,255,0.35)",
                   }}
                 />
-                <Typography variant="h6" fontWeight={700} sx={{ color: "#1E3A4B" }}>
+                <Typography variant="h6" fontWeight={700} sx={{ color: "#F3FAFF" }}>
                   Público Externo
                 </Typography>
               </Stack>
@@ -1921,10 +1974,10 @@ export function SocialCommunicationPage() {
                 size="small"
                 label={`${externalItems.length} matéria${externalItems.length === 1 ? "" : "s"}`}
                 sx={{
-                  bgcolor: "rgba(30, 58, 75, 0.1)",
-                  color: "#1E3A4B",
+                  bgcolor: "rgba(245, 251, 255, 0.22)",
+                  color: "#F4FAFF",
                   fontWeight: 700,
-                  border: "1px solid rgba(30, 58, 75, 0.24)",
+                  border: "1px solid rgba(245, 251, 255, 0.42)",
                 }}
               />
             </Stack>
