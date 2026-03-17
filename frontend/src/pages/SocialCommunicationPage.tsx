@@ -946,7 +946,7 @@ export function SocialCommunicationPage() {
                   position: "relative",
                   overflow: "hidden",
                   boxShadow:
-                    "inset 1px 1px 0 rgba(255,255,255,0.35), inset -1px -1px 0 rgba(0,0,0,0.14), inset 0 10px 16px rgba(255,255,255,0.08), inset 0 -10px 14px rgba(0,0,0,0.12), 0 10px 18px rgba(0,0,0,0.18)",
+                    "inset 1px 1px 0 rgba(255,255,255,0.28), inset -1px -1px 0 rgba(0,0,0,0.1), inset 0 8px 12px rgba(255,255,255,0.07), inset 0 -8px 12px rgba(0,0,0,0.1), 0 8px 14px rgba(0,0,0,0.12)",
                   transition: "transform 160ms ease, box-shadow 160ms ease",
                   "&::before": {
                     content: '""',
@@ -955,22 +955,11 @@ export function SocialCommunicationPage() {
                     borderRadius: "inherit",
                     pointerEvents: "none",
                     background:
-                      "linear-gradient(145deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.08) 28%, rgba(0,0,0,0.06) 72%, rgba(0,0,0,0.18) 100%)",
-                    mixBlendMode: "soft-light",
-                  },
-                  "&::after": {
-                    content: '""',
-                    position: "absolute",
-                    inset: 6,
-                    borderRadius: 2.4,
-                    pointerEvents: "none",
-                    border: "1px solid rgba(255,255,255,0.18)",
-                    boxShadow:
-                      "inset 1px 1px 0 rgba(255,255,255,0.2), inset -1px -1px 0 rgba(0,0,0,0.12)",
+                      "linear-gradient(145deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.04) 30%, rgba(0,0,0,0.03) 74%, rgba(0,0,0,0.1) 100%)",
                   },
                   "&:hover": {
                     transform: "translateY(-2px)",
-                    boxShadow: `${theme.hoverShadow}, inset 1px 1px 0 rgba(255,255,255,0.36), inset -1px -1px 0 rgba(0,0,0,0.16), inset 0 12px 18px rgba(255,255,255,0.09), inset 0 -12px 16px rgba(0,0,0,0.14)`,
+                    boxShadow: `${theme.hoverShadow}, inset 1px 1px 0 rgba(255,255,255,0.3), inset -1px -1px 0 rgba(0,0,0,0.12), inset 0 10px 14px rgba(255,255,255,0.08), inset 0 -10px 14px rgba(0,0,0,0.12)`,
                   },
                 }}
               >
