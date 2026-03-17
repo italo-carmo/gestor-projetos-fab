@@ -44,7 +44,7 @@ const metalSheen = keyframes`
 const PUBLIC_INTERNAL_BG = "rgb(103, 147, 173)";
 /** Mesma família cromática do interno, levemente mais clara */
 const PUBLIC_EXTERNAL_BG =
-  "linear-gradient(165deg, rgb(128, 168, 188) 0%, rgb(138, 176, 196) 50%, rgb(130, 170, 190) 100%)";
+  "linear-gradient(165deg, rgb(150, 186, 204) 0%, rgb(162, 196, 214) 50%, rgb(154, 189, 207) 100%)";
 import { parseApiError } from "../app/apiErrors";
 import { api } from "../api/client";
 import {
@@ -833,46 +833,52 @@ export function SocialCommunicationPage() {
     const theme =
       impact === "MULTIPLICADOR"
         ? {
-            accent: "#2B78B8",
+            accent: "#9A7214",
             accentSoft: "rgba(255, 255, 255, 0.95)",
-            buttonBg: "rgba(43, 120, 184, 0.14)",
-            buttonHoverBg: "rgba(43, 120, 184, 0.22)",
-            trackBg: "rgba(43, 120, 184, 0.12)",
-            thumbBg: "rgba(43, 120, 184, 0.28)",
-            cardBorder: "rgba(215, 234, 248, 0.38)",
-            avatarBg: "rgba(236, 246, 255, 0.22)",
-            avatarBorder: "rgba(236, 246, 255, 0.52)",
-            avatarColor: "#F2F9FF",
-            titleColor: "#F3FAFF",
-            textColor: "rgba(231, 243, 252, 0.95)",
-            cardBackground: "rgb(95, 126, 145)",
-            chipBorder: "rgba(33, 71, 97, 0.34)",
-            chipColor: "#1F4259",
-            impactChipBg: "rgba(255, 255, 255, 0.95)",
-            impactChipColor: "#1F4259",
-            actionButtonBg: "rgba(255,255,255,0.92)",
-            hoverShadow: "0 14px 24px rgba(17, 66, 89, 0.16)",
+            buttonBg: "rgba(182, 141, 49, 0.2)",
+            buttonHoverBg: "rgba(182, 141, 49, 0.32)",
+            trackBg: "rgba(182, 141, 49, 0.16)",
+            thumbBg: "rgba(182, 141, 49, 0.38)",
+            cardBorder: "rgba(184, 142, 50, 0.55)",
+            avatarBg: "rgba(255, 247, 216, 0.42)",
+            avatarBorder: "rgba(255, 231, 150, 0.78)",
+            avatarColor: "#4A3308",
+            titleColor: "#3E2A05",
+            textColor: "rgba(74, 53, 8, 0.95)",
+            cardBackground:
+              "linear-gradient(120deg, #6f510d 0%, #9b7418 14%, #d4af37 28%, #fff3bf 42%, #f0cd63 54%, #c69a2d 67%, #8a6717 80%, #d8b14f 92%, #62470a 100%)",
+            cardBackgroundSize: "240% 240%",
+            cardAnimation: `${metalSheen} 7s ease-in-out infinite`,
+            chipBorder: "rgba(96, 69, 15, 0.45)",
+            chipColor: "#4A3508",
+            impactChipBg: "rgba(255, 247, 219, 0.88)",
+            impactChipColor: "#4A3508",
+            actionButtonBg: "rgba(255, 251, 236, 0.92)",
+            hoverShadow: "0 14px 24px rgba(90, 64, 13, 0.28)",
           }
         : {
-            accent: "#2E8B57",
+            accent: "#8C8C96",
             accentSoft: "rgba(255, 255, 255, 0.95)",
-            buttonBg: "rgba(46, 139, 87, 0.14)",
-            buttonHoverBg: "rgba(46, 139, 87, 0.24)",
-            trackBg: "rgba(46, 139, 87, 0.12)",
-            thumbBg: "rgba(46, 139, 87, 0.28)",
-            cardBorder: "rgba(218, 245, 229, 0.38)",
-            avatarBg: "rgba(241, 252, 246, 0.22)",
-            avatarBorder: "rgba(241, 252, 246, 0.52)",
-            avatarColor: "#F1FCF6",
-            titleColor: "#F2FDF7",
-            textColor: "rgba(233, 248, 239, 0.95)",
-            cardBackground: "rgb(99, 130, 113)",
-            chipBorder: "rgba(36, 71, 53, 0.34)",
-            chipColor: "#234936",
-            impactChipBg: "rgba(255, 255, 255, 0.95)",
-            impactChipColor: "#234936",
-            actionButtonBg: "rgba(255,255,255,0.92)",
-            hoverShadow: "0 14px 24px rgba(17, 66, 89, 0.16)",
+            buttonBg: "rgba(140, 140, 150, 0.2)",
+            buttonHoverBg: "rgba(140, 140, 150, 0.34)",
+            trackBg: "rgba(140, 140, 150, 0.16)",
+            thumbBg: "rgba(140, 140, 150, 0.38)",
+            cardBorder: "rgba(145, 145, 160, 0.56)",
+            avatarBg: "rgba(248, 248, 252, 0.5)",
+            avatarBorder: "rgba(225, 225, 235, 0.84)",
+            avatarColor: "#2D2D34",
+            titleColor: "#2D2D34",
+            textColor: "rgba(49, 49, 58, 0.95)",
+            cardBackground:
+              "linear-gradient(120deg, #4b4b53 0%, #787882 14%, #b9b9c5 28%, #ffffff 42%, #d8d8e3 54%, #a4a4af 67%, #71717c 80%, #ececf3 92%, #43434b 100%)",
+            cardBackgroundSize: "240% 240%",
+            cardAnimation: `${metalSheen} 7.4s ease-in-out infinite`,
+            chipBorder: "rgba(95, 95, 110, 0.48)",
+            chipColor: "#2D2D34",
+            impactChipBg: "rgba(245, 245, 250, 0.9)",
+            impactChipColor: "#2D2D34",
+            actionButtonBg: "rgba(251, 251, 255, 0.92)",
+            hoverShadow: "0 14px 24px rgba(44, 44, 52, 0.26)",
           };
 
     return (
@@ -945,6 +951,8 @@ export function SocialCommunicationPage() {
                   borderRadius: 3,
                   border: `1px solid ${theme.cardBorder}`,
                   background: theme.cardBackground,
+                  backgroundSize: theme.cardBackgroundSize,
+                  animation: theme.cardAnimation,
                   position: "relative",
                   overflow: "hidden",
                   transition: "transform 160ms ease, box-shadow 160ms ease",
@@ -1387,375 +1395,6 @@ export function SocialCommunicationPage() {
       <Card
         sx={{
           mb: 2.5,
-          borderRadius: 3.4,
-          border: "1px solid rgb(58, 122, 154)",
-          backgroundColor: "#FFFFFF",
-          backgroundImage: "none",
-          boxShadow: "0 12px 24px rgba(17,66,89,0.16)",
-        }}
-      >
-        <CardContent sx={{ py: 2.2 }}>
-          <Stack
-            direction={{ xs: "column", md: "row" }}
-            alignItems={{ xs: "flex-start", md: "center" }}
-            justifyContent="space-between"
-            spacing={1}
-            sx={{ mb: 1.8 }}
-          >
-            <Box>
-              <Typography variant="h6" fontWeight={800} sx={{ color: "#1D3A4D" }}>
-                Militares Destaques
-              </Typography>
-              <Typography variant="body2" sx={{ color: "rgba(29, 58, 77, 0.86)" }}>
-                Destaques institucionais com impacto Multiplicador e Simbólico.
-              </Typography>
-            </Box>
-            <Stack direction="row" spacing={0.8} alignItems="center">
-              <Chip
-                size="small"
-                label={`${highlightItems.length} destaque${
-                  highlightItems.length === 1 ? "" : "s"
-                }`}
-                sx={{
-                  bgcolor: "rgba(29, 58, 77, 0.1)",
-                  color: "#1D3A4D",
-                  fontWeight: 700,
-                  border: "1px solid rgba(29, 58, 77, 0.24)",
-                }}
-              />
-              {canEditHighlights && (
-                <Button
-                  variant="contained"
-                  size="small"
-                  onClick={openCreateHighlight}
-                >
-                  Novo destaque
-                </Button>
-              )}
-            </Stack>
-          </Stack>
-
-          {canEditHighlights && highlightEditorOpen && (
-            <Card
-              sx={{
-                mb: 2,
-                borderRadius: 2.4,
-                border: "1px solid rgba(17,66,89,0.15)",
-                backgroundColor: "rgba(246, 251, 253, 0.94)",
-              }}
-            >
-              <CardContent sx={{ py: 1.7 }}>
-                <Stack spacing={1.2}>
-                  <Stack
-                    direction={{ xs: "column", md: "row" }}
-                    spacing={1}
-                    alignItems={{ xs: "stretch", md: "center" }}
-                  >
-                    <TextField
-                      size="small"
-                      label="E-mail Zimbra"
-                      fullWidth
-                      value={highlightForm.ldapEmail}
-                      onChange={(event) =>
-                        setHighlightForm((prev) => ({
-                          ...prev,
-                          ldapEmail: event.target.value,
-                        }))
-                      }
-                    />
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      startIcon={<SearchRoundedIcon fontSize="small" />}
-                      onClick={() => {
-                        void handleLookupHighlightLdap();
-                      }}
-                      disabled={highlightLookupBusy}
-                    >
-                      {highlightLookupBusy ? "Buscando..." : "Buscar"}
-                    </Button>
-                  </Stack>
-
-                  <Stack
-                    direction={{ xs: "column", md: "row" }}
-                    spacing={1.2}
-                    alignItems={{ xs: "flex-start", md: "center" }}
-                  >
-                    <Box
-                      sx={{
-                        width: 86,
-                        height: 86,
-                        borderRadius: "50%",
-                        bgcolor: "#CDECF7",
-                        border: "2px solid rgba(77,134,160,0.34)",
-                        color: "#114259",
-                        display: "grid",
-                        placeItems: "center",
-                        overflow: "hidden",
-                        flexShrink: 0,
-                      }}
-                    >
-                      {highlightPhotoPreviewUrl ? (
-                        <Box
-                          component="img"
-                          src={highlightPhotoPreviewUrl}
-                          alt={highlightForm.militaryName || "Foto do militar"}
-                          sx={{ width: "100%", height: "100%", objectFit: "cover" }}
-                        />
-                      ) : (
-                        <PersonRoundedIcon />
-                      )}
-                    </Box>
-                    <Stack spacing={0.6} flex={1}>
-                      <TextField
-                        size="small"
-                        label="Numero de Ordem"
-                        value={highlightForm.numeroOrdem}
-                        InputProps={{ readOnly: true }}
-                      />
-                      <Typography variant="caption" color="text.secondary">
-                        A foto e carregada automaticamente quando houver numero de ordem no LDAP.
-                      </Typography>
-                    </Stack>
-                  </Stack>
-
-                  <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
-                    <TextField
-                      size="small"
-                      label="Nome do militar"
-                      fullWidth
-                      value={highlightForm.militaryName}
-                      onChange={(event) =>
-                        setHighlightForm((prev) => ({
-                          ...prev,
-                          militaryName: event.target.value,
-                        }))
-                      }
-                    />
-                    <TextField
-                      size="small"
-                      label="Funcao no destaque"
-                      fullWidth
-                      value={highlightForm.highlightRole}
-                      onChange={(event) =>
-                        setHighlightForm((prev) => ({
-                          ...prev,
-                          highlightRole: event.target.value,
-                        }))
-                      }
-                    />
-                    <TextField
-                      size="small"
-                      label="OM"
-                      sx={{ minWidth: { md: 220 } }}
-                      value={highlightForm.fabom}
-                      onChange={(event) =>
-                        setHighlightForm((prev) => ({
-                          ...prev,
-                          fabom: event.target.value,
-                        }))
-                      }
-                    />
-                  </Stack>
-
-                  <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
-                    <TextField
-                      size="small"
-                      select
-                      label="Impacto"
-                      value={highlightForm.impact}
-                      sx={{ minWidth: { md: 220 } }}
-                      onChange={(event) =>
-                        setHighlightForm((prev) => ({
-                          ...prev,
-                          impact: event.target.value as "MULTIPLICADOR" | "SIMBOLICO",
-                        }))
-                      }
-                    >
-                      {HIGHLIGHT_IMPACT_OPTIONS.map((option) => (
-                        <MenuItem key={option.value} value={option.value}>
-                          {option.label}
-                        </MenuItem>
-                      ))}
-                    </TextField>
-                    <TextField
-                      size="small"
-                      select
-                      fullWidth
-                      label="OM"
-                      value={highlightForm.localityId}
-                      onChange={(event) =>
-                        setHighlightForm((prev) => ({
-                          ...prev,
-                          localityId: event.target.value,
-                        }))
-                      }
-                    >
-                      {omOptions.map((option) => (
-                        <MenuItem key={option.id} value={option.id}>
-                          {option.name}
-                        </MenuItem>
-                      ))}
-                    </TextField>
-                  </Stack>
-
-                  <TextField
-                    size="small"
-                    label="Texto do destaque"
-                    multiline
-                    minRows={3}
-                    value={highlightForm.text}
-                    onChange={(event) =>
-                      setHighlightForm((prev) => ({
-                        ...prev,
-                        text: event.target.value,
-                      }))
-                    }
-                  />
-
-                  <Stack direction="row" spacing={1} justifyContent="flex-end">
-                    <Button
-                      variant="outlined"
-                      color="error"
-                      onClick={() => {
-                        setHighlightEditorOpen(false);
-                        setHighlightEditing(null);
-                      }}
-                    >
-                      Cancelar
-                    </Button>
-                    <Button
-                      variant="contained"
-                      color="success"
-                      onClick={() => {
-                        void handleSaveHighlight();
-                      }}
-                      disabled={createHighlight.isPending || updateHighlight.isPending}
-                    >
-                      {highlightEditing ? "Atualizar destaque" : "Salvar destaque"}
-                    </Button>
-                  </Stack>
-                </Stack>
-              </CardContent>
-            </Card>
-          )}
-
-          <Stack
-            spacing={2.9}
-            sx={{ mt: highlightEditorOpen ? 0.5 : 1.6 }}
-          >
-            <Box>
-              <Stack
-                direction={{ xs: "column", sm: "row" }}
-                justifyContent="space-between"
-                alignItems={{ xs: "flex-start", sm: "center" }}
-                spacing={1}
-                sx={{ mb: 0.2 }}
-              >
-                <Typography
-                  variant="subtitle1"
-                  fontWeight={800}
-                  sx={{
-                    backgroundImage:
-                      "linear-gradient(110deg, #6b4e0a 0%, #9a7214 12%, #d4af37 26%, #fff8dc 38%, #f0d060 48%, #c9a227 58%, #8b6914 72%, #d4af37 86%, #5c4308 100%)",
-                    backgroundSize: "220% 200%",
-                    WebkitBackgroundClip: "text",
-                    WebkitTextFillColor: "transparent",
-                    backgroundClip: "text",
-                    animation: `${metalSheen} 5.5s ease-in-out infinite`,
-                    filter:
-                      "drop-shadow(0 1px 0 rgba(90, 60, 10, 0.45)) drop-shadow(0 2px 4px rgba(40, 28, 5, 0.35)) drop-shadow(0 0 10px rgba(212, 175, 55, 0.35))",
-                    letterSpacing: "0.03em",
-                  }}
-                >
-                  Impacto Multiplicador
-                </Typography>
-                <Chip
-                  size="small"
-                  label={`${multiplicadorHighlights.length} destaque${
-                    multiplicadorHighlights.length === 1 ? "" : "s"
-                  }`}
-                  sx={{
-                    background:
-                      "linear-gradient(160deg, rgba(255, 236, 180, 0.55) 0%, rgba(212, 175, 55, 0.28) 45%, rgba(180, 140, 40, 0.22) 100%)",
-                    color: "#4a3506",
-                    fontWeight: 800,
-                    border: "1px solid rgba(180, 140, 50, 0.65)",
-                    boxShadow:
-                      "inset 0 1px 0 rgba(255, 252, 235, 0.75), inset 0 -1px 0 rgba(100, 70, 15, 0.12), 0 2px 6px rgba(60, 40, 8, 0.18)",
-                    textShadow: "0 1px 0 rgba(255, 248, 220, 0.5)",
-                  }}
-                />
-              </Stack>
-              {multiplicadorHighlights.length === 0 ? (
-                <EmptyState
-                  title="Sem destaques multiplicadores"
-                  description="Cadastre destaques para mostrar neste carrossel."
-                />
-              ) : (
-                renderHighlightCarousel(multiplicadorHighlights, "MULTIPLICADOR")
-              )}
-            </Box>
-
-            <Box>
-              <Stack
-                direction={{ xs: "column", sm: "row" }}
-                justifyContent="space-between"
-                alignItems={{ xs: "flex-start", sm: "center" }}
-                spacing={1}
-                sx={{ mb: 0.2 }}
-              >
-                <Typography
-                  variant="subtitle1"
-                  fontWeight={800}
-                  sx={{
-                    backgroundImage:
-                      "linear-gradient(115deg, #4a4a52 0%, #787880 14%, #b8b8c2 28%, #ffffff 40%, #d8d8e2 50%, #a0a0aa 62%, #e8e8f0 74%, #909098 88%, #3c3c44 100%)",
-                    backgroundSize: "240% 200%",
-                    WebkitBackgroundClip: "text",
-                    WebkitTextFillColor: "transparent",
-                    backgroundClip: "text",
-                    animation: `${metalSheen} 6s ease-in-out infinite`,
-                    filter:
-                      "drop-shadow(0 1px 0 rgba(255, 255, 255, 0.55)) drop-shadow(0 2px 3px rgba(30, 30, 38, 0.4)) drop-shadow(0 0 8px rgba(200, 200, 210, 0.35))",
-                    letterSpacing: "0.03em",
-                  }}
-                >
-                  Impacto Simbólico
-                </Typography>
-                <Chip
-                  size="small"
-                  label={`${simbolicoHighlights.length} destaque${
-                    simbolicoHighlights.length === 1 ? "" : "s"
-                  }`}
-                  sx={{
-                    background:
-                      "linear-gradient(165deg, rgba(248, 248, 252, 0.85) 0%, rgba(200, 200, 210, 0.45) 40%, rgba(160, 160, 172, 0.35) 100%)",
-                    color: "#2d2d34",
-                    fontWeight: 800,
-                    border: "1px solid rgba(140, 140, 155, 0.55)",
-                    boxShadow:
-                      "inset 0 1px 0 rgba(255, 255, 255, 0.9), inset 0 -1px 0 rgba(80, 80, 90, 0.15), 0 2px 6px rgba(40, 40, 48, 0.14)",
-                    textShadow: "0 1px 0 rgba(255, 255, 255, 0.6)",
-                  }}
-                />
-              </Stack>
-              {simbolicoHighlights.length === 0 ? (
-                <EmptyState
-                  title="Sem destaques simbólicos"
-                  description="Cadastre destaques para mostrar neste carrossel."
-                />
-              ) : (
-                renderHighlightCarousel(simbolicoHighlights, "SIMBOLICO")
-              )}
-            </Box>
-          </Stack>
-        </CardContent>
-      </Card>
-
-      <Card
-        sx={{
-          mb: 2.5,
           borderRadius: 3,
           background: "linear-gradient(135deg, rgba(17,66,89,0.06), rgba(255,255,255,0.9))",
         }}
@@ -2081,6 +1720,334 @@ export function SocialCommunicationPage() {
         </Stack>
       )}
           </Box>
+
+          <Card
+            sx={{
+              borderRadius: 3.4,
+              border: "1px solid rgb(58, 122, 154)",
+              backgroundColor: "#FFFFFF",
+              backgroundImage: "none",
+              boxShadow: "0 12px 24px rgba(17,66,89,0.16)",
+            }}
+          >
+            <CardContent sx={{ py: 2.2 }}>
+              <Stack
+                direction={{ xs: "column", md: "row" }}
+                alignItems={{ xs: "flex-start", md: "center" }}
+                justifyContent="space-between"
+                spacing={1}
+                sx={{ mb: 1.8 }}
+              >
+                <Box>
+                  <Typography variant="h6" fontWeight={800} sx={{ color: "#1D3A4D" }}>
+                    Militares Destaques
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: "rgba(29, 58, 77, 0.86)" }}>
+                    Destaques institucionais com impacto Multiplicador e Simbólico.
+                  </Typography>
+                </Box>
+                <Stack direction="row" spacing={0.8} alignItems="center">
+                  <Chip
+                    size="small"
+                    label={`${highlightItems.length} destaque${
+                      highlightItems.length === 1 ? "" : "s"
+                    }`}
+                    sx={{
+                      bgcolor: "rgba(29, 58, 77, 0.1)",
+                      color: "#1D3A4D",
+                      fontWeight: 700,
+                      border: "1px solid rgba(29, 58, 77, 0.24)",
+                    }}
+                  />
+                  {canEditHighlights && (
+                    <Button
+                      variant="contained"
+                      size="small"
+                      onClick={openCreateHighlight}
+                    >
+                      Novo destaque
+                    </Button>
+                  )}
+                </Stack>
+              </Stack>
+
+              {canEditHighlights && highlightEditorOpen && (
+                <Card
+                  sx={{
+                    mb: 2,
+                    borderRadius: 2.4,
+                    border: "1px solid rgba(17,66,89,0.15)",
+                    backgroundColor: "rgba(246, 251, 253, 0.94)",
+                  }}
+                >
+                  <CardContent sx={{ py: 1.7 }}>
+                    <Stack spacing={1.2}>
+                      <Stack
+                        direction={{ xs: "column", md: "row" }}
+                        spacing={1}
+                        alignItems={{ xs: "stretch", md: "center" }}
+                      >
+                        <TextField
+                          size="small"
+                          label="E-mail Zimbra"
+                          fullWidth
+                          value={highlightForm.ldapEmail}
+                          onChange={(event) =>
+                            setHighlightForm((prev) => ({
+                              ...prev,
+                              ldapEmail: event.target.value,
+                            }))
+                          }
+                        />
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          startIcon={<SearchRoundedIcon fontSize="small" />}
+                          onClick={() => {
+                            void handleLookupHighlightLdap();
+                          }}
+                          disabled={highlightLookupBusy}
+                        >
+                          {highlightLookupBusy ? "Buscando..." : "Buscar"}
+                        </Button>
+                      </Stack>
+
+                      <Stack
+                        direction={{ xs: "column", md: "row" }}
+                        spacing={1.2}
+                        alignItems={{ xs: "flex-start", md: "center" }}
+                      >
+                        <Box
+                          sx={{
+                            width: 86,
+                            height: 86,
+                            borderRadius: "50%",
+                            bgcolor: "#CDECF7",
+                            border: "2px solid rgba(77,134,160,0.34)",
+                            color: "#114259",
+                            display: "grid",
+                            placeItems: "center",
+                            overflow: "hidden",
+                            flexShrink: 0,
+                          }}
+                        >
+                          {highlightPhotoPreviewUrl ? (
+                            <Box
+                              component="img"
+                              src={highlightPhotoPreviewUrl}
+                              alt={highlightForm.militaryName || "Foto do militar"}
+                              sx={{ width: "100%", height: "100%", objectFit: "cover" }}
+                            />
+                          ) : (
+                            <PersonRoundedIcon />
+                          )}
+                        </Box>
+                        <Stack spacing={0.6} flex={1}>
+                          <TextField
+                            size="small"
+                            label="Numero de Ordem"
+                            value={highlightForm.numeroOrdem}
+                            InputProps={{ readOnly: true }}
+                          />
+                          <Typography variant="caption" color="text.secondary">
+                            A foto e carregada automaticamente quando houver numero de ordem no LDAP.
+                          </Typography>
+                        </Stack>
+                      </Stack>
+
+                      <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
+                        <TextField
+                          size="small"
+                          label="Nome do militar"
+                          fullWidth
+                          value={highlightForm.militaryName}
+                          onChange={(event) =>
+                            setHighlightForm((prev) => ({
+                              ...prev,
+                              militaryName: event.target.value,
+                            }))
+                          }
+                        />
+                        <TextField
+                          size="small"
+                          label="Funcao no destaque"
+                          fullWidth
+                          value={highlightForm.highlightRole}
+                          onChange={(event) =>
+                            setHighlightForm((prev) => ({
+                              ...prev,
+                              highlightRole: event.target.value,
+                            }))
+                          }
+                        />
+                        <TextField
+                          size="small"
+                          label="OM"
+                          sx={{ minWidth: { md: 220 } }}
+                          value={highlightForm.fabom}
+                          onChange={(event) =>
+                            setHighlightForm((prev) => ({
+                              ...prev,
+                              fabom: event.target.value,
+                            }))
+                          }
+                        />
+                      </Stack>
+
+                      <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
+                        <TextField
+                          size="small"
+                          select
+                          label="Impacto"
+                          value={highlightForm.impact}
+                          sx={{ minWidth: { md: 220 } }}
+                          onChange={(event) =>
+                            setHighlightForm((prev) => ({
+                              ...prev,
+                              impact: event.target.value as "MULTIPLICADOR" | "SIMBOLICO",
+                            }))
+                          }
+                        >
+                          {HIGHLIGHT_IMPACT_OPTIONS.map((option) => (
+                            <MenuItem key={option.value} value={option.value}>
+                              {option.label}
+                            </MenuItem>
+                          ))}
+                        </TextField>
+                        <TextField
+                          size="small"
+                          select
+                          fullWidth
+                          label="OM"
+                          value={highlightForm.localityId}
+                          onChange={(event) =>
+                            setHighlightForm((prev) => ({
+                              ...prev,
+                              localityId: event.target.value,
+                            }))
+                          }
+                        >
+                          {omOptions.map((option) => (
+                            <MenuItem key={option.id} value={option.id}>
+                              {option.name}
+                            </MenuItem>
+                          ))}
+                        </TextField>
+                      </Stack>
+
+                      <TextField
+                        size="small"
+                        label="Texto do destaque"
+                        multiline
+                        minRows={3}
+                        value={highlightForm.text}
+                        onChange={(event) =>
+                          setHighlightForm((prev) => ({
+                            ...prev,
+                            text: event.target.value,
+                          }))
+                        }
+                      />
+
+                      <Stack direction="row" spacing={1} justifyContent="flex-end">
+                        <Button
+                          variant="outlined"
+                          color="error"
+                          onClick={() => {
+                            setHighlightEditorOpen(false);
+                            setHighlightEditing(null);
+                          }}
+                        >
+                          Cancelar
+                        </Button>
+                        <Button
+                          variant="contained"
+                          color="success"
+                          onClick={() => {
+                            void handleSaveHighlight();
+                          }}
+                          disabled={createHighlight.isPending || updateHighlight.isPending}
+                        >
+                          {highlightEditing ? "Atualizar destaque" : "Salvar destaque"}
+                        </Button>
+                      </Stack>
+                    </Stack>
+                  </CardContent>
+                </Card>
+              )}
+
+              <Stack
+                spacing={2.9}
+                sx={{ mt: highlightEditorOpen ? 0.5 : 1.6 }}
+              >
+                <Box>
+                  <Stack
+                    direction={{ xs: "column", sm: "row" }}
+                    justifyContent="space-between"
+                    alignItems={{ xs: "flex-start", sm: "center" }}
+                    spacing={1}
+                    sx={{ mb: 0.2 }}
+                  >
+                    <Typography variant="subtitle1" fontWeight={700} sx={{ color: "#1D3A4D" }}>
+                      Impacto Multiplicador
+                    </Typography>
+                    <Chip
+                      size="small"
+                      label={`${multiplicadorHighlights.length} destaque${
+                        multiplicadorHighlights.length === 1 ? "" : "s"
+                      }`}
+                      sx={{
+                        bgcolor: "rgba(29, 58, 77, 0.1)",
+                        color: "#1D3A4D",
+                        border: "1px solid rgba(29, 58, 77, 0.24)",
+                      }}
+                    />
+                  </Stack>
+                  {multiplicadorHighlights.length === 0 ? (
+                    <EmptyState
+                      title="Sem destaques multiplicadores"
+                      description="Cadastre destaques para mostrar neste carrossel."
+                    />
+                  ) : (
+                    renderHighlightCarousel(multiplicadorHighlights, "MULTIPLICADOR")
+                  )}
+                </Box>
+
+                <Box>
+                  <Stack
+                    direction={{ xs: "column", sm: "row" }}
+                    justifyContent="space-between"
+                    alignItems={{ xs: "flex-start", sm: "center" }}
+                    spacing={1}
+                    sx={{ mb: 0.2 }}
+                  >
+                    <Typography variant="subtitle1" fontWeight={700} sx={{ color: "#1D3A4D" }}>
+                      Impacto Simbólico
+                    </Typography>
+                    <Chip
+                      size="small"
+                      label={`${simbolicoHighlights.length} destaque${
+                        simbolicoHighlights.length === 1 ? "" : "s"
+                      }`}
+                      sx={{
+                        bgcolor: "rgba(29, 58, 77, 0.1)",
+                        color: "#1D3A4D",
+                        border: "1px solid rgba(29, 58, 77, 0.24)",
+                      }}
+                    />
+                  </Stack>
+                  {simbolicoHighlights.length === 0 ? (
+                    <EmptyState
+                      title="Sem destaques simbólicos"
+                      description="Cadastre destaques para mostrar neste carrossel."
+                    />
+                  ) : (
+                    renderHighlightCarousel(simbolicoHighlights, "SIMBOLICO")
+                  )}
+                </Box>
+              </Stack>
+            </CardContent>
+          </Card>
         </Stack>
       )}
 
