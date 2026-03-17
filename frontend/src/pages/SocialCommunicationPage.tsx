@@ -32,14 +32,7 @@ import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import ViewListRoundedIcon from "@mui/icons-material/ViewListRounded";
 import ViewModuleRoundedIcon from "@mui/icons-material/ViewModuleRounded";
 import UploadFileRoundedIcon from "@mui/icons-material/UploadFileRounded";
-import { keyframes } from "@emotion/react";
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
-
-/** Brilho suave no gradiente (ouro / prata) */
-const metalSheen = keyframes`
-  0%, 100% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-`;
 
 const PUBLIC_INTERNAL_BG = "rgb(103, 147, 173)";
 /** Mesma família cromática do interno, levemente mais clara */
@@ -847,8 +840,7 @@ export function SocialCommunicationPage() {
             textColor: "rgba(74, 53, 8, 0.95)",
             cardBackground:
               "linear-gradient(120deg, #6f510d 0%, #9b7418 14%, #d4af37 28%, #fff3bf 42%, #f0cd63 54%, #c69a2d 67%, #8a6717 80%, #d8b14f 92%, #62470a 100%)",
-            cardBackgroundSize: "240% 240%",
-            cardAnimation: `${metalSheen} 7s ease-in-out infinite`,
+            cardBackgroundSize: "180% 180%",
             chipBorder: "rgba(96, 69, 15, 0.45)",
             chipColor: "#4A3508",
             impactChipBg: "rgba(255, 247, 219, 0.88)",
@@ -871,8 +863,7 @@ export function SocialCommunicationPage() {
             textColor: "rgba(49, 49, 58, 0.95)",
             cardBackground:
               "linear-gradient(120deg, #4b4b53 0%, #787882 14%, #b9b9c5 28%, #ffffff 42%, #d8d8e3 54%, #a4a4af 67%, #71717c 80%, #ececf3 92%, #43434b 100%)",
-            cardBackgroundSize: "240% 240%",
-            cardAnimation: `${metalSheen} 7.4s ease-in-out infinite`,
+            cardBackgroundSize: "180% 180%",
             chipBorder: "rgba(95, 95, 110, 0.48)",
             chipColor: "#2D2D34",
             impactChipBg: "rgba(245, 245, 250, 0.9)",
@@ -943,16 +934,15 @@ export function SocialCommunicationPage() {
                   flex: "0 0 auto",
                   width: {
                     xs: "calc(100% - 2px)",
-                    sm: "calc((100% - 16px) / 2)",
-                    md: "calc((100% - 32px) / 3)",
-                    lg: "calc((100% - 48px) / 4)",
+                    sm: "calc((100% - 18px) / 2.08)",
+                    md: "calc((100% - 36px) / 3.12)",
+                    lg: "calc((100% - 54px) / 4.12)",
                   },
                   scrollSnapAlign: "start",
                   borderRadius: 3,
                   border: `1px solid ${theme.cardBorder}`,
                   background: theme.cardBackground,
                   backgroundSize: theme.cardBackgroundSize,
-                  animation: theme.cardAnimation,
                   position: "relative",
                   overflow: "hidden",
                   transition: "transform 160ms ease, box-shadow 160ms ease",
@@ -964,10 +954,10 @@ export function SocialCommunicationPage() {
               >
                 <CardContent
                   sx={{
-                    minHeight: 250,
+                    minHeight: 226,
                     display: "flex",
                     flexDirection: "column",
-                    gap: 1.1,
+                    gap: 0.9,
                   }}
                 >
                   <Box
@@ -979,8 +969,8 @@ export function SocialCommunicationPage() {
                   >
                     <Box
                       sx={{
-                        width: 74,
-                        height: 74,
+                        width: 90,
+                        height: 90,
                         borderRadius: "50%",
                         bgcolor: theme.avatarBg,
                         border: `2px solid ${theme.avatarBorder}`,
