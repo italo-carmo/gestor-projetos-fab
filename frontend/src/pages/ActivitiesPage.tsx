@@ -1787,7 +1787,7 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
         onClose={closeDrawer}
         PaperProps={{ sx: { width: { xs: '100%', md: 840, lg: 920 } } }}
       >
-        <Box p={3} sx={{ height: '100%', overflowY: 'auto' }}>
+        <Box p={3} sx={{ height: '100%', overflowY: 'auto', paddingTop: 10 }}>
           <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
             <Typography variant="h6">
               {isCreateMode ? 'Nova atividade' : selected ? 'Detalhes da atividade' : 'Detalhes da atividade'}
