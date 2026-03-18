@@ -31,8 +31,8 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/smif_gestao
       JWT_ACCESS_SECRET: change-me-access
       JWT_REFRESH_SECRET: change-me-refresh
-      JWT_ACCESS_TTL: 900s
-      JWT_REFRESH_TTL: 7d
+      JWT_ACCESS_TTL: 24h
+      JWT_REFRESH_TTL: 30d
       REPORTS_SIGNED_URL_SECRET: change-me-signed-url
       REPORTS_SIGNED_URL_TTL: 600s
       REPORTS_ALLOW_EXEC_DOWNLOAD: "false"

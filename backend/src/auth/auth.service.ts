@@ -128,7 +128,7 @@ export class AuthService {
       { sub: stored.userId, email: stored.user.email } as JwtPayload,
       {
         secret: this.config.get<string>('JWT_ACCESS_SECRET'),
-        expiresIn: this.config.get<string>('JWT_ACCESS_TTL') ?? '900s',
+        expiresIn: this.config.get<string>('JWT_ACCESS_TTL') ?? '24h',
       } as any,
     );
 
@@ -147,7 +147,7 @@ export class AuthService {
     };
     const newRefreshToken = await this.jwt.signAsync(refreshPayload, {
       secret: this.config.get<string>('JWT_REFRESH_SECRET'),
-      expiresIn: this.config.get<string>('JWT_REFRESH_TTL') ?? '7d',
+      expiresIn: this.config.get<string>('JWT_REFRESH_TTL') ?? '30d',
     } as any);
 
     const tokenHash = await bcrypt.hash(
@@ -310,7 +310,7 @@ export class AuthService {
     const accessPayload: JwtPayload = { sub: userId, email };
     const accessToken = await this.jwt.signAsync(accessPayload, {
       secret: this.config.get<string>('JWT_ACCESS_SECRET'),
-      expiresIn: this.config.get<string>('JWT_ACCESS_TTL') ?? '900s',
+      expiresIn: this.config.get<string>('JWT_ACCESS_TTL') ?? '24h',
     } as any);
 
     const refreshId = await this.prisma.refreshToken.create({
@@ -328,7 +328,7 @@ export class AuthService {
     };
     const refreshToken = await this.jwt.signAsync(refreshPayload, {
       secret: this.config.get<string>('JWT_REFRESH_SECRET'),
-      expiresIn: this.config.get<string>('JWT_REFRESH_TTL') ?? '7d',
+      expiresIn: this.config.get<string>('JWT_REFRESH_TTL') ?? '30d',
     } as any);
 
     const tokenHash = await bcrypt.hash(
@@ -344,9 +344,9 @@ export class AuthService {
   }
 
   private getRefreshTtlMs() {
-    const raw = this.config.get<string>('JWT_REFRESH_TTL') ?? '7d';
+    const raw = this.config.get<string>('JWT_REFRESH_TTL') ?? '30d';
     const match = raw.match(/^(\d+)([smhd])$/);
-    if (!match) return 7 * 24 * 60 * 60 * 1000;
+    if (!match) return 30 * 24 * 60 * 60 * 1000;
     const value = Number(match[1]);
     const unit = match[2];
     const multipliers: Record<string, number> = {
