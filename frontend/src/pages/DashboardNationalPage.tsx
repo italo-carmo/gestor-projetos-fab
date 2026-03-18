@@ -22,6 +22,7 @@ import {
   Tooltip,
   TextField,
 } from '@mui/material';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import DescriptionIcon from '@mui/icons-material/Description';
 import CampaignIcon from '@mui/icons-material/Campaign';
@@ -44,6 +45,7 @@ import {
   useMissionChecklistMapping,
   useUpdateDashboardNationalCardSetting,
   useUpdateMissionChecklist,
+  useUploadMissionChecklistPhoto,
 } from '../api/hooks';
 import { can } from '../app/rbac';
 import { hasAnyRole, ROLE_COMANDANTE_COMGEP, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from '../app/roleAccess';
@@ -404,6 +406,7 @@ export function DashboardNationalPage() {
   const { data: me } = useMe();
   const toast = useToast();
   const updateMissionChecklist = useUpdateMissionChecklist();
+  const uploadMissionChecklistPhoto = useUploadMissionChecklistPhoto();
   const updateSmifCardSetting = useUpdateDashboardNationalCardSetting();
   const [params] = useSearchParams();
   const navigate = useNavigate();
@@ -728,6 +731,57 @@ export function DashboardNationalPage() {
       });
     }
   };
+
+  const updateInstitutionalDetailPhotos = (
+    itemId: string,
+    nextPhotos: string[],
+  ) => {
+    setInstitutionalDetail((current) => {
+      if (!current?.mission) return current;
+      const nextSections = current.mission.checklistSections.map((section) => ({
+        ...section,
+        items: section.items.map((item) =>
+          item.id === itemId ? { ...item, photos: nextPhotos } : item,
+        ),
+      }));
+      return {
+        ...current,
+        cell: { ...current.cell, photos: nextPhotos, hasPhotos: nextPhotos.length > 0 },
+        mission: { ...current.mission, checklistSections: nextSections },
+      };
+    });
+  };
+
+  const handleAddInstitutionalPhoto = async (file: File | null) => {
+    const detail = institutionalDetail;
+    if (!file || !detail?.mission?.id || !canEditInstitutionalChecklist) return;
+    try {
+      const { photoUrl } = await uploadMissionChecklistPhoto.mutateAsync({
+        missionId: detail.mission.id,
+        file,
+      });
+      const currentPhotos = detail.cell.photos ?? [];
+      if (currentPhotos.includes(photoUrl)) return;
+      updateInstitutionalDetailPhotos(detail.itemId, [...currentPhotos, photoUrl]);
+      toast.push({ message: 'Foto adicionada. Clique em Salvar para persistir.', severity: 'success' });
+    } catch (error) {
+      toast.push({
+        message: parseApiError(error).message ?? 'Erro ao enviar foto.',
+        severity: 'error',
+      });
+    }
+  };
+
+  const handleRemoveInstitutionalPhoto = (photoUrl: string) => {
+    const detail = institutionalDetail;
+    if (!detail) return;
+    const currentPhotos = detail.cell.photos ?? [];
+    updateInstitutionalDetailPhotos(
+      detail.itemId,
+      currentPhotos.filter((p) => p !== photoUrl),
+    );
+  };
+
   const openKpiDetail = (nextDetail: Exclude<KpiDetailState, null>) => {
     setKpiDetail(nextDetail);
     setKpiDetailSearch('');
@@ -2158,7 +2212,9 @@ export function DashboardNationalPage() {
                         'Sem observações registradas para este item.'}
                     </Typography>
                   )}
-                  {(institutionalDetail.cell.photos ?? []).length > 0 ? (
+                  {((canEditInstitutionalChecklist &&
+                      Boolean(institutionalDetail.mission?.id)) ||
+                      (institutionalDetail.cell.photos ?? []).length > 0) ? (
                     <Box sx={{ mt: 1 }}>
                       <Typography
                         variant="caption"
@@ -2167,37 +2223,131 @@ export function DashboardNationalPage() {
                       >
                         Fotos relacionadas
                       </Typography>
-                      <Stack direction="row" spacing={0.8} flexWrap="wrap" useFlexGap>
-                        {(institutionalDetail.cell.photos ?? []).map((photoUrl) => (
-                          <Box
-                            key={photoUrl}
-                            component="a"
-                            href={photoUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            sx={{
-                              width: 120,
-                              height: 88,
-                              borderRadius: 1.2,
-                              overflow: 'hidden',
-                              border: '1px solid rgba(15,23,42,0.15)',
-                              display: 'block',
-                              bgcolor: '#E2E8F0',
-                            }}
+                      {canEditInstitutionalChecklist &&
+                      Boolean(institutionalDetail.mission?.id) ? (
+                        <>
+                          <Stack
+                            direction={{ xs: 'column', md: 'row' }}
+                            spacing={1}
+                            alignItems={{ xs: 'stretch', md: 'center' }}
+                            sx={{ mb: 1 }}
                           >
+                            <Button
+                              component="label"
+                              variant="outlined"
+                              size="small"
+                              disabled={uploadMissionChecklistPhoto.isPending}
+                              sx={{ alignSelf: { xs: 'stretch', md: 'flex-start' } }}
+                            >
+                              {uploadMissionChecklistPhoto.isPending
+                                ? 'Enviando...'
+                                : 'Adicionar foto'}
+                              <input
+                                type="file"
+                                accept="image/*"
+                                hidden
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0] ?? null;
+                                  void handleAddInstitutionalPhoto(file);
+                                  e.currentTarget.value = '';
+                                }}
+                              />
+                            </Button>
+                            <Typography variant="caption" color="text.secondary">
+                              Salve o item para persistir as alterações.
+                            </Typography>
+                          </Stack>
+                          {(institutionalDetail.cell.photos ?? []).length > 0 ? (
+                            <Stack direction="row" spacing={0.8} flexWrap="wrap" useFlexGap>
+                              {(institutionalDetail.cell.photos ?? []).map((photoUrl) => (
+                                <Box
+                                  key={photoUrl}
+                                  sx={{
+                                    width: 120,
+                                    height: 88,
+                                    borderRadius: 1.2,
+                                    overflow: 'hidden',
+                                    border: '1px solid rgba(15,23,42,0.15)',
+                                    position: 'relative',
+                                    bgcolor: '#E2E8F0',
+                                  }}
+                                >
+                                  <Box
+                                    component="a"
+                                    href={photoUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    sx={{
+                                      display: 'block',
+                                      width: '100%',
+                                      height: '100%',
+                                    }}
+                                  >
+                                    <Box
+                                      component="img"
+                                      src={photoUrl}
+                                      alt="Foto do mapeamento institucional"
+                                      sx={{
+                                        width: '100%',
+                                        height: '100%',
+                                        objectFit: 'cover',
+                                      }}
+                                    />
+                                  </Box>
+                                  <IconButton
+                                    size="small"
+                                    color="error"
+                                    onClick={() =>
+                                      handleRemoveInstitutionalPhoto(photoUrl)
+                                    }
+                                    sx={{
+                                      position: 'absolute',
+                                      top: 4,
+                                      right: 4,
+                                      bgcolor: 'rgba(255,255,255,0.9)',
+                                      '&:hover': { bgcolor: 'rgba(255,255,255,1)' },
+                                    }}
+                                  >
+                                    <DeleteOutlineIcon fontSize="inherit" />
+                                  </IconButton>
+                                </Box>
+                              ))}
+                            </Stack>
+                          ) : null}
+                        </>
+                      ) : (institutionalDetail.cell.photos ?? []).length > 0 ? (
+                        <Stack direction="row" spacing={0.8} flexWrap="wrap" useFlexGap>
+                          {(institutionalDetail.cell.photos ?? []).map((photoUrl) => (
                             <Box
-                              component="img"
-                              src={photoUrl}
-                              alt="Foto do mapeamento institucional"
+                              key={photoUrl}
+                              component="a"
+                              href={photoUrl}
+                              target="_blank"
+                              rel="noreferrer"
                               sx={{
-                                width: '100%',
-                                height: '100%',
-                                objectFit: 'cover',
+                                width: 120,
+                                height: 88,
+                                borderRadius: 1.2,
+                                overflow: 'hidden',
+                                border: '1px solid rgba(15,23,42,0.15)',
+                                display: 'block',
+                                bgcolor: '#E2E8F0',
                               }}
-                            />
-                          </Box>
-                        ))}
-                      </Stack>
+                            >
+                              <Box
+                                component="img"
+                                src={photoUrl}
+                                alt="Foto do mapeamento institucional"
+                                sx={{
+                                  width: '100%',
+                                  height: '100%',
+                                  objectFit: 'cover',
+                                }}
+                              />
+                            </Box>
+                          ))}
+                        </Stack>
+                      ) : null}
                     </Box>
                   ) : null}
                 </CardContent>
