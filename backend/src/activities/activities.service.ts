@@ -1171,7 +1171,7 @@ export class ActivitiesService {
 
     const existing = await this.prisma.activity.findMany({
       where: { id: { in: normalizedIds } },
-      select: { id: true, localityId: true },
+      select: { id: true, localityId: true, scope: true },
     });
     if (!existing.length) return { updated: 0 };
 
@@ -3120,9 +3120,9 @@ export class ActivitiesService {
     throwError('RBAC_FORBIDDEN');
   }
 
-  private assertActivityOperateAccess(activityOrScope: { scope?: string } | null, user?: RbacUser) {
+  private assertActivityOperateAccess(activityOrScope: { scope?: string } | null, user?: RbacUser): void {
     if (!user?.id) throwError('RBAC_FORBIDDEN');
-    const scope = activityOrScope?.scope;
+    const scope = (activityOrScope as { scope?: string } | null)?.scope;
     if (scope === 'CIPAVD') {
       if (hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_TI])) return;
       throwError('RBAC_FORBIDDEN');
