@@ -1,14 +1,12 @@
 import * as path from 'node:path';
 
-function resolveRuntimeRoot() {
-  if (process.env.NODE_ENV === 'production') {
-    return process.cwd();
-  }
-  return process.cwd();
-}
-
+/** Diretório persistente para fotos do checklist (fora da árvore do deploy). Em produção, defina MISSION_CHECKLIST_UPLOADS_DIR (ex: /var/lib/cipavd/mission-checklist-uploads). */
 export function getMissionChecklistPhotosDir() {
-  return path.resolve(resolveRuntimeRoot(), 'uploads', 'missions', 'checklist');
+  const envDir = process.env.MISSION_CHECKLIST_UPLOADS_DIR;
+  if (envDir && typeof envDir === 'string' && envDir.trim()) {
+    return path.resolve(envDir.trim());
+  }
+  return path.resolve(process.cwd(), 'uploads', 'missions', 'checklist');
 }
 
 export function getMissionChecklistPhotoCandidates(filename: string) {
