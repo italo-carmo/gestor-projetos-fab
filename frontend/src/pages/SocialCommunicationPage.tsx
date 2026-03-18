@@ -859,8 +859,8 @@ export function SocialCommunicationPage() {
             avatarBg: "rgba(248, 248, 252, 0.5)",
             avatarBorder: "rgba(225, 225, 235, 0.84)",
             avatarColor: "#F8FBFF",
-            titleColor: "rgba(198, 210, 224, 0.98)",
-            textColor: "rgba(186, 200, 216, 0.95)",
+            titleColor: "rgba(20, 24, 30, 0.98)",
+            textColor: "rgba(24, 30, 38, 0.95)",
             cardBackground:
               "linear-gradient(145deg, #9ca0ab 0%, #b6bac4 26%, #cfd3dc 52%, #bcc0ca 76%, #9ea2ad 100%)",
             cardBackgroundSize: "100% 100%",
