@@ -1,4 +1,16 @@
-import { Avatar, Box, Button, Card, CardContent, Chip, Drawer, Stack, TextField, Typography } from '@mui/material';
+import {
+  Avatar,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  Drawer,
+  Stack,
+  TextField,
+  Tooltip,
+  Typography,
+} from '@mui/material';
 import { useEffect, useState } from 'react';
 import {
   useAddOrgChartCommissionMember,
@@ -66,12 +78,59 @@ function CommissionMemberCard({
           gap={1}
         >
           <Stack direction="row" spacing={1.5} alignItems="flex-start" sx={{ minWidth: 0 }}>
-            <Avatar
-              src={photoDataUrl || undefined}
-              sx={{ width: 48, height: 48, flexShrink: 0, bgcolor: 'primary.main', color: 'primary.contrastText' }}
-            >
-              {!photoDataUrl ? initials : null}
-            </Avatar>
+            {photoDataUrl ? (
+              <Tooltip
+                title={
+                  <Box
+                    component="img"
+                    src={photoDataUrl}
+                    alt=""
+                    sx={{
+                      display: 'block',
+                      maxWidth: 320,
+                      maxHeight: 420,
+                      width: 'auto',
+                      height: 'auto',
+                      objectFit: 'contain',
+                      borderRadius: 1,
+                    }}
+                  />
+                }
+                enterDelay={250}
+                leaveDelay={150}
+                slotProps={{
+                  tooltip: {
+                    sx: {
+                      bgcolor: 'background.paper',
+                      p: 0.5,
+                      boxShadow: 6,
+                      borderRadius: 1,
+                      border: '1px solid',
+                      borderColor: 'divider',
+                      maxWidth: 'none',
+                    },
+                  },
+                }}
+              >
+                <Avatar
+                  src={photoDataUrl}
+                  sx={{
+                    width: 48,
+                    height: 48,
+                    flexShrink: 0,
+                    bgcolor: 'primary.main',
+                    color: 'primary.contrastText',
+                    cursor: 'zoom-in',
+                  }}
+                />
+              </Tooltip>
+            ) : (
+              <Avatar
+                sx={{ width: 48, height: 48, flexShrink: 0, bgcolor: 'primary.main', color: 'primary.contrastText' }}
+              >
+                {initials}
+              </Avatar>
+            )}
             <Box sx={{ minWidth: 0 }}>
               <Typography variant="subtitle2">{displayName}</Typography>
               <Chip
