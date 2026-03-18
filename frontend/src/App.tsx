@@ -139,6 +139,7 @@ function App() {
                   }
                 />
                 <Route path="/activities" element={<ActivitiesPage />} />
+                <Route path="/activities-cipavd" element={<ActivitiesPage scope="cipavd" />} />
                 <Route path="/gantt" element={<GanttPage />} />
                 <Route
                   path="/calendar"

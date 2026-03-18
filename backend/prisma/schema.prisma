@@ -184,6 +184,7 @@ model Activity {
   specialtyId   String?
   eventDate     DateTime?
   status        ActivityStatus @default(NOT_STARTED)
+  scope         ActivityScope  @default(SMIF)
   reportRequired Boolean      @default(false)
   createdById   String?
   createdAt     DateTime      @default(now())
@@ -206,6 +207,7 @@ model Activity {
   @@index([specialtyId])
   @@index([status])
   @@index([eventDate])
+  @@index([scope])
 }
 
 model ActivitySpecialty {
@@ -1368,6 +1370,11 @@ enum PermissionScope {
   SPECIALTY
   LOCALITY_SPECIALTY
   OWN
+}
+
+enum ActivityScope {
+  SMIF
+  CIPAVD
 }
 
 enum ActivityStatus {

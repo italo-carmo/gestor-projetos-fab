@@ -54,13 +54,14 @@ export class ActivitiesController {
     @Query('localityId') localityId: string | undefined,
     @Query('specialtyId') specialtyId: string | undefined,
     @Query('status') status: string | undefined,
+    @Query('scope') scope: string | undefined,
     @Query('q') q: string | undefined,
     @Query('page') page: string | undefined,
     @Query('pageSize') pageSize: string | undefined,
     @CurrentUser() user: RbacUser,
   ) {
     return this.activities.list(
-      { localityId, specialtyId, status, q, page, pageSize },
+      { localityId, specialtyId, status, scope, q, page, pageSize },
       user,
     );
   }

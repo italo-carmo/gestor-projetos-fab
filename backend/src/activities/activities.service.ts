@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { ActivityStatus, Prisma } from '@prisma/client';
+import { ActivityScope, ActivityStatus, Prisma } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -50,6 +50,7 @@ export class ActivitiesService {
       localityId?: string;
       specialtyId?: string;
       status?: string;
+      scope?: string;
       q?: string;
       page?: string;
       pageSize?: string;
@@ -65,8 +66,14 @@ export class ActivitiesService {
       return { items: [], page, pageSize, total: 0 };
     }
 
+    const scopeFilter: ActivityScope =
+      String(filters.scope ?? '').toUpperCase() === 'CIPAVD'
+        ? 'CIPAVD'
+        : 'SMIF';
+
     const andClauses: Prisma.ActivityWhereInput[] = [];
     andClauses.push({ localityId: { in: targetLocalityIds } });
+    andClauses.push({ scope: scopeFilter });
     if (filters.localityId) andClauses.push({ localityId: filters.localityId });
     if (filters.specialtyId) {
       andClauses.push({
@@ -228,10 +235,13 @@ export class ActivitiesService {
       eventDate?: string | null;
       reportRequired?: boolean;
       responsibleUserIds?: string[];
+      scope?: ActivityScope;
     },
     user?: RbacUser,
   ) {
-    this.assertActivityOperateAccess(null, user);
+    const scope: ActivityScope =
+      String(payload.scope ?? '').toUpperCase() === 'CIPAVD' ? 'CIPAVD' : 'SMIF';
+    this.assertActivityOperateAccess(scope === 'CIPAVD' ? { scope: 'CIPAVD' } : null, user);
     const normalizedLocalityIds = Array.from(
       new Set(
         (payload.localityIds ?? [])
@@ -297,6 +307,7 @@ export class ActivitiesService {
             specialtyId: primarySpecialtyId,
             eventDate: payload.eventDate ? new Date(payload.eventDate) : null,
             reportRequired: payload.reportRequired ?? false,
+            scope,
             createdById: user?.id ?? null,
             specialties:
               activitySpecialtyIds.length > 0
@@ -1055,10 +1066,12 @@ export class ActivitiesService {
       eventDate: Date | null;
       status: ActivityStatus;
       reportRequired: boolean;
+      scope: ActivityScope;
       createdById: string | null;
     }> = [];
     for (const activity of existing) {
       const specialtyIds = this.extractActivitySpecialtyIds(activity);
+      const activityScope: ActivityScope = (activity as any).scope === 'CIPAVD' ? 'CIPAVD' : 'SMIF';
       for (const targetLocalityId of normalizedTargetLocalityIds) {
         if (activity.localityId && activity.localityId === targetLocalityId) {
           skippedSameLocality += 1;
@@ -1085,6 +1098,7 @@ export class ActivitiesService {
               ? activity.status
               : ActivityStatus.NOT_STARTED,
           reportRequired: activity.reportRequired,
+          scope: activityScope,
           createdById: user?.id ?? null,
         });
       }
@@ -1110,6 +1124,7 @@ export class ActivitiesService {
             eventDate: payload.eventDate,
             status: payload.status,
             reportRequired: payload.reportRequired,
+            scope: payload.scope,
             createdById: payload.createdById,
             specialties:
               payload.specialtyIds.length > 0
@@ -3105,8 +3120,13 @@ export class ActivitiesService {
     throwError('RBAC_FORBIDDEN');
   }
 
-  private assertActivityOperateAccess(_activity: any, user?: RbacUser) {
+  private assertActivityOperateAccess(activityOrScope: { scope?: string } | null, user?: RbacUser) {
     if (!user?.id) throwError('RBAC_FORBIDDEN');
+    const scope = activityOrScope?.scope;
+    if (scope === 'CIPAVD') {
+      if (hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_TI])) return;
+      throwError('RBAC_FORBIDDEN');
+    }
     const profile = resolveAccessProfile(user);
     if (profile.ti || profile.nationalCommission) return;
     throwError('RBAC_FORBIDDEN');

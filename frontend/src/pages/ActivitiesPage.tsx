@@ -328,12 +328,15 @@ function getActivitySpecialtyLabel(activity: any) {
   return names.join(' / ');
 }
 
-export function ActivitiesPage() {
+type ActivitiesPageScope = 'smif' | 'cipavd';
+
+export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const activityIdFromUrl = searchParams.get('activityId') ?? '';
   const localityIdFromUrl = searchParams.get('localityId') ?? '';
   const tabFromUrl = searchParams.get('tab') === 'report' ? 'report' : 'activity';
   const toast = useToast();
+  const scopeApi = scope === 'cipavd' ? 'CIPAVD' : 'SMIF';
 
   const [statusFilter, setStatusFilter] = useState('');
   const [localityFilter, setLocalityFilter] = useState(localityIdFromUrl);
@@ -367,6 +370,7 @@ export function ActivitiesPage() {
     status: statusFilter || undefined,
     localityId: localityFilter || undefined,
     specialtyId: specialtyFilter || undefined,
+    scope: scopeApi,
     q: search || undefined,
     page: 1,
     pageSize: 100,
@@ -646,12 +650,15 @@ export function ActivitiesPage() {
   }, [selected]);
 
   const canView = !me ? true : can(me, 'task_instances', 'view');
-  const canManageActivityDataByRole = hasAnyRole(me, [
-    ROLE_COORDENACAO_CIPAVD,
-    ROLE_COMISSAO_CIPAVD,
-    ROLE_COMANDANTE_COMGEP,
-    ROLE_TI,
-  ]);
+  const canManageActivityDataByRole =
+    scope === 'cipavd'
+      ? hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI])
+      : hasAnyRole(me, [
+          ROLE_COORDENACAO_CIPAVD,
+          ROLE_COMISSAO_CIPAVD,
+          ROLE_COMANDANTE_COMGEP,
+          ROLE_TI,
+        ]);
   const canCreate = canManageActivityDataByRole;
   const canUpdate = canManageActivityDataByRole;
   const canDelete = canUpdate;
@@ -671,7 +678,9 @@ export function ActivitiesPage() {
   const canEditReportContent = canEditReport && !reportIsSigned;
   const canUploadReportPhotos = canUpload && !reportIsSigned;
   const canEditActivityForm = isCreateMode ? canCreate : canUpdate;
-  const canManageBatch = can(me, 'task_instances', 'update') && hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]);
+  const canManageBatch =
+    can(me, 'task_instances', 'update') &&
+    (scope === 'cipavd' ? hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]) : hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]));
   const canBatchAssignResponsible = selectedLocalityIds.length <= 1;
   const canCreateAssignResponsible = !isCreateMode || activityForm.localityIds.length <= 1;
   const createSelectedLocalities = useMemo(
@@ -753,6 +762,7 @@ export function ActivitiesPage() {
         responsibleUserIds: activityForm.responsibleUserId ? [activityForm.responsibleUserId] : [],
         eventDate: activityForm.eventDate || null,
         reportRequired: activityForm.reportRequired,
+        scope: scopeApi,
       });
       const firstId = String(created?.id ?? '');
       if (firstId) setSelectedId(firstId);
@@ -1295,7 +1305,9 @@ export function ActivitiesPage() {
   return (
     <Box>
       <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
-        <Typography variant="h4">Atividades de Campo</Typography>
+        <Typography variant="h4">
+          Atividades de Campo - {scope === 'cipavd' ? 'CIPAVD' : 'SMIF'}
+        </Typography>
         <Button variant="contained" onClick={openCreateDrawer} disabled={!canCreate}>
           Nova atividade
         </Button>

@@ -663,6 +663,7 @@ export function useCreateActivity() {
       responsibleUserIds?: string[];
       eventDate?: string | null;
       reportRequired?: boolean;
+      scope?: 'SMIF' | 'CIPAVD';
     }) => (await api.post("/activities", payload)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["activities"] }),
   });

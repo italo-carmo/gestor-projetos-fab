@@ -116,6 +116,7 @@ const navSections: NavSection[] = [
       { label: "Cronograma", to: "/gantt", icon: <TaskIcon fontSize="small" /> },
       { label: "Calendário", to: "/calendar", icon: <EventNoteIcon fontSize="small" /> },
       { label: "Missões", to: "/missions", icon: <FlagRoundedIcon fontSize="small" /> },
+      { label: "Atividades de Campo", to: "/activities-cipavd", icon: <EventNoteIcon fontSize="small" /> },
       { label: "BI Pesquisas", to: "/dashboard/bi", icon: <InsightsRoundedIcon fontSize="small" /> },
       { label: "Avisos", to: "/notices", icon: <CampaignIcon fontSize="small" /> },
     ],
@@ -347,7 +348,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         ]) && can(me, "best_practices", "view")
       );
     }
-    if (item.to === "/activities") {
+    if (item.to === "/activities" || item.to === "/activities-cipavd") {
       return can(me, "task_instances", "view");
     }
     if (item.to === "/meetings") {

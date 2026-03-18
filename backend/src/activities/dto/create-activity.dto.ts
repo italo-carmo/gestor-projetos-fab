@@ -2,15 +2,23 @@ import {
   IsArray,
   IsBoolean,
   IsDateString,
+  IsIn,
   IsOptional,
   IsString,
   MaxLength,
 } from 'class-validator';
 
+const ACTIVITY_SCOPES = ['SMIF', 'CIPAVD'] as const;
+
 export class CreateActivityDto {
   @IsString()
   @MaxLength(200)
   title: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(ACTIVITY_SCOPES)
+  scope?: (typeof ACTIVITY_SCOPES)[number];
 
   @IsOptional()
   @IsString()
