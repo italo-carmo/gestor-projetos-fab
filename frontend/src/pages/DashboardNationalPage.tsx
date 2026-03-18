@@ -490,6 +490,18 @@ export function DashboardNationalPage() {
     setInstitutionalPhotoCarouselIndex(0);
   }, [institutionalDetail?.itemId, (institutionalDetail?.cell.photos ?? []).length]);
 
+  useEffect(() => {
+    const photos = institutionalDetail?.cell.photos ?? [];
+    if (photos.length <= 1) return;
+    const t = setInterval(() => {
+      setInstitutionalPhotoCarouselIndex((i) => (i + 1) % photos.length);
+    }, 5000);
+    return () => clearInterval(t);
+  }, [
+    institutionalDetail?.itemId,
+    (institutionalDetail?.cell.photos ?? []).length,
+  ]);
+
   if (dashboardQuery.isLoading) return <SkeletonState />;
   if (dashboardQuery.isError) return <ErrorState error={dashboardQuery.error} onRetry={() => dashboardQuery.refetch()} />;
 
@@ -2289,8 +2301,8 @@ export function DashboardNationalPage() {
                                       borderRadius: 2,
                                       overflow: 'hidden',
                                       border: '1px solid rgba(15,23,42,0.15)',
-                                      bgcolor: '#E2E8F0',
-                                      minHeight: 200,
+bgcolor: '#fff',
+                                    minHeight: 200,
                                       maxHeight: 340,
                                       display: 'flex',
                                       alignItems: 'center',
@@ -2432,7 +2444,7 @@ export function DashboardNationalPage() {
                                   borderRadius: 2,
                                   overflow: 'hidden',
                                   border: '1px solid rgba(15,23,42,0.15)',
-                                  bgcolor: '#E2E8F0',
+                                  bgcolor: '#fff',
                                   minHeight: 200,
                                   maxHeight: 340,
                                   display: 'flex',
