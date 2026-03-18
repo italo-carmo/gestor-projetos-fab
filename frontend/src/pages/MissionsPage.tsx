@@ -45,6 +45,7 @@ import {
   useOmsCatalog,
   useRemoveMissionParticipant,
   useUpdateMissionChecklist,
+  useUploadMissionChecklistPhoto,
   useUpdateMission,
   useUpdateMissionScheduleItem,
   useUsers,
@@ -83,6 +84,7 @@ type MissionChecklistClassification =
 type MissionChecklistItemState = {
   classification: MissionChecklistClassification;
   notes: string;
+  photos: string[];
 };
 
 type MissionChecklistItemConfig = {
@@ -246,6 +248,7 @@ function buildDefaultMissionChecklistState(
       acc[itemId] = {
         classification: defaultClassification,
         notes: '',
+        photos: [],
       };
       return acc;
     },
@@ -298,6 +301,11 @@ function buildMissionChecklistStateFromApi(data: any): Record<string, MissionChe
       base[itemId] = {
         classification,
         notes: String(item?.notes ?? ''),
+        photos: Array.isArray(item?.photos)
+          ? item.photos
+              .map((photo: any) => String(photo ?? '').trim())
+              .filter((photo: string) => Boolean(photo))
+          : [],
       };
     }
   }
@@ -413,6 +421,7 @@ export function MissionsPage() {
   const deleteScheduleItem = useDeleteMissionScheduleItem();
   const exportSchedulePdf = useExportMissionSchedulePdf();
   const updateMissionChecklist = useUpdateMissionChecklist();
+  const uploadMissionChecklistPhoto = useUploadMissionChecklistPhoto();
 
   const [drawerOpen, setDrawerOpen] = useState(Boolean(missionIdFromUrl));
   const [isCreateMode, setIsCreateMode] = useState(false);
@@ -943,6 +952,7 @@ export function MissionsPage() {
       [itemId]: {
         classification,
         notes: current[itemId]?.notes ?? '',
+        photos: current[itemId]?.photos ?? [],
       },
     }));
     setChecklistDirty(true);
@@ -955,8 +965,61 @@ export function MissionsPage() {
         classification:
           current[itemId]?.classification ?? checklistDefaultClassification,
         notes,
+        photos: current[itemId]?.photos ?? [],
       },
     }));
+    setChecklistDirty(true);
+  };
+
+  const handleChecklistPhotoUpload = async (itemId: string, file: File | null) => {
+    if (!selectedMission?.id || !file) return;
+    try {
+      const response = await uploadMissionChecklistPhoto.mutateAsync({
+        missionId: selectedMission.id,
+        file,
+      });
+      const photoUrl = String(response?.photoUrl ?? '').trim();
+      if (!photoUrl) return;
+      setChecklistState((current) => {
+        const currentItem = current[itemId] ?? {
+          classification: checklistDefaultClassification,
+          notes: '',
+          photos: [],
+        };
+        const dedup = Array.from(new Set([...(currentItem.photos ?? []), photoUrl]));
+        return {
+          ...current,
+          [itemId]: {
+            ...currentItem,
+            photos: dedup,
+          },
+        };
+      });
+      setChecklistDirty(true);
+      toast.push({ message: 'Foto adicionada ao item.', severity: 'success' });
+    } catch (error) {
+      toast.push({
+        message: parseApiError(error).message ?? 'Erro ao enviar foto.',
+        severity: 'error',
+      });
+    }
+  };
+
+  const handleChecklistPhotoRemove = (itemId: string, photoUrl: string) => {
+    setChecklistState((current) => {
+      const currentItem = current[itemId] ?? {
+        classification: checklistDefaultClassification,
+        notes: '',
+        photos: [],
+      };
+      return {
+        ...current,
+        [itemId]: {
+          ...currentItem,
+          photos: (currentItem.photos ?? []).filter((photo) => photo !== photoUrl),
+        },
+      };
+    });
     setChecklistDirty(true);
   };
 
@@ -987,6 +1050,7 @@ export function MissionsPage() {
               checklistState[itemId]?.classification ??
               checklistDefaultClassification,
             notes: checklistState[itemId]?.notes ?? '',
+            photos: checklistState[itemId]?.photos ?? [],
           })),
         },
       });
@@ -1822,6 +1886,7 @@ export function MissionsPage() {
                                     const current = checklistState[item.id] ?? {
                                       classification: checklistDefaultClassification,
                                       notes: '',
+                                      photos: [],
                                     };
                                     const classificationMeta =
                                       checklistClassificationMap.get(current.classification) ??
@@ -1913,6 +1978,93 @@ export function MissionsPage() {
                                             fullWidth
                                           />
                                         </Stack>
+                                        <Stack
+                                          direction={{ xs: 'column', md: 'row' }}
+                                          spacing={1}
+                                          alignItems={{ xs: 'stretch', md: 'center' }}
+                                          sx={{ mt: 1 }}
+                                        >
+                                          <Button
+                                            component="label"
+                                            variant="outlined"
+                                            size="small"
+                                            disabled={uploadMissionChecklistPhoto.isPending}
+                                            sx={{ alignSelf: { xs: 'stretch', md: 'flex-start' } }}
+                                          >
+                                            {uploadMissionChecklistPhoto.isPending
+                                              ? 'Enviando foto...'
+                                              : 'Adicionar foto'}
+                                            <input
+                                              type="file"
+                                              accept="image/*"
+                                              hidden
+                                              onChange={(event) => {
+                                                const file = event.target.files?.[0] ?? null;
+                                                void handleChecklistPhotoUpload(item.id, file);
+                                                event.currentTarget.value = '';
+                                              }}
+                                            />
+                                          </Button>
+                                          <Typography variant="caption" color="text.secondary">
+                                            Fotos aparecem no detalhamento do item no SMIF.
+                                          </Typography>
+                                        </Stack>
+                                        {(current.photos ?? []).length > 0 ? (
+                                          <Stack
+                                            direction="row"
+                                            spacing={0.8}
+                                            flexWrap="wrap"
+                                            useFlexGap
+                                            sx={{ mt: 1 }}
+                                          >
+                                            {(current.photos ?? []).map((photoUrl) => (
+                                              <Box
+                                                key={photoUrl}
+                                                sx={{
+                                                  width: 92,
+                                                  height: 68,
+                                                  borderRadius: 1,
+                                                  overflow: 'hidden',
+                                                  border: '1px solid rgba(15,23,42,0.18)',
+                                                  position: 'relative',
+                                                  bgcolor: '#E2E8F0',
+                                                }}
+                                              >
+                                                <Box
+                                                  component="img"
+                                                  src={photoUrl}
+                                                  alt="Foto do mapeamento"
+                                                  sx={{
+                                                    width: '100%',
+                                                    height: '100%',
+                                                    objectFit: 'cover',
+                                                  }}
+                                                />
+                                                <IconButton
+                                                  size="small"
+                                                  color="error"
+                                                  onClick={() =>
+                                                    handleChecklistPhotoRemove(
+                                                      item.id,
+                                                      photoUrl,
+                                                    )
+                                                  }
+                                                  sx={{
+                                                    position: 'absolute',
+                                                    top: 2,
+                                                    right: 2,
+                                                    bgcolor: 'rgba(255,255,255,0.9)',
+                                                    '&:hover': {
+                                                      bgcolor: 'rgba(255,255,255,1)',
+                                                    },
+                                                  }}
+                                                >
+                                                  <DeleteOutlineIcon fontSize="inherit" />
+                                                </IconButton>
+                                              </Box>
+                                            ))}
+                                          </Stack>
+                                        ) : null}
                                       </Box>
                                     );
                                   })}

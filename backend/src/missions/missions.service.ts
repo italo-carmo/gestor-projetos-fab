@@ -45,6 +45,7 @@ type MissionChecklistStoredItem = {
   id: string;
   classification: MissionChecklistClassification;
   notes: string;
+  photos: string[];
 };
 
 type MissionChecklistSectionRuntime = {
@@ -367,7 +368,11 @@ export class MissionsService {
         checklistSections: MissionChecklistSectionRuntime[];
         checklistItemById: Map<
           string,
-          { classification: MissionChecklistClassification; notes: string }
+          {
+            classification: MissionChecklistClassification;
+            notes: string;
+            photos: string[];
+          }
         >;
       }
     >();
@@ -395,13 +400,18 @@ export class MissionsService {
       );
       const checklistItemById = new Map<
         string,
-        { classification: MissionChecklistClassification; notes: string }
+        {
+          classification: MissionChecklistClassification;
+          notes: string;
+          photos: string[];
+        }
       >();
       for (const section of checklistSections) {
         for (const item of section.items) {
           checklistItemById.set(item.id, {
             classification: item.classification,
             notes: item.notes,
+            photos: item.photos ?? [],
           });
         }
       }
@@ -454,6 +464,8 @@ export class MissionsService {
               classification: null,
               notes: '',
               hasNotes: false,
+              photos: [],
+              hasPhotos: false,
             };
           }
           const checklistItem = missionEntry.checklistItemById.get(item.id);
@@ -464,6 +476,8 @@ export class MissionsService {
               classification: null,
               notes: '',
               hasNotes: false,
+              photos: [],
+              hasPhotos: false,
             };
           }
           return {
@@ -472,6 +486,8 @@ export class MissionsService {
             classification: checklistItem.classification,
             notes: checklistItem.notes,
             hasNotes: Boolean(checklistItem.notes.trim()),
+            photos: checklistItem.photos ?? [],
+            hasPhotos: Boolean((checklistItem.photos ?? []).length),
           };
         }),
       })),
@@ -867,6 +883,7 @@ export class MissionsService {
         id: string;
         classification: MissionChecklistClassification;
         notes?: string;
+        photos?: string[];
       }[];
     },
     user?: RbacUser,
@@ -932,6 +949,10 @@ export class MissionsService {
         checklistNotesFilledCount: normalizedItems.filter((item) =>
           item.notes.trim(),
         ).length,
+        checklistPhotosCount: normalizedItems.reduce(
+          (acc, item) => acc + (item.photos?.length ?? 0),
+          0,
+        ),
       },
     });
 
@@ -2162,6 +2183,7 @@ export class MissionsService {
           classification:
             stored?.classification ?? checklistConfig.defaultClassification,
           notes: stored?.notes ?? '',
+          photos: stored?.photos ?? [],
         };
       }),
     }));
@@ -2172,6 +2194,7 @@ export class MissionsService {
       id: string;
       classification: MissionChecklistClassification;
       notes?: string;
+      photos?: string[];
     }[],
     checklistConfig: MissionChecklistConfigRuntime,
   ): MissionChecklistStoredItem[] {
@@ -2199,6 +2222,7 @@ export class MissionsService {
         id: item.id,
         classification: classification as MissionChecklistClassification,
         notes: sanitizeText(item.notes ?? ''),
+        photos: this.normalizeMissionChecklistPhotos(item.photos),
       });
     }
 
@@ -2209,6 +2233,7 @@ export class MissionsService {
         id: itemId,
         classification: checklistConfig.defaultClassification,
         notes: '',
+        photos: [],
       };
     });
   }
@@ -2243,10 +2268,37 @@ export class MissionsService {
         id: itemId,
         classification: classificationRaw as MissionChecklistClassification,
         notes: typeof rawItem.notes === 'string' ? rawItem.notes : '',
+        photos: this.normalizeMissionChecklistPhotos(
+          Array.isArray(rawItem.photos)
+            ? (rawItem.photos as Prisma.JsonValue[])
+                .filter((entry): entry is string => typeof entry === 'string')
+            : [],
+        ),
       });
     }
 
     return result;
+  }
+
+  private normalizeMissionChecklistPhotos(rawPhotos: string[] | undefined) {
+    if (!Array.isArray(rawPhotos)) return [];
+    const dedup = new Set<string>();
+    const normalized: string[] = [];
+    for (const raw of rawPhotos) {
+      const value = sanitizeText(String(raw ?? '')).trim();
+      if (!value) continue;
+      if (
+        !value.startsWith('/missions/checklist/uploads/') &&
+        !/^https?:\/\//i.test(value)
+      ) {
+        continue;
+      }
+      if (dedup.has(value)) continue;
+      dedup.add(value);
+      normalized.push(value);
+      if (normalized.length >= 12) break;
+    }
+    return normalized;
   }
 
   private async getMissionChecklistConfig(): Promise<MissionChecklistConfigRuntime> {
@@ -2457,6 +2509,15 @@ export class MissionsService {
       return;
     }
     throwError('RBAC_FORBIDDEN');
+  }
+
+  async assertChecklistUploadAccess(id: string, user?: RbacUser) {
+    this.assertMissionChecklistEditAccess(user);
+    const mission = await this.prisma.mission.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (!mission) throwError('NOT_FOUND');
   }
 
   private assertMissionChecklistConfigAccess(user?: RbacUser) {

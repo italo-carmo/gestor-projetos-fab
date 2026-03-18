@@ -7,9 +7,17 @@ import {
   Post,
   Put,
   Query,
+  UploadedFile,
   Res,
+  UseFilters,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../common/current-user.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
@@ -26,6 +34,17 @@ import { CreateMissionChecklistDimensionDto } from './dto/create-mission-checkli
 import { UpdateMissionChecklistDimensionDto } from './dto/update-mission-checklist-dimension.dto';
 import { UpdateMissionChecklistClassificationDto } from './dto/update-mission-checklist-classification.dto';
 import type { Response } from 'express';
+import { MulterExceptionFilter } from '../reports/multer-exception.filter';
+import { throwError } from '../common/http-error';
+import {
+  getMissionChecklistPhotoCandidates,
+  getMissionChecklistPhotosDir,
+} from './mission-checklist-storage';
+
+const checklistPhotosDir = getMissionChecklistPhotosDir();
+if (!fs.existsSync(checklistPhotosDir)) {
+  fs.mkdirSync(checklistPhotosDir, { recursive: true });
+}
 
 @Controller('missions')
 @UseGuards(JwtAuthGuard, RbacGuard)
@@ -141,6 +160,38 @@ export class MissionsController {
     return this.missions.upsertChecklist(id, dto, user);
   }
 
+  @Post(':id/checklist/photos')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: checklistPhotosDir,
+        filename: (_req, file, cb) => {
+          const extension = path.extname(file.originalname || '').toLowerCase();
+          const safeExtension =
+            extension && extension.length <= 10 ? extension : '.jpg';
+          cb(null, `${Date.now()}-${randomUUID()}${safeExtension}`);
+        },
+      }),
+      fileFilter: (_req, file, cb) => {
+        const mimetype = String(file.mimetype ?? '').toLowerCase();
+        cb(null, mimetype.startsWith('image/'));
+      },
+      limits: { fileSize: 8 * 1024 * 1024 },
+    }),
+  )
+  @UseFilters(MulterExceptionFilter)
+  async uploadChecklistPhoto(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: RbacUser,
+  ) {
+    if (!file) {
+      throwError('VALIDATION_ERROR', { field: 'file', reason: 'required' });
+    }
+    await this.missions.assertChecklistUploadAccess(id, user);
+    return { photoUrl: `/missions/checklist/uploads/${file.filename}` };
+  }
+
   @Post(':id/participants/ldap')
   addParticipantFromLdap(
     @Param('id') id: string,
@@ -211,5 +262,23 @@ export class MissionsController {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
     return res.send(buffer);
+  }
+}
+
+@Controller('missions/checklist/uploads')
+export class MissionsChecklistUploadsController {
+  @Get(':filename')
+  async uploadedPhoto(
+    @Param('filename') filename: string,
+    @Res() res: Response,
+  ) {
+    const safeName = path.basename(String(filename ?? ''));
+    if (!safeName || safeName !== filename) throwError('NOT_FOUND');
+    const filePath = getMissionChecklistPhotoCandidates(safeName).find(
+      (candidate) => fs.existsSync(candidate),
+    );
+    if (!filePath) throwError('NOT_FOUND');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    return res.sendFile(filePath);
   }
 }

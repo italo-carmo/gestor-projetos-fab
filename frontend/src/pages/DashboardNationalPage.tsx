@@ -184,6 +184,8 @@ type InstitutionalChecklistCell = {
   classification: InstitutionalChecklistClassification | null;
   notes: string;
   hasNotes: boolean;
+  photos: string[];
+  hasPhotos: boolean;
 };
 
 type InstitutionalChecklistItem = {
@@ -239,6 +241,7 @@ type InstitutionalChecklistMission = {
       prompt?: string | null;
       classification: InstitutionalChecklistClassification;
       notes: string;
+      photos: string[];
     }>;
   }>;
 };
@@ -677,6 +680,7 @@ export function DashboardNationalPage() {
         classification:
           item.id === detail.itemId ? nextClassification : item.classification,
         notes: item.id === detail.itemId ? nextNotes : item.notes,
+        photos: item.photos ?? [],
       })),
     );
 
@@ -1760,6 +1764,8 @@ export function DashboardNationalPage() {
                               classification: null,
                               notes: '',
                               hasNotes: false,
+                              photos: [],
+                              hasPhotos: false,
                             };
                           const classificationConfig = cell.classification
                             ? institutionalClassificationById.get(cell.classification) ??
@@ -2152,6 +2158,48 @@ export function DashboardNationalPage() {
                         'Sem observações registradas para este item.'}
                     </Typography>
                   )}
+                  {(institutionalDetail.cell.photos ?? []).length > 0 ? (
+                    <Box sx={{ mt: 1 }}>
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ display: 'block', mb: 0.6 }}
+                      >
+                        Fotos relacionadas
+                      </Typography>
+                      <Stack direction="row" spacing={0.8} flexWrap="wrap" useFlexGap>
+                        {(institutionalDetail.cell.photos ?? []).map((photoUrl) => (
+                          <Box
+                            key={photoUrl}
+                            component="a"
+                            href={photoUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            sx={{
+                              width: 120,
+                              height: 88,
+                              borderRadius: 1.2,
+                              overflow: 'hidden',
+                              border: '1px solid rgba(15,23,42,0.15)',
+                              display: 'block',
+                              bgcolor: '#E2E8F0',
+                            }}
+                          >
+                            <Box
+                              component="img"
+                              src={photoUrl}
+                              alt="Foto do mapeamento institucional"
+                              sx={{
+                                width: '100%',
+                                height: '100%',
+                                objectFit: 'cover',
+                              }}
+                            />
+                          </Box>
+                        ))}
+                      </Stack>
+                    </Box>
+                  ) : null}
                 </CardContent>
               </Card>
 
@@ -2354,6 +2402,45 @@ export function DashboardNationalPage() {
                                     >
                                       {item.notes || 'Sem observações.'}
                                     </Typography>
+                                    {(item.photos ?? []).length > 0 ? (
+                                      <Stack
+                                        direction="row"
+                                        spacing={0.6}
+                                        flexWrap="wrap"
+                                        useFlexGap
+                                        sx={{ mt: 0.55 }}
+                                      >
+                                        {item.photos.map((photoUrl) => (
+                                          <Box
+                                            key={photoUrl}
+                                            component="a"
+                                            href={photoUrl}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            sx={{
+                                              width: 70,
+                                              height: 52,
+                                              borderRadius: 0.8,
+                                              overflow: 'hidden',
+                                              border: '1px solid rgba(15,23,42,0.16)',
+                                              display: 'block',
+                                              bgcolor: '#E2E8F0',
+                                            }}
+                                          >
+                                            <Box
+                                              component="img"
+                                              src={photoUrl}
+                                              alt="Foto do item do checklist"
+                                              sx={{
+                                                width: '100%',
+                                                height: '100%',
+                                                objectFit: 'cover',
+                                              }}
+                                            />
+                                          </Box>
+                                        ))}
+                                      </Stack>
+                                    ) : null}
                                   </Box>
                                 );
                               })}

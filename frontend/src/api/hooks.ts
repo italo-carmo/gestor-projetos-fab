@@ -201,6 +201,7 @@ export function useUpdateMissionChecklist() {
             | "NECESSITA_ANALISE"
             | "POSSIVEL_RISCO";
           notes?: string;
+          photos?: string[];
         }>;
       };
     }) => (await api.put(`/missions/${args.id}/checklist`, args.payload)).data,
@@ -210,6 +211,20 @@ export function useUpdateMissionChecklist() {
       qc.invalidateQueries({ queryKey: qk.mission(args.id) });
       qc.invalidateQueries({ queryKey: ["missions"] });
       qc.invalidateQueries({ queryKey: ["missionChecklistMapping"] });
+    },
+  });
+}
+
+export function useUploadMissionChecklistPhoto() {
+  return useMutation({
+    mutationFn: async (args: { missionId: string; file: File }) => {
+      const formData = new FormData();
+      formData.append('file', args.file);
+      return (
+        await api.post(`/missions/${args.missionId}/checklist/photos`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        })
+      ).data as { photoUrl: string };
     },
   });
 }

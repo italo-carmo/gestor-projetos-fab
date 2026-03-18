@@ -23,6 +23,12 @@ export class UpsertMissionChecklistItemDto {
   @IsString()
   @MaxLength(4000)
   notes?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  @MaxLength(500, { each: true })
+  photos?: string[];
 }
 
 export class UpsertMissionChecklistDto {
