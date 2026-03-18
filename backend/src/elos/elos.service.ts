@@ -13,12 +13,14 @@ import {
   ROLE_COORDENACAO_CIPAVD,
   ROLE_TI,
 } from '../rbac/role-access';
+import { AuthService } from '../auth/auth.service';
 
 @Injectable()
 export class ElosService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly auth: AuthService,
   ) {}
 
   async list(
@@ -435,13 +437,20 @@ export class ElosService {
       take: 400,
     });
 
+    const numeroOrdemList = await Promise.all(
+      items.map((item) =>
+        this.auth.getNumeroOrdemForUser(item.ldapUid, item.email ?? ''),
+      ),
+    );
+
     return {
-      items: items.map((item) => ({
+      items: items.map((item, index) => ({
         id: item.id,
         name: item.name,
         warName: item.name,
         email: item.email,
         ldapUid: item.ldapUid,
+        numeroOrdem: numeroOrdemList[index] ?? null,
         functionText: item.commissionFunction ?? null,
         phone: item.commissionPhone ?? null,
         seniority: item.commissionSeniority ?? null,

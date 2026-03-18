@@ -375,6 +375,16 @@ export class AuthService {
     return this.fabLdap.lookupByEmail(normalizedEmail);
   }
 
+  /** Returns numeroOrdem for a user by ldapUid/email (for org-chart photos etc.). */
+  async getNumeroOrdemForUser(ldapUid: string | null, email: string): Promise<string | null> {
+    try {
+      const profile = await this.resolveFabProfileForUser({ ldapUid, email });
+      return profile?.numeroOrdem ?? null;
+    } catch {
+      return null;
+    }
+  }
+
   private normalizeNumeroOrdem(value: string) {
     const raw = String(value ?? '').trim();
     if (!raw) return '';

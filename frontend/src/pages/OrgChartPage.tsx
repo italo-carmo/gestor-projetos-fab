@@ -1,4 +1,4 @@
-import { Box, Button, Card, CardContent, Chip, Drawer, Stack, TextField, Typography } from '@mui/material';
+import { Avatar, Box, Button, Card, CardContent, Chip, Drawer, Stack, TextField, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
 import {
   useAddOrgChartCommissionMember,
@@ -7,6 +7,7 @@ import {
   useOrgChartCommissionMembers,
   useReorderOrgChartCommissionMembers,
   useRemoveOrgChartCommissionMember,
+  useSigpesPhoto,
   useUpdateOrgChartCommissionMember,
 } from '../api/hooks';
 import { parseApiError } from '../app/apiErrors';
@@ -15,6 +16,101 @@ import { useToast } from '../app/toast';
 import { ConfirmDialog } from '../components/dialogs/ConfirmDialog';
 import { ErrorState } from '../components/states/ErrorState';
 import { SkeletonState } from '../components/states/SkeletonState';
+
+function CommissionMemberCard({
+  member,
+  canManage,
+  canReorder,
+  draggingMemberId,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onDragEnd,
+  onEdit,
+  onRemove,
+}: {
+  member: any;
+  canManage: boolean;
+  canReorder: boolean;
+  draggingMemberId: string;
+  onDragStart: () => void;
+  onDragOver: (e: React.DragEvent) => void;
+  onDrop: (e: React.DragEvent) => void;
+  onDragEnd: () => void;
+  onEdit: () => void;
+  onRemove: () => void;
+}) {
+  const sigpesPhotoQuery = useSigpesPhoto(member?.numeroOrdem);
+  const photoDataUrl = String(sigpesPhotoQuery.data?.dataUrl ?? '').trim();
+  const displayName = member.warName ?? member.name ?? '—';
+  const initials = displayName !== '—' ? displayName.split(/\s+/).slice(0, 2).map((s: string) => s[0]).join('').toUpperCase() : '?';
+
+  return (
+    <Card
+      variant="outlined"
+      draggable={canReorder}
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      onDragEnd={onDragEnd}
+      sx={{
+        cursor: canReorder ? 'grab' : 'default',
+        opacity: draggingMemberId === String(member.id) ? 0.75 : 1,
+      }}
+    >
+      <CardContent sx={{ py: 1.4, '&:last-child': { pb: 1.4 } }}>
+        <Stack
+          direction={{ xs: 'column', md: 'row' }}
+          justifyContent="space-between"
+          alignItems={{ xs: 'flex-start', md: 'center' }}
+          gap={1}
+        >
+          <Stack direction="row" spacing={1.5} alignItems="flex-start" sx={{ minWidth: 0 }}>
+            <Avatar
+              src={photoDataUrl || undefined}
+              sx={{ width: 48, height: 48, flexShrink: 0, bgcolor: 'primary.main', color: 'primary.contrastText' }}
+            >
+              {!photoDataUrl ? initials : null}
+            </Avatar>
+            <Box sx={{ minWidth: 0 }}>
+              <Typography variant="subtitle2">{displayName}</Typography>
+              <Chip
+                size="small"
+                label={`Antiguidade ${member.seniority ?? '—'}`}
+                sx={{ mt: 0.6, mb: 0.4 }}
+                color="primary"
+                variant="outlined"
+              />
+              <Typography variant="body2" color="text.secondary">
+                {member.email ?? 'Sem e-mail'}
+              </Typography>
+              {member.functionText && (
+                <Typography variant="body2" color="text.secondary">
+                  Função: {member.functionText}
+                </Typography>
+              )}
+              {member.phone && (
+                <Typography variant="body2" color="text.secondary">
+                  Telefone: {member.phone}
+                </Typography>
+              )}
+            </Box>
+          </Stack>
+          {canManage && (
+            <Stack direction="row" spacing={1}>
+              <Button size="small" variant="outlined" onClick={onEdit}>
+                Editar dados
+              </Button>
+              <Button size="small" color="error" onClick={onRemove}>
+                Retirar da comissão
+              </Button>
+            </Stack>
+          )}
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+}
 
 export function OrgChartPage() {
   const toast = useToast();
@@ -211,10 +307,12 @@ export function OrgChartPage() {
           ) : (
             <Stack spacing={1.2}>
               {commissionMembers.map((member: any) => (
-                <Card
+                <CommissionMemberCard
                   key={member.id}
-                  variant="outlined"
-                  draggable={canReorder}
+                  member={member}
+                  canManage={canManage}
+                  canReorder={canReorder}
+                  draggingMemberId={draggingMemberId}
                   onDragStart={() => setDraggingMemberId(String(member.id))}
                   onDragOver={(e) => {
                     if (!canReorder) return;
@@ -225,58 +323,9 @@ export function OrgChartPage() {
                     moveMember(String(member.id));
                   }}
                   onDragEnd={() => setDraggingMemberId('')}
-                  sx={{
-                    cursor: canReorder ? 'grab' : 'default',
-                    opacity: draggingMemberId === String(member.id) ? 0.75 : 1,
-                  }}
-                >
-                  <CardContent sx={{ py: 1.4, '&:last-child': { pb: 1.4 } }}>
-                    <Stack
-                      direction={{ xs: 'column', md: 'row' }}
-                      justifyContent="space-between"
-                      alignItems={{ xs: 'flex-start', md: 'center' }}
-                      gap={1}
-                    >
-                      <Box>
-                        <Typography variant="subtitle2">{member.warName ?? member.name ?? '—'}</Typography>
-                        <Chip
-                          size="small"
-                          label={`Antiguidade ${member.seniority ?? '—'}`}
-                          sx={{ mt: 0.6, mb: 0.4 }}
-                          color="primary"
-                          variant="outlined"
-                        />
-                        <Typography variant="body2" color="text.secondary">
-                          {member.email ?? 'Sem e-mail'}
-                        </Typography>
-                        {member.functionText && (
-                          <Typography variant="body2" color="text.secondary">
-                            Função: {member.functionText}
-                          </Typography>
-                        )}
-                        {member.phone && (
-                          <Typography variant="body2" color="text.secondary">
-                            Telefone: {member.phone}
-                          </Typography>
-                        )}
-                      </Box>
-                      {canManage && (
-                        <Stack direction="row" spacing={1}>
-                          <Button size="small" variant="outlined" onClick={() => openEditCommissionMember(member)}>
-                            Editar dados
-                          </Button>
-                          <Button
-                            size="small"
-                            color="error"
-                            onClick={() => setCommissionDeleteTarget(member)}
-                          >
-                            Retirar da comissão
-                          </Button>
-                        </Stack>
-                      )}
-                    </Stack>
-                  </CardContent>
-                </Card>
+                  onEdit={() => openEditCommissionMember(member)}
+                  onRemove={() => setCommissionDeleteTarget(member)}
+                />
               ))}
             </Stack>
           )}
