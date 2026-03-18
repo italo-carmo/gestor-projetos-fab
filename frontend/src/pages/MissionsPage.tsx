@@ -58,6 +58,14 @@ import { ErrorState } from '../components/states/ErrorState';
 import { SkeletonState } from '../components/states/SkeletonState';
 import { selectTargetLocalities } from '../constants/localities';
 
+function resolveChecklistPhotoUrl(raw: string) {
+  const url = String(raw ?? '').trim();
+  if (!url) return '';
+  if (url.startsWith('/api/')) return url;
+  if (url.startsWith('/missions/checklist/uploads/')) return `/api${url}`;
+  return url;
+}
+
 const blankMissionForm = {
   title: '',
   description: '',
@@ -2017,9 +2025,12 @@ export function MissionsPage() {
                                             useFlexGap
                                             sx={{ mt: 1 }}
                                           >
-                                            {(current.photos ?? []).map((photoUrl) => (
-                                              <Box
-                                                key={photoUrl}
+                                            {(current.photos ?? []).map((photoUrl) => {
+                                              const resolvedUrl =
+                                                resolveChecklistPhotoUrl(photoUrl);
+                                              return (
+                                                <Box
+                                                  key={photoUrl}
                                                 sx={{
                                                   width: 92,
                                                   height: 68,
@@ -2032,7 +2043,7 @@ export function MissionsPage() {
                                               >
                                                 <Box
                                                   component="img"
-                                                  src={photoUrl}
+                                                  src={resolvedUrl}
                                                   alt="Foto do mapeamento"
                                                   sx={{
                                                     width: '100%',
@@ -2062,7 +2073,7 @@ export function MissionsPage() {
                                                   <DeleteOutlineIcon fontSize="inherit" />
                                                 </IconButton>
                                               </Box>
-                                            ))}
+                                            );})}
                                           </Stack>
                                         ) : null}
                                       </Box>

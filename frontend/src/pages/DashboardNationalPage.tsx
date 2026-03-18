@@ -54,6 +54,14 @@ import { useToast } from '../app/toast';
 import { SkeletonState } from '../components/states/SkeletonState';
 import { ErrorState } from '../components/states/ErrorState';
 import { EmptyState } from '../components/states/EmptyState';
+
+function resolveChecklistPhotoUrl(raw: string) {
+  const url = String(raw ?? '').trim();
+  if (!url) return '';
+  if (url.startsWith('/api/')) return url;
+  if (url.startsWith('/missions/checklist/uploads/')) return `/api${url}`;
+  return url;
+}
 type NationalDashboardTotals = {
   localities: number;
   coverageLocalities: number;
@@ -2272,9 +2280,9 @@ export function DashboardNationalPage() {
                                     bgcolor: '#E2E8F0',
                                   }}
                                 >
-                                  <Box
+                              <Box
                                     component="a"
-                                    href={photoUrl}
+                                    href={resolveChecklistPhotoUrl(photoUrl)}
                                     target="_blank"
                                     rel="noreferrer"
                                     sx={{
@@ -2285,7 +2293,7 @@ export function DashboardNationalPage() {
                                   >
                                     <Box
                                       component="img"
-                                      src={photoUrl}
+                                      src={resolveChecklistPhotoUrl(photoUrl)}
                                       alt="Foto do mapeamento institucional"
                                       sx={{
                                         width: '100%',
@@ -2336,7 +2344,7 @@ export function DashboardNationalPage() {
                             >
                               <Box
                                 component="img"
-                                src={photoUrl}
+                                src={resolveChecklistPhotoUrl(photoUrl)}
                                 alt="Foto do mapeamento institucional"
                                 sx={{
                                   width: '100%',
