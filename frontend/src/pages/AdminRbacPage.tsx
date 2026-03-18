@@ -30,6 +30,7 @@ import {
   useLocalities,
   useLookupLdapUser,
   useMe,
+  usePostos,
   useRemoveUserRole,
   useRoles,
   useSpecialties,
@@ -185,6 +186,14 @@ function roleIsCpca(roleName: string | null | undefined) {
   return normalizeRoleName(roleName) === 'cpca';
 }
 
+/** Primeira palavra do nome (posto/código, ex.: TB, CAP). */
+function firstNameToken(name: string | null | undefined) {
+  return String(name ?? '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)[0] ?? '';
+}
+
 export function AdminRbacPage() {
   const { data: me } = useMe();
   const toast = useToast();
@@ -194,6 +203,7 @@ export function AdminRbacPage() {
 
   const rolesQuery = useRoles();
   const usersQuery = useUsers(canViewUsers);
+  const postosQuery = usePostos(canViewUsers);
   const localitiesQuery = useLocalities(canViewLocalities);
   const specialtiesQuery = useSpecialties(can(me, 'specialties', 'view'));
   const updateUser = useUpdateUser();
@@ -222,14 +232,38 @@ export function AdminRbacPage() {
   const [roleFilterId, setRoleFilterId] = useState('');
   const [localityFilterId, setLocalityFilterId] = useState('');
 
-  const users = useMemo(
-    () =>
-      ((usersQuery.data?.items ?? []) as UserItem[])
-        .filter((user) => String(user.ldapUid ?? '').trim().length > 0)
-        .filter((user) => getUserRoles(user).length > 0)
-        .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')),
-    [usersQuery.data?.items],
-  );
+  const postoOrderByCode = useMemo(() => {
+    const items = (postosQuery.data?.items ?? []) as Array<{
+      code?: string;
+      sortOrder?: number;
+    }>;
+    const map = new Map<string, number>();
+    for (const p of items) {
+      const code = String(p.code ?? '').trim().toUpperCase();
+      if (code) map.set(code, Number(p.sortOrder ?? 0));
+    }
+    return map;
+  }, [postosQuery.data?.items]);
+
+  const users = useMemo(() => {
+    const list = ((usersQuery.data?.items ?? []) as UserItem[])
+      .filter((user) => String(user.ldapUid ?? '').trim().length > 0)
+      .filter((user) => getUserRoles(user).length > 0);
+
+    const UNKNOWN_POSTO_ORDER = 1_000_000;
+    const postoRank = (name: string) => {
+      const token = firstNameToken(name).toUpperCase();
+      if (!token || postoOrderByCode.size === 0) return UNKNOWN_POSTO_ORDER;
+      return postoOrderByCode.has(token) ? postoOrderByCode.get(token)! : UNKNOWN_POSTO_ORDER;
+    };
+
+    return [...list].sort((a, b) => {
+      const ra = postoRank(a.name);
+      const rb = postoRank(b.name);
+      if (ra !== rb) return ra - rb;
+      return a.name.localeCompare(b.name, 'pt-BR');
+    });
+  }, [usersQuery.data?.items, postoOrderByCode]);
   const roles = useMemo(
     () =>
       ((rolesQuery.data?.items ?? []) as RoleItem[]).sort((a, b) =>
