@@ -22,6 +22,8 @@ import {
   Tooltip,
   TextField,
 } from '@mui/material';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import DescriptionIcon from '@mui/icons-material/Description';
@@ -446,6 +448,8 @@ export function DashboardNationalPage() {
   const [institutionalDraftClassification, setInstitutionalDraftClassification] =
     useState<InstitutionalChecklistClassification>('NECESSITA_ANALISE');
   const [institutionalDraftNotes, setInstitutionalDraftNotes] = useState('');
+  const [institutionalPhotoCarouselIndex, setInstitutionalPhotoCarouselIndex] =
+    useState(0);
 
   const lessons = ((lessonsQuery.data?.items ?? []) as LessonPost[])
     .filter((item) => item?.id)
@@ -481,6 +485,10 @@ export function DashboardNationalPage() {
     institutionalDetail?.cell.classification,
     institutionalDetail?.cell.notes,
   ]);
+
+  useEffect(() => {
+    setInstitutionalPhotoCarouselIndex(0);
+  }, [institutionalDetail?.itemId, (institutionalDetail?.cell.photos ?? []).length]);
 
   if (dashboardQuery.isLoading) return <SkeletonState />;
   if (dashboardQuery.isError) return <ErrorState error={dashboardQuery.error} onRetry={() => dashboardQuery.refetch()} />;
@@ -2265,97 +2273,273 @@ export function DashboardNationalPage() {
                               Salve o item para persistir as alterações.
                             </Typography>
                           </Stack>
-                          {(institutionalDetail.cell.photos ?? []).length > 0 ? (
-                            <Stack direction="row" spacing={0.8} flexWrap="wrap" useFlexGap>
-                              {(institutionalDetail.cell.photos ?? []).map((photoUrl) => (
-                                <Box
-                                  key={photoUrl}
-                                  sx={{
-                                    width: 120,
-                                    height: 88,
-                                    borderRadius: 1.2,
-                                    overflow: 'hidden',
-                                    border: '1px solid rgba(15,23,42,0.15)',
-                                    position: 'relative',
-                                    bgcolor: '#E2E8F0',
-                                  }}
-                                >
-                              <Box
-                                    component="a"
-                                    href={resolveChecklistPhotoUrl(photoUrl)}
-                                    target="_blank"
-                                    rel="noreferrer"
+                          {(institutionalDetail.cell.photos ?? []).length > 0
+                            ? (() => {
+                                const photos = institutionalDetail.cell.photos ?? [];
+                                const idx = Math.min(
+                                  institutionalPhotoCarouselIndex,
+                                  photos.length - 1,
+                                );
+                                const currentUrl = photos[idx];
+                                const resolvedUrl = resolveChecklistPhotoUrl(currentUrl);
+                                return (
+                                  <Box
                                     sx={{
-                                      display: 'block',
-                                      width: '100%',
-                                      height: '100%',
+                                      position: 'relative',
+                                      borderRadius: 2,
+                                      overflow: 'hidden',
+                                      border: '1px solid rgba(15,23,42,0.15)',
+                                      bgcolor: '#E2E8F0',
+                                      minHeight: 200,
+                                      maxHeight: 340,
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
                                     }}
                                   >
                                     <Box
-                                      component="img"
-                                      src={resolveChecklistPhotoUrl(photoUrl)}
-                                      alt="Foto do mapeamento institucional"
+                                      component="a"
+                                      href={resolvedUrl}
+                                      target="_blank"
+                                      rel="noreferrer"
                                       sx={{
-                                        width: '100%',
-                                        height: '100%',
-                                        objectFit: 'cover',
+                                        display: 'block',
+                                        flex: 1,
+                                        minHeight: 200,
+                                        maxHeight: 340,
                                       }}
-                                    />
+                                    >
+                                      <Box
+                                        component="img"
+                                        src={resolvedUrl}
+                                        alt={`Foto do mapeamento institucional ${idx + 1}`}
+                                        sx={{
+                                          width: '100%',
+                                          height: '100%',
+                                          maxHeight: 340,
+                                          objectFit: 'contain',
+                                          display: 'block',
+                                        }}
+                                      />
+                                    </Box>
+                                    {photos.length > 1 ? (
+                                      <>
+                                        <IconButton
+                                          size="small"
+                                          onClick={() =>
+                                            setInstitutionalPhotoCarouselIndex((i) =>
+                                              i <= 0 ? photos.length - 1 : i - 1,
+                                            )
+                                          }
+                                          sx={{
+                                            position: 'absolute',
+                                            left: 8,
+                                            top: '50%',
+                                            transform: 'translateY(-50%)',
+                                            bgcolor: 'rgba(255,255,255,0.9)',
+                                            '&:hover': { bgcolor: 'rgba(255,255,255,1)' },
+                                          }}
+                                        >
+                                          <ChevronLeftIcon />
+                                        </IconButton>
+                                        <IconButton
+                                          size="small"
+                                          onClick={() =>
+                                            setInstitutionalPhotoCarouselIndex((i) =>
+                                              i >= photos.length - 1 ? 0 : i + 1,
+                                            )
+                                          }
+                                          sx={{
+                                            position: 'absolute',
+                                            right: 8,
+                                            top: '50%',
+                                            transform: 'translateY(-50%)',
+                                            bgcolor: 'rgba(255,255,255,0.9)',
+                                            '&:hover': { bgcolor: 'rgba(255,255,255,1)' },
+                                          }}
+                                        >
+                                          <ChevronRightIcon />
+                                        </IconButton>
+                                      </>
+                                    ) : null}
+                                    <IconButton
+                                      size="small"
+                                      color="error"
+                                      onClick={() =>
+                                        handleRemoveInstitutionalPhoto(currentUrl)
+                                      }
+                                      sx={{
+                                        position: 'absolute',
+                                        top: 8,
+                                        right: 8,
+                                        bgcolor: 'rgba(255,255,255,0.9)',
+                                        '&:hover': { bgcolor: 'rgba(255,255,255,1)' },
+                                      }}
+                                    >
+                                      <DeleteOutlineIcon fontSize="inherit" />
+                                    </IconButton>
+                                    {photos.length > 1 ? (
+                                      <Stack
+                                        direction="row"
+                                        spacing={0.5}
+                                        justifyContent="center"
+                                        sx={{
+                                          position: 'absolute',
+                                          bottom: 8,
+                                          left: 0,
+                                          right: 0,
+                                        }}
+                                      >
+                                        {photos.map((_, i) => (
+                                          <Box
+                                            key={i}
+                                            onClick={() =>
+                                              setInstitutionalPhotoCarouselIndex(i)
+                                            }
+                                            sx={{
+                                              width: 8,
+                                              height: 8,
+                                              borderRadius: '50%',
+                                              bgcolor:
+                                                i === idx
+                                                  ? 'primary.main'
+                                                  : 'rgba(255,255,255,0.7)',
+                                              cursor: 'pointer',
+                                              border: '1px solid rgba(0,0,0,0.2)',
+                                            }}
+                                          />
+                                        ))}
+                                      </Stack>
+                                    ) : null}
                                   </Box>
-                                  <IconButton
-                                    size="small"
-                                    color="error"
-                                    onClick={() =>
-                                      handleRemoveInstitutionalPhoto(photoUrl)
-                                    }
-                                    sx={{
-                                      position: 'absolute',
-                                      top: 4,
-                                      right: 4,
-                                      bgcolor: 'rgba(255,255,255,0.9)',
-                                      '&:hover': { bgcolor: 'rgba(255,255,255,1)' },
-                                    }}
-                                  >
-                                    <DeleteOutlineIcon fontSize="inherit" />
-                                  </IconButton>
-                                </Box>
-                              ))}
-                            </Stack>
-                          ) : null}
+                                );
+                              })()
+                            : null}
                         </>
-                      ) : (institutionalDetail.cell.photos ?? []).length > 0 ? (
-                        <Stack direction="row" spacing={0.8} flexWrap="wrap" useFlexGap>
-                          {(institutionalDetail.cell.photos ?? []).map((photoUrl) => (
-                            <Box
-                              key={photoUrl}
-                              component="a"
-                              href={photoUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              sx={{
-                                width: 120,
-                                height: 88,
-                                borderRadius: 1.2,
-                                overflow: 'hidden',
-                                border: '1px solid rgba(15,23,42,0.15)',
-                                display: 'block',
-                                bgcolor: '#E2E8F0',
-                              }}
-                            >
+                      ) : (institutionalDetail.cell.photos ?? []).length > 0
+                        ? (() => {
+                            const photos = institutionalDetail.cell.photos ?? [];
+                            const idx = Math.min(
+                              institutionalPhotoCarouselIndex,
+                              photos.length - 1,
+                            );
+                            const currentUrl = photos[idx];
+                            const resolvedUrl = resolveChecklistPhotoUrl(currentUrl);
+                            return (
                               <Box
-                                component="img"
-                                src={resolveChecklistPhotoUrl(photoUrl)}
-                                alt="Foto do mapeamento institucional"
                                 sx={{
-                                  width: '100%',
-                                  height: '100%',
-                                  objectFit: 'cover',
+                                  position: 'relative',
+                                  borderRadius: 2,
+                                  overflow: 'hidden',
+                                  border: '1px solid rgba(15,23,42,0.15)',
+                                  bgcolor: '#E2E8F0',
+                                  minHeight: 200,
+                                  maxHeight: 340,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
                                 }}
-                              />
-                            </Box>
-                          ))}
-                        </Stack>
-                      ) : null}
+                              >
+                                <Box
+                                  component="a"
+                                  href={resolvedUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  sx={{
+                                    display: 'block',
+                                    flex: 1,
+                                    minHeight: 200,
+                                    maxHeight: 340,
+                                  }}
+                                >
+                                  <Box
+                                    component="img"
+                                    src={resolvedUrl}
+                                    alt={`Foto do mapeamento institucional ${idx + 1}`}
+                                    sx={{
+                                      width: '100%',
+                                      height: '100%',
+                                      maxHeight: 340,
+                                      objectFit: 'contain',
+                                      display: 'block',
+                                    }}
+                                  />
+                                </Box>
+                                {photos.length > 1 ? (
+                                  <>
+                                    <IconButton
+                                      size="small"
+                                      onClick={() =>
+                                        setInstitutionalPhotoCarouselIndex((i) =>
+                                          i <= 0 ? photos.length - 1 : i - 1,
+                                        )
+                                      }
+                                      sx={{
+                                        position: 'absolute',
+                                        left: 8,
+                                        top: '50%',
+                                        transform: 'translateY(-50%)',
+                                        bgcolor: 'rgba(255,255,255,0.9)',
+                                        '&:hover': { bgcolor: 'rgba(255,255,255,1)' },
+                                      }}
+                                    >
+                                      <ChevronLeftIcon />
+                                    </IconButton>
+                                    <IconButton
+                                      size="small"
+                                      onClick={() =>
+                                        setInstitutionalPhotoCarouselIndex((i) =>
+                                          i >= photos.length - 1 ? 0 : i + 1,
+                                        )
+                                      }
+                                      sx={{
+                                        position: 'absolute',
+                                        right: 8,
+                                        top: '50%',
+                                        transform: 'translateY(-50%)',
+                                        bgcolor: 'rgba(255,255,255,0.9)',
+                                        '&:hover': { bgcolor: 'rgba(255,255,255,1)' },
+                                      }}
+                                    >
+                                      <ChevronRightIcon />
+                                    </IconButton>
+                                    <Stack
+                                      direction="row"
+                                      spacing={0.5}
+                                      justifyContent="center"
+                                      sx={{
+                                        position: 'absolute',
+                                        bottom: 8,
+                                        left: 0,
+                                        right: 0,
+                                      }}
+                                    >
+                                      {photos.map((_, i) => (
+                                        <Box
+                                          key={i}
+                                          onClick={() =>
+                                            setInstitutionalPhotoCarouselIndex(i)
+                                          }
+                                          sx={{
+                                            width: 8,
+                                            height: 8,
+                                            borderRadius: '50%',
+                                            bgcolor:
+                                              i === idx
+                                                ? 'primary.main'
+                                                : 'rgba(255,255,255,0.7)',
+                                            cursor: 'pointer',
+                                            border: '1px solid rgba(0,0,0,0.2)',
+                                          }}
+                                        />
+                                      ))}
+                                    </Stack>
+                                  </>
+                                ) : null}
+                              </Box>
+                            );
+                          })()
+                        : null}
                     </Box>
                   ) : null}
                 </CardContent>
