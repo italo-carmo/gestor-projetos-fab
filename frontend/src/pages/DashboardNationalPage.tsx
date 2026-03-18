@@ -711,7 +711,10 @@ export function DashboardNationalPage() {
         classification:
           item.id === detail.itemId ? nextClassification : item.classification,
         notes: item.id === detail.itemId ? nextNotes : item.notes,
-        photos: item.photos ?? [],
+        photos:
+          item.id === detail.itemId
+            ? detail.cell.photos ?? []
+            : item.photos ?? [],
       })),
     );
 
@@ -739,6 +742,8 @@ export function DashboardNationalPage() {
             classification: nextClassification,
             notes: nextNotes,
             hasNotes: Boolean(nextNotes.trim()),
+            photos: current.cell.photos ?? [],
+            hasPhotos: Boolean((current.cell.photos ?? []).length),
           },
           mission: {
             ...current.mission,
