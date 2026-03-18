@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { throwError } from '../common/http-error';
 import { canonicalRoleName } from '../rbac/role-access';
+import { FabLdapService } from '../ldap/fab-ldap.service';
 
 const LOCALITY_REQUIRED_ROLE_NAMES = new Set([
   'admin especialidade local',
@@ -34,7 +35,31 @@ function roleRequiresSpecialty(roleName: string | null | undefined) {
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly fabLdap: FabLdapService,
+  ) {}
+
+  private async resolveNumeroOrdem(
+    ldapUid: string | null,
+    email: string,
+  ): Promise<string | null> {
+    try {
+      const uid = String(ldapUid ?? '').trim();
+      if (uid) {
+        const byUid = await this.fabLdap.lookupByUid(uid);
+        if (byUid?.numeroOrdem) return byUid.numeroOrdem;
+      }
+      const em = String(email ?? '').trim().toLowerCase();
+      if (em) {
+        const byEmail = await this.fabLdap.lookupByEmail(em);
+        return byEmail?.numeroOrdem ?? null;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
 
   private toRoleResponse(role: { id: string; name: string }) {
     return {
@@ -130,9 +155,26 @@ export class UsersService {
       },
       orderBy: { name: 'asc' },
     });
-    return users
+    const filtered = users
       .filter((user) => String(user.ldapUid ?? '').trim().length > 0)
       .map((user) => this.mapUserRoles(user));
+
+    const chunkSize = 20;
+    const numeros: (string | null)[] = [];
+    for (let i = 0; i < filtered.length; i += chunkSize) {
+      const chunk = filtered.slice(i, i + chunkSize);
+      const batch = await Promise.all(
+        chunk.map((u: { ldapUid: string | null; email: string }) =>
+          this.resolveNumeroOrdem(u.ldapUid, u.email),
+        ),
+      );
+      numeros.push(...batch);
+    }
+
+    return filtered.map((user, idx) => ({
+      ...user,
+      numeroOrdem: numeros[idx] ?? null,
+    }));
   }
 
   async update(

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   Autocomplete,
+  Avatar,
   Box,
   Button,
   Card,
@@ -20,6 +21,7 @@ import {
   TableHead,
   TableRow,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import EditRoundedIcon from '@mui/icons-material/EditRounded';
@@ -32,6 +34,7 @@ import {
   useRoles,
   useSpecialties,
   useUpdateUser,
+  useSigpesPhoto,
   useUpsertLdapUser,
   useUsers,
 } from '../api/hooks';
@@ -51,8 +54,93 @@ type UserItem = {
   ldapOm?: string | null;
   localityId?: string | null;
   specialtyId?: string | null;
+  numeroOrdem?: string | null;
   roles?: UserRoleItem[];
 };
+
+function RbacUserPhotoAvatar({
+  numeroOrdem,
+  displayName,
+}: {
+  numeroOrdem: string | null | undefined;
+  displayName: string;
+}) {
+  const sigpesPhotoQuery = useSigpesPhoto(numeroOrdem);
+  const photoDataUrl = String(sigpesPhotoQuery.data?.dataUrl ?? '').trim();
+  const initials =
+    displayName.trim().length > 0
+      ? displayName
+          .split(/\s+/)
+          .slice(0, 2)
+          .map((s) => s[0])
+          .join('')
+          .toUpperCase()
+      : '?';
+
+  if (photoDataUrl) {
+    return (
+      <Tooltip
+        title={
+          <Box
+            component="img"
+            src={photoDataUrl}
+            alt=""
+            sx={{
+              display: 'block',
+              maxWidth: 320,
+              maxHeight: 420,
+              width: 'auto',
+              height: 'auto',
+              objectFit: 'contain',
+              borderRadius: 1,
+            }}
+          />
+        }
+        enterDelay={250}
+        leaveDelay={150}
+        slotProps={{
+          tooltip: {
+            sx: {
+              bgcolor: 'background.paper',
+              p: 0.5,
+              boxShadow: 6,
+              borderRadius: 1,
+              border: '1px solid',
+              borderColor: 'divider',
+              maxWidth: 'none',
+            },
+          },
+        }}
+      >
+        <Avatar
+          src={photoDataUrl}
+          sx={{
+            width: 40,
+            height: 40,
+            flexShrink: 0,
+            bgcolor: 'primary.main',
+            color: 'primary.contrastText',
+            cursor: 'zoom-in',
+          }}
+        />
+      </Tooltip>
+    );
+  }
+
+  return (
+    <Avatar
+      sx={{
+        width: 40,
+        height: 40,
+        flexShrink: 0,
+        bgcolor: 'primary.main',
+        color: 'primary.contrastText',
+      }}
+    >
+      {initials}
+    </Avatar>
+  );
+}
 type LdapLookupResponse = {
   user?: {
     uid: string;
@@ -626,9 +714,15 @@ export function AdminRbacPage() {
                     return (
                       <TableRow key={user.id} hover>
                         <TableCell>
-                          <Typography variant="body2" fontWeight={700}>
-                            {user.name}
-                          </Typography>
+                          <Stack direction="row" spacing={1.25} alignItems="center">
+                            <RbacUserPhotoAvatar
+                              numeroOrdem={user.numeroOrdem}
+                              displayName={user.name}
+                            />
+                            <Typography variant="body2" fontWeight={700}>
+                              {user.name}
+                            </Typography>
+                          </Stack>
                         </TableCell>
                         <TableCell>{user.ldapUid || user.email}</TableCell>
                         <TableCell>
