@@ -163,6 +163,14 @@ export function CalendarPage() {
     activitiesCipavdQuery.data?.items,
   ]);
 
+  /** Referência estável para não resetar a navegação do calendário a cada render do pai. */
+  const calendarSeedDate = useMemo(() => {
+    const now = new Date();
+    return year === now.getFullYear()
+      ? new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      : new Date(year, 0, 1);
+  }, [year]);
+
   const selectedTaskFromList = tasks.find((item: any) => item.id === selectedTaskId) ?? null;
   const selectedTaskQuery = useTaskInstance(
     selectedTaskId ?? '',
@@ -258,10 +266,11 @@ export function CalendarPage() {
             }}
           >
             <CalendarView
+              key={year}
               events={events}
               onSelect={handleSelectEvent}
               height="100%"
-              date={year === new Date().getFullYear() ? new Date() : new Date(year, 0, 1)}
+              date={calendarSeedDate}
             />
           </Box>
         </Card>

@@ -1,4 +1,5 @@
 import { Box, Typography } from '@mui/material';
+import { useEffect, useState } from 'react';
 import { Calendar, dateFnsLocalizer } from 'react-big-calendar';
 import { endOfDay, format, getDay, parse, startOfDay, startOfWeek } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -140,8 +141,20 @@ export function CalendarView({
   events: CalendarEventInput[];
   onSelect: (id: string) => void;
   height?: number | string;
+  /** Data inicial / âncora (ex.: início do ano filtrado). Precisa de estado interno + onNavigate para Anterior/Próximo funcionarem. */
   date?: Date;
 }) {
+  const [currentDate, setCurrentDate] = useState(() => date ?? new Date());
+
+  const dateSeedKey = date
+    ? `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`
+    : '';
+
+  useEffect(() => {
+    if (!date) return;
+    setCurrentDate(new Date(date.getFullYear(), date.getMonth(), date.getDate()));
+  }, [dateSeedKey]);
+
   const rbcEvents = events.map((e) => {
     const d = typeof e.date === 'string' ? new Date(e.date) : e.date;
     const endD = e.endDate
@@ -248,7 +261,8 @@ export function CalendarView({
         onSelectEvent={(event: any) => onSelect((event as { id: string }).id)}
         views={['month', 'week', 'day', 'agenda']}
         defaultView="month"
-        date={date ?? new Date()}
+        date={currentDate}
+        onNavigate={(nextDate: Date) => setCurrentDate(nextDate)}
         popup
         components={{ event: EventCard }}
         eventPropGetter={(event: any) => {
