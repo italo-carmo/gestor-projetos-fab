@@ -1,6 +1,13 @@
 import { Box, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { Calendar, dateFnsLocalizer } from 'react-big-calendar';
+
+/** Calendário “puro” sem HOC uncontrollable (evita conflito entre date/onNavigate e estado interno). */
+const CalendarControlled =
+  (Calendar as unknown as { ControlledComponent?: typeof Calendar }).ControlledComponent ??
+  Calendar;
+
+type RbcView = 'month' | 'week' | 'day' | 'agenda';
 import { endOfDay, format, getDay, parse, startOfDay, startOfWeek } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
@@ -145,6 +152,7 @@ export function CalendarView({
   date?: Date;
 }) {
   const [currentDate, setCurrentDate] = useState(() => date ?? new Date());
+  const [currentView, setCurrentView] = useState<RbcView>('month');
 
   const dateSeedKey = date
     ? `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`
@@ -251,7 +259,7 @@ export function CalendarView({
         },
       }}
     >
-      <Calendar
+      <CalendarControlled
         localizer={localizer}
         events={rbcEvents}
         startAccessor="start"
@@ -260,9 +268,10 @@ export function CalendarView({
         messages={MESSAGES}
         onSelectEvent={(event: any) => onSelect((event as { id: string }).id)}
         views={['month', 'week', 'day', 'agenda']}
-        defaultView="month"
+        view={currentView}
+        onView={(nextView: RbcView) => setCurrentView(nextView)}
         date={currentDate}
-        onNavigate={(nextDate: Date) => setCurrentDate(nextDate)}
+        onNavigate={(nextDate: Date) => setCurrentDate(new Date(nextDate.getTime()))}
         popup
         components={{ event: EventCard }}
         eventPropGetter={(event: any) => {
