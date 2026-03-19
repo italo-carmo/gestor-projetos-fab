@@ -543,6 +543,10 @@ export class ChecklistsService {
       where: {
         localityId: { in: localityIds },
         scope: ActivityScope.SMIF,
+        // Remove títulos legados da CIPAVD no checklist automático do SMIF.
+        NOT: {
+          title: { contains: 'CIPAVD', mode: 'insensitive' },
+        },
         ...(selectedSpecialtyId
           ? {
               OR: [{ specialtyId: null }, { specialtyId: selectedSpecialtyId }],
@@ -651,7 +655,10 @@ export class ChecklistsService {
           availabilityByLocality,
           activityTypeName: activityTypeByTitle.get(titleKey) ?? null,
         };
-      });
+      })
+      .filter((item) =>
+        Object.values(item.availabilityByLocality ?? {}).some(Boolean),
+      );
 
     return [...automaticTaskItems, ...automaticActivityItems];
   }
