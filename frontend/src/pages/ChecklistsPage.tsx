@@ -334,9 +334,16 @@ export function ChecklistsPage() {
         const filteredItems = itemSourceType && itemSourceType !== 'ALL'
           ? items.filter((item: any) => item.sourceType === itemSourceType)
           : items;
+        const isItemApplicableToLocality = (item: any, localityId: string) => {
+          if (item?.sourceType !== 'ACTIVITY') return true;
+          const availability = item?.availabilityByLocality;
+          if (!availability || typeof availability !== 'object') return true;
+          return Boolean(availability[localityId]);
+        };
         const statusSummary = filteredItems.reduce(
           (acc: { total: number; done: number; inProgress: number; pending: number }, item: any) => {
             for (const locality of localities) {
+              if (!isItemApplicableToLocality(item, locality.id)) continue;
               const status = item.statuses?.[locality.id] ?? 'NOT_STARTED';
               acc.total += 1;
               if (status === 'DONE') {
@@ -469,10 +476,13 @@ export function ChecklistsPage() {
                           {loc.name}
                         </TableCell>
                         {filteredItems.map((item: any) => {
+                          const applicable = isItemApplicableToLocality(item, loc.id);
                           const status = item.statuses?.[loc.id] ?? 'NOT_STARTED';
                           return (
                             <TableCell key={item.id} align="center" sx={{ py: 0.75 }}>
-                              <StatusIcon status={status} localityName={loc.name} />
+                              {applicable ? (
+                                <StatusIcon status={status} localityName={loc.name} />
+                              ) : null}
                             </TableCell>
                           );
                         })}
@@ -544,10 +554,13 @@ export function ChecklistsPage() {
                           </Stack>
                         </TableCell>
                         {localities.map((loc: any) => {
+                          const applicable = isItemApplicableToLocality(item, loc.id);
                           const status = item.statuses?.[loc.id] ?? 'NOT_STARTED';
                           return (
                             <TableCell key={loc.id} align="center" sx={{ py: 0.75 }}>
-                              <StatusIcon status={status} localityName={loc.name} />
+                              {applicable ? (
+                                <StatusIcon status={status} localityName={loc.name} />
+                              ) : null}
                             </TableCell>
                           );
                         })}

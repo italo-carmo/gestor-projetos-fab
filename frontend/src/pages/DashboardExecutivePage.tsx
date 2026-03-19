@@ -388,6 +388,7 @@ export function DashboardExecutivePage() {
     : activeKpiItems.filter((item: any) => {
         const haystack = [
           item?.title,
+          item?.activityTypeName,
           item?.localityCode,
           item?.localityName,
           item?.commandName,
@@ -400,6 +401,12 @@ export function DashboardExecutivePage() {
           .toLowerCase();
         return haystack.includes(normalizedKpiDetailSearch);
       });
+  const getKpiActivityDisplayTitle = (item: any) => {
+    const typeName = String(item?.activityTypeName ?? '').trim();
+    const title = String(item?.title ?? '').trim() || '-';
+    if (!typeName) return title;
+    return `${typeName} • ${title}`;
+  };
 
   return (
     <Box>
@@ -916,7 +923,7 @@ export function DashboardExecutivePage() {
                     >
                       <Box sx={{ minWidth: 0 }}>
                         <Typography variant="body2" sx={{ fontWeight: 700 }} noWrap>
-                          {item.title}
+                          {getKpiActivityDisplayTitle(item)}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
                           {(item.localityCode || item.localityName) ?? '-'} • {formatDateTime(item.eventDate)}

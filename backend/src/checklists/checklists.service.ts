@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import {
   Prisma,
+  ActivityScope,
   ActivityStatus,
   ChecklistItemStatusType,
   TaskStatus,
@@ -541,6 +542,7 @@ export class ChecklistsService {
     const activities = await this.prisma.activity.findMany({
       where: {
         localityId: { in: localityIds },
+        scope: ActivityScope.SMIF,
         ...(selectedSpecialtyId
           ? {
               OR: [{ specialtyId: null }, { specialtyId: selectedSpecialtyId }],
@@ -628,9 +630,11 @@ export class ChecklistsService {
       .sort((a, b) => a.localeCompare(b))
       .map((titleKey) => {
         const statusesByLocality: Record<string, ChecklistItemStatusType> = {};
+        const availabilityByLocality: Record<string, boolean> = {};
         for (const locality of localities) {
           const key = `${titleKey}:${locality.id}`;
           const statuses = activityStatusByTitleLocality.get(key) ?? [];
+          availabilityByLocality[locality.id] = statuses.length > 0;
           statusesByLocality[locality.id] =
             this.aggregateActivityStatus(statuses);
         }
@@ -644,6 +648,7 @@ export class ChecklistsService {
           taskTemplateId: null,
           sourceType: 'ACTIVITY',
           statuses: statusesByLocality,
+          availabilityByLocality,
           activityTypeName: activityTypeByTitle.get(titleKey) ?? null,
         };
       });
