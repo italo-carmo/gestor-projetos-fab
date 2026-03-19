@@ -3323,6 +3323,7 @@ export class TasksService {
       return {
         activityId: activity.id,
         title: activity.title ?? 'Atividade',
+        activityTypeName: activity.activityType?.name ?? null,
         specialtyId: primarySpecialty?.id ?? null,
         specialtyName:
           specialtyNames.length > 0 ? specialtyNames.join(' / ') : '',
