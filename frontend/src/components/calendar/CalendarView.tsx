@@ -34,12 +34,18 @@ const MESSAGES = {
   showMore: (total: number) => `+${total} mais`,
 };
 
+export type CalendarEventKind = 'task' | 'mission' | 'activity';
+
 export type CalendarEventInput = {
   id: string;
   title: string;
   date: string | Date;
+  /** End date for multi-day events (e.g. missions). If omitted, event is single-day. */
+  endDate?: string | Date;
   subtitle?: string;
   status?: string;
+  /** Distinguishes styling: task (status colors), mission, activity */
+  kind?: CalendarEventKind;
 };
 
 const STATUS_BG: Record<string, string> = {
@@ -58,10 +64,22 @@ const STATUS_BORDER: Record<string, string> = {
   NOT_STARTED: '#607D8B',
 };
 
+/** Mission: indigo/purple. Activity: teal. Task: by status. */
+const KIND_STYLES: Record<CalendarEventKind, { bg: string; border: string }> = {
+  task: { bg: '', border: '' }, // use status
+  mission: { bg: '#EDE7F6', border: '#5E35B1' },
+  activity: { bg: '#E0F2F1', border: '#00695C' },
+};
+
 function EventCard({ event }: { event: any }) {
+  const kind: CalendarEventKind = event.kind ?? 'task';
+  const isTask = kind === 'task';
   const status = event.status ?? 'NOT_STARTED';
-  const dotColor = STATUS_BORDER[status] ?? '#0C657E';
-  const bg = STATUS_BG[status] ?? '#E3F2FD';
+  const kindStyle = KIND_STYLES[kind];
+  const dotColor = isTask
+    ? (STATUS_BORDER[status] ?? '#0C657E')
+    : kindStyle.border;
+  const bg = isTask ? (STATUS_BG[status] ?? '#E3F2FD') : kindStyle.bg;
 
   return (
     <Box
@@ -94,7 +112,7 @@ function EventCard({ event }: { event: any }) {
           {event.title}
         </Typography>
       </Box>
-      {(event.subtitle || event.status) && (
+      {(event.subtitle || (isTask && event.status)) && (
         <Typography
           variant="caption"
           sx={{
@@ -106,7 +124,7 @@ function EventCard({ event }: { event: any }) {
             textOverflow: 'ellipsis',
           }}
         >
-          {event.subtitle ?? TASK_STATUS_LABELS[event.status] ?? event.status}
+          {event.subtitle ?? (isTask ? TASK_STATUS_LABELS[event.status] ?? event.status : '')}
         </Typography>
       )}
     </Box>
@@ -126,13 +144,17 @@ export function CalendarView({
 }) {
   const rbcEvents = events.map((e) => {
     const d = typeof e.date === 'string' ? new Date(e.date) : e.date;
+    const endD = e.endDate
+      ? (typeof e.endDate === 'string' ? new Date(e.endDate) : e.endDate)
+      : d;
     return {
       id: e.id,
       title: e.title,
       subtitle: e.subtitle,
       status: e.status,
+      kind: e.kind ?? 'task',
       start: startOfDay(d),
-      end: endOfDay(d),
+      end: endOfDay(endD),
       allDay: true,
     };
   });
@@ -230,12 +252,20 @@ export function CalendarView({
         popup
         components={{ event: EventCard }}
         eventPropGetter={(event: any) => {
+          const kind: CalendarEventKind = event.kind ?? 'task';
+          const isTask = kind === 'task';
           const status = event.status ?? 'NOT_STARTED';
+          const bg = isTask
+            ? (STATUS_BG[status] ?? '#E3F2FD')
+            : KIND_STYLES[kind].bg;
+          const borderColor = isTask
+            ? (STATUS_BORDER[status] ?? '#0C657E')
+            : KIND_STYLES[kind].border;
           return {
             style: {
-              backgroundColor: STATUS_BG[status] ?? '#E3F2FD',
+              backgroundColor: bg,
               color: '#17394B',
-              borderLeft: `4px solid ${STATUS_BORDER[status] ?? '#0C657E'}`,
+              borderLeft: `4px solid ${borderColor}`,
             },
           };
         }}
