@@ -152,7 +152,9 @@ const CPCA_PANEL_CARD_SX = {
 
 const CPCA_KPI_CARD_SX = {
   ...BLUE_CARD_SX,
+  border: "1px solid rgba(139, 184, 207, 0.42) !important",
   backgroundColor: "rgb(83, 127, 151) !important",
+  backgroundImage: "none !important",
   boxShadow: "0 18px 34px rgba(15,44,59,0.36)",
 } as const;
 
@@ -719,9 +721,7 @@ export function CpcaStatsPage() {
               >
                 <CardContent
                   sx={{
-                    backgroundColor: `${style.backgroundColor} !important`,
                     cursor: "pointer",
-                    borderRadius: 2,
                     transition: "transform 150ms ease, box-shadow 150ms ease",
                     "&:hover": {
                       transform: "translateY(-1px)",
