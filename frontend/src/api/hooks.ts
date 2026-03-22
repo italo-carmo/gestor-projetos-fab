@@ -797,7 +797,6 @@ export function useUpsertActivityReport() {
         participantsCount: number;
         participantsMaleCount?: number;
         participantsFemaleCount?: number;
-        publicProfile?: string;
         instructorsCount?: number;
         recruitsCount?: number;
         eloPsychologyCount?: number;

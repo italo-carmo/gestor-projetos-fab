@@ -86,7 +86,6 @@ const blankReport: {
   participantsCount: number;
   participantsMaleCount?: number;
   participantsFemaleCount?: number;
-  publicProfile: string;
   instructorsCount: number;
   recruitsCount: number;
   eloPsychologyCount: number;
@@ -109,7 +108,6 @@ const blankReport: {
   activityAnalysis: '',
   activitiesPerformed: '',
   participantsCount: 0,
-  publicProfile: '',
   instructorsCount: 0,
   recruitsCount: 0,
   eloPsychologyCount: 0,
@@ -630,7 +628,6 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
       participantsCount: Number(selected.report.participantsCount ?? 0),
       participantsMaleCount: selected.report.participantsMaleCount != null ? Number(selected.report.participantsMaleCount) : undefined,
       participantsFemaleCount: selected.report.participantsFemaleCount != null ? Number(selected.report.participantsFemaleCount) : undefined,
-      publicProfile: selected.report.publicProfile ?? '',
       instructorsCount: Number(selected.report.instructorsCount ?? 0),
       recruitsCount: Number(selected.report.recruitsCount ?? 0),
       eloPsychologyCount: Number(selected.report.eloPsychologyCount ?? 0),
@@ -1036,7 +1033,6 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
           participantsCount: toNonNegativeInt(reportForm.participantsCount),
           participantsMaleCount,
           participantsFemaleCount,
-          publicProfile: String(reportForm.publicProfile ?? ''),
           instructorsCount: toNonNegativeInt(reportForm.instructorsCount),
           recruitsCount: toNonNegativeInt(reportForm.recruitsCount),
           eloPsychologyCount: toNonNegativeInt(reportForm.eloPsychologyCount),
@@ -1102,7 +1098,6 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
             participantsCount: toNonNegativeInt(reportForm.participantsCount),
             participantsMaleCount,
             participantsFemaleCount,
-            publicProfile: String(reportForm.publicProfile ?? ''),
             instructorsCount: toNonNegativeInt(reportForm.instructorsCount),
             recruitsCount: toNonNegativeInt(reportForm.recruitsCount),
             eloPsychologyCount: toNonNegativeInt(reportForm.eloPsychologyCount),
@@ -1191,7 +1186,6 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
           participantsCount: toNonNegativeInt(source.participantsCount),
           participantsMaleCount: toOptionalNonNegativeInt(source.participantsMaleCount),
           participantsFemaleCount: toOptionalNonNegativeInt(source.participantsFemaleCount),
-          publicProfile: String(source.publicProfile ?? ''),
           instructorsCount: toNonNegativeInt(source.instructorsCount),
           recruitsCount: toNonNegativeInt(source.recruitsCount),
           eloPsychologyCount: toNonNegativeInt(source.eloPsychologyCount),
@@ -2335,17 +2329,6 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
                         disabled={!canEditReportContent}
                       />
                     </Stack>
-                    <TextField
-                      size="small"
-                      label="Perfil do Público"
-                      value={reportForm.publicProfile}
-                      onChange={(e) => setReportForm({ ...reportForm, publicProfile: e.target.value })}
-                      multiline
-                      minRows={2}
-                      fullWidth
-                      disabled={!canEditReportContent}
-                      placeholder="Ex: Conscritos e voluntárias do GSD-BR, instrutores e equipe organizadora"
-                    />
                     <Box sx={{ p: 1.2, border: '1px solid #E6ECF5', borderRadius: 2, bgcolor: '#F9FCFF' }}>
                       <Typography variant="subtitle2" sx={{ mb: 1 }}>
                         Participantes por perfil

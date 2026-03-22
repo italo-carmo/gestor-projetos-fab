@@ -2450,14 +2450,6 @@ export class ActivitiesService {
     ]);
     drawTableRow([
       {
-        label: 'Perfil do Público',
-        value: normalizeText(
-          report.publicProfile || report.participantsCharacteristics,
-        ),
-      },
-    ]);
-    drawTableRow([
-      {
         label: 'Participantes por Perfil',
         value:
           `Instrutores: ${report.instructorsCount ?? 0} | ` +

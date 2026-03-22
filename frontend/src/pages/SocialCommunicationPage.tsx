@@ -158,6 +158,100 @@ const HIGHLIGHT_IMPACT_OPTIONS = [
   { value: "MULTIPLICADOR" as const, label: "Multiplicador" },
   { value: "SIMBOLICO" as const, label: "Simbólico" },
 ];
+const SOCIAL_CARD_SETTINGS_STORAGE_KEY = "social-communication-card-settings-v1";
+
+type SocialCardId =
+  | "social-public-internal"
+  | "social-public-external"
+  | "social-highlights";
+
+type SocialCardSetting = {
+  title: string;
+  customBackgroundColor?: string;
+  impactMultiplicadorTitle: string;
+  impactSimbolicoTitle: string;
+};
+
+type SocialCardEditorDraft = {
+  title: string;
+  backgroundColor: string;
+  impactMultiplicadorTitle: string;
+  impactSimbolicoTitle: string;
+};
+
+const SOCIAL_CARD_DEFAULT_SETTINGS: Record<SocialCardId, SocialCardSetting> = {
+  "social-public-internal": {
+    title: "Público Interno",
+    customBackgroundColor: undefined,
+    impactMultiplicadorTitle: "Impacto Multiplicador",
+    impactSimbolicoTitle: "Impacto Simbólico",
+  },
+  "social-public-external": {
+    title: "Público Externo",
+    customBackgroundColor: undefined,
+    impactMultiplicadorTitle: "Impacto Multiplicador",
+    impactSimbolicoTitle: "Impacto Simbólico",
+  },
+  "social-highlights": {
+    title: "Militares Destaques",
+    customBackgroundColor: undefined,
+    impactMultiplicadorTitle: "Impacto Multiplicador",
+    impactSimbolicoTitle: "Impacto Simbólico",
+  },
+};
+
+const SOCIAL_CARD_EDITOR_DEFAULT_COLORS: Record<SocialCardId, string> = {
+  "social-public-internal": "#6793AD",
+  "social-public-external": "#A2C4D6",
+  "social-highlights": "#FFFFFF",
+};
+
+function isSocialCardId(value: string): value is SocialCardId {
+  return (
+    value === "social-public-internal" ||
+    value === "social-public-external" ||
+    value === "social-highlights"
+  );
+}
+
+function loadSocialCardSettings(): Record<SocialCardId, SocialCardSetting> {
+  const merged = { ...SOCIAL_CARD_DEFAULT_SETTINGS };
+  if (typeof window === "undefined") return merged;
+  try {
+    const raw = window.localStorage.getItem(SOCIAL_CARD_SETTINGS_STORAGE_KEY);
+    if (!raw) return merged;
+    const parsed = JSON.parse(raw) as Record<string, Partial<SocialCardSetting> | undefined>;
+    if (!parsed || typeof parsed !== "object") return merged;
+    for (const [key, value] of Object.entries(parsed)) {
+      if (!isSocialCardId(key) || !value) continue;
+      const defaults = SOCIAL_CARD_DEFAULT_SETTINGS[key];
+      merged[key] = {
+        title:
+          typeof value.title === "string" && value.title.trim()
+            ? value.title
+            : defaults.title,
+        customBackgroundColor:
+          typeof value.customBackgroundColor === "string" &&
+          value.customBackgroundColor.trim()
+            ? value.customBackgroundColor
+            : undefined,
+        impactMultiplicadorTitle:
+          typeof value.impactMultiplicadorTitle === "string" &&
+          value.impactMultiplicadorTitle.trim()
+            ? value.impactMultiplicadorTitle
+            : defaults.impactMultiplicadorTitle,
+        impactSimbolicoTitle:
+          typeof value.impactSimbolicoTitle === "string" &&
+          value.impactSimbolicoTitle.trim()
+            ? value.impactSimbolicoTitle
+            : defaults.impactSimbolicoTitle,
+      };
+    }
+    return merged;
+  } catch {
+    return merged;
+  }
+}
 
 function normalizeEmail(value: string) {
   return String(value ?? "").trim().toLowerCase();
@@ -325,6 +419,7 @@ export function SocialCommunicationPage() {
     ROLE_TI,
   ]);
   const canEditHighlights = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]);
+  const isTiProfile = hasAnyRole(me, [ROLE_TI]);
 
   const [search, setSearch] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -348,6 +443,19 @@ export function SocialCommunicationPage() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<SocialCommunicationArticle | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SocialCommunicationArticle | null>(null);
+  const [socialCardSettings, setSocialCardSettings] =
+    useState<Record<SocialCardId, SocialCardSetting>>(() =>
+      loadSocialCardSettings(),
+    );
+  const [editingSocialCardId, setEditingSocialCardId] =
+    useState<SocialCardId | null>(null);
+  const [editingSocialCardDraft, setEditingSocialCardDraft] =
+    useState<SocialCardEditorDraft>({
+      title: "",
+      backgroundColor: "#FFFFFF",
+      impactMultiplicadorTitle: "Impacto Multiplicador",
+      impactSimbolicoTitle: "Impacto Simbólico",
+    });
   const [resolvedUrl, setResolvedUrl] = useState("");
   const [form, setForm] = useState({
     url: "",
@@ -391,6 +499,81 @@ export function SocialCommunicationPage() {
       ),
     [highlightForm.photoBase64, highlightForm.photoMimeType],
   );
+  const getSocialCardSetting = useCallback(
+    (cardId: SocialCardId): SocialCardSetting =>
+      socialCardSettings[cardId] ?? SOCIAL_CARD_DEFAULT_SETTINGS[cardId],
+    [socialCardSettings],
+  );
+  const getSocialCardBackground = useCallback(
+    (cardId: SocialCardId) => {
+      const customColor = getSocialCardSetting(cardId).customBackgroundColor;
+      if (customColor) return customColor;
+      if (cardId === "social-public-internal") return PUBLIC_INTERNAL_BG;
+      if (cardId === "social-public-external") return PUBLIC_EXTERNAL_BG;
+      return "#FFFFFF";
+    },
+    [getSocialCardSetting],
+  );
+  const openSocialCardEditor = useCallback(
+    (cardId: SocialCardId) => {
+      const setting = getSocialCardSetting(cardId);
+      setEditingSocialCardId(cardId);
+      setEditingSocialCardDraft({
+        title: setting.title,
+        backgroundColor:
+          setting.customBackgroundColor ||
+          SOCIAL_CARD_EDITOR_DEFAULT_COLORS[cardId],
+        impactMultiplicadorTitle: setting.impactMultiplicadorTitle,
+        impactSimbolicoTitle: setting.impactSimbolicoTitle,
+      });
+    },
+    [getSocialCardSetting],
+  );
+  const saveSocialCardEditor = useCallback(() => {
+    if (!editingSocialCardId) return;
+    const defaults = SOCIAL_CARD_DEFAULT_SETTINGS[editingSocialCardId];
+    const normalizedTitle = editingSocialCardDraft.title.trim() || defaults.title;
+    const normalizedMultiplicadorTitle =
+      editingSocialCardDraft.impactMultiplicadorTitle.trim() ||
+      defaults.impactMultiplicadorTitle;
+    const normalizedSimbolicoTitle =
+      editingSocialCardDraft.impactSimbolicoTitle.trim() ||
+      defaults.impactSimbolicoTitle;
+    const next = {
+      ...socialCardSettings,
+      [editingSocialCardId]: {
+        ...getSocialCardSetting(editingSocialCardId),
+        title: normalizedTitle,
+        customBackgroundColor: editingSocialCardDraft.backgroundColor.trim()
+          ? editingSocialCardDraft.backgroundColor
+          : undefined,
+        impactMultiplicadorTitle:
+          editingSocialCardId === "social-highlights"
+            ? normalizedMultiplicadorTitle
+            : getSocialCardSetting(editingSocialCardId).impactMultiplicadorTitle,
+        impactSimbolicoTitle:
+          editingSocialCardId === "social-highlights"
+            ? normalizedSimbolicoTitle
+            : getSocialCardSetting(editingSocialCardId).impactSimbolicoTitle,
+      },
+    };
+    setSocialCardSettings(next);
+    window.localStorage.setItem(
+      SOCIAL_CARD_SETTINGS_STORAGE_KEY,
+      JSON.stringify(next),
+    );
+    setEditingSocialCardId(null);
+    toast.push({ message: "Card atualizado", severity: "success" });
+  }, [
+    editingSocialCardDraft.backgroundColor,
+    editingSocialCardDraft.impactMultiplicadorTitle,
+    editingSocialCardDraft.impactSimbolicoTitle,
+    editingSocialCardDraft.title,
+    editingSocialCardId,
+    getSocialCardSetting,
+    socialCardSettings,
+    toast,
+  ]);
 
   const openPreview = (item: SocialCommunicationArticle) => {
     const url =
@@ -735,6 +918,9 @@ export function SocialCommunicationPage() {
   const simbolicoHighlights = highlightItems.filter(
     (item) => item.impact === "SIMBOLICO",
   );
+  const internalCardSetting = getSocialCardSetting("social-public-internal");
+  const externalCardSetting = getSocialCardSetting("social-public-external");
+  const highlightsCardSetting = getSocialCardSetting("social-highlights");
 
   const internalItems = filteredByTags.filter((item) => (item.audience ?? 'INTERNAL') === 'INTERNAL');
   const externalItems = filteredByTags.filter((item) => (item.audience ?? 'INTERNAL') === 'EXTERNAL');
@@ -816,13 +1002,13 @@ export function SocialCommunicationPage() {
   const renderHighlightCarousel = (
     carouselItems: SocialCommunicationHighlight[],
     impact: "MULTIPLICADOR" | "SIMBOLICO",
+    impactTitle: string,
   ) => {
     const carouselRef =
       impact === "MULTIPLICADOR"
         ? highlightMultiplicadorCarouselRef
         : highlightSimbolicoCarouselRef;
-    const impactLabel =
-      impact === "MULTIPLICADOR" ? "Impacto Multiplicador" : "Impacto Simbólico";
+    const impactLabel = impactTitle;
     const theme =
       impact === "MULTIPLICADOR"
         ? {
@@ -1452,7 +1638,7 @@ export function SocialCommunicationPage() {
               p: { xs: 1.8, md: 2.4 },
               borderRadius: 3.2,
               border: "1px solid rgba(233, 246, 255, 0.36)",
-              background: PUBLIC_INTERNAL_BG,
+              background: getSocialCardBackground("social-public-internal"),
               boxShadow: "0 14px 28px rgba(17,66,89,0.14)",
             }}
           >
@@ -1473,19 +1659,30 @@ export function SocialCommunicationPage() {
                   }}
                 />
                 <Typography variant="h6" fontWeight={700} sx={{ color: "#F3FAFF" }}>
-                  Público Interno
+                  {internalCardSetting.title}
                 </Typography>
               </Stack>
-              <Chip
-                size="small"
-                label={`${internalItems.length} matéria${internalItems.length === 1 ? "" : "s"}`}
-                sx={{
-                  bgcolor: "rgba(245, 251, 255, 0.18)",
-                  color: "#F4FAFF",
-                  fontWeight: 700,
-                  border: "1px solid rgba(245, 251, 255, 0.38)",
-                }}
-              />
+              <Stack direction="row" spacing={0.8} alignItems="center">
+                <Chip
+                  size="small"
+                  label={`${internalItems.length} matéria${internalItems.length === 1 ? "" : "s"}`}
+                  sx={{
+                    bgcolor: "rgba(245, 251, 255, 0.18)",
+                    color: "#F4FAFF",
+                    fontWeight: 700,
+                    border: "1px solid rgba(245, 251, 255, 0.38)",
+                  }}
+                />
+                {isTiProfile ? (
+                  <IconButton
+                    size="small"
+                    sx={{ bgcolor: "rgba(245, 251, 255, 0.24)", color: "#F4FAFF" }}
+                    onClick={() => openSocialCardEditor("social-public-internal")}
+                  >
+                    <EditRoundedIcon fontSize="small" />
+                  </IconButton>
+                ) : null}
+              </Stack>
             </Stack>
             {internalItems.length === 0 ? (
               <EmptyState
@@ -1594,7 +1791,7 @@ export function SocialCommunicationPage() {
               p: { xs: 1.8, md: 2.4 },
               borderRadius: 3.2,
               border: "1px solid rgba(233, 246, 255, 0.5)",
-              background: PUBLIC_EXTERNAL_BG,
+              background: getSocialCardBackground("social-public-external"),
               boxShadow: "0 14px 28px rgba(17,66,89,0.12)",
             }}
           >
@@ -1616,19 +1813,30 @@ export function SocialCommunicationPage() {
                   }}
                 />
                 <Typography variant="h6" fontWeight={700} sx={{ color: "#F3FAFF" }}>
-                  Público Externo
+                  {externalCardSetting.title}
                 </Typography>
               </Stack>
-              <Chip
-                size="small"
-                label={`${externalItems.length} matéria${externalItems.length === 1 ? "" : "s"}`}
-                sx={{
-                  bgcolor: "rgba(245, 251, 255, 0.22)",
-                  color: "#F4FAFF",
-                  fontWeight: 700,
-                  border: "1px solid rgba(245, 251, 255, 0.42)",
-                }}
-              />
+              <Stack direction="row" spacing={0.8} alignItems="center">
+                <Chip
+                  size="small"
+                  label={`${externalItems.length} matéria${externalItems.length === 1 ? "" : "s"}`}
+                  sx={{
+                    bgcolor: "rgba(245, 251, 255, 0.22)",
+                    color: "#F4FAFF",
+                    fontWeight: 700,
+                    border: "1px solid rgba(245, 251, 255, 0.42)",
+                  }}
+                />
+                {isTiProfile ? (
+                  <IconButton
+                    size="small"
+                    sx={{ bgcolor: "rgba(245, 251, 255, 0.26)", color: "#F4FAFF" }}
+                    onClick={() => openSocialCardEditor("social-public-external")}
+                  >
+                    <EditRoundedIcon fontSize="small" />
+                  </IconButton>
+                ) : null}
+              </Stack>
             </Stack>
             {externalItems.length === 0 ? (
               <EmptyState
@@ -1735,8 +1943,7 @@ export function SocialCommunicationPage() {
             sx={{
               borderRadius: 3.4,
               border: "1px solid rgb(58, 122, 154)",
-              backgroundColor: "#FFFFFF",
-              backgroundImage: "none",
+              background: getSocialCardBackground("social-highlights"),
               boxShadow: "0 12px 24px rgba(17,66,89,0.16)",
             }}
           >
@@ -1750,10 +1957,11 @@ export function SocialCommunicationPage() {
               >
                 <Box>
                   <Typography variant="h6" fontWeight={800} sx={{ color: "#1D3A4D" }}>
-                    Militares Destaques
+                    {highlightsCardSetting.title}
                   </Typography>
                   <Typography variant="body2" sx={{ color: "rgba(29, 58, 77, 0.86)" }}>
-                    Destaques institucionais com impacto Multiplicador e Simbólico.
+                    Destaques institucionais com {highlightsCardSetting.impactMultiplicadorTitle} e{" "}
+                    {highlightsCardSetting.impactSimbolicoTitle}.
                   </Typography>
                 </Box>
                 <Stack direction="row" spacing={0.8} alignItems="center">
@@ -1769,6 +1977,15 @@ export function SocialCommunicationPage() {
                       border: "1px solid rgba(29, 58, 77, 0.24)",
                     }}
                   />
+                  {isTiProfile ? (
+                    <IconButton
+                      size="small"
+                      sx={{ bgcolor: "rgba(29, 58, 77, 0.12)", color: "#1D3A4D" }}
+                      onClick={() => openSocialCardEditor("social-highlights")}
+                    >
+                      <EditRoundedIcon fontSize="small" />
+                    </IconButton>
+                  ) : null}
                   {canEditHighlights && (
                     <Button
                       variant="contained"
@@ -1999,7 +2216,7 @@ export function SocialCommunicationPage() {
                     sx={{ mb: 0.2 }}
                   >
                     <Typography variant="subtitle1" fontWeight={700} sx={{ color: "#1D3A4D" }}>
-                      Impacto Multiplicador
+                      {highlightsCardSetting.impactMultiplicadorTitle}
                     </Typography>
                     <Chip
                       size="small"
@@ -2019,7 +2236,11 @@ export function SocialCommunicationPage() {
                       description="Cadastre destaques para mostrar neste carrossel."
                     />
                   ) : (
-                    renderHighlightCarousel(multiplicadorHighlights, "MULTIPLICADOR")
+                    renderHighlightCarousel(
+                      multiplicadorHighlights,
+                      "MULTIPLICADOR",
+                      highlightsCardSetting.impactMultiplicadorTitle,
+                    )
                   )}
                 </Box>
 
@@ -2032,7 +2253,7 @@ export function SocialCommunicationPage() {
                     sx={{ mb: 0.2 }}
                   >
                     <Typography variant="subtitle1" fontWeight={700} sx={{ color: "#1D3A4D" }}>
-                      Impacto Simbólico
+                      {highlightsCardSetting.impactSimbolicoTitle}
                     </Typography>
                     <Chip
                       size="small"
@@ -2052,7 +2273,11 @@ export function SocialCommunicationPage() {
                       description="Cadastre destaques para mostrar neste carrossel."
                     />
                   ) : (
-                    renderHighlightCarousel(simbolicoHighlights, "SIMBOLICO")
+                    renderHighlightCarousel(
+                      simbolicoHighlights,
+                      "SIMBOLICO",
+                      highlightsCardSetting.impactSimbolicoTitle,
+                    )
                   )}
                 </Box>
               </Stack>
@@ -2060,6 +2285,76 @@ export function SocialCommunicationPage() {
           </Card>
         </Stack>
       )}
+
+      <Dialog
+        open={Boolean(editingSocialCardId)}
+        onClose={() => setEditingSocialCardId(null)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>Editar card</DialogTitle>
+        <DialogContent sx={{ pt: 1 }}>
+          <Stack spacing={1.5} sx={{ mt: 0.5 }}>
+            <TextField
+              label="Nome do card"
+              value={editingSocialCardDraft.title}
+              onChange={(event) =>
+                setEditingSocialCardDraft((prev) => ({
+                  ...prev,
+                  title: event.target.value,
+                }))
+              }
+              fullWidth
+            />
+            {editingSocialCardId === "social-highlights" ? (
+              <>
+                <TextField
+                  label="Nome do bloco 1"
+                  value={editingSocialCardDraft.impactMultiplicadorTitle}
+                  onChange={(event) =>
+                    setEditingSocialCardDraft((prev) => ({
+                      ...prev,
+                      impactMultiplicadorTitle: event.target.value,
+                    }))
+                  }
+                  helperText="Ex.: Impacto Multiplicado"
+                  fullWidth
+                />
+                <TextField
+                  label="Nome do bloco 2"
+                  value={editingSocialCardDraft.impactSimbolicoTitle}
+                  onChange={(event) =>
+                    setEditingSocialCardDraft((prev) => ({
+                      ...prev,
+                      impactSimbolicoTitle: event.target.value,
+                    }))
+                  }
+                  helperText="Ex.: Impacto Simbólico"
+                  fullWidth
+                />
+              </>
+            ) : null}
+            <TextField
+              label="Cor do fundo"
+              type="color"
+              value={editingSocialCardDraft.backgroundColor}
+              onChange={(event) =>
+                setEditingSocialCardDraft((prev) => ({
+                  ...prev,
+                  backgroundColor: event.target.value,
+                }))
+              }
+              fullWidth
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditingSocialCardId(null)}>Cancelar</Button>
+          <Button variant="contained" onClick={saveSocialCardEditor}>
+            Salvar
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={editorOpen} onClose={() => setEditorOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>{editing ? "Editar materia" : "Nova materia"}</DialogTitle>
