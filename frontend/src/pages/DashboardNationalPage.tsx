@@ -1876,9 +1876,7 @@ export function DashboardNationalPage() {
                           const isClickable = Boolean(cell.missionId);
                           const previewText =
                             cell.notes.trim() ||
-                            (cell.classification
-                              ? 'Sem observações registradas.'
-                              : 'Sem preenchimento.');
+                            (cell.classification ? '' : 'Sem preenchimento.');
 
                           return (
                             <TableCell
