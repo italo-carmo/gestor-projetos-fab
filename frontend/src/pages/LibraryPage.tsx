@@ -10,6 +10,7 @@ import {
   Drawer,
   IconButton,
   MenuItem,
+  Pagination,
   Stack,
   Table,
   TableBody,
@@ -213,8 +214,25 @@ export function LibraryPage() {
   const [dragPhotoId, setDragPhotoId] = useState<string | null>(null);
   const [selectedPhotoIds, setSelectedPhotoIds] = useState<string[]>([]);
   const [bulkLocalityId, setBulkLocalityId] = useState<string>("");
-    const [downloadingDocumentId, setDownloadingDocumentId] = useState<string | null>(null);
-    const [downloadingReportId, setDownloadingReportId] = useState<string | null>(null);
+  const [downloadingDocumentId, setDownloadingDocumentId] = useState<string | null>(null);
+  const [downloadingReportId, setDownloadingReportId] = useState<string | null>(null);
+  const [reportPage, setReportPage] = useState(1);
+
+  const REPORTS_PER_PAGE = 5;
+  const reportTotal = activitiesWithReports.length;
+  const reportTotalPages = Math.max(1, Math.ceil(reportTotal / REPORTS_PER_PAGE));
+  const reportPageStart = reportTotal === 0 ? 0 : (reportPage - 1) * REPORTS_PER_PAGE + 1;
+  const reportPageEnd = reportTotal === 0 ? 0 : Math.min(reportPage * REPORTS_PER_PAGE, reportTotal);
+  const paginatedReports = useMemo(() => {
+    const start = (reportPage - 1) * REPORTS_PER_PAGE;
+    return activitiesWithReports.slice(start, start + REPORTS_PER_PAGE);
+  }, [activitiesWithReports, reportPage]);
+
+  useEffect(() => {
+    if (reportPage > reportTotalPages) {
+      setReportPage(reportTotalPages);
+    }
+  }, [reportPage, reportTotalPages]);
 
   useEffect(() => {
     setIntervalSeconds(Math.max(2, Math.min(60, intervalFromApi)));
@@ -809,67 +827,88 @@ export function LibraryPage() {
           ) : activitiesWithReports.length === 0 ? (
             <EmptyState title="Nenhum relatório disponível" description="Os relatórios das atividades aparecerão aqui quando forem criados." />
           ) : (
-            <Table size="small">
-              <TableHead>
-                <TableRow sx={{ bgcolor: "primary.main" }}>
-                  <TableCell sx={{ color: "white", fontWeight: 700 }}>Atividade</TableCell>
-                  <TableCell sx={{ color: "white", fontWeight: 700 }}>Localidade</TableCell>
-                  <TableCell sx={{ color: "white", fontWeight: 700 }}>Data do Evento</TableCell>
-                  <TableCell sx={{ color: "white", fontWeight: 700 }}>Data do Relatório</TableCell>
-                  <TableCell sx={{ color: "white", fontWeight: 700 }} align="right">Ações</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {activitiesWithReports.map((activity) => {
-                  const formatDate = (dateStr: string | null | undefined) => {
-                    if (!dateStr) return '—';
-                    const date = new Date(dateStr);
-                    const day = String(date.getUTCDate()).padStart(2, '0');
-                    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-                    const year = date.getUTCFullYear();
-                    return `${day}/${month}/${year}`;
-                  };
-                  return (
-                    <TableRow
-                      key={activity.id}
-                      hover
-                      onClick={() => {
-                        if (downloadingReportId !== activity.id) {
-                          void downloadActivityReport(activity.id, activity.title);
-                        }
-                      }}
-                      sx={{ cursor: downloadingReportId === activity.id ? "wait" : "pointer", opacity: downloadingReportId === activity.id ? 0.6 : 1 }}
-                    >
-                      <TableCell sx={{ minWidth: 260, fontWeight: 500 }}>
-                        {activity.displayTitle}
-                      </TableCell>
-                      <TableCell>{activity.locality}</TableCell>
-                      <TableCell>{formatDate(activity.eventDate)}</TableCell>
-                      <TableCell>{formatDate(activity.reportDate)}</TableCell>
-                      <TableCell align="right">
-                        <Tooltip title={downloadingReportId === activity.id ? "Baixando..." : "Baixar relatório"}>
-                          <span>
-                            <IconButton
-                              size="small"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                if (downloadingReportId !== activity.id) {
-                                  void downloadActivityReport(activity.id, activity.title);
-                                }
-                              }}
-                              disabled={downloadingReportId === activity.id}
-                              sx={{ color: "primary.main" }}
-                            >
-                              <OpenInNewRoundedIcon fontSize="small" />
-                            </IconButton>
-                          </span>
-                        </Tooltip>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+            <>
+              <Table size="small">
+                <TableHead>
+                  <TableRow sx={{ bgcolor: "primary.main" }}>
+                    <TableCell sx={{ color: "white", fontWeight: 700 }}>Atividade</TableCell>
+                    <TableCell sx={{ color: "white", fontWeight: 700 }}>Localidade</TableCell>
+                    <TableCell sx={{ color: "white", fontWeight: 700 }}>Data do Evento</TableCell>
+                    <TableCell sx={{ color: "white", fontWeight: 700 }}>Data do Relatório</TableCell>
+                    <TableCell sx={{ color: "white", fontWeight: 700 }} align="right">Ações</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {paginatedReports.map((activity) => {
+                    const formatDate = (dateStr: string | null | undefined) => {
+                      if (!dateStr) return '—';
+                      const date = new Date(dateStr);
+                      const day = String(date.getUTCDate()).padStart(2, '0');
+                      const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+                      const year = date.getUTCFullYear();
+                      return `${day}/${month}/${year}`;
+                    };
+                    return (
+                      <TableRow
+                        key={activity.id}
+                        hover
+                        onClick={() => {
+                          if (downloadingReportId !== activity.id) {
+                            void downloadActivityReport(activity.id, activity.title);
+                          }
+                        }}
+                        sx={{ cursor: downloadingReportId === activity.id ? "wait" : "pointer", opacity: downloadingReportId === activity.id ? 0.6 : 1 }}
+                      >
+                        <TableCell sx={{ minWidth: 260, fontWeight: 500 }}>
+                          {activity.displayTitle}
+                        </TableCell>
+                        <TableCell>{activity.locality}</TableCell>
+                        <TableCell>{formatDate(activity.eventDate)}</TableCell>
+                        <TableCell>{formatDate(activity.reportDate)}</TableCell>
+                        <TableCell align="right">
+                          <Tooltip title={downloadingReportId === activity.id ? "Baixando..." : "Baixar relatório"}>
+                            <span>
+                              <IconButton
+                                size="small"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  if (downloadingReportId !== activity.id) {
+                                    void downloadActivityReport(activity.id, activity.title);
+                                  }
+                                }}
+                                disabled={downloadingReportId === activity.id}
+                                sx={{ color: "primary.main" }}
+                              >
+                                <OpenInNewRoundedIcon fontSize="small" />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                spacing={1}
+                alignItems={{ xs: "flex-start", sm: "center" }}
+                justifyContent="space-between"
+                sx={{ mt: 1.5 }}
+              >
+                <Typography variant="body2" color="text.secondary">
+                  Mostrando {reportPageStart}-{reportPageEnd} de {reportTotal} relatórios
+                </Typography>
+                <Pagination
+                  color="primary"
+                  shape="rounded"
+                  size="small"
+                  page={reportPage}
+                  count={reportTotalPages}
+                  onChange={(_, value) => setReportPage(value)}
+                />
+              </Stack>
+            </>
           )}
           <Divider sx={{ my: 1.2 }} />
         </CardContent>
