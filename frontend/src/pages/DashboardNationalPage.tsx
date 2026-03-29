@@ -1431,59 +1431,80 @@ export function DashboardNationalPage() {
                       transition: 'transform 450ms ease-in-out',
                     }}
                   >
-                    {attentionPoints.map((item) => (
-                      <Card
-                        key={item.id}
-                        variant="outlined"
-                        sx={{
-                          height: `${attentionSlideHeight}px`,
-                          flexShrink: 0,
-                          borderRadius: 2,
-                          borderColor: '#D3E1EC',
-                          backgroundColor: '#F8FBFE',
-                          boxShadow: 'none',
-                        }}
-                      >
-                        <CardContent
+                    {attentionPoints.map((item) => {
+                      const typeColor =
+                        normalizeChecklistColorHex(item.type?.colorHex) ?? '#537F97';
+                      const typeTextColor =
+                        normalizeChecklistColorHex(item.type?.textColorHex) ??
+                        '#F4FAFD';
+                      return (
+                        <Card
+                          key={item.id}
+                          variant="outlined"
                           sx={{
-                            p: 1.4,
-                            height: '100%',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: 1,
+                            height: `${attentionSlideHeight}px`,
+                            flexShrink: 0,
+                            borderRadius: 2,
+                            borderColor: typeColor,
+                            backgroundColor: typeColor,
+                            boxShadow: 'none',
                           }}
                         >
-                          <Typography
-                            variant="subtitle2"
-                            sx={{ fontWeight: 700, color: '#0E3142', lineHeight: 1.22 }}
-                          >
-                            {item.title}
-                          </Typography>
-                          <Typography
-                            variant="body2"
-                            color="text.secondary"
+                          <CardContent
                             sx={{
-                              display: '-webkit-box',
-                              WebkitLineClamp: 5,
-                              WebkitBoxOrient: 'vertical',
-                              overflow: 'hidden',
+                              p: 1.4,
+                              height: '100%',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 1,
+                              backgroundColor: typeColor,
                             }}
                           >
-                            {item.content}
-                          </Typography>
-                          <Box mt="auto" display="flex" justifyContent="space-between" gap={1}>
-                            <Chip
-                              size="small"
-                              label={item.authorLabel || 'Coordenação CIPAVD'}
-                              sx={{ maxWidth: '70%' }}
-                            />
-                            <Typography variant="caption" color="text.secondary" noWrap>
-                              {new Date(item.createdAt).toLocaleDateString('pt-BR')}
+                            <Typography
+                              variant="subtitle2"
+                              sx={{
+                                fontWeight: 700,
+                                color: typeTextColor,
+                                lineHeight: 1.22,
+                              }}
+                            >
+                              {item.title}
                             </Typography>
-                          </Box>
-                        </CardContent>
-                      </Card>
-                    ))}
+                            <Typography
+                              variant="body2"
+                              sx={{
+                                color: hexToRgba(typeTextColor, 0.94),
+                                display: '-webkit-box',
+                                WebkitLineClamp: 5,
+                                WebkitBoxOrient: 'vertical',
+                                overflow: 'hidden',
+                              }}
+                            >
+                              {item.content}
+                            </Typography>
+                            <Box mt="auto" display="flex" justifyContent="space-between" gap={1}>
+                              <Chip
+                                size="small"
+                                label={item.authorLabel || 'Coordenação CIPAVD'}
+                                sx={{
+                                  maxWidth: '70%',
+                                  bgcolor: 'rgba(255,255,255,0.15)',
+                                  color: typeTextColor,
+                                  border: `1px solid ${hexToRgba(typeTextColor, 0.25)}`,
+                                }}
+                              />
+                              <Typography
+                                variant="caption"
+                                sx={{ color: hexToRgba(typeTextColor, 0.9) }}
+                                noWrap
+                              >
+                                {new Date(item.createdAt).toLocaleDateString('pt-BR')}
+                              </Typography>
+                            </Box>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
                   </Box>
                 </Box>
               </Box>
