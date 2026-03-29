@@ -460,6 +460,8 @@ export function DashboardNationalPage() {
   const [lessonOffset, setLessonOffset] = useState(0);
   const [attentionPointOffset, setAttentionPointOffset] = useState(0);
   const [readingLesson, setReadingLesson] = useState<LessonPost | null>(null);
+  const [readingAttentionPoint, setReadingAttentionPoint] =
+    useState<BestPracticePoint | null>(null);
   const isTiProfile = hasAnyRole(me, [ROLE_TI]);
   const [editingCardId, setEditingCardId] = useState<SmifCardId | null>(null);
   const [editingCardDraft, setEditingCardDraft] = useState<SmifCardSetting>({
@@ -1483,6 +1485,15 @@ export function DashboardNationalPage() {
                         <Card
                           key={item.id}
                           variant="outlined"
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => setReadingAttentionPoint(item)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              event.preventDefault();
+                              setReadingAttentionPoint(item);
+                            }
+                          }}
                           sx={{
                             height: `${attentionSlideHeight}px`,
                             flexShrink: 0,
@@ -1490,6 +1501,16 @@ export function DashboardNationalPage() {
                             borderColor: typeColor,
                             backgroundColor: typeColor,
                             boxShadow: 'none',
+                            cursor: 'pointer',
+                            transition: 'transform 220ms ease, box-shadow 220ms ease',
+                            '&:hover': {
+                              transform: 'translateY(-2px)',
+                              boxShadow: '0 8px 18px rgba(8, 15, 24, 0.22)',
+                            },
+                            '&:focus-visible': {
+                              outline: `2px solid ${typeTextColor}`,
+                              outlineOffset: '2px',
+                            },
                           }}
                         >
                           <CardContent
@@ -2997,6 +3018,46 @@ bgcolor: '#fff',
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setReadingLesson(null)}>Fechar</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(readingAttentionPoint)}
+        onClose={() => setReadingAttentionPoint(null)}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle sx={{ pb: 0.5 }}>
+          {readingAttentionPoint?.title || 'Ponto de atenção'}
+        </DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={1}>
+            <Typography
+              variant="body1"
+              sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.7 }}
+            >
+              {readingAttentionPoint?.content || '-'}
+            </Typography>
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              spacing={1}
+              justifyContent="space-between"
+              alignItems={{ xs: 'flex-start', sm: 'center' }}
+            >
+              <Typography variant="caption" color="text.secondary">
+                Autor: {readingAttentionPoint?.authorLabel || 'Coordenação CIPAVD'}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Data:{' '}
+                {readingAttentionPoint?.createdAt
+                  ? new Date(readingAttentionPoint.createdAt).toLocaleString('pt-BR')
+                  : '-'}
+              </Typography>
+            </Stack>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setReadingAttentionPoint(null)}>Fechar</Button>
         </DialogActions>
       </Dialog>
 
