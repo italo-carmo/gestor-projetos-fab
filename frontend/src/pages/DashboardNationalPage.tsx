@@ -24,6 +24,8 @@ import {
 } from '@mui/material';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import KeyboardArrowDownRoundedIcon from '@mui/icons-material/KeyboardArrowDownRounded';
+import KeyboardArrowUpRoundedIcon from '@mui/icons-material/KeyboardArrowUpRounded';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import DescriptionIcon from '@mui/icons-material/Description';
@@ -494,6 +496,18 @@ export function DashboardNationalPage() {
   const attentionSlideHeight = 238;
   const safeAttentionPointOffset =
     attentionPoints.length > 0 ? attentionPointOffset % attentionPoints.length : 0;
+  const goToPreviousAttentionPoint = () => {
+    if (attentionPoints.length <= 1) return;
+    setAttentionPointOffset((current) =>
+      (current - 1 + attentionPoints.length) % attentionPoints.length,
+    );
+  };
+  const goToNextAttentionPoint = () => {
+    if (attentionPoints.length <= 1) return;
+    setAttentionPointOffset((current) =>
+      (current + 1) % attentionPoints.length,
+    );
+  };
 
   useEffect(() => {
     if (lessons.length <= 1) return;
@@ -1403,6 +1417,30 @@ export function DashboardNationalPage() {
               <Typography variant="h6" sx={{ color: style.textColor }}>
                 Pontos de atenção
               </Typography>
+              {attentionPoints.length > 1 ? (
+                <Stack direction="row" alignItems="center" spacing={0.2}>
+                  <Tooltip title="Ponto anterior">
+                    <IconButton
+                      size="small"
+                      onClick={goToPreviousAttentionPoint}
+                      sx={{ color: style.textColor, opacity: 0.82 }}
+                      aria-label="Ir para ponto de atenção anterior"
+                    >
+                      <KeyboardArrowUpRoundedIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Próximo ponto">
+                    <IconButton
+                      size="small"
+                      onClick={goToNextAttentionPoint}
+                      sx={{ color: style.textColor, opacity: 0.82 }}
+                      aria-label="Ir para próximo ponto de atenção"
+                    >
+                      <KeyboardArrowDownRoundedIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </Stack>
+              ) : null}
             </Stack>
             {!canViewBestPractices ? (
               <Typography variant="body2" color="text.secondary">
@@ -1507,6 +1545,11 @@ export function DashboardNationalPage() {
                     })}
                   </Box>
                 </Box>
+                {attentionPoints.length > 1 ? (
+                  <Typography variant="caption" color="text.secondary" sx={{ mt: 0.8, display: 'block' }}>
+                    {safeAttentionPointOffset + 1} de {attentionPoints.length} • rotação automática a cada 5s
+                  </Typography>
+                ) : null}
               </Box>
             )}
           </CardContent>
