@@ -77,6 +77,7 @@ import { SkeletonState } from '../components/states/SkeletonState';
 import { ConfirmDialog } from '../components/dialogs/ConfirmDialog';
 import { ACTIVITY_STATUS_LABELS, ActivityStatus } from '../constants/enums';
 import { selectTargetLocalities } from '../constants/localities';
+import { ChecklistsPage } from './ChecklistsPage';
 
 const blankReport: {
   date: string;
@@ -1314,6 +1315,12 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
 
   return (
     <Box>
+      {scope === 'smif' && (
+        <Box mb={2}>
+          <ChecklistsPage />
+        </Box>
+      )}
+
       <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
         <Typography variant="h4">
           Atividades de Campo - {scope === 'cipavd' ? 'CIPAVD' : 'SMIF'}

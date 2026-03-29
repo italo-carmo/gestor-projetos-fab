@@ -489,10 +489,12 @@ export function DashboardNationalPage() {
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   const typedAttentionPoints = bestPracticeItems.filter((item) => {
     const normalizedType = normalizeSearchText(item.type?.name);
-    return normalizedType.includes('ponto de atencao');
+    return (
+      normalizedType.includes('ponto de atencao') ||
+      normalizedType.includes('pontos de atencao')
+    );
   });
-  const attentionPoints =
-    typedAttentionPoints.length > 0 ? typedAttentionPoints : bestPracticeItems;
+  const attentionPoints = typedAttentionPoints;
   const attentionSlideHeight = 238;
   const safeAttentionPointOffset =
     attentionPoints.length > 0 ? attentionPointOffset % attentionPoints.length : 0;
@@ -709,6 +711,8 @@ export function DashboardNationalPage() {
           const safeIndex = (lessonOffset + index) % lessons.length;
           return lessons[safeIndex];
         });
+  const showInstitutionalMapping =
+    import.meta.env.VITE_SMIF_SHOW_INSTITUTIONAL_MAPPING === 'true';
 
   const formatGsdLabel = (localityName?: string | null, localityCode?: string | null) => {
     const code = String(localityCode ?? '').trim();
@@ -1680,6 +1684,7 @@ export function DashboardNationalPage() {
         })()}
       </Box>
 
+      {showInstitutionalMapping ? (
       <Card
         sx={{
           width: '100%',
@@ -2086,6 +2091,7 @@ export function DashboardNationalPage() {
           )}
         </CardContent>
       </Card>
+      ) : null}
 
       <Dialog
         open={Boolean(kpiDetail)}

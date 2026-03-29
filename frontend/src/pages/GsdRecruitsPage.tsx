@@ -44,6 +44,8 @@ import { parseApiError } from '../app/apiErrors';
 import { EmptyState } from '../components/states/EmptyState';
 import { ErrorState } from '../components/states/ErrorState';
 import { SkeletonState } from '../components/states/SkeletonState';
+import { MilitaryHighlightsPanel } from '../components/gsd/MilitaryHighlightsPanel';
+import { InstitutionalMappingPanel } from '../components/gsd/InstitutionalMappingPanel';
 import {
   Bar,
   BarChart,
@@ -787,6 +789,10 @@ export function GsdRecruitsPage() {
             )}
           </CardContent>
         </Card>
+
+        <MilitaryHighlightsPanel />
+
+        <InstitutionalMappingPanel />
         </Stack>
       )}
 

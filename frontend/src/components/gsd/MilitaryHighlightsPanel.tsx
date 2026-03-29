@@ -1,0 +1,257 @@
+import {
+  Box,
+  Card,
+  CardContent,
+  Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Stack,
+  Typography,
+  Button,
+} from '@mui/material';
+import BadgeRoundedIcon from '@mui/icons-material/BadgeRounded';
+import MilitaryTechRoundedIcon from '@mui/icons-material/MilitaryTechRounded';
+import PersonRoundedIcon from '@mui/icons-material/PersonRounded';
+import { useMemo, useState } from 'react';
+import { useSocialCommunicationHighlights } from '../../api/hooks';
+import { EmptyState } from '../states/EmptyState';
+import { ErrorState } from '../states/ErrorState';
+import { SkeletonState } from '../states/SkeletonState';
+
+type SocialCommunicationHighlight = {
+  id: string;
+  militaryName: string;
+  highlightRole?: string | null;
+  photoMimeType?: string | null;
+  photoBase64?: string | null;
+  impact: 'MULTIPLICADOR' | 'SIMBOLICO';
+  locality: { id: string; code: string; name: string };
+  text: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+function normalizeHighlightPhotoBase64(value: unknown) {
+  return String(value ?? '').replace(/\s+/g, '').trim();
+}
+
+function buildHighlightPhotoDataUrl(
+  photoBase64?: string | null,
+  photoMimeType?: string | null,
+) {
+  const normalizedBase64 = normalizeHighlightPhotoBase64(photoBase64);
+  if (!normalizedBase64) return '';
+  const mimeType = String(photoMimeType ?? '').trim() || 'image/jpeg';
+  return `data:${mimeType};base64,${normalizedBase64}`;
+}
+
+export function MilitaryHighlightsPanel() {
+  const highlightsQuery = useSocialCommunicationHighlights({});
+  const [highlightReadingTarget, setHighlightReadingTarget] =
+    useState<SocialCommunicationHighlight | null>(null);
+
+  const highlightItems = useMemo(
+    () =>
+      [...((highlightsQuery.data?.items ?? []) as SocialCommunicationHighlight[])].sort(
+        (a, b) => {
+          const left = Date.parse(a.updatedAt ?? a.createdAt);
+          const right = Date.parse(b.updatedAt ?? b.createdAt);
+          return (Number.isNaN(right) ? 0 : right) - (Number.isNaN(left) ? 0 : left);
+        },
+      ),
+    [highlightsQuery.data?.items],
+  );
+
+  const renderHighlightCards = (cards: SocialCommunicationHighlight[]) => {
+    const theme = {
+      cardBorder: 'rgba(146, 106, 19, 0.65)',
+      cardBackground:
+        'linear-gradient(145deg, #b68f33 0%, #c9a44e 25%, #e2bf67 50%, #cca95a 74%, #af8d42 100%)',
+      titleColor: 'rgba(46, 30, 4, 0.95)',
+      textColor: 'rgba(58, 39, 6, 0.92)',
+      chipBg: 'rgba(255, 248, 227, 0.92)',
+      chipBorder: 'rgba(120, 82, 14, 0.35)',
+      chipColor: '#4A3407',
+      mediaBorder: 'rgba(255, 244, 205, 0.7)',
+      mediaBg: 'rgba(255, 248, 223, 0.28)',
+      hoverShadow: '0 14px 24px rgba(90, 64, 13, 0.24)',
+    };
+
+    return (
+      <Box
+        sx={{
+          display: 'grid',
+          gap: 1.35,
+          gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' },
+        }}
+      >
+        {cards.map((item) => {
+          const photoDataUrl = buildHighlightPhotoDataUrl(
+            item.photoBase64,
+            item.photoMimeType,
+          );
+          const initials = item.militaryName
+            .split(/\s+/)
+            .filter(Boolean)
+            .slice(0, 2)
+            .map((part) => part[0]?.toUpperCase() ?? '')
+            .join('');
+
+          return (
+            <Card
+              key={item.id}
+              role="button"
+              tabIndex={0}
+              onClick={() => setHighlightReadingTarget(item)}
+              onKeyDown={(event) => {
+                if (event.target !== event.currentTarget) return;
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  setHighlightReadingTarget(item);
+                }
+              }}
+              sx={{
+                borderRadius: 2.8,
+                border: `1px solid ${theme.cardBorder}`,
+                background: theme.cardBackground,
+                overflow: 'hidden',
+                cursor: 'pointer',
+                transition: 'transform 150ms ease, box-shadow 180ms ease',
+                boxShadow:
+                  'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.12), 0 8px 16px rgba(95,70,18,0.18)',
+                '&:hover': {
+                  transform: 'translateY(-2px)',
+                  boxShadow: `${theme.hoverShadow}, inset 0 1px 0 rgba(255,255,255,0.34), inset 0 -1px 0 rgba(0,0,0,0.14)`,
+                },
+              }}
+            >
+              <CardContent sx={{ p: 1.2 }}>
+                <Stack direction="row" spacing={1.2} alignItems="stretch">
+                  <Box
+                    sx={{
+                      width: 112,
+                      minWidth: 112,
+                      height: 112,
+                      borderRadius: 2,
+                      bgcolor: theme.mediaBg,
+                      border: `1px solid ${theme.mediaBorder}`,
+                      overflow: 'hidden',
+                      display: 'grid',
+                      placeItems: 'center',
+                      color: theme.titleColor,
+                      fontSize: 24,
+                      fontWeight: 800,
+                    }}
+                  >
+                    {photoDataUrl ? (
+                      <Box
+                        component="img"
+                        src={photoDataUrl}
+                        alt={item.militaryName}
+                        sx={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                    ) : (
+                      initials || <PersonRoundedIcon />
+                    )}
+                  </Box>
+
+                  <Stack sx={{ minWidth: 0, flex: 1 }}>
+                    <Typography variant="subtitle1" fontWeight={800} sx={{ color: theme.titleColor, mb: 0.55 }}>
+                      {item.militaryName}
+                    </Typography>
+                    <Stack direction="row" spacing={0.6} useFlexGap flexWrap="wrap" sx={{ mb: 0.7 }}>
+                      <Chip
+                        size="small"
+                        icon={<BadgeRoundedIcon />}
+                        label={item.locality?.code || item.locality?.name || 'OM'}
+                        sx={{ bgcolor: theme.chipBg, color: theme.chipColor, border: `1px solid ${theme.chipBorder}` }}
+                      />
+                      <Chip
+                        size="small"
+                        icon={<MilitaryTechRoundedIcon />}
+                        label={item.impact === 'MULTIPLICADOR' ? 'Multiplicador' : 'Simbólico'}
+                        sx={{ bgcolor: theme.chipBg, color: theme.chipColor, border: `1px solid ${theme.chipBorder}` }}
+                      />
+                      {item.highlightRole ? (
+                        <Chip
+                          size="small"
+                          icon={<PersonRoundedIcon />}
+                          label={item.highlightRole}
+                          sx={{ bgcolor: theme.chipBg, color: theme.chipColor, border: `1px solid ${theme.chipBorder}` }}
+                        />
+                      ) : null}
+                    </Stack>
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        color: theme.textColor,
+                        display: '-webkit-box',
+                        WebkitLineClamp: 4,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      {item.text}
+                    </Typography>
+                  </Stack>
+                </Stack>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </Box>
+    );
+  };
+
+  return (
+    <>
+      <Card sx={{ borderRadius: 3, border: '1px solid rgb(58, 122, 154)', boxShadow: '0 12px 24px rgba(17,66,89,0.16)' }}>
+        <CardContent sx={{ py: 2.2 }}>
+          <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={1} sx={{ mb: 1.8 }}>
+            <Box>
+              <Typography variant="h6" fontWeight={800} sx={{ color: '#1D3A4D' }}>
+                Militares Destaques
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'rgba(29, 58, 77, 0.86)' }}>
+                Destaques institucionais de Impacto Multiplicador e Simbólico.
+              </Typography>
+            </Box>
+            <Chip size="small" label={`${highlightItems.length} destaque${highlightItems.length === 1 ? '' : 's'}`} />
+          </Stack>
+
+          {highlightsQuery.isLoading ? (
+            <SkeletonState />
+          ) : highlightsQuery.isError ? (
+            <ErrorState error={highlightsQuery.error} onRetry={() => highlightsQuery.refetch()} />
+          ) : highlightItems.length === 0 ? (
+            <EmptyState title="Sem destaques" description="Nenhum destaque cadastrado." />
+          ) : (
+            renderHighlightCards(highlightItems)
+          )}
+        </CardContent>
+      </Card>
+
+      <Dialog open={Boolean(highlightReadingTarget)} onClose={() => setHighlightReadingTarget(null)} fullWidth maxWidth="sm">
+        <DialogTitle>Detalhes do Destaque</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={1}>
+            <Typography variant="h6" fontWeight={700}>{highlightReadingTarget?.militaryName ?? 'Militar'}</Typography>
+            <Stack direction="row" spacing={0.8} flexWrap="wrap" useFlexGap>
+              {highlightReadingTarget?.locality?.code ? <Chip size="small" icon={<BadgeRoundedIcon />} label={highlightReadingTarget.locality.code} variant="outlined" /> : null}
+              {highlightReadingTarget?.highlightRole ? <Chip size="small" icon={<PersonRoundedIcon />} label={highlightReadingTarget.highlightRole} variant="outlined" /> : null}
+              {highlightReadingTarget?.impact ? <Chip size="small" icon={<MilitaryTechRoundedIcon />} label={highlightReadingTarget.impact === 'MULTIPLICADOR' ? 'Multiplicador' : 'Simbólico'} /> : null}
+            </Stack>
+            <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.7 }}>
+              {highlightReadingTarget?.text ?? ''}
+            </Typography>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setHighlightReadingTarget(null)}>Fechar</Button>
+        </DialogActions>
+      </Dialog>
+    </>
+  );
+}

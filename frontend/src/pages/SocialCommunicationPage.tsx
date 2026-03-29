@@ -955,6 +955,8 @@ export function SocialCommunicationPage() {
   const internalCardSetting = getSocialCardSetting("social-public-internal");
   const externalCardSetting = getSocialCardSetting("social-public-external");
   const highlightsCardSetting = getSocialCardSetting("social-highlights");
+  const showHighlightsSection =
+    import.meta.env.VITE_SOCIAL_HIGHLIGHTS_PAGE === "true";
 
   const internalItems = filteredByTags.filter(
     (item) => (item.audience ?? "INTERNAL") === "INTERNAL",
@@ -2192,6 +2194,7 @@ export function SocialCommunicationPage() {
             )}
           </Box>
 
+          {showHighlightsSection ? (
           <Card
             sx={{
               borderRadius: 3.4,
@@ -2529,6 +2532,7 @@ export function SocialCommunicationPage() {
               </Stack>
             </CardContent>
           </Card>
+          ) : null}
         </Stack>
       )}
 

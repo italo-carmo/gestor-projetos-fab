@@ -126,7 +126,10 @@ export function ChecklistsPage() {
   };
 
   const clearFilters = () => {
-    const next = new URLSearchParams();
+    const next = new URLSearchParams(params);
+    next.delete('phaseId');
+    next.delete('specialtyId');
+    next.delete('eloRoleId');
     next.set('itemSourceType', 'ACTIVITY');
     setParams(next);
   };
