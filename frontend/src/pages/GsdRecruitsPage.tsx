@@ -715,9 +715,6 @@ export function GsdRecruitsPage() {
                       Recrutas ativas
                     </TableCell>
                     <TableCell sx={{ color: 'white', fontWeight: 600 }}>
-                      Comandante (LDAP)
-                    </TableCell>
-                    <TableCell sx={{ color: 'white', fontWeight: 600 }}>
                       Situação
                     </TableCell>
                     <TableCell sx={{ color: 'white', fontWeight: 600 }} align="right">
@@ -746,7 +743,6 @@ export function GsdRecruitsPage() {
                         )}
                       </TableCell>
                       <TableCell>{locality.recruitsFemaleCountCurrent ?? 0}</TableCell>
-                      <TableCell>{locality.commanderName || '—'}</TableCell>
                       <TableCell>
                         <Stack direction="row" spacing={0.6} flexWrap="wrap" useFlexGap>
                           <Chip size="small" label={`A iniciar: ${locality.recruitsByStatus?.toStart ?? 0}`} variant="outlined" />
