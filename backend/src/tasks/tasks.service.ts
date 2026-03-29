@@ -2109,12 +2109,20 @@ export class TasksService {
             executionSchedule: true,
             activitiesPerformed: true,
             participantsCount: true,
+            participantsMaleCount: true,
+            participantsFemaleCount: true,
             instructorsCount: true,
             recruitsCount: true,
             eloPsychologyCount: true,
             eloSocialAssistanceCount: true,
+            eloJuridicoCount: true,
+            eloCpcaCount: true,
             eloGraduadoMasterCount: true,
             participantsCharacteristics: true,
+            mainPointsObserved: true,
+            attentionPoints: true,
+            nextSteps: true,
+            referencesAndAttachments: true,
             conclusion: true,
             city: true,
             closingDate: true,
@@ -3094,6 +3102,7 @@ export class TasksService {
         approved: 0,
         pending: 0,
         total: 0,
+        completedItems: [],
         pendingItems: [],
       },
       kpiDetails: {
@@ -3229,12 +3238,20 @@ export class TasksService {
             executionSchedule: true,
             activitiesPerformed: true,
             participantsCount: true,
+            participantsMaleCount: true,
+            participantsFemaleCount: true,
             instructorsCount: true,
             recruitsCount: true,
             eloPsychologyCount: true,
             eloSocialAssistanceCount: true,
+            eloJuridicoCount: true,
+            eloCpcaCount: true,
             eloGraduadoMasterCount: true,
             participantsCharacteristics: true,
+            mainPointsObserved: true,
+            attentionPoints: true,
+            nextSteps: true,
+            referencesAndAttachments: true,
             conclusion: true,
             city: true,
             closingDate: true,
@@ -3536,21 +3553,24 @@ export class TasksService {
       }
     }
 
-    const reportRequiredActivities = filteredActivities.filter(
+    const reportRequiredCompletedActivities = filteredActivities.filter(
       (activity) =>
-        activity.reportRequired && activity.status === ActivityStatus.DONE,
+        activity.reportRequired &&
+        (activity.status === ActivityStatus.DONE ||
+          activity.status === ActivityStatus.CANCELLED),
     );
-    const approvedReportActivities = reportRequiredActivities.filter(
-      (activity) => hasSignedReport(activity),
-    );
-    const complianceApproved = reportRequiredActivities.filter((activity) =>
+    const signedReportActivities = filteredActivities.filter((activity) =>
       hasSignedReport(activity),
-    ).length;
-    const compliancePending =
-      reportRequiredActivities.length - complianceApproved;
-    const reportPendingItems = reportRequiredActivities
-      .filter((activity) => !hasSignedReport(activity))
-      .map((activity) => mapExecutiveActivityItem(activity));
+    );
+    const complianceApproved = signedReportActivities.length;
+    const reportPendingActivities = reportRequiredCompletedActivities.filter(
+      (activity) => !hasSignedReport(activity),
+    );
+    const compliancePending = reportPendingActivities.length;
+    const complianceTotal = complianceApproved + compliancePending;
+    const reportPendingItems = reportPendingActivities.map((activity) =>
+      mapExecutiveActivityItem(activity),
+    );
     const completedActivitiesWithSavedReport = filteredActivities.filter(
       (activity) =>
         activity.status === ActivityStatus.DONE && Boolean(activity.report?.id),
@@ -3653,14 +3673,24 @@ export class TasksService {
                 executionSchedule: activity.report.executionSchedule,
                 activitiesPerformed: activity.report.activitiesPerformed,
                 participantsCount: activity.report.participantsCount,
+                participantsMaleCount: activity.report.participantsMaleCount,
+                participantsFemaleCount:
+                  activity.report.participantsFemaleCount,
                 instructorsCount: activity.report.instructorsCount,
                 recruitsCount: activity.report.recruitsCount,
                 eloPsychologyCount: activity.report.eloPsychologyCount,
                 eloSocialAssistanceCount:
                   activity.report.eloSocialAssistanceCount,
+                eloJuridicoCount: activity.report.eloJuridicoCount,
+                eloCpcaCount: activity.report.eloCpcaCount,
                 eloGraduadoMasterCount: activity.report.eloGraduadoMasterCount,
                 participantsCharacteristics:
                   activity.report.participantsCharacteristics,
+                mainPointsObserved: activity.report.mainPointsObserved,
+                attentionPoints: activity.report.attentionPoints,
+                nextSteps: activity.report.nextSteps,
+                referencesAndAttachments:
+                  activity.report.referencesAndAttachments,
                 conclusion: activity.report.conclusion,
                 city: activity.report.city,
                 closingDate: activity.report.closingDate,
@@ -3669,7 +3699,7 @@ export class TasksService {
         };
       })
       .sort(sortByMostRecentActivity);
-    const reportCompletedItems = approvedReportActivities
+    const reportCompletedItems = signedReportActivities
       .map((activity) => {
         const baseItem = mapExecutiveActivityItem(activity);
         return {
@@ -3687,14 +3717,24 @@ export class TasksService {
                 executionSchedule: activity.report.executionSchedule,
                 activitiesPerformed: activity.report.activitiesPerformed,
                 participantsCount: activity.report.participantsCount,
+                participantsMaleCount: activity.report.participantsMaleCount,
+                participantsFemaleCount:
+                  activity.report.participantsFemaleCount,
                 instructorsCount: activity.report.instructorsCount,
                 recruitsCount: activity.report.recruitsCount,
                 eloPsychologyCount: activity.report.eloPsychologyCount,
                 eloSocialAssistanceCount:
                   activity.report.eloSocialAssistanceCount,
+                eloJuridicoCount: activity.report.eloJuridicoCount,
+                eloCpcaCount: activity.report.eloCpcaCount,
                 eloGraduadoMasterCount: activity.report.eloGraduadoMasterCount,
                 participantsCharacteristics:
                   activity.report.participantsCharacteristics,
+                mainPointsObserved: activity.report.mainPointsObserved,
+                attentionPoints: activity.report.attentionPoints,
+                nextSteps: activity.report.nextSteps,
+                referencesAndAttachments:
+                  activity.report.referencesAndAttachments,
                 conclusion: activity.report.conclusion,
                 city: activity.report.city,
                 closingDate: activity.report.closingDate,
@@ -3848,7 +3888,7 @@ export class TasksService {
         unassignedActivities: unassignedItems.length,
         reportPending: compliancePending,
         reportApproved: complianceApproved,
-        reportTotal: reportRequiredActivities.length,
+        reportTotal: complianceTotal,
       },
       status: {
         items: statusItems,
@@ -3883,7 +3923,7 @@ export class TasksService {
       reportsCompliance: {
         approved: complianceApproved,
         pending: compliancePending,
-        total: reportRequiredActivities.length,
+        total: complianceTotal,
         completedItems: reportCompletedItems,
         pendingItems: reportPendingItems,
       },

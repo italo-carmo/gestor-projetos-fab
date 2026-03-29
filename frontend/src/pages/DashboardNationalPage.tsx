@@ -42,6 +42,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   useDashboardNational,
+  useBestPractices,
   useLessonsLearned,
   useMe,
   useMissionChecklistMapping,
@@ -64,6 +65,15 @@ function resolveChecklistPhotoUrl(raw: string) {
   if (url.startsWith('/missions/checklist/uploads/')) return `/api${url}`;
   return url;
 }
+
+function normalizeSearchText(value: string | null | undefined) {
+  return String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
 type NationalDashboardTotals = {
   localities: number;
   coverageLocalities: number;
@@ -176,6 +186,20 @@ type LessonPost = {
   authorLabel?: string | null;
   createdAt: string;
   typeId: string;
+  type?: {
+    id: string;
+    name: string;
+    colorHex: string;
+    textColorHex?: string | null;
+  } | null;
+};
+
+type BestPracticePoint = {
+  id: string;
+  title: string;
+  content: string;
+  authorLabel?: string | null;
+  createdAt: string;
   type?: {
     id: string;
     name: string;
@@ -425,11 +449,14 @@ export function DashboardNationalPage() {
   const missionChecklistMappingQuery = useMissionChecklistMapping({
     localityId: localityId || undefined,
   });
+  const canViewBestPractices = can(me, 'best_practices', 'view');
+  const bestPracticesQuery = useBestPractices({}, canViewBestPractices);
   const canViewLessons =
     hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI, ROLE_COMANDANTE_COMGEP]) &&
     can(me, 'lessons_learned', 'view');
   const lessonsQuery = useLessonsLearned({}, canViewLessons);
   const [lessonOffset, setLessonOffset] = useState(0);
+  const [attentionPointOffset, setAttentionPointOffset] = useState(0);
   const [readingLesson, setReadingLesson] = useState<LessonPost | null>(null);
   const isTiProfile = hasAnyRole(me, [ROLE_TI]);
   const [editingCardId, setEditingCardId] = useState<SmifCardId | null>(null);
@@ -453,15 +480,20 @@ export function DashboardNationalPage() {
 
   const lessons = ((lessonsQuery.data?.items ?? []) as LessonPost[])
     .filter((item) => item?.id)
-    .filter((item) => {
-      const normalizedType = String(item.type?.name ?? '')
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .toLowerCase()
-        .trim();
-      return normalizedType === 'resultados positivos';
-    })
+    .filter((item) => normalizeSearchText(item.type?.name) === 'resultados positivos')
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const bestPracticeItems = ((bestPracticesQuery.data?.items ?? []) as BestPracticePoint[])
+    .filter((item) => item?.id)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const typedAttentionPoints = bestPracticeItems.filter((item) => {
+    const normalizedType = normalizeSearchText(item.type?.name);
+    return normalizedType.includes('ponto de atencao');
+  });
+  const attentionPoints =
+    typedAttentionPoints.length > 0 ? typedAttentionPoints : bestPracticeItems;
+  const attentionSlideHeight = 238;
+  const safeAttentionPointOffset =
+    attentionPoints.length > 0 ? attentionPointOffset % attentionPoints.length : 0;
 
   useEffect(() => {
     if (lessons.length <= 1) return;
@@ -489,6 +521,14 @@ export function DashboardNationalPage() {
   useEffect(() => {
     setInstitutionalPhotoCarouselIndex(0);
   }, [institutionalDetail?.itemId, (institutionalDetail?.cell.photos ?? []).length]);
+
+  useEffect(() => {
+    if (attentionPoints.length <= 1) return;
+    const timer = window.setInterval(() => {
+      setAttentionPointOffset((prev) => (prev + 1) % attentionPoints.length);
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [attentionPoints.length]);
 
   useEffect(() => {
     const photos = institutionalDetail?.cell.photos ?? [];
@@ -1184,7 +1224,7 @@ export function DashboardNationalPage() {
           gap: 2,
           gridTemplateColumns: {
             xs: '1fr',
-            md: 'repeat(2, minmax(0, 1fr))',
+            md: 'repeat(3, minmax(0, 1fr))',
           },
           mb: 2,
         }}
@@ -1202,6 +1242,12 @@ export function DashboardNationalPage() {
             border: '1px solid rgba(132, 178, 201, 0.36)',
             shadow: '0 18px 34px rgba(16,40,53,0.38)',
           },
+          {
+            id: 'smif-participants' as SmifCardId,
+            items: participantsIndicators,
+            border: '1px solid rgba(145, 195, 220, 0.36)',
+            shadow: '0 18px 34px rgba(18,42,56,0.38)',
+          },
         ].map((group) => {
           const cardSetting = getCardSetting(group.id);
           return (
@@ -1217,13 +1263,17 @@ export function DashboardNationalPage() {
               position: 'relative',
             }}
           >
-            <CardContent sx={{ p: 2.25 }}>
+            <CardContent sx={{ p: 1.85 }}>
               <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
                 <Box>
-                  <Typography variant="subtitle1" fontWeight={700} sx={{ letterSpacing: 0.2, color: cardSetting.textColor }}>
+                  <Typography
+                    variant="subtitle2"
+                    fontWeight={700}
+                    sx={{ letterSpacing: 0.2, color: cardSetting.textColor, lineHeight: 1.25 }}
+                  >
                     {cardSetting.title}
                   </Typography>
-                  <Typography variant="caption" sx={{ color: cardSetting.textColor }}>
+                  <Typography variant="caption" sx={{ color: cardSetting.textColor, opacity: 0.95 }}>
                     {cardSetting.description}
                   </Typography>
                 </Box>
@@ -1241,9 +1291,9 @@ export function DashboardNationalPage() {
               </Stack>
               <Box
                 sx={{
-                  mt: 1.5,
+                  mt: 1.15,
                   display: 'grid',
-                  gap: 1.25,
+                  gap: 1,
                   gridTemplateColumns: {
                     xs: '1fr',
                     sm: 'repeat(2, minmax(0, 1fr))',
@@ -1270,11 +1320,11 @@ export function DashboardNationalPage() {
                           : undefined
                       }
                       sx={{
-                        p: 1.5,
+                        p: 1.2,
                         borderRadius: 2,
                         border: isInteractive ? '1px solid rgba(0,60,92,0.35)' : '1px solid rgba(255,255,255,0.5)',
                         backgroundColor: 'rgba(255,255,255,0.9)',
-                        minHeight: 106,
+                        minHeight: 88,
                         display: 'flex',
                         flexDirection: 'column',
                         justifyContent: 'space-between',
@@ -1296,16 +1346,16 @@ export function DashboardNationalPage() {
                       }}
                     >
                       <Box display="flex" alignItems="center" justifyContent="space-between" gap={1}>
-                        <Typography variant="body2" color="text.secondary" fontWeight={600}>
+                        <Typography variant="caption" color="text.secondary" fontWeight={700}>
                           {item.label}
                         </Typography>
                         <Box sx={{ color: '#114259' }}>{item.icon}</Box>
                       </Box>
                       <Box>
-                        <Typography variant="h4" sx={{ fontWeight: 800, lineHeight: 1.1, color: '#0E3142' }}>
+                        <Typography variant="h5" sx={{ fontWeight: 800, lineHeight: 1.1, color: '#0E3142' }}>
                           {item.value}
                         </Typography>
-                        <Typography variant="caption" color="text.secondary">
+                        <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.2 }}>
                           {item.helper}{isInteractive ? ' • Clique para detalhar' : ''}
                         </Typography>
                       </Box>
@@ -1324,6 +1374,7 @@ export function DashboardNationalPage() {
           maxWidth: '100%',
           minWidth: 0,
           gap: 2,
+          alignItems: 'stretch',
           gridTemplateColumns: {
             xs: '1fr',
             md: 'repeat(2, minmax(0, 1fr))',
@@ -1332,110 +1383,111 @@ export function DashboardNationalPage() {
         }}
       >
         {(() => {
-          const style = getCardSetting('smif-participants');
+          const style = {
+            backgroundColor: '#FFFFFF',
+            textColor: '#111827',
+          };
           return (
         <Card
           sx={{
-            background: style.backgroundColor,
-            border: '1px solid rgba(145, 195, 220, 0.36)',
             width: '100%',
             minWidth: 0,
+            height: '100%',
+            backgroundColor: style.backgroundColor,
             borderRadius: 3,
-            boxShadow: '0 18px 34px rgba(18,42,56,0.38)',
+            border: '1px solid rgb(58, 122, 154)',
           }}
         >
-          <CardContent sx={{ p: 2.25 }}>
-            <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
-              <Box>
-                <Typography variant="subtitle1" fontWeight={700} sx={{ letterSpacing: 0.2, color: style.textColor }}>
-                  {style.title}
-                </Typography>
-                <Typography variant="caption" sx={{ color: style.textColor }}>
-                  {style.description}
-                </Typography>
-              </Box>
-              {isTiProfile ? (
-                <Tooltip title="Editar card">
-                  <IconButton
-                    size="small"
-                    sx={{ color: style.textColor, opacity: 0.72 }}
-                    onClick={() => openStyleEditor('smif-participants')}
-                  >
-                    <EditOutlinedIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-              ) : null}
+          <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+              <Typography variant="h6" sx={{ color: style.textColor }}>
+                Pontos de atenção
+              </Typography>
             </Stack>
-            <Box
-              sx={{
-                mt: 1.5,
-                display: 'grid',
-                gap: 1.25,
-                gridTemplateColumns: {
-                  xs: '1fr',
-                  sm: 'repeat(2, minmax(0, 1fr))',
-                },
-              }}
-            >
-              {participantsIndicators.map((item) => {
-                const onItemClick = getIndicatorClickAction('smif-participants', item.id);
-                const isInteractive = Boolean(onItemClick);
-                return (
+            {!canViewBestPractices ? (
+              <Typography variant="body2" color="text.secondary">
+                Conteúdo disponível para perfis com acesso a Boas Práticas.
+              </Typography>
+            ) : bestPracticesQuery.isLoading ? (
+              <Typography variant="body2" color="text.secondary">
+                Carregando pontos de atenção...
+              </Typography>
+            ) : bestPracticesQuery.isError ? (
+              <Typography variant="body2" color="error.main">
+                Não foi possível carregar os pontos de atenção.
+              </Typography>
+            ) : attentionPoints.length === 0 ? (
+              <Typography variant="body2" color="text.secondary">
+                Nenhum ponto de atenção cadastrado em boas práticas.
+              </Typography>
+            ) : (
+              <Box sx={{ flex: 1, overflow: 'hidden', minHeight: 0 }}>
+                <Box sx={{ overflow: 'hidden', height: `${attentionSlideHeight}px` }}>
                   <Box
-                    key={item.label}
-                    role={isInteractive ? 'button' : undefined}
-                    tabIndex={isInteractive ? 0 : undefined}
-                    onClick={onItemClick ?? undefined}
-                    onKeyDown={
-                      isInteractive
-                        ? (event) => {
-                            if ((event.key === 'Enter' || event.key === ' ') && onItemClick) {
-                              event.preventDefault();
-                              onItemClick();
-                            }
-                          }
-                        : undefined
-                    }
                     sx={{
-                      p: 1.5,
-                      borderRadius: 2,
-                      border: '1px solid rgba(0,60,92,0.35)',
-                      backgroundColor: 'rgba(255,255,255,0.9)',
-                      minHeight: 106,
                       display: 'flex',
                       flexDirection: 'column',
-                      justifyContent: 'space-between',
-                      cursor: 'pointer',
-                      transition: 'transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease',
-                      '&:hover': {
-                        transform: 'translateY(-1px)',
-                        boxShadow: '0 8px 16px rgba(17,66,89,0.16)',
-                        borderColor: 'rgba(0,60,92,0.45)',
-                      },
-                      '&:focus-visible': {
-                        outline: '2px solid #0D5B84',
-                        outlineOffset: '2px',
-                      },
+                      transform: `translateY(-${safeAttentionPointOffset * attentionSlideHeight}px)`,
+                      transition: 'transform 450ms ease-in-out',
                     }}
                   >
-                    <Box display="flex" alignItems="center" justifyContent="space-between" gap={1}>
-                      <Typography variant="body2" color="text.secondary" fontWeight={600}>
-                        {item.label}
-                      </Typography>
-                      <Box sx={{ color: '#114259' }}>{item.icon}</Box>
-                    </Box>
-                    <Box>
-                      <Typography variant="h4" sx={{ fontWeight: 800, lineHeight: 1.1, color: '#0E3142' }}>
-                        {item.value}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {item.helper} • Clique para detalhar
-                      </Typography>
-                    </Box>
+                    {attentionPoints.map((item) => (
+                      <Card
+                        key={item.id}
+                        variant="outlined"
+                        sx={{
+                          height: `${attentionSlideHeight}px`,
+                          flexShrink: 0,
+                          borderRadius: 2,
+                          borderColor: '#D3E1EC',
+                          backgroundColor: '#F8FBFE',
+                          boxShadow: 'none',
+                        }}
+                      >
+                        <CardContent
+                          sx={{
+                            p: 1.4,
+                            height: '100%',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 1,
+                          }}
+                        >
+                          <Typography
+                            variant="subtitle2"
+                            sx={{ fontWeight: 700, color: '#0E3142', lineHeight: 1.22 }}
+                          >
+                            {item.title}
+                          </Typography>
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{
+                              display: '-webkit-box',
+                              WebkitLineClamp: 5,
+                              WebkitBoxOrient: 'vertical',
+                              overflow: 'hidden',
+                            }}
+                          >
+                            {item.content}
+                          </Typography>
+                          <Box mt="auto" display="flex" justifyContent="space-between" gap={1}>
+                            <Chip
+                              size="small"
+                              label={item.authorLabel || 'Coordenação CIPAVD'}
+                              sx={{ maxWidth: '70%' }}
+                            />
+                            <Typography variant="caption" color="text.secondary" noWrap>
+                              {new Date(item.createdAt).toLocaleDateString('pt-BR')}
+                            </Typography>
+                          </Box>
+                        </CardContent>
+                      </Card>
+                    ))}
                   </Box>
-                );
-              })}
-            </Box>
+                </Box>
+              </Box>
+            )}
           </CardContent>
         </Card>
           );

@@ -8,7 +8,6 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  Drawer,
   IconButton,
   MenuItem,
   Stack,
@@ -17,7 +16,10 @@ import {
   Typography,
 } from '@mui/material';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
-import { useMemo, useState } from 'react';
+import KeyboardArrowUpRoundedIcon from '@mui/icons-material/KeyboardArrowUpRounded';
+import KeyboardArrowDownRoundedIcon from '@mui/icons-material/KeyboardArrowDownRounded';
+import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Bar, BarChart, ResponsiveContainer, Tooltip as RechartsTooltip, XAxis, YAxis } from 'recharts';
 import { useExecutiveDashboard, useMe } from '../api/hooks';
@@ -167,6 +169,7 @@ export function DashboardExecutivePage() {
 
   const dashboardQuery = useExecutiveDashboard(filters);
   const [selectedReport, setSelectedReport] = useState<any | null>(null);
+  const [completedReportCarouselIndex, setCompletedReportCarouselIndex] = useState(0);
   const isTiProfile = Boolean(me?.roles?.some((role: any) => role?.name === 'TI' || role?.code === 'ROLE_TI'));
   const [cardStyles, setCardStyles] = useState<Record<ExecutiveCardId, EditableCardStyle>>(
     () => loadExecutiveCardStyles(),
@@ -180,6 +183,21 @@ export function DashboardExecutivePage() {
   const [kpiDetail, setKpiDetail] = useState<ExecutiveKpiDetailState>(null);
   const [kpiDetailSearch, setKpiDetailSearch] = useState('');
   const [chartDetail, setChartDetail] = useState<ExecutiveChartDetailState>(null);
+  const completedReportItemsForCarousel = Array.isArray(
+    (dashboardQuery.data as any)?.reportsCompliance?.completedItems,
+  )
+    ? ((dashboardQuery.data as any).reportsCompliance.completedItems as any[])
+    : [];
+
+  useEffect(() => {
+    if (completedReportItemsForCarousel.length <= 1) return;
+    const timer = window.setInterval(() => {
+      setCompletedReportCarouselIndex(
+        (current) => (current + 1) % completedReportItemsForCarousel.length,
+      );
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [completedReportItemsForCarousel.length]);
 
   const updateParam = (key: string, value: string) => {
     const next = new URLSearchParams(params);
@@ -248,6 +266,14 @@ export function DashboardExecutivePage() {
   );
 
   const topSpecialties = [...bySpecialty]
+    .filter((item: any) => {
+      const normalizedName = String(item?.specialtyName ?? '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim()
+        .toLowerCase();
+      return !normalizedName.includes('comunicacao social');
+    })
     .sort((a: any, b: any) => Number(b.count ?? 0) - Number(a.count ?? 0))
     .slice(0, 12);
 
@@ -277,6 +303,24 @@ export function DashboardExecutivePage() {
   const completedActivityItems = executiveKpiDetails.completedActivities ?? [];
   const participantsActivityItems = executiveKpiDetails.participantsInActivities ?? [];
   const reportsApprovedItems = executiveKpiDetails.reportsApproved ?? [];
+  const completedReportSlideHeight = 214;
+  const safeCompletedReportCarouselIndex =
+    completedReportItems.length > 0
+      ? completedReportCarouselIndex % completedReportItems.length
+      : 0;
+
+  const goToPreviousCompletedReport = () => {
+    if (completedReportItems.length <= 1) return;
+    setCompletedReportCarouselIndex((current) =>
+      (current - 1 + completedReportItems.length) % completedReportItems.length,
+    );
+  };
+  const goToNextCompletedReport = () => {
+    if (completedReportItems.length <= 1) return;
+    setCompletedReportCarouselIndex((current) =>
+      (current + 1) % completedReportItems.length,
+    );
+  };
 
   const downloadCsv = () => {
     const headers = ['localityCode', 'localityName', 'progress', 'specialtyName', 'specialtyCount'];
@@ -769,43 +813,152 @@ export function DashboardExecutivePage() {
               <Typography variant="subtitle1" sx={{ fontWeight: 700, color: style.textColor }}>
                 {style.title}
               </Typography>
-              {isTiProfile ? (
-                <Tooltip title="Editar card">
-                  <IconButton
-                    size="small"
-                    sx={{ color: style.textColor, opacity: 0.72 }}
-                    onClick={() => openStyleEditor('cipavd-completed-reports')}
-                  >
-                    <EditOutlinedIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-              ) : null}
+              <Stack direction="row" alignItems="center" spacing={0.2}>
+                {completedReportItems.length > 1 ? (
+                  <>
+                    <Tooltip title="Relatório anterior">
+                      <IconButton
+                        size="small"
+                        onClick={goToPreviousCompletedReport}
+                        sx={{ color: style.textColor, opacity: 0.82 }}
+                        aria-label="Ir para relatório anterior"
+                      >
+                        <KeyboardArrowUpRoundedIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Próximo relatório">
+                      <IconButton
+                        size="small"
+                        onClick={goToNextCompletedReport}
+                        sx={{ color: style.textColor, opacity: 0.82 }}
+                        aria-label="Ir para próximo relatório"
+                      >
+                        <KeyboardArrowDownRoundedIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </>
+                ) : null}
+                {isTiProfile ? (
+                  <Tooltip title="Editar card">
+                    <IconButton
+                      size="small"
+                      sx={{ color: style.textColor, opacity: 0.72 }}
+                      onClick={() => openStyleEditor('cipavd-completed-reports')}
+                    >
+                      <EditOutlinedIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                ) : null}
+              </Stack>
             </Stack>
             {completedReportItems.length === 0 ? (
               <Typography variant="body2" color="text.secondary">
                 Nenhum relatório concluído no período selecionado.
               </Typography>
             ) : (
-              <Box sx={{ display: 'grid', gap: 1, overflowY: 'auto', maxHeight: 250, pr: 0.3 }}>
-                {completedReportItems.map((item: any) => (
-                  <Card key={item.activityId} variant="outlined" sx={{ borderColor: 'rgba(17,66,89,0.18)' }}>
-                    <CardContent sx={{ p: 1.2 }}>
-                      <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1}>
-                        <Box sx={{ minWidth: 0 }}>
-                          <Typography variant="body2" sx={{ fontWeight: 700 }} noWrap>
-                            {item.title}
-                          </Typography>
+              <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 0.7 }}>
+                <Typography variant="caption" color="text.secondary">
+                  Clique no relatório para abrir os detalhes completos.
+                </Typography>
+                <Box sx={{ overflow: 'hidden', height: `${completedReportSlideHeight}px` }}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      transform: `translateY(-${safeCompletedReportCarouselIndex * completedReportSlideHeight}px)`,
+                      transition: 'transform 420ms ease-in-out',
+                    }}
+                  >
+                    {completedReportItems.map((item: any) => (
+                      <Card
+                        key={item.activityId}
+                        variant="outlined"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setSelectedReport(item)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            setSelectedReport(item);
+                          }
+                        }}
+                        sx={{
+                          height: `${completedReportSlideHeight}px`,
+                          flexShrink: 0,
+                          borderColor: 'rgba(17,66,89,0.22)',
+                          borderRadius: 2,
+                          background:
+                            'linear-gradient(165deg, rgba(248,251,255,0.97) 0%, rgba(242,247,252,0.97) 100%)',
+                          cursor: 'pointer',
+                          transition: 'transform 150ms ease, box-shadow 180ms ease, border-color 180ms ease',
+                          '&:hover': {
+                            transform: 'translateY(-1px)',
+                            boxShadow: '0 10px 18px rgba(17,66,89,0.14)',
+                            borderColor: 'rgba(17,66,89,0.36)',
+                          },
+                          '&:focus-visible': {
+                            outline: '2px solid #1F4A61',
+                            outlineOffset: '2px',
+                          },
+                        }}
+                      >
+                        <CardContent sx={{ p: 1.35, height: '100%', display: 'flex', flexDirection: 'column' }}>
+                          <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1}>
+                            <Typography variant="body2" sx={{ fontWeight: 700, color: '#0E3142' }} noWrap>
+                              {item.title}
+                            </Typography>
+                            <OpenInNewRoundedIcon sx={{ fontSize: 16, color: '#1F4A61', flexShrink: 0 }} />
+                          </Stack>
                           <Typography variant="caption" color="text.secondary" noWrap>
-                            {(item.localityCode || item.localityName) ?? '-'} - Assinado em {formatDateTime(item.report?.signedAt)}
+                            {(item.localityCode || item.localityName) ?? '-'} • Assinado em {formatDateTime(item.report?.signedAt)}
                           </Typography>
-                        </Box>
-                        <Button size="small" variant="outlined" onClick={() => setSelectedReport(item)}>
-                          Ler
-                        </Button>
-                      </Stack>
-                    </CardContent>
-                  </Card>
-                ))}
+                          <Stack direction="row" spacing={0.6} sx={{ mt: 0.8, flexWrap: 'wrap' }} useFlexGap>
+                            <Chip
+                              size="small"
+                              label={`${Number(item?.report?.participantsCount ?? 0)} participantes`}
+                              color="primary"
+                              variant="outlined"
+                            />
+                            <Chip
+                              size="small"
+                              label={`${Number(item?.report?.instructorsCount ?? 0)} instrutores`}
+                              color="primary"
+                              variant="outlined"
+                            />
+                            <Chip
+                              size="small"
+                              label={`${Number(item?.report?.recruitsCount ?? 0)} recrutas`}
+                              color="primary"
+                              variant="outlined"
+                            />
+                          </Stack>
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{
+                              mt: 0.9,
+                              display: '-webkit-box',
+                              WebkitLineClamp: 4,
+                              WebkitBoxOrient: 'vertical',
+                              overflow: 'hidden',
+                              lineHeight: 1.35,
+                            }}
+                          >
+                            {item?.report?.activitiesPerformed ||
+                              item?.report?.missionSupport ||
+                              item?.report?.conclusion ||
+                              'Sem resumo textual disponível.'}
+                          </Typography>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </Box>
+                </Box>
+                {completedReportItems.length > 1 ? (
+                  <Typography variant="caption" color="text.secondary">
+                    {safeCompletedReportCarouselIndex + 1} de {completedReportItems.length} • rotação automática a cada 5s
+                  </Typography>
+                ) : null}
               </Box>
             )}
           </CardContent>
@@ -814,62 +967,195 @@ export function DashboardExecutivePage() {
         })()}
       </Box>
 
-      <Drawer
-        anchor="right"
+      <Dialog
         open={Boolean(selectedReport)}
         onClose={() => setSelectedReport(null)}
-        PaperProps={{ sx: { width: { xs: '100%', md: 560 } } }}
+        fullWidth
+        maxWidth="md"
       >
-        <Box sx={{ p: 3, pt: 7 }}>
-          <Typography variant="h6" sx={{ mt: 2, mb: 0.8 }}>
-            {selectedReport?.title || 'Relatório'}
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.8 }}>
-            {selectedReport?.localityName || '-'} - {formatDateTime(selectedReport?.report?.signedAt)}
-          </Typography>
-
-          <Stack spacing={1.4}>
-            <Box>
-              <Typography variant="subtitle2">Responsável</Typography>
-              <Typography variant="body2" color="text.secondary">
-                {selectedReport?.report?.responsible || '-'}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="subtitle2">Objetivos da missão</Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-wrap' }}>
-                {selectedReport?.report?.missionObjectives || '-'}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="subtitle2">Atividades realizadas</Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-wrap' }}>
-                {selectedReport?.report?.activitiesPerformed || '-'}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="subtitle2">Perfil dos participantes</Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-wrap' }}>
-                {selectedReport?.report?.participantsCharacteristics || '-'}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="subtitle2">Conclusão</Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-wrap' }}>
-                {selectedReport?.report?.conclusion || '-'}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="subtitle2">Resumo numérico</Typography>
-              <Typography variant="body2" color="text.secondary">
-                Participantes: {selectedReport?.report?.participantsCount ?? 0} | Instrutores:{' '}
-                {selectedReport?.report?.instructorsCount ?? 0} | Recrutas:{' '}
-                {selectedReport?.report?.recruitsCount ?? 0}
-              </Typography>
-            </Box>
+        <DialogTitle sx={{ pb: 0.7 }}>
+          {selectedReport?.title || 'Relatório concluído'}
+        </DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={1.3}>
+            <Stack direction="row" spacing={0.7} flexWrap="wrap" useFlexGap>
+              <Chip
+                size="small"
+                label={`Localidade: ${selectedReport?.localityCode || selectedReport?.localityName || '-'}`}
+              />
+              <Chip
+                size="small"
+                label={`Assinado em: ${formatDateTime(selectedReport?.report?.signedAt)}`}
+              />
+              <Chip
+                size="small"
+                label={`Data do relatório: ${formatDateTime(selectedReport?.report?.date)}`}
+              />
+            </Stack>
+            <Card variant="outlined">
+              <CardContent sx={{ p: 1.3 }}>
+                <Typography variant="subtitle2" sx={{ mb: 0.4 }}>
+                  Responsável
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {selectedReport?.report?.responsible || '-'}
+                </Typography>
+              </CardContent>
+            </Card>
+            <Card variant="outlined">
+              <CardContent sx={{ p: 1.3 }}>
+                <Typography variant="subtitle2" sx={{ mb: 0.4 }}>
+                  Apoio à missão
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-wrap' }}>
+                  {selectedReport?.report?.missionSupport || '-'}
+                </Typography>
+              </CardContent>
+            </Card>
+            <Card variant="outlined">
+              <CardContent sx={{ p: 1.3 }}>
+                <Typography variant="subtitle2" sx={{ mb: 0.4 }}>
+                  Introdução
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-wrap' }}>
+                  {selectedReport?.report?.introduction || '-'}
+                </Typography>
+              </CardContent>
+            </Card>
+            <Card variant="outlined">
+              <CardContent sx={{ p: 1.3 }}>
+                <Typography variant="subtitle2" sx={{ mb: 0.4 }}>
+                  Objetivos da missão
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-wrap' }}>
+                  {selectedReport?.report?.missionObjectives || '-'}
+                </Typography>
+              </CardContent>
+            </Card>
+            <Card variant="outlined">
+              <CardContent sx={{ p: 1.3 }}>
+                <Typography variant="subtitle2" sx={{ mb: 0.4 }}>
+                  Execução e cronograma
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-wrap' }}>
+                  {selectedReport?.report?.executionSchedule || '-'}
+                </Typography>
+              </CardContent>
+            </Card>
+            <Card variant="outlined">
+              <CardContent sx={{ p: 1.3 }}>
+                <Typography variant="subtitle2" sx={{ mb: 0.4 }}>
+                  Atividades realizadas
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-wrap' }}>
+                  {selectedReport?.report?.activitiesPerformed || '-'}
+                </Typography>
+              </CardContent>
+            </Card>
+            <Card variant="outlined">
+              <CardContent sx={{ p: 1.3 }}>
+                <Typography variant="subtitle2" sx={{ mb: 0.7 }}>
+                  Resumo numérico
+                </Typography>
+                <Stack direction="row" spacing={0.7} flexWrap="wrap" useFlexGap>
+                  <Chip size="small" label={`Participantes: ${selectedReport?.report?.participantsCount ?? 0}`} />
+                  <Chip size="small" label={`Homens: ${selectedReport?.report?.participantsMaleCount ?? 0}`} />
+                  <Chip size="small" label={`Mulheres: ${selectedReport?.report?.participantsFemaleCount ?? 0}`} />
+                  <Chip size="small" label={`Instrutores: ${selectedReport?.report?.instructorsCount ?? 0}`} />
+                  <Chip size="small" label={`Recrutas: ${selectedReport?.report?.recruitsCount ?? 0}`} />
+                  <Chip size="small" label={`Elo Psicologia: ${selectedReport?.report?.eloPsychologyCount ?? 0}`} />
+                  <Chip size="small" label={`Elo Assistência Social: ${selectedReport?.report?.eloSocialAssistanceCount ?? 0}`} />
+                  <Chip size="small" label={`Elo Jurídico: ${selectedReport?.report?.eloJuridicoCount ?? 0}`} />
+                  <Chip size="small" label={`Elo CPCA: ${selectedReport?.report?.eloCpcaCount ?? 0}`} />
+                  <Chip size="small" label={`Elo Graduado Master: ${selectedReport?.report?.eloGraduadoMasterCount ?? 0}`} />
+                </Stack>
+              </CardContent>
+            </Card>
+            <Card variant="outlined">
+              <CardContent sx={{ p: 1.3 }}>
+                <Typography variant="subtitle2" sx={{ mb: 0.4 }}>
+                  Características dos participantes
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-wrap' }}>
+                  {selectedReport?.report?.participantsCharacteristics || '-'}
+                </Typography>
+              </CardContent>
+            </Card>
+            <Card variant="outlined">
+              <CardContent sx={{ p: 1.3 }}>
+                <Typography variant="subtitle2" sx={{ mb: 0.4 }}>
+                  Principais pontos observados
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-wrap' }}>
+                  {selectedReport?.report?.mainPointsObserved || '-'}
+                </Typography>
+              </CardContent>
+            </Card>
+            <Card variant="outlined">
+              <CardContent sx={{ p: 1.3 }}>
+                <Typography variant="subtitle2" sx={{ mb: 0.4 }}>
+                  Pontos de atenção
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-wrap' }}>
+                  {selectedReport?.report?.attentionPoints || '-'}
+                </Typography>
+              </CardContent>
+            </Card>
+            <Card variant="outlined">
+              <CardContent sx={{ p: 1.3 }}>
+                <Typography variant="subtitle2" sx={{ mb: 0.4 }}>
+                  Próximos passos
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-wrap' }}>
+                  {selectedReport?.report?.nextSteps || '-'}
+                </Typography>
+              </CardContent>
+            </Card>
+            <Card variant="outlined">
+              <CardContent sx={{ p: 1.3 }}>
+                <Typography variant="subtitle2" sx={{ mb: 0.4 }}>
+                  Referências e anexos
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-wrap' }}>
+                  {selectedReport?.report?.referencesAndAttachments || '-'}
+                </Typography>
+              </CardContent>
+            </Card>
+            <Card variant="outlined">
+              <CardContent sx={{ p: 1.3 }}>
+                <Typography variant="subtitle2" sx={{ mb: 0.4 }}>
+                  Conclusão
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-wrap' }}>
+                  {selectedReport?.report?.conclusion || '-'}
+                </Typography>
+              </CardContent>
+            </Card>
+            <Card variant="outlined">
+              <CardContent sx={{ p: 1.3 }}>
+                <Typography variant="subtitle2" sx={{ mb: 0.4 }}>
+                  Local e fechamento
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Local: {selectedReport?.report?.location || '-'} • Cidade: {selectedReport?.report?.city || '-'} • Fechamento:{' '}
+                  {formatDateTime(selectedReport?.report?.closingDate)}
+                </Typography>
+              </CardContent>
+            </Card>
           </Stack>
-        </Box>
-      </Drawer>
+        </DialogContent>
+        <DialogActions>
+          {selectedReport?.activityId ? (
+            <Button
+              variant="outlined"
+              onClick={() => openActivityFromDetail(String(selectedReport.activityId))}
+            >
+              Abrir atividade
+            </Button>
+          ) : null}
+          <Button onClick={() => setSelectedReport(null)}>Fechar</Button>
+        </DialogActions>
+      </Dialog>
       <Dialog
         open={Boolean(kpiDetail)}
         onClose={() => setKpiDetail(null)}

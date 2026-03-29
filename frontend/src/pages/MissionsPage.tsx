@@ -5,6 +5,7 @@ import {
   Card,
   CardContent,
   Chip,
+  Collapse,
   Divider,
   Drawer,
   IconButton,
@@ -26,6 +27,8 @@ import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded';
 import PersonAddAlt1RoundedIcon from '@mui/icons-material/PersonAddAlt1Rounded';
+import KeyboardArrowDownRoundedIcon from '@mui/icons-material/KeyboardArrowDownRounded';
+import KeyboardArrowUpRoundedIcon from '@mui/icons-material/KeyboardArrowUpRounded';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
@@ -88,6 +91,11 @@ type MissionChecklistClassification =
   | 'OPORTUNIDADE_MELHORIA'
   | 'NECESSITA_ANALISE'
   | 'POSSIVEL_RISCO';
+
+type MissionStatsCardKey =
+  | 'missionsByUser'
+  | 'usersByMissionDays'
+  | 'participantsByMission';
 
 type MissionChecklistItemState = {
   classification: MissionChecklistClassification;
@@ -453,6 +461,13 @@ export function MissionsPage() {
   const [cloneSourceMissionId, setCloneSourceMissionId] = useState('');
   const [missionDeleteTarget, setMissionDeleteTarget] = useState<{ id: string; title: string } | null>(null);
   const [scheduleDeleteTarget, setScheduleDeleteTarget] = useState<{ id: string; title: string } | null>(null);
+  const [expandedStatsCards, setExpandedStatsCards] = useState<
+    Record<MissionStatsCardKey, boolean>
+  >({
+    missionsByUser: false,
+    usersByMissionDays: false,
+    participantsByMission: false,
+  });
 
   const lookupQuery = useLookupMissionLdapParticipant(ldapIdentifier);
 
@@ -858,6 +873,13 @@ export function MissionsPage() {
     return allUsers.find((u: any) => u?.id === selectedUserId) || null;
   }, [selectedUserId, allUsers]);
 
+  const toggleStatsCard = (cardKey: MissionStatsCardKey) => {
+    setExpandedStatsCards((current) => ({
+      ...current,
+      [cardKey]: !current[cardKey],
+    }));
+  };
+
   const validParticipants = useMemo(() => {
     if (!selectedMission?.participants) return [];
     const participants = selectedMission.participants as any[];
@@ -1181,93 +1203,169 @@ export function MissionsPage() {
             <Box
               sx={{
                 display: 'grid',
-                gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+                gridTemplateColumns: {
+                  xs: '1fr',
+                  md: 'repeat(3, minmax(0, 1fr))',
+                },
                 gap: 1.2,
+                alignItems: 'start',
               }}
             >
-              {statisticsQuery.data.missionsByUser.length > 0 && (
-                <Card variant="outlined">
-                  <CardContent sx={{ py: 1.4, px: 1.6 }}>
-                    <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+              <Card variant="outlined">
+                <CardContent sx={{ py: 1.2, px: 1.4 }}>
+                  <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1}>
+                    <Typography variant="subtitle2" fontWeight={700}>
                       Usuários com Mais Missões
                     </Typography>
-                    <Stack spacing={1} sx={{ mt: 0.8 }}>
-                      {statisticsQuery.data.missionsByUser.map((item: any, index: number) => (
-                        <Box key={item.userId}>
-                          <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1}>
-                            <Box sx={{ minWidth: 0, flex: 1 }}>
-                              <Typography variant="body2" fontWeight={600} noWrap>{item.userName}</Typography>
-                              {item.userEmail && (
-                                <Typography variant="caption" color="text.secondary" noWrap>{item.userEmail}</Typography>
-                              )}
-                            </Box>
-                            <Stack direction="row" spacing={0.5}>
-                              <Chip label={`${item.count} missões`} size="small" color="primary" />
-                              <Chip label={`${item.totalDays} dias`} size="small" variant="outlined" color="primary" />
+                    <IconButton
+                      size="small"
+                      onClick={() => toggleStatsCard('missionsByUser')}
+                      aria-label="Expandir card de usuários com mais missões"
+                    >
+                      {expandedStatsCards.missionsByUser ? (
+                        <KeyboardArrowUpRoundedIcon fontSize="small" />
+                      ) : (
+                        <KeyboardArrowDownRoundedIcon fontSize="small" />
+                      )}
+                    </IconButton>
+                  </Stack>
+                  <Collapse in={expandedStatsCards.missionsByUser}>
+                    {statisticsQuery.data.missionsByUser.length > 0 ? (
+                      <Stack spacing={1} sx={{ mt: 0.6 }}>
+                        {statisticsQuery.data.missionsByUser.map((item: any, index: number) => (
+                          <Box key={item.userId}>
+                            <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1}>
+                              <Box sx={{ minWidth: 0, flex: 1 }}>
+                                <Typography variant="body2" fontWeight={600} noWrap>{item.userName}</Typography>
+                                {item.userEmail && (
+                                  <Typography variant="caption" color="text.secondary" noWrap>{item.userEmail}</Typography>
+                                )}
+                              </Box>
+                              <Stack direction="row" spacing={0.5}>
+                                <Chip label={`${item.count} missões`} size="small" color="primary" />
+                                <Chip label={`${item.totalDays} dias`} size="small" variant="outlined" color="primary" />
+                              </Stack>
                             </Stack>
-                          </Stack>
-                          {index < statisticsQuery.data.missionsByUser.length - 1 && <Divider sx={{ mt: 1 }} />}
-                        </Box>
-                      ))}
-                    </Stack>
-                  </CardContent>
-                </Card>
-              )}
+                            {index < statisticsQuery.data.missionsByUser.length - 1 && <Divider sx={{ mt: 1 }} />}
+                          </Box>
+                        ))}
+                      </Stack>
+                    ) : (
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.8 }}>
+                        Sem dados para exibir.
+                      </Typography>
+                    )}
+                  </Collapse>
+                  {!expandedStatsCards.missionsByUser && (
+                    <Typography variant="caption" color="text.secondary">
+                      Card comprimido. Clique na seta para expandir.
+                    </Typography>
+                  )}
+                </CardContent>
+              </Card>
 
-              {statisticsQuery.data.usersByMissionDays.length > 0 && (
-                <Card variant="outlined">
-                  <CardContent sx={{ py: 1.4, px: 1.6 }}>
-                    <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+              <Card variant="outlined">
+                <CardContent sx={{ py: 1.2, px: 1.4 }}>
+                  <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1}>
+                    <Typography variant="subtitle2" fontWeight={700}>
                       Usuários com Mais Dias em Missão
                     </Typography>
-                    <Stack spacing={1} sx={{ mt: 0.8 }}>
-                      {statisticsQuery.data.usersByMissionDays.map((item: any, index: number) => (
-                        <Box key={item.userId}>
-                          <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1}>
-                            <Box sx={{ minWidth: 0, flex: 1 }}>
-                              <Typography variant="body2" fontWeight={600} noWrap>{item.userName}</Typography>
-                              {item.userEmail && (
-                                <Typography variant="caption" color="text.secondary" noWrap>{item.userEmail}</Typography>
-                              )}
-                            </Box>
-                            <Stack direction="row" spacing={0.5}>
-                              <Chip label={`${item.totalDays} dias`} size="small" color="secondary" />
-                              <Chip label={`${item.count} missões`} size="small" variant="outlined" color="secondary" />
+                    <IconButton
+                      size="small"
+                      onClick={() => toggleStatsCard('usersByMissionDays')}
+                      aria-label="Expandir card de usuários com mais dias em missão"
+                    >
+                      {expandedStatsCards.usersByMissionDays ? (
+                        <KeyboardArrowUpRoundedIcon fontSize="small" />
+                      ) : (
+                        <KeyboardArrowDownRoundedIcon fontSize="small" />
+                      )}
+                    </IconButton>
+                  </Stack>
+                  <Collapse in={expandedStatsCards.usersByMissionDays}>
+                    {statisticsQuery.data.usersByMissionDays.length > 0 ? (
+                      <Stack spacing={1} sx={{ mt: 0.6 }}>
+                        {statisticsQuery.data.usersByMissionDays.map((item: any, index: number) => (
+                          <Box key={item.userId}>
+                            <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1}>
+                              <Box sx={{ minWidth: 0, flex: 1 }}>
+                                <Typography variant="body2" fontWeight={600} noWrap>{item.userName}</Typography>
+                                {item.userEmail && (
+                                  <Typography variant="caption" color="text.secondary" noWrap>{item.userEmail}</Typography>
+                                )}
+                              </Box>
+                              <Stack direction="row" spacing={0.5}>
+                                <Chip label={`${item.totalDays} dias`} size="small" color="secondary" />
+                                <Chip label={`${item.count} missões`} size="small" variant="outlined" color="secondary" />
+                              </Stack>
                             </Stack>
-                          </Stack>
-                          {index < statisticsQuery.data.usersByMissionDays.length - 1 && <Divider sx={{ mt: 1 }} />}
-                        </Box>
-                      ))}
-                    </Stack>
-                  </CardContent>
-                </Card>
-              )}
+                            {index < statisticsQuery.data.usersByMissionDays.length - 1 && <Divider sx={{ mt: 1 }} />}
+                          </Box>
+                        ))}
+                      </Stack>
+                    ) : (
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.8 }}>
+                        Sem dados para exibir.
+                      </Typography>
+                    )}
+                  </Collapse>
+                  {!expandedStatsCards.usersByMissionDays && (
+                    <Typography variant="caption" color="text.secondary">
+                      Card comprimido. Clique na seta para expandir.
+                    </Typography>
+                  )}
+                </CardContent>
+              </Card>
 
-              {statisticsQuery.data.participantsByMission.length > 0 && (
-                <Card variant="outlined">
-                  <CardContent sx={{ py: 1.4, px: 1.6 }}>
-                    <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+              <Card variant="outlined">
+                <CardContent sx={{ py: 1.2, px: 1.4 }}>
+                  <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1}>
+                    <Typography variant="subtitle2" fontWeight={700}>
                       Missões com Mais Participantes
                     </Typography>
-                    <Stack spacing={1} sx={{ mt: 0.8 }}>
-                      {statisticsQuery.data.participantsByMission.map((item: any, index: number) => (
-                        <Box key={item.missionId}>
-                          <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1}>
-                            <Typography variant="body2" fontWeight={600} sx={{ minWidth: 0, flex: 1 }} noWrap>
-                              {item.missionTitle}
-                            </Typography>
-                            <Stack direction="row" spacing={0.5}>
-                              <Chip label={`${item.participantsCount} participantes`} size="small" color="secondary" />
-                              <Chip label={`${item.missionDays} dias`} size="small" variant="outlined" color="secondary" />
+                    <IconButton
+                      size="small"
+                      onClick={() => toggleStatsCard('participantsByMission')}
+                      aria-label="Expandir card de missões com mais participantes"
+                    >
+                      {expandedStatsCards.participantsByMission ? (
+                        <KeyboardArrowUpRoundedIcon fontSize="small" />
+                      ) : (
+                        <KeyboardArrowDownRoundedIcon fontSize="small" />
+                      )}
+                    </IconButton>
+                  </Stack>
+                  <Collapse in={expandedStatsCards.participantsByMission}>
+                    {statisticsQuery.data.participantsByMission.length > 0 ? (
+                      <Stack spacing={1} sx={{ mt: 0.6 }}>
+                        {statisticsQuery.data.participantsByMission.map((item: any, index: number) => (
+                          <Box key={item.missionId}>
+                            <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1}>
+                              <Typography variant="body2" fontWeight={600} sx={{ minWidth: 0, flex: 1 }} noWrap>
+                                {item.missionTitle}
+                              </Typography>
+                              <Stack direction="row" spacing={0.5}>
+                                <Chip label={`${item.participantsCount} participantes`} size="small" color="secondary" />
+                                <Chip label={`${item.missionDays} dias`} size="small" variant="outlined" color="secondary" />
+                              </Stack>
                             </Stack>
-                          </Stack>
-                          {index < statisticsQuery.data.participantsByMission.length - 1 && <Divider sx={{ mt: 1 }} />}
-                        </Box>
-                      ))}
-                    </Stack>
-                  </CardContent>
-                </Card>
-              )}
+                            {index < statisticsQuery.data.participantsByMission.length - 1 && <Divider sx={{ mt: 1 }} />}
+                          </Box>
+                        ))}
+                      </Stack>
+                    ) : (
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.8 }}>
+                        Sem dados para exibir.
+                      </Typography>
+                    )}
+                  </Collapse>
+                  {!expandedStatsCards.participantsByMission && (
+                    <Typography variant="caption" color="text.secondary">
+                      Card comprimido. Clique na seta para expandir.
+                    </Typography>
+                  )}
+                </CardContent>
+              </Card>
             </Box>
           </CardContent>
         </Card>

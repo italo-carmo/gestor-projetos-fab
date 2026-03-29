@@ -24,6 +24,7 @@ import {
   TableRow,
   TableSortLabel,
   Tabs,
+  Pagination,
   TextField,
   Typography,
 } from '@mui/material';
@@ -134,6 +135,7 @@ const drawerActionButtonSx = {
 type ActivityDrawerTab = 'activity' | 'report';
 type ActivitySortColumn = 'type' | 'activity' | 'locality' | 'specialty' | 'eventDate' | 'status';
 type ActivitySortDirection = 'asc' | 'desc';
+const ACTIVITY_PAGE_SIZE = 15;
 
 function normalizeSortText(value: unknown) {
   return String(value ?? '')
@@ -340,6 +342,7 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
   const [localityFilter, setLocalityFilter] = useState(localityIdFromUrl);
   const [specialtyFilter, setSpecialtyFilter] = useState('');
   const [search, setSearch] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
 
   const { data: localitiesData } = useLocalities();
   const localities = localitiesData?.items ?? [];
@@ -370,8 +373,8 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
     specialtyId: specialtyFilter || undefined,
     scope: scopeApi,
     q: search || undefined,
-    page: 1,
-    pageSize: 100,
+    page: currentPage,
+    pageSize: ACTIVITY_PAGE_SIZE,
   });
 
   const { data: me } = useMe();
@@ -414,6 +417,10 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
   const exportPdf = useExportActivityReportPdf();
 
   const items = activitiesQuery.data?.items ?? [];
+  const totalActivities = Number(activitiesQuery.data?.total ?? 0);
+  const totalPages = Math.max(1, Math.ceil(totalActivities / ACTIVITY_PAGE_SIZE));
+  const pageStart = totalActivities === 0 ? 0 : (currentPage - 1) * ACTIVITY_PAGE_SIZE + 1;
+  const pageEnd = Math.min(currentPage * ACTIVITY_PAGE_SIZE, totalActivities);
   const [orderedItems, setOrderedItems] = useState<any[]>([]);
   const [draggingActivityId, setDraggingActivityId] = useState('');
   const [sortState, setSortState] = useState<{
@@ -562,6 +569,15 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
       setLocalityFilter(localityIdFromUrl);
     }
   }, [localityFilter, localityIdFromUrl]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter, localityFilter, specialtyFilter, search, scopeApi]);
+
+  useEffect(() => {
+    if (currentPage <= totalPages) return;
+    setCurrentPage(totalPages);
+  }, [currentPage, totalPages]);
 
   useEffect(() => {
     if (!localityFilter) return;
@@ -1535,241 +1551,262 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
             {displayedItems.length === 0 ? (
               <EmptyState title="Nenhuma atividade" description="Cadastre uma nova atividade externa." />
             ) : (
-              <Table size="small">
-                <TableHead>
-                  <TableRow sx={{ bgcolor: 'primary.main' }}>
-                    {canUpdate && (
-                      <TableCell sx={{ color: 'white', fontWeight: 600, width: 40 }} />
-                    )}
-                    {canManageBatch && (
-                      <TableCell padding="checkbox" sx={{ color: 'white' }}>
-                        <Checkbox
-                          size="small"
-                          checked={allVisibleSelected}
-                          indeterminate={selectedIds.length > 0 && !allVisibleSelected}
-                          onChange={toggleSelectAll}
-                          sx={{ color: 'white', '&.Mui-checked': { color: 'white' }, '&.MuiCheckbox-indeterminate': { color: 'white' } }}
-                        />
-                      </TableCell>
-                    )}
-                    <TableCell sx={{ color: 'white', fontWeight: 600 }}>
-                      <TableSortLabel
-                        active={sortState?.column === 'type'}
-                        direction={sortState?.column === 'type' ? sortState.direction : 'asc'}
-                        onClick={() => handleSortByColumn('type')}
-                        sx={sortLabelSx}
-                      >
-                        Tipo
-                      </TableSortLabel>
-                    </TableCell>
-                    <TableCell sx={{ color: 'white', fontWeight: 600 }}>
-                      <TableSortLabel
-                        active={sortState?.column === 'activity'}
-                        direction={sortState?.column === 'activity' ? sortState.direction : 'asc'}
-                        onClick={() => handleSortByColumn('activity')}
-                        sx={sortLabelSx}
-                      >
-                        Atividade
-                      </TableSortLabel>
-                    </TableCell>
-                    <TableCell sx={{ color: 'white', fontWeight: 600 }}>
-                      <TableSortLabel
-                        active={sortState?.column === 'locality'}
-                        direction={sortState?.column === 'locality' ? sortState.direction : 'asc'}
-                        onClick={() => handleSortByColumn('locality')}
-                        sx={sortLabelSx}
-                      >
-                        Localidade
-                      </TableSortLabel>
-                    </TableCell>
-                    <TableCell sx={{ color: 'white', fontWeight: 600 }}>
-                      <TableSortLabel
-                        active={sortState?.column === 'specialty'}
-                        direction={sortState?.column === 'specialty' ? sortState.direction : 'asc'}
-                        onClick={() => handleSortByColumn('specialty')}
-                        sx={sortLabelSx}
-                      >
-                        Especialidade
-                      </TableSortLabel>
-                    </TableCell>
-                    <TableCell sx={{ color: 'white', fontWeight: 600 }}>Responsável</TableCell>
-                    <TableCell sx={{ color: 'white', fontWeight: 600 }}>
-                      <TableSortLabel
-                        active={sortState?.column === 'eventDate'}
-                        direction={sortState?.column === 'eventDate' ? sortState.direction : 'asc'}
-                        onClick={() => handleSortByColumn('eventDate')}
-                        sx={sortLabelSx}
-                      >
-                        Data
-                      </TableSortLabel>
-                    </TableCell>
-                    <TableCell sx={{ color: 'white', fontWeight: 600 }}>
-                      <TableSortLabel
-                        active={sortState?.column === 'status'}
-                        direction={sortState?.column === 'status' ? sortState.direction : 'asc'}
-                        onClick={() => handleSortByColumn('status')}
-                        sx={sortLabelSx}
-                      >
-                        Status
-                      </TableSortLabel>
-                    </TableCell>
-                    <TableCell
-                      sx={{ color: 'white', fontWeight: 600, display: { xs: 'none', sm: 'table-cell' } }}
-                    >
-                      Relatório
-                    </TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {displayedItems.map((item: any) => (
-                    <TableRow
-                      key={item.id}
-                      hover
-                      onDragOver={(event) => {
-                        if (!canUpdate || !!sortState) return;
-                        event.preventDefault();
-                      }}
-                      onDrop={(event) => {
-                        if (!canUpdate || !!sortState) return;
-                        event.preventDefault();
-                        void handleDropReorder(String(item.id));
-                      }}
-                      selected={!isCreateMode && selectedId === item.id}
-                      onClick={() => openActivityDrawer(item.id, 'activity')}
-                      sx={{
-                        cursor: 'pointer',
-                        opacity: draggingActivityId === String(item.id) ? 0.72 : 1,
-                      }}
-                    >
+              <>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: 'primary.main' }}>
                       {canUpdate && (
-                        <TableCell
-                          padding="checkbox"
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          <Box
-                            component="span"
-                            draggable={!sortState}
-                            onDragStart={() => {
-                              if (sortState) return;
-                              setDraggingActivityId(String(item.id));
-                            }}
-                            onDragEnd={() => setDraggingActivityId('')}
-                            sx={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              cursor: sortState ? 'not-allowed' : 'grab',
-                              color: 'text.disabled',
-                              '&:active': { cursor: sortState ? 'not-allowed' : 'grabbing' },
-                            }}
-                          >
-                            <DragIndicatorRoundedIcon fontSize="small" />
-                          </Box>
-                        </TableCell>
+                        <TableCell sx={{ color: 'white', fontWeight: 600, width: 40 }} />
                       )}
                       {canManageBatch && (
-                        <TableCell padding="checkbox" onClick={(event) => event.stopPropagation()}>
+                        <TableCell padding="checkbox" sx={{ color: 'white' }}>
                           <Checkbox
                             size="small"
-                            checked={selectedIdsSet.has(String(item.id))}
-                            onChange={() => toggleRowSelection(String(item.id))}
+                            checked={allVisibleSelected}
+                            indeterminate={selectedIds.length > 0 && !allVisibleSelected}
+                            onChange={toggleSelectAll}
+                            sx={{ color: 'white', '&.Mui-checked': { color: 'white' }, '&.MuiCheckbox-indeterminate': { color: 'white' } }}
                           />
                         </TableCell>
                       )}
-                      <TableCell>
-                        <Typography variant="body2">
-                          {item.activityType?.name ?? '—'}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>{item.title}</TableCell>
-                      <TableCell>
-                        {(() => {
-                          const localityLabel = getLocalityShortLabel(item);
-                          const localityStyle = getLocalityChipStyle(localityLabel);
-                          return (
-                            <Chip
-                              size="small"
-                              label={localityLabel}
-                              title={item.locality?.name ?? localityLabel}
-                              sx={{
-                                fontWeight: 700,
-                                borderWidth: 1,
-                                borderStyle: 'solid',
-                                bgcolor: localityStyle.bg,
-                                color: localityStyle.color,
-                                borderColor: localityStyle.border,
-                              }}
-                            />
-                          );
-                        })()}
-                      </TableCell>
-                      <TableCell>{getActivitySpecialtyLabel(item)}</TableCell>
-                      <TableCell>
-                        {Array.isArray(item.responsibleUsers) && item.responsibleUsers.length > 0
-                          ? item.responsibleUsers.map((user: any) => toMilitaryDisplayName(user.name)).join(', ')
-                          : '—'}
-                      </TableCell>
-                      <TableCell>
-                        {item.eventDate
-                          ? (() => {
-                              // Format date without timezone conversion to avoid day offset
-                              const dateStr = String(item.eventDate);
-                              if (dateStr.includes('T')) {
-                                const dateOnly = dateStr.split('T')[0];
-                                const [year, month, day] = dateOnly.split('-');
-                                return `${day}/${month}/${year}`;
-                              }
-                              // Fallback for other formats
-                              const date = new Date(dateStr);
-                              const day = String(date.getUTCDate()).padStart(2, '0');
-                              const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-                              const year = date.getUTCFullYear();
-                              return `${day}/${month}/${year}`;
-                            })()
-                          : '-'}
-                      </TableCell>
-                      <TableCell>
-                        {(() => {
-                          const statusStyle = getActivityStatusChipStyle(String(item.status));
-                          return (
-                            <Chip
-                              size="small"
-                              label={ACTIVITY_STATUS_LABELS[item.status] ?? item.status}
-                              sx={{
-                                fontWeight: 700,
-                                borderWidth: 1,
-                                borderStyle: 'solid',
-                                bgcolor: statusStyle.bg,
-                                color: statusStyle.color,
-                                borderColor: statusStyle.borderColor,
-                              }}
-                            />
-                          );
-                        })()}
-                      </TableCell>
-                      <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
-                        <IconButton
-                          size="small"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            openActivityDrawer(item.id, 'report');
-                          }}
-                          aria-label="Abrir relatório"
+                      <TableCell sx={{ color: 'white', fontWeight: 600 }}>
+                        <TableSortLabel
+                          active={sortState?.column === 'type'}
+                          direction={sortState?.column === 'type' ? sortState.direction : 'asc'}
+                          onClick={() => handleSortByColumn('type')}
+                          sx={sortLabelSx}
                         >
-                          {item.report ? (
-                            <CheckBoxRoundedIcon
-                              color={item.report.hasSignature ? 'success' : 'primary'}
-                              fontSize="small"
-                            />
-                          ) : (
-                            <CheckBoxOutlineBlankRoundedIcon fontSize="small" />
-                          )}
-                        </IconButton>
+                          Tipo
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell sx={{ color: 'white', fontWeight: 600 }}>
+                        <TableSortLabel
+                          active={sortState?.column === 'activity'}
+                          direction={sortState?.column === 'activity' ? sortState.direction : 'asc'}
+                          onClick={() => handleSortByColumn('activity')}
+                          sx={sortLabelSx}
+                        >
+                          Atividade
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell sx={{ color: 'white', fontWeight: 600 }}>
+                        <TableSortLabel
+                          active={sortState?.column === 'locality'}
+                          direction={sortState?.column === 'locality' ? sortState.direction : 'asc'}
+                          onClick={() => handleSortByColumn('locality')}
+                          sx={sortLabelSx}
+                        >
+                          Localidade
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell sx={{ color: 'white', fontWeight: 600 }}>
+                        <TableSortLabel
+                          active={sortState?.column === 'specialty'}
+                          direction={sortState?.column === 'specialty' ? sortState.direction : 'asc'}
+                          onClick={() => handleSortByColumn('specialty')}
+                          sx={sortLabelSx}
+                        >
+                          Especialidade
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell sx={{ color: 'white', fontWeight: 600 }}>Responsável</TableCell>
+                      <TableCell sx={{ color: 'white', fontWeight: 600 }}>
+                        <TableSortLabel
+                          active={sortState?.column === 'eventDate'}
+                          direction={sortState?.column === 'eventDate' ? sortState.direction : 'asc'}
+                          onClick={() => handleSortByColumn('eventDate')}
+                          sx={sortLabelSx}
+                        >
+                          Data
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell sx={{ color: 'white', fontWeight: 600 }}>
+                        <TableSortLabel
+                          active={sortState?.column === 'status'}
+                          direction={sortState?.column === 'status' ? sortState.direction : 'asc'}
+                          onClick={() => handleSortByColumn('status')}
+                          sx={sortLabelSx}
+                        >
+                          Status
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell
+                        sx={{ color: 'white', fontWeight: 600, display: { xs: 'none', sm: 'table-cell' } }}
+                      >
+                        Relatório
                       </TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHead>
+                  <TableBody>
+                    {displayedItems.map((item: any) => (
+                      <TableRow
+                        key={item.id}
+                        hover
+                        onDragOver={(event) => {
+                          if (!canUpdate || !!sortState) return;
+                          event.preventDefault();
+                        }}
+                        onDrop={(event) => {
+                          if (!canUpdate || !!sortState) return;
+                          event.preventDefault();
+                          void handleDropReorder(String(item.id));
+                        }}
+                        selected={!isCreateMode && selectedId === item.id}
+                        onClick={() => openActivityDrawer(item.id, 'activity')}
+                        sx={{
+                          cursor: 'pointer',
+                          opacity: draggingActivityId === String(item.id) ? 0.72 : 1,
+                        }}
+                      >
+                        {canUpdate && (
+                          <TableCell
+                            padding="checkbox"
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            <Box
+                              component="span"
+                              draggable={!sortState}
+                              onDragStart={() => {
+                                if (sortState) return;
+                                setDraggingActivityId(String(item.id));
+                              }}
+                              onDragEnd={() => setDraggingActivityId('')}
+                              sx={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: sortState ? 'not-allowed' : 'grab',
+                                color: 'text.disabled',
+                                '&:active': { cursor: sortState ? 'not-allowed' : 'grabbing' },
+                              }}
+                            >
+                              <DragIndicatorRoundedIcon fontSize="small" />
+                            </Box>
+                          </TableCell>
+                        )}
+                        {canManageBatch && (
+                          <TableCell padding="checkbox" onClick={(event) => event.stopPropagation()}>
+                            <Checkbox
+                              size="small"
+                              checked={selectedIdsSet.has(String(item.id))}
+                              onChange={() => toggleRowSelection(String(item.id))}
+                            />
+                          </TableCell>
+                        )}
+                        <TableCell>
+                          <Typography variant="body2">
+                            {item.activityType?.name ?? '—'}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>{item.title}</TableCell>
+                        <TableCell>
+                          {(() => {
+                            const localityLabel = getLocalityShortLabel(item);
+                            const localityStyle = getLocalityChipStyle(localityLabel);
+                            return (
+                              <Chip
+                                size="small"
+                                label={localityLabel}
+                                title={item.locality?.name ?? localityLabel}
+                                sx={{
+                                  fontWeight: 700,
+                                  borderWidth: 1,
+                                  borderStyle: 'solid',
+                                  bgcolor: localityStyle.bg,
+                                  color: localityStyle.color,
+                                  borderColor: localityStyle.border,
+                                }}
+                              />
+                            );
+                          })()}
+                        </TableCell>
+                        <TableCell>{getActivitySpecialtyLabel(item)}</TableCell>
+                        <TableCell>
+                          {Array.isArray(item.responsibleUsers) && item.responsibleUsers.length > 0
+                            ? item.responsibleUsers.map((user: any) => toMilitaryDisplayName(user.name)).join(', ')
+                            : '—'}
+                        </TableCell>
+                        <TableCell>
+                          {item.eventDate
+                            ? (() => {
+                                // Format date without timezone conversion to avoid day offset
+                                const dateStr = String(item.eventDate);
+                                if (dateStr.includes('T')) {
+                                  const dateOnly = dateStr.split('T')[0];
+                                  const [year, month, day] = dateOnly.split('-');
+                                  return `${day}/${month}/${year}`;
+                                }
+                                // Fallback for other formats
+                                const date = new Date(dateStr);
+                                const day = String(date.getUTCDate()).padStart(2, '0');
+                                const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+                                const year = date.getUTCFullYear();
+                                return `${day}/${month}/${year}`;
+                              })()
+                            : '-'}
+                        </TableCell>
+                        <TableCell>
+                          {(() => {
+                            const statusStyle = getActivityStatusChipStyle(String(item.status));
+                            return (
+                              <Chip
+                                size="small"
+                                label={ACTIVITY_STATUS_LABELS[item.status] ?? item.status}
+                                sx={{
+                                  fontWeight: 700,
+                                  borderWidth: 1,
+                                  borderStyle: 'solid',
+                                  bgcolor: statusStyle.bg,
+                                  color: statusStyle.color,
+                                  borderColor: statusStyle.borderColor,
+                                }}
+                              />
+                            );
+                          })()}
+                        </TableCell>
+                        <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
+                          <IconButton
+                            size="small"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              openActivityDrawer(item.id, 'report');
+                            }}
+                            aria-label="Abrir relatório"
+                          >
+                            {item.report ? (
+                              <CheckBoxRoundedIcon
+                                color={item.report.hasSignature ? 'success' : 'primary'}
+                                fontSize="small"
+                              />
+                            ) : (
+                              <CheckBoxOutlineBlankRoundedIcon fontSize="small" />
+                            )}
+                          </IconButton>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                <Stack
+                  direction={{ xs: 'column', sm: 'row' }}
+                  spacing={1}
+                  alignItems={{ xs: 'flex-start', sm: 'center' }}
+                  justifyContent="space-between"
+                  sx={{ mt: 1.5 }}
+                >
+                  <Typography variant="body2" color="text.secondary">
+                    Mostrando {pageStart}-{pageEnd} de {totalActivities} atividades
+                  </Typography>
+                  <Pagination
+                    color="primary"
+                    shape="rounded"
+                    size="small"
+                    page={currentPage}
+                    count={totalPages}
+                    onChange={(_, value) => setCurrentPage(value)}
+                  />
+                </Stack>
+              </>
             )}
           </CardContent>
         </Card>

@@ -506,8 +506,6 @@ export function SocialCommunicationPage() {
     text: "",
   });
   const [highlightLookupBusy, setHighlightLookupBusy] = useState(false);
-  const highlightMultiplicadorCarouselRef = useRef<HTMLDivElement | null>(null);
-  const highlightSimbolicoCarouselRef = useRef<HTMLDivElement | null>(null);
   const internalCarouselRef = useRef<HTMLDivElement | null>(null);
   const externalCarouselRef = useRef<HTMLDivElement | null>(null);
   const highlightPhotoPreviewUrl = useMemo(
@@ -953,12 +951,7 @@ export function SocialCommunicationPage() {
     const right = Date.parse(b.updatedAt ?? b.createdAt);
     return (Number.isNaN(right) ? 0 : right) - (Number.isNaN(left) ? 0 : left);
   });
-  const multiplicadorHighlights = highlightItems.filter(
-    (item) => item.impact === "MULTIPLICADOR",
-  );
-  const simbolicoHighlights = highlightItems.filter(
-    (item) => item.impact === "SIMBOLICO",
-  );
+  const combinedImpactHighlights = highlightItems;
   const internalCardSetting = getSocialCardSetting("social-public-internal");
   const externalCardSetting = getSocialCardSetting("social-public-external");
   const highlightsCardSetting = getSocialCardSetting("social-highlights");
@@ -1007,12 +1000,7 @@ export function SocialCommunicationPage() {
   );
 
   useEffect(() => {
-    const carouselRefs = [
-      highlightMultiplicadorCarouselRef,
-      highlightSimbolicoCarouselRef,
-      internalCarouselRef,
-      externalCarouselRef,
-    ];
+    const carouselRefs = [internalCarouselRef, externalCarouselRef];
     const intervalIds = carouselRefs
       .map((carouselRef) => {
         const container = carouselRef.current;
@@ -1030,8 +1018,6 @@ export function SocialCommunicationPage() {
   }, [
     externalItems.length,
     internalItems.length,
-    multiplicadorHighlights.length,
-    simbolicoHighlights.length,
     scrollCarouselByCard,
   ]);
 
@@ -1055,225 +1041,112 @@ export function SocialCommunicationPage() {
     );
   };
 
-  const renderHighlightCarousel = (
-    carouselItems: SocialCommunicationHighlight[],
-    impact: "MULTIPLICADOR" | "SIMBOLICO",
-    impactTitle: string,
-  ) => {
-    const carouselRef =
-      impact === "MULTIPLICADOR"
-        ? highlightMultiplicadorCarouselRef
-        : highlightSimbolicoCarouselRef;
-    const impactLabel = impactTitle;
-    const theme =
-      impact === "MULTIPLICADOR"
-        ? {
-            accent: "#9A7214",
-            accentSoft: "rgba(255, 255, 255, 0.95)",
-            buttonBg: "rgba(182, 141, 49, 0.2)",
-            buttonHoverBg: "rgba(182, 141, 49, 0.32)",
-            trackBg: "rgba(182, 141, 49, 0.16)",
-            thumbBg: "rgba(182, 141, 49, 0.38)",
-            cardBorder: "rgba(184, 142, 50, 0.55)",
-            avatarBg: "rgba(255, 247, 216, 0.42)",
-            avatarBorder: "rgba(255, 231, 150, 0.78)",
-            avatarColor: "#FFF7E6",
-            titleColor: "rgba(255, 248, 232, 0.98)",
-            textColor: "rgba(255, 244, 220, 0.94)",
-            cardBackground:
-              "linear-gradient(145deg, #b08f40 0%, #c7a654 26%, #dfbc69 52%, #cdac5c 76%, #af9149 100%)",
-            cardBackgroundSize: "100% 100%",
-            chipBorder: "rgba(96, 69, 15, 0.45)",
-            chipColor: "#4A3508",
-            impactChipBg: "rgba(255, 247, 219, 0.88)",
-            impactChipColor: "#4A3508",
-            actionButtonBg: "rgba(255, 251, 236, 0.92)",
-            hoverShadow: "0 14px 24px rgba(90, 64, 13, 0.28)",
-          }
-        : {
-            accent: "#8C8C96",
-            accentSoft: "rgba(255, 255, 255, 0.95)",
-            buttonBg: "rgba(140, 140, 150, 0.2)",
-            buttonHoverBg: "rgba(140, 140, 150, 0.34)",
-            trackBg: "rgba(140, 140, 150, 0.16)",
-            thumbBg: "rgba(140, 140, 150, 0.38)",
-            cardBorder: "rgba(145, 145, 160, 0.56)",
-            avatarBg: "rgba(248, 248, 252, 0.5)",
-            avatarBorder: "rgba(225, 225, 235, 0.84)",
-            avatarColor: "#F8FBFF",
-            titleColor: "rgba(20, 24, 30, 0.98)",
-            textColor: "rgba(24, 30, 38, 0.95)",
-            cardBackground:
-              "linear-gradient(145deg, #9ca0ab 0%, #b6bac4 26%, #cfd3dc 52%, #bcc0ca 76%, #9ea2ad 100%)",
-            cardBackgroundSize: "100% 100%",
-            chipBorder: "rgba(95, 95, 110, 0.48)",
-            chipColor: "#2D2D34",
-            impactChipBg: "rgba(245, 245, 250, 0.9)",
-            impactChipColor: "#2D2D34",
-            actionButtonBg: "rgba(251, 251, 255, 0.92)",
-            hoverShadow: "0 14px 24px rgba(44, 44, 52, 0.26)",
-          };
+  const renderHighlightCards = (cards: SocialCommunicationHighlight[]) => {
+    const theme = {
+      cardBorder: "rgba(146, 106, 19, 0.65)",
+      cardBackground:
+        "linear-gradient(145deg, #b68f33 0%, #c9a44e 25%, #e2bf67 50%, #cca95a 74%, #af8d42 100%)",
+      titleColor: "rgba(46, 30, 4, 0.95)",
+      textColor: "rgba(58, 39, 6, 0.92)",
+      chipBg: "rgba(255, 248, 227, 0.92)",
+      chipBorder: "rgba(120, 82, 14, 0.35)",
+      chipColor: "#4A3407",
+      mediaBorder: "rgba(255, 244, 205, 0.7)",
+      mediaBg: "rgba(255, 248, 223, 0.28)",
+      actionButtonBg: "rgba(255, 251, 236, 0.94)",
+      hoverShadow: "0 14px 24px rgba(90, 64, 13, 0.24)",
+    };
 
     return (
-      <Stack spacing={0.75}>
-        <Stack direction="row" justifyContent="flex-end" spacing={0.7}>
-          <IconButton
-            size="small"
-            onClick={() => scrollCarouselByCard(carouselRef, -1)}
-            sx={{
-              bgcolor: theme.buttonBg,
-              "&:hover": { bgcolor: theme.buttonHoverBg },
-            }}
-            aria-label={`Voltar carrossel de ${impactLabel}`}
-          >
-            <ArrowBackIosNewRoundedIcon fontSize="small" />
-          </IconButton>
-          <IconButton
-            size="small"
-            onClick={() => scrollCarouselByCard(carouselRef, 1)}
-            sx={{
-              bgcolor: theme.buttonBg,
-              "&:hover": { bgcolor: theme.buttonHoverBg },
-            }}
-            aria-label={`Avançar carrossel de ${impactLabel}`}
-          >
-            <ArrowForwardIosRoundedIcon fontSize="small" />
-          </IconButton>
-        </Stack>
-        <Box
-          ref={carouselRef}
-          sx={{
-            display: "flex",
-            gap: 2,
-            overflowX: "auto",
-            scrollBehavior: "smooth",
-            scrollSnapType: "x mandatory",
-            pb: 0.5,
-            px: 0.2,
-            "&::-webkit-scrollbar": {
-              height: 8,
-            },
-            "&::-webkit-scrollbar-track": {
-              backgroundColor: theme.trackBg,
-              borderRadius: 999,
-            },
-            "&::-webkit-scrollbar-thumb": {
-              backgroundColor: theme.thumbBg,
-              borderRadius: 999,
-            },
-          }}
-        >
-          {carouselItems.map((item) => {
-            const photoDataUrl = buildHighlightPhotoDataUrl(
-              item.photoBase64,
-              item.photoMimeType,
-            );
-            const initials = item.militaryName
-              .split(/\s+/)
-              .filter(Boolean)
-              .slice(0, 2)
-              .map((part) => part[0]?.toUpperCase() ?? "")
-              .join("");
-            return (
-              <Card
-                key={item.id}
-                data-carousel-card="true"
-                sx={{
-                  flex: "0 0 auto",
-                  width: {
-                    xs: "calc(100% - 2px)",
-                    sm: "calc((100% - 24px) / 2.36)",
-                    md: "calc((100% - 48px) / 3.55)",
-                    lg: "calc(18.645% - 15.5844px)",
-                  },
-                  scrollSnapAlign: "start",
-                  borderRadius: 3,
-                  border: `1px solid ${theme.cardBorder}`,
-                  background: theme.cardBackground,
-                  backgroundSize: theme.cardBackgroundSize,
-                  position: "relative",
-                  overflow: "hidden",
-                  boxShadow:
-                    "inset 2px 2px 0 rgba(255,255,255,0.31), inset -2px -2px 0 rgba(0,0,0,0.14), inset 0 13px 16px rgba(255,255,255,0.1), inset 0 -13px 16px rgba(0,0,0,0.14), 0 11px 18px rgba(0,0,0,0.16)",
-                  transition: "transform 160ms ease, box-shadow 160ms ease",
-                  "&::before": {
-                    content: '""',
-                    position: "absolute",
-                    inset: 0,
-                    borderRadius: "inherit",
-                    pointerEvents: "none",
-                    background:
-                      "linear-gradient(145deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.07) 28%, rgba(0,0,0,0.05) 72%, rgba(0,0,0,0.14) 100%)",
-                  },
-                  "&::after": {
-                    content: '""',
-                    position: "absolute",
-                    inset: 7,
-                    borderRadius: 2.2,
-                    pointerEvents: "none",
-                    boxShadow:
-                      "inset 2px 2px 0 rgba(255,255,255,0.2), inset -2px -2px 0 rgba(0,0,0,0.14)",
-                  },
-                  "&:hover": {
-                    transform: "translateY(-2px)",
-                    boxShadow: `${theme.hoverShadow}, inset 2px 2px 0 rgba(255,255,255,0.32), inset -2px -2px 0 rgba(0,0,0,0.16), inset 0 14px 18px rgba(255,255,255,0.11), inset 0 -14px 18px rgba(0,0,0,0.16)`,
-                  },
-                }}
-              >
-                <CardContent
-                  sx={{
-                    minHeight: 178,
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 0.8,
-                  }}
-                >
+      <Box
+        sx={{
+          display: "grid",
+          gap: 1.35,
+          gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" },
+        }}
+      >
+        {cards.map((item) => {
+          const photoDataUrl = buildHighlightPhotoDataUrl(
+            item.photoBase64,
+            item.photoMimeType,
+          );
+          const initials = item.militaryName
+            .split(/\s+/)
+            .filter(Boolean)
+            .slice(0, 2)
+            .map((part) => part[0]?.toUpperCase() ?? "")
+            .join("");
+
+          return (
+            <Card
+              key={item.id}
+              role="button"
+              tabIndex={0}
+              onClick={() => setHighlightReadingTarget(item)}
+              onKeyDown={(event) => {
+                if (event.target !== event.currentTarget) return;
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  setHighlightReadingTarget(item);
+                }
+              }}
+              sx={{
+                position: "relative",
+                borderRadius: 2.8,
+                border: `1px solid ${theme.cardBorder}`,
+                background: theme.cardBackground,
+                overflow: "hidden",
+                cursor: "pointer",
+                boxShadow:
+                  "inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.12), 0 8px 16px rgba(95,70,18,0.18)",
+                transition: "transform 150ms ease, box-shadow 180ms ease",
+                "&:hover": {
+                  transform: "translateY(-2px)",
+                  boxShadow: `${theme.hoverShadow}, inset 0 1px 0 rgba(255,255,255,0.34), inset 0 -1px 0 rgba(0,0,0,0.14)`,
+                },
+              }}
+            >
+              <CardContent sx={{ p: 1.2 }}>
+                <Stack direction="row" spacing={1.2} alignItems="stretch">
                   <Box
                     sx={{
-                      display: "flex",
-                      justifyContent: "center",
-                      pt: 0.6,
+                      width: 112,
+                      minWidth: 112,
+                      height: 112,
+                      borderRadius: 2,
+                      bgcolor: theme.mediaBg,
+                      border: `1px solid ${theme.mediaBorder}`,
+                      overflow: "hidden",
+                      display: "grid",
+                      placeItems: "center",
+                      color: theme.titleColor,
+                      fontSize: 24,
+                      fontWeight: 800,
                     }}
                   >
-                    <Box
-                      sx={{
-                        width: 90,
-                        height: 90,
-                        borderRadius: "50%",
-                        bgcolor: theme.avatarBg,
-                        border: `2px solid ${theme.avatarBorder}`,
-                        color: theme.avatarColor,
-                        display: "grid",
-                        placeItems: "center",
-                        overflow: "hidden",
-                        fontWeight: 800,
-                        fontSize: 20,
-                      }}
-                    >
-                      {photoDataUrl ? (
-                        <Box
-                          component="img"
-                          src={photoDataUrl}
-                          alt={item.militaryName}
-                          sx={{
-                            width: "100%",
-                            height: "100%",
-                            objectFit: "cover",
-                          }}
-                        />
-                      ) : (
-                        initials || <PersonRoundedIcon fontSize="small" />
-                      )}
-                    </Box>
+                    {photoDataUrl ? (
+                      <Box
+                        component="img"
+                        src={photoDataUrl}
+                        alt={item.militaryName}
+                        sx={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                        }}
+                      />
+                    ) : (
+                      initials || <PersonRoundedIcon />
+                    )}
                   </Box>
-                  <Box>
+                  <Stack sx={{ minWidth: 0, flex: 1 }}>
                     <Typography
                       variant="subtitle1"
-                      fontWeight={700}
+                      fontWeight={800}
                       sx={{
-                        textAlign: "center",
-                        minHeight: 50,
                         color: theme.titleColor,
+                        lineHeight: 1.2,
+                        mb: 0.55,
                         display: "-webkit-box",
                         WebkitLineClamp: 2,
                         WebkitBoxOrient: "vertical",
@@ -1284,105 +1157,100 @@ export function SocialCommunicationPage() {
                     </Typography>
                     <Stack
                       direction="row"
-                      spacing={0.7}
-                      justifyContent="center"
-                      flexWrap="wrap"
+                      spacing={0.6}
                       useFlexGap
-                      sx={{ mt: 0.6 }}
+                      flexWrap="wrap"
+                      sx={{ mb: 0.7 }}
                     >
                       <Chip
                         size="small"
                         icon={<BadgeRoundedIcon />}
-                        label={
-                          item.locality?.code || item.locality?.name || "OM"
-                        }
-                        variant="outlined"
+                        label={item.locality?.code || item.locality?.name || "OM"}
                         sx={{
-                          bgcolor: theme.accentSoft,
-                          borderColor: theme.chipBorder,
+                          bgcolor: theme.chipBg,
                           color: theme.chipColor,
+                          border: `1px solid ${theme.chipBorder}`,
+                          "& .MuiChip-label": { fontSize: "0.68rem" },
                         }}
                       />
                       <Chip
                         size="small"
                         icon={<MilitaryTechRoundedIcon />}
                         label={
-                          impact === "MULTIPLICADOR"
+                          item.impact === "MULTIPLICADOR"
                             ? "Multiplicador"
                             : "Simbólico"
                         }
                         sx={{
-                          bgcolor: theme.impactChipBg,
-                          color: theme.impactChipColor,
+                          bgcolor: theme.chipBg,
+                          color: theme.chipColor,
+                          border: `1px solid ${theme.chipBorder}`,
+                          "& .MuiChip-label": { fontSize: "0.68rem" },
                         }}
                       />
-                      {item.highlightRole && (
+                      {item.highlightRole ? (
                         <Chip
                           size="small"
                           icon={<PersonRoundedIcon />}
                           label={item.highlightRole}
                           sx={{
-                            bgcolor: theme.accentSoft,
-                            borderColor: theme.chipBorder,
+                            bgcolor: theme.chipBg,
                             color: theme.chipColor,
-                            borderWidth: 1,
-                            borderStyle: "solid",
+                            border: `1px solid ${theme.chipBorder}`,
                             maxWidth: "100%",
+                            "& .MuiChip-label": { fontSize: "0.68rem" },
                           }}
                         />
-                      )}
+                      ) : null}
                     </Stack>
-                  </Box>
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      mt: "auto",
-                      color: theme.textColor,
-                      display: "-webkit-box",
-                      WebkitLineClamp: 3,
-                      WebkitBoxOrient: "vertical",
-                      overflow: "hidden",
-                      cursor: "pointer",
-                    }}
-                    onClick={() => setHighlightReadingTarget(item)}
-                  >
-                    {item.text}
-                  </Typography>
-                </CardContent>
-                {canEditHighlights && (
-                  <Stack
-                    direction="row"
-                    spacing={0.4}
-                    sx={{ position: "absolute", top: 8, right: 8, zIndex: 3 }}
-                  >
-                    <IconButton
-                      size="small"
-                      sx={{ bgcolor: theme.actionButtonBg }}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        openEditHighlight(item);
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        color: theme.textColor,
+                        display: "-webkit-box",
+                        WebkitLineClamp: 4,
+                        WebkitBoxOrient: "vertical",
+                        overflow: "hidden",
                       }}
                     >
-                      <EditRoundedIcon fontSize="small" />
-                    </IconButton>
-                    <IconButton
-                      size="small"
-                      color="error"
-                      sx={{ bgcolor: theme.actionButtonBg }}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setHighlightDeleteTarget(item);
-                      }}
-                    >
-                      <DeleteOutlineRoundedIcon fontSize="small" />
-                    </IconButton>
+                      {item.text}
+                    </Typography>
                   </Stack>
-                )}
-              </Card>
-            );
-          })}
-        </Box>
-      </Stack>
+                </Stack>
+              </CardContent>
+              {canEditHighlights ? (
+                <Stack
+                  direction="row"
+                  spacing={0.4}
+                  sx={{ position: "absolute", top: 8, right: 8, zIndex: 3 }}
+                >
+                  <IconButton
+                    size="small"
+                    sx={{ bgcolor: theme.actionButtonBg }}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      openEditHighlight(item);
+                    }}
+                  >
+                    <EditRoundedIcon fontSize="small" />
+                  </IconButton>
+                  <IconButton
+                    size="small"
+                    color="error"
+                    sx={{ bgcolor: theme.actionButtonBg }}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setHighlightDeleteTarget(item);
+                    }}
+                  >
+                    <DeleteOutlineRoundedIcon fontSize="small" />
+                  </IconButton>
+                </Stack>
+              ) : null}
+            </Card>
+          );
+        })}
+      </Box>
     );
   };
 
@@ -2352,9 +2220,7 @@ export function SocialCommunicationPage() {
                     variant="body2"
                     sx={{ color: "rgba(29, 58, 77, 0.86)" }}
                   >
-                    Destaques institucionais com{" "}
-                    {highlightsCardSetting.impactMultiplicadorTitle} e{" "}
-                    {highlightsCardSetting.impactSimbolicoTitle}.
+                    Destaques institucionais de Impacto Multiplicador e Simbolico.
                   </Typography>
                 </Box>
                 <Stack direction="row" spacing={0.8} alignItems="center">
@@ -2626,9 +2492,9 @@ export function SocialCommunicationPage() {
               <Stack spacing={2.9} sx={{ mt: highlightEditorOpen ? 0.5 : 1.6 }}>
                 <Box>
                   <Stack
-                    direction={{ xs: "column", sm: "row" }}
+                    direction="row"
                     justifyContent="space-between"
-                    alignItems={{ xs: "flex-start", sm: "center" }}
+                    alignItems="center"
                     spacing={1}
                     sx={{ mb: 0.2 }}
                   >
@@ -2637,12 +2503,12 @@ export function SocialCommunicationPage() {
                       fontWeight={700}
                       sx={{ color: "#1D3A4D" }}
                     >
-                      {highlightsCardSetting.impactMultiplicadorTitle}
+                      Impacto Multiplicador e Simbolico
                     </Typography>
                     <Chip
                       size="small"
-                      label={`${multiplicadorHighlights.length} destaque${
-                        multiplicadorHighlights.length === 1 ? "" : "s"
+                      label={`${combinedImpactHighlights.length} destaque${
+                        combinedImpactHighlights.length === 1 ? "" : "s"
                       }`}
                       sx={{
                         bgcolor: "rgba(29, 58, 77, 0.1)",
@@ -2651,58 +2517,13 @@ export function SocialCommunicationPage() {
                       }}
                     />
                   </Stack>
-                  {multiplicadorHighlights.length === 0 ? (
+                  {combinedImpactHighlights.length === 0 ? (
                     <EmptyState
-                      title="Sem destaques multiplicadores"
-                      description="Cadastre destaques para mostrar neste carrossel."
+                      title="Sem destaques"
+                      description="Cadastre destaques para mostrar nesta seção."
                     />
                   ) : (
-                    renderHighlightCarousel(
-                      multiplicadorHighlights,
-                      "MULTIPLICADOR",
-                      highlightsCardSetting.impactMultiplicadorTitle,
-                    )
-                  )}
-                </Box>
-
-                <Box>
-                  <Stack
-                    direction={{ xs: "column", sm: "row" }}
-                    justifyContent="space-between"
-                    alignItems={{ xs: "flex-start", sm: "center" }}
-                    spacing={1}
-                    sx={{ mb: 0.2 }}
-                  >
-                    <Typography
-                      variant="subtitle1"
-                      fontWeight={700}
-                      sx={{ color: "#1D3A4D" }}
-                    >
-                      {highlightsCardSetting.impactSimbolicoTitle}
-                    </Typography>
-                    <Chip
-                      size="small"
-                      label={`${simbolicoHighlights.length} destaque${
-                        simbolicoHighlights.length === 1 ? "" : "s"
-                      }`}
-                      sx={{
-                        bgcolor: "rgba(29, 58, 77, 0.1)",
-                        color: "#1D3A4D",
-                        border: "1px solid rgba(29, 58, 77, 0.24)",
-                      }}
-                    />
-                  </Stack>
-                  {simbolicoHighlights.length === 0 ? (
-                    <EmptyState
-                      title="Sem destaques simbólicos"
-                      description="Cadastre destaques para mostrar neste carrossel."
-                    />
-                  ) : (
-                    renderHighlightCarousel(
-                      simbolicoHighlights,
-                      "SIMBOLICO",
-                      highlightsCardSetting.impactSimbolicoTitle,
-                    )
+                    renderHighlightCards(combinedImpactHighlights)
                   )}
                 </Box>
               </Stack>
