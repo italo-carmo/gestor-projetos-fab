@@ -32,7 +32,6 @@ import GroupsIcon from "@mui/icons-material/Groups";
 import PeopleIcon from "@mui/icons-material/People";
 import BusinessIcon from "@mui/icons-material/Business";
 import CampaignIcon from "@mui/icons-material/Campaign";
-import ChecklistIcon from "@mui/icons-material/Checklist";
 import AccountTreeIcon from "@mui/icons-material/AccountTree";
 import ContactPhoneIcon from "@mui/icons-material/ContactPhone";
 import EventNoteIcon from "@mui/icons-material/EventNote";
@@ -100,7 +99,6 @@ const navSections: NavSection[] = [
     id: "smif",
     label: "SMIF",
     items: [
-      { label: "Checklists", to: "/checklists", icon: <ChecklistIcon fontSize="small" /> },
       { label: "Atividades de Campo", to: "/activities", icon: <EventNoteIcon fontSize="small" /> },
       { label: "GSD e Recrutas", to: "/gsd-recruits", icon: <PeopleIcon fontSize="small" /> },
       { label: "Elos", to: "/elos", icon: <ContactPhoneIcon fontSize="small" /> },
@@ -323,9 +321,6 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
     if (item.to === "/notices") {
       return canSeeCommissionTiBoards && can(me, "notices", "view");
-    }
-    if (item.to === "/checklists") {
-      return can(me, "checklists", "view");
     }
     if (item.to === "/elos") {
       return can(me, "elos", "view");
