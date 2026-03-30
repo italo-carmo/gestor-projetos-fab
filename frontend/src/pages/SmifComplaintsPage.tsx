@@ -5,7 +5,6 @@ import {
   CardContent,
   Chip,
   Drawer,
-  IconButton,
   MenuItem,
   Stack,
   Table,
@@ -17,7 +16,6 @@ import {
   Typography,
 } from "@mui/material";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
-import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import ReportGmailerrorredRoundedIcon from "@mui/icons-material/ReportGmailerrorredRounded";
 import { useMemo, useState } from "react";
 import { parseApiError } from "../app/apiErrors";
@@ -113,7 +111,13 @@ export function SmifComplaintsPage() {
         .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"))
         .map((item) => ({
           id: item.id,
-          label: item.code ? `${item.code} - ${item.name}` : item.name,
+          label:
+            item.code &&
+            item.code.localeCompare(item.name, "pt-BR", {
+              sensitivity: "accent",
+            }) !== 0
+              ? `${item.code} - ${item.name}`
+              : item.name,
         })),
     [omsCatalogQuery.data?.items],
   );
@@ -230,6 +234,7 @@ export function SmifComplaintsPage() {
           <Stack
             direction={{ xs: "column", md: "row" }}
             justifyContent="space-between"
+            alignItems={{ xs: "flex-start", md: "center" }}
             spacing={1.5}
           >
             <Box>
@@ -249,6 +254,7 @@ export function SmifComplaintsPage() {
             </Box>
             <Button
               variant="contained"
+              size="small"
               startIcon={<AddRoundedIcon />}
               onClick={openCreate}
             >
@@ -316,22 +322,17 @@ export function SmifComplaintsPage() {
                     <TableCell sx={{ fontWeight: 700 }}>
                       Data da comunicação
                     </TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>
-                      Descrição geral
-                    </TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Conclusão</TableCell>
-                    <TableCell
-                      sx={{ fontWeight: 700, width: 72 }}
-                      align="right"
-                    >
-                      Ações
-                    </TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {items.map((item) => (
-                    <TableRow key={item.id} hover>
+                    <TableRow
+                      key={item.id}
+                      hover
+                      onClick={() => openEdit(item)}
+                      sx={{ cursor: "pointer" }}
+                    >
                       <TableCell>
                         {item.locality?.name ?? item.localityId}
                       </TableCell>
@@ -341,9 +342,6 @@ export function SmifComplaintsPage() {
                           .reverse()
                           .join("/")}
                       </TableCell>
-                      <TableCell sx={{ maxWidth: 360 }}>
-                        {item.description}
-                      </TableCell>
                       <TableCell>
                         <Chip
                           size="small"
@@ -351,14 +349,6 @@ export function SmifComplaintsPage() {
                           color={STATUS_COLOR[item.status] ?? "warning"}
                           variant="outlined"
                         />
-                      </TableCell>
-                      <TableCell sx={{ maxWidth: 320 }}>
-                        {item.conclusion || "—"}
-                      </TableCell>
-                      <TableCell align="right">
-                        <IconButton size="small" onClick={() => openEdit(item)}>
-                          <EditRoundedIcon fontSize="small" />
-                        </IconButton>
                       </TableCell>
                     </TableRow>
                   ))}
