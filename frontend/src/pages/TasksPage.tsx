@@ -178,7 +178,7 @@ export function TasksPage() {
       .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
   }, [localitiesData]);
 
-  const localities =
+  const localitiesBase =
     localitiesData.length > 0
       ? selectTargetLocalities(localitiesData).map((loc: any) => ({
           id: String(loc.id),
@@ -195,6 +195,9 @@ export function TasksPage() {
             ]),
           ).values(),
         );
+  const localities = Array.from(
+    new Map(localitiesBase.map((loc) => [String(loc.id), loc])).values(),
+  );
 
   const localityMap = useMemo(() => {
     const m = new Map(allLocalities.map((loc) => [loc.id, loc.name]));
@@ -1312,7 +1315,13 @@ export function TasksPage() {
               getOptionLabel={(option) => option.name}
               isOptionEqualToValue={(option, value) => option.id === value.id}
               onChange={(_, options) => {
-                const ids = options.map((option) => option.id);
+                const ids = Array.from(
+                  new Set(
+                    options
+                      .map((option) => String(option.id ?? "").trim())
+                      .filter(Boolean),
+                  ),
+                );
                 setCreateLocalityIds(ids);
                 setCreateOffsets((prev) =>
                   ids.reduce((acc: Record<string, number>, id: string) => {
@@ -1351,7 +1360,13 @@ export function TasksPage() {
                 size="small"
                 variant="outlined"
                 onClick={() => {
-                  const ids = localities.map((locality) => locality.id);
+                  const ids = Array.from(
+                    new Set(
+                      localities
+                        .map((locality) => String(locality.id ?? "").trim())
+                        .filter(Boolean),
+                    ),
+                  );
                   setCreateLocalityIds(ids);
                   setCreateOffsets(
                     ids.reduce((acc: Record<string, number>, id: string) => {

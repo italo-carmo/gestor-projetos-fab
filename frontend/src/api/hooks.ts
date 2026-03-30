@@ -5,18 +5,91 @@ import { splitMilitaryNameAndOm, toMilitaryDisplayName } from "../app/militaryNa
 
 /**
  * Tarefas recém-criadas podem não vir na 1ª página (ordem por prazo + paginação).
- * Qualquer refetch (incl. foco da janela) substitui a cache e apagava o merge manual.
- * Mantemos um buffer em memória e o `select` de useTasks reinjeta até o servidor
- * devolver esses ids na resposta; aí removemos do buffer.
+ * Mantemos um buffer temporário em memória e o `select` de useTasks reinjeta os
+ * itens pendentes que ainda combinam com os filtros da query observada.
  */
-const pendingCreatedTaskById = new Map<string, any>();
+type PendingCreatedTaskEntry = {
+  item: any;
+  createdAtMs: number;
+  seenInServerAtMs?: number;
+};
+
+const pendingCreatedTaskById = new Map<string, PendingCreatedTaskEntry>();
+const PENDING_CREATED_TASK_TTL_MS = 10 * 60_000;
+const PENDING_CREATED_TASK_SEEN_EVICT_MS = 2 * 60_000;
 
 function stashPendingCreatedTasks(items: any[]) {
+  const now = Date.now();
   for (const it of items ?? []) {
     const id = String(it?.id ?? "").trim();
     if (!id) continue;
-    if (!pendingCreatedTaskById.has(id)) pendingCreatedTaskById.set(id, it);
+    const existing = pendingCreatedTaskById.get(id);
+    pendingCreatedTaskById.set(id, {
+      item: it,
+      createdAtMs: existing?.createdAtMs ?? now,
+      seenInServerAtMs: existing?.seenInServerAtMs,
+    });
   }
+}
+
+function normalizeTaskIds(values: Array<string | null | undefined>) {
+  return Array.from(
+    new Set(
+      (values ?? [])
+        .map((value) => String(value ?? "").trim())
+        .filter(Boolean),
+    ),
+  );
+}
+
+function takePendingCreatedTasksByIds(taskIds: string[]) {
+  const removed = new Map<string, PendingCreatedTaskEntry>();
+  for (const id of taskIds) {
+    const existing = pendingCreatedTaskById.get(id);
+    if (!existing) continue;
+    removed.set(id, existing);
+    pendingCreatedTaskById.delete(id);
+  }
+  return removed;
+}
+
+function restorePendingCreatedTasks(
+  removed: Map<string, PendingCreatedTaskEntry> | undefined,
+) {
+  if (!removed || removed.size === 0) return;
+  for (const [id, entry] of removed.entries()) {
+    pendingCreatedTaskById.set(id, entry);
+  }
+}
+
+function removeTaskIdsFromTasksPageData(data: any, idSet: Set<string>) {
+  if (!data || typeof data !== "object" || !Array.isArray(data.items)) return data;
+  const beforeItems = data.items as any[];
+  const nextItems = beforeItems.filter(
+    (item: any) => !idSet.has(String(item?.id ?? "").trim()),
+  );
+  if (nextItems.length === beforeItems.length) return data;
+  const removedCount = beforeItems.length - nextItems.length;
+  const nextTotal =
+    typeof data.total === "number"
+      ? Math.max(0, Number(data.total) - removedCount)
+      : data.total;
+  return {
+    ...data,
+    items: nextItems,
+    total: nextTotal,
+  };
+}
+
+function removeTaskIdsFromTasksQueries(
+  qc: ReturnType<typeof useQueryClient>,
+  taskIds: string[],
+) {
+  if (taskIds.length === 0) return;
+  const idSet = new Set(taskIds);
+  qc.setQueriesData({ queryKey: ["tasks"] }, (old: any) =>
+    removeTaskIdsFromTasksPageData(old, idSet),
+  );
 }
 
 /** Dispara reexecução do `select` (merge com buffer) antes do refetch assíncrono. */
@@ -26,20 +99,120 @@ function touchTasksQueries(qc: ReturnType<typeof useQueryClient>) {
   );
 }
 
-function mergePendingIntoTasksPageData(data: any): any {
+function parseDateSafe(value: unknown): number | null {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+  const parsed = new Date(raw).getTime();
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function getTaskAssigneeIds(task: any) {
+  const fromResponsibles = Array.isArray(task?.responsibleUsers)
+    ? task.responsibleUsers
+        .map((entry: any) => String(entry?.id ?? "").trim())
+        .filter(Boolean)
+    : Array.isArray(task?.responsibles)
+      ? task.responsibles
+          .map((entry: any) => String(entry?.userId ?? entry?.user?.id ?? "").trim())
+          .filter(Boolean)
+      : [];
+  const assignedToId = String(task?.assignedToId ?? "").trim();
+  return new Set(
+    [assignedToId, ...fromResponsibles]
+      .map((value) => String(value ?? "").trim())
+      .filter(Boolean),
+  );
+}
+
+function taskMatchesFilters(task: any, filters: Record<string, any>) {
+  if (!task || typeof task !== "object") return false;
+
+  const localityFilter = String(filters.localityId ?? "").trim();
+  if (localityFilter && String(task.localityId ?? "").trim() !== localityFilter) {
+    return false;
+  }
+
+  const phaseFilter = String(filters.phaseId ?? "").trim();
+  if (phaseFilter) {
+    const taskPhaseId = String(
+      task.taskTemplate?.phaseId ?? task.phaseId ?? "",
+    ).trim();
+    if (taskPhaseId !== phaseFilter) return false;
+  }
+
+  const statusFilter = String(filters.status ?? "").trim();
+  if (statusFilter && String(task.status ?? "").trim() !== statusFilter) {
+    return false;
+  }
+
+  const eloRoleFilter = String(filters.eloRoleId ?? "").trim();
+  if (eloRoleFilter && String(task.eloRoleId ?? "").trim() !== eloRoleFilter) {
+    return false;
+  }
+
+  const assigneeIdsFilter = String(filters.assigneeIds ?? "").trim();
+  const assigneeIdFilter = String(filters.assigneeId ?? "").trim();
+  const taskAssigneeIds = getTaskAssigneeIds(task);
+  if (assigneeIdsFilter) {
+    const selected = assigneeIdsFilter
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean);
+    if (selected.length > 0 && !selected.some((id) => taskAssigneeIds.has(id))) {
+      return false;
+    }
+  } else if (assigneeIdFilter && !taskAssigneeIds.has(assigneeIdFilter)) {
+    return false;
+  }
+
+  const dueTs = parseDateSafe(task.dueDate);
+  const dueFromTs = parseDateSafe(filters.dueFrom);
+  const dueToTs = parseDateSafe(filters.dueTo);
+  if (dueTs !== null && dueFromTs !== null && dueTs < dueFromTs) return false;
+  if (dueTs !== null && dueToTs !== null && dueTs > dueToTs) return false;
+
+  return true;
+}
+
+function mergePendingIntoTasksPageData(
+  data: any,
+  filters: Record<string, any>,
+): any {
   if (!data || typeof data !== "object") return data;
+  const now = Date.now();
   const items = Array.isArray(data.items) ? data.items : [];
   const serverIds = new Set(items.map((t: any) => String(t.id)));
-  for (const id of [...pendingCreatedTaskById.keys()]) {
-    if (serverIds.has(id)) pendingCreatedTaskById.delete(id);
+
+  for (const [id, entry] of [...pendingCreatedTaskById.entries()]) {
+    if (now - entry.createdAtMs > PENDING_CREATED_TASK_TTL_MS) {
+      pendingCreatedTaskById.delete(id);
+      continue;
+    }
+    if (serverIds.has(id)) {
+      if (!entry.seenInServerAtMs) entry.seenInServerAtMs = now;
+      if (now - entry.seenInServerAtMs > PENDING_CREATED_TASK_SEEN_EVICT_MS) {
+        pendingCreatedTaskById.delete(id);
+      }
+    }
   }
-  const pending = [...pendingCreatedTaskById.values()].filter(
-    (p) => p?.id && !serverIds.has(String(p.id)),
+
+  const pending = [...pendingCreatedTaskById.values()]
+    .map((entry) => entry.item)
+    .filter(
+      (p) =>
+        p?.id &&
+        !serverIds.has(String(p.id)) &&
+        taskMatchesFilters(p, filters),
+    );
+  const dedupPending = pending.filter(
+    (item, index, arr) =>
+      arr.findIndex((candidate) => String(candidate.id) === String(item.id)) ===
+      index,
   );
-  if (pending.length === 0) return data;
+  if (dedupPending.length === 0) return data;
   return {
     ...data,
-    items: [...pending, ...items],
+    items: [...dedupPending, ...items],
   };
 }
 
@@ -118,7 +291,7 @@ export function useTasks(filters: Record<string, any>) {
       (await api.get("/task-instances", { params: filters })).data,
     staleTime: 15_000,
     refetchOnWindowFocus: false,
-    select: mergePendingIntoTasksPageData,
+    select: (data) => mergePendingIntoTasksPageData(data, filters),
   });
 }
 
@@ -1178,7 +1351,22 @@ export function useDeleteTask() {
   return useMutation({
     mutationFn: async (id: string) =>
       (await api.delete(`/task-instances/${id}`)).data,
-    onSuccess: () => {
+    onMutate: async (id) => {
+      const ids = normalizeTaskIds([id]);
+      await qc.cancelQueries({ queryKey: ["tasks"] });
+      const snapshots = qc.getQueriesData({ queryKey: ["tasks"] });
+      const removedPending = takePendingCreatedTasksByIds(ids);
+      removeTaskIdsFromTasksQueries(qc, ids);
+      return { snapshots, removedPending };
+    },
+    onError: (_err, _id, ctx) => {
+      ctx?.snapshots?.forEach(([key, data]: any) => qc.setQueryData(key, data));
+      restorePendingCreatedTasks(ctx?.removedPending);
+    },
+    onSuccess: (_data, id) => {
+      const ids = normalizeTaskIds([id]);
+      takePendingCreatedTasksByIds(ids);
+      removeTaskIdsFromTasksQueries(qc, ids);
       qc.invalidateQueries({ queryKey: ["tasks"] });
       qc.invalidateQueries({ queryKey: ["gantt"] });
       qc.invalidateQueries({ queryKey: ["calendar"] });
@@ -1260,7 +1448,22 @@ export function useBatchDeleteTasks() {
   return useMutation({
     mutationFn: async (args: { ids: string[] }) =>
       (await api.post("/task-instances/batch/delete", args)).data,
-    onSuccess: () => {
+    onMutate: async (args) => {
+      const ids = normalizeTaskIds(args?.ids ?? []);
+      await qc.cancelQueries({ queryKey: ["tasks"] });
+      const snapshots = qc.getQueriesData({ queryKey: ["tasks"] });
+      const removedPending = takePendingCreatedTasksByIds(ids);
+      removeTaskIdsFromTasksQueries(qc, ids);
+      return { snapshots, removedPending };
+    },
+    onError: (_err, _args, ctx) => {
+      ctx?.snapshots?.forEach(([key, data]: any) => qc.setQueryData(key, data));
+      restorePendingCreatedTasks(ctx?.removedPending);
+    },
+    onSuccess: (_data, args) => {
+      const ids = normalizeTaskIds(args?.ids ?? []);
+      takePendingCreatedTasksByIds(ids);
+      removeTaskIdsFromTasksQueries(qc, ids);
       qc.invalidateQueries({ queryKey: ["tasks"] });
       qc.invalidateQueries({ queryKey: ["gantt"] });
       qc.invalidateQueries({ queryKey: ["calendar"] });
