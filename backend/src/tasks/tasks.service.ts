@@ -570,6 +570,19 @@ export class TasksService {
     return { items: created };
   }
 
+  /**
+   * TI e comissão nacional: sem filtro por OM-alvo (tarefas em qualquer localidade aparecem).
+   * Demais perfis: apenas OMs-alvo SMIF (mesma regra do painel nacional).
+   */
+  private async allowedLocalityIdsForTaskQueries(
+    user?: RbacUser,
+  ): Promise<string[] | undefined> {
+    if (!user?.id) return this.getTargetLocalityIds();
+    const profile = resolveAccessProfile(user);
+    if (profile.ti || profile.nationalCommission) return undefined;
+    return this.getTargetLocalityIds();
+  }
+
   async listTaskInstances(
     filters: {
       localityId?: string;
@@ -587,8 +600,8 @@ export class TasksService {
     },
     user?: RbacUser,
   ) {
-    const allowedLocalityIds = await this.getTargetLocalityIds();
-    if (allowedLocalityIds.length === 0) {
+    const allowedLocalityIds = await this.allowedLocalityIdsForTaskQueries(user);
+    if (allowedLocalityIds !== undefined && allowedLocalityIds.length === 0) {
       const { page, pageSize } = this.parsePagination(
         filters.page,
         filters.pageSize,
@@ -1810,12 +1823,14 @@ export class TasksService {
     params: { localityId?: string; from?: string; to?: string },
     user?: RbacUser,
   ) {
-    const allowedLocalityIds = await this.getTargetLocalityIds();
-    if (allowedLocalityIds.length === 0) {
+    const allowedLocalityIds = await this.allowedLocalityIdsForTaskQueries(user);
+    if (allowedLocalityIds !== undefined && allowedLocalityIds.length === 0) {
       return { items: [] };
     }
     const andClauses: Prisma.TaskInstanceWhereInput[] = [];
-    andClauses.push({ localityId: { in: allowedLocalityIds } });
+    if (allowedLocalityIds !== undefined) {
+      andClauses.push({ localityId: { in: allowedLocalityIds } });
+    }
     if (params.localityId) andClauses.push({ localityId: params.localityId });
     if (params.from || params.to) {
       const dueDate: Prisma.DateTimeFilter = {};
@@ -1851,8 +1866,8 @@ export class TasksService {
   }
 
   async getCalendar(year: number, localityId?: string, user?: RbacUser) {
-    const allowedLocalityIds = await this.getTargetLocalityIds();
-    if (allowedLocalityIds.length === 0) {
+    const allowedLocalityIds = await this.allowedLocalityIdsForTaskQueries(user);
+    if (allowedLocalityIds !== undefined && allowedLocalityIds.length === 0) {
       return { items: [] };
     }
     const start = new Date(Date.UTC(year, 0, 1));
@@ -1860,8 +1875,10 @@ export class TasksService {
 
     const andClauses: Prisma.TaskInstanceWhereInput[] = [
       { dueDate: { gte: start, lt: end } },
-      { localityId: { in: allowedLocalityIds } },
     ];
+    if (allowedLocalityIds !== undefined) {
+      andClauses.push({ localityId: { in: allowedLocalityIds } });
+    }
     if (localityId) andClauses.push({ localityId });
     const accessWhere = this.buildTaskAccessWhere(user, 'view');
     if (Object.keys(accessWhere).length > 0) andClauses.push(accessWhere);
@@ -5124,8 +5141,9 @@ export class TasksService {
     },
     user?: RbacUser,
   ) {
-    const allowedLocalityIds = await this.getTargetLocalityIds();
-    if (allowedLocalityIds.length === 0) return [];
+    const allowedLocalityIds = await this.allowedLocalityIdsForTaskQueries(user);
+    if (allowedLocalityIds !== undefined && allowedLocalityIds.length === 0)
+      return [];
     const { where } = this.buildTaskWhere(
       { ...filters, allowedLocalityIds },
       user,
