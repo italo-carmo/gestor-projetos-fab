@@ -1,7 +1,32 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+} from "@tanstack/react-query";
 import { api } from "./client";
 import { qk } from "./queryKeys";
 import { splitMilitaryNameAndOm, toMilitaryDisplayName } from "../app/militaryName";
+
+/** Lista paginada ordena por prazo: tarefas novas podem ficar fora da 1ª página; injeta na cache após refetch. */
+function mergeCreatedTasksIntoTasksCache(
+  qc: QueryClient,
+  createdItems: any[],
+) {
+  if (!createdItems?.length) return;
+  qc.setQueriesData({ queryKey: ["tasks"] }, (old: any) => {
+    if (!old?.items) return old;
+    const serverIds = new Set(old.items.map((t: any) => String(t.id)));
+    const toPrepend = createdItems.filter(
+      (c: any) => c?.id && !serverIds.has(String(c.id)),
+    );
+    if (toPrepend.length === 0) return old;
+    return {
+      ...old,
+      items: [...toPrepend, ...old.items],
+    };
+  });
+}
 
 function normalizeSigpesNumeroOrdem(value: unknown) {
   const raw = String(value ?? "").trim();
@@ -1382,7 +1407,10 @@ export function useGenerateInstances() {
           args.payload,
         )
       ).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["tasks"] }),
+    onSuccess: async (data) => {
+      await qc.invalidateQueries({ queryKey: ["tasks"] });
+      mergeCreatedTasksIntoTasksCache(qc, data?.items ?? []);
+    },
   });
 }
 
@@ -1399,8 +1427,9 @@ export function useCreateTaskInstance() {
       assignedToId?: string | null;
       assigneeIds?: string[];
     }) => (await api.post("/task-instances", payload)).data,
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["tasks"] });
+    onSuccess: async (data) => {
+      await qc.invalidateQueries({ queryKey: ["tasks"] });
+      mergeCreatedTasksIntoTasksCache(qc, data?.items ?? []);
       qc.invalidateQueries({ queryKey: ["gantt"] });
       qc.invalidateQueries({ queryKey: ["calendar"] });
       qc.invalidateQueries({ queryKey: ["meetings"] });

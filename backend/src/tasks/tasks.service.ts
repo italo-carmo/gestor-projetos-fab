@@ -417,7 +417,11 @@ export class TasksService {
       diffJson: { templateId, count: created.length },
     });
 
-    return { items: created };
+    const items = await this.loadTaskInstancesMapped(
+      created.map((row) => row.id),
+      user,
+    );
+    return { items };
   }
 
   async createTaskInstancesManual(
@@ -567,7 +571,27 @@ export class TasksService {
       },
     });
 
-    return { items: created };
+    const items = await this.loadTaskInstancesMapped(
+      created.map((row) => row.id),
+      user,
+    );
+    return { items };
+  }
+
+  private async loadTaskInstancesMapped(
+    ids: string[],
+    user?: RbacUser,
+  ): Promise<any[]> {
+    if (!ids.length) return [];
+    const rows = await this.prisma.taskInstance.findMany({
+      where: { id: { in: ids } },
+      orderBy: { dueDate: 'asc' },
+      include: this.taskInstanceListInclude(),
+    });
+    const withComments = await this.attachTaskCommentSummary(rows, user);
+    return withComments.map((item) =>
+      this.mapTaskInstance(item, user?.executiveHidePii),
+    );
   }
 
   /**
