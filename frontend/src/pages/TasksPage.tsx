@@ -58,7 +58,7 @@ import { ptBR as dataGridPtBR } from "@mui/x-data-grid/locales";
 import { useToast } from "../app/toast";
 import { parseApiError } from "../app/apiErrors";
 import { TASK_PRIORITY_LABELS, TASK_STATUS_LABELS } from "../constants/enums";
-import { normalizeLocalityName } from "../constants/localities";
+import { selectTargetLocalities } from "../constants/localities";
 import { ConfirmDialog } from "../components/dialogs/ConfirmDialog";
 
 function resolveTaskTitle(task: any) {
@@ -178,22 +178,20 @@ export function TasksPage() {
       .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
   }, [localitiesData]);
 
-  /** Fonte única para seleção: catálogo de localidades do backend (`/localities`), sem fallback em tarefas. */
+  /** Fonte única para seleção: localidades SMIF (mesmo recorte usado na aba Admin > Localidades). */
   const localities = useMemo(() => {
     if (!localitiesData.length) return [];
-    const byNormalizedName = new Map<string, { id: string; name: string }>();
-    for (const row of localitiesData) {
-      const id = String(row?.id ?? "").trim();
-      if (!id) continue;
-      const name = String(row?.name ?? row?.code ?? id).trim() || id;
-      const key = normalizeLocalityName(name) || id;
-      if (!byNormalizedName.has(key)) {
-        byNormalizedName.set(key, { id, name });
-      }
-    }
-    return Array.from(byNormalizedName.values()).sort((a, b) =>
-      a.name.localeCompare(b.name, "pt-BR"),
-    );
+    const base = selectTargetLocalities(localitiesData).map((row: any) => ({
+      id: String(row?.id ?? "").trim(),
+      name:
+        String(row?.name ?? row?.code ?? row?.id ?? "").trim() ||
+        String(row?.id ?? "").trim(),
+    }));
+    return Array.from(
+      new Map(
+        base.filter((row) => row.id).map((row) => [row.id, row] as const),
+      ).values(),
+    ).sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
   }, [localitiesData]);
 
   const localityMap = useMemo(() => {

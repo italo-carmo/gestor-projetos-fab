@@ -231,8 +231,13 @@ export function TaskDetailsDrawer({
 
     const addOption = (
       locality: { id?: string | null; name?: string | null },
-      prefer = false,
+      opts?: { prefer?: boolean; allowIfUnknownName?: boolean },
     ) => {
+      const prefer = Boolean(opts?.prefer);
+      const allowIfUnknownName =
+        opts?.allowIfUnknownName === undefined
+          ? true
+          : Boolean(opts.allowIfUnknownName);
       const id = String(locality?.id ?? "").trim();
       if (!id) return;
       const name = String(locality?.name ?? id).trim() || id;
@@ -245,14 +250,16 @@ export function TaskDetailsDrawer({
       if (existingIdByName) {
         if (!prefer) return;
         optionMap.delete(existingIdByName);
+      } else if (!allowIfUnknownName) {
+        return;
       }
       optionMap.set(id, { id, name });
       if (normalizedName) normalizedNameToId.set(normalizedName, id);
     };
 
-    /** Prioriza a lista de localidades do catálogo (SMIF) e só inclui alias quando não existir equivalente por nome. */
+    /** Lista final limitada ao catálogo SMIF recebido da página. */
     localities.forEach((locality) => {
-      addOption(locality, true);
+      addOption(locality, { prefer: true, allowIfUnknownName: true });
     });
     linkedLocalities.forEach((locality) => {
       addOption(
@@ -260,7 +267,7 @@ export function TaskDetailsDrawer({
           id: String(locality?.id ?? ""),
           name: String(locality?.name ?? ""),
         },
-        false,
+        { prefer: false, allowIfUnknownName: false },
       );
     });
     if (task?.localityId) {
@@ -269,7 +276,7 @@ export function TaskDetailsDrawer({
           id: String(task.localityId),
           name: String(task.localityName ?? "Localidade atual"),
         },
-        false,
+        { prefer: false, allowIfUnknownName: false },
       );
     }
     return Array.from(optionMap.values()).sort((a, b) =>
@@ -322,7 +329,7 @@ export function TaskDetailsDrawer({
       taskLocalityId && !catalogLocalityIds.has(taskLocalityId)
         ? ((taskNormalizedName
             ? catalogByNormalizedName.get(taskNormalizedName)
-            : undefined) ?? taskLocalityId)
+            : undefined) ?? "")
         : taskLocalityId;
     setSelectedLocalityId(canonicalTaskLocalityId);
     setSelectedAssigneeValue(assigneeValueFromTask(task));
@@ -345,8 +352,8 @@ export function TaskDetailsDrawer({
         if (!localityId) return "";
         if (catalogLocalityIds.has(localityId)) return localityId;
         const normalizedName = normalizeLocalityName(locality?.name);
-        if (!normalizedName) return localityId;
-        return catalogByNormalizedName.get(normalizedName) ?? localityId;
+        if (!normalizedName) return "";
+        return catalogByNormalizedName.get(normalizedName) ?? "";
       })
       .filter(Boolean);
     setLinkedLocalityIdsDraft(uniqueLocalityIds(linkedIds));
