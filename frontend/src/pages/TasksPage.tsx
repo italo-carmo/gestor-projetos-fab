@@ -167,7 +167,7 @@ export function TasksPage() {
     : items;
 
   const localitiesData = (localitiesQuery.data?.items ?? []) as any[];
-  /** Catálogo completo (edição de localidades / criar tarefa); filtros usam só OMs-alvo em `localities`. */
+  /** Só para nomes na tabela (inclui OMs fora do recorte SMIF); edição/criação de tarefa usam `localities`. */
   const allLocalities = useMemo(() => {
     if (!localitiesData.length) return [];
     return localitiesData
@@ -482,9 +482,7 @@ export function TasksPage() {
     setCreateDrawerOpen(true);
   };
 
-  const localityPoolForCreate =
-    allLocalities.length > 0 ? allLocalities : localities;
-  const selectedCreateLocalities = localityPoolForCreate.filter((locality) =>
+  const selectedCreateLocalities = localities.filter((locality) =>
     createLocalityIds.includes(locality.id),
   );
 
@@ -1306,7 +1304,7 @@ export function TasksPage() {
             <Autocomplete
               multiple
               disableCloseOnSelect
-              options={localityPoolForCreate}
+              options={localities}
               value={selectedCreateLocalities}
               getOptionLabel={(option) => option.name}
               isOptionEqualToValue={(option, value) => option.id === value.id}
@@ -1350,7 +1348,7 @@ export function TasksPage() {
                 size="small"
                 variant="outlined"
                 onClick={() => {
-                  const ids = localityPoolForCreate.map((locality) => locality.id);
+                  const ids = localities.map((locality) => locality.id);
                   setCreateLocalityIds(ids);
                   setCreateOffsets(
                     ids.reduce((acc: Record<string, number>, id: string) => {

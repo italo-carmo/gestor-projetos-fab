@@ -67,7 +67,8 @@ export function CalendarPage() {
   });
 
   const localitiesCatalogQuery = useLocalities();
-  const allLocalitiesForTaskDrawer = useMemo(() => {
+  /** Catálogo completo só para resolver nomes; o drawer de tarefa usa localidades SMIF-alvo. */
+  const localityNameCatalog = useMemo(() => {
     const items = (localitiesCatalogQuery.data?.items ?? []) as any[];
     return items
       .map((loc) => ({
@@ -75,6 +76,15 @@ export function CalendarPage() {
         name: String(loc.name ?? loc.code ?? loc.id),
       }))
       .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+  }, [localitiesCatalogQuery.data?.items]);
+
+  const smifLocalitiesForTaskDrawer = useMemo(() => {
+    const items = (localitiesCatalogQuery.data?.items ?? []) as any[];
+    if (!items.length) return [];
+    return selectTargetLocalities(items).map((loc: any) => ({
+      id: String(loc.id),
+      name: String(loc.name ?? loc.code ?? loc.id),
+    }));
   }, [localitiesCatalogQuery.data?.items]);
 
   const localities = selectTargetLocalities(
@@ -88,13 +98,13 @@ export function CalendarPage() {
       String(loc.name ?? '').trim(),
   );
   const localityMap = useMemo(() => {
-    const m = new Map(allLocalitiesForTaskDrawer.map((l) => [l.id, l.name]));
+    const m = new Map(localityNameCatalog.map((l) => [l.id, l.name]));
     for (const loc of localities) {
       const id = String((loc as any).id ?? '');
       if (id && !m.has(id)) m.set(id, String((loc as any).name ?? id));
     }
     return m;
-  }, [allLocalitiesForTaskDrawer, localities]);
+  }, [localityNameCatalog, localities]);
 
   const templateMap = new Map((templatesQuery.data?.items ?? []).map((t: any) => [t.id, t]));
   const tasks = (tasksQuery.data?.items ?? []).map((task: any) => ({
@@ -302,7 +312,7 @@ export function CalendarPage() {
         onDeleted={() => setSelectedTaskId(null)}
         user={me}
         localities={
-          allLocalitiesForTaskDrawer.length > 0 ? allLocalitiesForTaskDrawer : localities
+          smifLocalitiesForTaskDrawer.length > 0 ? smifLocalitiesForTaskDrawer : localities
         }
         loading={Boolean(selectedTaskId) && !selectedTaskFromList && selectedTaskQuery.isLoading}
       />

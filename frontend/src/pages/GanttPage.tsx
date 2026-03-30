@@ -67,7 +67,8 @@ export function GanttPage() {
   const templateMap = new Map<string, any>(((templatesQuery.data?.items ?? []) as any[]).map((t: any) => [t.id, t]));
 
   const localitiesRaw = (localitiesQuery.data?.items ?? []) as any[];
-  const allLocalities = useMemo(
+  /** Nomes no gráfico; edição de tarefa usa só `localities` (SMIF-alvo). */
+  const localityNameCatalog = useMemo(
     () =>
       localitiesRaw
         .map((loc: any) => ({
@@ -81,7 +82,7 @@ export function GanttPage() {
     id: loc.id,
     name: loc.name ?? loc.code ?? loc.id,
   }));
-  const localityNameMap = new Map(allLocalities.map((l: any) => [l.id, l.name]));
+  const localityNameMap = new Map(localityNameCatalog.map((l: any) => [l.id, l.name]));
 
   const phases = ((phasesQuery.data?.items ?? []) as any[]).map((phase: any) => ({
     id: phase.id,
@@ -407,7 +408,7 @@ export function GanttPage() {
         onClose={() => setSelectedTaskId(null)}
         onDeleted={() => setSelectedTaskId(null)}
         user={me}
-        localities={allLocalities.length > 0 ? allLocalities : localities}
+        localities={localities}
         linkedTaskIds={selectedTask?.groupedTaskIds ?? []}
         linkedLocalities={selectedTask?.groupedLocalities ?? []}
       />
