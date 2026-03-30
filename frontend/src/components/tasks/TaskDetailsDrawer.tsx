@@ -152,6 +152,17 @@ export function TaskDetailsDrawer({
       .filter(Boolean);
     return Array.from(new Set(ids));
   }, [task?.id, linkedTaskIds]);
+
+  /** Evita reset do rascunho quando o pai re-renderiza com o mesmo conjunto de IDs (nova referência de array). */
+  const linkedLocalitiesKey = useMemo(
+    () =>
+      linkedLocalities
+        .map((l) => String(l?.id ?? "").trim())
+        .filter(Boolean)
+        .sort()
+        .join("|"),
+    [linkedLocalities],
+  );
   const hasLinkedTasks = normalizedLinkedIds.length > 1;
   const hasCustomTitle = Boolean(String(task?.titleOverride ?? "").trim());
   const isManualTaskTemplate =
@@ -239,7 +250,7 @@ export function TaskDetailsDrawer({
     task?.assignedToId,
     task?.assignedEloId,
     task?.assigneeType,
-    linkedLocalities,
+    linkedLocalitiesKey,
   ]);
 
   useEffect(() => {

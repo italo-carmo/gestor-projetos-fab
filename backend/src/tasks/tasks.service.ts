@@ -615,6 +615,12 @@ export class TasksService {
     if (filters.meetingId) where.meetingId = filters.meetingId;
     if (filters.eloRoleId) where.eloRoleId = filters.eloRoleId;
 
+    const finalWhere = await this.expandTaskWhereForSharedGroupKey(
+      { ...filters, allowedLocalityIds },
+      where,
+      user,
+    );
+
     const { page, pageSize, skip, take } = this.parsePagination(
       filters.page,
       filters.pageSize,
@@ -622,7 +628,7 @@ export class TasksService {
 
     const [items, total] = await this.prisma.$transaction([
       this.prisma.taskInstance.findMany({
-        where,
+        where: finalWhere,
         orderBy: { dueDate: 'asc' },
         skip,
         take,
@@ -655,7 +661,7 @@ export class TasksService {
           eloRole: { select: { id: true, code: true, name: true } },
         },
       }),
-      this.prisma.taskInstance.count({ where }),
+      this.prisma.taskInstance.count({ where: finalWhere }),
     ]);
 
     const withCommentSummary = await this.attachTaskCommentSummary(items, user);
@@ -5127,6 +5133,66 @@ export class TasksService {
     return { where };
   }
 
+  /**
+   * Com filtro por localityId, inclui também as outras instâncias do mesmo groupKey
+   * (tarefa multi-localidade). Sem isso o cliente só recebe a ponta da OM filtrada e o
+   * agrupamento no front perde as demais localidades após editar.
+   */
+  private async expandTaskWhereForSharedGroupKey(
+    filters: {
+      localityId?: string;
+      allowedLocalityIds?: string[];
+      phaseId?: string;
+      status?: string;
+      assigneeId?: string;
+      assigneeIds?: string;
+      dueFrom?: string;
+      dueTo?: string;
+      meetingId?: string;
+      eloRoleId?: string;
+      specialtyId?: string;
+    },
+    whereWithLocalityAndMeeting: Prisma.TaskInstanceWhereInput,
+    user?: RbacUser,
+  ): Promise<Prisma.TaskInstanceWhereInput> {
+    if (!filters.localityId) return whereWithLocalityAndMeeting;
+
+    const anchorRows = await this.prisma.taskInstance.findMany({
+      where: whereWithLocalityAndMeeting,
+      select: { groupKey: true },
+    });
+    const groupKeys = Array.from(
+      new Set(
+        anchorRows
+          .map((row) => String(row.groupKey ?? '').trim())
+          .filter(Boolean),
+      ),
+    );
+    if (groupKeys.length === 0) return whereWithLocalityAndMeeting;
+
+    const { where: withoutLocality } = this.buildTaskWhere(
+      {
+        ...filters,
+        localityId: undefined,
+      },
+      user,
+    );
+    if (filters.meetingId) withoutLocality.meetingId = filters.meetingId;
+    if (filters.eloRoleId) withoutLocality.eloRoleId = filters.eloRoleId;
+
+    return {
+      AND: [
+        withoutLocality,
+        {
+          OR: [
+            { localityId: filters.localityId },
+            { groupKey: { in: groupKeys } },
+          ],
+        },
+      ],
+    };
+  }
+
   async listTaskInstancesForExport(
     filters: {
       localityId?: string;
@@ -5149,8 +5215,14 @@ export class TasksService {
       user,
     );
 
-    const items = await this.prisma.taskInstance.findMany({
+    const finalWhere = await this.expandTaskWhereForSharedGroupKey(
+      { ...filters, allowedLocalityIds },
       where,
+      user,
+    );
+
+    const items = await this.prisma.taskInstance.findMany({
+      where: finalWhere,
       include: {
         taskTemplate: {
           include: { phase: true, specialty: true, eloRole: true },
