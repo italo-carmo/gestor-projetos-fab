@@ -129,8 +129,7 @@ export class ActivitiesController {
   ) {
     return this.activities.batchUpdateSpecialty(
       body.ids ?? [],
-      body.specialtyIds ??
-        (body.specialtyId ? [body.specialtyId] : []),
+      body.specialtyIds ?? (body.specialtyId ? [body.specialtyId] : []),
       user,
     );
   }

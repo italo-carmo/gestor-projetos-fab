@@ -7,7 +7,12 @@ import {
   CardContent,
   Checkbox,
   Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Drawer,
+  IconButton,
   MenuItem,
   Stack,
   Tab,
@@ -18,8 +23,10 @@ import {
   TableRow,
   Tabs,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
@@ -33,7 +40,18 @@ import {
   useSetLocalityCommanderFromLdap,
 } from '../api/hooks';
 import { can } from '../app/rbac';
-import { canEditRecruitsCount } from '../app/roleAccess';
+import {
+  canEditRecruitsCount,
+  hasAnyRole,
+  ROLE_TI,
+} from '../app/roleAccess';
+import {
+  GSD_RECRUITS_UI_DEFAULTS,
+  GSD_RECRUITS_UI_SETTINGS_KEY,
+  loadGsdRecruitsUiSettings,
+  persistGsdRecruitsUiSettings,
+  type GsdRecruitsUiSectionId,
+} from '../app/gsdRecruitsUiSettings';
 import { toMilitaryDisplayName } from '../app/militaryName';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
@@ -155,6 +173,11 @@ export function GsdRecruitsPage() {
     fabom: string | null;
   } | null>(null);
 
+  const isTiProfile = hasAnyRole(me, [ROLE_TI]);
+  const [gsdUiSettings, setGsdUiSettings] = useState(() => loadGsdRecruitsUiSettings());
+  const [editingGsdSection, setEditingGsdSection] = useState<GsdRecruitsUiSectionId | null>(null);
+  const [gsdSectionDraft, setGsdSectionDraft] = useState({ title: '', description: '' });
+
   const selectedLocalityId = String(selected?.id ?? '');
   const recruitMembersQuery = useLocalityRecruitMembers(
     selectedLocalityId,
@@ -256,6 +279,20 @@ export function GsdRecruitsPage() {
     return () => {
       observer.disconnect();
       window.removeEventListener('resize', updateVisibility);
+    };
+  }, []);
+
+  useEffect(() => {
+    const sync = () => setGsdUiSettings(loadGsdRecruitsUiSettings());
+    window.addEventListener('gsd-recruits-ui-settings-changed', sync);
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== GSD_RECRUITS_UI_SETTINGS_KEY) return;
+      sync();
+    };
+    window.addEventListener('storage', onStorage);
+    return () => {
+      window.removeEventListener('gsd-recruits-ui-settings-changed', sync);
+      window.removeEventListener('storage', onStorage);
     };
   }, []);
 
@@ -579,6 +616,27 @@ export function GsdRecruitsPage() {
     setSearchParams(next, { replace: true });
   };
 
+  const openGsdSectionEditor = (id: GsdRecruitsUiSectionId) => {
+    const s = gsdUiSettings[id];
+    setGsdSectionDraft({ title: s.title, description: s.description });
+    setEditingGsdSection(id);
+  };
+
+  const saveGsdSectionEditor = () => {
+    if (!editingGsdSection) return;
+    const next = {
+      ...gsdUiSettings,
+      [editingGsdSection]: {
+        title: gsdSectionDraft.title,
+        description: gsdSectionDraft.description,
+      },
+    };
+    setGsdUiSettings(next);
+    persistGsdRecruitsUiSettings(next);
+    setEditingGsdSection(null);
+    toast.push({ message: 'Texto do card atualizado.', severity: 'success' });
+  };
+
   return (
     <Box>
       <Typography variant="h4" gutterBottom fontWeight={700}>
@@ -597,9 +655,37 @@ export function GsdRecruitsPage() {
         <Stack spacing={2}>
           <Card>
             <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Localidades SMIF
-              </Typography>
+              <Stack
+                direction="row"
+                alignItems="flex-start"
+                justifyContent="space-between"
+                spacing={1}
+                sx={{ mb: 2 }}
+              >
+                <Box sx={{ minWidth: 0, flex: 1 }}>
+                  <Typography variant="h6" gutterBottom>
+                    {gsdUiSettings.smifLocalities.title.trim() ||
+                      GSD_RECRUITS_UI_DEFAULTS.smifLocalities.title}
+                  </Typography>
+                  {gsdUiSettings.smifLocalities.description.trim() ? (
+                    <Typography variant="body2" color="text.secondary">
+                      {gsdUiSettings.smifLocalities.description.trim()}
+                    </Typography>
+                  ) : null}
+                </Box>
+                {isTiProfile ? (
+                  <Tooltip title="Editar título e descrição">
+                    <IconButton
+                      size="small"
+                      onClick={() => openGsdSectionEditor('smifLocalities')}
+                      sx={{ flexShrink: 0 }}
+                      aria-label="Editar título e descrição do card Localidades SMIF"
+                    >
+                      <EditOutlinedIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                ) : null}
+              </Stack>
               {!canLoadRecruitsData ? (
                 <ErrorState
                   error={{
@@ -692,6 +778,42 @@ export function GsdRecruitsPage() {
 
           <Card>
             <CardContent>
+              {(isTiProfile ||
+                gsdUiSettings.managementTable.title.trim() ||
+                gsdUiSettings.managementTable.description.trim()) && (
+                <Stack
+                  direction="row"
+                  alignItems="flex-start"
+                  justifyContent="space-between"
+                  spacing={1}
+                  sx={{ mb: 2 }}
+                >
+                  <Box sx={{ minWidth: 0, flex: 1 }}>
+                    {gsdUiSettings.managementTable.title.trim() ? (
+                      <Typography variant="h6" gutterBottom>
+                        {gsdUiSettings.managementTable.title.trim()}
+                      </Typography>
+                    ) : null}
+                    {gsdUiSettings.managementTable.description.trim() ? (
+                      <Typography variant="body2" color="text.secondary">
+                        {gsdUiSettings.managementTable.description.trim()}
+                      </Typography>
+                    ) : null}
+                  </Box>
+                  {isTiProfile ? (
+                    <Tooltip title="Editar título e descrição">
+                      <IconButton
+                        size="small"
+                        onClick={() => openGsdSectionEditor('managementTable')}
+                        sx={{ flexShrink: 0 }}
+                        aria-label="Editar título e descrição do card da tabela de gestão"
+                      >
+                        <EditOutlinedIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  ) : null}
+                </Stack>
+              )}
               {!canLoadRecruitsData ? (
                 <ErrorState
                   error={{
@@ -786,9 +908,9 @@ export function GsdRecruitsPage() {
           </CardContent>
         </Card>
 
-        <MilitaryHighlightsPanel />
-
         <InstitutionalMappingPanel />
+
+        <MilitaryHighlightsPanel />
         </Stack>
       )}
 
@@ -1368,6 +1490,47 @@ export function GsdRecruitsPage() {
           </Box>
         </Box>
       </Drawer>
+
+      <Dialog
+        open={Boolean(editingGsdSection)}
+        onClose={() => setEditingGsdSection(null)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>
+          {editingGsdSection === 'smifLocalities'
+            ? 'Card Localidades SMIF'
+            : 'Card da tabela de gestão'}
+        </DialogTitle>
+        <DialogContent sx={{ pt: 1 }}>
+          <Stack spacing={1.5} sx={{ mt: 0.5 }}>
+            <TextField
+              label="Título"
+              value={gsdSectionDraft.title}
+              onChange={(e) =>
+                setGsdSectionDraft((prev) => ({ ...prev, title: e.target.value }))
+              }
+              fullWidth
+            />
+            <TextField
+              label="Descrição"
+              value={gsdSectionDraft.description}
+              onChange={(e) =>
+                setGsdSectionDraft((prev) => ({ ...prev, description: e.target.value }))
+              }
+              fullWidth
+              multiline
+              minRows={3}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditingGsdSection(null)}>Cancelar</Button>
+          <Button variant="contained" onClick={saveGsdSectionEditor}>
+            Salvar
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

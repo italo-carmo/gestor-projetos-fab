@@ -79,12 +79,22 @@ export class SocialCommunicationService {
         { militaryEmail: { contains: normalizedQuery, mode: 'insensitive' } },
         { fabom: { contains: normalizedQuery, mode: 'insensitive' } },
         { highlightText: { contains: normalizedQuery, mode: 'insensitive' } },
-        { locality: { name: { contains: normalizedQuery, mode: 'insensitive' } } },
-        { locality: { code: { contains: normalizedQuery, mode: 'insensitive' } } },
+        {
+          locality: {
+            name: { contains: normalizedQuery, mode: 'insensitive' },
+          },
+        },
+        {
+          locality: {
+            code: { contains: normalizedQuery, mode: 'insensitive' },
+          },
+        },
       ];
     }
 
-    const rows = await (this.prisma as any).socialCommunicationHighlight.findMany({
+    const rows = await (
+      this.prisma as any
+    ).socialCommunicationHighlight.findMany({
       where,
       include: {
         locality: { select: { id: true, code: true, name: true } },
@@ -136,7 +146,10 @@ export class SocialCommunicationService {
   ) {
     this.assertHighlightEditorAccess(user);
 
-    const localityId = this.normalizeRequiredText(payload.localityId, 'localityId');
+    const localityId = this.normalizeRequiredText(
+      payload.localityId,
+      'localityId',
+    );
     await this.assertHighlightLocalityExists(localityId);
     const normalizedPhotoBase64 =
       this.normalizeHighlightPhotoBase64(payload.photoBase64, 'photoBase64') ??
@@ -148,7 +161,9 @@ export class SocialCommunicationService {
         ) ?? 'image/jpeg')
       : null;
 
-    const created = await (this.prisma as any).socialCommunicationHighlight.create({
+    const created = await (
+      this.prisma as any
+    ).socialCommunicationHighlight.create({
       data: {
         ldapUid: this.normalizeOptionalText(payload.ldapUid) ?? null,
         militaryEmail: this.normalizeHighlightEmail(
@@ -208,7 +223,9 @@ export class SocialCommunicationService {
   ) {
     this.assertHighlightEditorAccess(user);
 
-    const existing = await (this.prisma as any).socialCommunicationHighlight.findUnique({
+    const existing = await (
+      this.prisma as any
+    ).socialCommunicationHighlight.findUnique({
       where: { id },
       select: { id: true },
     });
@@ -235,7 +252,8 @@ export class SocialCommunicationService {
       data.fabom = this.normalizeOptionalText(payload.fabom) ?? null;
     }
     if (payload.highlightRole !== undefined) {
-      data.highlightRole = this.normalizeOptionalText(payload.highlightRole) ?? null;
+      data.highlightRole =
+        this.normalizeOptionalText(payload.highlightRole) ?? null;
     }
     if (payload.photoBase64 !== undefined) {
       const normalizedPhotoBase64 = this.normalizeHighlightPhotoBase64(
@@ -264,7 +282,10 @@ export class SocialCommunicationService {
       data.impact = this.normalizeHighlightImpact(payload.impact, 'impact');
     }
     if (payload.localityId !== undefined) {
-      const localityId = this.normalizeRequiredText(payload.localityId, 'localityId');
+      const localityId = this.normalizeRequiredText(
+        payload.localityId,
+        'localityId',
+      );
       await this.assertHighlightLocalityExists(localityId);
       data.locality = { connect: { id: localityId } };
     }
@@ -272,7 +293,9 @@ export class SocialCommunicationService {
       data.highlightText = this.normalizeHighlightText(payload.text, 'text');
     }
 
-    const updated = await (this.prisma as any).socialCommunicationHighlight.update({
+    const updated = await (
+      this.prisma as any
+    ).socialCommunicationHighlight.update({
       where: { id },
       data,
       include: {
@@ -299,13 +322,17 @@ export class SocialCommunicationService {
   async removeHighlight(id: string, user?: RbacUser) {
     this.assertHighlightEditorAccess(user);
 
-    const existing = await (this.prisma as any).socialCommunicationHighlight.findUnique({
+    const existing = await (
+      this.prisma as any
+    ).socialCommunicationHighlight.findUnique({
       where: { id },
       select: { id: true, militaryName: true, militaryEmail: true },
     });
     if (!existing) throwError('NOT_FOUND');
 
-    await (this.prisma as any).socialCommunicationHighlight.delete({ where: { id } });
+    await (this.prisma as any).socialCommunicationHighlight.delete({
+      where: { id },
+    });
 
     await this.audit.log({
       userId: user?.id,
@@ -1208,7 +1235,10 @@ export class SocialCommunicationService {
     return normalized;
   }
 
-  private normalizeHighlightImpact(value: string, field: string): HighlightImpact {
+  private normalizeHighlightImpact(
+    value: string,
+    field: string,
+  ): HighlightImpact {
     const normalized = sanitizeText(value ?? '').toUpperCase();
     if (normalized === 'MULTIPLICADOR' || normalized === 'SIMBOLICO') {
       return normalized;

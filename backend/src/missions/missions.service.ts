@@ -559,7 +559,8 @@ export class MissionsService {
       payload.prompt === undefined ? null : sanitizeText(payload.prompt ?? '');
 
     const sortOrder =
-      typeof payload.sortOrder === 'number' && Number.isFinite(payload.sortOrder)
+      typeof payload.sortOrder === 'number' &&
+      Number.isFinite(payload.sortOrder)
         ? Math.max(0, Math.floor(payload.sortOrder))
         : await this.nextChecklistDimensionSortOrder(sectionId);
     const id = `dim_${Date.now().toString(36)}_${Math.random()
@@ -632,7 +633,8 @@ export class MissionsService {
         : this.normalizeChecklistSectionId(payload.sectionId);
 
     const nextSortOrder =
-      typeof payload.sortOrder === 'number' && Number.isFinite(payload.sortOrder)
+      typeof payload.sortOrder === 'number' &&
+      Number.isFinite(payload.sortOrder)
         ? Math.max(0, Math.floor(payload.sortOrder))
         : existing.sortOrder;
     const nextTitle =
@@ -855,7 +857,8 @@ export class MissionsService {
       this.readStoredMissionChecklistOmId(mission.checklistJson) ??
       mission.localityId;
     const checklistOm =
-      checklistOmId && (await this.prisma.locality.findUnique({
+      checklistOmId &&
+      (await this.prisma.locality.findUnique({
         where: { id: checklistOmId },
         select: { id: true, code: true, name: true },
       }));
@@ -1994,8 +1997,12 @@ export class MissionsService {
       cursorY += rowHeight + rowSpacing;
     };
 
-    const buildScheduleRowData = (item: (typeof mission.scheduleItems)[number]) => {
-      const endAt = new Date(item.startAt.getTime() + item.durationMinutes * 60_000);
+    const buildScheduleRowData = (
+      item: (typeof mission.scheduleItems)[number],
+    ) => {
+      const endAt = new Date(
+        item.startAt.getTime() + item.durationMinutes * 60_000,
+      );
       return {
         time: `${this.formatTime(item.startAt, missionTimeZone)} - ${this.formatTime(endAt, missionTimeZone)}`,
         duration: this.formatDuration(item.durationMinutes),
@@ -2104,9 +2111,14 @@ export class MissionsService {
       for (const dayGroup of groupedByDay) {
         const firstItem = dayGroup.items[0];
         if (!firstItem) continue;
-        moveDayBlockToNextPageWhenPossible(measureDayBlockHeight(dayGroup.items));
+        moveDayBlockToNextPageWhenPossible(
+          measureDayBlockHeight(dayGroup.items),
+        );
         const firstRowData = buildScheduleRowData(firstItem);
-        drawDayBlockHeader(dayGroup.label, measureScheduleRowHeight(firstRowData));
+        drawDayBlockHeader(
+          dayGroup.label,
+          measureScheduleRowHeight(firstRowData),
+        );
 
         let rowIndex = 0;
         let lastItemHour = -1;
@@ -2253,7 +2265,9 @@ export class MissionsService {
 
       const itemId = typeof rawItem.id === 'string' ? rawItem.id : '';
       const classificationRaw =
-        typeof rawItem.classification === 'string' ? rawItem.classification : '';
+        typeof rawItem.classification === 'string'
+          ? rawItem.classification
+          : '';
 
       if (!checklistConfig.itemIdSet.has(itemId)) continue;
       if (
@@ -2270,8 +2284,9 @@ export class MissionsService {
         notes: typeof rawItem.notes === 'string' ? rawItem.notes : '',
         photos: this.normalizeMissionChecklistPhotos(
           Array.isArray(rawItem.photos)
-            ? (rawItem.photos as Prisma.JsonValue[])
-                .filter((entry): entry is string => typeof entry === 'string')
+            ? (rawItem.photos as Prisma.JsonValue[]).filter(
+                (entry): entry is string => typeof entry === 'string',
+              )
             : [],
         ),
       });
@@ -2327,9 +2342,10 @@ export class MissionsService {
       `),
     ]);
 
-    const sectionGroups = new Map<MissionChecklistSectionId, MissionChecklistSectionRuntime['items']>(
-      MISSION_CHECKLIST_SECTION_IDS.map((sectionId) => [sectionId, []]),
-    );
+    const sectionGroups = new Map<
+      MissionChecklistSectionId,
+      MissionChecklistSectionRuntime['items']
+    >(MISSION_CHECKLIST_SECTION_IDS.map((sectionId) => [sectionId, []]));
 
     for (const row of dimensionRows) {
       if (!this.isMissionChecklistSectionId(row.sectionId)) continue;
@@ -2344,13 +2360,12 @@ export class MissionsService {
       });
     }
 
-    let sections: MissionChecklistSectionRuntime[] = MISSION_CHECKLIST_SECTION_IDS.map(
-      (sectionId) => ({
+    let sections: MissionChecklistSectionRuntime[] =
+      MISSION_CHECKLIST_SECTION_IDS.map((sectionId) => ({
         id: sectionId,
         title: MISSION_CHECKLIST_SECTION_TITLE_BY_ID[sectionId],
         items: sectionGroups.get(sectionId) ?? [],
-      }),
-    );
+      }));
 
     const hasAtLeastOneDimension = sections.some(
       (section) => section.items.length > 0,
@@ -2390,7 +2405,10 @@ export class MissionsService {
               : defaults.sortOrder,
         };
       })
-      .sort((a, b) => a.sortOrder - b.sortOrder || a.label.localeCompare(b.label, 'pt-BR'));
+      .sort(
+        (a, b) =>
+          a.sortOrder - b.sortOrder || a.label.localeCompare(b.label, 'pt-BR'),
+      );
 
     const itemIds = sections.flatMap((section) =>
       section.items.map((item) => item.id),
@@ -2403,7 +2421,7 @@ export class MissionsService {
       DEFAULT_MISSION_CHECKLIST_CLASSIFICATION,
     )
       ? DEFAULT_MISSION_CHECKLIST_CLASSIFICATION
-      : classifications[0]?.id ?? DEFAULT_MISSION_CHECKLIST_CLASSIFICATION;
+      : (classifications[0]?.id ?? DEFAULT_MISSION_CHECKLIST_CLASSIFICATION);
 
     return {
       sections,
@@ -2428,9 +2446,9 @@ export class MissionsService {
   private isMissionChecklistClassification(
     value: string,
   ): value is MissionChecklistClassification {
-    return (
-      MISSION_CHECKLIST_CLASSIFICATIONS as readonly string[]
-    ).includes(value);
+    return (MISSION_CHECKLIST_CLASSIFICATIONS as readonly string[]).includes(
+      value,
+    );
   }
 
   private isMissionChecklistSectionId(

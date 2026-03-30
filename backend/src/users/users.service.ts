@@ -50,7 +50,9 @@ export class UsersService {
         const byUid = await this.fabLdap.lookupByUid(uid);
         if (byUid?.numeroOrdem) return byUid.numeroOrdem;
       }
-      const em = String(email ?? '').trim().toLowerCase();
+      const em = String(email ?? '')
+        .trim()
+        .toLowerCase();
       if (em) {
         const byEmail = await this.fabLdap.lookupByEmail(em);
         return byEmail?.numeroOrdem ?? null;

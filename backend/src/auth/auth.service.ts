@@ -230,9 +230,9 @@ export class AuthService {
     }
 
     const apiTargets = this.getSigpesFotoApiTargets();
-    const candidates = [...new Set([normalizedNumeroOrdem, rawNumeroOrdem])].filter(
-      Boolean,
-    );
+    const candidates = [
+      ...new Set([normalizedNumeroOrdem, rawNumeroOrdem]),
+    ].filter(Boolean);
     let lastStatus: number | null = null;
     let sawInvalidPayload = false;
     let lastFetchErrorMessage: string | null = null;
@@ -376,7 +376,10 @@ export class AuthService {
   }
 
   /** Returns numeroOrdem for a user by ldapUid/email (for org-chart photos etc.). */
-  async getNumeroOrdemForUser(ldapUid: string | null, email: string): Promise<string | null> {
+  async getNumeroOrdemForUser(
+    ldapUid: string | null,
+    email: string,
+  ): Promise<string | null> {
     try {
       const profile = await this.resolveFabProfileForUser({ ldapUid, email });
       return profile?.numeroOrdem ?? null;
@@ -464,7 +467,10 @@ export class AuthService {
       targets.map((target) => `${target.baseUrl}::${target.hostHeader ?? ''}`),
     );
     if (!existingSignatures.has(signature)) {
-      targets.push({ baseUrl: fallbackBaseUrl, hostHeader: fallbackHostHeader });
+      targets.push({
+        baseUrl: fallbackBaseUrl,
+        hostHeader: fallbackHostHeader,
+      });
     }
 
     return targets;

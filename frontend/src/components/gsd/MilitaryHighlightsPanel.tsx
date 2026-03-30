@@ -1,5 +1,6 @@
 import {
   Box,
+  Button,
   Card,
   CardContent,
   Chip,
@@ -7,15 +8,29 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  IconButton,
   Stack,
+  TextField,
+  Tooltip,
   Typography,
-  Button,
 } from '@mui/material';
 import BadgeRoundedIcon from '@mui/icons-material/BadgeRounded';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import MilitaryTechRoundedIcon from '@mui/icons-material/MilitaryTechRounded';
 import PersonRoundedIcon from '@mui/icons-material/PersonRounded';
-import { useMemo, useState } from 'react';
-import { useSocialCommunicationHighlights } from '../../api/hooks';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSocialCommunicationHighlights, useMe } from '../../api/hooks';
+import {
+  loadSocialCardSettings,
+  persistSocialCardSettings,
+  SOCIAL_CARD_DEFAULT_SETTINGS,
+  SOCIAL_CARD_EDITOR_DEFAULT_COLORS,
+  SOCIAL_CARD_SETTINGS_STORAGE_KEY,
+  type SocialCardId,
+  type SocialCardSetting,
+} from '../../app/socialCardSettingsStorage';
+import { hasAnyRole, ROLE_TI } from '../../app/roleAccess';
+import { useToast } from '../../app/toast';
 import { EmptyState } from '../states/EmptyState';
 import { ErrorState } from '../states/ErrorState';
 import { SkeletonState } from '../states/SkeletonState';
@@ -48,9 +63,90 @@ function buildHighlightPhotoDataUrl(
 }
 
 export function MilitaryHighlightsPanel() {
+  const { data: me } = useMe();
+  const toast = useToast();
+  const isTiProfile = hasAnyRole(me, [ROLE_TI]);
   const highlightsQuery = useSocialCommunicationHighlights({});
   const [highlightReadingTarget, setHighlightReadingTarget] =
     useState<SocialCommunicationHighlight | null>(null);
+  const [socialCardSettings, setSocialCardSettings] = useState<
+    Record<SocialCardId, SocialCardSetting>
+  >(() => loadSocialCardSettings());
+
+  useEffect(() => {
+    const sync = () => setSocialCardSettings(loadSocialCardSettings());
+    window.addEventListener('social-card-settings-changed', sync);
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== SOCIAL_CARD_SETTINGS_STORAGE_KEY) return;
+      sync();
+    };
+    window.addEventListener('storage', onStorage);
+    return () => {
+      window.removeEventListener('social-card-settings-changed', sync);
+      window.removeEventListener('storage', onStorage);
+    };
+  }, []);
+
+  const highlightsCardSetting = useMemo(
+    () =>
+      socialCardSettings['social-highlights'] ??
+      SOCIAL_CARD_DEFAULT_SETTINGS['social-highlights'],
+    [socialCardSettings],
+  );
+
+  const cardBackground = useMemo(() => {
+    const custom = highlightsCardSetting.customBackgroundColor;
+    if (custom) return custom;
+    return '#FFFFFF';
+  }, [highlightsCardSetting.customBackgroundColor]);
+
+  const [cardEditorOpen, setCardEditorOpen] = useState(false);
+  const [cardEditorDraft, setCardEditorDraft] = useState({
+    title: '',
+    backgroundColor: '#FFFFFF',
+    impactMultiplicadorTitle: '',
+    impactSimbolicoTitle: '',
+  });
+
+  const openCardEditor = useCallback(() => {
+    const s =
+      socialCardSettings['social-highlights'] ??
+      SOCIAL_CARD_DEFAULT_SETTINGS['social-highlights'];
+    setCardEditorDraft({
+      title: s.title,
+      backgroundColor:
+        s.customBackgroundColor ||
+        SOCIAL_CARD_EDITOR_DEFAULT_COLORS['social-highlights'],
+      impactMultiplicadorTitle: s.impactMultiplicadorTitle,
+      impactSimbolicoTitle: s.impactSimbolicoTitle,
+    });
+    setCardEditorOpen(true);
+  }, [socialCardSettings]);
+
+  const saveCardEditor = useCallback(() => {
+    const defaults = SOCIAL_CARD_DEFAULT_SETTINGS['social-highlights'];
+    const full = loadSocialCardSettings();
+    const next = {
+      ...full,
+      'social-highlights': {
+        ...full['social-highlights'],
+        title: cardEditorDraft.title.trim() || defaults.title,
+        customBackgroundColor: cardEditorDraft.backgroundColor.trim()
+          ? cardEditorDraft.backgroundColor
+          : undefined,
+        impactMultiplicadorTitle:
+          cardEditorDraft.impactMultiplicadorTitle.trim() ||
+          defaults.impactMultiplicadorTitle,
+        impactSimbolicoTitle:
+          cardEditorDraft.impactSimbolicoTitle.trim() ||
+          defaults.impactSimbolicoTitle,
+      },
+    };
+    setSocialCardSettings(next);
+    persistSocialCardSettings(next);
+    setCardEditorOpen(false);
+    toast.push({ message: 'Card atualizado', severity: 'success' });
+  }, [cardEditorDraft, toast]);
 
   const highlightItems = useMemo(
     () =>
@@ -207,18 +303,59 @@ export function MilitaryHighlightsPanel() {
 
   return (
     <>
-      <Card sx={{ borderRadius: 3, border: '1px solid rgb(58, 122, 154)', boxShadow: '0 12px 24px rgba(17,66,89,0.16)' }}>
+      <Card
+        sx={{
+          borderRadius: 3,
+          border: '1px solid rgb(58, 122, 154)',
+          boxShadow: '0 12px 24px rgba(17,66,89,0.16)',
+          background: cardBackground,
+        }}
+      >
         <CardContent sx={{ py: 2.2 }}>
-          <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={1} sx={{ mb: 1.8 }}>
+          <Stack
+            direction={{ xs: 'column', md: 'row' }}
+            justifyContent="space-between"
+            alignItems={{ xs: 'flex-start', md: 'center' }}
+            spacing={1}
+            sx={{ mb: 1.8 }}
+          >
             <Box>
               <Typography variant="h6" fontWeight={800} sx={{ color: '#1D3A4D' }}>
-                Militares Destaques
+                {highlightsCardSetting.title}
               </Typography>
               <Typography variant="body2" sx={{ color: 'rgba(29, 58, 77, 0.86)' }}>
                 Destaques institucionais de Impacto Multiplicador e Simbólico.
               </Typography>
             </Box>
-            <Chip size="small" label={`${highlightItems.length} destaque${highlightItems.length === 1 ? '' : 's'}`} />
+            <Stack direction="row" spacing={0.8} alignItems="center">
+              <Chip
+                size="small"
+                label={`${highlightItems.length} destaque${highlightItems.length === 1 ? '' : 's'}`}
+                sx={{
+                  bgcolor: 'rgba(29, 58, 77, 0.1)',
+                  color: '#1D3A4D',
+                  fontWeight: 700,
+                  border: '1px solid rgba(29, 58, 77, 0.24)',
+                }}
+              />
+              {isTiProfile ? (
+                <Tooltip title="Editar cor e título do card">
+                  <IconButton
+                    size="small"
+                    sx={{
+                      bgcolor: 'rgba(29, 58, 77, 0.12)',
+                      color: '#1D3A4D',
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openCardEditor();
+                    }}
+                  >
+                    <EditOutlinedIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              ) : null}
+            </Stack>
           </Stack>
 
           {highlightsQuery.isLoading ? (
@@ -232,6 +369,69 @@ export function MilitaryHighlightsPanel() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog
+        open={cardEditorOpen}
+        onClose={() => setCardEditorOpen(false)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>Editar card</DialogTitle>
+        <DialogContent sx={{ pt: 1 }}>
+          <Stack spacing={1.5} sx={{ mt: 0.5 }}>
+            <TextField
+              label="Nome do card"
+              value={cardEditorDraft.title}
+              onChange={(event) =>
+                setCardEditorDraft((prev) => ({ ...prev, title: event.target.value }))
+              }
+              fullWidth
+            />
+            <TextField
+              label="Nome do bloco 1"
+              value={cardEditorDraft.impactMultiplicadorTitle}
+              onChange={(event) =>
+                setCardEditorDraft((prev) => ({
+                  ...prev,
+                  impactMultiplicadorTitle: event.target.value,
+                }))
+              }
+              helperText="Ex.: Impacto Multiplicador"
+              fullWidth
+            />
+            <TextField
+              label="Nome do bloco 2"
+              value={cardEditorDraft.impactSimbolicoTitle}
+              onChange={(event) =>
+                setCardEditorDraft((prev) => ({
+                  ...prev,
+                  impactSimbolicoTitle: event.target.value,
+                }))
+              }
+              helperText="Ex.: Impacto Simbólico"
+              fullWidth
+            />
+            <TextField
+              label="Cor do fundo"
+              type="color"
+              value={cardEditorDraft.backgroundColor}
+              onChange={(event) =>
+                setCardEditorDraft((prev) => ({
+                  ...prev,
+                  backgroundColor: event.target.value,
+                }))
+              }
+              fullWidth
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCardEditorOpen(false)}>Cancelar</Button>
+          <Button variant="contained" onClick={saveCardEditor}>
+            Salvar
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={Boolean(highlightReadingTarget)} onClose={() => setHighlightReadingTarget(null)} fullWidth maxWidth="sm">
         <DialogTitle>Detalhes do Destaque</DialogTitle>

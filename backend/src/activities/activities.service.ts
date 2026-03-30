@@ -240,8 +240,13 @@ export class ActivitiesService {
     user?: RbacUser,
   ) {
     const scope: ActivityScope =
-      String(payload.scope ?? '').toUpperCase() === 'CIPAVD' ? 'CIPAVD' : 'SMIF';
-    this.assertActivityOperateAccess(scope === 'CIPAVD' ? { scope: 'CIPAVD' } : null, user);
+      String(payload.scope ?? '').toUpperCase() === 'CIPAVD'
+        ? 'CIPAVD'
+        : 'SMIF';
+    this.assertActivityOperateAccess(
+      scope === 'CIPAVD' ? { scope: 'CIPAVD' } : null,
+      user,
+    );
     const normalizedLocalityIds = Array.from(
       new Set(
         (payload.localityIds ?? [])
@@ -450,7 +455,12 @@ export class ActivitiesService {
         ? ((existing as any).activityTypeId ?? null)
         : payload.activityTypeId,
     );
-    this.assertScopeConstraint(localityId, specialtyId, user, activitySpecialtyIds);
+    this.assertScopeConstraint(
+      localityId,
+      specialtyId,
+      user,
+      activitySpecialtyIds,
+    );
     const responsibleUserIds = await this.resolveActivityResponsibleIds(
       localityId,
       payload.responsibleUserIds ??
@@ -1071,7 +1081,8 @@ export class ActivitiesService {
     }> = [];
     for (const activity of existing) {
       const specialtyIds = this.extractActivitySpecialtyIds(activity);
-      const activityScope: ActivityScope = (activity as any).scope === 'CIPAVD' ? 'CIPAVD' : 'SMIF';
+      const activityScope: ActivityScope =
+        (activity as any).scope === 'CIPAVD' ? 'CIPAVD' : 'SMIF';
       for (const targetLocalityId of normalizedTargetLocalityIds) {
         if (activity.localityId && activity.localityId === targetLocalityId) {
           skippedSameLocality += 1;
@@ -1619,10 +1630,7 @@ export class ActivitiesService {
         ? `${(activity as any).locality.name} (${(activity as any).locality.code})`
         : 'Não vinculada',
     );
-    writeLine(
-      'Especialidade',
-      this.formatActivitySpecialtiesLabel(activity),
-    );
+    writeLine('Especialidade', this.formatActivitySpecialtiesLabel(activity));
     writeLine(
       'Data da visita',
       activity.eventDate
@@ -2725,7 +2733,9 @@ export class ActivitiesService {
   }
 
   private mapActivitySpecialties(activity: any) {
-    const links = Array.isArray(activity?.specialties) ? activity.specialties : [];
+    const links = Array.isArray(activity?.specialties)
+      ? activity.specialties
+      : [];
     const fromLinks = links
       .map((entry: any) => entry?.specialty)
       .filter((entry: any) => Boolean(entry?.id))
@@ -2746,7 +2756,10 @@ export class ActivitiesService {
           ]
         : [];
     const merged = [...fromLinks, ...fallback];
-    const unique = new Map<string, { id: string; name: string; color: string | null }>();
+    const unique = new Map<
+      string,
+      { id: string; name: string; color: string | null }
+    >();
     for (const specialty of merged) {
       if (!specialty.id) continue;
       if (!unique.has(specialty.id)) {
@@ -2954,9 +2967,9 @@ export class ActivitiesService {
       const normalizedSpecialtyIds = new Set(
         [
           String(specialtyId ?? '').trim(),
-          ...((specialtyIds ?? [])
+          ...(specialtyIds ?? [])
             .map((value) => String(value ?? '').trim())
-            .filter(Boolean) as string[]),
+            .filter(Boolean),
         ].filter(Boolean),
       );
       if (
@@ -3112,7 +3125,10 @@ export class ActivitiesService {
     throwError('RBAC_FORBIDDEN');
   }
 
-  private assertActivityOperateAccess(activityOrScope: { scope?: string } | null, user?: RbacUser): void {
+  private assertActivityOperateAccess(
+    activityOrScope: { scope?: string } | null,
+    user?: RbacUser,
+  ): void {
     if (!user?.id) throwError('RBAC_FORBIDDEN');
     const scope = (activityOrScope as { scope?: string } | null)?.scope;
     if (scope === 'CIPAVD') {
@@ -3139,9 +3155,9 @@ export class ActivitiesService {
     const normalized = Array.from(
       new Set(
         [
-          ...((args.specialtyIds ?? [])
+          ...(args.specialtyIds ?? [])
             .map((value) => String(value ?? '').trim())
-            .filter(Boolean) as string[]),
+            .filter(Boolean),
           String(args.specialtyId ?? '').trim(),
         ].filter(Boolean),
       ),

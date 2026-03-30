@@ -12,7 +12,11 @@ import { CurrentUser } from '../common/current-user.decorator';
 import { throwError } from '../common/http-error';
 import { RequirePermission } from '../rbac/require-permission.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
-import { hasAnyRole, hasNationalManagementScope, ROLE_TI } from '../rbac/role-access';
+import {
+  hasAnyRole,
+  hasNationalManagementScope,
+  ROLE_TI,
+} from '../rbac/role-access';
 import type { RbacUser } from '../rbac/rbac.types';
 import { TasksService } from './tasks.service';
 import { UpdateDashboardNationalCardDto } from './dto/update-dashboard-national-card.dto';

@@ -46,6 +46,15 @@ const PUBLIC_INTERNAL_BG = "rgb(103, 147, 173)";
 const PUBLIC_EXTERNAL_BG =
   "linear-gradient(165deg, rgb(150, 186, 204) 0%, rgb(162, 196, 214) 50%, rgb(154, 189, 207) 100%)";
 import { parseApiError } from "../app/apiErrors";
+import {
+  loadSocialCardSettings,
+  persistSocialCardSettings,
+  SOCIAL_CARD_DEFAULT_SETTINGS,
+  SOCIAL_CARD_EDITOR_DEFAULT_COLORS,
+  SOCIAL_CARD_SETTINGS_STORAGE_KEY,
+  type SocialCardId,
+  type SocialCardSetting,
+} from "../app/socialCardSettingsStorage";
 import { api } from "../api/client";
 import {
   hasAnyRole,
@@ -167,20 +176,6 @@ const HIGHLIGHT_IMPACT_OPTIONS = [
   { value: "MULTIPLICADOR" as const, label: "Multiplicador" },
   { value: "SIMBOLICO" as const, label: "Simbólico" },
 ];
-const SOCIAL_CARD_SETTINGS_STORAGE_KEY =
-  "social-communication-card-settings-v1";
-
-type SocialCardId =
-  | "social-public-internal"
-  | "social-public-external"
-  | "social-highlights";
-
-type SocialCardSetting = {
-  title: string;
-  customBackgroundColor?: string;
-  impactMultiplicadorTitle: string;
-  impactSimbolicoTitle: string;
-};
 
 type SocialCardEditorDraft = {
   title: string;
@@ -188,83 +183,6 @@ type SocialCardEditorDraft = {
   impactMultiplicadorTitle: string;
   impactSimbolicoTitle: string;
 };
-
-const SOCIAL_CARD_DEFAULT_SETTINGS: Record<SocialCardId, SocialCardSetting> = {
-  "social-public-internal": {
-    title: "Público Interno",
-    customBackgroundColor: undefined,
-    impactMultiplicadorTitle: "Impacto Multiplicador",
-    impactSimbolicoTitle: "Impacto Simbólico",
-  },
-  "social-public-external": {
-    title: "Público Externo",
-    customBackgroundColor: undefined,
-    impactMultiplicadorTitle: "Impacto Multiplicador",
-    impactSimbolicoTitle: "Impacto Simbólico",
-  },
-  "social-highlights": {
-    title: "Militares Destaques",
-    customBackgroundColor: undefined,
-    impactMultiplicadorTitle: "Impacto Multiplicador",
-    impactSimbolicoTitle: "Impacto Simbólico",
-  },
-};
-
-const SOCIAL_CARD_EDITOR_DEFAULT_COLORS: Record<SocialCardId, string> = {
-  "social-public-internal": "#6793AD",
-  "social-public-external": "#A2C4D6",
-  "social-highlights": "#FFFFFF",
-};
-
-function isSocialCardId(value: string): value is SocialCardId {
-  return (
-    value === "social-public-internal" ||
-    value === "social-public-external" ||
-    value === "social-highlights"
-  );
-}
-
-function loadSocialCardSettings(): Record<SocialCardId, SocialCardSetting> {
-  const merged = { ...SOCIAL_CARD_DEFAULT_SETTINGS };
-  if (typeof window === "undefined") return merged;
-  try {
-    const raw = window.localStorage.getItem(SOCIAL_CARD_SETTINGS_STORAGE_KEY);
-    if (!raw) return merged;
-    const parsed = JSON.parse(raw) as Record<
-      string,
-      Partial<SocialCardSetting> | undefined
-    >;
-    if (!parsed || typeof parsed !== "object") return merged;
-    for (const [key, value] of Object.entries(parsed)) {
-      if (!isSocialCardId(key) || !value) continue;
-      const defaults = SOCIAL_CARD_DEFAULT_SETTINGS[key];
-      merged[key] = {
-        title:
-          typeof value.title === "string" && value.title.trim()
-            ? value.title
-            : defaults.title,
-        customBackgroundColor:
-          typeof value.customBackgroundColor === "string" &&
-          value.customBackgroundColor.trim()
-            ? value.customBackgroundColor
-            : undefined,
-        impactMultiplicadorTitle:
-          typeof value.impactMultiplicadorTitle === "string" &&
-          value.impactMultiplicadorTitle.trim()
-            ? value.impactMultiplicadorTitle
-            : defaults.impactMultiplicadorTitle,
-        impactSimbolicoTitle:
-          typeof value.impactSimbolicoTitle === "string" &&
-          value.impactSimbolicoTitle.trim()
-            ? value.impactSimbolicoTitle
-            : defaults.impactSimbolicoTitle,
-      };
-    }
-    return merged;
-  } catch {
-    return merged;
-  }
-}
 
 function normalizeEmail(value: string) {
   return String(value ?? "")
@@ -466,6 +384,14 @@ export function SocialCommunicationPage() {
   const [socialCardSettings, setSocialCardSettings] = useState<
     Record<SocialCardId, SocialCardSetting>
   >(() => loadSocialCardSettings());
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== SOCIAL_CARD_SETTINGS_STORAGE_KEY) return;
+      setSocialCardSettings(loadSocialCardSettings());
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
   const [editingSocialCardId, setEditingSocialCardId] =
     useState<SocialCardId | null>(null);
   const [editingSocialCardDraft, setEditingSocialCardDraft] =
@@ -577,10 +503,7 @@ export function SocialCommunicationPage() {
       },
     };
     setSocialCardSettings(next);
-    window.localStorage.setItem(
-      SOCIAL_CARD_SETTINGS_STORAGE_KEY,
-      JSON.stringify(next),
-    );
+    persistSocialCardSettings(next);
     setEditingSocialCardId(null);
     toast.push({ message: "Card atualizado", severity: "success" });
   }, [

@@ -90,7 +90,6 @@ const navSections: NavSection[] = [
       { label: "SMIF", to: "/dashboard/smif", icon: <DashboardIcon fontSize="small" /> },
       { label: "CIPAVD", to: "/dashboard/cipavd", icon: <InsightsRoundedIcon fontSize="small" /> },
       { label: "Impacto Positivo", to: "/social-communication", icon: <NewspaperRoundedIcon fontSize="small" /> },
-      { label: "Boas Práticas", to: "/best-practices", icon: <LightbulbRoundedIcon fontSize="small" /> },
       { label: "Biblioteca", to: "/library", icon: <PhotoLibraryRoundedIcon fontSize="small" /> },
       { label: "CPCA", to: "/dashboard/cpca", icon: <PolicyRoundedIcon fontSize="small" /> },
     ],
@@ -102,6 +101,7 @@ const navSections: NavSection[] = [
       { label: "Atividades de Campo", to: "/activities", icon: <EventNoteIcon fontSize="small" /> },
       { label: "GSD e Recrutas", to: "/gsd-recruits", icon: <PeopleIcon fontSize="small" /> },
       { label: "Elos", to: "/elos", icon: <ContactPhoneIcon fontSize="small" /> },
+      { label: "Boas Práticas", to: "/best-practices", icon: <LightbulbRoundedIcon fontSize="small" /> },
     ],
   },
   {
@@ -115,8 +115,14 @@ const navSections: NavSection[] = [
       { label: "Calendário", to: "/calendar", icon: <EventNoteIcon fontSize="small" /> },
       { label: "Missões", to: "/missions", icon: <FlagRoundedIcon fontSize="small" /> },
       { label: "Atividades de Campo", to: "/activities-cipavd", icon: <EventNoteIcon fontSize="small" /> },
-      { label: "BI Pesquisas", to: "/dashboard/bi", icon: <InsightsRoundedIcon fontSize="small" /> },
       { label: "Avisos", to: "/notices", icon: <CampaignIcon fontSize="small" /> },
+    ],
+  },
+  {
+    id: "pesquisas",
+    label: "PESQUISAS",
+    items: [
+      { label: "BI Pesquisas", to: "/dashboard/bi", icon: <InsightsRoundedIcon fontSize="small" /> },
     ],
   },
   {

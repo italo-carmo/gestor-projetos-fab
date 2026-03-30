@@ -45,7 +45,6 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   useDashboardNational,
   useBestPractices,
-  useLessonsLearned,
   useMe,
   useMissionChecklistMapping,
   useUpdateDashboardNationalCardSetting,
@@ -53,7 +52,7 @@ import {
   useUploadMissionChecklistPhoto,
 } from '../api/hooks';
 import { can } from '../app/rbac';
-import { hasAnyRole, ROLE_COMANDANTE_COMGEP, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from '../app/roleAccess';
+import { hasAnyRole, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from '../app/roleAccess';
 import { parseApiError } from '../app/apiErrors';
 import { useToast } from '../app/toast';
 import { SkeletonState } from '../components/states/SkeletonState';
@@ -180,21 +179,6 @@ type KpiDetailState = {
   emptyMessage: string;
   countField: DrilldownCountField;
 } | null;
-
-type LessonPost = {
-  id: string;
-  title: string;
-  content: string;
-  authorLabel?: string | null;
-  createdAt: string;
-  typeId: string;
-  type?: {
-    id: string;
-    name: string;
-    colorHex: string;
-    textColorHex?: string | null;
-  } | null;
-};
 
 type BestPracticePoint = {
   id: string;
@@ -453,13 +437,7 @@ export function DashboardNationalPage() {
   });
   const canViewBestPractices = can(me, 'best_practices', 'view');
   const bestPracticesQuery = useBestPractices({}, canViewBestPractices);
-  const canViewLessons =
-    hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI, ROLE_COMANDANTE_COMGEP]) &&
-    can(me, 'lessons_learned', 'view');
-  const lessonsQuery = useLessonsLearned({}, canViewLessons);
-  const [lessonOffset, setLessonOffset] = useState(0);
   const [attentionPointOffset, setAttentionPointOffset] = useState(0);
-  const [readingLesson, setReadingLesson] = useState<LessonPost | null>(null);
   const [readingAttentionPoint, setReadingAttentionPoint] =
     useState<BestPracticePoint | null>(null);
   const isTiProfile = hasAnyRole(me, [ROLE_TI]);
@@ -482,10 +460,6 @@ export function DashboardNationalPage() {
   const [institutionalPhotoCarouselIndex, setInstitutionalPhotoCarouselIndex] =
     useState(0);
 
-  const lessons = ((lessonsQuery.data?.items ?? []) as LessonPost[])
-    .filter((item) => item?.id)
-    .filter((item) => normalizeSearchText(item.type?.name) === 'resultados positivos')
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   const bestPracticeItems = ((bestPracticesQuery.data?.items ?? []) as BestPracticePoint[])
     .filter((item) => item?.id)
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -512,14 +486,6 @@ export function DashboardNationalPage() {
       (current + 1) % attentionPoints.length,
     );
   };
-
-  useEffect(() => {
-    if (lessons.length <= 1) return;
-    const timer = window.setInterval(() => {
-      setLessonOffset((prev) => prev + 1);
-    }, 3800);
-    return () => window.clearInterval(timer);
-  }, [lessons.length]);
 
   useEffect(() => {
     setInstitutionalScheduleExpanded(false);
@@ -705,14 +671,6 @@ export function DashboardNationalPage() {
       entry.mission,
     ]),
   );
-  const lessonsPerView = 3;
-  const visibleLessons =
-    lessons.length <= lessonsPerView
-      ? lessons
-      : Array.from({ length: lessonsPerView }, (_, index) => {
-          const safeIndex = (lessonOffset + index) % lessons.length;
-          return lessons[safeIndex];
-        });
   const showInstitutionalMapping =
     import.meta.env.VITE_SMIF_SHOW_INSTITUTIONAL_MAPPING === 'true';
 
@@ -1244,8 +1202,9 @@ export function DashboardNationalPage() {
           gap: 2,
           gridTemplateColumns: {
             xs: '1fr',
-            md: 'repeat(3, minmax(0, 1fr))',
+            md: 'repeat(2, minmax(0, 1fr))',
           },
+          alignItems: 'stretch',
           mb: 2,
         }}
       >
@@ -1385,42 +1344,21 @@ export function DashboardNationalPage() {
               </Box>
             </CardContent>
           </Card>
-        )})}
-      </Box>
-      <Box
-        sx={{
-          display: 'grid',
-          width: '100%',
-          maxWidth: '100%',
-          minWidth: 0,
-          gap: 2,
-          alignItems: 'stretch',
-          gridTemplateColumns: {
-            xs: '1fr',
-            md: 'repeat(2, minmax(0, 1fr))',
-          },
-          mb: 2,
-        }}
-      >
-        {(() => {
-          const style = {
-            backgroundColor: '#FFFFFF',
-            textColor: '#111827',
-          };
-          return (
+        );
+        })}
         <Card
           sx={{
             width: '100%',
             minWidth: 0,
             height: '100%',
-            backgroundColor: style.backgroundColor,
+            backgroundColor: '#FFFFFF',
             borderRadius: 3,
             border: '1px solid rgb(58, 122, 154)',
           }}
         >
           <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
-              <Typography variant="h6" sx={{ color: style.textColor }}>
+              <Typography variant="h6" sx={{ color: '#111827' }}>
                 Pontos de atenção
               </Typography>
               {attentionPoints.length > 1 ? (
@@ -1429,7 +1367,7 @@ export function DashboardNationalPage() {
                     <IconButton
                       size="small"
                       onClick={goToPreviousAttentionPoint}
-                      sx={{ color: style.textColor, opacity: 0.82 }}
+                      sx={{ color: '#111827', opacity: 0.82 }}
                       aria-label="Ir para ponto de atenção anterior"
                     >
                       <KeyboardArrowUpRoundedIcon fontSize="small" />
@@ -1439,7 +1377,7 @@ export function DashboardNationalPage() {
                     <IconButton
                       size="small"
                       onClick={goToNextAttentionPoint}
-                      sx={{ color: style.textColor, opacity: 0.82 }}
+                      sx={{ color: '#111827', opacity: 0.82 }}
                       aria-label="Ir para próximo ponto de atenção"
                     >
                       <KeyboardArrowDownRoundedIcon fontSize="small" />
@@ -1579,130 +1517,6 @@ export function DashboardNationalPage() {
             )}
           </CardContent>
         </Card>
-          );
-        })()}
-        {(() => {
-          const style = {
-            backgroundColor: '#FFFFFF',
-            textColor: '#111827',
-          };
-          return (
-        <Card
-          sx={{
-            width: '100%',
-            minWidth: 0,
-            height: '100%',
-            backgroundColor: style.backgroundColor,
-            borderRadius: 3,
-            border: '1px solid rgb(58, 122, 154)',
-          }}
-        >
-          <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-            <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
-              <Typography variant="h6" sx={{ color: style.textColor }}>
-                Resultados positivos alcançados
-              </Typography>
-            </Stack>
-              {!canViewLessons ? (
-                <Typography variant="body2" color="text.secondary">
-                  Conteúdo disponível para Coordenação, TI e COMGEP.
-                </Typography>
-              ) : lessonsQuery.isLoading ? (
-                <Typography variant="body2" color="text.secondary">
-                  Carregando lições aprendidas...
-                </Typography>
-              ) : lessonsQuery.isError ? (
-                <Typography variant="body2" color="error.main">
-                  Não foi possível carregar as lições aprendidas.
-                </Typography>
-              ) : lessons.length === 0 ? (
-                <Typography variant="body2" color="text.secondary">
-                  Nenhum resultado positivo cadastrado.
-                </Typography>
-              ) : (
-                <Box
-                  display="grid"
-                  gap={1}
-                  sx={{
-                    flex: 1,
-                    overflow: 'hidden',
-                    alignContent: 'start',
-                  }}
-                >
-                  {visibleLessons.map((lesson, index) => (
-                    <Card
-                      key={`${lesson.id}-${lessonOffset}-${index}`}
-                      variant="outlined"
-                      onClick={() => setReadingLesson(lesson)}
-                      sx={{
-                        transition: 'transform 280ms ease, opacity 280ms ease',
-                        backgroundColor: lesson.type?.colorHex || '#8E44AD',
-                        borderColor: lesson.type?.colorHex || '#8E44AD',
-                        cursor: 'pointer',
-                        '&:hover': {
-                          transform: 'translateY(-2px)',
-                          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                        },
-                      }}
-                    >
-                      <CardContent sx={{ p: 1.2, backgroundColor: lesson.type?.colorHex || '#8E44AD' }}>
-                        <Typography
-                          variant="subtitle2"
-                          sx={{
-                            fontWeight: 700,
-                            lineHeight: 1.25,
-                            color: lesson.type?.textColorHex || '#F4FAFD',
-                          }}
-                        >
-                          {lesson.title}
-                        </Typography>
-                        <Typography
-                          variant="body2"
-                          sx={{
-                            mt: 0.6,
-                            color: lesson.type?.textColorHex || 'rgba(244, 250, 253, 0.94)',
-                            display: '-webkit-box',
-                            WebkitLineClamp: 3,
-                            WebkitBoxOrient: 'vertical',
-                            overflow: 'hidden',
-                          }}
-                        >
-                          {lesson.content}
-                        </Typography>
-                        <Box display="flex" justifyContent="space-between" gap={1} mt={1}>
-                          <Chip
-                            size="small"
-                            label={lesson.authorLabel || 'Coordenação CIPAVD'}
-                            sx={{
-                              bgcolor: 'rgba(255,255,255,0.15)',
-                              color: lesson.type?.textColorHex || 'rgba(236, 248, 252, 0.92)',
-                              border: `1px solid ${(lesson.type?.textColorHex || '#ECF8FC')}40`,
-                              height: 20,
-                              fontSize: '0.7rem',
-                              maxWidth: '68%',
-                              '& .MuiChip-label': {
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                              },
-                            }}
-                          />
-                          <Typography
-                            variant="caption"
-                            sx={{ color: lesson.type?.textColorHex || 'rgba(236, 248, 252, 0.9)' }}
-                            noWrap
-                          >
-                            {new Date(lesson.createdAt).toLocaleString('pt-BR')}
-                          </Typography>
-                        </Box>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </Box>
-              )}
-            </CardContent>
-        </Card>
-          );
-        })()}
       </Box>
 
       {showInstitutionalMapping ? (
@@ -2983,41 +2797,6 @@ bgcolor: '#fff',
             </Button>
           ) : null}
           <Button onClick={() => setInstitutionalDetail(null)}>Fechar</Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog
-        open={Boolean(readingLesson)}
-        onClose={() => setReadingLesson(null)}
-        fullWidth
-        maxWidth="md"
-      >
-        <DialogTitle sx={{ pb: 0.5 }}>
-          {readingLesson?.title || 'Resultado Positivo'}
-        </DialogTitle>
-        <DialogContent dividers>
-          <Typography
-            variant="body1"
-            sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}
-          >
-            {readingLesson?.content || '-'}
-          </Typography>
-          <Stack
-            direction={{ xs: 'column', sm: 'row' }}
-            spacing={1}
-            justifyContent="space-between"
-            sx={{ mt: 2, pt: 2, borderTop: '1px solid rgba(0,0,0,0.1)' }}
-          >
-            <Typography variant="caption" color="text.secondary">
-              Autor: {readingLesson?.authorLabel || 'Coordenação CIPAVD'}
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              Data: {readingLesson?.createdAt ? new Date(readingLesson.createdAt).toLocaleString('pt-BR') : '-'}
-            </Typography>
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setReadingLesson(null)}>Fechar</Button>
         </DialogActions>
       </Dialog>
 
