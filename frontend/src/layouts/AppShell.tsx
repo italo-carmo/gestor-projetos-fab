@@ -209,11 +209,6 @@ const navSections: NavSection[] = [
         to: "/cpca-cases",
         icon: <PolicyRoundedIcon fontSize="small" />,
       },
-      {
-        label: "OMs",
-        to: "/admin/oms",
-        icon: <BusinessIcon fontSize="small" />,
-      },
     ],
   },
   {
