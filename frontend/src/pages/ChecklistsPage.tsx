@@ -209,7 +209,11 @@ export function ChecklistsPage() {
             flexWrap="wrap"
             useFlexGap
             spacing={0.75}
-            sx={{ columnGap: 1, rowGap: 1 }}
+            sx={{
+              columnGap: 1,
+              rowGap: 1,
+              flexWrap: { xs: 'wrap', md: 'nowrap' },
+            }}
           >
             <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>
               Legenda:
@@ -240,7 +244,8 @@ export function ChecklistsPage() {
               onChange={(e) => updateParam('phaseId', e.target.value)}
               sx={{
                 minWidth: 0,
-                width: { xs: '100%', sm: 118 },
+                width: { xs: '100%', sm: 108 },
+                flexShrink: { md: 0 },
                 '& .MuiInputBase-input': { fontSize: '0.8125rem' },
                 '& .MuiInputLabel-root': { fontSize: '0.75rem' },
               }}
@@ -260,7 +265,8 @@ export function ChecklistsPage() {
               onChange={(e) => updateParam('specialtyId', e.target.value)}
               sx={{
                 minWidth: 0,
-                width: { xs: '100%', sm: 118 },
+                width: { xs: '100%', sm: 142 },
+                flexShrink: { md: 0 },
                 '& .MuiInputBase-input': { fontSize: '0.8125rem' },
                 '& .MuiInputLabel-root': { fontSize: '0.75rem' },
               }}
@@ -280,7 +286,8 @@ export function ChecklistsPage() {
               onChange={(e) => updateParam('eloRoleId', e.target.value)}
               sx={{
                 minWidth: 0,
-                width: { xs: '100%', sm: 128 },
+                width: { xs: '100%', sm: 152 },
+                flexShrink: { md: 0 },
                 '& .MuiInputBase-input': { fontSize: '0.8125rem' },
                 '& .MuiInputLabel-root': { fontSize: '0.75rem' },
               }}
@@ -304,7 +311,8 @@ export function ChecklistsPage() {
               }}
               sx={{
                 minWidth: 0,
-                width: { xs: '100%', sm: 112 },
+                width: { xs: '100%', sm: 132 },
+                flexShrink: { md: 0 },
                 '& .MuiInputBase-input': { fontSize: '0.8125rem' },
                 '& .MuiInputLabel-root': { fontSize: '0.75rem' },
               }}
