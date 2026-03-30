@@ -8,24 +8,34 @@ import { api } from "./client";
 import { qk } from "./queryKeys";
 import { splitMilitaryNameAndOm, toMilitaryDisplayName } from "../app/militaryName";
 
-/** Lista paginada ordena por prazo: tarefas novas podem ficar fora da 1ª página; injeta na cache após refetch. */
+/**
+ * Lista paginada ordena por prazo: tarefas novas podem ficar fora da 1ª página.
+ * Atualiza cada query `['tasks', filtros]` por chave exata (setQueriesData com updater
+ * falhava quando `items` era [] ou após race com refetch).
+ */
 function mergeCreatedTasksIntoTasksCache(
   qc: QueryClient,
   createdItems: any[],
 ) {
   if (!createdItems?.length) return;
-  qc.setQueriesData({ queryKey: ["tasks"] }, (old: any) => {
-    if (!old?.items) return old;
-    const serverIds = new Set(old.items.map((t: any) => String(t.id)));
+  const queries = qc.getQueriesData({ queryKey: ["tasks"] });
+  for (const [queryKey, data] of queries) {
+    const old = data as any;
+    const base =
+      old && typeof old === "object"
+        ? old
+        : { page: 1, pageSize: 20, total: 0 };
+    const currentItems = Array.isArray(base.items) ? base.items : [];
+    const serverIds = new Set(currentItems.map((t: any) => String(t.id)));
     const toPrepend = createdItems.filter(
       (c: any) => c?.id && !serverIds.has(String(c.id)),
     );
-    if (toPrepend.length === 0) return old;
-    return {
-      ...old,
-      items: [...toPrepend, ...old.items],
-    };
-  });
+    if (toPrepend.length === 0) continue;
+    qc.setQueryData(queryKey, {
+      ...base,
+      items: [...toPrepend, ...currentItems],
+    });
+  }
 }
 
 function normalizeSigpesNumeroOrdem(value: unknown) {
@@ -1408,8 +1418,10 @@ export function useGenerateInstances() {
         )
       ).data,
     onSuccess: async (data) => {
-      await qc.invalidateQueries({ queryKey: ["tasks"] });
-      mergeCreatedTasksIntoTasksCache(qc, data?.items ?? []);
+      const created = Array.isArray(data?.items) ? data.items : [];
+      mergeCreatedTasksIntoTasksCache(qc, created);
+      await qc.refetchQueries({ queryKey: ["tasks"] });
+      mergeCreatedTasksIntoTasksCache(qc, created);
     },
   });
 }
@@ -1428,8 +1440,10 @@ export function useCreateTaskInstance() {
       assigneeIds?: string[];
     }) => (await api.post("/task-instances", payload)).data,
     onSuccess: async (data) => {
-      await qc.invalidateQueries({ queryKey: ["tasks"] });
-      mergeCreatedTasksIntoTasksCache(qc, data?.items ?? []);
+      const created = Array.isArray(data?.items) ? data.items : [];
+      mergeCreatedTasksIntoTasksCache(qc, created);
+      await qc.refetchQueries({ queryKey: ["tasks"] });
+      mergeCreatedTasksIntoTasksCache(qc, created);
       qc.invalidateQueries({ queryKey: ["gantt"] });
       qc.invalidateQueries({ queryKey: ["calendar"] });
       qc.invalidateQueries({ queryKey: ["meetings"] });
