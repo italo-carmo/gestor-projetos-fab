@@ -55,6 +55,7 @@ import { ProgressInline } from "../chips/ProgressInline";
 import { DueBadge } from "../chips/DueBadge";
 import { EntityDocumentLinksManager } from "../documents/EntityDocumentLinksManager";
 import { TaskStatus, TASK_STATUS_LABELS } from "../../constants/enums";
+import { normalizeLocalityName } from "../../constants/localities";
 import { formatDate } from "../../app/date";
 import { ConfirmDialog } from "../dialogs/ConfirmDialog";
 
@@ -226,32 +227,50 @@ export function TaskDetailsDrawer({
     hasCustomTitle || isManualTaskTemplate || hasLinkedTasks;
   const localityOptions = useMemo(() => {
     const optionMap = new Map<string, { id: string; name: string }>();
-    linkedLocalities.forEach((locality) => {
+    const normalizedNameToId = new Map<string, string>();
+
+    const addOption = (
+      locality: { id?: string | null; name?: string | null },
+      prefer = false,
+    ) => {
       const id = String(locality?.id ?? "").trim();
       if (!id) return;
-      optionMap.set(id, {
-        id,
-        name: String(locality?.name ?? id),
-      });
-    });
-    localities.forEach((locality) => {
-      const id = String(locality?.id ?? "").trim();
-      if (!id) return;
-      if (!optionMap.has(id)) {
-        optionMap.set(id, {
-          id,
-          name: String(locality?.name ?? id),
-        });
+      const name = String(locality?.name ?? id).trim() || id;
+      const normalizedName = normalizeLocalityName(name);
+
+      if (optionMap.has(id)) return;
+      const existingIdByName = normalizedName
+        ? normalizedNameToId.get(normalizedName)
+        : undefined;
+      if (existingIdByName) {
+        if (!prefer) return;
+        optionMap.delete(existingIdByName);
       }
+      optionMap.set(id, { id, name });
+      if (normalizedName) normalizedNameToId.set(normalizedName, id);
+    };
+
+    /** Prioriza a lista de localidades do catálogo (SMIF) e só inclui alias quando não existir equivalente por nome. */
+    localities.forEach((locality) => {
+      addOption(locality, true);
+    });
+    linkedLocalities.forEach((locality) => {
+      addOption(
+        {
+          id: String(locality?.id ?? ""),
+          name: String(locality?.name ?? ""),
+        },
+        false,
+      );
     });
     if (task?.localityId) {
-      const id = String(task.localityId).trim();
-      if (id && !optionMap.has(id)) {
-        optionMap.set(id, {
-          id,
+      addOption(
+        {
+          id: String(task.localityId),
           name: String(task.localityName ?? "Localidade atual"),
-        });
-      }
+        },
+        false,
+      );
     }
     return Array.from(optionMap.values()).sort((a, b) =>
       a.name.localeCompare(b.name, "pt-BR"),
@@ -283,11 +302,33 @@ export function TaskDetailsDrawer({
       setConfirmDeleteOpen(false);
       return;
     }
-    setSelectedLocalityId(task.localityId ?? "");
+    const taskLocalityId = String(task.localityId ?? "").trim();
+    const catalogLocalityIds = new Set(
+      localities
+        .map((locality) => String(locality?.id ?? "").trim())
+        .filter(Boolean),
+    );
+    const catalogByNormalizedName = new Map(
+      localities
+        .map((locality) => {
+          const normalizedName = normalizeLocalityName(locality?.name);
+          if (!normalizedName) return null;
+          return [normalizedName, String(locality.id)] as const;
+        })
+        .filter(Boolean) as Array<readonly [string, string]>,
+    );
+    const taskNormalizedName = normalizeLocalityName(task.localityName);
+    const canonicalTaskLocalityId =
+      taskLocalityId && !catalogLocalityIds.has(taskLocalityId)
+        ? ((taskNormalizedName
+            ? catalogByNormalizedName.get(taskNormalizedName)
+            : undefined) ?? taskLocalityId)
+        : taskLocalityId;
+    setSelectedLocalityId(canonicalTaskLocalityId);
     setSelectedAssigneeValue(assigneeValueFromTask(task));
     setCommentText("");
     setTaskTitleDraft(resolveTaskTitle(task));
-    const linkedIds = (
+    const linkedEntries =
       linkedLocalities.length > 0
         ? linkedLocalities
         : task.localityId
@@ -297,9 +338,16 @@ export function TaskDetailsDrawer({
                 name: String(task.localityName ?? ""),
               },
             ]
-          : []
-    )
-      .map((locality) => String(locality?.id ?? "").trim())
+          : [];
+    const linkedIds = linkedEntries
+      .map((locality) => {
+        const localityId = String(locality?.id ?? "").trim();
+        if (!localityId) return "";
+        if (catalogLocalityIds.has(localityId)) return localityId;
+        const normalizedName = normalizeLocalityName(locality?.name);
+        if (!normalizedName) return localityId;
+        return catalogByNormalizedName.get(normalizedName) ?? localityId;
+      })
       .filter(Boolean);
     setLinkedLocalityIdsDraft(uniqueLocalityIds(linkedIds));
   }, [
@@ -308,6 +356,7 @@ export function TaskDetailsDrawer({
     task?.assignedToId,
     task?.assignedEloId,
     task?.assigneeType,
+    localities,
     linkedLocalitiesKey,
   ]);
   const linkedLocalityIdSet = useMemo(

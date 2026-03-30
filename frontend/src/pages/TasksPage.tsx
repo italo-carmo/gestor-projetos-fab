@@ -58,7 +58,7 @@ import { ptBR as dataGridPtBR } from "@mui/x-data-grid/locales";
 import { useToast } from "../app/toast";
 import { parseApiError } from "../app/apiErrors";
 import { TASK_PRIORITY_LABELS, TASK_STATUS_LABELS } from "../constants/enums";
-import { selectTargetLocalities } from "../constants/localities";
+import { normalizeLocalityName } from "../constants/localities";
 import { ConfirmDialog } from "../components/dialogs/ConfirmDialog";
 
 function resolveTaskTitle(task: any) {
@@ -167,7 +167,7 @@ export function TasksPage() {
     : items;
 
   const localitiesData = (localitiesQuery.data?.items ?? []) as any[];
-  /** Só para nomes na tabela (inclui OMs fora do recorte SMIF); edição/criação de tarefa usam `localities`. */
+  /** Só para nomes na tabela, preservando o catálogo completo vindo do backend. */
   const allLocalities = useMemo(() => {
     if (!localitiesData.length) return [];
     return localitiesData
@@ -178,26 +178,23 @@ export function TasksPage() {
       .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
   }, [localitiesData]);
 
-  const localitiesBase =
-    localitiesData.length > 0
-      ? selectTargetLocalities(localitiesData).map((loc: any) => ({
-          id: String(loc.id),
-          name: String(loc.name ?? loc.code ?? loc.id),
-        }))
-      : Array.from(
-          new Map<string, { id: string; name: string }>(
-            items.map((task: any) => [
-              String(task.localityId),
-              {
-                id: String(task.localityId),
-                name: resolveTaskLocalityName(task, new Map()),
-              },
-            ]),
-          ).values(),
-        );
-  const localities = Array.from(
-    new Map(localitiesBase.map((loc) => [String(loc.id), loc])).values(),
-  );
+  /** Fonte única para seleção: catálogo de localidades do backend (`/localities`), sem fallback em tarefas. */
+  const localities = useMemo(() => {
+    if (!localitiesData.length) return [];
+    const byNormalizedName = new Map<string, { id: string; name: string }>();
+    for (const row of localitiesData) {
+      const id = String(row?.id ?? "").trim();
+      if (!id) continue;
+      const name = String(row?.name ?? row?.code ?? id).trim() || id;
+      const key = normalizeLocalityName(name) || id;
+      if (!byNormalizedName.has(key)) {
+        byNormalizedName.set(key, { id, name });
+      }
+    }
+    return Array.from(byNormalizedName.values()).sort((a, b) =>
+      a.name.localeCompare(b.name, "pt-BR"),
+    );
+  }, [localitiesData]);
 
   const localityMap = useMemo(() => {
     const m = new Map(allLocalities.map((loc) => [loc.id, loc.name]));
