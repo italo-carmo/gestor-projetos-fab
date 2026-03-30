@@ -9,6 +9,7 @@ import { AuditService } from '../audit/audit.service';
 import type { RbacUser } from '../rbac/rbac.types';
 import {
   hasAnyRole,
+  ROLE_CIPAVD,
   ROLE_COMANDANTE_COMGEP,
   ROLE_COORDENACAO_CIPAVD,
   ROLE_TI,
@@ -2512,6 +2513,7 @@ export class MissionsService {
   private assertMissionAccess(user?: RbacUser) {
     if (
       hasAnyRole(user, [
+        ROLE_CIPAVD,
         ROLE_COORDENACAO_CIPAVD,
         ROLE_COMANDANTE_COMGEP,
         ROLE_TI,
@@ -2523,7 +2525,7 @@ export class MissionsService {
   }
 
   private assertMissionChecklistEditAccess(user?: RbacUser) {
-    if (hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_TI])) {
+    if (hasAnyRole(user, [ROLE_CIPAVD, ROLE_COORDENACAO_CIPAVD, ROLE_TI])) {
       return;
     }
     throwError('RBAC_FORBIDDEN');
@@ -2539,7 +2541,7 @@ export class MissionsService {
   }
 
   private assertMissionChecklistConfigAccess(user?: RbacUser) {
-    if (hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_TI])) {
+    if (hasAnyRole(user, [ROLE_CIPAVD, ROLE_COORDENACAO_CIPAVD, ROLE_TI])) {
       return;
     }
     throwError('RBAC_FORBIDDEN');

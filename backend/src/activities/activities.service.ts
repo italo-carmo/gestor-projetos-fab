@@ -14,6 +14,7 @@ import { parsePagination } from '../common/pagination';
 import {
   hasAnyRole,
   resolveAccessProfile,
+  ROLE_CIPAVD,
   ROLE_COORDENACAO_CIPAVD,
   ROLE_TI,
 } from '../rbac/role-access';
@@ -1979,7 +1980,7 @@ export class ActivitiesService {
 
   async signReport(activityId: string, user?: RbacUser) {
     if (!user?.id) throwError('RBAC_FORBIDDEN');
-    if (!hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_TI])) {
+    if (!hasAnyRole(user, [ROLE_CIPAVD, ROLE_COORDENACAO_CIPAVD, ROLE_TI])) {
       throwError('RBAC_FORBIDDEN');
     }
 
@@ -3132,7 +3133,7 @@ export class ActivitiesService {
     if (!user?.id) throwError('RBAC_FORBIDDEN');
     const scope = (activityOrScope as { scope?: string } | null)?.scope;
     if (scope === 'CIPAVD') {
-      if (hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_TI])) return;
+      if (hasAnyRole(user, [ROLE_CIPAVD, ROLE_COORDENACAO_CIPAVD, ROLE_TI])) return;
       throwError('RBAC_FORBIDDEN');
     }
     const profile = resolveAccessProfile(user);

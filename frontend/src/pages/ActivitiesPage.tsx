@@ -63,6 +63,7 @@ import {
 import { parseApiError } from '../app/apiErrors';
 import {
   hasAnyRole,
+  ROLE_CIPAVD,
   ROLE_COMANDANTE_COMGEP,
   ROLE_COMISSAO_CIPAVD,
   ROLE_COORDENACAO_CIPAVD,
@@ -666,7 +667,7 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
   const canView = !me ? true : can(me, 'task_instances', 'view');
   const canManageActivityDataByRole =
     scope === 'cipavd'
-      ? hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI])
+      ? hasAnyRole(me, [ROLE_CIPAVD, ROLE_COORDENACAO_CIPAVD, ROLE_TI])
       : hasAnyRole(me, [
           ROLE_COORDENACAO_CIPAVD,
           ROLE_COMISSAO_CIPAVD,
@@ -677,7 +678,7 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
   const canUpdate = canManageActivityDataByRole;
   const canDelete = canUpdate;
   const isTiProfile = hasAnyRole(me, [ROLE_TI]);
-  const canSignByRole = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]);
+  const canSignByRole = hasAnyRole(me, [ROLE_CIPAVD, ROLE_COORDENACAO_CIPAVD, ROLE_TI]);
   const canEditReport = can(me, 'reports', 'create') && canManageActivityDataByRole;
   const canSign = can(me, 'reports', 'approve') && canSignByRole;
   const canUpload = can(me, 'reports', 'upload') && canManageActivityDataByRole;
@@ -694,7 +695,9 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
   const canEditActivityForm = isCreateMode ? canCreate : canUpdate;
   const canManageBatch =
     can(me, 'task_instances', 'update') &&
-    (scope === 'cipavd' ? hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]) : hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]));
+    (scope === 'cipavd'
+      ? hasAnyRole(me, [ROLE_CIPAVD, ROLE_COORDENACAO_CIPAVD, ROLE_TI])
+      : hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]));
   const canBatchAssignResponsible = selectedLocalityIds.length <= 1;
   const canCreateAssignResponsible = !isCreateMode || activityForm.localityIds.length <= 1;
   const createSelectedLocalities = useMemo(

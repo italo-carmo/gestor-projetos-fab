@@ -47,6 +47,7 @@ import { api } from "../api/client";
 import { can } from "../app/rbac";
 import {
   hasAnyRole,
+  ROLE_CIPAVD,
   ROLE_COMISSAO_CIPAVD,
   ROLE_COMANDANTE_COMGEP,
   ROLE_COORDENACAO_CIPAVD,
@@ -130,6 +131,7 @@ export function TasksPage() {
 
   const tasksQuery = useTasks(taskFilters);
   const canManageTaskDataByRole = hasAnyRole(me, [
+    ROLE_CIPAVD,
     ROLE_COORDENACAO_CIPAVD,
     ROLE_COMISSAO_CIPAVD,
     ROLE_COMANDANTE_COMGEP,

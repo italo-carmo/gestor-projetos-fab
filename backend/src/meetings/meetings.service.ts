@@ -9,6 +9,7 @@ import { sanitizeText } from '../common/sanitize';
 import { parsePagination } from '../common/pagination';
 import {
   hasAnyRole,
+  ROLE_CIPAVD,
   ROLE_COORDENACAO_CIPAVD,
   ROLE_TI,
 } from '../rbac/role-access';
@@ -396,7 +397,7 @@ export class MeetingsService {
 
   private assertDeleteAccess(user?: RbacUser) {
     if (!user?.id) throwError('RBAC_FORBIDDEN');
-    if (hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_TI])) return;
+    if (hasAnyRole(user, [ROLE_CIPAVD, ROLE_COORDENACAO_CIPAVD, ROLE_TI])) return;
     throwError('RBAC_FORBIDDEN');
   }
 }

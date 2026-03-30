@@ -33,8 +33,10 @@ import { LessonsLearnedPage } from "./pages/LessonsLearnedPage";
 import { RequireAuth } from "./app/RequireAuth";
 import { RequireRoleAccess } from "./app/RequireRoleAccess";
 import {
+  hasRole,
   hasAnyRole,
   hasNationalManagementScope,
+  ROLE_CIPAVD,
   ROLE_COMANDANTE_COMGEP,
   ROLE_CPCA,
   resolveHomePath,
@@ -177,6 +179,7 @@ function App() {
                     <RequireRoleAccess
                       allow={(user) =>
                         hasAnyRole(user, [
+                          ROLE_CIPAVD,
                           ROLE_COORDENACAO_CIPAVD,
                           ROLE_COMANDANTE_COMGEP,
                           ROLE_TI,
@@ -197,7 +200,10 @@ function App() {
                   path="/calendar"
                   element={
                     <RequireRoleAccess
-                      allow={(user) => hasNationalManagementScope(user)}
+                      allow={(user) =>
+                        hasNationalManagementScope(user) ||
+                        hasRole(user, ROLE_CIPAVD)
+                      }
                     >
                       <CalendarPage />
                     </RequireRoleAccess>
@@ -207,7 +213,10 @@ function App() {
                   path="/meetings"
                   element={
                     <RequireRoleAccess
-                      allow={(user) => hasNationalManagementScope(user)}
+                      allow={(user) =>
+                        hasNationalManagementScope(user) ||
+                        hasRole(user, ROLE_CIPAVD)
+                      }
                     >
                       <MeetingsPage />
                     </RequireRoleAccess>

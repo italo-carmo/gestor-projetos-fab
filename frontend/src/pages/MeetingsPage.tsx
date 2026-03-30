@@ -51,6 +51,7 @@ import { useToast } from '../app/toast';
 import { parseApiError } from '../app/apiErrors';
 import {
   hasAnyRole,
+  ROLE_CIPAVD,
   ROLE_COMANDANTE_COMGEP,
   ROLE_COMISSAO_CIPAVD,
   ROLE_COORDENACAO_CIPAVD,
@@ -316,6 +317,7 @@ export function MeetingsPage() {
   const localities = localitiesQuery.data?.items ?? [];
 
   const canManageMeetingsByRole = hasAnyRole(me, [
+    ROLE_CIPAVD,
     ROLE_COORDENACAO_CIPAVD,
     ROLE_COMISSAO_CIPAVD,
     ROLE_COMANDANTE_COMGEP,
@@ -329,13 +331,14 @@ export function MeetingsPage() {
     (can(me, 'meetings', 'update') || can(me, 'meetings', 'view'));
   const canGenerate = can(me, 'tasks', 'generate_from_meeting');
   const canManageTaskDataByRole = hasAnyRole(me, [
+    ROLE_CIPAVD,
     ROLE_COORDENACAO_CIPAVD,
     ROLE_COMISSAO_CIPAVD,
     ROLE_COMANDANTE_COMGEP,
     ROLE_TI,
   ]);
   const canUpdateLinkedTask = can(me, 'task_instances', 'update') && canManageTaskDataByRole;
-  const canDelete = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_COMISSAO_CIPAVD, ROLE_TI]);
+  const canDelete = hasAnyRole(me, [ROLE_CIPAVD, ROLE_COORDENACAO_CIPAVD, ROLE_COMISSAO_CIPAVD, ROLE_TI]);
 
   const getTaskOptionLabel = (t: any) =>
     (t.taskTemplate?.title ?? t.title ?? 'Tarefa') + ' - ' + format(new Date(t.dueDate), 'dd/MM/yyyy');

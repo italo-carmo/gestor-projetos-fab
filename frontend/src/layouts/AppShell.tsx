@@ -44,7 +44,7 @@ import InsightsRoundedIcon from "@mui/icons-material/InsightsRounded";
 import PolicyRoundedIcon from "@mui/icons-material/PolicyRounded";
 import PhotoLibraryRoundedIcon from "@mui/icons-material/PhotoLibraryRounded";
 import LightbulbRoundedIcon from "@mui/icons-material/LightbulbRounded";
-import { Link, useLocation, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useDebounce } from "../app/useDebounce";
 import { can } from "../app/rbac";
 import {
@@ -53,6 +53,8 @@ import {
   hasAnyRole,
   hasNationalManagementScope,
   normalizeRoleName,
+  resolveHomePath,
+  ROLE_CIPAVD,
   ROLE_COMANDANTE_COMGEP,
   ROLE_CPCA,
   ROLE_COORDENACAO_CIPAVD,
@@ -242,8 +244,22 @@ const navSections: NavSection[] = [
   },
 ];
 
+const CIPAVD_ALLOWED_PATH_PREFIXES = [
+  "/dashboard/cipavd",
+  "/dashboard/executive",
+  "/tasks",
+  "/meetings",
+  "/org-chart",
+  "/gantt",
+  "/calendar",
+  "/missions",
+  "/activities-cipavd",
+  "/notices",
+];
+
 export function AppShell({ children }: { children: ReactNode }) {
   const location = useLocation();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("lg"));
@@ -350,6 +366,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   const sidebarWidth = sidebarCollapsed
     ? drawerCollapsedWidth
     : drawerExpandedWidth;
+  const isCipavdProfile = hasRole(me, ROLE_CIPAVD);
+  const isCipavdPathAllowed = CIPAVD_ALLOWED_PATH_PREFIXES.some(
+    (prefix) =>
+      location.pathname === prefix || location.pathname.startsWith(`${prefix}/`),
+  );
 
   const handleLogout = () => {
     localStorage.removeItem("accessToken");
@@ -366,6 +387,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       ROLE_TI,
     ]);
     const canSeeCommissionTiBoards = hasAnyRole(me, [
+      ROLE_CIPAVD,
       ROLE_COORDENACAO_CIPAVD,
       ROLE_TI,
     ]);
@@ -375,6 +397,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (item.to === "/dashboard/cipavd") {
       return (
         hasAnyRole(me, [
+          ROLE_CIPAVD,
           ROLE_COORDENACAO_CIPAVD,
           ROLE_COMANDANTE_COMGEP,
           ROLE_TI,
@@ -401,6 +424,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
     if (item.to === "/missions") {
       return hasAnyRole(me, [
+        ROLE_CIPAVD,
         ROLE_COORDENACAO_CIPAVD,
         ROLE_COMANDANTE_COMGEP,
         ROLE_TI,
@@ -435,10 +459,10 @@ export function AppShell({ children }: { children: ReactNode }) {
       return can(me, "org_chart", "view");
     }
     if (item.to === "/social-communication") {
-      return true;
+      return !isCipavdProfile;
     }
     if (item.to === "/library") {
-      return true;
+      return !isCipavdProfile;
     }
     if (item.to === "/best-practices") {
       return (
@@ -454,6 +478,15 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
     if (item.to === "/meetings") {
       return canSeeCommissionTiBoards && can(me, "meetings", "view");
+    }
+    if (item.to === "/tasks") {
+      return can(me, "task_instances", "view");
+    }
+    if (item.to === "/gantt") {
+      return can(me, "gantt", "view");
+    }
+    if (item.to === "/calendar") {
+      return can(me, "calendar", "view");
     }
     if (item.to === "/gsd-recruits") {
       return can(me, "localities", "view") || can(me, "dashboard", "view");
@@ -473,11 +506,24 @@ export function AppShell({ children }: { children: ReactNode }) {
   };
 
   const visibleNavSections = navSections
+    .filter((section) => !isCipavdProfile || section.id === "cipavd")
     .map((section) => ({
       ...section,
       items: section.items.filter(canSeeNavItem),
     }))
     .filter((section) => section.items.length > 0);
+
+  useEffect(() => {
+    if (!isCipavdProfile) return;
+    if (isCipavdPathAllowed || location.pathname === "/") return;
+    navigate(resolveHomePath(me), { replace: true });
+  }, [
+    isCipavdPathAllowed,
+    isCipavdProfile,
+    location.pathname,
+    me,
+    navigate,
+  ]);
 
   useEffect(() => {
     const fromUrl = (searchParams.get("localityId") ?? "").trim();

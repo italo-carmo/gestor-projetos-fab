@@ -10,6 +10,7 @@ import {
   hasAnyRole,
   hasNationalManagementScope,
   normalizeRoleName,
+  ROLE_CIPAVD,
   ROLE_COORDENACAO_CIPAVD,
   ROLE_TI,
 } from '../rbac/role-access';
@@ -824,7 +825,7 @@ export class ElosService {
   }
 
   private assertCanManageOrgChart(user?: RbacUser) {
-    if (!hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_TI])) {
+    if (!hasAnyRole(user, [ROLE_CIPAVD, ROLE_COORDENACAO_CIPAVD, ROLE_TI])) {
       throwError('RBAC_FORBIDDEN');
     }
   }

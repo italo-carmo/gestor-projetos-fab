@@ -2,6 +2,7 @@ import type { RbacUser } from './rbac.types';
 
 export const ROLE_COORDENACAO_CIPAVD = 'Coordenação CIPAVD';
 export const ROLE_COMISSAO_CIPAVD = 'Comissão CIPAVD';
+export const ROLE_CIPAVD = 'CIPAVD';
 export const ROLE_COMGEP = 'COMGEP';
 export const ROLE_COMANDANTE_COMGEP = ROLE_COMGEP;
 export const ROLE_TI = 'TI';

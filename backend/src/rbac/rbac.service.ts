@@ -9,6 +9,7 @@ import { RbacUser } from './rbac.types';
 import { FabLdapService } from '../ldap/fab-ldap.service';
 import {
   canonicalRoleName,
+  ROLE_CIPAVD,
   ROLE_COMISSAO_CIPAVD,
   ROLE_CPCA,
   normalizeRoleName,
@@ -866,9 +867,10 @@ export class RbacService {
     const priorityOrder = new Map<string, number>([
       [normalizeRoleName(ROLE_TI), 0],
       [normalizeRoleName(ROLE_COMISSAO_CIPAVD), 1],
-      [normalizeRoleName(ROLE_COORDENACAO_CIPAVD), 2],
-      [normalizeRoleName(ROLE_COMANDANTE_COMGEP), 3],
-      [normalizeRoleName(ROLE_CPCA), 4],
+      [normalizeRoleName(ROLE_CIPAVD), 2],
+      [normalizeRoleName(ROLE_COORDENACAO_CIPAVD), 3],
+      [normalizeRoleName(ROLE_COMANDANTE_COMGEP), 4],
+      [normalizeRoleName(ROLE_CPCA), 5],
     ]);
 
     const sorted = [...roles].sort((a, b) => {

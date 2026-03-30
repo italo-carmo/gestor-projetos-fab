@@ -2,6 +2,7 @@ import { can } from './rbac';
 
 export const ROLE_COORDENACAO_CIPAVD = 'Coordenação CIPAVD';
 export const ROLE_COMISSAO_CIPAVD = 'Comissão CIPAVD';
+export const ROLE_CIPAVD = 'CIPAVD';
 export const ROLE_COMGEP = 'COMGEP';
 export const ROLE_COMANDANTE_COMGEP = ROLE_COMGEP;
 export const ROLE_TI = 'TI';
@@ -75,6 +76,7 @@ export function canEditRecruitsCount(
 }
 
 export function resolveHomePath(user: MePayload | undefined) {
+  if (hasRole(user, ROLE_CIPAVD)) return '/dashboard/cipavd';
   if (hasNationalManagementScope(user)) return '/dashboard/smif';
   if (can(user, 'cpca_cases', 'view')) return '/cpca-cases';
   if (can(user, 'task_instances', 'view')) return '/activities';

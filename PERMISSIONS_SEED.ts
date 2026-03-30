@@ -2826,6 +2826,168 @@ export const ROLE_SUGGESTIONS: Record<string, SeedRolePermission[]> = {
       "scope": "NATIONAL"
     }
   ],
+  "CIPAVD": [
+    {
+      "resource": "users",
+      "action": "view",
+      "scope": "NATIONAL"
+    },
+    {
+      "resource": "phases",
+      "action": "view",
+      "scope": "NATIONAL"
+    },
+    {
+      "resource": "task_templates",
+      "action": "view",
+      "scope": "NATIONAL"
+    },
+    {
+      "resource": "task_templates",
+      "action": "create",
+      "scope": "NATIONAL"
+    },
+    {
+      "resource": "task_templates",
+      "action": "update",
+      "scope": "NATIONAL"
+    },
+    {
+      "resource": "task_instances",
+      "action": "view",
+      "scope": "NATIONAL"
+    },
+    {
+      "resource": "task_instances",
+      "action": "create",
+      "scope": "NATIONAL"
+    },
+    {
+      "resource": "task_instances",
+      "action": "update",
+      "scope": "NATIONAL"
+    },
+    {
+      "resource": "task_instances",
+      "action": "assign",
+      "scope": "NATIONAL"
+    },
+    {
+      "resource": "task_instances",
+      "action": "export",
+      "scope": "NATIONAL"
+    },
+    {
+      "resource": "reports",
+      "action": "view",
+      "scope": "NATIONAL"
+    },
+    {
+      "resource": "reports",
+      "action": "create",
+      "scope": "NATIONAL"
+    },
+    {
+      "resource": "reports",
+      "action": "update",
+      "scope": "NATIONAL"
+    },
+    {
+      "resource": "reports",
+      "action": "upload",
+      "scope": "NATIONAL"
+    },
+    {
+      "resource": "reports",
+      "action": "download",
+      "scope": "NATIONAL"
+    },
+    {
+      "resource": "reports",
+      "action": "approve",
+      "scope": "NATIONAL"
+    },
+    {
+      "resource": "meetings",
+      "action": "view",
+      "scope": "NATIONAL"
+    },
+    {
+      "resource": "meetings",
+      "action": "create",
+      "scope": "NATIONAL"
+    },
+    {
+      "resource": "meetings",
+      "action": "update",
+      "scope": "NATIONAL"
+    },
+    {
+      "resource": "tasks",
+      "action": "generate_from_meeting",
+      "scope": "NATIONAL"
+    },
+    {
+      "resource": "notices",
+      "action": "view",
+      "scope": "NATIONAL"
+    },
+    {
+      "resource": "notices",
+      "action": "create",
+      "scope": "NATIONAL"
+    },
+    {
+      "resource": "notices",
+      "action": "update",
+      "scope": "NATIONAL"
+    },
+    {
+      "resource": "notices",
+      "action": "delete",
+      "scope": "NATIONAL"
+    },
+    {
+      "resource": "notices",
+      "action": "pin",
+      "scope": "NATIONAL"
+    },
+    {
+      "resource": "org_chart",
+      "action": "view",
+      "scope": "NATIONAL"
+    },
+    {
+      "resource": "localities",
+      "action": "view",
+      "scope": "NATIONAL"
+    },
+    {
+      "resource": "specialties",
+      "action": "view",
+      "scope": "NATIONAL"
+    },
+    {
+      "resource": "dashboard",
+      "action": "view",
+      "scope": "NATIONAL"
+    },
+    {
+      "resource": "gantt",
+      "action": "view",
+      "scope": "NATIONAL"
+    },
+    {
+      "resource": "calendar",
+      "action": "view",
+      "scope": "NATIONAL"
+    },
+    {
+      "resource": "search",
+      "action": "view",
+      "scope": "NATIONAL"
+    }
+  ],
   "GSD Localidade": [
     {
       "resource": "task_instances",
@@ -2993,6 +3155,7 @@ export async function seedRbac(prisma: PrismaClient) {
   const systemRoles = [
     { name: "TI", description: "Administração geral do sistema", isSystemRole: true },
     { name: "Coordenação CIPAVD", description: "Coordenação nacional do programa", isSystemRole: true },
+    { name: "CIPAVD", description: "Operação do bloco CIPAVD", isSystemRole: true },
     { name: "Admin Especialidade Local", description: "Administra especialidade dentro da localidade", isSystemRole: true },
     { name: "GSD Localidade", description: "Gestão local do programa", isSystemRole: true },
     { name: "COMGEP", description: "Visão executiva/gerencial (sem PII)", isSystemRole: true },
