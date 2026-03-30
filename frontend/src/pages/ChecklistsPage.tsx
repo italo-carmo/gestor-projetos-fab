@@ -311,7 +311,7 @@ export function ChecklistsPage() {
               }}
               sx={{
                 minWidth: 0,
-                width: { xs: '100%', sm: 132 },
+                width: { xs: '100%', sm: 180 },
                 flexShrink: { md: 0 },
                 '& .MuiInputBase-input': { fontSize: '0.8125rem' },
                 '& .MuiInputLabel-root': { fontSize: '0.75rem' },
