@@ -20,7 +20,12 @@ exports.TasksModule = TasksModule;
 exports.TasksModule = TasksModule = __decorate([
     (0, common_1.Module)({
         imports: [rbac_module_1.RbacModule],
-        controllers: [phases_controller_1.PhasesController, task_templates_controller_1.TaskTemplatesController, task_instances_controller_1.TaskInstancesController, dashboards_controller_1.DashboardsController],
+        controllers: [
+            phases_controller_1.PhasesController,
+            task_templates_controller_1.TaskTemplatesController,
+            task_instances_controller_1.TaskInstancesController,
+            dashboards_controller_1.DashboardsController,
+        ],
         providers: [tasks_service_1.TasksService],
         exports: [tasks_service_1.TasksService],
     })

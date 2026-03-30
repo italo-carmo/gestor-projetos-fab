@@ -36,6 +36,12 @@ let AuthController = class AuthController {
             : String(activeRoleHeader ?? '').trim();
         return this.auth.me(req.user?.userId ?? '', activeRoleId || undefined);
     }
+    meFabProfile(req) {
+        return this.auth.meFabProfile(req.user?.userId ?? '');
+    }
+    getSigpesPhoto(numeroOrdem) {
+        return this.auth.getSigpesPhotoByOrder(numeroOrdem);
+    }
 };
 exports.AuthController = AuthController;
 __decorate([
@@ -64,6 +70,22 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", void 0)
 ], AuthController.prototype, "me", null);
+__decorate([
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, common_1.Get)('me/fab-profile'),
+    __param(0, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], AuthController.prototype, "meFabProfile", null);
+__decorate([
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, common_1.Get)('fotoes/:numeroOrdem'),
+    __param(0, (0, common_1.Param)('numeroOrdem')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], AuthController.prototype, "getSigpesPhoto", null);
 exports.AuthController = AuthController = __decorate([
     (0, common_1.Controller)('auth'),
     __metadata("design:paramtypes", [auth_service_1.AuthService])

@@ -55,14 +55,22 @@ let NoticesService = class NoticesService {
             });
         }
         if (scopeFilters.length > 0) {
-            const andArr = Array.isArray(where.AND) ? where.AND : (where.AND ? [where.AND] : []);
+            const andArr = Array.isArray(where.AND)
+                ? where.AND
+                : where.AND
+                    ? [where.AND]
+                    : [];
             where.AND = [...andArr, ...scopeFilters];
         }
         const { page, pageSize, skip, take } = (0, pagination_1.parsePagination)(filters.page, filters.pageSize);
         const [items, total] = await this.prisma.$transaction([
             this.prisma.notice.findMany({
                 where,
-                orderBy: [{ pinned: 'desc' }, { dueDate: 'asc' }, { createdAt: 'desc' }],
+                orderBy: [
+                    { pinned: 'desc' },
+                    { dueDate: 'asc' },
+                    { createdAt: 'desc' },
+                ],
                 skip,
                 take,
             }),
@@ -117,8 +125,14 @@ let NoticesService = class NoticesService {
                 body: payload.body ? (0, sanitize_1.sanitizeText)(payload.body) : undefined,
                 localityId,
                 specialtyId,
-                dueDate: payload.dueDate ? new Date(payload.dueDate) : payload.dueDate === null ? null : undefined,
-                priority: payload.priority ? payload.priority : undefined,
+                dueDate: payload.dueDate
+                    ? new Date(payload.dueDate)
+                    : payload.dueDate === null
+                        ? null
+                        : undefined,
+                priority: payload.priority
+                    ? payload.priority
+                    : undefined,
                 pinned: payload.pinned ?? undefined,
             },
         });
@@ -128,7 +142,11 @@ let NoticesService = class NoticesService {
             action: 'update',
             entityId: id,
             localityId: updated.localityId ?? undefined,
-            diffJson: { title: updated.title, priority: updated.priority, pinned: updated.pinned },
+            diffJson: {
+                title: updated.title,
+                priority: updated.priority,
+                pinned: updated.pinned,
+            },
         });
         return updated;
     }

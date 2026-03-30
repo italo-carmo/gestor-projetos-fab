@@ -8,6 +8,7 @@ export declare class BestPracticesService {
     list(filters: {
         q?: string;
         localityId?: string;
+        typeId?: string;
     }, user?: RbacUser): Promise<{
         items: any;
     }>;
@@ -19,18 +20,23 @@ export declare class BestPracticesService {
         content: string;
         localityId?: string | null;
         isCommission?: boolean;
+        typeId?: string | null;
     }, user?: RbacUser): Promise<any>;
     update(id: string, payload: {
         title?: string;
         content?: string;
         localityId?: string | null;
         isCommission?: boolean;
+        typeId?: string | null;
     }, user?: RbacUser): Promise<any>;
     remove(id: string, user?: RbacUser): Promise<{
         ok: boolean;
     }>;
     private assertViewerAccess;
-    private assertEditorAccess;
+    private assertUpdaterAccess;
+    private assertDeleteAccess;
+    private assertCreatorAccess;
+    private resolveTypeTarget;
     private resolveLocalityTarget;
     private normalizeRequiredText;
     createType(payload: {

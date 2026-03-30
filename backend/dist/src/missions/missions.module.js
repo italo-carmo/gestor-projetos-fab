@@ -17,7 +17,7 @@ exports.MissionsModule = MissionsModule;
 exports.MissionsModule = MissionsModule = __decorate([
     (0, common_1.Module)({
         imports: [rbac_module_1.RbacModule],
-        controllers: [missions_controller_1.MissionsController],
+        controllers: [missions_controller_1.MissionsController, missions_controller_1.MissionsChecklistUploadsController],
         providers: [missions_service_1.MissionsService],
     })
 ], MissionsModule);

@@ -14,6 +14,7 @@ const class_validator_1 = require("class-validator");
 class ListBestPracticeDto {
     q;
     localityId;
+    typeId;
 }
 exports.ListBestPracticeDto = ListBestPracticeDto;
 __decorate([
@@ -26,4 +27,9 @@ __decorate([
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], ListBestPracticeDto.prototype, "localityId", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], ListBestPracticeDto.prototype, "typeId", void 0);
 //# sourceMappingURL=list-best-practice.dto.js.map

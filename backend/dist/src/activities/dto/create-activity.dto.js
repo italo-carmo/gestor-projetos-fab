@@ -11,12 +11,15 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CreateActivityDto = void 0;
 const class_validator_1 = require("class-validator");
+const ACTIVITY_SCOPES = ['SMIF', 'CIPAVD'];
 class CreateActivityDto {
     title;
+    scope;
     description;
     localityId;
     localityIds;
     specialtyId;
+    specialtyIds;
     activityTypeId;
     eventDate;
     reportRequired;
@@ -28,6 +31,12 @@ __decorate([
     (0, class_validator_1.MaxLength)(200),
     __metadata("design:type", String)
 ], CreateActivityDto.prototype, "title", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsIn)(ACTIVITY_SCOPES),
+    __metadata("design:type", Object)
+], CreateActivityDto.prototype, "scope", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
@@ -49,6 +58,12 @@ __decorate([
     (0, class_validator_1.IsString)(),
     __metadata("design:type", Object)
 ], CreateActivityDto.prototype, "specialtyId", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsArray)(),
+    (0, class_validator_1.IsString)({ each: true }),
+    __metadata("design:type", Array)
+], CreateActivityDto.prototype, "specialtyIds", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),

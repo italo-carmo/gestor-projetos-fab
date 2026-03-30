@@ -29,7 +29,16 @@ let AuditController = class AuditController {
         if (!(0, role_access_1.hasAnyRole)(user, [role_access_1.ROLE_COORDENACAO_CIPAVD, role_access_1.ROLE_TI])) {
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         }
-        return this.audit.list({ resource, userId, localityId, entityId, from, to, page, pageSize });
+        return this.audit.list({
+            resource,
+            userId,
+            localityId,
+            entityId,
+            from,
+            to,
+            page,
+            pageSize,
+        });
     }
 };
 exports.AuditController = AuditController;

@@ -57,9 +57,36 @@ export declare class AuthService {
             executive_hide_pii: boolean;
         };
     }>;
+    meFabProfile(userId: string): Promise<{
+        uid: string | null;
+        fabom: string | null;
+        numeroOrdem: string | null;
+    }>;
+    getSigpesPhotoByOrder(numeroOrdem: string): Promise<{
+        numeroOrdem: string;
+        mimeType: null;
+        fileName: string | null;
+        base64: null;
+        dataUrl: null;
+    } | {
+        numeroOrdem: string;
+        mimeType: string;
+        fileName: string | null;
+        base64: string;
+        dataUrl: string;
+    }>;
     private issueTokens;
     private getRefreshTtlMs;
+    private resolveFabProfileForUser;
+    getNumeroOrdemForUser(ldapUid: string | null, email: string): Promise<string | null>;
+    private normalizeNumeroOrdem;
+    private getSigpesFotoApiBaseUrl;
+    private getSigpesFotoApiTargets;
+    private requestSigpesEndpoint;
+    private normalizeBase64;
+    private parseSigpesPayload;
     private registerFailedLogin;
     private registerSuccessfulLogin;
     private getHttpErrorCode;
+    private stringifyError;
 }

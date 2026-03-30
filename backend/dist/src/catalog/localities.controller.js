@@ -44,7 +44,10 @@ let LocalitiesController = class LocalitiesController {
     async list(user) {
         const canViewAll = (0, role_access_1.isNationalCommissionMember)(user) || (0, role_access_1.hasRole)(user, role_access_1.ROLE_TI);
         const where = !canViewAll && user?.localityId ? { id: user.localityId } : undefined;
-        const items = await this.prisma.locality.findMany({ where, orderBy: { name: 'asc' } });
+        const items = await this.prisma.locality.findMany({
+            where,
+            orderBy: { name: 'asc' },
+        });
         return { items };
     }
     async listOmsCatalog() {
@@ -60,8 +63,12 @@ let LocalitiesController = class LocalitiesController {
                 code: (0, sanitize_1.sanitizeText)(dto.code),
                 name: (0, sanitize_1.sanitizeText)(dto.name),
                 commandName: dto.commandName ? (0, sanitize_1.sanitizeText)(dto.commandName) : null,
-                commanderName: dto.commanderName ? (0, sanitize_1.sanitizeText)(dto.commanderName) : null,
-                individualMeetingDate: dto.individualMeetingDate ? new Date(dto.individualMeetingDate) : null,
+                commanderName: dto.commanderName
+                    ? (0, sanitize_1.sanitizeText)(dto.commanderName)
+                    : null,
+                individualMeetingDate: dto.individualMeetingDate
+                    ? new Date(dto.individualMeetingDate)
+                    : null,
                 visitDate: dto.visitDate ? new Date(dto.visitDate) : null,
                 recruitsFemaleCountCurrent: dto.recruitsFemaleCountCurrent ?? null,
                 notes: dto.notes ? (0, sanitize_1.sanitizeText)(dto.notes) : null,
@@ -76,7 +83,8 @@ let LocalitiesController = class LocalitiesController {
     async update(id, dto, user) {
         this.assertLocalityAccess(id, user);
         this.assertRecruitsMutationAccess(id, user, dto.recruitsFemaleCountCurrent);
-        if (dto.recruitsFemaleCountCurrent !== undefined && dto.recruitsFemaleCountCurrent !== null) {
+        if (dto.recruitsFemaleCountCurrent !== undefined &&
+            dto.recruitsFemaleCountCurrent !== null) {
             await this.assertRecruitAssignmentsWithinTotal(id, dto.recruitsFemaleCountCurrent);
         }
         const currentLocality = await this.prisma.locality.findUnique({
@@ -90,20 +98,44 @@ let LocalitiesController = class LocalitiesController {
             data: {
                 code: dto.code ? (0, sanitize_1.sanitizeText)(dto.code) : undefined,
                 name: dto.name ? (0, sanitize_1.sanitizeText)(dto.name) : undefined,
-                commandName: dto.commandName ? (0, sanitize_1.sanitizeText)(dto.commandName) : dto.commandName === null ? null : undefined,
-                commanderName: dto.commanderName ? (0, sanitize_1.sanitizeText)(dto.commanderName) : dto.commanderName === null ? null : undefined,
-                individualMeetingDate: dto.individualMeetingDate ? new Date(dto.individualMeetingDate) : dto.individualMeetingDate === null ? null : undefined,
-                visitDate: dto.visitDate ? new Date(dto.visitDate) : dto.visitDate === null ? null : undefined,
+                commandName: dto.commandName
+                    ? (0, sanitize_1.sanitizeText)(dto.commandName)
+                    : dto.commandName === null
+                        ? null
+                        : undefined,
+                commanderName: dto.commanderName
+                    ? (0, sanitize_1.sanitizeText)(dto.commanderName)
+                    : dto.commanderName === null
+                        ? null
+                        : undefined,
+                individualMeetingDate: dto.individualMeetingDate
+                    ? new Date(dto.individualMeetingDate)
+                    : dto.individualMeetingDate === null
+                        ? null
+                        : undefined,
+                visitDate: dto.visitDate
+                    ? new Date(dto.visitDate)
+                    : dto.visitDate === null
+                        ? null
+                        : undefined,
                 recruitsFemaleCountCurrent: dto.recruitsFemaleCountCurrent ?? undefined,
-                notes: dto.notes ? (0, sanitize_1.sanitizeText)(dto.notes) : dto.notes === null ? null : undefined,
+                notes: dto.notes
+                    ? (0, sanitize_1.sanitizeText)(dto.notes)
+                    : dto.notes === null
+                        ? null
+                        : undefined,
             },
         });
-        if (dto.recruitsFemaleCountCurrent !== undefined && dto.recruitsFemaleCountCurrent !== null) {
+        if (dto.recruitsFemaleCountCurrent !== undefined &&
+            dto.recruitsFemaleCountCurrent !== null) {
             const currentActiveCount = await this.prisma.recruitFemale.count({
                 where: {
                     localityId: id,
                     status: {
-                        in: [client_1.RecruitFemaleStatus.RECRUITMENT_TO_START, client_1.RecruitFemaleStatus.RECRUITMENT_STARTED],
+                        in: [
+                            client_1.RecruitFemaleStatus.RECRUITMENT_TO_START,
+                            client_1.RecruitFemaleStatus.RECRUITMENT_STARTED,
+                        ],
                     },
                 },
             });
@@ -130,7 +162,10 @@ let LocalitiesController = class LocalitiesController {
             where: {
                 localityId: id,
                 status: {
-                    in: [client_1.RecruitFemaleStatus.RECRUITMENT_TO_START, client_1.RecruitFemaleStatus.RECRUITMENT_STARTED],
+                    in: [
+                        client_1.RecruitFemaleStatus.RECRUITMENT_TO_START,
+                        client_1.RecruitFemaleStatus.RECRUITMENT_STARTED,
+                    ],
                 },
             },
         });
@@ -144,14 +179,19 @@ let LocalitiesController = class LocalitiesController {
                 where: {
                     localityId: id,
                     status: {
-                        in: [client_1.RecruitFemaleStatus.RECRUITMENT_TO_START, client_1.RecruitFemaleStatus.RECRUITMENT_STARTED],
+                        in: [
+                            client_1.RecruitFemaleStatus.RECRUITMENT_TO_START,
+                            client_1.RecruitFemaleStatus.RECRUITMENT_STARTED,
+                        ],
                     },
                 },
                 orderBy: { createdAt: 'asc' },
                 take: toRemove,
             });
             if (activeRecruits.length > 0) {
-                const dismissalReason = dto.dismissalReason ? (0, sanitize_1.sanitizeText)(dto.dismissalReason).trim() : null;
+                const dismissalReason = dto.dismissalReason
+                    ? (0, sanitize_1.sanitizeText)(dto.dismissalReason).trim()
+                    : null;
                 if (!dismissalReason) {
                     (0, http_error_1.throwError)('VALIDATION_ERROR', {
                         field: 'dismissalReason',
@@ -251,6 +291,8 @@ let LocalitiesController = class LocalitiesController {
                 const dismissalReasonRaw = (0, sanitize_1.sanitizeText)(String(item.dismissalReason ?? '').trim());
                 const dismissalReason = dismissalReasonRaw || null;
                 const destinationLocalityId = (0, sanitize_1.sanitizeText)(String(item.destinationLocalityId ?? '').trim()) || null;
+                const commentRaw = (0, sanitize_1.sanitizeText)(String(item.comment ?? '').trim());
+                const comment = commentRaw || null;
                 if (nextStatus === client_1.RecruitFemaleStatus.DISMISSED && !dismissalReason) {
                     (0, http_error_1.throwError)('VALIDATION_ERROR', {
                         field: 'items.dismissalReason',
@@ -274,16 +316,19 @@ let LocalitiesController = class LocalitiesController {
                     localityId: id,
                     name,
                     status: nextStatus,
-                    dismissalReason: nextStatus === client_1.RecruitFemaleStatus.DISMISSED ? dismissalReason : null,
+                    dismissalReason: nextStatus === client_1.RecruitFemaleStatus.DISMISSED
+                        ? dismissalReason
+                        : null,
                     dismissedAt: nextStatus === client_1.RecruitFemaleStatus.DISMISSED
-                        ? existing?.dismissedAt ?? now
+                        ? (existing?.dismissedAt ?? now)
                         : null,
                     destinationLocalityId: nextStatus === client_1.RecruitFemaleStatus.ASSIGNED_TO_OM
                         ? destinationLocalityId
                         : null,
                     designatedAt: nextStatus === client_1.RecruitFemaleStatus.ASSIGNED_TO_OM
-                        ? existing?.designatedAt ?? now
+                        ? (existing?.designatedAt ?? now)
                         : null,
+                    comment,
                     createdAt: now,
                     updatedAt: now,
                 };
@@ -297,6 +342,7 @@ let LocalitiesController = class LocalitiesController {
                         dismissedAt: payload.dismissedAt,
                         destinationLocalityId: payload.destinationLocalityId,
                         designatedAt: payload.designatedAt,
+                        comment: payload.comment,
                     },
                 });
             }
@@ -487,7 +533,8 @@ let LocalitiesController = class LocalitiesController {
         }
     }
     assertRecruitsMutationAccess(localityId, user, recruitsFemaleCountCurrent) {
-        if (recruitsFemaleCountCurrent === undefined || recruitsFemaleCountCurrent === null)
+        if (recruitsFemaleCountCurrent === undefined ||
+            recruitsFemaleCountCurrent === null)
             return;
         if (!(0, role_access_1.canEditRecruitsByRole)(user, localityId)) {
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
@@ -559,7 +606,7 @@ let LocalitiesController = class LocalitiesController {
         });
         if (!locality)
             (0, http_error_1.throwError)('NOT_FOUND');
-        const items = await this.prisma.recruitFemale.findMany({
+        const items = (await this.prisma.recruitFemale.findMany({
             where: { localityId },
             select: {
                 id: true,
@@ -569,12 +616,13 @@ let LocalitiesController = class LocalitiesController {
                 dismissedAt: true,
                 destinationLocalityId: true,
                 designatedAt: true,
+                comment: true,
                 destinationLocality: {
                     select: { id: true, name: true, code: true },
                 },
             },
             orderBy: [{ name: 'asc' }],
-        });
+        }));
         return {
             localityId,
             recruitsFemaleCountCurrent: locality.recruitsFemaleCountCurrent ?? 0,
@@ -588,6 +636,7 @@ let LocalitiesController = class LocalitiesController {
                 destinationLocalityName: item.destinationLocality?.name ?? item.destinationLocalityId ?? null,
                 destinationLocalityCode: item.destinationLocality?.code ?? null,
                 designatedAt: item.designatedAt?.toISOString() ?? null,
+                comment: item.comment ?? null,
             })),
         };
     }

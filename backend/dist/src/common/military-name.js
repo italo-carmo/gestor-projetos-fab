@@ -2,7 +2,9 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.stripOmSuffixFromLdapName = stripOmSuffixFromLdapName;
 function normalizeWhitespace(value) {
-    return String(value ?? '').replace(/\s+/g, ' ').trim();
+    return String(value ?? '')
+        .replace(/\s+/g, ' ')
+        .trim();
 }
 function stripOmSuffixFromLdapName(rawName, fabom) {
     const name = normalizeWhitespace(rawName ?? '');
@@ -15,16 +17,16 @@ function stripOmSuffixFromLdapName(rawName, fabom) {
     if (upperName === om)
         return '';
     if (upperName.endsWith(` (${om})`)) {
-        return name.slice(0, name.length - (` (${om})`.length)).trim();
+        return name.slice(0, name.length - ` (${om})`.length).trim();
     }
     if (upperName.endsWith(` - ${om}`)) {
-        return name.slice(0, name.length - (` - ${om}`.length)).trim();
+        return name.slice(0, name.length - ` - ${om}`.length).trim();
     }
     if (upperName.endsWith(` / ${om}`)) {
-        return name.slice(0, name.length - (` / ${om}`.length)).trim();
+        return name.slice(0, name.length - ` / ${om}`.length).trim();
     }
     if (upperName.endsWith(` ${om}`)) {
-        return name.slice(0, name.length - (` ${om}`.length)).trim();
+        return name.slice(0, name.length - ` ${om}`.length).trim();
     }
     return name;
 }

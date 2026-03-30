@@ -11,6 +11,10 @@ export type SocialCardSetting = {
   customBackgroundColor?: string;
   impactMultiplicadorTitle: string;
   impactSimbolicoTitle: string;
+  /** Cards internos em Militares Destaques (GSD / Comunicação Social) — só social-highlights */
+  highlightsInnerBackground?: string;
+  highlightsInnerTitleColor?: string;
+  highlightsInnerBodyColor?: string;
 };
 
 export const SOCIAL_CARD_DEFAULT_SETTINGS: Record<
@@ -22,18 +26,27 @@ export const SOCIAL_CARD_DEFAULT_SETTINGS: Record<
     customBackgroundColor: undefined,
     impactMultiplicadorTitle: 'Impacto Multiplicador',
     impactSimbolicoTitle: 'Impacto Simbólico',
+    highlightsInnerBackground: undefined,
+    highlightsInnerTitleColor: undefined,
+    highlightsInnerBodyColor: undefined,
   },
   'social-public-external': {
     title: 'Público Externo',
     customBackgroundColor: undefined,
     impactMultiplicadorTitle: 'Impacto Multiplicador',
     impactSimbolicoTitle: 'Impacto Simbólico',
+    highlightsInnerBackground: undefined,
+    highlightsInnerTitleColor: undefined,
+    highlightsInnerBodyColor: undefined,
   },
   'social-highlights': {
     title: 'Militares Destaques',
     customBackgroundColor: undefined,
     impactMultiplicadorTitle: 'Impacto Multiplicador',
     impactSimbolicoTitle: 'Impacto Simbólico',
+    highlightsInnerBackground: undefined,
+    highlightsInnerTitleColor: undefined,
+    highlightsInnerBodyColor: undefined,
   },
 };
 
@@ -85,6 +98,21 @@ export function loadSocialCardSettings(): Record<SocialCardId, SocialCardSetting
           value.impactSimbolicoTitle.trim()
             ? value.impactSimbolicoTitle
             : defaults.impactSimbolicoTitle,
+        highlightsInnerBackground:
+          typeof value.highlightsInnerBackground === 'string' &&
+          value.highlightsInnerBackground.trim()
+            ? value.highlightsInnerBackground.trim()
+            : undefined,
+        highlightsInnerTitleColor:
+          typeof value.highlightsInnerTitleColor === 'string' &&
+          value.highlightsInnerTitleColor.trim()
+            ? value.highlightsInnerTitleColor.trim()
+            : undefined,
+        highlightsInnerBodyColor:
+          typeof value.highlightsInnerBodyColor === 'string' &&
+          value.highlightsInnerBodyColor.trim()
+            ? value.highlightsInnerBodyColor.trim()
+            : undefined,
       };
     }
     return merged;

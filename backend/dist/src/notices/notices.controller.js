@@ -28,7 +28,16 @@ let NoticesController = class NoticesController {
         this.notices = notices;
     }
     list(localityId, specialtyId, pinned, priority, dueFrom, dueTo, page, pageSize, user) {
-        return this.notices.list({ localityId, specialtyId, pinned, priority, dueFrom, dueTo, page, pageSize }, user);
+        return this.notices.list({
+            localityId,
+            specialtyId,
+            pinned,
+            priority,
+            dueFrom,
+            dueTo,
+            page,
+            pageSize,
+        }, user);
     }
     create(dto, user) {
         return this.notices.create(dto, user);

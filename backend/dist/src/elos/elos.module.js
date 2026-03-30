@@ -8,6 +8,7 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ElosModule = void 0;
 const common_1 = require("@nestjs/common");
+const auth_module_1 = require("../auth/auth.module");
 const rbac_module_1 = require("../rbac/rbac.module");
 const elos_controller_1 = require("./elos.controller");
 const elos_service_1 = require("./elos.service");
@@ -16,7 +17,7 @@ let ElosModule = class ElosModule {
 exports.ElosModule = ElosModule;
 exports.ElosModule = ElosModule = __decorate([
     (0, common_1.Module)({
-        imports: [rbac_module_1.RbacModule],
+        imports: [rbac_module_1.RbacModule, auth_module_1.AuthModule],
         controllers: [elos_controller_1.ElosController, elos_controller_1.OrgChartController],
         providers: [elos_service_1.ElosService],
     })

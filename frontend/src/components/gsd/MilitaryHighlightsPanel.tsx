@@ -8,8 +8,10 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
   IconButton,
   Stack,
+  Switch,
   TextField,
   Tooltip,
   Typography,
@@ -27,8 +29,15 @@ import {
   SOCIAL_CARD_EDITOR_DEFAULT_COLORS,
   SOCIAL_CARD_SETTINGS_STORAGE_KEY,
   type SocialCardId,
-  type SocialCardSetting,
 } from '../../app/socialCardSettingsStorage';
+import {
+  buildInnerTheme,
+  DEFAULT_INNER_BODY_COLOR,
+  DEFAULT_INNER_TITLE_COLOR,
+  hexToRgba,
+  type InnerCardTheme,
+  PICKER_DEFAULT_INNER_BG,
+} from '../../app/socialHighlightsInnerTheme';
 import { hasAnyRole, ROLE_TI } from '../../app/roleAccess';
 import { useToast } from '../../app/toast';
 import { EmptyState } from '../states/EmptyState';
@@ -100,18 +109,29 @@ export function MilitaryHighlightsPanel() {
     return '#FFFFFF';
   }, [highlightsCardSetting.customBackgroundColor]);
 
+  const innerHighlightTheme = useMemo(
+    () => buildInnerTheme(highlightsCardSetting),
+    [highlightsCardSetting],
+  );
+
   const [cardEditorOpen, setCardEditorOpen] = useState(false);
+  const [innerUseSolidBackground, setInnerUseSolidBackground] = useState(false);
   const [cardEditorDraft, setCardEditorDraft] = useState({
     title: '',
     backgroundColor: '#FFFFFF',
     impactMultiplicadorTitle: '',
     impactSimbolicoTitle: '',
+    innerBackground: PICKER_DEFAULT_INNER_BG,
+    innerTitleColor: DEFAULT_INNER_TITLE_COLOR,
+    innerBodyColor: DEFAULT_INNER_BODY_COLOR,
   });
 
   const openCardEditor = useCallback(() => {
     const s =
       socialCardSettings['social-highlights'] ??
       SOCIAL_CARD_DEFAULT_SETTINGS['social-highlights'];
+    const solid = Boolean(s.highlightsInnerBackground?.trim());
+    setInnerUseSolidBackground(solid);
     setCardEditorDraft({
       title: s.title,
       backgroundColor:
@@ -119,6 +139,9 @@ export function MilitaryHighlightsPanel() {
         SOCIAL_CARD_EDITOR_DEFAULT_COLORS['social-highlights'],
       impactMultiplicadorTitle: s.impactMultiplicadorTitle,
       impactSimbolicoTitle: s.impactSimbolicoTitle,
+      innerBackground: s.highlightsInnerBackground?.trim() || PICKER_DEFAULT_INNER_BG,
+      innerTitleColor: s.highlightsInnerTitleColor?.trim() || DEFAULT_INNER_TITLE_COLOR,
+      innerBodyColor: s.highlightsInnerBodyColor?.trim() || DEFAULT_INNER_BODY_COLOR,
     });
     setCardEditorOpen(true);
   }, [socialCardSettings]);
@@ -126,10 +149,11 @@ export function MilitaryHighlightsPanel() {
   const saveCardEditor = useCallback(() => {
     const defaults = SOCIAL_CARD_DEFAULT_SETTINGS['social-highlights'];
     const full = loadSocialCardSettings();
+    const prev = full['social-highlights'];
     const next = {
       ...full,
       'social-highlights': {
-        ...full['social-highlights'],
+        ...prev,
         title: cardEditorDraft.title.trim() || defaults.title,
         customBackgroundColor: cardEditorDraft.backgroundColor.trim()
           ? cardEditorDraft.backgroundColor
@@ -140,13 +164,23 @@ export function MilitaryHighlightsPanel() {
         impactSimbolicoTitle:
           cardEditorDraft.impactSimbolicoTitle.trim() ||
           defaults.impactSimbolicoTitle,
+        highlightsInnerBackground:
+          innerUseSolidBackground && cardEditorDraft.innerBackground.trim()
+            ? cardEditorDraft.innerBackground.trim()
+            : undefined,
+        highlightsInnerTitleColor: cardEditorDraft.innerTitleColor.trim()
+          ? cardEditorDraft.innerTitleColor.trim()
+          : undefined,
+        highlightsInnerBodyColor: cardEditorDraft.innerBodyColor.trim()
+          ? cardEditorDraft.innerBodyColor.trim()
+          : undefined,
       },
     };
     setSocialCardSettings(next);
     persistSocialCardSettings(next);
     setCardEditorOpen(false);
     toast.push({ message: 'Card atualizado', severity: 'success' });
-  }, [cardEditorDraft, toast]);
+  }, [cardEditorDraft, innerUseSolidBackground, toast]);
 
   const highlightItems = useMemo(
     () =>
@@ -160,21 +194,10 @@ export function MilitaryHighlightsPanel() {
     [highlightsQuery.data?.items],
   );
 
-  const renderHighlightCards = (cards: SocialCommunicationHighlight[]) => {
-    const theme = {
-      cardBorder: 'rgba(146, 106, 19, 0.65)',
-      cardBackground:
-        'linear-gradient(145deg, #b68f33 0%, #c9a44e 25%, #e2bf67 50%, #cca95a 74%, #af8d42 100%)',
-      titleColor: 'rgba(46, 30, 4, 0.95)',
-      textColor: 'rgba(58, 39, 6, 0.92)',
-      chipBg: 'rgba(255, 248, 227, 0.92)',
-      chipBorder: 'rgba(120, 82, 14, 0.35)',
-      chipColor: '#4A3407',
-      mediaBorder: 'rgba(255, 244, 205, 0.7)',
-      mediaBg: 'rgba(255, 248, 223, 0.28)',
-      hoverShadow: '0 14px 24px rgba(90, 64, 13, 0.24)',
-    };
-
+  const renderHighlightCards = (
+    cards: SocialCommunicationHighlight[],
+    theme: InnerCardTheme,
+  ) => {
     return (
       <Box
         sx={{
@@ -215,8 +238,7 @@ export function MilitaryHighlightsPanel() {
                 overflow: 'hidden',
                 cursor: 'pointer',
                 transition: 'transform 150ms ease, box-shadow 180ms ease',
-                boxShadow:
-                  'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.12), 0 8px 16px rgba(95,70,18,0.18)',
+                boxShadow: `inset 0 1px 0 ${hexToRgba('#ffffff', 0.28)}, inset 0 -1px 0 ${hexToRgba('#000000', 0.12)}, 0 8px 16px ${hexToRgba(theme.titleColor, 0.2)}`,
                 '&:hover': {
                   transform: 'translateY(-2px)',
                   boxShadow: `${theme.hoverShadow}, inset 0 1px 0 rgba(255,255,255,0.34), inset 0 -1px 0 rgba(0,0,0,0.14)`,
@@ -283,6 +305,7 @@ export function MilitaryHighlightsPanel() {
                       variant="body2"
                       sx={{
                         color: theme.textColor,
+                        opacity: 0.98,
                         display: '-webkit-box',
                         WebkitLineClamp: 4,
                         WebkitBoxOrient: 'vertical',
@@ -339,7 +362,7 @@ export function MilitaryHighlightsPanel() {
                 }}
               />
               {isTiProfile ? (
-                <Tooltip title="Editar cor e título do card">
+                <Tooltip title="Editar painel e estilo dos cards de destaque">
                   <IconButton
                     size="small"
                     sx={{
@@ -365,7 +388,7 @@ export function MilitaryHighlightsPanel() {
           ) : highlightItems.length === 0 ? (
             <EmptyState title="Sem destaques" description="Nenhum destaque cadastrado." />
           ) : (
-            renderHighlightCards(highlightItems)
+            renderHighlightCards(highlightItems, innerHighlightTheme)
           )}
         </CardContent>
       </Card>
@@ -374,9 +397,9 @@ export function MilitaryHighlightsPanel() {
         open={cardEditorOpen}
         onClose={() => setCardEditorOpen(false)}
         fullWidth
-        maxWidth="xs"
+        maxWidth="sm"
       >
-        <DialogTitle>Editar card</DialogTitle>
+        <DialogTitle>Editar card de destaques</DialogTitle>
         <DialogContent sx={{ pt: 1 }}>
           <Stack spacing={1.5} sx={{ mt: 0.5 }}>
             <TextField
@@ -412,13 +435,61 @@ export function MilitaryHighlightsPanel() {
               fullWidth
             />
             <TextField
-              label="Cor do fundo"
+              label="Fundo do painel (externo)"
               type="color"
               value={cardEditorDraft.backgroundColor}
               onChange={(event) =>
                 setCardEditorDraft((prev) => ({
                   ...prev,
                   backgroundColor: event.target.value,
+                }))
+              }
+              fullWidth
+            />
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={innerUseSolidBackground}
+                  onChange={(_, checked) => setInnerUseSolidBackground(checked)}
+                  color="primary"
+                />
+              }
+              label="Usar cor sólida nos cards dos militares (desligado = degradê dourado padrão)"
+            />
+            {innerUseSolidBackground ? (
+              <TextField
+                label="Fundo dos cards dos militares (sólido)"
+                type="color"
+                value={cardEditorDraft.innerBackground}
+                onChange={(event) =>
+                  setCardEditorDraft((prev) => ({
+                    ...prev,
+                    innerBackground: event.target.value,
+                  }))
+                }
+                fullWidth
+              />
+            ) : null}
+            <TextField
+              label="Cor do nome (título)"
+              type="color"
+              value={cardEditorDraft.innerTitleColor}
+              onChange={(event) =>
+                setCardEditorDraft((prev) => ({
+                  ...prev,
+                  innerTitleColor: event.target.value,
+                }))
+              }
+              fullWidth
+            />
+            <TextField
+              label="Cor do texto (descrição)"
+              type="color"
+              value={cardEditorDraft.innerBodyColor}
+              onChange={(event) =>
+                setCardEditorDraft((prev) => ({
+                  ...prev,
+                  innerBodyColor: event.target.value,
                 }))
               }
               fullWidth

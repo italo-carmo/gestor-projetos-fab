@@ -14,6 +14,7 @@ const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../prisma/prisma.service");
 const http_error_1 = require("../common/http-error");
 const role_access_1 = require("../rbac/role-access");
+const fab_ldap_service_1 = require("../ldap/fab-ldap.service");
 const LOCALITY_REQUIRED_ROLE_NAMES = new Set([
     'admin especialidade local',
     'gsd localidade',
@@ -40,8 +41,29 @@ function roleRequiresSpecialty(roleName) {
 }
 let UsersService = class UsersService {
     prisma;
-    constructor(prisma) {
+    fabLdap;
+    constructor(prisma, fabLdap) {
         this.prisma = prisma;
+        this.fabLdap = fabLdap;
+    }
+    async resolveNumeroOrdem(ldapUid, email) {
+        try {
+            const uid = String(ldapUid ?? '').trim();
+            if (uid) {
+                const byUid = await this.fabLdap.lookupByUid(uid);
+                if (byUid?.numeroOrdem)
+                    return byUid.numeroOrdem;
+            }
+            const em = String(email ?? '').trim().toLowerCase();
+            if (em) {
+                const byEmail = await this.fabLdap.lookupByEmail(em);
+                return byEmail?.numeroOrdem ?? null;
+            }
+            return null;
+        }
+        catch {
+            return null;
+        }
     }
     toRoleResponse(role) {
         return {
@@ -127,9 +149,20 @@ let UsersService = class UsersService {
             },
             orderBy: { name: 'asc' },
         });
-        return users
+        const filtered = users
             .filter((user) => String(user.ldapUid ?? '').trim().length > 0)
             .map((user) => this.mapUserRoles(user));
+        const chunkSize = 20;
+        const numeros = [];
+        for (let i = 0; i < filtered.length; i += chunkSize) {
+            const chunk = filtered.slice(i, i + chunkSize);
+            const batch = await Promise.all(chunk.map((u) => this.resolveNumeroOrdem(u.ldapUid, u.email)));
+            numeros.push(...batch);
+        }
+        return filtered.map((user, idx) => ({
+            ...user,
+            numeroOrdem: numeros[idx] ?? null,
+        }));
     }
     async update(id, payload) {
         const existingUser = await this.prisma.user.findUnique({
@@ -181,12 +214,19 @@ let UsersService = class UsersService {
         else {
             targetRoleNames = existingUser.roles.map((item) => item.role.name);
         }
-        const targetLocalityId = payload.localityId !== undefined ? payload.localityId : existingUser.localityId;
-        if (targetRoleNames.some((roleName) => roleRequiresLocality(roleName)) && !targetLocalityId) {
+        const targetLocalityId = payload.localityId !== undefined
+            ? payload.localityId
+            : existingUser.localityId;
+        if (targetRoleNames.some((roleName) => roleRequiresLocality(roleName)) &&
+            !targetLocalityId) {
             (0, http_error_1.throwError)('USER_LOCAL_ROLE_REQUIRES_LOCALITY');
         }
-        const targetSpecialtyId = payload.specialtyId !== undefined ? payload.specialtyId : existingUser.specialtyId;
-        const targetEloRoleId = payload.eloRoleId !== undefined ? payload.eloRoleId : existingUser.eloRoleId;
+        const targetSpecialtyId = payload.specialtyId !== undefined
+            ? payload.specialtyId
+            : existingUser.specialtyId;
+        const targetEloRoleId = payload.eloRoleId !== undefined
+            ? payload.eloRoleId
+            : existingUser.eloRoleId;
         if (targetRoleNames.some((roleName) => roleRequiresSpecialty(roleName)) &&
             !targetSpecialtyId &&
             !targetEloRoleId) {
@@ -296,6 +336,7 @@ let UsersService = class UsersService {
 exports.UsersService = UsersService;
 exports.UsersService = UsersService = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [prisma_service_1.PrismaService])
+    __metadata("design:paramtypes", [prisma_service_1.PrismaService,
+        fab_ldap_service_1.FabLdapService])
 ], UsersService);
 //# sourceMappingURL=users.service.js.map

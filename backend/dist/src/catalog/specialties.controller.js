@@ -27,7 +27,9 @@ let SpecialtiesController = class SpecialtiesController {
         this.prisma = prisma;
     }
     async list() {
-        const items = await this.prisma.specialty.findMany({ orderBy: { name: 'asc' } });
+        const items = await this.prisma.specialty.findMany({
+            orderBy: { name: 'asc' },
+        });
         return { items };
     }
     async create(dto) {
@@ -44,8 +46,16 @@ let SpecialtiesController = class SpecialtiesController {
             where: { id },
             data: {
                 name: dto.name ? (0, sanitize_1.sanitizeText)(dto.name) : undefined,
-                color: dto.color ? (0, sanitize_1.sanitizeText)(dto.color) : dto.color === null ? null : undefined,
-                icon: dto.icon ? (0, sanitize_1.sanitizeText)(dto.icon) : dto.icon === null ? null : undefined,
+                color: dto.color
+                    ? (0, sanitize_1.sanitizeText)(dto.color)
+                    : dto.color === null
+                        ? null
+                        : undefined,
+                icon: dto.icon
+                    ? (0, sanitize_1.sanitizeText)(dto.icon)
+                    : dto.icon === null
+                        ? null
+                        : undefined,
             },
         });
     }

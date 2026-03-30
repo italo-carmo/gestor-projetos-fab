@@ -14,10 +14,23 @@ type SurveyFilters = {
     q?: string;
     combineMode?: string;
 };
+type ImportSurveyOptions = {
+    replaceAll?: boolean;
+};
+type CorrelatedViolenceSummary = {
+    sheetName: string;
+    totalRows: number;
+    mentionRows: number;
+    byType: Array<{
+        type: string;
+        count: number;
+        percent: number;
+    }>;
+};
 export declare class BiService {
     private readonly prisma;
     constructor(prisma: PrismaService);
-    importSurvey(file: Express.Multer.File, user?: RbacUser): Promise<{
+    importSurvey(file: Express.Multer.File, user?: RbacUser, options?: ImportSurveyOptions): Promise<{
         batch: {
             importedBy: {
                 id: string;
@@ -45,6 +58,8 @@ export declare class BiService {
             posto: string | null;
             autodeclara: string | null;
         }[];
+        importMode: string;
+        correlatedViolence: CorrelatedViolenceSummary | null;
     }>;
     listImports(filters: {
         page?: string;
@@ -83,12 +98,12 @@ export declare class BiService {
             posto: string | null;
             violenceTypes: string[];
             postoGraduacao: string | null;
-            autodeclara: string | null;
             batchId: string | null;
             submittedAt: Date | null;
             sufferedViolenceRaw: string | null;
             sufferedViolence: boolean | null;
             om: string | null;
+            autodeclara: string | null;
             extraColumn: string | null;
             rawPayload: Prisma.JsonValue | null;
             sourceRow: number | null;
@@ -193,6 +208,18 @@ export declare class BiService {
                 types: string[];
                 items: Record<string, string | number>[];
             };
+            violenceTypeByPostoPercent: {
+                types: string[];
+                items: Record<string, string | number>[];
+            };
+            monthlyTrend: {
+                yesRatePercent: number;
+                total: number;
+                yesCount: number;
+                noCount: number;
+                unknownCount: number;
+                month: string;
+            }[];
         };
         insights: {
             mostCommonType: {
@@ -203,6 +230,16 @@ export declare class BiService {
                 om: string;
                 simPercent: number;
                 total: number;
+            } | null;
+            topMissionByMentions: {
+                om: string;
+                mentions: number;
+                sharePercent: number;
+            } | null;
+            topProfileByMentions: {
+                posto: string;
+                mentions: number;
+                sharePercent: number;
             } | null;
         };
         latestImport: ({
@@ -229,11 +266,18 @@ export declare class BiService {
     private buildDistribution;
     private buildViolenceTypeChart;
     private buildViolenceTypeByOmChart;
+    private buildViolenceTypeByPostoChart;
+    private buildMonthlyTrend;
     private sortOm;
     private buildWhere;
     private parseCombineMode;
     private normalizeQuestionAnswer;
     private extractRows;
+    private readWorkbook;
+    private findPreferredSheetName;
+    private sheetToMatrix;
+    private extractCorrelatedViolenceSummary;
+    private resolveCorrelatedViolenceHeaderMap;
     private resolveHeaderMap;
     private parseDataRow;
     private fileExtension;
@@ -241,7 +285,7 @@ export declare class BiService {
     private parseSubmittedAt;
     private parseSufferedViolence;
     private parseViolenceTypes;
-    private toTitleCase;
+    private toTitleCaseWithAccents;
     private normalize;
     private cleanCell;
     private getCell;

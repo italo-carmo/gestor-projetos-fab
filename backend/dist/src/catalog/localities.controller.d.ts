@@ -84,30 +84,32 @@ export declare class LocalitiesController {
         localityId: string;
         recruitsFemaleCountCurrent: number;
         items: {
-            id: string;
-            name: string;
-            status: import("@prisma/client").$Enums.RecruitFemaleStatus;
-            dismissalReason: string | null;
-            dismissedAt: string | null;
-            destinationLocalityId: string | null;
-            destinationLocalityName: string | null;
-            destinationLocalityCode: string | null;
-            designatedAt: string | null;
+            id: any;
+            name: any;
+            status: any;
+            dismissalReason: any;
+            dismissedAt: any;
+            destinationLocalityId: any;
+            destinationLocalityName: any;
+            destinationLocalityCode: any;
+            designatedAt: any;
+            comment: any;
         }[];
     }>;
     replaceRecruitMembers(id: string, dto: ReplaceLocalityRecruitsMembersDto, user: RbacUser): Promise<{
         localityId: string;
         recruitsFemaleCountCurrent: number;
         items: {
-            id: string;
-            name: string;
-            status: import("@prisma/client").$Enums.RecruitFemaleStatus;
-            dismissalReason: string | null;
-            dismissedAt: string | null;
-            destinationLocalityId: string | null;
-            destinationLocalityName: string | null;
-            destinationLocalityCode: string | null;
-            designatedAt: string | null;
+            id: any;
+            name: any;
+            status: any;
+            dismissalReason: any;
+            dismissedAt: any;
+            destinationLocalityId: any;
+            destinationLocalityName: any;
+            destinationLocalityCode: any;
+            designatedAt: any;
+            comment: any;
         }[];
     }>;
     setCommanderFromLdap(id: string, dto: SetLocalityCommanderFromLdapDto, user: RbacUser): Promise<{

@@ -1,7 +1,10 @@
 import { PrismaService } from '../prisma/prisma.service';
+import { FabLdapService } from '../ldap/fab-ldap.service';
 export declare class UsersService {
     private readonly prisma;
-    constructor(prisma: PrismaService);
+    private readonly fabLdap;
+    constructor(prisma: PrismaService, fabLdap: FabLdapService);
+    private resolveNumeroOrdem;
     private toRoleResponse;
     private mapUserRoles;
     private readonly authInclude;
@@ -221,7 +224,8 @@ export declare class UsersService {
         commissionPhone: string | null;
         commissionSeniority: number | null;
     }) | null, null, import("@prisma/client/runtime/client").DefaultArgs, import("@prisma/client").Prisma.PrismaClientOptions>;
-    list(): Promise<({
+    list(): Promise<{
+        numeroOrdem: string | null;
         id: string;
         specialtyId: string | null;
         eloRoleId: string | null;
@@ -236,18 +240,16 @@ export declare class UsersService {
                 id: string;
                 name: string;
             };
-        }[];
-        email: string;
-        ldapUid: string | null;
-        localityId: string | null;
-    } & {
-        roles: {
+        }[] & {
             role: {
                 id: string;
                 name: string;
             };
         }[];
-    })[]>;
+        email: string;
+        ldapUid: string | null;
+        localityId: string | null;
+    }[]>;
     update(id: string, payload: {
         eloRoleId?: string | null;
         localityId?: string | null;

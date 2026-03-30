@@ -61,6 +61,7 @@ export declare class OrgChartController {
             warName: string;
             email: string;
             ldapUid: string | null;
+            numeroOrdem: string | null;
             functionText: string | null;
             phone: string | null;
             seniority: number | null;

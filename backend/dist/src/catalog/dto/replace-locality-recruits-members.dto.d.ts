@@ -10,6 +10,7 @@ export declare class ReplaceLocalityRecruitMemberItemDto {
     status: RecruitMemberStatusDto;
     dismissalReason?: string | null;
     destinationLocalityId?: string | null;
+    comment?: string | null;
 }
 export declare class ReplaceLocalityRecruitsMembersDto {
     items: ReplaceLocalityRecruitMemberItemDto[];

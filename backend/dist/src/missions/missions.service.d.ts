@@ -1,7 +1,19 @@
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import type { RbacUser } from '../rbac/rbac.types';
 import { FabLdapService } from '../ldap/fab-ldap.service';
+import { type MissionChecklistSectionId, type MissionChecklistClassification } from './mission-checklist.constants';
+type MissionChecklistSectionRuntime = {
+    id: MissionChecklistSectionId;
+    title: string;
+    items: Array<{
+        id: string;
+        title: string;
+        prompt: string | null;
+        sortOrder: number;
+    }>;
+};
 export declare class MissionsService {
     private readonly prisma;
     private readonly audit;
@@ -41,6 +53,7 @@ export declare class MissionsService {
             description: string | null;
             localityId: string;
             createdById: string | null;
+            checklistJson: Prisma.JsonValue | null;
             startDate: Date;
             endDate: Date;
         }[];
@@ -81,6 +94,148 @@ export declare class MissionsService {
             missionTitle: string;
             participantsCount: number;
         }[];
+    }>;
+    getChecklistMapping(filters: {
+        localityId?: string;
+    }, user?: RbacUser): Promise<{
+        generatedAt: string;
+        localities: {
+            id: string;
+            name: string;
+            code: string | null;
+        }[];
+        classifications: {
+            id: MissionChecklistClassification;
+            label: string;
+            colorHex: string | null;
+            sortOrder: number;
+        }[];
+        defaultClassification: "FORTE_CONSOLIDADA" | "OPORTUNIDADE_MELHORIA" | "NECESSITA_ANALISE" | "POSSIVEL_RISCO";
+        sections: {
+            id: "lideranca" | "acompanhamento_recrutas" | "analise_riscos";
+            title: string;
+            items: {
+                id: string;
+                title: string;
+                prompt: string | null;
+                cells: ({
+                    localityId: string;
+                    missionId: null;
+                    classification: null;
+                    notes: string;
+                    hasNotes: boolean;
+                    photos: never[];
+                    hasPhotos: boolean;
+                } | {
+                    localityId: string;
+                    missionId: string;
+                    classification: null;
+                    notes: string;
+                    hasNotes: boolean;
+                    photos: never[];
+                    hasPhotos: boolean;
+                } | {
+                    localityId: string;
+                    missionId: string;
+                    classification: "FORTE_CONSOLIDADA" | "OPORTUNIDADE_MELHORIA" | "NECESSITA_ANALISE" | "POSSIVEL_RISCO";
+                    notes: string;
+                    hasNotes: boolean;
+                    photos: string[];
+                    hasPhotos: boolean;
+                })[];
+            }[];
+        }[];
+        missionsByLocality: ({
+            localityId: string;
+            mission: null;
+        } | {
+            localityId: string;
+            mission: {
+                id: string;
+                title: string;
+                description: string | null;
+                startDate: Date;
+                endDate: Date;
+                updatedAt: Date;
+                locality: {
+                    id: string;
+                    name: string;
+                    code: string;
+                };
+                checklistOm: {
+                    id: string;
+                    name: string;
+                    code: string | null;
+                };
+                participants: {
+                    id: string;
+                    name: string;
+                    email: string | null;
+                    ldapUid: string | null;
+                    fabom: string | null;
+                    cpf: string | null;
+                }[];
+                participantsCount: number;
+                scheduleItems: {
+                    id: string;
+                    title: string;
+                    location: string;
+                    participants: string;
+                    responsible: string;
+                    durationMinutes: number;
+                    startAt: Date;
+                }[];
+                scheduleItemsCount: number;
+                checklistSections: MissionChecklistSectionRuntime[];
+            };
+        })[];
+    }>;
+    getChecklistConfig(user?: RbacUser): Promise<{
+        generatedAt: string;
+        classifications: {
+            id: MissionChecklistClassification;
+            label: string;
+            colorHex: string | null;
+            sortOrder: number;
+        }[];
+        defaultClassification: "FORTE_CONSOLIDADA" | "OPORTUNIDADE_MELHORIA" | "NECESSITA_ANALISE" | "POSSIVEL_RISCO";
+        sections: MissionChecklistSectionRuntime[];
+    }>;
+    createChecklistDimension(payload: {
+        sectionId: MissionChecklistSectionId;
+        title: string;
+        prompt?: string;
+        sortOrder?: number;
+    }, user?: RbacUser): Promise<{
+        id: string;
+        sectionId: string;
+        title: string;
+        prompt: string | null;
+        sortOrder: number;
+    }>;
+    updateChecklistDimension(id: string, payload: {
+        sectionId?: MissionChecklistSectionId;
+        title?: string;
+        prompt?: string;
+        sortOrder?: number;
+    }, user?: RbacUser): Promise<{
+        id: string;
+        sectionId: string;
+        title: string;
+        prompt: string | null;
+        sortOrder: number;
+    }>;
+    deleteChecklistDimension(id: string, user?: RbacUser): Promise<{
+        ok: boolean;
+    }>;
+    updateChecklistClassification(id: string, payload: {
+        label: string;
+        colorHex?: string;
+    }, user?: RbacUser): Promise<{
+        id: string;
+        label: string;
+        colorHex: string | null;
+        sortOrder: number;
     }>;
     getById(id: string, user?: RbacUser): Promise<{
         locality: {
@@ -125,8 +280,74 @@ export declare class MissionsService {
         description: string | null;
         localityId: string;
         createdById: string | null;
+        checklistJson: Prisma.JsonValue | null;
         startDate: Date;
         endDate: Date;
+    }>;
+    getChecklist(id: string, user?: RbacUser): Promise<{
+        missionId: string;
+        localityId: string;
+        omId: string;
+        om: "" | {
+            id: string;
+            name: string;
+            code: string;
+        } | null;
+        updatedAt: Date;
+        classifications: {
+            id: MissionChecklistClassification;
+            label: string;
+            colorHex: string | null;
+            sortOrder: number;
+        }[];
+        defaultClassification: "FORTE_CONSOLIDADA" | "OPORTUNIDADE_MELHORIA" | "NECESSITA_ANALISE" | "POSSIVEL_RISCO";
+        sections: {
+            id: "lideranca" | "acompanhamento_recrutas" | "analise_riscos";
+            title: string;
+            items: {
+                id: string;
+                title: string;
+                prompt: string | null;
+                sortOrder: number;
+                classification: "FORTE_CONSOLIDADA" | "OPORTUNIDADE_MELHORIA" | "NECESSITA_ANALISE" | "POSSIVEL_RISCO";
+                notes: string;
+                photos: string[];
+            }[];
+        }[];
+    }>;
+    upsertChecklist(id: string, payload: {
+        omId: string;
+        items: {
+            id: string;
+            classification: MissionChecklistClassification;
+            notes?: string;
+            photos?: string[];
+        }[];
+    }, user?: RbacUser): Promise<{
+        missionId: string;
+        localityId: string;
+        omId: string;
+        updatedAt: Date;
+        classifications: {
+            id: MissionChecklistClassification;
+            label: string;
+            colorHex: string | null;
+            sortOrder: number;
+        }[];
+        defaultClassification: "FORTE_CONSOLIDADA" | "OPORTUNIDADE_MELHORIA" | "NECESSITA_ANALISE" | "POSSIVEL_RISCO";
+        sections: {
+            id: "lideranca" | "acompanhamento_recrutas" | "analise_riscos";
+            title: string;
+            items: {
+                id: string;
+                title: string;
+                prompt: string | null;
+                sortOrder: number;
+                classification: "FORTE_CONSOLIDADA" | "OPORTUNIDADE_MELHORIA" | "NECESSITA_ANALISE" | "POSSIVEL_RISCO";
+                notes: string;
+                photos: string[];
+            }[];
+        }[];
     }>;
     create(payload: {
         title: string;
@@ -172,6 +393,7 @@ export declare class MissionsService {
         description: string | null;
         localityId: string;
         createdById: string | null;
+        checklistJson: Prisma.JsonValue | null;
         startDate: Date;
         endDate: Date;
     }>;
@@ -219,6 +441,7 @@ export declare class MissionsService {
         description: string | null;
         localityId: string;
         createdById: string | null;
+        checklistJson: Prisma.JsonValue | null;
         startDate: Date;
         endDate: Date;
     }>;
@@ -332,7 +555,23 @@ export declare class MissionsService {
         fileName: string;
         buffer: Buffer<ArrayBufferLike>;
     }>;
+    private buildMissionChecklistSections;
+    private normalizeMissionChecklistItems;
+    private readStoredMissionChecklistItems;
+    private normalizeMissionChecklistPhotos;
+    private getMissionChecklistConfig;
+    private readStoredMissionChecklistOmId;
+    private isMissionChecklistClassification;
+    private isMissionChecklistSectionId;
+    private normalizeChecklistSectionId;
+    private nextChecklistDimensionSortOrder;
+    private normalizeHexColor;
+    private sanitizeHexColorOrNull;
+    private isJsonObject;
     private assertMissionAccess;
+    private assertMissionChecklistEditAccess;
+    assertChecklistUploadAccess(id: string, user?: RbacUser): Promise<void>;
+    private assertMissionChecklistConfigAccess;
     private getTargetLocalityIds;
     private sanitizeRequiredText;
     private parseRequiredDate;
@@ -349,3 +588,4 @@ export declare class MissionsService {
     private extractCpf;
     private calculateInclusiveDays;
 }
+export {};

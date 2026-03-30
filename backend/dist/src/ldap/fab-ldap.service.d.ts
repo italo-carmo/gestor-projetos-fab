@@ -5,6 +5,7 @@ export type FabLdapProfile = {
     name: string | null;
     email: string | null;
     fabom: string | null;
+    numeroOrdem: string | null;
 };
 export declare class FabLdapService {
     private readonly config;
@@ -16,7 +17,9 @@ export declare class FabLdapService {
     private bindForLookup;
     private searchByUid;
     private mapEntry;
+    private readFirstAvailableAttribute;
     private readAttribute;
+    private readEntryValue;
     private normalizeUid;
     private buildUserDn;
     private getLdapUrl;

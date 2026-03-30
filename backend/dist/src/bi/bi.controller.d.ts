@@ -76,6 +76,18 @@ export declare class BiController {
                 types: string[];
                 items: Record<string, string | number>[];
             };
+            violenceTypeByPostoPercent: {
+                types: string[];
+                items: Record<string, string | number>[];
+            };
+            monthlyTrend: {
+                yesRatePercent: number;
+                total: number;
+                yesCount: number;
+                noCount: number;
+                unknownCount: number;
+                month: string;
+            }[];
         };
         insights: {
             mostCommonType: {
@@ -86,6 +98,16 @@ export declare class BiController {
                 om: string;
                 simPercent: number;
                 total: number;
+            } | null;
+            topMissionByMentions: {
+                om: string;
+                mentions: number;
+                sharePercent: number;
+            } | null;
+            topProfileByMentions: {
+                posto: string;
+                mentions: number;
+                sharePercent: number;
             } | null;
         };
         latestImport: ({
@@ -115,12 +137,12 @@ export declare class BiController {
             posto: string | null;
             violenceTypes: string[];
             postoGraduacao: string | null;
-            autodeclara: string | null;
             batchId: string | null;
             submittedAt: Date | null;
             sufferedViolenceRaw: string | null;
             sufferedViolence: boolean | null;
             om: string | null;
+            autodeclara: string | null;
             extraColumn: string | null;
             rawPayload: import("@prisma/client/runtime/client").JsonValue | null;
             sourceRow: number | null;
@@ -169,7 +191,7 @@ export declare class BiController {
         pageSize: number;
         total: number;
     }>;
-    importSurvey(file: Express.Multer.File, req: Request & {
+    importSurvey(file: Express.Multer.File, replace: string | undefined, req: Request & {
         fileValidationError?: string;
     }, user: RbacUser): Promise<{
         batch: {
@@ -199,6 +221,17 @@ export declare class BiController {
             posto: string | null;
             autodeclara: string | null;
         }[];
+        importMode: string;
+        correlatedViolence: {
+            sheetName: string;
+            totalRows: number;
+            mentionRows: number;
+            byType: Array<{
+                type: string;
+                count: number;
+                percent: number;
+            }>;
+        } | null;
     }>;
     deleteResponses(body: {
         ids?: string[];

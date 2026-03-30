@@ -2,11 +2,14 @@ import { ConfigService } from '@nestjs/config';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { RbacUser } from '../rbac/rbac.types';
+import { FabLdapService } from '../ldap/fab-ldap.service';
+type HighlightImpact = 'MULTIPLICADOR' | 'SIMBOLICO';
 export declare class SocialCommunicationService {
     private readonly prisma;
     private readonly audit;
     private readonly config;
-    constructor(prisma: PrismaService, audit: AuditService, config: ConfigService);
+    private readonly fabLdap;
+    constructor(prisma: PrismaService, audit: AuditService, config: ConfigService, fabLdap: FabLdapService);
     list(filters: {
         q?: string;
         tags?: string[];
@@ -23,12 +26,96 @@ export declare class SocialCommunicationService {
             createdAt: Date;
             updatedAt: Date;
             createdById: string | null;
+            audience: import("@prisma/client").$Enums.SocialCommunicationAudience;
             coverImageUrl: string | null;
             summary: string | null;
             publishedAt: Date | null;
             tags: string[];
             sourceUrl: string;
         }[];
+    }>;
+    listHighlights(filters: {
+        q?: string;
+    }): Promise<{
+        items: any;
+    }>;
+    lookupHighlightLdapProfile(email: string, user?: RbacUser): Promise<{
+        uid: string;
+        name: string | null;
+        email: string;
+        fabom: string | null;
+        numeroOrdem: string | null;
+    }>;
+    createHighlight(payload: {
+        ldapUid?: string | null;
+        militaryEmail: string;
+        militaryName: string;
+        highlightRole?: string | null;
+        fabom?: string | null;
+        photoMimeType?: string | null;
+        photoBase64?: string | null;
+        impact: HighlightImpact;
+        localityId: string;
+        text: string;
+    }, user?: RbacUser): Promise<{
+        id: string;
+        ldapUid: string | null;
+        militaryEmail: string;
+        militaryName: string;
+        highlightRole: string | null;
+        fabom: string | null;
+        photoMimeType: string | null;
+        photoBase64: string | null;
+        impact: HighlightImpact;
+        locality: {
+            id: string;
+            code: string;
+            name: string;
+        };
+        text: string;
+        createdBy: {
+            id: string;
+            name: string;
+        } | null;
+        createdAt: Date;
+        updatedAt: Date;
+    }>;
+    updateHighlight(id: string, payload: {
+        ldapUid?: string | null;
+        militaryEmail?: string;
+        militaryName?: string;
+        highlightRole?: string | null;
+        fabom?: string | null;
+        photoMimeType?: string | null;
+        photoBase64?: string | null;
+        impact?: HighlightImpact;
+        localityId?: string;
+        text?: string;
+    }, user?: RbacUser): Promise<{
+        id: string;
+        ldapUid: string | null;
+        militaryEmail: string;
+        militaryName: string;
+        highlightRole: string | null;
+        fabom: string | null;
+        photoMimeType: string | null;
+        photoBase64: string | null;
+        impact: HighlightImpact;
+        locality: {
+            id: string;
+            code: string;
+            name: string;
+        };
+        text: string;
+        createdBy: {
+            id: string;
+            name: string;
+        } | null;
+        createdAt: Date;
+        updatedAt: Date;
+    }>;
+    removeHighlight(id: string, user?: RbacUser): Promise<{
+        ok: boolean;
     }>;
     create(payload: {
         url: string;
@@ -39,11 +126,17 @@ export declare class SocialCommunicationService {
         tags?: string[];
         audience?: 'INTERNAL' | 'EXTERNAL';
     }, user?: RbacUser): Promise<{
+        createdBy: {
+            id: string;
+            name: string;
+        } | null;
+    } & {
         id: string;
         title: string;
         createdAt: Date;
         updatedAt: Date;
         createdById: string | null;
+        audience: import("@prisma/client").$Enums.SocialCommunicationAudience;
         coverImageUrl: string | null;
         summary: string | null;
         publishedAt: Date | null;
@@ -59,11 +152,17 @@ export declare class SocialCommunicationService {
         tags?: string[];
         audience?: 'INTERNAL' | 'EXTERNAL';
     }, user?: RbacUser): Promise<{
+        createdBy: {
+            id: string;
+            name: string;
+        } | null;
+    } & {
         id: string;
         title: string;
         createdAt: Date;
         updatedAt: Date;
         createdById: string | null;
+        audience: import("@prisma/client").$Enums.SocialCommunicationAudience;
         coverImageUrl: string | null;
         summary: string | null;
         publishedAt: Date | null;
@@ -97,6 +196,7 @@ export declare class SocialCommunicationService {
         html: string;
     }>;
     ensureEditorAccess(user?: RbacUser): void;
+    private assertHighlightEditorAccess;
     private assertEditorAccess;
     private buildContentProxyPath;
     private buildCoverProxyPath;
@@ -127,6 +227,13 @@ export declare class SocialCommunicationService {
     private resolveProxyNavigationValue;
     private isLikelyBinaryAsset;
     private resolveResourceUrl;
+    private toHighlightResponse;
+    private assertHighlightLocalityExists;
+    private normalizeHighlightEmail;
+    private normalizeHighlightImpact;
+    private normalizeHighlightPhotoMimeType;
+    private normalizeHighlightPhotoBase64;
+    private normalizeHighlightText;
     private normalizeRequiredText;
     private normalizeOptionalText;
     private normalizeTags;
@@ -142,3 +249,4 @@ export declare class SocialCommunicationService {
     private firstNonEmpty;
     private decodeHtmlEntities;
 }
+export {};

@@ -62,11 +62,15 @@ let ReportsController = class ReportsController {
     }
     async download(id, token, res, user) {
         if (!token) {
-            return res.status(401).send({ message: 'Token ausente', code: 'AUTH_INVALID_CREDENTIALS' });
+            return res
+                .status(401)
+                .send({ message: 'Token ausente', code: 'AUTH_INVALID_CREDENTIALS' });
         }
         const reportId = await this.reports.verifyDownloadToken(token);
         if (reportId !== id) {
-            return res.status(401).send({ message: 'Token invalido', code: 'AUTH_INVALID_CREDENTIALS' });
+            return res
+                .status(401)
+                .send({ message: 'Token invalido', code: 'AUTH_INVALID_CREDENTIALS' });
         }
         const report = await this.reports.getReport(id, user);
         const fileName = report.storageKey ?? node_path_1.default.basename(report.fileUrl);

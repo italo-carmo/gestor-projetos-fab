@@ -24,6 +24,7 @@ export declare class TaskTemplatesController {
             description: string | null;
             appliesToAllLocalities: boolean;
             reportRequiredDefault: boolean;
+            deletedAt: Date | null;
         })[];
     }>;
     create(dto: TaskTemplateDto, user: RbacUser): Promise<{
@@ -37,6 +38,7 @@ export declare class TaskTemplatesController {
         description: string | null;
         appliesToAllLocalities: boolean;
         reportRequiredDefault: boolean;
+        deletedAt: Date | null;
     }>;
     update(id: string, dto: UpdateTaskTemplateDto, user: RbacUser): Promise<{
         id: string;
@@ -49,6 +51,7 @@ export declare class TaskTemplatesController {
         description: string | null;
         appliesToAllLocalities: boolean;
         reportRequiredDefault: boolean;
+        deletedAt: Date | null;
     }>;
     generateInstances(id: string, dto: GenerateInstancesDto, user: RbacUser): Promise<{
         items: {
@@ -86,6 +89,7 @@ export declare class TaskTemplatesController {
         description: string | null;
         appliesToAllLocalities: boolean;
         reportRequiredDefault: boolean;
+        deletedAt: Date | null;
     }>;
     remove(id: string, user: RbacUser): Promise<{
         ok: boolean;

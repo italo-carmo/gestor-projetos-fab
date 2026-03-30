@@ -54,6 +54,7 @@ export declare class MeetingsService {
                     description: string | null;
                     appliesToAllLocalities: boolean;
                     reportRequiredDefault: boolean;
+                    deletedAt: Date | null;
                 };
             } & {
                 id: string;

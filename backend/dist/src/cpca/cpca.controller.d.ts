@@ -105,6 +105,14 @@ export declare class CpcaController {
             idleDays: number;
             retaliationRisk: boolean;
         }[];
+        kpiDetails: {
+            totalCases: any;
+            openCases: any;
+            closureRate: any;
+            averageClosureTime: any;
+            triageOver7Days: any;
+            investigationOver30Days: any;
+        };
     }>;
     getById(id: string, user: RbacUser): Promise<any>;
     create(dto: CreateCpcaCaseDto, user: RbacUser): Promise<any>;

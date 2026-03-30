@@ -166,7 +166,11 @@ let MeetingsService = class MeetingsService {
                 meetingType: payload.meetingType
                     ? payload.meetingType
                     : undefined,
-                location: payload.location !== undefined ? (location ? (0, sanitize_1.sanitizeText)(location) : null) : undefined,
+                location: payload.location !== undefined
+                    ? location
+                        ? (0, sanitize_1.sanitizeText)(location)
+                        : null
+                    : undefined,
                 meetingLink: payload.meetingLink !== undefined ? meetingLink : undefined,
                 agenda: payload.agenda
                     ? (0, sanitize_1.sanitizeText)(payload.agenda)

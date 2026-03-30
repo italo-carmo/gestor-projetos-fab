@@ -51,4 +51,26 @@ export declare class AuthController {
             executive_hide_pii: boolean;
         };
     }>;
+    meFabProfile(req: Request & {
+        user?: {
+            userId: string;
+        };
+    }): Promise<{
+        uid: string | null;
+        fabom: string | null;
+        numeroOrdem: string | null;
+    }>;
+    getSigpesPhoto(numeroOrdem: string): Promise<{
+        numeroOrdem: string;
+        mimeType: null;
+        fileName: string | null;
+        base64: null;
+        dataUrl: null;
+    } | {
+        numeroOrdem: string;
+        mimeType: string;
+        fileName: string | null;
+        base64: string;
+        dataUrl: string;
+    }>;
 }

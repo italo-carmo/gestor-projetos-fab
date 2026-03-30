@@ -19,7 +19,12 @@ exports.CatalogModule = CatalogModule;
 exports.CatalogModule = CatalogModule = __decorate([
     (0, common_1.Module)({
         imports: [rbac_module_1.RbacModule],
-        controllers: [localities_controller_1.LocalitiesController, specialties_controller_1.SpecialtiesController, elo_roles_controller_1.EloRolesController, postos_controller_1.PostosController],
+        controllers: [
+            localities_controller_1.LocalitiesController,
+            specialties_controller_1.SpecialtiesController,
+            elo_roles_controller_1.EloRolesController,
+            postos_controller_1.PostosController,
+        ],
     })
 ], CatalogModule);
 //# sourceMappingURL=catalog.module.js.map

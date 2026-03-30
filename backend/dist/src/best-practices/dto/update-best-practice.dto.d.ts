@@ -3,4 +3,5 @@ export declare class UpdateBestPracticeDto {
     content?: string;
     localityId?: string | null;
     isCommission?: boolean;
+    typeId?: string | null;
 }

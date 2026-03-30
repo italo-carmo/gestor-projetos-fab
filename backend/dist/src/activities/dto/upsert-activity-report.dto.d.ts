@@ -16,6 +16,8 @@ export declare class UpsertActivityReportDto {
     recruitsCount: number;
     eloPsychologyCount: number;
     eloSocialAssistanceCount: number;
+    eloJuridicoCount: number;
+    eloCpcaCount: number;
     eloGraduadoMasterCount: number;
     participantsCharacteristics: string;
     mainPointsObserved?: string;

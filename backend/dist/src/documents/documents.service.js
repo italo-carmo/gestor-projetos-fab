@@ -485,7 +485,10 @@ let DocumentsService = class DocumentsService {
         const entityType = this.parseEntityType(payload.entityType);
         const label = payload.label?.trim() || null;
         if (!documentId) {
-            (0, http_error_1.throwError)('VALIDATION_ERROR', { field: 'documentId', reason: 'required' });
+            (0, http_error_1.throwError)('VALIDATION_ERROR', {
+                field: 'documentId',
+                reason: 'required',
+            });
         }
         if (!entityId) {
             (0, http_error_1.throwError)('VALIDATION_ERROR', { field: 'entityId', reason: 'required' });
@@ -552,9 +555,14 @@ let DocumentsService = class DocumentsService {
         const nextEntityId = payload.entityId === undefined
             ? existing.entityId
             : String(payload.entityId ?? '').trim();
-        const nextLabel = payload.label === undefined ? existing.label : payload.label?.trim() || null;
+        const nextLabel = payload.label === undefined
+            ? existing.label
+            : payload.label?.trim() || null;
         if (!nextDocumentId) {
-            (0, http_error_1.throwError)('VALIDATION_ERROR', { field: 'documentId', reason: 'required' });
+            (0, http_error_1.throwError)('VALIDATION_ERROR', {
+                field: 'documentId',
+                reason: 'required',
+            });
         }
         if (!nextEntityId) {
             (0, http_error_1.throwError)('VALIDATION_ERROR', { field: 'entityId', reason: 'required' });
@@ -649,7 +657,9 @@ let DocumentsService = class DocumentsService {
             if (this.shouldApplyLocalityScope(user))
                 where.localityId = user?.localityId;
             if (user?.specialtyId) {
-                andClauses.push({ OR: [{ specialtyId: null }, { specialtyId: user.specialtyId }] });
+                andClauses.push({
+                    OR: [{ specialtyId: null }, { specialtyId: user.specialtyId }],
+                });
             }
             if (q) {
                 andClauses.push({
@@ -722,13 +732,18 @@ let DocumentsService = class DocumentsService {
                     id: row.id,
                     label: row.title,
                     subtitle: row.locality?.code ?? row.locality?.name ?? null,
-                    extra: row.eventDate ? row.eventDate.toISOString().slice(0, 10) : null,
+                    extra: row.eventDate
+                        ? row.eventDate.toISOString().slice(0, 10)
+                        : null,
                 })),
             };
         }
         const where = {};
         if (this.shouldApplyLocalityScope(user)) {
-            where.OR = [{ localityId: null }, { localityId: user?.localityId }];
+            where.OR = [
+                { localityId: null },
+                { localityId: user?.localityId },
+            ];
         }
         if (q) {
             const qWhere = {
@@ -1027,7 +1042,9 @@ let DocumentsService = class DocumentsService {
         };
     }
     parseEntityType(value) {
-        const normalized = String(value ?? '').trim().toUpperCase();
+        const normalized = String(value ?? '')
+            .trim()
+            .toUpperCase();
         if (normalized !== client_1.DocumentLinkEntity.TASK_INSTANCE &&
             normalized !== client_1.DocumentLinkEntity.TASK_TEMPLATE &&
             normalized !== client_1.DocumentLinkEntity.ACTIVITY &&

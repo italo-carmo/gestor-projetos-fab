@@ -53,15 +53,18 @@ const http_error_1 = require("../common/http-error");
 const sanitize_1 = require("../common/sanitize");
 const prisma_service_1 = require("../prisma/prisma.service");
 const role_access_1 = require("../rbac/role-access");
+const fab_ldap_service_1 = require("../ldap/fab-ldap.service");
 const social_communication_storage_1 = require("./social-communication-storage");
 let SocialCommunicationService = class SocialCommunicationService {
     prisma;
     audit;
     config;
-    constructor(prisma, audit, config) {
+    fabLdap;
+    constructor(prisma, audit, config, fabLdap) {
         this.prisma = prisma;
         this.audit = audit;
         this.config = config;
+        this.fabLdap = fabLdap;
     }
     async list(filters) {
         const where = {};
@@ -91,6 +94,184 @@ let SocialCommunicationService = class SocialCommunicationService {
                 : null,
         }));
         return { items };
+    }
+    async listHighlights(filters) {
+        const where = {};
+        const normalizedQuery = (0, sanitize_1.sanitizeText)(filters.q ?? '');
+        if (normalizedQuery) {
+            where.OR = [
+                { militaryName: { contains: normalizedQuery, mode: 'insensitive' } },
+                { highlightRole: { contains: normalizedQuery, mode: 'insensitive' } },
+                { militaryEmail: { contains: normalizedQuery, mode: 'insensitive' } },
+                { fabom: { contains: normalizedQuery, mode: 'insensitive' } },
+                { highlightText: { contains: normalizedQuery, mode: 'insensitive' } },
+                { locality: { name: { contains: normalizedQuery, mode: 'insensitive' } } },
+                { locality: { code: { contains: normalizedQuery, mode: 'insensitive' } } },
+            ];
+        }
+        const rows = await this.prisma.socialCommunicationHighlight.findMany({
+            where,
+            include: {
+                locality: { select: { id: true, code: true, name: true } },
+                createdBy: { select: { id: true, name: true } },
+            },
+            orderBy: [{ createdAt: 'desc' }],
+        });
+        return {
+            items: rows.map((item) => this.toHighlightResponse(item)),
+        };
+    }
+    async lookupHighlightLdapProfile(email, user) {
+        this.assertHighlightEditorAccess(user);
+        const normalizedEmail = this.normalizeHighlightEmail(email, 'email');
+        const profile = await this.fabLdap.lookupByEmail(normalizedEmail);
+        if (!profile) {
+            (0, http_error_1.throwError)('VALIDATION_ERROR', {
+                field: 'email',
+                reason: 'ldap_user_not_found',
+            });
+        }
+        return {
+            uid: profile.uid ?? null,
+            name: profile.name ?? null,
+            email: profile.email ?? normalizedEmail,
+            fabom: profile.fabom ?? null,
+            numeroOrdem: profile.numeroOrdem ?? null,
+        };
+    }
+    async createHighlight(payload, user) {
+        this.assertHighlightEditorAccess(user);
+        const localityId = this.normalizeRequiredText(payload.localityId, 'localityId');
+        await this.assertHighlightLocalityExists(localityId);
+        const normalizedPhotoBase64 = this.normalizeHighlightPhotoBase64(payload.photoBase64, 'photoBase64') ??
+            null;
+        const normalizedPhotoMimeType = normalizedPhotoBase64
+            ? (this.normalizeHighlightPhotoMimeType(payload.photoMimeType, 'photoMimeType') ?? 'image/jpeg')
+            : null;
+        const created = await this.prisma.socialCommunicationHighlight.create({
+            data: {
+                ldapUid: this.normalizeOptionalText(payload.ldapUid) ?? null,
+                militaryEmail: this.normalizeHighlightEmail(payload.militaryEmail, 'militaryEmail'),
+                militaryName: this.normalizeRequiredText(payload.militaryName, 'militaryName'),
+                highlightRole: this.normalizeOptionalText(payload.highlightRole) ?? null,
+                fabom: this.normalizeOptionalText(payload.fabom) ?? null,
+                photoMimeType: normalizedPhotoMimeType,
+                photoBase64: normalizedPhotoBase64,
+                impact: this.normalizeHighlightImpact(payload.impact, 'impact'),
+                localityId,
+                highlightText: this.normalizeHighlightText(payload.text, 'text'),
+                createdById: user?.id ?? null,
+            },
+            include: {
+                locality: { select: { id: true, code: true, name: true } },
+                createdBy: { select: { id: true, name: true } },
+            },
+        });
+        await this.audit.log({
+            userId: user?.id,
+            resource: 'social_communication_highlight',
+            action: 'create',
+            entityId: created.id,
+            diffJson: {
+                militaryName: created.militaryName,
+                militaryEmail: created.militaryEmail,
+                impact: created.impact,
+            },
+        });
+        return this.toHighlightResponse(created);
+    }
+    async updateHighlight(id, payload, user) {
+        this.assertHighlightEditorAccess(user);
+        const existing = await this.prisma.socialCommunicationHighlight.findUnique({
+            where: { id },
+            select: { id: true },
+        });
+        if (!existing)
+            (0, http_error_1.throwError)('NOT_FOUND');
+        const data = {};
+        if (payload.ldapUid !== undefined) {
+            data.ldapUid = this.normalizeOptionalText(payload.ldapUid) ?? null;
+        }
+        if (payload.militaryEmail !== undefined) {
+            data.militaryEmail = this.normalizeHighlightEmail(payload.militaryEmail, 'militaryEmail');
+        }
+        if (payload.militaryName !== undefined) {
+            data.militaryName = this.normalizeRequiredText(payload.militaryName, 'militaryName');
+        }
+        if (payload.fabom !== undefined) {
+            data.fabom = this.normalizeOptionalText(payload.fabom) ?? null;
+        }
+        if (payload.highlightRole !== undefined) {
+            data.highlightRole = this.normalizeOptionalText(payload.highlightRole) ?? null;
+        }
+        if (payload.photoBase64 !== undefined) {
+            const normalizedPhotoBase64 = this.normalizeHighlightPhotoBase64(payload.photoBase64, 'photoBase64');
+            if (normalizedPhotoBase64) {
+                data.photoBase64 = normalizedPhotoBase64;
+                data.photoMimeType =
+                    this.normalizeHighlightPhotoMimeType(payload.photoMimeType, 'photoMimeType') ?? 'image/jpeg';
+            }
+            else {
+                data.photoBase64 = null;
+                data.photoMimeType = null;
+            }
+        }
+        else if (payload.photoMimeType !== undefined) {
+            data.photoMimeType =
+                this.normalizeHighlightPhotoMimeType(payload.photoMimeType, 'photoMimeType') ?? null;
+        }
+        if (payload.impact !== undefined) {
+            data.impact = this.normalizeHighlightImpact(payload.impact, 'impact');
+        }
+        if (payload.localityId !== undefined) {
+            const localityId = this.normalizeRequiredText(payload.localityId, 'localityId');
+            await this.assertHighlightLocalityExists(localityId);
+            data.locality = { connect: { id: localityId } };
+        }
+        if (payload.text !== undefined) {
+            data.highlightText = this.normalizeHighlightText(payload.text, 'text');
+        }
+        const updated = await this.prisma.socialCommunicationHighlight.update({
+            where: { id },
+            data,
+            include: {
+                locality: { select: { id: true, code: true, name: true } },
+                createdBy: { select: { id: true, name: true } },
+            },
+        });
+        await this.audit.log({
+            userId: user?.id,
+            resource: 'social_communication_highlight',
+            action: 'update',
+            entityId: id,
+            diffJson: {
+                militaryName: updated.militaryName,
+                militaryEmail: updated.militaryEmail,
+                impact: updated.impact,
+            },
+        });
+        return this.toHighlightResponse(updated);
+    }
+    async removeHighlight(id, user) {
+        this.assertHighlightEditorAccess(user);
+        const existing = await this.prisma.socialCommunicationHighlight.findUnique({
+            where: { id },
+            select: { id: true, militaryName: true, militaryEmail: true },
+        });
+        if (!existing)
+            (0, http_error_1.throwError)('NOT_FOUND');
+        await this.prisma.socialCommunicationHighlight.delete({ where: { id } });
+        await this.audit.log({
+            userId: user?.id,
+            resource: 'social_communication_highlight',
+            action: 'delete',
+            entityId: id,
+            diffJson: {
+                militaryName: existing.militaryName,
+                militaryEmail: existing.militaryEmail,
+            },
+        });
+        return { ok: true };
     }
     async create(payload, user) {
         this.assertEditorAccess(user);
@@ -166,7 +347,9 @@ let SocialCommunicationService = class SocialCommunicationService {
                     existing.publishedAt ??
                     null)
                 : undefined;
-        const tags = payload.tags !== undefined ? (this.normalizeTags(payload.tags) ?? []) : undefined;
+        const tags = payload.tags !== undefined
+            ? (this.normalizeTags(payload.tags) ?? [])
+            : undefined;
         const audience = payload.audience !== undefined ? payload.audience : undefined;
         const updated = await this.prisma.socialCommunicationArticle.update({
             where: { id },
@@ -322,6 +505,11 @@ let SocialCommunicationService = class SocialCommunicationService {
     }
     ensureEditorAccess(user) {
         this.assertEditorAccess(user);
+    }
+    assertHighlightEditorAccess(user) {
+        if (!(0, role_access_1.hasAnyRole)(user, [role_access_1.ROLE_COORDENACAO_CIPAVD, role_access_1.ROLE_TI])) {
+            (0, http_error_1.throwError)('RBAC_FORBIDDEN');
+        }
     }
     assertEditorAccess(user) {
         if (!(0, role_access_1.hasAnyRole)(user, [
@@ -638,6 +826,93 @@ let SocialCommunicationService = class SocialCommunicationService {
             return null;
         }
     }
+    toHighlightResponse(item) {
+        return {
+            id: item.id,
+            ldapUid: item.ldapUid,
+            militaryEmail: item.militaryEmail,
+            militaryName: item.militaryName,
+            highlightRole: item.highlightRole,
+            fabom: item.fabom,
+            photoMimeType: item.photoMimeType,
+            photoBase64: item.photoBase64,
+            impact: item.impact,
+            locality: item.locality,
+            text: item.highlightText,
+            createdBy: item.createdBy,
+            createdAt: item.createdAt,
+            updatedAt: item.updatedAt,
+        };
+    }
+    async assertHighlightLocalityExists(localityId) {
+        const locality = await this.prisma.locality.findUnique({
+            where: { id: localityId },
+            select: { id: true },
+        });
+        if (!locality) {
+            (0, http_error_1.throwError)('VALIDATION_ERROR', {
+                field: 'localityId',
+                reason: 'not_found',
+            });
+        }
+    }
+    normalizeHighlightEmail(value, field) {
+        const normalized = (0, sanitize_1.sanitizeText)(value ?? '').toLowerCase();
+        if (!normalized) {
+            (0, http_error_1.throwError)('VALIDATION_ERROR', { field, reason: 'required' });
+        }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
+            (0, http_error_1.throwError)('VALIDATION_ERROR', { field, reason: 'invalid_email' });
+        }
+        return normalized;
+    }
+    normalizeHighlightImpact(value, field) {
+        const normalized = (0, sanitize_1.sanitizeText)(value ?? '').toUpperCase();
+        if (normalized === 'MULTIPLICADOR' || normalized === 'SIMBOLICO') {
+            return normalized;
+        }
+        (0, http_error_1.throwError)('VALIDATION_ERROR', { field, reason: 'invalid_impact' });
+    }
+    normalizeHighlightPhotoMimeType(value, field) {
+        if (value === undefined)
+            return undefined;
+        if (value === null)
+            return null;
+        const normalized = (0, sanitize_1.sanitizeText)(value ?? '').toLowerCase();
+        if (!normalized)
+            return null;
+        if (!/^image\/[a-z0-9.+-]+$/i.test(normalized)) {
+            (0, http_error_1.throwError)('VALIDATION_ERROR', { field, reason: 'invalid_mime_type' });
+        }
+        return normalized;
+    }
+    normalizeHighlightPhotoBase64(value, field) {
+        if (value === undefined)
+            return undefined;
+        if (value === null)
+            return null;
+        const normalized = String(value ?? '')
+            .replace(/\s+/g, '')
+            .trim();
+        if (!normalized)
+            return null;
+        if (normalized.length > 4_000_000) {
+            (0, http_error_1.throwError)('VALIDATION_ERROR', { field, reason: 'payload_too_large' });
+        }
+        if (!/^[A-Za-z0-9+/=_-]+$/.test(normalized)) {
+            (0, http_error_1.throwError)('VALIDATION_ERROR', { field, reason: 'invalid_base64' });
+        }
+        return normalized;
+    }
+    normalizeHighlightText(value, field) {
+        const normalized = String(value ?? '')
+            .replace(/[<>]/g, '')
+            .trim();
+        if (!normalized) {
+            (0, http_error_1.throwError)('VALIDATION_ERROR', { field, reason: 'required' });
+        }
+        return normalized;
+    }
     normalizeRequiredText(value, field) {
         const normalized = (0, sanitize_1.sanitizeText)(value ?? '');
         if (!normalized) {
@@ -831,6 +1106,7 @@ exports.SocialCommunicationService = SocialCommunicationService = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
         audit_service_1.AuditService,
-        config_1.ConfigService])
+        config_1.ConfigService,
+        fab_ldap_service_1.FabLdapService])
 ], SocialCommunicationService);
 //# sourceMappingURL=social-communication.service.js.map

@@ -1,10 +1,12 @@
 import { PrismaService } from '../prisma/prisma.service';
 import { RbacUser } from '../rbac/rbac.types';
 import { AuditService } from '../audit/audit.service';
+import { AuthService } from '../auth/auth.service';
 export declare class ElosService {
     private readonly prisma;
     private readonly audit;
-    constructor(prisma: PrismaService, audit: AuditService);
+    private readonly auth;
+    constructor(prisma: PrismaService, audit: AuditService, auth: AuthService);
     list(filters: {
         localityId?: string;
         roleType?: string;
@@ -86,6 +88,7 @@ export declare class ElosService {
             warName: string;
             email: string;
             ldapUid: string | null;
+            numeroOrdem: string | null;
             functionText: string | null;
             phone: string | null;
             seniority: number | null;

@@ -17,12 +17,15 @@ const sanitize_1 = require("../common/sanitize");
 const audit_service_1 = require("../audit/audit.service");
 const pagination_1 = require("../common/pagination");
 const role_access_1 = require("../rbac/role-access");
+const auth_service_1 = require("../auth/auth.service");
 let ElosService = class ElosService {
     prisma;
     audit;
-    constructor(prisma, audit) {
+    auth;
+    constructor(prisma, audit, auth) {
         this.prisma = prisma;
         this.audit = audit;
+        this.auth = auth;
     }
     async list(filters, user) {
         const where = {};
@@ -40,7 +43,10 @@ let ElosService = class ElosService {
             this.prisma.elo.findMany({
                 where,
                 include: { locality: true, eloRole: true },
-                orderBy: [{ locality: { name: 'asc' } }, { eloRole: { sortOrder: 'asc' } }],
+                orderBy: [
+                    { locality: { name: 'asc' } },
+                    { eloRole: { sortOrder: 'asc' } },
+                ],
                 skip,
                 take,
             }),
@@ -71,7 +77,8 @@ let ElosService = class ElosService {
                 name: (0, sanitize_1.sanitizeText)(resolvedName),
                 rank: payload.rank ? (0, sanitize_1.sanitizeText)(payload.rank) : null,
                 phone: payload.phone ? (0, sanitize_1.sanitizeText)(payload.phone) : null,
-                email: linkedUser?.email ?? (payload.email ? (0, sanitize_1.sanitizeText)(payload.email) : null),
+                email: linkedUser?.email ??
+                    (payload.email ? (0, sanitize_1.sanitizeText)(payload.email) : null),
                 om: payload.om ? (0, sanitize_1.sanitizeText)(payload.om) : null,
             },
             include: { locality: true, eloRole: true },
@@ -114,10 +121,22 @@ let ElosService = class ElosService {
                 localityId,
                 eloRoleId: payload.eloRoleId ?? undefined,
                 name: resolvedName,
-                rank: payload.rank ? (0, sanitize_1.sanitizeText)(payload.rank) : payload.rank === null ? null : undefined,
-                phone: payload.phone ? (0, sanitize_1.sanitizeText)(payload.phone) : payload.phone === null ? null : undefined,
+                rank: payload.rank
+                    ? (0, sanitize_1.sanitizeText)(payload.rank)
+                    : payload.rank === null
+                        ? null
+                        : undefined,
+                phone: payload.phone
+                    ? (0, sanitize_1.sanitizeText)(payload.phone)
+                    : payload.phone === null
+                        ? null
+                        : undefined,
                 email: resolvedEmail,
-                om: payload.om ? (0, sanitize_1.sanitizeText)(payload.om) : payload.om === null ? null : undefined,
+                om: payload.om
+                    ? (0, sanitize_1.sanitizeText)(payload.om)
+                    : payload.om === null
+                        ? null
+                        : undefined,
             },
             include: { locality: true, eloRole: true },
         });
@@ -173,7 +192,10 @@ let ElosService = class ElosService {
             this.prisma.elo.findMany({
                 where,
                 include: { locality: true, eloRole: true },
-                orderBy: [{ locality: { name: 'asc' } }, { eloRole: { sortOrder: 'asc' } }],
+                orderBy: [
+                    { locality: { name: 'asc' } },
+                    { eloRole: { sortOrder: 'asc' } },
+                ],
             }),
             this.prisma.user.findMany({
                 where: userWhere,
@@ -184,9 +206,15 @@ let ElosService = class ElosService {
                     localityId: true,
                     eloRoleId: true,
                     locality: { select: { id: true, name: true, code: true } },
-                    eloRole: { select: { id: true, code: true, name: true, sortOrder: true } },
+                    eloRole: {
+                        select: { id: true, code: true, name: true, sortOrder: true },
+                    },
                 },
-                orderBy: [{ locality: { name: 'asc' } }, { eloRole: { sortOrder: 'asc' } }, { name: 'asc' }],
+                orderBy: [
+                    { locality: { name: 'asc' } },
+                    { eloRole: { sortOrder: 'asc' } },
+                    { name: 'asc' },
+                ],
             }),
         ]);
         const existingKeySet = new Set();
@@ -206,7 +234,9 @@ let ElosService = class ElosService {
                     elos: [],
                 });
             }
-            grouped.get(key).elos.push(this.mapElo({ ...item, autoFromUser: false }, user?.executiveHidePii));
+            grouped
+                .get(key)
+                .elos.push(this.mapElo({ ...item, autoFromUser: false }, user?.executiveHidePii));
         }
         for (const candidate of candidates) {
             if (!candidate.localityId || !candidate.eloRoleId)
@@ -316,13 +346,15 @@ let ElosService = class ElosService {
             orderBy: [{ commissionSeniority: 'asc' }, { name: 'asc' }],
             take: 400,
         });
+        const numeroOrdemList = await Promise.all(items.map((item) => this.auth.getNumeroOrdemForUser(item.ldapUid, item.email ?? '')));
         return {
-            items: items.map((item) => ({
+            items: items.map((item, index) => ({
                 id: item.id,
                 name: item.name,
                 warName: item.name,
                 email: item.email,
                 ldapUid: item.ldapUid,
+                numeroOrdem: numeroOrdemList[index] ?? null,
                 functionText: item.commissionFunction ?? null,
                 phone: item.commissionPhone ?? null,
                 seniority: item.commissionSeniority ?? null,
@@ -370,7 +402,13 @@ let ElosService = class ElosService {
         const commissionRole = await this.getCommissionRoleOrFail();
         const target = await this.prisma.user.findUnique({
             where: { id: userId },
-            select: { id: true, isActive: true, name: true, email: true, commissionSeniority: true },
+            select: {
+                id: true,
+                isActive: true,
+                name: true,
+                email: true,
+                commissionSeniority: true,
+            },
         });
         if (!target || !target.isActive) {
             (0, http_error_1.throwError)('NOT_FOUND');
@@ -621,7 +659,8 @@ let ElosService = class ElosService {
                 name: true,
             },
         });
-        const role = roles.find((item) => (0, role_access_1.normalizeRoleName)(item.name) === (0, role_access_1.normalizeRoleName)(role_access_1.ROLE_COORDENACAO_CIPAVD));
+        const role = roles.find((item) => (0, role_access_1.normalizeRoleName)(item.name) ===
+            (0, role_access_1.normalizeRoleName)(role_access_1.ROLE_COORDENACAO_CIPAVD));
         return role ?? null;
     }
     async getCommissionRoleOrFail() {
@@ -663,8 +702,12 @@ let ElosService = class ElosService {
         return linkedUser;
     }
     buildEloMatchKey(localityId, eloRoleId, name, email) {
-        const nameKey = String(name ?? '').trim().toLowerCase();
-        const emailKey = String(email ?? '').trim().toLowerCase();
+        const nameKey = String(name ?? '')
+            .trim()
+            .toLowerCase();
+        const emailKey = String(email ?? '')
+            .trim()
+            .toLowerCase();
         return `${localityId}:${eloRoleId}:${nameKey}:${emailKey}`;
     }
     maskCommissionPhone(raw) {
@@ -690,6 +733,7 @@ exports.ElosService = ElosService;
 exports.ElosService = ElosService = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
-        audit_service_1.AuditService])
+        audit_service_1.AuditService,
+        auth_service_1.AuthService])
 ], ElosService);
 //# sourceMappingURL=elos.service.js.map

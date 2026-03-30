@@ -47,8 +47,8 @@ let ActivitiesController = class ActivitiesController {
     constructor(activities) {
         this.activities = activities;
     }
-    list(localityId, specialtyId, status, q, page, pageSize, user) {
-        return this.activities.list({ localityId, specialtyId, status, q, page, pageSize }, user);
+    list(localityId, specialtyId, status, scope, q, page, pageSize, user) {
+        return this.activities.list({ localityId, specialtyId, status, scope, q, page, pageSize }, user);
     }
     create(dto, user) {
         return this.activities.create(dto, user);
@@ -69,7 +69,8 @@ let ActivitiesController = class ActivitiesController {
         return this.activities.batchUpdateStatus(body.ids ?? [], body.status, user);
     }
     batchSpecialty(body, user) {
-        return this.activities.batchUpdateSpecialty(body.ids ?? [], body.specialtyId ?? null, user);
+        return this.activities.batchUpdateSpecialty(body.ids ?? [], body.specialtyIds ??
+            (body.specialtyId ? [body.specialtyId] : []), user);
     }
     batchResponsible(body, user) {
         return this.activities.batchUpdateResponsible(body.ids ?? [], body.responsibleUserId ?? null, user);
@@ -170,12 +171,13 @@ __decorate([
     __param(0, (0, common_1.Query)('localityId')),
     __param(1, (0, common_1.Query)('specialtyId')),
     __param(2, (0, common_1.Query)('status')),
-    __param(3, (0, common_1.Query)('q')),
-    __param(4, (0, common_1.Query)('page')),
-    __param(5, (0, common_1.Query)('pageSize')),
-    __param(6, (0, current_user_decorator_1.CurrentUser)()),
+    __param(3, (0, common_1.Query)('scope')),
+    __param(4, (0, common_1.Query)('q')),
+    __param(5, (0, common_1.Query)('page')),
+    __param(6, (0, common_1.Query)('pageSize')),
+    __param(7, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, Object, Object, Object, Object, Object, Object]),
+    __metadata("design:paramtypes", [Object, Object, Object, Object, Object, Object, Object, Object]),
     __metadata("design:returntype", void 0)
 ], ActivitiesController.prototype, "list", null);
 __decorate([

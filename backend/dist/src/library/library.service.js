@@ -148,7 +148,8 @@ let LibraryService = class LibraryService {
             mimeType = isPng ? 'image/png' : 'image/jpeg';
             let resized = image;
             if (metadata.width && metadata.height) {
-                if (metadata.width > MAX_IMAGE_WIDTH || metadata.height > MAX_IMAGE_HEIGHT) {
+                if (metadata.width > MAX_IMAGE_WIDTH ||
+                    metadata.height > MAX_IMAGE_HEIGHT) {
                     resized = image.resize(MAX_IMAGE_WIDTH, MAX_IMAGE_HEIGHT, {
                         fit: 'inside',
                         withoutEnlargement: true,
@@ -156,28 +157,40 @@ let LibraryService = class LibraryService {
                 }
             }
             if (isPng) {
-                fileBuffer = await resized.png({ quality: PNG_QUALITY, compressionLevel: 9 }).toBuffer();
+                fileBuffer = await resized
+                    .png({ quality: PNG_QUALITY, compressionLevel: 9 })
+                    .toBuffer();
             }
             else {
-                fileBuffer = await resized.jpeg({ quality: JPEG_QUALITY, mozjpeg: true }).toBuffer();
+                fileBuffer = await resized
+                    .jpeg({ quality: JPEG_QUALITY, mozjpeg: true })
+                    .toBuffer();
                 mimeType = 'image/jpeg';
             }
             if (fileBuffer.length > MAX_IMAGE_SIZE) {
-                let quality = isPng ? Math.max(60, PNG_QUALITY - 20) : Math.max(60, JPEG_QUALITY - 20);
+                let quality = isPng
+                    ? Math.max(60, PNG_QUALITY - 20)
+                    : Math.max(60, JPEG_QUALITY - 20);
                 let attempts = 0;
                 while (fileBuffer.length > MAX_IMAGE_SIZE && attempts < 3) {
                     quality = Math.max(40, quality - 10);
                     if (isPng) {
-                        fileBuffer = await image.resize(MAX_IMAGE_WIDTH, MAX_IMAGE_HEIGHT, {
+                        fileBuffer = await image
+                            .resize(MAX_IMAGE_WIDTH, MAX_IMAGE_HEIGHT, {
                             fit: 'inside',
                             withoutEnlargement: true,
-                        }).png({ quality, compressionLevel: 9 }).toBuffer();
+                        })
+                            .png({ quality, compressionLevel: 9 })
+                            .toBuffer();
                     }
                     else {
-                        fileBuffer = await image.resize(MAX_IMAGE_WIDTH, MAX_IMAGE_HEIGHT, {
+                        fileBuffer = await image
+                            .resize(MAX_IMAGE_WIDTH, MAX_IMAGE_HEIGHT, {
                             fit: 'inside',
                             withoutEnlargement: true,
-                        }).jpeg({ quality, mozjpeg: true }).toBuffer();
+                        })
+                            .jpeg({ quality, mozjpeg: true })
+                            .toBuffer();
                     }
                     attempts++;
                 }
@@ -213,7 +226,11 @@ let LibraryService = class LibraryService {
                 resource: 'library',
                 action: 'create_photo',
                 entityId: created.id,
-                diffJson: { title: created.title, sortOrder: created.sortOrder, localityId: created.localityId },
+                diffJson: {
+                    title: created.title,
+                    sortOrder: created.sortOrder,
+                    localityId: created.localityId,
+                },
             });
             return created;
         }
@@ -234,10 +251,14 @@ let LibraryService = class LibraryService {
     }
     async updatePhoto(id, payload, user) {
         this.ensureEditorAccess(user);
-        const current = await this.prisma.libraryPhoto.findUnique({ where: { id } });
+        const current = await this.prisma.libraryPhoto.findUnique({
+            where: { id },
+        });
         if (!current)
             (0, http_error_1.throwError)('NOT_FOUND');
-        const nextTitle = payload.title === undefined ? current.title : String(payload.title).trim();
+        const nextTitle = payload.title === undefined
+            ? current.title
+            : String(payload.title).trim();
         const nextSortOrder = payload.sortOrder === undefined
             ? current.sortOrder
             : Math.max(0, Math.floor(Number(payload.sortOrder) || 0));
@@ -259,13 +280,19 @@ let LibraryService = class LibraryService {
             resource: 'library',
             action: 'update_photo',
             entityId: updated.id,
-            diffJson: { title: updated.title, sortOrder: updated.sortOrder, localityId: updated.localityId },
+            diffJson: {
+                title: updated.title,
+                sortOrder: updated.sortOrder,
+                localityId: updated.localityId,
+            },
         });
         return updated;
     }
     async deletePhoto(id, _photosDir, user) {
         this.ensureEditorAccess(user);
-        const current = await this.prisma.libraryPhoto.findUnique({ where: { id } });
+        const current = await this.prisma.libraryPhoto.findUnique({
+            where: { id },
+        });
         if (!current)
             (0, http_error_1.throwError)('NOT_FOUND');
         await this.prisma.libraryPhoto.delete({ where: { id } });
@@ -306,10 +333,14 @@ let LibraryService = class LibraryService {
     }
     async updateDocument(id, payload, user) {
         this.ensureEditorAccess(user);
-        const current = await this.prisma.libraryDocument.findUnique({ where: { id } });
+        const current = await this.prisma.libraryDocument.findUnique({
+            where: { id },
+        });
         if (!current)
             (0, http_error_1.throwError)('NOT_FOUND');
-        const nextTitle = payload.title === undefined ? current.title : String(payload.title).trim();
+        const nextTitle = payload.title === undefined
+            ? current.title
+            : String(payload.title).trim();
         if (!nextTitle) {
             (0, http_error_1.throwError)('VALIDATION_ERROR', { field: 'title', reason: 'required' });
         }
@@ -328,13 +359,16 @@ let LibraryService = class LibraryService {
     }
     async deleteDocument(id, documentsDir, user) {
         this.ensureEditorAccess(user);
-        const current = await this.prisma.libraryDocument.findUnique({ where: { id } });
+        const current = await this.prisma.libraryDocument.findUnique({
+            where: { id },
+        });
         if (!current)
             (0, http_error_1.throwError)('NOT_FOUND');
         await this.prisma.libraryDocument.delete({ where: { id } });
         const storageKey = String(current.storageKey ?? '').trim();
         if (storageKey) {
-            const filePath = (0, library_storage_1.resolveExistingLibraryDocumentPath)(storageKey) || path.join(documentsDir, storageKey);
+            const filePath = (0, library_storage_1.resolveExistingLibraryDocumentPath)(storageKey) ||
+                path.join(documentsDir, storageKey);
             try {
                 if (fs.existsSync(filePath))
                     fs.unlinkSync(filePath);
@@ -352,7 +386,9 @@ let LibraryService = class LibraryService {
         return { success: true };
     }
     async getDocumentById(id) {
-        const document = await this.prisma.libraryDocument.findUnique({ where: { id } });
+        const document = await this.prisma.libraryDocument.findUnique({
+            where: { id },
+        });
         if (!document)
             (0, http_error_1.throwError)('NOT_FOUND');
         return document;

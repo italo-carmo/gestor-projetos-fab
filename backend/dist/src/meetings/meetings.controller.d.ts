@@ -45,6 +45,7 @@ export declare class MeetingsController {
                     description: string | null;
                     appliesToAllLocalities: boolean;
                     reportRequiredDefault: boolean;
+                    deletedAt: Date | null;
                 };
             } & {
                 id: string;

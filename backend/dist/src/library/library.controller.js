@@ -97,10 +97,14 @@ let LibraryController = class LibraryController {
     }
     async downloadDocument(id, res) {
         const document = await this.library.getDocumentById(id);
-        const storageKey = String(document.storageKey ?? '').trim() || path.basename(String(document.fileUrl ?? '').trim());
+        const storageKey = String(document.storageKey ?? '').trim() ||
+            path.basename(String(document.fileUrl ?? '').trim());
         const filePath = (0, library_storage_1.resolveExistingLibraryDocumentPath)(storageKey);
         if (!filePath) {
-            return res.status(404).json({ message: 'Arquivo indisponível para download.', code: 'NOT_FOUND' });
+            return res.status(404).json({
+                message: 'Arquivo indisponível para download.',
+                code: 'NOT_FOUND',
+            });
         }
         res.setHeader('Cache-Control', 'private, no-store');
         return res.download(filePath, document.fileName || document.title || 'publicacao');

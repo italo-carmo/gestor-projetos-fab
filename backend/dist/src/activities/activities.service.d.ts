@@ -1,4 +1,4 @@
-import { ActivityStatus } from '@prisma/client';
+import { ActivityScope, ActivityStatus } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -12,6 +12,7 @@ export declare class ActivitiesService {
         localityId?: string;
         specialtyId?: string;
         status?: string;
+        scope?: string;
         q?: string;
         page?: string;
         pageSize?: string;
@@ -41,9 +42,11 @@ export declare class ActivitiesService {
         localityIds?: string[];
         activityTypeId?: string | null;
         specialtyId?: string | null;
+        specialtyIds?: string[];
         eventDate?: string | null;
         reportRequired?: boolean;
         responsibleUserIds?: string[];
+        scope?: ActivityScope;
     }, user?: RbacUser): Promise<any>;
     update(id: string, payload: {
         title?: string;
@@ -51,6 +54,7 @@ export declare class ActivitiesService {
         localityId?: string | null;
         activityTypeId?: string | null;
         specialtyId?: string | null;
+        specialtyIds?: string[];
         eventDate?: string | null;
         reportRequired?: boolean;
         responsibleUserIds?: string[];
@@ -62,7 +66,7 @@ export declare class ActivitiesService {
     batchUpdateStatus(ids: string[], status: ActivityStatus, user?: RbacUser): Promise<{
         updated: number;
     }>;
-    batchUpdateSpecialty(ids: string[], specialtyId: string | null, user?: RbacUser): Promise<{
+    batchUpdateSpecialty(ids: string[], specialtyIdsInput: string[], user?: RbacUser): Promise<{
         updated: number;
     }>;
     batchUpdateResponsible(ids: string[], responsibleUserId: string | null, user?: RbacUser): Promise<{
@@ -123,6 +127,11 @@ export declare class ActivitiesService {
             eventDate: Date | null;
             locality: any;
             specialty: any;
+            specialties: {
+                id: string;
+                name: string;
+                color: string | null;
+            }[];
         };
         items: {
             id: any;
@@ -200,6 +209,8 @@ export declare class ActivitiesService {
         recruitsCount: number;
         eloPsychologyCount: number;
         eloSocialAssistanceCount: number;
+        eloJuridicoCount: number;
+        eloCpcaCount: number;
         eloGraduadoMasterCount: number;
         participantsCharacteristics: string;
         mainPointsObserved?: string;
@@ -246,6 +257,9 @@ export declare class ActivitiesService {
     }>;
     private attachActivityCommentSummary;
     private mapActivity;
+    private mapActivitySpecialties;
+    private extractActivitySpecialtyIds;
+    private formatActivitySpecialtiesLabel;
     listTypes(): Promise<{
         items: any;
     }>;
@@ -268,6 +282,7 @@ export declare class ActivitiesService {
     private assertActivityViewAccess;
     private assertActivityOperateAccess;
     private assertDeleteAccess;
+    private resolveActivitySpecialtyIds;
     private resolveActivityResponsibleIds;
     private resolveActivityTypeId;
     private invalidateSignature;

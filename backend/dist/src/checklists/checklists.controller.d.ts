@@ -26,46 +26,9 @@ export declare class ChecklistsController {
                 taskTemplateId: null;
                 sourceType: string;
                 statuses: Record<string, import("@prisma/client").$Enums.ChecklistItemStatusType>;
+                availabilityByLocality: Record<string, boolean>;
                 activityTypeName: string | null;
             })[];
-            localityProgress: {
-                localityId: string;
-                percent: number;
-            }[];
-        }[];
-        localities: {
-            id: string;
-            createdAt: Date;
-            updatedAt: Date;
-            name: string;
-            code: string;
-            commandName: string | null;
-            commanderName: string | null;
-            individualMeetingDate: Date | null;
-            visitDate: Date | null;
-            recruitsFemaleCountCurrent: number | null;
-            notes: string | null;
-        }[];
-    } | {
-        items: {
-            id: string;
-            title: string;
-            phaseId: string | null;
-            specialtyId: string | null;
-            eloRoleId: string | null;
-            eloRole: {
-                id: string;
-                name: string;
-                code: string;
-            } | null;
-            items: {
-                id: string;
-                title: string;
-                taskTemplateId: string | null;
-                sourceType: string;
-                statuses: Record<string, import("@prisma/client").$Enums.ChecklistItemStatusType>;
-                activityTypeName: string | null;
-            }[];
             localityProgress: {
                 localityId: string;
                 percent: number;

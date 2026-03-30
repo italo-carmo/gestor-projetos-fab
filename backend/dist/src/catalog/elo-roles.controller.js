@@ -27,7 +27,9 @@ let EloRolesController = class EloRolesController {
         this.prisma = prisma;
     }
     async list() {
-        const items = await this.prisma.eloRole.findMany({ orderBy: { sortOrder: 'asc' } });
+        const items = await this.prisma.eloRole.findMany({
+            orderBy: { sortOrder: 'asc' },
+        });
         return { items };
     }
     async create(dto) {

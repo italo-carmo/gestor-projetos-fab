@@ -139,9 +139,12 @@ let RbacService = class RbacService {
                 isSystemRole: false,
                 wildcard: role.wildcard,
                 flagsJson: (role.flagsJson ?? undefined),
-                constraintsTemplateJson: (role.constraintsTemplateJson ?? undefined),
+                constraintsTemplateJson: (role.constraintsTemplateJson ??
+                    undefined),
                 permissions: {
-                    create: role.permissions.map((rp) => ({ permissionId: rp.permissionId })),
+                    create: role.permissions.map((rp) => ({
+                        permissionId: rp.permissionId,
+                    })),
                 },
             },
         });
@@ -175,7 +178,10 @@ let RbacService = class RbacService {
         }
         await this.prisma.rolePermission.deleteMany({ where: { roleId } });
         await this.prisma.rolePermission.createMany({
-            data: permissionRecords.map((record) => ({ roleId, permissionId: record.id })),
+            data: permissionRecords.map((record) => ({
+                roleId,
+                permissionId: record.id,
+            })),
         });
         return this.prisma.role.findUnique({ where: { id: roleId } });
     }
@@ -213,7 +219,9 @@ let RbacService = class RbacService {
         const invalidPermissions = [];
         for (const role of incomingRoles) {
             for (const perm of role.permissions ?? []) {
-                const exists = allPermissions.some((p) => p.resource === perm.resource && p.action === perm.action && p.scope === perm.scope);
+                const exists = allPermissions.some((p) => p.resource === perm.resource &&
+                    p.action === perm.action &&
+                    p.scope === perm.scope);
                 if (!exists) {
                     invalidPermissions.push({ role: role.name, ...perm });
                 }
@@ -226,9 +234,13 @@ let RbacService = class RbacService {
         let updatedRoles = 0;
         let createdRoles = 0;
         for (const role of incomingRoles) {
-            const existing = await this.prisma.role.findUnique({ where: { name: role.name } });
+            const existing = await this.prisma.role.findUnique({
+                where: { name: role.name },
+            });
             const permissionIds = allPermissions
-                .filter((p) => (role.permissions ?? []).some((perm) => perm.resource === p.resource && perm.action === p.action && perm.scope === p.scope))
+                .filter((p) => (role.permissions ?? []).some((perm) => perm.resource === p.resource &&
+                perm.action === p.action &&
+                perm.scope === p.scope))
                 .map((p) => p.id);
             if (!existing) {
                 const created = await this.prisma.role.create({
@@ -238,7 +250,8 @@ let RbacService = class RbacService {
                         isSystemRole: role.isSystemRole ?? false,
                         wildcard: role.wildcard ?? false,
                         flagsJson: (role.flags ?? undefined),
-                        constraintsTemplateJson: (role.constraintsTemplate ?? undefined),
+                        constraintsTemplateJson: (role.constraintsTemplate ??
+                            undefined),
                         permissions: {
                             create: permissionIds.map((id) => ({ permissionId: id })),
                         },
@@ -254,18 +267,27 @@ let RbacService = class RbacService {
                         description: role.description ?? existing.description,
                         wildcard: role.wildcard ?? existing.wildcard,
                         flagsJson: (role.flags ?? existing.flagsJson ?? undefined),
-                        constraintsTemplateJson: (role.constraintsTemplate ?? existing.constraintsTemplateJson ?? undefined),
+                        constraintsTemplateJson: (role.constraintsTemplate ??
+                            existing.constraintsTemplateJson ??
+                            undefined),
                     },
                 });
                 if (mode === 'replace') {
-                    await this.prisma.rolePermission.deleteMany({ where: { roleId: existing.id } });
+                    await this.prisma.rolePermission.deleteMany({
+                        where: { roleId: existing.id },
+                    });
                 }
-                const current = await this.prisma.rolePermission.findMany({ where: { roleId: existing.id } });
+                const current = await this.prisma.rolePermission.findMany({
+                    where: { roleId: existing.id },
+                });
                 const currentIds = new Set(current.map((rp) => rp.permissionId));
                 const toAdd = permissionIds.filter((id) => !currentIds.has(id));
                 if (toAdd.length > 0) {
                     await this.prisma.rolePermission.createMany({
-                        data: toAdd.map((id) => ({ roleId: existing.id, permissionId: id })),
+                        data: toAdd.map((id) => ({
+                            roleId: existing.id,
+                            permissionId: id,
+                        })),
                     });
                 }
                 updatedRoles += 1;
@@ -402,7 +424,10 @@ let RbacService = class RbacService {
         if (!identifier) {
             (0, http_error_1.throwError)('VALIDATION_ERROR', { reason: 'LDAP_UID_REQUIRED' });
         }
-        const selectedRoleIds = Array.from(new Set([payload.roleId, ...(Array.isArray(payload.roleIds) ? payload.roleIds : [])]
+        const selectedRoleIds = Array.from(new Set([
+            payload.roleId,
+            ...(Array.isArray(payload.roleIds) ? payload.roleIds : []),
+        ]
             .map((value) => String(value ?? '').trim())
             .filter(Boolean)));
         if (!selectedRoleIds.length) {
@@ -417,7 +442,10 @@ let RbacService = class RbacService {
         }
         const profile = await this.lookupLdapByIdentifier(identifier);
         if (!profile) {
-            (0, http_error_1.throwError)('VALIDATION_ERROR', { reason: 'LDAP_USER_NOT_FOUND', uid: identifier });
+            (0, http_error_1.throwError)('VALIDATION_ERROR', {
+                reason: 'LDAP_USER_NOT_FOUND',
+                uid: identifier,
+            });
         }
         const uid = profile.uid;
         const preferredEmail = this.normalizeEmail(profile.email) ?? `${uid}@fab.intraer`;
@@ -435,12 +463,19 @@ let RbacService = class RbacService {
                 eloRoleId: true,
             },
         });
-        const targetLocalityId = payload.localityId !== undefined ? payload.localityId : (existing?.localityId ?? null);
-        if (roles.some((role) => roleRequiresLocality(role.name)) && !targetLocalityId) {
+        const targetLocalityId = payload.localityId !== undefined
+            ? payload.localityId
+            : (existing?.localityId ?? null);
+        if (roles.some((role) => roleRequiresLocality(role.name)) &&
+            !targetLocalityId) {
             (0, http_error_1.throwError)('USER_LOCAL_ROLE_REQUIRES_LOCALITY');
         }
-        const targetSpecialtyId = payload.specialtyId !== undefined ? payload.specialtyId : (existing?.specialtyId ?? null);
-        const targetEloRoleId = payload.eloRoleId !== undefined ? payload.eloRoleId : (existing?.eloRoleId ?? null);
+        const targetSpecialtyId = payload.specialtyId !== undefined
+            ? payload.specialtyId
+            : (existing?.specialtyId ?? null);
+        const targetEloRoleId = payload.eloRoleId !== undefined
+            ? payload.eloRoleId
+            : (existing?.eloRoleId ?? null);
         if (roles.some((role) => roleRequiresSpecialty(role.name)) &&
             !targetSpecialtyId &&
             !targetEloRoleId) {
@@ -456,7 +491,9 @@ let RbacService = class RbacService {
                     email: uniqueEmail,
                     isActive: true,
                     localityId: payload.localityId !== undefined ? payload.localityId : undefined,
-                    specialtyId: payload.specialtyId !== undefined ? payload.specialtyId : undefined,
+                    specialtyId: payload.specialtyId !== undefined
+                        ? payload.specialtyId
+                        : undefined,
                     eloRoleId: payload.eloRoleId !== undefined ? payload.eloRoleId : undefined,
                 },
             })
@@ -587,7 +624,8 @@ let RbacService = class RbacService {
             id: userRole.role.id,
             name: (0, role_access_1.canonicalRoleName)(userRole.role.name),
             wildcard: userRole.role.wildcard,
-            constraintsTemplateJson: userRole.role.constraintsTemplateJson,
+            constraintsTemplateJson: userRole.role
+                .constraintsTemplateJson,
             flagsJson: userRole.role.flagsJson,
             permissions: userRole.role.permissions.map((rp) => ({
                 resource: rp.permission.resource,
@@ -617,14 +655,18 @@ let RbacService = class RbacService {
             .map((item) => item.resource);
         const needsCatalogPermissions = roleWildcard || enabledOverrideResources.length > 0;
         const catalogPermissions = needsCatalogPermissions
-            ? await this.listPermissionEntries(roleWildcard ? undefined : { resource: { in: enabledOverrideResources } })
+            ? await this.listPermissionEntries(roleWildcard
+                ? undefined
+                : { resource: { in: enabledOverrideResources } })
             : [];
         const rolePermissions = this.dedupePermissions(roles.flatMap((role) => role.permissions));
         const basePermissions = roleWildcard
             ? this.dedupePermissions([...rolePermissions, ...catalogPermissions])
             : rolePermissions;
         const permissions = this.applyModuleAccessOverrides(basePermissions, moduleAccessOverrides, catalogPermissions);
-        const executiveFromRole = roles.some((role) => role.flagsJson && role.flagsJson.executive_hide_pii === true);
+        const executiveFromRole = roles.some((role) => role.flagsJson &&
+            role.flagsJson
+                .executive_hide_pii === true);
         return {
             id: user.id,
             name: user.name,
@@ -705,7 +747,9 @@ let RbacService = class RbacService {
         return this.dedupePermissions([...filtered, ...extra]);
     }
     normalizeEmail(email) {
-        const value = String(email ?? '').trim().toLowerCase();
+        const value = String(email ?? '')
+            .trim()
+            .toLowerCase();
         return value || null;
     }
     normalizeLdapIdentifier(identifier) {

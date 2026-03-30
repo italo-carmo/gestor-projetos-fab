@@ -9,15 +9,96 @@ export declare class LessonsLearnedController {
     private readonly lessons;
     constructor(lessons: LessonsLearnedService);
     list(query: ListLessonLearnedDto, user: RbacUser): Promise<{
-        items: any;
+        items: ({
+            type: {
+                id: string;
+                name: string;
+                colorHex: string;
+                textColorHex: string | null;
+            };
+            createdBy: {
+                id: string;
+                name: string;
+            } | null;
+        } & {
+            id: string;
+            title: string;
+            createdAt: Date;
+            updatedAt: Date;
+            createdById: string | null;
+            content: string;
+            authorLabel: string | null;
+            typeId: string;
+        })[];
     }>;
     listTypes(user: RbacUser): Promise<{
-        items: any;
+        items: {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            name: string;
+            colorHex: string;
+            textColorHex: string | null;
+        }[];
     }>;
-    create(dto: CreateLessonLearnedDto, user: RbacUser): Promise<any>;
-    createType(dto: CreateLessonLearnedTypeDto, user: RbacUser): Promise<any>;
-    update(id: string, dto: UpdateLessonLearnedDto, user: RbacUser): Promise<any>;
-    updateType(id: string, dto: UpdateLessonLearnedTypeDto, user: RbacUser): Promise<any>;
+    create(dto: CreateLessonLearnedDto, user: RbacUser): Promise<{
+        type: {
+            id: string;
+            name: string;
+            colorHex: string;
+            textColorHex: string | null;
+        };
+        createdBy: {
+            id: string;
+            name: string;
+        } | null;
+    } & {
+        id: string;
+        title: string;
+        createdAt: Date;
+        updatedAt: Date;
+        createdById: string | null;
+        content: string;
+        authorLabel: string | null;
+        typeId: string;
+    }>;
+    createType(dto: CreateLessonLearnedTypeDto, user: RbacUser): Promise<{
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        name: string;
+        colorHex: string;
+        textColorHex: string | null;
+    }>;
+    update(id: string, dto: UpdateLessonLearnedDto, user: RbacUser): Promise<{
+        type: {
+            id: string;
+            name: string;
+            colorHex: string;
+            textColorHex: string | null;
+        };
+        createdBy: {
+            id: string;
+            name: string;
+        } | null;
+    } & {
+        id: string;
+        title: string;
+        createdAt: Date;
+        updatedAt: Date;
+        createdById: string | null;
+        content: string;
+        authorLabel: string | null;
+        typeId: string;
+    }>;
+    updateType(id: string, dto: UpdateLessonLearnedTypeDto, user: RbacUser): Promise<{
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        name: string;
+        colorHex: string;
+        textColorHex: string | null;
+    }>;
     remove(id: string, user: RbacUser): Promise<{
         ok: boolean;
     }>;

@@ -27,7 +27,9 @@ let PostosController = class PostosController {
         this.prisma = prisma;
     }
     async list() {
-        const items = await this.prisma.posto.findMany({ orderBy: { sortOrder: 'asc' } });
+        const items = await this.prisma.posto.findMany({
+            orderBy: { sortOrder: 'asc' },
+        });
         return { items };
     }
     async create(dto) {

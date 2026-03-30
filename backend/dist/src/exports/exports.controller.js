@@ -67,7 +67,11 @@ let ExportsController = class ExportsController {
     async exportChecklists(phaseId, specialtyId, user, res) {
         const data = await this.checklists.list({ phaseId, specialtyId }, user);
         const localities = data.localities ?? [];
-        const headers = ['checklist', 'item', ...localities.map((l) => l.name)];
+        const headers = [
+            'checklist',
+            'item',
+            ...localities.map((l) => l.name),
+        ];
         const rows = [];
         for (const checklist of data.items ?? []) {
             for (const item of checklist.items ?? []) {
@@ -121,7 +125,9 @@ exports.ExportsController = ExportsController = __decorate([
 function toCsv(headers, rows) {
     const escape = (value) => {
         const sanitized = value ?? '';
-        if (sanitized.includes('"') || sanitized.includes(',') || sanitized.includes('\n')) {
+        if (sanitized.includes('"') ||
+            sanitized.includes(',') ||
+            sanitized.includes('\n')) {
             return `"${sanitized.replace(/"/g, '""')}"`;
         }
         return sanitized;

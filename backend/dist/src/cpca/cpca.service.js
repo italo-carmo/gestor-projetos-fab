@@ -233,6 +233,14 @@ let CpcaService = class CpcaService {
                 topAggressorRanks: [],
                 topVictimRanks: [],
                 criticalOpenCases: [],
+                kpiDetails: {
+                    totalCases: [],
+                    openCases: [],
+                    closureRate: [],
+                    averageClosureTime: [],
+                    triageOver7Days: [],
+                    investigationOver30Days: [],
+                },
             };
         }
         const caseIds = items.map((item) => item.id);
@@ -258,6 +266,94 @@ let CpcaService = class CpcaService {
             }
         }
         const now = new Date();
+        const KPI_DETAILS_LIMIT = 300;
+        const toDateIso = (value) => value instanceof Date && !Number.isNaN(value.getTime())
+            ? value.toISOString()
+            : null;
+        const toCaseDetailItem = (item) => {
+            const status = String(item.status ?? '');
+            const reportedAt = item.reportedAt instanceof Date &&
+                !Number.isNaN(item.reportedAt.getTime())
+                ? item.reportedAt
+                : null;
+            const updatedAt = item.updatedAt instanceof Date &&
+                !Number.isNaN(item.updatedAt.getTime())
+                ? item.updatedAt
+                : null;
+            const isOpen = CPCA_OPEN_STATUS_SET.has(status);
+            const openDays = reportedAt && isOpen ? this.daysBetween(reportedAt, now) : 0;
+            const idleDays = reportedAt && isOpen
+                ? this.daysBetween(updatedAt ?? reportedAt, now)
+                : 0;
+            const closedAt = closedAtByCaseId.get(item.id) ??
+                (status === 'ARCHIVED'
+                    ? (item.archivedAt ?? updatedAt ?? null)
+                    : status === 'CONCLUDED'
+                        ? (updatedAt ?? null)
+                        : null);
+            const daysToClosure = reportedAt &&
+                closedAt instanceof Date &&
+                !Number.isNaN(closedAt.getTime())
+                ? this.daysBetween(reportedAt, closedAt)
+                : null;
+            return {
+                caseId: String(item.id ?? ''),
+                caseNumber: String(item.caseNumber ?? ''),
+                localityId: String(item.localityId ?? ''),
+                localityCode: String(item.locality?.code ?? ''),
+                localityName: String(item.locality?.name ?? ''),
+                status,
+                complaintType: String(item.complaintType ?? ''),
+                detailedViolenceType: String(item.detailedViolenceType ?? ''),
+                procedureType: String(item.procedureType ?? ''),
+                retaliationRisk: Boolean(item.retaliationRisk),
+                reportedAt: toDateIso(reportedAt),
+                updatedAt: toDateIso(updatedAt),
+                closedAt: toDateIso(closedAt instanceof Date ? closedAt : null),
+                openDays,
+                idleDays,
+                daysToClosure,
+            };
+        };
+        const sortByReportedAtDesc = (a, b) => new Date(b.reportedAt ?? 0).getTime() -
+            new Date(a.reportedAt ?? 0).getTime();
+        const sortByOpenCriticality = (a, b) => {
+            if (Number(b.retaliationRisk) !== Number(a.retaliationRisk)) {
+                return Number(b.retaliationRisk) - Number(a.retaliationRisk);
+            }
+            if (b.openDays !== a.openDays)
+                return b.openDays - a.openDays;
+            if (b.idleDays !== a.idleDays)
+                return b.idleDays - a.idleDays;
+            return sortByReportedAtDesc(a, b);
+        };
+        const sortByClosureTimeDesc = (a, b) => {
+            if (Number(b.daysToClosure ?? 0) !== Number(a.daysToClosure ?? 0)) {
+                return Number(b.daysToClosure ?? 0) - Number(a.daysToClosure ?? 0);
+            }
+            return sortByReportedAtDesc(a, b);
+        };
+        const caseDetailItems = items.map((item) => toCaseDetailItem(item));
+        const totalCaseDetailItems = caseDetailItems
+            .slice()
+            .sort(sortByReportedAtDesc)
+            .slice(0, KPI_DETAILS_LIMIT);
+        const openCaseDetailItems = caseDetailItems
+            .filter((item) => CPCA_OPEN_STATUS_SET.has(String(item.status ?? '')))
+            .sort(sortByOpenCriticality)
+            .slice(0, KPI_DETAILS_LIMIT);
+        const closedCaseDetailItems = caseDetailItems
+            .filter((item) => ['CONCLUDED', 'ARCHIVED'].includes(String(item.status ?? '')))
+            .sort(sortByClosureTimeDesc)
+            .slice(0, KPI_DETAILS_LIMIT);
+        const triageOver7CaseDetailItems = openCaseDetailItems
+            .filter((item) => CPCA_TRIAGE_STATUS_SET.has(String(item.status ?? '')) &&
+            Number(item.openDays ?? 0) > 7)
+            .slice(0, KPI_DETAILS_LIMIT);
+        const investigationOver30CaseDetailItems = openCaseDetailItems
+            .filter((item) => CPCA_INVESTIGATION_STATUS_SET.has(String(item.status ?? '')) &&
+            Number(item.openDays ?? 0) > 30)
+            .slice(0, KPI_DETAILS_LIMIT);
         const monthCounter = new Map();
         const localityCounter = new Map();
         const aggressorRankCounter = new Map();
@@ -496,6 +592,14 @@ let CpcaService = class CpcaService {
             topAggressorRanks: this.toTopRankDistribution(aggressorRankCounter, 10),
             topVictimRanks: this.toTopRankDistribution(victimRankCounter, 10),
             criticalOpenCases: sortedCriticalOpenCases,
+            kpiDetails: {
+                totalCases: totalCaseDetailItems,
+                openCases: openCaseDetailItems,
+                closureRate: closedCaseDetailItems,
+                averageClosureTime: closedCaseDetailItems,
+                triageOver7Days: triageOver7CaseDetailItems,
+                investigationOver30Days: investigationOver30CaseDetailItems,
+            },
         };
     }
     async getById(id, user) {
@@ -1070,28 +1174,26 @@ let CpcaService = class CpcaService {
         });
     }
     assertIcaConsistency(input) {
-        if (input.complaintType === 'SEXUAL' &&
-            !Boolean(input.confidentialityTermSigned)) {
+        if (input.complaintType === 'SEXUAL' && !input.confidentialityTermSigned) {
             (0, http_error_1.throwError)('VALIDATION_ERROR', {
                 field: 'confidentialityTermSigned',
                 reason: 'CONFIDENTIALITY_TERM_REQUIRED_FOR_SEXUAL',
             });
         }
-        if (input.preliminaryReportDate &&
-            !Boolean(input.preliminaryReportGenerated)) {
+        if (input.preliminaryReportDate && !input.preliminaryReportGenerated) {
             (0, http_error_1.throwError)('VALIDATION_ERROR', {
                 field: 'preliminaryReportGenerated',
                 reason: 'PRELIMINARY_REPORT_DATE_REQUIRES_FLAG',
             });
         }
         if (Boolean(input.victimAccusedSeparationApplied) &&
-            !Boolean(input.victimAccusedSeparationEvaluated)) {
+            !input.victimAccusedSeparationEvaluated) {
             (0, http_error_1.throwError)('VALIDATION_ERROR', {
                 field: 'victimAccusedSeparationEvaluated',
                 reason: 'SEPARATION_APPLIED_REQUIRES_EVALUATION',
             });
         }
-        if (input.contractorReferralDate && !Boolean(input.outsourcedAccused)) {
+        if (input.contractorReferralDate && !input.outsourcedAccused) {
             (0, http_error_1.throwError)('VALIDATION_ERROR', {
                 field: 'outsourcedAccused',
                 reason: 'CONTRACTOR_REFERRAL_REQUIRES_OUTSOURCED_FLAG',
@@ -1104,7 +1206,7 @@ let CpcaService = class CpcaService {
                     reason: 'OUTCOME_SUMMARY_REQUIRED_FOR_CLOSURE',
                 });
             }
-            if (!Boolean(input.accusedDefenseEnsured)) {
+            if (!input.accusedDefenseEnsured) {
                 (0, http_error_1.throwError)('VALIDATION_ERROR', {
                     field: 'accusedDefenseEnsured',
                     reason: 'DEFENSE_CONFIRMATION_REQUIRED_FOR_CLOSURE',

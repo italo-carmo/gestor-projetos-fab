@@ -7,6 +7,10 @@ import {
   Chip,
   Collapse,
   Divider,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Drawer,
   IconButton,
   LinearProgress,
@@ -20,6 +24,7 @@ import {
   TableHead,
   TableRow,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
@@ -43,6 +48,7 @@ import {
   useLookupMissionLdapParticipant,
   useMission,
   useMissionChecklist,
+  useMe,
   useMissionStatistics,
   useMissions,
   useOmsCatalog,
@@ -54,6 +60,13 @@ import {
   useUsers,
 } from '../api/hooks';
 import { parseApiError } from '../app/apiErrors';
+import {
+  loadMissionsPageUiSettings,
+  MISSIONS_PAGE_UI_SETTINGS_KEY,
+  MISSIONS_STATS_SECTION_DEFAULTS,
+  persistMissionsPageUiSettings,
+} from '../app/missionsPageUiSettings';
+import { hasAnyRole, ROLE_TI } from '../app/roleAccess';
 import { useToast } from '../app/toast';
 import { ConfirmDialog } from '../components/dialogs/ConfirmDialog';
 import { EmptyState } from '../components/states/EmptyState';
@@ -469,6 +482,14 @@ export function MissionsPage() {
     participantsByMission: false,
   });
 
+  const { data: me } = useMe();
+  const isTiProfile = hasAnyRole(me, [ROLE_TI]);
+  const [missionsUiSettings, setMissionsUiSettings] = useState(() =>
+    loadMissionsPageUiSettings(),
+  );
+  const [statsSectionEditorOpen, setStatsSectionEditorOpen] = useState(false);
+  const [statsSectionDraft, setStatsSectionDraft] = useState({ title: '', description: '' });
+
   const lookupQuery = useLookupMissionLdapParticipant(ldapIdentifier);
 
   const localityOptions = useMemo(
@@ -652,6 +673,20 @@ export function MissionsPage() {
     setChecklistOmId(apiOmId || fallbackOmId);
     setChecklistDirty(false);
   }, [missionChecklistQuery.data, selectedMission?.id, selectedMission?.localityId]);
+
+  useEffect(() => {
+    const sync = () => setMissionsUiSettings(loadMissionsPageUiSettings());
+    window.addEventListener('missions-page-ui-settings-changed', sync);
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== MISSIONS_PAGE_UI_SETTINGS_KEY) return;
+      sync();
+    };
+    window.addEventListener('storage', onStorage);
+    return () => {
+      window.removeEventListener('missions-page-ui-settings-changed', sync);
+      window.removeEventListener('storage', onStorage);
+    };
+  }, []);
 
   const openCreate = () => {
     setIsCreateMode(true);
@@ -878,6 +913,26 @@ export function MissionsPage() {
       ...current,
       [cardKey]: !current[cardKey],
     }));
+  };
+
+  const openStatsSectionEditor = () => {
+    const s = missionsUiSettings.statsSection;
+    setStatsSectionDraft({ title: s.title, description: s.description });
+    setStatsSectionEditorOpen(true);
+  };
+
+  const saveStatsSectionEditor = () => {
+    const next = {
+      ...missionsUiSettings,
+      statsSection: {
+        title: statsSectionDraft.title,
+        description: statsSectionDraft.description,
+      },
+    };
+    setMissionsUiSettings(next);
+    persistMissionsPageUiSettings(next);
+    setStatsSectionEditorOpen(false);
+    toast.push({ message: 'Texto do card atualizado.', severity: 'success' });
   };
 
   const validParticipants = useMemo(() => {
@@ -1127,9 +1182,37 @@ export function MissionsPage() {
       {statisticsQuery.data && (
         <Card variant="outlined" sx={{ mb: 2 }}>
           <CardContent sx={{ p: 2 }}>
-            <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1.5 }}>
-              Estatísticas de Missões
-            </Typography>
+            <Stack
+              direction="row"
+              alignItems="flex-start"
+              justifyContent="space-between"
+              spacing={1}
+              sx={{ mb: 1.5 }}
+            >
+              <Box sx={{ minWidth: 0, flex: 1 }}>
+                <Typography variant="subtitle1" fontWeight={700}>
+                  {missionsUiSettings.statsSection.title.trim() ||
+                    MISSIONS_STATS_SECTION_DEFAULTS.title}
+                </Typography>
+                {missionsUiSettings.statsSection.description.trim() ? (
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                    {missionsUiSettings.statsSection.description.trim()}
+                  </Typography>
+                ) : null}
+              </Box>
+              {isTiProfile ? (
+                <Tooltip title="Editar título e descrição">
+                  <IconButton
+                    size="small"
+                    onClick={openStatsSectionEditor}
+                    sx={{ flexShrink: 0 }}
+                    aria-label="Editar título e descrição do card Estatísticas de Missões"
+                  >
+                    <EditOutlinedIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              ) : null}
+            </Stack>
 
             <Box
               sx={{
@@ -1167,14 +1250,6 @@ export function MissionsPage() {
                   <Typography variant="caption" color="text.secondary">Total de Dias de Missão</Typography>
                   <Typography variant="h5" fontWeight={700} color="primary.main">
                     {statisticsQuery.data.totalMissionDays}
-                  </Typography>
-                </CardContent>
-              </Card>
-              <Card variant="outlined" sx={{ bgcolor: 'background.default' }}>
-                <CardContent sx={{ py: 1.2, px: 1.4, '&:last-child': { pb: 1.2 } }}>
-                  <Typography variant="caption" color="text.secondary">Dias-Pessoa em Missão</Typography>
-                  <Typography variant="h5" fontWeight={700} color="primary.main">
-                    {statisticsQuery.data.totalParticipantDays}
                   </Typography>
                 </CardContent>
               </Card>
@@ -2191,6 +2266,43 @@ export function MissionsPage() {
           )}
         </Box>
       </Drawer>
+
+      <Dialog
+        open={statsSectionEditorOpen}
+        onClose={() => setStatsSectionEditorOpen(false)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>Card Estatísticas de Missões</DialogTitle>
+        <DialogContent sx={{ pt: 1 }}>
+          <Stack spacing={1.5} sx={{ mt: 0.5 }}>
+            <TextField
+              label="Título"
+              value={statsSectionDraft.title}
+              onChange={(e) =>
+                setStatsSectionDraft((prev) => ({ ...prev, title: e.target.value }))
+              }
+              fullWidth
+            />
+            <TextField
+              label="Descrição"
+              value={statsSectionDraft.description}
+              onChange={(e) =>
+                setStatsSectionDraft((prev) => ({ ...prev, description: e.target.value }))
+              }
+              fullWidth
+              multiline
+              minRows={3}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setStatsSectionEditorOpen(false)}>Cancelar</Button>
+          <Button variant="contained" onClick={saveStatsSectionEditor}>
+            Salvar
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <ConfirmDialog
         open={Boolean(missionDeleteTarget)}

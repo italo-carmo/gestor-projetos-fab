@@ -6,6 +6,10 @@ import { CreateMissionScheduleItemDto } from './dto/create-mission-schedule-item
 import { UpdateMissionScheduleItemDto } from './dto/update-mission-schedule-item.dto';
 import { MissionLdapParticipantDto } from './dto/mission-ldap-participant.dto';
 import { MissionUserParticipantDto } from './dto/mission-user-participant.dto';
+import { UpsertMissionChecklistDto } from './dto/upsert-mission-checklist.dto';
+import { CreateMissionChecklistDimensionDto } from './dto/create-mission-checklist-dimension.dto';
+import { UpdateMissionChecklistDimensionDto } from './dto/update-mission-checklist-dimension.dto';
+import { UpdateMissionChecklistClassificationDto } from './dto/update-mission-checklist-classification.dto';
 import type { Response } from 'express';
 export declare class MissionsController {
     private readonly missions;
@@ -38,6 +42,7 @@ export declare class MissionsController {
             description: string | null;
             localityId: string;
             createdById: string | null;
+            checklistJson: import("@prisma/client/runtime/client").JsonValue | null;
             startDate: Date;
             endDate: Date;
         }[];
@@ -79,6 +84,151 @@ export declare class MissionsController {
             participantsCount: number;
         }[];
     }>;
+    getChecklistMapping(localityId: string | undefined, user: RbacUser): Promise<{
+        generatedAt: string;
+        localities: {
+            id: string;
+            name: string;
+            code: string | null;
+        }[];
+        classifications: {
+            id: import("./mission-checklist.constants").MissionChecklistClassification;
+            label: string;
+            colorHex: string | null;
+            sortOrder: number;
+        }[];
+        defaultClassification: "FORTE_CONSOLIDADA" | "OPORTUNIDADE_MELHORIA" | "NECESSITA_ANALISE" | "POSSIVEL_RISCO";
+        sections: {
+            id: "lideranca" | "acompanhamento_recrutas" | "analise_riscos";
+            title: string;
+            items: {
+                id: string;
+                title: string;
+                prompt: string | null;
+                cells: ({
+                    localityId: string;
+                    missionId: null;
+                    classification: null;
+                    notes: string;
+                    hasNotes: boolean;
+                    photos: never[];
+                    hasPhotos: boolean;
+                } | {
+                    localityId: string;
+                    missionId: string;
+                    classification: null;
+                    notes: string;
+                    hasNotes: boolean;
+                    photos: never[];
+                    hasPhotos: boolean;
+                } | {
+                    localityId: string;
+                    missionId: string;
+                    classification: "FORTE_CONSOLIDADA" | "OPORTUNIDADE_MELHORIA" | "NECESSITA_ANALISE" | "POSSIVEL_RISCO";
+                    notes: string;
+                    hasNotes: boolean;
+                    photos: string[];
+                    hasPhotos: boolean;
+                })[];
+            }[];
+        }[];
+        missionsByLocality: ({
+            localityId: string;
+            mission: null;
+        } | {
+            localityId: string;
+            mission: {
+                id: string;
+                title: string;
+                description: string | null;
+                startDate: Date;
+                endDate: Date;
+                updatedAt: Date;
+                locality: {
+                    id: string;
+                    name: string;
+                    code: string;
+                };
+                checklistOm: {
+                    id: string;
+                    name: string;
+                    code: string | null;
+                };
+                participants: {
+                    id: string;
+                    name: string;
+                    email: string | null;
+                    ldapUid: string | null;
+                    fabom: string | null;
+                    cpf: string | null;
+                }[];
+                participantsCount: number;
+                scheduleItems: {
+                    id: string;
+                    title: string;
+                    location: string;
+                    participants: string;
+                    responsible: string;
+                    durationMinutes: number;
+                    startAt: Date;
+                }[];
+                scheduleItemsCount: number;
+                checklistSections: {
+                    id: import("./mission-checklist.constants").MissionChecklistSectionId;
+                    title: string;
+                    items: Array<{
+                        id: string;
+                        title: string;
+                        prompt: string | null;
+                        sortOrder: number;
+                    }>;
+                }[];
+            };
+        })[];
+    }>;
+    getChecklistConfig(user: RbacUser): Promise<{
+        generatedAt: string;
+        classifications: {
+            id: import("./mission-checklist.constants").MissionChecklistClassification;
+            label: string;
+            colorHex: string | null;
+            sortOrder: number;
+        }[];
+        defaultClassification: "FORTE_CONSOLIDADA" | "OPORTUNIDADE_MELHORIA" | "NECESSITA_ANALISE" | "POSSIVEL_RISCO";
+        sections: {
+            id: import("./mission-checklist.constants").MissionChecklistSectionId;
+            title: string;
+            items: Array<{
+                id: string;
+                title: string;
+                prompt: string | null;
+                sortOrder: number;
+            }>;
+        }[];
+    }>;
+    createChecklistDimension(dto: CreateMissionChecklistDimensionDto, user: RbacUser): Promise<{
+        id: string;
+        sectionId: string;
+        title: string;
+        prompt: string | null;
+        sortOrder: number;
+    }>;
+    updateChecklistDimension(id: string, dto: UpdateMissionChecklistDimensionDto, user: RbacUser): Promise<{
+        id: string;
+        sectionId: string;
+        title: string;
+        prompt: string | null;
+        sortOrder: number;
+    }>;
+    deleteChecklistDimension(id: string, user: RbacUser): Promise<{
+        ok: boolean;
+    }>;
+    updateChecklistClassification(id: string, dto: UpdateMissionChecklistClassificationDto, user: RbacUser): Promise<{
+        id: string;
+        label: string;
+        colorHex: string | null;
+        sortOrder: number;
+    }>;
     create(dto: CreateMissionDto, user: RbacUser): Promise<{
         participantsCount: number;
         scheduleItemsCount: number;
@@ -117,6 +267,7 @@ export declare class MissionsController {
         description: string | null;
         localityId: string;
         createdById: string | null;
+        checklistJson: import("@prisma/client/runtime/client").JsonValue | null;
         startDate: Date;
         endDate: Date;
     }>;
@@ -158,6 +309,7 @@ export declare class MissionsController {
         description: string | null;
         localityId: string;
         createdById: string | null;
+        checklistJson: import("@prisma/client/runtime/client").JsonValue | null;
         startDate: Date;
         endDate: Date;
     }>;
@@ -218,8 +370,69 @@ export declare class MissionsController {
         description: string | null;
         localityId: string;
         createdById: string | null;
+        checklistJson: import("@prisma/client/runtime/client").JsonValue | null;
         startDate: Date;
         endDate: Date;
+    }>;
+    getChecklist(id: string, user: RbacUser): Promise<{
+        missionId: string;
+        localityId: string;
+        omId: string;
+        om: "" | {
+            id: string;
+            name: string;
+            code: string;
+        } | null;
+        updatedAt: Date;
+        classifications: {
+            id: import("./mission-checklist.constants").MissionChecklistClassification;
+            label: string;
+            colorHex: string | null;
+            sortOrder: number;
+        }[];
+        defaultClassification: "FORTE_CONSOLIDADA" | "OPORTUNIDADE_MELHORIA" | "NECESSITA_ANALISE" | "POSSIVEL_RISCO";
+        sections: {
+            id: "lideranca" | "acompanhamento_recrutas" | "analise_riscos";
+            title: string;
+            items: {
+                id: string;
+                title: string;
+                prompt: string | null;
+                sortOrder: number;
+                classification: "FORTE_CONSOLIDADA" | "OPORTUNIDADE_MELHORIA" | "NECESSITA_ANALISE" | "POSSIVEL_RISCO";
+                notes: string;
+                photos: string[];
+            }[];
+        }[];
+    }>;
+    upsertChecklist(id: string, dto: UpsertMissionChecklistDto, user: RbacUser): Promise<{
+        missionId: string;
+        localityId: string;
+        omId: string;
+        updatedAt: Date;
+        classifications: {
+            id: import("./mission-checklist.constants").MissionChecklistClassification;
+            label: string;
+            colorHex: string | null;
+            sortOrder: number;
+        }[];
+        defaultClassification: "FORTE_CONSOLIDADA" | "OPORTUNIDADE_MELHORIA" | "NECESSITA_ANALISE" | "POSSIVEL_RISCO";
+        sections: {
+            id: "lideranca" | "acompanhamento_recrutas" | "analise_riscos";
+            title: string;
+            items: {
+                id: string;
+                title: string;
+                prompt: string | null;
+                sortOrder: number;
+                classification: "FORTE_CONSOLIDADA" | "OPORTUNIDADE_MELHORIA" | "NECESSITA_ANALISE" | "POSSIVEL_RISCO";
+                notes: string;
+                photos: string[];
+            }[];
+        }[];
+    }>;
+    uploadChecklistPhoto(id: string, file: Express.Multer.File, user: RbacUser): Promise<{
+        photoUrl: string;
     }>;
     addParticipantFromLdap(id: string, dto: MissionLdapParticipantDto, user: RbacUser): Promise<{
         id: string;
@@ -300,4 +513,7 @@ export declare class MissionsController {
         ok: boolean;
     }>;
     exportSchedulePdf(id: string, user: RbacUser, res: Response): Promise<Response<any, Record<string, any>>>;
+}
+export declare class MissionsChecklistUploadsController {
+    uploadedPhoto(filename: string, res: Response): Promise<void>;
 }

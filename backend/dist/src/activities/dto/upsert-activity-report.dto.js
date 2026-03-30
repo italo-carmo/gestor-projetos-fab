@@ -29,6 +29,8 @@ class UpsertActivityReportDto {
     recruitsCount;
     eloPsychologyCount;
     eloSocialAssistanceCount;
+    eloJuridicoCount;
+    eloCpcaCount;
     eloGraduadoMasterCount;
     participantsCharacteristics;
     mainPointsObserved;
@@ -122,6 +124,16 @@ __decorate([
     (0, class_validator_1.Min)(0),
     __metadata("design:type", Number)
 ], UpsertActivityReportDto.prototype, "eloSocialAssistanceCount", void 0);
+__decorate([
+    (0, class_validator_1.IsInt)(),
+    (0, class_validator_1.Min)(0),
+    __metadata("design:type", Number)
+], UpsertActivityReportDto.prototype, "eloJuridicoCount", void 0);
+__decorate([
+    (0, class_validator_1.IsInt)(),
+    (0, class_validator_1.Min)(0),
+    __metadata("design:type", Number)
+], UpsertActivityReportDto.prototype, "eloCpcaCount", void 0);
 __decorate([
     (0, class_validator_1.IsInt)(),
     (0, class_validator_1.Min)(0),

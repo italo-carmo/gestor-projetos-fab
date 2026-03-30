@@ -42,7 +42,9 @@ function canonicalRoleName(roleName) {
     const normalized = normalizeRoleName(roleName);
     if (normalized === 'comgep')
         return exports.ROLE_COMGEP;
-    return String(roleName ?? '').replace(/\s+/g, ' ').trim();
+    return String(roleName ?? '')
+        .replace(/\s+/g, ' ')
+        .trim();
 }
 function hasRole(user, roleName) {
     if (!user)
@@ -78,7 +80,10 @@ function isLocalityAdmin(user) {
 function isSpecialtyAdmin(user) {
     if (!user)
         return false;
-    if (hasAnyRole(user, [exports.ROLE_ADMIN_ESPECIALIDADE_LOCAL, exports.ROLE_ADMIN_ESPECIALIDADE_NACIONAL])) {
+    if (hasAnyRole(user, [
+        exports.ROLE_ADMIN_ESPECIALIDADE_LOCAL,
+        exports.ROLE_ADMIN_ESPECIALIDADE_NACIONAL,
+    ])) {
         return true;
     }
     return user.roles.some((role) => role.name.toLowerCase().includes('admin especialidade'));
@@ -92,7 +97,7 @@ function isLocalSpecialtyAdmin(user) {
 function resolveAccessProfile(user) {
     const ti = isTiUser(user);
     const nationalCommission = isNationalCommissionMember(user);
-    const effectiveLocalityId = ti || nationalCommission ? undefined : user?.localityId ?? undefined;
+    const effectiveLocalityId = ti || nationalCommission ? undefined : (user?.localityId ?? undefined);
     const localityAdmin = isLocalityAdmin(user);
     const specialtyAdmin = isSpecialtyAdmin(user);
     const nationalSpecialtyAdmin = isNationalSpecialtyAdmin(user);
@@ -107,10 +112,7 @@ function resolveAccessProfile(user) {
         groupSpecialtyId: user?.specialtyId ?? undefined,
         groupEloRoleId: user?.eloRoleId ?? undefined,
         localityId: effectiveLocalityId,
-        isAdminLike: ti ||
-            nationalCommission ||
-            localityAdmin ||
-            specialtyAdmin,
+        isAdminLike: ti || nationalCommission || localityAdmin || specialtyAdmin,
     };
 }
 function canEditRecruitsByRole(user, targetLocalityId) {
@@ -119,12 +121,18 @@ function canEditRecruitsByRole(user, targetLocalityId) {
     if (hasAnyRole(user, [exports.ROLE_COORDENACAO_CIPAVD, exports.ROLE_COMISSAO_CIPAVD, exports.ROLE_TI])) {
         return true;
     }
-    if (hasRole(user, exports.ROLE_GSD_LOCALIDADE) && user.localityId === targetLocalityId) {
+    if (hasRole(user, exports.ROLE_GSD_LOCALIDADE) &&
+        user.localityId === targetLocalityId) {
         return true;
     }
     return false;
 }
 function hasCpcaWorkflowAccess(user) {
-    return hasAnyRole(user, [exports.ROLE_CPCA, exports.ROLE_COORDENACAO_CIPAVD, exports.ROLE_COMANDANTE_COMGEP, exports.ROLE_TI]);
+    return hasAnyRole(user, [
+        exports.ROLE_CPCA,
+        exports.ROLE_COORDENACAO_CIPAVD,
+        exports.ROLE_COMANDANTE_COMGEP,
+        exports.ROLE_TI,
+    ]);
 }
 //# sourceMappingURL=role-access.js.map

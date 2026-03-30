@@ -64,6 +64,7 @@ let RbacGuard = class RbacGuard {
 exports.RbacGuard = RbacGuard;
 exports.RbacGuard = RbacGuard = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [core_1.Reflector, rbac_service_1.RbacService])
+    __metadata("design:paramtypes", [core_1.Reflector,
+        rbac_service_1.RbacService])
 ], RbacGuard);
 //# sourceMappingURL=rbac.guard.js.map

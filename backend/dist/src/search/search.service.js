@@ -22,7 +22,13 @@ let SearchService = class SearchService {
     async query(q, user) {
         const query = q?.trim();
         if (!query) {
-            return { tasks: [], notices: [], meetings: [], localities: [], documents: [] };
+            return {
+                tasks: [],
+                notices: [],
+                meetings: [],
+                localities: [],
+                documents: [],
+            };
         }
         const constraints = this.getScopeConstraints(user);
         const taskWhere = {
@@ -33,7 +39,9 @@ let SearchService = class SearchService {
         if (constraints.specialtyId) {
             taskWhere.AND = [
                 ...(taskWhere.AND ?? []),
-                { OR: [{ specialtyId: null }, { specialtyId: constraints.specialtyId }] },
+                {
+                    OR: [{ specialtyId: null }, { specialtyId: constraints.specialtyId }],
+                },
             ];
         }
         const noticeWhere = {
@@ -50,16 +58,18 @@ let SearchService = class SearchService {
         if (constraints.specialtyId) {
             noticeWhere.AND = [
                 ...(noticeWhere.AND ?? []),
-                { OR: [{ specialtyId: null }, { specialtyId: constraints.specialtyId }] },
+                {
+                    OR: [{ specialtyId: null }, { specialtyId: constraints.specialtyId }],
+                },
             ];
         }
         const meetingWhere = {
-            OR: [
-                { agenda: { contains: query, mode: 'insensitive' } },
-            ],
+            OR: [{ agenda: { contains: query, mode: 'insensitive' } }],
         };
         if (constraints.localityId) {
-            meetingWhere.AND = [{ OR: [{ localityId: null }, { localityId: constraints.localityId }] }];
+            meetingWhere.AND = [
+                { OR: [{ localityId: null }, { localityId: constraints.localityId }] },
+            ];
         }
         const localityWhere = {
             OR: [
@@ -76,7 +86,9 @@ let SearchService = class SearchService {
             ],
         };
         if (constraints.localityId) {
-            documentWhere.AND = [{ OR: [{ localityId: null }, { localityId: constraints.localityId }] }];
+            documentWhere.AND = [
+                { OR: [{ localityId: null }, { localityId: constraints.localityId }] },
+            ];
         }
         const [tasks, notices, meetings, localities, documents] = await this.prisma.$transaction([
             this.prisma.taskInstance.findMany({
@@ -98,7 +110,9 @@ let SearchService = class SearchService {
             }),
             this.prisma.documentAsset.findMany({
                 where: documentWhere,
-                include: { locality: { select: { id: true, name: true, code: true } } },
+                include: {
+                    locality: { select: { id: true, name: true, code: true } },
+                },
                 take: 10,
             }),
         ]);
@@ -147,7 +161,10 @@ let SearchService = class SearchService {
         if (profile.ti || profile.nationalCommission)
             return {};
         if (profile.localityAdmin) {
-            return { localityId: profile.localityId ?? undefined, specialtyId: undefined };
+            return {
+                localityId: profile.localityId ?? undefined,
+                specialtyId: undefined,
+            };
         }
         if (profile.specialtyAdmin) {
             return {

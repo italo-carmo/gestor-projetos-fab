@@ -24,7 +24,10 @@ let KpisService = class KpisService {
         if (user?.executiveHidePii) {
             where.visibility = client_1.KpiVisibility.EXECUTIVE;
         }
-        const items = await this.prisma.kpi.findMany({ where, orderBy: { key: 'asc' } });
+        const items = await this.prisma.kpi.findMany({
+            where,
+            orderBy: { key: 'asc' },
+        });
         return { items };
     }
     create(payload) {
@@ -48,7 +51,9 @@ let KpisService = class KpisService {
         });
     }
     async dashboard(filters, user) {
-        const from = filters.from ? new Date(filters.from) : new Date(Date.now() - 56 * 24 * 60 * 60 * 1000);
+        const from = filters.from
+            ? new Date(filters.from)
+            : new Date(Date.now() - 56 * 24 * 60 * 60 * 1000);
         const to = filters.to ? new Date(filters.to) : new Date();
         const [localities, tasks, phases, reports] = await this.prisma.$transaction([
             this.prisma.locality.findMany({ orderBy: { name: 'asc' } }),
@@ -64,25 +69,38 @@ let KpisService = class KpisService {
         const progressByPhase = phases.map((phase) => {
             const phaseTasks = tasks.filter((task) => task.taskTemplate.phaseId === phase.id);
             const avg = phaseTasks.length
-                ? phaseTasks.reduce((acc, task) => acc + task.progressPercent, 0) / phaseTasks.length
+                ? phaseTasks.reduce((acc, task) => acc + task.progressPercent, 0) /
+                    phaseTasks.length
                 : 0;
-            return { phaseId: phase.id, phaseName: phase.name, progress: Math.round(avg) };
+            return {
+                phaseId: phase.id,
+                phaseName: phase.name,
+                progress: Math.round(avg),
+            };
         });
         const overallProgress = progressByPhase.length > 0
-            ? Math.round(progressByPhase.reduce((acc, entry) => acc + entry.progress, 0) / progressByPhase.length)
+            ? Math.round(progressByPhase.reduce((acc, entry) => acc + entry.progress, 0) /
+                progressByPhase.length)
             : 0;
         const lateTasks = tasks.filter((task) => task.status !== client_1.TaskStatus.DONE && task.dueDate < new Date());
         const leadTimesByPhase = phases.map((phase) => {
-            const doneTasks = tasks.filter((task) => task.taskTemplate.phaseId === phase.id && task.status === client_1.TaskStatus.DONE);
+            const doneTasks = tasks.filter((task) => task.taskTemplate.phaseId === phase.id &&
+                task.status === client_1.TaskStatus.DONE);
             const avgDays = doneTasks.length
                 ? doneTasks.reduce((acc, task) => acc + (task.updatedAt.getTime() - task.createdAt.getTime()), 0) /
                     doneTasks.length /
                     (1000 * 60 * 60 * 24)
                 : 0;
-            return { phaseId: phase.id, phaseName: phase.name, avgLeadDays: Number(avgDays.toFixed(1)) };
+            return {
+                phaseId: phase.id,
+                phaseName: phase.name,
+                avgLeadDays: Number(avgDays.toFixed(1)),
+            };
         });
         const reportRequiredTasks = tasks.filter((task) => task.reportRequired && task.status === client_1.TaskStatus.DONE);
-        const approvedReports = new Set(reports.filter((report) => report.approved).map((report) => report.taskInstanceId));
+        const approvedReports = new Set(reports
+            .filter((report) => report.approved)
+            .map((report) => report.taskInstanceId));
         const complianceApproved = reportRequiredTasks.filter((task) => approvedReports.has(task.id)).length;
         const compliancePending = reportRequiredTasks.length - complianceApproved;
         const dashboard = {
@@ -99,7 +117,11 @@ let KpisService = class KpisService {
                 pending: compliancePending,
                 total: reportRequiredTasks.length,
             },
-            localities: localities.map((loc) => ({ id: loc.id, code: loc.code, name: loc.name })),
+            localities: localities.map((loc) => ({
+                id: loc.id,
+                code: loc.code,
+                name: loc.name,
+            })),
         };
         return user?.executiveHidePii ? (0, executive_1.sanitizeForExecutive)(dashboard) : dashboard;
     }

@@ -48,12 +48,22 @@ let ActivitiesService = class ActivitiesService {
         if (targetLocalityIds.length === 0) {
             return { items: [], page, pageSize, total: 0 };
         }
+        const scopeFilter = String(filters.scope ?? '').toUpperCase() === 'CIPAVD'
+            ? 'CIPAVD'
+            : 'SMIF';
         const andClauses = [];
         andClauses.push({ localityId: { in: targetLocalityIds } });
+        andClauses.push({ scope: scopeFilter });
         if (filters.localityId)
             andClauses.push({ localityId: filters.localityId });
-        if (filters.specialtyId)
-            andClauses.push({ specialtyId: filters.specialtyId });
+        if (filters.specialtyId) {
+            andClauses.push({
+                OR: [
+                    { specialtyId: filters.specialtyId },
+                    { specialties: { some: { specialtyId: filters.specialtyId } } },
+                ],
+            });
+        }
         if (filters.status)
             andClauses.push({ status: filters.status });
         if (filters.q) {
@@ -77,7 +87,14 @@ let ActivitiesService = class ActivitiesService {
                 take,
                 include: {
                     locality: { select: { id: true, code: true, name: true } },
+                    activityType: { select: { id: true, name: true } },
                     specialty: { select: { id: true, name: true, color: true } },
+                    specialties: {
+                        include: {
+                            specialty: { select: { id: true, name: true, color: true } },
+                        },
+                        orderBy: { createdAt: 'asc' },
+                    },
                     createdBy: { select: { id: true, name: true } },
                     responsibles: {
                         include: {
@@ -131,10 +148,7 @@ let ActivitiesService = class ActivitiesService {
         }
         if (specialtyId) {
             andClauses.push({
-                OR: [
-                    { specialtyId: null },
-                    { specialtyId },
-                ],
+                OR: [{ specialtyId: null }, { specialtyId }],
             });
         }
         andClauses.push({ ldapUid: { not: null } });
@@ -165,7 +179,8 @@ let ActivitiesService = class ActivitiesService {
         };
     }
     async create(payload, user) {
-        this.assertActivityOperateAccess(null, user);
+        const scope = String(payload.scope ?? '').toUpperCase() === 'CIPAVD' ? 'CIPAVD' : 'SMIF';
+        this.assertActivityOperateAccess(scope === 'CIPAVD' ? { scope: 'CIPAVD' } : null, user);
         const normalizedLocalityIds = Array.from(new Set((payload.localityIds ?? [])
             .map((value) => String(value ?? '').trim())
             .filter(Boolean)));
@@ -173,9 +188,14 @@ let ActivitiesService = class ActivitiesService {
         const createLocalityIds = normalizedLocalityIds.length > 0
             ? normalizedLocalityIds
             : [fallbackLocalityId];
-        const specialtyId = payload.specialtyId ?? null;
+        const activitySpecialtyIds = await this.resolveActivitySpecialtyIds({
+            specialtyId: payload.specialtyId,
+            specialtyIds: payload.specialtyIds,
+            fallbackToCommission: true,
+        });
+        const primarySpecialtyId = activitySpecialtyIds[0] ?? null;
         for (const localityId of createLocalityIds) {
-            this.assertScopeConstraint(localityId, specialtyId, user);
+            this.assertScopeConstraint(localityId, primarySpecialtyId, user, activitySpecialtyIds);
         }
         const normalizedResponsibleIds = Array.from(new Set((payload.responsibleUserIds ?? [])
             .map((value) => String(value ?? '').trim())
@@ -197,10 +217,21 @@ let ActivitiesService = class ActivitiesService {
                     : null,
                 localityId,
                 activityTypeId: activityTypeId,
-                specialtyId,
+                specialtyId: primarySpecialtyId,
                 eventDate: payload.eventDate ? new Date(payload.eventDate) : null,
                 reportRequired: payload.reportRequired ?? false,
+                scope,
                 createdById: user?.id ?? null,
+                specialties: activitySpecialtyIds.length > 0
+                    ? {
+                        createMany: {
+                            data: activitySpecialtyIds.map((itemId) => ({
+                                specialtyId: itemId,
+                            })),
+                            skipDuplicates: true,
+                        },
+                    }
+                    : undefined,
                 responsibles: responsibleUserIds.length > 0
                     ? {
                         create: responsibleUserIds.map((userId) => ({
@@ -214,6 +245,12 @@ let ActivitiesService = class ActivitiesService {
                 locality: { select: { id: true, code: true, name: true } },
                 activityType: { select: { id: true, name: true } },
                 specialty: { select: { id: true, name: true, color: true } },
+                specialties: {
+                    include: {
+                        specialty: { select: { id: true, name: true, color: true } },
+                    },
+                    orderBy: { createdAt: 'asc' },
+                },
                 createdBy: { select: { id: true, name: true } },
                 responsibles: {
                     include: {
@@ -278,6 +315,7 @@ let ActivitiesService = class ActivitiesService {
             where: { id },
             include: {
                 responsibles: { select: { userId: true } },
+                specialties: { select: { specialtyId: true } },
             },
         });
         if (!existing)
@@ -286,15 +324,22 @@ let ActivitiesService = class ActivitiesService {
         const localityId = payload.localityId === undefined
             ? existing.localityId
             : payload.localityId;
-        const specialtyId = payload.specialtyId === undefined
-            ? (existing.specialtyId ?? null)
-            : payload.specialtyId;
+        const currentSpecialtyIds = this.extractActivitySpecialtyIds(existing);
+        const specialtyInputWasProvided = payload.specialtyIds !== undefined || payload.specialtyId !== undefined;
+        const activitySpecialtyIds = specialtyInputWasProvided
+            ? await this.resolveActivitySpecialtyIds({
+                specialtyId: payload.specialtyId,
+                specialtyIds: payload.specialtyIds,
+                fallbackToCommission: true,
+            })
+            : currentSpecialtyIds;
+        const specialtyId = activitySpecialtyIds[0] ?? null;
         const activityTypeId = await this.resolveActivityTypeId(payload.activityTypeId === undefined
             ? (existing.activityTypeId ?? null)
             : payload.activityTypeId);
-        this.assertScopeConstraint(localityId, specialtyId, user);
+        this.assertScopeConstraint(localityId, specialtyId, user, activitySpecialtyIds);
         const responsibleUserIds = await this.resolveActivityResponsibleIds(localityId, payload.responsibleUserIds ??
-            existing.responsibles.map((entry) => entry.userId), user);
+            (existing.responsibles ?? []).map((entry) => entry.userId), user);
         const updated = await this.prisma.activity.update({
             where: { id },
             data: {
@@ -313,6 +358,19 @@ let ActivitiesService = class ActivitiesService {
                         ? null
                         : new Date(payload.eventDate),
                 reportRequired: payload.reportRequired ?? undefined,
+                specialties: {
+                    deleteMany: {},
+                    ...(activitySpecialtyIds.length > 0
+                        ? {
+                            createMany: {
+                                data: activitySpecialtyIds.map((itemId) => ({
+                                    specialtyId: itemId,
+                                })),
+                                skipDuplicates: true,
+                            },
+                        }
+                        : {}),
+                },
                 responsibles: {
                     deleteMany: {},
                     ...(responsibleUserIds.length > 0
@@ -329,6 +387,12 @@ let ActivitiesService = class ActivitiesService {
                 locality: { select: { id: true, code: true, name: true } },
                 activityType: { select: { id: true, name: true } },
                 specialty: { select: { id: true, name: true, color: true } },
+                specialties: {
+                    include: {
+                        specialty: { select: { id: true, name: true, color: true } },
+                    },
+                    orderBy: { createdAt: 'asc' },
+                },
                 createdBy: { select: { id: true, name: true } },
                 responsibles: {
                     include: {
@@ -391,7 +455,8 @@ let ActivitiesService = class ActivitiesService {
             if (!existing.report) {
                 (0, http_error_1.throwError)('ACTIVITY_REPORT_REQUIRED');
             }
-            if (!existing.report.signedAt || !existing.report.signatureHash) {
+            if (!existing.report.signedAt ||
+                !existing.report.signatureHash) {
                 (0, http_error_1.throwError)('ACTIVITY_REPORT_SIGNATURE_REQUIRED');
             }
         }
@@ -402,6 +467,12 @@ let ActivitiesService = class ActivitiesService {
                 locality: { select: { id: true, code: true, name: true } },
                 activityType: { select: { id: true, name: true } },
                 specialty: { select: { id: true, name: true, color: true } },
+                specialties: {
+                    include: {
+                        specialty: { select: { id: true, name: true, color: true } },
+                    },
+                    orderBy: { createdAt: 'asc' },
+                },
                 createdBy: { select: { id: true, name: true } },
                 responsibles: {
                     include: {
@@ -465,7 +536,9 @@ let ActivitiesService = class ActivitiesService {
                 await tx.activityReportPhoto.deleteMany({
                     where: { reportId: existing.report.id },
                 });
-                await tx.activityReport.delete({ where: { id: existing.report.id } });
+                await tx.activityReport.delete({
+                    where: { id: existing.report.id },
+                });
             }
             await tx.activity.delete({ where: { id } });
         });
@@ -530,7 +603,8 @@ let ActivitiesService = class ActivitiesService {
                 if (!activity.report) {
                     (0, http_error_1.throwError)('ACTIVITY_REPORT_REQUIRED');
                 }
-                if (!activity.report.signedAt || !activity.report.signatureHash) {
+                if (!activity.report.signedAt ||
+                    !activity.report.signatureHash) {
                     (0, http_error_1.throwError)('ACTIVITY_REPORT_SIGNATURE_REQUIRED');
                 }
             }
@@ -552,19 +626,16 @@ let ActivitiesService = class ActivitiesService {
         });
         return { updated: targetIds.length };
     }
-    async batchUpdateSpecialty(ids, specialtyId, user) {
+    async batchUpdateSpecialty(ids, specialtyIdsInput, user) {
         this.assertActivityOperateAccess(null, user);
         const normalizedIds = this.normalizeActivityIds(ids);
         if (!normalizedIds.length)
             return { updated: 0 };
-        if (specialtyId) {
-            const specialty = await this.prisma.specialty.findUnique({
-                where: { id: specialtyId },
-                select: { id: true },
-            });
-            if (!specialty)
-                (0, http_error_1.throwError)('NOT_FOUND');
-        }
+        const specialtyIds = await this.resolveActivitySpecialtyIds({
+            specialtyIds: specialtyIdsInput,
+            fallbackToCommission: true,
+        });
+        const primarySpecialtyId = specialtyIds[0] ?? null;
         const existing = await this.prisma.activity.findMany({
             where: { id: { in: normalizedIds } },
             select: {
@@ -576,12 +647,31 @@ let ActivitiesService = class ActivitiesService {
             return { updated: 0 };
         for (const activity of existing) {
             this.assertActivityOperateAccess(activity, user);
-            this.assertScopeConstraint(activity.localityId, specialtyId, user);
+            this.assertScopeConstraint(activity.localityId, primarySpecialtyId, user, specialtyIds);
         }
         const targetIds = existing.map((item) => item.id);
-        await this.prisma.activity.updateMany({
-            where: { id: { in: targetIds } },
-            data: { specialtyId },
+        await this.prisma.$transaction(async (tx) => {
+            for (const targetId of targetIds) {
+                await tx.activity.update({
+                    where: { id: targetId },
+                    data: {
+                        specialtyId: primarySpecialtyId,
+                        specialties: {
+                            deleteMany: {},
+                            ...(specialtyIds.length > 0
+                                ? {
+                                    createMany: {
+                                        data: specialtyIds.map((itemId) => ({
+                                            specialtyId: itemId,
+                                        })),
+                                        skipDuplicates: true,
+                                    },
+                                }
+                                : {}),
+                        },
+                    },
+                });
+            }
         });
         await this.audit.log({
             userId: user?.id,
@@ -589,7 +679,8 @@ let ActivitiesService = class ActivitiesService {
             action: 'batch_update_specialty',
             diffJson: {
                 count: targetIds.length,
-                specialtyId: specialtyId ?? null,
+                specialtyIds,
+                specialtyId: primarySpecialtyId,
                 ids: targetIds,
             },
         });
@@ -725,6 +816,7 @@ let ActivitiesService = class ActivitiesService {
                 eventDate: true,
                 status: true,
                 reportRequired: true,
+                specialties: { select: { specialtyId: true } },
             },
         });
         if (!existing.length) {
@@ -747,15 +839,18 @@ let ActivitiesService = class ActivitiesService {
             });
         }
         for (const activity of existing) {
+            const activitySpecialtyIds = this.extractActivitySpecialtyIds(activity);
             this.assertActivityOperateAccess(activity, user);
-            this.assertScopeConstraint(activity.localityId, activity.specialtyId, user);
+            this.assertScopeConstraint(activity.localityId, activity.specialtyId, user, activitySpecialtyIds);
             for (const localityId of normalizedTargetLocalityIds) {
-                this.assertScopeConstraint(localityId, activity.specialtyId, user);
+                this.assertScopeConstraint(localityId, activity.specialtyId, user, activitySpecialtyIds);
             }
         }
         let skippedSameLocality = 0;
-        const cloneRows = [];
+        const clonePayloads = [];
         for (const activity of existing) {
+            const specialtyIds = this.extractActivitySpecialtyIds(activity);
+            const activityScope = activity.scope === 'CIPAVD' ? 'CIPAVD' : 'SMIF';
             for (const targetLocalityId of normalizedTargetLocalityIds) {
                 if (activity.localityId && activity.localityId === targetLocalityId) {
                     skippedSameLocality += 1;
@@ -765,29 +860,58 @@ let ActivitiesService = class ActivitiesService {
                     ? null
                     : dateMode === 'SET_DATE' && targetDate
                         ? targetDate
-                        : activity.eventDate ?? null;
-                cloneRows.push({
+                        : (activity.eventDate ?? null);
+                clonePayloads.push({
                     title: activity.title,
                     description: activity.description ?? null,
                     localityId: targetLocalityId,
                     activityTypeId: activity.activityTypeId ?? null,
-                    specialtyId: activity.specialtyId ?? null,
+                    specialtyId: (specialtyIds[0] ?? activity.specialtyId ?? null),
+                    specialtyIds,
                     eventDate,
-                    status: statusMode === 'KEEP' ? activity.status : client_1.ActivityStatus.NOT_STARTED,
+                    status: statusMode === 'KEEP'
+                        ? activity.status
+                        : client_1.ActivityStatus.NOT_STARTED,
                     reportRequired: activity.reportRequired,
+                    scope: activityScope,
                     createdById: user?.id ?? null,
                 });
             }
         }
-        if (!cloneRows.length) {
+        if (!clonePayloads.length) {
             return {
                 created: 0,
                 skippedSameLocality,
                 requestedPairs: existing.length * normalizedTargetLocalityIds.length,
             };
         }
-        const result = await this.prisma.activity.createMany({
-            data: cloneRows,
+        await this.prisma.$transaction(async (tx) => {
+            for (const payload of clonePayloads) {
+                await tx.activity.create({
+                    data: {
+                        title: payload.title,
+                        description: payload.description,
+                        localityId: payload.localityId,
+                        activityTypeId: payload.activityTypeId,
+                        specialtyId: payload.specialtyId,
+                        eventDate: payload.eventDate,
+                        status: payload.status,
+                        reportRequired: payload.reportRequired,
+                        scope: payload.scope,
+                        createdById: payload.createdById,
+                        specialties: payload.specialtyIds.length > 0
+                            ? {
+                                createMany: {
+                                    data: payload.specialtyIds.map((itemId) => ({
+                                        specialtyId: itemId,
+                                    })),
+                                    skipDuplicates: true,
+                                },
+                            }
+                            : undefined,
+                    },
+                });
+            }
         });
         await this.audit.log({
             userId: user?.id,
@@ -799,12 +923,12 @@ let ActivitiesService = class ActivitiesService {
                 statusMode,
                 dateMode,
                 targetDate: targetDate ? targetDate.toISOString().slice(0, 10) : null,
-                created: result.count,
+                created: clonePayloads.length,
                 skippedSameLocality,
             },
         });
         return {
-            created: result.count,
+            created: clonePayloads.length,
             skippedSameLocality,
             requestedPairs: existing.length * normalizedTargetLocalityIds.length,
         };
@@ -816,7 +940,7 @@ let ActivitiesService = class ActivitiesService {
             return { updated: 0 };
         const existing = await this.prisma.activity.findMany({
             where: { id: { in: normalizedIds } },
-            select: { id: true, localityId: true },
+            select: { id: true, localityId: true, scope: true },
         });
         if (!existing.length)
             return { updated: 0 };
@@ -843,6 +967,7 @@ let ActivitiesService = class ActivitiesService {
                 id: true,
                 localityId: true,
                 specialtyId: true,
+                specialties: { select: { specialtyId: true } },
                 responsibles: {
                     select: {
                         userId: true,
@@ -891,6 +1016,7 @@ let ActivitiesService = class ActivitiesService {
                 id: true,
                 localityId: true,
                 specialtyId: true,
+                specialties: { select: { specialtyId: true } },
                 responsibles: {
                     select: {
                         userId: true,
@@ -941,6 +1067,7 @@ let ActivitiesService = class ActivitiesService {
                 id: true,
                 localityId: true,
                 specialtyId: true,
+                specialties: { select: { specialtyId: true } },
                 responsibles: { select: { userId: true } },
             },
         });
@@ -963,6 +1090,13 @@ let ActivitiesService = class ActivitiesService {
                 title: true,
                 eventDate: true,
                 localityId: true,
+                specialtyId: true,
+                specialties: {
+                    include: {
+                        specialty: { select: { id: true, name: true, color: true } },
+                    },
+                    orderBy: { createdAt: 'asc' },
+                },
                 responsibles: {
                     select: {
                         userId: true,
@@ -987,6 +1121,7 @@ let ActivitiesService = class ActivitiesService {
                 eventDate: activity.eventDate,
                 locality: activity.locality,
                 specialty: activity.specialty,
+                specialties: this.mapActivitySpecialties(activity),
             },
             items: items.map((item) => this.mapScheduleItem(item)),
         };
@@ -998,6 +1133,7 @@ let ActivitiesService = class ActivitiesService {
                 id: true,
                 localityId: true,
                 specialtyId: true,
+                specialties: { select: { specialtyId: true } },
                 responsibles: { select: { userId: true } },
             },
         });
@@ -1032,6 +1168,7 @@ let ActivitiesService = class ActivitiesService {
                 id: true,
                 localityId: true,
                 specialtyId: true,
+                specialties: { select: { specialtyId: true } },
                 responsibles: { select: { userId: true } },
             },
         });
@@ -1083,6 +1220,7 @@ let ActivitiesService = class ActivitiesService {
                 id: true,
                 localityId: true,
                 specialtyId: true,
+                specialties: { select: { specialtyId: true } },
                 responsibles: { select: { userId: true } },
             },
         });
@@ -1120,6 +1258,12 @@ let ActivitiesService = class ActivitiesService {
                 },
                 locality: { select: { id: true, code: true, name: true } },
                 specialty: { select: { id: true, name: true, color: true } },
+                specialties: {
+                    include: {
+                        specialty: { select: { id: true, name: true, color: true } },
+                    },
+                    orderBy: { createdAt: 'asc' },
+                },
                 visitScheduleItems: {
                     orderBy: [{ startTime: 'asc' }, { createdAt: 'asc' }],
                 },
@@ -1167,7 +1311,7 @@ let ActivitiesService = class ActivitiesService {
         writeLine('Localidade', activity.locality
             ? `${activity.locality.name} (${activity.locality.code})`
             : 'Não vinculada');
-        writeLine('Especialidade', activity.specialty?.name ?? 'Todas as especialidades');
+        writeLine('Especialidade', this.formatActivitySpecialtiesLabel(activity));
         writeLine('Data da visita', activity.eventDate
             ? this.formatDate(activity.eventDate)
             : 'Não informada');
@@ -1176,14 +1320,14 @@ let ActivitiesService = class ActivitiesService {
             .fontSize(12)
             .text('Programação', { underline: true });
         doc.moveDown(0.4);
-        if (activity.visitScheduleItems.length === 0) {
+        if ((activity.visitScheduleItems ?? []).length === 0) {
             doc
                 .font('Helvetica')
                 .fontSize(11)
                 .text('Nenhum item de cronograma cadastrado para esta visita.');
         }
         else {
-            activity.visitScheduleItems.forEach((item, index) => {
+            (activity.visitScheduleItems ?? []).forEach((item, index) => {
                 if (doc.y > doc.page.height - 150) {
                     doc.addPage();
                 }
@@ -1253,19 +1397,33 @@ let ActivitiesService = class ActivitiesService {
             executionSchedule: (0, sanitize_1.sanitizeText)(payload.executionSchedule ?? ''),
             activitiesPerformed: (0, sanitize_1.sanitizeText)(payload.activitiesPerformed),
             participantsCount: Math.max(0, Number(payload.participantsCount) || 0),
-            participantsMaleCount: payload.participantsMaleCount != null ? Math.max(0, Number(payload.participantsMaleCount) || 0) : null,
-            participantsFemaleCount: payload.participantsFemaleCount != null ? Math.max(0, Number(payload.participantsFemaleCount) || 0) : null,
-            publicProfile: payload.publicProfile ? (0, sanitize_1.sanitizeText)(payload.publicProfile) : null,
+            participantsMaleCount: payload.participantsMaleCount != null
+                ? Math.max(0, Number(payload.participantsMaleCount) || 0)
+                : null,
+            participantsFemaleCount: payload.participantsFemaleCount != null
+                ? Math.max(0, Number(payload.participantsFemaleCount) || 0)
+                : null,
+            publicProfile: payload.publicProfile
+                ? (0, sanitize_1.sanitizeText)(payload.publicProfile)
+                : null,
             instructorsCount: Math.max(0, Number(payload.instructorsCount) || 0),
             recruitsCount: Math.max(0, Number(payload.recruitsCount) || 0),
             eloPsychologyCount: Math.max(0, Number(payload.eloPsychologyCount) || 0),
             eloSocialAssistanceCount: Math.max(0, Number(payload.eloSocialAssistanceCount) || 0),
+            eloJuridicoCount: Math.max(0, Number(payload.eloJuridicoCount) || 0),
+            eloCpcaCount: Math.max(0, Number(payload.eloCpcaCount) || 0),
             eloGraduadoMasterCount: Math.max(0, Number(payload.eloGraduadoMasterCount) || 0),
             participantsCharacteristics: (0, sanitize_1.sanitizeText)(payload.participantsCharacteristics),
-            mainPointsObserved: payload.mainPointsObserved ? (0, sanitize_1.sanitizeText)(payload.mainPointsObserved) : null,
-            attentionPoints: payload.attentionPoints ? (0, sanitize_1.sanitizeText)(payload.attentionPoints) : null,
+            mainPointsObserved: payload.mainPointsObserved
+                ? (0, sanitize_1.sanitizeText)(payload.mainPointsObserved)
+                : null,
+            attentionPoints: payload.attentionPoints
+                ? (0, sanitize_1.sanitizeText)(payload.attentionPoints)
+                : null,
             nextSteps: payload.nextSteps ? (0, sanitize_1.sanitizeText)(payload.nextSteps) : null,
-            referencesAndAttachments: payload.referencesAndAttachments ? (0, sanitize_1.sanitizeText)(payload.referencesAndAttachments) : null,
+            referencesAndAttachments: payload.referencesAndAttachments
+                ? (0, sanitize_1.sanitizeText)(payload.referencesAndAttachments)
+                : null,
             conclusion: (0, sanitize_1.sanitizeText)(payload.conclusion),
             city: (0, sanitize_1.sanitizeText)(payload.city),
             closingDate: new Date(payload.closingDate),
@@ -1296,6 +1454,12 @@ let ActivitiesService = class ActivitiesService {
                 locality: { select: { id: true, code: true, name: true } },
                 activityType: { select: { id: true, name: true } },
                 specialty: { select: { id: true, name: true, color: true } },
+                specialties: {
+                    include: {
+                        specialty: { select: { id: true, name: true, color: true } },
+                    },
+                    orderBy: { createdAt: 'asc' },
+                },
                 createdBy: { select: { id: true, name: true } },
                 responsibles: {
                     include: {
@@ -1402,6 +1566,9 @@ let ActivitiesService = class ActivitiesService {
     async signReport(activityId, user) {
         if (!user?.id)
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
+        if (!(0, role_access_1.hasAnyRole)(user, [role_access_1.ROLE_COORDENACAO_CIPAVD, role_access_1.ROLE_TI])) {
+            (0, http_error_1.throwError)('RBAC_FORBIDDEN');
+        }
         const activity = await this.prisma.activity.findUnique({
             where: { id: activityId },
             include: {
@@ -1456,6 +1623,8 @@ let ActivitiesService = class ActivitiesService {
                 recruitsCount: report.recruitsCount ?? 0,
                 eloPsychologyCount: report.eloPsychologyCount ?? 0,
                 eloSocialAssistanceCount: report.eloSocialAssistanceCount ?? 0,
+                eloJuridicoCount: report.eloJuridicoCount ?? 0,
+                eloCpcaCount: report.eloCpcaCount ?? 0,
                 eloGraduadoMasterCount: report.eloGraduadoMasterCount ?? 0,
                 participantsCharacteristics: report.participantsCharacteristics,
                 conclusion: report.conclusion,
@@ -1530,6 +1699,12 @@ let ActivitiesService = class ActivitiesService {
                 },
                 locality: { select: { id: true, code: true, name: true } },
                 specialty: { select: { id: true, name: true, color: true } },
+                specialties: {
+                    include: {
+                        specialty: { select: { id: true, name: true, color: true } },
+                    },
+                    orderBy: { createdAt: 'asc' },
+                },
                 activityType: { select: { id: true, name: true } },
                 createdBy: { select: { id: true, name: true } },
                 report: {
@@ -1554,172 +1729,372 @@ let ActivitiesService = class ActivitiesService {
         if (!activity.report)
             (0, http_error_1.throwError)('ACTIVITY_REPORT_NOT_FOUND');
         const report = activity.report;
-        const doc = new pdfkit_1.default({ margin: 48, size: 'A4' });
+        const doc = new pdfkit_1.default({ margin: 44, size: 'A4' });
         const chunks = [];
         const done = new Promise((resolve, reject) => {
             doc.on('data', (chunk) => chunks.push(chunk));
             doc.on('end', () => resolve(Buffer.concat(chunks)));
             doc.on('error', reject);
         });
-        const writeSection = (title) => {
-            doc.moveDown(0.5);
+        const colors = {
+            primary: '#1F365D',
+            primarySoft: '#D7E2EF',
+            section: '#2B4B75',
+            border: '#A9B8C8',
+            text: '#1E2A36',
+            muted: '#5A6B7D',
+            warning: '#B26A00',
+        };
+        const contentLeft = doc.page.margins.left;
+        const contentWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+        const pageBottomLimit = () => doc.page.height - doc.page.margins.bottom;
+        const normalizeText = (value) => String(value ?? '').trim() || '-';
+        const sectionGap = 6;
+        const ensureSpace = (needed) => {
+            if (doc.y + needed <= pageBottomLimit())
+                return;
+            doc.addPage();
+            doc.y = doc.page.margins.top;
+        };
+        const drawHeader = () => {
+            const yearSource = report.closingDate ?? report.date;
+            const reportYear = !Number.isNaN(new Date(yearSource).getTime())
+                ? new Date(yearSource).getFullYear()
+                : new Date().getFullYear();
+            const logoPath = this.findScheduleLogoPath();
+            const headerY = doc.y;
+            if (logoPath) {
+                try {
+                    doc.image(logoPath, contentLeft, headerY, { fit: [84, 36] });
+                }
+                catch {
+                }
+            }
+            const barX = contentLeft + (logoPath ? 94 : 0);
+            const barW = contentWidth - (logoPath ? 94 : 0);
+            const barH = 32;
+            doc.save();
+            doc.fillColor(colors.primary).rect(barX, headerY, barW, barH).fill();
+            doc.restore();
             doc
+                .fillColor('#FFFFFF')
                 .font('Helvetica-Bold')
-                .fontSize(12)
-                .text(title, { underline: true });
-            doc.moveDown(0.4);
-        };
-        const writeField = (label, value) => {
-            doc.font('Helvetica-Bold').fontSize(10).text(label + ':', { continued: false });
-            doc.moveDown(0.2);
+                .fontSize(13)
+                .text(`RELATÓRIO DE ATIVIDADE — CIPAVD / SMIF ${reportYear}`, barX, headerY + 9, {
+                width: barW,
+                align: 'center',
+            });
             doc
+                .fillColor(colors.muted)
                 .font('Helvetica')
-                .fontSize(11)
-                .text(value || '-', { align: 'justify' });
-            doc.moveDown(0.6);
+                .fontSize(9)
+                .text(`${normalizeText(activity.locality?.name)} • ${normalizeText(this.formatActivitySpecialtiesLabel(activity))}`, contentLeft, headerY + barH + 6, { width: contentWidth, align: 'left' });
+            doc.y = headerY + barH + 18;
         };
-        const writeSubsection = (title, content) => {
-            doc.font('Helvetica-Bold').fontSize(10).text(title, { continued: false });
+        const drawSectionTitle = (title) => {
+            ensureSpace(26);
             doc.moveDown(0.2);
+            const y = doc.y;
             doc
-                .font('Helvetica')
-                .fontSize(11)
-                .text(content || '-', { align: 'justify' });
-            doc.moveDown(0.6);
+                .fillColor(colors.section)
+                .font('Helvetica-Bold')
+                .fontSize(10.5)
+                .text(title, contentLeft, y, { width: contentWidth, align: 'left' });
+            const lineY = y + 15;
+            doc
+                .strokeColor(colors.section)
+                .lineWidth(1)
+                .moveTo(contentLeft, lineY)
+                .lineTo(contentLeft + contentWidth, lineY)
+                .stroke();
+            doc.y = lineY + sectionGap;
+            doc.fillColor(colors.text);
         };
-        doc
-            .font('Helvetica-Bold')
-            .fontSize(18)
-            .text('RELATÓRIO DE ATIVIDADE - CIPAVD / SMIF 2026', { align: 'center' });
-        doc.moveDown(1);
-        writeSection('1. IDENTIFICAÇÃO DA ATIVIDADE');
-        writeField('Tipo de Atividade', activity.activityType?.name ?? '-');
-        writeField('Título / Tema', activity.title);
-        writeField('Data', this.formatDate(report.date));
-        writeField('Local', report.location);
-        writeSection('2. EQUIPE RESPONSÁVEL');
-        writeField('Responsável(is)', report.responsible);
+        const drawTableRow = (cells, opts) => {
+            const minHeight = opts?.minHeight ?? 22;
+            const ratioSum = cells.reduce((sum, cell) => sum + (cell.ratio ?? 1), 0);
+            const horizontalPadding = 6;
+            const metrics = cells.map((cell) => {
+                const width = (contentWidth * (cell.ratio ?? 1)) / ratioSum;
+                const labelWidth = Math.min(124, Math.max(76, width * 0.38));
+                const valueWidth = Math.max(40, width - labelWidth - horizontalPadding * 2);
+                const labelHeight = doc.heightOfString(normalizeText(cell.label), {
+                    width: Math.max(30, labelWidth - horizontalPadding * 2),
+                });
+                const valueHeight = doc.heightOfString(normalizeText(cell.value), {
+                    width: valueWidth,
+                    align: 'left',
+                });
+                return {
+                    width,
+                    labelWidth,
+                    cellHeight: Math.max(minHeight, labelHeight + 8, valueHeight + 8),
+                };
+            });
+            const rowHeight = metrics.reduce((max, metric) => Math.max(max, metric.cellHeight), minHeight);
+            ensureSpace(rowHeight + 2);
+            const rowY = doc.y;
+            let cursorX = contentLeft;
+            cells.forEach((cell, index) => {
+                const metric = metrics[index];
+                const label = normalizeText(cell.label);
+                const value = normalizeText(cell.value);
+                const valueWidth = metric.width - metric.labelWidth - horizontalPadding * 2;
+                doc.save();
+                doc
+                    .fillColor(colors.primarySoft)
+                    .rect(cursorX, rowY, metric.labelWidth, rowHeight)
+                    .fill();
+                doc.restore();
+                doc
+                    .strokeColor(colors.border)
+                    .lineWidth(0.8)
+                    .rect(cursorX, rowY, metric.labelWidth, rowHeight)
+                    .stroke();
+                doc
+                    .strokeColor(colors.border)
+                    .lineWidth(0.8)
+                    .rect(cursorX + metric.labelWidth, rowY, metric.width - metric.labelWidth, rowHeight)
+                    .stroke();
+                doc
+                    .fillColor(colors.text)
+                    .font('Helvetica-Bold')
+                    .fontSize(8.8)
+                    .text(label, cursorX + horizontalPadding, rowY + 4, {
+                    width: Math.max(20, metric.labelWidth - horizontalPadding * 2),
+                    align: 'left',
+                });
+                doc
+                    .fillColor(colors.text)
+                    .font('Helvetica')
+                    .fontSize(9.2)
+                    .text(value, cursorX + metric.labelWidth + horizontalPadding, rowY + 4, {
+                    width: valueWidth,
+                    align: 'left',
+                });
+                cursorX += metric.width;
+            });
+            doc.y = rowY + rowHeight + 5;
+        };
+        const drawNarrativeBlock = (title, content) => {
+            const normalizedTitle = normalizeText(title);
+            const normalizedContent = normalizeText(content);
+            const titleHeight = 17;
+            const textPadding = 7;
+            const textHeight = doc.heightOfString(normalizedContent, {
+                width: contentWidth - textPadding * 2,
+                align: 'justify',
+            });
+            const contentHeight = Math.max(38, textHeight + textPadding * 2);
+            ensureSpace(titleHeight + contentHeight + 4);
+            const blockY = doc.y;
+            doc.save();
+            doc
+                .fillColor(colors.primarySoft)
+                .rect(contentLeft, blockY, contentWidth, titleHeight)
+                .fill();
+            doc.restore();
+            doc
+                .strokeColor(colors.border)
+                .lineWidth(0.8)
+                .rect(contentLeft, blockY, contentWidth, titleHeight)
+                .stroke();
+            doc
+                .fillColor(colors.text)
+                .font('Helvetica-Bold')
+                .fontSize(9)
+                .text(normalizedTitle, contentLeft + 6, blockY + 4, {
+                width: contentWidth - 12,
+                align: 'left',
+            });
+            doc
+                .strokeColor(colors.border)
+                .lineWidth(0.8)
+                .rect(contentLeft, blockY + titleHeight, contentWidth, contentHeight)
+                .stroke();
+            doc
+                .fillColor(colors.text)
+                .font('Helvetica')
+                .fontSize(9.4)
+                .text(normalizedContent, contentLeft + textPadding, blockY + titleHeight + textPadding, {
+                width: contentWidth - textPadding * 2,
+                align: 'justify',
+            });
+            doc.y = blockY + titleHeight + contentHeight + 6;
+        };
+        drawHeader();
+        drawSectionTitle('1. IDENTIFICAÇÃO DA ATIVIDADE');
+        drawTableRow([
+            {
+                label: 'Tipo de Atividade',
+                value: normalizeText(activity.activityType?.name),
+            },
+        ]);
+        drawTableRow([
+            { label: 'Título / Tema', value: normalizeText(activity.title) },
+        ]);
+        drawTableRow([
+            { label: 'Data', value: this.formatDate(report.date), ratio: 1 },
+            { label: 'Local', value: normalizeText(report.location), ratio: 1 },
+        ]);
+        drawSectionTitle('2. EQUIPE RESPONSÁVEL');
+        drawTableRow([
+            { label: 'Responsável(is)', value: normalizeText(report.responsible) },
+        ]);
         if (report.missionSupport) {
-            writeField('Apoio à Missão', report.missionSupport);
+            drawTableRow([
+                {
+                    label: 'Apoio à Missão',
+                    value: normalizeText(report.missionSupport),
+                },
+            ]);
         }
-        writeSection('3. PÚBLICO PARTICIPANTE');
-        writeField('Total de Participantes', String(report.participantsCount));
+        drawSectionTitle('3. PÚBLICO PARTICIPANTE');
         const compositionParts = [];
-        if (report.participantsMaleCount != null && report.participantsMaleCount > 0) {
+        if (report.participantsMaleCount != null &&
+            report.participantsMaleCount > 0) {
             compositionParts.push(`${report.participantsMaleCount} homens`);
         }
-        if (report.participantsFemaleCount != null && report.participantsFemaleCount > 0) {
+        if (report.participantsFemaleCount != null &&
+            report.participantsFemaleCount > 0) {
             compositionParts.push(`${report.participantsFemaleCount} mulheres`);
         }
-        if (compositionParts.length > 0) {
-            writeField('Composição', compositionParts.join(' e '));
-        }
-        if (report.publicProfile) {
-            writeField('Perfil do Público', report.publicProfile);
-        }
-        writeSubsection('Participantes por perfil', `Instrutores: ${report.instructorsCount ?? 0}\n` +
-            `Recrutas: ${report.recruitsCount ?? 0}\n` +
-            `Elo Psicologia: ${report.eloPsychologyCount ?? 0}\n` +
-            `Elo Assistência Social: ${report.eloSocialAssistanceCount ?? 0}\n` +
-            `Elo Graduado Master: ${report.eloGraduadoMasterCount ?? 0}`);
-        if (report.participantsCharacteristics) {
-            writeField('Características dos Participantes', report.participantsCharacteristics);
-        }
-        writeSection('4. DESCRIÇÃO DA ATIVIDADE');
+        drawTableRow([
+            {
+                label: 'Total de Participantes',
+                value: String(report.participantsCount ?? 0),
+            },
+            {
+                label: 'Composição',
+                value: compositionParts.length > 0
+                    ? compositionParts.join(' e ')
+                    : 'Não informada',
+            },
+        ]);
+        drawTableRow([
+            {
+                label: 'Participantes por Perfil',
+                value: `Instrutores: ${report.instructorsCount ?? 0} | ` +
+                    `Recrutas: ${report.recruitsCount ?? 0} | ` +
+                    `Elo Psicologia: ${report.eloPsychologyCount ?? 0} | ` +
+                    `Elo Assistência Social: ${report.eloSocialAssistanceCount ?? 0} | ` +
+                    `Elo Jurídico: ${report.eloJuridicoCount ?? 0} | ` +
+                    `Elo CPCA: ${report.eloCpcaCount ?? 0} | ` +
+                    `Elo Graduado Master: ${report.eloGraduadoMasterCount ?? 0}`,
+            },
+        ]);
+        drawSectionTitle('4. DESCRIÇÃO DA ATIVIDADE');
         if (report.introduction) {
-            writeSubsection('Introdução', report.introduction);
+            drawNarrativeBlock('Introdução', report.introduction);
         }
         if (report.missionObjectives) {
-            writeSubsection('Objetivos da Missão', report.missionObjectives);
+            drawNarrativeBlock('Objetivos da Missão', report.missionObjectives);
         }
         if (report.executionSchedule) {
-            writeSubsection('Cronograma de Execução', report.executionSchedule);
+            drawNarrativeBlock('Cronograma de Execução', report.executionSchedule);
         }
-        writeSubsection('Desenvolvimento', report.activitiesPerformed);
+        drawNarrativeBlock('Desenvolvimento', report.activitiesPerformed);
         if (report.mainPointsObserved) {
-            writeSection('5. PRINCIPAIS PONTOS OBSERVADOS');
-            writeSubsection('Principais questionamentos levantados pelos participantes', report.mainPointsObserved);
+            drawSectionTitle('5. PRINCIPAIS PONTOS OBSERVADOS');
+            drawNarrativeBlock('Principais questionamentos levantados pelos participantes', report.mainPointsObserved);
         }
         if (report.attentionPoints) {
-            writeSection('6. PONTOS DE ATENÇÃO');
-            writeSubsection('Lacunas / Riscos / Encaminhamentos necessários', report.attentionPoints);
+            drawSectionTitle('6. PONTOS DE ATENÇÃO');
+            drawNarrativeBlock('Lacunas / Riscos / Encaminhamentos necessários', report.attentionPoints);
         }
         if (report.nextSteps) {
-            writeSection('7. ENCAMINHAMENTOS E PRÓXIMOS PASSOS');
-            writeSubsection('Ações previstas', report.nextSteps);
+            drawSectionTitle('7. ENCAMINHAMENTOS E PRÓXIMOS PASSOS');
+            drawNarrativeBlock('Ações previstas', report.nextSteps);
         }
         if (report.referencesAndAttachments) {
-            writeSection('8. REFERÊNCIAS E ANEXOS');
-            writeSubsection('Links e registros', report.referencesAndAttachments);
+            drawSectionTitle('8. REFERÊNCIAS E ANEXOS');
+            drawNarrativeBlock('Links e registros', report.referencesAndAttachments);
         }
         if (report.conclusion) {
-            writeSection('CONCLUSÃO');
-            doc
-                .font('Helvetica')
-                .fontSize(11)
-                .text(report.conclusion, { align: 'justify' });
-            doc.moveDown(0.8);
+            drawSectionTitle('CONCLUSÃO');
+            drawNarrativeBlock('Síntese conclusiva', report.conclusion);
         }
-        doc.moveDown(1);
-        const footerY = doc.page.height - 80;
-        doc.font('Helvetica').fontSize(10);
-        doc.y = footerY;
-        doc.text(`Local e Data: ${report.city}, ${this.formatDate(report.closingDate)}`, {
-            align: 'left',
-        });
-        doc.y = footerY + 15;
-        doc.text(`Responsável pelo Relatório: ${report.responsible}`, {
-            align: 'left',
-        });
-        doc
-            .font('Helvetica-Bold')
-            .fontSize(12)
-            .text('Assinatura Digital', { underline: true });
-        doc.moveDown(0.4);
+        drawTableRow([
+            {
+                label: 'Local e Data',
+                value: `${normalizeText(report.city)}, ${this.formatDate(report.closingDate)}`,
+            },
+            {
+                label: 'Responsável pelo Relatório',
+                value: normalizeText(report.responsible),
+            },
+        ]);
+        drawSectionTitle('ASSINATURA DIGITAL');
         if (report.signedAt && report.signatureHash) {
-            doc.font('Helvetica').fontSize(11).text('Status: ASSINADO');
-            doc.text(`Assinado em: ${this.formatDateTime(report.signedAt)}`);
-            doc.text(`Assinado por: ${report.signedBy?.name ?? report.signedById ?? 'N/A'}`);
-            doc.text(`Algoritmo: ${report.signatureAlgorithm ?? 'HMAC-SHA256'} v${report.signatureVersion ?? 1}`);
-            doc.text(`Hash da assinatura: ${report.signatureHash}`);
-            doc.text(`Hash do conteúdo: ${report.signaturePayloadHash ?? '-'}`);
+            drawTableRow([
+                { label: 'Status', value: 'ASSINADO' },
+                { label: 'Assinado em', value: this.formatDateTime(report.signedAt) },
+            ]);
+            drawTableRow([
+                {
+                    label: 'Assinado por',
+                    value: normalizeText(report.signedBy?.name ?? report.signedById),
+                },
+            ]);
+            drawTableRow([
+                {
+                    label: 'Algoritmo',
+                    value: `${report.signatureAlgorithm ?? 'HMAC-SHA256'} v${report.signatureVersion ?? 1}`,
+                },
+            ]);
+            drawNarrativeBlock('Hash de verificação', `Hash da assinatura: ${normalizeText(report.signatureHash)}\n` +
+                `Hash do conteúdo: ${normalizeText(report.signaturePayloadHash)}`);
         }
         else {
-            doc.font('Helvetica').fontSize(11).text('Status: NÃO ASSINADO');
+            drawNarrativeBlock('Status da assinatura', 'NÃO ASSINADO. Este relatório ainda não possui assinatura digital de validação.');
         }
         if (report.photos.length > 0) {
             doc.addPage();
-            doc
-                .font('Helvetica-Bold')
-                .fontSize(14)
-                .text('Imagens da atividade', { align: 'left' });
-            doc.moveDown(0.6);
-            for (const photo of report.photos) {
-                doc.font('Helvetica').fontSize(10).text(`• ${photo.fileName}`);
+            doc.y = doc.page.margins.top;
+            drawSectionTitle('ANEXOS FOTOGRÁFICOS');
+            for (const [index, photo] of report.photos.entries()) {
+                ensureSpace(262);
+                drawTableRow([
+                    {
+                        label: `Imagem ${index + 1}`,
+                        value: normalizeText(photo.fileName),
+                    },
+                ]);
+                const imageY = doc.y;
+                const imageHeight = 230;
                 const storageKey = photo.storageKey ?? node_path_1.default.basename(photo.fileUrl);
                 const filePath = node_path_1.default.join(activityPhotosDir, storageKey);
+                doc
+                    .strokeColor(colors.border)
+                    .lineWidth(0.8)
+                    .rect(contentLeft, imageY, contentWidth, imageHeight)
+                    .stroke();
                 if (node_fs_1.default.existsSync(filePath)) {
                     try {
-                        const availableWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
-                        doc.image(filePath, {
-                            fit: [availableWidth, 220],
+                        doc.image(filePath, contentLeft + 4, imageY + 4, {
+                            fit: [contentWidth - 8, imageHeight - 8],
                             align: 'center',
+                            valign: 'center',
                         });
-                        doc.moveDown(0.8);
                     }
                     catch {
                         doc
+                            .fillColor(colors.warning)
                             .font('Helvetica-Oblique')
-                            .text('  (Não foi possível renderizar esta imagem no PDF)');
-                        doc.moveDown(0.6);
+                            .fontSize(9.5)
+                            .text('(Não foi possível renderizar esta imagem no PDF)', contentLeft + 8, imageY + 12, { width: contentWidth - 16, align: 'left' });
+                        doc.fillColor(colors.text);
                     }
                 }
                 else {
                     doc
+                        .fillColor(colors.warning)
                         .font('Helvetica-Oblique')
-                        .text('  (Arquivo de imagem não encontrado no armazenamento)');
-                    doc.moveDown(0.6);
+                        .fontSize(9.5)
+                        .text('(Arquivo de imagem não encontrado no armazenamento)', contentLeft + 8, imageY + 12, { width: contentWidth - 16, align: 'left' });
+                    doc.fillColor(colors.text);
                 }
+                doc.y = imageY + imageHeight + 8;
             }
         }
         doc.end();
@@ -1792,6 +2167,8 @@ let ActivitiesService = class ActivitiesService {
     }
     mapActivity(activity, executiveHidePii) {
         const { responsibles, ...rest } = activity ?? {};
+        const specialties = this.mapActivitySpecialties(activity);
+        const primarySpecialty = specialties[0] ?? null;
         const responsibleUsers = Array.isArray(activity?.responsibles)
             ? activity.responsibles
                 .map((entry) => entry?.user)
@@ -1806,6 +2183,10 @@ let ActivitiesService = class ActivitiesService {
             : [];
         return {
             ...rest,
+            specialtyId: primarySpecialty?.id ?? activity?.specialtyId ?? null,
+            specialty: primarySpecialty,
+            specialtyIds: specialties.map((item) => item.id),
+            specialties,
             activityType: activity?.activityType
                 ? {
                     id: activity.activityType.id,
@@ -1821,6 +2202,54 @@ let ActivitiesService = class ActivitiesService {
                 }
                 : null,
         };
+    }
+    mapActivitySpecialties(activity) {
+        const links = Array.isArray(activity?.specialties) ? activity.specialties : [];
+        const fromLinks = links
+            .map((entry) => entry?.specialty)
+            .filter((entry) => Boolean(entry?.id))
+            .map((entry) => ({
+            id: String(entry.id),
+            name: String(entry.name ?? '').trim() || 'Especialidade',
+            color: entry.color ?? null,
+        }));
+        const fallback = activity?.specialty && String(activity.specialty?.id ?? '').trim()
+            ? [
+                {
+                    id: String(activity.specialty.id),
+                    name: String(activity.specialty.name ?? '').trim() || 'Especialidade',
+                    color: activity.specialty.color ?? null,
+                },
+            ]
+            : [];
+        const merged = [...fromLinks, ...fallback];
+        const unique = new Map();
+        for (const specialty of merged) {
+            if (!specialty.id)
+                continue;
+            if (!unique.has(specialty.id)) {
+                unique.set(specialty.id, specialty);
+            }
+        }
+        return Array.from(unique.values());
+    }
+    extractActivitySpecialtyIds(activity) {
+        const linkIds = Array.isArray(activity?.specialties)
+            ? activity.specialties
+                .map((entry) => String(entry?.specialtyId ?? '').trim())
+                .filter(Boolean)
+            : [];
+        const fallbackId = String(activity?.specialtyId ?? '').trim();
+        const normalized = Array.from(new Set([...linkIds, ...(fallbackId ? [fallbackId] : [])]));
+        return normalized;
+    }
+    formatActivitySpecialtiesLabel(activity) {
+        const names = this.mapActivitySpecialties(activity)
+            .map((entry) => String(entry.name ?? '').trim())
+            .filter(Boolean);
+        if (!names.length)
+            return 'Comissão CIPAVD';
+        return names.join(' / ');
     }
     async listTypes() {
         const items = await this.prisma.activityType.findMany({
@@ -1932,9 +2361,7 @@ let ActivitiesService = class ActivitiesService {
             .trim();
     }
     normalizeActivityIds(ids) {
-        return Array.from(new Set((ids ?? [])
-            .map((value) => String(value ?? '').trim())
-            .filter(Boolean)));
+        return Array.from(new Set((ids ?? []).map((value) => String(value ?? '').trim()).filter(Boolean)));
     }
     async getTargetLocalityIds() {
         const localities = await this.prisma.locality.findMany({
@@ -1970,17 +2397,24 @@ let ActivitiesService = class ActivitiesService {
             specialtyId: user.specialtyId ?? undefined,
         };
     }
-    assertScopeConstraint(localityId, specialtyId, user) {
+    assertScopeConstraint(localityId, specialtyId, user, specialtyIds) {
         const constraints = this.getScopeConstraints(user);
         if (constraints.localityId &&
             localityId &&
             constraints.localityId !== localityId) {
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         }
-        if (constraints.specialtyId &&
-            specialtyId &&
-            constraints.specialtyId !== specialtyId) {
-            (0, http_error_1.throwError)('RBAC_FORBIDDEN');
+        if (constraints.specialtyId) {
+            const normalizedSpecialtyIds = new Set([
+                String(specialtyId ?? '').trim(),
+                ...(specialtyIds ?? [])
+                    .map((value) => String(value ?? '').trim())
+                    .filter(Boolean),
+            ].filter(Boolean));
+            if (normalizedSpecialtyIds.size > 0 &&
+                !normalizedSpecialtyIds.has(constraints.specialtyId)) {
+                (0, http_error_1.throwError)('RBAC_FORBIDDEN');
+            }
         }
     }
     buildActivityAccessWhere(user, mode) {
@@ -2007,6 +2441,11 @@ let ActivitiesService = class ActivitiesService {
                     OR: [
                         { specialtyId: null },
                         { specialtyId: profile.groupSpecialtyId },
+                        {
+                            specialties: {
+                                some: { specialtyId: profile.groupSpecialtyId },
+                            },
+                        },
                     ],
                 });
             }
@@ -2030,7 +2469,11 @@ let ActivitiesService = class ActivitiesService {
             const groupOr = [];
             if (user.specialtyId) {
                 groupOr.push({
-                    OR: [{ specialtyId: null }, { specialtyId: user.specialtyId }],
+                    OR: [
+                        { specialtyId: null },
+                        { specialtyId: user.specialtyId },
+                        { specialties: { some: { specialtyId: user.specialtyId } } },
+                    ],
                 });
             }
             if (user.eloRoleId) {
@@ -2055,15 +2498,12 @@ let ActivitiesService = class ActivitiesService {
     hasActivityGroupMatch(activity, specialtyId, eloRoleId) {
         let specialtyMatch = false;
         if (specialtyId) {
-            if (activity?.specialtyId === undefined) {
-                specialtyMatch = Array.isArray(activity?.responsibles)
-                    ? activity.responsibles.some((entry) => entry?.user?.specialtyId === specialtyId)
-                    : false;
+            const activitySpecialtyIds = this.extractActivitySpecialtyIds(activity);
+            if (activitySpecialtyIds.length === 0) {
+                specialtyMatch = true;
             }
             else {
-                const activitySpecialtyId = activity.specialtyId;
-                specialtyMatch =
-                    !activitySpecialtyId || activitySpecialtyId === specialtyId;
+                specialtyMatch = activitySpecialtyIds.includes(String(specialtyId));
             }
         }
         let eloMatch = false;
@@ -2100,9 +2540,15 @@ let ActivitiesService = class ActivitiesService {
         }
         (0, http_error_1.throwError)('RBAC_FORBIDDEN');
     }
-    assertActivityOperateAccess(_activity, user) {
+    assertActivityOperateAccess(activityOrScope, user) {
         if (!user?.id)
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
+        const scope = activityOrScope?.scope;
+        if (scope === 'CIPAVD') {
+            if ((0, role_access_1.hasAnyRole)(user, [role_access_1.ROLE_COORDENACAO_CIPAVD, role_access_1.ROLE_TI]))
+                return;
+            (0, http_error_1.throwError)('RBAC_FORBIDDEN');
+        }
         const profile = (0, role_access_1.resolveAccessProfile)(user);
         if (profile.ti || profile.nationalCommission)
             return;
@@ -2115,6 +2561,41 @@ let ActivitiesService = class ActivitiesService {
         if (profile.ti || profile.nationalCommission)
             return;
         (0, http_error_1.throwError)('RBAC_FORBIDDEN');
+    }
+    async resolveActivitySpecialtyIds(args) {
+        const normalized = Array.from(new Set([
+            ...(args.specialtyIds ?? [])
+                .map((value) => String(value ?? '').trim())
+                .filter(Boolean),
+            String(args.specialtyId ?? '').trim(),
+        ].filter(Boolean)));
+        if (normalized.length === 0 && args.fallbackToCommission) {
+            const commission = await this.prisma.specialty.findFirst({
+                where: {
+                    OR: [
+                        { name: { equals: 'Comissão CIPAVD', mode: 'insensitive' } },
+                        { name: { equals: 'Comissao CIPAVD', mode: 'insensitive' } },
+                        { name: { contains: 'Comissão CIPAVD', mode: 'insensitive' } },
+                        { name: { contains: 'Comissao CIPAVD', mode: 'insensitive' } },
+                    ],
+                },
+                select: { id: true },
+            });
+            if (!commission)
+                return [];
+            normalized.push(commission.id);
+        }
+        if (normalized.length === 0)
+            return [];
+        const existing = await this.prisma.specialty.findMany({
+            where: { id: { in: normalized } },
+            select: { id: true },
+        });
+        const existingIds = new Set(existing.map((item) => item.id));
+        const invalid = normalized.filter((id) => !existingIds.has(id));
+        if (invalid.length > 0)
+            (0, http_error_1.throwError)('NOT_FOUND');
+        return normalized;
     }
     async resolveActivityResponsibleIds(localityId, responsibleUserIds, user) {
         const normalized = Array.from(new Set((responsibleUserIds ?? [])

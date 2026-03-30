@@ -15,7 +15,8 @@ const client_1 = require("@prisma/client");
 const adapter_pg_1 = require("@prisma/adapter-pg");
 let PrismaService = class PrismaService extends client_1.PrismaClient {
     constructor() {
-        const connectionString = process.env.DATABASE_URL ?? 'postgresql://smif:smif@localhost:5432/smif_gestao';
+        const connectionString = process.env.DATABASE_URL ??
+            'postgresql://smif:smif@localhost:5432/smif_gestao';
         const adapter = new adapter_pg_1.PrismaPg({ connectionString });
         super({ adapter });
     }

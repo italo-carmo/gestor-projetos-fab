@@ -12,7 +12,7 @@ import type { Request, Response } from 'express';
 export declare class ActivitiesController {
     private readonly activities;
     constructor(activities: ActivitiesService);
-    list(localityId: string | undefined, specialtyId: string | undefined, status: string | undefined, q: string | undefined, page: string | undefined, pageSize: string | undefined, user: RbacUser): Promise<{
+    list(localityId: string | undefined, specialtyId: string | undefined, status: string | undefined, scope: string | undefined, q: string | undefined, page: string | undefined, pageSize: string | undefined, user: RbacUser): Promise<{
         items: any[];
         page: number;
         pageSize: number;
@@ -42,7 +42,8 @@ export declare class ActivitiesController {
     }>;
     batchSpecialty(body: {
         ids: string[];
-        specialtyId: string | null;
+        specialtyId?: string | null;
+        specialtyIds?: string[];
     }, user: RbacUser): Promise<{
         updated: number;
     }>;
@@ -117,6 +118,11 @@ export declare class ActivitiesController {
             eventDate: Date | null;
             locality: any;
             specialty: any;
+            specialties: {
+                id: string;
+                name: string;
+                color: string | null;
+            }[];
         };
         items: {
             id: any;

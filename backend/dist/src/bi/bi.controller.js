@@ -83,7 +83,7 @@ let BiController = class BiController {
         this.assertBiAccess(user);
         return this.bi.listImports({ page, pageSize });
     }
-    importSurvey(file, req, user) {
+    importSurvey(file, replace, req, user) {
         this.assertBiAccess(user);
         if (!file) {
             if (req.fileValidationError === 'BI_FILE_TYPE_INVALID') {
@@ -91,7 +91,10 @@ let BiController = class BiController {
             }
             (0, http_error_1.throwError)('VALIDATION_ERROR', { reason: 'FILE_REQUIRED' });
         }
-        return this.bi.importSurvey(file, user);
+        const replaceAll = typeof replace === 'string'
+            ? ['1', 'true', 'sim', 'yes'].includes(replace.toLowerCase().trim())
+            : false;
+        return this.bi.importSurvey(file, user, { replaceAll });
     }
     deleteResponses(body, user) {
         this.assertBiAccess(user);
@@ -198,10 +201,11 @@ __decorate([
         },
     })),
     __param(0, (0, common_1.UploadedFile)()),
-    __param(1, (0, common_1.Req)()),
-    __param(2, (0, current_user_decorator_1.CurrentUser)()),
+    __param(1, (0, common_1.Body)('replace')),
+    __param(2, (0, common_1.Req)()),
+    __param(3, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, Object, Object]),
+    __metadata("design:paramtypes", [Object, Object, Object, Object]),
     __metadata("design:returntype", void 0)
 ], BiController.prototype, "importSurvey", null);
 __decorate([

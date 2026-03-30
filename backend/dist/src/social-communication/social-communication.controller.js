@@ -51,8 +51,11 @@ const jwt_auth_guard_1 = require("../auth/jwt-auth.guard");
 const current_user_decorator_1 = require("../common/current-user.decorator");
 const rbac_guard_1 = require("../rbac/rbac.guard");
 const create_social_communication_article_dto_1 = require("./dto/create-social-communication-article.dto");
+const create_social_communication_highlight_dto_1 = require("./dto/create-social-communication-highlight.dto");
+const lookup_social_communication_highlight_ldap_dto_1 = require("./dto/lookup-social-communication-highlight-ldap.dto");
 const resolve_social_communication_metadata_dto_1 = require("./dto/resolve-social-communication-metadata.dto");
 const update_social_communication_article_dto_1 = require("./dto/update-social-communication-article.dto");
+const update_social_communication_highlight_dto_1 = require("./dto/update-social-communication-highlight.dto");
 const social_communication_service_1 = require("./social-communication.service");
 const platform_express_1 = require("@nestjs/platform-express");
 const multer_1 = require("multer");
@@ -78,6 +81,15 @@ let SocialCommunicationController = class SocialCommunicationController {
     resolveMetadata(dto, user) {
         return this.socialCommunication.resolveMetadata(dto.url, user);
     }
+    listHighlights(q) {
+        return this.socialCommunication.listHighlights({ q });
+    }
+    lookupHighlightLdapProfile(query, user) {
+        return this.socialCommunication.lookupHighlightLdapProfile(query.email, user);
+    }
+    createHighlight(dto, user) {
+        return this.socialCommunication.createHighlight(dto, user);
+    }
     create(dto, user) {
         return this.socialCommunication.create(dto, user);
     }
@@ -91,8 +103,14 @@ let SocialCommunicationController = class SocialCommunicationController {
     update(id, dto, user) {
         return this.socialCommunication.update(id, dto, user);
     }
+    updateHighlight(id, dto, user) {
+        return this.socialCommunication.updateHighlight(id, dto, user);
+    }
     remove(id, user) {
         return this.socialCommunication.remove(id, user);
+    }
+    removeHighlight(id, user) {
+        return this.socialCommunication.removeHighlight(id, user);
     }
 };
 exports.SocialCommunicationController = SocialCommunicationController;
@@ -112,6 +130,29 @@ __decorate([
     __metadata("design:paramtypes", [resolve_social_communication_metadata_dto_1.ResolveSocialCommunicationMetadataDto, Object]),
     __metadata("design:returntype", void 0)
 ], SocialCommunicationController.prototype, "resolveMetadata", null);
+__decorate([
+    (0, common_1.Get)('highlights'),
+    __param(0, (0, common_1.Query)('q')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], SocialCommunicationController.prototype, "listHighlights", null);
+__decorate([
+    (0, common_1.Get)('highlights/ldap-profile'),
+    __param(0, (0, common_1.Query)()),
+    __param(1, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [lookup_social_communication_highlight_ldap_dto_1.LookupSocialCommunicationHighlightLdapDto, Object]),
+    __metadata("design:returntype", void 0)
+], SocialCommunicationController.prototype, "lookupHighlightLdapProfile", null);
+__decorate([
+    (0, common_1.Post)('highlights'),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [create_social_communication_highlight_dto_1.CreateSocialCommunicationHighlightDto, Object]),
+    __metadata("design:returntype", void 0)
+], SocialCommunicationController.prototype, "createHighlight", null);
 __decorate([
     (0, common_1.Post)(),
     __param(0, (0, common_1.Body)()),
@@ -154,6 +195,15 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], SocialCommunicationController.prototype, "update", null);
 __decorate([
+    (0, common_1.Put)('highlights/:id'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)()),
+    __param(2, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, update_social_communication_highlight_dto_1.UpdateSocialCommunicationHighlightDto, Object]),
+    __metadata("design:returntype", void 0)
+], SocialCommunicationController.prototype, "updateHighlight", null);
+__decorate([
     (0, common_1.Delete)(':id'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
@@ -161,6 +211,14 @@ __decorate([
     __metadata("design:paramtypes", [String, Object]),
     __metadata("design:returntype", void 0)
 ], SocialCommunicationController.prototype, "remove", null);
+__decorate([
+    (0, common_1.Delete)('highlights/:id'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", void 0)
+], SocialCommunicationController.prototype, "removeHighlight", null);
 exports.SocialCommunicationController = SocialCommunicationController = __decorate([
     (0, common_1.Controller)('social-communication'),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, rbac_guard_1.RbacGuard),

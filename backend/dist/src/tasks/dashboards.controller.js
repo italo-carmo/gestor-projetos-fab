@@ -21,6 +21,7 @@ const require_permission_decorator_1 = require("../rbac/require-permission.decor
 const rbac_guard_1 = require("../rbac/rbac.guard");
 const role_access_1 = require("../rbac/role-access");
 const tasks_service_1 = require("./tasks.service");
+const update_dashboard_national_card_dto_1 = require("./dto/update-dashboard-national-card.dto");
 let DashboardsController = class DashboardsController {
     tasks;
     constructor(tasks) {
@@ -34,6 +35,12 @@ let DashboardsController = class DashboardsController {
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         }
         return this.tasks.getDashboardNational(user, localityId);
+    }
+    updateNationalCard(id, dto, user) {
+        if (!(0, role_access_1.hasAnyRole)(user, [role_access_1.ROLE_TI])) {
+            (0, http_error_1.throwError)('RBAC_FORBIDDEN');
+        }
+        return this.tasks.updateDashboardNationalCardSetting(id, dto, user);
     }
     recruits(localityId, user) {
         return this.tasks.getDashboardRecruits(user, localityId);
@@ -66,7 +73,8 @@ let DashboardsController = class DashboardsController {
         const dbCounts = await this.tasks.debugActivityCounts({ from, to }, user);
         const dashboardResult = await this.tasks.getDashboardExecutive({ from, to, threshold: '70' }, user);
         const dashboardPsicologia = dashboardResult.specialties.items.find((s) => s.specialtyName?.toLowerCase().includes('psicologia'));
-        const dashboardCommission = dashboardResult.specialties.items.find((s) => s.specialtyName?.toLowerCase().includes('comissão') || s.specialtyName?.toLowerCase().includes('cipavd'));
+        const dashboardCommission = dashboardResult.specialties.items.find((s) => s.specialtyName?.toLowerCase().includes('comissão') ||
+            s.specialtyName?.toLowerCase().includes('cipavd'));
         return {
             database: {
                 psicologia: dbCounts.counts.psicologia,
@@ -119,6 +127,16 @@ __decorate([
     __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", void 0)
 ], DashboardsController.prototype, "national", null);
+__decorate([
+    (0, common_1.Put)('dashboard/national/cards/:id'),
+    (0, require_permission_decorator_1.RequirePermission)('dashboard', 'view'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)()),
+    __param(2, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, update_dashboard_national_card_dto_1.UpdateDashboardNationalCardDto, Object]),
+    __metadata("design:returntype", void 0)
+], DashboardsController.prototype, "updateNationalCard", null);
 __decorate([
     (0, common_1.Get)('dashboard/recruits'),
     (0, require_permission_decorator_1.RequirePermission)('dashboard', 'view'),

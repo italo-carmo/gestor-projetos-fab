@@ -20,7 +20,9 @@ let AuditService = class AuditService {
         this.prisma = prisma;
     }
     async log(params) {
-        const diffJson = params.diffJson ? this.truncateDiff(params.diffJson) : client_1.Prisma.JsonNull;
+        const diffJson = params.diffJson
+            ? this.truncateDiff(params.diffJson)
+            : client_1.Prisma.JsonNull;
         return this.prisma.auditLog.create({
             data: {
                 userId: params.userId ?? null,

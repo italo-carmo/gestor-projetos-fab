@@ -79,19 +79,30 @@ let ReportsService = class ReportsService {
         return report;
     }
     async getSignedUrl(id, user) {
-        if (user?.executiveHidePii && this.config.get('REPORTS_ALLOW_EXEC_DOWNLOAD') !== 'true') {
+        if (user?.executiveHidePii &&
+            this.config.get('REPORTS_ALLOW_EXEC_DOWNLOAD') !== 'true') {
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         }
         const report = await this.getReport(id, user);
-        const secret = this.config.get('REPORTS_SIGNED_URL_SECRET') ?? this.config.get('JWT_ACCESS_SECRET');
+        const secret = this.config.get('REPORTS_SIGNED_URL_SECRET') ??
+            this.config.get('JWT_ACCESS_SECRET');
         const ttl = this.config.get('REPORTS_SIGNED_URL_TTL') ?? '600s';
-        const token = await this.jwt.signAsync({ rid: report.id }, { secret, expiresIn: ttl });
-        return { url: `/reports/${report.id}/download?token=${token}`, expiresIn: ttl };
+        const token = await this.jwt.signAsync({ rid: report.id }, {
+            secret,
+            expiresIn: ttl,
+        });
+        return {
+            url: `/reports/${report.id}/download?token=${token}`,
+            expiresIn: ttl,
+        };
     }
     async verifyDownloadToken(token) {
-        const secret = this.config.get('REPORTS_SIGNED_URL_SECRET') ?? this.config.get('JWT_ACCESS_SECRET');
+        const secret = this.config.get('REPORTS_SIGNED_URL_SECRET') ??
+            this.config.get('JWT_ACCESS_SECRET');
         try {
-            const payload = await this.jwt.verifyAsync(token, { secret });
+            const payload = await this.jwt.verifyAsync(token, {
+                secret,
+            });
             return payload.rid;
         }
         catch {
@@ -113,7 +124,10 @@ let ReportsService = class ReportsService {
         if (!instance)
             (0, http_error_1.throwError)('NOT_FOUND');
         this.assertTaskViewAccess(instance, user);
-        const updated = await this.prisma.report.update({ where: { id }, data: { approved } });
+        const updated = await this.prisma.report.update({
+            where: { id },
+            data: { approved },
+        });
         await this.audit.log({
             userId: user?.id,
             resource: 'reports',
@@ -176,7 +190,9 @@ let ReportsService = class ReportsService {
         }
         if (this.isTaskResponsible(instance, user))
             return;
-        if (user.localityId && instance.localityId === user.localityId && (specialtyMatch || eloRoleMatch))
+        if (user.localityId &&
+            instance.localityId === user.localityId &&
+            (specialtyMatch || eloRoleMatch))
             return;
         (0, http_error_1.throwError)('RBAC_FORBIDDEN');
     }

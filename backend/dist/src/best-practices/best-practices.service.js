@@ -43,36 +43,66 @@ let BestPracticesService = class BestPracticesService {
                 where.localityId = filters.localityId;
             }
         }
-        const items = await this.prisma.bestPracticePost.findMany({
-            where,
-            include: {
-                locality: { select: { id: true, name: true, code: true } },
-                type: { select: { id: true, name: true, colorHex: true, textColorHex: true } },
-                createdBy: { select: { id: true, name: true } },
-            },
-            orderBy: [{ isCommission: 'desc' }, { createdAt: 'desc' }],
-        });
-        return { items };
+        if (filters.typeId) {
+            where.typeId = String(filters.typeId).trim();
+        }
+        try {
+            const items = await this.prisma.bestPracticePost.findMany({
+                where,
+                include: {
+                    locality: { select: { id: true, name: true, code: true } },
+                    type: {
+                        select: {
+                            id: true,
+                            name: true,
+                            colorHex: true,
+                            textColorHex: true,
+                        },
+                    },
+                    createdBy: { select: { id: true, name: true } },
+                },
+                orderBy: [{ isCommission: 'desc' }, { createdAt: 'desc' }],
+            });
+            return { items };
+        }
+        catch {
+            const legacyItems = await this.prisma.bestPracticePost.findMany({
+                where,
+                include: {
+                    locality: { select: { id: true, name: true, code: true } },
+                    createdBy: { select: { id: true, name: true } },
+                },
+                orderBy: [{ isCommission: 'desc' }, { createdAt: 'desc' }],
+            });
+            return {
+                items: legacyItems.map((item) => ({ ...item, type: null })),
+            };
+        }
     }
     async listTypes(user) {
         this.assertViewerAccess(user);
+        if (!this.prisma.bestPracticeType) {
+            return { items: [] };
+        }
         const items = await this.prisma.bestPracticeType.findMany({
             orderBy: [{ name: 'asc' }],
         });
         return { items };
     }
     async create(payload, user) {
-        this.assertEditorAccess(user);
+        this.assertCreatorAccess(user);
         const title = this.normalizeRequiredText(payload.title, 'title', 140);
         const content = this.normalizeRequiredText(payload.content, 'content', 1200);
         const isCommission = Boolean(payload.isCommission);
         const localityId = this.resolveLocalityTarget(payload.localityId, isCommission);
+        const typeId = await this.resolveTypeTarget(payload.typeId);
         const created = await this.prisma.bestPracticePost.create({
             data: {
                 title,
                 content,
                 isCommission,
                 localityId,
+                typeId,
                 createdById: user?.id ?? null,
                 authorLabel: this.buildAuthorLabel(user),
             },
@@ -90,17 +120,27 @@ let BestPracticesService = class BestPracticesService {
             diffJson: {
                 title: created.title,
                 isCommission: created.isCommission,
+                typeId: created.typeId ?? null,
             },
         });
         return created;
     }
     async update(id, payload, user) {
-        this.assertEditorAccess(user);
-        const existing = await this.prisma.bestPracticePost.findUnique({ where: { id } });
+        this.assertUpdaterAccess(user);
+        const existing = await this.prisma.bestPracticePost.findUnique({
+            where: { id },
+        });
         if (!existing)
             (0, http_error_1.throwError)('NOT_FOUND');
-        const nextIsCommission = payload.isCommission !== undefined ? Boolean(payload.isCommission) : existing.isCommission;
-        const nextLocalityId = this.resolveLocalityTarget(payload.localityId !== undefined ? payload.localityId : existing.localityId, nextIsCommission);
+        const nextIsCommission = payload.isCommission !== undefined
+            ? Boolean(payload.isCommission)
+            : existing.isCommission;
+        const nextLocalityId = this.resolveLocalityTarget(payload.localityId !== undefined
+            ? payload.localityId
+            : existing.localityId, nextIsCommission);
+        const nextTypeId = payload.typeId !== undefined
+            ? await this.resolveTypeTarget(payload.typeId)
+            : (existing.typeId ?? null);
         const updated = await this.prisma.bestPracticePost.update({
             where: { id },
             data: {
@@ -110,8 +150,11 @@ let BestPracticesService = class BestPracticesService {
                 content: payload.content !== undefined
                     ? this.normalizeRequiredText(payload.content, 'content', 1200)
                     : undefined,
-                isCommission: payload.isCommission !== undefined ? Boolean(payload.isCommission) : undefined,
+                isCommission: payload.isCommission !== undefined
+                    ? Boolean(payload.isCommission)
+                    : undefined,
                 localityId: nextLocalityId,
+                typeId: nextTypeId,
             },
             include: {
                 locality: { select: { id: true, name: true, code: true } },
@@ -127,13 +170,16 @@ let BestPracticesService = class BestPracticesService {
             diffJson: {
                 title: updated.title,
                 isCommission: updated.isCommission,
+                typeId: updated.typeId ?? null,
             },
         });
         return updated;
     }
     async remove(id, user) {
-        this.assertEditorAccess(user);
-        const existing = await this.prisma.bestPracticePost.findUnique({ where: { id } });
+        this.assertDeleteAccess(user);
+        const existing = await this.prisma.bestPracticePost.findUnique({
+            where: { id },
+        });
         if (!existing)
             (0, http_error_1.throwError)('NOT_FOUND');
         await this.prisma.bestPracticePost.delete({ where: { id } });
@@ -159,10 +205,39 @@ let BestPracticesService = class BestPracticesService {
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         }
     }
-    assertEditorAccess(user) {
+    assertUpdaterAccess(user) {
+        if (!(0, role_access_1.hasAnyRole)(user, [role_access_1.ROLE_COORDENACAO_CIPAVD, role_access_1.ROLE_TI])) {
+            (0, http_error_1.throwError)('RBAC_FORBIDDEN');
+        }
+    }
+    assertDeleteAccess(user) {
         if (!(0, role_access_1.hasRole)(user, role_access_1.ROLE_COORDENACAO_CIPAVD)) {
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         }
+    }
+    assertCreatorAccess(user) {
+        if (!(0, role_access_1.hasAnyRole)(user, [role_access_1.ROLE_COORDENACAO_CIPAVD, role_access_1.ROLE_TI])) {
+            (0, http_error_1.throwError)('RBAC_FORBIDDEN');
+        }
+    }
+    async resolveTypeTarget(typeId) {
+        const id = String(typeId ?? '').trim();
+        if (!id)
+            return null;
+        if (!this.prisma.bestPracticeType) {
+            (0, http_error_1.throwError)('VALIDATION_ERROR', {
+                field: 'typeId',
+                reason: 'feature_unavailable',
+            });
+        }
+        const found = await this.prisma.bestPracticeType.findUnique({
+            where: { id },
+            select: { id: true },
+        });
+        if (!found) {
+            (0, http_error_1.throwError)('NOT_FOUND');
+        }
+        return id;
     }
     resolveLocalityTarget(localityId, isCommission) {
         if (isCommission)
@@ -188,9 +263,17 @@ let BestPracticesService = class BestPracticesService {
     }
     async createType(payload, user) {
         this.assertTypeEditorAccess(user);
+        if (!this.prisma.bestPracticeType) {
+            (0, http_error_1.throwError)('VALIDATION_ERROR', {
+                field: 'type',
+                reason: 'feature_unavailable',
+            });
+        }
         const normalized = this.normalizeRequiredText(payload.name, 'name', 80);
         const colorHex = this.normalizeColorHex(payload.colorHex);
-        const textColorHex = payload.textColorHex ? this.normalizeColorHex(payload.textColorHex) : '#FFFFFF';
+        const textColorHex = payload.textColorHex
+            ? this.normalizeColorHex(payload.textColorHex)
+            : '#FFFFFF';
         const existing = await this.prisma.bestPracticeType.findFirst({
             where: { name: { equals: normalized, mode: 'insensitive' } },
             select: { id: true, name: true },
@@ -217,6 +300,12 @@ let BestPracticesService = class BestPracticesService {
     }
     async updateType(id, payload, user) {
         this.assertTypeEditorAccess(user);
+        if (!this.prisma.bestPracticeType) {
+            (0, http_error_1.throwError)('VALIDATION_ERROR', {
+                field: 'type',
+                reason: 'feature_unavailable',
+            });
+        }
         const existing = await this.prisma.bestPracticeType.findUnique({
             where: { id },
             select: { id: true },
@@ -227,7 +316,10 @@ let BestPracticesService = class BestPracticesService {
         if (payload.name !== undefined) {
             const normalized = this.normalizeRequiredText(payload.name, 'name', 80);
             const duplicate = await this.prisma.bestPracticeType.findFirst({
-                where: { name: { equals: normalized, mode: 'insensitive' }, id: { not: id } },
+                where: {
+                    name: { equals: normalized, mode: 'insensitive' },
+                    id: { not: id },
+                },
                 select: { id: true },
             });
             if (duplicate) {
@@ -239,7 +331,9 @@ let BestPracticesService = class BestPracticesService {
             updateData.colorHex = this.normalizeColorHex(payload.colorHex);
         }
         if (payload.textColorHex !== undefined) {
-            updateData.textColorHex = payload.textColorHex ? this.normalizeColorHex(payload.textColorHex) : '#FFFFFF';
+            updateData.textColorHex = payload.textColorHex
+                ? this.normalizeColorHex(payload.textColorHex)
+                : '#FFFFFF';
         }
         const updated = await this.prisma.bestPracticeType.update({
             where: { id },
@@ -257,6 +351,12 @@ let BestPracticesService = class BestPracticesService {
     }
     async removeType(id, user) {
         this.assertTypeEditorAccess(user);
+        if (!this.prisma.bestPracticeType) {
+            (0, http_error_1.throwError)('VALIDATION_ERROR', {
+                field: 'type',
+                reason: 'feature_unavailable',
+            });
+        }
         const existing = await this.prisma.bestPracticeType.findUnique({
             where: { id },
             select: { id: true, name: true },
@@ -288,7 +388,10 @@ let BestPracticesService = class BestPracticesService {
     normalizeColorHex(value) {
         const hex = String(value).trim();
         if (!/^#[0-9A-Fa-f]{6}$/.test(hex)) {
-            (0, http_error_1.throwError)('VALIDATION_ERROR', { field: 'colorHex', reason: 'invalid_format' });
+            (0, http_error_1.throwError)('VALIDATION_ERROR', {
+                field: 'colorHex',
+                reason: 'invalid_format',
+            });
         }
         return hex.toUpperCase();
     }

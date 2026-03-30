@@ -55,6 +55,7 @@ import {
   type SocialCardId,
   type SocialCardSetting,
 } from "../app/socialCardSettingsStorage";
+import { buildInnerTheme, hexToRgba } from "../app/socialHighlightsInnerTheme";
 import { api } from "../api/client";
 import {
   hasAnyRole,
@@ -878,6 +879,10 @@ export function SocialCommunicationPage() {
   const internalCardSetting = getSocialCardSetting("social-public-internal");
   const externalCardSetting = getSocialCardSetting("social-public-external");
   const highlightsCardSetting = getSocialCardSetting("social-highlights");
+  const highlightsInnerTheme = useMemo(
+    () => buildInnerTheme(highlightsCardSetting),
+    [highlightsCardSetting],
+  );
   const showHighlightsSection =
     import.meta.env.VITE_SOCIAL_HIGHLIGHTS_PAGE === "true";
 
@@ -967,20 +972,7 @@ export function SocialCommunicationPage() {
   };
 
   const renderHighlightCards = (cards: SocialCommunicationHighlight[]) => {
-    const theme = {
-      cardBorder: "rgba(146, 106, 19, 0.65)",
-      cardBackground:
-        "linear-gradient(145deg, #b68f33 0%, #c9a44e 25%, #e2bf67 50%, #cca95a 74%, #af8d42 100%)",
-      titleColor: "rgba(46, 30, 4, 0.95)",
-      textColor: "rgba(58, 39, 6, 0.92)",
-      chipBg: "rgba(255, 248, 227, 0.92)",
-      chipBorder: "rgba(120, 82, 14, 0.35)",
-      chipColor: "#4A3407",
-      mediaBorder: "rgba(255, 244, 205, 0.7)",
-      mediaBg: "rgba(255, 248, 223, 0.28)",
-      actionButtonBg: "rgba(255, 251, 236, 0.94)",
-      hoverShadow: "0 14px 24px rgba(90, 64, 13, 0.24)",
-    };
+    const theme = highlightsInnerTheme;
 
     return (
       <Box
@@ -1022,8 +1014,7 @@ export function SocialCommunicationPage() {
                 background: theme.cardBackground,
                 overflow: "hidden",
                 cursor: "pointer",
-                boxShadow:
-                  "inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.12), 0 8px 16px rgba(95,70,18,0.18)",
+                boxShadow: `inset 0 1px 0 ${hexToRgba("#ffffff", 0.28)}, inset 0 -1px 0 ${hexToRgba("#000000", 0.12)}, 0 8px 16px ${hexToRgba(theme.titleColor, 0.2)}`,
                 transition: "transform 150ms ease, box-shadow 180ms ease",
                 "&:hover": {
                   transform: "translateY(-2px)",
@@ -1132,6 +1123,7 @@ export function SocialCommunicationPage() {
                       variant="body2"
                       sx={{
                         color: theme.textColor,
+                        opacity: 0.98,
                         display: "-webkit-box",
                         WebkitLineClamp: 4,
                         WebkitBoxOrient: "vertical",

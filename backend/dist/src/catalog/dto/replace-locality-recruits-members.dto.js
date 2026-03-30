@@ -25,6 +25,7 @@ class ReplaceLocalityRecruitMemberItemDto {
     status;
     dismissalReason;
     destinationLocalityId;
+    comment;
 }
 exports.ReplaceLocalityRecruitMemberItemDto = ReplaceLocalityRecruitMemberItemDto;
 __decorate([
@@ -50,6 +51,11 @@ __decorate([
     (0, class_validator_1.IsString)(),
     __metadata("design:type", Object)
 ], ReplaceLocalityRecruitMemberItemDto.prototype, "destinationLocalityId", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", Object)
+], ReplaceLocalityRecruitMemberItemDto.prototype, "comment", void 0);
 class ReplaceLocalityRecruitsMembersDto {
     items;
 }

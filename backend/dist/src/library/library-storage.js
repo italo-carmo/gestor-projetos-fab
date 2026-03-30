@@ -54,7 +54,10 @@ function resolveExistingLibraryDocumentPath(fileName) {
     const safeName = path.basename(String(fileName ?? '').trim());
     if (!safeName)
         return '';
-    const candidates = [path.join(getLibraryDocumentsDir(), safeName), ...legacyDocumentDirs.map((dir) => path.join(dir, safeName))];
+    const candidates = [
+        path.join(getLibraryDocumentsDir(), safeName),
+        ...legacyDocumentDirs.map((dir) => path.join(dir, safeName)),
+    ];
     return candidates.find((candidate) => fs.existsSync(candidate)) || '';
 }
 //# sourceMappingURL=library-storage.js.map

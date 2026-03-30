@@ -41,7 +41,9 @@ let LessonsLearnedService = class LessonsLearnedService {
             where,
             include: {
                 createdBy: { select: { id: true, name: true } },
-                type: { select: { id: true, name: true, colorHex: true, textColorHex: true } },
+                type: {
+                    select: { id: true, name: true, colorHex: true, textColorHex: true },
+                },
             },
             orderBy: [{ createdAt: 'desc' }],
         });
@@ -69,7 +71,9 @@ let LessonsLearnedService = class LessonsLearnedService {
             },
             include: {
                 createdBy: { select: { id: true, name: true } },
-                type: { select: { id: true, name: true, colorHex: true, textColorHex: true } },
+                type: {
+                    select: { id: true, name: true, colorHex: true, textColorHex: true },
+                },
             },
         });
         await this.audit.log({
@@ -103,7 +107,9 @@ let LessonsLearnedService = class LessonsLearnedService {
             },
             include: {
                 createdBy: { select: { id: true, name: true } },
-                type: { select: { id: true, name: true, colorHex: true, textColorHex: true } },
+                type: {
+                    select: { id: true, name: true, colorHex: true, textColorHex: true },
+                },
             },
         });
         await this.audit.log({
@@ -136,13 +142,18 @@ let LessonsLearnedService = class LessonsLearnedService {
         this.assertEditorAccess(user);
         const name = this.normalizeRequiredText(payload.name, 'name', 80);
         const colorHex = this.normalizeColorHex(payload.colorHex);
-        const textColorHex = payload.textColorHex ? this.normalizeColorHex(payload.textColorHex) : '#FFFFFF';
+        const textColorHex = payload.textColorHex
+            ? this.normalizeColorHex(payload.textColorHex)
+            : '#FFFFFF';
         const existing = await this.prisma.lessonLearnedType.findFirst({
             where: { name: { equals: name, mode: 'insensitive' } },
             select: { id: true },
         });
         if (existing) {
-            (0, http_error_1.throwError)('VALIDATION_ERROR', { field: 'name', reason: 'already_exists' });
+            (0, http_error_1.throwError)('VALIDATION_ERROR', {
+                field: 'name',
+                reason: 'already_exists',
+            });
         }
         const created = await this.prisma.lessonLearnedType.create({
             data: { name, colorHex, textColorHex },
@@ -152,7 +163,11 @@ let LessonsLearnedService = class LessonsLearnedService {
             resource: 'lessons_learned',
             action: 'create',
             entityId: created.id,
-            diffJson: { type: created.name, colorHex: created.colorHex, textColorHex: created.textColorHex },
+            diffJson: {
+                type: created.name,
+                colorHex: created.colorHex,
+                textColorHex: created.textColorHex,
+            },
         });
         return created;
     }
@@ -175,7 +190,10 @@ let LessonsLearnedService = class LessonsLearnedService {
                 select: { id: true },
             });
             if (duplicated) {
-                (0, http_error_1.throwError)('VALIDATION_ERROR', { field: 'name', reason: 'already_exists' });
+                (0, http_error_1.throwError)('VALIDATION_ERROR', {
+                    field: 'name',
+                    reason: 'already_exists',
+                });
             }
         }
         const updated = await this.prisma.lessonLearnedType.update({
@@ -195,7 +213,11 @@ let LessonsLearnedService = class LessonsLearnedService {
             resource: 'lessons_learned',
             action: 'update',
             entityId: updated.id,
-            diffJson: { type: updated.name, colorHex: updated.colorHex, textColorHex: updated.textColorHex },
+            diffJson: {
+                type: updated.name,
+                colorHex: updated.colorHex,
+                textColorHex: updated.textColorHex,
+            },
         });
         return updated;
     }
@@ -280,7 +302,9 @@ let LessonsLearnedService = class LessonsLearnedService {
         return existing.id;
     }
     normalizeColorHex(value) {
-        const normalized = String(value ?? '').trim().toUpperCase();
+        const normalized = String(value ?? '')
+            .trim()
+            .toUpperCase();
         if (!/^#[0-9A-F]{6}$/.test(normalized)) {
             (0, http_error_1.throwError)('VALIDATION_ERROR', { field: 'colorHex', reason: 'invalid' });
         }

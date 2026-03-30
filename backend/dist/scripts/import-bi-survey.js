@@ -14,7 +14,7 @@ function parseArgs() {
     const fileArgIndex = args.findIndex((item) => item === '--file');
     const filePath = fileArgIndex >= 0 && args[fileArgIndex + 1]
         ? args[fileArgIndex + 1]
-        : '/Users/italocarmo/Downloads/Repositório/5. PESQUISAS - Dados/SLIDES_BD_EEAR_CIAAR_COMGEP_AFA/Banco_de_dados_tabelas_graficos.xlsx';
+        : '/home/italoibsc/Downloads/BD_FINAL_CIPAVD.xlsx';
     return {
         filePath,
         reset: args.includes('--reset'),
@@ -29,15 +29,11 @@ async function main() {
     const prisma = new prisma_service_1.PrismaService();
     await prisma.$connect();
     try {
-        if (reset) {
-            await prisma.biSurveyResponse.deleteMany();
-            await prisma.biSurveyImportBatch.deleteMany();
-        }
         const service = new bi_service_1.BiService(prisma);
         const result = await service.importSurvey({
             originalname: node_path_1.default.basename(resolved),
             buffer: node_fs_1.default.readFileSync(resolved),
-        }, undefined);
+        }, undefined, { replaceAll: reset });
         console.log(JSON.stringify({
             file: resolved,
             batchId: result.batch.id,
