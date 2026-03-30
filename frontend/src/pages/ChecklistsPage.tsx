@@ -1,11 +1,9 @@
 import {
-  Alert,
   Box,
   Button,
   Card,
   CardContent,
   Chip,
-  FormControlLabel,
   LinearProgress,
   MenuItem,
   Stack,
@@ -14,7 +12,6 @@ import {
   TableCell,
   TableHead,
   TableRow,
-  Switch,
   TextField,
   Tooltip,
   Typography,
@@ -143,8 +140,6 @@ export function ChecklistsPage() {
   const checklists = data.items ?? [];
 
   const checklistsToRender = useMemo(() => {
-    if (showDuplicates) return checklists;
-
     const grouped = new Map<string, any>();
     for (const checklist of checklists) {
       const key = [
@@ -170,9 +165,7 @@ export function ChecklistsPage() {
     }
 
     return Array.from(grouped.values());
-  }, [checklists, showDuplicates]);
-
-  const hiddenDuplicates = Math.max(0, checklists.length - checklistsToRender.length);
+  }, [checklists]);
   const filteredByPhase = phaseId
     ? checklistsToRender.filter((c: any) => c.phaseId === phaseId)
     : checklistsToRender;
@@ -189,7 +182,7 @@ export function ChecklistsPage() {
             Checklist de execução
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Visualização do andamento real de tarefas e atividades de campo por OM (somente leitura).
+            Visualização do andamento real de tarefas e atividades de campo por OM.
           </Typography>
         </Box>
         <Stack direction="row" spacing={1}>
@@ -210,36 +203,47 @@ export function ChecklistsPage() {
 
       <Card sx={{ mb: 1.2, borderRadius: 2, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
         <CardContent sx={{ py: 1.5 }}>
-          <Alert severity="info" sx={{ mb: 1.2 }}>
-            Os ícones refletem o status real das tarefas e das atividades cadastradas no sistema. Não é possível
-            alterar o checklist aqui — conclua ou atualize as tarefas e atividades nas respectivas telas.
-          </Alert>
-          <Stack direction="row" spacing={1.2} alignItems="center" flexWrap="wrap" sx={{ mb: 1.2 }}>
-            <Typography variant="caption" color="text.secondary">
+          <Stack
+            direction="row"
+            alignItems="center"
+            flexWrap="wrap"
+            useFlexGap
+            spacing={0.75}
+            sx={{ columnGap: 1, rowGap: 1 }}
+          >
+            <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>
               Legenda:
             </Typography>
-            <Stack direction="row" spacing={1} alignItems="center">
-              <CheckCircleRoundedIcon sx={{ fontSize: 20, color: DONE_COLOR }} />
-              <Typography variant="caption">Concluída</Typography>
+            <Stack direction="row" spacing={0.5} alignItems="center" sx={{ flexShrink: 0 }}>
+              <CheckCircleRoundedIcon sx={{ fontSize: 18, color: DONE_COLOR }} />
+              <Typography variant="caption" sx={{ fontSize: '0.7rem' }}>
+                Concluída
+              </Typography>
             </Stack>
-            <Stack direction="row" spacing={1} alignItems="center">
-              <ScheduleRoundedIcon sx={{ fontSize: 20, color: IN_PROGRESS_COLOR }} />
-              <Typography variant="caption">Em andamento</Typography>
+            <Stack direction="row" spacing={0.5} alignItems="center" sx={{ flexShrink: 0 }}>
+              <ScheduleRoundedIcon sx={{ fontSize: 18, color: IN_PROGRESS_COLOR }} />
+              <Typography variant="caption" sx={{ fontSize: '0.7rem' }}>
+                Em andamento
+              </Typography>
             </Stack>
-            <Stack direction="row" spacing={1} alignItems="center">
-              <RadioButtonUncheckedRoundedIcon sx={{ fontSize: 20, color: PENDING_COLOR }} />
-              <Typography variant="caption">Pendente</Typography>
+            <Stack direction="row" spacing={0.5} alignItems="center" sx={{ flexShrink: 0 }}>
+              <RadioButtonUncheckedRoundedIcon sx={{ fontSize: 18, color: PENDING_COLOR }} />
+              <Typography variant="caption" sx={{ fontSize: '0.7rem' }}>
+                Pendente
+              </Typography>
             </Stack>
-            <Chip size="small" color="info" variant="outlined" label="Somente leitura" />
-          </Stack>
-          <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} alignItems="center" flexWrap="wrap">
             <TextField
               select
               size="small"
               label="Fase"
               value={phaseId}
               onChange={(e) => updateParam('phaseId', e.target.value)}
-              sx={{ minWidth: 200 }}
+              sx={{
+                minWidth: 0,
+                width: { xs: '100%', sm: 118 },
+                '& .MuiInputBase-input': { fontSize: '0.8125rem' },
+                '& .MuiInputLabel-root': { fontSize: '0.75rem' },
+              }}
             >
               <MenuItem value="">Todas as fases</MenuItem>
               {phases.map((p: any) => (
@@ -254,7 +258,12 @@ export function ChecklistsPage() {
               label="Especialidade"
               value={specialtyId}
               onChange={(e) => updateParam('specialtyId', e.target.value)}
-              sx={{ minWidth: 180 }}
+              sx={{
+                minWidth: 0,
+                width: { xs: '100%', sm: 118 },
+                '& .MuiInputBase-input': { fontSize: '0.8125rem' },
+                '& .MuiInputLabel-root': { fontSize: '0.75rem' },
+              }}
             >
               <MenuItem value="">Todas</MenuItem>
               {(specialtiesQuery.data?.items ?? []).map((s: any) => (
@@ -269,7 +278,12 @@ export function ChecklistsPage() {
               label="Elo responsável"
               value={eloRoleId}
               onChange={(e) => updateParam('eloRoleId', e.target.value)}
-              sx={{ minWidth: 180 }}
+              sx={{
+                minWidth: 0,
+                width: { xs: '100%', sm: 128 },
+                '& .MuiInputBase-input': { fontSize: '0.8125rem' },
+                '& .MuiInputLabel-root': { fontSize: '0.75rem' },
+              }}
             >
               <MenuItem value="">Todos</MenuItem>
               {(eloRolesQuery.data?.items ?? []).map((r: any) => (
@@ -288,32 +302,29 @@ export function ChecklistsPage() {
                 next.set('itemSourceType', e.target.value);
                 setParams(next);
               }}
-              sx={{ minWidth: 170 }}
+              sx={{
+                minWidth: 0,
+                width: { xs: '100%', sm: 112 },
+                '& .MuiInputBase-input': { fontSize: '0.8125rem' },
+                '& .MuiInputLabel-root': { fontSize: '0.75rem' },
+              }}
             >
               <MenuItem value="ALL">Todos</MenuItem>
               <MenuItem value="TASK">Somente tarefas</MenuItem>
               <MenuItem value="ACTIVITY">Somente atividades</MenuItem>
             </TextField>
-            <Button variant="text" onClick={clearFilters} sx={{ ml: 1 }}>
+            <Button variant="text" size="small" onClick={clearFilters} sx={{ flexShrink: 0 }}>
               Limpar filtros
             </Button>
-            <FormControlLabel
-              control={<Switch size="small" checked={showDuplicates} onChange={(e) => setShowDuplicates(e.target.checked)} />}
-              label={showDuplicates ? 'Exibindo duplicados' : 'Ocultar duplicados'}
-            />
-            <Box flexGrow={1} />
+            <Box sx={{ flexGrow: 1, minWidth: 8 }} />
             <Chip
               label={viewByLocality ? 'Ver por item' : 'Ver por localidade'}
               onClick={() => setViewByLocality((v) => !v)}
               variant={viewByLocality ? 'filled' : 'outlined'}
               size="small"
+              sx={{ flexShrink: 0 }}
             />
           </Stack>
-          {!showDuplicates && hiddenDuplicates > 0 && (
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-              {hiddenDuplicates} checklist(s) duplicado(s) ocultado(s).
-            </Typography>
-          )}
         </CardContent>
       </Card>
 
