@@ -14,7 +14,6 @@ const common_1 = require("@nestjs/common");
 const client_1 = require("@prisma/client");
 const audit_service_1 = require("../audit/audit.service");
 const http_error_1 = require("../common/http-error");
-const priority_localities_1 = require("../common/priority-localities");
 const sanitize_1 = require("../common/sanitize");
 const prisma_service_1 = require("../prisma/prisma.service");
 const role_access_1 = require("../rbac/role-access");
@@ -53,9 +52,7 @@ let SmifComplaintsService = class SmifComplaintsService {
             },
             orderBy: [{ reportedAt: 'desc' }, { createdAt: 'desc' }],
         });
-        return {
-            items: items.filter((item) => (0, priority_localities_1.isTargetLocalityName)(item.locality?.name)),
-        };
+        return { items };
     }
     async create(payload, user) {
         this.assertEditorAccess(user);
@@ -197,18 +194,12 @@ let SmifComplaintsService = class SmifComplaintsService {
         }
         const exists = await this.prisma.locality.findUnique({
             where: { id },
-            select: { id: true, name: true },
+            select: { id: true },
         });
         if (!exists) {
             (0, http_error_1.throwError)('VALIDATION_ERROR', {
                 field: 'localityId',
                 reason: 'not_found',
-            });
-        }
-        if (!(0, priority_localities_1.isTargetLocalityName)(exists.name)) {
-            (0, http_error_1.throwError)('VALIDATION_ERROR', {
-                field: 'localityId',
-                reason: 'not_smif_locality',
             });
         }
         return id;

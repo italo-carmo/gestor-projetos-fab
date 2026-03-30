@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { Prisma, SmifComplaintStatus } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { throwError } from '../common/http-error';
-import { isTargetLocalityName } from '../common/priority-localities';
 import { sanitizeText } from '../common/sanitize';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -56,9 +55,7 @@ export class SmifComplaintsService {
       orderBy: [{ reportedAt: 'desc' }, { createdAt: 'desc' }],
     });
 
-    return {
-      items: items.filter((item) => isTargetLocalityName(item.locality?.name)),
-    };
+    return { items };
   }
 
   async create(
@@ -245,18 +242,12 @@ export class SmifComplaintsService {
     }
     const exists = await this.prisma.locality.findUnique({
       where: { id },
-      select: { id: true, name: true },
+      select: { id: true },
     });
     if (!exists) {
       throwError('VALIDATION_ERROR', {
         field: 'localityId',
         reason: 'not_found',
-      });
-    }
-    if (!isTargetLocalityName(exists.name)) {
-      throwError('VALIDATION_ERROR', {
-        field: 'localityId',
-        reason: 'not_smif_locality',
       });
     }
     return id;

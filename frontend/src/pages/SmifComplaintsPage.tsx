@@ -29,15 +29,14 @@ import {
 import { useToast } from "../app/toast";
 import {
   useCreateSmifComplaint,
-  useLocalities,
   useMe,
+  useOmsCatalog,
   useSmifComplaints,
   useUpdateSmifComplaint,
 } from "../api/hooks";
 import { EmptyState } from "../components/states/EmptyState";
 import { ErrorState } from "../components/states/ErrorState";
 import { SkeletonState } from "../components/states/SkeletonState";
-import { selectTargetLocalities } from "../constants/localities";
 
 const APP_HEADER_HEIGHT = 96;
 
@@ -98,20 +97,25 @@ export function SmifComplaintsPage() {
   );
 
   const complaintsQuery = useSmifComplaints(filters, canManage);
-  const localitiesQuery = useLocalities(canManage);
+  const omsCatalogQuery = useOmsCatalog(canManage);
   const createComplaint = useCreateSmifComplaint();
   const updateComplaint = useUpdateSmifComplaint();
 
-  const localityOptions = useMemo(
+  const omOptions = useMemo(
     () =>
-      selectTargetLocalities((localitiesQuery.data?.items ?? []) as any[])
+      ((omsCatalogQuery.data?.items ?? []) as any[])
         .map((item) => ({
           id: String(item?.id ?? "").trim(),
-          label: String(item?.name ?? "").trim(),
+          code: String(item?.code ?? "").trim(),
+          name: String(item?.name ?? "").trim(),
         }))
-        .filter((item) => item.id && item.label)
-        .sort((a, b) => a.label.localeCompare(b.label, "pt-BR")),
-    [localitiesQuery.data?.items],
+        .filter((item) => item.id && item.name)
+        .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"))
+        .map((item) => ({
+          id: item.id,
+          label: item.code ? `${item.code} - ${item.name}` : item.name,
+        })),
+    [omsCatalogQuery.data?.items],
   );
 
   if (!canManage) {
@@ -123,7 +127,7 @@ export function SmifComplaintsPage() {
     );
   }
 
-  if (complaintsQuery.isLoading || localitiesQuery.isLoading)
+  if (complaintsQuery.isLoading || omsCatalogQuery.isLoading)
     return <SkeletonState />;
 
   if (complaintsQuery.isError) {
@@ -135,11 +139,11 @@ export function SmifComplaintsPage() {
     );
   }
 
-  if (localitiesQuery.isError) {
+  if (omsCatalogQuery.isError) {
     return (
       <ErrorState
-        error={localitiesQuery.error}
-        onRetry={() => localitiesQuery.refetch()}
+        error={omsCatalogQuery.error}
+        onRetry={() => omsCatalogQuery.refetch()}
       />
     );
   }
@@ -174,7 +178,7 @@ export function SmifComplaintsPage() {
     try {
       if (!form.localityId) {
         toast.push({
-          message: "Selecione a localidade do ocorrido.",
+          message: "Selecione a OM do ocorrido.",
           severity: "warning",
         });
         return;
@@ -262,7 +266,7 @@ export function SmifComplaintsPage() {
               label="Buscar"
               value={q}
               onChange={(event) => setQ(event.target.value)}
-              placeholder="Descrição, conclusão ou localidade"
+              placeholder="Descrição, conclusão ou OM"
               fullWidth
             />
             <TextField
@@ -280,13 +284,13 @@ export function SmifComplaintsPage() {
             <TextField
               select
               size="small"
-              label="Localidade"
+              label="OM"
               value={localityIdFilter}
               onChange={(event) => setLocalityIdFilter(event.target.value)}
               sx={{ minWidth: 260 }}
             >
               <MenuItem value="">Todas</MenuItem>
-              {localityOptions.map((option) => (
+              {omOptions.map((option) => (
                 <MenuItem key={option.id} value={option.id}>
                   {option.label}
                 </MenuItem>
@@ -308,7 +312,7 @@ export function SmifComplaintsPage() {
               <Table size="small">
                 <TableHead>
                   <TableRow>
-                    <TableCell sx={{ fontWeight: 700 }}>Localidade</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>OM</TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>
                       Data da comunicação
                     </TableCell>
@@ -386,7 +390,7 @@ export function SmifComplaintsPage() {
             <TextField
               select
               size="small"
-              label="Local do ocorrido (Localidade SMIF)"
+              label="Local do ocorrido (OM)"
               value={form.localityId}
               onChange={(event) =>
                 setForm((prev) => ({ ...prev, localityId: event.target.value }))
@@ -394,7 +398,7 @@ export function SmifComplaintsPage() {
               fullWidth
             >
               <MenuItem value="">Selecione</MenuItem>
-              {localityOptions.map((option) => (
+              {omOptions.map((option) => (
                 <MenuItem key={option.id} value={option.id}>
                   {option.label}
                 </MenuItem>
