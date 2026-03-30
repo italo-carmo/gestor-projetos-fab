@@ -646,7 +646,9 @@ export function GsdRecruitsPage() {
         Gestão individual das recrutas por GSD, com status, baixas e designação de OM por pessoa.
       </Typography>
 
-      <Tabs value={activeTab} onChange={handleTabChange} sx={{ mb: 2 }}>
+      <InstitutionalMappingPanel />
+
+      <Tabs value={activeTab} onChange={handleTabChange} sx={{ mb: 2, mt: 2 }}>
         {canViewGsdTab && <Tab value="gestao" label="Gestão por localidade" />}
         {canViewHistoryTab && <Tab value="historico" label="Histórico de recrutas" />}
       </Tabs>
@@ -907,8 +909,6 @@ export function GsdRecruitsPage() {
             )}
           </CardContent>
         </Card>
-
-        <InstitutionalMappingPanel />
 
         <MilitaryHighlightsPanel />
         </Stack>
