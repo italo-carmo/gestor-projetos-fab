@@ -215,40 +215,50 @@ export function TasksPage() {
   );
   const phaseMap = new Map(phases.map((phase) => [phase.id, phase.name]));
 
-  const assignees: { id: string; name: string }[] = me?.executive_hide_pii
-    ? []
-    : (usersQuery.data?.items ?? []).length > 0
-      ? (usersQuery.data?.items ?? [])
-          .map((user: any) => ({
-            id: String(user.id),
-            name:
-              user.name ??
-              user.email ??
-              `Usuário ${String(user.id).slice(0, 8)}`,
-          }))
-          .sort(
-            (
-              a: { id: string; name: string },
-              b: { id: string; name: string },
-            ) => a.name.localeCompare(b.name, "pt-BR"),
-          )
-      : Array.from(
-          new Map<string, { id: string; name: string }>(
-            items
-              .filter((item: any) => item.assignedToId)
-              .map((item: any) => [
-                String(item.assignedToId),
-                {
-                  id: String(item.assignedToId),
-                  name:
-                    item.assignee?.name ??
-                    item.assignedTo?.name ??
-                    item.assignedTo?.email ??
-                    `Usuário ${String(item.assignedToId).slice(0, 8)}`,
-                },
-              ]),
-          ).values(),
-        );
+  const assignees: { id: string; name: string; localityId?: string | null }[] =
+    me?.executive_hide_pii
+      ? []
+      : (usersQuery.data?.items ?? []).length > 0
+        ? (usersQuery.data?.items ?? [])
+            .map((user: any) => ({
+              id: String(user.id),
+              localityId:
+                user?.localityId === undefined || user?.localityId === null
+                  ? null
+                  : String(user.localityId),
+              name:
+                user.name ??
+                user.email ??
+                `Usuário ${String(user.id).slice(0, 8)}`,
+            }))
+            .sort(
+              (
+                a: { id: string; name: string },
+                b: { id: string; name: string },
+              ) => a.name.localeCompare(b.name, "pt-BR"),
+            )
+        : Array.from(
+            new Map<string, { id: string; name: string }>(
+              items
+                .filter((item: any) => item.assignedToId)
+                .map((item: any) => [
+                  String(item.assignedToId),
+                  {
+                    id: String(item.assignedToId),
+                    localityId:
+                      item?.localityId === undefined ||
+                      item?.localityId === null
+                        ? null
+                        : String(item.localityId),
+                    name:
+                      item.assignee?.name ??
+                      item.assignedTo?.name ??
+                      item.assignedTo?.email ??
+                      `Usuário ${String(item.assignedToId).slice(0, 8)}`,
+                  },
+                ]),
+            ).values(),
+          );
 
   const taskIdFromUrl = params.get("taskId") ?? "";
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(
@@ -262,13 +272,14 @@ export function TasksPage() {
         String(task.createdAt ?? "").slice(0, 10) ||
         String(task.dueDate ?? "").slice(0, 10);
       const phaseKey = String(task.taskTemplate?.phaseId ?? "");
-      const templateKey = String(task.taskTemplateId ?? task.taskTemplate?.id ?? "");
+      const templateKey = String(
+        task.taskTemplateId ?? task.taskTemplate?.id ?? "",
+      );
       const meetingKey = String(task.meetingId ?? "");
       const specialtyKey = String(task.specialtyId ?? "");
       const eloRoleKey = String(task.eloRoleId ?? "");
       const titleKey = resolveTaskTitle(task).trim().toLowerCase();
-      const fallbackLegacyKey =
-        `legacy:${templateKey}|${titleKey}|${phaseKey}|${createdDateKey}|${meetingKey}|${specialtyKey}|${eloRoleKey}`;
+      const fallbackLegacyKey = `legacy:${templateKey}|${titleKey}|${phaseKey}|${createdDateKey}|${meetingKey}|${specialtyKey}|${eloRoleKey}`;
       const key = explicitGroupKey || fallbackLegacyKey;
       const current = groups.get(key) ?? [];
       current.push(task);
@@ -359,9 +370,11 @@ export function TasksPage() {
   const rowByAnyGroupedTaskId = useMemo(() => {
     const m = new Map<string, any>();
     for (const row of groupedRows) {
-      const ids = (row.groupedTaskIds?.length
-        ? row.groupedTaskIds
-        : [String(row.primaryTaskId ?? row.id)]) as string[];
+      const ids = (
+        row.groupedTaskIds?.length
+          ? row.groupedTaskIds
+          : [String(row.primaryTaskId ?? row.id)]
+      ) as string[];
       for (const id of ids) {
         m.set(String(id), row);
       }
@@ -460,13 +473,46 @@ export function TasksPage() {
   const createAssigneeOptions = useMemo(() => {
     if (me?.executive_hide_pii) return [];
     const fromTaskAssignees = createAssigneesQuery.data?.items ?? [];
-    if (fromTaskAssignees.length > 0) {
-      return [...fromTaskAssignees].sort((a: any, b: any) =>
-        String(a.name).localeCompare(String(b.name), "pt-BR"),
-      );
-    }
-    return assignees;
-  }, [assignees, createAssigneesQuery.data?.items, me?.executive_hide_pii]);
+    const selectedLocalityIdSet = new Set(
+      createLocalityIds
+        .map((value) => String(value ?? "").trim())
+        .filter(Boolean),
+    );
+    const usersFilteredByLocality =
+      selectedLocalityIdSet.size > 0
+        ? assignees.filter((assignee) =>
+            selectedLocalityIdSet.has(String(assignee.localityId ?? "").trim()),
+          )
+        : assignees;
+
+    const merged = new Map<string, { id: string; name: string }>();
+    fromTaskAssignees.forEach((item: any) => {
+      const id = String(item?.id ?? "").trim();
+      if (!id) return;
+      merged.set(id, {
+        id,
+        name: String(item?.name ?? item?.label ?? `Usuário ${id.slice(0, 8)}`),
+      });
+    });
+    usersFilteredByLocality.forEach((item) => {
+      const id = String(item?.id ?? "").trim();
+      if (!id) return;
+      if (merged.has(id)) return;
+      merged.set(id, {
+        id,
+        name: String(item.name ?? `Usuário ${id.slice(0, 8)}`),
+      });
+    });
+
+    return Array.from(merged.values()).sort((a, b) =>
+      String(a.name).localeCompare(String(b.name), "pt-BR"),
+    );
+  }, [
+    assignees,
+    createAssigneesQuery.data?.items,
+    createLocalityIds,
+    me?.executive_hide_pii,
+  ]);
 
   const resetCreateForm = () => {
     setCreateMode("template");
@@ -897,9 +943,10 @@ export function TasksPage() {
                   "& .MuiDataGrid-sortIcon, & .MuiDataGrid-menuIconButton": {
                     color: "#FFFFFF !important",
                   },
-                  "& .MuiDataGrid-menuIconButton .MuiSvgIcon-root, & .MuiDataGrid-sortIcon .MuiSvgIcon-root": {
-                    color: "#FFFFFF !important",
-                  },
+                  "& .MuiDataGrid-menuIconButton .MuiSvgIcon-root, & .MuiDataGrid-sortIcon .MuiSvgIcon-root":
+                    {
+                      color: "#FFFFFF !important",
+                    },
                   "& .MuiDataGrid-iconSeparator": {
                     color: "rgba(255,255,255,0.45)",
                   },

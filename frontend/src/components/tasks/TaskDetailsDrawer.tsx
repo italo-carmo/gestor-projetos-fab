@@ -30,6 +30,7 @@ import {
   useSpecialties,
   useTaskAssignees,
   useTaskComments,
+  useUsers,
   useUpdateTaskEloRole,
   useUpdateTaskSpecialty,
   useUpdateTaskMeeting,
@@ -66,6 +67,12 @@ function resolveTaskTitle(task: any) {
     "";
   const normalized = String(raw).trim();
   return normalized || "Tarefa sem título";
+}
+
+function uniqueLocalityIds(values: Array<string | null | undefined>) {
+  return Array.from(
+    new Set(values.map((value) => String(value ?? "").trim()).filter(Boolean)),
+  );
 }
 
 export type TaskDetailsDrawerProps = {
@@ -124,6 +131,7 @@ export function TaskDetailsDrawer({
   ]);
   const canUpdate = can(user, "task_instances", "update");
   const canAssign = can(user, "task_instances", "assign") && canManageByRole;
+  const canViewUsers = can(user, "users", "view");
   const canManageTaskData = canUpdate && canManageByRole;
   const canDelete = canManageTaskData;
   const meetingsQuery = useMeetings({});
@@ -136,7 +144,52 @@ export function TaskDetailsDrawer({
   const specialties = specialtiesQuery.data?.items ?? [];
   const updateTaskSpecialty = useUpdateTaskSpecialty();
   const assigneesQuery = useTaskAssignees(selectedLocalityId);
-  const assigneeOptions = assigneesQuery.data?.items ?? [];
+  const usersQuery = useUsers(canViewUsers && !user?.executive_hide_pii);
+  const assigneeOptions = useMemo(() => {
+    const fromTaskAssignees = (assigneesQuery.data?.items ?? []) as any[];
+    const users = (usersQuery.data?.items ?? []) as any[];
+    const selectedLocality = String(selectedLocalityId ?? "").trim();
+    const usersByLocality =
+      selectedLocality.length > 0
+        ? users.filter(
+            (candidate: any) =>
+              String(candidate?.localityId ?? "").trim() === selectedLocality,
+          )
+        : users;
+
+    const merged = new Map<string, any>();
+    fromTaskAssignees.forEach((option: any) => {
+      const type = String(option?.type ?? "").trim();
+      const id = String(option?.id ?? "").trim();
+      if (!type || !id) return;
+      merged.set(`${type}:${id}`, option);
+    });
+
+    usersByLocality
+      .map((candidate: any) => {
+        const id = String(candidate?.id ?? "").trim();
+        if (!id) return null;
+        return {
+          type: "USER",
+          id,
+          label: String(
+            candidate?.name ?? candidate?.email ?? `Usuário ${id.slice(0, 8)}`,
+          ),
+          subtitle: "Usuário",
+        };
+      })
+      .filter(Boolean)
+      .sort((a: any, b: any) =>
+        String(a.label).localeCompare(String(b.label), "pt-BR"),
+      )
+      .forEach((option: any) => {
+        const key = `USER:${String(option.id)}`;
+        if (merged.has(key)) return;
+        merged.set(key, option);
+      });
+
+    return Array.from(merged.values());
+  }, [assigneesQuery.data?.items, selectedLocalityId, usersQuery.data?.items]);
   const commentsQuery = useTaskComments(task?.id ?? "");
   const auditQuery = useAuditLogs(
     task
@@ -192,8 +245,8 @@ export function TaskDetailsDrawer({
       }
     });
     if (task?.localityId) {
-      const id = String(task.localityId);
-      if (!optionMap.has(id)) {
+      const id = String(task.localityId).trim();
+      if (id && !optionMap.has(id)) {
         optionMap.set(id, {
           id,
           name: String(task.localityName ?? "Localidade atual"),
@@ -238,12 +291,17 @@ export function TaskDetailsDrawer({
       linkedLocalities.length > 0
         ? linkedLocalities
         : task.localityId
-          ? [{ id: String(task.localityId), name: String(task.localityName ?? "") }]
+          ? [
+              {
+                id: String(task.localityId),
+                name: String(task.localityName ?? ""),
+              },
+            ]
           : []
     )
       .map((locality) => String(locality?.id ?? "").trim())
       .filter(Boolean);
-    setLinkedLocalityIdsDraft(Array.from(new Set(linkedIds)));
+    setLinkedLocalityIdsDraft(uniqueLocalityIds(linkedIds));
   }, [
     task?.id,
     task?.localityId,
@@ -252,6 +310,10 @@ export function TaskDetailsDrawer({
     task?.assigneeType,
     linkedLocalitiesKey,
   ]);
+  const linkedLocalityIdSet = useMemo(
+    () => new Set(uniqueLocalityIds(linkedLocalityIdsDraft)),
+    [linkedLocalityIdsDraft],
+  );
 
   useEffect(() => {
     if (!open || !task?.id) return;
@@ -423,8 +485,7 @@ export function TaskDetailsDrawer({
     if (!task || !canManageTaskData) return;
 
     const nextTitle = taskTitleDraft.trim();
-    const titleChanged =
-      !!nextTitle && nextTitle !== resolveTaskTitle(task);
+    const titleChanged = !!nextTitle && nextTitle !== resolveTaskTitle(task);
 
     const nextLocalityIds = Array.from(
       new Set(linkedLocalityIdsDraft.map((value) => String(value).trim())),
@@ -608,16 +669,20 @@ export function TaskDetailsDrawer({
                       size="small"
                       options={localityOptions}
                       value={localityOptions.filter((option) =>
-                        linkedLocalityIdsDraft.includes(option.id),
+                        linkedLocalityIdSet.has(String(option.id).trim()),
                       )}
                       getOptionLabel={(option) => option.name}
                       isOptionEqualToValue={(option, value) =>
                         option.id === value.id
                       }
                       onChange={(_, values) =>
-                        setLinkedLocalityIdsDraft(values.map((value) => value.id))
+                        setLinkedLocalityIdsDraft(
+                          uniqueLocalityIds(values.map((value) => value.id)),
+                        )
                       }
-                      disabled={!canManageTaskData || updateTaskLocalities.isPending}
+                      disabled={
+                        !canManageTaskData || updateTaskLocalities.isPending
+                      }
                       renderTags={(value, getTagProps) =>
                         value.map((option, index) => (
                           <Chip
@@ -642,14 +707,21 @@ export function TaskDetailsDrawer({
                       )}
                     />
                     {canManageTaskData && localityOptions.length > 0 && (
-                      <Stack direction="row" spacing={1} sx={{ mt: 1 }} flexWrap="wrap">
+                      <Stack
+                        direction="row"
+                        spacing={1}
+                        sx={{ mt: 1 }}
+                        flexWrap="wrap"
+                      >
                         <Button
                           size="small"
                           variant="outlined"
                           disabled={updateTaskLocalities.isPending}
                           onClick={() =>
                             setLinkedLocalityIdsDraft(
-                              localityOptions.map((option) => option.id),
+                              uniqueLocalityIds(
+                                localityOptions.map((option) => option.id),
+                              ),
                             )
                           }
                         >
@@ -714,15 +786,7 @@ export function TaskDetailsDrawer({
                   }}
                   disabled={!canAssign || user?.executive_hide_pii}
                 >
-                  {(localities.length
-                    ? localities
-                    : [
-                        {
-                          id: task.localityId,
-                          name: task.localityName ?? "Localidade atual",
-                        },
-                      ]
-                  ).map((loc) => (
+                  {localityOptions.map((loc) => (
                     <MenuItem key={loc.id} value={loc.id}>
                       {loc.name}
                     </MenuItem>
@@ -853,7 +917,7 @@ export function TaskDetailsDrawer({
                     ))}
                   </TextField>
                 </Box>
-                <Stack direction="row" spacing={1} sx={{ width: '100%' }}>
+                <Stack direction="row" spacing={1} sx={{ width: "100%" }}>
                   <Button
                     size="small"
                     variant="outlined"
@@ -896,7 +960,9 @@ export function TaskDetailsDrawer({
                       variant="outlined"
                       color="error"
                       onClick={handleDelete}
-                      disabled={deleteTask.isPending || batchDeleteTasks.isPending}
+                      disabled={
+                        deleteTask.isPending || batchDeleteTasks.isPending
+                      }
                       sx={{ minHeight: 30, px: 1.5, flex: 1 }}
                     >
                       Excluir
