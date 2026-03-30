@@ -182,6 +182,33 @@ export class SmifComplaintsService {
     return updated;
   }
 
+  async remove(id: string, user?: RbacUser) {
+    this.assertEditorAccess(user);
+
+    const existing = await this.prisma.smifComplaint.findUnique({
+      where: { id },
+      select: { id: true, localityId: true, reportedAt: true, status: true },
+    });
+    if (!existing) throwError('NOT_FOUND');
+
+    await this.prisma.smifComplaint.delete({ where: { id } });
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'smif_complaints',
+      action: 'delete',
+      entityId: existing.id,
+      localityId: existing.localityId,
+      diffJson: {
+        localityId: existing.localityId,
+        reportedAt: existing.reportedAt,
+        status: existing.status,
+      },
+    });
+
+    return { ok: true };
+  }
+
   private assertEditorAccess(user?: RbacUser) {
     if (!hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_TI])) {
       throwError('RBAC_FORBIDDEN');

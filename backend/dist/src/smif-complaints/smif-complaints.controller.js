@@ -35,6 +35,9 @@ let SmifComplaintsController = class SmifComplaintsController {
     update(id, dto, user) {
         return this.smifComplaints.update(id, dto, user);
     }
+    remove(id, user) {
+        return this.smifComplaints.remove(id, user);
+    }
 };
 exports.SmifComplaintsController = SmifComplaintsController;
 __decorate([
@@ -62,6 +65,14 @@ __decorate([
     __metadata("design:paramtypes", [String, update_smif_complaint_dto_1.UpdateSmifComplaintDto, Object]),
     __metadata("design:returntype", void 0)
 ], SmifComplaintsController.prototype, "update", null);
+__decorate([
+    (0, common_1.Delete)(':id'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", void 0)
+], SmifComplaintsController.prototype, "remove", null);
 exports.SmifComplaintsController = SmifComplaintsController = __decorate([
     (0, common_1.Controller)('smif-complaints'),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, rbac_guard_1.RbacGuard),

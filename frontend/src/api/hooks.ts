@@ -2882,6 +2882,17 @@ export function useUpdateSmifComplaint() {
   });
 }
 
+export function useDeleteSmifComplaint() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      (await api.delete(`/smif-complaints/${id}`)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["smifComplaints"] });
+    },
+  });
+}
+
 export function useLocalities(enabled = true) {
   return useQuery({
     queryKey: qk.localities,

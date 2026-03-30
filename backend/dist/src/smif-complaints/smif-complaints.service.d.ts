@@ -102,6 +102,9 @@ export declare class SmifComplaintsService {
         reportedAt: Date;
         updatedById: string | null;
     }>;
+    remove(id: string, user?: RbacUser): Promise<{
+        ok: boolean;
+    }>;
     private assertEditorAccess;
     private resolveActorId;
     private normalizeDate;

@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Post,
@@ -39,5 +40,10 @@ export class SmifComplaintsController {
     @CurrentUser() user: RbacUser,
   ) {
     return this.smifComplaints.update(id, dto, user);
+  }
+
+  @Delete(':id')
+  remove(@Param('id') id: string, @CurrentUser() user: RbacUser) {
+    return this.smifComplaints.remove(id, user);
   }
 }

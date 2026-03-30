@@ -5,6 +5,7 @@ import {
   CardContent,
   Chip,
   Drawer,
+  IconButton,
   MenuItem,
   Stack,
   Table,
@@ -16,6 +17,7 @@ import {
   Typography,
 } from "@mui/material";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
+import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import ReportGmailerrorredRoundedIcon from "@mui/icons-material/ReportGmailerrorredRounded";
 import { useMemo, useState } from "react";
 import { parseApiError } from "../app/apiErrors";
@@ -27,11 +29,13 @@ import {
 import { useToast } from "../app/toast";
 import {
   useCreateSmifComplaint,
+  useDeleteSmifComplaint,
   useMe,
   useOmsCatalog,
   useSmifComplaints,
   useUpdateSmifComplaint,
 } from "../api/hooks";
+import { ConfirmDialog } from "../components/dialogs/ConfirmDialog";
 import { EmptyState } from "../components/states/EmptyState";
 import { ErrorState } from "../components/states/ErrorState";
 import { SkeletonState } from "../components/states/SkeletonState";
@@ -77,6 +81,7 @@ export function SmifComplaintsPage() {
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<SmifComplaintItem | null>(null);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [form, setForm] = useState({
     localityId: "",
     reportedAt: toDateInput(new Date()),
@@ -98,6 +103,7 @@ export function SmifComplaintsPage() {
   const omsCatalogQuery = useOmsCatalog(canManage);
   const createComplaint = useCreateSmifComplaint();
   const updateComplaint = useUpdateSmifComplaint();
+  const deleteComplaint = useDeleteSmifComplaint();
 
   const omOptions = useMemo(
     () =>
@@ -154,6 +160,11 @@ export function SmifComplaintsPage() {
 
   const items = (complaintsQuery.data?.items ?? []) as SmifComplaintItem[];
 
+  const closeDrawer = () => {
+    setDrawerOpen(false);
+    setConfirmDeleteOpen(false);
+  };
+
   const openCreate = () => {
     setEditing(null);
     setForm({
@@ -163,6 +174,7 @@ export function SmifComplaintsPage() {
       status: "IN_PROGRESS",
       conclusion: "",
     });
+    setConfirmDeleteOpen(false);
     setDrawerOpen(true);
   };
 
@@ -175,6 +187,7 @@ export function SmifComplaintsPage() {
       status: item.status ?? "IN_PROGRESS",
       conclusion: String(item.conclusion ?? ""),
     });
+    setConfirmDeleteOpen(false);
     setDrawerOpen(true);
   };
 
@@ -218,10 +231,25 @@ export function SmifComplaintsPage() {
         toast.push({ message: "Denúncia registrada.", severity: "success" });
       }
 
-      setDrawerOpen(false);
+      closeDrawer();
     } catch (error) {
       toast.push({
         message: parseApiError(error).message ?? "Erro ao salvar denúncia.",
+        severity: "error",
+      });
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!editing?.id) return;
+    try {
+      await deleteComplaint.mutateAsync(editing.id);
+      toast.push({ message: "Denúncia excluída.", severity: "success" });
+      closeDrawer();
+      setEditing(null);
+    } catch (error) {
+      toast.push({
+        message: parseApiError(error).message ?? "Erro ao excluir denúncia.",
         severity: "error",
       });
     }
@@ -323,6 +351,12 @@ export function SmifComplaintsPage() {
                       Data da comunicação
                     </TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
+                    <TableCell
+                      sx={{ fontWeight: 700, width: 72 }}
+                      align="right"
+                    >
+                      Ações
+                    </TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -350,6 +384,17 @@ export function SmifComplaintsPage() {
                           variant="outlined"
                         />
                       </TableCell>
+                      <TableCell align="right">
+                        <IconButton
+                          size="small"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openEdit(item);
+                          }}
+                        >
+                          <EditRoundedIcon fontSize="small" />
+                        </IconButton>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -362,7 +407,7 @@ export function SmifComplaintsPage() {
       <Drawer
         anchor="right"
         open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
+        onClose={closeDrawer}
         PaperProps={{
           sx: {
             width: { xs: "100%", md: 520 },
@@ -452,14 +497,27 @@ export function SmifComplaintsPage() {
             />
 
             <Stack direction="row" spacing={1} justifyContent="flex-end">
-              <Button variant="text" onClick={() => setDrawerOpen(false)}>
+              {editing ? (
+                <Button
+                  color="error"
+                  variant="outlined"
+                  onClick={() => setConfirmDeleteOpen(true)}
+                  disabled={deleteComplaint.isPending}
+                  sx={{ mr: "auto" }}
+                >
+                  Excluir denúncia
+                </Button>
+              ) : null}
+              <Button variant="text" onClick={closeDrawer}>
                 Cancelar
               </Button>
               <Button
                 variant="contained"
                 onClick={handleSave}
                 disabled={
-                  createComplaint.isPending || updateComplaint.isPending
+                  createComplaint.isPending ||
+                  updateComplaint.isPending ||
+                  deleteComplaint.isPending
                 }
               >
                 Salvar
@@ -468,6 +526,28 @@ export function SmifComplaintsPage() {
           </Stack>
         </Box>
       </Drawer>
+
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        onCancel={() => setConfirmDeleteOpen(false)}
+        onConfirm={handleConfirmDelete}
+        title="Excluir denúncia"
+        message="Tem certeza que deseja excluir esta denúncia?"
+        highlightText={
+          editing
+            ? `${editing.locality?.name ?? "OM"} • ${toDateInput(
+                editing.reportedAt,
+              )
+                .split("-")
+                .reverse()
+                .join("/")}`
+            : undefined
+        }
+        note="Esta ação não pode ser desfeita."
+        confirmLabel={deleteComplaint.isPending ? "Excluindo..." : "Excluir"}
+        severity="error"
+        confirmLoading={deleteComplaint.isPending}
+      />
     </Stack>
   );
 }

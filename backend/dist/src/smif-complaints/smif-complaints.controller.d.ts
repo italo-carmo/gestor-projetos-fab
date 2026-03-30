@@ -86,4 +86,7 @@ export declare class SmifComplaintsController {
         reportedAt: Date;
         updatedById: string | null;
     }>;
+    remove(id: string, user: RbacUser): Promise<{
+        ok: boolean;
+    }>;
 }
