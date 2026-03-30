@@ -1,41 +1,46 @@
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-  type QueryClient,
-} from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./client";
 import { qk } from "./queryKeys";
 import { splitMilitaryNameAndOm, toMilitaryDisplayName } from "../app/militaryName";
 
 /**
- * Lista paginada ordena por prazo: tarefas novas podem ficar fora da 1ª página.
- * Atualiza cada query `['tasks', filtros]` por chave exata (setQueriesData com updater
- * falhava quando `items` era [] ou após race com refetch).
+ * Tarefas recém-criadas podem não vir na 1ª página (ordem por prazo + paginação).
+ * Qualquer refetch (incl. foco da janela) substitui a cache e apagava o merge manual.
+ * Mantemos um buffer em memória e o `select` de useTasks reinjeta até o servidor
+ * devolver esses ids na resposta; aí removemos do buffer.
  */
-function mergeCreatedTasksIntoTasksCache(
-  qc: QueryClient,
-  createdItems: any[],
-) {
-  if (!createdItems?.length) return;
-  const queries = qc.getQueriesData({ queryKey: ["tasks"] });
-  for (const [queryKey, data] of queries) {
-    const old = data as any;
-    const base =
-      old && typeof old === "object"
-        ? old
-        : { page: 1, pageSize: 20, total: 0 };
-    const currentItems = Array.isArray(base.items) ? base.items : [];
-    const serverIds = new Set(currentItems.map((t: any) => String(t.id)));
-    const toPrepend = createdItems.filter(
-      (c: any) => c?.id && !serverIds.has(String(c.id)),
-    );
-    if (toPrepend.length === 0) continue;
-    qc.setQueryData(queryKey, {
-      ...base,
-      items: [...toPrepend, ...currentItems],
-    });
+const pendingCreatedTaskById = new Map<string, any>();
+
+function stashPendingCreatedTasks(items: any[]) {
+  for (const it of items ?? []) {
+    const id = String(it?.id ?? "").trim();
+    if (!id) continue;
+    if (!pendingCreatedTaskById.has(id)) pendingCreatedTaskById.set(id, it);
   }
+}
+
+/** Dispara reexecução do `select` (merge com buffer) antes do refetch assíncrono. */
+function touchTasksQueries(qc: ReturnType<typeof useQueryClient>) {
+  qc.setQueriesData({ queryKey: ["tasks"] }, (old: any) =>
+    old && typeof old === "object" ? { ...old } : old,
+  );
+}
+
+function mergePendingIntoTasksPageData(data: any): any {
+  if (!data || typeof data !== "object") return data;
+  const items = Array.isArray(data.items) ? data.items : [];
+  const serverIds = new Set(items.map((t: any) => String(t.id)));
+  for (const id of [...pendingCreatedTaskById.keys()]) {
+    if (serverIds.has(id)) pendingCreatedTaskById.delete(id);
+  }
+  const pending = [...pendingCreatedTaskById.values()].filter(
+    (p) => p?.id && !serverIds.has(String(p.id)),
+  );
+  if (pending.length === 0) return data;
+  return {
+    ...data,
+    items: [...pending, ...items],
+  };
 }
 
 function normalizeSigpesNumeroOrdem(value: unknown) {
@@ -112,6 +117,8 @@ export function useTasks(filters: Record<string, any>) {
     queryFn: async () =>
       (await api.get("/task-instances", { params: filters })).data,
     staleTime: 15_000,
+    refetchOnWindowFocus: false,
+    select: mergePendingIntoTasksPageData,
   });
 }
 
@@ -1419,9 +1426,9 @@ export function useGenerateInstances() {
       ).data,
     onSuccess: async (data) => {
       const created = Array.isArray(data?.items) ? data.items : [];
-      mergeCreatedTasksIntoTasksCache(qc, created);
-      await qc.refetchQueries({ queryKey: ["tasks"] });
-      mergeCreatedTasksIntoTasksCache(qc, created);
+      stashPendingCreatedTasks(created);
+      touchTasksQueries(qc);
+      await qc.invalidateQueries({ queryKey: ["tasks"] });
     },
   });
 }
@@ -1441,9 +1448,9 @@ export function useCreateTaskInstance() {
     }) => (await api.post("/task-instances", payload)).data,
     onSuccess: async (data) => {
       const created = Array.isArray(data?.items) ? data.items : [];
-      mergeCreatedTasksIntoTasksCache(qc, created);
-      await qc.refetchQueries({ queryKey: ["tasks"] });
-      mergeCreatedTasksIntoTasksCache(qc, created);
+      stashPendingCreatedTasks(created);
+      touchTasksQueries(qc);
+      await qc.invalidateQueries({ queryKey: ["tasks"] });
       qc.invalidateQueries({ queryKey: ["gantt"] });
       qc.invalidateQueries({ queryKey: ["calendar"] });
       qc.invalidateQueries({ queryKey: ["meetings"] });
