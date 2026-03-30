@@ -626,45 +626,28 @@ export class TasksService {
       filters.pageSize,
     );
 
+    const listInclude = this.taskInstanceListInclude();
+
     const [items, total] = await this.prisma.$transaction([
       this.prisma.taskInstance.findMany({
         where: finalWhere,
         orderBy: { dueDate: 'asc' },
         skip,
         take,
-        include: {
-          locality: { select: { id: true, name: true, code: true } },
-          specialty: { select: { id: true, name: true, color: true } },
-          taskTemplate: { select: { id: true, title: true, phaseId: true } },
-          assignedTo: { select: { id: true, name: true, email: true } },
-          assignedElo: {
-            include: {
-              eloRole: { select: { id: true, code: true, name: true } },
-            },
-          },
-          responsibles: {
-            include: {
-              user: {
-                select: {
-                  id: true,
-                  name: true,
-                  email: true,
-                  localityId: true,
-                  specialtyId: true,
-                  eloRoleId: true,
-                },
-              },
-            },
-            orderBy: [{ createdAt: 'asc' }],
-          },
-          meeting: { select: { id: true, datetime: true, scope: true } },
-          eloRole: { select: { id: true, code: true, name: true } },
-        },
+        include: listInclude,
       }),
       this.prisma.taskInstance.count({ where: finalWhere }),
     ]);
 
-    const withCommentSummary = await this.attachTaskCommentSummary(items, user);
+    const mergedItems = await this.mergeTaskGroupSiblingsIntoPage(
+      items,
+      finalWhere,
+    );
+
+    const withCommentSummary = await this.attachTaskCommentSummary(
+      mergedItems,
+      user,
+    );
 
     return {
       items: withCommentSummary.map((item) =>
@@ -5191,6 +5174,78 @@ export class TasksService {
         },
       ],
     };
+  }
+
+  private taskInstanceListInclude(): Prisma.TaskInstanceInclude {
+    return {
+      locality: { select: { id: true, name: true, code: true } },
+      specialty: { select: { id: true, name: true, color: true } },
+      taskTemplate: { select: { id: true, title: true, phaseId: true } },
+      assignedTo: { select: { id: true, name: true, email: true } },
+      assignedElo: {
+        include: {
+          eloRole: { select: { id: true, code: true, name: true } },
+        },
+      },
+      responsibles: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              localityId: true,
+              specialtyId: true,
+              eloRoleId: true,
+            },
+          },
+        },
+        orderBy: [{ createdAt: 'asc' }],
+      },
+      meeting: { select: { id: true, datetime: true, scope: true } },
+      eloRole: { select: { id: true, code: true, name: true } },
+    };
+  }
+
+  /**
+   * Paginação (skip/take) pode trazer só uma instância de um grupo multi-localidade.
+   * Busca as demais instâncias com o mesmo groupKey que ainda obedecem ao mesmo where.
+   */
+  private async mergeTaskGroupSiblingsIntoPage(
+    pageItems: any[],
+    finalWhere: Prisma.TaskInstanceWhereInput,
+  ): Promise<any[]> {
+    const groupKeys = Array.from(
+      new Set(
+        pageItems
+          .map((row) => String(row.groupKey ?? '').trim())
+          .filter(Boolean),
+      ),
+    );
+    if (groupKeys.length === 0) return pageItems;
+
+    const existingIds = pageItems.map((row) => row.id);
+
+    const siblings = await this.prisma.taskInstance.findMany({
+      where: {
+        AND: [
+          finalWhere,
+          { groupKey: { in: groupKeys } },
+          { id: { notIn: existingIds } },
+        ],
+      },
+      orderBy: { dueDate: 'asc' },
+      include: this.taskInstanceListInclude(),
+    });
+
+    if (siblings.length === 0) return pageItems;
+
+    const merged = [...pageItems, ...siblings];
+    merged.sort(
+      (a, b) =>
+        new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime(),
+    );
+    return merged;
   }
 
   async listTaskInstancesForExport(

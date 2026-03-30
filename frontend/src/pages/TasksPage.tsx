@@ -352,22 +352,25 @@ export function TasksPage() {
     [items],
   );
 
-  const rowByPrimaryTaskId = useMemo(
-    () =>
-      new Map(
-        groupedRows.map((row: any) => [
-          String(row.primaryTaskId ?? row.id),
-          row,
-        ]),
-      ),
-    [groupedRows],
-  );
+  /** Qualquer id de instância do grupo aponta para a linha agregada (evita drawer sem localidades vinculadas). */
+  const rowByAnyGroupedTaskId = useMemo(() => {
+    const m = new Map<string, any>();
+    for (const row of groupedRows) {
+      const ids = (row.groupedTaskIds?.length
+        ? row.groupedTaskIds
+        : [String(row.primaryTaskId ?? row.id)]) as string[];
+      for (const id of ids) {
+        m.set(String(id), row);
+      }
+    }
+    return m;
+  }, [groupedRows]);
 
   const selectedTask = selectedTaskId
     ? (taskById.get(String(selectedTaskId)) ?? null)
     : null;
   const selectedTaskGroup = selectedTaskId
-    ? (rowByPrimaryTaskId.get(String(selectedTaskId)) ?? null)
+    ? (rowByAnyGroupedTaskId.get(String(selectedTaskId)) ?? null)
     : null;
 
   useEffect(() => {
