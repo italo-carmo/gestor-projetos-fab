@@ -72,7 +72,7 @@ import {
   Line,
   LineChart,
   ResponsiveContainer,
-  Tooltip,
+  Tooltip as RechartsTooltip,
   XAxis,
   YAxis,
 } from 'recharts';
@@ -985,7 +985,7 @@ export function GsdRecruitsPage() {
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="month" tick={{ fontSize: 12 }} />
                         <YAxis allowDecimals={false} />
-                        <Tooltip />
+                        <RechartsTooltip />
                         <Bar
                           dataKey="value"
                           name="Recrutas"
@@ -1037,7 +1037,7 @@ export function GsdRecruitsPage() {
                           <CartesianGrid strokeDasharray="3 3" />
                           <XAxis dataKey="date" tick={{ fontSize: 11 }} />
                           <YAxis allowDecimals={false} />
-                          <Tooltip />
+                          <RechartsTooltip />
                           <Legend />
                           <Line
                             type="monotone"
