@@ -66,11 +66,22 @@ export function GanttPage() {
 
   const templateMap = new Map<string, any>(((templatesQuery.data?.items ?? []) as any[]).map((t: any) => [t.id, t]));
 
-  const localities = selectTargetLocalities((localitiesQuery.data?.items ?? []) as any[]).map((loc: any) => ({
+  const localitiesRaw = (localitiesQuery.data?.items ?? []) as any[];
+  const allLocalities = useMemo(
+    () =>
+      localitiesRaw
+        .map((loc: any) => ({
+          id: String(loc.id),
+          name: String(loc.name ?? loc.code ?? loc.id),
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')),
+    [localitiesRaw],
+  );
+  const localities = selectTargetLocalities(localitiesRaw).map((loc: any) => ({
     id: loc.id,
     name: loc.name ?? loc.code ?? loc.id,
   }));
-  const localityNameMap = new Map(localities.map((l: any) => [l.id, l.name]));
+  const localityNameMap = new Map(allLocalities.map((l: any) => [l.id, l.name]));
 
   const phases = ((phasesQuery.data?.items ?? []) as any[]).map((phase: any) => ({
     id: phase.id,
@@ -396,7 +407,7 @@ export function GanttPage() {
         onClose={() => setSelectedTaskId(null)}
         onDeleted={() => setSelectedTaskId(null)}
         user={me}
-        localities={localities}
+        localities={allLocalities.length > 0 ? allLocalities : localities}
         linkedTaskIds={selectedTask?.groupedTaskIds ?? []}
         linkedLocalities={selectedTask?.groupedLocalities ?? []}
       />

@@ -7,6 +7,7 @@ import {
   useActivities,
   useCalendarYear,
   useDashboardNational,
+  useLocalities,
   useMe,
   useMissions,
   useTaskInstance,
@@ -65,6 +66,17 @@ export function CalendarPage() {
     scope: 'CIPAVD',
   });
 
+  const localitiesCatalogQuery = useLocalities();
+  const allLocalitiesForTaskDrawer = useMemo(() => {
+    const items = (localitiesCatalogQuery.data?.items ?? []) as any[];
+    return items
+      .map((loc) => ({
+        id: String(loc.id),
+        name: String(loc.name ?? loc.code ?? loc.id),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+  }, [localitiesCatalogQuery.data?.items]);
+
   const localities = selectTargetLocalities(
     (dashboardQuery.data?.items ?? []).map((loc: any) => ({
       id: loc.localityId,
@@ -75,7 +87,14 @@ export function CalendarPage() {
       String(loc.id ?? '').trim() &&
       String(loc.name ?? '').trim(),
   );
-  const localityMap = new Map(localities.map((l: any) => [l.id, l.name]));
+  const localityMap = useMemo(() => {
+    const m = new Map(allLocalitiesForTaskDrawer.map((l) => [l.id, l.name]));
+    for (const loc of localities) {
+      const id = String((loc as any).id ?? '');
+      if (id && !m.has(id)) m.set(id, String((loc as any).name ?? id));
+    }
+    return m;
+  }, [allLocalitiesForTaskDrawer, localities]);
 
   const templateMap = new Map((templatesQuery.data?.items ?? []).map((t: any) => [t.id, t]));
   const tasks = (tasksQuery.data?.items ?? []).map((task: any) => ({
@@ -282,7 +301,9 @@ export function CalendarPage() {
         onClose={() => setSelectedTaskId(null)}
         onDeleted={() => setSelectedTaskId(null)}
         user={me}
-        localities={localities}
+        localities={
+          allLocalitiesForTaskDrawer.length > 0 ? allLocalitiesForTaskDrawer : localities
+        }
         loading={Boolean(selectedTaskId) && !selectedTaskFromList && selectedTaskQuery.isLoading}
       />
     </Box>

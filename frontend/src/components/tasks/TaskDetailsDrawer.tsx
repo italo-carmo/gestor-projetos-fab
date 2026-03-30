@@ -630,6 +630,29 @@ export function TaskDetailsDrawer({
                         />
                       )}
                     />
+                    {canManageTaskData && localityOptions.length > 0 && (
+                      <Stack direction="row" spacing={1} sx={{ mt: 1 }} flexWrap="wrap">
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          disabled={updateTaskLocalities.isPending}
+                          onClick={() =>
+                            setLinkedLocalityIdsDraft(
+                              localityOptions.map((option) => option.id),
+                            )
+                          }
+                        >
+                          Selecionar todas
+                        </Button>
+                        <Button
+                          size="small"
+                          disabled={updateTaskLocalities.isPending}
+                          onClick={() => setLinkedLocalityIdsDraft([])}
+                        >
+                          Limpar seleção
+                        </Button>
+                      </Stack>
+                    )}
                   </Box>
                 )}
                 <TextField

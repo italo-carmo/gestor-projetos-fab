@@ -167,6 +167,17 @@ export function TasksPage() {
     : items;
 
   const localitiesData = (localitiesQuery.data?.items ?? []) as any[];
+  /** Catálogo completo (edição de localidades / criar tarefa); filtros usam só OMs-alvo em `localities`. */
+  const allLocalities = useMemo(() => {
+    if (!localitiesData.length) return [];
+    return localitiesData
+      .map((loc: any) => ({
+        id: String(loc.id),
+        name: String(loc.name ?? loc.code ?? loc.id),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+  }, [localitiesData]);
+
   const localities =
     localitiesData.length > 0
       ? selectTargetLocalities(localitiesData).map((loc: any) => ({
@@ -184,7 +195,14 @@ export function TasksPage() {
             ]),
           ).values(),
         );
-  const localityMap = new Map(localities.map((loc) => [loc.id, loc.name]));
+
+  const localityMap = useMemo(() => {
+    const m = new Map(allLocalities.map((loc) => [loc.id, loc.name]));
+    for (const loc of localities) {
+      if (!m.has(loc.id)) m.set(loc.id, loc.name);
+    }
+    return m;
+  }, [allLocalities, localities]);
 
   const phases = ((phasesQuery.data?.items ?? []) as any[]).map(
     (phase: any) => ({
@@ -464,7 +482,9 @@ export function TasksPage() {
     setCreateDrawerOpen(true);
   };
 
-  const selectedCreateLocalities = localities.filter((locality) =>
+  const localityPoolForCreate =
+    allLocalities.length > 0 ? allLocalities : localities;
+  const selectedCreateLocalities = localityPoolForCreate.filter((locality) =>
     createLocalityIds.includes(locality.id),
   );
 
@@ -1286,7 +1306,7 @@ export function TasksPage() {
             <Autocomplete
               multiple
               disableCloseOnSelect
-              options={localities}
+              options={localityPoolForCreate}
               value={selectedCreateLocalities}
               getOptionLabel={(option) => option.name}
               isOptionEqualToValue={(option, value) => option.id === value.id}
@@ -1330,7 +1350,7 @@ export function TasksPage() {
                 size="small"
                 variant="outlined"
                 onClick={() => {
-                  const ids = localities.map((locality) => locality.id);
+                  const ids = localityPoolForCreate.map((locality) => locality.id);
                   setCreateLocalityIds(ids);
                   setCreateOffsets(
                     ids.reduce((acc: Record<string, number>, id: string) => {
