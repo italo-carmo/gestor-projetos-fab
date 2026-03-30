@@ -25,6 +25,12 @@ let AuditController = class AuditController {
     constructor(audit) {
         this.audit = audit;
     }
+    lastLogins(user) {
+        if (!(0, role_access_1.hasAnyRole)(user, [role_access_1.ROLE_COORDENACAO_CIPAVD, role_access_1.ROLE_TI])) {
+            (0, http_error_1.throwError)('RBAC_FORBIDDEN');
+        }
+        return this.audit.lastLoginsByUser();
+    }
     list(resource, userId, localityId, entityId, from, to, page, pageSize, user) {
         if (!(0, role_access_1.hasAnyRole)(user, [role_access_1.ROLE_COORDENACAO_CIPAVD, role_access_1.ROLE_TI])) {
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
@@ -42,6 +48,13 @@ let AuditController = class AuditController {
     }
 };
 exports.AuditController = AuditController;
+__decorate([
+    (0, common_1.Get)('last-logins'),
+    __param(0, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], AuditController.prototype, "lastLogins", null);
 __decorate([
     (0, common_1.Get)(),
     __param(0, (0, common_1.Query)('resource')),

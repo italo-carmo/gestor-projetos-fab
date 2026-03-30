@@ -14,10 +14,12 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  LinearProgress,
   TextField,
   Typography,
 } from "@mui/material";
 import FilterAltRoundedIcon from "@mui/icons-material/FilterAltRounded";
+import LoginRoundedIcon from "@mui/icons-material/LoginRounded";
 import InsightsRoundedIcon from "@mui/icons-material/InsightsRounded";
 import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
 import RuleRoundedIcon from "@mui/icons-material/RuleRounded";
@@ -28,7 +30,7 @@ import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import type { ChipProps } from "@mui/material";
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { useAuditLogs, useLocalities } from "../api/hooks";
+import { useAuditLastLogins, useAuditLogs, useLocalities } from "../api/hooks";
 import { EmptyState } from "../components/states/EmptyState";
 import { ErrorState } from "../components/states/ErrorState";
 import { SkeletonState } from "../components/states/SkeletonState";
@@ -123,6 +125,7 @@ export function AuditPage() {
   );
 
   const auditQuery = useAuditLogs(filters);
+  const lastLoginsQuery = useAuditLastLogins();
   const localitiesQuery = useLocalities();
 
   const updateParam = (key: string, value: string) => {
@@ -253,7 +256,10 @@ export function AuditPage() {
                 size="small"
                 variant="outlined"
                 startIcon={<RefreshRoundedIcon />}
-                onClick={() => auditQuery.refetch()}
+                onClick={() => {
+                  void auditQuery.refetch();
+                  void lastLoginsQuery.refetch();
+                }}
               >
                 Atualizar
               </Button>
@@ -555,6 +561,139 @@ export function AuditPage() {
           </CardContent>
         </Card>
       )}
+
+      <Card
+        sx={{
+          mt: 2,
+          borderRadius: 3,
+          border: "1px solid",
+          borderColor: "divider",
+        }}
+      >
+        <CardContent>
+          <Stack direction="row" spacing={1} alignItems="center" mb={1}>
+            <LoginRoundedIcon color="primary" fontSize="small" />
+            <Typography variant="subtitle1" fontWeight={700}>
+              Último login por usuário
+            </Typography>
+          </Stack>
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
+            Registros de autenticação LDAP nos logs de auditoria (ação{" "}
+            <Box component="span" sx={{ fontFamily: "monospace" }}>
+              auth / login_ldap
+            </Box>
+            ), um por usuário, do mais recente ao mais antigo.
+          </Typography>
+
+          {lastLoginsQuery.isLoading ? (
+            <LinearProgress />
+          ) : lastLoginsQuery.isError ? (
+            <ErrorState
+              error={lastLoginsQuery.error}
+              onRetry={() => lastLoginsQuery.refetch()}
+            />
+          ) : (
+            <>
+              {(lastLoginsQuery.data?.items ?? []).length === 0 ? (
+                <EmptyState
+                  title="Nenhum login nos logs"
+                  description="Ainda não há eventos de login LDAP registrados na auditoria."
+                />
+              ) : (
+                <TableContainer sx={{ maxHeight: 360 }}>
+                  <Table stickyHeader size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell
+                          sx={{
+                            fontWeight: 800,
+                            bgcolor: "rgb(23, 57, 75)",
+                            color: "#FFFFFF",
+                          }}
+                        >
+                          Último login
+                        </TableCell>
+                        <TableCell
+                          sx={{
+                            fontWeight: 800,
+                            bgcolor: "rgb(23, 57, 75)",
+                            color: "#FFFFFF",
+                          }}
+                        >
+                          Nome
+                        </TableCell>
+                        <TableCell
+                          sx={{
+                            fontWeight: 800,
+                            bgcolor: "rgb(23, 57, 75)",
+                            color: "#FFFFFF",
+                          }}
+                        >
+                          E-mail
+                        </TableCell>
+                        <TableCell
+                          sx={{
+                            fontWeight: 800,
+                            bgcolor: "rgb(23, 57, 75)",
+                            color: "#FFFFFF",
+                          }}
+                        >
+                          LDAP
+                        </TableCell>
+                        <TableCell
+                          sx={{
+                            fontWeight: 800,
+                            bgcolor: "rgb(23, 57, 75)",
+                            color: "#FFFFFF",
+                          }}
+                        >
+                          ID usuário
+                        </TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {(lastLoginsQuery.data?.items ?? []).map((row, index: number) => (
+                        <TableRow
+                          key={row.userId}
+                          hover
+                          sx={{
+                            bgcolor:
+                              index % 2 === 0 ? "common.white" : "grey.50",
+                          }}
+                        >
+                          <TableCell sx={{ whiteSpace: "nowrap" }}>
+                            <Typography variant="body2" fontWeight={700}>
+                              {row.lastLoginAt
+                                ? formatDateTime(String(row.lastLoginAt))
+                                : "—"}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2" fontWeight={600}>
+                              {row.user?.name ?? "—"}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2">
+                              {row.user?.email ?? "—"}
+                            </Typography>
+                          </TableCell>
+                          <TableCell sx={{ fontFamily: "monospace", fontSize: 12 }}>
+                            {row.user?.ldapUid ?? "—"}
+                          </TableCell>
+                          <TableCell sx={{ fontFamily: "monospace", fontSize: 12 }}>
+                            {row.userId}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
 
       <Drawer
         anchor="right"

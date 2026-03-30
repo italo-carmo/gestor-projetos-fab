@@ -70,6 +70,41 @@ let AuditService = class AuditService {
         ]);
         return { items, page, pageSize, total };
     }
+    async lastLoginsByUser() {
+        const grouped = await this.prisma.auditLog.groupBy({
+            by: ['userId'],
+            where: {
+                resource: 'auth',
+                action: 'login_ldap',
+                userId: { not: null },
+            },
+            _max: { createdAt: true },
+        });
+        const userIds = grouped.map((g) => g.userId).filter((id) => Boolean(id));
+        if (userIds.length === 0) {
+            return { items: [] };
+        }
+        const users = await this.prisma.user.findMany({
+            where: { id: { in: userIds } },
+            select: { id: true, name: true, email: true, ldapUid: true },
+        });
+        const userMap = new Map(users.map((u) => [u.id, u]));
+        const items = grouped
+            .map((g) => {
+            const userId = g.userId;
+            const lastLoginAt = g._max.createdAt;
+            if (!lastLoginAt)
+                return null;
+            return {
+                userId,
+                lastLoginAt,
+                user: userMap.get(userId) ?? null,
+            };
+        })
+            .filter((row) => row !== null)
+            .sort((a, b) => b.lastLoginAt.getTime() - a.lastLoginAt.getTime());
+        return { items };
+    }
 };
 exports.AuditService = AuditService;
 exports.AuditService = AuditService = __decorate([

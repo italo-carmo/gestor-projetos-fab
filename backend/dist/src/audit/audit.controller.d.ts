@@ -3,6 +3,18 @@ import { AuditService } from './audit.service';
 export declare class AuditController {
     private readonly audit;
     constructor(audit: AuditService);
+    lastLogins(user: RbacUser): Promise<{
+        items: {
+            userId: string;
+            lastLoginAt: Date;
+            user: {
+                id: string;
+                name: string;
+                email: string;
+                ldapUid: string | null;
+            } | null;
+        }[];
+    }>;
     list(resource: string | undefined, userId: string | undefined, localityId: string | undefined, entityId: string | undefined, from: string | undefined, to: string | undefined, page: string | undefined, pageSize: string | undefined, user: RbacUser): Promise<{
         items: ({
             user: {

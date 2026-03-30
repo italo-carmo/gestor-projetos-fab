@@ -2432,6 +2432,27 @@ export function useAuditLogs(filters: Record<string, any>) {
   });
 }
 
+/** Último login LDAP por usuário (eventos auth/login_ldap nos logs). */
+export function useAuditLastLogins() {
+  return useQuery({
+    queryKey: qk.auditLastLogins,
+    queryFn: async () =>
+      (await api.get("/audit-logs/last-logins")).data as {
+        items: Array<{
+          userId: string;
+          lastLoginAt: string;
+          user: {
+            id: string;
+            name: string | null;
+            email: string | null;
+            ldapUid: string | null;
+          } | null;
+        }>;
+      },
+    staleTime: 30_000,
+  });
+}
+
 /** CPCA cases */
 export function useCpcaCases(filters: Record<string, any>, enabled = true) {
   return useQuery({

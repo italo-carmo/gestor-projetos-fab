@@ -245,7 +245,9 @@ let AuthService = class AuthService {
             (0, http_error_1.throwError)('VALIDATION_ERROR', { reason: 'NUMERO_ORDEM_REQUIRED' });
         }
         const apiTargets = this.getSigpesFotoApiTargets();
-        const candidates = [...new Set([normalizedNumeroOrdem, rawNumeroOrdem])].filter(Boolean);
+        const candidates = [
+            ...new Set([normalizedNumeroOrdem, rawNumeroOrdem]),
+        ].filter(Boolean);
         let lastStatus = null;
         let sawInvalidPayload = false;
         let lastFetchErrorMessage = null;
@@ -441,7 +443,10 @@ let AuthService = class AuthService {
         const signature = `${fallbackBaseUrl}::${fallbackHostHeader ?? ''}`;
         const existingSignatures = new Set(targets.map((target) => `${target.baseUrl}::${target.hostHeader ?? ''}`));
         if (!existingSignatures.has(signature)) {
-            targets.push({ baseUrl: fallbackBaseUrl, hostHeader: fallbackHostHeader });
+            targets.push({
+                baseUrl: fallbackBaseUrl,
+                hostHeader: fallbackHostHeader,
+            });
         }
         return targets;
     }

@@ -54,7 +54,9 @@ let UsersService = class UsersService {
                 if (byUid?.numeroOrdem)
                     return byUid.numeroOrdem;
             }
-            const em = String(email ?? '').trim().toLowerCase();
+            const em = String(email ?? '')
+                .trim()
+                .toLowerCase();
             if (em) {
                 const byEmail = await this.fabLdap.lookupByEmail(em);
                 return byEmail?.numeroOrdem ?? null;

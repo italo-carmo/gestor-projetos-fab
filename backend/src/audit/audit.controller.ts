@@ -16,6 +16,14 @@ import { AuditService } from './audit.service';
 export class AuditController {
   constructor(private readonly audit: AuditService) {}
 
+  @Get('last-logins')
+  lastLogins(@CurrentUser() user: RbacUser) {
+    if (!hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_TI])) {
+      throwError('RBAC_FORBIDDEN');
+    }
+    return this.audit.lastLoginsByUser();
+  }
+
   @Get()
   list(
     @Query('resource') resource: string | undefined,

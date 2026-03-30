@@ -79,4 +79,16 @@ export declare class AuditService {
         pageSize: number;
         total: number;
     }>;
+    lastLoginsByUser(): Promise<{
+        items: {
+            userId: string;
+            lastLoginAt: Date;
+            user: {
+                id: string;
+                name: string;
+                email: string;
+                ldapUid: string | null;
+            } | null;
+        }[];
+    }>;
 }

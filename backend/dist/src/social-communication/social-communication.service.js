@@ -105,8 +105,16 @@ let SocialCommunicationService = class SocialCommunicationService {
                 { militaryEmail: { contains: normalizedQuery, mode: 'insensitive' } },
                 { fabom: { contains: normalizedQuery, mode: 'insensitive' } },
                 { highlightText: { contains: normalizedQuery, mode: 'insensitive' } },
-                { locality: { name: { contains: normalizedQuery, mode: 'insensitive' } } },
-                { locality: { code: { contains: normalizedQuery, mode: 'insensitive' } } },
+                {
+                    locality: {
+                        name: { contains: normalizedQuery, mode: 'insensitive' },
+                    },
+                },
+                {
+                    locality: {
+                        code: { contains: normalizedQuery, mode: 'insensitive' },
+                    },
+                },
             ];
         }
         const rows = await this.prisma.socialCommunicationHighlight.findMany({
@@ -202,7 +210,8 @@ let SocialCommunicationService = class SocialCommunicationService {
             data.fabom = this.normalizeOptionalText(payload.fabom) ?? null;
         }
         if (payload.highlightRole !== undefined) {
-            data.highlightRole = this.normalizeOptionalText(payload.highlightRole) ?? null;
+            data.highlightRole =
+                this.normalizeOptionalText(payload.highlightRole) ?? null;
         }
         if (payload.photoBase64 !== undefined) {
             const normalizedPhotoBase64 = this.normalizeHighlightPhotoBase64(payload.photoBase64, 'photoBase64');
@@ -260,7 +269,9 @@ let SocialCommunicationService = class SocialCommunicationService {
         });
         if (!existing)
             (0, http_error_1.throwError)('NOT_FOUND');
-        await this.prisma.socialCommunicationHighlight.delete({ where: { id } });
+        await this.prisma.socialCommunicationHighlight.delete({
+            where: { id },
+        });
         await this.audit.log({
             userId: user?.id,
             resource: 'social_communication_highlight',

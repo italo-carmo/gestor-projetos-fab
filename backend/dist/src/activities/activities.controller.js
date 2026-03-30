@@ -69,8 +69,7 @@ let ActivitiesController = class ActivitiesController {
         return this.activities.batchUpdateStatus(body.ids ?? [], body.status, user);
     }
     batchSpecialty(body, user) {
-        return this.activities.batchUpdateSpecialty(body.ids ?? [], body.specialtyIds ??
-            (body.specialtyId ? [body.specialtyId] : []), user);
+        return this.activities.batchUpdateSpecialty(body.ids ?? [], body.specialtyIds ?? (body.specialtyId ? [body.specialtyId] : []), user);
     }
     batchResponsible(body, user) {
         return this.activities.batchUpdateResponsible(body.ids ?? [], body.responsibleUserId ?? null, user);

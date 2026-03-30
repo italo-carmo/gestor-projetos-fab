@@ -388,7 +388,8 @@ let MissionsService = class MissionsService {
         const sectionId = this.normalizeChecklistSectionId(payload.sectionId);
         const title = this.sanitizeRequiredText(payload.title, 'title');
         const prompt = payload.prompt === undefined ? null : (0, sanitize_1.sanitizeText)(payload.prompt ?? '');
-        const sortOrder = typeof payload.sortOrder === 'number' && Number.isFinite(payload.sortOrder)
+        const sortOrder = typeof payload.sortOrder === 'number' &&
+            Number.isFinite(payload.sortOrder)
             ? Math.max(0, Math.floor(payload.sortOrder))
             : await this.nextChecklistDimensionSortOrder(sectionId);
         const id = `dim_${Date.now().toString(36)}_${Math.random()
@@ -429,7 +430,8 @@ let MissionsService = class MissionsService {
         const nextSectionId = payload.sectionId === undefined
             ? existing.sectionId
             : this.normalizeChecklistSectionId(payload.sectionId);
-        const nextSortOrder = typeof payload.sortOrder === 'number' && Number.isFinite(payload.sortOrder)
+        const nextSortOrder = typeof payload.sortOrder === 'number' &&
+            Number.isFinite(payload.sortOrder)
             ? Math.max(0, Math.floor(payload.sortOrder))
             : existing.sortOrder;
         const nextTitle = payload.title === undefined
@@ -590,10 +592,11 @@ let MissionsService = class MissionsService {
             (0, http_error_1.throwError)('NOT_FOUND');
         const checklistOmId = this.readStoredMissionChecklistOmId(mission.checklistJson) ??
             mission.localityId;
-        const checklistOm = checklistOmId && (await this.prisma.locality.findUnique({
-            where: { id: checklistOmId },
-            select: { id: true, code: true, name: true },
-        }));
+        const checklistOm = checklistOmId &&
+            (await this.prisma.locality.findUnique({
+                where: { id: checklistOmId },
+                select: { id: true, code: true, name: true },
+            }));
         return {
             missionId: mission.id,
             localityId: mission.localityId,
@@ -1683,7 +1686,9 @@ let MissionsService = class MissionsService {
             if (!this.isJsonObject(rawItem))
                 continue;
             const itemId = typeof rawItem.id === 'string' ? rawItem.id : '';
-            const classificationRaw = typeof rawItem.classification === 'string' ? rawItem.classification : '';
+            const classificationRaw = typeof rawItem.classification === 'string'
+                ? rawItem.classification
+                : '';
             if (!checklistConfig.itemIdSet.has(itemId))
                 continue;
             if (!checklistConfig.classificationIdSet.has(classificationRaw)) {
@@ -1694,8 +1699,7 @@ let MissionsService = class MissionsService {
                 classification: classificationRaw,
                 notes: typeof rawItem.notes === 'string' ? rawItem.notes : '',
                 photos: this.normalizeMissionChecklistPhotos(Array.isArray(rawItem.photos)
-                    ? rawItem.photos
-                        .filter((entry) => typeof entry === 'string')
+                    ? rawItem.photos.filter((entry) => typeof entry === 'string')
                     : []),
             });
         }
@@ -1802,7 +1806,7 @@ let MissionsService = class MissionsService {
         const classificationIdSet = new Set(classifications.map((classification) => classification.id));
         const defaultClassification = classificationIdSet.has(mission_checklist_constants_1.DEFAULT_MISSION_CHECKLIST_CLASSIFICATION)
             ? mission_checklist_constants_1.DEFAULT_MISSION_CHECKLIST_CLASSIFICATION
-            : classifications[0]?.id ?? mission_checklist_constants_1.DEFAULT_MISSION_CHECKLIST_CLASSIFICATION;
+            : (classifications[0]?.id ?? mission_checklist_constants_1.DEFAULT_MISSION_CHECKLIST_CLASSIFICATION);
         return {
             sections,
             itemIds,

@@ -2639,12 +2639,20 @@ let TasksService = class TasksService {
                         executionSchedule: true,
                         activitiesPerformed: true,
                         participantsCount: true,
+                        participantsMaleCount: true,
+                        participantsFemaleCount: true,
                         instructorsCount: true,
                         recruitsCount: true,
                         eloPsychologyCount: true,
                         eloSocialAssistanceCount: true,
+                        eloJuridicoCount: true,
+                        eloCpcaCount: true,
                         eloGraduadoMasterCount: true,
                         participantsCharacteristics: true,
+                        mainPointsObserved: true,
+                        attentionPoints: true,
+                        nextSteps: true,
+                        referencesAndAttachments: true,
                         conclusion: true,
                         city: true,
                         closingDate: true,
@@ -2860,8 +2868,7 @@ let TasksService = class TasksService {
         const reportPendingActivities = reportRequiredCompletedActivities.filter((activity) => !hasSignedReport(activity));
         const compliancePending = reportPendingActivities.length;
         const complianceTotal = complianceApproved + compliancePending;
-        const reportPendingItems = reportPendingActivities
-            .map((activity) => mapExecutiveActivityItem(activity));
+        const reportPendingItems = reportPendingActivities.map((activity) => mapExecutiveActivityItem(activity));
         const completedActivitiesWithSavedReport = filteredActivities.filter((activity) => activity.status === client_1.ActivityStatus.DONE && Boolean(activity.report?.id));
         const participantsInCompletedActivities = completedActivitiesWithSavedReport.reduce((acc, activity) => acc + Number(activity.report?.participantsCount ?? 0), 0);
         const visitedCities = new Set(filteredActivities

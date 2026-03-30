@@ -179,7 +179,9 @@ let ActivitiesService = class ActivitiesService {
         };
     }
     async create(payload, user) {
-        const scope = String(payload.scope ?? '').toUpperCase() === 'CIPAVD' ? 'CIPAVD' : 'SMIF';
+        const scope = String(payload.scope ?? '').toUpperCase() === 'CIPAVD'
+            ? 'CIPAVD'
+            : 'SMIF';
         this.assertActivityOperateAccess(scope === 'CIPAVD' ? { scope: 'CIPAVD' } : null, user);
         const normalizedLocalityIds = Array.from(new Set((payload.localityIds ?? [])
             .map((value) => String(value ?? '').trim())
@@ -2204,7 +2206,9 @@ let ActivitiesService = class ActivitiesService {
         };
     }
     mapActivitySpecialties(activity) {
-        const links = Array.isArray(activity?.specialties) ? activity.specialties : [];
+        const links = Array.isArray(activity?.specialties)
+            ? activity.specialties
+            : [];
         const fromLinks = links
             .map((entry) => entry?.specialty)
             .filter((entry) => Boolean(entry?.id))
