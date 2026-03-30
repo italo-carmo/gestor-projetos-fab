@@ -38,6 +38,7 @@ const cpca_module_1 = require("./cpca/cpca.module");
 const library_module_1 = require("./library/library.module");
 const best_practices_module_1 = require("./best-practices/best-practices.module");
 const lessons_learned_module_1 = require("./lessons-learned/lessons-learned.module");
+const smif_complaints_module_1 = require("./smif-complaints/smif-complaints.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -77,6 +78,7 @@ exports.AppModule = AppModule = __decorate([
             library_module_1.LibraryModule,
             best_practices_module_1.BestPracticesModule,
             lessons_learned_module_1.LessonsLearnedModule,
+            smif_complaints_module_1.SmifComplaintsModule,
         ],
         controllers: [app_controller_1.AppController],
         providers: [app_service_1.AppService],

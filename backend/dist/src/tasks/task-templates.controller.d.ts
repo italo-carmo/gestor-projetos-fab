@@ -54,29 +54,7 @@ export declare class TaskTemplatesController {
         deletedAt: Date | null;
     }>;
     generateInstances(id: string, dto: GenerateInstancesDto, user: RbacUser): Promise<{
-        items: {
-            id: string;
-            specialtyId: string | null;
-            eloRoleId: string | null;
-            createdAt: Date;
-            updatedAt: Date;
-            taskTemplateId: string;
-            localityId: string;
-            status: import("@prisma/client").$Enums.TaskStatus;
-            reportRequired: boolean;
-            groupKey: string | null;
-            titleOverride: string | null;
-            dueDate: Date;
-            priority: import("@prisma/client").$Enums.TaskPriority;
-            progressPercent: number;
-            assigneeType: import("@prisma/client").$Enums.TaskAssigneeType | null;
-            externalAssigneeName: string | null;
-            externalAssigneeRole: string | null;
-            blockedByIdsJson: import("@prisma/client/runtime/client").JsonValue | null;
-            meetingId: string | null;
-            assignedToId: string | null;
-            assignedEloId: string | null;
-        }[];
+        items: any[];
     }>;
     clone(id: string, user: RbacUser): Promise<{
         id: string;

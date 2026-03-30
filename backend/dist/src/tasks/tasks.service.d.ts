@@ -111,29 +111,7 @@ export declare class TasksService {
         assignedToId?: string | null;
         assigneeIds?: string[];
     }, user?: RbacUser): Promise<{
-        items: {
-            id: string;
-            specialtyId: string | null;
-            eloRoleId: string | null;
-            createdAt: Date;
-            updatedAt: Date;
-            taskTemplateId: string;
-            localityId: string;
-            status: import("@prisma/client").$Enums.TaskStatus;
-            reportRequired: boolean;
-            groupKey: string | null;
-            titleOverride: string | null;
-            dueDate: Date;
-            priority: import("@prisma/client").$Enums.TaskPriority;
-            progressPercent: number;
-            assigneeType: import("@prisma/client").$Enums.TaskAssigneeType | null;
-            externalAssigneeName: string | null;
-            externalAssigneeRole: string | null;
-            blockedByIdsJson: Prisma.JsonValue | null;
-            meetingId: string | null;
-            assignedToId: string | null;
-            assignedEloId: string | null;
-        }[];
+        items: any[];
     }>;
     createTaskInstancesManual(payload: {
         title: string;
@@ -145,30 +123,10 @@ export declare class TasksService {
         assignedToId?: string | null;
         assigneeIds?: string[];
     }, user?: RbacUser): Promise<{
-        items: {
-            id: string;
-            specialtyId: string | null;
-            eloRoleId: string | null;
-            createdAt: Date;
-            updatedAt: Date;
-            taskTemplateId: string;
-            localityId: string;
-            status: import("@prisma/client").$Enums.TaskStatus;
-            reportRequired: boolean;
-            groupKey: string | null;
-            titleOverride: string | null;
-            dueDate: Date;
-            priority: import("@prisma/client").$Enums.TaskPriority;
-            progressPercent: number;
-            assigneeType: import("@prisma/client").$Enums.TaskAssigneeType | null;
-            externalAssigneeName: string | null;
-            externalAssigneeRole: string | null;
-            blockedByIdsJson: Prisma.JsonValue | null;
-            meetingId: string | null;
-            assignedToId: string | null;
-            assignedEloId: string | null;
-        }[];
+        items: any[];
     }>;
+    private loadTaskInstancesMapped;
+    private allowedLocalityIdsForTaskQueries;
     listTaskInstances(filters: {
         localityId?: string;
         phaseId?: string;
@@ -1361,6 +1319,9 @@ export declare class TasksService {
     }>;
     private hasBlockingDependencies;
     private buildTaskWhere;
+    private expandTaskWhereForSharedGroupKey;
+    private taskInstanceListInclude;
+    private mergeTaskGroupSiblingsIntoPage;
     listTaskInstancesForExport(filters: {
         localityId?: string;
         allowedLocalityIds?: string[];

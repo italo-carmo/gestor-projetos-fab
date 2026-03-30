@@ -325,7 +325,8 @@ let TasksService = class TasksService {
             localityId: user?.localityId ?? undefined,
             diffJson: { templateId, count: created.length },
         });
-        return { items: created };
+        const items = await this.loadTaskInstancesMapped(created.map((row) => row.id), user);
+        return { items };
     }
     async createTaskInstancesManual(payload, user) {
         const title = (0, sanitize_1.sanitizeText)(String(payload.title ?? '').trim());
@@ -435,11 +436,31 @@ let TasksService = class TasksService {
                 localityIds,
             },
         });
-        return { items: created };
+        const items = await this.loadTaskInstancesMapped(created.map((row) => row.id), user);
+        return { items };
+    }
+    async loadTaskInstancesMapped(ids, user) {
+        if (!ids.length)
+            return [];
+        const rows = await this.prisma.taskInstance.findMany({
+            where: { id: { in: ids } },
+            orderBy: { dueDate: 'asc' },
+            include: this.taskInstanceListInclude(),
+        });
+        const withComments = await this.attachTaskCommentSummary(rows, user);
+        return withComments.map((item) => this.mapTaskInstance(item, user?.executiveHidePii));
+    }
+    async allowedLocalityIdsForTaskQueries(user) {
+        if (!user?.id)
+            return this.getTargetLocalityIds();
+        const profile = (0, role_access_1.resolveAccessProfile)(user);
+        if (profile.ti || profile.nationalCommission)
+            return undefined;
+        return this.getTargetLocalityIds();
     }
     async listTaskInstances(filters, user) {
-        const allowedLocalityIds = await this.getTargetLocalityIds();
-        if (allowedLocalityIds.length === 0) {
+        const allowedLocalityIds = await this.allowedLocalityIdsForTaskQueries(user);
+        if (allowedLocalityIds !== undefined && allowedLocalityIds.length === 0) {
             const { page, pageSize } = this.parsePagination(filters.page, filters.pageSize);
             return { items: [], page, pageSize, total: 0 };
         }
@@ -448,45 +469,21 @@ let TasksService = class TasksService {
             where.meetingId = filters.meetingId;
         if (filters.eloRoleId)
             where.eloRoleId = filters.eloRoleId;
+        const finalWhere = await this.expandTaskWhereForSharedGroupKey({ ...filters, allowedLocalityIds }, where, user);
         const { page, pageSize, skip, take } = this.parsePagination(filters.page, filters.pageSize);
+        const listInclude = this.taskInstanceListInclude();
         const [items, total] = await this.prisma.$transaction([
             this.prisma.taskInstance.findMany({
-                where,
+                where: finalWhere,
                 orderBy: { dueDate: 'asc' },
                 skip,
                 take,
-                include: {
-                    locality: { select: { id: true, name: true, code: true } },
-                    specialty: { select: { id: true, name: true, color: true } },
-                    taskTemplate: { select: { id: true, title: true, phaseId: true } },
-                    assignedTo: { select: { id: true, name: true, email: true } },
-                    assignedElo: {
-                        include: {
-                            eloRole: { select: { id: true, code: true, name: true } },
-                        },
-                    },
-                    responsibles: {
-                        include: {
-                            user: {
-                                select: {
-                                    id: true,
-                                    name: true,
-                                    email: true,
-                                    localityId: true,
-                                    specialtyId: true,
-                                    eloRoleId: true,
-                                },
-                            },
-                        },
-                        orderBy: [{ createdAt: 'asc' }],
-                    },
-                    meeting: { select: { id: true, datetime: true, scope: true } },
-                    eloRole: { select: { id: true, code: true, name: true } },
-                },
+                include: listInclude,
             }),
-            this.prisma.taskInstance.count({ where }),
+            this.prisma.taskInstance.count({ where: finalWhere }),
         ]);
-        const withCommentSummary = await this.attachTaskCommentSummary(items, user);
+        const mergedItems = await this.mergeTaskGroupSiblingsIntoPage(items, finalWhere);
+        const withCommentSummary = await this.attachTaskCommentSummary(mergedItems, user);
         return {
             items: withCommentSummary.map((item) => this.mapTaskInstance(item, user?.executiveHidePii)),
             page,
@@ -1473,12 +1470,14 @@ let TasksService = class TasksService {
         return { deleted: existing.length };
     }
     async getGantt(params, user) {
-        const allowedLocalityIds = await this.getTargetLocalityIds();
-        if (allowedLocalityIds.length === 0) {
+        const allowedLocalityIds = await this.allowedLocalityIdsForTaskQueries(user);
+        if (allowedLocalityIds !== undefined && allowedLocalityIds.length === 0) {
             return { items: [] };
         }
         const andClauses = [];
-        andClauses.push({ localityId: { in: allowedLocalityIds } });
+        if (allowedLocalityIds !== undefined) {
+            andClauses.push({ localityId: { in: allowedLocalityIds } });
+        }
         if (params.localityId)
             andClauses.push({ localityId: params.localityId });
         if (params.from || params.to) {
@@ -1512,16 +1511,18 @@ let TasksService = class TasksService {
         };
     }
     async getCalendar(year, localityId, user) {
-        const allowedLocalityIds = await this.getTargetLocalityIds();
-        if (allowedLocalityIds.length === 0) {
+        const allowedLocalityIds = await this.allowedLocalityIdsForTaskQueries(user);
+        if (allowedLocalityIds !== undefined && allowedLocalityIds.length === 0) {
             return { items: [] };
         }
         const start = new Date(Date.UTC(year, 0, 1));
         const end = new Date(Date.UTC(year + 1, 0, 1));
         const andClauses = [
             { dueDate: { gte: start, lt: end } },
-            { localityId: { in: allowedLocalityIds } },
         ];
+        if (allowedLocalityIds !== undefined) {
+            andClauses.push({ localityId: { in: allowedLocalityIds } });
+        }
         if (localityId)
             andClauses.push({ localityId });
         const accessWhere = this.buildTaskAccessWhere(user, 'view');
@@ -4135,13 +4136,100 @@ let TasksService = class TasksService {
         const where = andClauses.length > 0 ? { AND: andClauses } : {};
         return { where };
     }
+    async expandTaskWhereForSharedGroupKey(filters, whereWithLocalityAndMeeting, user) {
+        if (!filters.localityId)
+            return whereWithLocalityAndMeeting;
+        const anchorRows = await this.prisma.taskInstance.findMany({
+            where: whereWithLocalityAndMeeting,
+            select: { groupKey: true },
+        });
+        const groupKeys = Array.from(new Set(anchorRows
+            .map((row) => String(row.groupKey ?? '').trim())
+            .filter(Boolean)));
+        if (groupKeys.length === 0)
+            return whereWithLocalityAndMeeting;
+        const { where: withoutLocality } = this.buildTaskWhere({
+            ...filters,
+            localityId: undefined,
+        }, user);
+        if (filters.meetingId)
+            withoutLocality.meetingId = filters.meetingId;
+        if (filters.eloRoleId)
+            withoutLocality.eloRoleId = filters.eloRoleId;
+        return {
+            AND: [
+                withoutLocality,
+                {
+                    OR: [
+                        { localityId: filters.localityId },
+                        { groupKey: { in: groupKeys } },
+                    ],
+                },
+            ],
+        };
+    }
+    taskInstanceListInclude() {
+        return {
+            locality: { select: { id: true, name: true, code: true } },
+            specialty: { select: { id: true, name: true, color: true } },
+            taskTemplate: { select: { id: true, title: true, phaseId: true } },
+            assignedTo: { select: { id: true, name: true, email: true } },
+            assignedElo: {
+                include: {
+                    eloRole: { select: { id: true, code: true, name: true } },
+                },
+            },
+            responsibles: {
+                include: {
+                    user: {
+                        select: {
+                            id: true,
+                            name: true,
+                            email: true,
+                            localityId: true,
+                            specialtyId: true,
+                            eloRoleId: true,
+                        },
+                    },
+                },
+                orderBy: [{ createdAt: 'asc' }],
+            },
+            meeting: { select: { id: true, datetime: true, scope: true } },
+            eloRole: { select: { id: true, code: true, name: true } },
+        };
+    }
+    async mergeTaskGroupSiblingsIntoPage(pageItems, finalWhere) {
+        const groupKeys = Array.from(new Set(pageItems
+            .map((row) => String(row.groupKey ?? '').trim())
+            .filter(Boolean)));
+        if (groupKeys.length === 0)
+            return pageItems;
+        const existingIds = pageItems.map((row) => row.id);
+        const siblings = await this.prisma.taskInstance.findMany({
+            where: {
+                AND: [
+                    finalWhere,
+                    { groupKey: { in: groupKeys } },
+                    { id: { notIn: existingIds } },
+                ],
+            },
+            orderBy: { dueDate: 'asc' },
+            include: this.taskInstanceListInclude(),
+        });
+        if (siblings.length === 0)
+            return pageItems;
+        const merged = [...pageItems, ...siblings];
+        merged.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+        return merged;
+    }
     async listTaskInstancesForExport(filters, user) {
-        const allowedLocalityIds = await this.getTargetLocalityIds();
-        if (allowedLocalityIds.length === 0)
+        const allowedLocalityIds = await this.allowedLocalityIdsForTaskQueries(user);
+        if (allowedLocalityIds !== undefined && allowedLocalityIds.length === 0)
             return [];
         const { where } = this.buildTaskWhere({ ...filters, allowedLocalityIds }, user);
+        const finalWhere = await this.expandTaskWhereForSharedGroupKey({ ...filters, allowedLocalityIds }, where, user);
         const items = await this.prisma.taskInstance.findMany({
-            where,
+            where: finalWhere,
             include: {
                 taskTemplate: {
                     include: { phase: true, specialty: true, eloRole: true },

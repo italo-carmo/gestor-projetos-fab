@@ -29,6 +29,7 @@ import { CpcaModule } from './cpca/cpca.module';
 import { LibraryModule } from './library/library.module';
 import { BestPracticesModule } from './best-practices/best-practices.module';
 import { LessonsLearnedModule } from './lessons-learned/lessons-learned.module';
+import { SmifComplaintsModule } from './smif-complaints/smif-complaints.module';
 
 @Module({
   imports: [
@@ -65,6 +66,7 @@ import { LessonsLearnedModule } from './lessons-learned/lessons-learned.module';
     LibraryModule,
     BestPracticesModule,
     LessonsLearnedModule,
+    SmifComplaintsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

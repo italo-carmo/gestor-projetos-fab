@@ -1,7 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./client";
 import { qk } from "./queryKeys";
-import { splitMilitaryNameAndOm, toMilitaryDisplayName } from "../app/militaryName";
+import {
+  splitMilitaryNameAndOm,
+  toMilitaryDisplayName,
+} from "../app/militaryName";
 
 /**
  * Tarefas recém-criadas podem não vir na 1ª página (ordem por prazo + paginação).
@@ -35,9 +38,7 @@ function stashPendingCreatedTasks(items: any[]) {
 function normalizeTaskIds(values: Array<string | null | undefined>) {
   return Array.from(
     new Set(
-      (values ?? [])
-        .map((value) => String(value ?? "").trim())
-        .filter(Boolean),
+      (values ?? []).map((value) => String(value ?? "").trim()).filter(Boolean),
     ),
   );
 }
@@ -63,7 +64,8 @@ function restorePendingCreatedTasks(
 }
 
 function removeTaskIdsFromTasksPageData(data: any, idSet: Set<string>) {
-  if (!data || typeof data !== "object" || !Array.isArray(data.items)) return data;
+  if (!data || typeof data !== "object" || !Array.isArray(data.items))
+    return data;
   const beforeItems = data.items as any[];
   const nextItems = beforeItems.filter(
     (item: any) => !idSet.has(String(item?.id ?? "").trim()),
@@ -113,7 +115,9 @@ function getTaskAssigneeIds(task: any) {
         .filter(Boolean)
     : Array.isArray(task?.responsibles)
       ? task.responsibles
-          .map((entry: any) => String(entry?.userId ?? entry?.user?.id ?? "").trim())
+          .map((entry: any) =>
+            String(entry?.userId ?? entry?.user?.id ?? "").trim(),
+          )
           .filter(Boolean)
       : [];
   const assignedToId = String(task?.assignedToId ?? "").trim();
@@ -128,7 +132,10 @@ function taskMatchesFilters(task: any, filters: Record<string, any>) {
   if (!task || typeof task !== "object") return false;
 
   const localityFilter = String(filters.localityId ?? "").trim();
-  if (localityFilter && String(task.localityId ?? "").trim() !== localityFilter) {
+  if (
+    localityFilter &&
+    String(task.localityId ?? "").trim() !== localityFilter
+  ) {
     return false;
   }
 
@@ -158,7 +165,10 @@ function taskMatchesFilters(task: any, filters: Record<string, any>) {
       .split(",")
       .map((value) => value.trim())
       .filter(Boolean);
-    if (selected.length > 0 && !selected.some((id) => taskAssigneeIds.has(id))) {
+    if (
+      selected.length > 0 &&
+      !selected.some((id) => taskAssigneeIds.has(id))
+    ) {
       return false;
     }
   } else if (assigneeIdFilter && !taskAssigneeIds.has(assigneeIdFilter)) {
@@ -200,9 +210,7 @@ function mergePendingIntoTasksPageData(
     .map((entry) => entry.item)
     .filter(
       (p) =>
-        p?.id &&
-        !serverIds.has(String(p.id)) &&
-        taskMatchesFilters(p, filters),
+        p?.id && !serverIds.has(String(p.id)) && taskMatchesFilters(p, filters),
     );
   const dedupPending = pending.filter(
     (item, index, arr) =>
@@ -259,7 +267,9 @@ export function useSigpesPhoto(numeroOrdem: string | null | undefined) {
     queryFn: async () => {
       try {
         return (
-          await api.get(`/auth/fotoes/${encodeURIComponent(normalizedNumeroOrdem)}`)
+          await api.get(
+            `/auth/fotoes/${encodeURIComponent(normalizedNumeroOrdem)}`,
+          )
         ).data;
       } catch {
         return {
@@ -367,7 +377,8 @@ export function useMission(id: string, enabled = true) {
 export function useMissionChecklist(missionId: string, enabled = true) {
   return useQuery({
     queryKey: qk.missionChecklist(missionId || ""),
-    queryFn: async () => (await api.get(`/missions/${missionId}/checklist`)).data,
+    queryFn: async () =>
+      (await api.get(`/missions/${missionId}/checklist`)).data,
     enabled: Boolean(missionId) && enabled,
     staleTime: 10_000,
     refetchOnWindowFocus: false,
@@ -377,7 +388,7 @@ export function useMissionChecklist(missionId: string, enabled = true) {
 export function useMissionChecklistConfig(enabled = true) {
   return useQuery({
     queryKey: qk.missionChecklistConfig,
-    queryFn: async () => (await api.get('/missions/checklist/config')).data,
+    queryFn: async () => (await api.get("/missions/checklist/config")).data,
     enabled,
     staleTime: 20_000,
     refetchOnWindowFocus: false,
@@ -394,7 +405,8 @@ export function useMissionChecklistMapping(
   return useQuery({
     queryKey: qk.missionChecklistMapping(normalized),
     queryFn: async () =>
-      (await api.get('/missions/checklist/mapping', { params: normalized })).data,
+      (await api.get("/missions/checklist/mapping", { params: normalized }))
+        .data,
     enabled,
     staleTime: 20_000,
     refetchOnWindowFocus: false,
@@ -434,11 +446,15 @@ export function useUploadMissionChecklistPhoto() {
   return useMutation({
     mutationFn: async (args: { missionId: string; file: File }) => {
       const formData = new FormData();
-      formData.append('file', args.file);
+      formData.append("file", args.file);
       return (
-        await api.post(`/missions/${args.missionId}/checklist/photos`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        })
+        await api.post(
+          `/missions/${args.missionId}/checklist/photos`,
+          formData,
+          {
+            headers: { "Content-Type": "multipart/form-data" },
+          },
+        )
       ).data as { photoUrl: string };
     },
   });
@@ -448,16 +464,16 @@ export function useCreateMissionChecklistDimension() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (payload: {
-      sectionId: 'lideranca' | 'acompanhamento_recrutas' | 'analise_riscos';
+      sectionId: "lideranca" | "acompanhamento_recrutas" | "analise_riscos";
       title: string;
       prompt?: string;
       sortOrder?: number;
     }) =>
-      (await api.post('/missions/checklist/config/dimensions', payload)).data,
+      (await api.post("/missions/checklist/config/dimensions", payload)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.missionChecklistConfig });
-      qc.invalidateQueries({ queryKey: ['missionChecklistMapping'] });
-      qc.invalidateQueries({ queryKey: ['missions'] });
+      qc.invalidateQueries({ queryKey: ["missionChecklistMapping"] });
+      qc.invalidateQueries({ queryKey: ["missions"] });
     },
   });
 }
@@ -468,7 +484,7 @@ export function useUpdateMissionChecklistDimension() {
     mutationFn: async (args: {
       id: string;
       payload: {
-        sectionId?: 'lideranca' | 'acompanhamento_recrutas' | 'analise_riscos';
+        sectionId?: "lideranca" | "acompanhamento_recrutas" | "analise_riscos";
         title?: string;
         prompt?: string;
         sortOrder?: number;
@@ -482,8 +498,8 @@ export function useUpdateMissionChecklistDimension() {
       ).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.missionChecklistConfig });
-      qc.invalidateQueries({ queryKey: ['missionChecklistMapping'] });
-      qc.invalidateQueries({ queryKey: ['missions'] });
+      qc.invalidateQueries({ queryKey: ["missionChecklistMapping"] });
+      qc.invalidateQueries({ queryKey: ["missions"] });
     },
   });
 }
@@ -495,8 +511,8 @@ export function useDeleteMissionChecklistDimension() {
       (await api.delete(`/missions/checklist/config/dimensions/${id}`)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.missionChecklistConfig });
-      qc.invalidateQueries({ queryKey: ['missionChecklistMapping'] });
-      qc.invalidateQueries({ queryKey: ['missions'] });
+      qc.invalidateQueries({ queryKey: ["missionChecklistMapping"] });
+      qc.invalidateQueries({ queryKey: ["missions"] });
     },
   });
 }
@@ -506,10 +522,10 @@ export function useUpdateMissionChecklistClassification() {
   return useMutation({
     mutationFn: async (args: {
       id:
-        | 'FORTE_CONSOLIDADA'
-        | 'OPORTUNIDADE_MELHORIA'
-        | 'NECESSITA_ANALISE'
-        | 'POSSIVEL_RISCO';
+        | "FORTE_CONSOLIDADA"
+        | "OPORTUNIDADE_MELHORIA"
+        | "NECESSITA_ANALISE"
+        | "POSSIVEL_RISCO";
       payload: {
         label: string;
         colorHex?: string;
@@ -523,8 +539,8 @@ export function useUpdateMissionChecklistClassification() {
       ).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.missionChecklistConfig });
-      qc.invalidateQueries({ queryKey: ['missionChecklistMapping'] });
-      qc.invalidateQueries({ queryKey: ['missions'] });
+      qc.invalidateQueries({ queryKey: ["missionChecklistMapping"] });
+      qc.invalidateQueries({ queryKey: ["missions"] });
     },
   });
 }
@@ -713,19 +729,27 @@ export function useExportMissionSchedulePdf() {
       const response = await api.get(`/missions/${id}/schedule/pdf`, {
         responseType: "blob",
       });
-      const contentType = String(response.headers?.["content-type"] ?? "").toLowerCase();
+      const contentType = String(
+        response.headers?.["content-type"] ?? "",
+      ).toLowerCase();
       if (!contentType.includes("application/pdf")) {
-        throw new Error("Não foi possível exportar o PDF. Faça login novamente e tente de novo.");
+        throw new Error(
+          "Não foi possível exportar o PDF. Faça login novamente e tente de novo.",
+        );
       }
       const blob = new Blob([response.data], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      const contentDisposition = String(response.headers?.["content-disposition"] ?? "");
+      const contentDisposition = String(
+        response.headers?.["content-disposition"] ?? "",
+      );
       const fileNameMatch =
         /filename\*=(?:UTF-8'')?([^;]+)/i.exec(contentDisposition) ??
         /filename="?([^"]+)"?/i.exec(contentDisposition);
-      const decodedName = fileNameMatch?.[1] ? decodeURIComponent(fileNameMatch[1].trim()) : "";
+      const decodedName = fileNameMatch?.[1]
+        ? decodeURIComponent(fileNameMatch[1].trim())
+        : "";
       a.download = decodedName || `cronograma-missao-${id}.pdf`;
       document.body.appendChild(a);
       a.click();
@@ -878,7 +902,7 @@ export function useCreateActivity() {
       responsibleUserIds?: string[];
       eventDate?: string | null;
       reportRequired?: boolean;
-      scope?: 'SMIF' | 'CIPAVD';
+      scope?: "SMIF" | "CIPAVD";
     }) => (await api.post("/activities", payload)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["activities"] }),
   });
@@ -962,9 +986,11 @@ export function useReorderActivities() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (ids: string[]) =>
-      (await api.put('/activities/batch/reorder', { ids })).data as { updated: number },
+      (await api.put("/activities/batch/reorder", { ids })).data as {
+        updated: number;
+      },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['activities'] });
+      qc.invalidateQueries({ queryKey: ["activities"] });
     },
   });
 }
@@ -981,8 +1007,11 @@ export function useBatchUpdateActivityStatus() {
 export function useBatchUpdateActivitySpecialty() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (args: { ids: string[]; specialtyId?: string | null; specialtyIds?: string[] }) =>
-      (await api.put("/activities/batch/specialty", args)).data,
+    mutationFn: async (args: {
+      ids: string[];
+      specialtyId?: string | null;
+      specialtyIds?: string[];
+    }) => (await api.put("/activities/batch/specialty", args)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["activities"] }),
   });
 }
@@ -1519,7 +1548,7 @@ export function useUpdateDashboardNationalCardSetting() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (args: {
-      id: 'smif-completed' | 'smif-field' | 'smif-participants';
+      id: "smif-completed" | "smif-field" | "smif-participants";
       payload: {
         title?: string;
         description?: string;
@@ -1527,9 +1556,10 @@ export function useUpdateDashboardNationalCardSetting() {
         textColor?: string;
       };
     }) =>
-      (await api.put(`/dashboard/national/cards/${args.id}`, args.payload)).data,
+      (await api.put(`/dashboard/national/cards/${args.id}`, args.payload))
+        .data,
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['dashboardNational'] });
+      qc.invalidateQueries({ queryKey: ["dashboardNational"] });
     },
   });
 }
@@ -1583,11 +1613,11 @@ export function useDeleteTaskTemplate() {
       (await api.delete(`/task-templates/${id}`)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.taskTemplates });
-      qc.invalidateQueries({ queryKey: ['tasks'] });
-      qc.invalidateQueries({ queryKey: ['gantt'] });
-      qc.invalidateQueries({ queryKey: ['calendar'] });
-      qc.invalidateQueries({ queryKey: ['checklists'] });
-      qc.invalidateQueries({ queryKey: ['meetings'] });
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      qc.invalidateQueries({ queryKey: ["gantt"] });
+      qc.invalidateQueries({ queryKey: ["calendar"] });
+      qc.invalidateQueries({ queryKey: ["checklists"] });
+      qc.invalidateQueries({ queryKey: ["meetings"] });
     },
   });
 }
@@ -1815,7 +1845,8 @@ export function useRbacSimulate(params: { userId?: string; roleId?: string }) {
 export function useLookupLdapUser() {
   return useMutation({
     mutationFn: async (identifier: string) =>
-      (await api.get("/admin/rbac/ldap-user", { params: { uid: identifier } })).data,
+      (await api.get("/admin/rbac/ldap-user", { params: { uid: identifier } }))
+        .data,
   });
 }
 
@@ -1966,8 +1997,12 @@ export function useUpdateSocialCommunicationHighlight() {
         text?: string;
       };
     }) =>
-      (await api.put(`/social-communication/highlights/${args.id}`, args.payload))
-        .data,
+      (
+        await api.put(
+          `/social-communication/highlights/${args.id}`,
+          args.payload,
+        )
+      ).data,
     onSuccess: () =>
       qc.invalidateQueries({ queryKey: ["socialCommunicationHighlights"] }),
   });
@@ -2054,16 +2089,21 @@ export function useDeleteSocialCommunicationArticle() {
 export function useBestPractices(filters: Record<string, any>, enabled = true) {
   return useQuery({
     queryKey: qk.bestPractices(filters),
-    queryFn: async () => (await api.get("/best-practices", { params: filters })).data,
+    queryFn: async () =>
+      (await api.get("/best-practices", { params: filters })).data,
     enabled,
     staleTime: 10_000,
   });
 }
 
-export function useLessonsLearned(filters: Record<string, any>, enabled = true) {
+export function useLessonsLearned(
+  filters: Record<string, any>,
+  enabled = true,
+) {
   return useQuery({
     queryKey: qk.lessonsLearned(filters),
-    queryFn: async () => (await api.get("/lessons-learned", { params: filters })).data,
+    queryFn: async () =>
+      (await api.get("/lessons-learned", { params: filters })).data,
     enabled,
     staleTime: 10_000,
   });
@@ -2120,7 +2160,8 @@ export function useUpdateBestPractice() {
 export function useDeleteBestPractice() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => (await api.delete(`/best-practices/${id}`)).data,
+    mutationFn: async (id: string) =>
+      (await api.delete(`/best-practices/${id}`)).data,
     onSuccess: () =>
       qc.invalidateQueries({
         predicate: (query) =>
@@ -2142,8 +2183,11 @@ export function useBestPracticeTypes(enabled = true) {
 export function useCreateBestPracticeType() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (payload: { name: string; colorHex: string; textColorHex?: string }) =>
-      (await api.post("/best-practices/types", payload)).data,
+    mutationFn: async (payload: {
+      name: string;
+      colorHex: string;
+      textColorHex?: string;
+    }) => (await api.post("/best-practices/types", payload)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["bestPracticeTypes"] });
       qc.invalidateQueries({
@@ -2161,7 +2205,8 @@ export function useUpdateBestPracticeType() {
     mutationFn: async (args: {
       id: string;
       payload: { name?: string; colorHex?: string; textColorHex?: string };
-    }) => (await api.put(`/best-practices/types/${args.id}`, args.payload)).data,
+    }) =>
+      (await api.put(`/best-practices/types/${args.id}`, args.payload)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["bestPracticeTypes"] });
       qc.invalidateQueries({
@@ -2176,7 +2221,8 @@ export function useUpdateBestPracticeType() {
 export function useDeleteBestPracticeType() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => (await api.delete(`/best-practices/types/${id}`)).data,
+    mutationFn: async (id: string) =>
+      (await api.delete(`/best-practices/types/${id}`)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["bestPracticeTypes"] });
       qc.invalidateQueries({
@@ -2218,7 +2264,8 @@ export function useUpdateLessonLearned() {
 export function useDeleteLessonLearned() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => (await api.delete(`/lessons-learned/${id}`)).data,
+    mutationFn: async (id: string) =>
+      (await api.delete(`/lessons-learned/${id}`)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["lessonsLearned"] }),
   });
 }
@@ -2241,7 +2288,8 @@ export function useUpdateLessonLearnedType() {
     mutationFn: async (args: {
       id: string;
       payload: { name?: string; colorHex?: string };
-    }) => (await api.put(`/lessons-learned/types/${args.id}`, args.payload)).data,
+    }) =>
+      (await api.put(`/lessons-learned/types/${args.id}`, args.payload)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["lessonLearnedTypes"] });
       qc.invalidateQueries({ queryKey: ["lessonsLearned"] });
@@ -2252,7 +2300,8 @@ export function useUpdateLessonLearnedType() {
 export function useDeleteLessonLearnedType() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => (await api.delete(`/lessons-learned/types/${id}`)).data,
+    mutationFn: async (id: string) =>
+      (await api.delete(`/lessons-learned/types/${id}`)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["lessonLearnedTypes"] });
       qc.invalidateQueries({ queryKey: ["lessonsLearned"] });
@@ -2281,7 +2330,11 @@ export function useUpdateLibrarySettings() {
 export function useUploadLibraryPhoto() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (args: { file: File; title?: string; localityId?: string }) => {
+    mutationFn: async (args: {
+      file: File;
+      title?: string;
+      localityId?: string;
+    }) => {
       const formData = new FormData();
       formData.append("file", args.file);
       if (args.title) formData.append("title", args.title);
@@ -2301,7 +2354,11 @@ export function useUpdateLibraryPhoto() {
   return useMutation({
     mutationFn: async (args: {
       id: string;
-      payload: { title?: string; sortOrder?: number; localityId?: string | null };
+      payload: {
+        title?: string;
+        sortOrder?: number;
+        localityId?: string | null;
+      };
     }) => (await api.put(`/library/photos/${args.id}`, args.payload)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: qk.library }),
   });
@@ -2310,7 +2367,8 @@ export function useUpdateLibraryPhoto() {
 export function useDeleteLibraryPhoto() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => (await api.delete(`/library/photos/${id}`)).data,
+    mutationFn: async (id: string) =>
+      (await api.delete(`/library/photos/${id}`)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: qk.library }),
   });
 }
@@ -2496,8 +2554,9 @@ export function useOrgChartCommissionMembers(filters: Record<string, any>) {
   return useQuery({
     queryKey: qk.orgChartCommissionMembers(filters),
     queryFn: async () => {
-      const data = (await api.get("/org-chart/commission-members", { params: filters }))
-        .data;
+      const data = (
+        await api.get("/org-chart/commission-members", { params: filters })
+      ).data;
       return {
         ...data,
         items: (data?.items ?? []).map((item: any) => ({
@@ -2518,8 +2577,9 @@ export function useOrgChartCommissionCandidates(
   return useQuery({
     queryKey: qk.orgChartCommissionCandidates(filters),
     queryFn: async () => {
-      const data = (await api.get("/org-chart/commission-candidates", { params: filters }))
-        .data;
+      const data = (
+        await api.get("/org-chart/commission-candidates", { params: filters })
+      ).data;
       return {
         ...data,
         items: (data?.items ?? []).map((item: any) => ({
@@ -2541,7 +2601,8 @@ export function useOrgChartCandidates(
   return useQuery({
     queryKey: ["orgChart", "candidates", filters],
     queryFn: async () => {
-      const data = (await api.get("/org-chart/candidates", { params: filters })).data;
+      const data = (await api.get("/org-chart/candidates", { params: filters }))
+        .data;
       return {
         ...data,
         items: (data?.items ?? []).map((item: any) => ({
@@ -2667,10 +2728,10 @@ export function useReorderOrgChartCommissionMembers() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (payload: { userIds: string[] }) =>
-      (await api.put('/org-chart/commission-members/reorder', payload)).data,
+      (await api.put("/org-chart/commission-members/reorder", payload)).data,
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['orgChart', 'commissionMembers'] });
-      qc.invalidateQueries({ queryKey: ['orgChart'] });
+      qc.invalidateQueries({ queryKey: ["orgChart", "commissionMembers"] });
+      qc.invalidateQueries({ queryKey: ["orgChart"] });
     },
   });
 }
@@ -2710,7 +2771,8 @@ export function useAuditLastLogins() {
 export function useCpcaCases(filters: Record<string, any>, enabled = true) {
   return useQuery({
     queryKey: qk.cpcaCases(filters),
-    queryFn: async () => (await api.get("/cpca-cases", { params: filters })).data,
+    queryFn: async () =>
+      (await api.get("/cpca-cases", { params: filters })).data,
     enabled,
     staleTime: 10_000,
   });
@@ -2728,7 +2790,8 @@ export function useCpcaCase(id: string, enabled = true) {
 export function useCpcaCaseStats(filters: Record<string, any>, enabled = true) {
   return useQuery({
     queryKey: qk.cpcaCaseStats(filters),
-    queryFn: async () => (await api.get("/cpca-cases/stats", { params: filters })).data,
+    queryFn: async () =>
+      (await api.get("/cpca-cases/stats", { params: filters })).data,
     enabled,
     staleTime: 15_000,
   });
@@ -2761,10 +2824,60 @@ export function useAddCpcaCaseComment() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (args: { id: string; text: string }) =>
-      (await api.post(`/cpca-cases/${args.id}/comments`, { text: args.text })).data,
+      (await api.post(`/cpca-cases/${args.id}/comments`, { text: args.text }))
+        .data,
     onSuccess: (_data, args) => {
       qc.invalidateQueries({ queryKey: ["cpcaCases"] });
       qc.invalidateQueries({ queryKey: qk.cpcaCase(args.id) });
+    },
+  });
+}
+
+/** SMIF complaints */
+export function useSmifComplaints(
+  filters: Record<string, any>,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: qk.smifComplaints(filters),
+    queryFn: async () =>
+      (await api.get("/smif-complaints", { params: filters })).data,
+    enabled,
+    staleTime: 10_000,
+  });
+}
+
+export function useCreateSmifComplaint() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      localityId: string;
+      reportedAt: string;
+      description: string;
+      status?: "IN_PROGRESS" | "COMPLETED";
+      conclusion?: string;
+    }) => (await api.post("/smif-complaints", payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["smifComplaints"] });
+    },
+  });
+}
+
+export function useUpdateSmifComplaint() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      payload: {
+        localityId?: string;
+        reportedAt?: string;
+        description?: string;
+        status?: "IN_PROGRESS" | "COMPLETED";
+        conclusion?: string;
+      };
+    }) => (await api.put(`/smif-complaints/${args.id}`, args.payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["smifComplaints"] });
     },
   });
 }
@@ -2787,10 +2900,14 @@ export function useOmsCatalog(enabled = true) {
   });
 }
 
-export function useLocalityRecruitDesignations(localityId: string, enabled = true) {
+export function useLocalityRecruitDesignations(
+  localityId: string,
+  enabled = true,
+) {
   return useQuery({
     queryKey: qk.recruitDesignations(localityId || ""),
-    queryFn: async () => (await api.get(`/localities/${localityId}/recruit-designations`)).data,
+    queryFn: async () =>
+      (await api.get(`/localities/${localityId}/recruit-designations`)).data,
     enabled: Boolean(localityId) && enabled,
     staleTime: 10_000,
   });
@@ -2798,8 +2915,9 @@ export function useLocalityRecruitDesignations(localityId: string, enabled = tru
 
 export function useLocalityRecruitMembers(localityId: string, enabled = true) {
   return useQuery({
-    queryKey: ['localities', 'recruitMembers', localityId || ''],
-    queryFn: async () => (await api.get(`/localities/${localityId}/recruits-members`)).data,
+    queryKey: ["localities", "recruitMembers", localityId || ""],
+    queryFn: async () =>
+      (await api.get(`/localities/${localityId}/recruits-members`)).data,
     enabled: Boolean(localityId) && enabled,
     staleTime: 10_000,
   });
@@ -2869,12 +2987,12 @@ export function useCreateLocality() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (payload: Record<string, any>) =>
-      (await api.post('/localities', payload)).data,
+      (await api.post("/localities", payload)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.localities });
-      qc.invalidateQueries({ queryKey: ['dashboardRecruits'] });
-      qc.invalidateQueries({ queryKey: ['dashboardNational'] });
-      qc.invalidateQueries({ queryKey: ['dashboardExecutive'] });
+      qc.invalidateQueries({ queryKey: ["dashboardRecruits"] });
+      qc.invalidateQueries({ queryKey: ["dashboardNational"] });
+      qc.invalidateQueries({ queryKey: ["dashboardExecutive"] });
     },
   });
 }
@@ -2882,12 +3000,13 @@ export function useCreateLocality() {
 export function useDeleteLocality() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => (await api.delete(`/localities/${id}`)).data,
+    mutationFn: async (id: string) =>
+      (await api.delete(`/localities/${id}`)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.localities });
-      qc.invalidateQueries({ queryKey: ['dashboardRecruits'] });
-      qc.invalidateQueries({ queryKey: ['dashboardNational'] });
-      qc.invalidateQueries({ queryKey: ['dashboardExecutive'] });
+      qc.invalidateQueries({ queryKey: ["dashboardRecruits"] });
+      qc.invalidateQueries({ queryKey: ["dashboardNational"] });
+      qc.invalidateQueries({ queryKey: ["dashboardExecutive"] });
     },
   });
 }
@@ -2928,7 +3047,9 @@ export function useUpdateLocalityRecruitDesignations() {
         })
       ).data,
     onSuccess: (_data, args) => {
-      qc.invalidateQueries({ queryKey: qk.recruitDesignations(args.localityId) });
+      qc.invalidateQueries({
+        queryKey: qk.recruitDesignations(args.localityId),
+      });
       qc.invalidateQueries({ queryKey: ["dashboardRecruits"] });
       qc.invalidateQueries({ queryKey: ["dashboardNational"] });
       qc.invalidateQueries({ queryKey: ["dashboardExecutive"] });
@@ -2945,10 +3066,10 @@ export function useReplaceLocalityRecruitMembers() {
         id?: string;
         name: string;
         status:
-          | 'RECRUITMENT_TO_START'
-          | 'RECRUITMENT_STARTED'
-          | 'DISMISSED'
-          | 'ASSIGNED_TO_OM';
+          | "RECRUITMENT_TO_START"
+          | "RECRUITMENT_STARTED"
+          | "DISMISSED"
+          | "ASSIGNED_TO_OM";
         dismissalReason?: string | null;
         destinationLocalityId?: string | null;
         comment?: string | null;
@@ -2960,12 +3081,16 @@ export function useReplaceLocalityRecruitMembers() {
         })
       ).data,
     onSuccess: (_data, args) => {
-      qc.invalidateQueries({ queryKey: ['localities', 'recruitMembers', args.localityId] });
-      qc.invalidateQueries({ queryKey: qk.recruitDesignations(args.localityId) });
+      qc.invalidateQueries({
+        queryKey: ["localities", "recruitMembers", args.localityId],
+      });
+      qc.invalidateQueries({
+        queryKey: qk.recruitDesignations(args.localityId),
+      });
       qc.invalidateQueries({ queryKey: qk.localities });
-      qc.invalidateQueries({ queryKey: ['dashboardRecruits'] });
-      qc.invalidateQueries({ queryKey: ['dashboardNational'] });
-      qc.invalidateQueries({ queryKey: ['dashboardExecutive'] });
+      qc.invalidateQueries({ queryKey: ["dashboardRecruits"] });
+      qc.invalidateQueries({ queryKey: ["dashboardNational"] });
+      qc.invalidateQueries({ queryKey: ["dashboardExecutive"] });
     },
   });
 }
@@ -2981,9 +3106,9 @@ export function useSetLocalityCommanderFromLdap() {
       ).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.localities });
-      qc.invalidateQueries({ queryKey: ['dashboardRecruits'] });
-      qc.invalidateQueries({ queryKey: ['dashboardNational'] });
-      qc.invalidateQueries({ queryKey: ['dashboardExecutive'] });
+      qc.invalidateQueries({ queryKey: ["dashboardRecruits"] });
+      qc.invalidateQueries({ queryKey: ["dashboardNational"] });
+      qc.invalidateQueries({ queryKey: ["dashboardExecutive"] });
     },
   });
 }

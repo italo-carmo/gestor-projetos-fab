@@ -1,69 +1,96 @@
 export const qk = {
-  me: ["auth","me"] as const,
+  me: ["auth", "me"] as const,
   myFabProfile: ["auth", "me", "fab-profile"] as const,
   sigpesPhoto: (numeroOrdem: string) =>
     ["auth", "sigpesPhoto", numeroOrdem] as const,
   tasks: (filters: Record<string, any>) => ["tasks", filters] as const,
   taskAssignees: (localityId: string) => ["taskAssignees", localityId] as const,
   taskComments: (taskId: string) => ["taskComments", taskId] as const,
-  activityComments: (activityId: string) => ["activityComments", activityId] as const,
-  activitySchedule: (activityId: string) => ["activitySchedule", activityId] as const,
+  activityComments: (activityId: string) =>
+    ["activityComments", activityId] as const,
+  activitySchedule: (activityId: string) =>
+    ["activitySchedule", activityId] as const,
   activityTypes: ["activityTypes"] as const,
   missions: (filters: Record<string, any>) => ["missions", filters] as const,
   mission: (id: string) => ["mission", id] as const,
-  missionSchedule: (missionId: string) => ["missionSchedule", missionId] as const,
-  missionChecklist: (missionId: string) => ["missionChecklist", missionId] as const,
+  missionSchedule: (missionId: string) =>
+    ["missionSchedule", missionId] as const,
+  missionChecklist: (missionId: string) =>
+    ["missionChecklist", missionId] as const,
   missionChecklistConfig: ["missionChecklistConfig"] as const,
   missionChecklistMapping: (filters: Record<string, any>) =>
     ["missionChecklistMapping", filters] as const,
-  activities: (filters: Record<string, any>) => ["activities", filters] as const,
+  activities: (filters: Record<string, any>) =>
+    ["activities", filters] as const,
   task: (id: string) => ["task", id] as const,
   gantt: (filters: Record<string, any>) => ["gantt", filters] as const,
-  calendarYear: (year: number, filters: Record<string, any>) => ["calendar", year, filters] as const,
+  calendarYear: (year: number, filters: Record<string, any>) =>
+    ["calendar", year, filters] as const,
   localityProgress: (id: string) => ["localityProgress", id] as const,
-  dashboardNational: (filters: Record<string, any>) => ["dashboardNational", filters] as const,
-  dashboardRecruits: (filters: Record<string, any>) => ["dashboardRecruits", filters] as const,
-  roles: ["rbac","roles"] as const,
-  permissions: ["rbac","permissions"] as const,
-  userModuleAccess: (userId: string) => ["rbac", "userModuleAccess", userId] as const,
+  dashboardNational: (filters: Record<string, any>) =>
+    ["dashboardNational", filters] as const,
+  dashboardRecruits: (filters: Record<string, any>) =>
+    ["dashboardRecruits", filters] as const,
+  roles: ["rbac", "roles"] as const,
+  permissions: ["rbac", "permissions"] as const,
+  userModuleAccess: (userId: string) =>
+    ["rbac", "userModuleAccess", userId] as const,
   taskTemplates: ["taskTemplates"] as const,
   notices: (filters: Record<string, any>) => ["notices", filters] as const,
-  socialCommunication: (filters: Record<string, any>) => ["socialCommunication", filters] as const,
+  socialCommunication: (filters: Record<string, any>) =>
+    ["socialCommunication", filters] as const,
   socialCommunicationHighlights: (filters: Record<string, any>) =>
     ["socialCommunicationHighlights", filters] as const,
-  bestPractices: (filters: Record<string, any>) => ["bestPractices", filters] as const,
-  lessonsLearned: (filters: Record<string, any>) => ["lessonsLearned", filters] as const,
+  bestPractices: (filters: Record<string, any>) =>
+    ["bestPractices", filters] as const,
+  lessonsLearned: (filters: Record<string, any>) =>
+    ["lessonsLearned", filters] as const,
   lessonLearnedTypes: ["lessonLearnedTypes"] as const,
   library: ["library"] as const,
   meetings: (filters: Record<string, any>) => ["meetings", filters] as const,
-  checklists: (filters: Record<string, any>) => ["checklists", filters] as const,
+  checklists: (filters: Record<string, any>) =>
+    ["checklists", filters] as const,
   elos: (filters: Record<string, any>) => ["elos", filters] as const,
   orgChart: (filters: Record<string, any>) => ["orgChart", filters] as const,
-  orgChartCommissionMembers: (filters: Record<string, any>) => ["orgChart", "commissionMembers", filters] as const,
-  orgChartCommissionCandidates: (filters: Record<string, any>) => ["orgChart", "commissionCandidates", filters] as const,
+  orgChartCommissionMembers: (filters: Record<string, any>) =>
+    ["orgChart", "commissionMembers", filters] as const,
+  orgChartCommissionCandidates: (filters: Record<string, any>) =>
+    ["orgChart", "commissionCandidates", filters] as const,
   auditLogs: (filters: Record<string, any>) => ["auditLogs", filters] as const,
   auditLastLogins: ["auditLogs", "lastLogins"] as const,
   localities: ["localities"] as const,
   omsCatalog: ["omsCatalog"] as const,
-  recruitDesignations: (localityId: string) => ["recruitDesignations", localityId] as const,
+  recruitDesignations: (localityId: string) =>
+    ["recruitDesignations", localityId] as const,
   specialties: ["specialties"] as const,
   eloRoles: ["eloRoles"] as const,
   postos: ["postos"] as const,
   search: (q: string) => ["search", q] as const,
   documents: (filters: Record<string, any>) => ["documents", filters] as const,
-  documentSubcategories: (filters: Record<string, any>) => ["documents", "subcategories", filters] as const,
+  documentSubcategories: (filters: Record<string, any>) =>
+    ["documents", "subcategories", filters] as const,
   documentCoverage: ["documents", "coverage"] as const,
   documentContent: (id: string) => ["documents", id, "content"] as const,
-  documentLinks: (filters: Record<string, any>) => ["documents", "links", filters] as const,
+  documentLinks: (filters: Record<string, any>) =>
+    ["documents", "links", filters] as const,
   documentLinkCandidates: (filters: Record<string, any>) =>
     ["documents", "link-candidates", filters] as const,
-  executiveDashboard: (filters: Record<string, any>) => ["dashboardExecutive", filters] as const,
-  kpiDashboard: (filters: Record<string, any>) => ["kpiDashboard", filters] as const,
-  biSurveyDashboard: (filters: Record<string, any>) => ["biSurvey", "dashboard", filters] as const,
-  biSurveyResponses: (filters: Record<string, any>) => ["biSurvey", "responses", filters] as const,
-  biSurveyImports: (filters: Record<string, any>) => ["biSurvey", "imports", filters] as const,
-  biSurveyQuestions: (filters: Record<string, any>) => ["biSurvey", "questions", filters] as const,
+  executiveDashboard: (filters: Record<string, any>) =>
+    ["dashboardExecutive", filters] as const,
+  kpiDashboard: (filters: Record<string, any>) =>
+    ["kpiDashboard", filters] as const,
+  biSurveyDashboard: (filters: Record<string, any>) =>
+    ["biSurvey", "dashboard", filters] as const,
+  biSurveyResponses: (filters: Record<string, any>) =>
+    ["biSurvey", "responses", filters] as const,
+  biSurveyImports: (filters: Record<string, any>) =>
+    ["biSurvey", "imports", filters] as const,
+  biSurveyQuestions: (filters: Record<string, any>) =>
+    ["biSurvey", "questions", filters] as const,
   cpcaCases: (filters: Record<string, any>) => ["cpcaCases", filters] as const,
   cpcaCase: (id: string) => ["cpcaCase", id] as const,
-  cpcaCaseStats: (filters: Record<string, any>) => ["cpcaCaseStats", filters] as const,
+  cpcaCaseStats: (filters: Record<string, any>) =>
+    ["cpcaCaseStats", filters] as const,
+  smifComplaints: (filters: Record<string, any>) =>
+    ["smifComplaints", filters] as const,
 };

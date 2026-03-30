@@ -60,6 +60,8 @@ model User {
   libraryDocumentsCreated LibraryDocument[] @relation("LibraryDocumentCreator")
   bestPracticesCreated BestPracticePost[] @relation("BestPracticeCreator")
   lessonsLearnedCreated LessonLearnedPost[] @relation("LessonLearnedCreator")
+  smifComplaintsCreated SmifComplaint[] @relation("SmifComplaintCreatedBy")
+  smifComplaintsUpdated SmifComplaint[] @relation("SmifComplaintUpdatedBy")
 }
 
 model UserModuleAccessOverride {
@@ -173,6 +175,7 @@ model Locality {
   libraryPhotos              LibraryPhoto[]
   bestPracticePosts          BestPracticePost[]
   socialCommunicationHighlights SocialCommunicationHighlight[]
+  smifComplaints             SmifComplaint[]
 }
 
 model Activity {
@@ -1070,6 +1073,27 @@ model RecruitFemale {
   @@index([status, dismissedAt])
 }
 
+model SmifComplaint {
+  id          String              @id @default(cuid())
+  localityId  String
+  reportedAt  DateTime
+  description String
+  status      SmifComplaintStatus @default(IN_PROGRESS)
+  conclusion  String?
+  createdById String
+  updatedById String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  locality    Locality            @relation(fields: [localityId], references: [id])
+  createdBy   User                @relation("SmifComplaintCreatedBy", fields: [createdById], references: [id])
+  updatedBy   User?               @relation("SmifComplaintUpdatedBy", fields: [updatedById], references: [id])
+
+  @@index([status, reportedAt])
+  @@index([localityId, reportedAt])
+  @@index([createdById])
+}
+
 model CpcComplaintCase {
   id                              String             @id @default(cuid())
   caseNumber                      String             @unique
@@ -1341,6 +1365,11 @@ enum CpcComplaintStatus {
   INVESTIGATION
   CONCLUDED
   ARCHIVED
+}
+
+enum SmifComplaintStatus {
+  IN_PROGRESS
+  COMPLETED
 }
 
 enum CpcProcedureType {

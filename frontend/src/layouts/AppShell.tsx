@@ -87,21 +87,62 @@ const navSections: NavSection[] = [
     id: "command",
     label: "COMANDO",
     items: [
-      { label: "SMIF", to: "/dashboard/smif", icon: <DashboardIcon fontSize="small" /> },
-      { label: "CIPAVD", to: "/dashboard/cipavd", icon: <InsightsRoundedIcon fontSize="small" /> },
-      { label: "Impacto Positivo", to: "/social-communication", icon: <NewspaperRoundedIcon fontSize="small" /> },
-      { label: "Biblioteca", to: "/library", icon: <PhotoLibraryRoundedIcon fontSize="small" /> },
-      { label: "CPCA", to: "/dashboard/cpca", icon: <PolicyRoundedIcon fontSize="small" /> },
+      {
+        label: "SMIF",
+        to: "/dashboard/smif",
+        icon: <DashboardIcon fontSize="small" />,
+      },
+      {
+        label: "CIPAVD",
+        to: "/dashboard/cipavd",
+        icon: <InsightsRoundedIcon fontSize="small" />,
+      },
+      {
+        label: "Impacto Positivo",
+        to: "/social-communication",
+        icon: <NewspaperRoundedIcon fontSize="small" />,
+      },
+      {
+        label: "Biblioteca",
+        to: "/library",
+        icon: <PhotoLibraryRoundedIcon fontSize="small" />,
+      },
+      {
+        label: "CPCA",
+        to: "/dashboard/cpca",
+        icon: <PolicyRoundedIcon fontSize="small" />,
+      },
     ],
   },
   {
     id: "smif",
     label: "SMIF",
     items: [
-      { label: "Atividades de Campo", to: "/activities", icon: <EventNoteIcon fontSize="small" /> },
-      { label: "GSD e Recrutas", to: "/gsd-recruits", icon: <PeopleIcon fontSize="small" /> },
-      { label: "Elos", to: "/elos", icon: <ContactPhoneIcon fontSize="small" /> },
-      { label: "Boas Práticas", to: "/best-practices", icon: <LightbulbRoundedIcon fontSize="small" /> },
+      {
+        label: "Atividades de Campo",
+        to: "/activities",
+        icon: <EventNoteIcon fontSize="small" />,
+      },
+      {
+        label: "Denúncias",
+        to: "/smif-complaints",
+        icon: <PolicyRoundedIcon fontSize="small" />,
+      },
+      {
+        label: "GSD e Recrutas",
+        to: "/gsd-recruits",
+        icon: <PeopleIcon fontSize="small" />,
+      },
+      {
+        label: "Elos",
+        to: "/elos",
+        icon: <ContactPhoneIcon fontSize="small" />,
+      },
+      {
+        label: "Boas Práticas",
+        to: "/best-practices",
+        icon: <LightbulbRoundedIcon fontSize="small" />,
+      },
     ],
   },
   {
@@ -109,38 +150,94 @@ const navSections: NavSection[] = [
     label: "CIPAVD",
     items: [
       { label: "Tarefas", to: "/tasks", icon: <TaskIcon fontSize="small" /> },
-      { label: "Reuniões", to: "/meetings", icon: <GroupsIcon fontSize="small" /> },
-      { label: "Organograma", to: "/org-chart", icon: <AccountTreeIcon fontSize="small" /> },
-      { label: "Cronograma", to: "/gantt", icon: <TaskIcon fontSize="small" /> },
-      { label: "Calendário", to: "/calendar", icon: <EventNoteIcon fontSize="small" /> },
-      { label: "Missões", to: "/missions", icon: <FlagRoundedIcon fontSize="small" /> },
-      { label: "Atividades de Campo", to: "/activities-cipavd", icon: <EventNoteIcon fontSize="small" /> },
-      { label: "Avisos", to: "/notices", icon: <CampaignIcon fontSize="small" /> },
+      {
+        label: "Reuniões",
+        to: "/meetings",
+        icon: <GroupsIcon fontSize="small" />,
+      },
+      {
+        label: "Organograma",
+        to: "/org-chart",
+        icon: <AccountTreeIcon fontSize="small" />,
+      },
+      {
+        label: "Cronograma",
+        to: "/gantt",
+        icon: <TaskIcon fontSize="small" />,
+      },
+      {
+        label: "Calendário",
+        to: "/calendar",
+        icon: <EventNoteIcon fontSize="small" />,
+      },
+      {
+        label: "Missões",
+        to: "/missions",
+        icon: <FlagRoundedIcon fontSize="small" />,
+      },
+      {
+        label: "Atividades de Campo",
+        to: "/activities-cipavd",
+        icon: <EventNoteIcon fontSize="small" />,
+      },
+      {
+        label: "Avisos",
+        to: "/notices",
+        icon: <CampaignIcon fontSize="small" />,
+      },
     ],
   },
   {
     id: "pesquisas",
     label: "PESQUISAS",
     items: [
-      { label: "BI Pesquisas", to: "/dashboard/bi", icon: <InsightsRoundedIcon fontSize="small" /> },
+      {
+        label: "BI Pesquisas",
+        to: "/dashboard/bi",
+        icon: <InsightsRoundedIcon fontSize="small" />,
+      },
     ],
   },
   {
     id: "cpca",
     label: "CPCA",
     items: [
-      { label: "Denúncias", to: "/cpca-cases", icon: <PolicyRoundedIcon fontSize="small" /> },
-      { label: "OMs", to: "/admin/oms", icon: <BusinessIcon fontSize="small" /> },
+      {
+        label: "Denúncias",
+        to: "/cpca-cases",
+        icon: <PolicyRoundedIcon fontSize="small" />,
+      },
+      {
+        label: "OMs",
+        to: "/admin/oms",
+        icon: <BusinessIcon fontSize="small" />,
+      },
     ],
   },
   {
     id: "ti",
     label: "TI",
     items: [
-      { label: "Usuários e Permissões", to: "/admin/rbac", icon: <PeopleIcon fontSize="small" /> },
-      { label: "Logs", to: "/audit", icon: <InsightsRoundedIcon fontSize="small" /> },
-      { label: "Administração", to: "/admin", icon: <SettingsIcon fontSize="small" /> },
-      { label: "OMs", to: "/admin/oms", icon: <BusinessIcon fontSize="small" /> },
+      {
+        label: "Usuários e Permissões",
+        to: "/admin/rbac",
+        icon: <PeopleIcon fontSize="small" />,
+      },
+      {
+        label: "Logs",
+        to: "/audit",
+        icon: <InsightsRoundedIcon fontSize="small" />,
+      },
+      {
+        label: "Administração",
+        to: "/admin",
+        icon: <SettingsIcon fontSize="small" />,
+      },
+      {
+        label: "OMs",
+        to: "/admin/oms",
+        icon: <BusinessIcon fontSize="small" />,
+      },
     ],
   },
 ];
@@ -298,6 +395,9 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
     if (item.to === "/dashboard/bi") {
       return isBiRole && can(me, "dashboard", "view");
+    }
+    if (item.to === "/smif-complaints") {
+      return hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]);
     }
     if (item.to === "/missions") {
       return hasAnyRole(me, [
@@ -507,7 +607,9 @@ export function AppShell({ children }: { children: ReactNode }) {
                     selected={selected}
                     onClick={() => setMobileOpen(false)}
                     sx={{
-                      justifyContent: sidebarCollapsed ? "center" : "flex-start",
+                      justifyContent: sidebarCollapsed
+                        ? "center"
+                        : "flex-start",
                       px: sidebarCollapsed ? 1 : undefined,
                     }}
                   >
@@ -975,10 +1077,21 @@ export function AppShell({ children }: { children: ReactNode }) {
           pb: 3.5,
         }}
       >
-        <Toolbar sx={{ minHeight: `${headerHeight}px !important`, height: `${headerHeight}px` }} />
+        <Toolbar
+          sx={{
+            minHeight: `${headerHeight}px !important`,
+            height: `${headerHeight}px`,
+          }}
+        />
         <Box
           className="page-enter"
-          sx={{ width: "100%", minWidth: 0, maxWidth: 1650, mx: "auto", pt: { xs: 1.2, md: 1.8 } }}
+          sx={{
+            width: "100%",
+            minWidth: 0,
+            maxWidth: 1650,
+            mx: "auto",
+            pt: { xs: 1.2, md: 1.8 },
+          }}
         >
           {children}
         </Box>
