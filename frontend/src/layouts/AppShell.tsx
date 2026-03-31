@@ -366,6 +366,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     (prefix) =>
       location.pathname === prefix || location.pathname.startsWith(`${prefix}/`),
   );
+  const isTasksPath =
+    location.pathname === "/tasks" || location.pathname.startsWith("/tasks/");
 
   const handleLogout = () => {
     localStorage.removeItem("accessToken");
@@ -641,7 +643,9 @@ export function AppShell({ children }: { children: ReactNode }) {
                     key={item.to}
                     component={Link}
                     to={
-                      canUseGlobalLocalityFilter && globalLocalityId
+                      canUseGlobalLocalityFilter &&
+                      globalLocalityId &&
+                      section.id !== "cipavd"
                         ? `${item.to}?localityId=${encodeURIComponent(globalLocalityId)}`
                         : item.to
                     }
@@ -949,7 +953,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               </Popover>
             </Box>
           )}
-          {canUseGlobalLocalityFilter && (
+          {canUseGlobalLocalityFilter && !isTasksPath && (
             <TextField
               select
               size="small"

@@ -47,6 +47,7 @@ export function hasAnyRole(user: RbacUser | undefined, roleNames: string[]) {
 
 export function isNationalCommissionMember(user: RbacUser | undefined) {
   return hasAnyRole(user, [
+    ROLE_CIPAVD,
     ROLE_COORDENACAO_CIPAVD,
     ROLE_COMISSAO_CIPAVD,
     ROLE_COMANDANTE_COMGEP,
