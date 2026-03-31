@@ -129,7 +129,11 @@ export function TasksPage() {
     [localityId, phaseId, status, assigneeIdsFilter, dueFrom, dueTo, eloRoleId],
   );
 
-  const tasksQuery = useTasks(taskFilters);
+  const tasksQuery = useTasks({
+    ...taskFilters,
+    page: "1",
+    pageSize: "500",
+  });
   const canManageTaskDataByRole = hasAnyRole(me, [
     ROLE_CIPAVD,
     ROLE_COORDENACAO_CIPAVD,
