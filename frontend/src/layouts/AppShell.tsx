@@ -80,6 +80,7 @@ import {
 const drawerExpandedWidth = 284;
 const drawerCollapsedWidth = 92;
 const headerHeight = 76;
+const GLOBAL_LOCALITY_QUERY_PARAM = "globalLocalityId";
 
 type NavItem = { label: string; to: string; icon: JSX.Element };
 type NavSection = { id: string; label?: string; items: NavItem[] };
@@ -351,8 +352,8 @@ export function AppShell({ children }: { children: ReactNode }) {
       ),
     [availableGlobalLocalities],
   );
-  const globalLocalityId = searchParams.get("localityId") ?? "";
-  const contextFromQuery = searchParams.get("localityId");
+  const globalLocalityId = searchParams.get(GLOBAL_LOCALITY_QUERY_PARAM) ?? "";
+  const contextFromQuery = searchParams.get(GLOBAL_LOCALITY_QUERY_PARAM);
   const localityFromPath = location.pathname.startsWith("/dashboard/locality/")
     ? location.pathname.split("/").pop()
     : null;
@@ -523,13 +524,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   ]);
 
   useEffect(() => {
-    const fromUrl = (searchParams.get("localityId") ?? "").trim();
+    const fromUrl = (searchParams.get(GLOBAL_LOCALITY_QUERY_PARAM) ?? "").trim();
 
     if (!canUseGlobalLocalityFilter) {
       localStorage.removeItem(GLOBAL_LOCALITY_STORAGE_KEY);
       if (fromUrl) {
         const next = new URLSearchParams(searchParams);
-        next.delete("localityId");
+        next.delete(GLOBAL_LOCALITY_QUERY_PARAM);
         setSearchParams(next, { replace: true });
       }
       return;
@@ -646,7 +647,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                       canUseGlobalLocalityFilter &&
                       globalLocalityId &&
                       section.id !== "cipavd"
-                        ? `${item.to}?localityId=${encodeURIComponent(globalLocalityId)}`
+                        ? `${item.to}?${GLOBAL_LOCALITY_QUERY_PARAM}=${encodeURIComponent(globalLocalityId)}`
                         : item.to
                     }
                     selected={selected}
@@ -963,10 +964,10 @@ export function AppShell({ children }: { children: ReactNode }) {
                 const value = event.target.value;
                 const next = new URLSearchParams(searchParams);
                 if (value) {
-                  next.set("localityId", value);
+                  next.set(GLOBAL_LOCALITY_QUERY_PARAM, value);
                   localStorage.setItem(GLOBAL_LOCALITY_STORAGE_KEY, value);
                 } else {
-                  next.delete("localityId");
+                  next.delete(GLOBAL_LOCALITY_QUERY_PARAM);
                   localStorage.removeItem(GLOBAL_LOCALITY_STORAGE_KEY);
                 }
                 setSearchParams(next);

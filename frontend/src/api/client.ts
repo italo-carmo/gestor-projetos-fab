@@ -4,6 +4,7 @@ const configuredBaseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefin
 const isLocalHostPattern = /^(https?:\/\/)?(localhost|127\.0\.0\.1|::1)(:\d+)?$/i;
 export const GLOBAL_LOCALITY_STORAGE_KEY = "globalLocalityId";
 export const ACTIVE_ROLE_STORAGE_KEY = "activeRoleId";
+const GLOBAL_LOCALITY_QUERY_PARAM = "globalLocalityId";
 
 const shouldForceRelativeApiBase = () => {
   if (typeof window === "undefined") return false;
@@ -21,7 +22,11 @@ const apiBaseUrl = shouldForceRelativeApiBase()
 const resolveGlobalLocalityIdFromUrl = () => {
   if (typeof window === "undefined") return "";
   try {
-    return new URLSearchParams(window.location.search).get("localityId")?.trim() ?? "";
+    return (
+      new URLSearchParams(window.location.search)
+        .get(GLOBAL_LOCALITY_QUERY_PARAM)
+        ?.trim() ?? ""
+    );
   } catch {
     return "";
   }
