@@ -789,7 +789,7 @@ export function TasksPage() {
       )}
 
       {groupedRows.length > 0 && tab === 0 && (
-        <Card>
+        <Card sx={{ width: "100%" }}>
           <CardContent>
             <Stack
               direction={{ xs: "column", md: "row" }}
@@ -908,7 +908,7 @@ export function TasksPage() {
                 Excluir selecionadas
               </Button>
             </Stack>
-            <Box sx={{ height: 520 }}>
+            <Box sx={{ height: 520, width: "100%" }}>
               <DataGrid
                 rows={safeRows}
                 getRowId={(row) => String(row.id)}
@@ -916,6 +916,7 @@ export function TasksPage() {
                   dataGridPtBR.components.MuiDataGrid.defaultProps.localeText
                 }
                 sx={{
+                  width: "100%",
                   "--DataGrid-containerBackground": "rgb(23, 57, 75)",
                   "& .MuiDataGrid-columnHeaders": {
                     backgroundColor: "rgb(23, 57, 75) !important",
@@ -963,8 +964,8 @@ export function TasksPage() {
                     {
                       field: "title",
                       headerName: "Título da tarefa",
-                      flex: 1.35,
-                      minWidth: 320,
+                      flex: 1.15,
+                      minWidth: 280,
                       valueGetter: (_, row) => resolveTaskTitle(row),
                       renderCell: (params) => {
                         const title = resolveTaskTitle(params.row);
@@ -1039,7 +1040,7 @@ export function TasksPage() {
                     {
                       field: "dueDate",
                       headerName: "Prazo",
-                      width: 128,
+                      width: 152,
                       renderCell: (params) => (
                         <DueBadge
                           dueDate={params.row.dueDate}
