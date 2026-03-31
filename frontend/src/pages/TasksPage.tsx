@@ -963,9 +963,47 @@ export function TasksPage() {
                     {
                       field: "title",
                       headerName: "Título da tarefa",
-                      flex: 1.2,
-                      minWidth: 260,
+                      flex: 1.35,
+                      minWidth: 320,
                       valueGetter: (_, row) => resolveTaskTitle(row),
+                      renderCell: (params) => {
+                        const title = resolveTaskTitle(params.row);
+                        const commentsTotal = Number(
+                          params.row.comments?.total ?? 0,
+                        );
+                        const unreadComments = Number(
+                          params.row.comments?.unread ?? 0,
+                        );
+                        return (
+                          <Stack
+                            direction="row"
+                            alignItems="center"
+                            spacing={0.8}
+                            sx={{ minWidth: 0, width: "100%" }}
+                          >
+                            <Typography
+                              variant="body2"
+                              sx={{
+                                fontWeight: 600,
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                              }}
+                              title={title}
+                            >
+                              {title}
+                            </Typography>
+                            {commentsTotal > 0 && (
+                              <Chip
+                                size="small"
+                                label={String(commentsTotal)}
+                                color={unreadComments > 0 ? "warning" : "default"}
+                                sx={{ height: 20, fontSize: 11, minWidth: 28 }}
+                              />
+                            )}
+                          </Stack>
+                        );
+                      },
                     },
                     {
                       field: "locality",
@@ -1001,7 +1039,7 @@ export function TasksPage() {
                     {
                       field: "dueDate",
                       headerName: "Prazo",
-                      width: 112,
+                      width: 128,
                       renderCell: (params) => (
                         <DueBadge
                           dueDate={params.row.dueDate}
@@ -1023,17 +1061,6 @@ export function TasksPage() {
                             "-"),
                     },
                     {
-                      field: "comments",
-                      headerName: "Comentários",
-                      width: 92,
-                      renderCell: (params) => {
-                        const total = params.row.comments?.total ?? 0;
-                        const unread = params.row.comments?.unread ?? 0;
-                        if (!total) return "—";
-                        return unread > 0 ? `Novo (${unread})` : `${total}`;
-                      },
-                    },
-                    {
                       field: "status",
                       headerName: "Status",
                       width: 120,
@@ -1050,13 +1077,6 @@ export function TasksPage() {
                       width: 84,
                       valueGetter: (_, row) =>
                         `${Math.max(0, Math.min(100, Number(row.progressPercent ?? 0)))}%`,
-                    },
-                    {
-                      field: "eloRole",
-                      headerName: "Elo",
-                      width: 84,
-                      valueGetter: (_, row) =>
-                        row.eloRole?.name ?? row.eloRole?.code ?? "—",
                     },
                   ] as GridColDef[]
                 }
