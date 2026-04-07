@@ -1,6 +1,7 @@
 import type { RbacUser } from './rbac.types';
 export declare const ROLE_COORDENACAO_CIPAVD = "Coordena\u00E7\u00E3o CIPAVD";
 export declare const ROLE_COMISSAO_CIPAVD = "Comiss\u00E3o CIPAVD";
+export declare const ROLE_CIPAVD = "CIPAVD";
 export declare const ROLE_COMGEP = "COMGEP";
 export declare const ROLE_COMANDANTE_COMGEP = "COMGEP";
 export declare const ROLE_TI = "TI";

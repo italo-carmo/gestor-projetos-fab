@@ -98,10 +98,18 @@ export class RbacService {
   }
 
   async listRoles() {
-    const roles = await this.prisma.role.findMany({ orderBy: { name: 'asc' } });
+    const roles = await this.prisma.role.findMany({
+      orderBy: { name: 'asc' },
+      include: { permissions: { include: { permission: true } } },
+    });
     return roles.map((role) => ({
       ...role,
       name: canonicalRoleName(role.name),
+      permissions: role.permissions.map((entry) => ({
+        resource: entry.permission.resource,
+        action: entry.permission.action,
+        scope: entry.permission.scope,
+      })),
     }));
   }
 

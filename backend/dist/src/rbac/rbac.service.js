@@ -102,10 +102,18 @@ let RbacService = class RbacService {
         return this.buildAccessFromUser(user, activeRoleId);
     }
     async listRoles() {
-        const roles = await this.prisma.role.findMany({ orderBy: { name: 'asc' } });
+        const roles = await this.prisma.role.findMany({
+            orderBy: { name: 'asc' },
+            include: { permissions: { include: { permission: true } } },
+        });
         return roles.map((role) => ({
             ...role,
             name: (0, role_access_1.canonicalRoleName)(role.name),
+            permissions: role.permissions.map((entry) => ({
+                resource: entry.permission.resource,
+                action: entry.permission.action,
+                scope: entry.permission.scope,
+            })),
         }));
     }
     async createRole(data) {
@@ -717,9 +725,10 @@ let RbacService = class RbacService {
         const priorityOrder = new Map([
             [(0, role_access_1.normalizeRoleName)(role_access_1.ROLE_TI), 0],
             [(0, role_access_1.normalizeRoleName)(role_access_1.ROLE_COMISSAO_CIPAVD), 1],
-            [(0, role_access_1.normalizeRoleName)(role_access_1.ROLE_COORDENACAO_CIPAVD), 2],
-            [(0, role_access_1.normalizeRoleName)(role_access_1.ROLE_COMANDANTE_COMGEP), 3],
-            [(0, role_access_1.normalizeRoleName)(role_access_1.ROLE_CPCA), 4],
+            [(0, role_access_1.normalizeRoleName)(role_access_1.ROLE_CIPAVD), 2],
+            [(0, role_access_1.normalizeRoleName)(role_access_1.ROLE_COORDENACAO_CIPAVD), 3],
+            [(0, role_access_1.normalizeRoleName)(role_access_1.ROLE_COMANDANTE_COMGEP), 4],
+            [(0, role_access_1.normalizeRoleName)(role_access_1.ROLE_CPCA), 5],
         ]);
         const sorted = [...roles].sort((a, b) => {
             const priorityA = priorityOrder.get((0, role_access_1.normalizeRoleName)(a.name)) ?? Number.MAX_SAFE_INTEGER;

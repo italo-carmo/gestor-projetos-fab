@@ -16,6 +16,11 @@ export declare class RbacService {
     getUserAccess(userId: string, activeRoleId?: string | null): Promise<RbacUser>;
     listRoles(): Promise<{
         name: string;
+        permissions: {
+            resource: string;
+            action: string;
+            scope: import("@prisma/client").$Enums.PermissionScope;
+        }[];
         id: string;
         createdAt: Date;
         updatedAt: Date;

@@ -624,7 +624,14 @@ export function MeetingsPage() {
         }}
         PaperProps={{ sx: { width: { xs: '100%', md: 520 } } }}
       >
-        <Box p={3} display="flex" flexDirection="column" gap={2} height="100%">
+        <Box
+          p={3}
+          display="flex"
+          flexDirection="column"
+          gap={2}
+          height="100%"
+          sx={{ overflowY: 'auto', pt: { xs: 8, md: 7 } }}
+        >
           <Typography variant="h5">{selectedMeeting ? 'Detalhes da reunião' : 'Nova reunião'}</Typography>
           <TextField
             size="small"

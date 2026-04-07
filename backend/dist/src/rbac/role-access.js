@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ROLE_ADMINISTRACAO_LOCAL = exports.ROLE_ADMIN_LOCALIDADE = exports.ROLE_ADMIN_ESPECIALIDADE_NACIONAL = exports.ROLE_ADMIN_ESPECIALIDADE_LOCAL = exports.ROLE_GSD_LOCALIDADE = exports.ROLE_CPCA = exports.ROLE_TI = exports.ROLE_COMANDANTE_COMGEP = exports.ROLE_COMGEP = exports.ROLE_COMISSAO_CIPAVD = exports.ROLE_COORDENACAO_CIPAVD = void 0;
+exports.ROLE_ADMINISTRACAO_LOCAL = exports.ROLE_ADMIN_LOCALIDADE = exports.ROLE_ADMIN_ESPECIALIDADE_NACIONAL = exports.ROLE_ADMIN_ESPECIALIDADE_LOCAL = exports.ROLE_GSD_LOCALIDADE = exports.ROLE_CPCA = exports.ROLE_TI = exports.ROLE_COMANDANTE_COMGEP = exports.ROLE_COMGEP = exports.ROLE_CIPAVD = exports.ROLE_COMISSAO_CIPAVD = exports.ROLE_COORDENACAO_CIPAVD = void 0;
 exports.normalizeRoleName = normalizeRoleName;
 exports.canonicalRoleName = canonicalRoleName;
 exports.hasRole = hasRole;
@@ -17,6 +17,7 @@ exports.canEditRecruitsByRole = canEditRecruitsByRole;
 exports.hasCpcaWorkflowAccess = hasCpcaWorkflowAccess;
 exports.ROLE_COORDENACAO_CIPAVD = 'Coordenação CIPAVD';
 exports.ROLE_COMISSAO_CIPAVD = 'Comissão CIPAVD';
+exports.ROLE_CIPAVD = 'CIPAVD';
 exports.ROLE_COMGEP = 'COMGEP';
 exports.ROLE_COMANDANTE_COMGEP = exports.ROLE_COMGEP;
 exports.ROLE_TI = 'TI';
@@ -59,6 +60,7 @@ function hasAnyRole(user, roleNames) {
 }
 function isNationalCommissionMember(user) {
     return hasAnyRole(user, [
+        exports.ROLE_CIPAVD,
         exports.ROLE_COORDENACAO_CIPAVD,
         exports.ROLE_COMISSAO_CIPAVD,
         exports.ROLE_COMANDANTE_COMGEP,

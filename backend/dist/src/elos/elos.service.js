@@ -648,7 +648,7 @@ let ElosService = class ElosService {
         }
     }
     assertCanManageOrgChart(user) {
-        if (!(0, role_access_1.hasAnyRole)(user, [role_access_1.ROLE_COORDENACAO_CIPAVD, role_access_1.ROLE_TI])) {
+        if (!(0, role_access_1.hasAnyRole)(user, [role_access_1.ROLE_CIPAVD, role_access_1.ROLE_COORDENACAO_CIPAVD, role_access_1.ROLE_TI])) {
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         }
     }

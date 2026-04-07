@@ -1568,7 +1568,7 @@ let ActivitiesService = class ActivitiesService {
     async signReport(activityId, user) {
         if (!user?.id)
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
-        if (!(0, role_access_1.hasAnyRole)(user, [role_access_1.ROLE_COORDENACAO_CIPAVD, role_access_1.ROLE_TI])) {
+        if (!(0, role_access_1.hasAnyRole)(user, [role_access_1.ROLE_CIPAVD, role_access_1.ROLE_COORDENACAO_CIPAVD, role_access_1.ROLE_TI])) {
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         }
         const activity = await this.prisma.activity.findUnique({
@@ -2549,7 +2549,7 @@ let ActivitiesService = class ActivitiesService {
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         const scope = activityOrScope?.scope;
         if (scope === 'CIPAVD') {
-            if ((0, role_access_1.hasAnyRole)(user, [role_access_1.ROLE_COORDENACAO_CIPAVD, role_access_1.ROLE_TI]))
+            if ((0, role_access_1.hasAnyRole)(user, [role_access_1.ROLE_CIPAVD, role_access_1.ROLE_COORDENACAO_CIPAVD, role_access_1.ROLE_TI]))
                 return;
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         }

@@ -1877,6 +1877,7 @@ let MissionsService = class MissionsService {
     }
     assertMissionAccess(user) {
         if ((0, role_access_1.hasAnyRole)(user, [
+            role_access_1.ROLE_CIPAVD,
             role_access_1.ROLE_COORDENACAO_CIPAVD,
             role_access_1.ROLE_COMANDANTE_COMGEP,
             role_access_1.ROLE_TI,
@@ -1886,7 +1887,7 @@ let MissionsService = class MissionsService {
         (0, http_error_1.throwError)('RBAC_FORBIDDEN');
     }
     assertMissionChecklistEditAccess(user) {
-        if ((0, role_access_1.hasAnyRole)(user, [role_access_1.ROLE_COORDENACAO_CIPAVD, role_access_1.ROLE_TI])) {
+        if ((0, role_access_1.hasAnyRole)(user, [role_access_1.ROLE_CIPAVD, role_access_1.ROLE_COORDENACAO_CIPAVD, role_access_1.ROLE_TI])) {
             return;
         }
         (0, http_error_1.throwError)('RBAC_FORBIDDEN');
@@ -1901,7 +1902,7 @@ let MissionsService = class MissionsService {
             (0, http_error_1.throwError)('NOT_FOUND');
     }
     assertMissionChecklistConfigAccess(user) {
-        if ((0, role_access_1.hasAnyRole)(user, [role_access_1.ROLE_COORDENACAO_CIPAVD, role_access_1.ROLE_TI])) {
+        if ((0, role_access_1.hasAnyRole)(user, [role_access_1.ROLE_CIPAVD, role_access_1.ROLE_COORDENACAO_CIPAVD, role_access_1.ROLE_TI])) {
             return;
         }
         (0, http_error_1.throwError)('RBAC_FORBIDDEN');

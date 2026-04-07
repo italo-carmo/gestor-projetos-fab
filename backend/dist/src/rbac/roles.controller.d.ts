@@ -7,6 +7,11 @@ export declare class RolesController {
     list(): Promise<{
         items: {
             name: string;
+            permissions: {
+                resource: string;
+                action: string;
+                scope: import("@prisma/client").$Enums.PermissionScope;
+            }[];
             id: string;
             createdAt: Date;
             updatedAt: Date;
