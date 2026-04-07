@@ -33,6 +33,7 @@ model User {
   eloRole          EloRole?      @relation(fields: [eloRoleId], references: [id])
   roles            UserRole[]
   moduleAccessOverrides UserModuleAccessOverride[]
+  menuUpdateReads  UserMenuUpdateRead[]
   refreshTokens    RefreshToken[]
   assignedTasks    TaskInstance[] @relation("TaskAssignee")
   taskResponsibilities TaskResponsible[] @relation("TaskResponsibleUser")
@@ -732,6 +733,20 @@ model ActivityCommentRead {
 
   @@unique([activityId, userId])
   @@index([userId, seenAt])
+}
+
+model UserMenuUpdateRead {
+  id         String   @id @default(cuid())
+  userId     String
+  menuKey    String
+  seenAt     DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, menuKey])
+  @@index([userId, seenAt])
+  @@index([menuKey])
 }
 
 model Kpi {

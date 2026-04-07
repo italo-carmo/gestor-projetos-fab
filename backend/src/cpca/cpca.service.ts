@@ -1234,6 +1234,43 @@ export class CpcaService {
     return updated;
   }
 
+  async remove(id: string, user?: RbacUser) {
+    const complaintModel = (this.prisma as any).cpcComplaintCase;
+
+    const current = await complaintModel.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        caseNumber: true,
+        localityId: true,
+        complaintType: true,
+        status: true,
+        procedureType: true,
+      },
+    });
+    if (!current) throwError('NOT_FOUND');
+
+    this.assertCaseAccess(current.localityId, user);
+
+    await complaintModel.delete({ where: { id } });
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'cpca_cases',
+      action: 'delete',
+      entityId: current.id,
+      localityId: current.localityId,
+      diffJson: {
+        caseNumber: current.caseNumber,
+        complaintType: current.complaintType,
+        status: current.status,
+        procedureType: current.procedureType,
+      },
+    });
+
+    return { ok: true };
+  }
+
   async addComment(id: string, text: string, user?: RbacUser) {
     const complaintModel = (this.prisma as any).cpcComplaintCase;
     const commentModel = (this.prisma as any).cpcComplaintComment;

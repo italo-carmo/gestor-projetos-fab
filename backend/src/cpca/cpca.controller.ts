@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Post,
@@ -84,6 +85,12 @@ export class CpcaController {
     @CurrentUser() user: RbacUser,
   ) {
     return this.cpca.update(id, dto, user);
+  }
+
+  @Delete(':id')
+  @RequirePermission('cpca_cases', 'delete')
+  remove(@Param('id') id: string, @CurrentUser() user: RbacUser) {
+    return this.cpca.remove(id, user);
   }
 
   @Get(':id/comments')

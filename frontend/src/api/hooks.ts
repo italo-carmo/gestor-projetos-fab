@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo } from "react";
 import { api } from "./client";
 import { qk } from "./queryKeys";
 import {
@@ -2768,6 +2769,118 @@ export function useAuditLastLogins() {
   });
 }
 
+/** Menu updates (novidades por menu) */
+export function useMenuUpdates(menuKeys: string[], enabled = true) {
+  const normalizedKeys = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          (menuKeys ?? [])
+            .map((menuKey) => String(menuKey ?? "").trim())
+            .filter(Boolean),
+        ),
+      ).sort((a, b) => a.localeCompare(b, "pt-BR")),
+    [menuKeys],
+  );
+
+  return useQuery({
+    queryKey: qk.menuUpdates(normalizedKeys),
+    queryFn: async () =>
+      (
+        await api.get("/menu-updates", {
+          params: {
+            menuKeys: normalizedKeys.join(","),
+          },
+        })
+      ).data as {
+        items: Array<{
+          menuKey: string;
+          hasUnread: boolean;
+          lastEventAt: string | null;
+          seenAt: string | null;
+        }>;
+      },
+    enabled: enabled && normalizedKeys.length > 0,
+    staleTime: 15_000,
+    refetchOnWindowFocus: false,
+  });
+}
+
+function patchMenuUpdatesData(
+  data: unknown,
+  menuKey: string,
+  seenAt: string,
+) {
+  if (!data || typeof data !== "object") return data;
+  const current = data as {
+    items?: Array<{
+      menuKey?: string | null;
+      hasUnread?: boolean;
+      seenAt?: string | null;
+      lastEventAt?: string | null;
+    }>;
+  };
+  if (!Array.isArray(current.items)) return data;
+
+  let changed = false;
+  const items = current.items.map((item) => {
+    if (String(item?.menuKey ?? "").trim() !== menuKey) return item;
+    changed = true;
+    return {
+      ...item,
+      hasUnread: false,
+      seenAt,
+    };
+  });
+
+  if (!changed) return data;
+  return {
+    ...current,
+    items,
+  };
+}
+
+export function useMarkMenuUpdateSeen() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (menuKey: string) =>
+      (await api.post(`/menu-updates/${encodeURIComponent(menuKey)}/seen`))
+        .data as {
+        ok: boolean;
+        menuKey: string;
+        seenAt: string;
+      },
+    onMutate: async (menuKeyRaw: string) => {
+      const menuKey = String(menuKeyRaw ?? "").trim();
+      if (!menuKey) return { snapshots: [] as Array<[readonly unknown[], any]> };
+
+      await qc.cancelQueries({ queryKey: ["menuUpdates"] });
+      const snapshots = qc.getQueriesData({ queryKey: ["menuUpdates"] });
+      const seenAt = new Date().toISOString();
+
+      for (const [queryKey, oldData] of snapshots) {
+        qc.setQueryData(queryKey, patchMenuUpdatesData(oldData, menuKey, seenAt));
+      }
+
+      return { snapshots };
+    },
+    onError: (_error, _menuKey, context) => {
+      for (const [queryKey, data] of context?.snapshots ?? []) {
+        qc.setQueryData(queryKey, data);
+      }
+    },
+    onSuccess: (data) => {
+      const menuKey = String(data?.menuKey ?? "").trim();
+      const seenAt = String(data?.seenAt ?? "").trim();
+      if (!menuKey || !seenAt) return;
+      qc.setQueriesData({ queryKey: ["menuUpdates"] }, (oldData) =>
+        patchMenuUpdatesData(oldData, menuKey, seenAt),
+      );
+    },
+  });
+}
+
 /** CPCA cases */
 export function useCpcaCases(filters: Record<string, any>, enabled = true) {
   return useQuery({
@@ -2817,6 +2930,17 @@ export function useUpdateCpcaCase() {
     onSuccess: (_data, args) => {
       qc.invalidateQueries({ queryKey: ["cpcaCases"] });
       qc.invalidateQueries({ queryKey: qk.cpcaCase(args.id) });
+    },
+  });
+}
+
+export function useDeleteCpcaCase() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await api.delete(`/cpca-cases/${id}`)).data,
+    onSuccess: (_data, id) => {
+      qc.invalidateQueries({ queryKey: ["cpcaCases"] });
+      qc.invalidateQueries({ queryKey: qk.cpcaCase(id) });
     },
   });
 }

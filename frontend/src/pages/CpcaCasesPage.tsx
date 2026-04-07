@@ -29,12 +29,14 @@ import {
   useCpcaCase,
   useCpcaCases,
   useCreateCpcaCase,
+  useDeleteCpcaCase,
   useLocalities,
   useMe,
   usePostos,
   useUpdateCpcaCase,
 } from "../api/hooks";
 import { parseApiError } from "../app/apiErrors";
+import { can } from "../app/rbac";
 import {
   hasAnyRole,
   ROLE_COMANDANTE_COMGEP,
@@ -43,6 +45,7 @@ import {
   ROLE_TI,
 } from "../app/roleAccess";
 import { useToast } from "../app/toast";
+import { ConfirmDialog } from "../components/dialogs/ConfirmDialog";
 import { EmptyState } from "../components/states/EmptyState";
 import { ErrorState } from "../components/states/ErrorState";
 import { SkeletonState } from "../components/states/SkeletonState";
@@ -335,6 +338,13 @@ const defaultForm = {
 function formatOmLabel(locality: any) {
   const code = String(locality?.code ?? "").trim();
   const name = String(locality?.name ?? "").trim();
+  if (
+    code &&
+    name &&
+    code.localeCompare(name, "pt-BR", { sensitivity: "accent" }) === 0
+  ) {
+    return code;
+  }
   if (code && name) return `${code} - ${name}`;
   return code || name || "-";
 }
@@ -418,6 +428,7 @@ export function CpcaCasesPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedId, setSelectedId] = useState("");
   const [isCreateMode, setIsCreateMode] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [form, setForm] = useState(defaultForm);
   const [newComment, setNewComment] = useState("");
   const [activeStep, setActiveStep] = useState(0);
@@ -428,7 +439,9 @@ export function CpcaCasesPage() {
   );
   const createCase = useCreateCpcaCase();
   const updateCase = useUpdateCpcaCase();
+  const deleteCase = useDeleteCpcaCase();
   const addComment = useAddCpcaCaseComment();
+  const canDeleteCase = can(me, "cpca_cases", "delete");
 
   const isNationalScope = hasAnyRole(me, [
     ROLE_COORDENACAO_CIPAVD,
@@ -646,6 +659,7 @@ export function CpcaCasesPage() {
   const openCreate = () => {
     setIsCreateMode(true);
     setSelectedId("");
+    setConfirmDeleteOpen(false);
     setForm({
       ...defaultForm,
       localityId: isNationalScope ? "" : String(me?.localityId ?? ""),
@@ -658,6 +672,7 @@ export function CpcaCasesPage() {
   const openDetails = (id: string) => {
     setIsCreateMode(false);
     setSelectedId(id);
+    setConfirmDeleteOpen(false);
     setNewComment("");
     setActiveStep(0);
     setDrawerOpen(true);
@@ -667,6 +682,7 @@ export function CpcaCasesPage() {
     setDrawerOpen(false);
     setSelectedId("");
     setIsCreateMode(false);
+    setConfirmDeleteOpen(false);
     setForm(defaultForm);
     setNewComment("");
     setActiveStep(0);
@@ -801,6 +817,21 @@ export function CpcaCasesPage() {
       toast.push({
         message:
           parseApiError(error).message ?? "Erro ao registrar comentário.",
+        severity: "error",
+      });
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!selectedId) return;
+    try {
+      await deleteCase.mutateAsync(selectedId);
+      toast.push({ message: "Denúncia excluída.", severity: "success" });
+      setConfirmDeleteOpen(false);
+      closeDrawer();
+    } catch (error) {
+      toast.push({
+        message: parseApiError(error).message ?? "Erro ao excluir denúncia.",
         severity: "error",
       });
     }
@@ -1840,9 +1871,21 @@ export function CpcaCasesPage() {
                 ? "Nova notificação CPCA"
                 : `Caso ${selectedCaseQuery.data?.caseNumber ?? ""}`}
             </Typography>
-            <Button variant="text" onClick={closeDrawer}>
-              Fechar
-            </Button>
+            <Stack direction="row" spacing={1}>
+              {!isCreateMode && canDeleteCase && (
+                <Button
+                  color="error"
+                  variant="outlined"
+                  onClick={() => setConfirmDeleteOpen(true)}
+                  disabled={deleteCase.isPending || !selectedId}
+                >
+                  Excluir denúncia
+                </Button>
+              )}
+              <Button variant="text" onClick={closeDrawer}>
+                Fechar
+              </Button>
+            </Stack>
           </Stack>
 
           <Alert severity="warning" sx={{ mb: 2 }}>
@@ -1937,7 +1980,11 @@ export function CpcaCasesPage() {
                       <Button
                         variant="contained"
                         onClick={saveCase}
-                        disabled={createCase.isPending || updateCase.isPending}
+                        disabled={
+                          createCase.isPending ||
+                          updateCase.isPending ||
+                          deleteCase.isPending
+                        }
                       >
                         {isCreateMode
                           ? "Criar notificação"
@@ -2077,7 +2124,11 @@ export function CpcaCasesPage() {
                       <Button
                         variant="outlined"
                         onClick={saveComment}
-                        disabled={!newComment.trim() || addComment.isPending}
+                        disabled={
+                          !newComment.trim() ||
+                          addComment.isPending ||
+                          deleteCase.isPending
+                        }
                       >
                         Adicionar comentário
                       </Button>
@@ -2089,6 +2140,25 @@ export function CpcaCasesPage() {
           )}
         </Box>
       </Drawer>
+
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        onCancel={() => setConfirmDeleteOpen(false)}
+        onConfirm={handleConfirmDelete}
+        title="Excluir denúncia CPCA"
+        message="Tem certeza que deseja excluir esta denúncia?"
+        highlightText={
+          selectedCaseQuery.data
+            ? `${selectedCaseQuery.data.caseNumber} • ${formatOmLabel(
+                selectedCaseQuery.data.locality,
+              )}`
+            : undefined
+        }
+        note="Esta ação não pode ser desfeita."
+        confirmLabel={deleteCase.isPending ? "Excluindo..." : "Excluir"}
+        severity="error"
+        confirmLoading={deleteCase.isPending}
+      />
     </Box>
   );
 }

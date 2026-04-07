@@ -599,7 +599,12 @@ export function LibraryPage() {
                         <Typography variant="subtitle2" fontWeight={700} noWrap>
                           {locality.code || locality.name}
               </Typography>
-                        <Typography variant="caption" color="text.secondary" noWrap>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          noWrap
+                          sx={{ mt: 0.3 }}
+                        >
                           {locality.name}
                         </Typography>
                       </Box>

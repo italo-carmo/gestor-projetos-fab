@@ -58,6 +58,7 @@ export const qk = {
     ["orgChart", "commissionCandidates", filters] as const,
   auditLogs: (filters: Record<string, any>) => ["auditLogs", filters] as const,
   auditLastLogins: ["auditLogs", "lastLogins"] as const,
+  menuUpdates: (menuKeys: string[]) => ["menuUpdates", menuKeys] as const,
   localities: ["localities"] as const,
   omsCatalog: ["omsCatalog"] as const,
   recruitDesignations: (localityId: string) =>

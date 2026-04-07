@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
   AppBar,
@@ -53,7 +53,9 @@ import {
 } from "../app/roleAccess";
 import {
   useLocalities,
+  useMarkMenuUpdateSeen,
   useMe,
+  useMenuUpdates,
   useMyFabProfile,
   useSearch,
   useSigpesPhoto,
@@ -73,8 +75,26 @@ const drawerCollapsedWidth = 92;
 const headerHeight = 76;
 const GLOBAL_LOCALITY_QUERY_PARAM = "globalLocalityId";
 
-type NavItem = { label: string; to: string; icon: JSX.Element };
+type NavItem = {
+  label: string;
+  to: string;
+  icon: ReactNode;
+  menuKey?: string;
+};
 type NavSection = { id: string; label?: string; items: NavItem[] };
+
+function toPathOnly(value: string) {
+  const [path] = String(value ?? "").split("?");
+  const normalized = path.replace(/\/+$/, "");
+  return normalized || "/";
+}
+
+function pathMatches(currentPath: string, itemPath: string) {
+  if (itemPath === "/") return currentPath === "/";
+  return (
+    currentPath === itemPath || currentPath.startsWith(`${itemPath}/`)
+  );
+}
 
 const navSections: NavSection[] = [
   {
@@ -95,16 +115,19 @@ const navSections: NavSection[] = [
         label: "Impacto Positivo",
         to: "/social-communication",
         icon: <NewspaperRoundedIcon fontSize="small" />,
+        menuKey: "social_communication",
       },
       {
         label: "Biblioteca",
         to: "/library",
         icon: <PhotoLibraryRoundedIcon fontSize="small" />,
+        menuKey: "library",
       },
       {
         label: "CPCA",
         to: "/dashboard/cpca",
         icon: <PolicyRoundedIcon fontSize="small" />,
+        menuKey: "cpca_cases",
       },
     ],
   },
@@ -116,26 +139,31 @@ const navSections: NavSection[] = [
         label: "Atividades de Campo",
         to: "/activities",
         icon: <EventNoteIcon fontSize="small" />,
+        menuKey: "activities",
       },
       {
         label: "Denúncias",
         to: "/smif-complaints",
         icon: <PolicyRoundedIcon fontSize="small" />,
+        menuKey: "smif_complaints",
       },
       {
         label: "GSD e Recrutas",
         to: "/gsd-recruits",
         icon: <PeopleIcon fontSize="small" />,
+        menuKey: "gsd_recruits",
       },
       {
         label: "Elos",
         to: "/elos",
         icon: <ContactPhoneIcon fontSize="small" />,
+        menuKey: "elos",
       },
       {
         label: "Boas Práticas",
         to: "/best-practices",
         icon: <LightbulbRoundedIcon fontSize="small" />,
+        menuKey: "best_practices",
       },
     ],
   },
@@ -143,41 +171,53 @@ const navSections: NavSection[] = [
     id: "cipavd",
     label: "CIPAVD",
     items: [
-      { label: "Tarefas", to: "/tasks", icon: <TaskIcon fontSize="small" /> },
+      {
+        label: "Tarefas",
+        to: "/tasks",
+        icon: <TaskIcon fontSize="small" />,
+        menuKey: "tasks",
+      },
       {
         label: "Reuniões",
         to: "/meetings",
         icon: <GroupsIcon fontSize="small" />,
+        menuKey: "meetings",
       },
       {
         label: "Organograma",
         to: "/org-chart",
         icon: <AccountTreeIcon fontSize="small" />,
+        menuKey: "org_chart",
       },
       {
         label: "Cronograma",
         to: "/gantt",
         icon: <TaskIcon fontSize="small" />,
+        menuKey: "tasks",
       },
       {
         label: "Calendário",
         to: "/calendar",
         icon: <EventNoteIcon fontSize="small" />,
+        menuKey: "tasks",
       },
       {
         label: "Missões",
         to: "/missions",
         icon: <FlagRoundedIcon fontSize="small" />,
+        menuKey: "missions",
       },
       {
         label: "Atividades de Campo",
         to: "/activities-cipavd",
         icon: <EventNoteIcon fontSize="small" />,
+        menuKey: "activities",
       },
       {
         label: "Avisos",
         to: "/notices",
         icon: <CampaignIcon fontSize="small" />,
+        menuKey: "notices",
       },
     ],
   },
@@ -189,6 +229,7 @@ const navSections: NavSection[] = [
         label: "BI Pesquisas",
         to: "/dashboard/bi",
         icon: <InsightsRoundedIcon fontSize="small" />,
+        menuKey: "bi",
       },
     ],
   },
@@ -200,6 +241,7 @@ const navSections: NavSection[] = [
         label: "Denúncias",
         to: "/cpca-cases",
         icon: <PolicyRoundedIcon fontSize="small" />,
+        menuKey: "cpca_cases",
       },
     ],
   },
@@ -211,6 +253,7 @@ const navSections: NavSection[] = [
         label: "Usuários e Permissões",
         to: "/admin/rbac",
         icon: <PeopleIcon fontSize="small" />,
+        menuKey: "admin_rbac",
       },
       {
         label: "Logs",
@@ -221,11 +264,13 @@ const navSections: NavSection[] = [
         label: "Administração",
         to: "/admin",
         icon: <SettingsIcon fontSize="small" />,
+        menuKey: "admin_catalog",
       },
       {
         label: "OMs",
         to: "/admin/oms",
         icon: <BusinessIcon fontSize="small" />,
+        menuKey: "admin_oms",
       },
     ],
   },
@@ -448,6 +493,83 @@ export function AppShell({ children }: { children: ReactNode }) {
     }))
     .filter((section) => section.items.length > 0);
 
+  const pathnameOnly = toPathOnly(location.pathname);
+
+  const activeNavItemPath = useMemo(() => {
+    let bestMatch = "";
+    let bestLength = -1;
+
+    for (const section of visibleNavSections) {
+      for (const item of section.items) {
+        const itemPath = toPathOnly(item.to);
+        if (!pathMatches(pathnameOnly, itemPath)) continue;
+        if (itemPath.length > bestLength) {
+          bestMatch = itemPath;
+          bestLength = itemPath.length;
+        }
+      }
+    }
+
+    return bestMatch;
+  }, [pathnameOnly, visibleNavSections]);
+
+  const menuKeysToTrack = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          visibleNavSections
+            .flatMap((section) => section.items)
+            .map((item) => String(item.menuKey ?? "").trim())
+            .filter(Boolean),
+        ),
+      ).sort((a, b) => a.localeCompare(b, "pt-BR")),
+    [visibleNavSections],
+  );
+
+  const menuUpdatesQuery = useMenuUpdates(
+    menuKeysToTrack,
+    Boolean(me?.id) && menuKeysToTrack.length > 0,
+  );
+  const markMenuUpdateSeen = useMarkMenuUpdateSeen();
+
+  const unreadMenuKeySet = useMemo(
+    () =>
+      new Set(
+        ((menuUpdatesQuery.data?.items ?? []) as Array<{
+          menuKey?: string | null;
+          hasUnread?: boolean;
+        }>)
+          .filter((item) => Boolean(item?.hasUnread))
+          .map((item) => String(item?.menuKey ?? "").trim())
+          .filter(Boolean),
+      ),
+    [menuUpdatesQuery.data?.items],
+  );
+
+  const activeNavItem = useMemo(() => {
+    for (const section of visibleNavSections) {
+      const found = section.items.find(
+        (item) => toPathOnly(item.to) === activeNavItemPath,
+      );
+      if (found) return found;
+    }
+    return null;
+  }, [activeNavItemPath, visibleNavSections]);
+
+  const markMenuAsSeen = useCallback(
+    (menuKeyRaw: string | null | undefined) => {
+      const menuKey = String(menuKeyRaw ?? "").trim();
+      if (!menuKey) return;
+      if (!unreadMenuKeySet.has(menuKey)) return;
+      markMenuUpdateSeen.mutate(menuKey);
+    },
+    [markMenuUpdateSeen, unreadMenuKeySet],
+  );
+
+  useEffect(() => {
+    markMenuAsSeen(activeNavItem?.menuKey);
+  }, [activeNavItem?.menuKey, markMenuAsSeen]);
+
   useEffect(() => {
     const fromUrl = (searchParams.get(GLOBAL_LOCALITY_QUERY_PARAM) ?? "").trim();
 
@@ -561,9 +683,13 @@ export function AppShell({ children }: { children: ReactNode }) {
             )}
             <List disablePadding>
               {section.items.map((item) => {
-                const selected =
-                  location.pathname === item.to ||
-                  location.pathname.startsWith(`${item.to}/`);
+                const selected = toPathOnly(item.to) === activeNavItemPath;
+                const showUnreadBadge =
+                  !sidebarCollapsed &&
+                  Boolean(
+                    String(item.menuKey ?? "").trim() &&
+                      unreadMenuKeySet.has(String(item.menuKey ?? "").trim()),
+                  );
                 const button = (
                   <ListItemButton
                     key={item.to}
@@ -576,7 +702,10 @@ export function AppShell({ children }: { children: ReactNode }) {
                         : item.to
                     }
                     selected={selected}
-                    onClick={() => setMobileOpen(false)}
+                    onClick={() => {
+                      markMenuAsSeen(item.menuKey);
+                      setMobileOpen(false);
+                    }}
                     sx={{
                       justifyContent: sidebarCollapsed
                         ? "center"
@@ -593,14 +722,39 @@ export function AppShell({ children }: { children: ReactNode }) {
                       {item.icon}
                     </ListItemIcon>
                     {!sidebarCollapsed && (
-                      <ListItemText
-                        primary={item.label}
-                        primaryTypographyProps={{
-                          fontSize: 13.5,
-                          fontWeight: selected ? 700 : 600,
-                          lineHeight: 1.22,
+                      <Box
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          minWidth: 0,
+                          flexGrow: 1,
+                          gap: 0.8,
                         }}
-                      />
+                      >
+                        <ListItemText
+                          primary={item.label}
+                          primaryTypographyProps={{
+                            fontSize: 13.5,
+                            fontWeight: selected ? 700 : 600,
+                            lineHeight: 1.22,
+                          }}
+                          sx={{ minWidth: 0 }}
+                        />
+                        {showUnreadBadge ? (
+                          <Box
+                            component="span"
+                            aria-label="Novidades não visualizadas"
+                            sx={{
+                              width: 8,
+                              height: 8,
+                              borderRadius: "50%",
+                              bgcolor: "#D24B4B",
+                              boxShadow: "0 0 0 2px rgba(210,75,75,0.16)",
+                              flexShrink: 0,
+                            }}
+                          />
+                        ) : null}
+                      </Box>
                     )}
                   </ListItemButton>
                 );
@@ -632,9 +786,11 @@ export function AppShell({ children }: { children: ReactNode }) {
     [
       canUseGlobalLocalityFilter,
       globalLocalityId,
+      activeNavItemPath,
       isMobile,
-      location.pathname,
+      markMenuAsSeen,
       sidebarCollapsed,
+      unreadMenuKeySet,
       visibleNavSections,
     ],
   );
