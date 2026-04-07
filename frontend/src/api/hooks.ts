@@ -1406,10 +1406,11 @@ export function useDeleteTask() {
   });
 }
 
-export function usePostos() {
+export function usePostos(enabled = true) {
   return useQuery({
     queryKey: qk.postos,
     queryFn: async () => (await api.get("/postos")).data,
+    enabled,
     staleTime: 60_000,
   });
 }

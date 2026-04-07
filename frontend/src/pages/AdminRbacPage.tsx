@@ -41,6 +41,7 @@ import {
   useSpecialties,
   useUpdateUser,
   useSigpesPhoto,
+  useSetRolePermissions,
   useUpsertLdapUser,
   useUsers,
 } from "../api/hooks";
@@ -179,6 +180,7 @@ type PermissionMatrixRow = {
   resource: string;
   meta: ReturnType<typeof getPermissionResourceMeta>;
   crudRoleNames: Record<CrudAction, string[]>;
+  availableActions: string[];
   extraActions: MatrixExtraAction[];
 };
 
@@ -237,6 +239,10 @@ export function AdminRbacPage() {
   const canViewUsers = can(me, "users", "view");
   const canUpdateUsers = can(me, "users", "update");
   const canViewLocalities = can(me, "localities", "view");
+  const canViewRoles = can(me, "roles", "view");
+  const canEditRolePermissions = can(me, "roles", "permissions");
+  const canViewMatrix = canViewRoles || canEditRolePermissions;
+  const canAccessRbacPage = canViewUsers || canViewMatrix;
 
   const rolesQuery = useRoles();
   const permissionsCatalogQuery = usePermissionsCatalog();
@@ -248,6 +254,7 @@ export function AdminRbacPage() {
   const removeUserRole = useRemoveUserRole();
   const ldapLookup = useLookupLdapUser();
   const upsertLdapUser = useUpsertLdapUser();
+  const setRolePermissions = useSetRolePermissions();
 
   const [editingUser, setEditingUser] = useState<UserItem | null>(null);
   const [editRoleIds, setEditRoleIds] = useState<string[]>([]);
@@ -274,8 +281,9 @@ export function AdminRbacPage() {
   const [activeTab, setActiveTab] = useState<"users" | "matrix">("users");
   const [matrixSearch, setMatrixSearch] = useState("");
   const [matrixRoleIds, setMatrixRoleIds] = useState<string[]>([]);
-  const [matrixMenuFilter, setMatrixMenuFilter] = useState("");
-  const [matrixOnlyAssigned, setMatrixOnlyAssigned] = useState(true);
+  const [matrixModuleFilter, setMatrixModuleFilter] = useState("");
+  const [matrixEditRoleId, setMatrixEditRoleId] = useState("");
+  const [matrixOnlyAssigned, setMatrixOnlyAssigned] = useState(false);
 
   const postoOrderByCode = useMemo(() => {
     const items = (postosQuery.data?.items ?? []) as Array<{
@@ -414,13 +422,16 @@ export function AdminRbacPage() {
     () => (permissionsCatalogQuery.data?.items ?? []) as PermissionEntryItem[],
     [permissionsCatalogQuery.data?.items],
   );
-  const catalogPermissionKeys = useMemo(() => {
-    const keys = new Set<string>();
+  const catalogPermissionsByKey = useMemo(() => {
+    const map = new Map<string, PermissionEntryItem>();
     for (const item of permissionsCatalog) {
-      keys.add(`${item.resource}:${item.action}`);
+      map.set(`${item.resource}:${item.action}`, item);
     }
-    return keys;
+    return map;
   }, [permissionsCatalog]);
+  const catalogPermissionKeys = useMemo(() => {
+    return new Set(catalogPermissionsByKey.keys());
+  }, [catalogPermissionsByKey]);
   const rolePermissionKeysById = useMemo(() => {
     const map = new Map<string, Set<string>>();
     for (const role of roles) {
@@ -439,7 +450,37 @@ export function AdminRbacPage() {
         : roles,
     [matrixRoleIds, roles],
   );
+  const editingMatrixRole = useMemo(
+    () => roles.find((role) => role.id === matrixEditRoleId) ?? null,
+    [matrixEditRoleId, roles],
+  );
+  const editingMatrixRolePermissionKeys = useMemo(() => {
+    const keys = new Set<string>();
+    if (!editingMatrixRole) return keys;
+    for (const permission of editingMatrixRole.permissions ?? []) {
+      keys.add(`${permission.resource}:${permission.action}`);
+    }
+    return keys;
+  }, [editingMatrixRole]);
+  const isMatrixEditingWildcardRole = Boolean(editingMatrixRole?.wildcard);
+
   const permissionMatrixBaseRows = useMemo<PermissionMatrixRow[]>(() => {
+    const actionPriority = new Map<string, number>([
+      ["view", 1],
+      ["create", 2],
+      ["update", 3],
+      ["delete", 4],
+    ]);
+    const sortActions = (left: string, right: string) => {
+      const leftPriority = actionPriority.get(left) ?? 999;
+      const rightPriority = actionPriority.get(right) ?? 999;
+      if (leftPriority !== rightPriority) return leftPriority - rightPriority;
+      return getPermissionActionLabel(left).localeCompare(
+        getPermissionActionLabel(right),
+        "pt-BR",
+      );
+    };
+
     const actionsByResource = new Map<string, Set<string>>();
     for (const permission of permissionsCatalog) {
       if (!actionsByResource.has(permission.resource)) {
@@ -483,38 +524,26 @@ export function AdminRbacPage() {
           .map((role) => role.name);
       }
 
-      const extraActions = Array.from(actionSet)
+      const availableActions = Array.from(actionSet).sort(sortActions);
+      const extraActions = availableActions
         .filter((action) => !CRUD_ACTIONS.includes(action as CrudAction))
-        .sort((a, b) =>
-          getPermissionActionLabel(a).localeCompare(
-            getPermissionActionLabel(b),
-            "pt-BR",
-          ),
-        )
         .map((action) => ({
           action,
           roleNames: visibleMatrixRoles
             .filter((role) => hasRolePermission(role, resource, action))
             .map((role) => role.name),
-        }))
-        .filter((entry) => entry.roleNames.length > 0);
+        }));
 
       rows.push({
         resource,
         meta: getPermissionResourceMeta(resource),
         crudRoleNames,
+        availableActions,
         extraActions,
       });
     }
 
-    return rows.sort((a, b) => {
-      if (a.meta.menuOrder !== b.meta.menuOrder) {
-        return a.meta.menuOrder - b.meta.menuOrder;
-      }
-      const menuCmp = a.meta.menu.localeCompare(b.meta.menu, "pt-BR");
-      if (menuCmp !== 0) return menuCmp;
-      return a.meta.title.localeCompare(b.meta.title, "pt-BR");
-    });
+    return rows.sort((a, b) => a.meta.title.localeCompare(b.meta.title, "pt-BR"));
   }, [
     catalogPermissionKeys,
     permissionsCatalog,
@@ -522,10 +551,10 @@ export function AdminRbacPage() {
     roles,
     visibleMatrixRoles,
   ]);
-  const matrixMenuOptions = useMemo(
+  const matrixModuleOptions = useMemo(
     () =>
       Array.from(
-        new Set(permissionMatrixBaseRows.map((row) => row.meta.menu)),
+        new Set(permissionMatrixBaseRows.map((row) => row.meta.title)),
       ).sort((a, b) => a.localeCompare(b, "pt-BR")),
     [permissionMatrixBaseRows],
   );
@@ -533,7 +562,7 @@ export function AdminRbacPage() {
     const term = matrixSearch.trim().toLowerCase();
 
     return permissionMatrixBaseRows.filter((row) => {
-      if (matrixMenuFilter && row.meta.menu !== matrixMenuFilter) {
+      if (matrixModuleFilter && row.meta.title !== matrixModuleFilter) {
         return false;
       }
 
@@ -550,10 +579,10 @@ export function AdminRbacPage() {
 
       if (!term) return true;
       const searchBlob = [
-        row.meta.menu,
         row.meta.title,
         row.meta.description,
         row.resource,
+        ...row.availableActions.map((action) => getPermissionActionLabel(action)),
         ...CRUD_ACTIONS.flatMap((action) => row.crudRoleNames[action]),
         ...row.extraActions.flatMap((action) => [
           action.action,
@@ -565,7 +594,7 @@ export function AdminRbacPage() {
       return searchBlob.includes(term);
     });
   }, [
-    matrixMenuFilter,
+    matrixModuleFilter,
     matrixOnlyAssigned,
     matrixSearch,
     permissionMatrixBaseRows,
@@ -733,6 +762,134 @@ export function AdminRbacPage() {
     }
   };
 
+  const handleToggleMatrixPermission = async (
+    resource: string,
+    action: string,
+    enabled: boolean,
+  ) => {
+    if (!editingMatrixRole) {
+      toast.push({
+        message: "Selecione um papel em 'Papel para editar'.",
+        severity: "warning",
+      });
+      return;
+    }
+    if (editingMatrixRole.wildcard) {
+      toast.push({
+        message:
+          "Este papel é curinga (*). Edite as permissões em um papel não curinga.",
+        severity: "warning",
+      });
+      return;
+    }
+
+    const key = `${resource}:${action}`;
+    const nextByKey = new Map<string, PermissionEntryItem>();
+    for (const permission of editingMatrixRole.permissions ?? []) {
+      nextByKey.set(`${permission.resource}:${permission.action}`, permission);
+    }
+
+    if (enabled) {
+      const fromCatalog = catalogPermissionsByKey.get(key);
+      if (!fromCatalog) {
+        toast.push({
+          message: `Permissão ${resource}:${action} não existe no catálogo.`,
+          severity: "error",
+        });
+        return;
+      }
+      nextByKey.set(key, fromCatalog);
+    } else {
+      nextByKey.delete(key);
+    }
+
+    const nextPermissions = Array.from(nextByKey.values()).sort((left, right) =>
+      `${left.resource}:${left.action}`.localeCompare(
+        `${right.resource}:${right.action}`,
+        "pt-BR",
+      ),
+    );
+
+    try {
+      await setRolePermissions.mutateAsync({
+        roleId: editingMatrixRole.id,
+        permissions: nextPermissions,
+      });
+      toast.push({
+        message: `Permissão ${enabled ? "adicionada" : "removida"} no papel ${editingMatrixRole.name}.`,
+        severity: "success",
+      });
+    } catch (error) {
+      toast.push({
+        message:
+          parseApiError(error).message ?? "Erro ao atualizar permissões do papel",
+        severity: "error",
+      });
+    }
+  };
+
+  const handleClearModulePermissions = async (resource: string) => {
+    if (!editingMatrixRole) {
+      toast.push({
+        message: "Selecione um papel em 'Papel para editar'.",
+        severity: "warning",
+      });
+      return;
+    }
+    if (editingMatrixRole.wildcard) {
+      toast.push({
+        message:
+          "Este papel é curinga (*). Não é possível limpar módulo neste perfil.",
+        severity: "warning",
+      });
+      return;
+    }
+
+    const current = editingMatrixRole.permissions ?? [];
+    const nextPermissions = current
+      .filter((permission) => permission.resource !== resource)
+      .sort((left, right) =>
+        `${left.resource}:${left.action}`.localeCompare(
+          `${right.resource}:${right.action}`,
+          "pt-BR",
+        ),
+      );
+
+    if (nextPermissions.length === current.length) {
+      toast.push({
+        message: `O papel ${editingMatrixRole.name} não possui permissões explícitas no módulo ${resource}.`,
+        severity: "info",
+      });
+      return;
+    }
+
+    try {
+      await setRolePermissions.mutateAsync({
+        roleId: editingMatrixRole.id,
+        permissions: nextPermissions,
+      });
+      toast.push({
+        message: `Permissões do módulo ${resource} removidas do papel ${editingMatrixRole.name}.`,
+        severity: "success",
+      });
+    } catch (error) {
+      toast.push({
+        message:
+          parseApiError(error).message ?? "Erro ao limpar permissões do módulo",
+        severity: "error",
+      });
+    }
+  };
+
+  const matrixEditRoleHasPermission = (resource: string, action: string) => {
+    if (!editingMatrixRole) return false;
+    const key = `${resource}:${action}`;
+    const explicit = editingMatrixRolePermissionKeys.has(key);
+    const wildcardFromCatalog =
+      Boolean(editingMatrixRole.wildcard) && catalogPermissionKeys.has(key);
+    return explicit || wildcardFromCatalog;
+  };
+
   const renderRoleChips = (roleNames: string[]) => {
     if (roleNames.length === 0) {
       return (
@@ -742,21 +899,13 @@ export function AdminRbacPage() {
       );
     }
     return (
-      <Stack direction="row" spacing={0.5} useFlexGap flexWrap="wrap">
-        {roleNames.map((roleName) => (
-          <Chip
-            key={roleName}
-            size="small"
-            label={roleName}
-            variant="outlined"
-            color="primary"
-          />
-        ))}
-      </Stack>
+      <Typography variant="caption" sx={{ whiteSpace: "normal" }}>
+        {roleNames.join(", ")}
+      </Typography>
     );
   };
 
-  if (!canViewUsers) {
+  if (!canAccessRbacPage) {
     return (
       <Box>
         <Typography variant="h4" gutterBottom>
@@ -769,25 +918,32 @@ export function AdminRbacPage() {
     );
   }
 
+  const selectedTab: "users" | "matrix" =
+    activeTab === "users" && !canViewUsers
+      ? "matrix"
+      : activeTab === "matrix" && !canViewMatrix
+        ? "users"
+        : activeTab;
+
   return (
     <Box>
       <Typography variant="h4" gutterBottom>
         Usuários e Permissões
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Gerencie papéis e localidade dos usuários LDAP de forma centralizada.
+        Gerencie usuários LDAP e permissões por módulo de forma centralizada.
       </Typography>
 
       <Tabs
-        value={activeTab}
+        value={selectedTab}
         onChange={(_event, value: "users" | "matrix") => setActiveTab(value)}
         sx={{ mb: 2 }}
       >
-        <Tab value="users" label="Usuários LDAP" />
-        <Tab value="matrix" label="Matriz de permissões" />
+        {canViewUsers && <Tab value="users" label="Usuários LDAP" />}
+        {canViewMatrix && <Tab value="matrix" label="Matriz de permissões" />}
       </Tabs>
 
-      {activeTab === "users" && (
+      {selectedTab === "users" && canViewUsers && (
         <Stack spacing={2.2}>
           {canUpdateUsers && (
             <Card>
@@ -1168,7 +1324,7 @@ export function AdminRbacPage() {
         </Stack>
       )}
 
-      {activeTab === "matrix" && (
+      {selectedTab === "matrix" && canViewMatrix && (
         <Stack spacing={2.2}>
           <Card>
             <CardContent>
@@ -1180,12 +1336,10 @@ export function AdminRbacPage() {
                 sx={{ mb: 1.5 }}
               >
                 <Box>
-                  <Typography variant="h6">
-                    Mapa inteligente de permissões
-                  </Typography>
+                  <Typography variant="h6">Matriz de permissões por módulo</Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Padrão matriz (menu x ações) para leitura rápida dos acessos
-                    por papel.
+                    Visualize e ajuste permissões por módulo, funcionalidade e
+                    papel.
                   </Typography>
                 </Box>
                 <Stack direction="row" spacing={0.8} useFlexGap flexWrap="wrap">
@@ -1209,7 +1363,7 @@ export function AdminRbacPage() {
               >
                 <TextField
                   size="small"
-                  label="Buscar menu/recurso/papel"
+                  label="Buscar módulo/funcionalidade/papel"
                   value={matrixSearch}
                   onChange={(event) => setMatrixSearch(event.target.value)}
                   sx={{ minWidth: 260 }}
@@ -1217,15 +1371,15 @@ export function AdminRbacPage() {
                 <TextField
                   select
                   size="small"
-                  label="Filtrar por menu"
-                  value={matrixMenuFilter}
-                  onChange={(event) => setMatrixMenuFilter(event.target.value)}
+                  label="Filtrar por módulo"
+                  value={matrixModuleFilter}
+                  onChange={(event) => setMatrixModuleFilter(event.target.value)}
                   sx={{ minWidth: 220 }}
                 >
                   <MenuItem value="">Todos</MenuItem>
-                  {matrixMenuOptions.map((menuName) => (
-                    <MenuItem key={menuName} value={menuName}>
-                      {menuName}
+                  {matrixModuleOptions.map((moduleName) => (
+                    <MenuItem key={moduleName} value={moduleName}>
+                      {moduleName}
                     </MenuItem>
                   ))}
                 </TextField>
@@ -1260,6 +1414,24 @@ export function AdminRbacPage() {
                     </MenuItem>
                   ))}
                 </TextField>
+                {canEditRolePermissions && (
+                  <TextField
+                    select
+                    size="small"
+                    label="Papel para editar"
+                    value={matrixEditRoleId}
+                    onChange={(event) => setMatrixEditRoleId(event.target.value)}
+                    sx={{ minWidth: 260 }}
+                    disabled={setRolePermissions.isPending}
+                  >
+                    <MenuItem value="">Somente visualização</MenuItem>
+                    {roles.map((role) => (
+                      <MenuItem key={role.id} value={role.id}>
+                        {role.name}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                )}
                 <FormControlLabel
                   sx={{ m: 0 }}
                   control={
@@ -1273,6 +1445,13 @@ export function AdminRbacPage() {
                   label="Somente módulos com papéis atribuídos"
                 />
               </Stack>
+              {canEditRolePermissions && matrixEditRoleId && (
+                <Typography variant="caption" color="text.secondary">
+                  {isMatrixEditingWildcardRole
+                    ? "Papel curinga selecionado: edição desabilitada neste modo."
+                    : `Editando permissões do papel: ${editingMatrixRole?.name ?? matrixEditRoleId}.`}
+                </Typography>
+              )}
             </CardContent>
           </Card>
 
@@ -1299,125 +1478,250 @@ export function AdminRbacPage() {
                   </Typography>
                 </Box>
               ) : (
-                <Box sx={{ overflowX: "auto" }}>
-                  <Table size="small">
+                <Box sx={{ width: "100%" }}>
+                  <Table
+                    size="small"
+                    sx={{
+                      tableLayout: "fixed",
+                      width: "100%",
+                      "& th, & td": { py: 0.9, px: 1 },
+                    }}
+                  >
                     <TableHead>
                       <TableRow>
-                        <TableCell sx={{ fontWeight: 700, minWidth: 130 }}>
-                          Menu
-                        </TableCell>
-                        <TableCell sx={{ fontWeight: 700, minWidth: 190 }}>
+                        <TableCell sx={{ fontWeight: 700, width: "22%" }}>
                           Módulo
                         </TableCell>
-                        <TableCell sx={{ fontWeight: 700, minWidth: 260 }}>
-                          Descrição
+                        <TableCell sx={{ fontWeight: 700, width: "26%" }}>
+                          Funcionalidades
                         </TableCell>
-                        <TableCell sx={{ fontWeight: 700, minWidth: 180 }}>
+                        <TableCell sx={{ fontWeight: 700, width: "13%" }}>
                           Ver
                         </TableCell>
-                        <TableCell sx={{ fontWeight: 700, minWidth: 180 }}>
+                        <TableCell sx={{ fontWeight: 700, width: "13%" }}>
                           Criar
                         </TableCell>
-                        <TableCell sx={{ fontWeight: 700, minWidth: 180 }}>
+                        <TableCell sx={{ fontWeight: 700, width: "13%" }}>
                           Editar
                         </TableCell>
-                        <TableCell sx={{ fontWeight: 700, minWidth: 180 }}>
+                        <TableCell sx={{ fontWeight: 700, width: "13%" }}>
                           Excluir
-                        </TableCell>
-                        <TableCell sx={{ fontWeight: 700, minWidth: 240 }}>
-                          Ações extras
                         </TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
                       {permissionMatrixRows.length === 0 && (
                         <TableRow>
-                          <TableCell colSpan={8}>
+                          <TableCell colSpan={6}>
                             <Typography variant="body2" color="text.secondary">
                               Nenhum módulo encontrado com os filtros atuais.
                             </Typography>
                           </TableCell>
                         </TableRow>
                       )}
-                      {permissionMatrixRows.map((row) => (
-                        <TableRow key={row.resource} hover>
-                          <TableCell>
-                            <Typography variant="body2" fontWeight={700}>
-                              {row.meta.menu}
-                            </Typography>
-                          </TableCell>
-                          <TableCell>
-                            <Typography variant="body2" fontWeight={700}>
-                              {row.meta.title}
-                            </Typography>
-                            <Typography
-                              variant="caption"
-                              color="text.secondary"
-                              display="block"
-                            >
-                              {row.resource}
-                            </Typography>
-                            {row.meta.route && (
-                              <Typography
-                                variant="caption"
-                                color="primary.main"
-                                display="block"
-                              >
-                                {row.meta.route}
+                      {permissionMatrixRows.map((row) => {
+                        const viewKey = `${row.resource}:view`;
+                        const createKey = `${row.resource}:create`;
+                        const updateKey = `${row.resource}:update`;
+                        const deleteKey = `${row.resource}:delete`;
+                        const viewEnabled = matrixEditRoleHasPermission(
+                          row.resource,
+                          "view",
+                        );
+                        const createEnabled = matrixEditRoleHasPermission(
+                          row.resource,
+                          "create",
+                        );
+                        const updateEnabled = matrixEditRoleHasPermission(
+                          row.resource,
+                          "update",
+                        );
+                        const deleteEnabled = matrixEditRoleHasPermission(
+                          row.resource,
+                          "delete",
+                        );
+
+                        return (
+                          <TableRow key={row.resource} hover>
+                            <TableCell>
+                              <Typography variant="body2" fontWeight={700}>
+                                {row.meta.title}
                               </Typography>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <Typography variant="body2" color="text.secondary">
-                              {row.meta.description}
-                            </Typography>
-                          </TableCell>
-                          <TableCell>
-                            {renderRoleChips(row.crudRoleNames.view)}
-                          </TableCell>
-                          <TableCell>
-                            {renderRoleChips(row.crudRoleNames.create)}
-                          </TableCell>
-                          <TableCell>
-                            {renderRoleChips(row.crudRoleNames.update)}
-                          </TableCell>
-                          <TableCell>
-                            {renderRoleChips(row.crudRoleNames.delete)}
-                          </TableCell>
-                          <TableCell>
-                            {row.extraActions.length === 0 ? (
                               <Typography
                                 variant="caption"
                                 color="text.secondary"
+                                display="block"
                               >
-                                —
+                                {row.resource}
                               </Typography>
-                            ) : (
-                              <Stack spacing={0.8}>
-                                {row.extraActions.map((extraAction) => (
-                                  <Box
-                                    key={`${row.resource}:${extraAction.action}`}
-                                  >
-                                    <Typography
-                                      variant="caption"
-                                      sx={{
-                                        fontWeight: 700,
-                                        display: "block",
-                                        mb: 0.3,
-                                      }}
-                                    >
-                                      {getPermissionActionLabel(
-                                        extraAction.action,
-                                      )}
-                                    </Typography>
-                                    {renderRoleChips(extraAction.roleNames)}
-                                  </Box>
-                                ))}
+                              {row.meta.route && (
+                                <Typography
+                                  variant="caption"
+                                  color="primary.main"
+                                  display="block"
+                                >
+                                  {row.meta.route}
+                                </Typography>
+                              )}
+                              {canEditRolePermissions && matrixEditRoleId && (
+                                <Button
+                                  variant="text"
+                                  color="error"
+                                  size="small"
+                                  sx={{ p: 0, mt: 0.4, minWidth: 0 }}
+                                  disabled={
+                                    setRolePermissions.isPending ||
+                                    isMatrixEditingWildcardRole
+                                  }
+                                  onClick={() => {
+                                    void handleClearModulePermissions(
+                                      row.resource,
+                                    );
+                                  }}
+                                >
+                                  Limpar módulo
+                                </Button>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                                sx={{ display: "block", mb: 0.6 }}
+                              >
+                                {row.meta.description}
+                              </Typography>
+                              <Stack
+                                direction="row"
+                                spacing={0.5}
+                                useFlexGap
+                                flexWrap="wrap"
+                              >
+                                {row.availableActions.map((action) => {
+                                  const key = `${row.resource}:${action}`;
+                                  const assigned = matrixEditRoleHasPermission(
+                                    row.resource,
+                                    action,
+                                  );
+                                  const fromCatalog =
+                                    catalogPermissionKeys.has(key);
+                                  return (
+                                    <Chip
+                                      key={key}
+                                      size="small"
+                                      label={getPermissionActionLabel(action)}
+                                      variant={assigned ? "filled" : "outlined"}
+                                      color={
+                                        assigned
+                                          ? "primary"
+                                          : fromCatalog
+                                            ? "default"
+                                            : "warning"
+                                      }
+                                    />
+                                  );
+                                })}
                               </Stack>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                            </TableCell>
+                            <TableCell>
+                              {canEditRolePermissions && matrixEditRoleId ? (
+                                <Stack direction="row" alignItems="center">
+                                  <Switch
+                                    size="small"
+                                    checked={viewEnabled}
+                                    disabled={
+                                      setRolePermissions.isPending ||
+                                      isMatrixEditingWildcardRole ||
+                                      !catalogPermissionKeys.has(viewKey)
+                                    }
+                                    onChange={(_event, checked) => {
+                                      void handleToggleMatrixPermission(
+                                        row.resource,
+                                        "view",
+                                        checked,
+                                      );
+                                    }}
+                                  />
+                                </Stack>
+                              ) : (
+                                renderRoleChips(row.crudRoleNames.view)
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {canEditRolePermissions && matrixEditRoleId ? (
+                                <Stack direction="row" alignItems="center">
+                                  <Switch
+                                    size="small"
+                                    checked={createEnabled}
+                                    disabled={
+                                      setRolePermissions.isPending ||
+                                      isMatrixEditingWildcardRole ||
+                                      !catalogPermissionKeys.has(createKey)
+                                    }
+                                    onChange={(_event, checked) => {
+                                      void handleToggleMatrixPermission(
+                                        row.resource,
+                                        "create",
+                                        checked,
+                                      );
+                                    }}
+                                  />
+                                </Stack>
+                              ) : (
+                                renderRoleChips(row.crudRoleNames.create)
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {canEditRolePermissions && matrixEditRoleId ? (
+                                <Stack direction="row" alignItems="center">
+                                  <Switch
+                                    size="small"
+                                    checked={updateEnabled}
+                                    disabled={
+                                      setRolePermissions.isPending ||
+                                      isMatrixEditingWildcardRole ||
+                                      !catalogPermissionKeys.has(updateKey)
+                                    }
+                                    onChange={(_event, checked) => {
+                                      void handleToggleMatrixPermission(
+                                        row.resource,
+                                        "update",
+                                        checked,
+                                      );
+                                    }}
+                                  />
+                                </Stack>
+                              ) : (
+                                renderRoleChips(row.crudRoleNames.update)
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {canEditRolePermissions && matrixEditRoleId ? (
+                                <Stack direction="row" alignItems="center">
+                                  <Switch
+                                    size="small"
+                                    checked={deleteEnabled}
+                                    disabled={
+                                      setRolePermissions.isPending ||
+                                      isMatrixEditingWildcardRole ||
+                                      !catalogPermissionKeys.has(deleteKey)
+                                    }
+                                    onChange={(_event, checked) => {
+                                      void handleToggleMatrixPermission(
+                                        row.resource,
+                                        "delete",
+                                        checked,
+                                      );
+                                    }}
+                                  />
+                                </Stack>
+                              ) : (
+                                renderRoleChips(row.crudRoleNames.delete)
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </Box>
