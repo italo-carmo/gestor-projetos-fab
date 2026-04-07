@@ -1,4 +1,5 @@
 import type { RbacUser } from './rbac.types';
+import { PermissionScope } from '@prisma/client';
 
 export const ROLE_COORDENACAO_CIPAVD = 'Coordenação CIPAVD';
 export const ROLE_COMISSAO_CIPAVD = 'Comissão CIPAVD';
@@ -43,6 +44,42 @@ export function hasRole(user: RbacUser | undefined, roleName: string) {
 export function hasAnyRole(user: RbacUser | undefined, roleNames: string[]) {
   if (!user || roleNames.length === 0) return false;
   return roleNames.some((roleName) => hasRole(user, roleName));
+}
+
+export function hasPermission(
+  user: RbacUser | undefined,
+  resource: string,
+  action: string,
+  scope?: PermissionScope | string,
+) {
+  if (!user) return false;
+  const targetResource = String(resource ?? '').trim();
+  const targetAction = String(action ?? '').trim();
+  const targetScope = scope ? String(scope).trim().toUpperCase() : null;
+  return user.permissions.some((permission) => {
+    const sameResource =
+      permission.resource === targetResource || permission.resource === '*';
+    if (!sameResource) return false;
+    const sameAction =
+      permission.action === targetAction || permission.action === '*';
+    if (!sameAction) return false;
+    if (!targetScope) return true;
+    return String(permission.scope ?? '').toUpperCase() === targetScope;
+  });
+}
+
+export function hasAnyPermission(
+  user: RbacUser | undefined,
+  requirements: Array<{
+    resource: string;
+    action: string;
+    scope?: PermissionScope | string;
+  }>,
+) {
+  if (!user) return false;
+  return requirements.some((requirement) =>
+    hasPermission(user, requirement.resource, requirement.action, requirement.scope),
+  );
 }
 
 export function isNationalCommissionMember(user: RbacUser | undefined) {

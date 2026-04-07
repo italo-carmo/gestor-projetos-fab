@@ -20,6 +20,7 @@ import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../common/current-user.decorator';
+import { RequirePermission } from '../rbac/require-permission.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
 import type { RbacUser } from '../rbac/rbac.types';
 import { MissionsService } from './missions.service';
@@ -52,6 +53,7 @@ export class MissionsController {
   constructor(private readonly missions: MissionsService) {}
 
   @Get()
+  @RequirePermission('missions', 'view')
   list(
     @Query('localityId') localityId: string | undefined,
     @Query('q') q: string | undefined,
@@ -63,11 +65,13 @@ export class MissionsController {
   }
 
   @Get('statistics')
+  @RequirePermission('missions', 'view')
   getStatistics(@CurrentUser() user: RbacUser) {
     return this.missions.getStatistics(user);
   }
 
   @Get('checklist/mapping')
+  @RequirePermission('missions', 'view')
   getChecklistMapping(
     @Query('localityId') localityId: string | undefined,
     @CurrentUser() user: RbacUser,
@@ -76,11 +80,13 @@ export class MissionsController {
   }
 
   @Get('checklist/config')
+  @RequirePermission('missions', 'view')
   getChecklistConfig(@CurrentUser() user: RbacUser) {
     return this.missions.getChecklistConfig(user);
   }
 
   @Post('checklist/config/dimensions')
+  @RequirePermission('missions', 'update')
   createChecklistDimension(
     @Body() dto: CreateMissionChecklistDimensionDto,
     @CurrentUser() user: RbacUser,
@@ -89,6 +95,7 @@ export class MissionsController {
   }
 
   @Put('checklist/config/dimensions/:id')
+  @RequirePermission('missions', 'update')
   updateChecklistDimension(
     @Param('id') id: string,
     @Body() dto: UpdateMissionChecklistDimensionDto,
@@ -98,6 +105,7 @@ export class MissionsController {
   }
 
   @Delete('checklist/config/dimensions/:id')
+  @RequirePermission('missions', 'update')
   deleteChecklistDimension(
     @Param('id') id: string,
     @CurrentUser() user: RbacUser,
@@ -106,6 +114,7 @@ export class MissionsController {
   }
 
   @Put('checklist/config/classifications/:id')
+  @RequirePermission('missions', 'update')
   updateChecklistClassification(
     @Param('id') id: string,
     @Body() dto: UpdateMissionChecklistClassificationDto,
@@ -115,11 +124,13 @@ export class MissionsController {
   }
 
   @Post()
+  @RequirePermission('missions', 'create')
   create(@Body() dto: CreateMissionDto, @CurrentUser() user: RbacUser) {
     return this.missions.create(dto, user);
   }
 
   @Put(':id')
+  @RequirePermission('missions', 'update')
   update(
     @Param('id') id: string,
     @Body() dto: UpdateMissionDto,
@@ -129,11 +140,13 @@ export class MissionsController {
   }
 
   @Delete(':id')
+  @RequirePermission('missions', 'delete')
   remove(@Param('id') id: string, @CurrentUser() user: RbacUser) {
     return this.missions.delete(id, user);
   }
 
   @Get('ldap-participant')
+  @RequirePermission('missions', 'view')
   lookupLdapParticipant(
     @Query('q') q: string | undefined,
     @CurrentUser() user: RbacUser,
@@ -142,16 +155,19 @@ export class MissionsController {
   }
 
   @Get(':id')
+  @RequirePermission('missions', 'view')
   getById(@Param('id') id: string, @CurrentUser() user: RbacUser) {
     return this.missions.getById(id, user);
   }
 
   @Get(':id/checklist')
+  @RequirePermission('missions', 'view')
   getChecklist(@Param('id') id: string, @CurrentUser() user: RbacUser) {
     return this.missions.getChecklist(id, user);
   }
 
   @Put(':id/checklist')
+  @RequirePermission('missions', 'update')
   upsertChecklist(
     @Param('id') id: string,
     @Body() dto: UpsertMissionChecklistDto,
@@ -161,6 +177,7 @@ export class MissionsController {
   }
 
   @Post(':id/checklist/photos')
+  @RequirePermission('missions', 'upload')
   @UseInterceptors(
     FileInterceptor('file', {
       storage: diskStorage({
@@ -193,6 +210,7 @@ export class MissionsController {
   }
 
   @Post(':id/participants/ldap')
+  @RequirePermission('missions', 'update')
   addParticipantFromLdap(
     @Param('id') id: string,
     @Body() dto: MissionLdapParticipantDto,
@@ -202,6 +220,7 @@ export class MissionsController {
   }
 
   @Post(':id/participants/user')
+  @RequirePermission('missions', 'update')
   addParticipantFromUser(
     @Param('id') id: string,
     @Body() dto: MissionUserParticipantDto,
@@ -211,6 +230,7 @@ export class MissionsController {
   }
 
   @Delete(':id/participants/:participantId')
+  @RequirePermission('missions', 'update')
   removeParticipant(
     @Param('id') id: string,
     @Param('participantId') participantId: string,
@@ -220,11 +240,13 @@ export class MissionsController {
   }
 
   @Get(':id/schedule')
+  @RequirePermission('missions', 'view')
   listSchedule(@Param('id') id: string, @CurrentUser() user: RbacUser) {
     return this.missions.listSchedule(id, user);
   }
 
   @Post(':id/schedule')
+  @RequirePermission('missions', 'create')
   createScheduleItem(
     @Param('id') id: string,
     @Body() dto: CreateMissionScheduleItemDto,
@@ -234,6 +256,7 @@ export class MissionsController {
   }
 
   @Put(':id/schedule/:itemId')
+  @RequirePermission('missions', 'update')
   updateScheduleItem(
     @Param('id') id: string,
     @Param('itemId') itemId: string,
@@ -244,6 +267,7 @@ export class MissionsController {
   }
 
   @Delete(':id/schedule/:itemId')
+  @RequirePermission('missions', 'delete')
   deleteScheduleItem(
     @Param('id') id: string,
     @Param('itemId') itemId: string,
@@ -253,6 +277,7 @@ export class MissionsController {
   }
 
   @Get(':id/schedule/pdf')
+  @RequirePermission('missions', 'download')
   async exportSchedulePdf(
     @Param('id') id: string,
     @CurrentUser() user: RbacUser,

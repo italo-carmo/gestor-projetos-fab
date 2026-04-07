@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import {
   ActivityStatus,
+  PermissionScope,
   Prisma,
   TaskAssigneeType,
   TaskPriority,
@@ -11,7 +12,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { throwError } from '../common/http-error';
 import { AuditService } from '../audit/audit.service';
 import { RbacUser } from '../rbac/rbac.types';
-import { hasAnyRole, resolveAccessProfile, ROLE_TI } from '../rbac/role-access';
+import { hasPermission, resolveAccessProfile } from '../rbac/role-access';
 import { sanitizeForExecutive } from '../common/executive';
 import { sanitizeText } from '../common/sanitize';
 import {
@@ -5378,7 +5379,7 @@ export class TasksService {
   }
 
   private assertDashboardNationalCardManageAccess(user?: RbacUser) {
-    if (hasAnyRole(user, [ROLE_TI])) {
+    if (hasPermission(user, 'dashboard', 'update', PermissionScope.NATIONAL)) {
       return;
     }
     throwError('RBAC_FORBIDDEN');

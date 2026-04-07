@@ -40,7 +40,6 @@ import {
   useUpdateEloRole,
 } from '../api/hooks';
 import { can } from '../app/rbac';
-import { hasAnyRole, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from '../app/roleAccess';
 import { useToast } from '../app/toast';
 import { parseApiError } from '../app/apiErrors';
 import { SkeletonState } from '../components/states/SkeletonState';
@@ -772,7 +771,7 @@ function normalizeHexColor(value: string | null | undefined) {
 
 function InstitutionalMappingTab() {
   const { data: me } = useMe();
-  const canManage = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]);
+  const canManage = can(me, 'missions', 'update');
   const configQuery = useMissionChecklistConfig(canManage);
   const createDimension = useCreateMissionChecklistDimension();
   const updateDimension = useUpdateMissionChecklistDimension();

@@ -1346,7 +1346,7 @@ export class DocumentsService {
 
     const hasNationalSearchScope = user.permissions.some(
       (permission) =>
-        (permission.resource === 'search' || permission.resource === '*') &&
+        (permission.resource === 'documents' || permission.resource === '*') &&
         (permission.action === 'view' || permission.action === '*') &&
         permission.scope === PermissionScope.NATIONAL,
     );

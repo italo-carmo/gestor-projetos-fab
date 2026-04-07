@@ -25,7 +25,6 @@ import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { parseApiError } from "../app/apiErrors";
 import { can } from "../app/rbac";
-import { hasAnyRole, hasRole, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from "../app/roleAccess";
 import { useToast } from "../app/toast";
 import { selectTargetLocalities } from "../constants/localities";
 import {
@@ -117,7 +116,10 @@ export function BestPracticesPage() {
   const types = (typesQuery.data?.items ?? []) as BestPracticeType[];
   const typeById = useMemo(() => new Map(types.map((item) => [item.id, item])), [types]);
   
-  const canManageTypes = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]) && can(me, "best_practices", "create");
+  const canManageTypes =
+    can(me, "best_practice_types", "create") ||
+    can(me, "best_practice_types", "update") ||
+    can(me, "best_practice_types", "delete");
 
   if (postsQuery.isLoading) return <SkeletonState />;
   if (postsQuery.isError) {
@@ -160,14 +162,9 @@ export function BestPracticesPage() {
       .toLowerCase();
     return normalized !== hiddenTypeLabel;
   });
-  const canCreate =
-    hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]) &&
-    can(me, "best_practices", "create");
-  const canUpdate =
-    hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]) &&
-    can(me, "best_practices", "update");
-  const canDelete =
-    hasRole(me, ROLE_COORDENACAO_CIPAVD) && can(me, "best_practices", "delete");
+  const canCreate = can(me, "best_practices", "create");
+  const canUpdate = can(me, "best_practices", "update");
+  const canDelete = can(me, "best_practices", "delete");
 
   const postsByTypeId = new Map<string, BestPracticePost[]>();
   const postsByLocalityId = new Map<string, BestPracticePost[]>();

@@ -14,6 +14,7 @@ import {
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../common/current-user.decorator';
+import { RequirePermission } from '../rbac/require-permission.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
 import type { RbacUser } from '../rbac/rbac.types';
 import { CreateSocialCommunicationArticleDto } from './dto/create-social-communication-article.dto';
@@ -45,6 +46,7 @@ export class SocialCommunicationController {
   ) {}
 
   @Get()
+  @RequirePermission('social_communication', 'view')
   list(
     @Query('q') q: string | undefined,
     @Query('tag') tag: string | string[] | undefined,
@@ -54,6 +56,7 @@ export class SocialCommunicationController {
   }
 
   @Post('metadata')
+  @RequirePermission('social_communication', 'create')
   resolveMetadata(
     @Body() dto: ResolveSocialCommunicationMetadataDto,
     @CurrentUser() user: RbacUser,
@@ -62,11 +65,13 @@ export class SocialCommunicationController {
   }
 
   @Get('highlights')
+  @RequirePermission('social_communication_highlight', 'view')
   listHighlights(@Query('q') q: string | undefined) {
     return this.socialCommunication.listHighlights({ q });
   }
 
   @Get('highlights/ldap-profile')
+  @RequirePermission('social_communication_highlight', 'create')
   lookupHighlightLdapProfile(
     @Query() query: LookupSocialCommunicationHighlightLdapDto,
     @CurrentUser() user: RbacUser,
@@ -78,6 +83,7 @@ export class SocialCommunicationController {
   }
 
   @Post('highlights')
+  @RequirePermission('social_communication_highlight', 'create')
   createHighlight(
     @Body() dto: CreateSocialCommunicationHighlightDto,
     @CurrentUser() user: RbacUser,
@@ -86,6 +92,7 @@ export class SocialCommunicationController {
   }
 
   @Post()
+  @RequirePermission('social_communication', 'create')
   create(
     @Body() dto: CreateSocialCommunicationArticleDto,
     @CurrentUser() user: RbacUser,
@@ -94,6 +101,7 @@ export class SocialCommunicationController {
   }
 
   @Post('upload-cover')
+  @RequirePermission('social_communication', 'upload')
   @UseInterceptors(
     FileInterceptor('file', {
       storage: diskStorage({
@@ -125,6 +133,7 @@ export class SocialCommunicationController {
   }
 
   @Put(':id')
+  @RequirePermission('social_communication', 'update')
   update(
     @Param('id') id: string,
     @Body() dto: UpdateSocialCommunicationArticleDto,
@@ -134,6 +143,7 @@ export class SocialCommunicationController {
   }
 
   @Put('highlights/:id')
+  @RequirePermission('social_communication_highlight', 'update')
   updateHighlight(
     @Param('id') id: string,
     @Body() dto: UpdateSocialCommunicationHighlightDto,
@@ -143,11 +153,13 @@ export class SocialCommunicationController {
   }
 
   @Delete(':id')
+  @RequirePermission('social_communication', 'delete')
   remove(@Param('id') id: string, @CurrentUser() user: RbacUser) {
     return this.socialCommunication.remove(id, user);
   }
 
   @Delete('highlights/:id')
+  @RequirePermission('social_communication_highlight', 'delete')
   removeHighlight(@Param('id') id: string, @CurrentUser() user: RbacUser) {
     return this.socialCommunication.removeHighlight(id, user);
   }

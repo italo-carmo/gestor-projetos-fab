@@ -21,11 +21,7 @@ import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import ReportGmailerrorredRoundedIcon from "@mui/icons-material/ReportGmailerrorredRounded";
 import { useMemo, useState } from "react";
 import { parseApiError } from "../app/apiErrors";
-import {
-  hasAnyRole,
-  ROLE_COORDENACAO_CIPAVD,
-  ROLE_TI,
-} from "../app/roleAccess";
+import { can } from "../app/rbac";
 import { useToast } from "../app/toast";
 import {
   useCreateSmifComplaint,
@@ -73,7 +69,7 @@ type SmifComplaintItem = {
 export function SmifComplaintsPage() {
   const toast = useToast();
   const { data: me } = useMe();
-  const canManage = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]);
+  const canManage = can(me, "smif_complaints", "view");
 
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("");
@@ -132,7 +128,7 @@ export function SmifComplaintsPage() {
     return (
       <EmptyState
         title="Acesso restrito"
-        description="Somente os perfis TI e Coordenação CIPAVD podem acessar denúncias SMIF."
+        description="Seu papel ativo nao possui permissao para visualizar denuncias SMIF."
       />
     );
   }

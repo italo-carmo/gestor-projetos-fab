@@ -6,11 +6,7 @@ import { resolveExistingLibraryDocumentPath } from './library-storage';
 import { AuditService } from '../audit/audit.service';
 import { throwError } from '../common/http-error';
 import { PrismaService } from '../prisma/prisma.service';
-import {
-  hasAnyRole,
-  ROLE_COORDENACAO_CIPAVD,
-  ROLE_TI,
-} from '../rbac/role-access';
+import { hasPermission } from '../rbac/role-access';
 import type { RbacUser } from '../rbac/rbac.types';
 import { libraryPhotosDir } from './library.controller';
 
@@ -57,8 +53,11 @@ export class LibraryService {
     };
   }
 
-  ensureEditorAccess(user?: RbacUser) {
-    if (!hasAnyRole(user, [ROLE_TI, ROLE_COORDENACAO_CIPAVD])) {
+  ensureEditorAccess(
+    user: RbacUser | undefined,
+    action: 'create' | 'update' | 'delete',
+  ) {
+    if (!hasPermission(user, 'library', action)) {
       throwError('RBAC_FORBIDDEN');
     }
   }
@@ -67,7 +66,7 @@ export class LibraryService {
     payload: { carouselIntervalSeconds: number },
     user?: RbacUser,
   ) {
-    this.ensureEditorAccess(user);
+    this.ensureEditorAccess(user, 'update');
     const value = Number(payload.carouselIntervalSeconds);
     if (!Number.isFinite(value) || value < 2 || value > 60) {
       throwError('VALIDATION_ERROR', {
@@ -103,7 +102,7 @@ export class LibraryService {
     payload: { title?: string; localityId?: string },
     user?: RbacUser,
   ) {
-    this.ensureEditorAccess(user);
+    this.ensureEditorAccess(user, 'create');
     if (!file) {
       throwError('VALIDATION_ERROR', { field: 'file', reason: 'required' });
     }
@@ -244,7 +243,7 @@ export class LibraryService {
     payload: { title?: string; sortOrder?: number; localityId?: string | null },
     user?: RbacUser,
   ) {
-    this.ensureEditorAccess(user);
+    this.ensureEditorAccess(user, 'update');
     const current = await this.prisma.libraryPhoto.findUnique({
       where: { id },
     });
@@ -286,7 +285,7 @@ export class LibraryService {
   }
 
   async deletePhoto(id: string, _photosDir: string, user?: RbacUser) {
-    this.ensureEditorAccess(user);
+    this.ensureEditorAccess(user, 'delete');
     const current = await this.prisma.libraryPhoto.findUnique({
       where: { id },
     });
@@ -308,7 +307,7 @@ export class LibraryService {
     payload: { title?: string },
     user?: RbacUser,
   ) {
-    this.ensureEditorAccess(user);
+    this.ensureEditorAccess(user, 'create');
     if (!file) {
       throwError('VALIDATION_ERROR', { field: 'file', reason: 'required' });
     }
@@ -340,7 +339,7 @@ export class LibraryService {
     payload: { title?: string },
     user?: RbacUser,
   ) {
-    this.ensureEditorAccess(user);
+    this.ensureEditorAccess(user, 'update');
     const current = await this.prisma.libraryDocument.findUnique({
       where: { id },
     });
@@ -367,7 +366,7 @@ export class LibraryService {
   }
 
   async deleteDocument(id: string, documentsDir: string, user?: RbacUser) {
-    this.ensureEditorAccess(user);
+    this.ensureEditorAccess(user, 'delete');
     const current = await this.prisma.libraryDocument.findUnique({
       where: { id },
     });

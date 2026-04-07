@@ -45,8 +45,8 @@ import {
   useActivities,
 } from "../api/hooks";
 import { api } from "../api/client";
-import { ROLE_COORDENACAO_CIPAVD, ROLE_TI, hasAnyRole } from "../app/roleAccess";
 import { parseApiError } from "../app/apiErrors";
+import { can } from "../app/rbac";
 import { useToast } from "../app/toast";
 import { selectTargetLocalities } from "../constants/localities";
 import { EmptyState } from "../components/states/EmptyState";
@@ -155,7 +155,10 @@ export function LibraryPage() {
   const updateDocument = useUpdateLibraryDocument();
   const deleteDocument = useDeleteLibraryDocument();
   const activitiesQuery = useActivities({ pageSize: '1000' }); // Get all activities to filter those with reports
-  const canManage = hasAnyRole(me, [ROLE_TI, ROLE_COORDENACAO_CIPAVD]);
+  const canManage =
+    can(me, "library", "create") ||
+    can(me, "library", "update") ||
+    can(me, "library", "delete");
 
   const allPhotos = useMemo(
     () => ((libraryQuery.data?.photos ?? []) as LibraryPhoto[]).slice().sort((a, b) => a.sortOrder - b.sortOrder),

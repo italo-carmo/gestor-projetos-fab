@@ -43,13 +43,6 @@ import {
 import { useToast } from "../../app/toast";
 import { parseApiError } from "../../app/apiErrors";
 import { can } from "../../app/rbac";
-import {
-  hasAnyRole,
-  ROLE_COMISSAO_CIPAVD,
-  ROLE_COMANDANTE_COMGEP,
-  ROLE_COORDENACAO_CIPAVD,
-  ROLE_TI,
-} from "../../app/roleAccess";
 import { StatusChip } from "../chips/StatusChip";
 import { ProgressInline } from "../chips/ProgressInline";
 import { DueBadge } from "../chips/DueBadge";
@@ -124,17 +117,11 @@ export function TaskDetailsDrawer({
   const updateTaskTitle = useUpdateTaskTitle();
   const updateTaskLocalities = useUpdateTaskLocalities();
 
-  const canManageByRole = hasAnyRole(user, [
-    ROLE_COORDENACAO_CIPAVD,
-    ROLE_COMISSAO_CIPAVD,
-    ROLE_COMANDANTE_COMGEP,
-    ROLE_TI,
-  ]);
   const canUpdate = can(user, "task_instances", "update");
-  const canAssign = can(user, "task_instances", "assign") && canManageByRole;
+  const canAssign = can(user, "task_instances", "assign");
   const canViewUsers = can(user, "users", "view");
-  const canManageTaskData = canUpdate && canManageByRole;
-  const canDelete = canManageTaskData;
+  const canManageTaskData = canUpdate;
+  const canDelete = can(user, "task_instances", "delete");
   const meetingsQuery = useMeetings({});
   const meetings = meetingsQuery.data?.items ?? [];
   const updateTaskMeeting = useUpdateTaskMeeting();

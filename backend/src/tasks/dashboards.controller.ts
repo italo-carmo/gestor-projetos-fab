@@ -12,11 +12,7 @@ import { CurrentUser } from '../common/current-user.decorator';
 import { throwError } from '../common/http-error';
 import { RequirePermission } from '../rbac/require-permission.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
-import {
-  hasAnyRole,
-  hasNationalManagementScope,
-  ROLE_TI,
-} from '../rbac/role-access';
+import { hasPermission } from '../rbac/role-access';
 import type { RbacUser } from '../rbac/rbac.types';
 import { TasksService } from './tasks.service';
 import { UpdateDashboardNationalCardDto } from './dto/update-dashboard-national-card.dto';
@@ -38,20 +34,20 @@ export class DashboardsController {
     @Query('localityId') localityId: string | undefined,
     @CurrentUser() user: RbacUser,
   ) {
-    if (!hasNationalManagementScope(user)) {
+    if (!hasPermission(user, 'dashboard', 'view', 'NATIONAL')) {
       throwError('RBAC_FORBIDDEN');
     }
     return this.tasks.getDashboardNational(user, localityId);
   }
 
   @Put('dashboard/national/cards/:id')
-  @RequirePermission('dashboard', 'view')
+  @RequirePermission('dashboard', 'update')
   updateNationalCard(
     @Param('id') id: string,
     @Body() dto: UpdateDashboardNationalCardDto,
     @CurrentUser() user: RbacUser,
   ) {
-    if (!hasAnyRole(user, [ROLE_TI])) {
+    if (!hasPermission(user, 'dashboard', 'update', 'NATIONAL')) {
       throwError('RBAC_FORBIDDEN');
     }
     return this.tasks.updateDashboardNationalCardSetting(id, dto, user);

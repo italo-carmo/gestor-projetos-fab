@@ -57,12 +57,7 @@ import {
 } from "../app/socialCardSettingsStorage";
 import { buildInnerTheme, hexToRgba } from "../app/socialHighlightsInnerTheme";
 import { api } from "../api/client";
-import {
-  hasAnyRole,
-  ROLE_COMANDANTE_COMGEP,
-  ROLE_COORDENACAO_CIPAVD,
-  ROLE_TI,
-} from "../app/roleAccess";
+import { can } from "../app/rbac";
 import { useToast } from "../app/toast";
 import {
   useCreateSocialCommunicationHighlight,
@@ -349,13 +344,15 @@ export function SocialCommunicationPage() {
   const toast = useToast();
   const { data: me } = useMe();
 
-  const canEdit = hasAnyRole(me, [
-    ROLE_COORDENACAO_CIPAVD,
-    ROLE_COMANDANTE_COMGEP,
-    ROLE_TI,
-  ]);
-  const canEditHighlights = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]);
-  const isTiProfile = hasAnyRole(me, [ROLE_TI]);
+  const canEdit =
+    can(me, "social_communication", "create") ||
+    can(me, "social_communication", "update") ||
+    can(me, "social_communication", "delete");
+  const canEditHighlights =
+    can(me, "social_communication_highlight", "create") ||
+    can(me, "social_communication_highlight", "update") ||
+    can(me, "social_communication_highlight", "delete");
+  const isTiProfile = can(me, "roles", "permissions");
 
   const [search, setSearch] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);

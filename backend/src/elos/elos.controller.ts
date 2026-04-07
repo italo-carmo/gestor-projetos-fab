@@ -108,7 +108,7 @@ export class OrgChartController {
   }
 
   @Post('commission-members')
-  @RequirePermission('org_chart', 'view')
+  @RequirePermission('org_chart', 'create')
   addCommissionMember(
     @Body() dto: ManageOrgChartCommissionMemberDto,
     @CurrentUser() user: RbacUser,
@@ -117,7 +117,7 @@ export class OrgChartController {
   }
 
   @Delete('commission-members/:userId')
-  @RequirePermission('org_chart', 'view')
+  @RequirePermission('org_chart', 'delete')
   removeCommissionMember(
     @Param('userId') userId: string,
     @CurrentUser() user: RbacUser,
@@ -126,7 +126,7 @@ export class OrgChartController {
   }
 
   @Put('commission-members/reorder')
-  @RequirePermission('org_chart', 'view')
+  @RequirePermission('org_chart', 'update')
   reorderCommissionMembers(
     @Body() dto: ReorderOrgChartCommissionMembersDto,
     @CurrentUser() user: RbacUser,
@@ -135,7 +135,7 @@ export class OrgChartController {
   }
 
   @Put('commission-members/:userId')
-  @RequirePermission('org_chart', 'view')
+  @RequirePermission('org_chart', 'update')
   updateCommissionMember(
     @Param('userId') userId: string,
     @Body() dto: UpdateOrgChartCommissionMemberDto,
@@ -145,7 +145,7 @@ export class OrgChartController {
   }
 
   @Post('assignments')
-  @RequirePermission('org_chart', 'view')
+  @RequirePermission('org_chart', 'create')
   createAssignment(
     @Body() dto: CreateOrgChartAssignmentDto,
     @CurrentUser() user: RbacUser,
@@ -154,7 +154,7 @@ export class OrgChartController {
   }
 
   @Put('assignments/:id')
-  @RequirePermission('org_chart', 'view')
+  @RequirePermission('org_chart', 'update')
   updateAssignment(
     @Param('id') id: string,
     @Body() dto: UpdateOrgChartAssignmentDto,
@@ -164,7 +164,7 @@ export class OrgChartController {
   }
 
   @Delete('assignments/:id')
-  @RequirePermission('org_chart', 'view')
+  @RequirePermission('org_chart', 'delete')
   removeAssignment(@Param('id') id: string, @CurrentUser() user: RbacUser) {
     return this.elos.removeOrgChartAssignment(id, user);
   }

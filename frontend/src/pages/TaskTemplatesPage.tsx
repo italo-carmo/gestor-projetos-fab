@@ -32,12 +32,6 @@ import { SkeletonState } from "../components/states/SkeletonState";
 import { useToast } from "../app/toast";
 import { parseApiError } from "../app/apiErrors";
 import { can } from "../app/rbac";
-import {
-  hasAnyRole,
-  ROLE_COMANDANTE_COMGEP,
-  ROLE_COORDENACAO_CIPAVD,
-  ROLE_TI,
-} from "../app/roleAccess";
 import { TASK_PRIORITY_LABELS } from "../constants/enums";
 import { ConfirmDialog } from "../components/dialogs/ConfirmDialog";
 
@@ -253,9 +247,7 @@ export function TaskTemplatesPage() {
   );
   const phases = phasesQuery.data?.items ?? [];
   const localities = localitiesQuery.data?.items ?? [];
-  const canEditTemplate =
-    can(me, "task_templates", "update") &&
-    hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI]);
+  const canEditTemplate = can(me, "task_templates", "update");
   const canDeleteTemplate = canEditTemplate;
 
   if (templatesQuery.isLoading) return <SkeletonState />;

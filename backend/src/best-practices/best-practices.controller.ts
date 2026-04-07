@@ -55,13 +55,13 @@ export class BestPracticesController {
   }
 
   @Get('types')
-  @RequirePermission('best_practices', 'view')
+  @RequirePermission('best_practice_types', 'view')
   listTypes(@CurrentUser() user: RbacUser) {
     return this.bestPractices.listTypes(user);
   }
 
   @Post('types')
-  @RequirePermission('best_practices', 'create')
+  @RequirePermission('best_practice_types', 'create')
   createType(
     @Body() dto: CreateBestPracticeTypeDto,
     @CurrentUser() user: RbacUser,
@@ -70,7 +70,7 @@ export class BestPracticesController {
   }
 
   @Put('types/:id')
-  @RequirePermission('best_practices', 'update')
+  @RequirePermission('best_practice_types', 'update')
   updateType(
     @Param('id') id: string,
     @Body() dto: UpdateBestPracticeTypeDto,
@@ -80,7 +80,7 @@ export class BestPracticesController {
   }
 
   @Delete('types/:id')
-  @RequirePermission('best_practices', 'delete')
+  @RequirePermission('best_practice_types', 'delete')
   removeType(@Param('id') id: string, @CurrentUser() user: RbacUser) {
     return this.bestPractices.removeType(id, user);
   }

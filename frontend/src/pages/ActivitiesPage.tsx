@@ -61,14 +61,6 @@ import {
   useUpsertActivityReport,
 } from '../api/hooks';
 import { parseApiError } from '../app/apiErrors';
-import {
-  hasAnyRole,
-  ROLE_CIPAVD,
-  ROLE_COMANDANTE_COMGEP,
-  ROLE_COMISSAO_CIPAVD,
-  ROLE_COORDENACAO_CIPAVD,
-  ROLE_TI,
-} from '../app/roleAccess';
 import { useToast } from '../app/toast';
 import { can } from '../app/rbac';
 import { toMilitaryDisplayName } from '../app/militaryName';
@@ -665,39 +657,25 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
   }, [selected]);
 
   const canView = !me ? true : can(me, 'task_instances', 'view');
-  const canManageActivityDataByRole =
-    scope === 'cipavd'
-      ? hasAnyRole(me, [ROLE_CIPAVD, ROLE_COORDENACAO_CIPAVD, ROLE_TI])
-      : hasAnyRole(me, [
-          ROLE_COORDENACAO_CIPAVD,
-          ROLE_COMISSAO_CIPAVD,
-          ROLE_COMANDANTE_COMGEP,
-          ROLE_TI,
-        ]);
-  const canCreate = canManageActivityDataByRole;
-  const canUpdate = canManageActivityDataByRole;
-  const canDelete = canUpdate;
-  const isTiProfile = hasAnyRole(me, [ROLE_TI]);
-  const canSignByRole = hasAnyRole(me, [ROLE_CIPAVD, ROLE_COORDENACAO_CIPAVD, ROLE_TI]);
-  const canEditReport = can(me, 'reports', 'create') && canManageActivityDataByRole;
-  const canSign = can(me, 'reports', 'approve') && canSignByRole;
-  const canUpload = can(me, 'reports', 'upload') && canManageActivityDataByRole;
-  const canDownload = can(me, 'reports', 'download') && canManageActivityDataByRole;
+  const canCreate = can(me, 'task_instances', 'create');
+  const canUpdate = can(me, 'task_instances', 'update');
+  const canDelete = can(me, 'task_instances', 'delete');
+  const canEditReport = can(me, 'reports', 'create');
+  const canSign = can(me, 'reports', 'approve');
+  const canUpload = can(me, 'reports', 'upload');
+  const canDownload = can(me, 'reports', 'download');
   const reportIsSigned = Boolean(selected?.report?.hasSignature);
   const isReportSigner = Boolean(
     selected?.report?.signedById &&
       me?.id &&
       String(selected.report.signedById) === String(me.id),
   );
-  const canDeleteSignature = reportIsSigned && (isTiProfile || isReportSigner);
+  const canDeleteSignature =
+    reportIsSigned && (can(me, 'reports', 'update') || isReportSigner);
   const canEditReportContent = canEditReport && !reportIsSigned;
   const canUploadReportPhotos = canUpload && !reportIsSigned;
   const canEditActivityForm = isCreateMode ? canCreate : canUpdate;
-  const canManageBatch =
-    can(me, 'task_instances', 'update') &&
-    (scope === 'cipavd'
-      ? hasAnyRole(me, [ROLE_CIPAVD, ROLE_COORDENACAO_CIPAVD, ROLE_TI])
-      : hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]));
+  const canManageBatch = can(me, 'task_instances', 'update');
   const canBatchAssignResponsible = selectedLocalityIds.length <= 1;
   const canCreateAssignResponsible = !isCreateMode || activityForm.localityIds.length <= 1;
   const createSelectedLocalities = useMemo(

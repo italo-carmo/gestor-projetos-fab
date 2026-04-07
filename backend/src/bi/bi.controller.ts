@@ -20,12 +20,6 @@ import { throwError } from '../common/http-error';
 import { MulterExceptionFilter } from '../reports/multer-exception.filter';
 import { RequirePermission } from '../rbac/require-permission.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
-import {
-  hasAnyRole,
-  ROLE_COMANDANTE_COMGEP,
-  ROLE_COORDENACAO_CIPAVD,
-  ROLE_TI,
-} from '../rbac/role-access';
 import type { RbacUser } from '../rbac/rbac.types';
 import { BiService } from './bi.service';
 
@@ -35,7 +29,7 @@ export class BiController {
   constructor(private readonly bi: BiService) {}
 
   @Get('surveys/dashboard')
-  @RequirePermission('dashboard', 'view')
+  @RequirePermission('bi', 'view')
   dashboard(
     @Query('from') from: string | undefined,
     @Query('to') to: string | undefined,
@@ -49,7 +43,6 @@ export class BiController {
     @Query('combineMode') combineMode: string | undefined,
     @CurrentUser() user: RbacUser,
   ) {
-    this.assertBiAccess(user);
     return this.bi.dashboard({
       from,
       to,
@@ -65,7 +58,7 @@ export class BiController {
   }
 
   @Get('surveys/responses')
-  @RequirePermission('dashboard', 'view')
+  @RequirePermission('bi', 'view')
   listResponses(
     @Query('from') from: string | undefined,
     @Query('to') to: string | undefined,
@@ -82,7 +75,6 @@ export class BiController {
     @Query('pageSize') pageSize: string | undefined,
     @CurrentUser() user: RbacUser,
   ) {
-    this.assertBiAccess(user);
     return this.bi.listResponses({
       from,
       to,
@@ -101,7 +93,7 @@ export class BiController {
   }
 
   @Get('surveys/questions')
-  @RequirePermission('dashboard', 'view')
+  @RequirePermission('bi', 'view')
   listQuestions(
     @Query('from') from: string | undefined,
     @Query('to') to: string | undefined,
@@ -116,7 +108,6 @@ export class BiController {
     @Query('combineMode') combineMode: string | undefined,
     @CurrentUser() user: RbacUser,
   ) {
-    this.assertBiAccess(user);
     return this.bi.listQuestions({
       from,
       to,
@@ -133,18 +124,17 @@ export class BiController {
   }
 
   @Get('surveys/imports')
-  @RequirePermission('dashboard', 'view')
+  @RequirePermission('bi', 'view')
   listImports(
     @Query('page') page: string | undefined,
     @Query('pageSize') pageSize: string | undefined,
     @CurrentUser() user: RbacUser,
   ) {
-    this.assertBiAccess(user);
     return this.bi.listImports({ page, pageSize });
   }
 
   @Post('surveys/import')
-  @RequirePermission('dashboard', 'view')
+  @RequirePermission('bi', 'upload')
   @UseGuards(ThrottlerGuard)
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @UseFilters(MulterExceptionFilter)
@@ -176,7 +166,6 @@ export class BiController {
     @Req() req: Request & { fileValidationError?: string },
     @CurrentUser() user: RbacUser,
   ) {
-    this.assertBiAccess(user);
     if (!file) {
       if (req.fileValidationError === 'BI_FILE_TYPE_INVALID') {
         throwError('BI_FILE_TYPE_INVALID');
@@ -193,7 +182,7 @@ export class BiController {
   }
 
   @Post('surveys/responses/delete')
-  @RequirePermission('dashboard', 'view')
+  @RequirePermission('bi', 'delete')
   deleteResponses(
     @Body()
     body: {
@@ -213,19 +202,6 @@ export class BiController {
     },
     @CurrentUser() user: RbacUser,
   ) {
-    this.assertBiAccess(user);
     return this.bi.deleteResponses(body);
-  }
-
-  private assertBiAccess(user: RbacUser) {
-    if (
-      !hasAnyRole(user, [
-        ROLE_COORDENACAO_CIPAVD,
-        ROLE_COMANDANTE_COMGEP,
-        ROLE_TI,
-      ])
-    ) {
-      throwError('RBAC_FORBIDDEN');
-    }
   }
 }

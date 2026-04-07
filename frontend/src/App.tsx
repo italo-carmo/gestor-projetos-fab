@@ -32,17 +32,8 @@ import { BestPracticesPage } from "./pages/BestPracticesPage";
 import { LessonsLearnedPage } from "./pages/LessonsLearnedPage";
 import { RequireAuth } from "./app/RequireAuth";
 import { RequireRoleAccess } from "./app/RequireRoleAccess";
-import {
-  hasRole,
-  hasAnyRole,
-  hasNationalManagementScope,
-  ROLE_CIPAVD,
-  ROLE_COMANDANTE_COMGEP,
-  ROLE_CPCA,
-  resolveHomePath,
-  ROLE_COORDENACAO_CIPAVD,
-  ROLE_TI,
-} from "./app/roleAccess";
+import { can } from "./app/rbac";
+import { resolveHomePath } from "./app/roleAccess";
 import { useMe } from "./api/hooks";
 
 function HomeRedirect() {
@@ -72,7 +63,7 @@ function App() {
                   path="/dashboard/smif"
                   element={
                     <RequireRoleAccess
-                      allow={(user) => hasNationalManagementScope(user)}
+                      allow={(user) => can(user, "dashboard", "view", "NATIONAL")}
                     >
                       <DashboardNationalPage />
                     </RequireRoleAccess>
@@ -94,14 +85,7 @@ function App() {
                   path="/dashboard/cpca"
                   element={
                     <RequireRoleAccess
-                      allow={(user) =>
-                        hasAnyRole(user, [
-                          ROLE_CPCA,
-                          ROLE_COORDENACAO_CIPAVD,
-                          ROLE_COMANDANTE_COMGEP,
-                          ROLE_TI,
-                        ])
-                      }
+                      allow={(user) => can(user, "cpca_cases", "view")}
                     >
                       <CpcaStatsPage />
                     </RequireRoleAccess>
@@ -111,13 +95,7 @@ function App() {
                   path="/dashboard/bi"
                   element={
                     <RequireRoleAccess
-                      allow={(user) =>
-                        hasAnyRole(user, [
-                          ROLE_COORDENACAO_CIPAVD,
-                          ROLE_COMANDANTE_COMGEP,
-                          ROLE_TI,
-                        ])
-                      }
+                      allow={(user) => can(user, "bi", "view")}
                     >
                       <BiSurveyDashboardPage />
                     </RequireRoleAccess>
@@ -132,9 +110,7 @@ function App() {
                   path="/smif-complaints"
                   element={
                     <RequireRoleAccess
-                      allow={(user) =>
-                        hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_TI])
-                      }
+                      allow={(user) => can(user, "smif_complaints", "view")}
                     >
                       <SmifComplaintsPage />
                     </RequireRoleAccess>
@@ -144,14 +120,7 @@ function App() {
                   path="/cpca-cases"
                   element={
                     <RequireRoleAccess
-                      allow={(user) =>
-                        hasAnyRole(user, [
-                          ROLE_CPCA,
-                          ROLE_COORDENACAO_CIPAVD,
-                          ROLE_COMANDANTE_COMGEP,
-                          ROLE_TI,
-                        ])
-                      }
+                      allow={(user) => can(user, "cpca_cases", "view")}
                     >
                       <CpcaCasesPage />
                     </RequireRoleAccess>
@@ -161,13 +130,7 @@ function App() {
                   path="/cpca-stats"
                   element={
                     <RequireRoleAccess
-                      allow={(user) =>
-                        hasAnyRole(user, [
-                          ROLE_COORDENACAO_CIPAVD,
-                          ROLE_COMANDANTE_COMGEP,
-                          ROLE_TI,
-                        ])
-                      }
+                      allow={(user) => can(user, "cpca_cases", "view")}
                     >
                       <CpcaStatsPage />
                     </RequireRoleAccess>
@@ -177,14 +140,7 @@ function App() {
                   path="/missions"
                   element={
                     <RequireRoleAccess
-                      allow={(user) =>
-                        hasAnyRole(user, [
-                          ROLE_CIPAVD,
-                          ROLE_COORDENACAO_CIPAVD,
-                          ROLE_COMANDANTE_COMGEP,
-                          ROLE_TI,
-                        ])
-                      }
+                      allow={(user) => can(user, "missions", "view")}
                     >
                       <MissionsPage />
                     </RequireRoleAccess>
@@ -200,10 +156,7 @@ function App() {
                   path="/calendar"
                   element={
                     <RequireRoleAccess
-                      allow={(user) =>
-                        hasNationalManagementScope(user) ||
-                        hasRole(user, ROLE_CIPAVD)
-                      }
+                      allow={(user) => can(user, "calendar", "view")}
                     >
                       <CalendarPage />
                     </RequireRoleAccess>
@@ -213,10 +166,7 @@ function App() {
                   path="/meetings"
                   element={
                     <RequireRoleAccess
-                      allow={(user) =>
-                        hasNationalManagementScope(user) ||
-                        hasRole(user, ROLE_CIPAVD)
-                      }
+                      allow={(user) => can(user, "meetings", "view")}
                     >
                       <MeetingsPage />
                     </RequireRoleAccess>
@@ -238,13 +188,7 @@ function App() {
                   path="/best-practices"
                   element={
                     <RequireRoleAccess
-                      allow={(user) =>
-                        hasAnyRole(user, [
-                          ROLE_COORDENACAO_CIPAVD,
-                          ROLE_COMANDANTE_COMGEP,
-                          ROLE_TI,
-                        ])
-                      }
+                      allow={(user) => can(user, "best_practices", "view")}
                     >
                       <BestPracticesPage />
                     </RequireRoleAccess>
@@ -255,13 +199,7 @@ function App() {
                   path="/lessons-learned"
                   element={
                     <RequireRoleAccess
-                      allow={(user) =>
-                        hasAnyRole(user, [
-                          ROLE_COORDENACAO_CIPAVD,
-                          ROLE_COMANDANTE_COMGEP,
-                          ROLE_TI,
-                        ])
-                      }
+                      allow={(user) => can(user, "lessons_learned", "view")}
                     >
                       <LessonsLearnedPage />
                     </RequireRoleAccess>
@@ -271,9 +209,7 @@ function App() {
                   path="/documents"
                   element={
                     <RequireRoleAccess
-                      allow={(user) =>
-                        hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_TI])
-                      }
+                      allow={(user) => can(user, "documents", "view")}
                     >
                       <DocumentsPage />
                     </RequireRoleAccess>
@@ -285,9 +221,7 @@ function App() {
                   path="/audit"
                   element={
                     <RequireRoleAccess
-                      allow={(user) =>
-                        hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_TI])
-                      }
+                      allow={(user) => can(user, "audit_logs", "view")}
                     >
                       <AuditPage />
                     </RequireRoleAccess>
@@ -319,7 +253,7 @@ function App() {
                   path="/admin/oms"
                   element={
                     <RequireRoleAccess
-                      allow={(user) => hasAnyRole(user, [ROLE_TI])}
+                      allow={(user) => can(user, "localities", "view")}
                     >
                       <OmsAdminPage />
                     </RequireRoleAccess>

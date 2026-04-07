@@ -4,14 +4,7 @@ import { AuditService } from '../audit/audit.service';
 import { throwError } from '../common/http-error';
 import { sanitizeText } from '../common/sanitize';
 import { parsePagination } from '../common/pagination';
-import {
-  hasAnyRole,
-  hasRole,
-  ROLE_COMANDANTE_COMGEP,
-  ROLE_COORDENACAO_CIPAVD,
-  ROLE_CPCA,
-  ROLE_TI,
-} from '../rbac/role-access';
+import { hasPermission } from '../rbac/role-access';
 import type { RbacUser } from '../rbac/rbac.types';
 import { CreateCpcaCaseDto } from './dto/create-cpca-case.dto';
 import { UpdateCpcaCaseDto } from './dto/update-cpca-case.dto';
@@ -1303,21 +1296,15 @@ export class CpcaService {
   }
 
   private getScopeConstraints(user?: RbacUser) {
-    if (!user || !this.hasWorkflowAccess(user)) {
+    if (!user) {
       throwError('RBAC_FORBIDDEN');
     }
 
-    if (
-      hasAnyRole(user, [
-        ROLE_COORDENACAO_CIPAVD,
-        ROLE_COMANDANTE_COMGEP,
-        ROLE_TI,
-      ])
-    ) {
+    if (this.hasNationalScope(user)) {
       return {};
     }
 
-    if (hasRole(user, ROLE_CPCA)) {
+    if (this.hasLocalityScope(user)) {
       if (!user.localityId) {
         throwError('RBAC_FORBIDDEN');
       }
@@ -1327,13 +1314,22 @@ export class CpcaService {
     throwError('RBAC_FORBIDDEN');
   }
 
-  private hasWorkflowAccess(user?: RbacUser) {
-    return hasAnyRole(user, [
-      ROLE_CPCA,
-      ROLE_COORDENACAO_CIPAVD,
-      ROLE_COMANDANTE_COMGEP,
-      ROLE_TI,
-    ]);
+  private hasCasePermission(
+    user: RbacUser | undefined,
+    scope?: 'NATIONAL' | 'LOCALITY',
+  ) {
+    if (!user) return false;
+    return ['view', 'create', 'update', 'comment', 'delete'].some((action) =>
+      hasPermission(user, 'cpca_cases', action, scope),
+    );
+  }
+
+  private hasNationalScope(user?: RbacUser) {
+    return this.hasCasePermission(user, 'NATIONAL');
+  }
+
+  private hasLocalityScope(user?: RbacUser) {
+    return this.hasCasePermission(user, 'LOCALITY');
   }
 
   private assertCaseAccess(localityId: string, user?: RbacUser) {

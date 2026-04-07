@@ -35,7 +35,6 @@ import { SkeletonState } from "../components/states/SkeletonState";
 import { useToast } from "../app/toast";
 import { parseApiError } from "../app/apiErrors";
 import { can } from "../app/rbac";
-import { hasAnyRole, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from "../app/roleAccess";
 import {
   normalizeLocalityName,
   selectTargetLocalities,
@@ -65,7 +64,10 @@ export function ElosPage() {
   const createOrgChartAssignment = useCreateOrgChartAssignment();
   const updateOrgChartAssignment = useUpdateOrgChartAssignment();
   const deleteOrgChartAssignment = useDeleteOrgChartAssignment();
-  const canManageOrgChart = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]);
+  const canManageOrgChart =
+    can(me, "org_chart", "create") ||
+    can(me, "org_chart", "update") ||
+    can(me, "org_chart", "delete");
 
   const gradMasterByLocalityId = useMemo(() => {
     const map = new Map<string, string>();

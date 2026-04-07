@@ -12,11 +12,8 @@ import type { RbacUser } from '../rbac/rbac.types';
 import { sanitizeText } from '../common/sanitize';
 import { parsePagination } from '../common/pagination';
 import {
-  hasAnyRole,
+  hasPermission,
   resolveAccessProfile,
-  ROLE_CIPAVD,
-  ROLE_COORDENACAO_CIPAVD,
-  ROLE_TI,
 } from '../rbac/role-access';
 import { selectTargetLocalities } from '../common/priority-localities';
 
@@ -1980,7 +1977,7 @@ export class ActivitiesService {
 
   async signReport(activityId: string, user?: RbacUser) {
     if (!user?.id) throwError('RBAC_FORBIDDEN');
-    if (!hasAnyRole(user, [ROLE_CIPAVD, ROLE_COORDENACAO_CIPAVD, ROLE_TI])) {
+    if (!hasPermission(user, 'reports', 'approve')) {
       throwError('RBAC_FORBIDDEN');
     }
 
@@ -3133,7 +3130,7 @@ export class ActivitiesService {
     if (!user?.id) throwError('RBAC_FORBIDDEN');
     const scope = (activityOrScope as { scope?: string } | null)?.scope;
     if (scope === 'CIPAVD') {
-      if (hasAnyRole(user, [ROLE_CIPAVD, ROLE_COORDENACAO_CIPAVD, ROLE_TI])) return;
+      if (hasPermission(user, 'task_instances', 'update')) return;
       throwError('RBAC_FORBIDDEN');
     }
     const profile = resolveAccessProfile(user);

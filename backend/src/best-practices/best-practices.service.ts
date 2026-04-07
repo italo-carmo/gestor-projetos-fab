@@ -4,13 +4,7 @@ import { AuditService } from '../audit/audit.service';
 import { throwError } from '../common/http-error';
 import { sanitizeText } from '../common/sanitize';
 import { PrismaService } from '../prisma/prisma.service';
-import {
-  hasAnyRole,
-  hasRole,
-  ROLE_COMANDANTE_COMGEP,
-  ROLE_COORDENACAO_CIPAVD,
-  ROLE_TI,
-} from '../rbac/role-access';
+import { hasPermission } from '../rbac/role-access';
 import type { RbacUser } from '../rbac/rbac.types';
 
 @Injectable()
@@ -244,31 +238,25 @@ export class BestPracticesService {
   }
 
   private assertViewerAccess(user?: RbacUser) {
-    if (
-      !hasAnyRole(user, [
-        ROLE_COORDENACAO_CIPAVD,
-        ROLE_TI,
-        ROLE_COMANDANTE_COMGEP,
-      ])
-    ) {
+    if (!hasPermission(user, 'best_practices', 'view')) {
       throwError('RBAC_FORBIDDEN');
     }
   }
 
   private assertUpdaterAccess(user?: RbacUser) {
-    if (!hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_TI])) {
+    if (!hasPermission(user, 'best_practices', 'update')) {
       throwError('RBAC_FORBIDDEN');
     }
   }
 
   private assertDeleteAccess(user?: RbacUser) {
-    if (!hasRole(user, ROLE_COORDENACAO_CIPAVD)) {
+    if (!hasPermission(user, 'best_practices', 'delete')) {
       throwError('RBAC_FORBIDDEN');
     }
   }
 
   private assertCreatorAccess(user?: RbacUser) {
-    if (!hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_TI])) {
+    if (!hasPermission(user, 'best_practices', 'create')) {
       throwError('RBAC_FORBIDDEN');
     }
   }
@@ -328,7 +316,7 @@ export class BestPracticesService {
     payload: { name: string; colorHex: string; textColorHex?: string },
     user?: RbacUser,
   ) {
-    this.assertTypeEditorAccess(user);
+    this.assertTypeEditorAccess(user, 'create');
     if (!(this.prisma as any).bestPracticeType) {
       throwError('VALIDATION_ERROR', {
         field: 'type',
@@ -375,7 +363,7 @@ export class BestPracticesService {
     payload: { name?: string; colorHex?: string; textColorHex?: string },
     user?: RbacUser,
   ) {
-    this.assertTypeEditorAccess(user);
+    this.assertTypeEditorAccess(user, 'update');
     if (!(this.prisma as any).bestPracticeType) {
       throwError('VALIDATION_ERROR', {
         field: 'type',
@@ -431,7 +419,7 @@ export class BestPracticesService {
   }
 
   async removeType(id: string, user?: RbacUser) {
-    this.assertTypeEditorAccess(user);
+    this.assertTypeEditorAccess(user, 'delete');
     if (!(this.prisma as any).bestPracticeType) {
       throwError('VALIDATION_ERROR', {
         field: 'type',
@@ -465,8 +453,11 @@ export class BestPracticesService {
     return { ok: true };
   }
 
-  private assertTypeEditorAccess(user?: RbacUser) {
-    if (!hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_TI])) {
+  private assertTypeEditorAccess(
+    user: RbacUser | undefined,
+    action: 'create' | 'update' | 'delete',
+  ) {
+    if (!hasPermission(user, 'best_practice_types', action)) {
       throwError('RBAC_FORBIDDEN');
     }
   }

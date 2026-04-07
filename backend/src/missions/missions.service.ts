@@ -7,13 +7,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { throwError } from '../common/http-error';
 import { AuditService } from '../audit/audit.service';
 import type { RbacUser } from '../rbac/rbac.types';
-import {
-  hasAnyRole,
-  ROLE_CIPAVD,
-  ROLE_COMANDANTE_COMGEP,
-  ROLE_COORDENACAO_CIPAVD,
-  ROLE_TI,
-} from '../rbac/role-access';
+import { hasAnyPermission, hasPermission } from '../rbac/role-access';
 import { sanitizeText } from '../common/sanitize';
 import { parsePagination } from '../common/pagination';
 import { FabLdapService } from '../ldap/fab-ldap.service';
@@ -2512,11 +2506,13 @@ export class MissionsService {
 
   private assertMissionAccess(user?: RbacUser) {
     if (
-      hasAnyRole(user, [
-        ROLE_CIPAVD,
-        ROLE_COORDENACAO_CIPAVD,
-        ROLE_COMANDANTE_COMGEP,
-        ROLE_TI,
+      hasAnyPermission(user, [
+        { resource: 'missions', action: 'view' },
+        { resource: 'missions', action: 'create' },
+        { resource: 'missions', action: 'update' },
+        { resource: 'missions', action: 'delete' },
+        { resource: 'missions', action: 'upload' },
+        { resource: 'missions', action: 'download' },
       ])
     ) {
       return;
@@ -2525,7 +2521,12 @@ export class MissionsService {
   }
 
   private assertMissionChecklistEditAccess(user?: RbacUser) {
-    if (hasAnyRole(user, [ROLE_CIPAVD, ROLE_COORDENACAO_CIPAVD, ROLE_TI])) {
+    if (
+      hasAnyPermission(user, [
+        { resource: 'missions', action: 'update' },
+        { resource: 'missions', action: 'upload' },
+      ])
+    ) {
       return;
     }
     throwError('RBAC_FORBIDDEN');
@@ -2541,7 +2542,7 @@ export class MissionsService {
   }
 
   private assertMissionChecklistConfigAccess(user?: RbacUser) {
-    if (hasAnyRole(user, [ROLE_CIPAVD, ROLE_COORDENACAO_CIPAVD, ROLE_TI])) {
+    if (hasPermission(user, 'missions', 'update')) {
       return;
     }
     throwError('RBAC_FORBIDDEN');

@@ -44,21 +44,12 @@ import InsightsRoundedIcon from "@mui/icons-material/InsightsRounded";
 import PolicyRoundedIcon from "@mui/icons-material/PolicyRounded";
 import PhotoLibraryRoundedIcon from "@mui/icons-material/PhotoLibraryRounded";
 import LightbulbRoundedIcon from "@mui/icons-material/LightbulbRounded";
-import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { useDebounce } from "../app/useDebounce";
 import { can } from "../app/rbac";
 import {
   canonicalRoleName,
-  hasRole,
-  hasAnyRole,
-  hasNationalManagementScope,
   normalizeRoleName,
-  resolveHomePath,
-  ROLE_CIPAVD,
-  ROLE_COMANDANTE_COMGEP,
-  ROLE_CPCA,
-  ROLE_COORDENACAO_CIPAVD,
-  ROLE_TI,
 } from "../app/roleAccess";
 import {
   useLocalities,
@@ -240,22 +231,8 @@ const navSections: NavSection[] = [
   },
 ];
 
-const CIPAVD_ALLOWED_PATH_PREFIXES = [
-  "/dashboard/cipavd",
-  "/dashboard/executive",
-  "/tasks",
-  "/meetings",
-  "/org-chart",
-  "/gantt",
-  "/calendar",
-  "/missions",
-  "/activities-cipavd",
-  "/notices",
-];
-
 export function AppShell({ children }: { children: ReactNode }) {
   const location = useLocation();
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("lg"));
@@ -324,11 +301,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   const switchableRoleCount = roleOptions.filter((role) =>
     Boolean(role.roleId),
   ).length;
-  const canUseGlobalLocalityFilter = hasAnyRole(me, [
-    ROLE_COORDENACAO_CIPAVD,
-    ROLE_COMANDANTE_COMGEP,
-    ROLE_TI,
-  ]);
+  const canUseGlobalLocalityFilter =
+    can(me, "dashboard", "view", "NATIONAL") ||
+    can(me, "localities", "view", "NATIONAL");
   const availableGlobalLocalities = useMemo(
     () =>
       selectTargetLocalities((localitiesQuery.data?.items ?? []) as any[])
@@ -362,11 +337,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   const sidebarWidth = sidebarCollapsed
     ? drawerCollapsedWidth
     : drawerExpandedWidth;
-  const isCipavdProfile = hasRole(me, ROLE_CIPAVD);
-  const isCipavdPathAllowed = CIPAVD_ALLOWED_PATH_PREFIXES.some(
-    (prefix) =>
-      location.pathname === prefix || location.pathname.startsWith(`${prefix}/`),
-  );
   const isTasksPath =
     location.pathname === "/tasks" || location.pathname.startsWith("/tasks/");
 
@@ -378,77 +348,35 @@ export function AppShell({ children }: { children: ReactNode }) {
   };
 
   const canSeeNavItem = (item: NavItem) => {
-    const isNationalManager = hasNationalManagementScope(me);
-    const isBiRole = hasAnyRole(me, [
-      ROLE_COORDENACAO_CIPAVD,
-      ROLE_COMANDANTE_COMGEP,
-      ROLE_TI,
-    ]);
-    const canSeeCommissionTiBoards = hasAnyRole(me, [
-      ROLE_CIPAVD,
-      ROLE_COORDENACAO_CIPAVD,
-      ROLE_TI,
-    ]);
     if (item.to === "/dashboard/smif") {
-      return isNationalManager && can(me, "dashboard", "view");
+      return can(me, "dashboard", "view", "NATIONAL");
     }
     if (item.to === "/dashboard/cipavd") {
       return (
-        hasAnyRole(me, [
-          ROLE_CIPAVD,
-          ROLE_COORDENACAO_CIPAVD,
-          ROLE_COMANDANTE_COMGEP,
-          ROLE_TI,
-        ]) &&
         can(me, "dashboard", "view") &&
         (me?.executive_hide_pii || can(me, "roles", "view"))
       );
     }
     if (item.to === "/dashboard/cpca") {
-      return (
-        hasAnyRole(me, [
-          ROLE_CPCA,
-          ROLE_COORDENACAO_CIPAVD,
-          ROLE_COMANDANTE_COMGEP,
-          ROLE_TI,
-        ]) && can(me, "cpca_cases", "view")
-      );
+      return can(me, "cpca_cases", "view");
     }
     if (item.to === "/dashboard/bi") {
-      return isBiRole && can(me, "dashboard", "view");
+      return can(me, "bi", "view");
     }
     if (item.to === "/smif-complaints") {
-      return hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]);
+      return can(me, "smif_complaints", "view");
     }
     if (item.to === "/missions") {
-      return hasAnyRole(me, [
-        ROLE_CIPAVD,
-        ROLE_COORDENACAO_CIPAVD,
-        ROLE_COMANDANTE_COMGEP,
-        ROLE_TI,
-      ]);
+      return can(me, "missions", "view");
     }
     if (item.to === "/cpca-cases") {
-      return (
-        hasAnyRole(me, [
-          ROLE_CPCA,
-          ROLE_COORDENACAO_CIPAVD,
-          ROLE_COMANDANTE_COMGEP,
-          ROLE_TI,
-        ]) && can(me, "cpca_cases", "view")
-      );
+      return can(me, "cpca_cases", "view");
     }
     if (item.to === "/cpca-stats") {
-      return (
-        hasAnyRole(me, [
-          ROLE_COORDENACAO_CIPAVD,
-          ROLE_COMANDANTE_COMGEP,
-          ROLE_TI,
-        ]) && can(me, "cpca_cases", "view")
-      );
+      return can(me, "cpca_cases", "view");
     }
     if (item.to === "/notices") {
-      return canSeeCommissionTiBoards && can(me, "notices", "view");
+      return can(me, "notices", "view");
     }
     if (item.to === "/elos") {
       return can(me, "elos", "view");
@@ -457,25 +385,19 @@ export function AppShell({ children }: { children: ReactNode }) {
       return can(me, "org_chart", "view");
     }
     if (item.to === "/social-communication") {
-      return !isCipavdProfile;
+      return can(me, "social_communication", "view");
     }
     if (item.to === "/library") {
-      return !isCipavdProfile;
+      return can(me, "library", "view");
     }
     if (item.to === "/best-practices") {
-      return (
-        hasAnyRole(me, [
-          ROLE_COORDENACAO_CIPAVD,
-          ROLE_TI,
-          ROLE_COMANDANTE_COMGEP,
-        ]) && can(me, "best_practices", "view")
-      );
+      return can(me, "best_practices", "view");
     }
     if (item.to === "/activities" || item.to === "/activities-cipavd") {
       return can(me, "task_instances", "view");
     }
     if (item.to === "/meetings") {
-      return canSeeCommissionTiBoards && can(me, "meetings", "view");
+      return can(me, "meetings", "view");
     }
     if (item.to === "/tasks") {
       return can(me, "task_instances", "view");
@@ -490,7 +412,16 @@ export function AppShell({ children }: { children: ReactNode }) {
       return can(me, "localities", "view") || can(me, "dashboard", "view");
     }
     if (item.to === "/admin/oms") {
-      return hasRole(me, ROLE_TI) && can(me, "localities", "view");
+      return can(me, "localities", "view");
+    }
+    if (item.to === "/admin") {
+      return (
+        can(me, "localities", "view") ||
+        can(me, "specialties", "view") ||
+        can(me, "postos", "view") ||
+        can(me, "phases", "view") ||
+        can(me, "elo_roles", "view")
+      );
     }
     if (
       item.to === "/admin/rbac" ||
@@ -498,30 +429,24 @@ export function AppShell({ children }: { children: ReactNode }) {
       item.to === "/admin/phases" ||
       item.to === "/admin/elo-roles"
     ) {
-      return hasRole(me, ROLE_TI);
+      return (
+        can(me, "users", "view") ||
+        can(me, "roles", "view") ||
+        can(me, "roles", "permissions")
+      );
+    }
+    if (item.to === "/audit") {
+      return can(me, "audit_logs", "view");
     }
     return true;
   };
 
   const visibleNavSections = navSections
-    .filter((section) => !isCipavdProfile || section.id === "cipavd")
     .map((section) => ({
       ...section,
       items: section.items.filter(canSeeNavItem),
     }))
     .filter((section) => section.items.length > 0);
-
-  useEffect(() => {
-    if (!isCipavdProfile) return;
-    if (isCipavdPathAllowed || location.pathname === "/") return;
-    navigate(resolveHomePath(me), { replace: true });
-  }, [
-    isCipavdPathAllowed,
-    isCipavdProfile,
-    location.pathname,
-    me,
-    navigate,
-  ]);
 
   useEffect(() => {
     const fromUrl = (searchParams.get(GLOBAL_LOCALITY_QUERY_PARAM) ?? "").trim();
@@ -714,13 +639,9 @@ export function AppShell({ children }: { children: ReactNode }) {
     ],
   );
 
-  const canSeeDocuments = hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]);
-  const canSeeNotices =
-    hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]) &&
-    can(me, "notices", "view");
-  const canSeeMeetings =
-    hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]) &&
-    can(me, "meetings", "view");
+  const canSeeNotices = can(me, "notices", "view");
+  const canSeeMeetings = can(me, "meetings", "view");
+  const canSeeDocuments = can(me, "documents", "view");
   const totalSearchResults =
     (searchQuery.data?.tasks?.length ?? 0) +
     (canSeeNotices ? (searchQuery.data?.notices?.length ?? 0) : 0) +

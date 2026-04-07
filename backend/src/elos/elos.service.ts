@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { PermissionScope, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { RbacUser } from '../rbac/rbac.types';
 import { throwError } from '../common/http-error';
@@ -7,12 +7,9 @@ import { sanitizeText } from '../common/sanitize';
 import { AuditService } from '../audit/audit.service';
 import { parsePagination } from '../common/pagination';
 import {
-  hasAnyRole,
-  hasNationalManagementScope,
+  hasPermission,
   normalizeRoleName,
-  ROLE_CIPAVD,
   ROLE_COORDENACAO_CIPAVD,
-  ROLE_TI,
 } from '../rbac/role-access';
 import { AuthService } from '../auth/auth.service';
 
@@ -495,7 +492,7 @@ export class ElosService {
   }
 
   async addCommissionMember(payload: { userId: string }, user?: RbacUser) {
-    this.assertCanManageOrgChart(user);
+    this.assertCanManageOrgChart(user, 'create');
 
     const userId = String(payload.userId ?? '').trim();
     if (!userId) {
@@ -570,7 +567,7 @@ export class ElosService {
   }
 
   async removeCommissionMember(payload: { userId: string }, user?: RbacUser) {
-    this.assertCanManageOrgChart(user);
+    this.assertCanManageOrgChart(user, 'delete');
 
     const userId = String(payload.userId ?? '').trim();
     if (!userId) {
@@ -622,7 +619,7 @@ export class ElosService {
     },
     user?: RbacUser,
   ) {
-    this.assertCanManageOrgChart(user);
+    this.assertCanManageOrgChart(user, 'update');
 
     const userId = String(payload.userId ?? '').trim();
     if (!userId) {
@@ -701,7 +698,7 @@ export class ElosService {
     payload: { userIds: string[] },
     user?: RbacUser,
   ) {
-    this.assertCanManageOrgChart(user);
+    this.assertCanManageOrgChart(user, 'update');
     const commissionRole = await this.getCommissionRoleOrFail();
     const normalizedIds = Array.from(
       new Set(
@@ -762,7 +759,7 @@ export class ElosService {
     },
     user?: RbacUser,
   ) {
-    this.assertCanManageOrgChart(user);
+    this.assertCanManageOrgChart(user, 'create');
     return this.create(
       {
         localityId: payload.localityId,
@@ -789,7 +786,7 @@ export class ElosService {
     },
     user?: RbacUser,
   ) {
-    this.assertCanManageOrgChart(user);
+    this.assertCanManageOrgChart(user, 'update');
     return this.update(
       id,
       {
@@ -805,13 +802,13 @@ export class ElosService {
   }
 
   async removeOrgChartAssignment(id: string, user?: RbacUser) {
-    this.assertCanManageOrgChart(user);
+    this.assertCanManageOrgChart(user, 'delete');
     return this.remove(id, user);
   }
 
   private getScopeConstraints(user?: RbacUser) {
     if (!user) return {};
-    if (hasNationalManagementScope(user)) return {};
+    if (this.hasNationalOrgChartScope(user)) return {};
     return {
       localityId: user.localityId ?? undefined,
     };
@@ -824,10 +821,22 @@ export class ElosService {
     }
   }
 
-  private assertCanManageOrgChart(user?: RbacUser) {
-    if (!hasAnyRole(user, [ROLE_CIPAVD, ROLE_COORDENACAO_CIPAVD, ROLE_TI])) {
+  private assertCanManageOrgChart(
+    user: RbacUser | undefined,
+    action: 'create' | 'update' | 'delete',
+  ) {
+    if (!hasPermission(user, 'org_chart', action)) {
       throwError('RBAC_FORBIDDEN');
     }
+  }
+
+  private hasNationalOrgChartScope(user?: RbacUser) {
+    return (
+      hasPermission(user, 'org_chart', 'view', PermissionScope.NATIONAL) ||
+      hasPermission(user, 'org_chart', 'create', PermissionScope.NATIONAL) ||
+      hasPermission(user, 'org_chart', 'update', PermissionScope.NATIONAL) ||
+      hasPermission(user, 'org_chart', 'delete', PermissionScope.NATIONAL)
+    );
   }
 
   private async getCommissionRole() {

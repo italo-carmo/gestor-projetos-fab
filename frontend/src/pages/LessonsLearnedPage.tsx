@@ -16,9 +16,6 @@ import {
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import EditRoundedIcon from '@mui/icons-material/EditRounded';
-import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded';
-import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
-import ExpandLessRoundedIcon from '@mui/icons-material/ExpandLessRounded';
 import { useMemo, useState } from 'react';
 import {
   useCreateLessonLearned,
@@ -33,7 +30,6 @@ import {
 } from '../api/hooks';
 import { parseApiError } from '../app/apiErrors';
 import { can } from '../app/rbac';
-import { hasAnyRole, ROLE_COMANDANTE_COMGEP, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from '../app/roleAccess';
 import { useToast } from '../app/toast';
 import { EmptyState } from '../components/states/EmptyState';
 import { ErrorState } from '../components/states/ErrorState';
@@ -59,15 +55,12 @@ type LessonPost = {
 export function LessonsLearnedPage() {
   const toast = useToast();
   const { data: me } = useMe();
-  const canView =
-    hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI, ROLE_COMANDANTE_COMGEP]) &&
-    can(me, 'lessons_learned', 'view');
+  const canView = can(me, 'lessons_learned', 'view');
   const canManage =
-    hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]) &&
-    can(me, 'lessons_learned', 'create');
-  const canManageTypes =
-    hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_TI]) &&
-    can(me, 'lessons_learned_types', 'create');
+    can(me, 'lessons_learned', 'create') ||
+    can(me, 'lessons_learned', 'update') ||
+    can(me, 'lessons_learned', 'delete');
+  const canManageTypes = canManage;
 
   const typesQuery = useLessonLearnedTypes(canView);
   const lessonsQuery = useLessonsLearned({}, canView);
@@ -603,4 +596,3 @@ export function LessonsLearnedPage() {
     </Box>
   );
 }
-

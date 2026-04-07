@@ -1,13 +1,8 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../common/current-user.decorator';
-import { throwError } from '../common/http-error';
+import { RequirePermission } from '../rbac/require-permission.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
-import {
-  hasAnyRole,
-  ROLE_COORDENACAO_CIPAVD,
-  ROLE_TI,
-} from '../rbac/role-access';
 import type { RbacUser } from '../rbac/rbac.types';
 import { AuditService } from './audit.service';
 
@@ -17,14 +12,14 @@ export class AuditController {
   constructor(private readonly audit: AuditService) {}
 
   @Get('last-logins')
+  @RequirePermission('audit_logs', 'view')
   lastLogins(@CurrentUser() user: RbacUser) {
-    if (!hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_TI])) {
-      throwError('RBAC_FORBIDDEN');
-    }
+    void user;
     return this.audit.lastLoginsByUser();
   }
 
   @Get()
+  @RequirePermission('audit_logs', 'view')
   list(
     @Query('resource') resource: string | undefined,
     @Query('userId') userId: string | undefined,
@@ -36,9 +31,7 @@ export class AuditController {
     @Query('pageSize') pageSize: string | undefined,
     @CurrentUser() user: RbacUser,
   ) {
-    if (!hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_TI])) {
-      throwError('RBAC_FORBIDDEN');
-    }
+    void user;
     return this.audit.list({
       resource,
       userId,

@@ -45,14 +45,6 @@ import { DueBadge } from "../components/chips/DueBadge";
 import { TaskDetailsDrawer } from "../components/tasks/TaskDetailsDrawer";
 import { api } from "../api/client";
 import { can } from "../app/rbac";
-import {
-  hasAnyRole,
-  ROLE_CIPAVD,
-  ROLE_COMISSAO_CIPAVD,
-  ROLE_COMANDANTE_COMGEP,
-  ROLE_COORDENACAO_CIPAVD,
-  ROLE_TI,
-} from "../app/roleAccess";
 import { DataGrid } from "@mui/x-data-grid";
 import type { GridColDef, GridRowSelectionModel } from "@mui/x-data-grid";
 import { ptBR as dataGridPtBR } from "@mui/x-data-grid/locales";
@@ -134,20 +126,10 @@ export function TasksPage() {
     page: "1",
     pageSize: "500",
   });
-  const canManageTaskDataByRole = hasAnyRole(me, [
-    ROLE_CIPAVD,
-    ROLE_COORDENACAO_CIPAVD,
-    ROLE_COMISSAO_CIPAVD,
-    ROLE_COMANDANTE_COMGEP,
-    ROLE_TI,
-  ]);
-  const canManageTaskAssignments =
-    can(me, "task_instances", "assign") && canManageTaskDataByRole;
-  const canManageTaskData =
-    can(me, "task_instances", "update") && canManageTaskDataByRole;
-  const canCreateTask = canManageTaskDataByRole;
-  const canGenerateTaskInstances =
-    can(me, "task_templates", "create") && canManageTaskDataByRole;
+  const canManageTaskAssignments = can(me, "task_instances", "assign");
+  const canManageTaskData = can(me, "task_instances", "update");
+  const canCreateTask = can(me, "task_instances", "create");
+  const canGenerateTaskInstances = can(me, "task_templates", "create");
   const canViewUsers = can(me, "users", "view");
   const usersQuery = useUsers(canViewUsers);
   const phasesQuery = usePhases();

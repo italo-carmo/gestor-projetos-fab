@@ -4,12 +4,7 @@ import { AuditService } from '../audit/audit.service';
 import { throwError } from '../common/http-error';
 import { sanitizeText } from '../common/sanitize';
 import { PrismaService } from '../prisma/prisma.service';
-import {
-  hasAnyRole,
-  ROLE_COMANDANTE_COMGEP,
-  ROLE_COORDENACAO_CIPAVD,
-  ROLE_TI,
-} from '../rbac/role-access';
+import { hasPermission } from '../rbac/role-access';
 import type { RbacUser } from '../rbac/rbac.types';
 
 @Injectable()
@@ -61,7 +56,7 @@ export class LessonsLearnedService {
     payload: { title: string; content: string; typeId: string },
     user?: RbacUser,
   ) {
-    this.assertEditorAccess(user);
+    this.assertEditorAccess(user, 'create');
 
     const title = this.normalizeRequiredText(payload.title, 'title', 140);
     const content = this.normalizeRequiredText(
@@ -103,7 +98,7 @@ export class LessonsLearnedService {
     payload: { title?: string; content?: string; typeId?: string },
     user?: RbacUser,
   ) {
-    this.assertEditorAccess(user);
+    this.assertEditorAccess(user, 'update');
     const existing = await this.prisma.lessonLearnedPost.findUnique({
       where: { id },
     });
@@ -145,7 +140,7 @@ export class LessonsLearnedService {
   }
 
   async remove(id: string, user?: RbacUser) {
-    this.assertEditorAccess(user);
+    this.assertEditorAccess(user, 'delete');
     const existing = await this.prisma.lessonLearnedPost.findUnique({
       where: { id },
     });
@@ -166,7 +161,7 @@ export class LessonsLearnedService {
     payload: { name: string; colorHex: string; textColorHex?: string },
     user?: RbacUser,
   ) {
-    this.assertEditorAccess(user);
+    this.assertEditorAccess(user, 'create');
     const name = this.normalizeRequiredText(payload.name, 'name', 80);
     const colorHex = this.normalizeColorHex(payload.colorHex);
     const textColorHex = payload.textColorHex
@@ -204,7 +199,7 @@ export class LessonsLearnedService {
     payload: { name?: string; colorHex?: string; textColorHex?: string },
     user?: RbacUser,
   ) {
-    this.assertEditorAccess(user);
+    this.assertEditorAccess(user, 'update');
     const existing = await this.prisma.lessonLearnedType.findUnique({
       where: { id },
     });
@@ -257,7 +252,7 @@ export class LessonsLearnedService {
   }
 
   async removeType(id: string, user?: RbacUser) {
-    this.assertEditorAccess(user);
+    this.assertEditorAccess(user, 'delete');
     const existing = await this.prisma.lessonLearnedType.findUnique({
       where: { id },
     });
@@ -283,19 +278,16 @@ export class LessonsLearnedService {
   }
 
   private assertViewerAccess(user?: RbacUser) {
-    if (
-      !hasAnyRole(user, [
-        ROLE_COORDENACAO_CIPAVD,
-        ROLE_TI,
-        ROLE_COMANDANTE_COMGEP,
-      ])
-    ) {
+    if (!hasPermission(user, 'lessons_learned', 'view')) {
       throwError('RBAC_FORBIDDEN');
     }
   }
 
-  private assertEditorAccess(user?: RbacUser) {
-    if (!hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_TI])) {
+  private assertEditorAccess(
+    user: RbacUser | undefined,
+    action: 'create' | 'update' | 'delete',
+  ) {
+    if (!hasPermission(user, 'lessons_learned', action)) {
       throwError('RBAC_FORBIDDEN');
     }
   }

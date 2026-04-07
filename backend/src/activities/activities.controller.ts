@@ -67,6 +67,7 @@ export class ActivitiesController {
   }
 
   @Post()
+  @RequirePermission('task_instances', 'create')
   create(@Body() dto: CreateActivityDto, @CurrentUser() user: RbacUser) {
     return this.activities.create(dto, user);
   }
@@ -97,6 +98,7 @@ export class ActivitiesController {
   }
 
   @Put(':id')
+  @RequirePermission('task_instances', 'update')
   update(
     @Param('id') id: string,
     @Body() dto: UpdateActivityDto,
@@ -106,6 +108,7 @@ export class ActivitiesController {
   }
 
   @Put('batch/status')
+  @RequirePermission('task_instances', 'update')
   batchStatus(
     @Body() body: { ids: string[]; status: string },
     @CurrentUser() user: RbacUser,
@@ -118,6 +121,7 @@ export class ActivitiesController {
   }
 
   @Put('batch/specialty')
+  @RequirePermission('task_instances', 'update')
   batchSpecialty(
     @Body()
     body: {
@@ -135,6 +139,7 @@ export class ActivitiesController {
   }
 
   @Put('batch/responsible')
+  @RequirePermission('task_instances', 'update')
   batchResponsible(
     @Body() body: { ids: string[]; responsibleUserId: string | null },
     @CurrentUser() user: RbacUser,
@@ -147,11 +152,13 @@ export class ActivitiesController {
   }
 
   @Post('batch/delete')
+  @RequirePermission('task_instances', 'delete')
   batchDelete(@Body() body: { ids: string[] }, @CurrentUser() user: RbacUser) {
     return this.activities.batchDelete(body.ids ?? [], user);
   }
 
   @Post('batch/replicate')
+  @RequirePermission('task_instances', 'create')
   batchReplicate(
     @Body()
     body: {
@@ -182,6 +189,7 @@ export class ActivitiesController {
   }
 
   @Put(':id/status')
+  @RequirePermission('task_instances', 'update')
   updateStatus(
     @Param('id') id: string,
     @Body() dto: UpdateActivityStatusDto,
@@ -191,6 +199,7 @@ export class ActivitiesController {
   }
 
   @Delete(':id')
+  @RequirePermission('task_instances', 'delete')
   remove(@Param('id') id: string, @CurrentUser() user: RbacUser) {
     return this.activities.delete(id, user);
   }
@@ -202,6 +211,7 @@ export class ActivitiesController {
   }
 
   @Post(':id/comments')
+  @RequirePermission('task_instances', 'update')
   addComment(
     @Param('id') id: string,
     @Body() dto: ActivityCommentDto,
@@ -223,6 +233,7 @@ export class ActivitiesController {
   }
 
   @Post(':id/schedule')
+  @RequirePermission('task_instances', 'update')
   createScheduleItem(
     @Param('id') id: string,
     @Body() dto: CreateActivityScheduleItemDto,
@@ -232,6 +243,7 @@ export class ActivitiesController {
   }
 
   @Put(':id/schedule/:itemId')
+  @RequirePermission('task_instances', 'update')
   updateScheduleItem(
     @Param('id') id: string,
     @Param('itemId') itemId: string,
@@ -242,6 +254,7 @@ export class ActivitiesController {
   }
 
   @Delete(':id/schedule/:itemId')
+  @RequirePermission('task_instances', 'update')
   deleteScheduleItem(
     @Param('id') id: string,
     @Param('itemId') itemId: string,

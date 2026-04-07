@@ -23,7 +23,7 @@ import {
   useUpdateOrgChartCommissionMember,
 } from '../api/hooks';
 import { parseApiError } from '../app/apiErrors';
-import { hasAnyRole, ROLE_CIPAVD, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from '../app/roleAccess';
+import { can } from '../app/rbac';
 import { useToast } from '../app/toast';
 import { ConfirmDialog } from '../components/dialogs/ConfirmDialog';
 import { ErrorState } from '../components/states/ErrorState';
@@ -174,7 +174,10 @@ function CommissionMemberCard({
 export function OrgChartPage() {
   const toast = useToast();
   const { data: me } = useMe();
-  const canManage = hasAnyRole(me, [ROLE_CIPAVD, ROLE_COORDENACAO_CIPAVD, ROLE_TI]);
+  const canManage =
+    can(me, 'org_chart', 'create') ||
+    can(me, 'org_chart', 'update') ||
+    can(me, 'org_chart', 'delete');
 
   const commissionMembersQuery = useOrgChartCommissionMembers({});
   const addCommissionMember = useAddOrgChartCommissionMember();

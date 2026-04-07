@@ -8,12 +8,7 @@ import { AuditService } from '../audit/audit.service';
 import { throwError } from '../common/http-error';
 import { sanitizeText } from '../common/sanitize';
 import { PrismaService } from '../prisma/prisma.service';
-import {
-  hasAnyRole,
-  ROLE_COMANDANTE_COMGEP,
-  ROLE_COORDENACAO_CIPAVD,
-  ROLE_TI,
-} from '../rbac/role-access';
+import { hasPermission } from '../rbac/role-access';
 import type { RbacUser } from '../rbac/rbac.types';
 import { FabLdapService } from '../ldap/fab-ldap.service';
 import { getSocialCommunicationCoverCandidates } from './social-communication-storage';
@@ -109,7 +104,7 @@ export class SocialCommunicationService {
   }
 
   async lookupHighlightLdapProfile(email: string, user?: RbacUser) {
-    this.assertHighlightEditorAccess(user);
+    this.assertHighlightEditorAccess(user, 'create');
 
     const normalizedEmail = this.normalizeHighlightEmail(email, 'email');
     const profile = await this.fabLdap.lookupByEmail(normalizedEmail);
@@ -144,7 +139,7 @@ export class SocialCommunicationService {
     },
     user?: RbacUser,
   ) {
-    this.assertHighlightEditorAccess(user);
+    this.assertHighlightEditorAccess(user, 'create');
 
     const localityId = this.normalizeRequiredText(
       payload.localityId,
@@ -221,7 +216,7 @@ export class SocialCommunicationService {
     },
     user?: RbacUser,
   ) {
-    this.assertHighlightEditorAccess(user);
+    this.assertHighlightEditorAccess(user, 'update');
 
     const existing = await (
       this.prisma as any
@@ -320,7 +315,7 @@ export class SocialCommunicationService {
   }
 
   async removeHighlight(id: string, user?: RbacUser) {
-    this.assertHighlightEditorAccess(user);
+    this.assertHighlightEditorAccess(user, 'delete');
 
     const existing = await (
       this.prisma as any
@@ -360,7 +355,7 @@ export class SocialCommunicationService {
     },
     user?: RbacUser,
   ) {
-    this.assertEditorAccess(user);
+    this.assertEditorAccess(user, 'create');
 
     const sourceUrl = this.normalizeUrl(payload.url, 'url');
     const metadata = await this.extractMetadataSafe(sourceUrl);
@@ -419,7 +414,7 @@ export class SocialCommunicationService {
     },
     user?: RbacUser,
   ) {
-    this.assertEditorAccess(user);
+    this.assertEditorAccess(user, 'update');
 
     const existing = await this.prisma.socialCommunicationArticle.findUnique({
       where: { id },
@@ -514,7 +509,7 @@ export class SocialCommunicationService {
   }
 
   async remove(id: string, user?: RbacUser) {
-    this.assertEditorAccess(user);
+    this.assertEditorAccess(user, 'delete');
 
     const existing = await this.prisma.socialCommunicationArticle.findUnique({
       where: { id },
@@ -538,7 +533,7 @@ export class SocialCommunicationService {
   }
 
   async resolveMetadata(url: string, user?: RbacUser) {
-    this.assertEditorAccess(user);
+    this.assertEditorAccess(user, 'create');
 
     const sourceUrl = this.normalizeUrl(url, 'url');
     const metadata = await this.extractMetadataSafe(sourceUrl);
@@ -674,23 +669,23 @@ export class SocialCommunicationService {
   }
 
   ensureEditorAccess(user?: RbacUser) {
-    this.assertEditorAccess(user);
+    this.assertEditorAccess(user, 'upload');
   }
 
-  private assertHighlightEditorAccess(user?: RbacUser) {
-    if (!hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_TI])) {
+  private assertHighlightEditorAccess(
+    user: RbacUser | undefined,
+    action: 'view' | 'create' | 'update' | 'delete',
+  ) {
+    if (!hasPermission(user, 'social_communication_highlight', action)) {
       throwError('RBAC_FORBIDDEN');
     }
   }
 
-  private assertEditorAccess(user?: RbacUser) {
-    if (
-      !hasAnyRole(user, [
-        ROLE_COORDENACAO_CIPAVD,
-        ROLE_COMANDANTE_COMGEP,
-        ROLE_TI,
-      ])
-    ) {
+  private assertEditorAccess(
+    user: RbacUser | undefined,
+    action: 'view' | 'create' | 'update' | 'delete' | 'upload',
+  ) {
+    if (!hasPermission(user, 'social_communication', action)) {
       throwError('RBAC_FORBIDDEN');
     }
   }

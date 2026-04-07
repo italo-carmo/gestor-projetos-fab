@@ -20,6 +20,7 @@ import { randomUUID } from 'node:crypto';
 import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../common/current-user.decorator';
+import { RequirePermission } from '../rbac/require-permission.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
 import type { RbacUser } from '../rbac/rbac.types';
 import { MulterExceptionFilter } from '../reports/multer-exception.filter';
@@ -49,11 +50,13 @@ export class LibraryController {
   constructor(private readonly library: LibraryService) {}
 
   @Get()
+  @RequirePermission('library', 'view')
   list() {
     return this.library.getData();
   }
 
   @Put('settings')
+  @RequirePermission('library', 'update')
   updateSettings(
     @Body() body: { carouselIntervalSeconds: number },
     @CurrentUser() user: RbacUser,
@@ -65,6 +68,7 @@ export class LibraryController {
   }
 
   @Post('photos/upload')
+  @RequirePermission('library', 'create')
   @UseInterceptors(
     FileInterceptor('file', {
       storage: diskStorage({
@@ -93,6 +97,7 @@ export class LibraryController {
   }
 
   @Put('photos/:id')
+  @RequirePermission('library', 'update')
   updatePhoto(
     @Param('id') id: string,
     @Body()
@@ -103,11 +108,13 @@ export class LibraryController {
   }
 
   @Delete('photos/:id')
+  @RequirePermission('library', 'delete')
   deletePhoto(@Param('id') id: string, @CurrentUser() user: RbacUser) {
     return this.library.deletePhoto(id, '', user);
   }
 
   @Post('documents/upload')
+  @RequirePermission('library', 'create')
   @UseInterceptors(
     FileInterceptor('file', {
       storage: diskStorage({
@@ -132,6 +139,7 @@ export class LibraryController {
   }
 
   @Put('documents/:id')
+  @RequirePermission('library', 'update')
   updateDocument(
     @Param('id') id: string,
     @Body() body: { title?: string },
@@ -141,11 +149,13 @@ export class LibraryController {
   }
 
   @Delete('documents/:id')
+  @RequirePermission('library', 'delete')
   deleteDocument(@Param('id') id: string, @CurrentUser() user: RbacUser) {
     return this.library.deleteDocument(id, libraryDocumentsDir, user);
   }
 
   @Get('documents/:id/download')
+  @RequirePermission('library', 'download')
   async downloadDocument(@Param('id') id: string, @Res() res: Response) {
     const document = await this.library.getDocumentById(id);
     const storageKey =

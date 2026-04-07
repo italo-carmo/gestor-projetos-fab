@@ -74,14 +74,6 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     route: "/templates",
     sidebarItems: ["Administração"],
   },
-  task_comments: {
-    menu: "Planejamento",
-    menuOrder: 20,
-    title: "Comentarios de Tarefa",
-    description: "Registro de comentarios e historico operacional.",
-    route: "/tasks",
-    sidebarItems: ["Tarefas"],
-  },
   checklists: {
     menu: "Planejamento",
     menuOrder: 20,
@@ -105,23 +97,6 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     description: "Fluxos de missao, participantes, agenda e checklist.",
     route: "/missions",
     sidebarItems: ["Missoes"],
-  },
-  activities: {
-    menu: "Operacoes",
-    menuOrder: 30,
-    title: "Atividades de Campo",
-    description: "Gestao de atividades externas, lotes e status operacionais.",
-    route: "/activities",
-    routeAliases: ["/activities-cipavd"],
-    sidebarItems: ["Atividades de Campo"],
-  },
-  activity_comments: {
-    menu: "Operacoes",
-    menuOrder: 30,
-    title: "Comentarios de Atividade",
-    description: "Comentarios e colaboracao dentro de atividades de campo.",
-    route: "/activities-cipavd",
-    sidebarItems: ["Atividades de Campo"],
   },
   reports: {
     menu: "Operacoes",

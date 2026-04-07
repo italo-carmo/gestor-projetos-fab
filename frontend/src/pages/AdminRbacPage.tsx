@@ -29,6 +29,7 @@ import {
   Typography,
 } from "@mui/material";
 import EditRoundedIcon from "@mui/icons-material/EditRounded";
+import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import { can } from "../app/rbac";
 import {
   useLocalities,
@@ -176,6 +177,7 @@ type MatrixRoleBadge = {
   roleId: string;
   roleName: string;
   explicit: boolean;
+  fixed: boolean;
 };
 
 type MatrixExtraAction = {
@@ -205,6 +207,31 @@ function normalizeRoleName(roleName: string | null | undefined) {
     .replace(/[\u0300-\u036f]/g, "")
     .trim()
     .toLowerCase();
+}
+
+const TI_ROLE_NAME_NORMALIZED = normalizeRoleName("TI");
+const TI_BLOCKED_PERMISSION_KEYS = new Set(["audit_logs:delete"]);
+const PERMISSION_SCOPE_PRIORITY: Record<string, number> = {
+  LOCALITY: 0,
+  LOCALITY_SPECIALTY: 1,
+  SPECIALTY: 2,
+  OWN: 3,
+  NATIONAL: 4,
+};
+
+function isTiRoleName(roleName: string | null | undefined) {
+  return normalizeRoleName(roleName) === TI_ROLE_NAME_NORMALIZED;
+}
+
+function permissionScopePriority(scope: string | null | undefined) {
+  const normalized = String(scope ?? "")
+    .trim()
+    .toUpperCase();
+  return PERMISSION_SCOPE_PRIORITY[normalized] ?? 999;
+}
+
+function isTiBlockedPermission(resource: string, action: string) {
+  return TI_BLOCKED_PERMISSION_KEYS.has(`${resource}:${action}`);
 }
 
 function roleRequiresLocality(roleName: string | null | undefined) {
@@ -448,7 +475,16 @@ export function AdminRbacPage() {
   const catalogPermissionsByKey = useMemo(() => {
     const map = new Map<string, PermissionEntryItem>();
     for (const item of permissionsCatalog) {
-      map.set(`${item.resource}:${item.action}`, item);
+      const key = `${item.resource}:${item.action}`;
+      const current = map.get(key);
+      if (!current) {
+        map.set(key, item);
+        continue;
+      }
+
+      if (permissionScopePriority(item.scope) < permissionScopePriority(current.scope)) {
+        map.set(key, item);
+      }
     }
     return map;
   }, [permissionsCatalog]);
@@ -515,9 +551,11 @@ export function AdminRbacPage() {
     const hasRolePermission = (role: RoleItem, resource: string, action: string) => {
       const key = `${resource}:${action}`;
       const explicit = rolePermissionKeysById.get(role.id)?.has(key) ?? false;
-      const wildcardFromCatalog =
-        Boolean(role.wildcard) && catalogPermissionKeys.has(key);
-      return explicit || wildcardFromCatalog;
+      const tiGlobalPermission =
+        isTiRoleName(role.name) &&
+        !isTiBlockedPermission(resource, action) &&
+        catalogPermissionKeys.has(key);
+      return explicit || tiGlobalPermission;
     };
     const buildRoleBadges = (resource: string, action: string) =>
       visibleMatrixRoles
@@ -529,6 +567,7 @@ export function AdminRbacPage() {
             roleId: role.id,
             roleName: role.name,
             explicit,
+            fixed: isTiRoleName(role.name),
           };
         });
 
@@ -794,11 +833,11 @@ export function AdminRbacPage() {
       });
       return;
     }
-    if (role.wildcard) {
+    if (isTiRoleName(role.name)) {
       setMatrixRemoveTarget(null);
       toast.push({
         message:
-          "Papel curinga não pode ser editado por remoção individual de badge.",
+          "O papel TI possui acesso global fixo (exceto apagar logs) e não pode ser editado por remoção.",
         severity: "warning",
       });
       return;
@@ -860,10 +899,10 @@ export function AdminRbacPage() {
       });
       return;
     }
-    if (role.wildcard) {
+    if (isTiRoleName(role.name)) {
       toast.push({
         message:
-          "Papel curinga já possui acesso global. Selecione um papel não curinga.",
+          "O papel TI já possui acesso global fixo (exceto apagar logs). Selecione outro papel.",
         severity: "warning",
       });
       return;
@@ -923,10 +962,18 @@ export function AdminRbacPage() {
     action: string,
   ) => {
     if (!canEditRolePermissions) return;
+    if (badge.fixed) {
+      toast.push({
+        message:
+          "O papel TI possui acesso global fixo (exceto apagar logs) e não pode ser removido por badge.",
+        severity: "warning",
+      });
+      return;
+    }
     if (!badge.explicit) {
       toast.push({
         message:
-          "Permissão herdada de papel curinga. Não é possível remover por badge.",
+          "Somente permissões explícitas podem ser removidas por badge.",
         severity: "warning",
       });
       return;
@@ -953,20 +1000,37 @@ export function AdminRbacPage() {
     }
     return (
       <Stack direction="row" spacing={0.5} useFlexGap flexWrap="wrap">
-        {roleBadges.map((badge) => (
-          <Chip
-            key={`${resource}:${action}:${badge.roleId}`}
-            size="small"
-            label={badge.roleName}
-            color={badge.explicit ? "primary" : "default"}
-            variant={badge.explicit ? "filled" : "outlined"}
-            onClick={
-              canEditRolePermissions
-                ? () => requestRemoveFromBadge(badge, resource, action)
-                : undefined
-            }
-          />
-        ))}
+        {roleBadges.map((badge) => {
+          const canRemoveBadge =
+            canEditRolePermissions &&
+            !badge.fixed &&
+            badge.explicit &&
+            !setRolePermissions.isPending;
+          const chipColor = badge.fixed
+            ? "secondary"
+            : badge.explicit
+              ? "primary"
+              : "default";
+          const chipVariant =
+            badge.fixed || badge.explicit ? "filled" : "outlined";
+          return (
+            <Chip
+              key={`${resource}:${action}:${badge.roleId}`}
+              size="small"
+              label={badge.roleName}
+              color={chipColor}
+              variant={chipVariant}
+              onDelete={
+                canRemoveBadge
+                  ? () => requestRemoveFromBadge(badge, resource, action)
+                  : undefined
+              }
+              deleteIcon={
+                canRemoveBadge ? <CloseRoundedIcon fontSize="small" /> : undefined
+              }
+            />
+          );
+        })}
       </Stack>
     );
   };
@@ -1868,8 +1932,14 @@ export function AdminRbacPage() {
             >
               <MenuItem value="">Selecione...</MenuItem>
               {roles.map((role) => (
-                <MenuItem key={role.id} value={role.id}>
-                  {role.name}
+                <MenuItem
+                  key={role.id}
+                  value={role.id}
+                  disabled={isTiRoleName(role.name)}
+                >
+                  {isTiRoleName(role.name)
+                    ? `${role.name} (acesso global fixo)`
+                    : role.name}
                 </MenuItem>
               ))}
             </TextField>

@@ -47,15 +47,6 @@ export class RbacGuard implements CanActivate {
     });
 
     if (!allowed) {
-      const wildcard = access.roles.some((role) => role.wildcard);
-      if (wildcard) {
-        const blockedByOverride = access.moduleAccessOverrides.some(
-          (override) => override.resource === resource && !override.enabled,
-        );
-        if (!blockedByOverride) {
-          return true;
-        }
-      }
       throwError('RBAC_FORBIDDEN');
     }
 

@@ -4,11 +4,7 @@ import { AuditService } from '../audit/audit.service';
 import { throwError } from '../common/http-error';
 import { sanitizeText } from '../common/sanitize';
 import { PrismaService } from '../prisma/prisma.service';
-import {
-  hasAnyRole,
-  ROLE_COORDENACAO_CIPAVD,
-  ROLE_TI,
-} from '../rbac/role-access';
+import { hasPermission } from '../rbac/role-access';
 import type { RbacUser } from '../rbac/rbac.types';
 
 @Injectable()
@@ -22,7 +18,7 @@ export class SmifComplaintsService {
     filters: { q?: string; status?: SmifComplaintStatus; localityId?: string },
     user?: RbacUser,
   ) {
-    this.assertEditorAccess(user);
+    this.assertPermission(user, 'view');
 
     const where: Prisma.SmifComplaintWhereInput = {};
 
@@ -68,7 +64,7 @@ export class SmifComplaintsService {
     },
     user?: RbacUser,
   ) {
-    this.assertEditorAccess(user);
+    this.assertPermission(user, 'create');
     const actorId = this.resolveActorId(user);
 
     const localityId = await this.resolveLocalityId(payload.localityId);
@@ -124,7 +120,7 @@ export class SmifComplaintsService {
     },
     user?: RbacUser,
   ) {
-    this.assertEditorAccess(user);
+    this.assertPermission(user, 'update');
     const actorId = this.resolveActorId(user);
 
     const existing = await this.prisma.smifComplaint.findUnique({
@@ -183,7 +179,7 @@ export class SmifComplaintsService {
   }
 
   async remove(id: string, user?: RbacUser) {
-    this.assertEditorAccess(user);
+    this.assertPermission(user, 'delete');
 
     const existing = await this.prisma.smifComplaint.findUnique({
       where: { id },
@@ -209,8 +205,11 @@ export class SmifComplaintsService {
     return { ok: true };
   }
 
-  private assertEditorAccess(user?: RbacUser) {
-    if (!hasAnyRole(user, [ROLE_COORDENACAO_CIPAVD, ROLE_TI])) {
+  private assertPermission(
+    user: RbacUser | undefined,
+    action: 'view' | 'create' | 'update' | 'delete',
+  ) {
+    if (!hasPermission(user, 'smif_complaints', action)) {
       throwError('RBAC_FORBIDDEN');
     }
   }

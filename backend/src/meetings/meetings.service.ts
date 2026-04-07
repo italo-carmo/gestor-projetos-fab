@@ -7,12 +7,7 @@ import { RbacUser } from '../rbac/rbac.types';
 import { throwError } from '../common/http-error';
 import { sanitizeText } from '../common/sanitize';
 import { parsePagination } from '../common/pagination';
-import {
-  hasAnyRole,
-  ROLE_CIPAVD,
-  ROLE_COORDENACAO_CIPAVD,
-  ROLE_TI,
-} from '../rbac/role-access';
+import { hasPermission } from '../rbac/role-access';
 
 @Injectable()
 export class MeetingsService {
@@ -397,7 +392,7 @@ export class MeetingsService {
 
   private assertDeleteAccess(user?: RbacUser) {
     if (!user?.id) throwError('RBAC_FORBIDDEN');
-    if (hasAnyRole(user, [ROLE_CIPAVD, ROLE_COORDENACAO_CIPAVD, ROLE_TI])) return;
+    if (hasPermission(user, 'meetings', 'delete')) return;
     throwError('RBAC_FORBIDDEN');
   }
 }

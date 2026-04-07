@@ -8,7 +8,7 @@ import {
   Put,
   UseGuards,
 } from '@nestjs/common';
-import { Prisma, RecruitFemaleStatus } from '@prisma/client';
+import { PermissionScope, Prisma, RecruitFemaleStatus } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../common/current-user.decorator';
@@ -16,10 +16,7 @@ import { throwError } from '../common/http-error';
 import { RequirePermission } from '../rbac/require-permission.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
 import {
-  canEditRecruitsByRole,
-  isNationalCommissionMember,
-  ROLE_TI,
-  hasRole,
+  hasPermission,
   ROLE_GSD_LOCALIDADE,
 } from '../rbac/role-access';
 import type { RbacUser } from '../rbac/rbac.types';
@@ -46,8 +43,12 @@ export class LocalitiesController {
   @Get()
   @RequirePermission('localities', 'view')
   async list(@CurrentUser() user: RbacUser) {
-    const canViewAll =
-      isNationalCommissionMember(user) || hasRole(user, ROLE_TI);
+    const canViewAll = hasPermission(
+      user,
+      'localities',
+      'view',
+      PermissionScope.NATIONAL,
+    );
     const where =
       !canViewAll && user?.localityId ? { id: user.localityId } : undefined;
     const items = await this.prisma.locality.findMany({
@@ -58,7 +59,7 @@ export class LocalitiesController {
   }
 
   @Get('oms-catalog')
-  @RequirePermission('dashboard', 'view')
+  @RequirePermission('localities', 'view')
   async listOmsCatalog() {
     const items = await this.prisma.locality.findMany({
       select: { id: true, code: true, name: true },
@@ -184,7 +185,7 @@ export class LocalitiesController {
   }
 
   @Put(':id/recruits')
-  @RequirePermission('dashboard', 'view')
+  @RequirePermission('localities', 'update')
   async updateRecruits(
     @Param('id') id: string,
     @Body() dto: UpdateLocalityRecruitsDto,
@@ -276,6 +277,7 @@ export class LocalitiesController {
   }
 
   @Get(':id/recruit-designations')
+  @RequirePermission('localities', 'view')
   async listRecruitDesignations(
     @Param('id') id: string,
     @CurrentUser() user: RbacUser,
@@ -285,6 +287,7 @@ export class LocalitiesController {
   }
 
   @Get(':id/recruits-members')
+  @RequirePermission('localities', 'view')
   async listRecruitMembers(
     @Param('id') id: string,
     @CurrentUser() user: RbacUser,
@@ -294,6 +297,7 @@ export class LocalitiesController {
   }
 
   @Put(':id/recruits-members')
+  @RequirePermission('localities', 'update')
   async replaceRecruitMembers(
     @Param('id') id: string,
     @Body() dto: ReplaceLocalityRecruitsMembersDto,
@@ -464,6 +468,7 @@ export class LocalitiesController {
   }
 
   @Put(':id/commander-from-ldap')
+  @RequirePermission('localities', 'update')
   async setCommanderFromLdap(
     @Param('id') id: string,
     @Body() dto: SetLocalityCommanderFromLdapDto,
@@ -575,6 +580,7 @@ export class LocalitiesController {
   }
 
   @Put(':id/recruit-designations')
+  @RequirePermission('localities', 'update')
   async replaceRecruitDesignations(
     @Param('id') id: string,
     @Body() dto: UpdateLocalityRecruitDesignationsDto,
@@ -677,8 +683,7 @@ export class LocalitiesController {
   }
 
   private assertLocalityAccess(localityId: string, user?: RbacUser) {
-    const bypassLocalityConstraint =
-      isNationalCommissionMember(user) || hasRole(user, ROLE_TI);
+    const bypassLocalityConstraint = this.hasNationalLocalitiesAccess(user);
     if (bypassLocalityConstraint) return;
     if (!user?.localityId) return;
     if (user.localityId !== localityId) {
@@ -696,15 +701,26 @@ export class LocalitiesController {
       recruitsFemaleCountCurrent === null
     )
       return;
-    if (!canEditRecruitsByRole(user, localityId)) {
+    if (!hasPermission(user, 'localities', 'update')) {
       throwError('RBAC_FORBIDDEN');
     }
+    this.assertLocalityAccess(localityId, user);
   }
 
   private assertRecruitsEditorAccess(localityId: string, user?: RbacUser) {
-    if (!canEditRecruitsByRole(user, localityId)) {
+    if (!hasPermission(user, 'localities', 'update')) {
       throwError('RBAC_FORBIDDEN');
     }
+    this.assertLocalityAccess(localityId, user);
+  }
+
+  private hasNationalLocalitiesAccess(user?: RbacUser) {
+    return (
+      hasPermission(user, 'localities', 'view', PermissionScope.NATIONAL) ||
+      hasPermission(user, 'localities', 'create', PermissionScope.NATIONAL) ||
+      hasPermission(user, 'localities', 'update', PermissionScope.NATIONAL) ||
+      hasPermission(user, 'localities', 'delete', PermissionScope.NATIONAL)
+    );
   }
 
   private async assertRecruitAssignmentsWithinTotal(
