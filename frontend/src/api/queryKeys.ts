@@ -88,6 +88,12 @@ export const qk = {
     ["biSurvey", "imports", filters] as const,
   biSurveyQuestions: (filters: Record<string, any>) =>
     ["biSurvey", "questions", filters] as const,
+  biDomesticViolenceDashboard: (filters: Record<string, any>) =>
+    ["biDomesticViolence", "dashboard", filters] as const,
+  biDomesticViolenceResponses: (filters: Record<string, any>) =>
+    ["biDomesticViolence", "responses", filters] as const,
+  biDomesticViolenceImports: (filters: Record<string, any>) =>
+    ["biDomesticViolence", "imports", filters] as const,
   cpcaCases: (filters: Record<string, any>) => ["cpcaCases", filters] as const,
   cpcaCase: (id: string) => ["cpcaCase", id] as const,
   cpcaCaseStats: (filters: Record<string, any>) =>

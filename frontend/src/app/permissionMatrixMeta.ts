@@ -281,7 +281,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     title: "BI Pesquisas",
     description: "Importacao e consulta de dados do modulo BI.",
     route: "/dashboard/bi",
-    sidebarItems: ["BI Pesquisas"],
+    sidebarItems: ["BI Pesquisas", "Violência Doméstica"],
   },
 };
 

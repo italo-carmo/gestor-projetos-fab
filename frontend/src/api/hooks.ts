@@ -2834,11 +2834,7 @@ export function useMenuUpdates(menuKeys: string[], enabled = true) {
   });
 }
 
-function patchMenuUpdatesData(
-  data: unknown,
-  menuKey: string,
-  seenAt: string,
-) {
+function patchMenuUpdatesData(data: unknown, menuKey: string, seenAt: string) {
   if (!data || typeof data !== "object") return data;
   const current = data as {
     items?: Array<{
@@ -2883,14 +2879,18 @@ export function useMarkMenuUpdateSeen() {
       },
     onMutate: async (menuKeyRaw: string) => {
       const menuKey = String(menuKeyRaw ?? "").trim();
-      if (!menuKey) return { snapshots: [] as Array<[readonly unknown[], any]> };
+      if (!menuKey)
+        return { snapshots: [] as Array<[readonly unknown[], any]> };
 
       await qc.cancelQueries({ queryKey: ["menuUpdates"] });
       const snapshots = qc.getQueriesData({ queryKey: ["menuUpdates"] });
       const seenAt = new Date().toISOString();
 
       for (const [queryKey, oldData] of snapshots) {
-        qc.setQueryData(queryKey, patchMenuUpdatesData(oldData, menuKey, seenAt));
+        qc.setQueryData(
+          queryKey,
+          patchMenuUpdatesData(oldData, menuKey, seenAt),
+        );
       }
 
       return { snapshots };
@@ -2967,7 +2967,8 @@ export function useUpdateCpcaCase() {
 export function useDeleteCpcaCase() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => (await api.delete(`/cpca-cases/${id}`)).data,
+    mutationFn: async (id: string) =>
+      (await api.delete(`/cpca-cases/${id}`)).data,
     onSuccess: (_data, id) => {
       qc.invalidateQueries({ queryKey: ["cpcaCases"] });
       qc.invalidateQueries({ queryKey: qk.cpcaCase(id) });
@@ -3605,6 +3606,86 @@ export function useDeleteBiSurveyResponses() {
     }) => (await api.post("/bi/surveys/responses/delete", payload)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["biSurvey"] });
+    },
+  });
+}
+
+export function useBiDomesticViolenceDashboard(filters: Record<string, any>) {
+  return useQuery({
+    queryKey: qk.biDomesticViolenceDashboard(filters),
+    queryFn: async () =>
+      (await api.get("/bi/domestic-violence/dashboard", { params: filters }))
+        .data,
+    staleTime: 15_000,
+  });
+}
+
+export function useBiDomesticViolenceResponses(filters: Record<string, any>) {
+  return useQuery({
+    queryKey: qk.biDomesticViolenceResponses(filters),
+    queryFn: async () =>
+      (await api.get("/bi/domestic-violence/responses", { params: filters }))
+        .data,
+    staleTime: 5_000,
+  });
+}
+
+export function useBiDomesticViolenceImports(filters: Record<string, any>) {
+  return useQuery({
+    queryKey: qk.biDomesticViolenceImports(filters),
+    queryFn: async () =>
+      (await api.get("/bi/domestic-violence/imports", { params: filters }))
+        .data,
+    staleTime: 10_000,
+  });
+}
+
+export function useImportBiDomesticViolence() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { file: File; replace?: boolean }) => {
+      const form = new FormData();
+      form.append("file", args.file);
+      if (typeof args.replace === "boolean") {
+        form.append("replace", String(args.replace));
+      }
+      return (await api.post("/bi/domestic-violence/import", form)).data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["biDomesticViolence"] });
+    },
+  });
+}
+
+export function useDeleteBiDomesticViolenceResponses() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      ids?: string[];
+      allFiltered?: boolean;
+      from?: string;
+      to?: string;
+      organization?: string;
+      rank?: string;
+      maritalStatus?: string;
+      education?: string;
+      fabBond?: string;
+      sufferedLifetime?: string;
+      sufferedLast12Months?: string;
+      frequency?: string;
+      violenceType?: string;
+      impactIntensity?: string;
+      impactArea?: string;
+      soughtHelp?: string;
+      complaintChannel?: string;
+      noComplaintReason?: string;
+      authorMilitaryLink?: string;
+      q?: string;
+      combineMode?: "AND" | "OR";
+    }) =>
+      (await api.post("/bi/domestic-violence/responses/delete", payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["biDomesticViolence"] });
     },
   });
 }

@@ -47,10 +47,7 @@ import LightbulbRoundedIcon from "@mui/icons-material/LightbulbRounded";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { useDebounce } from "../app/useDebounce";
 import { can, canAccessAdminCatalog } from "../app/rbac";
-import {
-  canonicalRoleName,
-  normalizeRoleName,
-} from "../app/roleAccess";
+import { canonicalRoleName, normalizeRoleName } from "../app/roleAccess";
 import {
   useLocalities,
   useMarkMenuUpdateSeen,
@@ -91,9 +88,7 @@ function toPathOnly(value: string) {
 
 function pathMatches(currentPath: string, itemPath: string) {
   if (itemPath === "/") return currentPath === "/";
-  return (
-    currentPath === itemPath || currentPath.startsWith(`${itemPath}/`)
-  );
+  return currentPath === itemPath || currentPath.startsWith(`${itemPath}/`);
 }
 
 const navSections: NavSection[] = [
@@ -228,6 +223,12 @@ const navSections: NavSection[] = [
       {
         label: "BI Pesquisas",
         to: "/dashboard/bi",
+        icon: <InsightsRoundedIcon fontSize="small" />,
+        menuKey: "bi",
+      },
+      {
+        label: "Violência Doméstica",
+        to: "/dashboard/bi-violencia-domestica",
         icon: <InsightsRoundedIcon fontSize="small" />,
         menuKey: "bi",
       },
@@ -408,6 +409,9 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (item.to === "/dashboard/bi") {
       return can(me, "bi", "view");
     }
+    if (item.to === "/dashboard/bi-violencia-domestica") {
+      return can(me, "bi", "view");
+    }
     if (item.to === "/smif-complaints") {
       return can(me, "smif_complaints", "view");
     }
@@ -528,11 +532,13 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const unreadMenuCountByKey = useMemo(() => {
     const map = new Map<string, number>();
-    ((menuUpdatesQuery.data?.items ?? []) as Array<{
-      menuKey?: string | null;
-      unreadCount?: number | null;
-      hasUnread?: boolean;
-    }>).forEach((item) => {
+    (
+      (menuUpdatesQuery.data?.items ?? []) as Array<{
+        menuKey?: string | null;
+        unreadCount?: number | null;
+        hasUnread?: boolean;
+      }>
+    ).forEach((item) => {
       const key = String(item?.menuKey ?? "").trim();
       if (!key) return;
       const parsedCount = Number(item?.unreadCount ?? 0);
@@ -573,7 +579,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, [activeNavItem?.menuKey, markMenuAsSeen]);
 
   useEffect(() => {
-    const fromUrl = (searchParams.get(GLOBAL_LOCALITY_QUERY_PARAM) ?? "").trim();
+    const fromUrl = (
+      searchParams.get(GLOBAL_LOCALITY_QUERY_PARAM) ?? ""
+    ).trim();
 
     if (!canUseGlobalLocalityFilter) {
       localStorage.removeItem(GLOBAL_LOCALITY_STORAGE_KEY);
@@ -686,12 +694,12 @@ export function AppShell({ children }: { children: ReactNode }) {
             <List disablePadding>
               {section.items.map((item) => {
                 const selected = toPathOnly(item.to) === activeNavItemPath;
-                const unreadCount = unreadMenuCountByKey.get(
-                  String(item.menuKey ?? "").trim(),
-                ) ?? 0;
-                const showUnreadBadge =
-                  !sidebarCollapsed && unreadCount > 0;
-                const unreadLabel = unreadCount > 99 ? "99+" : String(unreadCount);
+                const unreadCount =
+                  unreadMenuCountByKey.get(String(item.menuKey ?? "").trim()) ??
+                  0;
+                const showUnreadBadge = !sidebarCollapsed && unreadCount > 0;
+                const unreadLabel =
+                  unreadCount > 99 ? "99+" : String(unreadCount);
                 const button = (
                   <ListItemButton
                     key={item.to}

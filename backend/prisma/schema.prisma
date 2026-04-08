@@ -53,6 +53,7 @@ model User {
   auditLogs        AuditLog[]
   meetingParticipations MeetingParticipant[]
   biSurveyImportBatches BiSurveyImportBatch[]
+  biDomesticViolenceImportBatches BiDomesticViolenceImportBatch[]
   cpcaCasesCreated CpcComplaintCase[] @relation("CpcComplaintCaseCreatedBy")
   cpcaCasesUpdated CpcComplaintCase[] @relation("CpcComplaintCaseUpdatedBy")
   cpcaCaseComments CpcComplaintComment[] @relation("CpcComplaintCommentAuthor")
@@ -1275,6 +1276,67 @@ model BiSurveyResponse {
   @@index([om, postoGraduacao])
   @@index([posto])
   @@index([autodeclara])
+  @@index([batchId])
+}
+
+model BiDomesticViolenceImportBatch {
+  id            String                         @id @default(cuid())
+  fileName      String
+  format        BiImportFormat
+  sheetName     String?
+  totalRows     Int
+  insertedRows  Int
+  duplicateRows Int
+  invalidRows   Int
+  importedById  String?
+  importedAt    DateTime                       @default(now())
+
+  importedBy    User?                          @relation(fields: [importedById], references: [id], onDelete: SetNull)
+  responses     BiDomesticViolenceResponse[]
+
+  @@index([importedAt])
+  @@index([importedById, importedAt])
+}
+
+model BiDomesticViolenceResponse {
+  id                     String                          @id @default(cuid())
+  batchId                String?
+  submittedAt            DateTime?
+  age                    Int?
+  organization           String?
+  maritalStatus          String?
+  education              String?
+  fabBond                String?
+  rank                   String?
+  sufferedLifetimeRaw    String?
+  sufferedLifetime       Boolean?
+  sufferedLast12MonthsRaw String?
+  sufferedLast12Months   Boolean?
+  frequency              String?
+  violenceTypes          String[]                        @default([])
+  authorMilitaryLink     String?
+  occurrencePlace        String?
+  witnessesRaw           String?
+  witnesses              Boolean?
+  impactIntensity        String?
+  impactAreas            String[]                        @default([])
+  soughtHelpRaw          String?
+  soughtHelp             Boolean?
+  complaintChannels      String[]                        @default([])
+  noComplaintReasons     String[]                        @default([])
+  rawPayload             Json?
+  sourceRow              Int?
+  sourceHash             String                          @unique
+  createdAt              DateTime                        @default(now())
+  updatedAt              DateTime                        @updatedAt
+
+  batch                  BiDomesticViolenceImportBatch?  @relation(fields: [batchId], references: [id], onDelete: SetNull)
+
+  @@index([submittedAt])
+  @@index([organization, rank])
+  @@index([sufferedLifetime, sufferedLast12Months])
+  @@index([impactIntensity])
+  @@index([soughtHelp])
   @@index([batchId])
 }
 

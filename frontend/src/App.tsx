@@ -22,6 +22,7 @@ import { AuditPage } from "./pages/AuditPage";
 import { TaskTemplatesPage } from "./pages/TaskTemplatesPage";
 import { DocumentsPage } from "./pages/DocumentsPage";
 import { BiSurveyDashboardPage } from "./pages/BiSurveyDashboardPage";
+import { BiDomesticViolenceDashboardPage } from "./pages/BiDomesticViolenceDashboardPage";
 import { MissionsPage } from "./pages/MissionsPage";
 import { SocialCommunicationPage } from "./pages/SocialCommunicationPage";
 import { CpcaCasesPage } from "./pages/CpcaCasesPage";
@@ -63,7 +64,9 @@ function App() {
                   path="/dashboard/smif"
                   element={
                     <RequireRoleAccess
-                      allow={(user) => can(user, "dashboard", "view", "NATIONAL")}
+                      allow={(user) =>
+                        can(user, "dashboard", "view", "NATIONAL")
+                      }
                     >
                       <DashboardNationalPage />
                     </RequireRoleAccess>
@@ -98,6 +101,16 @@ function App() {
                       allow={(user) => can(user, "bi", "view")}
                     >
                       <BiSurveyDashboardPage />
+                    </RequireRoleAccess>
+                  }
+                />
+                <Route
+                  path="/dashboard/bi-violencia-domestica"
+                  element={
+                    <RequireRoleAccess
+                      allow={(user) => can(user, "bi", "view")}
+                    >
+                      <BiDomesticViolenceDashboardPage />
                     </RequireRoleAccess>
                   }
                 />
@@ -231,7 +244,9 @@ function App() {
                 <Route
                   path="/admin"
                   element={
-                    <RequireRoleAccess allow={(user) => canAccessAdminCatalog(user)}>
+                    <RequireRoleAccess
+                      allow={(user) => canAccessAdminCatalog(user)}
+                    >
                       <AdminPage />
                     </RequireRoleAccess>
                   }
