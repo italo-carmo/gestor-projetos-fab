@@ -3669,23 +3669,99 @@ export function useDeleteBiDomesticViolenceResponses() {
       rank?: string;
       maritalStatus?: string;
       education?: string;
+      naturality?: string;
       fabBond?: string;
+      situationScope?: string;
       sufferedLifetime?: string;
       sufferedLast12Months?: string;
       frequency?: string;
+      affectiveBond?: string;
       violenceType?: string;
+      authorRelation?: string;
       impactIntensity?: string;
       impactArea?: string;
       soughtHelp?: string;
       complaintChannel?: string;
       noComplaintReason?: string;
       authorMilitaryLink?: string;
+      occurrencePlace?: string;
+      witnesses?: string;
       q?: string;
       combineMode?: "AND" | "OR";
     }) =>
       (await api.post("/bi/domestic-violence/responses/delete", payload)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["biDomesticViolence"] });
+    },
+  });
+}
+
+export function useBiRecruitsDashboard(filters: Record<string, any>) {
+  return useQuery({
+    queryKey: qk.biRecruitsDashboard(filters),
+    queryFn: async () =>
+      (await api.get("/bi/recruits/dashboard", { params: filters })).data,
+    staleTime: 15_000,
+  });
+}
+
+export function useBiRecruitsResponses(filters: Record<string, any>) {
+  return useQuery({
+    queryKey: qk.biRecruitsResponses(filters),
+    queryFn: async () =>
+      (await api.get("/bi/recruits/responses", { params: filters })).data,
+    staleTime: 5_000,
+  });
+}
+
+export function useBiRecruitsImports(filters: Record<string, any>) {
+  return useQuery({
+    queryKey: qk.biRecruitsImports(filters),
+    queryFn: async () =>
+      (await api.get("/bi/recruits/imports", { params: filters })).data,
+    staleTime: 10_000,
+  });
+}
+
+export function useImportBiRecruits() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { file: File; replace?: boolean }) => {
+      const form = new FormData();
+      form.append("file", args.file);
+      if (typeof args.replace === "boolean") {
+        form.append("replace", String(args.replace));
+      }
+      return (await api.post("/bi/recruits/import", form)).data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["biRecruits"] });
+    },
+  });
+}
+
+export function useDeleteBiRecruitsResponses() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      ids?: string[];
+      allFiltered?: boolean;
+      from?: string;
+      to?: string;
+      education?: string;
+      gender?: string;
+      identifyHarassment?: string;
+      conductLimits?: string;
+      knowOrientation?: string;
+      knowReportProcess?: string;
+      willingnessOrientation?: string;
+      willingnessReport?: string;
+      enlistmentDecisionInfluence?: string;
+      q?: string;
+      combineMode?: "AND" | "OR";
+    }) => (await api.post("/bi/recruits/responses/delete", payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["biRecruits"] });
     },
   });
 }

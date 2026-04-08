@@ -54,6 +54,7 @@ model User {
   meetingParticipations MeetingParticipant[]
   biSurveyImportBatches BiSurveyImportBatch[]
   biDomesticViolenceImportBatches BiDomesticViolenceImportBatch[]
+  biRecruitsImportBatches BiRecruitsImportBatch[]
   cpcaCasesCreated CpcComplaintCase[] @relation("CpcComplaintCaseCreatedBy")
   cpcaCasesUpdated CpcComplaintCase[] @relation("CpcComplaintCaseUpdatedBy")
   cpcaCaseComments CpcComplaintComment[] @relation("CpcComplaintCommentAuthor")
@@ -1306,14 +1307,18 @@ model BiDomesticViolenceResponse {
   organization           String?
   maritalStatus          String?
   education              String?
+  naturality             String?
   fabBond                String?
   rank                   String?
+  situationScope         String?
   sufferedLifetimeRaw    String?
   sufferedLifetime       Boolean?
   sufferedLast12MonthsRaw String?
   sufferedLast12Months   Boolean?
   frequency              String?
+  affectiveBond          String?
   violenceTypes          String[]                        @default([])
+  authorRelation         String?
   authorMilitaryLink     String?
   occurrencePlace        String?
   witnessesRaw           String?
@@ -1337,6 +1342,56 @@ model BiDomesticViolenceResponse {
   @@index([sufferedLifetime, sufferedLast12Months])
   @@index([impactIntensity])
   @@index([soughtHelp])
+  @@index([batchId])
+}
+
+model BiRecruitsImportBatch {
+  id            String                   @id @default(cuid())
+  fileName      String
+  format        BiImportFormat
+  sheetName     String?
+  totalRows     Int
+  insertedRows  Int
+  duplicateRows Int
+  invalidRows   Int
+  importedById  String?
+  importedAt    DateTime                 @default(now())
+
+  importedBy    User?                    @relation(fields: [importedById], references: [id], onDelete: SetNull)
+  responses     BiRecruitsResponse[]
+
+  @@index([importedAt])
+  @@index([importedById, importedAt])
+}
+
+model BiRecruitsResponse {
+  id                             String                  @id @default(cuid())
+  batchId                        String?
+  submittedAt                    DateTime?
+  education                      String?
+  gender                         String?
+  identifyHarassment             String?
+  conductLimits                  String?
+  knowOrientation                String?
+  knowReportProcess              String?
+  willingnessOrientation         String?
+  willingnessReport              String?
+  enlistmentDecisionInfluenceText String?
+  suggestionComment              String?
+  rawPayload                     Json?
+  sourceRow                      Int?
+  sourceHash                     String                  @unique
+  createdAt                      DateTime                @default(now())
+  updatedAt                      DateTime                @updatedAt
+
+  batch                          BiRecruitsImportBatch?  @relation(fields: [batchId], references: [id], onDelete: SetNull)
+
+  @@index([submittedAt])
+  @@index([education, gender])
+  @@index([identifyHarassment, conductLimits])
+  @@index([knowOrientation, knowReportProcess])
+  @@index([willingnessOrientation, willingnessReport])
+  @@index([enlistmentDecisionInfluenceText])
   @@index([batchId])
 }
 

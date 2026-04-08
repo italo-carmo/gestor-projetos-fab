@@ -47,7 +47,13 @@ import LightbulbRoundedIcon from "@mui/icons-material/LightbulbRounded";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { useDebounce } from "../app/useDebounce";
 import { can, canAccessAdminCatalog } from "../app/rbac";
-import { canonicalRoleName, normalizeRoleName } from "../app/roleAccess";
+import {
+  canonicalRoleName,
+  hasAnyRole,
+  normalizeRoleName,
+  ROLE_COMGEP,
+  ROLE_TI,
+} from "../app/roleAccess";
 import {
   useLocalities,
   useMarkMenuUpdateSeen,
@@ -221,7 +227,7 @@ const navSections: NavSection[] = [
     label: "PESQUISAS",
     items: [
       {
-        label: "BI Pesquisas",
+        label: "Escolas",
         to: "/dashboard/bi",
         icon: <InsightsRoundedIcon fontSize="small" />,
         menuKey: "bi",
@@ -229,6 +235,12 @@ const navSections: NavSection[] = [
       {
         label: "Violência Doméstica",
         to: "/dashboard/bi-violencia-domestica",
+        icon: <InsightsRoundedIcon fontSize="small" />,
+        menuKey: "bi",
+      },
+      {
+        label: "Recrutas",
+        to: "/dashboard/bi-recrutas",
         icon: <InsightsRoundedIcon fontSize="small" />,
         menuKey: "bi",
       },
@@ -411,6 +423,9 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
     if (item.to === "/dashboard/bi-violencia-domestica") {
       return can(me, "bi", "view");
+    }
+    if (item.to === "/dashboard/bi-recrutas") {
+      return can(me, "bi", "view") && hasAnyRole(me, [ROLE_TI, ROLE_COMGEP]);
     }
     if (item.to === "/smif-complaints") {
       return can(me, "smif_complaints", "view");

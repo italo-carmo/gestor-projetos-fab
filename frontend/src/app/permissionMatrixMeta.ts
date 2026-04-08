@@ -16,7 +16,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     description: "Visualização e ajustes dos paineis executivos e CIPAVD.",
     route: "/dashboard/smif",
     routeAliases: ["/dashboard/cipavd"],
-    sidebarItems: ["SMIF", "CIPAVD", "BI Pesquisas"],
+    sidebarItems: ["SMIF", "CIPAVD", "Escolas"],
   },
   kpis: {
     menu: "Dashboards",
@@ -278,10 +278,11 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
   bi: {
     menu: "Dashboards",
     menuOrder: 10,
-    title: "BI Pesquisas",
+    title: "Escolas",
     description: "Importacao e consulta de dados do modulo BI.",
     route: "/dashboard/bi",
-    sidebarItems: ["BI Pesquisas", "Violência Doméstica"],
+    routeAliases: ["/dashboard/bi-violencia-domestica", "/dashboard/bi-recrutas"],
+    sidebarItems: ["Escolas", "Violência Doméstica", "Recrutas"],
   },
 };
 

@@ -23,6 +23,7 @@ import { TaskTemplatesPage } from "./pages/TaskTemplatesPage";
 import { DocumentsPage } from "./pages/DocumentsPage";
 import { BiSurveyDashboardPage } from "./pages/BiSurveyDashboardPage";
 import { BiDomesticViolenceDashboardPage } from "./pages/BiDomesticViolenceDashboardPage";
+import { BiRecruitsDashboardPage } from "./pages/BiRecruitsDashboardPage";
 import { MissionsPage } from "./pages/MissionsPage";
 import { SocialCommunicationPage } from "./pages/SocialCommunicationPage";
 import { CpcaCasesPage } from "./pages/CpcaCasesPage";
@@ -34,7 +35,7 @@ import { LessonsLearnedPage } from "./pages/LessonsLearnedPage";
 import { RequireAuth } from "./app/RequireAuth";
 import { RequireRoleAccess } from "./app/RequireRoleAccess";
 import { can, canAccessAdminCatalog } from "./app/rbac";
-import { resolveHomePath } from "./app/roleAccess";
+import { hasAnyRole, resolveHomePath, ROLE_COMGEP, ROLE_TI } from "./app/roleAccess";
 import { useMe } from "./api/hooks";
 
 function HomeRedirect() {
@@ -111,6 +112,19 @@ function App() {
                       allow={(user) => can(user, "bi", "view")}
                     >
                       <BiDomesticViolenceDashboardPage />
+                    </RequireRoleAccess>
+                  }
+                />
+                <Route
+                  path="/dashboard/bi-recrutas"
+                  element={
+                    <RequireRoleAccess
+                      allow={(user) =>
+                        can(user, "bi", "view") &&
+                        hasAnyRole(user, [ROLE_TI, ROLE_COMGEP])
+                      }
+                    >
+                      <BiRecruitsDashboardPage />
                     </RequireRoleAccess>
                   }
                 />
