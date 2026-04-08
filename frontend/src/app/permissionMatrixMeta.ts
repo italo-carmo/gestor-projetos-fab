@@ -208,8 +208,8 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     menuOrder: 80,
     title: "Localidades / OMs",
     description: "Cadastro das OMs e dados estruturais de localidade.",
-    route: "/gsd-recruits",
-    routeAliases: ["/admin/oms"],
+    route: "/admin?tab=localities",
+    routeAliases: ["/gsd-recruits", "/admin/oms", "/admin/localities"],
     sidebarItems: ["GSD e Recrutas", "Administracao", "OMs"],
   },
   specialties: {

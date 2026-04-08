@@ -71,20 +71,88 @@ export class MenuUpdatesService {
               FROM "UserMenuUpdateRead"
               WHERE "userId" = ${userId}
                 AND "menuKey" IN (${Prisma.join(menuKeys)})
+            ),
+            "candidate_logs" AS (
+              SELECT
+                mr."menuKey" AS "menuKey",
+                al."resource" AS "resource",
+                al."entityId" AS "entityId",
+                al."diffJson" AS "diffJson",
+                al."createdAt" AS "createdAt"
+              FROM "menu_resources" mr
+              LEFT JOIN "seen_by_menu" sbm
+                ON sbm."menuKey" = mr."menuKey"
+              JOIN "AuditLog" al
+                ON al."resource" = mr."resource"
+               AND al."action" NOT IN (${Prisma.join(IGNORED_AUDIT_ACTIONS)})
+               AND (
+                 sbm."seenAt" IS NULL OR al."createdAt" > sbm."seenAt"
+               )
+            ),
+            "direct_items" AS (
+              SELECT
+                cl."menuKey" AS "menuKey",
+                cl."createdAt" AS "createdAt",
+                CASE
+                  WHEN cl."resource" = 'activity_comments'
+                    THEN COALESCE(cl."diffJson"->>'activityId', cl."entityId")
+                  WHEN cl."resource" = 'task_comments'
+                    THEN COALESCE(cl."diffJson"->>'taskInstanceId', cl."entityId")
+                  WHEN cl."resource" = 'activities' AND cl."diffJson" ? 'activityId'
+                    THEN cl."diffJson"->>'activityId'
+                  WHEN cl."resource" = 'task_instances' AND cl."diffJson" ? 'taskInstanceId'
+                    THEN cl."diffJson"->>'taskInstanceId'
+                  ELSE cl."entityId"
+                END AS "itemKey"
+              FROM "candidate_logs" cl
+            ),
+            "array_items" AS (
+              SELECT
+                cl."menuKey" AS "menuKey",
+                cl."createdAt" AS "createdAt",
+                jsonb_array_elements_text(
+                  CASE
+                    WHEN jsonb_typeof(cl."diffJson"->'ids') = 'array'
+                      THEN cl."diffJson"->'ids'
+                    ELSE '[]'::jsonb
+                  END
+                ) AS "itemKey"
+              FROM "candidate_logs" cl
+            ),
+            "all_items" AS (
+              SELECT
+                di."menuKey" AS "menuKey",
+                di."createdAt" AS "createdAt",
+                btrim(di."itemKey") AS "itemKey"
+              FROM "direct_items" di
+              WHERE btrim(COALESCE(di."itemKey", '')) <> ''
+              UNION ALL
+              SELECT
+                ai."menuKey" AS "menuKey",
+                ai."createdAt" AS "createdAt",
+                btrim(ai."itemKey") AS "itemKey"
+              FROM "array_items" ai
+              WHERE btrim(COALESCE(ai."itemKey", '')) <> ''
+            ),
+            "menu_unread" AS (
+              SELECT
+                i."menuKey" AS "menuKey",
+                COUNT(DISTINCT i."itemKey") AS "unreadCount",
+                MAX(i."createdAt") AS "lastEventAt"
+              FROM "all_items" i
+              GROUP BY i."menuKey"
             )
             SELECT
-              mr."menuKey" AS "menuKey",
-              COUNT(al."id") FILTER (
-                WHERE sbm."seenAt" IS NULL OR al."createdAt" > sbm."seenAt"
-              ) AS "unreadCount",
-              MAX(al."createdAt") AS "lastEventAt"
-            FROM "menu_resources" mr
-            LEFT JOIN "AuditLog" al
-              ON al."resource" = mr."resource"
-             AND al."action" NOT IN (${Prisma.join(IGNORED_AUDIT_ACTIONS)})
-            LEFT JOIN "seen_by_menu" sbm
-              ON sbm."menuKey" = mr."menuKey"
-            GROUP BY mr."menuKey"
+              mk."menuKey" AS "menuKey",
+              COALESCE(mu."unreadCount", 0) AS "unreadCount",
+              mu."lastEventAt" AS "lastEventAt"
+            FROM (
+              VALUES ${Prisma.join(
+                menuKeys.map((menuKey) => Prisma.sql`(${menuKey})`),
+              )}
+            ) AS mk("menuKey")
+            LEFT JOIN "menu_unread" mu
+              ON mu."menuKey" = mk."menuKey"
           `)
         : Promise.resolve([]),
       this.prisma.$queryRaw<Array<{ menuKey: string; seenAt: Date }>>(

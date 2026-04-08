@@ -1646,6 +1646,16 @@ export function AdminRbacPage() {
                                 {row.meta.route}
                               </Typography>
                             )}
+                            {Array.isArray(row.meta.routeAliases) &&
+                              row.meta.routeAliases.length > 0 && (
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                  display="block"
+                                >
+                                  {row.meta.routeAliases.join(" • ")}
+                                </Typography>
+                              )}
                             {canEditRolePermissions && (
                               <Button
                                 variant="outlined"
