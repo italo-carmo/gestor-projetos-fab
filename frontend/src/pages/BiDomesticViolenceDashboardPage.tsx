@@ -36,8 +36,6 @@ import {
   CartesianGrid,
   Cell,
   Legend,
-  Line,
-  LineChart,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -69,17 +67,23 @@ type DashboardFilters = {
   rank: string[];
   maritalStatus: string[];
   education: string[];
+  naturality: string[];
   fabBond: string[];
+  situationScope: string[];
   frequency: string[];
+  affectiveBond: string[];
   violenceTypes: string[];
+  authorRelation: string[];
   impactIntensity: string[];
   impactAreas: string[];
   complaintChannels: string[];
   noComplaintReasons: string[];
   authorMilitaryLink: string[];
+  occurrencePlace: string[];
   sufferedLifetime: Array<{ value: string; label: string }>;
   sufferedLast12Months: Array<{ value: string; label: string }>;
   soughtHelp: Array<{ value: string; label: string }>;
+  witnesses: Array<{ value: string; label: string }>;
 };
 
 type DistributionDatum = {
@@ -119,7 +123,19 @@ type DomesticDashboardResponse = {
     violenceTypeDistribution: DistributionDatum[];
     organizationDistribution: DistributionDatum[];
     rankDistribution: DistributionDatum[];
+    maritalStatusDistribution: DistributionDatum[];
+    educationDistribution: DistributionDatum[];
+    naturalityDistribution: DistributionDatum[];
+    fabBondDistribution: DistributionDatum[];
     ageRangeDistribution: DistributionDatum[];
+    situationScopeDistribution: DistributionDatum[];
+    frequencyDistribution: DistributionDatum[];
+    affectiveBondDistribution: DistributionDatum[];
+    authorRelationDistribution: DistributionDatum[];
+    authorMilitaryLinkDistribution: DistributionDatum[];
+    occurrencePlaceDistribution: DistributionDatum[];
+    witnessesDistribution: DistributionDatum[];
+    soughtHelpDistribution: DistributionDatum[];
     impactIntensityDistribution: DistributionDatum[];
     impactAreaDistribution: DistributionDatum[];
     complaintChannelDistribution: DistributionDatum[];
@@ -128,13 +144,10 @@ type DomesticDashboardResponse = {
       types: string[];
       items: ViolenceByOrganizationDatum[];
     };
-    monthlyTrend: Array<{
-      month: string;
+    responseTrend: Array<{
+      day: string;
+      dayLabel: string;
       total: number;
-      lifetimeYesCount: number;
-      last12MonthsYesCount: number;
-      lifetimeRatePercent: number;
-      last12MonthsRatePercent: number;
     }>;
   };
   insights: {
@@ -178,15 +191,22 @@ type DomesticResponseRow = {
   organization?: string | null;
   maritalStatus?: string | null;
   education?: string | null;
+  naturality?: string | null;
   fabBond?: string | null;
   rank?: string | null;
+  situationScope?: string | null;
   sufferedLifetimeRaw?: string | null;
   sufferedLifetime?: boolean | null;
   sufferedLast12MonthsRaw?: string | null;
   sufferedLast12Months?: boolean | null;
   frequency?: string | null;
+  affectiveBond?: string | null;
   violenceTypes?: string[];
+  authorRelation?: string | null;
   authorMilitaryLink?: string | null;
+  occurrencePlace?: string | null;
+  witnessesRaw?: string | null;
+  witnesses?: boolean | null;
   impactIntensity?: string | null;
   impactAreas?: string[];
   soughtHelpRaw?: string | null;
@@ -284,11 +304,21 @@ function buildCsv(items: DomesticResponseRow[]) {
     "Data",
     "Idade",
     "Organização Militar",
+    "Estado civil",
+    "Escolaridade",
+    "Naturalidade",
+    "Vínculo institucional com a FAB",
     "Posto/Graduação",
+    "Situação relatada",
     "Sofreu ao longo da vida",
     "Sofreu nos últimos 12 meses",
     "Frequência",
+    "Vínculo afetivo com o autor",
     "Tipos de violência",
+    "Tipo de vínculo com autor do fato",
+    "Autor com vínculo militar",
+    "Local da ocorrência",
+    "Houve testemunhas",
     "Impacto",
     "Áreas de impacto",
     "Procurou canal",
@@ -300,11 +330,21 @@ function buildCsv(items: DomesticResponseRow[]) {
     formatDate(item.submittedAt),
     item.age ?? "",
     item.organization ?? "",
+    item.maritalStatus ?? "",
+    item.education ?? "",
+    item.naturality ?? "",
+    item.fabBond ?? "",
     item.rank ?? "",
+    item.situationScope ?? "",
     boolLabel(item.sufferedLifetime),
     boolLabel(item.sufferedLast12Months),
     item.frequency ?? "",
+    item.affectiveBond ?? "",
     (item.violenceTypes ?? []).join(" | "),
+    item.authorRelation ?? "",
+    item.authorMilitaryLink ?? "",
+    item.occurrencePlace ?? "",
+    boolLabel(item.witnesses),
     item.impactIntensity ?? "",
     (item.impactAreas ?? []).join(" | "),
     boolLabel(item.soughtHelp),
@@ -343,17 +383,23 @@ export function BiDomesticViolenceDashboardPage() {
     rank: "",
     maritalStatus: "",
     education: "",
+    naturality: "",
     fabBond: "",
+    situationScope: "",
     sufferedLifetime: "",
     sufferedLast12Months: "",
     frequency: "",
+    affectiveBond: "",
     violenceType: "",
+    authorRelation: "",
     impactIntensity: "",
     impactArea: "",
     soughtHelp: "",
     complaintChannel: "",
     noComplaintReason: "",
     authorMilitaryLink: "",
+    occurrencePlace: "",
+    witnesses: "",
     q: "",
     combineMode: "AND" as CombineMode,
   });
@@ -366,17 +412,23 @@ export function BiDomesticViolenceDashboardPage() {
       rank: filters.rank || undefined,
       maritalStatus: filters.maritalStatus || undefined,
       education: filters.education || undefined,
+      naturality: filters.naturality || undefined,
       fabBond: filters.fabBond || undefined,
+      situationScope: filters.situationScope || undefined,
       sufferedLifetime: filters.sufferedLifetime || undefined,
       sufferedLast12Months: filters.sufferedLast12Months || undefined,
       frequency: filters.frequency || undefined,
+      affectiveBond: filters.affectiveBond || undefined,
       violenceType: filters.violenceType || undefined,
+      authorRelation: filters.authorRelation || undefined,
       impactIntensity: filters.impactIntensity || undefined,
       impactArea: filters.impactArea || undefined,
       soughtHelp: filters.soughtHelp || undefined,
       complaintChannel: filters.complaintChannel || undefined,
       noComplaintReason: filters.noComplaintReason || undefined,
       authorMilitaryLink: filters.authorMilitaryLink || undefined,
+      occurrencePlace: filters.occurrencePlace || undefined,
+      witnesses: filters.witnesses || undefined,
       q: filters.q || undefined,
       combineMode: filters.combineMode || undefined,
     }),
@@ -456,12 +508,77 @@ export function BiDomesticViolenceDashboardPage() {
     [dashboard?.charts.rankDistribution],
   );
 
+  const maritalStatusBars = useMemo(
+    () => (dashboard?.charts.maritalStatusDistribution ?? []).slice(0, 8),
+    [dashboard?.charts.maritalStatusDistribution],
+  );
+
+  const educationBars = useMemo(
+    () => (dashboard?.charts.educationDistribution ?? []).slice(0, 8),
+    [dashboard?.charts.educationDistribution],
+  );
+
+  const naturalityBars = useMemo(
+    () => (dashboard?.charts.naturalityDistribution ?? []).slice(0, 8),
+    [dashboard?.charts.naturalityDistribution],
+  );
+
+  const fabBondBars = useMemo(
+    () => (dashboard?.charts.fabBondDistribution ?? []).slice(0, 8),
+    [dashboard?.charts.fabBondDistribution],
+  );
+
+  const situationScopeBars = useMemo(
+    () => (dashboard?.charts.situationScopeDistribution ?? []).slice(0, 8),
+    [dashboard?.charts.situationScopeDistribution],
+  );
+
+  const frequencyBars = useMemo(
+    () => (dashboard?.charts.frequencyDistribution ?? []).slice(0, 8),
+    [dashboard?.charts.frequencyDistribution],
+  );
+
+  const affectiveBondBars = useMemo(
+    () => (dashboard?.charts.affectiveBondDistribution ?? []).slice(0, 8),
+    [dashboard?.charts.affectiveBondDistribution],
+  );
+
+  const authorRelationBars = useMemo(
+    () => (dashboard?.charts.authorRelationDistribution ?? []).slice(0, 8),
+    [dashboard?.charts.authorRelationDistribution],
+  );
+
+  const authorMilitaryLinkBars = useMemo(
+    () => (dashboard?.charts.authorMilitaryLinkDistribution ?? []).slice(0, 8),
+    [dashboard?.charts.authorMilitaryLinkDistribution],
+  );
+
+  const occurrencePlaceBars = useMemo(
+    () => (dashboard?.charts.occurrencePlaceDistribution ?? []).slice(0, 8),
+    [dashboard?.charts.occurrencePlaceDistribution],
+  );
+
+  const impactIntensityBars = useMemo(
+    () => (dashboard?.charts.impactIntensityDistribution ?? []).slice(0, 8),
+    [dashboard?.charts.impactIntensityDistribution],
+  );
+
+  const witnessesBars = useMemo(
+    () => dashboard?.charts.witnessesDistribution ?? [],
+    [dashboard?.charts.witnessesDistribution],
+  );
+
+  const soughtHelpBars = useMemo(
+    () => dashboard?.charts.soughtHelpDistribution ?? [],
+    [dashboard?.charts.soughtHelpDistribution],
+  );
+
   const ageBars = useMemo(
     () => dashboard?.charts.ageRangeDistribution ?? [],
     [dashboard?.charts.ageRangeDistribution],
   );
 
-  const trend = dashboard?.charts.monthlyTrend ?? [];
+  const trend = dashboard?.charts.responseTrend ?? [];
   const violenceByOrganization = dashboard?.charts.violenceByOrganization;
 
   const updateFilter = <K extends keyof typeof filters>(
@@ -483,17 +600,23 @@ export function BiDomesticViolenceDashboardPage() {
       rank: "",
       maritalStatus: "",
       education: "",
+      naturality: "",
       fabBond: "",
+      situationScope: "",
       sufferedLifetime: "",
       sufferedLast12Months: "",
       frequency: "",
+      affectiveBond: "",
       violenceType: "",
+      authorRelation: "",
       impactIntensity: "",
       impactArea: "",
       soughtHelp: "",
       complaintChannel: "",
       noComplaintReason: "",
       authorMilitaryLink: "",
+      occurrencePlace: "",
+      witnesses: "",
       q: "",
       combineMode: "AND",
     });
@@ -991,6 +1114,177 @@ export function BiDomesticViolenceDashboardPage() {
             </Grid>
             <Grid size={{ xs: 12, md: 2.4 }}>
               <TextField
+                label="Naturalidade"
+                value={filters.naturality}
+                onChange={(event) =>
+                  updateFilter("naturality", event.target.value)
+                }
+                select
+                size="small"
+                fullWidth
+              >
+                <MenuItem value="">Todas</MenuItem>
+                {(dashboard.filters.naturality ?? []).map((option) => (
+                  <MenuItem key={option} value={option}>
+                    {option}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Grid>
+            <Grid size={{ xs: 12, md: 2.4 }}>
+              <TextField
+                label="Vínculo com FAB"
+                value={filters.fabBond}
+                onChange={(event) =>
+                  updateFilter("fabBond", event.target.value)
+                }
+                select
+                size="small"
+                fullWidth
+              >
+                <MenuItem value="">Todos</MenuItem>
+                {(dashboard.filters.fabBond ?? []).map((option) => (
+                  <MenuItem key={option} value={option}>
+                    {option}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Grid>
+            <Grid size={{ xs: 12, md: 2.4 }}>
+              <TextField
+                label="Situação relatada"
+                value={filters.situationScope}
+                onChange={(event) =>
+                  updateFilter("situationScope", event.target.value)
+                }
+                select
+                size="small"
+                fullWidth
+              >
+                <MenuItem value="">Todas</MenuItem>
+                {(dashboard.filters.situationScope ?? []).map((option) => (
+                  <MenuItem key={option} value={option}>
+                    {option}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Grid>
+            <Grid size={{ xs: 12, md: 2.4 }}>
+              <TextField
+                label="Frequência da ocorrência"
+                value={filters.frequency}
+                onChange={(event) =>
+                  updateFilter("frequency", event.target.value)
+                }
+                select
+                size="small"
+                fullWidth
+              >
+                <MenuItem value="">Todas</MenuItem>
+                {(dashboard.filters.frequency ?? []).map((option) => (
+                  <MenuItem key={option} value={option}>
+                    {option}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Grid>
+            <Grid size={{ xs: 12, md: 2.4 }}>
+              <TextField
+                label="Vínculo afetivo (autor)"
+                value={filters.affectiveBond}
+                onChange={(event) =>
+                  updateFilter("affectiveBond", event.target.value)
+                }
+                select
+                size="small"
+                fullWidth
+              >
+                <MenuItem value="">Todos</MenuItem>
+                {(dashboard.filters.affectiveBond ?? []).map((option) => (
+                  <MenuItem key={option} value={option}>
+                    {option}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Grid>
+            <Grid size={{ xs: 12, md: 2.4 }}>
+              <TextField
+                label="Tipo de autor do fato"
+                value={filters.authorRelation}
+                onChange={(event) =>
+                  updateFilter("authorRelation", event.target.value)
+                }
+                select
+                size="small"
+                fullWidth
+              >
+                <MenuItem value="">Todos</MenuItem>
+                {(dashboard.filters.authorRelation ?? []).map((option) => (
+                  <MenuItem key={option} value={option}>
+                    {option}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Grid>
+            <Grid size={{ xs: 12, md: 2.4 }}>
+              <TextField
+                label="Autor com vínculo militar"
+                value={filters.authorMilitaryLink}
+                onChange={(event) =>
+                  updateFilter("authorMilitaryLink", event.target.value)
+                }
+                select
+                size="small"
+                fullWidth
+              >
+                <MenuItem value="">Todos</MenuItem>
+                {(dashboard.filters.authorMilitaryLink ?? []).map((option) => (
+                  <MenuItem key={option} value={option}>
+                    {option}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Grid>
+            <Grid size={{ xs: 12, md: 2.4 }}>
+              <TextField
+                label="Local da ocorrência"
+                value={filters.occurrencePlace}
+                onChange={(event) =>
+                  updateFilter("occurrencePlace", event.target.value)
+                }
+                select
+                size="small"
+                fullWidth
+              >
+                <MenuItem value="">Todos</MenuItem>
+                {(dashboard.filters.occurrencePlace ?? []).map((option) => (
+                  <MenuItem key={option} value={option}>
+                    {option}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Grid>
+            <Grid size={{ xs: 12, md: 2.4 }}>
+              <TextField
+                label="Houve testemunhas"
+                value={filters.witnesses}
+                onChange={(event) =>
+                  updateFilter("witnesses", event.target.value)
+                }
+                select
+                size="small"
+                fullWidth
+              >
+                <MenuItem value="">Todos</MenuItem>
+                {(dashboard.filters.witnesses ?? []).map((option) => (
+                  <MenuItem key={option.value} value={option.value}>
+                    {option.label}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Grid>
+            <Grid size={{ xs: 12, md: 2.4 }}>
+              <TextField
                 label="Sofreu (vida)"
                 value={filters.sufferedLifetime}
                 onChange={(event) =>
@@ -1416,6 +1710,743 @@ export function BiDomesticViolenceDashboardPage() {
                     />
                     <Legend wrapperStyle={legendWrapperStyle} />
                   </PieChart>
+                </ResponsiveContainer>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      <Grid container spacing={2} sx={{ mb: 2 }}>
+        <Grid size={{ xs: 12, lg: 3 }}>
+          <Card sx={cardSx}>
+            <CardContent>
+              <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
+                Estado civil
+              </Typography>
+              <Box sx={{ height: 280 }}>
+                <ResponsiveContainer>
+                  <BarChart data={maritalStatusBars}>
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke={chartGridStroke}
+                    />
+                    <XAxis
+                      dataKey="maritalStatus"
+                      stroke={chartAxisStroke}
+                      tick={axisTickStyle}
+                    />
+                    <YAxis stroke={chartAxisStroke} tick={axisTickStyle} />
+                    <Tooltip
+                      formatter={(_value: number, _name, props: any) => {
+                        const payload = props?.payload as
+                          | DistributionDatum
+                          | undefined;
+                        if (metricMode === "COUNT") {
+                          return [`${payload?.count ?? 0}`, "Respostas"];
+                        }
+                        return [
+                          `${getPercentLabel(Number(payload?.percent ?? 0))}`,
+                          "%",
+                        ];
+                      }}
+                      contentStyle={tooltipContentStyle}
+                      labelStyle={tooltipLabelStyle}
+                    />
+                    <Bar
+                      dataKey={(entry: DistributionDatum) =>
+                        metricValue(metricMode, entry.count, entry.percent)
+                      }
+                      fill={DV_PALETTE.primaryDark}
+                      radius={[8, 8, 0, 0]}
+                      onClick={(entry: any) => {
+                        if (entry?.maritalStatus) {
+                          updateFilter(
+                            "maritalStatus",
+                            String(entry.maritalStatus),
+                          );
+                        }
+                      }}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid size={{ xs: 12, lg: 3 }}>
+          <Card sx={cardSx}>
+            <CardContent>
+              <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
+                Escolaridade
+              </Typography>
+              <Box sx={{ height: 280 }}>
+                <ResponsiveContainer>
+                  <BarChart data={educationBars}>
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke={chartGridStroke}
+                    />
+                    <XAxis
+                      dataKey="education"
+                      stroke={chartAxisStroke}
+                      tick={axisTickStyle}
+                    />
+                    <YAxis stroke={chartAxisStroke} tick={axisTickStyle} />
+                    <Tooltip
+                      formatter={(_value: number, _name, props: any) => {
+                        const payload = props?.payload as
+                          | DistributionDatum
+                          | undefined;
+                        if (metricMode === "COUNT") {
+                          return [`${payload?.count ?? 0}`, "Respostas"];
+                        }
+                        return [
+                          `${getPercentLabel(Number(payload?.percent ?? 0))}`,
+                          "%",
+                        ];
+                      }}
+                      contentStyle={tooltipContentStyle}
+                      labelStyle={tooltipLabelStyle}
+                    />
+                    <Bar
+                      dataKey={(entry: DistributionDatum) =>
+                        metricValue(metricMode, entry.count, entry.percent)
+                      }
+                      fill={DV_PALETTE.gold}
+                      radius={[8, 8, 0, 0]}
+                      onClick={(entry: any) => {
+                        if (entry?.education) {
+                          updateFilter("education", String(entry.education));
+                        }
+                      }}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid size={{ xs: 12, lg: 3 }}>
+          <Card sx={cardSx}>
+            <CardContent>
+              <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
+                Naturalidade
+              </Typography>
+              <Box sx={{ height: 280 }}>
+                <ResponsiveContainer>
+                  <BarChart data={naturalityBars}>
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke={chartGridStroke}
+                    />
+                    <XAxis
+                      dataKey="naturality"
+                      stroke={chartAxisStroke}
+                      tick={axisTickStyle}
+                    />
+                    <YAxis stroke={chartAxisStroke} tick={axisTickStyle} />
+                    <Tooltip
+                      formatter={(_value: number, _name, props: any) => {
+                        const payload = props?.payload as
+                          | DistributionDatum
+                          | undefined;
+                        if (metricMode === "COUNT") {
+                          return [`${payload?.count ?? 0}`, "Respostas"];
+                        }
+                        return [
+                          `${getPercentLabel(Number(payload?.percent ?? 0))}`,
+                          "%",
+                        ];
+                      }}
+                      contentStyle={tooltipContentStyle}
+                      labelStyle={tooltipLabelStyle}
+                    />
+                    <Bar
+                      dataKey={(entry: DistributionDatum) =>
+                        metricValue(metricMode, entry.count, entry.percent)
+                      }
+                      fill={DV_PALETTE.secondary}
+                      radius={[8, 8, 0, 0]}
+                      onClick={(entry: any) => {
+                        if (entry?.naturality) {
+                          updateFilter("naturality", String(entry.naturality));
+                        }
+                      }}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid size={{ xs: 12, lg: 3 }}>
+          <Card sx={cardSx}>
+            <CardContent>
+              <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
+                Vínculo institucional FAB
+              </Typography>
+              <Box sx={{ height: 280 }}>
+                <ResponsiveContainer>
+                  <BarChart data={fabBondBars}>
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke={chartGridStroke}
+                    />
+                    <XAxis
+                      dataKey="fabBond"
+                      stroke={chartAxisStroke}
+                      tick={axisTickStyle}
+                    />
+                    <YAxis stroke={chartAxisStroke} tick={axisTickStyle} />
+                    <Tooltip
+                      formatter={(_value: number, _name, props: any) => {
+                        const payload = props?.payload as
+                          | DistributionDatum
+                          | undefined;
+                        if (metricMode === "COUNT") {
+                          return [`${payload?.count ?? 0}`, "Respostas"];
+                        }
+                        return [
+                          `${getPercentLabel(Number(payload?.percent ?? 0))}`,
+                          "%",
+                        ];
+                      }}
+                      contentStyle={tooltipContentStyle}
+                      labelStyle={tooltipLabelStyle}
+                    />
+                    <Bar
+                      dataKey={(entry: DistributionDatum) =>
+                        metricValue(metricMode, entry.count, entry.percent)
+                      }
+                      fill={DV_PALETTE.violet}
+                      radius={[8, 8, 0, 0]}
+                      onClick={(entry: any) => {
+                        if (entry?.fabBond) {
+                          updateFilter("fabBond", String(entry.fabBond));
+                        }
+                      }}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      <Grid container spacing={2} sx={{ mb: 2 }}>
+        <Grid size={{ xs: 12, lg: 3 }}>
+          <Card sx={cardSx}>
+            <CardContent>
+              <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
+                Situação relatada
+              </Typography>
+              <Box sx={{ height: 280 }}>
+                <ResponsiveContainer>
+                  <BarChart data={situationScopeBars}>
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke={chartGridStroke}
+                    />
+                    <XAxis
+                      dataKey="situationScope"
+                      stroke={chartAxisStroke}
+                      tick={axisTickStyle}
+                    />
+                    <YAxis stroke={chartAxisStroke} tick={axisTickStyle} />
+                    <Tooltip
+                      formatter={(_value: number, _name, props: any) => {
+                        const payload = props?.payload as
+                          | DistributionDatum
+                          | undefined;
+                        if (metricMode === "COUNT") {
+                          return [`${payload?.count ?? 0}`, "Respostas"];
+                        }
+                        return [
+                          `${getPercentLabel(Number(payload?.percent ?? 0))}`,
+                          "%",
+                        ];
+                      }}
+                      contentStyle={tooltipContentStyle}
+                      labelStyle={tooltipLabelStyle}
+                    />
+                    <Bar
+                      dataKey={(entry: DistributionDatum) =>
+                        metricValue(metricMode, entry.count, entry.percent)
+                      }
+                      fill={DV_PALETTE.accent}
+                      radius={[8, 8, 0, 0]}
+                      onClick={(entry: any) => {
+                        if (entry?.situationScope) {
+                          updateFilter(
+                            "situationScope",
+                            String(entry.situationScope),
+                          );
+                        }
+                      }}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid size={{ xs: 12, lg: 3 }}>
+          <Card sx={cardSx}>
+            <CardContent>
+              <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
+                Frequência da ocorrência
+              </Typography>
+              <Box sx={{ height: 280 }}>
+                <ResponsiveContainer>
+                  <BarChart data={frequencyBars}>
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke={chartGridStroke}
+                    />
+                    <XAxis
+                      dataKey="frequency"
+                      stroke={chartAxisStroke}
+                      tick={axisTickStyle}
+                    />
+                    <YAxis stroke={chartAxisStroke} tick={axisTickStyle} />
+                    <Tooltip
+                      formatter={(_value: number, _name, props: any) => {
+                        const payload = props?.payload as
+                          | DistributionDatum
+                          | undefined;
+                        if (metricMode === "COUNT") {
+                          return [`${payload?.count ?? 0}`, "Respostas"];
+                        }
+                        return [
+                          `${getPercentLabel(Number(payload?.percent ?? 0))}`,
+                          "%",
+                        ];
+                      }}
+                      contentStyle={tooltipContentStyle}
+                      labelStyle={tooltipLabelStyle}
+                    />
+                    <Bar
+                      dataKey={(entry: DistributionDatum) =>
+                        metricValue(metricMode, entry.count, entry.percent)
+                      }
+                      fill={DV_PALETTE.accentSoft}
+                      radius={[8, 8, 0, 0]}
+                      onClick={(entry: any) => {
+                        if (entry?.frequency) {
+                          updateFilter("frequency", String(entry.frequency));
+                        }
+                      }}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid size={{ xs: 12, lg: 3 }}>
+          <Card sx={cardSx}>
+            <CardContent>
+              <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
+                Vínculo afetivo com o autor
+              </Typography>
+              <Box sx={{ height: 280 }}>
+                <ResponsiveContainer>
+                  <BarChart data={affectiveBondBars}>
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke={chartGridStroke}
+                    />
+                    <XAxis
+                      dataKey="affectiveBond"
+                      stroke={chartAxisStroke}
+                      tick={axisTickStyle}
+                    />
+                    <YAxis stroke={chartAxisStroke} tick={axisTickStyle} />
+                    <Tooltip
+                      formatter={(_value: number, _name, props: any) => {
+                        const payload = props?.payload as
+                          | DistributionDatum
+                          | undefined;
+                        if (metricMode === "COUNT") {
+                          return [`${payload?.count ?? 0}`, "Respostas"];
+                        }
+                        return [
+                          `${getPercentLabel(Number(payload?.percent ?? 0))}`,
+                          "%",
+                        ];
+                      }}
+                      contentStyle={tooltipContentStyle}
+                      labelStyle={tooltipLabelStyle}
+                    />
+                    <Bar
+                      dataKey={(entry: DistributionDatum) =>
+                        metricValue(metricMode, entry.count, entry.percent)
+                      }
+                      fill={DV_PALETTE.primary}
+                      radius={[8, 8, 0, 0]}
+                      onClick={(entry: any) => {
+                        if (entry?.affectiveBond) {
+                          updateFilter(
+                            "affectiveBond",
+                            String(entry.affectiveBond),
+                          );
+                        }
+                      }}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid size={{ xs: 12, lg: 3 }}>
+          <Card sx={cardSx}>
+            <CardContent>
+              <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
+                Tipo de autor do fato
+              </Typography>
+              <Box sx={{ height: 280 }}>
+                <ResponsiveContainer>
+                  <BarChart data={authorRelationBars}>
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke={chartGridStroke}
+                    />
+                    <XAxis
+                      dataKey="authorRelation"
+                      stroke={chartAxisStroke}
+                      tick={axisTickStyle}
+                    />
+                    <YAxis stroke={chartAxisStroke} tick={axisTickStyle} />
+                    <Tooltip
+                      formatter={(_value: number, _name, props: any) => {
+                        const payload = props?.payload as
+                          | DistributionDatum
+                          | undefined;
+                        if (metricMode === "COUNT") {
+                          return [`${payload?.count ?? 0}`, "Respostas"];
+                        }
+                        return [
+                          `${getPercentLabel(Number(payload?.percent ?? 0))}`,
+                          "%",
+                        ];
+                      }}
+                      contentStyle={tooltipContentStyle}
+                      labelStyle={tooltipLabelStyle}
+                    />
+                    <Bar
+                      dataKey={(entry: DistributionDatum) =>
+                        metricValue(metricMode, entry.count, entry.percent)
+                      }
+                      fill={DV_PALETTE.gold}
+                      radius={[8, 8, 0, 0]}
+                      onClick={(entry: any) => {
+                        if (entry?.authorRelation) {
+                          updateFilter(
+                            "authorRelation",
+                            String(entry.authorRelation),
+                          );
+                        }
+                      }}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      <Grid container spacing={2} sx={{ mb: 2 }}>
+        <Grid size={{ xs: 12, lg: 4 }}>
+          <Card sx={cardSx}>
+            <CardContent>
+              <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
+                Autor com vínculo militar
+              </Typography>
+              <Box sx={{ height: 280 }}>
+                <ResponsiveContainer>
+                  <BarChart data={authorMilitaryLinkBars}>
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke={chartGridStroke}
+                    />
+                    <XAxis
+                      dataKey="authorMilitaryLink"
+                      stroke={chartAxisStroke}
+                      tick={axisTickStyle}
+                    />
+                    <YAxis stroke={chartAxisStroke} tick={axisTickStyle} />
+                    <Tooltip
+                      formatter={(_value: number, _name, props: any) => {
+                        const payload = props?.payload as
+                          | DistributionDatum
+                          | undefined;
+                        if (metricMode === "COUNT") {
+                          return [`${payload?.count ?? 0}`, "Respostas"];
+                        }
+                        return [
+                          `${getPercentLabel(Number(payload?.percent ?? 0))}`,
+                          "%",
+                        ];
+                      }}
+                      contentStyle={tooltipContentStyle}
+                      labelStyle={tooltipLabelStyle}
+                    />
+                    <Bar
+                      dataKey={(entry: DistributionDatum) =>
+                        metricValue(metricMode, entry.count, entry.percent)
+                      }
+                      fill={DV_PALETTE.primaryDark}
+                      radius={[8, 8, 0, 0]}
+                      onClick={(entry: any) => {
+                        if (entry?.authorMilitaryLink) {
+                          updateFilter(
+                            "authorMilitaryLink",
+                            String(entry.authorMilitaryLink),
+                          );
+                        }
+                      }}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid size={{ xs: 12, lg: 4 }}>
+          <Card sx={cardSx}>
+            <CardContent>
+              <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
+                Local da ocorrência
+              </Typography>
+              <Box sx={{ height: 280 }}>
+                <ResponsiveContainer>
+                  <BarChart data={occurrencePlaceBars}>
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke={chartGridStroke}
+                    />
+                    <XAxis
+                      dataKey="occurrencePlace"
+                      stroke={chartAxisStroke}
+                      tick={axisTickStyle}
+                    />
+                    <YAxis stroke={chartAxisStroke} tick={axisTickStyle} />
+                    <Tooltip
+                      formatter={(_value: number, _name, props: any) => {
+                        const payload = props?.payload as
+                          | DistributionDatum
+                          | undefined;
+                        if (metricMode === "COUNT") {
+                          return [`${payload?.count ?? 0}`, "Respostas"];
+                        }
+                        return [
+                          `${getPercentLabel(Number(payload?.percent ?? 0))}`,
+                          "%",
+                        ];
+                      }}
+                      contentStyle={tooltipContentStyle}
+                      labelStyle={tooltipLabelStyle}
+                    />
+                    <Bar
+                      dataKey={(entry: DistributionDatum) =>
+                        metricValue(metricMode, entry.count, entry.percent)
+                      }
+                      fill={DV_PALETTE.secondary}
+                      radius={[8, 8, 0, 0]}
+                      onClick={(entry: any) => {
+                        if (entry?.occurrencePlace) {
+                          updateFilter(
+                            "occurrencePlace",
+                            String(entry.occurrencePlace),
+                          );
+                        }
+                      }}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid size={{ xs: 12, lg: 4 }}>
+          <Card sx={cardSx}>
+            <CardContent>
+              <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
+                Houve testemunhas?
+              </Typography>
+              <Box sx={{ height: 280 }}>
+                <ResponsiveContainer>
+                  <BarChart data={witnessesBars}>
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke={chartGridStroke}
+                    />
+                    <XAxis
+                      dataKey="witnessesLabel"
+                      stroke={chartAxisStroke}
+                      tick={axisTickStyle}
+                    />
+                    <YAxis stroke={chartAxisStroke} tick={axisTickStyle} />
+                    <Tooltip
+                      formatter={(_value: number, _name, props: any) => {
+                        const payload = props?.payload as
+                          | DistributionDatum
+                          | undefined;
+                        if (metricMode === "COUNT") {
+                          return [`${payload?.count ?? 0}`, "Respostas"];
+                        }
+                        return [
+                          `${getPercentLabel(Number(payload?.percent ?? 0))}`,
+                          "%",
+                        ];
+                      }}
+                      contentStyle={tooltipContentStyle}
+                      labelStyle={tooltipLabelStyle}
+                    />
+                    <Bar
+                      dataKey={(entry: DistributionDatum) =>
+                        metricValue(metricMode, entry.count, entry.percent)
+                      }
+                      fill={DV_PALETTE.accentSoft}
+                      radius={[8, 8, 0, 0]}
+                      onClick={(entry: any) => {
+                        if (entry?.witnessesLabel === "Sim") {
+                          updateFilter("witnesses", "SIM");
+                        }
+                        if (entry?.witnessesLabel === "Não") {
+                          updateFilter("witnesses", "NAO");
+                        }
+                      }}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      <Grid container spacing={2} sx={{ mb: 2 }}>
+        <Grid size={{ xs: 12, lg: 6 }}>
+          <Card sx={cardSx}>
+            <CardContent>
+              <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
+                Intensidade do impacto
+              </Typography>
+              <Box sx={{ height: 300 }}>
+                <ResponsiveContainer>
+                  <BarChart data={impactIntensityBars}>
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke={chartGridStroke}
+                    />
+                    <XAxis
+                      dataKey="level"
+                      stroke={chartAxisStroke}
+                      tick={axisTickStyle}
+                    />
+                    <YAxis stroke={chartAxisStroke} tick={axisTickStyle} />
+                    <Tooltip
+                      formatter={(_value: number, _name, props: any) => {
+                        const payload = props?.payload as
+                          | DistributionDatum
+                          | undefined;
+                        if (metricMode === "COUNT") {
+                          return [`${payload?.count ?? 0}`, "Respostas"];
+                        }
+                        return [
+                          `${getPercentLabel(Number(payload?.percent ?? 0))}`,
+                          "%",
+                        ];
+                      }}
+                      contentStyle={tooltipContentStyle}
+                      labelStyle={tooltipLabelStyle}
+                    />
+                    <Bar
+                      dataKey={(entry: DistributionDatum) =>
+                        metricValue(metricMode, entry.count, entry.percent)
+                      }
+                      fill={DV_PALETTE.violet}
+                      radius={[8, 8, 0, 0]}
+                      onClick={(entry: any) => {
+                        if (entry?.level) {
+                          updateFilter(
+                            "impactIntensity",
+                            String(entry.level),
+                          );
+                        }
+                      }}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid size={{ xs: 12, lg: 6 }}>
+          <Card sx={cardSx}>
+            <CardContent>
+              <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
+                Procurou canal de denúncia?
+              </Typography>
+              <Box sx={{ height: 300 }}>
+                <ResponsiveContainer>
+                  <BarChart data={soughtHelpBars}>
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke={chartGridStroke}
+                    />
+                    <XAxis
+                      dataKey="soughtHelpLabel"
+                      stroke={chartAxisStroke}
+                      tick={axisTickStyle}
+                    />
+                    <YAxis stroke={chartAxisStroke} tick={axisTickStyle} />
+                    <Tooltip
+                      formatter={(_value: number, _name, props: any) => {
+                        const payload = props?.payload as
+                          | DistributionDatum
+                          | undefined;
+                        if (metricMode === "COUNT") {
+                          return [`${payload?.count ?? 0}`, "Respostas"];
+                        }
+                        return [
+                          `${getPercentLabel(Number(payload?.percent ?? 0))}`,
+                          "%",
+                        ];
+                      }}
+                      contentStyle={tooltipContentStyle}
+                      labelStyle={tooltipLabelStyle}
+                    />
+                    <Bar
+                      dataKey={(entry: DistributionDatum) =>
+                        metricValue(metricMode, entry.count, entry.percent)
+                      }
+                      fill={DV_PALETTE.accent}
+                      radius={[8, 8, 0, 0]}
+                      onClick={(entry: any) => {
+                        if (entry?.soughtHelpLabel === "Sim") {
+                          updateFilter("soughtHelp", "SIM");
+                        }
+                        if (entry?.soughtHelpLabel === "Não") {
+                          updateFilter("soughtHelp", "NAO");
+                        }
+                      }}
+                    />
+                  </BarChart>
                 </ResponsiveContainer>
               </Box>
             </CardContent>
@@ -1885,62 +2916,40 @@ export function BiDomesticViolenceDashboardPage() {
       <Card sx={{ ...cardSx, mb: 2 }}>
         <CardContent>
           <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
-            Evolução mensal das respostas e prevalência
+            Evolução das respostas
+          </Typography>
+          <Typography variant="caption" sx={{ color: DV_PALETTE.muted }}>
+            Cada barra representa a quantidade de respostas registrada em um dia.
           </Typography>
           <Box sx={{ height: 320 }}>
             <ResponsiveContainer>
-              <LineChart data={trend}>
+              <BarChart data={trend}>
                 <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
                 <XAxis
-                  dataKey="month"
+                  dataKey="dayLabel"
                   stroke={chartAxisStroke}
                   tick={axisTickStyle}
+                  minTickGap={18}
                 />
-                <YAxis stroke={chartAxisStroke} tick={axisTickStyle} />
+                <YAxis
+                  stroke={chartAxisStroke}
+                  tick={axisTickStyle}
+                  allowDecimals={false}
+                />
                 <Tooltip
-                  formatter={(value: number, name: string) => {
-                    if (name.includes("Rate")) {
-                      return [getPercentLabel(Number(value ?? 0)), "%"];
-                    }
-                    return [value, "Registros"];
+                  formatter={(value: number) => {
+                    return [Math.round(Number(value ?? 0)), "Registros"];
                   }}
                   contentStyle={tooltipContentStyle}
                   labelStyle={tooltipLabelStyle}
                 />
-                <Legend wrapperStyle={legendWrapperStyle} />
-                <Line
-                  type="monotone"
-                  dataKey={
-                    metricMode === "COUNT"
-                      ? "lifetimeYesCount"
-                      : "lifetimeRatePercent"
-                  }
-                  name={
-                    metricMode === "COUNT"
-                      ? "Sofreram ao longo da vida (Qtd)"
-                      : "Sofreram ao longo da vida (%)"
-                  }
-                  stroke={DV_PALETTE.accent}
-                  strokeWidth={2.5}
-                  dot={{ r: 3 }}
+                <Bar
+                  dataKey="total"
+                  name="Respostas"
+                  fill={alpha(DV_PALETTE.primary, 0.62)}
+                  radius={[8, 8, 0, 0]}
                 />
-                <Line
-                  type="monotone"
-                  dataKey={
-                    metricMode === "COUNT"
-                      ? "last12MonthsYesCount"
-                      : "last12MonthsRatePercent"
-                  }
-                  name={
-                    metricMode === "COUNT"
-                      ? "Sofreram nos últimos 12 meses (Qtd)"
-                      : "Sofreram nos últimos 12 meses (%)"
-                  }
-                  stroke={DV_PALETTE.primary}
-                  strokeWidth={2.5}
-                  dot={{ r: 3 }}
-                />
-              </LineChart>
+              </BarChart>
             </ResponsiveContainer>
           </Box>
         </CardContent>

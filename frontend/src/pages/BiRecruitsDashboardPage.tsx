@@ -34,9 +34,6 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
-  Legend,
-  Line,
-  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -102,13 +99,10 @@ type RecruitsDashboardResponse = {
     willingnessOrientationDistribution: DistributionDatum[];
     willingnessReportDistribution: DistributionDatum[];
     enlistmentDecisionInfluenceDistribution: DistributionDatum[];
-    monthlyTrend: Array<{
-      month: string;
+    responseTrend: Array<{
+      day: string;
+      dayLabel: string;
       total: number;
-      secureGuidanceCount: number;
-      secureReportCount: number;
-      secureGuidanceRatePercent: number;
-      secureReportRatePercent: number;
     }>;
   };
   textColumns: {
@@ -224,7 +218,6 @@ const tooltipContentStyle = {
   background: "#FFFFFF",
 };
 const tooltipLabelStyle = { color: RC_PALETTE.text, fontWeight: 700 };
-const legendWrapperStyle = { color: RC_PALETTE.text };
 
 function formatDate(value?: string | Date | null) {
   if (!value) return "-";
@@ -1208,77 +1201,49 @@ export function BiRecruitsDashboardPage() {
       <Card sx={{ ...cardSx, mb: 2 }}>
         <CardContent>
           <Typography variant="subtitle1" fontWeight={700}>
-            Evolução mensal das respostas
+            Evolução das respostas
           </Typography>
           <Typography variant="caption" sx={{ color: RC_PALETTE.muted }}>
-            Barras em quantidade de respostas; linhas em percentual de segurança
-            percebida para orientação e registro.
+            Cada barra representa a quantidade de respostas registrada em um dia.
           </Typography>
 
-          {(dashboard.charts.monthlyTrend ?? []).length === 0 ? (
+          {(dashboard.charts.responseTrend ?? []).length === 0 ? (
             <Alert severity="info" sx={{ mt: 1 }}>
               Sem dados de tendência para o recorte atual.
             </Alert>
           ) : (
             <Box sx={{ mt: 1.1 }}>
               <ResponsiveContainer width="100%" height={320}>
-                <LineChart data={dashboard.charts.monthlyTrend}>
+                <BarChart data={dashboard.charts.responseTrend}>
                   <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
-                  <XAxis dataKey="month" stroke={chartAxisStroke} tick={axisTickStyle} />
+                  <XAxis
+                    dataKey="dayLabel"
+                    stroke={chartAxisStroke}
+                    tick={axisTickStyle}
+                    minTickGap={18}
+                  />
                   <YAxis
-                    yAxisId="left"
                     stroke={chartAxisStroke}
                     tick={axisTickStyle}
                     allowDecimals={false}
-                    label={{ value: "Respostas", angle: -90, position: "insideLeft" }}
-                  />
-                  <YAxis
-                    yAxisId="right"
-                    orientation="right"
-                    stroke={chartAxisStroke}
-                    tick={axisTickStyle}
-                    domain={[0, 100]}
-                    label={{ value: "%", angle: 90, position: "insideRight" }}
+                    label={{
+                      value: "Respostas",
+                      angle: -90,
+                      position: "insideLeft",
+                    }}
                   />
                   <Tooltip
-                    formatter={(value: number, name: string) => {
-                      if (name.includes("Rate")) {
-                        return [`${Number(value).toFixed(2)}%`, name];
-                      }
-                      return [`${value} registros`, name];
-                    }}
+                    formatter={(value: number) => [`${value} registros`, "Respostas"]}
                     contentStyle={tooltipContentStyle}
                     labelStyle={tooltipLabelStyle}
                   />
-                  <Legend wrapperStyle={legendWrapperStyle} />
                   <Bar
-                    yAxisId="left"
                     dataKey="total"
                     name="Respostas"
-                    fill={alpha(RC_PALETTE.primary, 0.38)}
+                    fill={alpha(RC_PALETTE.primary, 0.62)}
                     radius={[8, 8, 0, 0]}
                   />
-                  <Line
-                    yAxisId="right"
-                    type="monotone"
-                    dataKey="secureGuidanceRatePercent"
-                    name="% Segurança para orientação"
-                    stroke={RC_PALETTE.secondary}
-                    strokeWidth={2.2}
-                    dot={{ r: 3 }}
-                    activeDot={{ r: 5 }}
-                  />
-                  <Line
-                    yAxisId="right"
-                    type="monotone"
-                    dataKey="secureReportRatePercent"
-                    name="% Segurança para registro"
-                    stroke={RC_PALETTE.accent}
-                    strokeWidth={2.2}
-                    dot={{ r: 3 }}
-                    activeDot={{ r: 5 }}
-                  />
-                </LineChart>
+                </BarChart>
               </ResponsiveContainer>
             </Box>
           )}

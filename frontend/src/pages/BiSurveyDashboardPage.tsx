@@ -8,6 +8,10 @@ import {
   Checkbox,
   Chip,
   Collapse,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   IconButton,
   LinearProgress,
   MenuItem,
@@ -18,12 +22,14 @@ import {
   TableHead,
   TableRow,
   TextField,
+  Tooltip as MuiTooltip,
   Typography,
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import UploadFileRoundedIcon from "@mui/icons-material/UploadFileRounded";
 import AutoGraphRoundedIcon from "@mui/icons-material/AutoGraphRounded";
 import DownloadRoundedIcon from "@mui/icons-material/DownloadRounded";
+import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import KeyboardArrowDownRoundedIcon from "@mui/icons-material/KeyboardArrowDownRounded";
 import KeyboardArrowUpRoundedIcon from "@mui/icons-material/KeyboardArrowUpRounded";
 import {
@@ -46,8 +52,10 @@ import {
   useBiSurveyQuestions,
   useBiSurveyResponses,
   useImportBiSurvey,
+  useMe,
 } from "../api/hooks";
 import { parseApiError } from "../app/apiErrors";
+import { hasAnyRole, ROLE_TI } from "../app/roleAccess";
 import { useToast } from "../app/toast";
 import { EmptyState } from "../components/states/EmptyState";
 import { ErrorState } from "../components/states/ErrorState";
@@ -195,6 +203,45 @@ type PagedResponse<T> = {
   total: number;
 };
 
+type BiEditableCardId =
+  | "context-mission"
+  | "kpi-total-responses"
+  | "kpi-violence-rate"
+  | "kpi-violence-mentions"
+  | "kpi-quick-insight"
+  | "chart-mission-percent"
+  | "chart-yes-no"
+  | "chart-violence-type"
+  | "chart-violence-by-mission"
+  | "chart-mission-distribution"
+  | "chart-profile-types"
+  | "chart-monthly-trend";
+
+type BiEditableCardTextStyle = {
+  title: string;
+  description: string;
+  textColor: string;
+};
+
+const BI_CARD_TEXT_STYLES_STORAGE_KEY = "bi-survey-card-text-styles-v1";
+
+function isBiEditableCardId(value: string): value is BiEditableCardId {
+  return (
+    value === "context-mission" ||
+    value === "kpi-total-responses" ||
+    value === "kpi-violence-rate" ||
+    value === "kpi-violence-mentions" ||
+    value === "kpi-quick-insight" ||
+    value === "chart-mission-percent" ||
+    value === "chart-yes-no" ||
+    value === "chart-violence-type" ||
+    value === "chart-violence-by-mission" ||
+    value === "chart-mission-distribution" ||
+    value === "chart-profile-types" ||
+    value === "chart-monthly-trend"
+  );
+}
+
 function formatDate(value?: string | Date | null) {
   if (!value) return "-";
   const date = new Date(value);
@@ -317,15 +364,141 @@ const BAR_CHART_HEIGHT_SMALL = 205;
 const BAR_SIZE_PRIMARY = 10;
 const BAR_SIZE_STACKED = 8;
 
+function buildBiCardTextDefaults(
+  metricMode: MetricMode,
+): Record<BiEditableCardId, BiEditableCardTextStyle> {
+  const metricLabel = metricMode === "PERCENT" ? "%" : "Qtd";
+  return {
+    "context-mission": {
+      title: "Contexto da Missão",
+      description:
+        "Esta visão consolida respostas por missão. Use este recorte antes dos gráficos para evitar comparação entre questionários de missões diferentes.",
+      textColor: BI_PALETTE.text,
+    },
+    "kpi-total-responses": {
+      title: "Respostas no recorte",
+      description: "Total de respostas consideradas nos filtros atuais.",
+      textColor: BI_PALETTE.text,
+    },
+    "kpi-violence-rate": {
+      title: "Taxa de relatos",
+      description:
+        "Percentual de respostas que indicaram ocorrência de violência.",
+      textColor: BI_PALETTE.text,
+    },
+    "kpi-violence-mentions": {
+      title: "Ocorrências mapeadas",
+      description:
+        "Quantidade de menções de tipos de violência no recorte filtrado.",
+      textColor: BI_PALETTE.text,
+    },
+    "kpi-quick-insight": {
+      title: "Insight rápido",
+      description:
+        "Resumo executivo com os principais sinais detectados nesta seleção.",
+      textColor: BI_PALETTE.text,
+    },
+    "chart-mission-percent": {
+      title: `Missão Percentual (${metricLabel})`,
+      description: "Clique em uma barra para filtrar a missão.",
+      textColor: BI_PALETTE.text,
+    },
+    "chart-yes-no": {
+      title: "Sofreu violência (geral)",
+      description: "Clique em uma fatia para aplicar filtro de Sim/Não.",
+      textColor: BI_PALETTE.text,
+    },
+    "chart-violence-type": {
+      title: `Violência percentual por tipo (${metricLabel})`,
+      description: "Clique em um tipo para filtrar o recorte.",
+      textColor: BI_PALETTE.text,
+    },
+    "chart-violence-by-mission": {
+      title: `Violências por missão (${metricLabel})`,
+      description:
+        "Equivalente ao cruzamento por missão/tipo do arquivo original.",
+      textColor: BI_PALETTE.text,
+    },
+    "chart-mission-distribution": {
+      title: `Distribuição por missão (${metricLabel})`,
+      description: "",
+      textColor: BI_PALETTE.text,
+    },
+    "chart-profile-types": {
+      title: `Tipos por perfil funcional (${metricLabel})`,
+      description:
+        "Leitura de concentração por DISCENTE e GRADUADO E OFICIAL.",
+      textColor: BI_PALETTE.text,
+    },
+    "chart-monthly-trend": {
+      title: `Evolução mensal das respostas (${metricLabel})`,
+      description: "",
+      textColor: BI_PALETTE.text,
+    },
+  };
+}
+
+function loadBiCardTextStyles(): Partial<
+  Record<BiEditableCardId, Partial<BiEditableCardTextStyle>>
+> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(BI_CARD_TEXT_STYLES_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<
+      string,
+      Partial<BiEditableCardTextStyle> | undefined
+    >;
+    if (!parsed || typeof parsed !== "object") return {};
+    const normalized: Partial<
+      Record<BiEditableCardId, Partial<BiEditableCardTextStyle>>
+    > = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      if (!isBiEditableCardId(key) || !value) continue;
+      normalized[key] = {
+        title:
+          typeof value.title === "string" && value.title.trim()
+            ? value.title
+            : undefined,
+        description:
+          typeof value.description === "string"
+            ? value.description
+            : undefined,
+        textColor:
+          typeof value.textColor === "string" && value.textColor.trim()
+            ? value.textColor
+            : undefined,
+      };
+    }
+    return normalized;
+  } catch {
+    return {};
+  }
+}
+
 export function BiSurveyDashboardPage() {
   const toast = useToast();
+  const { data: me } = useMe();
   const [metricMode, setMetricMode] = useState<MetricMode>("PERCENT");
+  const isTiProfile = hasAnyRole(me, [ROLE_TI]);
   const [responsesExpanded, setResponsesExpanded] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [page, setPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [deleteConfirmMode, setDeleteConfirmMode] =
     useState<DeleteConfirmMode | null>(null);
+  const [cardTextStyles, setCardTextStyles] = useState<
+    Partial<Record<BiEditableCardId, Partial<BiEditableCardTextStyle>>>
+  >(() => loadBiCardTextStyles());
+  const [editingCardId, setEditingCardId] = useState<BiEditableCardId | null>(
+    null,
+  );
+  const [editingCardDraft, setEditingCardDraft] =
+    useState<BiEditableCardTextStyle>({
+      title: "",
+      description: "",
+      textColor: BI_PALETTE.text,
+    });
   const [filters, setFilters] = useState({
     from: "",
     to: "",
@@ -337,6 +510,54 @@ export function BiSurveyDashboardPage() {
     violenceType: "",
     combineMode: "AND" as CombineMode,
   });
+
+  const cardTextDefaults = useMemo(
+    () => buildBiCardTextDefaults(metricMode),
+    [metricMode],
+  );
+  const getCardTextStyle = (cardId: BiEditableCardId): BiEditableCardTextStyle => {
+    const defaults = cardTextDefaults[cardId];
+    const custom = cardTextStyles[cardId];
+    return {
+      title:
+        typeof custom?.title === "string" && custom.title.trim()
+          ? custom.title
+          : defaults.title,
+      description:
+        typeof custom?.description === "string"
+          ? custom.description
+          : defaults.description,
+      textColor:
+        typeof custom?.textColor === "string" && custom.textColor.trim()
+          ? custom.textColor
+          : defaults.textColor,
+    };
+  };
+  const openTextEditor = (cardId: BiEditableCardId) => {
+    setEditingCardId(cardId);
+    setEditingCardDraft({ ...getCardTextStyle(cardId) });
+  };
+  const saveTextEditor = () => {
+    if (!editingCardId) return;
+    const defaults = cardTextDefaults[editingCardId];
+    const normalized: BiEditableCardTextStyle = {
+      title: editingCardDraft.title.trim() || defaults.title,
+      description: editingCardDraft.description.trim(),
+      textColor: editingCardDraft.textColor.trim() || defaults.textColor,
+    };
+    const next = {
+      ...cardTextStyles,
+      [editingCardId]: normalized,
+    };
+    setCardTextStyles(next);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(
+        BI_CARD_TEXT_STYLES_STORAGE_KEY,
+        JSON.stringify(next),
+      );
+    }
+    setEditingCardId(null);
+  };
 
   const dashboardFilters = useMemo(
     () => ({
@@ -543,6 +764,21 @@ export function BiSurveyDashboardPage() {
       />
     );
 
+  const contextMissionText = getCardTextStyle("context-mission");
+  const kpiTotalResponsesText = getCardTextStyle("kpi-total-responses");
+  const kpiViolenceRateText = getCardTextStyle("kpi-violence-rate");
+  const kpiViolenceMentionsText = getCardTextStyle("kpi-violence-mentions");
+  const kpiQuickInsightText = getCardTextStyle("kpi-quick-insight");
+  const missionPercentText = getCardTextStyle("chart-mission-percent");
+  const yesNoText = getCardTextStyle("chart-yes-no");
+  const violenceTypeText = getCardTextStyle("chart-violence-type");
+  const violenceByMissionText = getCardTextStyle("chart-violence-by-mission");
+  const missionDistributionText = getCardTextStyle(
+    "chart-mission-distribution",
+  );
+  const profileTypesText = getCardTextStyle("chart-profile-types");
+  const monthlyTrendText = getCardTextStyle("chart-monthly-trend");
+
   return (
     <Box
       sx={{
@@ -559,7 +795,7 @@ export function BiSurveyDashboardPage() {
       >
         <Box>
           <Typography variant="h4" fontWeight={700}>
-            BI Pesquisas
+            Escolas
           </Typography>
           <Typography variant="body2" sx={{ color: BI_PALETTE.muted }}>
             Painel analítico consolidado para leitura executiva e tomada de decisão sobre os dados de pesquisa.
@@ -632,11 +868,36 @@ export function BiSurveyDashboardPage() {
 
       <Card sx={{ mb: 2, ...cardSx }}>
         <CardContent>
-          <Typography variant="subtitle1" fontWeight={700}>
-            Contexto da Missão
-          </Typography>
-          <Typography variant="body2" sx={{ color: BI_PALETTE.muted, mt: 0.6 }}>
-            Esta visão consolida respostas por missão. Use este recorte antes dos gráficos para evitar comparação entre questionários de missões diferentes.
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="center"
+            gap={1}
+          >
+            <Typography
+              variant="subtitle1"
+              fontWeight={700}
+              sx={{ color: contextMissionText.textColor }}
+            >
+              {contextMissionText.title}
+            </Typography>
+            {isTiProfile ? (
+              <MuiTooltip title="Editar card">
+                <IconButton
+                  size="small"
+                  onClick={() => openTextEditor("context-mission")}
+                  sx={{ color: contextMissionText.textColor, opacity: 0.72 }}
+                >
+                  <EditOutlinedIcon fontSize="small" />
+                </IconButton>
+              </MuiTooltip>
+            ) : null}
+          </Stack>
+          <Typography
+            variant="body2"
+            sx={{ color: contextMissionText.textColor, mt: 0.6 }}
+          >
+            {contextMissionText.description}
           </Typography>
           <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ mt: 1.2 }}>
             <Chip
@@ -1017,11 +1278,54 @@ export function BiSurveyDashboardPage() {
           }}
         >
           <CardContent sx={KPI_CARD_CONTENT_SX}>
-            <Typography variant="overline">Respostas no recorte</Typography>
-            <Typography variant="h5" lineHeight={1.1}>
+            <Stack
+              direction="row"
+              justifyContent="space-between"
+              alignItems="center"
+              gap={1}
+              sx={{ mb: 0.2 }}
+            >
+              <Typography
+                variant="overline"
+                sx={{ color: kpiTotalResponsesText.textColor }}
+              >
+                {kpiTotalResponsesText.title}
+              </Typography>
+              {isTiProfile ? (
+                <MuiTooltip title="Editar KPI">
+                  <IconButton
+                    size="small"
+                    onClick={() => openTextEditor("kpi-total-responses")}
+                    sx={{ color: kpiTotalResponsesText.textColor, opacity: 0.72 }}
+                  >
+                    <EditOutlinedIcon fontSize="small" />
+                  </IconButton>
+                </MuiTooltip>
+              ) : null}
+            </Stack>
+            {kpiTotalResponsesText.description.trim() ? (
+              <Typography
+                variant="caption"
+                sx={{
+                  color: kpiTotalResponsesText.textColor,
+                  display: "block",
+                  mb: 0.45,
+                }}
+              >
+                {kpiTotalResponsesText.description}
+              </Typography>
+            ) : null}
+            <Typography
+              variant="h5"
+              lineHeight={1.1}
+              sx={{ color: kpiTotalResponsesText.textColor }}
+            >
               {dashboard.kpis.totalResponses}
             </Typography>
-            <Typography variant="caption" sx={{ color: BI_PALETTE.muted }}>
+            <Typography
+              variant="caption"
+              sx={{ color: alpha(kpiTotalResponsesText.textColor, 0.78) }}
+            >
               Base total: {dashboard.kpis.totalRowsInDb}
             </Typography>
           </CardContent>
@@ -1034,11 +1338,54 @@ export function BiSurveyDashboardPage() {
           }}
         >
           <CardContent sx={KPI_CARD_CONTENT_SX}>
-            <Typography variant="overline">Taxa de relatos</Typography>
-            <Typography variant="h5" lineHeight={1.1}>
+            <Stack
+              direction="row"
+              justifyContent="space-between"
+              alignItems="center"
+              gap={1}
+              sx={{ mb: 0.2 }}
+            >
+              <Typography
+                variant="overline"
+                sx={{ color: kpiViolenceRateText.textColor }}
+              >
+                {kpiViolenceRateText.title}
+              </Typography>
+              {isTiProfile ? (
+                <MuiTooltip title="Editar KPI">
+                  <IconButton
+                    size="small"
+                    onClick={() => openTextEditor("kpi-violence-rate")}
+                    sx={{ color: kpiViolenceRateText.textColor, opacity: 0.72 }}
+                  >
+                    <EditOutlinedIcon fontSize="small" />
+                  </IconButton>
+                </MuiTooltip>
+              ) : null}
+            </Stack>
+            {kpiViolenceRateText.description.trim() ? (
+              <Typography
+                variant="caption"
+                sx={{
+                  color: kpiViolenceRateText.textColor,
+                  display: "block",
+                  mb: 0.45,
+                }}
+              >
+                {kpiViolenceRateText.description}
+              </Typography>
+            ) : null}
+            <Typography
+              variant="h5"
+              lineHeight={1.1}
+              sx={{ color: kpiViolenceRateText.textColor }}
+            >
               {dashboard.kpis.violenceRatePercent.toFixed(1)}%
             </Typography>
-            <Typography variant="caption" sx={{ color: BI_PALETTE.muted }}>
+            <Typography
+              variant="caption"
+              sx={{ color: alpha(kpiViolenceRateText.textColor, 0.78) }}
+            >
               Sim: {dashboard.kpis.yesCount} | Não: {dashboard.kpis.noCount}
             </Typography>
           </CardContent>
@@ -1050,11 +1397,57 @@ export function BiSurveyDashboardPage() {
           }}
         >
           <CardContent sx={KPI_CARD_CONTENT_SX}>
-            <Typography variant="overline">Ocorrencias mapeadas</Typography>
-            <Typography variant="h5" lineHeight={1.1}>
+            <Stack
+              direction="row"
+              justifyContent="space-between"
+              alignItems="center"
+              gap={1}
+              sx={{ mb: 0.2 }}
+            >
+              <Typography
+                variant="overline"
+                sx={{ color: kpiViolenceMentionsText.textColor }}
+              >
+                {kpiViolenceMentionsText.title}
+              </Typography>
+              {isTiProfile ? (
+                <MuiTooltip title="Editar KPI">
+                  <IconButton
+                    size="small"
+                    onClick={() => openTextEditor("kpi-violence-mentions")}
+                    sx={{
+                      color: kpiViolenceMentionsText.textColor,
+                      opacity: 0.72,
+                    }}
+                  >
+                    <EditOutlinedIcon fontSize="small" />
+                  </IconButton>
+                </MuiTooltip>
+              ) : null}
+            </Stack>
+            {kpiViolenceMentionsText.description.trim() ? (
+              <Typography
+                variant="caption"
+                sx={{
+                  color: kpiViolenceMentionsText.textColor,
+                  display: "block",
+                  mb: 0.45,
+                }}
+              >
+                {kpiViolenceMentionsText.description}
+              </Typography>
+            ) : null}
+            <Typography
+              variant="h5"
+              lineHeight={1.1}
+              sx={{ color: kpiViolenceMentionsText.textColor }}
+            >
               {dashboard.kpis.totalViolenceMentions}
             </Typography>
-            <Typography variant="caption" sx={{ color: BI_PALETTE.muted }}>
+            <Typography
+              variant="caption"
+              sx={{ color: alpha(kpiViolenceMentionsText.textColor, 0.78) }}
+            >
               Media por vitima: {dashboard.kpis.averageTypesPerVictim}
             </Typography>
           </CardContent>
@@ -1066,16 +1459,52 @@ export function BiSurveyDashboardPage() {
           }}
         >
           <CardContent sx={KPI_CARD_CONTENT_SX}>
-            <Typography variant="overline">Insight rapido</Typography>
-            <Typography variant="body2" sx={{ mt: 0.6 }}>
+            <Stack
+              direction="row"
+              justifyContent="space-between"
+              alignItems="center"
+              gap={1}
+              sx={{ mb: 0.2 }}
+            >
+              <Typography
+                variant="overline"
+                sx={{ color: kpiQuickInsightText.textColor }}
+              >
+                {kpiQuickInsightText.title}
+              </Typography>
+              {isTiProfile ? (
+                <MuiTooltip title="Editar KPI">
+                  <IconButton
+                    size="small"
+                    onClick={() => openTextEditor("kpi-quick-insight")}
+                    sx={{ color: kpiQuickInsightText.textColor, opacity: 0.72 }}
+                  >
+                    <EditOutlinedIcon fontSize="small" />
+                  </IconButton>
+                </MuiTooltip>
+              ) : null}
+            </Stack>
+            {kpiQuickInsightText.description.trim() ? (
+              <Typography
+                variant="caption"
+                sx={{
+                  color: kpiQuickInsightText.textColor,
+                  display: "block",
+                  mb: 0.45,
+                }}
+              >
+                {kpiQuickInsightText.description}
+              </Typography>
+            ) : null}
+            <Typography variant="body2" sx={{ mt: 0.6, color: kpiQuickInsightText.textColor }}>
               Tipo mais frequente:{" "}
               <strong>{dashboard.insights.mostCommonType?.type ?? "-"}</strong>
             </Typography>
-            <Typography variant="body2">
+            <Typography variant="body2" sx={{ color: kpiQuickInsightText.textColor }}>
               Missão com maior taxa:{" "}
               <strong>{dashboard.insights.riskiestOm?.om ?? "-"}</strong>
             </Typography>
-            <Typography variant="body2">
+            <Typography variant="body2" sx={{ color: kpiQuickInsightText.textColor }}>
               Perfil com mais relatos:{" "}
               <strong>{dashboard.insights.topProfileByMentions?.posto ?? "-"}</strong>
             </Typography>
@@ -1091,11 +1520,37 @@ export function BiSurveyDashboardPage() {
       >
         <Card sx={cardSx}>
           <CardContent>
-            <Typography variant="subtitle1" fontWeight={700} gutterBottom>
-              Missão Percentual ({metricMode === "PERCENT" ? "%" : "Qtd"})
-            </Typography>
-            <Typography variant="caption" sx={chartCaptionSx}>
-              Clique em uma barra para filtrar a missão.
+            <Stack
+              direction="row"
+              justifyContent="space-between"
+              alignItems="center"
+              gap={1}
+              sx={{ mb: 0.35 }}
+            >
+              <Typography
+                variant="subtitle1"
+                fontWeight={700}
+                sx={{ color: missionPercentText.textColor }}
+              >
+                {missionPercentText.title}
+              </Typography>
+              {isTiProfile ? (
+                <MuiTooltip title="Editar card">
+                  <IconButton
+                    size="small"
+                    onClick={() => openTextEditor("chart-mission-percent")}
+                    sx={{ color: missionPercentText.textColor, opacity: 0.72 }}
+                  >
+                    <EditOutlinedIcon fontSize="small" />
+                  </IconButton>
+                </MuiTooltip>
+              ) : null}
+            </Stack>
+            <Typography
+              variant="caption"
+              sx={{ ...chartCaptionSx, color: missionPercentText.textColor }}
+            >
+              {missionPercentText.description}
             </Typography>
             <ResponsiveContainer width="100%" height={BAR_CHART_HEIGHT_LARGE}>
               <BarChart
@@ -1155,11 +1610,37 @@ export function BiSurveyDashboardPage() {
 
         <Card sx={cardSx}>
           <CardContent>
-            <Typography variant="subtitle1" fontWeight={700} gutterBottom>
-              Sofreu violência (geral)
-            </Typography>
-            <Typography variant="caption" sx={chartCaptionSx}>
-              Clique em uma fatia para aplicar filtro de Sim/Não.
+            <Stack
+              direction="row"
+              justifyContent="space-between"
+              alignItems="center"
+              gap={1}
+              sx={{ mb: 0.35 }}
+            >
+              <Typography
+                variant="subtitle1"
+                fontWeight={700}
+                sx={{ color: yesNoText.textColor }}
+              >
+                {yesNoText.title}
+              </Typography>
+              {isTiProfile ? (
+                <MuiTooltip title="Editar card">
+                  <IconButton
+                    size="small"
+                    onClick={() => openTextEditor("chart-yes-no")}
+                    sx={{ color: yesNoText.textColor, opacity: 0.72 }}
+                  >
+                    <EditOutlinedIcon fontSize="small" />
+                  </IconButton>
+                </MuiTooltip>
+              ) : null}
+            </Stack>
+            <Typography
+              variant="caption"
+              sx={{ ...chartCaptionSx, color: yesNoText.textColor }}
+            >
+              {yesNoText.description}
             </Typography>
             <ResponsiveContainer width="100%" height={BAR_CHART_HEIGHT_LARGE}>
               <PieChart>
@@ -1208,12 +1689,37 @@ export function BiSurveyDashboardPage() {
       >
         <Card sx={cardSx}>
           <CardContent>
-            <Typography variant="subtitle1" fontWeight={700} gutterBottom>
-              Violência percentual por tipo (
-              {metricMode === "PERCENT" ? "%" : "Qtd"})
-            </Typography>
-            <Typography variant="caption" sx={chartCaptionSx}>
-              Clique em um tipo para filtrar o recorte.
+            <Stack
+              direction="row"
+              justifyContent="space-between"
+              alignItems="center"
+              gap={1}
+              sx={{ mb: 0.35 }}
+            >
+              <Typography
+                variant="subtitle1"
+                fontWeight={700}
+                sx={{ color: violenceTypeText.textColor }}
+              >
+                {violenceTypeText.title}
+              </Typography>
+              {isTiProfile ? (
+                <MuiTooltip title="Editar card">
+                  <IconButton
+                    size="small"
+                    onClick={() => openTextEditor("chart-violence-type")}
+                    sx={{ color: violenceTypeText.textColor, opacity: 0.72 }}
+                  >
+                    <EditOutlinedIcon fontSize="small" />
+                  </IconButton>
+                </MuiTooltip>
+              ) : null}
+            </Stack>
+            <Typography
+              variant="caption"
+              sx={{ ...chartCaptionSx, color: violenceTypeText.textColor }}
+            >
+              {violenceTypeText.description}
             </Typography>
             <ResponsiveContainer width="100%" height={BAR_CHART_HEIGHT_LARGE}>
               <BarChart
@@ -1275,11 +1781,40 @@ export function BiSurveyDashboardPage() {
 
         <Card sx={cardSx}>
           <CardContent>
-            <Typography variant="subtitle1" fontWeight={700} gutterBottom>
-              Violências por missão ({metricMode === "PERCENT" ? "%" : "Qtd"})
-            </Typography>
-            <Typography variant="caption" sx={chartCaptionSx}>
-              Equivalente ao cruzamento por missão/tipo do arquivo original.
+            <Stack
+              direction="row"
+              justifyContent="space-between"
+              alignItems="center"
+              gap={1}
+              sx={{ mb: 0.35 }}
+            >
+              <Typography
+                variant="subtitle1"
+                fontWeight={700}
+                sx={{ color: violenceByMissionText.textColor }}
+              >
+                {violenceByMissionText.title}
+              </Typography>
+              {isTiProfile ? (
+                <MuiTooltip title="Editar card">
+                  <IconButton
+                    size="small"
+                    onClick={() => openTextEditor("chart-violence-by-mission")}
+                    sx={{
+                      color: violenceByMissionText.textColor,
+                      opacity: 0.72,
+                    }}
+                  >
+                    <EditOutlinedIcon fontSize="small" />
+                  </IconButton>
+                </MuiTooltip>
+              ) : null}
+            </Stack>
+            <Typography
+              variant="caption"
+              sx={{ ...chartCaptionSx, color: violenceByMissionText.textColor }}
+            >
+              {violenceByMissionText.description}
             </Typography>
             <ResponsiveContainer width="100%" height={BAR_CHART_HEIGHT_LARGE}>
               <BarChart
@@ -1350,9 +1885,47 @@ export function BiSurveyDashboardPage() {
       >
         <Card sx={cardSx}>
           <CardContent>
-            <Typography variant="subtitle1" fontWeight={700} gutterBottom>
-              Distribuicao por missão ({metricMode === "PERCENT" ? "%" : "Qtd"})
-            </Typography>
+            <Stack
+              direction="row"
+              justifyContent="space-between"
+              alignItems="center"
+              gap={1}
+              sx={{ mb: 0.35 }}
+            >
+              <Typography
+                variant="subtitle1"
+                fontWeight={700}
+                sx={{ color: missionDistributionText.textColor }}
+              >
+                {missionDistributionText.title}
+              </Typography>
+              {isTiProfile ? (
+                <MuiTooltip title="Editar card">
+                  <IconButton
+                    size="small"
+                    onClick={() => openTextEditor("chart-mission-distribution")}
+                    sx={{
+                      color: missionDistributionText.textColor,
+                      opacity: 0.72,
+                    }}
+                  >
+                    <EditOutlinedIcon fontSize="small" />
+                  </IconButton>
+                </MuiTooltip>
+              ) : null}
+            </Stack>
+            {missionDistributionText.description.trim() ? (
+              <Typography
+                variant="caption"
+                sx={{
+                  ...chartCaptionSx,
+                  color: missionDistributionText.textColor,
+                  display: "block",
+                }}
+              >
+                {missionDistributionText.description}
+              </Typography>
+            ) : null}
             <ResponsiveContainer width="100%" height={BAR_CHART_HEIGHT_SMALL}>
               <BarChart data={dashboard.charts.omDistribution} barCategoryGap="32%">
                 <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
@@ -1389,11 +1962,37 @@ export function BiSurveyDashboardPage() {
 
         <Card sx={cardSx}>
           <CardContent>
-            <Typography variant="subtitle1" fontWeight={700} gutterBottom>
-              Tipos por perfil funcional ({metricMode === "PERCENT" ? "%" : "Qtd"})
-            </Typography>
-            <Typography variant="caption" sx={chartCaptionSx}>
-              Leitura de concentração por DISCENTE e GRADUADO E OFICIAL.
+            <Stack
+              direction="row"
+              justifyContent="space-between"
+              alignItems="center"
+              gap={1}
+              sx={{ mb: 0.35 }}
+            >
+              <Typography
+                variant="subtitle1"
+                fontWeight={700}
+                sx={{ color: profileTypesText.textColor }}
+              >
+                {profileTypesText.title}
+              </Typography>
+              {isTiProfile ? (
+                <MuiTooltip title="Editar card">
+                  <IconButton
+                    size="small"
+                    onClick={() => openTextEditor("chart-profile-types")}
+                    sx={{ color: profileTypesText.textColor, opacity: 0.72 }}
+                  >
+                    <EditOutlinedIcon fontSize="small" />
+                  </IconButton>
+                </MuiTooltip>
+              ) : null}
+            </Stack>
+            <Typography
+              variant="caption"
+              sx={{ ...chartCaptionSx, color: profileTypesText.textColor }}
+            >
+              {profileTypesText.description}
             </Typography>
             <ResponsiveContainer width="100%" height={BAR_CHART_HEIGHT_MEDIUM}>
               <BarChart data={typeByPosto?.items ?? []} barCategoryGap="32%">
@@ -1445,9 +2044,44 @@ export function BiSurveyDashboardPage() {
 
       <Card sx={{ mb: 2, ...cardSx }}>
         <CardContent>
-          <Typography variant="subtitle1" fontWeight={700} gutterBottom>
-            Evolução mensal das respostas ({metricMode === "PERCENT" ? "%" : "Qtd"})
-          </Typography>
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="center"
+            gap={1}
+            sx={{ mb: 0.35 }}
+          >
+            <Typography
+              variant="subtitle1"
+              fontWeight={700}
+              sx={{ color: monthlyTrendText.textColor }}
+            >
+              {monthlyTrendText.title}
+            </Typography>
+            {isTiProfile ? (
+              <MuiTooltip title="Editar card">
+                <IconButton
+                  size="small"
+                  onClick={() => openTextEditor("chart-monthly-trend")}
+                  sx={{ color: monthlyTrendText.textColor, opacity: 0.72 }}
+                >
+                  <EditOutlinedIcon fontSize="small" />
+                </IconButton>
+              </MuiTooltip>
+            ) : null}
+          </Stack>
+          {monthlyTrendText.description.trim() ? (
+            <Typography
+              variant="caption"
+              sx={{
+                ...chartCaptionSx,
+                color: monthlyTrendText.textColor,
+                display: "block",
+              }}
+            >
+              {monthlyTrendText.description}
+            </Typography>
+          ) : null}
           <ResponsiveContainer width="100%" height={BAR_CHART_HEIGHT_MEDIUM}>
             <BarChart data={dashboard.charts.monthlyTrend ?? []} barCategoryGap="32%">
               <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
@@ -1799,6 +2433,61 @@ export function BiSurveyDashboardPage() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog
+        open={Boolean(editingCardId)}
+        onClose={() => setEditingCardId(null)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Editar texto do card</DialogTitle>
+        <DialogContent sx={{ pt: 1 }}>
+          <Stack spacing={1.3} sx={{ mt: 0.4 }}>
+            <TextField
+              label="Título"
+              value={editingCardDraft.title}
+              onChange={(event) =>
+                setEditingCardDraft((prev) => ({
+                  ...prev,
+                  title: event.target.value,
+                }))
+              }
+              fullWidth
+            />
+            <TextField
+              label="Descrição"
+              value={editingCardDraft.description}
+              onChange={(event) =>
+                setEditingCardDraft((prev) => ({
+                  ...prev,
+                  description: event.target.value,
+                }))
+              }
+              fullWidth
+              multiline
+              minRows={2}
+            />
+            <TextField
+              label="Cor da fonte"
+              type="color"
+              value={editingCardDraft.textColor}
+              onChange={(event) =>
+                setEditingCardDraft((prev) => ({
+                  ...prev,
+                  textColor: event.target.value,
+                }))
+              }
+              fullWidth
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditingCardId(null)}>Cancelar</Button>
+          <Button variant="contained" onClick={saveTextEditor}>
+            Salvar
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <ConfirmDialog
         open={Boolean(deleteConfirmMode)}

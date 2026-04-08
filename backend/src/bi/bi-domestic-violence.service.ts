@@ -14,17 +14,23 @@ type DomesticViolenceFilters = {
   rank?: string;
   maritalStatus?: string;
   education?: string;
+  naturality?: string;
   fabBond?: string;
+  situationScope?: string;
   sufferedLifetime?: string;
   sufferedLast12Months?: string;
   frequency?: string;
+  affectiveBond?: string;
   violenceType?: string;
+  authorRelation?: string;
   impactIntensity?: string;
   impactArea?: string;
   soughtHelp?: string;
   complaintChannel?: string;
   noComplaintReason?: string;
   authorMilitaryLink?: string;
+  occurrencePlace?: string;
+  witnesses?: string;
   q?: string;
   combineMode?: string;
 };
@@ -39,14 +45,18 @@ type ParsedDomesticViolenceRow = {
   organization: string | null;
   maritalStatus: string | null;
   education: string | null;
+  naturality: string | null;
   fabBond: string | null;
   rank: string | null;
+  situationScope: string | null;
   sufferedLifetimeRaw: string | null;
   sufferedLifetime: boolean | null;
   sufferedLast12MonthsRaw: string | null;
   sufferedLast12Months: boolean | null;
   frequency: string | null;
+  affectiveBond: string | null;
   violenceTypes: string[];
+  authorRelation: string | null;
   authorMilitaryLink: string | null;
   occurrencePlace: string | null;
   witnessesRaw: string | null;
@@ -172,14 +182,18 @@ export class BiDomesticViolenceService {
           organization: item.organization,
           maritalStatus: item.maritalStatus,
           education: item.education,
+          naturality: item.naturality,
           fabBond: item.fabBond,
           rank: item.rank,
+          situationScope: item.situationScope,
           sufferedLifetimeRaw: item.sufferedLifetimeRaw,
           sufferedLifetime: item.sufferedLifetime,
           sufferedLast12MonthsRaw: item.sufferedLast12MonthsRaw,
           sufferedLast12Months: item.sufferedLast12Months,
           frequency: item.frequency,
+          affectiveBond: item.affectiveBond,
           violenceTypes: item.violenceTypes,
+          authorRelation: item.authorRelation,
           authorMilitaryLink: item.authorMilitaryLink,
           occurrencePlace: item.occurrencePlace,
           witnessesRaw: item.witnessesRaw,
@@ -224,9 +238,13 @@ export class BiDomesticViolenceService {
         age: item.age,
         organization: item.organization,
         rank: item.rank,
+        naturality: item.naturality,
+        situationScope: item.situationScope,
         sufferedLifetimeRaw: item.sufferedLifetimeRaw,
         sufferedLast12MonthsRaw: item.sufferedLast12MonthsRaw,
+        affectiveBond: item.affectiveBond,
         violenceTypes: item.violenceTypes,
+        authorRelation: item.authorRelation,
         impactIntensity: item.impactIntensity,
         soughtHelpRaw: item.soughtHelpRaw,
       })),
@@ -348,13 +366,19 @@ export class BiDomesticViolenceService {
             organization: true,
             maritalStatus: true,
             education: true,
+            naturality: true,
             fabBond: true,
             rank: true,
+            situationScope: true,
             sufferedLifetime: true,
             sufferedLast12Months: true,
             frequency: true,
+            affectiveBond: true,
             violenceTypes: true,
+            authorRelation: true,
             authorMilitaryLink: true,
+            occurrencePlace: true,
+            witnesses: true,
             impactIntensity: true,
             impactAreas: true,
             soughtHelp: true,
@@ -368,17 +392,23 @@ export class BiDomesticViolenceService {
             rank: true,
             maritalStatus: true,
             education: true,
+            naturality: true,
             fabBond: true,
+            situationScope: true,
             sufferedLifetime: true,
             sufferedLast12Months: true,
             frequency: true,
+            affectiveBond: true,
             violenceTypes: true,
+            authorRelation: true,
             impactIntensity: true,
             impactAreas: true,
             soughtHelp: true,
             complaintChannels: true,
             noComplaintReasons: true,
             authorMilitaryLink: true,
+            occurrencePlace: true,
+            witnesses: true,
           },
         }),
         this.prisma.biDomesticViolenceResponse.count(),
@@ -459,10 +489,70 @@ export class BiDomesticViolenceService {
       (row) => row.rank ?? 'Não informado',
       'rank',
     );
+    const maritalStatusDistribution = this.buildDistribution(
+      rows,
+      (row) => row.maritalStatus ?? 'Não informado',
+      'maritalStatus',
+    );
+    const educationDistribution = this.buildDistribution(
+      rows,
+      (row) => row.education ?? 'Não informado',
+      'education',
+    );
+    const naturalityDistribution = this.buildDistribution(
+      rows,
+      (row) => row.naturality ?? 'Não informado',
+      'naturality',
+    );
+    const fabBondDistribution = this.buildDistribution(
+      rows,
+      (row) => row.fabBond ?? 'Não informado',
+      'fabBond',
+    );
     const ageRangeDistribution = this.buildDistribution(
       rows,
       (row) => this.ageRange(row.age),
       'range',
+    );
+    const situationScopeDistribution = this.buildDistribution(
+      rows,
+      (row) => row.situationScope ?? 'Não informado',
+      'situationScope',
+    );
+    const frequencyDistribution = this.buildDistribution(
+      rows,
+      (row) => row.frequency ?? 'Não informado',
+      'frequency',
+    );
+    const affectiveBondDistribution = this.buildDistribution(
+      rows,
+      (row) => row.affectiveBond ?? 'Não informado',
+      'affectiveBond',
+    );
+    const authorRelationDistribution = this.buildDistribution(
+      rows,
+      (row) => row.authorRelation ?? 'Não informado',
+      'authorRelation',
+    );
+    const authorMilitaryLinkDistribution = this.buildDistribution(
+      rows,
+      (row) => row.authorMilitaryLink ?? 'Não informado',
+      'authorMilitaryLink',
+    );
+    const occurrencePlaceDistribution = this.buildDistribution(
+      rows,
+      (row) => row.occurrencePlace ?? 'Não informado',
+      'occurrencePlace',
+    );
+    const witnessesDistribution = this.buildDistribution(
+      rows,
+      (row) => this.booleanLabel(row.witnesses),
+      'witnessesLabel',
+    );
+    const soughtHelpDistribution = this.buildDistribution(
+      rows,
+      (row) => this.booleanLabel(row.soughtHelp),
+      'soughtHelpLabel',
     );
     const impactIntensityDistribution = this.buildDistribution(
       rows,
@@ -471,7 +561,7 @@ export class BiDomesticViolenceService {
     );
 
     const violenceByOrganization = this.buildViolenceByOrganization(rows);
-    const monthlyTrend = this.buildMonthlyTrend(rows);
+    const responseTrend = this.buildResponseTrend(rows);
 
     const organizationRisk = this.buildOrganizationRisk(rows);
     const topViolenceType = violenceTypeDistribution[0] ?? null;
@@ -567,13 +657,25 @@ export class BiDomesticViolenceService {
         violenceTypeDistribution,
         organizationDistribution,
         rankDistribution,
+        maritalStatusDistribution,
+        educationDistribution,
+        naturalityDistribution,
+        fabBondDistribution,
         ageRangeDistribution,
+        situationScopeDistribution,
+        frequencyDistribution,
+        affectiveBondDistribution,
+        authorRelationDistribution,
+        authorMilitaryLinkDistribution,
+        occurrencePlaceDistribution,
+        witnessesDistribution,
+        soughtHelpDistribution,
         impactIntensityDistribution,
         impactAreaDistribution,
         complaintChannelDistribution,
         noComplaintReasonDistribution,
         violenceByOrganization,
-        monthlyTrend,
+        responseTrend,
       },
       insights: {
         topViolenceType: topViolenceType
@@ -622,31 +724,42 @@ export class BiDomesticViolenceService {
       rank: string | null;
       maritalStatus: string | null;
       education: string | null;
+      naturality: string | null;
       fabBond: string | null;
+      situationScope: string | null;
       sufferedLifetime: boolean | null;
       sufferedLast12Months: boolean | null;
       frequency: string | null;
+      affectiveBond: string | null;
       violenceTypes: string[];
+      authorRelation: string | null;
       impactIntensity: string | null;
       impactAreas: string[];
       soughtHelp: boolean | null;
       complaintChannels: string[];
       noComplaintReasons: string[];
       authorMilitaryLink: string | null;
+      occurrencePlace: string | null;
+      witnesses: boolean | null;
     }>,
   ) {
     const organization = new Set<string>();
     const rank = new Set<string>();
     const maritalStatus = new Set<string>();
     const education = new Set<string>();
+    const naturality = new Set<string>();
     const fabBond = new Set<string>();
+    const situationScope = new Set<string>();
     const frequency = new Set<string>();
+    const affectiveBond = new Set<string>();
     const violenceTypes = new Set<string>();
+    const authorRelation = new Set<string>();
     const impactIntensity = new Set<string>();
     const impactAreas = new Set<string>();
     const complaintChannels = new Set<string>();
     const noComplaintReasons = new Set<string>();
     const authorMilitaryLink = new Set<string>();
+    const occurrencePlace = new Set<string>();
 
     for (const row of rows) {
       if (row.organization?.trim()) organization.add(row.organization.trim());
@@ -654,13 +767,26 @@ export class BiDomesticViolenceService {
       if (row.maritalStatus?.trim())
         maritalStatus.add(row.maritalStatus.trim());
       if (row.education?.trim()) education.add(row.education.trim());
+      if (row.naturality?.trim()) naturality.add(row.naturality.trim());
       if (row.fabBond?.trim()) fabBond.add(row.fabBond.trim());
+      if (row.situationScope?.trim()) {
+        situationScope.add(row.situationScope.trim());
+      }
       if (row.frequency?.trim()) frequency.add(row.frequency.trim());
+      if (row.affectiveBond?.trim()) {
+        affectiveBond.add(row.affectiveBond.trim());
+      }
+      if (row.authorRelation?.trim()) {
+        authorRelation.add(row.authorRelation.trim());
+      }
       if (row.impactIntensity?.trim()) {
         impactIntensity.add(row.impactIntensity.trim());
       }
       if (row.authorMilitaryLink?.trim()) {
         authorMilitaryLink.add(row.authorMilitaryLink.trim());
+      }
+      if (row.occurrencePlace?.trim()) {
+        occurrencePlace.add(row.occurrencePlace.trim());
       }
 
       for (const type of row.violenceTypes) {
@@ -686,9 +812,19 @@ export class BiDomesticViolenceService {
         a.localeCompare(b, 'pt-BR'),
       ),
       education: [...education].sort((a, b) => a.localeCompare(b, 'pt-BR')),
+      naturality: [...naturality].sort((a, b) => a.localeCompare(b, 'pt-BR')),
       fabBond: [...fabBond].sort((a, b) => a.localeCompare(b, 'pt-BR')),
+      situationScope: [...situationScope].sort((a, b) =>
+        a.localeCompare(b, 'pt-BR'),
+      ),
       frequency: [...frequency].sort((a, b) => a.localeCompare(b, 'pt-BR')),
+      affectiveBond: [...affectiveBond].sort((a, b) =>
+        a.localeCompare(b, 'pt-BR'),
+      ),
       violenceTypes: [...violenceTypes].sort((a, b) =>
+        a.localeCompare(b, 'pt-BR'),
+      ),
+      authorRelation: [...authorRelation].sort((a, b) =>
         a.localeCompare(b, 'pt-BR'),
       ),
       impactIntensity: [...impactIntensity].sort((a, b) =>
@@ -704,9 +840,13 @@ export class BiDomesticViolenceService {
       authorMilitaryLink: [...authorMilitaryLink].sort((a, b) =>
         a.localeCompare(b, 'pt-BR'),
       ),
+      occurrencePlace: [...occurrencePlace].sort((a, b) =>
+        a.localeCompare(b, 'pt-BR'),
+      ),
       sufferedLifetime: YES_NO_FILTER_OPTIONS,
       sufferedLast12Months: YES_NO_FILTER_OPTIONS,
       soughtHelp: YES_NO_FILTER_OPTIONS,
+      witnesses: YES_NO_FILTER_OPTIONS,
     };
   }
 
@@ -859,60 +999,39 @@ export class BiDomesticViolenceService {
       .sort((a, b) => b.lifetimeRatePercent - a.lifetimeRatePercent);
   }
 
-  private buildMonthlyTrend(
+  private buildResponseTrend(
     rows: Array<{
       submittedAt: Date | null;
-      sufferedLifetime: boolean | null;
-      sufferedLast12Months: boolean | null;
     }>,
   ) {
-    const map = new Map<
-      string,
-      {
-        total: number;
-        lifetimeYesCount: number;
-        last12MonthsYesCount: number;
-      }
-    >();
+    const map = new Map<string, number>();
 
     for (const row of rows) {
-      const month = row.submittedAt
+      const day = row.submittedAt
         ? `${row.submittedAt.getFullYear()}-${String(
             row.submittedAt.getMonth() + 1,
-          ).padStart(2, '0')}`
-        : 'Sem data';
+          ).padStart(2, '0')}-${String(row.submittedAt.getDate()).padStart(
+            2,
+            '0',
+          )}`
+        : 'SEM_DATA';
 
-      const current = map.get(month) ?? {
-        total: 0,
-        lifetimeYesCount: 0,
-        last12MonthsYesCount: 0,
-      };
-
-      current.total += 1;
-      if (row.sufferedLifetime === true) current.lifetimeYesCount += 1;
-      if (row.sufferedLast12Months === true) current.last12MonthsYesCount += 1;
-      map.set(month, current);
+      map.set(day, (map.get(day) ?? 0) + 1);
     }
 
     return [...map.entries()]
-      .map(([month, value]) => ({
-        month,
-        ...value,
-        lifetimeRatePercent:
-          value.total > 0
-            ? Number(((value.lifetimeYesCount / value.total) * 100).toFixed(2))
-            : 0,
-        last12MonthsRatePercent:
-          value.total > 0
-            ? Number(
-                ((value.last12MonthsYesCount / value.total) * 100).toFixed(2),
-              )
-            : 0,
+      .map(([day, total]) => ({
+        day,
+        dayLabel:
+          day === 'SEM_DATA'
+            ? 'Sem data'
+            : `${day.slice(8, 10)}/${day.slice(5, 7)}/${day.slice(0, 4)}`,
+        total,
       }))
       .sort((a, b) => {
-        if (a.month === 'Sem data') return 1;
-        if (b.month === 'Sem data') return -1;
-        return a.month.localeCompare(b.month, 'pt-BR');
+        if (a.day === 'SEM_DATA') return 1;
+        if (b.day === 'SEM_DATA') return -1;
+        return a.day.localeCompare(b.day, 'pt-BR');
       });
   }
 
@@ -948,11 +1067,23 @@ export class BiDomesticViolenceService {
     if (filters.education?.trim()) {
       conditions.push({ education: filters.education.trim() });
     }
+    if (filters.naturality?.trim()) {
+      conditions.push({ naturality: filters.naturality.trim() });
+    }
     if (filters.fabBond?.trim()) {
       conditions.push({ fabBond: filters.fabBond.trim() });
     }
+    if (filters.situationScope?.trim()) {
+      conditions.push({ situationScope: filters.situationScope.trim() });
+    }
     if (filters.frequency?.trim()) {
       conditions.push({ frequency: filters.frequency.trim() });
+    }
+    if (filters.affectiveBond?.trim()) {
+      conditions.push({ affectiveBond: filters.affectiveBond.trim() });
+    }
+    if (filters.authorRelation?.trim()) {
+      conditions.push({ authorRelation: filters.authorRelation.trim() });
     }
     if (filters.impactIntensity?.trim()) {
       conditions.push({ impactIntensity: filters.impactIntensity.trim() });
@@ -961,6 +1092,9 @@ export class BiDomesticViolenceService {
       conditions.push({
         authorMilitaryLink: filters.authorMilitaryLink.trim(),
       });
+    }
+    if (filters.occurrencePlace?.trim()) {
+      conditions.push({ occurrencePlace: filters.occurrencePlace.trim() });
     }
 
     if (filters.violenceType?.trim()) {
@@ -1013,6 +1147,13 @@ export class BiDomesticViolenceService {
       }
     }
 
+    if (filters.witnesses?.trim()) {
+      const parsed = this.parseFilterBoolean(filters.witnesses);
+      if (parsed !== null) {
+        conditions.push({ witnesses: parsed });
+      }
+    }
+
     if (filters.q?.trim()) {
       const query = filters.q.trim();
       conditions.push({
@@ -1021,8 +1162,12 @@ export class BiDomesticViolenceService {
           { rank: { contains: query, mode: 'insensitive' } },
           { maritalStatus: { contains: query, mode: 'insensitive' } },
           { education: { contains: query, mode: 'insensitive' } },
+          { naturality: { contains: query, mode: 'insensitive' } },
           { fabBond: { contains: query, mode: 'insensitive' } },
+          { situationScope: { contains: query, mode: 'insensitive' } },
           { frequency: { contains: query, mode: 'insensitive' } },
+          { affectiveBond: { contains: query, mode: 'insensitive' } },
+          { authorRelation: { contains: query, mode: 'insensitive' } },
           { impactIntensity: { contains: query, mode: 'insensitive' } },
           { authorMilitaryLink: { contains: query, mode: 'insensitive' } },
           { occurrencePlace: { contains: query, mode: 'insensitive' } },
@@ -1050,6 +1195,12 @@ export class BiDomesticViolenceService {
     if (['SIM', 'S', 'TRUE', 'YES'].includes(normalized)) return true;
     if (['NAO', 'N', 'FALSE', 'NO'].includes(normalized)) return false;
     return null;
+  }
+
+  private booleanLabel(value: boolean | null) {
+    if (value === true) return 'Sim';
+    if (value === false) return 'Não';
+    return 'Não informado';
   }
 
   private parseDate(value?: string) {
@@ -1159,6 +1310,7 @@ export class BiDomesticViolenceService {
       organization: findIndex(['Organização Militar']),
       maritalStatus: findIndex(['Estado civil']),
       education: findIndex(['Escolaridade']),
+      naturality: findIndex(['Naturalidade']),
       fabBond: findIndex(['Vínculo institucional com a FAB']),
       rank: findIndex(['Caso seja militar, indique o posto ou graduação']),
       sufferedLifetime: findIndex([
@@ -1167,10 +1319,18 @@ export class BiDomesticViolenceService {
       sufferedLast12Months: findIndex([
         'Nos últimos 12 meses, você sofreu algum tipo de violência doméstica',
       ]),
+      situationScope: findIndex([
+        'As próximas perguntas tratam da violência sofrida',
+        'qual situação você deseja relatar',
+      ]),
       frequency: findIndex(['Frequência da ocorrência']),
+      affectiveBond: findIndex(['Tipo de vínculo afetivo com o autor']),
       violenceTypes: findIndex([
         'Se sofreu violência, qual(is) tipo(s)',
         'qual(is) tipo(s)',
+      ]),
+      authorRelation: findIndex([
+        'Qual é o tipo de vínculo com o autor do fato',
       ]),
       authorMilitaryLink: findIndex([
         'O autor da violência possui vínculo com instituição militar',
@@ -1216,12 +1376,16 @@ export class BiDomesticViolenceService {
       organization: number;
       maritalStatus: number;
       education: number;
+      naturality: number;
       fabBond: number;
       rank: number;
       sufferedLifetime: number;
       sufferedLast12Months: number;
+      situationScope: number;
       frequency: number;
+      affectiveBond: number;
       violenceTypes: number;
+      authorRelation: number;
       authorMilitaryLink: number;
       occurrencePlace: number;
       witnesses: number;
@@ -1240,12 +1404,16 @@ export class BiDomesticViolenceService {
     const organizationRaw = this.getCell(row, map.organization);
     const maritalStatusRaw = this.getCell(row, map.maritalStatus);
     const educationRaw = this.getCell(row, map.education);
+    const naturalityRaw = this.getCell(row, map.naturality);
     const fabBondRaw = this.getCell(row, map.fabBond);
     const rankRaw = this.getCell(row, map.rank);
     const sufferedLifetimeRaw = this.getCell(row, map.sufferedLifetime);
     const sufferedLast12MonthsRaw = this.getCell(row, map.sufferedLast12Months);
+    const situationScopeRaw = this.getCell(row, map.situationScope);
     const frequencyRaw = this.getCell(row, map.frequency);
+    const affectiveBondRaw = this.getCell(row, map.affectiveBond);
     const violenceTypesRaw = this.getCell(row, map.violenceTypes);
+    const authorRelationRaw = this.getCell(row, map.authorRelation);
     const authorMilitaryLinkRaw = this.getCell(row, map.authorMilitaryLink);
     const occurrencePlaceRaw = this.getCell(row, map.occurrencePlace);
     const witnessesRaw = this.getCell(row, map.witnesses);
@@ -1261,12 +1429,16 @@ export class BiDomesticViolenceService {
       organizationRaw,
       maritalStatusRaw,
       educationRaw,
+      naturalityRaw,
       fabBondRaw,
       rankRaw,
       sufferedLifetimeRaw,
       sufferedLast12MonthsRaw,
+      situationScopeRaw,
       frequencyRaw,
+      affectiveBondRaw,
       violenceTypesRaw,
+      authorRelationRaw,
       authorMilitaryLinkRaw,
       occurrencePlaceRaw,
       witnessesRaw,
@@ -1286,13 +1458,16 @@ export class BiDomesticViolenceService {
     const organization = this.normalizeOrganization(organizationRaw);
     const maritalStatus = this.cleanCategory(maritalStatusRaw);
     const education = this.cleanCategory(educationRaw);
+    const naturality = this.cleanCategory(naturalityRaw);
     const fabBond = this.cleanCategory(fabBondRaw);
     const rank = this.normalizeRank(rankRaw);
     const sufferedLifetime = this.parseBooleanAnswer(sufferedLifetimeRaw);
     const sufferedLast12Months = this.parseBooleanAnswer(
       sufferedLast12MonthsRaw,
     );
+    const situationScope = this.cleanCategory(situationScopeRaw);
     const frequency = this.cleanCategory(frequencyRaw);
+    const affectiveBond = this.cleanCategory(affectiveBondRaw);
     const violenceTypes = this.parseKnownMultiSelect(
       violenceTypesRaw,
       DOMESTIC_VIOLENCE_TYPE_OPTIONS,
@@ -1304,6 +1479,7 @@ export class BiDomesticViolenceService {
         { match: 'PATRIMONIAL', label: 'Patrimonial' },
       ],
     );
+    const authorRelation = this.cleanCategory(authorRelationRaw);
     const authorMilitaryLink = this.cleanCategory(authorMilitaryLinkRaw);
     const occurrencePlace = this.cleanCategory(occurrencePlaceRaw);
     const witnesses = this.parseBooleanAnswer(witnessesRaw);
@@ -1380,12 +1556,16 @@ export class BiDomesticViolenceService {
       organizationRaw,
       maritalStatusRaw,
       educationRaw,
+      naturalityRaw,
       fabBondRaw,
       rankRaw,
       sufferedLifetimeRaw,
       sufferedLast12MonthsRaw,
+      situationScopeRaw,
       frequencyRaw,
+      affectiveBondRaw,
       violenceTypesRaw,
+      authorRelationRaw,
       authorMilitaryLinkRaw,
       occurrencePlaceRaw,
       witnessesRaw,
@@ -1424,14 +1604,18 @@ export class BiDomesticViolenceService {
         organization,
         maritalStatus,
         education,
+        naturality,
         fabBond,
         rank,
+        situationScope,
         sufferedLifetimeRaw,
         sufferedLifetime,
         sufferedLast12MonthsRaw,
         sufferedLast12Months,
         frequency,
+        affectiveBond,
         violenceTypes,
+        authorRelation,
         authorMilitaryLink,
         occurrencePlace,
         witnessesRaw,

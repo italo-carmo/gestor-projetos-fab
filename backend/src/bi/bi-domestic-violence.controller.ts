@@ -37,17 +37,23 @@ export class BiDomesticViolenceController {
     @Query('rank') rank: string | undefined,
     @Query('maritalStatus') maritalStatus: string | undefined,
     @Query('education') education: string | undefined,
+    @Query('naturality') naturality: string | undefined,
     @Query('fabBond') fabBond: string | undefined,
+    @Query('situationScope') situationScope: string | undefined,
     @Query('sufferedLifetime') sufferedLifetime: string | undefined,
     @Query('sufferedLast12Months') sufferedLast12Months: string | undefined,
     @Query('frequency') frequency: string | undefined,
+    @Query('affectiveBond') affectiveBond: string | undefined,
     @Query('violenceType') violenceType: string | undefined,
+    @Query('authorRelation') authorRelation: string | undefined,
     @Query('impactIntensity') impactIntensity: string | undefined,
     @Query('impactArea') impactArea: string | undefined,
     @Query('soughtHelp') soughtHelp: string | undefined,
     @Query('complaintChannel') complaintChannel: string | undefined,
     @Query('noComplaintReason') noComplaintReason: string | undefined,
     @Query('authorMilitaryLink') authorMilitaryLink: string | undefined,
+    @Query('occurrencePlace') occurrencePlace: string | undefined,
+    @Query('witnesses') witnesses: string | undefined,
     @Query('q') q: string | undefined,
     @Query('combineMode') combineMode: string | undefined,
     @CurrentUser() user: RbacUser,
@@ -59,17 +65,23 @@ export class BiDomesticViolenceController {
       rank,
       maritalStatus,
       education,
+      naturality,
       fabBond,
+      situationScope,
       sufferedLifetime,
       sufferedLast12Months,
       frequency,
+      affectiveBond,
       violenceType,
+      authorRelation,
       impactIntensity,
       impactArea,
       soughtHelp,
       complaintChannel,
       noComplaintReason,
       authorMilitaryLink,
+      occurrencePlace,
+      witnesses,
       q,
       combineMode,
     });
@@ -84,17 +96,23 @@ export class BiDomesticViolenceController {
     @Query('rank') rank: string | undefined,
     @Query('maritalStatus') maritalStatus: string | undefined,
     @Query('education') education: string | undefined,
+    @Query('naturality') naturality: string | undefined,
     @Query('fabBond') fabBond: string | undefined,
+    @Query('situationScope') situationScope: string | undefined,
     @Query('sufferedLifetime') sufferedLifetime: string | undefined,
     @Query('sufferedLast12Months') sufferedLast12Months: string | undefined,
     @Query('frequency') frequency: string | undefined,
+    @Query('affectiveBond') affectiveBond: string | undefined,
     @Query('violenceType') violenceType: string | undefined,
+    @Query('authorRelation') authorRelation: string | undefined,
     @Query('impactIntensity') impactIntensity: string | undefined,
     @Query('impactArea') impactArea: string | undefined,
     @Query('soughtHelp') soughtHelp: string | undefined,
     @Query('complaintChannel') complaintChannel: string | undefined,
     @Query('noComplaintReason') noComplaintReason: string | undefined,
     @Query('authorMilitaryLink') authorMilitaryLink: string | undefined,
+    @Query('occurrencePlace') occurrencePlace: string | undefined,
+    @Query('witnesses') witnesses: string | undefined,
     @Query('q') q: string | undefined,
     @Query('combineMode') combineMode: string | undefined,
     @Query('page') page: string | undefined,
@@ -108,17 +126,23 @@ export class BiDomesticViolenceController {
       rank,
       maritalStatus,
       education,
+      naturality,
       fabBond,
+      situationScope,
       sufferedLifetime,
       sufferedLast12Months,
       frequency,
+      affectiveBond,
       violenceType,
+      authorRelation,
       impactIntensity,
       impactArea,
       soughtHelp,
       complaintChannel,
       noComplaintReason,
       authorMilitaryLink,
+      occurrencePlace,
+      witnesses,
       q,
       combineMode,
       page,
@@ -199,17 +223,23 @@ export class BiDomesticViolenceController {
       rank?: string;
       maritalStatus?: string;
       education?: string;
+      naturality?: string;
       fabBond?: string;
+      situationScope?: string;
       sufferedLifetime?: string;
       sufferedLast12Months?: string;
       frequency?: string;
+      affectiveBond?: string;
       violenceType?: string;
+      authorRelation?: string;
       impactIntensity?: string;
       impactArea?: string;
       soughtHelp?: string;
       complaintChannel?: string;
       noComplaintReason?: string;
       authorMilitaryLink?: string;
+      occurrencePlace?: string;
+      witnesses?: string;
       q?: string;
       combineMode?: string;
     },

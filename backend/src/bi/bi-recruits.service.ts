@@ -377,7 +377,7 @@ export class BiRecruitsService {
       'enlistmentDecisionInfluence',
     );
 
-    const monthlyTrend = this.buildMonthlyTrend(rows);
+    const responseTrend = this.buildResponseTrend(rows);
 
     const suggestionComment = this.buildFreeTextRows(
       rows,
@@ -446,7 +446,7 @@ export class BiRecruitsService {
         willingnessOrientationDistribution,
         willingnessReportDistribution,
         enlistmentDecisionInfluenceDistribution,
-        monthlyTrend,
+        responseTrend,
       },
       textColumns: {
         suggestionComment,
@@ -574,62 +574,39 @@ export class BiRecruitsService {
       .sort((a, b) => b.count - a.count);
   }
 
-  private buildMonthlyTrend(
+  private buildResponseTrend(
     rows: Array<{
       submittedAt: Date | null;
-      willingnessOrientation: string | null;
-      willingnessReport: string | null;
     }>,
   ) {
-    const map = new Map<
-      string,
-      {
-        total: number;
-        secureGuidanceCount: number;
-        secureReportCount: number;
-      }
-    >();
+    const map = new Map<string, number>();
 
     for (const row of rows) {
-      const month = row.submittedAt
+      const day = row.submittedAt
         ? `${row.submittedAt.getFullYear()}-${String(
             row.submittedAt.getMonth() + 1,
-          ).padStart(2, '0')}`
-        : 'Sem data';
+          ).padStart(2, '0')}-${String(row.submittedAt.getDate()).padStart(
+            2,
+            '0',
+          )}`
+        : 'SEM_DATA';
 
-      const current = map.get(month) ?? {
-        total: 0,
-        secureGuidanceCount: 0,
-        secureReportCount: 0,
-      };
-
-      current.total += 1;
-      if (row.willingnessOrientation === 'Seguro(a)') {
-        current.secureGuidanceCount += 1;
-      }
-      if (row.willingnessReport === 'Seguro(a)') {
-        current.secureReportCount += 1;
-      }
-      map.set(month, current);
+      map.set(day, (map.get(day) ?? 0) + 1);
     }
 
     return [...map.entries()]
-      .map(([month, value]) => ({
-        month,
-        ...value,
-        secureGuidanceRatePercent:
-          value.total > 0
-            ? Number(((value.secureGuidanceCount / value.total) * 100).toFixed(2))
-            : 0,
-        secureReportRatePercent:
-          value.total > 0
-            ? Number(((value.secureReportCount / value.total) * 100).toFixed(2))
-            : 0,
+      .map(([day, total]) => ({
+        day,
+        dayLabel:
+          day === 'SEM_DATA'
+            ? 'Sem data'
+            : `${day.slice(8, 10)}/${day.slice(5, 7)}/${day.slice(0, 4)}`,
+        total,
       }))
       .sort((a, b) => {
-        if (a.month === 'Sem data') return 1;
-        if (b.month === 'Sem data') return -1;
-        return a.month.localeCompare(b.month, 'pt-BR');
+        if (a.day === 'SEM_DATA') return 1;
+        if (b.day === 'SEM_DATA') return -1;
+        return a.day.localeCompare(b.day, 'pt-BR');
       });
   }
 

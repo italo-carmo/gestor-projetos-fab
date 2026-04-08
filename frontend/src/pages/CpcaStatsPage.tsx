@@ -161,7 +161,15 @@ const CPCA_KPI_CARD_SX = {
 type EditableCardStyle = {
   backgroundColor: string;
   textColor: string;
+  title?: string;
+  description?: string;
 };
+
+type CardEditorState = {
+  cardId: string;
+  defaults: EditableCardStyle;
+  allowTextEditing: boolean;
+} | null;
 
 type CpcaChartDetailKind =
   | "status"
@@ -238,10 +246,14 @@ export function CpcaStatsPage() {
   const [cardStyles, setCardStyles] = useState<
     Record<string, EditableCardStyle>
   >(() => loadCpcaCardStyles());
-  const [editingCardId, setEditingCardId] = useState<string | null>(null);
+  const [cardEditorState, setCardEditorState] = useState<CardEditorState>(
+    null,
+  );
   const [editingCardDraft, setEditingCardDraft] = useState<EditableCardStyle>({
     backgroundColor: "#FFFFFF",
     textColor: "#111827",
+    title: "",
+    description: "",
   });
   const [chartDetail, setChartDetail] = useState<CpcaChartDetailState>(null);
   const [kpiDetail, setKpiDetail] = useState<CpcaKpiDetailState>(null);
@@ -438,24 +450,61 @@ export function CpcaStatsPage() {
     },
   ];
 
-  const getCardStyle = (cardId: string, defaults: EditableCardStyle) =>
-    cardStyles[cardId] ?? defaults;
-  const openStyleEditor = (cardId: string, defaults: EditableCardStyle) => {
-    setEditingCardId(cardId);
+  const getCardStyle = (cardId: string, defaults: EditableCardStyle) => {
+    const current = cardStyles[cardId];
+    if (!current) return defaults;
+    return {
+      backgroundColor: current.backgroundColor || defaults.backgroundColor,
+      textColor: current.textColor || defaults.textColor,
+      title: (current.title ?? "").trim() || defaults.title || "",
+      description:
+        typeof current.description === "string"
+          ? current.description
+          : (defaults.description ?? ""),
+    };
+  };
+  const openStyleEditor = (
+    cardId: string,
+    defaults: EditableCardStyle,
+    options?: {
+      allowTextEditing?: boolean;
+    },
+  ) => {
+    setCardEditorState({
+      cardId,
+      defaults,
+      allowTextEditing: Boolean(options?.allowTextEditing),
+    });
     setEditingCardDraft(getCardStyle(cardId, defaults));
   };
   const saveStyleEditor = () => {
-    if (!editingCardId) return;
+    if (!cardEditorState) return;
+    const normalized: EditableCardStyle = {
+      backgroundColor:
+        editingCardDraft.backgroundColor ||
+        cardEditorState.defaults.backgroundColor,
+      textColor: editingCardDraft.textColor || cardEditorState.defaults.textColor,
+    };
+    if (cardEditorState.allowTextEditing) {
+      normalized.title =
+        (editingCardDraft.title ?? "").trim() ||
+        cardEditorState.defaults.title ||
+        "";
+      normalized.description =
+        (editingCardDraft.description ?? "").trim() ||
+        cardEditorState.defaults.description ||
+        "";
+    }
     const next = {
       ...cardStyles,
-      [editingCardId]: editingCardDraft,
+      [cardEditorState.cardId]: normalized,
     };
     setCardStyles(next);
     window.localStorage.setItem(
       CPCA_CARD_STYLES_STORAGE_KEY,
       JSON.stringify(next),
     );
-    setEditingCardId(null);
+    setCardEditorState(null);
   };
   const openKpiDetail = (kind: CpcaKpiDetailKind) => {
     const metadata: Record<
@@ -706,17 +755,26 @@ export function CpcaStatsPage() {
 
       <Grid container spacing={2}>
         {kpiCards.map((card) => {
-          const style = getCardStyle("cpca-kpi-cards", {
+          const kpiCardStyle = getCardStyle(`cpca-kpi-${card.id}`, {
             backgroundColor: "rgb(83, 127, 151)",
             textColor: "#F4FAFD",
+            title: card.label,
+            description: card.hint,
           });
+          const isTextEditableKpi =
+            card.id === "totalCases" ||
+            card.id === "openCases" ||
+            card.id === "closureRate";
+          const cardTitle = (kpiCardStyle.title ?? "").trim() || card.label;
+          const cardDescription =
+            (kpiCardStyle.description ?? "").trim() || card.hint;
           return (
             <Grid key={card.label} size={{ xs: 12, sm: 6, md: 4 }}>
               <Card
                 sx={{
                   ...CPCA_KPI_CARD_SX,
                   height: "100%",
-                  backgroundColor: `${style.backgroundColor} !important`,
+                  backgroundColor: `${kpiCardStyle.backgroundColor} !important`,
                 }}
               >
                 <CardContent
@@ -744,16 +802,34 @@ export function CpcaStatsPage() {
                 >
                   {isTiProfile ? (
                     <Box display="flex" justifyContent="flex-end">
-                      <Tooltip title="Editar cores do card">
+                      <Tooltip
+                        title={
+                          isTextEditableKpi
+                            ? "Editar título, descrição e cores do card"
+                            : "Editar cores do card"
+                        }
+                      >
                         <IconButton
                           size="small"
-                          sx={{ color: style.textColor, opacity: 0.72, p: 0.3 }}
+                          sx={{
+                            color: kpiCardStyle.textColor,
+                            opacity: 0.72,
+                            p: 0.3,
+                          }}
                           onClick={(event) => {
                             event.stopPropagation();
-                            openStyleEditor("cpca-kpi-cards", {
-                              backgroundColor: "rgb(83, 127, 151)",
-                              textColor: "#F4FAFD",
-                            });
+                            openStyleEditor(
+                              `cpca-kpi-${card.id}`,
+                              {
+                                backgroundColor: "rgb(83, 127, 151)",
+                                textColor: "#F4FAFD",
+                                title: card.label,
+                                description: card.hint,
+                              },
+                              {
+                                allowTextEditing: isTextEditableKpi,
+                              },
+                            );
                           }}
                         >
                           <EditOutlinedIcon fontSize="small" />
@@ -764,20 +840,25 @@ export function CpcaStatsPage() {
                   <Typography
                     variant="overline"
                     fontWeight={600}
-                    sx={{ color: style.textColor }}
+                    sx={{ color: kpiCardStyle.textColor }}
                   >
-                    {card.label}
+                    {cardTitle}
                   </Typography>
                   <Typography
                     variant="h5"
                     fontWeight={800}
                     lineHeight={1.15}
-                    sx={{ color: style.textColor }}
+                    sx={{ color: kpiCardStyle.textColor }}
                   >
                     {card.value}
                   </Typography>
-                  <Typography variant="caption" sx={{ color: style.textColor }}>
-                    {card.hint} • Clique para detalhar
+                  <Typography
+                    variant="caption"
+                    sx={{ color: kpiCardStyle.textColor }}
+                  >
+                    {cardDescription
+                      ? `${cardDescription} • Clique para detalhar`
+                      : "Clique para detalhar"}
                   </Typography>
                 </CardContent>
               </Card>
@@ -1903,14 +1984,46 @@ export function CpcaStatsPage() {
       </Dialog>
 
       <Dialog
-        open={Boolean(editingCardId)}
-        onClose={() => setEditingCardId(null)}
+        open={Boolean(cardEditorState)}
+        onClose={() => setCardEditorState(null)}
         fullWidth
         maxWidth="xs"
       >
-        <DialogTitle>Editar cores do card</DialogTitle>
+        <DialogTitle>
+          {cardEditorState?.allowTextEditing
+            ? "Editar card"
+            : "Editar cores do card"}
+        </DialogTitle>
         <DialogContent sx={{ pt: 1 }}>
           <Stack spacing={1.5} sx={{ mt: 0.5 }}>
+            {cardEditorState?.allowTextEditing ? (
+              <>
+                <TextField
+                  label="Título do card"
+                  value={editingCardDraft.title ?? ""}
+                  onChange={(e) =>
+                    setEditingCardDraft((prev) => ({
+                      ...prev,
+                      title: e.target.value,
+                    }))
+                  }
+                  fullWidth
+                />
+                <TextField
+                  label="Descrição do card"
+                  value={editingCardDraft.description ?? ""}
+                  onChange={(e) =>
+                    setEditingCardDraft((prev) => ({
+                      ...prev,
+                      description: e.target.value,
+                    }))
+                  }
+                  minRows={2}
+                  multiline
+                  fullWidth
+                />
+              </>
+            ) : null}
             <TextField
               label="Cor do fundo"
               type="color"
@@ -1938,7 +2051,7 @@ export function CpcaStatsPage() {
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setEditingCardId(null)}>Cancelar</Button>
+          <Button onClick={() => setCardEditorState(null)}>Cancelar</Button>
           <Button variant="contained" onClick={saveStyleEditor}>
             Salvar
           </Button>
