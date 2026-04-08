@@ -970,7 +970,12 @@ export class TasksService {
         },
       }),
       this.prisma.user.findMany({
-        where: { localityId, isActive: true },
+        where: {
+          localityId,
+          isActive: true,
+          ldapUid: { not: null },
+          roles: { some: {} },
+        },
         orderBy: { name: 'asc' },
         select: {
           id: true,
@@ -1035,6 +1040,43 @@ export class TasksService {
       localityId: locality.id,
       localityName: locality.name,
       items,
+    };
+  }
+
+  async listAssignableUsers(user?: RbacUser) {
+    if (!user?.id) throwError('RBAC_FORBIDDEN');
+
+    const profile = resolveAccessProfile(user);
+    const where: Prisma.UserWhereInput = {
+      isActive: true,
+      ldapUid: { not: null },
+      roles: { some: {} },
+    };
+
+    if (!profile.ti && !profile.nationalCommission) {
+      if (!profile.localityId) {
+        return { items: [] as Array<Record<string, unknown>> };
+      }
+      where.localityId = profile.localityId;
+    }
+
+    const users = await this.prisma.user.findMany({
+      where,
+      orderBy: { name: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        localityId: true,
+      },
+    });
+
+    return {
+      items: users.map((item) => ({
+        id: item.id,
+        name: item.name || item.email || `Usuário ${item.id.slice(0, 8)}`,
+        localityId: item.localityId ?? null,
+      })),
     };
   }
 

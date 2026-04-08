@@ -40,6 +40,12 @@ export class TaskInstancesController {
     return this.tasks.listAssignees(localityId, user);
   }
 
+  @Get('assignable-users')
+  @RequirePermission('task_instances', 'assign')
+  listAssignableUsers(@CurrentUser() user: RbacUser) {
+    return this.tasks.listAssignableUsers(user);
+  }
+
   @Get()
   @RequirePermission('task_instances', 'view')
   list(

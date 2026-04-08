@@ -1215,6 +1215,30 @@ export function useTaskAssignees(localityId: string) {
   });
 }
 
+export function useTaskAssignableUsers(enabled = true) {
+  return useQuery({
+    queryKey: ["task-assignable-users"],
+    queryFn: async () => {
+      const data = (await api.get("/task-instances/assignable-users")).data;
+      return {
+        ...data,
+        items: (data?.items ?? []).map((item: any) => ({
+          ...item,
+          name: toMilitaryDisplayName(item?.name),
+        })),
+      } as {
+        items: Array<{
+          id: string;
+          name: string;
+          localityId?: string | null;
+        }>;
+      };
+    },
+    enabled,
+    staleTime: 10_000,
+  });
+}
+
 export function useTaskAssigneesMulti(localityIds: string[]) {
   const normalized = Array.from(
     new Set(
@@ -1226,24 +1250,27 @@ export function useTaskAssigneesMulti(localityIds: string[]) {
   return useQuery({
     queryKey: ["task-assignees-multi", normalized.join(",")],
     queryFn: async () => {
-      const responses = await Promise.all(
-        normalized.map(async (localityId) => {
-          const response = await api.get("/task-instances/assignees", {
+      const responses = await Promise.allSettled(
+        normalized.map(async (localityId) =>
+          api.get("/task-instances/assignees", {
             params: { localityId },
-          });
-          return response.data?.items ?? [];
-        }),
+          }),
+        ),
       );
       const merged = new Map<string, { id: string; name: string }>();
-      responses.flat().forEach((item: any) => {
-        if (item?.type !== "USER" || !item?.id) return;
-        const id = String(item.id);
-        if (!merged.has(id)) {
-          merged.set(id, {
-            id,
-            name: String(item.label ?? `Usuário ${id.slice(0, 8)}`),
-          });
-        }
+      responses.forEach((response) => {
+        if (response.status !== "fulfilled") return;
+        const items = response.value?.data?.items ?? [];
+        items.forEach((item: any) => {
+          if (item?.type !== "USER" || !item?.id) return;
+          const id = String(item.id);
+          if (!merged.has(id)) {
+            merged.set(id, {
+              id,
+              name: String(item.label ?? `Usuário ${id.slice(0, 8)}`),
+            });
+          }
+        });
       });
       return { items: Array.from(merged.values()) };
     },
@@ -2795,6 +2822,7 @@ export function useMenuUpdates(menuKeys: string[], enabled = true) {
       ).data as {
         items: Array<{
           menuKey: string;
+          unreadCount: number;
           hasUnread: boolean;
           lastEventAt: string | null;
           seenAt: string | null;
@@ -2815,6 +2843,7 @@ function patchMenuUpdatesData(
   const current = data as {
     items?: Array<{
       menuKey?: string | null;
+      unreadCount?: number;
       hasUnread?: boolean;
       seenAt?: string | null;
       lastEventAt?: string | null;
@@ -2828,6 +2857,7 @@ function patchMenuUpdatesData(
     changed = true;
     return {
       ...item,
+      unreadCount: 0,
       hasUnread: false,
       seenAt,
     };

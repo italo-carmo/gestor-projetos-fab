@@ -532,19 +532,27 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
   const markMenuUpdateSeen = useMarkMenuUpdateSeen();
 
-  const unreadMenuKeySet = useMemo(
-    () =>
-      new Set(
-        ((menuUpdatesQuery.data?.items ?? []) as Array<{
-          menuKey?: string | null;
-          hasUnread?: boolean;
-        }>)
-          .filter((item) => Boolean(item?.hasUnread))
-          .map((item) => String(item?.menuKey ?? "").trim())
-          .filter(Boolean),
-      ),
-    [menuUpdatesQuery.data?.items],
-  );
+  const unreadMenuCountByKey = useMemo(() => {
+    const map = new Map<string, number>();
+    ((menuUpdatesQuery.data?.items ?? []) as Array<{
+      menuKey?: string | null;
+      unreadCount?: number | null;
+      hasUnread?: boolean;
+    }>).forEach((item) => {
+      const key = String(item?.menuKey ?? "").trim();
+      if (!key) return;
+      const parsedCount = Number(item?.unreadCount ?? 0);
+      const safeCount = Number.isFinite(parsedCount)
+        ? Math.max(0, Math.floor(parsedCount))
+        : 0;
+      const fallbackCount = item?.hasUnread ? 1 : 0;
+      const unreadCount = safeCount > 0 ? safeCount : fallbackCount;
+      if (unreadCount > 0) {
+        map.set(key, unreadCount);
+      }
+    });
+    return map;
+  }, [menuUpdatesQuery.data?.items]);
 
   const activeNavItem = useMemo(() => {
     for (const section of visibleNavSections) {
@@ -560,10 +568,10 @@ export function AppShell({ children }: { children: ReactNode }) {
     (menuKeyRaw: string | null | undefined) => {
       const menuKey = String(menuKeyRaw ?? "").trim();
       if (!menuKey) return;
-      if (!unreadMenuKeySet.has(menuKey)) return;
+      if ((unreadMenuCountByKey.get(menuKey) ?? 0) <= 0) return;
       markMenuUpdateSeen.mutate(menuKey);
     },
-    [markMenuUpdateSeen, unreadMenuKeySet],
+    [markMenuUpdateSeen, unreadMenuCountByKey],
   );
 
   useEffect(() => {
@@ -684,12 +692,12 @@ export function AppShell({ children }: { children: ReactNode }) {
             <List disablePadding>
               {section.items.map((item) => {
                 const selected = toPathOnly(item.to) === activeNavItemPath;
+                const unreadCount = unreadMenuCountByKey.get(
+                  String(item.menuKey ?? "").trim(),
+                ) ?? 0;
                 const showUnreadBadge =
-                  !sidebarCollapsed &&
-                  Boolean(
-                    String(item.menuKey ?? "").trim() &&
-                      unreadMenuKeySet.has(String(item.menuKey ?? "").trim()),
-                  );
+                  !sidebarCollapsed && unreadCount > 0;
+                const unreadLabel = unreadCount > 99 ? "99+" : String(unreadCount);
                 const button = (
                   <ListItemButton
                     key={item.to}
@@ -745,14 +753,23 @@ export function AppShell({ children }: { children: ReactNode }) {
                             component="span"
                             aria-label="Novidades não visualizadas"
                             sx={{
-                              width: 8,
-                              height: 8,
-                              borderRadius: "50%",
+                              minWidth: 18,
+                              height: 18,
+                              px: 0.5,
+                              borderRadius: 9,
                               bgcolor: "#D24B4B",
-                              boxShadow: "0 0 0 2px rgba(210,75,75,0.16)",
+                              color: "#fff",
+                              fontSize: 10,
+                              fontWeight: 700,
+                              lineHeight: 1,
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "center",
                               flexShrink: 0,
                             }}
-                          />
+                          >
+                            {unreadLabel}
+                          </Box>
                         ) : null}
                       </Box>
                     )}
@@ -790,7 +807,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       isMobile,
       markMenuAsSeen,
       sidebarCollapsed,
-      unreadMenuKeySet,
+      unreadMenuCountByKey,
       visibleNavSections,
     ],
   );

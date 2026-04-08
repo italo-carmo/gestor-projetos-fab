@@ -41,25 +41,51 @@ export class MenuUpdatesService {
       return { items: [] as Array<Record<string, unknown>> };
     }
 
-    const resources = Array.from(
-      new Set(
-        menuKeys.flatMap(
-          (menuKey) => MENU_UPDATE_RESOURCES[menuKey] ?? [],
-        ),
+    const menuResourcePairs = menuKeys.flatMap((menuKey) =>
+      Array.from(new Set(MENU_UPDATE_RESOURCES[menuKey] ?? [])).map(
+        (resource) => ({
+          menuKey,
+          resource,
+        }),
       ),
     );
 
-    const [latestAuditByResource, seenRows] = await Promise.all([
-      resources.length
-        ? this.prisma.auditLog.groupBy({
-            by: ['resource'],
-            where: {
-              resource: { in: resources },
-              action: { notIn: IGNORED_AUDIT_ACTIONS },
-            },
-            orderBy: { resource: 'asc' },
-            _max: { createdAt: true },
-          })
+    const [aggregateRows, seenRows] = await Promise.all([
+      menuResourcePairs.length
+        ? this.prisma.$queryRaw<
+            Array<{
+              menuKey: string;
+              unreadCount: bigint | number | string | null;
+              lastEventAt: Date | null;
+            }>
+          >(Prisma.sql`
+            WITH "menu_resources" ("menuKey", "resource") AS (
+              VALUES ${Prisma.join(
+                menuResourcePairs.map((pair) =>
+                  Prisma.sql`(${pair.menuKey}, ${pair.resource})`,
+                ),
+              )}
+            ),
+            "seen_by_menu" AS (
+              SELECT "menuKey", "seenAt"
+              FROM "UserMenuUpdateRead"
+              WHERE "userId" = ${userId}
+                AND "menuKey" IN (${Prisma.join(menuKeys)})
+            )
+            SELECT
+              mr."menuKey" AS "menuKey",
+              COUNT(al."id") FILTER (
+                WHERE sbm."seenAt" IS NULL OR al."createdAt" > sbm."seenAt"
+              ) AS "unreadCount",
+              MAX(al."createdAt") AS "lastEventAt"
+            FROM "menu_resources" mr
+            LEFT JOIN "AuditLog" al
+              ON al."resource" = mr."resource"
+             AND al."action" NOT IN (${Prisma.join(IGNORED_AUDIT_ACTIONS)})
+            LEFT JOIN "seen_by_menu" sbm
+              ON sbm."menuKey" = mr."menuKey"
+            GROUP BY mr."menuKey"
+          `)
         : Promise.resolve([]),
       this.prisma.$queryRaw<Array<{ menuKey: string; seenAt: Date }>>(
         Prisma.sql`
@@ -71,11 +97,15 @@ export class MenuUpdatesService {
       ),
     ]);
 
-    const lastEventAtByResource = new Map<string, Date>();
-    for (const row of latestAuditByResource) {
-      if (row._max.createdAt instanceof Date) {
-        lastEventAtByResource.set(row.resource, row._max.createdAt);
-      }
+    const aggregatesByMenuKey = new Map<
+      string,
+      { unreadCount: number; lastEventAt: Date | null }
+    >();
+    for (const row of aggregateRows) {
+      aggregatesByMenuKey.set(row.menuKey, {
+        unreadCount: this.toUnreadCount(row.unreadCount),
+        lastEventAt: row.lastEventAt ?? null,
+      });
     }
 
     const seenAtByMenuKey = new Map<string, Date>();
@@ -84,14 +114,15 @@ export class MenuUpdatesService {
     }
 
     const items = menuKeys.map((menuKey) => {
-      const lastEventAt = this.resolveLastEventAt(menuKey, lastEventAtByResource);
+      const aggregate = aggregatesByMenuKey.get(menuKey);
+      const unreadCount = aggregate?.unreadCount ?? 0;
+      const lastEventAt = aggregate?.lastEventAt ?? null;
       const seenAt = seenAtByMenuKey.get(menuKey) ?? null;
-      const hasUnread =
-        lastEventAt instanceof Date &&
-        (!seenAt || lastEventAt.getTime() > seenAt.getTime());
+      const hasUnread = unreadCount > 0;
 
       return {
         menuKey,
+        unreadCount,
         hasUnread,
         lastEventAt: lastEventAt ? lastEventAt.toISOString() : null,
         seenAt: seenAt ? seenAt.toISOString() : null,
@@ -145,22 +176,27 @@ export class MenuUpdatesService {
     };
   }
 
-  private resolveLastEventAt(
-    menuKey: string,
-    byResource: Map<string, Date>,
-  ) {
-    const resources = MENU_UPDATE_RESOURCES[menuKey] ?? [];
-    let latest: Date | null = null;
+  private toUnreadCount(value: bigint | number | string | null | undefined) {
+    if (value === null || value === undefined) return 0;
 
-    for (const resource of resources) {
-      const candidate = byResource.get(resource);
-      if (!(candidate instanceof Date)) continue;
-      if (!latest || candidate.getTime() > latest.getTime()) {
-        latest = candidate;
-      }
+    if (typeof value === 'bigint') {
+      if (value <= 0n) return 0;
+      const maxSafe = BigInt(Number.MAX_SAFE_INTEGER);
+      return Number(value > maxSafe ? maxSafe : value);
     }
 
-    return latest;
+    if (typeof value === 'number') {
+      if (!Number.isFinite(value) || value <= 0) return 0;
+      return Math.floor(value);
+    }
+
+    if (typeof value === 'string') {
+      const parsed = Number.parseInt(value, 10);
+      if (!Number.isFinite(parsed) || parsed <= 0) return 0;
+      return parsed;
+    }
+
+    return 0;
   }
 
   private normalizeMenuKeys(rawMenuKeys: string | string[] | undefined) {

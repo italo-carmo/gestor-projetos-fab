@@ -33,6 +33,7 @@ import {
   useUsers,
   useGenerateInstances,
   useCreateTaskInstance,
+  useTaskAssignableUsers,
   useTaskAssigneesMulti,
 } from "../api/hooks";
 import { useDebounce } from "../app/useDebounce";
@@ -198,30 +199,33 @@ export function TasksPage() {
   );
   const phaseMap = new Map(phases.map((phase) => [phase.id, phase.name]));
 
+  const directoryUsers = useMemo(() => {
+    if (me?.executive_hide_pii || !canViewUsers) return [];
+    return ((usersQuery.data?.items ?? []) as any[])
+      .map((user: any) => ({
+        id: String(user.id),
+        localityId:
+          user?.localityId === undefined || user?.localityId === null
+            ? null
+            : String(user.localityId),
+        name:
+          user.name ?? user.email ?? `Usuário ${String(user.id).slice(0, 8)}`,
+      }))
+      .sort(
+        (
+          a: { id: string; name: string },
+          b: { id: string; name: string },
+        ) => a.name.localeCompare(b.name, "pt-BR"),
+      );
+  }, [canViewUsers, me?.executive_hide_pii, usersQuery.data?.items]);
+
   const assignees: { id: string; name: string; localityId?: string | null }[] =
-    me?.executive_hide_pii
-      ? []
-      : (usersQuery.data?.items ?? []).length > 0
-        ? (usersQuery.data?.items ?? [])
-            .map((user: any) => ({
-              id: String(user.id),
-              localityId:
-                user?.localityId === undefined || user?.localityId === null
-                  ? null
-                  : String(user.localityId),
-              name:
-                user.name ??
-                user.email ??
-                `Usuário ${String(user.id).slice(0, 8)}`,
-            }))
-            .sort(
-              (
-                a: { id: string; name: string },
-                b: { id: string; name: string },
-              ) => a.name.localeCompare(b.name, "pt-BR"),
-            )
+    directoryUsers.length > 0
+      ? directoryUsers
+      : me?.executive_hide_pii
+        ? []
         : Array.from(
-            new Map<string, { id: string; name: string }>(
+            new Map<string, { id: string; name: string; localityId?: string | null }>(
               items
                 .filter((item: any) => item.assignedToId)
                 .map((item: any) => [
@@ -452,38 +456,36 @@ export function TasksPage() {
   const createAssigneesQuery = useTaskAssigneesMulti(
     canManageTaskAssignments ? createLocalityIds : [],
   );
+  const createAssignableUsersQuery = useTaskAssignableUsers(
+    canManageTaskAssignments && !me?.executive_hide_pii,
+  );
 
   const createAssigneeOptions = useMemo(() => {
     if (me?.executive_hide_pii) return [];
     const fromTaskAssignees = createAssigneesQuery.data?.items ?? [];
-    const selectedLocalityIdSet = new Set(
-      createLocalityIds
-        .map((value) => String(value ?? "").trim())
-        .filter(Boolean),
-    );
-    const usersFilteredByLocality =
-      selectedLocalityIdSet.size > 0
-        ? assignees.filter((assignee) =>
-            selectedLocalityIdSet.has(String(assignee.localityId ?? "").trim()),
-          )
-        : assignees;
+    const assignableUsers =
+      (createAssignableUsersQuery.data?.items ?? directoryUsers) as Array<{
+        id?: string | null;
+        name?: string | null;
+      }>;
 
     const merged = new Map<string, { id: string; name: string }>();
-    fromTaskAssignees.forEach((item: any) => {
+    assignableUsers.forEach((item) => {
       const id = String(item?.id ?? "").trim();
       if (!id) return;
       merged.set(id, {
         id,
-        name: String(item?.name ?? item?.label ?? `Usuário ${id.slice(0, 8)}`),
+        name: String(item?.name ?? `Usuário ${id.slice(0, 8)}`),
       });
     });
-    usersFilteredByLocality.forEach((item) => {
+
+    fromTaskAssignees.forEach((item: any) => {
       const id = String(item?.id ?? "").trim();
       if (!id) return;
       if (merged.has(id)) return;
       merged.set(id, {
         id,
-        name: String(item.name ?? `Usuário ${id.slice(0, 8)}`),
+        name: String(item?.name ?? item?.label ?? `Usuário ${id.slice(0, 8)}`),
       });
     });
 
@@ -491,9 +493,9 @@ export function TasksPage() {
       String(a.name).localeCompare(String(b.name), "pt-BR"),
     );
   }, [
-    assignees,
     createAssigneesQuery.data?.items,
-    createLocalityIds,
+    createAssignableUsersQuery.data?.items,
+    directoryUsers,
     me?.executive_hide_pii,
   ]);
 
