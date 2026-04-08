@@ -3,9 +3,12 @@ import { Reflector } from '@nestjs/core';
 import { PERMISSION_METADATA_KEY } from './require-permission.decorator';
 import { RbacService } from './rbac.service';
 import { throwError } from '../common/http-error';
+import { normalizeRoleName, ROLE_TI } from './role-access';
 
 @Injectable()
 export class RbacGuard implements CanActivate {
+  private readonly tiRoleNameNormalized = normalizeRoleName(ROLE_TI);
+
   constructor(
     private readonly reflector: Reflector,
     private readonly rbac: RbacService,
@@ -47,6 +50,15 @@ export class RbacGuard implements CanActivate {
     });
 
     if (!allowed) {
+      const hasTiRole = (access.allRoles ?? access.roles ?? []).some(
+        (role) =>
+          normalizeRoleName(role?.name) === this.tiRoleNameNormalized,
+      );
+      const isTiBlockedAction =
+        resource === 'audit_logs' && action === 'delete';
+      if (hasTiRole && !isTiBlockedAction) {
+        return true;
+      }
       throwError('RBAC_FORBIDDEN');
     }
 
