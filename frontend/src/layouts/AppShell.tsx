@@ -46,7 +46,7 @@ import PhotoLibraryRoundedIcon from "@mui/icons-material/PhotoLibraryRounded";
 import LightbulbRoundedIcon from "@mui/icons-material/LightbulbRounded";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { useDebounce } from "../app/useDebounce";
-import { can } from "../app/rbac";
+import { can, canAccessAdminCatalog } from "../app/rbac";
 import {
   canonicalRoleName,
   normalizeRoleName,
@@ -460,13 +460,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       return can(me, "localities", "view");
     }
     if (item.to === "/admin") {
-      return (
-        can(me, "localities", "view") ||
-        can(me, "specialties", "view") ||
-        can(me, "postos", "view") ||
-        can(me, "phases", "view") ||
-        can(me, "elo_roles", "view")
-      );
+      return canAccessAdminCatalog(me);
     }
     if (
       item.to === "/admin/rbac" ||

@@ -32,7 +32,7 @@ import { BestPracticesPage } from "./pages/BestPracticesPage";
 import { LessonsLearnedPage } from "./pages/LessonsLearnedPage";
 import { RequireAuth } from "./app/RequireAuth";
 import { RequireRoleAccess } from "./app/RequireRoleAccess";
-import { can } from "./app/rbac";
+import { can, canAccessAdminCatalog } from "./app/rbac";
 import { resolveHomePath } from "./app/roleAccess";
 import { useMe } from "./api/hooks";
 
@@ -228,7 +228,14 @@ function App() {
                   }
                 />
                 <Route path="/admin/rbac" element={<AdminRbacPage />} />
-                <Route path="/admin" element={<AdminPage />} />
+                <Route
+                  path="/admin"
+                  element={
+                    <RequireRoleAccess allow={(user) => canAccessAdminCatalog(user)}>
+                      <AdminPage />
+                    </RequireRoleAccess>
+                  }
+                />
                 <Route
                   path="/admin/localities"
                   element={<Navigate to="/admin?tab=localities" replace />}
