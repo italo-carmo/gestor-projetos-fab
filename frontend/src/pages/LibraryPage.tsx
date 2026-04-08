@@ -603,7 +603,7 @@ export function LibraryPage() {
                           variant="caption"
                           color="text.secondary"
                           noWrap
-                          sx={{ mt: 0.3 }}
+                          sx={{ mt: { xs: 0.9, sm: 0.3 } }}
                         >
                           {locality.name}
                         </Typography>

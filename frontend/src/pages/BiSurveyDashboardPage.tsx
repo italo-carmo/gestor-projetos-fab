@@ -7,6 +7,8 @@ import {
   CardContent,
   Checkbox,
   Chip,
+  Collapse,
+  IconButton,
   LinearProgress,
   MenuItem,
   Stack,
@@ -22,6 +24,8 @@ import { alpha } from "@mui/material/styles";
 import UploadFileRoundedIcon from "@mui/icons-material/UploadFileRounded";
 import AutoGraphRoundedIcon from "@mui/icons-material/AutoGraphRounded";
 import DownloadRoundedIcon from "@mui/icons-material/DownloadRounded";
+import KeyboardArrowDownRoundedIcon from "@mui/icons-material/KeyboardArrowDownRounded";
+import KeyboardArrowUpRoundedIcon from "@mui/icons-material/KeyboardArrowUpRounded";
 import {
   Bar,
   BarChart,
@@ -301,9 +305,22 @@ const cardSx = {
   background: `linear-gradient(165deg, #FFFFFF 0%, ${alpha(BI_PALETTE.primarySoft, 0.14)} 100%)`,
 };
 
+const KPI_CARD_CONTENT_SX = {
+  py: 1.15,
+  px: 1.4,
+  "&:last-child": { pb: 1.15 },
+};
+
+const BAR_CHART_HEIGHT_LARGE = 240;
+const BAR_CHART_HEIGHT_MEDIUM = 220;
+const BAR_CHART_HEIGHT_SMALL = 205;
+const BAR_SIZE_PRIMARY = 10;
+const BAR_SIZE_STACKED = 8;
+
 export function BiSurveyDashboardPage() {
   const toast = useToast();
   const [metricMode, setMetricMode] = useState<MetricMode>("PERCENT");
+  const [responsesExpanded, setResponsesExpanded] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [page, setPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -999,9 +1016,9 @@ export function BiSurveyDashboardPage() {
             borderColor: alpha(BI_PALETTE.primary, 0.2),
           }}
         >
-          <CardContent>
+          <CardContent sx={KPI_CARD_CONTENT_SX}>
             <Typography variant="overline">Respostas no recorte</Typography>
-            <Typography variant="h4">
+            <Typography variant="h5" lineHeight={1.1}>
               {dashboard.kpis.totalResponses}
             </Typography>
             <Typography variant="caption" sx={{ color: BI_PALETTE.muted }}>
@@ -1016,9 +1033,9 @@ export function BiSurveyDashboardPage() {
             background: `linear-gradient(165deg, #FFFFFF 0%, ${alpha(BI_PALETTE.accentSoft, 0.16)} 100%)`,
           }}
         >
-          <CardContent>
+          <CardContent sx={KPI_CARD_CONTENT_SX}>
             <Typography variant="overline">Taxa de relatos</Typography>
-            <Typography variant="h4">
+            <Typography variant="h5" lineHeight={1.1}>
               {dashboard.kpis.violenceRatePercent.toFixed(1)}%
             </Typography>
             <Typography variant="caption" sx={{ color: BI_PALETTE.muted }}>
@@ -1032,9 +1049,9 @@ export function BiSurveyDashboardPage() {
             borderColor: alpha(BI_PALETTE.primaryMid, 0.2),
           }}
         >
-          <CardContent>
+          <CardContent sx={KPI_CARD_CONTENT_SX}>
             <Typography variant="overline">Ocorrencias mapeadas</Typography>
-            <Typography variant="h4">
+            <Typography variant="h5" lineHeight={1.1}>
               {dashboard.kpis.totalViolenceMentions}
             </Typography>
             <Typography variant="caption" sx={{ color: BI_PALETTE.muted }}>
@@ -1048,9 +1065,9 @@ export function BiSurveyDashboardPage() {
             borderColor: alpha(BI_PALETTE.violet, 0.25),
           }}
         >
-          <CardContent>
+          <CardContent sx={KPI_CARD_CONTENT_SX}>
             <Typography variant="overline">Insight rapido</Typography>
-            <Typography variant="body2" sx={{ mt: 1 }}>
+            <Typography variant="body2" sx={{ mt: 0.6 }}>
               Tipo mais frequente:{" "}
               <strong>{dashboard.insights.mostCommonType?.type ?? "-"}</strong>
             </Typography>
@@ -1080,9 +1097,10 @@ export function BiSurveyDashboardPage() {
             <Typography variant="caption" sx={chartCaptionSx}>
               Clique em uma barra para filtrar a missão.
             </Typography>
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={BAR_CHART_HEIGHT_LARGE}>
               <BarChart
                 data={dashboard.charts.omViolencePercent}
+                barCategoryGap="32%"
                 onClick={(state: {
                   activePayload?: Array<{ payload?: OmViolenceDatum }>;
                 }) => {
@@ -1091,7 +1109,7 @@ export function BiSurveyDashboardPage() {
                     updateFilter("mission", payload.om);
                   }
                 }}
-                margin={{ top: 14, right: 16, left: 0, bottom: 0 }}
+                margin={{ top: 10, right: 12, left: 0, bottom: 0 }}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
                 <XAxis
@@ -1121,12 +1139,14 @@ export function BiSurveyDashboardPage() {
                   stackId="a"
                   name="Não"
                   fill={BI_PALETTE.primarySoft}
+                  barSize={BAR_SIZE_STACKED}
                 />
                 <Bar
                   dataKey={metricMode === "PERCENT" ? "simPercent" : "simCount"}
                   stackId="a"
                   name="Sim"
                   fill={BI_PALETTE.accent}
+                  barSize={BAR_SIZE_STACKED}
                 />
               </BarChart>
             </ResponsiveContainer>
@@ -1141,7 +1161,7 @@ export function BiSurveyDashboardPage() {
             <Typography variant="caption" sx={chartCaptionSx}>
               Clique em uma fatia para aplicar filtro de Sim/Não.
             </Typography>
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={BAR_CHART_HEIGHT_LARGE}>
               <PieChart>
                 <Pie
                   data={dashboard.charts.yesNoDonut}
@@ -1149,7 +1169,7 @@ export function BiSurveyDashboardPage() {
                   nameKey="label"
                   cx="50%"
                   cy="50%"
-                  outerRadius={96}
+                  outerRadius={82}
                   label
                 >
                   {dashboard.charts.yesNoDonut.map((entry) => (
@@ -1195,9 +1215,10 @@ export function BiSurveyDashboardPage() {
             <Typography variant="caption" sx={chartCaptionSx}>
               Clique em um tipo para filtrar o recorte.
             </Typography>
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={BAR_CHART_HEIGHT_LARGE}>
               <BarChart
                 data={dashboard.charts.violenceTypePercent}
+                barCategoryGap="32%"
                 onClick={(state: {
                   activePayload?: Array<{ payload?: ViolenceTypeDatum }>;
                 }) => {
@@ -1206,7 +1227,7 @@ export function BiSurveyDashboardPage() {
                     updateFilter("violenceType", payload.type);
                   }
                 }}
-                margin={{ top: 14, right: 16, left: 0, bottom: 0 }}
+                margin={{ top: 10, right: 12, left: 0, bottom: 0 }}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
                 <XAxis
@@ -1236,6 +1257,7 @@ export function BiSurveyDashboardPage() {
                 />
                 <Bar
                   dataKey={metricMode === "PERCENT" ? "percent" : "count"}
+                  barSize={BAR_SIZE_PRIMARY}
                 >
                   {dashboard.charts.violenceTypePercent.map((entry) => (
                     <Cell
@@ -1259,10 +1281,11 @@ export function BiSurveyDashboardPage() {
             <Typography variant="caption" sx={chartCaptionSx}>
               Equivalente ao cruzamento por missão/tipo do arquivo original.
             </Typography>
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={BAR_CHART_HEIGHT_LARGE}>
               <BarChart
                 data={typeByOm?.items ?? []}
-                margin={{ top: 14, right: 16, left: 0, bottom: 0 }}
+                barCategoryGap="32%"
+                margin={{ top: 10, right: 12, left: 0, bottom: 0 }}
                 onClick={(state: {
                   activePayload?: Array<{ payload?: ViolenceTypeByOmDatum }>;
                 }) => {
@@ -1306,6 +1329,7 @@ export function BiSurveyDashboardPage() {
                     }
                     stackId="a"
                     name={type}
+                    barSize={BAR_SIZE_STACKED}
                     fill={
                       TYPE_COLOR_BY_LABEL[type] ??
                       PIE_COLORS[index % PIE_COLORS.length]
@@ -1329,8 +1353,8 @@ export function BiSurveyDashboardPage() {
             <Typography variant="subtitle1" fontWeight={700} gutterBottom>
               Distribuicao por missão ({metricMode === "PERCENT" ? "%" : "Qtd"})
             </Typography>
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={dashboard.charts.omDistribution}>
+            <ResponsiveContainer width="100%" height={BAR_CHART_HEIGHT_SMALL}>
+              <BarChart data={dashboard.charts.omDistribution} barCategoryGap="32%">
                 <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
                 <XAxis
                   dataKey="label"
@@ -1356,6 +1380,7 @@ export function BiSurveyDashboardPage() {
                 <Bar
                   dataKey={metricMode === "PERCENT" ? "percent" : "count"}
                   fill={BI_PALETTE.primaryMid}
+                  barSize={BAR_SIZE_PRIMARY}
                 />
               </BarChart>
             </ResponsiveContainer>
@@ -1370,8 +1395,8 @@ export function BiSurveyDashboardPage() {
             <Typography variant="caption" sx={chartCaptionSx}>
               Leitura de concentração por DISCENTE e GRADUADO E OFICIAL.
             </Typography>
-            <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={typeByPosto?.items ?? []}>
+            <ResponsiveContainer width="100%" height={BAR_CHART_HEIGHT_MEDIUM}>
+              <BarChart data={typeByPosto?.items ?? []} barCategoryGap="32%">
                 <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
                 <XAxis
                   dataKey="posto"
@@ -1405,6 +1430,7 @@ export function BiSurveyDashboardPage() {
                     }
                     stackId="a"
                     name={type}
+                    barSize={BAR_SIZE_STACKED}
                     fill={
                       TYPE_COLOR_BY_LABEL[type] ??
                       PIE_COLORS[index % PIE_COLORS.length]
@@ -1422,8 +1448,8 @@ export function BiSurveyDashboardPage() {
           <Typography variant="subtitle1" fontWeight={700} gutterBottom>
             Evolução mensal das respostas ({metricMode === "PERCENT" ? "%" : "Qtd"})
           </Typography>
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={dashboard.charts.monthlyTrend ?? []}>
+          <ResponsiveContainer width="100%" height={BAR_CHART_HEIGHT_MEDIUM}>
+            <BarChart data={dashboard.charts.monthlyTrend ?? []} barCategoryGap="32%">
               <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
               <XAxis
                 dataKey="month"
@@ -1451,6 +1477,7 @@ export function BiSurveyDashboardPage() {
                 dataKey={metricMode === "PERCENT" ? "yesRatePercent" : "total"}
                 name={metricMode === "PERCENT" ? "Taxa de relatos" : "Total de respostas"}
                 fill={metricMode === "PERCENT" ? BI_PALETTE.accent : BI_PALETTE.primaryMid}
+                barSize={BAR_SIZE_PRIMARY}
               />
             </BarChart>
           </ResponsiveContainer>
@@ -1469,12 +1496,61 @@ export function BiSurveyDashboardPage() {
             direction={{ xs: "column", md: "row" }}
             justifyContent="space-between"
             alignItems={{ md: "center" }}
-            mb={1.2}
+            mb={responsesExpanded ? 1.2 : 0}
           >
-            <Typography variant="subtitle1" fontWeight={700}>
-              Respostas detalhadas
-            </Typography>
-            <Stack direction="row" spacing={1} alignItems="center">
+            <Box sx={{ minWidth: 0, flex: 1 }}>
+              <Typography variant="subtitle1" fontWeight={700}>
+                Respostas detalhadas
+              </Typography>
+              {!responsesExpanded && (
+                <Typography variant="caption" sx={{ color: BI_PALETTE.muted }}>
+                  Card comprimido. Clique na seta para expandir.
+                </Typography>
+              )}
+            </Box>
+            <Stack direction="row" spacing={0.8} alignItems="center">
+              <Chip
+                size="small"
+                label={`Total no recorte: ${responses?.total ?? 0}`}
+                sx={{
+                  bgcolor: alpha(BI_PALETTE.primarySoft, 0.3),
+                  color: BI_PALETTE.primaryDark,
+                }}
+              />
+              <Chip
+                size="small"
+                variant="outlined"
+                label={`Selecionados: ${selectedIds.length}`}
+                sx={{
+                  borderColor: alpha(BI_PALETTE.primary, 0.4),
+                  color: BI_PALETTE.primaryDark,
+                }}
+              />
+              <IconButton
+                size="small"
+                onClick={() => setResponsesExpanded((prev) => !prev)}
+                aria-label={
+                  responsesExpanded
+                    ? "Recolher respostas detalhadas"
+                    : "Expandir respostas detalhadas"
+                }
+              >
+                {responsesExpanded ? (
+                  <KeyboardArrowUpRoundedIcon fontSize="small" />
+                ) : (
+                  <KeyboardArrowDownRoundedIcon fontSize="small" />
+                )}
+              </IconButton>
+            </Stack>
+          </Stack>
+
+          <Collapse in={responsesExpanded} timeout="auto" unmountOnExit>
+            <Stack
+              direction={{ xs: "column", lg: "row" }}
+              spacing={0.8}
+              alignItems={{ lg: "center" }}
+              sx={{ mb: 1.2 }}
+            >
               <Button
                 size="small"
                 variant="outlined"
@@ -1499,15 +1575,6 @@ export function BiSurveyDashboardPage() {
                 label={`Pagina ${page} de ${totalPages}`}
                 sx={{
                   bgcolor: alpha(BI_PALETTE.primarySoft, 0.3),
-                  color: BI_PALETTE.primaryDark,
-                }}
-              />
-              <Chip
-                size="small"
-                variant="outlined"
-                label={`Selecionados: ${selectedIds.length}`}
-                sx={{
-                  borderColor: alpha(BI_PALETTE.primary, 0.4),
                   color: BI_PALETTE.primaryDark,
                 }}
               />
@@ -1570,99 +1637,99 @@ export function BiSurveyDashboardPage() {
                 Proxima
               </Button>
             </Stack>
-          </Stack>
 
-          {responsesQuery.isLoading ? (
-            <SkeletonState />
-          ) : responsesQuery.isError ? (
-            <ErrorState
-              error={responsesQuery.error}
-              onRetry={() => responsesQuery.refetch()}
-            />
-          ) : (responses?.items.length ?? 0) === 0 ? (
-            <EmptyState
-              title="Sem respostas"
-              description="Ajuste os filtros para visualizar registros."
-            />
-          ) : (
-            <Table
-              size="small"
-              sx={{
-                "& .MuiTableCell-root": {
-                  borderBottomColor: BI_PALETTE.tableBorder,
-                },
-              }}
-            >
-              <TableHead>
-                <TableRow sx={{ bgcolor: BI_PALETTE.primaryDark }}>
-                  <TableCell padding="checkbox" sx={tableHeaderCellSx}>
-                    <Checkbox
-                      checked={allCurrentPageSelected}
-                      indeterminate={
-                        !allCurrentPageSelected &&
-                        selectedIds.some((id) => currentPageIds.includes(id))
-                      }
-                      onChange={toggleSelectAllCurrentPage}
-                      sx={{
-                        color: "white",
-                        "&.Mui-checked": { color: "white" },
-                      }}
-                    />
-                  </TableCell>
-                  <TableCell sx={tableHeaderCellSx}>
-                    Data
-                  </TableCell>
-                  <TableCell sx={tableHeaderCellSx}>
-                    Missão
-                  </TableCell>
-                  <TableCell sx={tableHeaderCellSx}>
-                    Posto/Graduação
-                  </TableCell>
-                  <TableCell sx={tableHeaderCellSx}>
-                    Posto
-                  </TableCell>
-                  <TableCell sx={tableHeaderCellSx}>
-                    Autodeclaracao
-                  </TableCell>
-                  <TableCell sx={tableHeaderCellSx}>
-                    Sofreu violência?
-                  </TableCell>
-                  <TableCell sx={tableHeaderCellSx}>
-                    Tipos
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {responses?.items.map((row) => (
-                  <TableRow
-                    key={row.id}
-                    hover
-                    sx={{
-                      "&:hover": {
-                        bgcolor: alpha(BI_PALETTE.primarySoft, 0.18),
-                      },
-                    }}
-                  >
-                    <TableCell padding="checkbox">
+            {responsesQuery.isLoading ? (
+              <SkeletonState />
+            ) : responsesQuery.isError ? (
+              <ErrorState
+                error={responsesQuery.error}
+                onRetry={() => responsesQuery.refetch()}
+              />
+            ) : (responses?.items.length ?? 0) === 0 ? (
+              <EmptyState
+                title="Sem respostas"
+                description="Ajuste os filtros para visualizar registros."
+              />
+            ) : (
+              <Table
+                size="small"
+                sx={{
+                  "& .MuiTableCell-root": {
+                    borderBottomColor: BI_PALETTE.tableBorder,
+                  },
+                }}
+              >
+                <TableHead>
+                  <TableRow sx={{ bgcolor: BI_PALETTE.primaryDark }}>
+                    <TableCell padding="checkbox" sx={tableHeaderCellSx}>
                       <Checkbox
-                        checked={selectedIds.includes(row.id)}
-                        onChange={() => toggleSelectRow(row.id)}
+                        checked={allCurrentPageSelected}
+                        indeterminate={
+                          !allCurrentPageSelected &&
+                          selectedIds.some((id) => currentPageIds.includes(id))
+                        }
+                        onChange={toggleSelectAllCurrentPage}
+                        sx={{
+                          color: "white",
+                          "&.Mui-checked": { color: "white" },
+                        }}
                       />
                     </TableCell>
-                    <TableCell>{formatDate(row.submittedAt)}</TableCell>
-                    <TableCell>{row.om ?? "-"}</TableCell>
-                    <TableCell>{row.postoGraduacao ?? "-"}</TableCell>
-                    <TableCell>{row.posto ?? "-"}</TableCell>
-                    <TableCell>{row.autodeclara ?? "-"}</TableCell>
-                    <TableCell>{row.sufferedViolenceRaw ?? "-"}</TableCell>
-                    <TableCell>
-                      {(row.violenceTypes ?? []).join(", ") || "-"}
+                    <TableCell sx={tableHeaderCellSx}>
+                      Data
+                    </TableCell>
+                    <TableCell sx={tableHeaderCellSx}>
+                      Missão
+                    </TableCell>
+                    <TableCell sx={tableHeaderCellSx}>
+                      Posto/Graduação
+                    </TableCell>
+                    <TableCell sx={tableHeaderCellSx}>
+                      Posto
+                    </TableCell>
+                    <TableCell sx={tableHeaderCellSx}>
+                      Autodeclaracao
+                    </TableCell>
+                    <TableCell sx={tableHeaderCellSx}>
+                      Sofreu violência?
+                    </TableCell>
+                    <TableCell sx={tableHeaderCellSx}>
+                      Tipos
                     </TableCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
+                </TableHead>
+                <TableBody>
+                  {responses?.items.map((row) => (
+                    <TableRow
+                      key={row.id}
+                      hover
+                      sx={{
+                        "&:hover": {
+                          bgcolor: alpha(BI_PALETTE.primarySoft, 0.18),
+                        },
+                      }}
+                    >
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          checked={selectedIds.includes(row.id)}
+                          onChange={() => toggleSelectRow(row.id)}
+                        />
+                      </TableCell>
+                      <TableCell>{formatDate(row.submittedAt)}</TableCell>
+                      <TableCell>{row.om ?? "-"}</TableCell>
+                      <TableCell>{row.postoGraduacao ?? "-"}</TableCell>
+                      <TableCell>{row.posto ?? "-"}</TableCell>
+                      <TableCell>{row.autodeclara ?? "-"}</TableCell>
+                      <TableCell>{row.sufferedViolenceRaw ?? "-"}</TableCell>
+                      <TableCell>
+                        {(row.violenceTypes ?? []).join(", ") || "-"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </Collapse>
         </CardContent>
       </Card>
 
