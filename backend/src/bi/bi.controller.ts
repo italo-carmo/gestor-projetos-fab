@@ -2,7 +2,9 @@ import {
   Body,
   Controller,
   Get,
+  Param,
   Post,
+  Put,
   Query,
   Req,
   UploadedFile,
@@ -20,6 +22,7 @@ import { throwError } from '../common/http-error';
 import { MulterExceptionFilter } from '../reports/multer-exception.filter';
 import { RequirePermission } from '../rbac/require-permission.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
+import { hasAnyRole, ROLE_TI } from '../rbac/role-access';
 import type { RbacUser } from '../rbac/rbac.types';
 import { BiService } from './bi.service';
 
@@ -27,6 +30,12 @@ import { BiService } from './bi.service';
 @UseGuards(JwtAuthGuard, RbacGuard)
 export class BiController {
   constructor(private readonly bi: BiService) {}
+
+  private assertTiForSettings(user: RbacUser) {
+    if (!hasAnyRole(user, [ROLE_TI])) {
+      throwError('RBAC_FORBIDDEN');
+    }
+  }
 
   @Get('surveys/dashboard')
   @RequirePermission('bi', 'view')
@@ -203,5 +212,22 @@ export class BiController {
     @CurrentUser() user: RbacUser,
   ) {
     return this.bi.deleteResponses(body);
+  }
+
+  @Get('surveys/card-settings')
+  @RequirePermission('bi', 'view')
+  listCardSettings(@CurrentUser() user: RbacUser) {
+    return this.bi.listCardSettings();
+  }
+
+  @Put('surveys/card-settings/:cardId')
+  @RequirePermission('bi', 'upload')
+  updateCardSetting(
+    @Param('cardId') cardId: string,
+    @Body() body: { title?: string; description?: string | null },
+    @CurrentUser() user: RbacUser,
+  ) {
+    this.assertTiForSettings(user);
+    return this.bi.updateCardSetting(cardId, body, user);
   }
 }

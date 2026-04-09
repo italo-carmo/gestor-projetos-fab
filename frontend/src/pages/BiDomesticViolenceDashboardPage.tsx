@@ -8,8 +8,13 @@ import {
   Checkbox,
   Chip,
   Collapse,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   FormControlLabel,
   Grid,
+  IconButton,
   LinearProgress,
   MenuItem,
   Stack,
@@ -28,6 +33,7 @@ import UploadFileRoundedIcon from "@mui/icons-material/UploadFileRounded";
 import AutoGraphRoundedIcon from "@mui/icons-material/AutoGraphRounded";
 import DownloadRoundedIcon from "@mui/icons-material/DownloadRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
+import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import KeyboardArrowDownRoundedIcon from "@mui/icons-material/KeyboardArrowDownRounded";
 import KeyboardArrowUpRoundedIcon from "@mui/icons-material/KeyboardArrowUpRounded";
 import {
@@ -50,9 +56,11 @@ import {
   useImportBiDomesticViolence,
   useDeleteBiDomesticViolenceResponses,
   useMe,
+  useUpdateBiDomesticViolenceCardSetting,
 } from "../api/hooks";
 import { parseApiError } from "../app/apiErrors";
 import { can } from "../app/rbac";
+import { hasAnyRole, ROLE_TI } from "../app/roleAccess";
 import { useToast } from "../app/toast";
 import { ErrorState } from "../components/states/ErrorState";
 import { SkeletonState } from "../components/states/SkeletonState";
@@ -91,6 +99,17 @@ type DistributionDatum = {
   count: number;
   percent: number;
   [key: string]: string | number;
+};
+
+type CardSetting = {
+  cardId: string;
+  title: string;
+  description?: string | null;
+};
+
+type EditableCardText = {
+  title: string;
+  description: string;
 };
 
 type ViolenceByOrganizationDatum = {
@@ -184,6 +203,7 @@ type DomesticDashboardResponse = {
     importedAt: string;
     fileName: string;
   } | null;
+  cardSettings?: CardSetting[];
 };
 
 type DomesticResponseRow = {
@@ -284,6 +304,81 @@ const tooltipContentStyle = {
 const tooltipLabelStyle = { color: DV_PALETTE.text, fontWeight: 700 };
 const legendWrapperStyle = { color: DV_PALETTE.text };
 
+const FIXED_CARD_DEFAULTS: Record<string, EditableCardText> = {
+  "page-header": {
+    title: "Violência Doméstica",
+    description:
+      "Painel estratégico com leitura de prevalência, padrões de impacto e barreiras de denúncia.",
+  },
+  "panel-ingestion": {
+    title: "Ingestão de base CSV/XLSX",
+    description:
+      "Atualize o BI a partir do formulário oficial, com opção de substituir toda a base.",
+  },
+  "panel-filters": {
+    title: "Filtros analíticos",
+    description: "Refine o recorte por período, perfil e respostas do formulário.",
+  },
+  "kpi-total": {
+    title: "Respostas no recorte",
+    description: "Volume total de respostas consideradas nos filtros atuais.",
+  },
+  "kpi-lifetime": {
+    title: "Sofreram ao longo da vida",
+    description: "Quantidade de respondentes com marcação positiva ao longo da vida.",
+  },
+  "kpi-last12": {
+    title: "Últimos 12 meses",
+    description: "Quantidade de respondentes com marcação positiva nos últimos 12 meses.",
+  },
+  "kpi-sought-help": {
+    title: "Buscaram canal",
+    description: "Quantidade de respondentes que buscaram algum canal de ajuda.",
+  },
+  "kpi-sought-help-rate": {
+    title: "Taxa de busca de ajuda",
+    description: "Percentual de busca de ajuda entre casos com violência declarada.",
+  },
+  "kpi-recurring": {
+    title: "Violência recorrente",
+    description: "Volume e percentual de casos recorrentes no recorte atual.",
+  },
+  "kpi-violence-mentions": {
+    title: "Menções de tipos de violência",
+    description: "Total de menções distribuídas entre os tipos de violência.",
+  },
+  "kpi-avg-types": {
+    title: "Média de tipos por vítima",
+    description: "Média de tipos de violência por resposta positiva.",
+  },
+  "insight-main": {
+    title: "Insights executivos",
+    description:
+      "Resumo dos principais sinais observados no recorte, com foco em prevalência, canais e barreiras.",
+  },
+  "chart-lifetime-donut": {
+    title: "Sofreu violência ao longo da vida",
+    description: "Clique em uma fatia para aplicar filtro.",
+  },
+  "chart-last12-donut": {
+    title: "Sofreu nos últimos 12 meses",
+    description: "Clique em uma fatia para filtrar o recorte recente.",
+  },
+  "chart-response-trend": {
+    title: "Evolução das respostas",
+    description:
+      'Cada barra representa o percentual diário de respostas positivas (responderam "Sim" para violência ao longo da vida).',
+  },
+  "list-imports": {
+    title: "Histórico de importações recentes",
+    description: "Últimos lotes importados para esta base.",
+  },
+  "list-responses": {
+    title: "Respostas do recorte",
+    description: "Tabela detalhada com os registros filtrados e ações de exclusão.",
+  },
+};
+
 function formatDate(value?: string | Date | null) {
   if (!value) return "-";
   const date = new Date(value);
@@ -369,6 +464,7 @@ function metricValue(mode: MetricMode, count: number, percent: number) {
 export function BiDomesticViolenceDashboardPage() {
   const toast = useToast();
   const { data: me } = useMe();
+  const isTiProfile = hasAnyRole(me, [ROLE_TI]);
   const [metricMode, setMetricMode] = useState<MetricMode>("PERCENT");
   const [responsesExpanded, setResponsesExpanded] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -377,6 +473,11 @@ export function BiDomesticViolenceDashboardPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [deleteConfirmMode, setDeleteConfirmMode] =
     useState<DeleteConfirmMode | null>(null);
+  const [editingCardId, setEditingCardId] = useState<string | null>(null);
+  const [editingCardDraft, setEditingCardDraft] = useState<EditableCardText>({
+    title: "",
+    description: "",
+  });
 
   const [filters, setFilters] = useState({
     from: "",
@@ -446,6 +547,7 @@ export function BiDomesticViolenceDashboardPage() {
   const importsQuery = useBiDomesticViolenceImports({ page: 1, pageSize: 8 });
   const importMutation = useImportBiDomesticViolence();
   const deleteResponsesMutation = useDeleteBiDomesticViolenceResponses();
+  const updateCardSettingMutation = useUpdateBiDomesticViolenceCardSetting();
 
   const dashboard = dashboardQuery.data as
     | DomesticDashboardResponse
@@ -466,6 +568,76 @@ export function BiDomesticViolenceDashboardPage() {
 
   const canUpload = can(me, "bi", "upload");
   const canDelete = can(me, "bi", "delete");
+
+  const getDefaultCardText = (cardId: string): EditableCardText => {
+    return (
+      FIXED_CARD_DEFAULTS[cardId] ?? {
+        title: cardId,
+        description: "",
+      }
+    );
+  };
+
+  const cardSettingsMap = useMemo(() => {
+    const map = new Map<string, EditableCardText>();
+    for (const item of dashboard?.cardSettings ?? []) {
+      const cardId = String(item?.cardId ?? "").trim();
+      if (!cardId) continue;
+      map.set(cardId, {
+        title:
+          String(item?.title ?? "").trim() ||
+          getDefaultCardText(cardId).title,
+        description:
+          typeof item?.description === "string"
+            ? item.description
+            : getDefaultCardText(cardId).description,
+      });
+    }
+    return map;
+  }, [dashboard?.cardSettings]);
+
+  const getCardText = (cardId: string): EditableCardText => {
+    return cardSettingsMap.get(cardId) ?? getDefaultCardText(cardId);
+  };
+
+  const openCardEditor = (cardId: string) => {
+    const text = getCardText(cardId);
+    setEditingCardId(cardId);
+    setEditingCardDraft({ ...text });
+  };
+
+  const saveCardEditor = async () => {
+    if (!editingCardId) return;
+    const title = editingCardDraft.title.trim();
+    if (!title) {
+      toast.push({
+        message: "Título é obrigatório.",
+        severity: "warning",
+      });
+      return;
+    }
+
+    try {
+      await updateCardSettingMutation.mutateAsync({
+        cardId: editingCardId,
+        payload: {
+          title,
+          description: editingCardDraft.description.trim() || "",
+        },
+      });
+      toast.push({
+        message: "Texto do card atualizado.",
+        severity: "success",
+      });
+      setEditingCardId(null);
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({
+        message: payload.message ?? "Falha ao atualizar card.",
+        severity: "error",
+      });
+    }
+  };
 
   const totalPages = responses
     ? Math.max(1, Math.ceil(responses.total / responses.pageSize))
@@ -747,6 +919,26 @@ export function BiDomesticViolenceDashboardPage() {
     );
   }
 
+  const pageHeaderText = getCardText("page-header");
+  const ingestionPanelText = getCardText("panel-ingestion");
+  const filtersPanelText = getCardText("panel-filters");
+  const kpiTextsById: Record<string, EditableCardText> = {
+    "kpi-total": getCardText("kpi-total"),
+    "kpi-lifetime": getCardText("kpi-lifetime"),
+    "kpi-last12": getCardText("kpi-last12"),
+    "kpi-sought-help": getCardText("kpi-sought-help"),
+    "kpi-sought-help-rate": getCardText("kpi-sought-help-rate"),
+    "kpi-recurring": getCardText("kpi-recurring"),
+    "kpi-violence-mentions": getCardText("kpi-violence-mentions"),
+    "kpi-avg-types": getCardText("kpi-avg-types"),
+  };
+  const insightMainText = getCardText("insight-main");
+  const lifetimeDonutText = getCardText("chart-lifetime-donut");
+  const last12DonutText = getCardText("chart-last12-donut");
+  const responseTrendText = getCardText("chart-response-trend");
+  const importsText = getCardText("list-imports");
+  const responsesText = getCardText("list-responses");
+
   return (
     <Box
       sx={{
@@ -762,12 +954,20 @@ export function BiDomesticViolenceDashboardPage() {
         mb={2}
       >
         <Box>
-          <Typography variant="h4" fontWeight={700}>
-            Violência Doméstica
-          </Typography>
+          <Stack direction="row" spacing={0.8} alignItems="center">
+            <Typography variant="h4" fontWeight={700}>
+              {pageHeaderText.title}
+            </Typography>
+            {isTiProfile ? (
+              <MuiTooltip title="Editar título/descrição">
+                <IconButton size="small" onClick={() => openCardEditor("page-header")}>
+                  <EditOutlinedIcon fontSize="small" />
+                </IconButton>
+              </MuiTooltip>
+            ) : null}
+          </Stack>
           <Typography variant="body2" sx={{ color: DV_PALETTE.muted }}>
-            Painel estratégico com leitura de prevalência, padrões de impacto e
-            barreiras de denúncia.
+            {pageHeaderText.description}
           </Typography>
         </Box>
 
@@ -834,12 +1034,23 @@ export function BiDomesticViolenceDashboardPage() {
                 gap={1.2}
               >
                 <Box>
-                  <Typography variant="subtitle1" fontWeight={700}>
-                    Ingestão de base CSV/XLSX
-                  </Typography>
+                  <Stack direction="row" spacing={0.8} alignItems="center">
+                    <Typography variant="subtitle1" fontWeight={700}>
+                      {ingestionPanelText.title}
+                    </Typography>
+                    {isTiProfile ? (
+                      <MuiTooltip title="Editar título/descrição">
+                        <IconButton
+                          size="small"
+                          onClick={() => openCardEditor("panel-ingestion")}
+                        >
+                          <EditOutlinedIcon fontSize="small" />
+                        </IconButton>
+                      </MuiTooltip>
+                    ) : null}
+                  </Stack>
                   <Typography variant="body2" sx={{ color: DV_PALETTE.muted }}>
-                    Atualize o BI a partir do formulário oficial, com opção de
-                    substituir toda a base.
+                    {ingestionPanelText.description}
                   </Typography>
                 </Box>
 
@@ -1012,8 +1223,25 @@ export function BiDomesticViolenceDashboardPage() {
 
       <Card sx={{ ...cardSx, mb: 2 }}>
         <CardContent>
-          <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1.2 }}>
-            Filtros analíticos
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="center"
+            sx={{ mb: 0.6 }}
+          >
+            <Typography variant="subtitle1" fontWeight={700}>
+              {filtersPanelText.title}
+            </Typography>
+            {isTiProfile ? (
+              <MuiTooltip title="Editar título/descrição">
+                <IconButton size="small" onClick={() => openCardEditor("panel-filters")}>
+                  <EditOutlinedIcon fontSize="small" />
+                </IconButton>
+              </MuiTooltip>
+            ) : null}
+          </Stack>
+          <Typography variant="caption" sx={{ color: DV_PALETTE.muted }}>
+            {filtersPanelText.description}
           </Typography>
 
           <Grid container spacing={1.2}>
@@ -1472,44 +1700,52 @@ export function BiDomesticViolenceDashboardPage() {
       <Grid container spacing={1.2} sx={{ mb: 2 }}>
         {[
           {
-            label: "Respostas no recorte",
+            cardId: "kpi-total",
+            label: kpiTextsById["kpi-total"].title,
             value: dashboard.kpis.totalResponses,
             color: DV_PALETTE.primary,
           },
           {
-            label: "Sofreram ao longo da vida",
+            cardId: "kpi-lifetime",
+            label: kpiTextsById["kpi-lifetime"].title,
             value: dashboard.kpis.lifetimeYesCount,
             color: DV_PALETTE.accent,
           },
           {
-            label: "Últimos 12 meses",
+            cardId: "kpi-last12",
+            label: kpiTextsById["kpi-last12"].title,
             value: dashboard.kpis.last12MonthsYesCount,
             color: DV_PALETTE.gold,
           },
           {
-            label: "Buscaram canal",
+            cardId: "kpi-sought-help",
+            label: kpiTextsById["kpi-sought-help"].title,
             value: dashboard.kpis.soughtHelpYesCount,
             color: DV_PALETTE.secondary,
           },
           {
-            label: "Taxa de busca de ajuda",
+            cardId: "kpi-sought-help-rate",
+            label: kpiTextsById["kpi-sought-help-rate"].title,
             value: `${getPercentLabel(dashboard.kpis.soughtHelpRatePercent)}`,
             color: DV_PALETTE.violet,
           },
           {
-            label: "Violência recorrente",
+            cardId: "kpi-recurring",
+            label: kpiTextsById["kpi-recurring"].title,
             value: `${dashboard.kpis.recurringCount} (${getPercentLabel(
               dashboard.kpis.recurringRatePercent,
             )})`,
             color: DV_PALETTE.accentSoft,
           },
           {
-            label: "Menções de tipos de violência",
+            cardId: "kpi-violence-mentions",
+            label: kpiTextsById["kpi-violence-mentions"].title,
             value: dashboard.kpis.totalViolenceMentions,
             color: DV_PALETTE.primaryDark,
           },
           {
-            label: "Média de tipos por vítima",
+            cardId: "kpi-avg-types",
+            label: kpiTextsById["kpi-avg-types"].title,
             value: dashboard.kpis.avgTypesPerVictim,
             color: DV_PALETTE.primary,
           },
@@ -1519,14 +1755,26 @@ export function BiDomesticViolenceDashboardPage() {
               <CardContent
                 sx={{ py: 1.2, px: 1.4, "&:last-child": { pb: 1.2 } }}
               >
-                <Typography variant="body2" sx={{ color: DV_PALETTE.muted }}>
-                  {kpi.label}
-                </Typography>
+                <Stack direction="row" justifyContent="space-between" alignItems="center">
+                  <Typography variant="body2" sx={{ color: DV_PALETTE.muted }}>
+                    {kpi.label}
+                  </Typography>
+                  {isTiProfile ? (
+                    <MuiTooltip title="Editar título/descrição">
+                      <IconButton size="small" onClick={() => openCardEditor(kpi.cardId)}>
+                        <EditOutlinedIcon fontSize="small" />
+                      </IconButton>
+                    </MuiTooltip>
+                  ) : null}
+                </Stack>
                 <Typography
                   variant="h5"
                   sx={{ color: kpi.color, fontWeight: 700, mt: 0.4 }}
                 >
                   {kpi.value}
+                </Typography>
+                <Typography variant="caption" sx={{ color: DV_PALETTE.muted }}>
+                  {kpiTextsById[kpi.cardId]?.description ?? ""}
                 </Typography>
               </CardContent>
             </Card>
@@ -1536,8 +1784,20 @@ export function BiDomesticViolenceDashboardPage() {
 
       <Card sx={{ ...cardSx, mb: 2 }}>
         <CardContent>
-          <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
-            Insights executivos
+          <Stack direction="row" justifyContent="space-between" alignItems="center">
+            <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
+              {insightMainText.title}
+            </Typography>
+            {isTiProfile ? (
+              <MuiTooltip title="Editar título/descrição">
+                <IconButton size="small" onClick={() => openCardEditor("insight-main")}>
+                  <EditOutlinedIcon fontSize="small" />
+                </IconButton>
+              </MuiTooltip>
+            ) : null}
+          </Stack>
+          <Typography variant="caption" sx={{ color: DV_PALETTE.muted }}>
+            {insightMainText.description}
           </Typography>
           <Grid container spacing={1}>
             <Grid size={{ xs: 12, md: 4 }}>
@@ -1593,14 +1853,23 @@ export function BiDomesticViolenceDashboardPage() {
         <Grid size={{ xs: 12, lg: 6 }}>
           <Card sx={cardSx}>
             <CardContent>
-              <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
-                Sofreu violência ao longo da vida
-              </Typography>
+              <Stack direction="row" justifyContent="space-between" alignItems="center">
+                <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
+                  {lifetimeDonutText.title}
+                </Typography>
+                {isTiProfile ? (
+                  <MuiTooltip title="Editar título/descrição">
+                    <IconButton size="small" onClick={() => openCardEditor("chart-lifetime-donut")}>
+                      <EditOutlinedIcon fontSize="small" />
+                    </IconButton>
+                  </MuiTooltip>
+                ) : null}
+              </Stack>
               <Typography
                 variant="body2"
                 sx={{ color: DV_PALETTE.muted, mb: 1.2 }}
               >
-                Clique em uma fatia para aplicar filtro.
+                {lifetimeDonutText.description}
               </Typography>
               <Box sx={{ height: 236 }}>
                 <ResponsiveContainer>
@@ -1656,14 +1925,23 @@ export function BiDomesticViolenceDashboardPage() {
         <Grid size={{ xs: 12, lg: 6 }}>
           <Card sx={cardSx}>
             <CardContent>
-              <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
-                Sofreu nos últimos 12 meses
-              </Typography>
+              <Stack direction="row" justifyContent="space-between" alignItems="center">
+                <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
+                  {last12DonutText.title}
+                </Typography>
+                {isTiProfile ? (
+                  <MuiTooltip title="Editar título/descrição">
+                    <IconButton size="small" onClick={() => openCardEditor("chart-last12-donut")}>
+                      <EditOutlinedIcon fontSize="small" />
+                    </IconButton>
+                  </MuiTooltip>
+                ) : null}
+              </Stack>
               <Typography
                 variant="body2"
                 sx={{ color: DV_PALETTE.muted, mb: 1.2 }}
               >
-                Clique em uma fatia para filtrar o recorte recente.
+                {last12DonutText.description}
               </Typography>
               <Box sx={{ height: 236 }}>
                 <ResponsiveContainer>
@@ -2917,12 +3195,20 @@ export function BiDomesticViolenceDashboardPage() {
 
       <Card sx={{ ...cardSx, mb: 2 }}>
         <CardContent>
-          <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
-            Evolução das respostas
-          </Typography>
+          <Stack direction="row" justifyContent="space-between" alignItems="center">
+            <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
+              {responseTrendText.title}
+            </Typography>
+            {isTiProfile ? (
+              <MuiTooltip title="Editar título/descrição">
+                <IconButton size="small" onClick={() => openCardEditor("chart-response-trend")}>
+                  <EditOutlinedIcon fontSize="small" />
+                </IconButton>
+              </MuiTooltip>
+            ) : null}
+          </Stack>
           <Typography variant="caption" sx={{ color: DV_PALETTE.muted }}>
-            Cada barra representa o percentual diário de respostas positivas
-            (responderam "Sim" para violência ao longo da vida).
+            {responseTrendText.description}
           </Typography>
           <Box sx={{ height: 250 }}>
             <ResponsiveContainer>
@@ -2982,9 +3268,18 @@ export function BiDomesticViolenceDashboardPage() {
             gap={1}
             mb={1}
           >
-            <Typography variant="subtitle1" fontWeight={700}>
-              Histórico de importações recentes
-            </Typography>
+            <Stack direction="row" spacing={0.8} alignItems="center">
+              <Typography variant="subtitle1" fontWeight={700}>
+                {importsText.title}
+              </Typography>
+              {isTiProfile ? (
+                <MuiTooltip title="Editar título/descrição">
+                  <IconButton size="small" onClick={() => openCardEditor("list-imports")}>
+                    <EditOutlinedIcon fontSize="small" />
+                  </IconButton>
+                </MuiTooltip>
+              ) : null}
+            </Stack>
             <Chip
               size="small"
               label={`${imports?.items?.length ?? 0} lote(s)`}
@@ -2994,6 +3289,9 @@ export function BiDomesticViolenceDashboardPage() {
               }}
             />
           </Stack>
+          <Typography variant="caption" sx={{ color: DV_PALETTE.muted }}>
+            {importsText.description}
+          </Typography>
 
           {!imports?.items?.length ? (
             <Alert severity="info">Sem histórico de importações.</Alert>
@@ -3038,9 +3336,23 @@ export function BiDomesticViolenceDashboardPage() {
             alignItems={{ lg: "center" }}
             gap={1}
           >
-            <Typography variant="subtitle1" fontWeight={700}>
-              Respostas do recorte
-            </Typography>
+            <Box>
+              <Stack direction="row" spacing={0.8} alignItems="center">
+                <Typography variant="subtitle1" fontWeight={700}>
+                  {responsesText.title}
+                </Typography>
+                {isTiProfile ? (
+                  <MuiTooltip title="Editar título/descrição">
+                    <IconButton size="small" onClick={() => openCardEditor("list-responses")}>
+                      <EditOutlinedIcon fontSize="small" />
+                    </IconButton>
+                  </MuiTooltip>
+                ) : null}
+              </Stack>
+              <Typography variant="caption" sx={{ color: DV_PALETTE.muted }}>
+                {responsesText.description}
+              </Typography>
+            </Box>
 
             <Stack direction="row" spacing={1}>
               <Button
@@ -3193,6 +3505,53 @@ export function BiDomesticViolenceDashboardPage() {
           </Collapse>
         </CardContent>
       </Card>
+
+      <Dialog
+        open={editingCardId !== null}
+        onClose={() => setEditingCardId(null)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Editar texto do card</DialogTitle>
+        <DialogContent sx={{ pt: 1 }}>
+          <Stack spacing={1.3} sx={{ mt: 0.4 }}>
+            <TextField
+              label="Título"
+              value={editingCardDraft.title}
+              onChange={(event) =>
+                setEditingCardDraft((prev) => ({
+                  ...prev,
+                  title: event.target.value,
+                }))
+              }
+              fullWidth
+            />
+            <TextField
+              label="Descrição"
+              value={editingCardDraft.description}
+              onChange={(event) =>
+                setEditingCardDraft((prev) => ({
+                  ...prev,
+                  description: event.target.value,
+                }))
+              }
+              fullWidth
+              multiline
+              minRows={2}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditingCardId(null)}>Cancelar</Button>
+          <Button
+            variant="contained"
+            onClick={() => void saveCardEditor()}
+            disabled={updateCardSettingMutation.isPending}
+          >
+            Salvar
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <ConfirmDialog
         open={deleteConfirmMode !== null}

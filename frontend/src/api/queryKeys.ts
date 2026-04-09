@@ -90,18 +90,22 @@ export const qk = {
     ["biSurvey", "imports", filters] as const,
   biSurveyQuestions: (filters: Record<string, any>) =>
     ["biSurvey", "questions", filters] as const,
+  biSurveyCardSettings: () => ["biSurvey", "cardSettings"] as const,
   biDomesticViolenceDashboard: (filters: Record<string, any>) =>
     ["biDomesticViolence", "dashboard", filters] as const,
   biDomesticViolenceResponses: (filters: Record<string, any>) =>
     ["biDomesticViolence", "responses", filters] as const,
   biDomesticViolenceImports: (filters: Record<string, any>) =>
     ["biDomesticViolence", "imports", filters] as const,
+  biDomesticViolenceCardSettings: () =>
+    ["biDomesticViolence", "cardSettings"] as const,
   biRecruitsDashboard: (filters: Record<string, any>) =>
     ["biRecruits", "dashboard", filters] as const,
   biRecruitsResponses: (filters: Record<string, any>) =>
     ["biRecruits", "responses", filters] as const,
   biRecruitsImports: (filters: Record<string, any>) =>
     ["biRecruits", "imports", filters] as const,
+  biRecruitsCardSettings: () => ["biRecruits", "cardSettings"] as const,
   biBestPracticesCycleDashboard: (filters: Record<string, any>) =>
     ["biBestPracticesCycle", "dashboard", filters] as const,
   biBestPracticesCycleResponses: (filters: Record<string, any>) =>

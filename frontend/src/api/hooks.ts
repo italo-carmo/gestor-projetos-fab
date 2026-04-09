@@ -3676,6 +3676,15 @@ export function useBiSurveyImports(filters: Record<string, any>) {
   });
 }
 
+export function useBiSurveyCardSettings(enabled = true) {
+  return useQuery({
+    queryKey: qk.biSurveyCardSettings(),
+    queryFn: async () => (await api.get("/bi/surveys/card-settings")).data,
+    enabled,
+    staleTime: 20_000,
+  });
+}
+
 export function useImportBiSurvey() {
   const qc = useQueryClient();
   return useMutation({
@@ -3717,6 +3726,25 @@ export function useDeleteBiSurveyResponses() {
   });
 }
 
+export function useUpdateBiSurveyCardSetting() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      cardId: string;
+      payload: { title?: string; description?: string | null };
+    }) =>
+      (
+        await api.put(
+          `/bi/surveys/card-settings/${encodeURIComponent(args.cardId)}`,
+          args.payload,
+        )
+      ).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["biSurvey"] });
+    },
+  });
+}
+
 export function useBiDomesticViolenceDashboard(filters: Record<string, any>) {
   return useQuery({
     queryKey: qk.biDomesticViolenceDashboard(filters),
@@ -3744,6 +3772,16 @@ export function useBiDomesticViolenceImports(filters: Record<string, any>) {
       (await api.get("/bi/domestic-violence/imports", { params: filters }))
         .data,
     staleTime: 10_000,
+  });
+}
+
+export function useBiDomesticViolenceCardSettings(enabled = true) {
+  return useQuery({
+    queryKey: qk.biDomesticViolenceCardSettings(),
+    queryFn: async () =>
+      (await api.get("/bi/domestic-violence/card-settings")).data,
+    enabled,
+    staleTime: 20_000,
   });
 }
 
@@ -3803,6 +3841,27 @@ export function useDeleteBiDomesticViolenceResponses() {
   });
 }
 
+export function useUpdateBiDomesticViolenceCardSetting() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      cardId: string;
+      payload: { title?: string; description?: string | null };
+    }) =>
+      (
+        await api.put(
+          `/bi/domestic-violence/card-settings/${encodeURIComponent(
+            args.cardId,
+          )}`,
+          args.payload,
+        )
+      ).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["biDomesticViolence"] });
+    },
+  });
+}
+
 export function useBiRecruitsDashboard(filters: Record<string, any>) {
   return useQuery({
     queryKey: qk.biRecruitsDashboard(filters),
@@ -3827,6 +3886,15 @@ export function useBiRecruitsImports(filters: Record<string, any>) {
     queryFn: async () =>
       (await api.get("/bi/recruits/imports", { params: filters })).data,
     staleTime: 10_000,
+  });
+}
+
+export function useBiRecruitsCardSettings(enabled = true) {
+  return useQuery({
+    queryKey: qk.biRecruitsCardSettings(),
+    queryFn: async () => (await api.get("/bi/recruits/card-settings")).data,
+    enabled,
+    staleTime: 20_000,
   });
 }
 
@@ -3867,6 +3935,25 @@ export function useDeleteBiRecruitsResponses() {
       q?: string;
       combineMode?: "AND" | "OR";
     }) => (await api.post("/bi/recruits/responses/delete", payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["biRecruits"] });
+    },
+  });
+}
+
+export function useUpdateBiRecruitsCardSetting() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      cardId: string;
+      payload: { title?: string; description?: string | null };
+    }) =>
+      (
+        await api.put(
+          `/bi/recruits/card-settings/${encodeURIComponent(args.cardId)}`,
+          args.payload,
+        )
+      ).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["biRecruits"] });
     },

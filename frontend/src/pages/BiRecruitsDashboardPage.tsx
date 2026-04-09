@@ -8,8 +8,13 @@ import {
   Checkbox,
   Chip,
   Collapse,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   FormControlLabel,
   Grid,
+  IconButton,
   LinearProgress,
   MenuItem,
   Stack,
@@ -20,6 +25,7 @@ import {
   TableHead,
   TableRow,
   TextField,
+  Tooltip as MuiTooltip,
   Typography,
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
@@ -27,6 +33,7 @@ import UploadFileRoundedIcon from "@mui/icons-material/UploadFileRounded";
 import AutoGraphRoundedIcon from "@mui/icons-material/AutoGraphRounded";
 import DownloadRoundedIcon from "@mui/icons-material/DownloadRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
+import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import KeyboardArrowDownRoundedIcon from "@mui/icons-material/KeyboardArrowDownRounded";
 import KeyboardArrowUpRoundedIcon from "@mui/icons-material/KeyboardArrowUpRounded";
 import {
@@ -46,9 +53,11 @@ import {
   useDeleteBiRecruitsResponses,
   useImportBiRecruits,
   useMe,
+  useUpdateBiRecruitsCardSetting,
 } from "../api/hooks";
 import { parseApiError } from "../app/apiErrors";
 import { can } from "../app/rbac";
+import { hasAnyRole, ROLE_TI } from "../app/roleAccess";
 import { useToast } from "../app/toast";
 import { ConfirmDialog } from "../components/dialogs/ConfirmDialog";
 import { ErrorState } from "../components/states/ErrorState";
@@ -63,6 +72,17 @@ type DistributionDatum = {
   count: number;
   percent: number;
   [key: string]: string | number;
+};
+
+type CardSetting = {
+  cardId: string;
+  title: string;
+  description?: string | null;
+};
+
+type EditableCardText = {
+  title: string;
+  description: string;
 };
 
 type RecruitsDashboardResponse = {
@@ -142,6 +162,7 @@ type RecruitsDashboardResponse = {
     importedAt: string;
     fileName: string;
   } | null;
+  cardSettings?: CardSetting[];
 };
 
 type RecruitsResponseRow = {
@@ -167,12 +188,15 @@ type PagedResponse<T> = {
 };
 
 type DistributionCardProps = {
+  cardId: string;
   title: string;
   subtitle: string;
   data: DistributionDatum[];
   mode: MetricMode;
   color: string;
   longLabels?: boolean;
+  onEdit: (cardId: string) => void;
+  editable: boolean;
 };
 
 const RC_PALETTE = {
@@ -221,6 +245,97 @@ const tooltipContentStyle = {
   background: "#FFFFFF",
 };
 const tooltipLabelStyle = { color: RC_PALETTE.text, fontWeight: 700 };
+
+const FIXED_CARD_DEFAULTS: Record<string, EditableCardText> = {
+  "page-header": {
+    title: "Recrutas",
+    description:
+      "Painel estratégico da Pesquisa de Percepção Institucional com foco em leitura rápida para decisão de comando.",
+  },
+  "panel-ingestion": {
+    title: "Ingestão de base CSV/XLSX",
+    description:
+      "Atualize o BI de Recrutas com a planilha oficial e escolha entre anexar ou substituir toda a base.",
+  },
+  "panel-filters": {
+    title: "Filtros analíticos",
+    description: "Refine o recorte por período, perfil e respostas do formulário.",
+  },
+  "kpi-total": {
+    title: "Respostas no recorte",
+    description: "Base total no banco e volume atual de respostas filtradas.",
+  },
+  "kpi-guidance": {
+    title: "Segurança para orientação",
+    description: "Percentual e volume de recrutas que se sentem seguros para orientação.",
+  },
+  "kpi-report": {
+    title: "Segurança para registro",
+    description: "Percentual e volume de recrutas que se sentem seguros para registrar ocorrência.",
+  },
+  "kpi-attention": {
+    title: "Ponto de atenção",
+    description: "Principal fragilidade observada no recorte atual.",
+  },
+  "chart-response-trend": {
+    title: "Evolução das respostas",
+    description:
+      'Cada barra representa o percentual diário de respostas positivas (disposição "Seguro(a)" para registrar ocorrência).',
+  },
+  "chart-education": {
+    title: "Escolaridade",
+    description: "Perfil acadêmico da amostra.",
+  },
+  "chart-gender": {
+    title: "Gênero",
+    description: "Distribuição de gênero dos respondentes.",
+  },
+  "chart-identify-harassment": {
+    title: "Identificação de assédio",
+    description: "Questão 1.1 - capacidade de identificar situações.",
+  },
+  "chart-conduct-limits": {
+    title: "Compreensão dos limites",
+    description: "Questão 1.2 - clareza sobre limites de conduta.",
+  },
+  "chart-know-orientation": {
+    title: "Sabe a quem recorrer",
+    description: "Questão 2.1 - orientação institucional.",
+  },
+  "chart-know-report-process": {
+    title: "Sabe registrar formalmente",
+    description: "Questão 2.2 - conhecimento do processo de registro.",
+  },
+  "chart-willingness-orientation": {
+    title: "Disposição para orientação",
+    description: "Questão 3.1 - segurança para buscar orientação.",
+  },
+  "chart-willingness-report": {
+    title: "Disposição para registrar",
+    description: "Questão 3.2 - segurança para registrar ocorrência.",
+  },
+  "chart-enlistment-influence": {
+    title: "Fator para ingresso na FAB",
+    description: "Pergunta 4 - principal motivador de ingresso.",
+  },
+  "insight-main": {
+    title: "Insight Executivo",
+    description: "Síntese de sinais de risco e leitura consolidada das respostas.",
+  },
+  "list-free-text": {
+    title: "Sugestões e Comentários (texto livre)",
+    description:
+      "Coluna aberta apresentada em lista para leitura qualitativa das respostas.",
+  },
+  "list-responses": {
+    title: "Respostas",
+    description: "Tabela detalhada das respostas do recorte atual.",
+  },
+  "list-imports": {
+    title: "Histórico de importações",
+    description: "Últimos lotes importados para esta pesquisa.",
+  },
+};
 
 function formatDate(value?: string | Date | null) {
   if (!value) return "-";
@@ -274,12 +389,15 @@ function buildCsv(items: RecruitsResponseRow[]) {
 }
 
 function DistributionCard({
+  cardId,
   title,
   subtitle,
   data,
   mode,
   color,
   longLabels = false,
+  onEdit,
+  editable,
 }: DistributionCardProps) {
   const chartData = data.slice(0, 12).map((item) => ({
     ...item,
@@ -302,9 +420,18 @@ function DistributionCard({
   return (
     <Card sx={cardSx}>
       <CardContent>
-        <Typography variant="subtitle1" fontWeight={700}>
-          {title}
-        </Typography>
+        <Stack direction="row" justifyContent="space-between" alignItems="center">
+          <Typography variant="subtitle1" fontWeight={700}>
+            {title}
+          </Typography>
+          {editable ? (
+            <MuiTooltip title="Editar título/descrição">
+              <IconButton size="small" onClick={() => onEdit(cardId)}>
+                <EditOutlinedIcon fontSize="small" />
+              </IconButton>
+            </MuiTooltip>
+          ) : null}
+        </Stack>
         <Typography variant="caption" sx={{ color: RC_PALETTE.muted }}>
           {subtitle}
         </Typography>
@@ -361,6 +488,7 @@ function DistributionCard({
 export function BiRecruitsDashboardPage() {
   const toast = useToast();
   const { data: me } = useMe();
+  const isTiProfile = hasAnyRole(me, [ROLE_TI]);
   const [metricMode, setMetricMode] = useState<MetricMode>("PERCENT");
   const [responsesExpanded, setResponsesExpanded] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -369,6 +497,11 @@ export function BiRecruitsDashboardPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [deleteConfirmMode, setDeleteConfirmMode] =
     useState<DeleteConfirmMode | null>(null);
+  const [editingCardId, setEditingCardId] = useState<string | null>(null);
+  const [editingCardDraft, setEditingCardDraft] = useState<EditableCardText>({
+    title: "",
+    description: "",
+  });
 
   const [filters, setFilters] = useState({
     from: "",
@@ -415,6 +548,7 @@ export function BiRecruitsDashboardPage() {
   const importsQuery = useBiRecruitsImports({ page: 1, pageSize: 8 });
   const importMutation = useImportBiRecruits();
   const deleteResponsesMutation = useDeleteBiRecruitsResponses();
+  const updateCardSettingMutation = useUpdateBiRecruitsCardSetting();
 
   const dashboard = dashboardQuery.data as RecruitsDashboardResponse | undefined;
   const responses = responsesQuery.data as
@@ -433,6 +567,76 @@ export function BiRecruitsDashboardPage() {
 
   const canUpload = can(me, "bi", "upload");
   const canDelete = can(me, "bi", "delete");
+
+  const getDefaultCardText = (cardId: string): EditableCardText => {
+    return (
+      FIXED_CARD_DEFAULTS[cardId] ?? {
+        title: cardId,
+        description: "",
+      }
+    );
+  };
+
+  const cardSettingsMap = useMemo(() => {
+    const map = new Map<string, EditableCardText>();
+    for (const item of dashboard?.cardSettings ?? []) {
+      const cardId = String(item?.cardId ?? "").trim();
+      if (!cardId) continue;
+      map.set(cardId, {
+        title:
+          String(item?.title ?? "").trim() ||
+          getDefaultCardText(cardId).title,
+        description:
+          typeof item?.description === "string"
+            ? item.description
+            : getDefaultCardText(cardId).description,
+      });
+    }
+    return map;
+  }, [dashboard?.cardSettings]);
+
+  const getCardText = (cardId: string): EditableCardText => {
+    return cardSettingsMap.get(cardId) ?? getDefaultCardText(cardId);
+  };
+
+  const openCardEditor = (cardId: string) => {
+    const text = getCardText(cardId);
+    setEditingCardId(cardId);
+    setEditingCardDraft({ ...text });
+  };
+
+  const saveCardEditor = async () => {
+    if (!editingCardId) return;
+    const title = editingCardDraft.title.trim();
+    if (!title) {
+      toast.push({
+        message: "Título é obrigatório.",
+        severity: "warning",
+      });
+      return;
+    }
+
+    try {
+      await updateCardSettingMutation.mutateAsync({
+        cardId: editingCardId,
+        payload: {
+          title,
+          description: editingCardDraft.description.trim() || "",
+        },
+      });
+      toast.push({
+        message: "Texto do card atualizado.",
+        severity: "success",
+      });
+      setEditingCardId(null);
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({
+        message: payload.message ?? "Falha ao atualizar card.",
+        severity: "error",
+      });
+    }
+  };
 
   const totalPages = responses
     ? Math.max(1, Math.ceil(responses.total / responses.pageSize))
@@ -599,63 +803,85 @@ export function BiRecruitsDashboardPage() {
     );
   }
 
-  const distributionCards: Array<Omit<DistributionCardProps, "mode">> = [
+  const distributionCards: Array<Omit<DistributionCardProps, "mode" | "onEdit" | "editable">> = [
     {
-      title: "Escolaridade",
-      subtitle: "Perfil acadêmico da amostra.",
+      cardId: "chart-education",
+      title: getCardText("chart-education").title,
+      subtitle: getCardText("chart-education").description,
       data: dashboard.charts.educationDistribution,
       color: CHART_COLORS[0],
     },
     {
-      title: "Gênero",
-      subtitle: "Distribuição de gênero dos respondentes.",
+      cardId: "chart-gender",
+      title: getCardText("chart-gender").title,
+      subtitle: getCardText("chart-gender").description,
       data: dashboard.charts.genderDistribution,
       color: CHART_COLORS[1],
     },
     {
-      title: "Identificação de assédio",
-      subtitle: "Questão 1.1 - capacidade de identificar situações.",
+      cardId: "chart-identify-harassment",
+      title: getCardText("chart-identify-harassment").title,
+      subtitle: getCardText("chart-identify-harassment").description,
       data: dashboard.charts.identifyHarassmentDistribution,
       color: CHART_COLORS[2],
     },
     {
-      title: "Compreensão dos limites",
-      subtitle: "Questão 1.2 - clareza sobre limites de conduta.",
+      cardId: "chart-conduct-limits",
+      title: getCardText("chart-conduct-limits").title,
+      subtitle: getCardText("chart-conduct-limits").description,
       data: dashboard.charts.conductLimitsDistribution,
       color: CHART_COLORS[3],
     },
     {
-      title: "Sabe a quem recorrer",
-      subtitle: "Questão 2.1 - orientação institucional.",
+      cardId: "chart-know-orientation",
+      title: getCardText("chart-know-orientation").title,
+      subtitle: getCardText("chart-know-orientation").description,
       data: dashboard.charts.knowOrientationDistribution,
       color: CHART_COLORS[4],
     },
     {
-      title: "Sabe registrar formalmente",
-      subtitle: "Questão 2.2 - conhecimento do processo de registro.",
+      cardId: "chart-know-report-process",
+      title: getCardText("chart-know-report-process").title,
+      subtitle: getCardText("chart-know-report-process").description,
       data: dashboard.charts.knowReportProcessDistribution,
       color: CHART_COLORS[5],
     },
     {
-      title: "Disposição para orientação",
-      subtitle: "Questão 3.1 - segurança para buscar orientação.",
+      cardId: "chart-willingness-orientation",
+      title: getCardText("chart-willingness-orientation").title,
+      subtitle: getCardText("chart-willingness-orientation").description,
       data: dashboard.charts.willingnessOrientationDistribution,
       color: CHART_COLORS[6],
     },
     {
-      title: "Disposição para registrar",
-      subtitle: "Questão 3.2 - segurança para registrar ocorrência.",
+      cardId: "chart-willingness-report",
+      title: getCardText("chart-willingness-report").title,
+      subtitle: getCardText("chart-willingness-report").description,
       data: dashboard.charts.willingnessReportDistribution,
       color: CHART_COLORS[7],
     },
     {
-      title: "Fator para ingresso na FAB",
-      subtitle: "Pergunta 4 - principal motivador de ingresso.",
+      cardId: "chart-enlistment-influence",
+      title: getCardText("chart-enlistment-influence").title,
+      subtitle: getCardText("chart-enlistment-influence").description,
       data: dashboard.charts.enlistmentDecisionInfluenceDistribution,
       color: CHART_COLORS[8],
       longLabels: true,
     },
   ];
+
+  const pageHeaderText = getCardText("page-header");
+  const ingestionPanelText = getCardText("panel-ingestion");
+  const filtersPanelText = getCardText("panel-filters");
+  const kpiTotalText = getCardText("kpi-total");
+  const kpiGuidanceText = getCardText("kpi-guidance");
+  const kpiReportText = getCardText("kpi-report");
+  const kpiAttentionText = getCardText("kpi-attention");
+  const trendText = getCardText("chart-response-trend");
+  const insightText = getCardText("insight-main");
+  const freeTextCardText = getCardText("list-free-text");
+  const responsesText = getCardText("list-responses");
+  const importsText = getCardText("list-imports");
 
   return (
     <Box
@@ -672,12 +898,20 @@ export function BiRecruitsDashboardPage() {
         mb={2}
       >
         <Box>
-          <Typography variant="h4" fontWeight={700}>
-            Recrutas
-          </Typography>
+          <Stack direction="row" spacing={0.8} alignItems="center">
+            <Typography variant="h4" fontWeight={700}>
+              {pageHeaderText.title}
+            </Typography>
+            {isTiProfile ? (
+              <MuiTooltip title="Editar título/descrição">
+                <IconButton size="small" onClick={() => openCardEditor("page-header")}>
+                  <EditOutlinedIcon fontSize="small" />
+                </IconButton>
+              </MuiTooltip>
+            ) : null}
+          </Stack>
           <Typography variant="body2" sx={{ color: RC_PALETTE.muted }}>
-            Painel estratégico da Pesquisa de Percepção Institucional com foco
-            em leitura rápida para decisão de comando.
+            {pageHeaderText.description}
           </Typography>
         </Box>
 
@@ -744,12 +978,23 @@ export function BiRecruitsDashboardPage() {
                 gap={1.2}
               >
                 <Box>
-                  <Typography variant="subtitle1" fontWeight={700}>
-                    Ingestão de base CSV/XLSX
-                  </Typography>
+                  <Stack direction="row" spacing={0.8} alignItems="center">
+                    <Typography variant="subtitle1" fontWeight={700}>
+                      {ingestionPanelText.title}
+                    </Typography>
+                    {isTiProfile ? (
+                      <MuiTooltip title="Editar título/descrição">
+                        <IconButton
+                          size="small"
+                          onClick={() => openCardEditor("panel-ingestion")}
+                        >
+                          <EditOutlinedIcon fontSize="small" />
+                        </IconButton>
+                      </MuiTooltip>
+                    ) : null}
+                  </Stack>
                   <Typography variant="body2" sx={{ color: RC_PALETTE.muted }}>
-                    Atualize o BI de Recrutas com a planilha oficial e escolha
-                    entre anexar ou substituir toda a base.
+                    {ingestionPanelText.description}
                   </Typography>
                 </Box>
 
@@ -917,8 +1162,25 @@ export function BiRecruitsDashboardPage() {
 
       <Card sx={{ ...cardSx, mb: 2 }}>
         <CardContent>
-          <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1.2 }}>
-            Filtros analíticos
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="center"
+            sx={{ mb: 0.6 }}
+          >
+            <Typography variant="subtitle1" fontWeight={700}>
+              {filtersPanelText.title}
+            </Typography>
+            {isTiProfile ? (
+              <MuiTooltip title="Editar título/descrição">
+                <IconButton size="small" onClick={() => openCardEditor("panel-filters")}>
+                  <EditOutlinedIcon fontSize="small" />
+                </IconButton>
+              </MuiTooltip>
+            ) : null}
+          </Stack>
+          <Typography variant="caption" sx={{ color: RC_PALETTE.muted }}>
+            {filtersPanelText.description}
           </Typography>
 
           <Grid container spacing={1.2}>
@@ -1146,12 +1408,21 @@ export function BiRecruitsDashboardPage() {
         <Grid size={{ xs: 12, md: 3 }}>
           <Card sx={cardSx}>
             <CardContent>
-              <Typography variant="overline">Respostas no recorte</Typography>
+              <Stack direction="row" justifyContent="space-between" alignItems="center">
+                <Typography variant="overline">{kpiTotalText.title}</Typography>
+                {isTiProfile ? (
+                  <MuiTooltip title="Editar título/descrição">
+                    <IconButton size="small" onClick={() => openCardEditor("kpi-total")}>
+                      <EditOutlinedIcon fontSize="small" />
+                    </IconButton>
+                  </MuiTooltip>
+                ) : null}
+              </Stack>
               <Typography variant="h5" lineHeight={1.1}>
                 {dashboard.kpis.totalResponses}
               </Typography>
               <Typography variant="caption" sx={{ color: RC_PALETTE.muted }}>
-                Base total: {dashboard.kpis.totalRowsInDb}
+                {kpiTotalText.description} Base total: {dashboard.kpis.totalRowsInDb}
               </Typography>
             </CardContent>
           </Card>
@@ -1164,12 +1435,21 @@ export function BiRecruitsDashboardPage() {
             }}
           >
             <CardContent>
-              <Typography variant="overline">Segurança para orientação</Typography>
+              <Stack direction="row" justifyContent="space-between" alignItems="center">
+                <Typography variant="overline">{kpiGuidanceText.title}</Typography>
+                {isTiProfile ? (
+                  <MuiTooltip title="Editar título/descrição">
+                    <IconButton size="small" onClick={() => openCardEditor("kpi-guidance")}>
+                      <EditOutlinedIcon fontSize="small" />
+                    </IconButton>
+                  </MuiTooltip>
+                ) : null}
+              </Stack>
               <Typography variant="h5" lineHeight={1.1}>
                 {dashboard.kpis.secureGuidanceRatePercent.toFixed(1)}%
               </Typography>
               <Typography variant="caption" sx={{ color: RC_PALETTE.muted }}>
-                Seguro(a): {dashboard.kpis.secureGuidanceCount}
+                {kpiGuidanceText.description} Seguro(a): {dashboard.kpis.secureGuidanceCount}
               </Typography>
             </CardContent>
           </Card>
@@ -1182,12 +1462,21 @@ export function BiRecruitsDashboardPage() {
             }}
           >
             <CardContent>
-              <Typography variant="overline">Segurança para registro</Typography>
+              <Stack direction="row" justifyContent="space-between" alignItems="center">
+                <Typography variant="overline">{kpiReportText.title}</Typography>
+                {isTiProfile ? (
+                  <MuiTooltip title="Editar título/descrição">
+                    <IconButton size="small" onClick={() => openCardEditor("kpi-report")}>
+                      <EditOutlinedIcon fontSize="small" />
+                    </IconButton>
+                  </MuiTooltip>
+                ) : null}
+              </Stack>
               <Typography variant="h5" lineHeight={1.1}>
                 {dashboard.kpis.secureReportRatePercent.toFixed(1)}%
               </Typography>
               <Typography variant="caption" sx={{ color: RC_PALETTE.muted }}>
-                Seguro(a): {dashboard.kpis.secureReportCount}
+                {kpiReportText.description} Seguro(a): {dashboard.kpis.secureReportCount}
               </Typography>
             </CardContent>
           </Card>
@@ -1200,12 +1489,21 @@ export function BiRecruitsDashboardPage() {
             }}
           >
             <CardContent>
-              <Typography variant="overline">Ponto de atenção</Typography>
+              <Stack direction="row" justifyContent="space-between" alignItems="center">
+                <Typography variant="overline">{kpiAttentionText.title}</Typography>
+                {isTiProfile ? (
+                  <MuiTooltip title="Editar título/descrição">
+                    <IconButton size="small" onClick={() => openCardEditor("kpi-attention")}>
+                      <EditOutlinedIcon fontSize="small" />
+                    </IconButton>
+                  </MuiTooltip>
+                ) : null}
+              </Stack>
               <Typography variant="body2" sx={{ mt: 0.6 }}>
                 <strong>{dashboard.insights.weakestPoint.title}</strong>
               </Typography>
               <Typography variant="caption" sx={{ color: RC_PALETTE.muted }}>
-                {dashboard.insights.weakestPoint.affectedCount} respostas ({" "}
+                {kpiAttentionText.description} {dashboard.insights.weakestPoint.affectedCount} respostas ({" "}
                 {dashboard.insights.weakestPoint.affectedRatePercent.toFixed(1)}%)
               </Typography>
             </CardContent>
@@ -1215,12 +1513,20 @@ export function BiRecruitsDashboardPage() {
 
       <Card sx={{ ...cardSx, mb: 2 }}>
         <CardContent>
-          <Typography variant="subtitle1" fontWeight={700}>
-            Evolução das respostas
-          </Typography>
+          <Stack direction="row" justifyContent="space-between" alignItems="center">
+            <Typography variant="subtitle1" fontWeight={700}>
+              {trendText.title}
+            </Typography>
+            {isTiProfile ? (
+              <MuiTooltip title="Editar título/descrição">
+                <IconButton size="small" onClick={() => openCardEditor("chart-response-trend")}>
+                  <EditOutlinedIcon fontSize="small" />
+                </IconButton>
+              </MuiTooltip>
+            ) : null}
+          </Stack>
           <Typography variant="caption" sx={{ color: RC_PALETTE.muted }}>
-            Cada barra representa o percentual diário de respostas positivas
-            (disposição "Seguro(a)" para registrar ocorrência).
+            {trendText.description}
           </Typography>
 
           {(dashboard.charts.responseTrend ?? []).length === 0 ? (
@@ -1280,16 +1586,33 @@ export function BiRecruitsDashboardPage() {
 
       <Grid container spacing={2} sx={{ mb: 2 }}>
         {distributionCards.map((card) => (
-          <Grid key={card.title} size={{ xs: 12, lg: 6 }}>
-            <DistributionCard {...card} mode={metricMode} />
+          <Grid key={card.cardId} size={{ xs: 12, lg: 6 }}>
+            <DistributionCard
+              {...card}
+              mode={metricMode}
+              onEdit={openCardEditor}
+              editable={isTiProfile}
+            />
           </Grid>
         ))}
       </Grid>
 
       <Card sx={{ ...cardSx, mb: 2 }}>
         <CardContent>
-          <Typography variant="subtitle1" fontWeight={700}>
-            Insight Executivo
+          <Stack direction="row" justifyContent="space-between" alignItems="center">
+            <Typography variant="subtitle1" fontWeight={700}>
+              {insightText.title}
+            </Typography>
+            {isTiProfile ? (
+              <MuiTooltip title="Editar título/descrição">
+                <IconButton size="small" onClick={() => openCardEditor("insight-main")}>
+                  <EditOutlinedIcon fontSize="small" />
+                </IconButton>
+              </MuiTooltip>
+            ) : null}
+          </Stack>
+          <Typography variant="caption" sx={{ color: RC_PALETTE.muted }}>
+            {insightText.description}
           </Typography>
           <Typography variant="body2" sx={{ color: RC_PALETTE.muted, mt: 0.5 }}>
             Escolaridade dominante: <strong>{dashboard.insights.topEducation?.label ?? "-"}</strong>
@@ -1311,11 +1634,20 @@ export function BiRecruitsDashboardPage() {
 
       <Card sx={{ ...cardSx, mb: 2 }}>
         <CardContent>
-          <Typography variant="subtitle1" fontWeight={700}>
-            Sugestões e Comentários (texto livre)
-          </Typography>
+          <Stack direction="row" justifyContent="space-between" alignItems="center">
+            <Typography variant="subtitle1" fontWeight={700}>
+              {freeTextCardText.title}
+            </Typography>
+            {isTiProfile ? (
+              <MuiTooltip title="Editar título/descrição">
+                <IconButton size="small" onClick={() => openCardEditor("list-free-text")}>
+                  <EditOutlinedIcon fontSize="small" />
+                </IconButton>
+              </MuiTooltip>
+            ) : null}
+          </Stack>
           <Typography variant="caption" sx={{ color: RC_PALETTE.muted }}>
-            Coluna aberta apresentada em lista para leitura qualitativa. Exibindo{" "}
+            {freeTextCardText.description} Exibindo{" "}
             {dashboard.textColumns.suggestionComment.displayed} de{" "}
             {dashboard.textColumns.suggestionComment.total} registros.
           </Typography>
@@ -1357,9 +1689,23 @@ export function BiRecruitsDashboardPage() {
             alignItems={{ md: "center" }}
             gap={1}
           >
-            <Typography variant="subtitle1" fontWeight={700}>
-              Respostas ({responses?.total ?? 0})
-            </Typography>
+            <Box>
+              <Stack direction="row" spacing={0.8} alignItems="center">
+                <Typography variant="subtitle1" fontWeight={700}>
+                  {responsesText.title} ({responses?.total ?? 0})
+                </Typography>
+                {isTiProfile ? (
+                  <MuiTooltip title="Editar título/descrição">
+                    <IconButton size="small" onClick={() => openCardEditor("list-responses")}>
+                      <EditOutlinedIcon fontSize="small" />
+                    </IconButton>
+                  </MuiTooltip>
+                ) : null}
+              </Stack>
+              <Typography variant="caption" sx={{ color: RC_PALETTE.muted }}>
+                {responsesText.description}
+              </Typography>
+            </Box>
             <Stack direction="row" spacing={1}>
               <Button
                 size="small"
@@ -1506,8 +1852,20 @@ export function BiRecruitsDashboardPage() {
 
       <Card sx={cardSx}>
         <CardContent>
-          <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
-            Histórico de importações
+          <Stack direction="row" justifyContent="space-between" alignItems="center">
+            <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
+              {importsText.title}
+            </Typography>
+            {isTiProfile ? (
+              <MuiTooltip title="Editar título/descrição">
+                <IconButton size="small" onClick={() => openCardEditor("list-imports")}>
+                  <EditOutlinedIcon fontSize="small" />
+                </IconButton>
+              </MuiTooltip>
+            ) : null}
+          </Stack>
+          <Typography variant="caption" sx={{ color: RC_PALETTE.muted }}>
+            {importsText.description}
           </Typography>
           <Table size="small">
             <TableHead>
@@ -1538,6 +1896,53 @@ export function BiRecruitsDashboardPage() {
           ) : null}
         </CardContent>
       </Card>
+
+      <Dialog
+        open={editingCardId !== null}
+        onClose={() => setEditingCardId(null)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Editar texto do card</DialogTitle>
+        <DialogContent sx={{ pt: 1 }}>
+          <Stack spacing={1.3} sx={{ mt: 0.4 }}>
+            <TextField
+              label="Título"
+              value={editingCardDraft.title}
+              onChange={(event) =>
+                setEditingCardDraft((prev) => ({
+                  ...prev,
+                  title: event.target.value,
+                }))
+              }
+              fullWidth
+            />
+            <TextField
+              label="Descrição"
+              value={editingCardDraft.description}
+              onChange={(event) =>
+                setEditingCardDraft((prev) => ({
+                  ...prev,
+                  description: event.target.value,
+                }))
+              }
+              fullWidth
+              multiline
+              minRows={2}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditingCardId(null)}>Cancelar</Button>
+          <Button
+            variant="contained"
+            onClick={() => void saveCardEditor()}
+            disabled={updateCardSettingMutation.isPending}
+          >
+            Salvar
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <ConfirmDialog
         open={deleteConfirmMode !== null}

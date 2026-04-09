@@ -53,6 +53,7 @@ import {
   useBiSurveyResponses,
   useImportBiSurvey,
   useMe,
+  useUpdateBiSurveyCardSetting,
 } from "../api/hooks";
 import { parseApiError } from "../app/apiErrors";
 import { hasAnyRole, ROLE_TI } from "../app/roleAccess";
@@ -103,6 +104,12 @@ type ViolenceTypeByOmDatum = {
   om: string;
   total: number;
   [key: string]: number | string;
+};
+
+type CardSetting = {
+  cardId: string;
+  title: string;
+  description?: string | null;
 };
 
 type BiDashboardResponse = {
@@ -161,6 +168,7 @@ type BiDashboardResponse = {
     importedAt: string;
     fileName: string;
   } | null;
+  cardSettings?: CardSetting[];
 };
 
 type BiResponseRow = {
@@ -204,6 +212,7 @@ type PagedResponse<T> = {
 };
 
 type BiEditableCardId =
+  | "page-header"
   | "context-mission"
   | "kpi-total-responses"
   | "kpi-violence-rate"
@@ -222,25 +231,6 @@ type BiEditableCardTextStyle = {
   description: string;
   textColor: string;
 };
-
-const BI_CARD_TEXT_STYLES_STORAGE_KEY = "bi-survey-card-text-styles-v1";
-
-function isBiEditableCardId(value: string): value is BiEditableCardId {
-  return (
-    value === "context-mission" ||
-    value === "kpi-total-responses" ||
-    value === "kpi-violence-rate" ||
-    value === "kpi-violence-mentions" ||
-    value === "kpi-quick-insight" ||
-    value === "chart-mission-percent" ||
-    value === "chart-yes-no" ||
-    value === "chart-violence-type" ||
-    value === "chart-violence-by-mission" ||
-    value === "chart-mission-distribution" ||
-    value === "chart-profile-types" ||
-    value === "chart-monthly-trend"
-  );
-}
 
 function formatDate(value?: string | Date | null) {
   if (!value) return "-";
@@ -369,6 +359,12 @@ function buildBiCardTextDefaults(
 ): Record<BiEditableCardId, BiEditableCardTextStyle> {
   const metricLabel = metricMode === "PERCENT" ? "%" : "Qtd";
   return {
+    "page-header": {
+      title: "Escolas",
+      description:
+        "Painel analítico consolidado para leitura executiva e tomada de decisão sobre os dados de pesquisa.",
+      textColor: BI_PALETTE.text,
+    },
     "context-mission": {
       title: "Contexto da Missão",
       description:
@@ -439,44 +435,6 @@ function buildBiCardTextDefaults(
   };
 }
 
-function loadBiCardTextStyles(): Partial<
-  Record<BiEditableCardId, Partial<BiEditableCardTextStyle>>
-> {
-  if (typeof window === "undefined") return {};
-  try {
-    const raw = window.localStorage.getItem(BI_CARD_TEXT_STYLES_STORAGE_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw) as Record<
-      string,
-      Partial<BiEditableCardTextStyle> | undefined
-    >;
-    if (!parsed || typeof parsed !== "object") return {};
-    const normalized: Partial<
-      Record<BiEditableCardId, Partial<BiEditableCardTextStyle>>
-    > = {};
-    for (const [key, value] of Object.entries(parsed)) {
-      if (!isBiEditableCardId(key) || !value) continue;
-      normalized[key] = {
-        title:
-          typeof value.title === "string" && value.title.trim()
-            ? value.title
-            : undefined,
-        description:
-          typeof value.description === "string"
-            ? value.description
-            : undefined,
-        textColor:
-          typeof value.textColor === "string" && value.textColor.trim()
-            ? value.textColor
-            : undefined,
-      };
-    }
-    return normalized;
-  } catch {
-    return {};
-  }
-}
-
 export function BiSurveyDashboardPage() {
   const toast = useToast();
   const { data: me } = useMe();
@@ -488,9 +446,6 @@ export function BiSurveyDashboardPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [deleteConfirmMode, setDeleteConfirmMode] =
     useState<DeleteConfirmMode | null>(null);
-  const [cardTextStyles, setCardTextStyles] = useState<
-    Partial<Record<BiEditableCardId, Partial<BiEditableCardTextStyle>>>
-  >(() => loadBiCardTextStyles());
   const [editingCardId, setEditingCardId] = useState<BiEditableCardId | null>(
     null,
   );
@@ -516,48 +471,59 @@ export function BiSurveyDashboardPage() {
     () => buildBiCardTextDefaults(metricMode),
     [metricMode],
   );
+  const updateCardSettingMutation = useUpdateBiSurveyCardSetting();
   const getCardTextStyle = (cardId: BiEditableCardId): BiEditableCardTextStyle => {
     const defaults = cardTextDefaults[cardId];
-    const custom = cardTextStyles[cardId];
+    const custom = dashboard?.cardSettings?.find(
+      (item) => item.cardId === cardId,
+    );
     return {
       title:
-        typeof custom?.title === "string" && custom.title.trim()
+        typeof custom?.title === "string" && String(custom.title).trim()
           ? custom.title
           : defaults.title,
       description:
         typeof custom?.description === "string"
           ? custom.description
           : defaults.description,
-      textColor:
-        typeof custom?.textColor === "string" && custom.textColor.trim()
-          ? custom.textColor
-          : defaults.textColor,
+      textColor: defaults.textColor,
     };
   };
   const openTextEditor = (cardId: BiEditableCardId) => {
     setEditingCardId(cardId);
     setEditingCardDraft({ ...getCardTextStyle(cardId) });
   };
-  const saveTextEditor = () => {
+  const saveTextEditor = async () => {
     if (!editingCardId) return;
-    const defaults = cardTextDefaults[editingCardId];
-    const normalized: BiEditableCardTextStyle = {
-      title: editingCardDraft.title.trim() || defaults.title,
-      description: editingCardDraft.description.trim(),
-      textColor: editingCardDraft.textColor.trim() || defaults.textColor,
-    };
-    const next = {
-      ...cardTextStyles,
-      [editingCardId]: normalized,
-    };
-    setCardTextStyles(next);
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(
-        BI_CARD_TEXT_STYLES_STORAGE_KEY,
-        JSON.stringify(next),
-      );
+    const title = editingCardDraft.title.trim();
+    if (!title) {
+      toast.push({
+        message: "Título é obrigatório.",
+        severity: "warning",
+      });
+      return;
     }
-    setEditingCardId(null);
+
+    try {
+      await updateCardSettingMutation.mutateAsync({
+        cardId: editingCardId,
+        payload: {
+          title,
+          description: editingCardDraft.description.trim() || "",
+        },
+      });
+      toast.push({
+        message: "Texto do card atualizado.",
+        severity: "success",
+      });
+      setEditingCardId(null);
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({
+        message: payload.message ?? "Falha ao atualizar card.",
+        severity: "error",
+      });
+    }
   };
 
   const dashboardFilters = useMemo(
@@ -765,6 +731,7 @@ export function BiSurveyDashboardPage() {
       />
     );
 
+  const pageHeaderText = getCardTextStyle("page-header");
   const contextMissionText = getCardTextStyle("context-mission");
   const kpiTotalResponsesText = getCardTextStyle("kpi-total-responses");
   const kpiViolenceRateText = getCardTextStyle("kpi-violence-rate");
@@ -795,11 +762,24 @@ export function BiSurveyDashboardPage() {
         mb={2}
       >
         <Box>
-          <Typography variant="h4" fontWeight={700}>
-            Escolas
-          </Typography>
+          <Stack direction="row" spacing={0.8} alignItems="center">
+            <Typography variant="h4" fontWeight={700}>
+              {pageHeaderText.title}
+            </Typography>
+            {isTiProfile ? (
+              <MuiTooltip title="Editar card">
+                <IconButton
+                  size="small"
+                  onClick={() => openTextEditor("page-header")}
+                  sx={{ color: BI_PALETTE.primary }}
+                >
+                  <EditOutlinedIcon fontSize="small" />
+                </IconButton>
+              </MuiTooltip>
+            ) : null}
+          </Stack>
           <Typography variant="body2" sx={{ color: BI_PALETTE.muted }}>
-            Painel analítico consolidado para leitura executiva e tomada de decisão sobre os dados de pesquisa.
+            {pageHeaderText.description}
           </Typography>
         </Box>
         <Stack direction="row" spacing={1}>
@@ -2475,23 +2455,15 @@ export function BiSurveyDashboardPage() {
               multiline
               minRows={2}
             />
-            <TextField
-              label="Cor da fonte"
-              type="color"
-              value={editingCardDraft.textColor}
-              onChange={(event) =>
-                setEditingCardDraft((prev) => ({
-                  ...prev,
-                  textColor: event.target.value,
-                }))
-              }
-              fullWidth
-            />
           </Stack>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setEditingCardId(null)}>Cancelar</Button>
-          <Button variant="contained" onClick={saveTextEditor}>
+          <Button
+            variant="contained"
+            onClick={() => void saveTextEditor()}
+            disabled={updateCardSettingMutation.isPending}
+          >
             Salvar
           </Button>
         </DialogActions>

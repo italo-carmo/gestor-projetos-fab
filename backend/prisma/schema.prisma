@@ -53,8 +53,11 @@ model User {
   auditLogs        AuditLog[]
   meetingParticipations MeetingParticipant[]
   biSurveyImportBatches BiSurveyImportBatch[]
+  biSurveyCardSettings BiSurveyCardSetting[] @relation("BiSurveyCardSettingUpdatedBy")
   biDomesticViolenceImportBatches BiDomesticViolenceImportBatch[]
+  biDomesticViolenceCardSettings BiDomesticViolenceCardSetting[] @relation("BiDomesticViolenceCardSettingUpdatedBy")
   biRecruitsImportBatches BiRecruitsImportBatch[]
+  biRecruitsCardSettings BiRecruitsCardSetting[] @relation("BiRecruitsCardSettingUpdatedBy")
   biBestPracticeCycleImportBatches BiBestPracticeCycleImportBatch[]
   biBestPracticeCycleCardSettings BiBestPracticeCycleCardSetting[] @relation("BiBestPracticeCycleCardSettingUpdatedBy")
   biCpcaMeetingImportBatches BiCpcaMeetingImportBatch[]
@@ -1410,6 +1413,48 @@ model BiRecruitsResponse {
   @@index([willingnessOrientation, willingnessReport])
   @@index([enlistmentDecisionInfluenceText])
   @@index([batchId])
+}
+
+model BiSurveyCardSetting {
+  id          String   @id @default(cuid())
+  cardId      String   @unique
+  title       String
+  description String?
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  updatedBy   User?    @relation("BiSurveyCardSettingUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@index([updatedAt])
+}
+
+model BiDomesticViolenceCardSetting {
+  id          String   @id @default(cuid())
+  cardId      String   @unique
+  title       String
+  description String?
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  updatedBy   User?    @relation("BiDomesticViolenceCardSettingUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@index([updatedAt])
+}
+
+model BiRecruitsCardSetting {
+  id          String   @id @default(cuid())
+  cardId      String   @unique
+  title       String
+  description String?
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  updatedBy   User?    @relation("BiRecruitsCardSettingUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@index([updatedAt])
 }
 
 model BiBestPracticeCycleImportBatch {

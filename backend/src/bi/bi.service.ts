@@ -25,6 +25,11 @@ type ImportSurveyOptions = {
   replaceAll?: boolean;
 };
 
+type SurveyCardSettingInput = {
+  title?: string;
+  description?: string | null;
+};
+
 type ParsedSurveyRow = {
   submittedAt: Date | null;
   sufferedViolenceRaw: string | null;
@@ -118,6 +123,24 @@ const SURVEY_QUESTION_DEFINITIONS: SurveyQuestionDefinition[] = [
     extractValues: (row) => (row.posto ? [row.posto] : []),
   },
 ];
+
+const SURVEY_CARD_IDS = new Set([
+  'page-header',
+  'context-mission',
+  'kpi-total-responses',
+  'kpi-violence-rate',
+  'kpi-violence-mentions',
+  'kpi-quick-insight',
+  'chart-mission-percent',
+  'chart-yes-no',
+  'chart-violence-type',
+  'chart-violence-by-mission',
+  'chart-mission-distribution',
+  'chart-profile-types',
+  'chart-monthly-trend',
+  'list-responses',
+  'list-imports',
+]);
 
 @Injectable()
 export class BiService {
@@ -411,10 +434,87 @@ export class BiService {
     };
   }
 
+  async listCardSettings() {
+    const cardSettingModel = (this.prisma as any).biSurveyCardSetting;
+    const items = await cardSettingModel.findMany({
+      orderBy: { cardId: 'asc' },
+      select: {
+        cardId: true,
+        title: true,
+        description: true,
+        updatedAt: true,
+        updatedBy: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+    });
+
+    return {
+      items,
+    };
+  }
+
+  async updateCardSetting(
+    cardIdRaw: string,
+    payload: SurveyCardSettingInput,
+    user?: RbacUser,
+  ) {
+    const cardId = String(cardIdRaw ?? '').trim();
+    if (!SURVEY_CARD_IDS.has(cardId)) {
+      throwError('VALIDATION_ERROR', {
+        field: 'cardId',
+        reason: 'invalid_card_id',
+      });
+    }
+
+    const title = String(payload.title ?? '').trim();
+    if (!title) {
+      throwError('VALIDATION_ERROR', {
+        field: 'title',
+        reason: 'required',
+      });
+    }
+
+    const descriptionRaw = payload.description;
+    const description =
+      descriptionRaw === undefined || descriptionRaw === null
+        ? null
+        : String(descriptionRaw).trim() || null;
+
+    const cardSettingModel = (this.prisma as any).biSurveyCardSetting;
+
+    const updated = await cardSettingModel.upsert({
+      where: { cardId },
+      create: {
+        cardId,
+        title,
+        description,
+        updatedById: user?.id ?? null,
+      },
+      update: {
+        title,
+        description,
+        updatedById: user?.id ?? null,
+      },
+      select: {
+        cardId: true,
+        title: true,
+        description: true,
+        updatedAt: true,
+        updatedBy: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+    });
+
+    return updated;
+  }
+
   async dashboard(filters: SurveyFilters) {
     const where = this.buildWhere(filters);
+    const cardSettingModel = (this.prisma as any).biSurveyCardSetting;
 
-    const [rows, allRowsForFilters, totalRowsInDb, latestImport] =
+    const [rows, allRowsForFilters, totalRowsInDb, latestImport, cardSettings] =
       await this.prisma.$transaction([
         this.prisma.biSurveyResponse.findMany({
           where,
@@ -445,6 +545,18 @@ export class BiService {
           orderBy: { importedAt: 'desc' },
           include: {
             importedBy: {
+              select: { id: true, name: true, email: true },
+            },
+          },
+        }),
+        cardSettingModel.findMany({
+          orderBy: { cardId: 'asc' },
+          select: {
+            cardId: true,
+            title: true,
+            description: true,
+            updatedAt: true,
+            updatedBy: {
               select: { id: true, name: true, email: true },
             },
           },
@@ -601,6 +713,7 @@ export class BiService {
             }
           : null,
       },
+      cardSettings,
       latestImport,
     };
   }

@@ -39,6 +39,11 @@ type ImportDomesticViolenceOptions = {
   replaceAll?: boolean;
 };
 
+type DomesticViolenceCardSettingInput = {
+  title?: string;
+  description?: string | null;
+};
+
 type ParsedDomesticViolenceRow = {
   submittedAt: Date | null;
   age: number | null;
@@ -114,6 +119,47 @@ const YES_NO_FILTER_OPTIONS = [
   { value: 'SIM', label: 'Sim' },
   { value: 'NAO', label: 'Não' },
 ];
+
+const DOMESTIC_VIOLENCE_CARD_IDS = new Set([
+  'page-header',
+  'panel-ingestion',
+  'panel-filters',
+  'kpi-total',
+  'kpi-lifetime',
+  'kpi-last12',
+  'kpi-sought-help',
+  'kpi-sought-help-rate',
+  'kpi-recurring',
+  'kpi-violence-mentions',
+  'kpi-avg-types',
+  'insight-main',
+  'chart-lifetime-donut',
+  'chart-last12-donut',
+  'chart-marital-status',
+  'chart-education',
+  'chart-naturality',
+  'chart-fab-bond',
+  'chart-age-range',
+  'chart-rank',
+  'chart-organization',
+  'chart-violence-type',
+  'chart-impact-area',
+  'chart-channel',
+  'chart-no-report-reason',
+  'chart-situation-scope',
+  'chart-frequency',
+  'chart-affective-bond',
+  'chart-author-relation',
+  'chart-author-military-link',
+  'chart-occurrence-place',
+  'chart-witnesses',
+  'chart-sought-help',
+  'chart-impact-intensity',
+  'chart-violence-by-organization',
+  'chart-response-trend',
+  'list-responses',
+  'list-imports',
+]);
 
 @Injectable()
 export class BiDomesticViolenceService {
@@ -352,10 +398,87 @@ export class BiDomesticViolenceService {
     };
   }
 
+  async listCardSettings() {
+    const cardSettingModel = (this.prisma as any).biDomesticViolenceCardSetting;
+    const items = await cardSettingModel.findMany({
+      orderBy: { cardId: 'asc' },
+      select: {
+        cardId: true,
+        title: true,
+        description: true,
+        updatedAt: true,
+        updatedBy: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+    });
+
+    return {
+      items,
+    };
+  }
+
+  async updateCardSetting(
+    cardIdRaw: string,
+    payload: DomesticViolenceCardSettingInput,
+    user?: RbacUser,
+  ) {
+    const cardId = String(cardIdRaw ?? '').trim();
+    if (!DOMESTIC_VIOLENCE_CARD_IDS.has(cardId)) {
+      throwError('VALIDATION_ERROR', {
+        field: 'cardId',
+        reason: 'invalid_card_id',
+      });
+    }
+
+    const title = String(payload.title ?? '').trim();
+    if (!title) {
+      throwError('VALIDATION_ERROR', {
+        field: 'title',
+        reason: 'required',
+      });
+    }
+
+    const descriptionRaw = payload.description;
+    const description =
+      descriptionRaw === undefined || descriptionRaw === null
+        ? null
+        : String(descriptionRaw).trim() || null;
+
+    const cardSettingModel = (this.prisma as any).biDomesticViolenceCardSetting;
+
+    const updated = await cardSettingModel.upsert({
+      where: { cardId },
+      create: {
+        cardId,
+        title,
+        description,
+        updatedById: user?.id ?? null,
+      },
+      update: {
+        title,
+        description,
+        updatedById: user?.id ?? null,
+      },
+      select: {
+        cardId: true,
+        title: true,
+        description: true,
+        updatedAt: true,
+        updatedBy: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+    });
+
+    return updated;
+  }
+
   async dashboard(filters: DomesticViolenceFilters) {
     const where = this.buildWhere(filters);
+    const cardSettingModel = (this.prisma as any).biDomesticViolenceCardSetting;
 
-    const [rows, allRowsForFilters, totalRowsInDb, latestImport] =
+    const [rows, allRowsForFilters, totalRowsInDb, latestImport, cardSettings] =
       await this.prisma.$transaction([
         this.prisma.biDomesticViolenceResponse.findMany({
           where,
@@ -416,6 +539,18 @@ export class BiDomesticViolenceService {
           orderBy: { importedAt: 'desc' },
           include: {
             importedBy: {
+              select: { id: true, name: true, email: true },
+            },
+          },
+        }),
+        cardSettingModel.findMany({
+          orderBy: { cardId: 'asc' },
+          select: {
+            cardId: true,
+            title: true,
+            description: true,
+            updatedAt: true,
+            updatedBy: {
               select: { id: true, name: true, email: true },
             },
           },
@@ -714,6 +849,7 @@ export class BiDomesticViolenceService {
             }
           : null,
       },
+      cardSettings,
       latestImport,
     };
   }

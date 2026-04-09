@@ -2,7 +2,9 @@ import {
   Body,
   Controller,
   Get,
+  Param,
   Post,
+  Put,
   Query,
   Req,
   UploadedFile,
@@ -31,6 +33,12 @@ export class BiRecruitsController {
 
   private assertRecruitsAccess(user: RbacUser) {
     if (!hasAnyRole(user, [ROLE_TI, ROLE_COMGEP])) {
+      throwError('RBAC_FORBIDDEN');
+    }
+  }
+
+  private assertTiForSettings(user: RbacUser) {
+    if (!hasAnyRole(user, [ROLE_TI])) {
       throwError('RBAC_FORBIDDEN');
     }
   }
@@ -201,5 +209,24 @@ export class BiRecruitsController {
   ) {
     this.assertRecruitsAccess(user);
     return this.biRecruits.deleteResponses(body);
+  }
+
+  @Get('card-settings')
+  @RequirePermission('bi', 'view')
+  listCardSettings(@CurrentUser() user: RbacUser) {
+    this.assertRecruitsAccess(user);
+    return this.biRecruits.listCardSettings();
+  }
+
+  @Put('card-settings/:cardId')
+  @RequirePermission('bi', 'upload')
+  updateCardSetting(
+    @Param('cardId') cardId: string,
+    @Body() body: { title?: string; description?: string | null },
+    @CurrentUser() user: RbacUser,
+  ) {
+    this.assertRecruitsAccess(user);
+    this.assertTiForSettings(user);
+    return this.biRecruits.updateCardSetting(cardId, body, user);
   }
 }

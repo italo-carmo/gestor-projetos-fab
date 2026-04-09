@@ -27,6 +27,11 @@ type ImportRecruitsOptions = {
   replaceAll?: boolean;
 };
 
+type RecruitsCardSettingInput = {
+  title?: string;
+  description?: string | null;
+};
+
 type ParsedRecruitsRow = {
   submittedAt: Date | null;
   education: string | null;
@@ -58,6 +63,30 @@ const ENLISTMENT_DECISION_OPTIONS = [
   'Cumprimento do serviço obrigatório',
   'Estabilidade financeira',
 ] as const;
+
+const RECRUITS_CARD_IDS = new Set([
+  'page-header',
+  'panel-ingestion',
+  'panel-filters',
+  'kpi-total',
+  'kpi-guidance',
+  'kpi-report',
+  'kpi-attention',
+  'chart-response-trend',
+  'chart-education',
+  'chart-gender',
+  'chart-identify-harassment',
+  'chart-conduct-limits',
+  'chart-know-orientation',
+  'chart-know-report-process',
+  'chart-willingness-orientation',
+  'chart-willingness-report',
+  'chart-enlistment-influence',
+  'insight-main',
+  'list-free-text',
+  'list-responses',
+  'list-imports',
+]);
 
 @Injectable()
 export class BiRecruitsService {
@@ -270,10 +299,87 @@ export class BiRecruitsService {
     };
   }
 
+  async listCardSettings() {
+    const cardSettingModel = (this.prisma as any).biRecruitsCardSetting;
+    const items = await cardSettingModel.findMany({
+      orderBy: { cardId: 'asc' },
+      select: {
+        cardId: true,
+        title: true,
+        description: true,
+        updatedAt: true,
+        updatedBy: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+    });
+
+    return {
+      items,
+    };
+  }
+
+  async updateCardSetting(
+    cardIdRaw: string,
+    payload: RecruitsCardSettingInput,
+    user?: RbacUser,
+  ) {
+    const cardId = String(cardIdRaw ?? '').trim();
+    if (!RECRUITS_CARD_IDS.has(cardId)) {
+      throwError('VALIDATION_ERROR', {
+        field: 'cardId',
+        reason: 'invalid_card_id',
+      });
+    }
+
+    const title = String(payload.title ?? '').trim();
+    if (!title) {
+      throwError('VALIDATION_ERROR', {
+        field: 'title',
+        reason: 'required',
+      });
+    }
+
+    const descriptionRaw = payload.description;
+    const description =
+      descriptionRaw === undefined || descriptionRaw === null
+        ? null
+        : String(descriptionRaw).trim() || null;
+
+    const cardSettingModel = (this.prisma as any).biRecruitsCardSetting;
+
+    const updated = await cardSettingModel.upsert({
+      where: { cardId },
+      create: {
+        cardId,
+        title,
+        description,
+        updatedById: user?.id ?? null,
+      },
+      update: {
+        title,
+        description,
+        updatedById: user?.id ?? null,
+      },
+      select: {
+        cardId: true,
+        title: true,
+        description: true,
+        updatedAt: true,
+        updatedBy: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+    });
+
+    return updated;
+  }
+
   async dashboard(filters: RecruitsFilters) {
     const where = this.buildWhere(filters);
+    const cardSettingModel = (this.prisma as any).biRecruitsCardSetting;
 
-    const [rows, allRowsForFilters, totalRowsInDb, latestImport] =
+    const [rows, allRowsForFilters, totalRowsInDb, latestImport, cardSettings] =
       await this.prisma.$transaction([
         this.prisma.biRecruitsResponse.findMany({
           where,
@@ -310,6 +416,18 @@ export class BiRecruitsService {
           orderBy: { importedAt: 'desc' },
           include: {
             importedBy: {
+              select: { id: true, name: true, email: true },
+            },
+          },
+        }),
+        cardSettingModel.findMany({
+          orderBy: { cardId: 'asc' },
+          select: {
+            cardId: true,
+            title: true,
+            description: true,
+            updatedAt: true,
+            updatedBy: {
               select: { id: true, name: true, email: true },
             },
           },
@@ -468,6 +586,7 @@ export class BiRecruitsService {
           : null,
         weakestPoint,
       },
+      cardSettings,
       latestImport,
     };
   }

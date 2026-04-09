@@ -2,7 +2,9 @@ import {
   Body,
   Controller,
   Get,
+  Param,
   Post,
+  Put,
   Query,
   Req,
   UploadedFile,
@@ -20,6 +22,7 @@ import { throwError } from '../common/http-error';
 import { MulterExceptionFilter } from '../reports/multer-exception.filter';
 import { RequirePermission } from '../rbac/require-permission.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
+import { hasAnyRole, ROLE_TI } from '../rbac/role-access';
 import type { RbacUser } from '../rbac/rbac.types';
 import { BiDomesticViolenceService } from './bi-domestic-violence.service';
 
@@ -27,6 +30,12 @@ import { BiDomesticViolenceService } from './bi-domestic-violence.service';
 @UseGuards(JwtAuthGuard, RbacGuard)
 export class BiDomesticViolenceController {
   constructor(private readonly biDomesticViolence: BiDomesticViolenceService) {}
+
+  private assertTiForSettings(user: RbacUser) {
+    if (!hasAnyRole(user, [ROLE_TI])) {
+      throwError('RBAC_FORBIDDEN');
+    }
+  }
 
   @Get('dashboard')
   @RequirePermission('bi', 'view')
@@ -246,5 +255,22 @@ export class BiDomesticViolenceController {
     @CurrentUser() user: RbacUser,
   ) {
     return this.biDomesticViolence.deleteResponses(body);
+  }
+
+  @Get('card-settings')
+  @RequirePermission('bi', 'view')
+  listCardSettings(@CurrentUser() user: RbacUser) {
+    return this.biDomesticViolence.listCardSettings();
+  }
+
+  @Put('card-settings/:cardId')
+  @RequirePermission('bi', 'upload')
+  updateCardSetting(
+    @Param('cardId') cardId: string,
+    @Body() body: { title?: string; description?: string | null },
+    @CurrentUser() user: RbacUser,
+  ) {
+    this.assertTiForSettings(user);
+    return this.biDomesticViolence.updateCardSetting(cardId, body, user);
   }
 }
