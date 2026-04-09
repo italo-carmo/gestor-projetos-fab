@@ -598,17 +598,15 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
 
   useEffect(() => {
     if (!activityIdFromUrl) return;
-    if (activityIdFromUrl !== selectedId) {
-      setSelectedId(activityIdFromUrl);
-      setDrawerOpen(true);
-      setIsCreateMode(false);
-    } else if (!drawerOpen) {
-      setDrawerOpen(true);
-    }
+    setSelectedId((prev) =>
+      prev === activityIdFromUrl ? prev : activityIdFromUrl,
+    );
+    setDrawerOpen(true);
+    setIsCreateMode(false);
     if (tabFromUrl === 'report') {
       setDrawerTab('report');
     }
-  }, [activityIdFromUrl, drawerOpen, selectedId, tabFromUrl]);
+  }, [activityIdFromUrl, tabFromUrl]);
 
   const [activityForm, setActivityForm] = useState({
     title: '',

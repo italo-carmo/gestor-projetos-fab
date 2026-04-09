@@ -172,6 +172,7 @@ type DistributionCardProps = {
   data: DistributionDatum[];
   mode: MetricMode;
   color: string;
+  longLabels?: boolean;
 };
 
 const RC_PALETTE = {
@@ -278,13 +279,24 @@ function DistributionCard({
   data,
   mode,
   color,
+  longLabels = false,
 }: DistributionCardProps) {
   const chartData = data.slice(0, 12).map((item) => ({
     ...item,
     metric: metricValue(mode, item.count, item.percent),
   }));
 
-  const height = Math.max(164, chartData.length * 24);
+  const longestLabelLength = chartData.reduce(
+    (max, item) => Math.max(max, String(item.label ?? "").length),
+    0,
+  );
+  const useLongLabelLayout = longLabels || longestLabelLength >= 34;
+  const rowHeight = useLongLabelLayout ? 34 : 24;
+  const height = Math.max(useLongLabelLayout ? 228 : 164, chartData.length * rowHeight);
+  const yAxisWidth = useLongLabelLayout ? 236 : 168;
+  const yAxisTickStyle = useLongLabelLayout
+    ? { ...axisTickStyle, fontSize: 11 }
+    : axisTickStyle;
   const metricLabel = mode === "COUNT" ? "Quantidade" : "Percentual (%)";
 
   return (
@@ -310,9 +322,9 @@ function DistributionCard({
                 <YAxis
                   type="category"
                   dataKey="label"
-                  width={168}
+                  width={yAxisWidth}
                   stroke={chartAxisStroke}
-                  tick={axisTickStyle}
+                  tick={yAxisTickStyle}
                 />
                 <Tooltip
                   formatter={(value: number, _name, payload) => {
@@ -641,6 +653,7 @@ export function BiRecruitsDashboardPage() {
       subtitle: "Pergunta 4 - principal motivador de ingresso.",
       data: dashboard.charts.enlistmentDecisionInfluenceDistribution,
       color: CHART_COLORS[8],
+      longLabels: true,
     },
   ];
 

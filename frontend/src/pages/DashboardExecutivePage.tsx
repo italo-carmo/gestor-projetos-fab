@@ -400,17 +400,17 @@ export function DashboardExecutivePage() {
     const next = new URLSearchParams();
     next.set('activityId', activityId);
     next.set('tab', 'report');
-    navigate(`/activities?${next.toString()}`);
+    navigate(`/activities-cipavd?${next.toString()}`);
   };
   const openLocalityActivities = (targetLocalityId: string) => {
     const next = new URLSearchParams();
     next.set('localityId', targetLocalityId);
-    navigate(`/activities?${next.toString()}`);
+    navigate(`/activities-cipavd?${next.toString()}`);
   };
   const openSpecialtyActivities = (targetSpecialtyId: string) => {
     const next = new URLSearchParams();
     next.set('specialtyId', targetSpecialtyId);
-    navigate(`/activities?${next.toString()}`);
+    navigate(`/activities-cipavd?${next.toString()}`);
   };
   const openChartDetail = (kind: 'locality' | 'specialty', item: any) => {
     setChartDetail({ kind, item });
