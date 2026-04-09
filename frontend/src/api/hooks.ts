@@ -2989,6 +2989,80 @@ export function useAddCpcaCaseComment() {
   });
 }
 
+/** SMIF complaints (full workflow parity with CPCA) */
+export function useSmifComplaintCases(
+  filters: Record<string, any>,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: qk.smifComplaints(filters),
+    queryFn: async () =>
+      (await api.get("/smif-complaints", { params: filters })).data,
+    enabled,
+    staleTime: 10_000,
+  });
+}
+
+export function useSmifComplaintCase(id: string, enabled = true) {
+  return useQuery({
+    queryKey: qk.smifComplaintCase(id || ""),
+    queryFn: async () => (await api.get(`/smif-complaints/${id}`)).data,
+    enabled: Boolean(id) && enabled,
+    staleTime: 10_000,
+  });
+}
+
+export function useCreateSmifComplaintCase() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: Record<string, any>) =>
+      (await api.post("/smif-complaints", payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["smifComplaints"] });
+    },
+  });
+}
+
+export function useUpdateSmifComplaintCase() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; payload: Record<string, any> }) =>
+      (await api.put(`/smif-complaints/${args.id}`, args.payload)).data,
+    onSuccess: (_data, args) => {
+      qc.invalidateQueries({ queryKey: ["smifComplaints"] });
+      qc.invalidateQueries({ queryKey: qk.smifComplaintCase(args.id) });
+    },
+  });
+}
+
+export function useDeleteSmifComplaintCase() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      (await api.delete(`/smif-complaints/${id}`)).data,
+    onSuccess: (_data, id) => {
+      qc.invalidateQueries({ queryKey: ["smifComplaints"] });
+      qc.invalidateQueries({ queryKey: qk.smifComplaintCase(id) });
+    },
+  });
+}
+
+export function useAddSmifComplaintCaseComment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; text: string }) =>
+      (
+        await api.post(`/smif-complaints/${args.id}/comments`, {
+          text: args.text,
+        })
+      ).data,
+    onSuccess: (_data, args) => {
+      qc.invalidateQueries({ queryKey: ["smifComplaints"] });
+      qc.invalidateQueries({ queryKey: qk.smifComplaintCase(args.id) });
+    },
+  });
+}
+
 /** SMIF complaints */
 export function useSmifComplaints(
   filters: Record<string, any>,
@@ -3004,49 +3078,15 @@ export function useSmifComplaints(
 }
 
 export function useCreateSmifComplaint() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (payload: {
-      localityId: string;
-      reportedAt: string;
-      description: string;
-      status?: "IN_PROGRESS" | "COMPLETED";
-      conclusion?: string;
-    }) => (await api.post("/smif-complaints", payload)).data,
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["smifComplaints"] });
-    },
-  });
+  return useCreateSmifComplaintCase();
 }
 
 export function useUpdateSmifComplaint() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (args: {
-      id: string;
-      payload: {
-        localityId?: string;
-        reportedAt?: string;
-        description?: string;
-        status?: "IN_PROGRESS" | "COMPLETED";
-        conclusion?: string;
-      };
-    }) => (await api.put(`/smif-complaints/${args.id}`, args.payload)).data,
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["smifComplaints"] });
-    },
-  });
+  return useUpdateSmifComplaintCase();
 }
 
 export function useDeleteSmifComplaint() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (id: string) =>
-      (await api.delete(`/smif-complaints/${id}`)).data,
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["smifComplaints"] });
-    },
-  });
+  return useDeleteSmifComplaintCase();
 }
 
 export function useLocalities(enabled = true) {

@@ -1,281 +1,55 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, SmifComplaintStatus } from '@prisma/client';
-import { AuditService } from '../audit/audit.service';
-import { throwError } from '../common/http-error';
-import { sanitizeText } from '../common/sanitize';
-import { PrismaService } from '../prisma/prisma.service';
-import { hasPermission } from '../rbac/role-access';
+import { CpcaService, SMIF_WORKFLOW_CONTEXT } from '../cpca/cpca.service';
+import { AddCpcaCaseCommentDto } from '../cpca/dto/add-cpca-case-comment.dto';
+import { CreateCpcaCaseDto } from '../cpca/dto/create-cpca-case.dto';
+import { UpdateCpcaCaseDto } from '../cpca/dto/update-cpca-case.dto';
 import type { RbacUser } from '../rbac/rbac.types';
 
 @Injectable()
 export class SmifComplaintsService {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly audit: AuditService,
-  ) {}
+  constructor(private readonly cpca: CpcaService) {}
 
   async list(
-    filters: { q?: string; status?: SmifComplaintStatus; localityId?: string },
-    user?: RbacUser,
-  ) {
-    this.assertPermission(user, 'view');
-
-    const where: Prisma.SmifComplaintWhereInput = {};
-
-    if (filters.q) {
-      const q = String(filters.q).trim();
-      if (q) {
-        where.OR = [
-          { description: { contains: q, mode: 'insensitive' } },
-          { conclusion: { contains: q, mode: 'insensitive' } },
-          { locality: { name: { contains: q, mode: 'insensitive' } } },
-        ];
-      }
-    }
-
-    if (filters.status) {
-      where.status = filters.status;
-    }
-
-    if (filters.localityId) {
-      where.localityId = String(filters.localityId).trim();
-    }
-
-    const items = await this.prisma.smifComplaint.findMany({
-      where,
-      include: {
-        locality: { select: { id: true, code: true, name: true } },
-        createdBy: { select: { id: true, name: true } },
-        updatedBy: { select: { id: true, name: true } },
-      },
-      orderBy: [{ reportedAt: 'desc' }, { createdAt: 'desc' }],
-    });
-
-    return { items };
-  }
-
-  async create(
-    payload: {
-      localityId: string;
-      reportedAt: string;
-      description: string;
-      status?: SmifComplaintStatus;
-      conclusion?: string;
-    },
-    user?: RbacUser,
-  ) {
-    this.assertPermission(user, 'create');
-    const actorId = this.resolveActorId(user);
-
-    const localityId = await this.resolveLocalityId(payload.localityId);
-    const reportedAt = this.normalizeDate(payload.reportedAt, 'reportedAt');
-    const description = this.normalizeRequiredText(
-      payload.description,
-      'description',
-      4000,
-    );
-    const status = payload.status ?? SmifComplaintStatus.IN_PROGRESS;
-    const conclusion = this.normalizeOptionalText(payload.conclusion, 4000);
-
-    const created = await this.prisma.smifComplaint.create({
-      data: {
-        localityId,
-        reportedAt,
-        description,
-        status,
-        conclusion,
-        createdById: actorId,
-      },
-      include: {
-        locality: { select: { id: true, code: true, name: true } },
-        createdBy: { select: { id: true, name: true } },
-        updatedBy: { select: { id: true, name: true } },
-      },
-    });
-
-    await this.audit.log({
-      userId: user?.id,
-      resource: 'smif_complaints',
-      action: 'create',
-      entityId: created.id,
-      localityId: created.localityId,
-      diffJson: {
-        localityId: created.localityId,
-        reportedAt: created.reportedAt,
-        status: created.status,
-      },
-    });
-
-    return created;
-  }
-
-  async update(
-    id: string,
-    payload: {
+    filters: {
       localityId?: string;
-      reportedAt?: string;
-      description?: string;
-      status?: SmifComplaintStatus;
-      conclusion?: string;
+      status?: string;
+      complaintType?: string;
+      detailedViolenceType?: string;
+      procedureType?: string;
+      q?: string;
+      page?: string;
+      pageSize?: string;
     },
     user?: RbacUser,
   ) {
-    this.assertPermission(user, 'update');
-    const actorId = this.resolveActorId(user);
+    return this.cpca.list(filters, user, SMIF_WORKFLOW_CONTEXT);
+  }
 
-    const existing = await this.prisma.smifComplaint.findUnique({
-      where: { id },
-    });
-    if (!existing) throwError('NOT_FOUND');
+  async getById(id: string, user?: RbacUser) {
+    return this.cpca.getById(id, user, SMIF_WORKFLOW_CONTEXT);
+  }
 
-    const localityId =
-      payload.localityId !== undefined
-        ? await this.resolveLocalityId(payload.localityId)
-        : undefined;
-    const reportedAt =
-      payload.reportedAt !== undefined
-        ? this.normalizeDate(payload.reportedAt, 'reportedAt')
-        : undefined;
-    const description =
-      payload.description !== undefined
-        ? this.normalizeRequiredText(payload.description, 'description', 4000)
-        : undefined;
-    const conclusion =
-      payload.conclusion !== undefined
-        ? this.normalizeOptionalText(payload.conclusion, 4000)
-        : undefined;
+  async create(payload: CreateCpcaCaseDto, user?: RbacUser) {
+    return this.cpca.create(payload, user, SMIF_WORKFLOW_CONTEXT);
+  }
 
-    const updated = await this.prisma.smifComplaint.update({
-      where: { id },
-      data: {
-        localityId,
-        reportedAt,
-        description,
-        status: payload.status,
-        conclusion,
-        updatedById: actorId,
-      },
-      include: {
-        locality: { select: { id: true, code: true, name: true } },
-        createdBy: { select: { id: true, name: true } },
-        updatedBy: { select: { id: true, name: true } },
-      },
-    });
-
-    await this.audit.log({
-      userId: user?.id,
-      resource: 'smif_complaints',
-      action: 'update',
-      entityId: updated.id,
-      localityId: updated.localityId,
-      diffJson: {
-        localityId: updated.localityId,
-        reportedAt: updated.reportedAt,
-        status: updated.status,
-      },
-    });
-
-    return updated;
+  async update(id: string, payload: UpdateCpcaCaseDto, user?: RbacUser) {
+    return this.cpca.update(id, payload, user, SMIF_WORKFLOW_CONTEXT);
   }
 
   async remove(id: string, user?: RbacUser) {
-    this.assertPermission(user, 'delete');
-
-    const existing = await this.prisma.smifComplaint.findUnique({
-      where: { id },
-      select: { id: true, localityId: true, reportedAt: true, status: true },
-    });
-    if (!existing) throwError('NOT_FOUND');
-
-    await this.prisma.smifComplaint.delete({ where: { id } });
-
-    await this.audit.log({
-      userId: user?.id,
-      resource: 'smif_complaints',
-      action: 'delete',
-      entityId: existing.id,
-      localityId: existing.localityId,
-      diffJson: {
-        localityId: existing.localityId,
-        reportedAt: existing.reportedAt,
-        status: existing.status,
-      },
-    });
-
-    return { ok: true };
+    return this.cpca.remove(id, user, SMIF_WORKFLOW_CONTEXT);
   }
 
-  private assertPermission(
-    user: RbacUser | undefined,
-    action: 'view' | 'create' | 'update' | 'delete',
+  async listComments(id: string, user?: RbacUser) {
+    return this.cpca.listComments(id, user, SMIF_WORKFLOW_CONTEXT);
+  }
+
+  async addComment(
+    id: string,
+    payload: AddCpcaCaseCommentDto,
+    user?: RbacUser,
   ) {
-    if (!hasPermission(user, 'smif_complaints', action)) {
-      throwError('RBAC_FORBIDDEN');
-    }
-  }
-
-  private resolveActorId(user?: RbacUser) {
-    const id = String(user?.id ?? '').trim();
-    if (!id) {
-      throwError('RBAC_FORBIDDEN');
-    }
-    return id;
-  }
-
-  private normalizeDate(value: string, field: string) {
-    const date = new Date(value);
-    if (!Number.isFinite(date.getTime())) {
-      throwError('VALIDATION_ERROR', { field, reason: 'invalid_date' });
-    }
-    return date;
-  }
-
-  private normalizeRequiredText(
-    value: string,
-    field: string,
-    maxLength: number,
-  ) {
-    const normalized = sanitizeText(value ?? '');
-    if (!normalized) {
-      throwError('VALIDATION_ERROR', { field, reason: 'required' });
-    }
-    if (normalized.length > maxLength) {
-      throwError('VALIDATION_ERROR', { field, reason: 'too_long' });
-    }
-    return normalized;
-  }
-
-  private normalizeOptionalText(value: string | undefined, maxLength: number) {
-    if (value === undefined) return undefined;
-    const normalized = sanitizeText(value ?? '');
-    if (!normalized) return null;
-    if (normalized.length > maxLength) {
-      throwError('VALIDATION_ERROR', {
-        field: 'conclusion',
-        reason: 'too_long',
-      });
-    }
-    return normalized;
-  }
-
-  private async resolveLocalityId(localityId: string) {
-    const id = String(localityId ?? '').trim();
-    if (!id) {
-      throwError('VALIDATION_ERROR', {
-        field: 'localityId',
-        reason: 'required',
-      });
-    }
-    const exists = await this.prisma.locality.findUnique({
-      where: { id },
-      select: { id: true },
-    });
-    if (!exists) {
-      throwError('VALIDATION_ERROR', {
-        field: 'localityId',
-        reason: 'not_found',
-      });
-    }
-    return id;
+    return this.cpca.addComment(id, payload.text, user, SMIF_WORKFLOW_CONTEXT);
   }
 }

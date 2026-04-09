@@ -108,4 +108,5 @@ export const qk = {
     ["cpcaCaseStats", filters] as const,
   smifComplaints: (filters: Record<string, any>) =>
     ["smifComplaints", filters] as const,
+  smifComplaintCase: (id: string) => ["smifComplaintCase", id] as const,
 };

@@ -1117,6 +1117,8 @@ model SmifComplaint {
 model CpcComplaintCase {
   id                              String             @id @default(cuid())
   caseNumber                      String             @unique
+  workflowScope                   CpcComplaintWorkflowScope @default(CPCA)
+  legacySmifComplaintId           String?            @unique
   localityId                      String
   complaintType                   CpcComplaintType
   notifierType                    CpcNotifierType    @default(VITIMA)
@@ -1184,9 +1186,11 @@ model CpcComplaintCase {
   statusHistory                   CpcComplaintStatusHistory[]
 
   @@index([localityId, status])
+  @@index([workflowScope, localityId, status])
   @@index([complaintType, status])
   @@index([procedureType])
   @@index([reportedAt])
+  @@index([workflowScope, reportedAt])
 }
 
 model CpcComplaintComment {
@@ -1484,6 +1488,11 @@ enum ChecklistItemStatusType {
 enum CpcComplaintType {
   MORAL
   SEXUAL
+}
+
+enum CpcComplaintWorkflowScope {
+  CPCA
+  SMIF
 }
 
 enum CpcNotifierType {

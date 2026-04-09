@@ -26,6 +26,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   useAddCpcaCaseComment,
+  useAddSmifComplaintCaseComment,
   useCpcaCase,
   useCpcaCases,
   useCreateCpcaCase,
@@ -33,6 +34,11 @@ import {
   useLocalities,
   useMe,
   usePostos,
+  useSmifComplaintCase,
+  useSmifComplaintCases,
+  useCreateSmifComplaintCase,
+  useDeleteSmifComplaintCase,
+  useUpdateSmifComplaintCase,
   useUpdateCpcaCase,
 } from "../api/hooks";
 import { parseApiError } from "../app/apiErrors";
@@ -392,17 +398,21 @@ function statusOptionsForStep(step: number, currentStatus: string) {
   return STATUS_OPTIONS.filter((item) => allowed.has(item.value));
 }
 
-export function CpcaCasesPage() {
+type CpcaCasesPageProps = {
+  workflow?: "CPCA" | "SMIF";
+};
+
+export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
   const toast = useToast();
   const [params, setParams] = useSearchParams();
   const { data: me, isLoading: meLoading } = useMe();
+  const isSmifWorkflow = workflow === "SMIF";
+  const resourceKey = isSmifWorkflow ? "smif_complaints" : "cpca_cases";
+  const workflowRoleAccess = isSmifWorkflow
+    ? [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI]
+    : [ROLE_CPCA, ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI];
 
-  const canAccessByRole = hasAnyRole(me, [
-    ROLE_CPCA,
-    ROLE_COORDENACAO_CIPAVD,
-    ROLE_COMANDANTE_COMGEP,
-    ROLE_TI,
-  ]);
+  const canAccessByRole = hasAnyRole(me, workflowRoleAccess);
 
   const q = params.get("q") ?? "";
   const localityId = params.get("localityId") ?? "";
@@ -421,7 +431,15 @@ export function CpcaCasesPage() {
     [q, localityId, status, detailedViolenceType, procedureType],
   );
 
-  const casesQuery = useCpcaCases(filters, canAccessByRole);
+  const cpcaCasesQuery = useCpcaCases(
+    filters,
+    canAccessByRole && !isSmifWorkflow,
+  );
+  const smifCasesQuery = useSmifComplaintCases(
+    filters,
+    canAccessByRole && isSmifWorkflow,
+  );
+  const casesQuery = isSmifWorkflow ? smifCasesQuery : cpcaCasesQuery;
   const localitiesQuery = useLocalities(canAccessByRole);
   const postosQuery = usePostos();
 
@@ -433,15 +451,34 @@ export function CpcaCasesPage() {
   const [newComment, setNewComment] = useState("");
   const [activeStep, setActiveStep] = useState(0);
 
-  const selectedCaseQuery = useCpcaCase(
+  const selectedCpcaCaseQuery = useCpcaCase(
     selectedId,
-    canAccessByRole && drawerOpen && Boolean(selectedId),
+    canAccessByRole && drawerOpen && Boolean(selectedId) && !isSmifWorkflow,
   );
-  const createCase = useCreateCpcaCase();
-  const updateCase = useUpdateCpcaCase();
-  const deleteCase = useDeleteCpcaCase();
-  const addComment = useAddCpcaCaseComment();
-  const canDeleteCase = can(me, "cpca_cases", "delete");
+  const selectedSmifCaseQuery = useSmifComplaintCase(
+    selectedId,
+    canAccessByRole && drawerOpen && Boolean(selectedId) && isSmifWorkflow,
+  );
+  const selectedCaseQuery = isSmifWorkflow
+    ? selectedSmifCaseQuery
+    : selectedCpcaCaseQuery;
+  const createCpcaCase = useCreateCpcaCase();
+  const updateCpcaCase = useUpdateCpcaCase();
+  const deleteCpcaCase = useDeleteCpcaCase();
+  const addCpcaCaseComment = useAddCpcaCaseComment();
+  const createSmifCase = useCreateSmifComplaintCase();
+  const updateSmifCase = useUpdateSmifComplaintCase();
+  const deleteSmifCase = useDeleteSmifComplaintCase();
+  const addSmifCaseComment = useAddSmifComplaintCaseComment();
+  const createCase = isSmifWorkflow ? createSmifCase : createCpcaCase;
+  const updateCase = isSmifWorkflow ? updateSmifCase : updateCpcaCase;
+  const deleteCase = isSmifWorkflow ? deleteSmifCase : deleteCpcaCase;
+  const addComment = isSmifWorkflow ? addSmifCaseComment : addCpcaCaseComment;
+  const canCreateCase = can(me, resourceKey, "create");
+  const canUpdateCase = can(me, resourceKey, "update");
+  const canDeleteCase = can(me, resourceKey, "delete");
+  const canCommentCase = can(me, resourceKey, "comment");
+  const workflowLabel = isSmifWorkflow ? "SMIF" : "CPCA";
 
   const isNationalScope = hasAnyRole(me, [
     ROLE_COORDENACAO_CIPAVD,
@@ -644,7 +681,11 @@ export function CpcaCasesPage() {
 
   if (meLoading) return <SkeletonState />;
   if (!canAccessByRole) {
-    return <ErrorState error={{ message: "Acesso negado ao fluxo CPCA." }} />;
+    return (
+      <ErrorState
+        error={{ message: `Acesso negado ao fluxo ${workflowLabel}.` }}
+      />
+    );
   }
   if (casesQuery.isLoading) return <SkeletonState />;
   if (casesQuery.isError) {
@@ -657,6 +698,7 @@ export function CpcaCasesPage() {
   }
 
   const openCreate = () => {
+    if (!canCreateCase) return;
     setIsCreateMode(true);
     setSelectedId("");
     setConfirmDeleteOpen(false);
@@ -689,6 +731,20 @@ export function CpcaCasesPage() {
   };
 
   const saveCase = async () => {
+    if (isCreateMode && !canCreateCase) {
+      toast.push({
+        message: "Seu perfil nao possui permissao para criar notificações.",
+        severity: "warning",
+      });
+      return;
+    }
+    if (!isCreateMode && !canUpdateCase) {
+      toast.push({
+        message: "Seu perfil nao possui permissao para editar notificações.",
+        severity: "warning",
+      });
+      return;
+    }
     if (isNationalScope && !form.localityId) {
       toast.push({
         message: "Selecione a OM da ocorrência.",
@@ -801,13 +857,22 @@ export function CpcaCasesPage() {
       }
     } catch (error) {
       toast.push({
-        message: parseApiError(error).message ?? "Erro ao salvar caso CPCA.",
+        message:
+          parseApiError(error).message ??
+          `Erro ao salvar caso ${workflowLabel}.`,
         severity: "error",
       });
     }
   };
 
   const saveComment = async () => {
+    if (!canCommentCase) {
+      toast.push({
+        message: "Seu perfil nao possui permissao para registrar comentários.",
+        severity: "warning",
+      });
+      return;
+    }
     if (!selectedId || !newComment.trim()) return;
     try {
       await addComment.mutateAsync({ id: selectedId, text: newComment.trim() });
@@ -1657,15 +1722,17 @@ export function CpcaCasesPage() {
       >
         <Box>
           <Typography variant="h4" fontWeight={700}>
-            CPCA - Denúncias
+            {workflowLabel} - Denúncias
           </Typography>
           <Typography variant="body2" color="text.secondary">
             Fluxo sigiloso em etapas, conforme ICA 30-13 (Arts. 47 a 57).
           </Typography>
         </Box>
-        <Button variant="contained" onClick={openCreate}>
-          Nova notificação
-        </Button>
+        {canCreateCase && (
+          <Button variant="contained" onClick={openCreate}>
+            Nova notificação
+          </Button>
+        )}
       </Stack>
 
       <Card sx={{ mb: 2 }}>
@@ -1758,7 +1825,7 @@ export function CpcaCasesPage() {
           {items.length === 0 ? (
             <EmptyState
               title="Nenhuma notificação"
-              description="Registre a primeira ocorrência da CPCA para iniciar o acompanhamento."
+              description={`Registre a primeira ocorrência de ${workflowLabel} para iniciar o acompanhamento.`}
             />
           ) : (
             <Table size="small">
@@ -1868,7 +1935,7 @@ export function CpcaCasesPage() {
           >
             <Typography variant="h6" fontWeight={700}>
               {isCreateMode
-                ? "Nova notificação CPCA"
+                ? `Nova notificação ${workflowLabel}`
                 : `Caso ${selectedCaseQuery.data?.caseNumber ?? ""}`}
             </Typography>
             <Stack direction="row" spacing={1}>
@@ -1890,7 +1957,9 @@ export function CpcaCasesPage() {
 
           <Alert severity="warning" sx={{ mb: 2 }}>
             Registrar apenas dados genéricos (sem nomes). Acesso restrito a
-            CPCA, Coordenação CIPAVD e COMGEP.
+            {isSmifWorkflow
+              ? " TI, Coordenação CIPAVD e COMGEP."
+              : " CPCA, Coordenação CIPAVD e COMGEP."}
           </Alert>
 
           {!isCreateMode && selectedCaseQuery.isLoading && <SkeletonState />}
@@ -1981,6 +2050,8 @@ export function CpcaCasesPage() {
                         variant="contained"
                         onClick={saveCase}
                         disabled={
+                          (isCreateMode && !canCreateCase) ||
+                          (!isCreateMode && !canUpdateCase) ||
                           createCase.isPending ||
                           updateCase.isPending ||
                           deleteCase.isPending
@@ -2111,28 +2182,37 @@ export function CpcaCasesPage() {
                       </Stack>
                     )}
                     <Divider sx={{ mb: 1 }} />
-                    <TextField
-                      size="small"
-                      label="Novo comentário"
-                      value={newComment}
-                      onChange={(e) => setNewComment(e.target.value)}
-                      fullWidth
-                      multiline
-                      minRows={2}
-                    />
-                    <Box display="flex" justifyContent="flex-end" mt={1}>
-                      <Button
-                        variant="outlined"
-                        onClick={saveComment}
-                        disabled={
-                          !newComment.trim() ||
-                          addComment.isPending ||
-                          deleteCase.isPending
-                        }
-                      >
-                        Adicionar comentário
-                      </Button>
-                    </Box>
+                    {canCommentCase ? (
+                      <>
+                        <TextField
+                          size="small"
+                          label="Novo comentário"
+                          value={newComment}
+                          onChange={(e) => setNewComment(e.target.value)}
+                          fullWidth
+                          multiline
+                          minRows={2}
+                        />
+                        <Box display="flex" justifyContent="flex-end" mt={1}>
+                          <Button
+                            variant="outlined"
+                            onClick={saveComment}
+                            disabled={
+                              !newComment.trim() ||
+                              addComment.isPending ||
+                              deleteCase.isPending
+                            }
+                          >
+                            Adicionar comentário
+                          </Button>
+                        </Box>
+                      </>
+                    ) : (
+                      <Typography variant="body2" color="text.secondary">
+                        Seu perfil possui acesso somente para leitura dos
+                        comentários.
+                      </Typography>
+                    )}
                   </CardContent>
                 </Card>
               )}
@@ -2145,7 +2225,7 @@ export function CpcaCasesPage() {
         open={confirmDeleteOpen}
         onCancel={() => setConfirmDeleteOpen(false)}
         onConfirm={handleConfirmDelete}
-        title="Excluir denúncia CPCA"
+        title={`Excluir denúncia ${workflowLabel}`}
         message="Tem certeza que deseja excluir esta denúncia?"
         highlightText={
           selectedCaseQuery.data
