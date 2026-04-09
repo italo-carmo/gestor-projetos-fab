@@ -149,6 +149,7 @@ model Locality {
   id                         String          @id @default(cuid())
   code                       String          @unique
   name                       String
+  catalogType                LocalityCatalogType @default(SMIF)
   commandName                String?
   commanderName              String?
   individualMeetingDate      DateTime?       // Data da Reunião Individual
@@ -179,6 +180,8 @@ model Locality {
   bestPracticePosts          BestPracticePost[]
   socialCommunicationHighlights SocialCommunicationHighlight[]
   smifComplaints             SmifComplaint[]
+
+  @@index([catalogType])
 }
 
 model Activity {
@@ -1534,6 +1537,11 @@ enum PermissionScope {
 }
 
 enum ActivityScope {
+  SMIF
+  CIPAVD
+}
+
+enum LocalityCatalogType {
   SMIF
   CIPAVD
 }

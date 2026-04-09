@@ -24,7 +24,13 @@ const MENU_UPDATE_RESOURCES: Record<string, readonly string[]> = {
   cpca_cases: ['cpca_cases'],
   bi: ['bi', 'bi_survey'],
   admin_rbac: ['admin_rbac', 'roles', 'users'],
-  admin_catalog: ['specialties', 'postos', 'phases', 'elo_roles'],
+  admin_catalog: [
+    'specialties',
+    'postos',
+    'phases',
+    'elo_roles',
+    'localities_cipavd',
+  ],
   admin_oms: ['localities'],
 };
 

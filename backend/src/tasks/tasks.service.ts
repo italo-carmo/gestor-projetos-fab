@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import {
   ActivityStatus,
+  LocalityCatalogType,
   PermissionScope,
   Prisma,
   TaskAssigneeType,
@@ -1377,7 +1378,10 @@ export class TasksService {
       : desiredLocalityIds[0];
 
     const localityRecords = await this.prisma.locality.findMany({
-      where: { id: { in: desiredLocalityIds } },
+      where: {
+        id: { in: desiredLocalityIds },
+        catalogType: LocalityCatalogType.SMIF,
+      },
       select: { id: true, commandName: true, commanderName: true },
     });
     if (localityRecords.length !== desiredLocalityIds.length) {
@@ -2027,7 +2031,7 @@ export class TasksService {
     }
 
     const rawLocalities = await this.prisma.locality.findMany({
-      where,
+      where: { ...where, catalogType: LocalityCatalogType.SMIF },
       select: {
         id: true,
         name: true,
@@ -2914,7 +2918,10 @@ export class TasksService {
     const [localitiesRaw, historyRaw, recruitMembersRaw] =
       await this.prisma.$transaction([
         this.prisma.locality.findMany({
-          where: localityWhere,
+          where: {
+            ...localityWhere,
+            catalogType: LocalityCatalogType.SMIF,
+          },
           orderBy: { name: 'asc' },
           select: {
             id: true,
@@ -3222,7 +3229,7 @@ export class TasksService {
     }
 
     const localitiesRaw = await this.prisma.locality.findMany({
-      where: localityWhere,
+      where: { ...localityWhere, catalogType: LocalityCatalogType.SMIF },
       orderBy: { name: 'asc' },
     });
 
@@ -4030,7 +4037,10 @@ export class TasksService {
     const to = params.to ? new Date(params.to) : null;
 
     const localitiesRaw = await this.prisma.locality.findMany({
-      where: { id: { in: allowedLocalityIds } },
+      where: {
+        id: { in: allowedLocalityIds },
+        catalogType: LocalityCatalogType.SMIF,
+      },
       orderBy: { name: 'asc' },
     });
 
@@ -4160,7 +4170,10 @@ export class TasksService {
     });
 
     const localitiesRaw = await this.prisma.locality.findMany({
-      where: { id: { in: allowedLocalityIds } },
+      where: {
+        id: { in: allowedLocalityIds },
+        catalogType: LocalityCatalogType.SMIF,
+      },
       orderBy: { name: 'asc' },
     });
 
@@ -5468,6 +5481,7 @@ export class TasksService {
 
   private async getTargetLocalityIds() {
     const localities = await this.prisma.locality.findMany({
+      where: { catalogType: LocalityCatalogType.SMIF },
       select: {
         id: true,
         name: true,

@@ -1,5 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { ActivityScope, ActivityStatus, Prisma } from '@prisma/client';
+import {
+  ActivityScope,
+  ActivityStatus,
+  LocalityCatalogType,
+  Prisma,
+} from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -59,18 +64,20 @@ export class ActivitiesService {
       filters.page,
       filters.pageSize,
     );
-    const targetLocalityIds = await this.getTargetLocalityIds();
-    if (targetLocalityIds.length === 0) {
-      return { items: [], page, pageSize, total: 0 };
-    }
-
     const scopeFilter: ActivityScope =
       String(filters.scope ?? '').toUpperCase() === 'CIPAVD'
         ? 'CIPAVD'
         : 'SMIF';
+    const targetLocalityIds =
+      scopeFilter === 'SMIF' ? await this.getTargetLocalityIds() : [];
+    if (scopeFilter === 'SMIF' && targetLocalityIds.length === 0) {
+      return { items: [], page, pageSize, total: 0 };
+    }
 
     const andClauses: Prisma.ActivityWhereInput[] = [];
-    andClauses.push({ localityId: { in: targetLocalityIds } });
+    if (scopeFilter === 'SMIF') {
+      andClauses.push({ localityId: { in: targetLocalityIds } });
+    }
     andClauses.push({ scope: scopeFilter });
     if (filters.localityId) andClauses.push({ localityId: filters.localityId });
     if (filters.specialtyId) {
@@ -1033,6 +1040,7 @@ export class ActivitiesService {
         AND: [
           { id: { in: normalizedTargetLocalityIds } },
           { id: { in: allowedTargetLocalityIds } },
+          { catalogType: LocalityCatalogType.SMIF },
         ],
       },
       select: { id: true },
@@ -2915,6 +2923,7 @@ export class ActivitiesService {
 
   private async getTargetLocalityIds() {
     const localities = await this.prisma.locality.findMany({
+      where: { catalogType: LocalityCatalogType.SMIF },
       select: {
         id: true,
         name: true,

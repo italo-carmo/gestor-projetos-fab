@@ -60,6 +60,8 @@ export const qk = {
   auditLastLogins: ["auditLogs", "lastLogins"] as const,
   menuUpdates: (menuKeys: string[]) => ["menuUpdates", menuKeys] as const,
   localities: ["localities"] as const,
+  cipavdLocalities: ["cipavdLocalities"] as const,
+  cipavdLocalitiesCatalog: ["cipavdLocalitiesCatalog"] as const,
   omsCatalog: ["omsCatalog"] as const,
   recruitDesignations: (localityId: string) =>
     ["recruitDesignations", localityId] as const,

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { LocalityCatalogType, Prisma } from '@prisma/client';
 import fs from 'node:fs';
 import path from 'node:path';
 import PDFDocument from 'pdfkit';
@@ -320,6 +320,7 @@ export class MissionsService {
 
     const [omsCatalog, missions] = await this.prisma.$transaction([
       this.prisma.locality.findMany({
+        where: { catalogType: LocalityCatalogType.SMIF },
         select: { id: true, name: true, code: true },
         orderBy: { name: 'asc' },
       }),
@@ -2550,6 +2551,7 @@ export class MissionsService {
 
   private async getTargetLocalityIds() {
     const localities = await this.prisma.locality.findMany({
+      where: { catalogType: LocalityCatalogType.SMIF },
       select: {
         id: true,
         name: true,

@@ -8,7 +8,12 @@ import {
   Put,
   UseGuards,
 } from '@nestjs/common';
-import { PermissionScope, Prisma, RecruitFemaleStatus } from '@prisma/client';
+import {
+  LocalityCatalogType,
+  PermissionScope,
+  Prisma,
+  RecruitFemaleStatus,
+} from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../common/current-user.decorator';
@@ -24,9 +29,11 @@ import { PrismaService } from '../prisma/prisma.service';
 import { sanitizeText } from '../common/sanitize';
 import { FabLdapService } from '../ldap/fab-ldap.service';
 import { RbacService } from '../rbac/rbac.service';
+import { CreateCipavdLocalityDto } from './dto/create-cipavd-locality.dto';
 import { CreateLocalityDto } from './dto/create-locality.dto';
 import { SetLocalityCommanderFromLdapDto } from './dto/set-locality-commander-from-ldap.dto';
 import { UpdateLocalityRecruitDesignationsDto } from './dto/update-locality-recruit-designations.dto';
+import { UpdateCipavdLocalityDto } from './dto/update-cipavd-locality.dto';
 import { ReplaceLocalityRecruitsMembersDto } from './dto/replace-locality-recruits-members.dto';
 import { UpdateLocalityRecruitsDto } from './dto/update-locality-recruits.dto';
 import { UpdateLocalityDto } from './dto/update-locality.dto';
@@ -49,8 +56,12 @@ export class LocalitiesController {
       'view',
       PermissionScope.NATIONAL,
     );
-    const where =
-      !canViewAll && user?.localityId ? { id: user.localityId } : undefined;
+    const where: Prisma.LocalityWhereInput = {
+      catalogType: LocalityCatalogType.SMIF,
+    };
+    if (!canViewAll && user?.localityId) {
+      where.id = user.localityId;
+    }
     const items = await this.prisma.locality.findMany({
       where,
       orderBy: { name: 'asc' },
@@ -62,10 +73,80 @@ export class LocalitiesController {
   @RequirePermission('localities', 'view')
   async listOmsCatalog() {
     const items = await this.prisma.locality.findMany({
+      where: { catalogType: LocalityCatalogType.SMIF },
       select: { id: true, code: true, name: true },
       orderBy: { name: 'asc' },
     });
     return { items };
+  }
+
+  @Get('cipavd')
+  @RequirePermission('localities_cipavd', 'view')
+  async listCipavdLocalities() {
+    const items = await this.prisma.locality.findMany({
+      where: { catalogType: LocalityCatalogType.CIPAVD },
+      select: { id: true, code: true, name: true, createdAt: true },
+      orderBy: { name: 'asc' },
+    });
+    return { items };
+  }
+
+  @Get('cipavd-catalog')
+  @RequirePermission('task_instances', 'view')
+  async listCipavdCatalog() {
+    const items = await this.prisma.locality.findMany({
+      where: { catalogType: LocalityCatalogType.CIPAVD },
+      select: { id: true, code: true, name: true },
+      orderBy: { name: 'asc' },
+    });
+    return { items };
+  }
+
+  @Post('cipavd')
+  @RequirePermission('localities_cipavd', 'create')
+  async createCipavdLocality(@Body() dto: CreateCipavdLocalityDto) {
+    return this.prisma.locality.create({
+      data: {
+        code: sanitizeText(dto.code).toUpperCase(),
+        name: sanitizeText(dto.name),
+        catalogType: LocalityCatalogType.CIPAVD,
+      },
+      select: { id: true, code: true, name: true, createdAt: true },
+    });
+  }
+
+  @Put('cipavd/:id')
+  @RequirePermission('localities_cipavd', 'update')
+  async updateCipavdLocality(
+    @Param('id') id: string,
+    @Body() dto: UpdateCipavdLocalityDto,
+  ) {
+    const existing = await this.prisma.locality.findFirst({
+      where: { id, catalogType: LocalityCatalogType.CIPAVD },
+      select: { id: true },
+    });
+    if (!existing) throwError('NOT_FOUND');
+
+    return this.prisma.locality.update({
+      where: { id },
+      data: {
+        code: dto.code ? sanitizeText(dto.code).toUpperCase() : undefined,
+        name: dto.name ? sanitizeText(dto.name) : undefined,
+      },
+      select: { id: true, code: true, name: true, createdAt: true },
+    });
+  }
+
+  @Delete('cipavd/:id')
+  @RequirePermission('localities_cipavd', 'delete')
+  async removeCipavdLocality(@Param('id') id: string) {
+    const existing = await this.prisma.locality.findFirst({
+      where: { id, catalogType: LocalityCatalogType.CIPAVD },
+      select: { id: true },
+    });
+    if (!existing) throwError('NOT_FOUND');
+    await this.prisma.locality.delete({ where: { id } });
+    return { ok: true };
   }
 
   @Post()
@@ -75,6 +156,7 @@ export class LocalitiesController {
       data: {
         code: sanitizeText(dto.code),
         name: sanitizeText(dto.name),
+        catalogType: LocalityCatalogType.SMIF,
         commandName: dto.commandName ? sanitizeText(dto.commandName) : null,
         commanderName: dto.commanderName
           ? sanitizeText(dto.commanderName)
@@ -117,9 +199,12 @@ export class LocalitiesController {
     }
     const currentLocality = await this.prisma.locality.findUnique({
       where: { id },
-      select: { recruitsFemaleCountCurrent: true },
+      select: { recruitsFemaleCountCurrent: true, catalogType: true },
     });
     if (!currentLocality) throwError('NOT_FOUND');
+    if (currentLocality.catalogType !== LocalityCatalogType.SMIF) {
+      throwError('NOT_FOUND');
+    }
 
     const updated = await this.prisma.locality.update({
       where: { id },
@@ -346,7 +431,10 @@ export class LocalitiesController {
     );
     if (destinationIds.length > 0) {
       const destinations = await this.prisma.locality.findMany({
-        where: { id: { in: destinationIds } },
+        where: {
+          id: { in: destinationIds },
+          catalogType: LocalityCatalogType.SMIF,
+        },
         select: { id: true },
       });
       if (destinations.length !== destinationIds.length) {
@@ -633,7 +721,10 @@ export class LocalitiesController {
         (item) => item.destinationLocalityId,
       );
       const destinationLocalities = await this.prisma.locality.findMany({
-        where: { id: { in: destinationIds } },
+        where: {
+          id: { in: destinationIds },
+          catalogType: LocalityCatalogType.SMIF,
+        },
         select: { id: true },
       });
       if (destinationLocalities.length !== destinationIds.length) {
@@ -678,6 +769,11 @@ export class LocalitiesController {
   @Delete(':id')
   @RequirePermission('localities', 'delete')
   async remove(@Param('id') id: string) {
+    const existing = await this.prisma.locality.findFirst({
+      where: { id, catalogType: LocalityCatalogType.SMIF },
+      select: { id: true },
+    });
+    if (!existing) throwError('NOT_FOUND');
     await this.prisma.locality.delete({ where: { id } });
     return { ok: true };
   }

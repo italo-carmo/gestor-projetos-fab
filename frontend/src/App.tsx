@@ -274,6 +274,14 @@ function App() {
                   element={<Navigate to="/admin?tab=localities" replace />}
                 />
                 <Route
+                  path="/admin/localities-cipavd"
+                  element={<Navigate to="/admin?tab=localities-cipavd" replace />}
+                />
+                <Route
+                  path="/admin/localidades-cipavd"
+                  element={<Navigate to="/admin?tab=localities-cipavd" replace />}
+                />
+                <Route
                   path="/admin/postos"
                   element={<Navigate to="/admin?tab=postos" replace />}
                 />

@@ -16,7 +16,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMe, usePhases, useUpdatePhase } from '../api/hooks';
 import {
   useCreatePosto,
@@ -30,6 +30,10 @@ import {
   useUpdatePosto,
 } from '../api/hooks';
 import {
+  useCipavdLocalities,
+  useCreateCipavdLocality,
+  useDeleteCipavdLocality,
+  useUpdateCipavdLocality,
   useCreateLocality,
   useDeleteLocality,
   useCreateEloRole,
@@ -283,6 +287,233 @@ function LocalitiesTab() {
         open={Boolean(deleteId)}
         title="Excluir localidade"
         message="Essa ação remove a localidade e pode afetar vínculos existentes. Deseja continuar?"
+        onConfirm={() => deleteId && handleDelete(deleteId)}
+        onCancel={() => setDeleteId(null)}
+      />
+    </Box>
+  );
+}
+
+function CipavdLocalitiesTab() {
+  const { data: me } = useMe();
+  const localitiesQuery = useCipavdLocalities();
+  const createLocality = useCreateCipavdLocality();
+  const updateLocality = useUpdateCipavdLocality();
+  const deleteLocality = useDeleteCipavdLocality();
+  const toast = useToast();
+
+  const canCreateLocality = can(me, 'localities_cipavd', 'create');
+  const canUpdateLocality = can(me, 'localities_cipavd', 'update');
+  const canDeleteLocality = can(me, 'localities_cipavd', 'delete');
+  const canManage = canCreateLocality || canUpdateLocality || canDeleteLocality;
+
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [editing, setEditing] = useState<any | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [form, setForm] = useState<LocalityForm>({ code: '', name: '' });
+
+  if (localitiesQuery.isLoading) return <SkeletonState />;
+  if (localitiesQuery.isError) {
+    return <ErrorState error={localitiesQuery.error} onRetry={() => localitiesQuery.refetch()} />;
+  }
+
+  const items = ((localitiesQuery.data?.items ?? []) as any[])
+    .slice()
+    .sort((a: any, b: any) => String(a?.name ?? '').localeCompare(String(b?.name ?? ''), 'pt-BR'));
+
+  const openCreate = () => {
+    if (!canCreateLocality) return;
+    setEditing(null);
+    setForm({ code: '', name: '' });
+    setDrawerOpen(true);
+  };
+
+  const openEdit = (item: any) => {
+    if (!canUpdateLocality) return;
+    setEditing(item);
+    setForm({
+      code: item.code ?? '',
+      name: item.name ?? '',
+    });
+    setDrawerOpen(true);
+  };
+
+  const handleSave = async () => {
+    if (editing && !canUpdateLocality) {
+      toast.push({ message: 'Você não possui permissão para editar localidades CIPAVD.', severity: 'warning' });
+      return;
+    }
+    if (!editing && !canCreateLocality) {
+      toast.push({ message: 'Você não possui permissão para criar localidades CIPAVD.', severity: 'warning' });
+      return;
+    }
+
+    const payload = {
+      code: form.code.trim().toUpperCase(),
+      name: form.name.trim(),
+    };
+
+    if (!payload.code || !payload.name) {
+      toast.push({ message: 'Informe sigla e nome da localidade.', severity: 'warning' });
+      return;
+    }
+
+    const duplicateCode = items.find((item: any) => {
+      const sameCode = String(item?.code ?? '').trim().toUpperCase() === payload.code;
+      if (!sameCode) return false;
+      if (!editing) return true;
+      return String(item?.id ?? '') !== String(editing?.id ?? '');
+    });
+    if (duplicateCode) {
+      toast.push({
+        message: `A sigla ${payload.code} já está em uso. Use uma sigla diferente.`,
+        severity: 'warning',
+      });
+      return;
+    }
+
+    try {
+      if (editing) {
+        await updateLocality.mutateAsync({ id: editing.id, payload });
+        toast.push({ message: 'Localidade CIPAVD atualizada.', severity: 'success' });
+      } else {
+        await createLocality.mutateAsync(payload);
+        toast.push({ message: 'Localidade CIPAVD criada.', severity: 'success' });
+      }
+      setDrawerOpen(false);
+    } catch (error) {
+      toast.push({ message: parseApiError(error).message ?? 'Erro ao salvar localidade CIPAVD.', severity: 'error' });
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!canDeleteLocality) {
+      toast.push({ message: 'Você não possui permissão para excluir localidades CIPAVD.', severity: 'warning' });
+      return;
+    }
+    try {
+      await deleteLocality.mutateAsync(id);
+      toast.push({ message: 'Localidade CIPAVD excluída.', severity: 'success' });
+      setDeleteId(null);
+    } catch (error) {
+      toast.push({ message: parseApiError(error).message ?? 'Erro ao excluir localidade CIPAVD.', severity: 'error' });
+    }
+  };
+
+  return (
+    <Box>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+        <Typography variant="h6" fontWeight={700}>Localidades CIPAVD</Typography>
+        {canCreateLocality && (
+          <Button variant="contained" size="small" onClick={openCreate}>
+            Nova localidade
+          </Button>
+        )}
+      </Box>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        Cadastre as localidades exclusivas para as atividades de campo da CIPAVD.
+      </Typography>
+
+      <Card>
+        <CardContent>
+          {items.length === 0 ? (
+            <EmptyState
+              title="Nenhuma localidade CIPAVD"
+              description="Crie uma localidade CIPAVD para habilitar seleção no módulo de atividades de campo CIPAVD."
+            />
+          ) : (
+            <Table size="small">
+              <TableHead>
+                <TableRow sx={{ bgcolor: 'primary.main' }}>
+                  <TableCell sx={{ color: 'white', fontWeight: 600, width: 160 }}>Sigla</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 600 }}>Localidade</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 600 }} align="right">
+                    Ações
+                  </TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {items.map((item: any) => (
+                  <TableRow key={item.id} hover>
+                    <TableCell>{item.code}</TableCell>
+                    <TableCell>{item.name}</TableCell>
+                    <TableCell align="right">
+                      {canManage ? (
+                        <>
+                          {canUpdateLocality && (
+                            <Button size="small" onClick={() => openEdit(item)}>
+                              Editar
+                            </Button>
+                          )}
+                          {canDeleteLocality && (
+                            <Button size="small" color="error" onClick={() => setDeleteId(item.id)}>
+                              Excluir
+                            </Button>
+                          )}
+                        </>
+                      ) : (
+                        <Typography variant="caption" color="text.secondary">
+                          Sem permissão de alteração
+                        </Typography>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <Drawer
+        anchor="right"
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        PaperProps={{ sx: { width: { xs: '100%', md: 380 } } }}
+      >
+        <Box p={3} display="flex" flexDirection="column" gap={2}>
+          <Typography variant="h6">{editing ? 'Editar localidade CIPAVD' : 'Nova localidade CIPAVD'}</Typography>
+          <TextField
+            size="small"
+            label="Sigla"
+            value={form.code}
+            onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
+            placeholder="Ex: CIPA01"
+            fullWidth
+          />
+          <TextField
+            size="small"
+            label="Nome da localidade"
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            placeholder="Ex: Base Operacional 01"
+            fullWidth
+          />
+          <Box display="flex" gap={1} justifyContent="flex-end">
+            <Button variant="outlined" color="error" onClick={() => setDrawerOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="contained"
+              color="success"
+              onClick={handleSave}
+              disabled={
+                createLocality.isPending ||
+                updateLocality.isPending ||
+                (!editing && !canCreateLocality) ||
+                (editing && !canUpdateLocality)
+              }
+            >
+              Salvar
+            </Button>
+          </Box>
+        </Box>
+      </Drawer>
+
+      <ConfirmDialog
+        open={Boolean(deleteId)}
+        title="Excluir localidade CIPAVD"
+        message="Essa ação remove a localidade e pode afetar vínculos existentes em atividades CIPAVD. Deseja continuar?"
         onConfirm={() => deleteId && handleDelete(deleteId)}
         onCancel={() => setDeleteId(null)}
       />
@@ -1215,9 +1446,22 @@ function InstitutionalMappingTab() {
 }
 
 export function AdminPage() {
+  const { data: me } = useMe();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab') || 'postos';
   const [currentTab, setCurrentTab] = useState(tabParam);
+  const canViewCipavdLocalities = can(me, 'localities_cipavd', 'view');
+
+  useEffect(() => {
+    setCurrentTab(tabParam);
+  }, [tabParam]);
+
+  useEffect(() => {
+    if (currentTab !== 'localities-cipavd' || canViewCipavdLocalities) return;
+    const params = new URLSearchParams(searchParams);
+    params.set('tab', 'postos');
+    setSearchParams(params, { replace: true });
+  }, [canViewCipavdLocalities, currentTab, searchParams, setSearchParams]);
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: string) => {
     setCurrentTab(newValue);
@@ -1232,8 +1476,8 @@ export function AdminPage() {
         Administração
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Gerencie localidades SMIF, postos, fases, papéis de elo e o mapeamento
-        institucional do sistema.
+        Gerencie localidades SMIF e CIPAVD, postos, fases, papéis de elo e o
+        mapeamento institucional do sistema.
       </Typography>
 
       <Card>
@@ -1244,6 +1488,9 @@ export function AdminPage() {
             sx={{ mb: 3, borderBottom: 1, borderColor: 'divider' }}
           >
             <Tab label="Localidades SMIF" value="localities" />
+            {canViewCipavdLocalities && (
+              <Tab label="Localidades CIPAVD" value="localities-cipavd" />
+            )}
             <Tab label="Postos" value="postos" />
             <Tab label="Fases" value="phases" />
             <Tab label="Papéis de Elo" value="elo-roles" />
@@ -1251,6 +1498,9 @@ export function AdminPage() {
           </Tabs>
 
           {currentTab === 'localities' && <LocalitiesTab />}
+          {canViewCipavdLocalities && currentTab === 'localities-cipavd' && (
+            <CipavdLocalitiesTab />
+          )}
           {currentTab === 'postos' && <PostosTab />}
           {currentTab === 'phases' && <PhasesTab />}
           {currentTab === 'elo-roles' && <EloRolesTab />}

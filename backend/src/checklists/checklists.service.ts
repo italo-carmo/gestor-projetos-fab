@@ -4,6 +4,7 @@ import {
   ActivityScope,
   ActivityStatus,
   ChecklistItemStatusType,
+  LocalityCatalogType,
   TaskStatus,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -45,7 +46,7 @@ export class ChecklistsService {
     /** Inclui OMs-alvo mesmo sem recrutas ativas, para refletir tarefas/atividades reais */
 
     const localitiesRaw = await this.prisma.locality.findMany({
-      where: localityWhere,
+      where: { ...localityWhere, catalogType: LocalityCatalogType.SMIF },
       orderBy: { name: 'asc' },
     });
     const localityGroups = groupTargetLocalities(localitiesRaw);
@@ -224,7 +225,10 @@ export class ChecklistsService {
       new Set(normalized.map((entry) => entry.localityId)),
     );
     const allLocalities = await this.prisma.locality.findMany({
-      where: { id: { in: canonicalLocalityIds } },
+      where: {
+        id: { in: canonicalLocalityIds },
+        catalogType: LocalityCatalogType.SMIF,
+      },
       select: {
         id: true,
         name: true,

@@ -3067,6 +3067,24 @@ export function useOmsCatalog(enabled = true) {
   });
 }
 
+export function useCipavdLocalities(enabled = true) {
+  return useQuery({
+    queryKey: qk.cipavdLocalities,
+    queryFn: async () => (await api.get("/localities/cipavd")).data,
+    enabled,
+    staleTime: 60_000,
+  });
+}
+
+export function useCipavdLocalitiesCatalog(enabled = true) {
+  return useQuery({
+    queryKey: qk.cipavdLocalitiesCatalog,
+    queryFn: async () => (await api.get("/localities/cipavd-catalog")).data,
+    enabled,
+    staleTime: 60_000,
+  });
+}
+
 export function useLocalityRecruitDesignations(
   localityId: string,
   enabled = true,
@@ -3174,6 +3192,47 @@ export function useDeleteLocality() {
       qc.invalidateQueries({ queryKey: ["dashboardRecruits"] });
       qc.invalidateQueries({ queryKey: ["dashboardNational"] });
       qc.invalidateQueries({ queryKey: ["dashboardExecutive"] });
+    },
+  });
+}
+
+export function useCreateCipavdLocality() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: { code: string; name: string }) =>
+      (await api.post("/localities/cipavd", payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.cipavdLocalities });
+      qc.invalidateQueries({ queryKey: qk.cipavdLocalitiesCatalog });
+      qc.invalidateQueries({ queryKey: ["activities"] });
+    },
+  });
+}
+
+export function useUpdateCipavdLocality() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      payload: { code?: string; name?: string };
+    }) => (await api.put(`/localities/cipavd/${args.id}`, args.payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.cipavdLocalities });
+      qc.invalidateQueries({ queryKey: qk.cipavdLocalitiesCatalog });
+      qc.invalidateQueries({ queryKey: ["activities"] });
+    },
+  });
+}
+
+export function useDeleteCipavdLocality() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      (await api.delete(`/localities/cipavd/${id}`)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.cipavdLocalities });
+      qc.invalidateQueries({ queryKey: qk.cipavdLocalitiesCatalog });
+      qc.invalidateQueries({ queryKey: ["activities"] });
     },
   });
 }

@@ -50,6 +50,7 @@ import {
   useDeleteActivity,
   useDeleteActivityReportPhoto,
   useExportActivityReportPdf,
+  useCipavdLocalitiesCatalog,
   useLocalities,
   useMe,
   useSpecialties,
@@ -338,8 +339,14 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
   const [search, setSearch] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
 
-  const { data: localitiesData } = useLocalities();
-  const localities = localitiesData?.items ?? [];
+  const { data: localitiesData } = useLocalities(scope !== 'cipavd');
+  const cipavdLocalitiesQuery = useCipavdLocalitiesCatalog(scope === 'cipavd');
+  const localities = useMemo(() => {
+    if (scope === 'cipavd') {
+      return cipavdLocalitiesQuery.data?.items ?? [];
+    }
+    return localitiesData?.items ?? [];
+  }, [cipavdLocalitiesQuery.data?.items, localitiesData?.items, scope]);
   const { data: specialtiesData } = useSpecialties();
   const specialties = specialtiesData?.items ?? [];
   const commissionSpecialty = useMemo(
@@ -351,15 +358,23 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
   const responsibleUsersQuery = useActivityResponsibleUsers({});
   const allResponsibleUsers = responsibleUsersQuery.data?.items ?? [];
 
-  const selectableLocalities = useMemo(
-    () =>
-      selectTargetLocalities(localities as any[]).filter(
+  const selectableLocalities = useMemo(() => {
+    const normalized = (localities as any[])
+      .filter(
         (locality: any) =>
           String(locality?.id ?? '').trim() &&
           String(locality?.name ?? '').trim(),
-      ),
-    [localities],
-  );
+      )
+      .sort((first: any, second: any) =>
+        String(first?.name ?? '').localeCompare(String(second?.name ?? ''), 'pt-BR'),
+      );
+
+    if (scope === 'cipavd') {
+      return normalized;
+    }
+
+    return selectTargetLocalities(normalized);
+  }, [localities, scope]);
 
   const activitiesQuery = useActivities({
     status: statusFilter || undefined,

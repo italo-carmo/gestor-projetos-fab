@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { LocalityCatalogType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { RbacUser } from '../rbac/rbac.types';
 import { sanitizeForExecutive } from '../common/executive';
@@ -65,6 +66,7 @@ export class SearchService {
     }
 
     const localityWhere: any = {
+      catalogType: LocalityCatalogType.SMIF,
       OR: [
         { name: { contains: query, mode: 'insensitive' } },
         { code: { contains: query, mode: 'insensitive' } },

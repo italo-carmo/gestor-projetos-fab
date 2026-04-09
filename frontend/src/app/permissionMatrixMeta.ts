@@ -214,6 +214,15 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     routeAliases: ["/gsd-recruits", "/admin/oms", "/admin/localities"],
     sidebarItems: ["GSD e Recrutas", "Administracao", "OMs"],
   },
+  localities_cipavd: {
+    menu: "Administracao",
+    menuOrder: 80,
+    title: "Localidades CIPAVD",
+    description: "Cadastro de localidades usadas pelas atividades de campo CIPAVD.",
+    route: "/admin?tab=localities-cipavd",
+    routeAliases: ["/admin/localities-cipavd", "/activities-cipavd"],
+    sidebarItems: ["Administracao", "Atividades de Campo"],
+  },
   specialties: {
     menu: "Administracao",
     menuOrder: 80,

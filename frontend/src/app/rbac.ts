@@ -21,6 +21,9 @@ export function canAccessAdminCatalog(user: RbacUser) {
     can(user, "localities", "create") ||
     can(user, "localities", "update") ||
     can(user, "localities", "delete") ||
+    can(user, "localities_cipavd", "create") ||
+    can(user, "localities_cipavd", "update") ||
+    can(user, "localities_cipavd", "delete") ||
     can(user, "specialties", "create") ||
     can(user, "specialties", "update") ||
     can(user, "specialties", "delete") ||

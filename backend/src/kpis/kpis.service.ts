@@ -1,5 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { KpiVisibility, Prisma, TaskStatus } from '@prisma/client';
+import {
+  KpiVisibility,
+  LocalityCatalogType,
+  Prisma,
+  TaskStatus,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { RbacUser } from '../rbac/rbac.types';
 import { sanitizeForExecutive } from '../common/executive';
@@ -58,7 +63,10 @@ export class KpisService {
 
     const [localities, tasks, phases, reports] = await this.prisma.$transaction(
       [
-        this.prisma.locality.findMany({ orderBy: { name: 'asc' } }),
+        this.prisma.locality.findMany({
+          where: { catalogType: LocalityCatalogType.SMIF },
+          orderBy: { name: 'asc' },
+        }),
         this.prisma.taskInstance.findMany({
           where: {
             createdAt: { gte: from, lte: to },
