@@ -62,8 +62,10 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     menu: "Planejamento",
     menuOrder: 20,
     title: "Tarefas",
-    description: "Gestao das tarefas executadas nas OMs e na CIPAVD.",
-    route: "/tasks",
+    description:
+      "Gestao das tarefas e atividades de campo executadas nas OMs e na CIPAVD.",
+    route: "/activities",
+    routeAliases: ["/activities-cipavd", "/tasks"],
     sidebarItems: ["Tarefas", "Atividades de Campo"],
   },
   task_templates: {

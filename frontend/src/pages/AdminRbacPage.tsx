@@ -640,6 +640,9 @@ export function AdminRbacPage() {
         row.meta.title,
         row.meta.description,
         row.resource,
+        row.meta.route ?? "",
+        ...(row.meta.routeAliases ?? []),
+        ...(row.meta.sidebarItems ?? []),
         ...row.availableActions.map((action) => getPermissionActionLabel(action)),
         ...CRUD_ACTIONS.flatMap((action) =>
           row.crudRoles[action].map((role) => role.roleName),
