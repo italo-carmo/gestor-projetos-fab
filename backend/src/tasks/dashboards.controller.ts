@@ -71,10 +71,11 @@ export class DashboardsController {
     @Query('threshold') threshold: string | undefined,
     @Query('command') command: string | undefined,
     @Query('localityId') localityId: string | undefined,
+    @Query('scope') scope: string | undefined,
     @CurrentUser() user: RbacUser,
   ) {
     return this.tasks.getDashboardExecutive(
-      { from, to, phaseId, threshold, command, localityId },
+      { from, to, phaseId, threshold, command, localityId, scope },
       user,
     );
   }

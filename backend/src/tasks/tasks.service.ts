@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import {
+  ActivityScope,
   ActivityStatus,
   LocalityCatalogType,
   PermissionScope,
@@ -2122,6 +2123,7 @@ export class TasksService {
     } else {
       activityWhereClauses.push({ localityId: { in: localityAliasIds } });
     }
+    activityWhereClauses.push({ scope: ActivityScope.SMIF });
     if (constraints.specialtyId) {
       activityWhereClauses.push({
         OR: [
@@ -2350,6 +2352,7 @@ export class TasksService {
       const primarySpecialty = specialties[0] ?? null;
       return {
         activityId: activity.id,
+        scope: activity.scope ?? null,
         title: activity.title ?? 'Atividade',
         localityId: canonicalId,
         localityCode: locality?.code ?? '',
@@ -2388,6 +2391,7 @@ export class TasksService {
       const primarySpecialty = specialties[0] ?? null;
       return {
         activityId: activity.id,
+        scope: activity.scope ?? null,
         title: activity.title ?? 'Atividade',
         localityId: canonicalId,
         localityCode: locality?.code ?? '',
@@ -3138,6 +3142,7 @@ export class TasksService {
       threshold?: string;
       command?: string;
       localityId?: string;
+      scope?: string;
     },
     user?: RbacUser,
   ) {
@@ -3196,8 +3201,22 @@ export class TasksService {
       },
     };
 
-    const allowedLocalityIds = await this.getTargetLocalityIds();
-    if (allowedLocalityIds.length === 0) {
+    const scopeFilter: ActivityScope =
+      String(params.scope ?? '').toUpperCase() === 'CIPAVD'
+        ? ActivityScope.CIPAVD
+        : ActivityScope.SMIF;
+    const localityCatalogType =
+      scopeFilter === ActivityScope.CIPAVD
+        ? LocalityCatalogType.CIPAVD
+        : LocalityCatalogType.SMIF;
+    const allowedLocalityIds =
+      scopeFilter === ActivityScope.SMIF
+        ? await this.getTargetLocalityIds()
+        : [];
+    if (
+      scopeFilter === ActivityScope.SMIF &&
+      allowedLocalityIds.length === 0
+    ) {
       return user?.executiveHidePii
         ? sanitizeForExecutive(emptyResponse)
         : emptyResponse;
@@ -3209,7 +3228,9 @@ export class TasksService {
     const threshold = Number.isFinite(thresholdRaw) ? thresholdRaw : 70;
 
     const localityWhere: Prisma.LocalityWhereInput = {
-      id: { in: allowedLocalityIds },
+      ...(scopeFilter === ActivityScope.SMIF
+        ? { id: { in: allowedLocalityIds } }
+        : {}),
     };
     if (params.command) {
       localityWhere.commandName = params.command;
@@ -3229,13 +3250,27 @@ export class TasksService {
     }
 
     const localitiesRaw = await this.prisma.locality.findMany({
-      where: { ...localityWhere, catalogType: LocalityCatalogType.SMIF },
+      where: { ...localityWhere, catalogType: localityCatalogType },
       orderBy: { name: 'asc' },
     });
 
-    const localityGroups = groupTargetLocalities(localitiesRaw);
-    const localities = localityGroups.map((group) => group.canonical);
-    const { aliasByLocalityId } = createTargetLocalityAliasMap(localityGroups);
+    const localityGroups =
+      scopeFilter === ActivityScope.SMIF
+        ? groupTargetLocalities(localitiesRaw)
+        : [];
+    const localities =
+      scopeFilter === ActivityScope.SMIF
+        ? localityGroups.map((group) => group.canonical)
+        : localitiesRaw;
+    const aliasByLocalityId =
+      scopeFilter === ActivityScope.SMIF
+        ? createTargetLocalityAliasMap(localityGroups).aliasByLocalityId
+        : new Map<string, string>(
+            localitiesRaw.map((locality) => [
+              String(locality.id),
+              String(locality.id),
+            ]),
+          );
     const localityIds = Array.from(aliasByLocalityId.keys());
     if (!localityIds.length) {
       return user?.executiveHidePii
@@ -3267,6 +3302,7 @@ export class TasksService {
     const activities: any[] = await this.prisma.activity.findMany({
       where: {
         localityId: { in: localityIds },
+        scope: scopeFilter,
         ...(activityDateRangeFilter ?? {}),
       },
       include: {
@@ -3419,6 +3455,7 @@ export class TasksService {
       const primarySpecialty = specialties[0] ?? null;
       return {
         activityId: activity.id,
+        scope: activity.scope ?? null,
         title: activity.title ?? 'Atividade',
         activityTypeName: activity.activityType?.name ?? null,
         specialtyId: primarySpecialty?.id ?? null,

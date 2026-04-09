@@ -163,6 +163,7 @@ export function DashboardExecutivePage() {
       threshold: threshold || undefined,
       command: command || undefined,
       localityId: localityId || undefined,
+      scope: 'CIPAVD',
     }),
     [from, to, threshold, command, localityId],
   );

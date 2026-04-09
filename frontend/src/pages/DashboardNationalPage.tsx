@@ -26,6 +26,7 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import KeyboardArrowDownRoundedIcon from '@mui/icons-material/KeyboardArrowDownRounded';
 import KeyboardArrowUpRoundedIcon from '@mui/icons-material/KeyboardArrowUpRounded';
+import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import DescriptionIcon from '@mui/icons-material/Description';
@@ -438,6 +439,8 @@ export function DashboardNationalPage() {
   const canViewBestPractices = can(me, 'best_practices', 'view');
   const bestPracticesQuery = useBestPractices({}, canViewBestPractices);
   const [attentionPointOffset, setAttentionPointOffset] = useState(0);
+  const [completedReportCarouselIndex, setCompletedReportCarouselIndex] =
+    useState(0);
   const [readingAttentionPoint, setReadingAttentionPoint] =
     useState<BestPracticePoint | null>(null);
   const isTiProfile = hasAnyRole(me, [ROLE_TI]);
@@ -472,8 +475,18 @@ export function DashboardNationalPage() {
   });
   const attentionPoints = typedAttentionPoints;
   const attentionSlideHeight = 238;
+  const completedReportsForCarousel = Array.isArray(
+    (dashboardQuery.data as any)?.drilldown?.completedReports,
+  )
+    ? ((dashboardQuery.data as any).drilldown.completedReports as NationalDrilldownItem[])
+    : [];
+  const completedReportSlideHeight = 202;
   const safeAttentionPointOffset =
     attentionPoints.length > 0 ? attentionPointOffset % attentionPoints.length : 0;
+  const safeCompletedReportCarouselIndex =
+    completedReportsForCarousel.length > 0
+      ? completedReportCarouselIndex % completedReportsForCarousel.length
+      : 0;
   const goToPreviousAttentionPoint = () => {
     if (attentionPoints.length <= 1) return;
     setAttentionPointOffset((current) =>
@@ -484,6 +497,20 @@ export function DashboardNationalPage() {
     if (attentionPoints.length <= 1) return;
     setAttentionPointOffset((current) =>
       (current + 1) % attentionPoints.length,
+    );
+  };
+  const goToPreviousCompletedReport = () => {
+    if (completedReportsForCarousel.length <= 1) return;
+    setCompletedReportCarouselIndex(
+      (current) =>
+        (current - 1 + completedReportsForCarousel.length) %
+        completedReportsForCarousel.length,
+    );
+  };
+  const goToNextCompletedReport = () => {
+    if (completedReportsForCarousel.length <= 1) return;
+    setCompletedReportCarouselIndex(
+      (current) => (current + 1) % completedReportsForCarousel.length,
     );
   };
 
@@ -513,6 +540,16 @@ export function DashboardNationalPage() {
     }, 5000);
     return () => window.clearInterval(timer);
   }, [attentionPoints.length]);
+
+  useEffect(() => {
+    if (completedReportsForCarousel.length <= 1) return;
+    const timer = window.setInterval(() => {
+      setCompletedReportCarouselIndex(
+        (current) => (current + 1) % completedReportsForCarousel.length,
+      );
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [completedReportsForCarousel.length]);
 
   useEffect(() => {
     const photos = institutionalDetail?.cell.photos ?? [];
@@ -1350,10 +1387,160 @@ export function DashboardNationalPage() {
           sx={{
             width: '100%',
             minWidth: 0,
+            minHeight: 320,
+            backgroundColor: '#FFFFFF',
+            borderRadius: 3,
+            border: '1px solid rgba(17,66,89,0.28)',
+          }}
+        >
+          <CardContent sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+            <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 0.8 }}>
+              <Typography variant="h6" sx={{ color: '#111827' }}>
+                Relatórios concluídos
+              </Typography>
+              {completedReportsForCarousel.length > 1 ? (
+                <Stack direction="row" alignItems="center" spacing={0.2}>
+                  <Tooltip title="Relatório anterior">
+                    <IconButton
+                      size="small"
+                      onClick={goToPreviousCompletedReport}
+                      sx={{ color: '#111827', opacity: 0.82 }}
+                      aria-label="Ir para relatório anterior"
+                    >
+                      <KeyboardArrowUpRoundedIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Próximo relatório">
+                    <IconButton
+                      size="small"
+                      onClick={goToNextCompletedReport}
+                      sx={{ color: '#111827', opacity: 0.82 }}
+                      aria-label="Ir para próximo relatório"
+                    >
+                      <KeyboardArrowDownRoundedIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </Stack>
+              ) : null}
+            </Stack>
+            {completedReportsForCarousel.length === 0 ? (
+              <Typography variant="body2" color="text.secondary">
+                Nenhum relatório concluído no período selecionado.
+              </Typography>
+            ) : (
+              <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 0.7 }}>
+                <Typography variant="caption" color="text.secondary">
+                  Clique no relatório para abrir a atividade no contexto SMIF.
+                </Typography>
+                <Box sx={{ overflow: 'hidden', height: `${completedReportSlideHeight}px` }}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      transform: `translateY(-${safeCompletedReportCarouselIndex * completedReportSlideHeight}px)`,
+                      transition: 'transform 420ms ease-in-out',
+                    }}
+                  >
+                    {completedReportsForCarousel.map((item) => (
+                      <Card
+                        key={item.activityId}
+                        variant="outlined"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => openActivityFromDetail(item.activityId)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            openActivityFromDetail(item.activityId);
+                          }
+                        }}
+                        sx={{
+                          height: `${completedReportSlideHeight}px`,
+                          flexShrink: 0,
+                          borderColor: 'rgba(17,66,89,0.22)',
+                          borderRadius: 2,
+                          background:
+                            'linear-gradient(165deg, rgba(248,251,255,0.97) 0%, rgba(242,247,252,0.97) 100%)',
+                          cursor: 'pointer',
+                          transition: 'transform 150ms ease, box-shadow 180ms ease, border-color 180ms ease',
+                          '&:hover': {
+                            transform: 'translateY(-1px)',
+                            boxShadow: '0 10px 18px rgba(17,66,89,0.14)',
+                            borderColor: 'rgba(17,66,89,0.36)',
+                          },
+                          '&:focus-visible': {
+                            outline: '2px solid #1F4A61',
+                            outlineOffset: '2px',
+                          },
+                        }}
+                      >
+                        <CardContent sx={{ p: 1.35, height: '100%', display: 'flex', flexDirection: 'column' }}>
+                          <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1}>
+                            <Typography variant="body2" sx={{ fontWeight: 700, color: '#0E3142' }} noWrap>
+                              {item.title}
+                            </Typography>
+                            <OpenInNewRoundedIcon sx={{ fontSize: 16, color: '#1F4A61', flexShrink: 0 }} />
+                          </Stack>
+                          <Typography variant="caption" color="text.secondary" noWrap>
+                            {(item.localityCode || item.localityName) ?? '-'} • Data da atividade {formatDrilldownDate(item.eventDate)}
+                          </Typography>
+                          <Stack direction="row" spacing={0.6} sx={{ mt: 0.8, flexWrap: 'wrap' }} useFlexGap>
+                            <Chip
+                              size="small"
+                              label={`${Number(item?.instructors ?? 0)} instrutores`}
+                              color="primary"
+                              variant="outlined"
+                            />
+                            <Chip
+                              size="small"
+                              label={`${Number(item?.recruits ?? 0)} recrutas`}
+                              color="primary"
+                              variant="outlined"
+                            />
+                            <Chip
+                              size="small"
+                              label={`${Number(item?.elos ?? 0)} elos`}
+                              color="primary"
+                              variant="outlined"
+                            />
+                          </Stack>
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{
+                              mt: 0.9,
+                              display: '-webkit-box',
+                              WebkitLineClamp: 3,
+                              WebkitBoxOrient: 'vertical',
+                              overflow: 'hidden',
+                              lineHeight: 1.35,
+                            }}
+                          >
+                            {String(item.activityTypeName ?? '').trim() || 'Relatório assinado'}
+                          </Typography>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </Box>
+                </Box>
+                {completedReportsForCarousel.length > 1 ? (
+                  <Typography variant="caption" color="text.secondary">
+                    {safeCompletedReportCarouselIndex + 1} de {completedReportsForCarousel.length} • rotação automática a cada 5s
+                  </Typography>
+                ) : null}
+              </Box>
+            )}
+          </CardContent>
+        </Card>
+        <Card
+          sx={{
+            width: '100%',
+            minWidth: 0,
             height: '100%',
             backgroundColor: '#FFFFFF',
             borderRadius: 3,
             border: '1px solid rgb(58, 122, 154)',
+            gridColumn: { xs: '1', md: '1 / -1' },
           }}
         >
           <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
