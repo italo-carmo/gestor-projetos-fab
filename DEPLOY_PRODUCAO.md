@@ -45,6 +45,7 @@ npm install --workspaces --no-audit --no-fund
 
 cd backend
 npx prisma migrate deploy
+npx prisma generate
 npm run build
 ```
 
@@ -98,6 +99,7 @@ cd /opt/gestao-projetos
 npm install --workspaces --no-audit --no-fund
 cd backend
 npx prisma migrate deploy
+npx prisma generate
 npm run build
 cd ../frontend
 npm install --no-audit --no-fund
