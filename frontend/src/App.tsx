@@ -26,6 +26,7 @@ import { BiDomesticViolenceDashboardPage } from "./pages/BiDomesticViolenceDashb
 import { BiRecruitsDashboardPage } from "./pages/BiRecruitsDashboardPage";
 import { BiBestPracticesCycleDashboardPage } from "./pages/BiBestPracticesCycleDashboardPage";
 import { BiCpcaMeetingDashboardPage } from "./pages/BiCpcaMeetingDashboardPage";
+import { BiGsdEvaluationDashboardPage } from "./pages/BiGsdEvaluationDashboardPage";
 import { MissionsPage } from "./pages/MissionsPage";
 import { SocialCommunicationPage } from "./pages/SocialCommunicationPage";
 import { CpcaCasesPage } from "./pages/CpcaCasesPage";
@@ -147,6 +148,16 @@ function App() {
                       allow={(user) => can(user, "bi", "view")}
                     >
                       <BiCpcaMeetingDashboardPage />
+                    </RequireRoleAccess>
+                  }
+                />
+                <Route
+                  path="/dashboard/bi-avaliacao-gsd"
+                  element={
+                    <RequireRoleAccess
+                      allow={(user) => can(user, "bi", "view")}
+                    >
+                      <BiGsdEvaluationDashboardPage />
                     </RequireRoleAccess>
                   }
                 />

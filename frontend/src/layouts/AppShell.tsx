@@ -256,6 +256,12 @@ const navSections: NavSection[] = [
         icon: <InsightsRoundedIcon fontSize="small" />,
         menuKey: "bi",
       },
+      {
+        label: "Avaliação GSD",
+        to: "/dashboard/bi-avaliacao-gsd",
+        icon: <InsightsRoundedIcon fontSize="small" />,
+        menuKey: "bi",
+      },
     ],
   },
   {
@@ -443,6 +449,9 @@ export function AppShell({ children }: { children: ReactNode }) {
       return can(me, "bi", "view");
     }
     if (item.to === "/dashboard/bi-encontro-cpca") {
+      return can(me, "bi", "view");
+    }
+    if (item.to === "/dashboard/bi-avaliacao-gsd") {
       return can(me, "bi", "view");
     }
     if (item.to === "/smif-complaints") {

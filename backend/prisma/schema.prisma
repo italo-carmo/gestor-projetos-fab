@@ -59,6 +59,8 @@ model User {
   biBestPracticeCycleCardSettings BiBestPracticeCycleCardSetting[] @relation("BiBestPracticeCycleCardSettingUpdatedBy")
   biCpcaMeetingImportBatches BiCpcaMeetingImportBatch[]
   biCpcaMeetingCardSettings BiCpcaMeetingCardSetting[] @relation("BiCpcaMeetingCardSettingUpdatedBy")
+  biGsdEvaluationImportBatches BiGsdEvaluationImportBatch[]
+  biGsdEvaluationCardSettings BiGsdEvaluationCardSetting[] @relation("BiGsdEvaluationCardSettingUpdatedBy")
   cpcaCasesCreated CpcComplaintCase[] @relation("CpcComplaintCaseCreatedBy")
   cpcaCasesUpdated CpcComplaintCase[] @relation("CpcComplaintCaseUpdatedBy")
   cpcaCaseComments CpcComplaintComment[] @relation("CpcComplaintCommentAuthor")
@@ -1515,6 +1517,57 @@ model BiCpcaMeetingCardSetting {
   updatedAt   DateTime @updatedAt
 
   updatedBy   User?    @relation("BiCpcaMeetingCardSettingUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@index([updatedAt])
+}
+
+model BiGsdEvaluationImportBatch {
+  id            String                       @id @default(cuid())
+  fileName      String
+  format        BiImportFormat
+  sheetName     String?
+  columnsJson   Json?
+  totalRows     Int
+  insertedRows  Int
+  duplicateRows Int
+  invalidRows   Int
+  importedById  String?
+  importedAt    DateTime                     @default(now())
+
+  importedBy    User?                        @relation(fields: [importedById], references: [id], onDelete: SetNull)
+  responses     BiGsdEvaluationResponse[]
+
+  @@index([importedAt])
+  @@index([importedById, importedAt])
+}
+
+model BiGsdEvaluationResponse {
+  id          String                      @id @default(cuid())
+  batchId     String?
+  submittedAt DateTime?
+  answersJson Json?
+  rawPayload  Json?
+  sourceRow   Int?
+  sourceHash  String                      @unique
+  createdAt   DateTime                    @default(now())
+  updatedAt   DateTime                    @updatedAt
+
+  batch       BiGsdEvaluationImportBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+
+  @@index([submittedAt])
+  @@index([batchId])
+}
+
+model BiGsdEvaluationCardSetting {
+  id          String   @id @default(cuid())
+  cardId      String   @unique
+  title       String
+  description String?
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  updatedBy   User?    @relation("BiGsdEvaluationCardSettingUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
 
   @@index([updatedAt])
 }

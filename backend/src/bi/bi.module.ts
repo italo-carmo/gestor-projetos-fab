@@ -4,6 +4,8 @@ import { BiBestPracticesCycleController } from './bi-best-practices-cycle.contro
 import { BiBestPracticesCycleService } from './bi-best-practices-cycle.service';
 import { BiCpcaMeetingController } from './bi-cpca-meeting.controller';
 import { BiCpcaMeetingService } from './bi-cpca-meeting.service';
+import { BiGsdEvaluationController } from './bi-gsd-evaluation.controller';
+import { BiGsdEvaluationService } from './bi-gsd-evaluation.service';
 import { BiDomesticViolenceController } from './bi-domestic-violence.controller';
 import { BiDomesticViolenceService } from './bi-domestic-violence.service';
 import { BiRecruitsController } from './bi-recruits.controller';
@@ -19,6 +21,7 @@ import { BiService } from './bi.service';
     BiRecruitsController,
     BiBestPracticesCycleController,
     BiCpcaMeetingController,
+    BiGsdEvaluationController,
   ],
   providers: [
     BiService,
@@ -26,6 +29,7 @@ import { BiService } from './bi.service';
     BiRecruitsService,
     BiBestPracticesCycleService,
     BiCpcaMeetingService,
+    BiGsdEvaluationService,
   ],
 })
 export class BiModule {}

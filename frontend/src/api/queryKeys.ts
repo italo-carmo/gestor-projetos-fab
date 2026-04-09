@@ -118,6 +118,14 @@ export const qk = {
     ["biCpcaMeeting", "imports", filters] as const,
   biCpcaMeetingCardSettings: () =>
     ["biCpcaMeeting", "cardSettings"] as const,
+  biGsdEvaluationDashboard: (filters: Record<string, any>) =>
+    ["biGsdEvaluation", "dashboard", filters] as const,
+  biGsdEvaluationResponses: (filters: Record<string, any>) =>
+    ["biGsdEvaluation", "responses", filters] as const,
+  biGsdEvaluationImports: (filters: Record<string, any>) =>
+    ["biGsdEvaluation", "imports", filters] as const,
+  biGsdEvaluationCardSettings: () =>
+    ["biGsdEvaluation", "cardSettings"] as const,
   cpcaCases: (filters: Record<string, any>) => ["cpcaCases", filters] as const,
   cpcaCase: (id: string) => ["cpcaCase", id] as const,
   cpcaCaseStats: (filters: Record<string, any>) =>

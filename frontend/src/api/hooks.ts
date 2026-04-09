@@ -4067,3 +4067,93 @@ export function useUpdateBiCpcaMeetingCardSetting() {
     },
   });
 }
+
+export function useBiGsdEvaluationDashboard(filters: Record<string, any>) {
+  return useQuery({
+    queryKey: qk.biGsdEvaluationDashboard(filters),
+    queryFn: async () =>
+      (await api.get("/bi/gsd-evaluation/dashboard", { params: filters })).data,
+    staleTime: 15_000,
+  });
+}
+
+export function useBiGsdEvaluationResponses(filters: Record<string, any>) {
+  return useQuery({
+    queryKey: qk.biGsdEvaluationResponses(filters),
+    queryFn: async () =>
+      (await api.get("/bi/gsd-evaluation/responses", { params: filters })).data,
+    staleTime: 5_000,
+  });
+}
+
+export function useBiGsdEvaluationImports(filters: Record<string, any>) {
+  return useQuery({
+    queryKey: qk.biGsdEvaluationImports(filters),
+    queryFn: async () =>
+      (await api.get("/bi/gsd-evaluation/imports", { params: filters })).data,
+    staleTime: 10_000,
+  });
+}
+
+export function useBiGsdEvaluationCardSettings(enabled = true) {
+  return useQuery({
+    queryKey: qk.biGsdEvaluationCardSettings(),
+    queryFn: async () => (await api.get("/bi/gsd-evaluation/card-settings")).data,
+    enabled,
+    staleTime: 20_000,
+  });
+}
+
+export function useImportBiGsdEvaluation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { file: File; replace?: boolean }) => {
+      const form = new FormData();
+      form.append("file", args.file);
+      if (typeof args.replace === "boolean") {
+        form.append("replace", String(args.replace));
+      }
+      return (await api.post("/bi/gsd-evaluation/import", form)).data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["biGsdEvaluation"] });
+    },
+  });
+}
+
+export function useDeleteBiGsdEvaluationResponses() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      ids?: string[];
+      allFiltered?: boolean;
+      from?: string;
+      to?: string;
+      q?: string;
+      combineMode?: "AND" | "OR";
+      columnFilters?: Record<string, string>;
+    }) => (await api.post("/bi/gsd-evaluation/responses/delete", payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["biGsdEvaluation"] });
+    },
+  });
+}
+
+export function useUpdateBiGsdEvaluationCardSetting() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      cardId: string;
+      payload: { title?: string; description?: string | null };
+    }) =>
+      (
+        await api.put(
+          `/bi/gsd-evaluation/card-settings/${encodeURIComponent(args.cardId)}`,
+          args.payload,
+        )
+      ).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["biGsdEvaluation"] });
+    },
+  });
+}
