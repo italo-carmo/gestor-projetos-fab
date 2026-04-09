@@ -1860,6 +1860,55 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
 
           {(isCreateMode || drawerTab === 'activity') && (
             <>
+              <Stack
+                direction={{ xs: 'column', md: 'row' }}
+                spacing={1}
+                sx={{ alignItems: { xs: 'stretch', md: 'center' } }}
+              >
+                <TextField
+                  select
+                  size="small"
+                  label="Tipo"
+                  value={activityForm.activityTypeId}
+                  onChange={(e) => setActivityForm({ ...activityForm, activityTypeId: e.target.value })}
+                  sx={{ minWidth: 220 }}
+                  disabled={!canEditActivityForm}
+                >
+                  <MenuItem value="">Sem tipo</MenuItem>
+                  {activityTypes.map((type: any) => (
+                    <MenuItem key={type.id} value={type.id}>
+                      {type.name}
+                    </MenuItem>
+                  ))}
+                </TextField>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  color="success"
+                  sx={drawerActionButtonSx}
+                  disabled={!canEditActivityForm || createActivityType.isPending}
+                  onClick={async () => {
+                    const name = window.prompt('Informe o nome do novo tipo de atividade:');
+                    const normalized = String(name ?? '').trim();
+                    if (!normalized) return;
+                    try {
+                      const created = await createActivityType.mutateAsync({ name: normalized });
+                      setActivityForm((prev) => ({
+                        ...prev,
+                        activityTypeId: String(created?.id ?? ''),
+                      }));
+                      toast.push({ message: 'Tipo criado com sucesso', severity: 'success' });
+                    } catch (error) {
+                      toast.push({
+                        message: parseApiError(error).message ?? 'Erro ao criar tipo',
+                        severity: 'error',
+                      });
+                    }
+                  }}
+                >
+                  Adicionar tipo
+                </Button>
+              </Stack>
               <TextField
                 size="small"
                 label="Título"
@@ -1867,6 +1916,7 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
                 onChange={(e) => setActivityForm({ ...activityForm, title: e.target.value })}
                 fullWidth
                 disabled={!canEditActivityForm}
+                sx={{ mt: 1 }}
               />
               <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} sx={{ mt: 1 }}>
                 {isCreateMode ? (
@@ -2000,55 +2050,6 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
                     </MenuItem>
                   ))}
                 </TextField>
-              </Stack>
-              <Stack
-                direction={{ xs: 'column', md: 'row' }}
-                spacing={1}
-                sx={{ mt: 1, alignItems: { xs: 'stretch', md: 'center' } }}
-              >
-                <TextField
-                  select
-                  size="small"
-                  label="Tipo"
-                  value={activityForm.activityTypeId}
-                  onChange={(e) => setActivityForm({ ...activityForm, activityTypeId: e.target.value })}
-                  sx={{ minWidth: 220 }}
-                  disabled={!canEditActivityForm}
-                >
-                  <MenuItem value="">Sem tipo</MenuItem>
-                  {activityTypes.map((type: any) => (
-                    <MenuItem key={type.id} value={type.id}>
-                      {type.name}
-                    </MenuItem>
-                  ))}
-                </TextField>
-                <Button
-                  size="small"
-                  variant="outlined"
-                  color="success"
-                  sx={drawerActionButtonSx}
-                  disabled={!canEditActivityForm || createActivityType.isPending}
-                  onClick={async () => {
-                    const name = window.prompt('Informe o nome do novo tipo de atividade:');
-                    const normalized = String(name ?? '').trim();
-                    if (!normalized) return;
-                    try {
-                      const created = await createActivityType.mutateAsync({ name: normalized });
-                      setActivityForm((prev) => ({
-                        ...prev,
-                        activityTypeId: String(created?.id ?? ''),
-                      }));
-                      toast.push({ message: 'Tipo criado com sucesso', severity: 'success' });
-                    } catch (error) {
-                      toast.push({
-                        message: parseApiError(error).message ?? 'Erro ao criar tipo',
-                        severity: 'error',
-                      });
-                    }
-                  }}
-                >
-                  Adicionar tipo
-                </Button>
               </Stack>
               {isCreateMode && activityForm.localityIds.length > 1 && (
                 <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>

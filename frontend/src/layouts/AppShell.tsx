@@ -140,7 +140,7 @@ const navSections: NavSection[] = [
         label: "Atividades de Campo",
         to: "/activities",
         icon: <EventNoteIcon fontSize="small" />,
-        menuKey: "activities",
+        menuKey: "activities_smif",
       },
       {
         label: "Denúncias",
@@ -212,7 +212,7 @@ const navSections: NavSection[] = [
         label: "Atividades de Campo",
         to: "/activities-cipavd",
         icon: <EventNoteIcon fontSize="small" />,
-        menuKey: "activities",
+        menuKey: "activities_cipavd",
       },
       {
         label: "Avisos",

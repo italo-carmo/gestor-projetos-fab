@@ -6,7 +6,8 @@ import { Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 
 const MENU_UPDATE_RESOURCES: Record<string, readonly string[]> = {
-  activities: ['activities', 'activity_comments'],
+  activities_smif: ['activities', 'activity_comments'],
+  activities_cipavd: ['activities', 'activity_comments'],
   smif_complaints: ['smif_complaints'],
   gsd_recruits: ['localities'],
   elos: ['elos'],
@@ -94,6 +95,24 @@ export class MenuUpdatesService {
                AND (
                  sbm."seenAt" IS NULL OR al."createdAt" > sbm."seenAt"
                )
+              LEFT JOIN "Activity" "act_scope"
+                ON (
+                  (al."resource" = 'activities' AND "act_scope"."id" = al."entityId")
+                  OR (
+                    al."resource" = 'activity_comments'
+                    AND "act_scope"."id" = NULLIF(btrim(al."diffJson"->>'activityId'), '')
+                  )
+                )
+              WHERE (
+                mr."menuKey" NOT IN ('activities_smif', 'activities_cipavd')
+                OR (
+                  "act_scope"."id" IS NOT NULL
+                  AND (
+                    (mr."menuKey" = 'activities_smif' AND "act_scope"."scope" = 'SMIF'::"ActivityScope")
+                    OR (mr."menuKey" = 'activities_cipavd' AND "act_scope"."scope" = 'CIPAVD'::"ActivityScope")
+                  )
+                )
+              )
             ),
             "direct_items" AS (
               SELECT
