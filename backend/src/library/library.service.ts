@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import sharp from 'sharp';
 import { resolveExistingLibraryDocumentPath } from './library-storage';
 import { AuditService } from '../audit/audit.service';
+import { selectTargetLocalities } from '../common/priority-localities';
 import { throwError } from '../common/http-error';
 import { PrismaService } from '../prisma/prisma.service';
 import { hasPermission } from '../rbac/role-access';
@@ -29,7 +30,7 @@ export class LibraryService {
     const scope = this.parseScope(scopeRaw);
     const localityCatalogType =
       scope === 'CIPAVD' ? LocalityCatalogType.CIPAVD : LocalityCatalogType.SMIF;
-    const [photos, documents, settings, localities] = await this.prisma.$transaction([
+    const [photos, documents, settings, rawLocalities] = await this.prisma.$transaction([
       this.prisma.libraryPhoto.findMany({
         where: { scope },
         include: {
@@ -53,10 +54,25 @@ export class LibraryService {
       }),
       this.prisma.locality.findMany({
         where: { catalogType: localityCatalogType },
-        select: { id: true, code: true, name: true },
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          recruitsFemaleCountCurrent: true,
+          updatedAt: true,
+        },
         orderBy: { name: 'asc' },
       }),
     ]);
+    const scopedLocalities =
+      scope === 'SMIF' ? selectTargetLocalities(rawLocalities) : rawLocalities;
+    const localities = scopedLocalities
+      .map((locality) => ({
+        id: locality.id,
+        code: locality.code,
+        name: locality.name,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
     return {
       scope,
       photos,
