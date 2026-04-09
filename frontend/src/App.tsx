@@ -25,6 +25,7 @@ import { BiSurveyDashboardPage } from "./pages/BiSurveyDashboardPage";
 import { BiDomesticViolenceDashboardPage } from "./pages/BiDomesticViolenceDashboardPage";
 import { BiRecruitsDashboardPage } from "./pages/BiRecruitsDashboardPage";
 import { BiBestPracticesCycleDashboardPage } from "./pages/BiBestPracticesCycleDashboardPage";
+import { BiCpcaMeetingDashboardPage } from "./pages/BiCpcaMeetingDashboardPage";
 import { MissionsPage } from "./pages/MissionsPage";
 import { SocialCommunicationPage } from "./pages/SocialCommunicationPage";
 import { CpcaCasesPage } from "./pages/CpcaCasesPage";
@@ -136,6 +137,16 @@ function App() {
                       allow={(user) => can(user, "bi", "view")}
                     >
                       <BiBestPracticesCycleDashboardPage />
+                    </RequireRoleAccess>
+                  }
+                />
+                <Route
+                  path="/dashboard/bi-encontro-cpca"
+                  element={
+                    <RequireRoleAccess
+                      allow={(user) => can(user, "bi", "view")}
+                    >
+                      <BiCpcaMeetingDashboardPage />
                     </RequireRoleAccess>
                   }
                 />

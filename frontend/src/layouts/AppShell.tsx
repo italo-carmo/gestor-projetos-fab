@@ -250,6 +250,12 @@ const navSections: NavSection[] = [
         icon: <InsightsRoundedIcon fontSize="small" />,
         menuKey: "bi",
       },
+      {
+        label: "Encontro CPCA",
+        to: "/dashboard/bi-encontro-cpca",
+        icon: <InsightsRoundedIcon fontSize="small" />,
+        menuKey: "bi",
+      },
     ],
   },
   {
@@ -434,6 +440,9 @@ export function AppShell({ children }: { children: ReactNode }) {
       return can(me, "bi", "view") && hasAnyRole(me, [ROLE_TI, ROLE_COMGEP]);
     }
     if (item.to === "/dashboard/bi-ciclo-boas-praticas") {
+      return can(me, "bi", "view");
+    }
+    if (item.to === "/dashboard/bi-encontro-cpca") {
       return can(me, "bi", "view");
     }
     if (item.to === "/smif-complaints") {

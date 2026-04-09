@@ -3977,3 +3977,93 @@ export function useUpdateBiBestPracticesCycleCardSetting() {
     },
   });
 }
+
+export function useBiCpcaMeetingDashboard(filters: Record<string, any>) {
+  return useQuery({
+    queryKey: qk.biCpcaMeetingDashboard(filters),
+    queryFn: async () =>
+      (await api.get("/bi/cpca-meeting/dashboard", { params: filters })).data,
+    staleTime: 15_000,
+  });
+}
+
+export function useBiCpcaMeetingResponses(filters: Record<string, any>) {
+  return useQuery({
+    queryKey: qk.biCpcaMeetingResponses(filters),
+    queryFn: async () =>
+      (await api.get("/bi/cpca-meeting/responses", { params: filters })).data,
+    staleTime: 5_000,
+  });
+}
+
+export function useBiCpcaMeetingImports(filters: Record<string, any>) {
+  return useQuery({
+    queryKey: qk.biCpcaMeetingImports(filters),
+    queryFn: async () =>
+      (await api.get("/bi/cpca-meeting/imports", { params: filters })).data,
+    staleTime: 10_000,
+  });
+}
+
+export function useBiCpcaMeetingCardSettings(enabled = true) {
+  return useQuery({
+    queryKey: qk.biCpcaMeetingCardSettings(),
+    queryFn: async () => (await api.get("/bi/cpca-meeting/card-settings")).data,
+    enabled,
+    staleTime: 20_000,
+  });
+}
+
+export function useImportBiCpcaMeeting() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { file: File; replace?: boolean }) => {
+      const form = new FormData();
+      form.append("file", args.file);
+      if (typeof args.replace === "boolean") {
+        form.append("replace", String(args.replace));
+      }
+      return (await api.post("/bi/cpca-meeting/import", form)).data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["biCpcaMeeting"] });
+    },
+  });
+}
+
+export function useDeleteBiCpcaMeetingResponses() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      ids?: string[];
+      allFiltered?: boolean;
+      from?: string;
+      to?: string;
+      q?: string;
+      combineMode?: "AND" | "OR";
+      columnFilters?: Record<string, string>;
+    }) => (await api.post("/bi/cpca-meeting/responses/delete", payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["biCpcaMeeting"] });
+    },
+  });
+}
+
+export function useUpdateBiCpcaMeetingCardSetting() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      cardId: string;
+      payload: { title?: string; description?: string | null };
+    }) =>
+      (
+        await api.put(
+          `/bi/cpca-meeting/card-settings/${encodeURIComponent(args.cardId)}`,
+          args.payload,
+        )
+      ).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["biCpcaMeeting"] });
+    },
+  });
+}

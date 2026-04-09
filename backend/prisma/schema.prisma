@@ -57,6 +57,8 @@ model User {
   biRecruitsImportBatches BiRecruitsImportBatch[]
   biBestPracticeCycleImportBatches BiBestPracticeCycleImportBatch[]
   biBestPracticeCycleCardSettings BiBestPracticeCycleCardSetting[] @relation("BiBestPracticeCycleCardSettingUpdatedBy")
+  biCpcaMeetingImportBatches BiCpcaMeetingImportBatch[]
+  biCpcaMeetingCardSettings BiCpcaMeetingCardSetting[] @relation("BiCpcaMeetingCardSettingUpdatedBy")
   cpcaCasesCreated CpcComplaintCase[] @relation("CpcComplaintCaseCreatedBy")
   cpcaCasesUpdated CpcComplaintCase[] @relation("CpcComplaintCaseUpdatedBy")
   cpcaCaseComments CpcComplaintComment[] @relation("CpcComplaintCommentAuthor")
@@ -1462,6 +1464,57 @@ model BiBestPracticeCycleCardSetting {
   updatedAt   DateTime @updatedAt
 
   updatedBy   User?    @relation("BiBestPracticeCycleCardSettingUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@index([updatedAt])
+}
+
+model BiCpcaMeetingImportBatch {
+  id            String                     @id @default(cuid())
+  fileName      String
+  format        BiImportFormat
+  sheetName     String?
+  columnsJson   Json?
+  totalRows     Int
+  insertedRows  Int
+  duplicateRows Int
+  invalidRows   Int
+  importedById  String?
+  importedAt    DateTime                   @default(now())
+
+  importedBy    User?                      @relation(fields: [importedById], references: [id], onDelete: SetNull)
+  responses     BiCpcaMeetingResponse[]
+
+  @@index([importedAt])
+  @@index([importedById, importedAt])
+}
+
+model BiCpcaMeetingResponse {
+  id          String                   @id @default(cuid())
+  batchId     String?
+  submittedAt DateTime?
+  answersJson Json?
+  rawPayload  Json?
+  sourceRow   Int?
+  sourceHash  String                   @unique
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+
+  batch       BiCpcaMeetingImportBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+
+  @@index([submittedAt])
+  @@index([batchId])
+}
+
+model BiCpcaMeetingCardSetting {
+  id          String   @id @default(cuid())
+  cardId      String   @unique
+  title       String
+  description String?
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  updatedBy   User?    @relation("BiCpcaMeetingCardSettingUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
 
   @@index([updatedAt])
 }

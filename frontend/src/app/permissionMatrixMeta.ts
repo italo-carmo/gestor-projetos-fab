@@ -292,8 +292,8 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     title: "Escolas",
     description: "Importacao e consulta de dados do modulo BI.",
     route: "/dashboard/bi",
-    routeAliases: ["/dashboard/bi-violencia-domestica", "/dashboard/bi-recrutas", "/dashboard/bi-ciclo-boas-praticas"],
-    sidebarItems: ["Escolas", "Violência Doméstica", "Recrutas", "Ciclo de Boas Práticas"],
+    routeAliases: ["/dashboard/bi-violencia-domestica", "/dashboard/bi-recrutas", "/dashboard/bi-ciclo-boas-praticas", "/dashboard/bi-encontro-cpca"],
+    sidebarItems: ["Escolas", "Violência Doméstica", "Recrutas", "Ciclo de Boas Práticas", "Encontro CPCA"],
   },
 };
 
