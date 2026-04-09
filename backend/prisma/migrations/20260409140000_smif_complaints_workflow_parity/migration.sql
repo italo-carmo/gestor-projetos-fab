@@ -39,13 +39,23 @@ WITH smif_permissions(resource, action, scope) AS (
     ('smif_complaints', 'comment', 'NATIONAL'),
     ('smif_complaints', 'delete', 'NATIONAL')
 )
-INSERT INTO "Permission" ("id", "resource", "action", "scope", "description")
+INSERT INTO "Permission" (
+  "id",
+  "resource",
+  "action",
+  "scope",
+  "description",
+  "createdAt",
+  "updatedAt"
+)
 SELECT
   concat('perm_', gen_random_uuid()::text),
   p.resource,
   p.action,
   p.scope::"PermissionScope",
-  concat(p.action, ' on ', p.resource, ' (', p.scope, ')')
+  concat(p.action, ' on ', p.resource, ' (', p.scope, ')'),
+  now(),
+  now()
 FROM smif_permissions p
 WHERE NOT EXISTS (
   SELECT 1
