@@ -85,8 +85,8 @@ WITH role_permission_targets(role_name, resource, action, scope) AS (
     ('COMGEP', 'smif_complaints', 'view', 'NATIONAL'),
     ('Comandante COMGEP', 'smif_complaints', 'view', 'NATIONAL')
 )
-INSERT INTO "RolePermission" ("roleId", "permissionId")
-SELECT r.id, p.id
+INSERT INTO "RolePermission" ("id", "roleId", "permissionId")
+SELECT concat('roleperm_', gen_random_uuid()::text), r.id, p.id
 FROM role_permission_targets t
 JOIN "Role" r
   ON r."name" = t.role_name
