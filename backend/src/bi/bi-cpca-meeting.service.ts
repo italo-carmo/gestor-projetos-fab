@@ -47,6 +47,7 @@ type ColumnMeta = {
   key: string;
   label: string;
   type: ColumnType;
+  questionNumber: number | null;
   options: string[];
   nonEmptyCount: number;
   uniqueCount: number;
@@ -481,6 +482,20 @@ export class BiCpcaMeetingService {
       ...this.buildTextList(filteredRows, column.key),
     }));
 
+    const question2Column = columns.find(
+      (column) =>
+        column.questionNumber === 2 &&
+        (column.type === 'CATEGORICAL' || column.type === 'MULTI_SELECT'),
+    );
+    const question2TrendByDay = question2Column
+      ? this.buildQuestionTrendByDay(filteredRows, question2Column)
+      : {
+          questionKey: null,
+          questionLabel: null,
+          options: [] as string[],
+          items: [] as Array<Record<string, string | number>>,
+        };
+
     const totalCells = filteredRows.length * columns.length;
     const filledCells = columns.reduce((sum, column) => {
       const count = filteredRows.reduce((acc: number, row: MeetingRow) => {
@@ -533,6 +548,7 @@ export class BiCpcaMeetingService {
       },
       charts: {
         categoricalDistributions,
+        question2TrendByDay,
       },
       textColumns: {
         freeTextLists,
@@ -553,6 +569,7 @@ export class BiCpcaMeetingService {
         key: column.key,
         label: column.label,
         type: column.type,
+        questionNumber: column.questionNumber,
       })),
     };
   }
@@ -652,7 +669,7 @@ export class BiCpcaMeetingService {
           : 0;
 
       const multi = this.isLikelyMultiSelect(label, allValues);
-      const forceCategorical = questionNumber === 4;
+      const forceCategorical = questionNumber === 2 || questionNumber === 4;
       const freeText = forceCategorical
         ? false
         : this.isLikelyFreeText(label, allValues, uniqueValues.size);
@@ -671,6 +688,7 @@ export class BiCpcaMeetingService {
         key,
         label,
         type,
+        questionNumber,
         options,
         nonEmptyCount: allValues.length,
         uniqueCount: uniqueValues.size,
@@ -753,6 +771,73 @@ export class BiCpcaMeetingService {
       totalResponses,
       displayed: Math.min(items.length, 25),
       items: items.slice(0, 25),
+    };
+  }
+
+  private buildQuestionTrendByDay(rows: MeetingRow[], column: ColumnMeta) {
+    const map = new Map<string, { total: number; counters: Map<string, number> }>();
+
+    for (const row of rows) {
+      const day = row.submittedAt
+        ? `${row.submittedAt.getFullYear()}-${String(
+            row.submittedAt.getMonth() + 1,
+          ).padStart(2, '0')}-${String(row.submittedAt.getDate()).padStart(2, '0')}`
+        : 'SEM_DATA';
+
+      const current =
+        map.get(day) ?? {
+          total: 0,
+          counters: new Map<string, number>(),
+        };
+
+      current.total += 1;
+      const option = this.cleanCell(row.answers[column.key]) ?? 'Não informado';
+      current.counters.set(option, (current.counters.get(option) ?? 0) + 1);
+      map.set(day, current);
+    }
+
+    const discovered = new Set<string>();
+    for (const value of map.values()) {
+      for (const option of value.counters.keys()) {
+        discovered.add(option);
+      }
+    }
+
+    const options = [...discovered].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+
+    const items = [...map.entries()]
+      .map(([day, value]) => {
+        const item: Record<string, number | string> = {
+          day,
+          dayLabel:
+            day === 'SEM_DATA'
+              ? 'Sem data'
+              : `${day.slice(8, 10)}/${day.slice(5, 7)}/${day.slice(0, 4)}`,
+          total: value.total,
+        };
+
+        for (const option of options) {
+          const count = value.counters.get(option) ?? 0;
+          item[`${option}__count`] = count;
+          item[`${option}__percent`] =
+            value.total > 0 ? Number(((count / value.total) * 100).toFixed(2)) : 0;
+        }
+
+        return item;
+      })
+      .sort((a, b) => {
+        const aDay = String(a.day);
+        const bDay = String(b.day);
+        if (aDay === 'SEM_DATA') return 1;
+        if (bDay === 'SEM_DATA') return -1;
+        return aDay.localeCompare(bDay, 'pt-BR');
+      });
+
+    return {
+      questionKey: column.key,
+      questionLabel: column.label,
+      options,
+      items,
     };
   }
 

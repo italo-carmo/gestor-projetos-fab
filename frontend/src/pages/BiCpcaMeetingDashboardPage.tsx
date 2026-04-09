@@ -39,6 +39,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  Legend,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -101,6 +102,17 @@ type CpcaMeetingDashboardResponse = {
       totalMentions: number;
       data: DistributionDatum[];
     }>;
+    question2TrendByDay: {
+      questionKey: string | null;
+      questionLabel: string | null;
+      options: string[];
+      items: Array<{
+        day: string;
+        dayLabel: string;
+        total: number;
+        [key: string]: string | number;
+      }>;
+    };
   };
   textColumns: {
     freeTextLists: Array<{
@@ -256,6 +268,11 @@ const FIXED_CARD_DEFAULTS: Record<string, EditableCardText> = {
     title: "Insights gerenciais",
     description:
       "Resumo dos principais sinais observados no recorte, com foco em concentração de respostas e campos discursivos.",
+  },
+  "chart-trend-q2": {
+    title: "Evolução das respostas",
+    description:
+      "Distribuição percentual diária da Q2: “Você se sente confiante para aplicar corretamente os procedimentos administrativos de apuração e acolhimento definidos na ICA 30-13/2024.”",
   },
   "list-imports": {
     title: "Histórico de importações",
@@ -754,10 +771,13 @@ export function BiCpcaMeetingDashboardPage() {
   const kpiCategoricalText = getCardText("kpi-categorical");
   const kpiTextText = getCardText("kpi-text");
   const insightMainText = getCardText("insight-main");
+  const trendText = getCardText("chart-trend-q2");
   const importsText = getCardText("list-imports");
   const responsesText = getCardText("list-responses");
 
   const visibleColumns = (dashboard.columnsMeta ?? []).slice(0, 6);
+  const trendOptions = dashboard.charts.question2TrendByDay?.options ?? [];
+  const trendItems = dashboard.charts.question2TrendByDay?.items ?? [];
 
   return (
     <Box
@@ -1138,6 +1158,71 @@ export function BiCpcaMeetingDashboardPage() {
           </Card>
         </Grid>
       </Grid>
+
+      <Card sx={{ mb: 1.2, ...cardSx }}>
+        <CardContent>
+          <Stack direction="row" justifyContent="space-between" alignItems="center" mb={0.5}>
+            <Typography variant="subtitle1" fontWeight={700}>
+              {trendText.title}
+            </Typography>
+            {isTiProfile ? (
+              <MuiTooltip title="Editar título/descrição">
+                <IconButton size="small" onClick={() => openCardEditor("chart-trend-q2")}>
+                  <EditOutlinedIcon fontSize="small" />
+                </IconButton>
+              </MuiTooltip>
+            ) : null}
+          </Stack>
+          <Typography variant="caption" sx={{ color: CPCA_BI_PALETTE.muted }}>
+            {trendText.description}
+          </Typography>
+
+          {trendItems.length === 0 ? (
+            <Alert severity="info" sx={{ mt: 1 }}>
+              Sem dados para evolução das respostas da Q2.
+            </Alert>
+          ) : (
+            <Box sx={{ mt: 1.1 }}>
+              <ResponsiveContainer width="100%" height={230}>
+                <BarChart data={trendItems} barCategoryGap="30%">
+                  <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
+                  <XAxis dataKey="dayLabel" stroke={chartAxisStroke} tick={axisTickStyle} />
+                  <YAxis
+                    stroke={chartAxisStroke}
+                    tick={axisTickStyle}
+                    domain={[0, 100]}
+                    tickFormatter={(value) => `${value}%`}
+                  />
+                  <Tooltip
+                    formatter={(value: number, name: string, payload: any) => {
+                      const option = String(name ?? "");
+                      const count = Number(payload?.payload?.[`${option}__count`] ?? 0);
+                      return [`${Number(value ?? 0).toFixed(2)}%`, `${option} • ${count} resp.`];
+                    }}
+                    labelFormatter={(label, payload) => {
+                      const total = Number(payload?.[0]?.payload?.total ?? 0);
+                      return `${label} (n=${total})`;
+                    }}
+                    contentStyle={tooltipContentStyle}
+                    labelStyle={tooltipLabelStyle}
+                  />
+                  <Legend wrapperStyle={{ color: CPCA_BI_PALETTE.text }} />
+                  {trendOptions.map((option, index) => (
+                    <Bar
+                      key={option}
+                      dataKey={`${option}__percent`}
+                      name={option}
+                      stackId="q2-trend"
+                      fill={CHART_COLORS[index % CHART_COLORS.length]}
+                      radius={index === trendOptions.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
+                    />
+                  ))}
+                </BarChart>
+              </ResponsiveContainer>
+            </Box>
+          )}
+        </CardContent>
+      </Card>
 
       <Card sx={{ mb: 1.2, ...cardSx }}>
         <CardContent>
