@@ -471,7 +471,13 @@ function CipavdLocalitiesTab() {
         onClose={() => setDrawerOpen(false)}
         PaperProps={{ sx: { width: { xs: '100%', md: 380 } } }}
       >
-        <Box p={3} display="flex" flexDirection="column" gap={2}>
+        <Box
+          p={3}
+          display="flex"
+          flexDirection="column"
+          gap={2}
+          sx={{ mt: { xs: 9, md: 10 } }}
+        >
           <Typography variant="h6">{editing ? 'Editar localidade CIPAVD' : 'Nova localidade CIPAVD'}</Typography>
           <TextField
             size="small"
