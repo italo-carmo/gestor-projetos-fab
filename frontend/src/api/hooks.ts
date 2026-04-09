@@ -2339,10 +2339,10 @@ export function useDeleteLessonLearnedType() {
 }
 
 /** Library */
-export function useLibrary() {
+export function useLibrary(filters: Record<string, any> = {}) {
   return useQuery({
-    queryKey: qk.library,
-    queryFn: async () => (await api.get("/library")).data,
+    queryKey: qk.library(filters),
+    queryFn: async () => (await api.get("/library", { params: filters })).data,
     staleTime: 10_000,
   });
 }
@@ -2352,7 +2352,7 @@ export function useUpdateLibrarySettings() {
   return useMutation({
     mutationFn: async (payload: { carouselIntervalSeconds: number }) =>
       (await api.put("/library/settings", payload)).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: qk.library }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["library"] }),
   });
 }
 
@@ -2363,18 +2363,20 @@ export function useUploadLibraryPhoto() {
       file: File;
       title?: string;
       localityId?: string;
+      scope?: "SMIF" | "CIPAVD";
     }) => {
       const formData = new FormData();
       formData.append("file", args.file);
       if (args.title) formData.append("title", args.title);
       if (args.localityId) formData.append("localityId", args.localityId);
+      if (args.scope) formData.append("scope", args.scope);
       return (
         await api.post("/library/photos/upload", formData, {
           headers: { "Content-Type": "multipart/form-data" },
         })
       ).data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: qk.library }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["library"] }),
   });
 }
 
@@ -2387,9 +2389,10 @@ export function useUpdateLibraryPhoto() {
         title?: string;
         sortOrder?: number;
         localityId?: string | null;
+        scope?: "SMIF" | "CIPAVD";
       };
     }) => (await api.put(`/library/photos/${args.id}`, args.payload)).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: qk.library }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["library"] }),
   });
 }
 
@@ -2398,24 +2401,29 @@ export function useDeleteLibraryPhoto() {
   return useMutation({
     mutationFn: async (id: string) =>
       (await api.delete(`/library/photos/${id}`)).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: qk.library }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["library"] }),
   });
 }
 
 export function useUploadLibraryDocument() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (args: { file: File; title?: string }) => {
+    mutationFn: async (args: {
+      file: File;
+      title?: string;
+      scope?: "SMIF" | "CIPAVD";
+    }) => {
       const formData = new FormData();
       formData.append("file", args.file);
       if (args.title) formData.append("title", args.title);
+      if (args.scope) formData.append("scope", args.scope);
       return (
         await api.post("/library/documents/upload", formData, {
           headers: { "Content-Type": "multipart/form-data" },
         })
       ).data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: qk.library }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["library"] }),
   });
 }
 
@@ -2424,7 +2432,7 @@ export function useUpdateLibraryDocument() {
   return useMutation({
     mutationFn: async (args: { id: string; payload: { title?: string } }) =>
       (await api.put(`/library/documents/${args.id}`, args.payload)).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: qk.library }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["library"] }),
   });
 }
 
@@ -2433,7 +2441,7 @@ export function useDeleteLibraryDocument() {
   return useMutation({
     mutationFn: async (id: string) =>
       (await api.delete(`/library/documents/${id}`)).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: qk.library }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["library"] }),
   });
 }
 

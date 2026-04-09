@@ -12,11 +12,13 @@ import {
   MenuItem,
   Pagination,
   Stack,
+  Tab,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableRow,
+  Tabs,
   TextField,
   Tooltip,
   Typography,
@@ -35,7 +37,6 @@ import {
   useDeleteLibraryDocument,
   useDeleteLibraryPhoto,
   useLibrary,
-  useLocalities,
   useMe,
   useUpdateLibraryDocument,
   useUpdateLibraryPhoto,
@@ -48,7 +49,6 @@ import { api } from "../api/client";
 import { parseApiError } from "../app/apiErrors";
 import { can } from "../app/rbac";
 import { useToast } from "../app/toast";
-import { selectTargetLocalities } from "../constants/localities";
 import { EmptyState } from "../components/states/EmptyState";
 import { ErrorState } from "../components/states/ErrorState";
 import { SkeletonState } from "../components/states/SkeletonState";
@@ -56,6 +56,7 @@ import { SkeletonState } from "../components/states/SkeletonState";
 type LibraryPhoto = {
   id: string;
   title: string;
+  scope?: "SMIF" | "CIPAVD";
   fileUrl?: string | null; // Mantido para compatibilidade
   imageData?: string; // Base64 da imagem
   mimeType?: string | null; // Tipo MIME (ex: image/jpeg)
@@ -71,10 +72,29 @@ type LibraryPhoto = {
 type LibraryDocument = {
   id: string;
   title: string;
+  scope?: "SMIF" | "CIPAVD";
   fileName: string;
   fileUrl: string;
   fileSize?: number | null;
   createdAt: string;
+};
+
+type LibraryScope = "SMIF" | "CIPAVD";
+
+type LibraryLocality = {
+  id: string;
+  name: string;
+  code: string;
+};
+
+type ActivityWithReport = {
+  id: string;
+  title: string;
+  displayTitle: string;
+  locality: string;
+  eventDate?: string | null;
+  reportDate?: string | null;
+  createdAt?: string | null;
 };
 
 function toApiUrl(path: string) {
@@ -145,8 +165,8 @@ function getDocumentType(value: { fileName?: string | null; title?: string | nul
 export function LibraryPage() {
   const toast = useToast();
   const { data: me } = useMe();
-  const libraryQuery = useLibrary();
-  const localitiesQuery = useLocalities();
+  const [activeScope, setActiveScope] = useState<LibraryScope>("SMIF");
+  const libraryQuery = useLibrary({ scope: activeScope });
   const updateSettings = useUpdateLibrarySettings();
   const uploadPhoto = useUploadLibraryPhoto();
   const updatePhoto = useUpdateLibraryPhoto();
@@ -154,7 +174,10 @@ export function LibraryPage() {
   const uploadDocument = useUploadLibraryDocument();
   const updateDocument = useUpdateLibraryDocument();
   const deleteDocument = useDeleteLibraryDocument();
-  const activitiesQuery = useActivities({ pageSize: '1000' }); // Get all activities to filter those with reports
+  const activitiesQuery = useActivities({
+    pageSize: "1000",
+    scope: activeScope,
+  });
   const canManage =
     can(me, "library", "create") ||
     can(me, "library", "update") ||
@@ -171,11 +194,19 @@ export function LibraryPage() {
   );
   
   // Filter activities that have reports
-  const activitiesWithReports = useMemo(() => {
-    const items = (activitiesQuery.data?.items ?? []) as any[];
+  const activitiesWithReports = useMemo<ActivityWithReport[]>(() => {
+    const items = (activitiesQuery.data?.items ?? []) as Array<{
+      id: string;
+      title?: string | null;
+      eventDate?: string | null;
+      createdAt?: string | null;
+      report?: { date?: string | null } | null;
+      locality?: { name?: string | null; code?: string | null } | null;
+      activityType?: { name?: string | null } | null;
+    }>;
     return items.filter((activity) => activity.report != null).map((activity) => ({
       id: activity.id,
-      title: activity.title,
+      title: String(activity.title ?? ""),
       displayTitle:
         String(activity.activityType?.name ?? '').trim() && String(activity.title ?? '').trim()
           ? `${String(activity.activityType?.name ?? '').trim()} - ${String(activity.title ?? '').trim()}`
@@ -189,14 +220,18 @@ export function LibraryPage() {
   
   const intervalFromApi = Number(libraryQuery.data?.settings?.carouselIntervalSeconds ?? 5);
 
-  const localities = useMemo(() => {
-    const items = (localitiesQuery.data?.items ?? []) as any[];
-    return selectTargetLocalities(items).map((loc: any) => ({
+  const localities = useMemo<LibraryLocality[]>(() => {
+    const items = (libraryQuery.data?.localities ?? []) as Array<{
+      id: string;
+      name?: string | null;
+      code?: string | null;
+    }>;
+    return items.map((loc) => ({
       id: String(loc.id),
       name: String(loc.name ?? loc.code ?? loc.id),
       code: String(loc.code ?? ""),
     }));
-  }, [localitiesQuery.data]);
+  }, [libraryQuery.data?.localities]);
 
   const [intervalSeconds, setIntervalSeconds] = useState(5);
   const [carouselIndicesByLocality, setCarouselIndicesByLocality] = useState<Record<string, number>>({});
@@ -242,11 +277,20 @@ export function LibraryPage() {
   }, [intervalFromApi]);
 
   // Refetch when drawer closes to ensure data is fresh
+  const { refetch: refetchLibrary } = libraryQuery;
   useEffect(() => {
     if (!drawerOpen) {
-      libraryQuery.refetch();
+      refetchLibrary();
     }
-  }, [drawerOpen]);
+  }, [drawerOpen, refetchLibrary]);
+
+  useEffect(() => {
+    setSelectedPhotoIds([]);
+    setEditingLocalityId("");
+    setBulkLocalityId("");
+    setNewPhotoLocalityId("");
+    setDrawerOpen(false);
+  }, [activeScope]);
 
   useEffect(() => {
     const validIds = new Set(allPhotos.map((photo) => photo.id));
@@ -275,7 +319,7 @@ export function LibraryPage() {
       for (const update of updates) {
         await updatePhoto.mutateAsync({
           id: update.id,
-          payload: { sortOrder: update.sortOrder },
+          payload: { sortOrder: update.sortOrder, scope: activeScope },
         });
       }
       toast.push({ message: "Ordem das fotos atualizada.", severity: "success" });
@@ -318,7 +362,7 @@ export function LibraryPage() {
       for (const photoId of selectedIdsForBulkAction) {
         await updatePhoto.mutateAsync({
           id: photoId,
-          payload: { localityId: bulkLocalityId || null },
+          payload: { localityId: bulkLocalityId || null, scope: activeScope },
         });
       }
       toast.push({ message: "Localidade atualizada em massa.", severity: "success" });
@@ -519,6 +563,12 @@ export function LibraryPage() {
     return <ErrorState error={libraryQuery.error} onRetry={() => libraryQuery.refetch()} />;
   }
 
+  const scopeLabel = activeScope === "CIPAVD" ? "CIPAVD" : "SMIF";
+  const scopeSubtitle =
+    activeScope === "CIPAVD"
+      ? "Acervo da frente CIPAVD com publicações, galeria e relatórios de campo dedicados."
+      : "Acervo oficial da frente SMIF com galeria de fotos, publicações e relatórios institucionais.";
+
   return (
     <Box sx={{ overflowX: "clip" }}>
       <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", md: "center" }} gap={1} mb={1.4}>
@@ -529,15 +579,73 @@ export function LibraryPage() {
             </Typography>
           </Stack>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            Acervo oficial da comissão com galeria de fotos e publicações institucionais.
+            {scopeSubtitle}
           </Typography>
         </Box>
       </Stack>
 
+      <Card
+        sx={{
+          mb: 2,
+          borderRadius: 3,
+          border: "1px solid rgba(17,66,89,0.12)",
+          background:
+            "linear-gradient(165deg, rgba(255,255,255,1) 0%, rgba(226,241,248,0.62) 100%)",
+        }}
+      >
+        <CardContent sx={{ pb: "12px !important" }}>
+          <Stack
+            direction={{ xs: "column", md: "row" }}
+            justifyContent="space-between"
+            alignItems={{ xs: "flex-start", md: "center" }}
+            gap={1}
+          >
+            <Box>
+              <Typography variant="subtitle2" color="text.secondary">
+                Escopo da biblioteca
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                Exibindo conteúdo de {scopeLabel}
+              </Typography>
+            </Box>
+            <Tabs
+              value={activeScope}
+              onChange={(_event, value: LibraryScope) => {
+                setActiveScope(value);
+                setReportPage(1);
+              }}
+              sx={{
+                minHeight: 34,
+                "& .MuiTabs-indicator": { display: "none" },
+                "& .MuiTab-root": {
+                  minHeight: 34,
+                  py: 0.6,
+                  px: 1.8,
+                  borderRadius: 999,
+                  textTransform: "none",
+                  fontWeight: 700,
+                  color: "text.secondary",
+                },
+                "& .Mui-selected": {
+                  color: "primary.main !important",
+                  bgcolor: "rgba(25,118,210,0.11)",
+                },
+              }}
+            >
+              <Tab value="SMIF" label="SMIF" />
+              <Tab value="CIPAVD" label="CIPAVD" />
+            </Tabs>
+          </Stack>
+        </CardContent>
+      </Card>
+
       <Card sx={{ mb: 2 }}>
         <CardContent>
           {localities.length === 0 ? (
-            <EmptyState title="Nenhuma localidade disponível" description="Cadastre localidade SMIF para gerar novos carrosséis." />
+            <EmptyState
+              title="Nenhuma localidade disponível"
+              description={`Cadastre localidade ${scopeLabel} para gerar novos carrosséis.`}
+            />
           ) : (
             <Box sx={{ position: 'relative' }}>
               <Box
@@ -732,7 +840,7 @@ export function LibraryPage() {
         <CardContent>
           <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", md: "center" }} gap={1} sx={{ mb: 1 }}>
             <Typography variant="h6" fontWeight={700}>
-              Publicações da Comissão
+              Publicações - {scopeLabel}
           </Typography>
             {canManage && (
               <Button
@@ -751,11 +859,14 @@ export function LibraryPage() {
             )}
           </Stack>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1.4 }}>
-            Cartilhas, normativos e demais materiais institucionais para consulta rápida.
+            Cartilhas, normativos e materiais institucionais da frente {scopeLabel}.
           </Typography>
 
           {documents.length === 0 ? (
-            <EmptyState title="Nenhuma publicação" description="Inclua as publicações produzidas pela comissão." />
+            <EmptyState
+              title="Nenhuma publicação"
+              description={`Inclua as publicações produzidas para ${scopeLabel}.`}
+            />
           ) : (
             <Table size="small">
               <TableHead>
@@ -823,11 +934,11 @@ export function LibraryPage() {
         <CardContent>
           <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", md: "center" }} gap={1} sx={{ mb: 1 }}>
             <Typography variant="h6" fontWeight={700}>
-              Relatórios das Atividades
+              Relatórios das Atividades - {scopeLabel}
             </Typography>
           </Stack>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1.4 }}>
-            Relatórios completos das atividades de campo realizadas pela comissão.
+            Relatórios completos das atividades de campo da frente {scopeLabel}.
           </Typography>
 
           {activitiesQuery.isLoading ? (
@@ -939,14 +1050,16 @@ export function LibraryPage() {
             <Stack spacing={3}>
               <Box>
                 <Typography variant="h6" fontWeight={700} sx={{ mb: 0.5 }}>
-                  {drawerMode === "photos" ? "Gerenciar Fotos da Biblioteca" : "Gerenciar Publicações da Comissão"}
+                  {drawerMode === "photos"
+                    ? `Gerenciar Fotos - ${scopeLabel}`
+                    : `Gerenciar Publicações - ${scopeLabel}`}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                   {drawerMode === "photos"
                     ? editingLocalityId
                       ? `Gerencie as fotos de ${localities.find((loc) => loc.id === editingLocalityId)?.name ?? "localidade selecionada"}.`
-                      : "Configure o carrossel e gerencie as fotos."
-                    : "Gerencie títulos e arquivos das publicações institucionais."}
+                      : `Configure o carrossel e gerencie as fotos de ${scopeLabel}.`
+                    : `Gerencie títulos e arquivos das publicações de ${scopeLabel}.`}
                 </Typography>
               </Box>
 
@@ -1061,6 +1174,7 @@ export function LibraryPage() {
                                 file,
                                 title: files.length === 1 ? title : undefined, // Só usa título se for uma foto só
                                 localityId,
+                                scope: activeScope,
                               });
                               successCount++;
                             } catch (error) {
@@ -1228,6 +1342,7 @@ export function LibraryPage() {
                                             payload: {
                                               title: titleDraft.trim(),
                                               localityId: localityDraft || null,
+                                              scope: activeScope,
                                             },
                                           });
                                           toast.push({ message: "Foto atualizada.", severity: "success" });
@@ -1321,6 +1436,7 @@ export function LibraryPage() {
                             await uploadDocument.mutateAsync({
                               file,
                               title: newDocumentTitle.trim() || undefined,
+                              scope: activeScope,
                             });
                             setNewDocumentTitle("");
                             toast.push({ message: "Publicação adicionada.", severity: "success" });
@@ -1338,7 +1454,10 @@ export function LibraryPage() {
                   </Stack>
 
                   {documents.length === 0 ? (
-                    <EmptyState title="Nenhuma publicação" description="Inclua as publicações produzidas pela comissão." />
+                    <EmptyState
+                      title="Nenhuma publicação"
+                      description={`Inclua as publicações produzidas para ${scopeLabel}.`}
+                    />
                   ) : (
                     <Table size="small">
                       <TableHead>

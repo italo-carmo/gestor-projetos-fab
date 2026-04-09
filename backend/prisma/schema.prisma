@@ -862,6 +862,7 @@ model SocialCommunicationHighlight {
 model LibraryPhoto {
   id          String   @id @default(cuid())
   title       String
+  scope       ActivityScope @default(SMIF)
   fileUrl     String?  // Mantido para compatibilidade, mas não mais usado
   storageKey  String?  // Mantido para compatibilidade, mas não mais usado
   imageData   String   @db.Text // Base64 da imagem
@@ -876,12 +877,14 @@ model LibraryPhoto {
   createdBy   User?     @relation("LibraryPhotoCreator", fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([sortOrder, createdAt])
+  @@index([scope, sortOrder, createdAt])
   @@index([localityId])
 }
 
 model LibraryDocument {
   id          String   @id @default(cuid())
   title       String
+  scope       ActivityScope @default(SMIF)
   fileName    String
   fileUrl     String
   storageKey  String?
@@ -894,6 +897,7 @@ model LibraryDocument {
   createdBy   User?    @relation("LibraryDocumentCreator", fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([createdAt])
+  @@index([scope, createdAt])
 }
 
 model LibrarySetting {

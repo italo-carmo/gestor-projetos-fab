@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { LocalityCatalogType } from '@prisma/client';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import sharp from 'sharp';
@@ -15,6 +16,7 @@ const MAX_IMAGE_WIDTH = 1920;
 const MAX_IMAGE_HEIGHT = 1080;
 const JPEG_QUALITY = 80;
 const PNG_QUALITY = 80;
+type LibraryScope = 'SMIF' | 'CIPAVD';
 
 @Injectable()
 export class LibraryService {
@@ -23,30 +25,43 @@ export class LibraryService {
     private readonly audit: AuditService,
   ) {}
 
-  async getData() {
-    const [photos, documents, settings] = await this.prisma.$transaction([
+  async getData(scopeRaw?: string) {
+    const scope = this.parseScope(scopeRaw);
+    const localityCatalogType =
+      scope === 'CIPAVD' ? LocalityCatalogType.CIPAVD : LocalityCatalogType.SMIF;
+    const [photos, documents, settings, localities] = await this.prisma.$transaction([
       this.prisma.libraryPhoto.findMany({
+        where: { scope },
         include: {
           locality: {
             select: {
               id: true,
               code: true,
               name: true,
+              catalogType: true,
             },
           },
         },
         orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
       }),
       this.prisma.libraryDocument.findMany({
+        where: { scope },
         orderBy: [{ createdAt: 'desc' }],
       }),
       this.prisma.librarySetting.findFirst({
         orderBy: { createdAt: 'asc' },
       }),
+      this.prisma.locality.findMany({
+        where: { catalogType: localityCatalogType },
+        select: { id: true, code: true, name: true },
+        orderBy: { name: 'asc' },
+      }),
     ]);
     return {
+      scope,
       photos,
       documents,
+      localities,
       settings: {
         carouselIntervalSeconds: Number(settings?.carouselIntervalSeconds ?? 5),
       },
@@ -99,7 +114,7 @@ export class LibraryService {
 
   async createPhoto(
     file: Express.Multer.File,
-    payload: { title?: string; localityId?: string },
+    payload: { title?: string; localityId?: string; scope?: string },
     user?: RbacUser,
   ) {
     this.ensureEditorAccess(user, 'create');
@@ -188,17 +203,21 @@ export class LibraryService {
         // Ignore cleanup errors
       }
 
+      const title = String(payload.title ?? '').trim();
+      const localityId = String(payload.localityId ?? '').trim() || null;
+      const scope = this.parseScope(payload.scope);
       const currentMaxSortOrder = await this.prisma.libraryPhoto.aggregate({
+        where: { scope },
         _max: { sortOrder: true },
       });
       const nextSortOrder =
         Number(currentMaxSortOrder._max.sortOrder ?? -1) + 1;
-      const title = String(payload.title ?? '').trim();
-      const localityId = String(payload.localityId ?? '').trim() || null;
+      await this.assertLocalityForScope(localityId, scope);
 
       const created = await this.prisma.libraryPhoto.create({
         data: {
           title,
+          scope,
           imageData: base64Data,
           mimeType,
           fileUrl: null, // No longer used
@@ -215,6 +234,7 @@ export class LibraryService {
         entityId: created.id,
         diffJson: {
           title: created.title,
+          scope: created.scope,
           sortOrder: created.sortOrder,
           localityId: created.localityId,
         },
@@ -240,7 +260,12 @@ export class LibraryService {
 
   async updatePhoto(
     id: string,
-    payload: { title?: string; sortOrder?: number; localityId?: string | null },
+    payload: {
+      title?: string;
+      sortOrder?: number;
+      localityId?: string | null;
+      scope?: string;
+    },
     user?: RbacUser,
   ) {
     this.ensureEditorAccess(user, 'update');
@@ -262,11 +287,17 @@ export class LibraryService {
         : payload.localityId === null || payload.localityId === ''
           ? null
           : String(payload.localityId).trim() || null;
+    const nextScope =
+      payload.scope === undefined
+        ? (current.scope as LibraryScope)
+        : this.parseScope(payload.scope);
+    await this.assertLocalityForScope(nextLocalityId, nextScope);
     const updated = await this.prisma.libraryPhoto.update({
       where: { id },
       data: {
         title: nextTitle,
         sortOrder: nextSortOrder,
+        scope: nextScope,
         localityId: nextLocalityId,
       },
     });
@@ -277,6 +308,7 @@ export class LibraryService {
       entityId: updated.id,
       diffJson: {
         title: updated.title,
+        scope: updated.scope,
         sortOrder: updated.sortOrder,
         localityId: updated.localityId,
       },
@@ -304,7 +336,7 @@ export class LibraryService {
 
   async createDocument(
     file: Express.Multer.File,
-    payload: { title?: string },
+    payload: { title?: string; scope?: string },
     user?: RbacUser,
   ) {
     this.ensureEditorAccess(user, 'create');
@@ -313,9 +345,11 @@ export class LibraryService {
     }
     const title =
       String(payload.title ?? '').trim() || file.originalname || 'Documento';
+    const scope = this.parseScope(payload.scope);
     const created = await this.prisma.libraryDocument.create({
       data: {
         title,
+        scope,
         fileName: file.originalname || file.filename,
         fileUrl: `/library/uploads/documents/${file.filename}`,
         storageKey: file.filename,
@@ -329,7 +363,11 @@ export class LibraryService {
       resource: 'library',
       action: 'create_document',
       entityId: created.id,
-      diffJson: { title: created.title, fileName: created.fileName },
+      diffJson: {
+        title: created.title,
+        fileName: created.fileName,
+        scope: created.scope,
+      },
     });
     return created;
   }
@@ -399,5 +437,37 @@ export class LibraryService {
     });
     if (!document) throwError('NOT_FOUND');
     return document;
+  }
+
+  private parseScope(value?: string | null): LibraryScope {
+    const normalized = String(value ?? '')
+      .trim()
+      .toUpperCase();
+    return normalized === 'CIPAVD' ? 'CIPAVD' : 'SMIF';
+  }
+
+  private async assertLocalityForScope(
+    localityId: string | null,
+    scope: LibraryScope,
+  ) {
+    if (!localityId) return;
+    const locality = await this.prisma.locality.findUnique({
+      where: { id: localityId },
+      select: { id: true, catalogType: true },
+    });
+    if (!locality) {
+      throwError('VALIDATION_ERROR', {
+        field: 'localityId',
+        reason: 'invalid',
+      });
+    }
+    const expectedCatalogType =
+      scope === 'CIPAVD' ? LocalityCatalogType.CIPAVD : LocalityCatalogType.SMIF;
+    if (locality.catalogType !== expectedCatalogType) {
+      throwError('VALIDATION_ERROR', {
+        field: 'localityId',
+        reason: 'scope_mismatch',
+      });
+    }
   }
 }

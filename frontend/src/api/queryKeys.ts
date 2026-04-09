@@ -46,7 +46,7 @@ export const qk = {
   lessonsLearned: (filters: Record<string, any>) =>
     ["lessonsLearned", filters] as const,
   lessonLearnedTypes: ["lessonLearnedTypes"] as const,
-  library: ["library"] as const,
+  library: (filters: Record<string, any>) => ["library", filters] as const,
   meetings: (filters: Record<string, any>) => ["meetings", filters] as const,
   checklists: (filters: Record<string, any>) =>
     ["checklists", filters] as const,

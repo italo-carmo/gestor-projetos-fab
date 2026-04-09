@@ -459,6 +459,7 @@ export class BiGsdEvaluationService {
 
     const latestColumns = this.parseColumnsJson(latestImport?.columnsJson);
     const columns = this.buildColumnsMeta(allRows, filteredRows, latestColumns);
+    const localityKey = this.detectObservedLocalityKey(columns);
 
     const categoricalColumns = columns.filter(
       (item) => item.type === 'CATEGORICAL' || item.type === 'MULTI_SELECT',
@@ -466,7 +467,11 @@ export class BiGsdEvaluationService {
     const textColumns = columns.filter((item) => item.type === 'FREE_TEXT');
 
     const categoricalDistributions = categoricalColumns.map((column) => {
-      const distribution = this.buildDistribution(filteredRows, column);
+      const distribution = this.buildDistribution(
+        filteredRows,
+        column,
+        localityKey,
+      );
       return {
         key: column.key,
         label: column.label,
@@ -685,21 +690,39 @@ export class BiGsdEvaluationService {
     return columns;
   }
 
-  private buildDistribution(rows: MeetingRow[], column: ColumnMeta) {
+  private buildDistribution(
+    rows: MeetingRow[],
+    column: ColumnMeta,
+    localityKey: string | null,
+  ) {
     const counter = new Map<string, number>();
+    const localitiesByOption = new Map<string, Set<string>>();
 
     for (const row of rows) {
       const raw = this.cleanCell(row.answers[column.key]);
       if (!raw) continue;
+      const localityValue = localityKey
+        ? this.cleanCell(row.answers[localityKey])
+        : null;
 
       if (column.type === 'MULTI_SELECT') {
         for (const token of this.splitMultiValues(raw, true)) {
           counter.set(token, (counter.get(token) ?? 0) + 1);
+          if (localityValue) {
+            const localities = localitiesByOption.get(token) ?? new Set<string>();
+            localities.add(localityValue);
+            localitiesByOption.set(token, localities);
+          }
         }
         continue;
       }
 
       counter.set(raw, (counter.get(raw) ?? 0) + 1);
+      if (localityValue) {
+        const localities = localitiesByOption.get(raw) ?? new Set<string>();
+        localities.add(localityValue);
+        localitiesByOption.set(raw, localities);
+      }
     }
 
     const totalMentions = Array.from(counter.values()).reduce(
@@ -713,6 +736,9 @@ export class BiGsdEvaluationService {
         count,
         percent:
           totalMentions > 0 ? Number(((count / totalMentions) * 100).toFixed(2)) : 0,
+        localities: Array.from(localitiesByOption.get(label) ?? []).sort((a, b) =>
+          a.localeCompare(b, 'pt-BR'),
+        ),
       }))
       .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
       .slice(0, 20);
@@ -721,6 +747,31 @@ export class BiGsdEvaluationService {
       totalMentions,
       data,
     };
+  }
+
+  private detectObservedLocalityKey(columns: ColumnMeta[]) {
+    let bestKey: string | null = null;
+    let bestScore = 0;
+
+    for (const column of columns) {
+      const keyNorm = this.normalizeForMatch(column.key);
+      const labelNorm = this.normalizeForMatch(column.label);
+      const combined = `${keyNorm}|${labelNorm}`;
+      let score = 0;
+
+      if (combined.includes('OMOBSERVADA')) score = 100;
+      else if (keyNorm === 'OM' || labelNorm === 'OM') score = 80;
+      else if (combined.includes('ORGANIZACAOMILITAR')) score = 60;
+      else if (combined.includes('LOCALIDADE')) score = 50;
+      else if (combined.includes('UNIDADE')) score = 40;
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestKey = column.key;
+      }
+    }
+
+    return bestScore > 0 ? bestKey : null;
   }
 
   private buildTextList(rows: MeetingRow[], key: string) {

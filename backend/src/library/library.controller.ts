@@ -6,6 +6,7 @@ import {
   Param,
   Post,
   Put,
+  Query,
   Res,
   UploadedFile,
   UseFilters,
@@ -51,8 +52,8 @@ export class LibraryController {
 
   @Get()
   @RequirePermission('library', 'view')
-  list() {
-    return this.library.getData();
+  list(@Query('scope') scope: string | undefined) {
+    return this.library.getData(scope);
   }
 
   @Put('settings')
@@ -90,7 +91,8 @@ export class LibraryController {
   @UseFilters(MulterExceptionFilter)
   uploadPhoto(
     @UploadedFile() file: Express.Multer.File,
-    @Body() body: { title?: string; localityId?: string },
+    @Body()
+    body: { title?: string; localityId?: string; scope?: string },
     @CurrentUser() user: RbacUser,
   ) {
     return this.library.createPhoto(file, body, user);
@@ -101,7 +103,12 @@ export class LibraryController {
   updatePhoto(
     @Param('id') id: string,
     @Body()
-    body: { title?: string; sortOrder?: number; localityId?: string | null },
+    body: {
+      title?: string;
+      sortOrder?: number;
+      localityId?: string | null;
+      scope?: string;
+    },
     @CurrentUser() user: RbacUser,
   ) {
     return this.library.updatePhoto(id, body, user);
@@ -132,7 +139,7 @@ export class LibraryController {
   @UseFilters(MulterExceptionFilter)
   uploadDocument(
     @UploadedFile() file: Express.Multer.File,
-    @Body() body: { title?: string },
+    @Body() body: { title?: string; scope?: string },
     @CurrentUser() user: RbacUser,
   ) {
     return this.library.createDocument(file, body, user);

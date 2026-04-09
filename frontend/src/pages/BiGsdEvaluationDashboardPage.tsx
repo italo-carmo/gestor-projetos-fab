@@ -70,6 +70,7 @@ type DistributionDatum = {
   label: string;
   count: number;
   percent: number;
+  localities?: string[];
 };
 
 type CardSetting = {
@@ -167,6 +168,14 @@ type EditableCardText = {
   description: string;
 };
 
+type DistributionDetailModalState = {
+  questionTitle: string;
+  optionLabel: string;
+  count: number;
+  percent: number;
+  localities: string[];
+};
+
 type DistributionCardProps = {
   cardId: string;
   title: string;
@@ -176,6 +185,7 @@ type DistributionCardProps = {
   mode: MetricMode;
   onEdit: (cardId: string) => void;
   editable: boolean;
+  onOptionSelect?: (option: DistributionDatum) => void;
 };
 
 const GSD_BI_PALETTE = {
@@ -318,6 +328,7 @@ function DistributionCard({
   mode,
   onEdit,
   editable,
+  onOptionSelect,
 }: DistributionCardProps) {
   const chartData = data.slice(0, 12).map((item) => ({
     ...item,
@@ -393,6 +404,19 @@ function DistributionCard({
                     <Cell
                       key={`${cardId}-${item.label}`}
                       fill={index % 2 === 0 ? color : alpha(color, 0.72)}
+                      onClick={() =>
+                        onOptionSelect?.({
+                          label: String(item.label),
+                          count: Number(item.count),
+                          percent: Number(item.percent),
+                          localities: Array.isArray(item.localities)
+                            ? item.localities
+                            : [],
+                        })
+                      }
+                      style={{
+                        cursor: onOptionSelect ? "pointer" : "default",
+                      }}
                     />
                   ))}
                 </Bar>
@@ -423,6 +447,8 @@ export function BiGsdEvaluationDashboardPage() {
     title: "",
     description: "",
   });
+  const [distributionDetailModal, setDistributionDetailModal] =
+    useState<DistributionDetailModalState | null>(null);
 
   const [filters, setFilters] = useState({
     from: "",
@@ -1202,6 +1228,15 @@ export function BiGsdEvaluationDashboardPage() {
                 mode={metricMode}
                 onEdit={openCardEditor}
                 editable={isTiProfile}
+                onOptionSelect={(option) =>
+                  setDistributionDetailModal({
+                    questionTitle: text.title,
+                    optionLabel: option.label,
+                    count: option.count,
+                    percent: option.percent,
+                    localities: option.localities ?? [],
+                  })
+                }
               />
             </Grid>
           );
@@ -1212,8 +1247,16 @@ export function BiGsdEvaluationDashboardPage() {
         {dashboard.textColumns.freeTextLists.map((list) => {
           const cardId = `text:${list.key}`;
           const text = getCardText(cardId);
+          const normalizedListKey = normalizeCardIdKey(list.key);
+          const normalizedListLabel = normalizeCardIdKey(list.label);
+          const isComplementaryObservationCard =
+            normalizedListKey.includes("observacoes_complementares") ||
+            normalizedListLabel.includes("observacoes_complementares");
           return (
-            <Grid key={list.key} size={{ xs: 12, md: 6 }}>
+            <Grid
+              key={list.key}
+              size={{ xs: 12, md: isComplementaryObservationCard ? 12 : 6 }}
+            >
               <Card sx={cardSx}>
                 <CardContent>
                   <Stack direction="row" justifyContent="space-between" alignItems="center">
@@ -1469,6 +1512,56 @@ export function BiGsdEvaluationDashboardPage() {
         onCancel={() => setDeleteConfirmMode(null)}
         onConfirm={handleConfirmDelete}
       />
+
+      <Dialog
+        open={distributionDetailModal !== null}
+        onClose={() => setDistributionDetailModal(null)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Localidades da resposta selecionada</DialogTitle>
+        <DialogContent sx={{ display: "grid", gap: 1.1, pt: "12px !important" }}>
+          <Typography variant="body2">
+            <strong>Pergunta:</strong> {distributionDetailModal?.questionTitle ?? "-"}
+          </Typography>
+          <Typography variant="body2">
+            <strong>Resposta:</strong> {distributionDetailModal?.optionLabel ?? "-"}
+          </Typography>
+          <Typography variant="body2">
+            <strong>Ocorrências:</strong> {distributionDetailModal?.count ?? 0} (
+            {toPercent(distributionDetailModal?.percent ?? 0)})
+          </Typography>
+          <Typography variant="body2">
+            <strong>OM observada ({distributionDetailModal?.localities.length ?? 0}):</strong>
+          </Typography>
+          {(distributionDetailModal?.localities.length ?? 0) === 0 ? (
+            <Alert severity="info">
+              Nenhuma OM identificada para esta combinação no recorte atual.
+            </Alert>
+          ) : (
+            <Box
+              sx={{
+                maxHeight: 320,
+                overflowY: "auto",
+                borderRadius: 2,
+                border: `1px solid ${alpha(GSD_BI_PALETTE.primary, 0.18)}`,
+                p: 1,
+              }}
+            >
+              <Stack spacing={0.65}>
+                {(distributionDetailModal?.localities ?? []).map((locality) => (
+                  <Typography key={locality} variant="body2">
+                    - {locality}
+                  </Typography>
+                ))}
+              </Stack>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDistributionDetailModal(null)}>Fechar</Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog
         open={editingCardId !== null}
