@@ -103,6 +103,8 @@ type RecruitsDashboardResponse = {
       day: string;
       dayLabel: string;
       total: number;
+      positiveCount: number;
+      positiveRatePercent: number;
     }>;
   };
   textColumns: {
@@ -282,7 +284,7 @@ function DistributionCard({
     metric: metricValue(mode, item.count, item.percent),
   }));
 
-  const height = Math.max(220, chartData.length * 34);
+  const height = Math.max(164, chartData.length * 24);
   const metricLabel = mode === "COUNT" ? "Quantidade" : "Percentual (%)";
 
   return (
@@ -327,7 +329,7 @@ function DistributionCard({
                   contentStyle={tooltipContentStyle}
                   labelStyle={tooltipLabelStyle}
                 />
-                <Bar dataKey="metric" radius={[0, 10, 10, 0]} barSize={15}>
+                <Bar dataKey="metric" radius={[0, 10, 10, 0]} barSize={9}>
                   {chartData.map((item, index) => (
                     <Cell
                       key={`${title}-${item.label}`}
@@ -1204,7 +1206,8 @@ export function BiRecruitsDashboardPage() {
             Evolução das respostas
           </Typography>
           <Typography variant="caption" sx={{ color: RC_PALETTE.muted }}>
-            Cada barra representa a quantidade de respostas registrada em um dia.
+            Cada barra representa o percentual diário de respostas positivas
+            (disposição "Seguro(a)" para registrar ocorrência).
           </Typography>
 
           {(dashboard.charts.responseTrend ?? []).length === 0 ? (
@@ -1213,8 +1216,8 @@ export function BiRecruitsDashboardPage() {
             </Alert>
           ) : (
             <Box sx={{ mt: 1.1 }}>
-              <ResponsiveContainer width="100%" height={320}>
-                <BarChart data={dashboard.charts.responseTrend}>
+              <ResponsiveContainer width="100%" height={228}>
+                <BarChart data={dashboard.charts.responseTrend} barCategoryGap="42%">
                   <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
                   <XAxis
                     dataKey="dayLabel"
@@ -1225,23 +1228,35 @@ export function BiRecruitsDashboardPage() {
                   <YAxis
                     stroke={chartAxisStroke}
                     tick={axisTickStyle}
-                    allowDecimals={false}
+                    domain={[0, 100]}
+                    tickFormatter={(value: number) => `${Math.round(value)}%`}
                     label={{
-                      value: "Respostas",
+                      value: "Positivas (%)",
                       angle: -90,
                       position: "insideLeft",
                     }}
                   />
                   <Tooltip
-                    formatter={(value: number) => [`${value} registros`, "Respostas"]}
+                    formatter={(
+                      value: number,
+                      _name,
+                      props: { payload?: { total?: number; positiveCount?: number } },
+                    ) => {
+                      const payload = props?.payload;
+                      return [
+                        toPercent(Number(value ?? 0)),
+                        `Positivas (${Number(payload?.positiveCount ?? 0)}/${Number(payload?.total ?? 0)})`,
+                      ];
+                    }}
                     contentStyle={tooltipContentStyle}
                     labelStyle={tooltipLabelStyle}
                   />
                   <Bar
-                    dataKey="total"
-                    name="Respostas"
+                    dataKey="positiveRatePercent"
+                    name="Positivas (%)"
                     fill={alpha(RC_PALETTE.primary, 0.62)}
                     radius={[8, 8, 0, 0]}
+                    barSize={8}
                   />
                 </BarChart>
               </ResponsiveContainer>

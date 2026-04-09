@@ -148,6 +148,8 @@ type DomesticDashboardResponse = {
       day: string;
       dayLabel: string;
       total: number;
+      positiveCount: number;
+      positiveRatePercent: number;
     }>;
   };
   insights: {
@@ -1600,7 +1602,7 @@ export function BiDomesticViolenceDashboardPage() {
               >
                 Clique em uma fatia para aplicar filtro.
               </Typography>
-              <Box sx={{ height: 280 }}>
+              <Box sx={{ height: 236 }}>
                 <ResponsiveContainer>
                   <PieChart>
                     <Pie
@@ -1663,7 +1665,7 @@ export function BiDomesticViolenceDashboardPage() {
               >
                 Clique em uma fatia para filtrar o recorte recente.
               </Typography>
-              <Box sx={{ height: 280 }}>
+              <Box sx={{ height: 236 }}>
                 <ResponsiveContainer>
                   <PieChart>
                     <Pie
@@ -1724,9 +1726,9 @@ export function BiDomesticViolenceDashboardPage() {
               <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
                 Estado civil
               </Typography>
-              <Box sx={{ height: 280 }}>
+              <Box sx={{ height: 236 }}>
                 <ResponsiveContainer>
-                  <BarChart data={maritalStatusBars}>
+                  <BarChart barCategoryGap="42%" maxBarSize={14} data={maritalStatusBars}>
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke={chartGridStroke}
@@ -1781,9 +1783,9 @@ export function BiDomesticViolenceDashboardPage() {
               <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
                 Escolaridade
               </Typography>
-              <Box sx={{ height: 280 }}>
+              <Box sx={{ height: 236 }}>
                 <ResponsiveContainer>
-                  <BarChart data={educationBars}>
+                  <BarChart barCategoryGap="42%" maxBarSize={14} data={educationBars}>
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke={chartGridStroke}
@@ -1835,9 +1837,9 @@ export function BiDomesticViolenceDashboardPage() {
               <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
                 Naturalidade
               </Typography>
-              <Box sx={{ height: 280 }}>
+              <Box sx={{ height: 236 }}>
                 <ResponsiveContainer>
-                  <BarChart data={naturalityBars}>
+                  <BarChart barCategoryGap="42%" maxBarSize={14} data={naturalityBars}>
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke={chartGridStroke}
@@ -1889,9 +1891,9 @@ export function BiDomesticViolenceDashboardPage() {
               <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
                 Vínculo institucional FAB
               </Typography>
-              <Box sx={{ height: 280 }}>
+              <Box sx={{ height: 236 }}>
                 <ResponsiveContainer>
-                  <BarChart data={fabBondBars}>
+                  <BarChart barCategoryGap="42%" maxBarSize={14} data={fabBondBars}>
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke={chartGridStroke}
@@ -1945,9 +1947,9 @@ export function BiDomesticViolenceDashboardPage() {
               <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
                 Situação relatada
               </Typography>
-              <Box sx={{ height: 280 }}>
+              <Box sx={{ height: 236 }}>
                 <ResponsiveContainer>
-                  <BarChart data={situationScopeBars}>
+                  <BarChart barCategoryGap="42%" maxBarSize={14} data={situationScopeBars}>
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke={chartGridStroke}
@@ -2002,9 +2004,9 @@ export function BiDomesticViolenceDashboardPage() {
               <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
                 Frequência da ocorrência
               </Typography>
-              <Box sx={{ height: 280 }}>
+              <Box sx={{ height: 236 }}>
                 <ResponsiveContainer>
-                  <BarChart data={frequencyBars}>
+                  <BarChart barCategoryGap="42%" maxBarSize={14} data={frequencyBars}>
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke={chartGridStroke}
@@ -2056,9 +2058,9 @@ export function BiDomesticViolenceDashboardPage() {
               <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
                 Vínculo afetivo com o autor
               </Typography>
-              <Box sx={{ height: 280 }}>
+              <Box sx={{ height: 236 }}>
                 <ResponsiveContainer>
-                  <BarChart data={affectiveBondBars}>
+                  <BarChart barCategoryGap="42%" maxBarSize={14} data={affectiveBondBars}>
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke={chartGridStroke}
@@ -2113,9 +2115,9 @@ export function BiDomesticViolenceDashboardPage() {
               <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
                 Tipo de autor do fato
               </Typography>
-              <Box sx={{ height: 280 }}>
+              <Box sx={{ height: 236 }}>
                 <ResponsiveContainer>
-                  <BarChart data={authorRelationBars}>
+                  <BarChart barCategoryGap="42%" maxBarSize={14} data={authorRelationBars}>
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke={chartGridStroke}
@@ -2172,9 +2174,9 @@ export function BiDomesticViolenceDashboardPage() {
               <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
                 Autor com vínculo militar
               </Typography>
-              <Box sx={{ height: 280 }}>
+              <Box sx={{ height: 236 }}>
                 <ResponsiveContainer>
-                  <BarChart data={authorMilitaryLinkBars}>
+                  <BarChart barCategoryGap="42%" maxBarSize={14} data={authorMilitaryLinkBars}>
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke={chartGridStroke}
@@ -2229,9 +2231,9 @@ export function BiDomesticViolenceDashboardPage() {
               <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
                 Local da ocorrência
               </Typography>
-              <Box sx={{ height: 280 }}>
+              <Box sx={{ height: 236 }}>
                 <ResponsiveContainer>
-                  <BarChart data={occurrencePlaceBars}>
+                  <BarChart barCategoryGap="42%" maxBarSize={14} data={occurrencePlaceBars}>
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke={chartGridStroke}
@@ -2286,9 +2288,9 @@ export function BiDomesticViolenceDashboardPage() {
               <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
                 Houve testemunhas?
               </Typography>
-              <Box sx={{ height: 280 }}>
+              <Box sx={{ height: 236 }}>
                 <ResponsiveContainer>
-                  <BarChart data={witnessesBars}>
+                  <BarChart barCategoryGap="42%" maxBarSize={14} data={witnessesBars}>
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke={chartGridStroke}
@@ -2345,9 +2347,9 @@ export function BiDomesticViolenceDashboardPage() {
               <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
                 Intensidade do impacto
               </Typography>
-              <Box sx={{ height: 300 }}>
+              <Box sx={{ height: 248 }}>
                 <ResponsiveContainer>
-                  <BarChart data={impactIntensityBars}>
+                  <BarChart barCategoryGap="42%" maxBarSize={14} data={impactIntensityBars}>
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke={chartGridStroke}
@@ -2402,9 +2404,9 @@ export function BiDomesticViolenceDashboardPage() {
               <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
                 Procurou canal de denúncia?
               </Typography>
-              <Box sx={{ height: 300 }}>
+              <Box sx={{ height: 248 }}>
                 <ResponsiveContainer>
-                  <BarChart data={soughtHelpBars}>
+                  <BarChart barCategoryGap="42%" maxBarSize={14} data={soughtHelpBars}>
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke={chartGridStroke}
@@ -2467,9 +2469,9 @@ export function BiDomesticViolenceDashboardPage() {
               >
                 Clique em uma barra para filtrar pelo tipo.
               </Typography>
-              <Box sx={{ height: 300 }}>
+              <Box sx={{ height: 248 }}>
                 <ResponsiveContainer>
-                  <BarChart data={violenceTypeBars}>
+                  <BarChart barCategoryGap="42%" maxBarSize={14} data={violenceTypeBars}>
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke={chartGridStroke}
@@ -2526,9 +2528,9 @@ export function BiDomesticViolenceDashboardPage() {
               >
                 Clique em uma barra para filtrar por área.
               </Typography>
-              <Box sx={{ height: 300 }}>
+              <Box sx={{ height: 248 }}>
                 <ResponsiveContainer>
-                  <BarChart data={impactAreaBars}>
+                  <BarChart barCategoryGap="42%" maxBarSize={14} data={impactAreaBars}>
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke={chartGridStroke}
@@ -2583,9 +2585,9 @@ export function BiDomesticViolenceDashboardPage() {
             Visualização de concentração por OM. Clique em qualquer barra para
             filtrar a organização.
           </Typography>
-          <Box sx={{ height: 340 }}>
+          <Box sx={{ height: 280 }}>
             <ResponsiveContainer>
-              <BarChart data={violenceByOrganization?.items ?? []}>
+              <BarChart barCategoryGap="42%" maxBarSize={14} data={violenceByOrganization?.items ?? []}>
                 <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
                 <XAxis
                   dataKey="organization"
@@ -2643,9 +2645,9 @@ export function BiDomesticViolenceDashboardPage() {
               <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
                 Distribuição por organização
               </Typography>
-              <Box sx={{ height: 280 }}>
+              <Box sx={{ height: 236 }}>
                 <ResponsiveContainer>
-                  <BarChart data={organizationBars}>
+                  <BarChart barCategoryGap="42%" maxBarSize={14} data={organizationBars}>
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke={chartGridStroke}
@@ -2700,9 +2702,9 @@ export function BiDomesticViolenceDashboardPage() {
               <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
                 Distribuição por posto/graduação
               </Typography>
-              <Box sx={{ height: 280 }}>
+              <Box sx={{ height: 236 }}>
                 <ResponsiveContainer>
-                  <BarChart data={rankBars}>
+                  <BarChart barCategoryGap="42%" maxBarSize={14} data={rankBars}>
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke={chartGridStroke}
@@ -2753,9 +2755,9 @@ export function BiDomesticViolenceDashboardPage() {
               <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
                 Faixa etária
               </Typography>
-              <Box sx={{ height: 280 }}>
+              <Box sx={{ height: 236 }}>
                 <ResponsiveContainer>
-                  <BarChart data={ageBars}>
+                  <BarChart barCategoryGap="42%" maxBarSize={14} data={ageBars}>
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke={chartGridStroke}
@@ -2804,9 +2806,9 @@ export function BiDomesticViolenceDashboardPage() {
               <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
                 Canais de denúncia
               </Typography>
-              <Box sx={{ height: 300 }}>
+              <Box sx={{ height: 248 }}>
                 <ResponsiveContainer>
-                  <BarChart data={channelBars}>
+                  <BarChart barCategoryGap="42%" maxBarSize={14} data={channelBars}>
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke={chartGridStroke}
@@ -2861,9 +2863,9 @@ export function BiDomesticViolenceDashboardPage() {
               <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
                 Motivos para não denunciar
               </Typography>
-              <Box sx={{ height: 300 }}>
+              <Box sx={{ height: 248 }}>
                 <ResponsiveContainer>
-                  <BarChart data={reasonBars}>
+                  <BarChart barCategoryGap="42%" maxBarSize={14} data={reasonBars}>
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke={chartGridStroke}
@@ -2919,11 +2921,12 @@ export function BiDomesticViolenceDashboardPage() {
             Evolução das respostas
           </Typography>
           <Typography variant="caption" sx={{ color: DV_PALETTE.muted }}>
-            Cada barra representa a quantidade de respostas registrada em um dia.
+            Cada barra representa o percentual diário de respostas positivas
+            (responderam "Sim" para violência ao longo da vida).
           </Typography>
-          <Box sx={{ height: 320 }}>
+          <Box sx={{ height: 250 }}>
             <ResponsiveContainer>
-              <BarChart data={trend}>
+              <BarChart barCategoryGap="42%" maxBarSize={14} data={trend}>
                 <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
                 <XAxis
                   dataKey="dayLabel"
@@ -2934,20 +2937,35 @@ export function BiDomesticViolenceDashboardPage() {
                 <YAxis
                   stroke={chartAxisStroke}
                   tick={axisTickStyle}
-                  allowDecimals={false}
+                  domain={[0, 100]}
+                  tickFormatter={(value: number) => `${Math.round(value)}%`}
+                  label={{
+                    value: "Positivas (%)",
+                    angle: -90,
+                    position: "insideLeft",
+                  }}
                 />
                 <Tooltip
-                  formatter={(value: number) => {
-                    return [Math.round(Number(value ?? 0)), "Registros"];
+                  formatter={(
+                    value: number,
+                    _name,
+                    props: { payload?: { total?: number; positiveCount?: number } },
+                  ) => {
+                    const payload = props?.payload;
+                    return [
+                      getPercentLabel(Number(value ?? 0)),
+                      `Positivas (${Number(payload?.positiveCount ?? 0)}/${Number(payload?.total ?? 0)})`,
+                    ];
                   }}
                   contentStyle={tooltipContentStyle}
                   labelStyle={tooltipLabelStyle}
                 />
                 <Bar
-                  dataKey="total"
-                  name="Respostas"
+                  dataKey="positiveRatePercent"
+                  name="Positivas (%)"
                   fill={alpha(DV_PALETTE.primary, 0.62)}
                   radius={[8, 8, 0, 0]}
+                  barSize={10}
                 />
               </BarChart>
             </ResponsiveContainer>

@@ -431,8 +431,9 @@ function buildBiCardTextDefaults(
       textColor: BI_PALETTE.text,
     },
     "chart-monthly-trend": {
-      title: `Evolução mensal das respostas (${metricLabel})`,
-      description: "",
+      title: "Evolução das respostas",
+      description:
+        "Cada barra mostra o percentual de respostas positivas (Sim) no período.",
       textColor: BI_PALETTE.text,
     },
   };
@@ -2092,25 +2093,32 @@ export function BiSurveyDashboardPage() {
                 tickLine={{ stroke: chartAxisStroke }}
               />
               <YAxis
-                tickFormatter={(value) =>
-                  metricMode === "PERCENT" ? `${value}%` : String(value)
-                }
+                domain={[0, 100]}
+                tickFormatter={(value) => `${Math.round(Number(value ?? 0))}%`}
                 tick={axisTickStyle}
                 axisLine={{ stroke: chartAxisStroke }}
                 tickLine={{ stroke: chartAxisStroke }}
               />
               <Tooltip
-                formatter={(value: number) =>
-                  metricMode === "PERCENT" ? getPercentLabel(value) : value
-                }
+                formatter={(
+                  value: number,
+                  _name,
+                  props: { payload?: { yesCount?: number; total?: number } },
+                ) => {
+                  const payload = props?.payload;
+                  return [
+                    getPercentLabel(Number(value ?? 0)),
+                    `Positivas (${Number(payload?.yesCount ?? 0)}/${Number(payload?.total ?? 0)})`,
+                  ];
+                }}
                 contentStyle={tooltipContentStyle}
                 labelStyle={tooltipLabelStyle}
               />
               <Legend wrapperStyle={legendWrapperStyle} />
               <Bar
-                dataKey={metricMode === "PERCENT" ? "yesRatePercent" : "total"}
-                name={metricMode === "PERCENT" ? "Taxa de relatos" : "Total de respostas"}
-                fill={metricMode === "PERCENT" ? BI_PALETTE.accent : BI_PALETTE.primaryMid}
+                dataKey="yesRatePercent"
+                name="Positivas (%)"
+                fill={BI_PALETTE.accent}
                 barSize={BAR_SIZE_PRIMARY}
               />
             </BarChart>

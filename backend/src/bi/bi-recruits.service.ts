@@ -577,9 +577,16 @@ export class BiRecruitsService {
   private buildResponseTrend(
     rows: Array<{
       submittedAt: Date | null;
+      willingnessReport: string | null;
     }>,
   ) {
-    const map = new Map<string, number>();
+    const map = new Map<
+      string,
+      {
+        total: number;
+        positiveCount: number;
+      }
+    >();
 
     for (const row of rows) {
       const day = row.submittedAt
@@ -591,17 +598,30 @@ export class BiRecruitsService {
           )}`
         : 'SEM_DATA';
 
-      map.set(day, (map.get(day) ?? 0) + 1);
+      const current = map.get(day) ?? {
+        total: 0,
+        positiveCount: 0,
+      };
+      current.total += 1;
+      if (row.willingnessReport === 'Seguro(a)') {
+        current.positiveCount += 1;
+      }
+      map.set(day, current);
     }
 
     return [...map.entries()]
-      .map(([day, total]) => ({
+      .map(([day, value]) => ({
         day,
         dayLabel:
           day === 'SEM_DATA'
             ? 'Sem data'
             : `${day.slice(8, 10)}/${day.slice(5, 7)}/${day.slice(0, 4)}`,
-        total,
+        total: value.total,
+        positiveCount: value.positiveCount,
+        positiveRatePercent:
+          value.total > 0
+            ? Number(((value.positiveCount / value.total) * 100).toFixed(2))
+            : 0,
       }))
       .sort((a, b) => {
         if (a.day === 'SEM_DATA') return 1;
