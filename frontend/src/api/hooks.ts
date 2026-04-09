@@ -3864,3 +3864,116 @@ export function useDeleteBiRecruitsResponses() {
     },
   });
 }
+
+export function useBiBestPracticesCycleDashboard(filters: Record<string, any>) {
+  return useQuery({
+    queryKey: qk.biBestPracticesCycleDashboard(filters),
+    queryFn: async () =>
+      (
+        await api.get("/bi/best-practices-cycle/dashboard", {
+          params: filters,
+        })
+      ).data,
+    staleTime: 15_000,
+  });
+}
+
+export function useBiBestPracticesCycleResponses(filters: Record<string, any>) {
+  return useQuery({
+    queryKey: qk.biBestPracticesCycleResponses(filters),
+    queryFn: async () =>
+      (
+        await api.get("/bi/best-practices-cycle/responses", {
+          params: filters,
+        })
+      ).data,
+    staleTime: 5_000,
+  });
+}
+
+export function useBiBestPracticesCycleImports(filters: Record<string, any>) {
+  return useQuery({
+    queryKey: qk.biBestPracticesCycleImports(filters),
+    queryFn: async () =>
+      (
+        await api.get("/bi/best-practices-cycle/imports", {
+          params: filters,
+        })
+      ).data,
+    staleTime: 10_000,
+  });
+}
+
+export function useBiBestPracticesCycleCardSettings(enabled = true) {
+  return useQuery({
+    queryKey: qk.biBestPracticesCycleCardSettings(),
+    queryFn: async () => (await api.get("/bi/best-practices-cycle/card-settings")).data,
+    enabled,
+    staleTime: 20_000,
+  });
+}
+
+export function useImportBiBestPracticesCycle() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { file: File; replace?: boolean }) => {
+      const form = new FormData();
+      form.append("file", args.file);
+      if (typeof args.replace === "boolean") {
+        form.append("replace", String(args.replace));
+      }
+      return (await api.post("/bi/best-practices-cycle/import", form)).data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["biBestPracticesCycle"] });
+    },
+  });
+}
+
+export function useDeleteBiBestPracticesCycleResponses() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      ids?: string[];
+      allFiltered?: boolean;
+      from?: string;
+      to?: string;
+      technicalRigorPerception?: string;
+      preparednessToLeadMixedClass?: string;
+      genderBiasImpact?: string;
+      interactionDifference?: string;
+      supportNeedRecognition?: string;
+      mainChallengeOption?: string;
+      identification?: string;
+      specialty?: string;
+      q?: string;
+      combineMode?: "AND" | "OR";
+    }) =>
+      (await api.post("/bi/best-practices-cycle/responses/delete", payload))
+        .data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["biBestPracticesCycle"] });
+    },
+  });
+}
+
+export function useUpdateBiBestPracticesCycleCardSetting() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      cardId: string;
+      payload: { title?: string; description?: string | null };
+    }) =>
+      (
+        await api.put(
+          `/bi/best-practices-cycle/card-settings/${encodeURIComponent(
+            args.cardId,
+          )}`,
+          args.payload,
+        )
+      ).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["biBestPracticesCycle"] });
+    },
+  });
+}

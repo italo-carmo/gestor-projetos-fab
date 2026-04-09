@@ -102,6 +102,14 @@ export const qk = {
     ["biRecruits", "responses", filters] as const,
   biRecruitsImports: (filters: Record<string, any>) =>
     ["biRecruits", "imports", filters] as const,
+  biBestPracticesCycleDashboard: (filters: Record<string, any>) =>
+    ["biBestPracticesCycle", "dashboard", filters] as const,
+  biBestPracticesCycleResponses: (filters: Record<string, any>) =>
+    ["biBestPracticesCycle", "responses", filters] as const,
+  biBestPracticesCycleImports: (filters: Record<string, any>) =>
+    ["biBestPracticesCycle", "imports", filters] as const,
+  biBestPracticesCycleCardSettings: () =>
+    ["biBestPracticesCycle", "cardSettings"] as const,
   cpcaCases: (filters: Record<string, any>) => ["cpcaCases", filters] as const,
   cpcaCase: (id: string) => ["cpcaCase", id] as const,
   cpcaCaseStats: (filters: Record<string, any>) =>

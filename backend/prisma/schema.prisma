@@ -55,6 +55,8 @@ model User {
   biSurveyImportBatches BiSurveyImportBatch[]
   biDomesticViolenceImportBatches BiDomesticViolenceImportBatch[]
   biRecruitsImportBatches BiRecruitsImportBatch[]
+  biBestPracticeCycleImportBatches BiBestPracticeCycleImportBatch[]
+  biBestPracticeCycleCardSettings BiBestPracticeCycleCardSetting[] @relation("BiBestPracticeCycleCardSettingUpdatedBy")
   cpcaCasesCreated CpcComplaintCase[] @relation("CpcComplaintCaseCreatedBy")
   cpcaCasesUpdated CpcComplaintCase[] @relation("CpcComplaintCaseUpdatedBy")
   cpcaCaseComments CpcComplaintComment[] @relation("CpcComplaintCommentAuthor")
@@ -1400,6 +1402,68 @@ model BiRecruitsResponse {
   @@index([willingnessOrientation, willingnessReport])
   @@index([enlistmentDecisionInfluenceText])
   @@index([batchId])
+}
+
+model BiBestPracticeCycleImportBatch {
+  id            String                           @id @default(cuid())
+  fileName      String
+  format        BiImportFormat
+  sheetName     String?
+  totalRows     Int
+  insertedRows  Int
+  duplicateRows Int
+  invalidRows   Int
+  importedById  String?
+  importedAt    DateTime                         @default(now())
+
+  importedBy    User?                            @relation(fields: [importedById], references: [id], onDelete: SetNull)
+  responses     BiBestPracticeCycleResponse[]
+
+  @@index([importedAt])
+  @@index([importedById, importedAt])
+}
+
+model BiBestPracticeCycleResponse {
+  id                            String                          @id @default(cuid())
+  batchId                       String?
+  submittedAt                   DateTime?
+  technicalRigorPerception      String?
+  preparednessToLeadMixedClass  String?
+  genderBiasImpact              String?
+  interactionDifference         String?
+  interactionDifferenceComment  String?
+  supportNeedRecognition        String?
+  mainChallengeOptions          String[]                        @default([])
+  identification                String?
+  specialty                     String?
+  rawPayload                    Json?
+  sourceRow                     Int?
+  sourceHash                    String                          @unique
+  createdAt                     DateTime                        @default(now())
+  updatedAt                     DateTime                        @updatedAt
+
+  batch                         BiBestPracticeCycleImportBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+
+  @@index([submittedAt])
+  @@index([technicalRigorPerception, preparednessToLeadMixedClass])
+  @@index([interactionDifference, supportNeedRecognition])
+  @@index([identification])
+  @@index([specialty])
+  @@index([batchId])
+}
+
+model BiBestPracticeCycleCardSetting {
+  id          String   @id @default(cuid())
+  cardId      String   @unique
+  title       String
+  description String?
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  updatedBy   User?    @relation("BiBestPracticeCycleCardSettingUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@index([updatedAt])
 }
 
 enum TaskStatus {

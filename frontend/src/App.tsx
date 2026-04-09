@@ -24,6 +24,7 @@ import { DocumentsPage } from "./pages/DocumentsPage";
 import { BiSurveyDashboardPage } from "./pages/BiSurveyDashboardPage";
 import { BiDomesticViolenceDashboardPage } from "./pages/BiDomesticViolenceDashboardPage";
 import { BiRecruitsDashboardPage } from "./pages/BiRecruitsDashboardPage";
+import { BiBestPracticesCycleDashboardPage } from "./pages/BiBestPracticesCycleDashboardPage";
 import { MissionsPage } from "./pages/MissionsPage";
 import { SocialCommunicationPage } from "./pages/SocialCommunicationPage";
 import { CpcaCasesPage } from "./pages/CpcaCasesPage";
@@ -125,6 +126,16 @@ function App() {
                       }
                     >
                       <BiRecruitsDashboardPage />
+                    </RequireRoleAccess>
+                  }
+                />
+                <Route
+                  path="/dashboard/bi-ciclo-boas-praticas"
+                  element={
+                    <RequireRoleAccess
+                      allow={(user) => can(user, "bi", "view")}
+                    >
+                      <BiBestPracticesCycleDashboardPage />
                     </RequireRoleAccess>
                   }
                 />

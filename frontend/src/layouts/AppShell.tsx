@@ -244,6 +244,12 @@ const navSections: NavSection[] = [
         icon: <InsightsRoundedIcon fontSize="small" />,
         menuKey: "bi",
       },
+      {
+        label: "Ciclo de Boas Práticas",
+        to: "/dashboard/bi-ciclo-boas-praticas",
+        icon: <InsightsRoundedIcon fontSize="small" />,
+        menuKey: "bi",
+      },
     ],
   },
   {
@@ -426,6 +432,9 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
     if (item.to === "/dashboard/bi-recrutas") {
       return can(me, "bi", "view") && hasAnyRole(me, [ROLE_TI, ROLE_COMGEP]);
+    }
+    if (item.to === "/dashboard/bi-ciclo-boas-praticas") {
+      return can(me, "bi", "view");
     }
     if (item.to === "/smif-complaints") {
       return can(me, "smif_complaints", "view");
