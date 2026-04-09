@@ -101,11 +101,6 @@ type CpcaMeetingDashboardResponse = {
       totalMentions: number;
       data: DistributionDatum[];
     }>;
-    submissionsByDay: Array<{
-      day: string;
-      dayLabel: string;
-      count: number;
-    }>;
   };
   textColumns: {
     freeTextLists: Array<{
@@ -261,10 +256,6 @@ const FIXED_CARD_DEFAULTS: Record<string, EditableCardText> = {
     title: "Insights gerenciais",
     description:
       "Resumo dos principais sinais observados no recorte, com foco em concentração de respostas e campos discursivos.",
-  },
-  "chart-trend": {
-    title: "Evolução de respostas por dia",
-    description: "Volume de respostas ao longo do tempo no recorte selecionado.",
   },
   "list-imports": {
     title: "Histórico de importações",
@@ -763,7 +754,6 @@ export function BiCpcaMeetingDashboardPage() {
   const kpiCategoricalText = getCardText("kpi-categorical");
   const kpiTextText = getCardText("kpi-text");
   const insightMainText = getCardText("insight-main");
-  const trendText = getCardText("chart-trend");
   const importsText = getCardText("list-imports");
   const responsesText = getCardText("list-responses");
 
@@ -1194,48 +1184,6 @@ export function BiCpcaMeetingDashboardPage() {
               </Alert>
             </Grid>
           </Grid>
-        </CardContent>
-      </Card>
-
-      <Card sx={{ mb: 1.2, ...cardSx }}>
-        <CardContent>
-          <Stack direction="row" justifyContent="space-between" alignItems="center">
-            <Typography variant="subtitle1" fontWeight={700}>
-              {trendText.title}
-            </Typography>
-            {isTiProfile ? (
-              <MuiTooltip title="Editar título/descrição">
-                <IconButton size="small" onClick={() => openCardEditor("chart-trend")}>
-                  <EditOutlinedIcon fontSize="small" />
-                </IconButton>
-              </MuiTooltip>
-            ) : null}
-          </Stack>
-          <Typography variant="caption" sx={{ color: CPCA_BI_PALETTE.muted }}>
-            {trendText.description}
-          </Typography>
-
-          {dashboard.charts.submissionsByDay.length === 0 ? (
-            <Alert severity="info" sx={{ mt: 1 }}>
-              Sem dados para o recorte atual.
-            </Alert>
-          ) : (
-            <Box sx={{ mt: 1.1 }}>
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={dashboard.charts.submissionsByDay}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
-                  <XAxis dataKey="dayLabel" stroke={chartAxisStroke} tick={axisTickStyle} />
-                  <YAxis stroke={chartAxisStroke} tick={axisTickStyle} />
-                  <Tooltip
-                    formatter={(value: number) => [`${value} respostas`, "Volume"]}
-                    contentStyle={tooltipContentStyle}
-                    labelStyle={tooltipLabelStyle}
-                  />
-                  <Bar dataKey="count" fill={CPCA_BI_PALETTE.primary} barSize={10} />
-                </BarChart>
-              </ResponsiveContainer>
-            </Box>
-          )}
         </CardContent>
       </Card>
 

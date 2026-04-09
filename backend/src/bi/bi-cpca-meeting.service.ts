@@ -457,11 +457,7 @@ export class BiCpcaMeetingService {
     );
 
     const latestColumns = this.parseColumnsJson(latestImport?.columnsJson);
-    const columns = this.buildColumnsMeta(
-      allRows,
-      filteredRows,
-      latestColumns,
-    );
+    const columns = this.buildColumnsMeta(allRows, filteredRows, latestColumns);
 
     const categoricalColumns = columns.filter(
       (item) => item.type === 'CATEGORICAL' || item.type === 'MULTI_SELECT',
@@ -485,7 +481,6 @@ export class BiCpcaMeetingService {
       ...this.buildTextList(filteredRows, column.key),
     }));
 
-    const submissionsByDay = this.buildSubmissionsByDay(filteredRows);
     const totalCells = filteredRows.length * columns.length;
     const filledCells = columns.reduce((sum, column) => {
       const count = filteredRows.reduce((acc: number, row: MeetingRow) => {
@@ -538,7 +533,6 @@ export class BiCpcaMeetingService {
       },
       charts: {
         categoricalDistributions,
-        submissionsByDay,
       },
       textColumns: {
         freeTextLists,
@@ -579,12 +573,19 @@ export class BiCpcaMeetingService {
   }
 
   private mapRow(row: any): MeetingRow {
+    const answers = this.toStringRecord(row.answersJson);
+    const rawPayload = this.toNullableStringRecord(row.rawPayload);
+    const submittedAt =
+      row.submittedAt
+        ? new Date(row.submittedAt)
+        : this.inferSubmittedAtFromPayload(answers, rawPayload);
+
     return {
       id: String(row.id),
-      submittedAt: row.submittedAt ? new Date(row.submittedAt) : null,
+      submittedAt,
       createdAt: row.createdAt ? new Date(row.createdAt) : new Date(0),
-      answers: this.toStringRecord(row.answersJson),
-      rawPayload: this.toNullableStringRecord(row.rawPayload),
+      answers,
+      rawPayload,
     };
   }
 
@@ -634,6 +635,11 @@ export class BiCpcaMeetingService {
         .filter((value): value is string => Boolean(value));
 
       const label = labelsByKey.get(key) ?? this.humanizeHeaderKey(key);
+      if (this.isSubmittedAtColumn(key, label, latestColumns?.submittedAtKey ?? null)) {
+        continue;
+      }
+
+      const questionNumber = this.extractQuestionNumber(label);
       const uniqueValues = new Set(allValues.map((item) => this.normalizeForMatch(item)));
       const avgLength =
         allValues.length > 0
@@ -646,7 +652,10 @@ export class BiCpcaMeetingService {
           : 0;
 
       const multi = this.isLikelyMultiSelect(label, allValues);
-      const freeText = this.isLikelyFreeText(label, allValues, uniqueValues.size);
+      const forceCategorical = questionNumber === 4;
+      const freeText = forceCategorical
+        ? false
+        : this.isLikelyFreeText(label, allValues, uniqueValues.size);
       const type: ColumnType = freeText
         ? 'FREE_TEXT'
         : multi
@@ -745,24 +754,6 @@ export class BiCpcaMeetingService {
       displayed: Math.min(items.length, 25),
       items: items.slice(0, 25),
     };
-  }
-
-  private buildSubmissionsByDay(rows: MeetingRow[]) {
-    const map = new Map<string, number>();
-    for (const row of rows) {
-      const day = row.submittedAt
-        ? `${row.submittedAt.getFullYear()}-${String(row.submittedAt.getMonth() + 1).padStart(2, '0')}-${String(row.submittedAt.getDate()).padStart(2, '0')}`
-        : 'Sem data';
-      map.set(day, (map.get(day) ?? 0) + 1);
-    }
-
-    return Array.from(map.entries())
-      .map(([day, count]) => ({
-        day,
-        dayLabel: day === 'Sem data' ? day : this.formatDayLabel(day),
-        count,
-      }))
-      .sort((a, b) => a.day.localeCompare(b.day));
   }
 
   private buildOptionsList(values: string[], allowMultiSplit: boolean) {
@@ -1102,12 +1093,18 @@ export class BiCpcaMeetingService {
     const minute = Number(match[5] ?? 0);
     const second = Number(match[6] ?? 0);
 
-    let month = p1;
-    let day = p2;
+    let day = p1;
+    let month = p2;
 
-    if (p1 > 12 && p2 <= 12) {
+    if (raw.includes('-') && !raw.includes('/')) {
+      month = p1;
+      day = p2;
+    } else if (p1 > 12 && p2 <= 12) {
       day = p1;
       month = p2;
+    } else if (p2 > 12 && p1 <= 12) {
+      month = p1;
+      day = p2;
     }
 
     const parsed = new Date(year, month - 1, day, hour, minute, second);
@@ -1173,6 +1170,50 @@ export class BiCpcaMeetingService {
     }
 
     return [clean];
+  }
+
+  private inferSubmittedAtFromPayload(
+    answers: Record<string, string>,
+    rawPayload: Record<string, string | null>,
+  ) {
+    for (const [key, value] of Object.entries(answers)) {
+      if (!value) continue;
+      if (!this.isSubmittedAtColumn(key, key, null)) continue;
+      const parsed = this.parseSubmittedAt(value);
+      if (parsed) return parsed;
+    }
+
+    for (const [label, value] of Object.entries(rawPayload)) {
+      if (!value) continue;
+      if (!this.isSubmittedAtColumn(this.normalizeHeaderKey(label), label, null)) {
+        continue;
+      }
+      const parsed = this.parseSubmittedAt(value);
+      if (parsed) return parsed;
+    }
+
+    return null;
+  }
+
+  private isSubmittedAtColumn(
+    key: string,
+    label: string,
+    submittedAtKey: string | null,
+  ) {
+    if (submittedAtKey && key === submittedAtKey) return true;
+    const normalizedLabel = this.normalizeForMatch(label);
+    return (
+      normalizedLabel.includes('CARIMBODEDATAHORA') ||
+      normalizedLabel.includes('TIMESTAMP') ||
+      normalizedLabel.includes('SUBMITTEDAT')
+    );
+  }
+
+  private extractQuestionNumber(label: string) {
+    const match = String(label ?? '').trim().match(/^(\d{1,2})[\).\-\s]/);
+    if (!match) return null;
+    const parsed = Number(match[1]);
+    return Number.isFinite(parsed) ? parsed : null;
   }
 
   private toStringRecord(value: unknown) {
