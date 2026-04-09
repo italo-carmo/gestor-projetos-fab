@@ -250,11 +250,12 @@ model ActivityType {
 }
 
 model Mission {
-  id          String   @id @default(cuid())
+  id          String         @id @default(cuid())
   title       String
   description String?
   checklistJson Json?
   localityId  String
+  scope       ActivityScope  @default(SMIF)
   startDate   DateTime
   endDate     DateTime
   createdById String?
@@ -268,6 +269,7 @@ model Mission {
 
   @@index([localityId, startDate])
   @@index([startDate, endDate])
+  @@index([scope, localityId])
 }
 
 model MissionParticipant {

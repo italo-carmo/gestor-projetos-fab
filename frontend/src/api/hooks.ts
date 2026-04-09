@@ -358,10 +358,30 @@ export function useMissions(filters: Record<string, any>, enabled = true) {
   });
 }
 
-export function useMissionStatistics() {
+export function useMissionLocalityOptions(scope: string, enabled = true) {
   return useQuery({
-    queryKey: ["missions", "statistics"],
-    queryFn: async () => (await api.get("/missions/statistics")).data,
+    queryKey: ["missions", "locality-options", scope],
+    queryFn: async () =>
+      (
+        await api.get("/missions/locality-options", {
+          params: { scope: scope || "SMIF" },
+        })
+      ).data,
+    enabled,
+    staleTime: 60_000,
+  });
+}
+
+export function useMissionStatistics(scope: string = "SMIF", enabled = true) {
+  return useQuery({
+    queryKey: ["missions", "statistics", scope],
+    queryFn: async () =>
+      (
+        await api.get("/missions/statistics", {
+          params: { scope: scope || "SMIF" },
+        })
+      ).data,
+    enabled,
     staleTime: 30_000,
   });
 }
@@ -397,11 +417,12 @@ export function useMissionChecklistConfig(enabled = true) {
 }
 
 export function useMissionChecklistMapping(
-  filters: { localityId?: string },
+  filters: { localityId?: string; scope?: string },
   enabled = true,
 ) {
   const normalized = {
     localityId: filters.localityId || undefined,
+    scope: filters.scope || "SMIF",
   };
   return useQuery({
     queryKey: qk.missionChecklistMapping(normalized),
@@ -555,8 +576,12 @@ export function useCreateMission() {
       localityId: string;
       startDate: string;
       endDate: string;
+      scope?: "SMIF" | "CIPAVD";
     }) => (await api.post("/missions", payload)).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["missions"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["missions"] });
+      qc.invalidateQueries({ queryKey: ["missions", "statistics"] });
+    },
   });
 }
 
@@ -575,6 +600,7 @@ export function useUpdateMission() {
     }) => (await api.put(`/missions/${args.id}`, args.payload)).data,
     onSuccess: (_data, args) => {
       qc.invalidateQueries({ queryKey: ["missions"] });
+      qc.invalidateQueries({ queryKey: ["missions", "statistics"] });
       qc.invalidateQueries({ queryKey: qk.mission(args.id) });
     },
   });
@@ -587,6 +613,7 @@ export function useDeleteMission() {
       (await api.delete(`/missions/${id}`)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["missions"] });
+      qc.invalidateQueries({ queryKey: ["missions", "statistics"] });
     },
   });
 }
@@ -613,6 +640,7 @@ export function useAddMissionParticipantFromLdap() {
       ).data,
     onSuccess: (_data, args) => {
       qc.invalidateQueries({ queryKey: ["missions"] });
+      qc.invalidateQueries({ queryKey: ["missions", "statistics"] });
       qc.invalidateQueries({ queryKey: qk.mission(args.id) });
     },
   });
@@ -629,6 +657,7 @@ export function useAddMissionParticipantFromUser() {
       ).data,
     onSuccess: (_data, args) => {
       qc.invalidateQueries({ queryKey: ["missions"] });
+      qc.invalidateQueries({ queryKey: ["missions", "statistics"] });
       qc.invalidateQueries({ queryKey: qk.mission(args.id) });
     },
   });
@@ -645,6 +674,7 @@ export function useRemoveMissionParticipant() {
       ).data,
     onSuccess: (_data, args) => {
       qc.invalidateQueries({ queryKey: ["missions"] });
+      qc.invalidateQueries({ queryKey: ["missions", "statistics"] });
       qc.invalidateQueries({ queryKey: qk.mission(args.id) });
     },
   });
@@ -677,6 +707,7 @@ export function useCreateMissionScheduleItem() {
     onSuccess: (_data, args) => {
       qc.invalidateQueries({ queryKey: qk.missionSchedule(args.id) });
       qc.invalidateQueries({ queryKey: ["missions"] });
+      qc.invalidateQueries({ queryKey: ["missions", "statistics"] });
       qc.invalidateQueries({ queryKey: qk.mission(args.id) });
     },
   });
@@ -706,6 +737,7 @@ export function useUpdateMissionScheduleItem() {
     onSuccess: (_data, args) => {
       qc.invalidateQueries({ queryKey: qk.missionSchedule(args.id) });
       qc.invalidateQueries({ queryKey: ["missions"] });
+      qc.invalidateQueries({ queryKey: ["missions", "statistics"] });
       qc.invalidateQueries({ queryKey: qk.mission(args.id) });
     },
   });
@@ -719,6 +751,7 @@ export function useDeleteMissionScheduleItem() {
     onSuccess: (_data, args) => {
       qc.invalidateQueries({ queryKey: qk.missionSchedule(args.id) });
       qc.invalidateQueries({ queryKey: ["missions"] });
+      qc.invalidateQueries({ queryKey: ["missions", "statistics"] });
       qc.invalidateQueries({ queryKey: qk.mission(args.id) });
     },
   });

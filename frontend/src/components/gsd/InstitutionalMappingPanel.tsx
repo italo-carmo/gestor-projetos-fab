@@ -257,7 +257,9 @@ export function InstitutionalMappingPanel() {
 
   const updateMissionChecklist = useUpdateMissionChecklist();
   const uploadMissionChecklistPhoto = useUploadMissionChecklistPhoto();
-  const missionChecklistMappingQuery = useMissionChecklistMapping({});
+  const missionChecklistMappingQuery = useMissionChecklistMapping({
+    scope: "SMIF",
+  });
 
   const [institutionalDetail, setInstitutionalDetail] =
     useState<InstitutionalChecklistDetailState>(null);

@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { LocalityCatalogType, Prisma } from '@prisma/client';
+import {
+  ActivityScope,
+  LocalityCatalogType,
+  Prisma,
+} from '@prisma/client';
 import fs from 'node:fs';
 import path from 'node:path';
 import PDFDocument from 'pdfkit';
@@ -95,12 +99,28 @@ export class MissionsService {
     private readonly fabLdap: FabLdapService,
   ) {}
 
+  async listLocalityOptions(scopeParam: string | undefined, user?: RbacUser) {
+    this.assertMissionAccess(user);
+    const scope = this.normalizeMissionScope(scopeParam);
+    const ids = await this.resolveAllowedLocalityIds(scope);
+    if (ids.length === 0) {
+      return { items: [] as Array<{ id: string; code: string | null; name: string }> };
+    }
+    const items = await this.prisma.locality.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, code: true, name: true },
+      orderBy: { name: 'asc' },
+    });
+    return { items };
+  }
+
   async list(
     filters: {
       localityId?: string;
       q?: string;
       page?: string;
       pageSize?: string;
+      scope?: string;
     },
     user?: RbacUser,
   ) {
@@ -110,13 +130,15 @@ export class MissionsService {
       filters.page,
       filters.pageSize,
     );
-    const targetLocalityIds = await this.getTargetLocalityIds();
+    const scope = this.normalizeMissionScope(filters.scope);
+    const targetLocalityIds = await this.resolveAllowedLocalityIds(scope);
     if (targetLocalityIds.length === 0) {
       return { items: [], page, pageSize, total: 0 };
     }
 
     const andClauses: Prisma.MissionWhereInput[] = [
       { localityId: { in: targetLocalityIds } },
+      { scope },
     ];
     if (filters.localityId) andClauses.push({ localityId: filters.localityId });
     if (filters.q) {
@@ -170,10 +192,11 @@ export class MissionsService {
     };
   }
 
-  async getStatistics(user?: RbacUser) {
+  async getStatistics(user?: RbacUser, scopeParam?: string) {
     this.assertMissionAccess(user);
 
-    const targetLocalityIds = await this.getTargetLocalityIds();
+    const scope = this.normalizeMissionScope(scopeParam);
+    const targetLocalityIds = await this.resolveAllowedLocalityIds(scope);
     if (targetLocalityIds.length === 0) {
       return {
         totalMissions: 0,
@@ -191,7 +214,7 @@ export class MissionsService {
     }
 
     const missions = await this.prisma.mission.findMany({
-      where: { localityId: { in: targetLocalityIds } },
+      where: { localityId: { in: targetLocalityIds }, scope },
       include: {
         participants: {
           select: {
@@ -311,20 +334,27 @@ export class MissionsService {
   async getChecklistMapping(
     filters: {
       localityId?: string;
+      scope?: string;
     },
     user?: RbacUser,
   ) {
     this.assertMissionAccess(user);
     const selectedOmId = String(filters.localityId ?? '').trim() || null;
+    const scope = this.normalizeMissionScope(filters.scope);
+    const catalogType =
+      scope === ActivityScope.CIPAVD
+        ? LocalityCatalogType.CIPAVD
+        : LocalityCatalogType.SMIF;
     const checklistConfig = await this.getMissionChecklistConfig();
 
     const [omsCatalog, missions] = await this.prisma.$transaction([
       this.prisma.locality.findMany({
-        where: { catalogType: LocalityCatalogType.SMIF },
+        where: { catalogType },
         select: { id: true, name: true, code: true },
         orderBy: { name: 'asc' },
       }),
       this.prisma.mission.findMany({
+        where: { scope },
         include: {
           locality: { select: { id: true, name: true, code: true } },
           participants: {
@@ -830,6 +860,7 @@ export class MissionsService {
     });
 
     if (!mission) throwError('NOT_FOUND');
+    await this.assertMissionLocalityAllowed(mission);
     return mission;
   }
 
@@ -842,12 +873,14 @@ export class MissionsService {
       select: {
         id: true,
         localityId: true,
+        scope: true,
         updatedAt: true,
         checklistJson: true,
       },
     });
 
     if (!mission) throwError('NOT_FOUND');
+    await this.assertMissionLocalityAllowed(mission);
 
     const checklistOmId =
       this.readStoredMissionChecklistOmId(mission.checklistJson) ??
@@ -892,9 +925,10 @@ export class MissionsService {
 
     const mission = await this.prisma.mission.findUnique({
       where: { id },
-      select: { id: true, localityId: true },
+      select: { id: true, localityId: true, scope: true },
     });
     if (!mission) throwError('NOT_FOUND');
+    await this.assertMissionLocalityAllowed(mission);
 
     const checklistOmId = String(payload.omId ?? '').trim();
     if (!checklistOmId) {
@@ -903,14 +937,24 @@ export class MissionsService {
         reason: 'REQUIRED',
       });
     }
-    const omExists = await this.prisma.locality.findUnique({
+    const omRow = await this.prisma.locality.findUnique({
       where: { id: checklistOmId },
-      select: { id: true },
+      select: { id: true, catalogType: true },
     });
-    if (!omExists) {
+    if (!omRow) {
       throwError('VALIDATION_ERROR', {
         field: 'omId',
         reason: 'OM_NOT_FOUND',
+      });
+    }
+    const expectedCatalog =
+      mission.scope === ActivityScope.CIPAVD
+        ? LocalityCatalogType.CIPAVD
+        : LocalityCatalogType.SMIF;
+    if (omRow.catalogType !== expectedCatalog) {
+      throwError('VALIDATION_ERROR', {
+        field: 'omId',
+        reason: 'OM_CATALOG_MISMATCH',
       });
     }
 
@@ -976,12 +1020,14 @@ export class MissionsService {
       localityId: string;
       startDate: string;
       endDate: string;
+      scope?: string;
     },
     user?: RbacUser,
   ) {
     this.assertMissionAccess(user);
 
-    const targetLocalityIds = await this.getTargetLocalityIds();
+    const scope = this.normalizeMissionScope(payload.scope);
+    const targetLocalityIds = await this.resolveAllowedLocalityIds(scope);
     if (!targetLocalityIds.includes(payload.localityId)) {
       throwError('VALIDATION_ERROR', {
         field: 'localityId',
@@ -1005,6 +1051,7 @@ export class MissionsService {
           ? sanitizeText(payload.description)
           : null,
         localityId: payload.localityId,
+        scope,
         startDate,
         endDate,
         createdById: user?.id ?? null,
@@ -1051,8 +1098,11 @@ export class MissionsService {
 
     const existing = await this.prisma.mission.findUnique({ where: { id } });
     if (!existing) throwError('NOT_FOUND');
+    await this.assertMissionLocalityAllowed(existing);
 
-    const targetLocalityIds = await this.getTargetLocalityIds();
+    const targetLocalityIds = await this.resolveAllowedLocalityIds(
+      existing.scope,
+    );
     const localityId = payload.localityId ?? existing.localityId;
     if (!targetLocalityIds.includes(localityId)) {
       throwError('VALIDATION_ERROR', {
@@ -1130,6 +1180,7 @@ export class MissionsService {
       },
     });
     if (!existing) throwError('NOT_FOUND');
+    await this.assertMissionLocalityAllowed(existing);
 
     await this.prisma.mission.delete({ where: { id } });
 
@@ -1189,6 +1240,7 @@ export class MissionsService {
       include: { participants: true },
     });
     if (!mission) throwError('NOT_FOUND');
+    await this.assertMissionLocalityAllowed(mission);
 
     const normalized = String(identifier ?? '').trim();
     if (!normalized) {
@@ -1273,6 +1325,7 @@ export class MissionsService {
       include: { participants: true },
     });
     if (!mission) throwError('NOT_FOUND');
+    await this.assertMissionLocalityAllowed(mission);
 
     const systemUser = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -1338,6 +1391,7 @@ export class MissionsService {
       where: { id: missionId },
     });
     if (!mission) throwError('NOT_FOUND');
+    await this.assertMissionLocalityAllowed(mission);
 
     const participant = await this.prisma.missionParticipant.findFirst({
       where: { id: participantId, missionId },
@@ -1378,6 +1432,7 @@ export class MissionsService {
     });
 
     if (!mission) throwError('NOT_FOUND');
+    await this.assertMissionLocalityAllowed(mission);
 
     return {
       mission: {
@@ -1409,6 +1464,7 @@ export class MissionsService {
       where: { id: missionId },
     });
     if (!mission) throwError('NOT_FOUND');
+    await this.assertMissionLocalityAllowed(mission);
 
     const created = await this.prisma.missionScheduleItem.create({
       data: {
@@ -1455,6 +1511,7 @@ export class MissionsService {
       where: { id: missionId },
     });
     if (!mission) throwError('NOT_FOUND');
+    await this.assertMissionLocalityAllowed(mission);
 
     const existing = await this.prisma.missionScheduleItem.findFirst({
       where: { id: itemId, missionId },
@@ -1509,6 +1566,7 @@ export class MissionsService {
       where: { id: missionId },
     });
     if (!mission) throwError('NOT_FOUND');
+    await this.assertMissionLocalityAllowed(mission);
 
     const existing = await this.prisma.missionScheduleItem.findFirst({
       where: { id: itemId, missionId },
@@ -1548,6 +1606,7 @@ export class MissionsService {
     });
 
     if (!mission) throwError('NOT_FOUND');
+    await this.assertMissionLocalityAllowed(mission);
 
     const doc = new PDFDocument({
       margin: 32,
@@ -2537,9 +2596,10 @@ export class MissionsService {
     this.assertMissionChecklistEditAccess(user);
     const mission = await this.prisma.mission.findUnique({
       where: { id },
-      select: { id: true },
+      select: { id: true, localityId: true, scope: true },
     });
     if (!mission) throwError('NOT_FOUND');
+    await this.assertMissionLocalityAllowed(mission);
   }
 
   private assertMissionChecklistConfigAccess(user?: RbacUser) {
@@ -2549,7 +2609,31 @@ export class MissionsService {
     throwError('RBAC_FORBIDDEN');
   }
 
-  private async getTargetLocalityIds() {
+  private normalizeMissionScope(raw?: string): ActivityScope {
+    const value = String(raw ?? '').trim().toUpperCase();
+    if (value === 'CIPAVD') return ActivityScope.CIPAVD;
+    return ActivityScope.SMIF;
+  }
+
+  private async assertMissionLocalityAllowed(mission: {
+    localityId: string;
+    scope: ActivityScope;
+  }) {
+    const allowed = await this.resolveAllowedLocalityIds(mission.scope);
+    if (!allowed.includes(mission.localityId)) {
+      throwError('NOT_FOUND');
+    }
+  }
+
+  private async resolveAllowedLocalityIds(scope: ActivityScope) {
+    if (scope === ActivityScope.CIPAVD) {
+      const rows = await this.prisma.locality.findMany({
+        where: { catalogType: LocalityCatalogType.CIPAVD },
+        select: { id: true },
+      });
+      return rows.map((row) => row.id);
+    }
+
     const localities = await this.prisma.locality.findMany({
       where: { catalogType: LocalityCatalogType.SMIF },
       select: {

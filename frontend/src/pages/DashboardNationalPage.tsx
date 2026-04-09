@@ -435,6 +435,7 @@ export function DashboardNationalPage() {
   const dashboardQuery = useDashboardNational({ localityId: localityId || undefined });
   const missionChecklistMappingQuery = useMissionChecklistMapping({
     localityId: localityId || undefined,
+    scope: "SMIF",
   });
   const canViewBestPractices = can(me, 'best_practices', 'view');
   const bestPracticesQuery = useBestPractices({}, canViewBestPractices);

@@ -377,6 +377,91 @@ const FIXED_CARD_DEFAULTS: Record<string, EditableCardText> = {
     title: "Respostas do recorte",
     description: "Tabela detalhada com os registros filtrados e ações de exclusão.",
   },
+  "chart-marital-status": {
+    title: "Estado civil",
+    description: "",
+  },
+  "chart-education": {
+    title: "Escolaridade",
+    description: "",
+  },
+  "chart-naturality": {
+    title: "Naturalidade",
+    description: "",
+  },
+  "chart-fab-bond": {
+    title: "Vínculo institucional FAB",
+    description: "",
+  },
+  "chart-situation-scope": {
+    title: "Situação relatada",
+    description: "",
+  },
+  "chart-frequency": {
+    title: "Frequência da ocorrência",
+    description: "",
+  },
+  "chart-affective-bond": {
+    title: "Vínculo afetivo com o autor",
+    description: "",
+  },
+  "chart-author-relation": {
+    title: "Tipo de autor do fato",
+    description: "",
+  },
+  "chart-author-military-link": {
+    title: "Autor com vínculo militar",
+    description: "",
+  },
+  "chart-occurrence-place": {
+    title: "Local da ocorrência",
+    description: "",
+  },
+  "chart-witnesses": {
+    title: "Houve testemunhas?",
+    description: "",
+  },
+  "chart-impact-intensity": {
+    title: "Intensidade do impacto",
+    description: "",
+  },
+  "chart-sought-help-bar": {
+    title: "Procurou canal de denúncia?",
+    description: "",
+  },
+  "chart-violence-types": {
+    title: "Tipos de violência reportados",
+    description: "Clique em uma barra para filtrar pelo tipo.",
+  },
+  "chart-impact-areas": {
+    title: "Áreas de impacto percebidas",
+    description: "Clique em uma barra para filtrar por área.",
+  },
+  "chart-violence-by-org": {
+    title: "Cruzamento: tipos de violência por organização militar",
+    description:
+      "Visualização de concentração por OM. Clique em qualquer barra para filtrar a organização.",
+  },
+  "chart-org-distribution": {
+    title: "Distribuição por organização",
+    description: "",
+  },
+  "chart-rank": {
+    title: "Distribuição por posto/graduação",
+    description: "",
+  },
+  "chart-age": {
+    title: "Faixa etária",
+    description: "",
+  },
+  "chart-complaint-channels": {
+    title: "Canais de denúncia",
+    description: "",
+  },
+  "chart-no-complaint-reasons": {
+    title: "Motivos para não denunciar",
+    description: "",
+  },
 };
 
 function formatDate(value?: string | Date | null) {
@@ -938,6 +1023,40 @@ export function BiDomesticViolenceDashboardPage() {
   const responseTrendText = getCardText("chart-response-trend");
   const importsText = getCardText("list-imports");
   const responsesText = getCardText("list-responses");
+
+  const renderDistributionChartHeader = (cardId: string) => {
+    const text = getCardText(cardId);
+    const hasDesc = Boolean(String(text.description ?? "").trim());
+    return (
+      <>
+        <Stack
+          direction="row"
+          justifyContent="space-between"
+          alignItems="flex-start"
+        >
+          <Typography
+            variant="subtitle1"
+            fontWeight={700}
+            sx={{ mb: hasDesc ? 0.5 : 1 }}
+          >
+            {text.title}
+          </Typography>
+          {isTiProfile ? (
+            <MuiTooltip title="Editar título/descrição">
+              <IconButton size="small" onClick={() => openCardEditor(cardId)}>
+                <EditOutlinedIcon fontSize="small" />
+              </IconButton>
+            </MuiTooltip>
+          ) : null}
+        </Stack>
+        {hasDesc ? (
+          <Typography variant="body2" sx={{ color: DV_PALETTE.muted, mb: 1.2 }}>
+            {text.description}
+          </Typography>
+        ) : null}
+      </>
+    );
+  };
 
   return (
     <Box
@@ -2001,9 +2120,7 @@ export function BiDomesticViolenceDashboardPage() {
         <Grid size={{ xs: 12, lg: 3 }}>
           <Card sx={cardSx}>
             <CardContent>
-              <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
-                Estado civil
-              </Typography>
+              {renderDistributionChartHeader("chart-marital-status")}
               <Box sx={{ height: 236 }}>
                 <ResponsiveContainer>
                   <BarChart barCategoryGap="42%" maxBarSize={14} data={maritalStatusBars}>
@@ -2058,9 +2175,7 @@ export function BiDomesticViolenceDashboardPage() {
         <Grid size={{ xs: 12, lg: 3 }}>
           <Card sx={cardSx}>
             <CardContent>
-              <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
-                Escolaridade
-              </Typography>
+              {renderDistributionChartHeader("chart-education")}
               <Box sx={{ height: 236 }}>
                 <ResponsiveContainer>
                   <BarChart barCategoryGap="42%" maxBarSize={14} data={educationBars}>
@@ -2112,9 +2227,7 @@ export function BiDomesticViolenceDashboardPage() {
         <Grid size={{ xs: 12, lg: 3 }}>
           <Card sx={cardSx}>
             <CardContent>
-              <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
-                Naturalidade
-              </Typography>
+              {renderDistributionChartHeader("chart-naturality")}
               <Box sx={{ height: 236 }}>
                 <ResponsiveContainer>
                   <BarChart barCategoryGap="42%" maxBarSize={14} data={naturalityBars}>
@@ -2166,9 +2279,7 @@ export function BiDomesticViolenceDashboardPage() {
         <Grid size={{ xs: 12, lg: 3 }}>
           <Card sx={cardSx}>
             <CardContent>
-              <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
-                Vínculo institucional FAB
-              </Typography>
+              {renderDistributionChartHeader("chart-fab-bond")}
               <Box sx={{ height: 236 }}>
                 <ResponsiveContainer>
                   <BarChart barCategoryGap="42%" maxBarSize={14} data={fabBondBars}>
@@ -2222,9 +2333,7 @@ export function BiDomesticViolenceDashboardPage() {
         <Grid size={{ xs: 12, lg: 3 }}>
           <Card sx={cardSx}>
             <CardContent>
-              <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
-                Situação relatada
-              </Typography>
+              {renderDistributionChartHeader("chart-situation-scope")}
               <Box sx={{ height: 236 }}>
                 <ResponsiveContainer>
                   <BarChart barCategoryGap="42%" maxBarSize={14} data={situationScopeBars}>
@@ -2279,9 +2388,7 @@ export function BiDomesticViolenceDashboardPage() {
         <Grid size={{ xs: 12, lg: 3 }}>
           <Card sx={cardSx}>
             <CardContent>
-              <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
-                Frequência da ocorrência
-              </Typography>
+              {renderDistributionChartHeader("chart-frequency")}
               <Box sx={{ height: 236 }}>
                 <ResponsiveContainer>
                   <BarChart barCategoryGap="42%" maxBarSize={14} data={frequencyBars}>
@@ -2333,9 +2440,7 @@ export function BiDomesticViolenceDashboardPage() {
         <Grid size={{ xs: 12, lg: 3 }}>
           <Card sx={cardSx}>
             <CardContent>
-              <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
-                Vínculo afetivo com o autor
-              </Typography>
+              {renderDistributionChartHeader("chart-affective-bond")}
               <Box sx={{ height: 236 }}>
                 <ResponsiveContainer>
                   <BarChart barCategoryGap="42%" maxBarSize={14} data={affectiveBondBars}>
@@ -2390,9 +2495,7 @@ export function BiDomesticViolenceDashboardPage() {
         <Grid size={{ xs: 12, lg: 3 }}>
           <Card sx={cardSx}>
             <CardContent>
-              <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
-                Tipo de autor do fato
-              </Typography>
+              {renderDistributionChartHeader("chart-author-relation")}
               <Box sx={{ height: 236 }}>
                 <ResponsiveContainer>
                   <BarChart barCategoryGap="42%" maxBarSize={14} data={authorRelationBars}>
@@ -2449,9 +2552,7 @@ export function BiDomesticViolenceDashboardPage() {
         <Grid size={{ xs: 12, lg: 4 }}>
           <Card sx={cardSx}>
             <CardContent>
-              <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
-                Autor com vínculo militar
-              </Typography>
+              {renderDistributionChartHeader("chart-author-military-link")}
               <Box sx={{ height: 236 }}>
                 <ResponsiveContainer>
                   <BarChart barCategoryGap="42%" maxBarSize={14} data={authorMilitaryLinkBars}>
@@ -2506,9 +2607,7 @@ export function BiDomesticViolenceDashboardPage() {
         <Grid size={{ xs: 12, lg: 4 }}>
           <Card sx={cardSx}>
             <CardContent>
-              <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
-                Local da ocorrência
-              </Typography>
+              {renderDistributionChartHeader("chart-occurrence-place")}
               <Box sx={{ height: 236 }}>
                 <ResponsiveContainer>
                   <BarChart barCategoryGap="42%" maxBarSize={14} data={occurrencePlaceBars}>
@@ -2563,9 +2662,7 @@ export function BiDomesticViolenceDashboardPage() {
         <Grid size={{ xs: 12, lg: 4 }}>
           <Card sx={cardSx}>
             <CardContent>
-              <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
-                Houve testemunhas?
-              </Typography>
+              {renderDistributionChartHeader("chart-witnesses")}
               <Box sx={{ height: 236 }}>
                 <ResponsiveContainer>
                   <BarChart barCategoryGap="42%" maxBarSize={14} data={witnessesBars}>
@@ -2622,9 +2719,7 @@ export function BiDomesticViolenceDashboardPage() {
         <Grid size={{ xs: 12, lg: 6 }}>
           <Card sx={cardSx}>
             <CardContent>
-              <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
-                Intensidade do impacto
-              </Typography>
+              {renderDistributionChartHeader("chart-impact-intensity")}
               <Box sx={{ height: 248 }}>
                 <ResponsiveContainer>
                   <BarChart barCategoryGap="42%" maxBarSize={14} data={impactIntensityBars}>
@@ -2679,9 +2774,7 @@ export function BiDomesticViolenceDashboardPage() {
         <Grid size={{ xs: 12, lg: 6 }}>
           <Card sx={cardSx}>
             <CardContent>
-              <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
-                Procurou canal de denúncia?
-              </Typography>
+              {renderDistributionChartHeader("chart-sought-help-bar")}
               <Box sx={{ height: 248 }}>
                 <ResponsiveContainer>
                   <BarChart barCategoryGap="42%" maxBarSize={14} data={soughtHelpBars}>
@@ -2738,15 +2831,7 @@ export function BiDomesticViolenceDashboardPage() {
         <Grid size={{ xs: 12, lg: 6 }}>
           <Card sx={cardSx}>
             <CardContent>
-              <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
-                Tipos de violência reportados
-              </Typography>
-              <Typography
-                variant="body2"
-                sx={{ color: DV_PALETTE.muted, mb: 1.2 }}
-              >
-                Clique em uma barra para filtrar pelo tipo.
-              </Typography>
+              {renderDistributionChartHeader("chart-violence-types")}
               <Box sx={{ height: 248 }}>
                 <ResponsiveContainer>
                   <BarChart barCategoryGap="42%" maxBarSize={14} data={violenceTypeBars}>
@@ -2797,15 +2882,7 @@ export function BiDomesticViolenceDashboardPage() {
         <Grid size={{ xs: 12, lg: 6 }}>
           <Card sx={cardSx}>
             <CardContent>
-              <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
-                Áreas de impacto percebidas
-              </Typography>
-              <Typography
-                variant="body2"
-                sx={{ color: DV_PALETTE.muted, mb: 1.2 }}
-              >
-                Clique em uma barra para filtrar por área.
-              </Typography>
+              {renderDistributionChartHeader("chart-impact-areas")}
               <Box sx={{ height: 248 }}>
                 <ResponsiveContainer>
                   <BarChart barCategoryGap="42%" maxBarSize={14} data={impactAreaBars}>
@@ -2856,13 +2933,7 @@ export function BiDomesticViolenceDashboardPage() {
 
       <Card sx={{ ...cardSx, mb: 2 }}>
         <CardContent>
-          <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
-            Cruzamento: tipos de violência por organização militar
-          </Typography>
-          <Typography variant="body2" sx={{ color: DV_PALETTE.muted, mb: 1.2 }}>
-            Visualização de concentração por OM. Clique em qualquer barra para
-            filtrar a organização.
-          </Typography>
+          {renderDistributionChartHeader("chart-violence-by-org")}
           <Box sx={{ height: 280 }}>
             <ResponsiveContainer>
               <BarChart barCategoryGap="42%" maxBarSize={14} data={violenceByOrganization?.items ?? []}>
@@ -2920,9 +2991,7 @@ export function BiDomesticViolenceDashboardPage() {
         <Grid size={{ xs: 12, lg: 4 }}>
           <Card sx={cardSx}>
             <CardContent>
-              <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
-                Distribuição por organização
-              </Typography>
+              {renderDistributionChartHeader("chart-org-distribution")}
               <Box sx={{ height: 236 }}>
                 <ResponsiveContainer>
                   <BarChart barCategoryGap="42%" maxBarSize={14} data={organizationBars}>
@@ -2977,9 +3046,7 @@ export function BiDomesticViolenceDashboardPage() {
         <Grid size={{ xs: 12, lg: 4 }}>
           <Card sx={cardSx}>
             <CardContent>
-              <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
-                Distribuição por posto/graduação
-              </Typography>
+              {renderDistributionChartHeader("chart-rank")}
               <Box sx={{ height: 236 }}>
                 <ResponsiveContainer>
                   <BarChart barCategoryGap="42%" maxBarSize={14} data={rankBars}>
@@ -3030,9 +3097,7 @@ export function BiDomesticViolenceDashboardPage() {
         <Grid size={{ xs: 12, lg: 4 }}>
           <Card sx={cardSx}>
             <CardContent>
-              <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
-                Faixa etária
-              </Typography>
+              {renderDistributionChartHeader("chart-age")}
               <Box sx={{ height: 236 }}>
                 <ResponsiveContainer>
                   <BarChart barCategoryGap="42%" maxBarSize={14} data={ageBars}>
@@ -3081,9 +3146,7 @@ export function BiDomesticViolenceDashboardPage() {
         <Grid size={{ xs: 12, lg: 6 }}>
           <Card sx={cardSx}>
             <CardContent>
-              <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
-                Canais de denúncia
-              </Typography>
+              {renderDistributionChartHeader("chart-complaint-channels")}
               <Box sx={{ height: 248 }}>
                 <ResponsiveContainer>
                   <BarChart barCategoryGap="42%" maxBarSize={14} data={channelBars}>
@@ -3138,9 +3201,7 @@ export function BiDomesticViolenceDashboardPage() {
         <Grid size={{ xs: 12, lg: 6 }}>
           <Card sx={cardSx}>
             <CardContent>
-              <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
-                Motivos para não denunciar
-              </Typography>
+              {renderDistributionChartHeader("chart-no-complaint-reasons")}
               <Box sx={{ height: 248 }}>
                 <ResponsiveContainer>
                   <BarChart barCategoryGap="42%" maxBarSize={14} data={reasonBars}>

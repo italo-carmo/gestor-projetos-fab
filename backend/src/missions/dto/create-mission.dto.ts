@@ -1,4 +1,10 @@
-import { IsDateString, IsOptional, IsString, MaxLength } from 'class-validator';
+import {
+  IsDateString,
+  IsIn,
+  IsOptional,
+  IsString,
+  MaxLength,
+} from 'class-validator';
 
 export class CreateMissionDto {
   @IsString()
@@ -11,6 +17,10 @@ export class CreateMissionDto {
 
   @IsString()
   localityId: string;
+
+  @IsOptional()
+  @IsIn(['SMIF', 'CIPAVD'])
+  scope?: 'SMIF' | 'CIPAVD';
 
   @IsDateString()
   startDate: string;

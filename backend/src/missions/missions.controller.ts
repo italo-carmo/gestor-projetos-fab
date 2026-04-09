@@ -59,24 +59,38 @@ export class MissionsController {
     @Query('q') q: string | undefined,
     @Query('page') page: string | undefined,
     @Query('pageSize') pageSize: string | undefined,
+    @Query('scope') scope: string | undefined,
     @CurrentUser() user: RbacUser,
   ) {
-    return this.missions.list({ localityId, q, page, pageSize }, user);
+    return this.missions.list({ localityId, q, page, pageSize, scope }, user);
   }
 
   @Get('statistics')
   @RequirePermission('missions', 'view')
-  getStatistics(@CurrentUser() user: RbacUser) {
-    return this.missions.getStatistics(user);
+  getStatistics(
+    @Query('scope') scope: string | undefined,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.missions.getStatistics(user, scope);
+  }
+
+  @Get('locality-options')
+  @RequirePermission('missions', 'view')
+  listLocalityOptions(
+    @Query('scope') scope: string | undefined,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.missions.listLocalityOptions(scope, user);
   }
 
   @Get('checklist/mapping')
   @RequirePermission('missions', 'view')
   getChecklistMapping(
     @Query('localityId') localityId: string | undefined,
+    @Query('scope') scope: string | undefined,
     @CurrentUser() user: RbacUser,
   ) {
-    return this.missions.getChecklistMapping({ localityId }, user);
+    return this.missions.getChecklistMapping({ localityId, scope }, user);
   }
 
   @Get('checklist/config')

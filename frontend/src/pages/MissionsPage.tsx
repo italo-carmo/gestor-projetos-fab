@@ -27,6 +27,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
@@ -44,11 +45,11 @@ import {
   useDeleteMission,
   useDeleteMissionScheduleItem,
   useExportMissionSchedulePdf,
-  useLocalities,
   useLookupMissionLdapParticipant,
   useMission,
   useMissionChecklist,
   useMe,
+  useMissionLocalityOptions,
   useMissionStatistics,
   useMissions,
   useOmsCatalog,
@@ -72,7 +73,7 @@ import { ConfirmDialog } from '../components/dialogs/ConfirmDialog';
 import { EmptyState } from '../components/states/EmptyState';
 import { ErrorState } from '../components/states/ErrorState';
 import { SkeletonState } from '../components/states/SkeletonState';
-import { selectTargetLocalities } from '../constants/localities';
+type MissionScope = 'SMIF' | 'CIPAVD';
 
 function resolveChecklistPhotoUrl(raw: string) {
   const url = String(raw ?? '').trim();
@@ -430,13 +431,22 @@ export function MissionsPage() {
   const missionIdFromUrl = params.get('missionId') ?? '';
   const localityId = params.get('localityId') ?? '';
   const q = params.get('q') ?? '';
+  const missionScope: MissionScope =
+    params.get('scope') === 'CIPAVD' ? 'CIPAVD' : 'SMIF';
 
-  const missionsQuery = useMissions({ localityId: localityId || undefined, q: q || undefined });
-  const localitiesQuery = useLocalities();
-  const omsCatalogQuery = useOmsCatalog();
+  const missionsQuery = useMissions({
+    localityId: localityId || undefined,
+    q: q || undefined,
+    scope: missionScope,
+  });
+  const localityOptionsQuery = useMissionLocalityOptions(missionScope);
+  const omsCatalogQuery = useOmsCatalog(missionScope === 'SMIF');
   const missionDetailQuery = useMission(missionIdFromUrl, Boolean(missionIdFromUrl));
-  const cloneMissionOptionsQuery = useMissions({ pageSize: '200' });
-  const statisticsQuery = useMissionStatistics();
+  const cloneMissionOptionsQuery = useMissions({
+    pageSize: '200',
+    scope: missionScope,
+  });
+  const statisticsQuery = useMissionStatistics(missionScope);
 
   const createMission = useCreateMission();
   const updateMission = useUpdateMission();
@@ -492,17 +502,28 @@ export function MissionsPage() {
 
   const lookupQuery = useLookupMissionLdapParticipant(ldapIdentifier);
 
-  const localityOptions = useMemo(
-    () =>
-      selectTargetLocalities((localitiesQuery.data?.items ?? []) as any[])
-        .filter((locality: any) => Number(locality?.recruitsFemaleCountCurrent ?? 0) > 0)
-        .map((locality: any) => ({ id: String(locality.id), name: String(locality.name) }))
-        .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')),
-    [localitiesQuery.data?.items],
-  );
-  const checklistOmOptions = useMemo(
-    () =>
-      ((omsCatalogQuery.data?.items ?? []) as Array<any>)
+  const localityOptions = useMemo(() => {
+    const rows = (localityOptionsQuery.data?.items ?? []) as Array<{
+      id: string;
+      code?: string | null;
+      name: string;
+    }>;
+    return rows
+      .map((row) => ({
+        id: String(row.id),
+        name: row.code ? `${row.name} (${row.code})` : String(row.name),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+  }, [localityOptionsQuery.data?.items]);
+
+  const checklistOmOptions = useMemo(() => {
+    if (missionScope === 'CIPAVD') {
+      const rows = (localityOptionsQuery.data?.items ?? []) as Array<{
+        id: string;
+        code?: string | null;
+        name: string;
+      }>;
+      return rows
         .map((item) => {
           const id = String(item?.id ?? '').trim();
           if (!id) return null;
@@ -516,14 +537,36 @@ export function MissionsPage() {
           };
         })
         .filter(Boolean)
-        .sort((a, b) => String(a?.label ?? '').localeCompare(String(b?.label ?? ''), 'pt-BR')) as Array<{
+        .sort((a, b) =>
+          String(a?.label ?? '').localeCompare(String(b?.label ?? ''), 'pt-BR'),
+        ) as Array<{
         id: string;
         code: string;
         name: string;
         label: string;
-      }>,
-    [omsCatalogQuery.data?.items],
-  );
+      }>;
+    }
+    return ((omsCatalogQuery.data?.items ?? []) as Array<any>)
+      .map((item) => {
+        const id = String(item?.id ?? '').trim();
+        if (!id) return null;
+        const code = String(item?.code ?? '').trim();
+        const name = String(item?.name ?? '').trim();
+        return {
+          id,
+          code,
+          name,
+          label: code || name || id,
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => String(a?.label ?? '').localeCompare(String(b?.label ?? ''), 'pt-BR')) as Array<{
+      id: string;
+      code: string;
+      name: string;
+      label: string;
+    }>;
+  }, [missionScope, localityOptionsQuery.data?.items, omsCatalogQuery.data?.items]);
 
   const items = missionsQuery.data?.items ?? [];
   const selectedMission = missionDetailQuery.data ?? null;
@@ -675,6 +718,18 @@ export function MissionsPage() {
   }, [missionChecklistQuery.data, selectedMission?.id, selectedMission?.localityId]);
 
   useEffect(() => {
+    const data = missionDetailQuery.data as { scope?: string } | undefined;
+    if (!missionIdFromUrl || !data?.scope) return;
+    const expected: MissionScope =
+      String(data.scope).toUpperCase() === 'CIPAVD' ? 'CIPAVD' : 'SMIF';
+    if (missionScope !== expected) {
+      const next = new URLSearchParams(params);
+      next.set('scope', expected);
+      setParams(next, { replace: true });
+    }
+  }, [missionIdFromUrl, missionDetailQuery.data, missionScope, params, setParams]);
+
+  useEffect(() => {
     const sync = () => setMissionsUiSettings(loadMissionsPageUiSettings());
     window.addEventListener('missions-page-ui-settings-changed', sync);
     const onStorage = (e: StorageEvent) => {
@@ -802,6 +857,7 @@ export function MissionsPage() {
           localityId: missionForm.localityId,
           startDate: missionForm.startDate,
           endDate: missionForm.endDate,
+          scope: missionScope,
         });
         const clonedCount = await cloneScheduleItems(created.id);
         toast.push({ message: 'Missão criada com sucesso.', severity: 'success' });
@@ -1149,19 +1205,92 @@ export function MissionsPage() {
   if (missionsQuery.isLoading) return <SkeletonState />;
   if (missionsQuery.isError) return <ErrorState error={missionsQuery.error} onRetry={() => missionsQuery.refetch()} />;
 
+  const scopeLabel = missionScope === 'CIPAVD' ? 'CIPAVD' : 'SMIF';
+  const scopeSubtitle =
+    missionScope === 'CIPAVD'
+      ? 'Planejamento de missões da frente CIPAVD: equipe, cronograma com PDF e mapeamento institucional alinhado ao catálogo CIPAVD.'
+      : 'Planejamento das missões SMIF de instrução e acompanhamento, com participantes via LDAP, cronograma oficial e exportação em PDF.';
+
+  const handleScopeTabChange = (_event: unknown, value: MissionScope) => {
+    const next = new URLSearchParams(params);
+    next.set('scope', value);
+    next.delete('missionId');
+    setParams(next, { replace: true });
+  };
+
   return (
-    <Box>
-      <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', md: 'center' }} mb={2} gap={1.2}>
+    <Box sx={{ overflowX: 'clip' }}>
+      <Stack
+        direction={{ xs: 'column', md: 'row' }}
+        justifyContent="space-between"
+        alignItems={{ xs: 'flex-start', md: 'center' }}
+        gap={1}
+        mb={1.4}
+      >
         <Box>
-          <Typography variant="h4">Missões</Typography>
-          <Typography variant="body2" color="text.secondary">
-            Planejamento completo da missão, participantes via LDAP e cronograma oficial com exportação em PDF.
+          <Typography variant="h4" fontWeight={700}>
+            Missões
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            {scopeSubtitle}
           </Typography>
         </Box>
         <Button variant="contained" startIcon={<AddRoundedIcon />} onClick={openCreate}>
           Nova missão
         </Button>
       </Stack>
+
+      <Card
+        sx={{
+          mb: 2,
+          borderRadius: 3,
+          border: (theme) => `1px solid ${alpha(theme.palette.primary.main, 0.12)}`,
+          background: (theme) =>
+            `linear-gradient(165deg, ${theme.palette.background.paper} 0%, ${alpha(theme.palette.primary.main, 0.06)} 100%)`,
+        }}
+      >
+        <CardContent sx={{ pb: '12px !important' }}>
+          <Stack
+            direction={{ xs: 'column', md: 'row' }}
+            justifyContent="space-between"
+            alignItems={{ xs: 'flex-start', md: 'center' }}
+            gap={1}
+          >
+            <Box>
+              <Typography variant="subtitle2" color="text.secondary">
+                Escopo
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                Listagem, indicadores e cadastros filtrados por {scopeLabel}
+              </Typography>
+            </Box>
+            <Tabs
+              value={missionScope}
+              onChange={handleScopeTabChange}
+              sx={{
+                minHeight: 34,
+                '& .MuiTabs-indicator': { display: 'none' },
+                '& .MuiTab-root': {
+                  minHeight: 34,
+                  py: 0.6,
+                  px: 1.8,
+                  borderRadius: 999,
+                  textTransform: 'none',
+                  fontWeight: 700,
+                  color: 'text.secondary',
+                },
+                '& .Mui-selected': {
+                  color: 'primary.main !important',
+                  bgcolor: (theme) => alpha(theme.palette.primary.main, 0.11),
+                },
+              }}
+            >
+              <Tab value="SMIF" label="SMIF" />
+              <Tab value="CIPAVD" label="CIPAVD" />
+            </Tabs>
+          </Stack>
+        </CardContent>
+      </Card>
 
       {statisticsQuery.isLoading && (
         <Card sx={{ mb: 2 }}>
@@ -1199,6 +1328,9 @@ export function MissionsPage() {
                     {missionsUiSettings.statsSection.description.trim()}
                   </Typography>
                 ) : null}
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75 }}>
+                  Indicadores calculados apenas para missões {scopeLabel}.
+                </Typography>
               </Box>
               {isTiProfile ? (
                 <Tooltip title="Editar título e descrição">
@@ -1488,7 +1620,14 @@ export function MissionsPage() {
       <Card>
         <CardContent>
           {items.length === 0 ? (
-            <EmptyState title="Nenhuma missão" description="Crie a primeira missão para iniciar o planejamento." />
+            <EmptyState
+              title="Nenhuma missão"
+              description={
+                missionScope === 'CIPAVD'
+                  ? 'Crie a primeira missão CIPAVD para iniciar o planejamento nesta frente.'
+                  : 'Crie a primeira missão SMIF para iniciar o planejamento.'
+              }
+            />
           ) : (
             <Table size="small">
               <TableHead>
@@ -1574,7 +1713,9 @@ export function MissionsPage() {
       >
         <Box p={3} sx={{ height: '100%', overflowY: 'auto' }}>
           <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
-            <Typography variant="h6">{isCreateMode ? 'Nova missão' : 'Detalhes da missão'}</Typography>
+            <Typography variant="h6">
+              {isCreateMode ? `Nova missão (${scopeLabel})` : `Detalhes da missão (${scopeLabel})`}
+            </Typography>
             <Stack direction="row" spacing={1}>
               {!isCreateMode && selectedMission && (
                 <Button
