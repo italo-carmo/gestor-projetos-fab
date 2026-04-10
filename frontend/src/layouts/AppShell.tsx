@@ -41,6 +41,12 @@ import LogoutIcon from "@mui/icons-material/Logout";
 import ChevronLeftRoundedIcon from "@mui/icons-material/ChevronLeftRounded";
 import ChevronRightRoundedIcon from "@mui/icons-material/ChevronRightRounded";
 import InsightsRoundedIcon from "@mui/icons-material/InsightsRounded";
+import BarChartRoundedIcon from "@mui/icons-material/BarChartRounded";
+import StackedBarChartRoundedIcon from "@mui/icons-material/StackedBarChartRounded";
+import MilitaryTechRoundedIcon from "@mui/icons-material/MilitaryTechRounded";
+import AutorenewRoundedIcon from "@mui/icons-material/AutorenewRounded";
+import ForumRoundedIcon from "@mui/icons-material/ForumRounded";
+import GradingRoundedIcon from "@mui/icons-material/GradingRounded";
 import PolicyRoundedIcon from "@mui/icons-material/PolicyRounded";
 import PhotoLibraryRoundedIcon from "@mui/icons-material/PhotoLibraryRounded";
 import LightbulbRoundedIcon from "@mui/icons-material/LightbulbRounded";
@@ -229,37 +235,37 @@ const navSections: NavSection[] = [
       {
         label: "Escolas",
         to: "/dashboard/bi",
-        icon: <InsightsRoundedIcon fontSize="small" />,
+        icon: <BarChartRoundedIcon fontSize="small" />,
         menuKey: "bi",
       },
       {
         label: "Violência Doméstica",
         to: "/dashboard/bi-violencia-domestica",
-        icon: <InsightsRoundedIcon fontSize="small" />,
+        icon: <StackedBarChartRoundedIcon fontSize="small" />,
         menuKey: "bi",
       },
       {
         label: "Recrutas",
         to: "/dashboard/bi-recrutas",
-        icon: <InsightsRoundedIcon fontSize="small" />,
+        icon: <MilitaryTechRoundedIcon fontSize="small" />,
         menuKey: "bi",
       },
       {
         label: "Ciclo de Boas Práticas",
         to: "/dashboard/bi-ciclo-boas-praticas",
-        icon: <InsightsRoundedIcon fontSize="small" />,
+        icon: <AutorenewRoundedIcon fontSize="small" />,
         menuKey: "bi",
       },
       {
         label: "Encontro CPCA",
         to: "/dashboard/bi-encontro-cpca",
-        icon: <InsightsRoundedIcon fontSize="small" />,
+        icon: <ForumRoundedIcon fontSize="small" />,
         menuKey: "bi",
       },
       {
         label: "Avaliação GSD",
         to: "/dashboard/bi-avaliacao-gsd",
-        icon: <InsightsRoundedIcon fontSize="small" />,
+        icon: <GradingRoundedIcon fontSize="small" />,
         menuKey: "bi",
       },
     ],
