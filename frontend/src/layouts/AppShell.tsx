@@ -43,7 +43,7 @@ import ChevronRightRoundedIcon from "@mui/icons-material/ChevronRightRounded";
 import InsightsRoundedIcon from "@mui/icons-material/InsightsRounded";
 import BarChartRoundedIcon from "@mui/icons-material/BarChartRounded";
 import StackedBarChartRoundedIcon from "@mui/icons-material/StackedBarChartRounded";
-import MilitaryTechRoundedIcon from "@mui/icons-material/MilitaryTechRounded";
+import GroupAddRoundedIcon from "@mui/icons-material/GroupAddRounded";
 import AutorenewRoundedIcon from "@mui/icons-material/AutorenewRounded";
 import ForumRoundedIcon from "@mui/icons-material/ForumRounded";
 import GradingRoundedIcon from "@mui/icons-material/GradingRounded";
@@ -247,7 +247,7 @@ const navSections: NavSection[] = [
       {
         label: "Recrutas",
         to: "/dashboard/bi-recrutas",
-        icon: <MilitaryTechRoundedIcon fontSize="small" />,
+        icon: <GroupAddRoundedIcon fontSize="small" />,
         menuKey: "bi",
       },
       {
