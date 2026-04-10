@@ -337,14 +337,14 @@ export class StrategicService {
             doc.fontSize(9).fillColor('#333333').text(`  • ${item.label}: ${item.count} (${item.percent}%)`);
           }
         }
-        if (profile.victimProfile.byRank.length > 0) {
+        if (profile.victimProfile?.byRank?.length > 0) {
           doc.moveDown(0.3);
           doc.fontSize(10).fillColor(gray).text('Postos/Graduações de vítimas mais frequentes:');
           for (const item of profile.victimProfile.byRank.slice(0, 5)) {
             doc.fontSize(9).fillColor('#333333').text(`  • ${item.label}: ${item.count} (${item.percent}%)`);
           }
         }
-        if (profile.context.byViolenceType.length > 0) {
+        if (profile.context?.byViolenceType?.length > 0) {
           doc.moveDown(0.3);
           doc.fontSize(10).fillColor(gray).text('Tipos de violência mais frequentes:');
           for (const item of profile.context.byViolenceType.slice(0, 5)) {
