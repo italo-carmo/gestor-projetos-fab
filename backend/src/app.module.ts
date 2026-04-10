@@ -31,6 +31,7 @@ import { BestPracticesModule } from './best-practices/best-practices.module';
 import { LessonsLearnedModule } from './lessons-learned/lessons-learned.module';
 import { SmifComplaintsModule } from './smif-complaints/smif-complaints.module';
 import { MenuUpdatesModule } from './menu-updates/menu-updates.module';
+import { StrategicModule } from './strategic/strategic.module';
 
 @Module({
   imports: [
@@ -69,6 +70,7 @@ import { MenuUpdatesModule } from './menu-updates/menu-updates.module';
     LessonsLearnedModule,
     SmifComplaintsModule,
     MenuUpdatesModule,
+    StrategicModule,
   ],
   controllers: [AppController],
   providers: [AppService],

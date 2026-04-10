@@ -47,6 +47,7 @@ import GroupAddRoundedIcon from "@mui/icons-material/GroupAddRounded";
 import AutorenewRoundedIcon from "@mui/icons-material/AutorenewRounded";
 import ForumRoundedIcon from "@mui/icons-material/ForumRounded";
 import GradingRoundedIcon from "@mui/icons-material/GradingRounded";
+import ShieldRoundedIcon from "@mui/icons-material/ShieldRounded";
 import PolicyRoundedIcon from "@mui/icons-material/PolicyRounded";
 import PhotoLibraryRoundedIcon from "@mui/icons-material/PhotoLibraryRounded";
 import LightbulbRoundedIcon from "@mui/icons-material/LightbulbRounded";
@@ -232,6 +233,12 @@ const navSections: NavSection[] = [
     id: "pesquisas",
     label: "PESQUISAS",
     items: [
+      {
+        label: "Painel Estratégico",
+        to: "/dashboard/estrategico",
+        icon: <ShieldRoundedIcon fontSize="small" />,
+        menuKey: "bi",
+      },
       {
         label: "Escolas",
         to: "/dashboard/bi",

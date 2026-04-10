@@ -4318,3 +4318,42 @@ export function useUpdateBiGsdEvaluationCardSetting() {
     },
   });
 }
+
+export function useStrategicDashboard() {
+  return useQuery({
+    queryKey: ["strategic", "dashboard"],
+    queryFn: async () => (await api.get("/strategic/dashboard")).data,
+  });
+}
+
+export function useAggressorProfile() {
+  return useQuery({
+    queryKey: ["strategic", "aggressorProfile"],
+    queryFn: async () => (await api.get("/strategic/aggressor-profile")).data,
+  });
+}
+
+export function useTextAnalysis() {
+  return useQuery({
+    queryKey: ["strategic", "textAnalysis"],
+    queryFn: async () => (await api.get("/strategic/text-analysis")).data,
+  });
+}
+
+export function useExportExecutiveReportPdf() {
+  return useMutation({
+    mutationFn: async () => {
+      const res = await api.get("/strategic/executive-report/pdf", {
+        responseType: "blob",
+      });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `relatorio-executivo-${new Date().toISOString().slice(0, 10)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    },
+  });
+}

@@ -28,6 +28,7 @@ import { BiRecruitsDashboardPage } from "./pages/BiRecruitsDashboardPage";
 import { BiBestPracticesCycleDashboardPage } from "./pages/BiBestPracticesCycleDashboardPage";
 import { BiCpcaMeetingDashboardPage } from "./pages/BiCpcaMeetingDashboardPage";
 import { BiGsdEvaluationDashboardPage } from "./pages/BiGsdEvaluationDashboardPage";
+import { StrategicDashboardPage } from "./pages/StrategicDashboardPage";
 import { MissionsPage } from "./pages/MissionsPage";
 import { SocialCommunicationPage } from "./pages/SocialCommunicationPage";
 import { CpcaCasesPage } from "./pages/CpcaCasesPage";
@@ -160,6 +161,16 @@ function App() {
                       allow={(user) => can(user, "bi", "view")}
                     >
                       <BiGsdEvaluationDashboardPage />
+                    </RequireRoleAccess>
+                  }
+                />
+                <Route
+                  path="/dashboard/estrategico"
+                  element={
+                    <RequireRoleAccess
+                      allow={(user) => can(user, "bi", "view")}
+                    >
+                      <StrategicDashboardPage />
                     </RequireRoleAccess>
                   }
                 />
