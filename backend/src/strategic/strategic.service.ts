@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
+import { LocalityCatalogType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { selectTargetLocalities } from '../common/priority-localities';
 import PDFDocument from 'pdfkit';
 
 const PT_STOPWORDS = new Set([
@@ -247,20 +249,27 @@ export class StrategicService {
       ...cpcaCommentTexts,
     ];
 
+    const buildSource = (texts: string[]) => ({
+      count: texts.length,
+      topWords: tokenizeAndCount(texts).slice(0, 50),
+      rawTexts: texts.slice(0, 500),
+    });
+
     return {
       generatedAt: new Date().toISOString(),
       sources: {
-        recruitsSuggestions: { count: suggestionTexts.length, topWords: tokenizeAndCount(suggestionTexts).slice(0, 50) },
-        recruitsEnlistment: { count: enlistmentTexts.length, topWords: tokenizeAndCount(enlistmentTexts).slice(0, 50) },
-        reportObservations: { count: reportObservations.length, topWords: tokenizeAndCount(reportObservations).slice(0, 50) },
-        reportAttentionPoints: { count: reportAttention.length, topWords: tokenizeAndCount(reportAttention).slice(0, 50) },
-        reportConclusions: { count: reportConclusions.length, topWords: tokenizeAndCount(reportConclusions).slice(0, 50) },
-        bestPracticeComments: { count: bestPracticeComments.length, topWords: tokenizeAndCount(bestPracticeComments).slice(0, 50) },
-        cpcaComments: { count: cpcaCommentTexts.length, topWords: tokenizeAndCount(cpcaCommentTexts).slice(0, 50) },
+        recruitsSuggestions: buildSource(suggestionTexts),
+        recruitsEnlistment: buildSource(enlistmentTexts),
+        reportObservations: buildSource(reportObservations),
+        reportAttentionPoints: buildSource(reportAttention),
+        reportConclusions: buildSource(reportConclusions),
+        bestPracticeComments: buildSource(bestPracticeComments),
+        cpcaComments: buildSource(cpcaCommentTexts),
       },
       consolidated: {
         totalTexts: allTexts.length,
         topWords: tokenizeAndCount(allTexts).slice(0, 80),
+        rawTexts: allTexts.slice(0, 1000),
       },
     };
   }
@@ -454,8 +463,8 @@ export class StrategicService {
       const all = await model.findMany({
         select: { willingnessReport: true, knowReportProcess: true },
       });
-      const safeCount = all.filter((r: any) => /seguro/i.test(r.willingnessReport ?? '')).length;
-      const knowProcess = all.filter((r: any) => /sim/i.test(r.knowReportProcess ?? '')).length;
+      const safeCount = all.filter((r: any) => r.willingnessReport === 'Seguro(a)').length;
+      const knowProcess = all.filter((r: any) => r.knowReportProcess === 'Sim').length;
       return {
         totalResponses: total,
         safeCount,
@@ -496,9 +505,17 @@ export class StrategicService {
 
   private async getActivitiesKpis() {
     try {
+      const smifLocalities = await this.prisma.locality.findMany({
+        where: { catalogType: LocalityCatalogType.SMIF },
+        select: { id: true, name: true, recruitsFemaleCountCurrent: true, updatedAt: true } as any,
+      } as any);
+      const smifTargetIds = selectTargetLocalities(smifLocalities).map((l: any) => l.id);
+
       const total = await this.prisma.activity.count();
       const done = await this.prisma.activity.count({ where: { status: 'DONE' } });
-      const smif = await this.prisma.activity.count({ where: { scope: 'SMIF' } });
+      const smif = await this.prisma.activity.count({
+        where: { scope: 'SMIF', localityId: { in: smifTargetIds } },
+      });
       const cipavd = await this.prisma.activity.count({ where: { scope: 'CIPAVD' } });
       const withReport = await (this.prisma as any).activityReport.count();
       const signed = await (this.prisma as any).activityReport.count({ where: { signedAt: { not: null } } });

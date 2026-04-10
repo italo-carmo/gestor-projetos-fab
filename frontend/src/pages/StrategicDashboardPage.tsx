@@ -4,7 +4,15 @@ import {
   Card,
   CardContent,
   Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
   Grid,
+  List,
+  ListItem,
+  ListItemText,
   Stack,
   Tab,
   Tabs,
@@ -15,7 +23,8 @@ import DownloadRoundedIcon from "@mui/icons-material/DownloadRounded";
 import DashboardRoundedIcon from "@mui/icons-material/DashboardRounded";
 import FingerprintRoundedIcon from "@mui/icons-material/FingerprintRounded";
 import TextSnippetRoundedIcon from "@mui/icons-material/TextSnippetRounded";
-import { useMemo, useState } from "react";
+import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
+import { useCallback, useMemo, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -164,12 +173,164 @@ function HorizontalBarCard({
   );
 }
 
+function ClickableBarCard({
+  data,
+  height = 280,
+  onBarClick,
+}: {
+  data: { label: string; count: number; percent: number }[];
+  height?: number;
+  onBarClick?: (word: string) => void;
+}) {
+  if (data.length === 0) return null;
+  const chartHeight = Math.max(height, data.length * 28 + 40);
+  return (
+    <ResponsiveContainer width="100%" height={chartHeight}>
+      <BarChart
+        data={data}
+        layout="vertical"
+        margin={{ left: 10, right: 30, top: 5, bottom: 5 }}
+      >
+        <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+        <XAxis type="number" tickFormatter={(v) => `${v}`} />
+        <YAxis
+          dataKey="label"
+          type="category"
+          width={140}
+          tick={{ fontSize: 11 }}
+          interval={0}
+        />
+        <RechartsTooltip
+          formatter={(val: number) => [`${val} ocorrências — clique para ver textos`]}
+        />
+        <Bar
+          dataKey="count"
+          barSize={16}
+          radius={[0, 4, 4, 0]}
+          cursor="pointer"
+          onClick={(entry: any) => onBarClick?.(entry?.label ?? "")}
+        >
+          {data.map((_: any, i: number) => (
+            <Cell key={i} fill={COLORS[i % COLORS.length]} />
+          ))}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+function normalizeForSearch(text: string) {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function filterTextsByWord(texts: string[], word: string): string[] {
+  const normalized = normalizeForSearch(word);
+  return texts.filter((t) => normalizeForSearch(t).includes(normalized));
+}
+
+function TextsModal({
+  open,
+  word,
+  texts,
+  onClose,
+}: {
+  open: boolean;
+  word: string;
+  texts: string[];
+  onClose: () => void;
+}) {
+  const filtered = useMemo(
+    () => (word ? filterTextsByWord(texts, word) : []),
+    [texts, word],
+  );
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth scroll="paper">
+      <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <Box>
+          <Typography variant="h6" component="span">
+            Textos contendo:{" "}
+          </Typography>
+          <Chip label={word} color="primary" size="small" sx={{ ml: 0.5 }} />
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            {filtered.length} texto(s) encontrado(s)
+          </Typography>
+        </Box>
+        <Button onClick={onClose} size="small" sx={{ minWidth: "auto" }}>
+          <CloseRoundedIcon />
+        </Button>
+      </DialogTitle>
+      <Divider />
+      <DialogContent sx={{ p: 0 }}>
+        {filtered.length === 0 ? (
+          <Typography sx={{ p: 3 }} color="text.secondary">
+            Nenhum texto encontrado.
+          </Typography>
+        ) : (
+          <List dense>
+            {filtered.map((text, i) => {
+              const regex = new RegExp(
+                `(${word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`,
+                "gi",
+              );
+              const parts = text.split(regex);
+              return (
+                <ListItem
+                  key={i}
+                  sx={{
+                    borderBottom: "1px solid #F0F0F0",
+                    alignItems: "flex-start",
+                    py: 1.2,
+                  }}
+                >
+                  <ListItemText
+                    primary={
+                      <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
+                        {parts.map((part, j) =>
+                          regex.test(part) ? (
+                            <Box
+                              key={j}
+                              component="mark"
+                              sx={{
+                                bgcolor: "#FFF3CD",
+                                color: "#856404",
+                                px: 0.3,
+                                borderRadius: 0.5,
+                                fontWeight: 600,
+                              }}
+                            >
+                              {part}
+                            </Box>
+                          ) : (
+                            <span key={j}>{part}</span>
+                          ),
+                        )}
+                      </Typography>
+                    }
+                  />
+                </ListItem>
+              );
+            })}
+          </List>
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Fechar</Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
 function WordCloud({
   words,
   maxWords = 60,
+  onWordClick,
 }: {
   words: { word: string; count: number }[];
   maxWords?: number;
+  onWordClick?: (word: string) => void;
 }) {
   const sliced = words.slice(0, maxWords);
   if (sliced.length === 0)
@@ -198,17 +359,18 @@ function WordCloud({
           Math.round((w.count / maxCount) * maxSize),
         );
         return (
-          <Tooltip key={i} title={`${w.word}: ${w.count} ocorrências`} arrow>
+          <Tooltip key={i} title={`${w.word}: ${w.count} ocorrências — clique para ver textos`} arrow>
             <Typography
               component="span"
+              onClick={() => onWordClick?.(w.word)}
               sx={{
                 fontSize: size,
                 fontWeight: size > 20 ? 700 : size > 15 ? 600 : 400,
                 color: COLORS[i % COLORS.length],
-                cursor: "default",
+                cursor: "pointer",
                 lineHeight: 1.2,
                 transition: "transform 0.2s",
-                "&:hover": { transform: "scale(1.15)" },
+                "&:hover": { transform: "scale(1.15)", textDecoration: "underline" },
               }}
             >
               {w.word}
@@ -616,6 +778,8 @@ function AggressorProfileTab() {
 function TextAnalysisTab() {
   const { data, isLoading, error } = useTextAnalysis();
   const [activeSource, setActiveSource] = useState<string | null>(null);
+  const [modalWord, setModalWord] = useState("");
+  const [modalOpen, setModalOpen] = useState(false);
 
   const sourcesWithData = useMemo(() => {
     if (!data?.sources) return [];
@@ -627,6 +791,19 @@ function TextAnalysisTab() {
         ...v,
       }));
   }, [data]);
+
+  const activeRawTexts = useMemo(() => {
+    if (!data) return [];
+    if (activeSource) {
+      return sourcesWithData.find((s) => s.key === activeSource)?.rawTexts ?? [];
+    }
+    return data.consolidated.rawTexts ?? [];
+  }, [data, activeSource, sourcesWithData]);
+
+  const handleWordClick = useCallback((word: string) => {
+    setModalWord(word);
+    setModalOpen(true);
+  }, []);
 
   if (isLoading) return <SkeletonState />;
   if (error) return <ErrorState message="Erro ao carregar análise de texto." />;
@@ -706,12 +883,18 @@ function TextAnalysisTab() {
           <Typography variant="subtitle2" gutterBottom>
             {activeLabel}
           </Typography>
-          <WordCloud words={activeWords} maxWords={60} />
+          <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: "block" }}>
+            Clique em qualquer palavra para ver os textos completos que a contêm.
+          </Typography>
+          <WordCloud words={activeWords} maxWords={60} onWordClick={handleWordClick} />
         </CardContent>
       </Card>
 
       <Typography variant="h6" sx={{ mb: 2, color: "#1A3C6E" }}>
         Termos mais frequentes por fonte
+      </Typography>
+      <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: "block" }}>
+        Clique em uma barra do gráfico para ver os textos que contêm a palavra.
       </Typography>
       <Grid container spacing={2}>
         {sourcesWithData.map((source) => (
@@ -722,21 +905,30 @@ function TextAnalysisTab() {
                   {source.label}{" "}
                   <Chip label={`${source.count} textos`} size="small" sx={{ ml: 1 }} />
                 </Typography>
-                <HorizontalBarCard
-                  title=""
+                <ClickableBarCard
                   data={source.topWords.slice(0, 15).map((w: any) => ({
                     label: w.word,
                     count: w.count,
                     percent: 0,
                   }))}
-                  height={200}
-                  maxItems={15}
+                  height={280}
+                  onBarClick={(word) => {
+                    setActiveSource(source.key);
+                    handleWordClick(word);
+                  }}
                 />
               </CardContent>
             </Card>
           </Grid>
         ))}
       </Grid>
+
+      <TextsModal
+        open={modalOpen}
+        word={modalWord}
+        texts={activeRawTexts}
+        onClose={() => setModalOpen(false)}
+      />
     </Box>
   );
 }
