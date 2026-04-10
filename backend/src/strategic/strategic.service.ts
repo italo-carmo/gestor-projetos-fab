@@ -266,11 +266,12 @@ export class StrategicService {
   }
 
   async executiveReportPdf(): Promise<Buffer> {
-    const [dashboard, profile, textData] = await Promise.all([
+    const [dashboard, profileRaw, textData] = await Promise.all([
       this.situationalDashboard(),
       this.aggressorProfile(),
       this.textAnalysis(),
     ]);
+    const profile = profileRaw as any;
 
     return new Promise((resolve, reject) => {
       const doc = new PDFDocument({ size: 'A4', margin: 50 });
