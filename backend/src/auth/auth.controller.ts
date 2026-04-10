@@ -52,4 +52,30 @@ export class AuthController {
   getSigpesPhoto(@Param('numeroOrdem') numeroOrdem: string) {
     return this.auth.getSigpesPhotoByOrder(numeroOrdem);
   }
+
+  @Post('2fa/confirm-setup')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  confirmTwoFactorSetup(
+    @Body('setupToken') setupToken: string,
+    @Body('code') code: string,
+  ) {
+    return this.auth.confirmTwoFactorSetup(setupToken, code);
+  }
+
+  @Post('2fa/verify')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  verifyTwoFactor(
+    @Body('twoFactorToken') twoFactorToken: string,
+    @Body('code') code: string,
+  ) {
+    return this.auth.verifyTwoFactor(twoFactorToken, code);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('2fa/status')
+  async twoFactorStatus(@Req() req: Request & { user?: { userId: string } }) {
+    return this.auth.getUserTwoFactorStatus(req.user?.userId ?? '');
+  }
 }

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule } from '@nestjs/config';
@@ -14,7 +14,7 @@ import { RbacModule } from '../rbac/rbac.module';
     PassportModule,
     JwtModule.register({}),
     UsersModule,
-    RbacModule,
+    forwardRef(() => RbacModule),
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy],

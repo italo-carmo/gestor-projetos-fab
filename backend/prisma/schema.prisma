@@ -24,6 +24,9 @@ model User {
   commissionFunction String?
   commissionPhone    String?
   commissionSeniority Int?
+  totpSecret       String?
+  totpEnabled      Boolean        @default(false)
+  totpBackupCodes  String[]       @default([])
   flagsJson        Json?
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt

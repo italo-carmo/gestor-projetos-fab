@@ -12,6 +12,7 @@ import { AdminPage } from "./pages/AdminPage";
 import { OmsAdminPage } from "./pages/OmsAdminPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { LoginPage } from "./pages/LoginPage";
+import { TwoFactorSetupPage } from "./pages/TwoFactorSetupPage";
 import { MeetingsPage } from "./pages/MeetingsPage";
 import { NoticesPage } from "./pages/NoticesPage";
 import { ChecklistsPage } from "./pages/ChecklistsPage";
@@ -57,6 +58,7 @@ function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/2fa-setup" element={<TwoFactorSetupPage />} />
       <Route
         path="/*"
         element={

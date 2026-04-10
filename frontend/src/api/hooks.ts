@@ -295,6 +295,39 @@ export function useLogin() {
   });
 }
 
+export function useConfirmTwoFactorSetup() {
+  return useMutation({
+    mutationFn: async (args: { setupToken: string; code: string }) =>
+      (await api.post("/auth/2fa/confirm-setup", args)).data,
+  });
+}
+
+export function useVerifyTwoFactor() {
+  return useMutation({
+    mutationFn: async (args: { twoFactorToken: string; code: string }) =>
+      (await api.post("/auth/2fa/verify", args)).data,
+  });
+}
+
+export function useResetTwoFactor() {
+  return useMutation({
+    mutationFn: async (userId: string) =>
+      (await api.post(`/admin/rbac/users/${encodeURIComponent(userId)}/reset-2fa`)).data,
+  });
+}
+
+export function useUserTwoFactorStatus(userId: string, enabled = true) {
+  return useQuery({
+    queryKey: ["user-2fa-status", userId],
+    queryFn: async () =>
+      (await api.get(`/admin/rbac/users/${encodeURIComponent(userId)}/2fa-status`)).data as {
+        totpEnabled: boolean;
+      },
+    enabled: enabled && Boolean(userId),
+    staleTime: 30_000,
+  });
+}
+
 export function useTasks(filters: Record<string, any>) {
   return useQuery({
     queryKey: qk.tasks(filters),

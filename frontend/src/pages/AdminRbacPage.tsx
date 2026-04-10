@@ -29,6 +29,7 @@ import {
   Typography,
 } from "@mui/material";
 import EditRoundedIcon from "@mui/icons-material/EditRounded";
+import LockResetRoundedIcon from "@mui/icons-material/LockResetRounded";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import { can } from "../app/rbac";
 import {
@@ -45,6 +46,7 @@ import {
   useSetRolePermissions,
   useUpsertLdapUser,
   useUsers,
+  useResetTwoFactor,
 } from "../api/hooks";
 import { parseApiError } from "../app/apiErrors";
 import {
@@ -286,6 +288,7 @@ export function AdminRbacPage() {
   const specialtiesQuery = useSpecialties(can(me, "specialties", "view"));
   const updateUser = useUpdateUser();
   const removeUserRole = useRemoveUserRole();
+  const resetTwoFactor = useResetTwoFactor();
   const ldapLookup = useLookupLdapUser();
   const upsertLdapUser = useUpsertLdapUser();
   const setRolePermissions = useSetRolePermissions();
@@ -299,6 +302,10 @@ export function AdminRbacPage() {
     userName: string;
     roleId: string;
     roleName: string;
+  } | null>(null);
+  const [reset2faTarget, setReset2faTarget] = useState<{
+    userId: string;
+    userName: string;
   } | null>(null);
 
   const [ldapUid, setLdapUid] = useState("");
@@ -1437,14 +1444,33 @@ export function AdminRbacPage() {
                           </TableCell>
                           <TableCell>{specialtyName}</TableCell>
                           <TableCell>
-                            <IconButton
-                              size="small"
-                              color="primary"
-                              disabled={!canUpdateUsers}
-                              onClick={() => openEditModal(user)}
-                            >
-                              <EditRoundedIcon fontSize="small" />
-                            </IconButton>
+                            <Stack direction="row" spacing={0.5}>
+                              <Tooltip title="Editar usuário">
+                                <IconButton
+                                  size="small"
+                                  color="primary"
+                                  disabled={!canUpdateUsers}
+                                  onClick={() => openEditModal(user)}
+                                >
+                                  <EditRoundedIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                              <Tooltip title="Resetar autenticação em dois fatores">
+                                <IconButton
+                                  size="small"
+                                  color="warning"
+                                  disabled={!canUpdateUsers}
+                                  onClick={() =>
+                                    setReset2faTarget({
+                                      userId: user.id,
+                                      userName: user.name,
+                                    })
+                                  }
+                                >
+                                  <LockResetRoundedIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            </Stack>
                           </TableCell>
                         </TableRow>
                       );
@@ -2046,6 +2072,39 @@ export function AdminRbacPage() {
         confirmLabel={setRolePermissions.isPending ? "Removendo..." : "Remover"}
         severity="error"
         confirmLoading={setRolePermissions.isPending}
+      />
+
+      <ConfirmDialog
+        open={Boolean(reset2faTarget)}
+        onCancel={() => setReset2faTarget(null)}
+        onConfirm={() => {
+          if (!reset2faTarget) return;
+          resetTwoFactor.mutate(reset2faTarget.userId, {
+            onSuccess: () => {
+              toast.push({
+                message: `Autenticação em dois fatores resetada para ${reset2faTarget.userName}. O usuário precisará configurar novamente no próximo login.`,
+                severity: "success",
+              });
+              setReset2faTarget(null);
+            },
+            onError: (error: any) => {
+              const payload = parseApiError(error);
+              toast.push({
+                message: payload.message ?? "Erro ao resetar 2FA",
+                severity: "error",
+              });
+            },
+          });
+        }}
+        title="Resetar autenticação em dois fatores"
+        message="O usuário precisará configurar o Google Authenticator novamente no próximo login. Deseja continuar?"
+        highlightText={reset2faTarget?.userName ?? ""}
+        note="O reset entra em vigor imediatamente."
+        confirmLabel={
+          resetTwoFactor.isPending ? "Resetando..." : "Resetar 2FA"
+        }
+        severity="warning"
+        confirmLoading={resetTwoFactor.isPending}
       />
     </Box>
   );

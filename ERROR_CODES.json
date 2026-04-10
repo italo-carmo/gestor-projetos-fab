@@ -104,5 +104,17 @@
   "TASK_TEMPLATE_IN_USE": {
     "httpStatus": 409,
     "message": "Não é possível excluir o modelo porque ele já possui tarefas geradas."
+  },
+  "AUTH_2FA_INVALID_CODE": {
+    "httpStatus": 401,
+    "message": "Código de verificação inválido. Verifique o código no Google Authenticator e tente novamente."
+  },
+  "AUTH_2FA_TOKEN_EXPIRED": {
+    "httpStatus": 401,
+    "message": "Sessão de verificação expirada. Faça login novamente."
+  },
+  "AUTH_2FA_ALREADY_ENABLED": {
+    "httpStatus": 409,
+    "message": "Autenticação em dois fatores já está ativada."
   }
 }
