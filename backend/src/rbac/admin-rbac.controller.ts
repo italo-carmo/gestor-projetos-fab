@@ -18,15 +18,11 @@ import type { RbacUser } from './rbac.types';
 import { SetUserModuleAccessDto } from './dto/set-user-module-access.dto';
 import { LookupLdapUserDto } from './dto/lookup-ldap-user.dto';
 import { UpsertLdapUserDto } from './dto/upsert-ldap-user.dto';
-import { AuthService } from '../auth/auth.service';
 
 @Controller('admin/rbac')
 @UseGuards(JwtAuthGuard, RbacGuard)
 export class AdminRbacController {
-  constructor(
-    private readonly rbac: RbacService,
-    private readonly auth: AuthService,
-  ) {}
+  constructor(private readonly rbac: RbacService) {}
 
   @Get('export')
   @RequirePermission('admin_rbac', 'export')
@@ -96,17 +92,5 @@ export class AdminRbacController {
       },
       user?.id,
     );
-  }
-
-  @Post('users/:id/reset-2fa')
-  @RequirePermission('users', 'update')
-  resetTwoFactor(@Param('id') id: string) {
-    return this.auth.resetTwoFactor(id);
-  }
-
-  @Get('users/:id/2fa-status')
-  @RequirePermission('users', 'view')
-  twoFactorStatus(@Param('id') id: string) {
-    return this.auth.getUserTwoFactorStatus(id);
   }
 }

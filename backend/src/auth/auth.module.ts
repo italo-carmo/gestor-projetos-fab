@@ -1,9 +1,10 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
+import { Admin2faController } from './admin-2fa.controller';
 import { JwtStrategy } from './jwt.strategy';
 import { UsersModule } from '../users/users.module';
 import { RbacModule } from '../rbac/rbac.module';
@@ -14,9 +15,9 @@ import { RbacModule } from '../rbac/rbac.module';
     PassportModule,
     JwtModule.register({}),
     UsersModule,
-    forwardRef(() => RbacModule),
+    RbacModule,
   ],
-  controllers: [AuthController],
+  controllers: [AuthController, Admin2faController],
   providers: [AuthService, JwtStrategy],
   exports: [AuthService],
 })
