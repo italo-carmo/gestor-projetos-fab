@@ -69,7 +69,7 @@ export function verifyTotpCode(secretBase32: string, code: string): boolean {
     period: TOTP_PERIOD,
     secret: OTPAuth.Secret.fromBase32(secretBase32),
   });
-  const delta = totp.validate({ token: code.trim(), window: 1 });
+  const delta = totp.validate({ token: code.trim(), window: 3 });
   return delta !== null;
 }
 
