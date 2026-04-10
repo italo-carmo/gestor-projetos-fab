@@ -88,3 +88,45 @@ api.interceptors.request.use((config) => {
 
   return config;
 });
+
+let refreshPromise: Promise<string | null> | null = null;
+
+async function refreshAccessToken(): Promise<string | null> {
+  const refreshToken = localStorage.getItem("refreshToken");
+  if (!refreshToken) return null;
+  try {
+    const { data } = await axios.post(`${apiBaseUrl}/auth/refresh`, { refreshToken });
+    if (data?.accessToken) localStorage.setItem("accessToken", data.accessToken);
+    if (data?.refreshToken) localStorage.setItem("refreshToken", data.refreshToken);
+    return data?.accessToken ?? null;
+  } catch {
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("refreshToken");
+    return null;
+  }
+}
+
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const original = error.config;
+    if (
+      error.response?.status === 401 &&
+      !original._retry &&
+      !String(original.url ?? "").includes("/auth/login") &&
+      !String(original.url ?? "").includes("/auth/refresh") &&
+      !String(original.url ?? "").includes("/auth/2fa/")
+    ) {
+      original._retry = true;
+      if (!refreshPromise) {
+        refreshPromise = refreshAccessToken().finally(() => { refreshPromise = null; });
+      }
+      const newToken = await refreshPromise;
+      if (newToken) {
+        original.headers.Authorization = `Bearer ${newToken}`;
+        return api(original);
+      }
+    }
+    return Promise.reject(error);
+  },
+);
