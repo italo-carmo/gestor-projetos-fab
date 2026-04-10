@@ -1132,8 +1132,8 @@ export function useUpsertActivityReport() {
 export function useSignActivityReport() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) =>
-      (await api.post(`/activities/${id}/report/sign`)).data,
+    mutationFn: async (args: { id: string; totpCode: string }) =>
+      (await api.post(`/activities/${args.id}/report/sign`, { totpCode: args.totpCode })).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["activities"] }),
   });
 }

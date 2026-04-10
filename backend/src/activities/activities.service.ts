@@ -21,6 +21,7 @@ import {
   resolveAccessProfile,
 } from '../rbac/role-access';
 import { selectTargetLocalities } from '../common/priority-localities';
+import { decryptSecret, verifyTotpCode } from '../auth/totp.util';
 
 const activityPhotosDir = path.resolve(
   process.cwd(),
@@ -1983,10 +1984,29 @@ export class ActivitiesService {
     return { ok: true };
   }
 
-  async signReport(activityId: string, user?: RbacUser) {
+  async signReport(activityId: string, user?: RbacUser, totpCode?: string) {
     if (!user?.id) throwError('RBAC_FORBIDDEN');
     if (!hasPermission(user, 'reports', 'approve')) {
       throwError('RBAC_FORBIDDEN');
+    }
+
+    const code = String(totpCode ?? '').replace(/\s/g, '').trim();
+    if (!code) throwError('AUTH_2FA_INVALID_CODE');
+
+    const signer = await this.prisma.user.findUnique({
+      where: { id: user.id },
+      select: { totpSecret: true, totpEnabled: true },
+    });
+    if (!signer?.totpEnabled || !signer?.totpSecret) {
+      throwError('AUTH_2FA_INVALID_CODE');
+    }
+    const encKey =
+      this.config.get<string>('TOTP_ENCRYPTION_KEY') ??
+      this.config.get<string>('JWT_ACCESS_SECRET') ??
+      'fallback-totp-key';
+    const secretBase32 = decryptSecret(signer.totpSecret, encKey);
+    if (!verifyTotpCode(secretBase32, code)) {
+      throwError('AUTH_2FA_INVALID_CODE');
     }
 
     const activity = await this.prisma.activity.findUnique({

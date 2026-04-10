@@ -291,8 +291,12 @@ export class ActivitiesController {
 
   @Post(':id/report/sign')
   @RequirePermission('reports', 'approve')
-  signReport(@Param('id') id: string, @CurrentUser() user: RbacUser) {
-    return this.activities.signReport(id, user);
+  signReport(
+    @Param('id') id: string,
+    @Body('totpCode') totpCode: string,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.activities.signReport(id, user, totpCode);
   }
 
   @Post(':id/report/photos')

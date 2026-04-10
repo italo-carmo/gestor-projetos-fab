@@ -394,6 +394,9 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
   const [drawerTab, setDrawerTab] = useState<ActivityDrawerTab>(tabFromUrl);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [removeSignatureConfirmOpen, setRemoveSignatureConfirmOpen] = useState(false);
+  const [sign2faDialogOpen, setSign2faDialogOpen] = useState(false);
+  const [sign2faCode, setSign2faCode] = useState('');
+  const [sign2faError, setSign2faError] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [batchDeleteConfirmOpen, setBatchDeleteConfirmOpen] = useState(false);
   const [replicateDialogOpen, setReplicateDialogOpen] = useState(false);
@@ -1067,7 +1070,7 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
     }
   };
 
-  const handleSign = async () => {
+  const handleSignClick = () => {
     if (!selected || !canSign) return;
     if (reportIsSigned) {
       toast.push({
@@ -1094,6 +1097,22 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
       });
       return;
     }
+    setSign2faCode('');
+    setSign2faError('');
+    setSign2faDialogOpen(true);
+  };
+
+  const handleSignConfirm = async () => {
+    if (!selected || !canSign) return;
+    const code = sign2faCode.replace(/\s/g, '').trim();
+    if (code.length < 6) {
+      setSign2faError('Informe o código de 6 dígitos do Google Authenticator.');
+      return;
+    }
+    const reportDateIso = toIsoDateStartOfDay(reportForm.date);
+    const closingDateInput = reportForm.closingDate || reportForm.date;
+    const closingDateIso = toIsoDateStartOfDay(closingDateInput);
+    if (!reportDateIso || !closingDateIso) return;
     const participantsMaleCount = toOptionalNonNegativeInt(reportForm.participantsMaleCount);
     const participantsFemaleCount = toOptionalNonNegativeInt(reportForm.participantsFemaleCount);
     try {
@@ -1127,11 +1146,19 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
           },
         });
       }
-      await signReport.mutateAsync(selected.id);
+      await signReport.mutateAsync({ id: selected.id, totpCode: code });
+      setSign2faDialogOpen(false);
+      setSign2faCode('');
+      setSign2faError('');
       toast.push({ message: 'Relatório assinado digitalmente', severity: 'success' });
     } catch (error) {
       const payload = parseApiError(error);
+      if (payload.code === 'AUTH_2FA_INVALID_CODE') {
+        setSign2faError('Código inválido. Verifique o Google Authenticator e tente novamente.');
+        return;
+      }
       if (payload.code === 'ACTIVITY_REPORT_SIGNED_LOCKED') {
+        setSign2faDialogOpen(false);
         toast.push({
           message:
             payload.message ??
@@ -1145,13 +1172,14 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
         (payload.code === 'VALIDATION_ERROR' &&
           payload.details?.reason === 'ACTIVITY_REPORT_INCOMPLETE')
       ) {
+        setSign2faDialogOpen(false);
         toast.push({
           message: buildIncompleteReportMessage(payload, getReportMissingFields(reportForm)),
           severity: 'warning',
         });
         return;
       }
-      toast.push({ message: payload.message ?? 'Erro ao assinar', severity: 'error' });
+      setSign2faError(payload.message ?? 'Erro ao assinar');
     }
   };
 
@@ -2741,7 +2769,7 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
                     variant="outlined"
                     size="small"
                     sx={drawerActionButtonSx}
-                    onClick={handleSign}
+                    onClick={handleSignClick}
                     disabled={!canSign || signReport.isPending || reportIsSigned}
                   >
                     Assinar digitalmente
@@ -2943,6 +2971,49 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
         severity="warning"
         confirmLoading={upsertReport.isPending}
       />
+
+      <Dialog
+        open={sign2faDialogOpen}
+        onClose={() => { setSign2faDialogOpen(false); setSign2faCode(''); setSign2faError(''); }}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle sx={{ pb: 0.5 }}>Verificação de segurança</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Para assinar digitalmente este relatório, informe o código de 6 dígitos do seu <strong>Google Authenticator</strong>.
+          </DialogContentText>
+          <TextField
+            autoFocus
+            fullWidth
+            label="Código de verificação"
+            placeholder="000 000"
+            value={sign2faCode}
+            onChange={(e) => {
+              const v = e.target.value.replace(/[^0-9\s]/g, '');
+              setSign2faCode(v);
+              if (sign2faError) setSign2faError('');
+            }}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleSignConfirm(); }}
+            error={!!sign2faError}
+            helperText={sign2faError || 'Abra o Google Authenticator no seu celular e digite o código exibido.'}
+            inputProps={{ maxLength: 7, inputMode: 'numeric', autoComplete: 'one-time-code' }}
+            size="small"
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => { setSign2faDialogOpen(false); setSign2faCode(''); setSign2faError(''); }}>
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleSignConfirm}
+            disabled={signReport.isPending || upsertReport.isPending}
+          >
+            {signReport.isPending ? 'Assinando…' : 'Confirmar e assinar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
