@@ -21,6 +21,7 @@ import QrCode2RoundedIcon from '@mui/icons-material/QrCode2Rounded';
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import LockRoundedIcon from '@mui/icons-material/LockRounded';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '../app/toast';
 import { parseApiError } from '../app/apiErrors';
 import { resolveHomePath } from '../app/roleAccess';
@@ -35,6 +36,7 @@ type SetupData = {
 
 export function TwoFactorSetupPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const toast = useToast();
   const confirmSetup = useConfirmTwoFactorSetup();
 
@@ -80,12 +82,13 @@ export function TwoFactorSetupPage() {
 
   const handleFinish = async () => {
     sessionStorage.removeItem('2fa_setup');
+    await queryClient.resetQueries();
     try {
       const me = (await api.get('/auth/me')).data;
       toast.push({ message: 'Autenticação em dois fatores ativada com sucesso!', severity: 'success' });
       navigate(resolveHomePath(me), { replace: true });
     } catch {
-      navigate('/', { replace: true });
+      window.location.href = '/';
     }
   };
 
