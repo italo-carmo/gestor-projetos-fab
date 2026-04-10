@@ -195,6 +195,8 @@ type DistributionCardProps = {
   mode: MetricMode;
   color: string;
   longLabels?: boolean;
+  /** Ocupa a linha inteira (12 colunas) e amplia área do gráfico para rótulos longos */
+  fullRow?: boolean;
   onEdit: (cardId: string) => void;
   editable: boolean;
 };
@@ -396,6 +398,7 @@ function DistributionCard({
   mode,
   color,
   longLabels = false,
+  fullRow = false,
   onEdit,
   editable,
 }: DistributionCardProps) {
@@ -409,13 +412,29 @@ function DistributionCard({
     0,
   );
   const useLongLabelLayout = longLabels || longestLabelLength >= 34;
-  const rowHeight = useLongLabelLayout ? 34 : 24;
-  const height = Math.max(useLongLabelLayout ? 228 : 164, chartData.length * rowHeight);
-  const yAxisWidth = useLongLabelLayout ? 236 : 168;
+  const rowHeight = fullRow
+    ? useLongLabelLayout
+      ? 46
+      : 30
+    : useLongLabelLayout
+      ? 34
+      : 24;
+  const height = Math.max(
+    fullRow ? (useLongLabelLayout ? 320 : 200) : useLongLabelLayout ? 228 : 164,
+    chartData.length * rowHeight,
+  );
+  const yAxisWidth = fullRow
+    ? Math.min(560, Math.max(320, Math.ceil(longestLabelLength * 7.2)))
+    : useLongLabelLayout
+      ? 236
+      : 168;
   const yAxisTickStyle = useLongLabelLayout
     ? { ...axisTickStyle, fontSize: 11 }
     : axisTickStyle;
   const metricLabel = mode === "COUNT" ? "Quantidade" : "Percentual (%)";
+  const chartMargin = fullRow
+    ? { left: 12, right: 32, top: 10, bottom: 16 }
+    : { left: 8, right: 8, top: 8, bottom: 8 };
 
   return (
     <Card sx={cardSx}>
@@ -441,9 +460,9 @@ function DistributionCard({
             Sem dados para o recorte atual.
           </Alert>
         ) : (
-          <Box sx={{ mt: 1.1 }}>
+          <Box sx={{ mt: 1.1, width: "100%", minWidth: 0 }}>
             <ResponsiveContainer width="100%" height={height}>
-              <BarChart data={chartData} layout="vertical" margin={{ left: 8 }}>
+              <BarChart data={chartData} layout="vertical" margin={chartMargin}>
                 <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
                 <XAxis type="number" stroke={chartAxisStroke} tick={axisTickStyle} />
                 <YAxis
@@ -452,6 +471,8 @@ function DistributionCard({
                   width={yAxisWidth}
                   stroke={chartAxisStroke}
                   tick={yAxisTickStyle}
+                  interval={0}
+                  tickMargin={fullRow ? 10 : 6}
                 />
                 <Tooltip
                   formatter={(value: number, _name, payload) => {
@@ -468,7 +489,11 @@ function DistributionCard({
                   contentStyle={tooltipContentStyle}
                   labelStyle={tooltipLabelStyle}
                 />
-                <Bar dataKey="metric" radius={[0, 10, 10, 0]} barSize={9}>
+                <Bar
+                  dataKey="metric"
+                  radius={[0, 10, 10, 0]}
+                  barSize={fullRow ? 12 : 9}
+                >
                   {chartData.map((item, index) => (
                     <Cell
                       key={`${title}-${item.label}`}
@@ -867,6 +892,7 @@ export function BiRecruitsDashboardPage() {
       data: dashboard.charts.enlistmentDecisionInfluenceDistribution,
       color: CHART_COLORS[8],
       longLabels: true,
+      fullRow: true,
     },
   ];
 
@@ -1586,7 +1612,10 @@ export function BiRecruitsDashboardPage() {
 
       <Grid container spacing={2} sx={{ mb: 2 }}>
         {distributionCards.map((card) => (
-          <Grid key={card.cardId} size={{ xs: 12, lg: 6 }}>
+          <Grid
+            key={card.cardId}
+            size={{ xs: 12, lg: card.fullRow ? 12 : 6 }}
+          >
             <DistributionCard
               {...card}
               mode={metricMode}
