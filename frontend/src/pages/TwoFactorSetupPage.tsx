@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Box,
   Button,
@@ -47,10 +47,11 @@ export function TwoFactorSetupPage() {
   const [savedConfirmed, setSavedConfirmed] = useState(false);
   const [copiedKey, setCopiedKey] = useState(false);
 
-  if (!setupData) {
-    navigate('/login', { replace: true });
-    return null;
-  }
+  useEffect(() => {
+    if (!setupData) navigate('/login', { replace: true });
+  }, [setupData, navigate]);
+
+  if (!setupData) return null;
 
   const handleConfirmCode = async () => {
     const normalized = code.replace(/\s/g, '').trim();
