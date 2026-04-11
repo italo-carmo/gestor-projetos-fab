@@ -56,6 +56,7 @@ import { getTargetLocalityKey, selectTargetLocalities } from '../constants/local
 type LocalityForm = {
   code: string;
   name: string;
+  uf: string;
 };
 
 function LocalitiesTab() {
@@ -82,7 +83,7 @@ function LocalitiesTab() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ code: '', name: '' });
+    setForm({ code: '', name: '', uf: '' });
     setDrawerOpen(true);
   };
 
@@ -91,6 +92,7 @@ function LocalitiesTab() {
     setForm({
       code: item.code ?? '',
       name: item.name ?? '',
+      uf: item.uf ?? '',
     });
     setDrawerOpen(true);
   };
@@ -99,6 +101,7 @@ function LocalitiesTab() {
     const payload = {
       code: form.code.trim().toUpperCase(),
       name: form.name.trim(),
+      uf: form.uf.trim().toUpperCase() || null,
     };
     if (!payload.code || !payload.name) {
       toast.push({ message: 'Informe sigla e nome da localidade.', severity: 'warning' });
@@ -267,6 +270,16 @@ function LocalitiesTab() {
             placeholder="Ex: Brasília-DF"
             fullWidth
           />
+          <TextField
+            size="small"
+            label="UF (Estado)"
+            value={form.uf}
+            onChange={(e) => setForm({ ...form, uf: e.target.value.toUpperCase().slice(0, 2) })}
+            placeholder="Ex: SP, RJ, DF"
+            fullWidth
+            inputProps={{ maxLength: 2 }}
+            helperText="Sigla do estado para o Mapa Geográfico do Painel Estratégico"
+          />
           <Box display="flex" gap={1} justifyContent="flex-end">
             <Button variant="outlined" color="error" onClick={() => setDrawerOpen(false)}>
               Cancelar
@@ -310,7 +323,7 @@ function CipavdLocalitiesTab() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<any | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [form, setForm] = useState<LocalityForm>({ code: '', name: '' });
+  const [form, setForm] = useState<LocalityForm>({ code: '', name: '', uf: '' });
 
   if (localitiesQuery.isLoading) return <SkeletonState />;
   if (localitiesQuery.isError) {
@@ -324,7 +337,7 @@ function CipavdLocalitiesTab() {
   const openCreate = () => {
     if (!canCreateLocality) return;
     setEditing(null);
-    setForm({ code: '', name: '' });
+    setForm({ code: '', name: '', uf: '' });
     setDrawerOpen(true);
   };
 
@@ -334,6 +347,7 @@ function CipavdLocalitiesTab() {
     setForm({
       code: item.code ?? '',
       name: item.name ?? '',
+      uf: item.uf ?? '',
     });
     setDrawerOpen(true);
   };
@@ -351,6 +365,7 @@ function CipavdLocalitiesTab() {
     const payload = {
       code: form.code.trim().toUpperCase(),
       name: form.name.trim(),
+      uf: form.uf.trim().toUpperCase() || null,
     };
 
     if (!payload.code || !payload.name) {
@@ -494,6 +509,16 @@ function CipavdLocalitiesTab() {
             onChange={(e) => setForm({ ...form, name: e.target.value })}
             placeholder="Ex: Base Operacional 01"
             fullWidth
+          />
+          <TextField
+            size="small"
+            label="UF (Estado)"
+            value={form.uf}
+            onChange={(e) => setForm({ ...form, uf: e.target.value.toUpperCase().slice(0, 2) })}
+            placeholder="Ex: SP, RJ, DF"
+            fullWidth
+            inputProps={{ maxLength: 2 }}
+            helperText="Sigla do estado para o Mapa Geográfico do Painel Estratégico"
           />
           <Box display="flex" gap={1} justifyContent="flex-end">
             <Button variant="outlined" color="error" onClick={() => setDrawerOpen(false)}>

@@ -51,6 +51,7 @@ type UserItem = {
 type OmsForm = {
   code: string;
   name: string;
+  uf: string;
   commandName: string;
   commanderName: string;
   notes: string;
@@ -61,6 +62,7 @@ type CpcaCoverageFilter = 'ALL' | 'WITH_CPCA' | 'WITHOUT_CPCA';
 const DEFAULT_FORM: OmsForm = {
   code: '',
   name: '',
+  uf: '',
   commandName: '',
   commanderName: '',
   notes: '',
@@ -143,6 +145,7 @@ export function OmsAdminPage() {
     setForm({
       code: locality.code ?? '',
       name: locality.name ?? '',
+      uf: (locality as any).uf ?? '',
       commandName: locality.commandName ?? '',
       commanderName: locality.commanderName ?? '',
       notes: locality.notes ?? '',
@@ -160,6 +163,7 @@ export function OmsAdminPage() {
     const payload = {
       code: form.code.trim().toUpperCase(),
       name: form.name.trim(),
+      uf: form.uf.trim().toUpperCase() || null,
       commandName: form.commandName.trim() || null,
       commanderName: form.commanderName.trim() || null,
       notes: form.notes.trim() || null,
@@ -392,6 +396,15 @@ export function OmsAdminPage() {
             value={form.name}
             onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
             placeholder="Ex: Base Aérea de Salvador"
+          />
+          <TextField
+            size="small"
+            label="UF (Estado)"
+            value={form.uf}
+            onChange={(event) => setForm((prev) => ({ ...prev, uf: event.target.value.toUpperCase().slice(0, 2) }))}
+            placeholder="Ex: SP, RJ, DF"
+            inputProps={{ maxLength: 2 }}
+            helperText="Sigla do estado para o Mapa Geográfico"
           />
           <TextField
             size="small"
