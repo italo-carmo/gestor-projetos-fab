@@ -9,6 +9,10 @@ export class CreateLocalityDto {
 
   @IsOptional()
   @IsString()
+  uf?: string | null;
+
+  @IsOptional()
+  @IsString()
   commandName?: string | null;
 
   @IsOptional()

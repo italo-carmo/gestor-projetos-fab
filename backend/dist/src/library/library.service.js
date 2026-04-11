@@ -47,11 +47,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.LibraryService = void 0;
 const common_1 = require("@nestjs/common");
+const client_1 = require("@prisma/client");
 const fs = __importStar(require("node:fs"));
 const path = __importStar(require("node:path"));
 const sharp_1 = __importDefault(require("sharp"));
 const library_storage_1 = require("./library-storage");
 const audit_service_1 = require("../audit/audit.service");
+const priority_localities_1 = require("../common/priority-localities");
 const http_error_1 = require("../common/http-error");
 const prisma_service_1 = require("../prisma/prisma.service");
 const role_access_1 = require("../rbac/role-access");
@@ -68,42 +70,68 @@ let LibraryService = class LibraryService {
         this.prisma = prisma;
         this.audit = audit;
     }
-    async getData() {
-        const [photos, documents, settings] = await this.prisma.$transaction([
+    async getData(scopeRaw) {
+        const scope = this.parseScope(scopeRaw);
+        const localityCatalogType = scope === 'CIPAVD' ? client_1.LocalityCatalogType.CIPAVD : client_1.LocalityCatalogType.SMIF;
+        const [photos, documents, settings, rawLocalities] = await this.prisma.$transaction([
             this.prisma.libraryPhoto.findMany({
+                where: { scope },
                 include: {
                     locality: {
                         select: {
                             id: true,
                             code: true,
                             name: true,
+                            catalogType: true,
                         },
                     },
                 },
                 orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
             }),
             this.prisma.libraryDocument.findMany({
+                where: { scope },
                 orderBy: [{ createdAt: 'desc' }],
             }),
             this.prisma.librarySetting.findFirst({
                 orderBy: { createdAt: 'asc' },
             }),
+            this.prisma.locality.findMany({
+                where: { catalogType: localityCatalogType },
+                select: {
+                    id: true,
+                    code: true,
+                    name: true,
+                    recruitsFemaleCountCurrent: true,
+                    updatedAt: true,
+                },
+                orderBy: { name: 'asc' },
+            }),
         ]);
+        const scopedLocalities = scope === 'SMIF' ? (0, priority_localities_1.selectTargetLocalities)(rawLocalities) : rawLocalities;
+        const localities = scopedLocalities
+            .map((locality) => ({
+            id: locality.id,
+            code: locality.code,
+            name: locality.name,
+        }))
+            .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
         return {
+            scope,
             photos,
             documents,
+            localities,
             settings: {
                 carouselIntervalSeconds: Number(settings?.carouselIntervalSeconds ?? 5),
             },
         };
     }
-    ensureEditorAccess(user) {
-        if (!(0, role_access_1.hasAnyRole)(user, [role_access_1.ROLE_TI, role_access_1.ROLE_COORDENACAO_CIPAVD])) {
+    ensureEditorAccess(user, action) {
+        if (!(0, role_access_1.hasPermission)(user, 'library', action)) {
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         }
     }
     async updateSettings(payload, user) {
-        this.ensureEditorAccess(user);
+        this.ensureEditorAccess(user, 'update');
         const value = Number(payload.carouselIntervalSeconds);
         if (!Number.isFinite(value) || value < 2 || value > 60) {
             (0, http_error_1.throwError)('VALIDATION_ERROR', {
@@ -134,7 +162,7 @@ let LibraryService = class LibraryService {
         return saved;
     }
     async createPhoto(file, payload, user) {
-        this.ensureEditorAccess(user);
+        this.ensureEditorAccess(user, 'create');
         if (!file) {
             (0, http_error_1.throwError)('VALIDATION_ERROR', { field: 'file', reason: 'required' });
         }
@@ -203,15 +231,19 @@ let LibraryService = class LibraryService {
             }
             catch {
             }
+            const title = String(payload.title ?? '').trim();
+            const localityId = String(payload.localityId ?? '').trim() || null;
+            const scope = this.parseScope(payload.scope);
             const currentMaxSortOrder = await this.prisma.libraryPhoto.aggregate({
+                where: { scope },
                 _max: { sortOrder: true },
             });
             const nextSortOrder = Number(currentMaxSortOrder._max.sortOrder ?? -1) + 1;
-            const title = String(payload.title ?? '').trim();
-            const localityId = String(payload.localityId ?? '').trim() || null;
+            await this.assertLocalityForScope(localityId, scope);
             const created = await this.prisma.libraryPhoto.create({
                 data: {
                     title,
+                    scope,
                     imageData: base64Data,
                     mimeType,
                     fileUrl: null,
@@ -228,6 +260,7 @@ let LibraryService = class LibraryService {
                 entityId: created.id,
                 diffJson: {
                     title: created.title,
+                    scope: created.scope,
                     sortOrder: created.sortOrder,
                     localityId: created.localityId,
                 },
@@ -250,7 +283,7 @@ let LibraryService = class LibraryService {
         }
     }
     async updatePhoto(id, payload, user) {
-        this.ensureEditorAccess(user);
+        this.ensureEditorAccess(user, 'update');
         const current = await this.prisma.libraryPhoto.findUnique({
             where: { id },
         });
@@ -267,11 +300,16 @@ let LibraryService = class LibraryService {
             : payload.localityId === null || payload.localityId === ''
                 ? null
                 : String(payload.localityId).trim() || null;
+        const nextScope = payload.scope === undefined
+            ? current.scope
+            : this.parseScope(payload.scope);
+        await this.assertLocalityForScope(nextLocalityId, nextScope);
         const updated = await this.prisma.libraryPhoto.update({
             where: { id },
             data: {
                 title: nextTitle,
                 sortOrder: nextSortOrder,
+                scope: nextScope,
                 localityId: nextLocalityId,
             },
         });
@@ -282,6 +320,7 @@ let LibraryService = class LibraryService {
             entityId: updated.id,
             diffJson: {
                 title: updated.title,
+                scope: updated.scope,
                 sortOrder: updated.sortOrder,
                 localityId: updated.localityId,
             },
@@ -289,7 +328,7 @@ let LibraryService = class LibraryService {
         return updated;
     }
     async deletePhoto(id, _photosDir, user) {
-        this.ensureEditorAccess(user);
+        this.ensureEditorAccess(user, 'delete');
         const current = await this.prisma.libraryPhoto.findUnique({
             where: { id },
         });
@@ -306,14 +345,16 @@ let LibraryService = class LibraryService {
         return { success: true };
     }
     async createDocument(file, payload, user) {
-        this.ensureEditorAccess(user);
+        this.ensureEditorAccess(user, 'create');
         if (!file) {
             (0, http_error_1.throwError)('VALIDATION_ERROR', { field: 'file', reason: 'required' });
         }
         const title = String(payload.title ?? '').trim() || file.originalname || 'Documento';
+        const scope = this.parseScope(payload.scope);
         const created = await this.prisma.libraryDocument.create({
             data: {
                 title,
+                scope,
                 fileName: file.originalname || file.filename,
                 fileUrl: `/library/uploads/documents/${file.filename}`,
                 storageKey: file.filename,
@@ -327,12 +368,16 @@ let LibraryService = class LibraryService {
             resource: 'library',
             action: 'create_document',
             entityId: created.id,
-            diffJson: { title: created.title, fileName: created.fileName },
+            diffJson: {
+                title: created.title,
+                fileName: created.fileName,
+                scope: created.scope,
+            },
         });
         return created;
     }
     async updateDocument(id, payload, user) {
-        this.ensureEditorAccess(user);
+        this.ensureEditorAccess(user, 'update');
         const current = await this.prisma.libraryDocument.findUnique({
             where: { id },
         });
@@ -358,7 +403,7 @@ let LibraryService = class LibraryService {
         return updated;
     }
     async deleteDocument(id, documentsDir, user) {
-        this.ensureEditorAccess(user);
+        this.ensureEditorAccess(user, 'delete');
         const current = await this.prisma.libraryDocument.findUnique({
             where: { id },
         });
@@ -392,6 +437,33 @@ let LibraryService = class LibraryService {
         if (!document)
             (0, http_error_1.throwError)('NOT_FOUND');
         return document;
+    }
+    parseScope(value) {
+        const normalized = String(value ?? '')
+            .trim()
+            .toUpperCase();
+        return normalized === 'CIPAVD' ? 'CIPAVD' : 'SMIF';
+    }
+    async assertLocalityForScope(localityId, scope) {
+        if (!localityId)
+            return;
+        const locality = await this.prisma.locality.findUnique({
+            where: { id: localityId },
+            select: { id: true, catalogType: true },
+        });
+        if (!locality) {
+            (0, http_error_1.throwError)('VALIDATION_ERROR', {
+                field: 'localityId',
+                reason: 'invalid',
+            });
+        }
+        const expectedCatalogType = scope === 'CIPAVD' ? client_1.LocalityCatalogType.CIPAVD : client_1.LocalityCatalogType.SMIF;
+        if (locality.catalogType !== expectedCatalogType) {
+            (0, http_error_1.throwError)('VALIDATION_ERROR', {
+                field: 'localityId',
+                reason: 'scope_mismatch',
+            });
+        }
     }
 };
 exports.LibraryService = LibraryService;

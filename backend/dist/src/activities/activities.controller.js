@@ -123,8 +123,8 @@ let ActivitiesController = class ActivitiesController {
     upsertReport(id, dto, user) {
         return this.activities.upsertReport(id, dto, user);
     }
-    signReport(id, user) {
-        return this.activities.signReport(id, user);
+    signReport(id, totpCode, user) {
+        return this.activities.signReport(id, user, totpCode);
     }
     async uploadPhoto(id, file, req, user) {
         if (!file) {
@@ -181,6 +181,7 @@ __decorate([
 ], ActivitiesController.prototype, "list", null);
 __decorate([
     (0, common_1.Post)(),
+    (0, require_permission_decorator_1.RequirePermission)('task_instances', 'create'),
     __param(0, (0, common_1.Body)()),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
@@ -214,6 +215,7 @@ __decorate([
 ], ActivitiesController.prototype, "listResponsibleUsers", null);
 __decorate([
     (0, common_1.Put)(':id'),
+    (0, require_permission_decorator_1.RequirePermission)('task_instances', 'update'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),
@@ -223,6 +225,7 @@ __decorate([
 ], ActivitiesController.prototype, "update", null);
 __decorate([
     (0, common_1.Put)('batch/status'),
+    (0, require_permission_decorator_1.RequirePermission)('task_instances', 'update'),
     __param(0, (0, common_1.Body)()),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
@@ -231,6 +234,7 @@ __decorate([
 ], ActivitiesController.prototype, "batchStatus", null);
 __decorate([
     (0, common_1.Put)('batch/specialty'),
+    (0, require_permission_decorator_1.RequirePermission)('task_instances', 'update'),
     __param(0, (0, common_1.Body)()),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
@@ -239,6 +243,7 @@ __decorate([
 ], ActivitiesController.prototype, "batchSpecialty", null);
 __decorate([
     (0, common_1.Put)('batch/responsible'),
+    (0, require_permission_decorator_1.RequirePermission)('task_instances', 'update'),
     __param(0, (0, common_1.Body)()),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
@@ -247,6 +252,7 @@ __decorate([
 ], ActivitiesController.prototype, "batchResponsible", null);
 __decorate([
     (0, common_1.Post)('batch/delete'),
+    (0, require_permission_decorator_1.RequirePermission)('task_instances', 'delete'),
     __param(0, (0, common_1.Body)()),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
@@ -255,6 +261,7 @@ __decorate([
 ], ActivitiesController.prototype, "batchDelete", null);
 __decorate([
     (0, common_1.Post)('batch/replicate'),
+    (0, require_permission_decorator_1.RequirePermission)('task_instances', 'create'),
     __param(0, (0, common_1.Body)()),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
@@ -272,6 +279,7 @@ __decorate([
 ], ActivitiesController.prototype, "batchReorder", null);
 __decorate([
     (0, common_1.Put)(':id/status'),
+    (0, require_permission_decorator_1.RequirePermission)('task_instances', 'update'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),
@@ -281,6 +289,7 @@ __decorate([
 ], ActivitiesController.prototype, "updateStatus", null);
 __decorate([
     (0, common_1.Delete)(':id'),
+    (0, require_permission_decorator_1.RequirePermission)('task_instances', 'delete'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
@@ -298,6 +307,7 @@ __decorate([
 ], ActivitiesController.prototype, "comments", null);
 __decorate([
     (0, common_1.Post)(':id/comments'),
+    (0, require_permission_decorator_1.RequirePermission)('task_instances', 'update'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),
@@ -325,6 +335,7 @@ __decorate([
 ], ActivitiesController.prototype, "listSchedule", null);
 __decorate([
     (0, common_1.Post)(':id/schedule'),
+    (0, require_permission_decorator_1.RequirePermission)('task_instances', 'update'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),
@@ -334,6 +345,7 @@ __decorate([
 ], ActivitiesController.prototype, "createScheduleItem", null);
 __decorate([
     (0, common_1.Put)(':id/schedule/:itemId'),
+    (0, require_permission_decorator_1.RequirePermission)('task_instances', 'update'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Param)('itemId')),
     __param(2, (0, common_1.Body)()),
@@ -344,6 +356,7 @@ __decorate([
 ], ActivitiesController.prototype, "updateScheduleItem", null);
 __decorate([
     (0, common_1.Delete)(':id/schedule/:itemId'),
+    (0, require_permission_decorator_1.RequirePermission)('task_instances', 'update'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Param)('itemId')),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),
@@ -375,9 +388,10 @@ __decorate([
     (0, common_1.Post)(':id/report/sign'),
     (0, require_permission_decorator_1.RequirePermission)('reports', 'approve'),
     __param(0, (0, common_1.Param)('id')),
-    __param(1, (0, current_user_decorator_1.CurrentUser)()),
+    __param(1, (0, common_1.Body)('totpCode')),
+    __param(2, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:paramtypes", [String, String, Object]),
     __metadata("design:returntype", void 0)
 ], ActivitiesController.prototype, "signReport", null);
 __decorate([

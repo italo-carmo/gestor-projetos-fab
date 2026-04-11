@@ -27,6 +27,7 @@ const sanitize_1 = require("../common/sanitize");
 const pagination_1 = require("../common/pagination");
 const role_access_1 = require("../rbac/role-access");
 const priority_localities_1 = require("../common/priority-localities");
+const totp_util_1 = require("../auth/totp.util");
 const activityPhotosDir = node_path_1.default.resolve(process.cwd(), 'storage', 'activity-reports');
 const scheduleLogoCandidates = [
     node_path_1.default.resolve(process.cwd(), 'frontend', 'public', 'brand', 'cipavd-7.png'),
@@ -44,15 +45,17 @@ let ActivitiesService = class ActivitiesService {
     }
     async list(filters, user) {
         const { page, pageSize, skip, take } = (0, pagination_1.parsePagination)(filters.page, filters.pageSize);
-        const targetLocalityIds = await this.getTargetLocalityIds();
-        if (targetLocalityIds.length === 0) {
-            return { items: [], page, pageSize, total: 0 };
-        }
         const scopeFilter = String(filters.scope ?? '').toUpperCase() === 'CIPAVD'
             ? 'CIPAVD'
             : 'SMIF';
+        const targetLocalityIds = scopeFilter === 'SMIF' ? await this.getTargetLocalityIds() : [];
+        if (scopeFilter === 'SMIF' && targetLocalityIds.length === 0) {
+            return { items: [], page, pageSize, total: 0 };
+        }
         const andClauses = [];
-        andClauses.push({ localityId: { in: targetLocalityIds } });
+        if (scopeFilter === 'SMIF') {
+            andClauses.push({ localityId: { in: targetLocalityIds } });
+        }
         andClauses.push({ scope: scopeFilter });
         if (filters.localityId)
             andClauses.push({ localityId: filters.localityId });
@@ -830,6 +833,7 @@ let ActivitiesService = class ActivitiesService {
                 AND: [
                     { id: { in: normalizedTargetLocalityIds } },
                     { id: { in: allowedTargetLocalityIds } },
+                    { catalogType: client_1.LocalityCatalogType.SMIF },
                 ],
             },
             select: { id: true },
@@ -1565,11 +1569,28 @@ let ActivitiesService = class ActivitiesService {
         });
         return { ok: true };
     }
-    async signReport(activityId, user) {
+    async signReport(activityId, user, totpCode) {
         if (!user?.id)
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
-        if (!(0, role_access_1.hasAnyRole)(user, [role_access_1.ROLE_CIPAVD, role_access_1.ROLE_COORDENACAO_CIPAVD, role_access_1.ROLE_TI])) {
+        if (!(0, role_access_1.hasPermission)(user, 'reports', 'approve')) {
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
+        }
+        const code = String(totpCode ?? '').replace(/\s/g, '').trim();
+        if (!code)
+            (0, http_error_1.throwError)('AUTH_2FA_INVALID_CODE');
+        const signer = await this.prisma.user.findUnique({
+            where: { id: user.id },
+            select: { totpSecret: true, totpEnabled: true },
+        });
+        if (!signer?.totpEnabled || !signer?.totpSecret) {
+            (0, http_error_1.throwError)('AUTH_2FA_INVALID_CODE');
+        }
+        const encKey = this.config.get('TOTP_ENCRYPTION_KEY') ??
+            this.config.get('JWT_ACCESS_SECRET') ??
+            'fallback-totp-key';
+        const secretBase32 = (0, totp_util_1.decryptSecret)(signer.totpSecret, encKey);
+        if (!(0, totp_util_1.verifyTotpCode)(secretBase32, code)) {
+            (0, http_error_1.throwError)('AUTH_2FA_INVALID_CODE');
         }
         const activity = await this.prisma.activity.findUnique({
             where: { id: activityId },
@@ -2369,6 +2390,7 @@ let ActivitiesService = class ActivitiesService {
     }
     async getTargetLocalityIds() {
         const localities = await this.prisma.locality.findMany({
+            where: { catalogType: client_1.LocalityCatalogType.SMIF },
             select: {
                 id: true,
                 name: true,
@@ -2549,7 +2571,7 @@ let ActivitiesService = class ActivitiesService {
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         const scope = activityOrScope?.scope;
         if (scope === 'CIPAVD') {
-            if ((0, role_access_1.hasAnyRole)(user, [role_access_1.ROLE_CIPAVD, role_access_1.ROLE_COORDENACAO_CIPAVD, role_access_1.ROLE_TI]))
+            if ((0, role_access_1.hasPermission)(user, 'task_instances', 'update'))
                 return;
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         }

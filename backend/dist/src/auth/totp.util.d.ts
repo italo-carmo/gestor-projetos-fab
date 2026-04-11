@@ -1,0 +1,10 @@
+export declare function encryptSecret(plaintext: string, encryptionKey: string): string;
+export declare function decryptSecret(ciphertext: string, encryptionKey: string): string;
+export declare function generateTotpSecret(): string;
+export declare function buildTotpUri(secretBase32: string, accountName: string): string;
+export declare function generateQrCodeDataUrl(uri: string): Promise<string>;
+export declare function formatManualKey(base32: string): string;
+export declare function verifyTotpCode(secretBase32: string, code: string): boolean;
+export declare function generateBackupCodes(): string[];
+export declare function hashBackupCodes(codes: string[]): Promise<string[]>;
+export declare function verifyBackupCode(candidate: string, hashes: string[]): Promise<number>;

@@ -11,6 +11,10 @@ export class UpdateLocalityDto {
 
   @IsOptional()
   @IsString()
+  uf?: string | null;
+
+  @IsOptional()
+  @IsString()
   commandName?: string | null;
 
   @IsOptional()

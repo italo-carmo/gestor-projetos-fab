@@ -4340,6 +4340,13 @@ export function useTextAnalysis() {
   });
 }
 
+export function useGeoMap() {
+  return useQuery({
+    queryKey: ["strategic", "geoMap"],
+    queryFn: async () => (await api.get("/strategic/geo-map")).data,
+  });
+}
+
 export function useExportExecutiveReportPdf() {
   return useMutation({
     mutationFn: async () => {

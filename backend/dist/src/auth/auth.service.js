@@ -55,6 +55,7 @@ const http_error_1 = require("../common/http-error");
 const audit_service_1 = require("../audit/audit.service");
 const rbac_service_1 = require("../rbac/rbac.service");
 const fab_ldap_service_1 = require("../ldap/fab-ldap.service");
+const totp_util_1 = require("./totp.util");
 const REFRESH_TOKEN_SALT_ROUNDS = 10;
 const SIGPES_FOTO_TIMEOUT_MS = 8_000;
 let AuthService = class AuthService {
@@ -107,7 +108,6 @@ let AuthService = class AuthService {
         if (!refreshedUser.roles.length) {
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         }
-        const tokens = await this.issueTokens(refreshedUser.id, refreshedUser.email);
         const role = refreshedUser.roles[0]?.role
             ? {
                 id: refreshedUser.roles[0].role.id,
@@ -121,15 +121,32 @@ let AuthService = class AuthService {
             entityId: refreshedUser.id,
             localityId: refreshedUser.localityId ?? undefined,
         });
+        const fullUser = await this.prisma.user.findUnique({
+            where: { id: refreshedUser.id },
+            select: { totpEnabled: true, totpSecret: true },
+        });
+        if (fullUser?.totpEnabled && fullUser?.totpSecret) {
+            const twoFactorToken = await this.issue2faToken(refreshedUser.id, '2fa');
+            return { requiresTwoFactor: true, twoFactorToken };
+        }
+        const secretBase32 = (0, totp_util_1.generateTotpSecret)();
+        const encKey = this.getTotpEncryptionKey();
+        const encrypted = (0, totp_util_1.encryptSecret)(secretBase32, encKey);
+        const accountName = refreshedUser.email || refreshedUser.name || refreshedUser.id;
+        const totpUri = (0, totp_util_1.buildTotpUri)(secretBase32, accountName);
+        const qrCodeDataUrl = await (0, totp_util_1.generateQrCodeDataUrl)(totpUri);
+        const manualEntryKey = (0, totp_util_1.formatManualKey)(secretBase32);
+        await this.prisma.user.update({
+            where: { id: refreshedUser.id },
+            data: { totpSecret: encrypted, totpEnabled: false, totpBackupCodes: [] },
+        });
+        const setupToken = await this.issue2faToken(refreshedUser.id, '2fa_setup');
         return {
-            accessToken: tokens.accessToken,
-            refreshToken: tokens.refreshToken,
-            user: {
-                id: refreshedUser.id,
-                name: refreshedUser.name,
-                email: refreshedUser.email,
-                role: role ?? undefined,
-            },
+            requiresTwoFactorSetup: true,
+            setupToken,
+            qrCodeDataUrl,
+            manualEntryKey,
+            totpUri,
         };
     }
     async refresh(refreshToken) {
@@ -310,6 +327,120 @@ let AuthService = class AuthService {
             reason: 'SIGPES_FOTO_API_UNREACHABLE',
             message: lastFetchErrorMessage ?? 'SIGPES_FOTO_NO_ROUTE',
         });
+    }
+    async confirmTwoFactorSetup(setupToken, code) {
+        const payload = await this.verify2faToken(setupToken, '2fa_setup');
+        const user = await this.prisma.user.findUnique({
+            where: { id: payload.sub },
+            select: { id: true, email: true, totpSecret: true, totpEnabled: true },
+        });
+        if (!user || !user.totpSecret)
+            (0, http_error_1.throwError)('AUTH_INVALID_CREDENTIALS');
+        if (user.totpEnabled)
+            (0, http_error_1.throwError)('AUTH_2FA_ALREADY_ENABLED');
+        const encKey = this.getTotpEncryptionKey();
+        const secretBase32 = (0, totp_util_1.decryptSecret)(user.totpSecret, encKey);
+        if (!(0, totp_util_1.verifyTotpCode)(secretBase32, code)) {
+            (0, http_error_1.throwError)('AUTH_2FA_INVALID_CODE');
+        }
+        const backupCodesPlain = (0, totp_util_1.generateBackupCodes)();
+        const backupCodesHashed = await (0, totp_util_1.hashBackupCodes)(backupCodesPlain);
+        await this.prisma.user.update({
+            where: { id: user.id },
+            data: { totpEnabled: true, totpBackupCodes: backupCodesHashed },
+        });
+        await this.audit.log({
+            userId: user.id,
+            resource: 'auth',
+            action: '2fa_setup',
+            entityId: user.id,
+        });
+        const tokens = await this.issueTokens(user.id, user.email);
+        return { ...tokens, backupCodes: backupCodesPlain };
+    }
+    async verifyTwoFactor(twoFactorToken, code) {
+        const payload = await this.verify2faToken(twoFactorToken, '2fa');
+        const user = await this.prisma.user.findUnique({
+            where: { id: payload.sub },
+            select: { id: true, email: true, totpSecret: true, totpEnabled: true, totpBackupCodes: true },
+        });
+        if (!user || !user.totpSecret || !user.totpEnabled) {
+            (0, http_error_1.throwError)('AUTH_INVALID_CREDENTIALS');
+        }
+        const encKey = this.getTotpEncryptionKey();
+        const secretBase32 = (0, totp_util_1.decryptSecret)(user.totpSecret, encKey);
+        const normalizedCode = code.replace(/[-\s]/g, '').trim();
+        if (/^\d{6}$/.test(normalizedCode)) {
+            if (!(0, totp_util_1.verifyTotpCode)(secretBase32, normalizedCode)) {
+                (0, http_error_1.throwError)('AUTH_2FA_INVALID_CODE');
+            }
+        }
+        else {
+            const idx = await (0, totp_util_1.verifyBackupCode)(normalizedCode, user.totpBackupCodes);
+            if (idx < 0)
+                (0, http_error_1.throwError)('AUTH_2FA_INVALID_CODE');
+            const remaining = [...user.totpBackupCodes];
+            remaining.splice(idx, 1);
+            await this.prisma.user.update({
+                where: { id: user.id },
+                data: { totpBackupCodes: remaining },
+            });
+        }
+        const tokens = await this.issueTokens(user.id, user.email);
+        return { ...tokens };
+    }
+    async resetTwoFactor(targetUserId) {
+        const user = await this.prisma.user.findUnique({
+            where: { id: targetUserId },
+            select: { id: true },
+        });
+        if (!user)
+            (0, http_error_1.throwError)('NOT_FOUND');
+        await this.prisma.user.update({
+            where: { id: targetUserId },
+            data: { totpSecret: null, totpEnabled: false, totpBackupCodes: [] },
+        });
+        await this.audit.log({
+            userId: targetUserId,
+            resource: 'auth',
+            action: '2fa_reset',
+            entityId: targetUserId,
+        });
+        return { ok: true };
+    }
+    async getUserTwoFactorStatus(userId) {
+        const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+            select: { totpEnabled: true },
+        });
+        return { totpEnabled: user?.totpEnabled ?? false };
+    }
+    async issue2faToken(userId, purpose) {
+        const payload = { sub: userId, purpose };
+        return this.jwt.signAsync(payload, {
+            secret: this.config.get('JWT_ACCESS_SECRET'),
+            expiresIn: '5m',
+        });
+    }
+    async verify2faToken(token, expectedPurpose) {
+        let payload;
+        try {
+            payload = await this.jwt.verifyAsync(token, {
+                secret: this.config.get('JWT_ACCESS_SECRET'),
+            });
+        }
+        catch {
+            (0, http_error_1.throwError)('AUTH_2FA_TOKEN_EXPIRED');
+        }
+        if (payload.purpose !== expectedPurpose) {
+            (0, http_error_1.throwError)('AUTH_INVALID_CREDENTIALS');
+        }
+        return payload;
+    }
+    getTotpEncryptionKey() {
+        return (this.config.get('TOTP_ENCRYPTION_KEY') ??
+            this.config.get('JWT_ACCESS_SECRET') ??
+            'fallback-totp-key');
     }
     async issueTokens(userId, email) {
         const accessPayload = { sub: userId, email };

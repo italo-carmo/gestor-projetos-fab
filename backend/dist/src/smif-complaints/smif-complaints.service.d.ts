@@ -1,114 +1,34 @@
-import { SmifComplaintStatus } from '@prisma/client';
-import { AuditService } from '../audit/audit.service';
-import { PrismaService } from '../prisma/prisma.service';
+import { CpcaService } from '../cpca/cpca.service';
+import { AddCpcaCaseCommentDto } from '../cpca/dto/add-cpca-case-comment.dto';
+import { CreateCpcaCaseDto } from '../cpca/dto/create-cpca-case.dto';
+import { UpdateCpcaCaseDto } from '../cpca/dto/update-cpca-case.dto';
 import type { RbacUser } from '../rbac/rbac.types';
 export declare class SmifComplaintsService {
-    private readonly prisma;
-    private readonly audit;
-    constructor(prisma: PrismaService, audit: AuditService);
+    private readonly cpca;
+    constructor(cpca: CpcaService);
     list(filters: {
+        localityId?: string;
+        status?: string;
+        complaintType?: string;
+        detailedViolenceType?: string;
+        procedureType?: string;
         q?: string;
-        status?: SmifComplaintStatus;
-        localityId?: string;
+        page?: string;
+        pageSize?: string;
     }, user?: RbacUser): Promise<{
-        items: ({
-            locality: {
-                id: string;
-                name: string;
-                code: string;
-            };
-            createdBy: {
-                id: string;
-                name: string;
-            };
-            updatedBy: {
-                id: string;
-                name: string;
-            } | null;
-        } & {
-            id: string;
-            createdAt: Date;
-            updatedAt: Date;
-            description: string;
-            localityId: string;
-            status: import("@prisma/client").$Enums.SmifComplaintStatus;
-            createdById: string;
-            conclusion: string | null;
-            reportedAt: Date;
-            updatedById: string | null;
-        })[];
+        items: any;
+        page: number;
+        pageSize: number;
+        total: any;
     }>;
-    create(payload: {
-        localityId: string;
-        reportedAt: string;
-        description: string;
-        status?: SmifComplaintStatus;
-        conclusion?: string;
-    }, user?: RbacUser): Promise<{
-        locality: {
-            id: string;
-            name: string;
-            code: string;
-        };
-        createdBy: {
-            id: string;
-            name: string;
-        };
-        updatedBy: {
-            id: string;
-            name: string;
-        } | null;
-    } & {
-        id: string;
-        createdAt: Date;
-        updatedAt: Date;
-        description: string;
-        localityId: string;
-        status: import("@prisma/client").$Enums.SmifComplaintStatus;
-        createdById: string;
-        conclusion: string | null;
-        reportedAt: Date;
-        updatedById: string | null;
-    }>;
-    update(id: string, payload: {
-        localityId?: string;
-        reportedAt?: string;
-        description?: string;
-        status?: SmifComplaintStatus;
-        conclusion?: string;
-    }, user?: RbacUser): Promise<{
-        locality: {
-            id: string;
-            name: string;
-            code: string;
-        };
-        createdBy: {
-            id: string;
-            name: string;
-        };
-        updatedBy: {
-            id: string;
-            name: string;
-        } | null;
-    } & {
-        id: string;
-        createdAt: Date;
-        updatedAt: Date;
-        description: string;
-        localityId: string;
-        status: import("@prisma/client").$Enums.SmifComplaintStatus;
-        createdById: string;
-        conclusion: string | null;
-        reportedAt: Date;
-        updatedById: string | null;
-    }>;
+    getById(id: string, user?: RbacUser): Promise<any>;
+    create(payload: CreateCpcaCaseDto, user?: RbacUser): Promise<any>;
+    update(id: string, payload: UpdateCpcaCaseDto, user?: RbacUser): Promise<any>;
     remove(id: string, user?: RbacUser): Promise<{
         ok: boolean;
     }>;
-    private assertEditorAccess;
-    private resolveActorId;
-    private normalizeDate;
-    private normalizeRequiredText;
-    private normalizeOptionalText;
-    private resolveLocalityId;
+    listComments(id: string, user?: RbacUser): Promise<{
+        items: any;
+    }>;
+    addComment(id: string, payload: AddCpcaCaseCommentDto, user?: RbacUser): Promise<any>;
 }

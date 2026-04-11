@@ -57,7 +57,7 @@ let LessonsLearnedService = class LessonsLearnedService {
         return { items };
     }
     async create(payload, user) {
-        this.assertEditorAccess(user);
+        this.assertEditorAccess(user, 'create');
         const title = this.normalizeRequiredText(payload.title, 'title', 140);
         const content = this.normalizeRequiredText(payload.content, 'content', 1200);
         const typeId = await this.resolveTypeId(payload.typeId);
@@ -86,7 +86,7 @@ let LessonsLearnedService = class LessonsLearnedService {
         return created;
     }
     async update(id, payload, user) {
-        this.assertEditorAccess(user);
+        this.assertEditorAccess(user, 'update');
         const existing = await this.prisma.lessonLearnedPost.findUnique({
             where: { id },
         });
@@ -122,7 +122,7 @@ let LessonsLearnedService = class LessonsLearnedService {
         return updated;
     }
     async remove(id, user) {
-        this.assertEditorAccess(user);
+        this.assertEditorAccess(user, 'delete');
         const existing = await this.prisma.lessonLearnedPost.findUnique({
             where: { id },
         });
@@ -139,7 +139,7 @@ let LessonsLearnedService = class LessonsLearnedService {
         return { ok: true };
     }
     async createType(payload, user) {
-        this.assertEditorAccess(user);
+        this.assertEditorAccess(user, 'create');
         const name = this.normalizeRequiredText(payload.name, 'name', 80);
         const colorHex = this.normalizeColorHex(payload.colorHex);
         const textColorHex = payload.textColorHex
@@ -172,7 +172,7 @@ let LessonsLearnedService = class LessonsLearnedService {
         return created;
     }
     async updateType(id, payload, user) {
-        this.assertEditorAccess(user);
+        this.assertEditorAccess(user, 'update');
         const existing = await this.prisma.lessonLearnedType.findUnique({
             where: { id },
         });
@@ -222,7 +222,7 @@ let LessonsLearnedService = class LessonsLearnedService {
         return updated;
     }
     async removeType(id, user) {
-        this.assertEditorAccess(user);
+        this.assertEditorAccess(user, 'delete');
         const existing = await this.prisma.lessonLearnedType.findUnique({
             where: { id },
         });
@@ -248,16 +248,12 @@ let LessonsLearnedService = class LessonsLearnedService {
         return { ok: true };
     }
     assertViewerAccess(user) {
-        if (!(0, role_access_1.hasAnyRole)(user, [
-            role_access_1.ROLE_COORDENACAO_CIPAVD,
-            role_access_1.ROLE_TI,
-            role_access_1.ROLE_COMANDANTE_COMGEP,
-        ])) {
+        if (!(0, role_access_1.hasPermission)(user, 'lessons_learned', 'view')) {
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         }
     }
-    assertEditorAccess(user) {
-        if (!(0, role_access_1.hasAnyRole)(user, [role_access_1.ROLE_COORDENACAO_CIPAVD, role_access_1.ROLE_TI])) {
+    assertEditorAccess(user, action) {
+        if (!(0, role_access_1.hasPermission)(user, 'lessons_learned', action)) {
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         }
     }

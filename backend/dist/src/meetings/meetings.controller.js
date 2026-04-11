@@ -16,10 +16,8 @@ exports.MeetingsController = void 0;
 const common_1 = require("@nestjs/common");
 const jwt_auth_guard_1 = require("../auth/jwt-auth.guard");
 const current_user_decorator_1 = require("../common/current-user.decorator");
-const http_error_1 = require("../common/http-error");
 const require_permission_decorator_1 = require("../rbac/require-permission.decorator");
 const rbac_guard_1 = require("../rbac/rbac.guard");
-const role_access_1 = require("../rbac/role-access");
 const create_meeting_dto_1 = require("./dto/create-meeting.dto");
 const update_meeting_dto_1 = require("./dto/update-meeting.dto");
 const meeting_decision_dto_1 = require("./dto/meeting-decision.dto");
@@ -31,33 +29,22 @@ let MeetingsController = class MeetingsController {
         this.meetings = meetings;
     }
     list(status, scope, localityId, from, to, page, pageSize, user) {
-        this.assertMeetingsAccess(user);
         return this.meetings.list({ status, scope, localityId, from, to, page, pageSize }, user);
     }
     create(dto, user) {
-        this.assertMeetingsAccess(user);
         return this.meetings.create(dto, user);
     }
     update(id, dto, user) {
-        this.assertMeetingsAccess(user);
         return this.meetings.update(id, dto, user);
     }
     addDecision(id, dto, user) {
-        this.assertMeetingsAccess(user);
         return this.meetings.addDecision(id, dto.text, user);
     }
     generateTasks(id, dto, user) {
-        this.assertMeetingsAccess(user);
         return this.meetings.generateTasks(id, dto, user);
     }
     remove(id, user) {
-        this.assertMeetingsAccess(user);
         return this.meetings.delete(id, user);
-    }
-    assertMeetingsAccess(user) {
-        if (!(0, role_access_1.hasNationalManagementScope)(user)) {
-            (0, http_error_1.throwError)('RBAC_FORBIDDEN');
-        }
     }
 };
 exports.MeetingsController = MeetingsController;
@@ -78,7 +65,7 @@ __decorate([
 ], MeetingsController.prototype, "list", null);
 __decorate([
     (0, common_1.Post)(),
-    (0, require_permission_decorator_1.RequirePermission)('meetings', 'view'),
+    (0, require_permission_decorator_1.RequirePermission)('meetings', 'create'),
     __param(0, (0, common_1.Body)()),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
@@ -87,7 +74,7 @@ __decorate([
 ], MeetingsController.prototype, "create", null);
 __decorate([
     (0, common_1.Put)(':id'),
-    (0, require_permission_decorator_1.RequirePermission)('meetings', 'view'),
+    (0, require_permission_decorator_1.RequirePermission)('meetings', 'update'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),
@@ -97,7 +84,7 @@ __decorate([
 ], MeetingsController.prototype, "update", null);
 __decorate([
     (0, common_1.Post)(':id/decisions'),
-    (0, require_permission_decorator_1.RequirePermission)('meetings', 'view'),
+    (0, require_permission_decorator_1.RequirePermission)('meetings', 'update'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),
@@ -117,7 +104,7 @@ __decorate([
 ], MeetingsController.prototype, "generateTasks", null);
 __decorate([
     (0, common_1.Delete)(':id'),
-    (0, require_permission_decorator_1.RequirePermission)('meetings', 'view'),
+    (0, require_permission_decorator_1.RequirePermission)('meetings', 'delete'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),

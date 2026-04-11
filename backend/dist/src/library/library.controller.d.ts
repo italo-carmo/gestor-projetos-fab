@@ -6,18 +6,21 @@ export declare const libraryDocumentsDir: string;
 export declare class LibraryController {
     private readonly library;
     constructor(library: LibraryService);
-    list(): Promise<{
+    list(scope: string | undefined): Promise<{
+        scope: "SMIF" | "CIPAVD";
         photos: ({
             locality: {
                 id: string;
                 name: string;
                 code: string;
+                catalogType: import("@prisma/client").$Enums.LocalityCatalogType;
             } | null;
         } & {
             id: string;
             title: string;
             createdAt: Date;
             updatedAt: Date;
+            scope: import("@prisma/client").$Enums.ActivityScope;
             localityId: string | null;
             sortOrder: number;
             createdById: string | null;
@@ -31,12 +34,18 @@ export declare class LibraryController {
             title: string;
             createdAt: Date;
             updatedAt: Date;
+            scope: import("@prisma/client").$Enums.ActivityScope;
             fileName: string;
             createdById: string | null;
             fileUrl: string;
             storageKey: string | null;
             mimeType: string | null;
             fileSize: number | null;
+        }[];
+        localities: {
+            id: string;
+            code: string;
+            name: string;
         }[];
         settings: {
             carouselIntervalSeconds: number;
@@ -53,11 +62,13 @@ export declare class LibraryController {
     uploadPhoto(file: Express.Multer.File, body: {
         title?: string;
         localityId?: string;
+        scope?: string;
     }, user: RbacUser): Promise<{
         id: string;
         title: string;
         createdAt: Date;
         updatedAt: Date;
+        scope: import("@prisma/client").$Enums.ActivityScope;
         localityId: string | null;
         sortOrder: number;
         createdById: string | null;
@@ -70,11 +81,13 @@ export declare class LibraryController {
         title?: string;
         sortOrder?: number;
         localityId?: string | null;
+        scope?: string;
     }, user: RbacUser): Promise<{
         id: string;
         title: string;
         createdAt: Date;
         updatedAt: Date;
+        scope: import("@prisma/client").$Enums.ActivityScope;
         localityId: string | null;
         sortOrder: number;
         createdById: string | null;
@@ -88,11 +101,13 @@ export declare class LibraryController {
     }>;
     uploadDocument(file: Express.Multer.File, body: {
         title?: string;
+        scope?: string;
     }, user: RbacUser): Promise<{
         id: string;
         title: string;
         createdAt: Date;
         updatedAt: Date;
+        scope: import("@prisma/client").$Enums.ActivityScope;
         fileName: string;
         createdById: string | null;
         fileUrl: string;
@@ -107,6 +122,7 @@ export declare class LibraryController {
         title: string;
         createdAt: Date;
         updatedAt: Date;
+        scope: import("@prisma/client").$Enums.ActivityScope;
         fileName: string;
         createdById: string | null;
         fileUrl: string;

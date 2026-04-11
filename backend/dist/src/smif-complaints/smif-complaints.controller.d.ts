@@ -1,92 +1,25 @@
+import { AddCpcaCaseCommentDto } from '../cpca/dto/add-cpca-case-comment.dto';
+import { CreateCpcaCaseDto } from '../cpca/dto/create-cpca-case.dto';
+import { UpdateCpcaCaseDto } from '../cpca/dto/update-cpca-case.dto';
 import type { RbacUser } from '../rbac/rbac.types';
-import { CreateSmifComplaintDto } from './dto/create-smif-complaint.dto';
-import { ListSmifComplaintDto } from './dto/list-smif-complaint.dto';
-import { UpdateSmifComplaintDto } from './dto/update-smif-complaint.dto';
 import { SmifComplaintsService } from './smif-complaints.service';
 export declare class SmifComplaintsController {
     private readonly smifComplaints;
     constructor(smifComplaints: SmifComplaintsService);
-    list(query: ListSmifComplaintDto, user: RbacUser): Promise<{
-        items: ({
-            locality: {
-                id: string;
-                name: string;
-                code: string;
-            };
-            createdBy: {
-                id: string;
-                name: string;
-            };
-            updatedBy: {
-                id: string;
-                name: string;
-            } | null;
-        } & {
-            id: string;
-            createdAt: Date;
-            updatedAt: Date;
-            description: string;
-            localityId: string;
-            status: import("@prisma/client").$Enums.SmifComplaintStatus;
-            createdById: string;
-            conclusion: string | null;
-            reportedAt: Date;
-            updatedById: string | null;
-        })[];
+    list(omId: string | undefined, localityId: string | undefined, status: string | undefined, complaintType: string | undefined, detailedViolenceType: string | undefined, procedureType: string | undefined, q: string | undefined, page: string | undefined, pageSize: string | undefined, user: RbacUser): Promise<{
+        items: any;
+        page: number;
+        pageSize: number;
+        total: any;
     }>;
-    create(dto: CreateSmifComplaintDto, user: RbacUser): Promise<{
-        locality: {
-            id: string;
-            name: string;
-            code: string;
-        };
-        createdBy: {
-            id: string;
-            name: string;
-        };
-        updatedBy: {
-            id: string;
-            name: string;
-        } | null;
-    } & {
-        id: string;
-        createdAt: Date;
-        updatedAt: Date;
-        description: string;
-        localityId: string;
-        status: import("@prisma/client").$Enums.SmifComplaintStatus;
-        createdById: string;
-        conclusion: string | null;
-        reportedAt: Date;
-        updatedById: string | null;
-    }>;
-    update(id: string, dto: UpdateSmifComplaintDto, user: RbacUser): Promise<{
-        locality: {
-            id: string;
-            name: string;
-            code: string;
-        };
-        createdBy: {
-            id: string;
-            name: string;
-        };
-        updatedBy: {
-            id: string;
-            name: string;
-        } | null;
-    } & {
-        id: string;
-        createdAt: Date;
-        updatedAt: Date;
-        description: string;
-        localityId: string;
-        status: import("@prisma/client").$Enums.SmifComplaintStatus;
-        createdById: string;
-        conclusion: string | null;
-        reportedAt: Date;
-        updatedById: string | null;
-    }>;
+    getById(id: string, user: RbacUser): Promise<any>;
+    create(dto: CreateCpcaCaseDto, user: RbacUser): Promise<any>;
+    update(id: string, dto: UpdateCpcaCaseDto, user: RbacUser): Promise<any>;
     remove(id: string, user: RbacUser): Promise<{
         ok: boolean;
     }>;
+    comments(id: string, user: RbacUser): Promise<{
+        items: any;
+    }>;
+    addComment(id: string, dto: AddCpcaCaseCommentDto, user: RbacUser): Promise<any>;
 }

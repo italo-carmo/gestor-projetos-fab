@@ -4,6 +4,7 @@ import { BiService } from './bi.service';
 export declare class BiController {
     private readonly bi;
     constructor(bi: BiService);
+    private assertTiForSettings;
     dashboard(from: string | undefined, to: string | undefined, mission: string | undefined, om: string | undefined, posto: string | undefined, postoGraduacao: string | undefined, autodeclara: string | undefined, suffered: string | undefined, violenceType: string | undefined, combineMode: string | undefined, user: RbacUser): Promise<{
         kpis: {
             totalResponses: number;
@@ -110,6 +111,7 @@ export declare class BiController {
                 sharePercent: number;
             } | null;
         };
+        cardSettings: any;
         latestImport: ({
             importedBy: {
                 id: string;
@@ -251,5 +253,11 @@ export declare class BiController {
         mode: string;
         deletedCount: number;
     }>;
-    private assertBiAccess;
+    listCardSettings(user: RbacUser): Promise<{
+        items: any;
+    }>;
+    updateCardSetting(cardId: string, body: {
+        title?: string;
+        description?: string | null;
+    }, user: RbacUser): Promise<any>;
 }

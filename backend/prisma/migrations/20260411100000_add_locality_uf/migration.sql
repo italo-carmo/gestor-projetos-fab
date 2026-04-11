@@ -1,0 +1,1 @@
+ALTER TABLE "Locality" ADD COLUMN "uf" TEXT;

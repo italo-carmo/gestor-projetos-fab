@@ -15,6 +15,7 @@ export declare class MeetingsController {
                 updatedAt: Date;
                 name: string;
                 code: string;
+                catalogType: import("@prisma/client").$Enums.LocalityCatalogType;
                 commandName: string | null;
                 commanderName: string | null;
                 individualMeetingDate: Date | null;
@@ -101,6 +102,7 @@ export declare class MeetingsController {
             updatedAt: Date;
             name: string;
             code: string;
+            catalogType: import("@prisma/client").$Enums.LocalityCatalogType;
             commandName: string | null;
             commanderName: string | null;
             individualMeetingDate: Date | null;
@@ -140,6 +142,7 @@ export declare class MeetingsController {
             updatedAt: Date;
             name: string;
             code: string;
+            catalogType: import("@prisma/client").$Enums.LocalityCatalogType;
             commandName: string | null;
             commanderName: string | null;
             individualMeetingDate: Date | null;
@@ -184,5 +187,4 @@ export declare class MeetingsController {
     remove(id: string, user: RbacUser): Promise<{
         ok: boolean;
     }>;
-    private assertMeetingsAccess;
 }

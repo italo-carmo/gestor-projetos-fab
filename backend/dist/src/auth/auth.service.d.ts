@@ -15,17 +15,21 @@ export declare class AuthService {
     private readonly fabLdap;
     constructor(users: UsersService, prisma: PrismaService, jwt: JwtService, config: ConfigService, audit: AuditService, rbac: RbacService, fabLdap: FabLdapService);
     login(login: string, password: string): Promise<{
-        accessToken: string;
-        refreshToken: string;
-        user: {
-            id: string;
-            name: string;
-            email: string;
-            role: {
-                id: string;
-                name: string;
-            } | undefined;
-        };
+        requiresTwoFactor: boolean;
+        twoFactorToken: string;
+        requiresTwoFactorSetup?: undefined;
+        setupToken?: undefined;
+        qrCodeDataUrl?: undefined;
+        manualEntryKey?: undefined;
+        totpUri?: undefined;
+    } | {
+        requiresTwoFactorSetup: boolean;
+        setupToken: string;
+        qrCodeDataUrl: string;
+        manualEntryKey: string;
+        totpUri: string;
+        requiresTwoFactor?: undefined;
+        twoFactorToken?: undefined;
     }>;
     refresh(refreshToken: string): Promise<{
         accessToken: string;
@@ -75,6 +79,24 @@ export declare class AuthService {
         base64: string;
         dataUrl: string;
     }>;
+    confirmTwoFactorSetup(setupToken: string, code: string): Promise<{
+        backupCodes: string[];
+        accessToken: string;
+        refreshToken: string;
+    }>;
+    verifyTwoFactor(twoFactorToken: string, code: string): Promise<{
+        accessToken: string;
+        refreshToken: string;
+    }>;
+    resetTwoFactor(targetUserId: string): Promise<{
+        ok: boolean;
+    }>;
+    getUserTwoFactorStatus(userId: string): Promise<{
+        totpEnabled: any;
+    }>;
+    private issue2faToken;
+    private verify2faToken;
+    private getTotpEncryptionKey;
     private issueTokens;
     private getRefreshTtlMs;
     private resolveFabProfileForUser;

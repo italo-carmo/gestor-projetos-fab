@@ -28,6 +28,12 @@ export class StrategicController {
     return this.service.textAnalysis();
   }
 
+  @Get('geo-map')
+  @RequirePermission('bi', 'view')
+  geoMap() {
+    return this.service.geoMap();
+  }
+
   @Get('executive-report/pdf')
   @RequirePermission('bi', 'view')
   async executiveReportPdf(@Res() res: Response) {

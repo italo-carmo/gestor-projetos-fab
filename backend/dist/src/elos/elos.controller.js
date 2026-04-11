@@ -171,7 +171,7 @@ __decorate([
 ], OrgChartController.prototype, "commissionCandidates", null);
 __decorate([
     (0, common_1.Post)('commission-members'),
-    (0, require_permission_decorator_1.RequirePermission)('org_chart', 'view'),
+    (0, require_permission_decorator_1.RequirePermission)('org_chart', 'create'),
     __param(0, (0, common_1.Body)()),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
@@ -180,7 +180,7 @@ __decorate([
 ], OrgChartController.prototype, "addCommissionMember", null);
 __decorate([
     (0, common_1.Delete)('commission-members/:userId'),
-    (0, require_permission_decorator_1.RequirePermission)('org_chart', 'view'),
+    (0, require_permission_decorator_1.RequirePermission)('org_chart', 'delete'),
     __param(0, (0, common_1.Param)('userId')),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
@@ -189,7 +189,7 @@ __decorate([
 ], OrgChartController.prototype, "removeCommissionMember", null);
 __decorate([
     (0, common_1.Put)('commission-members/reorder'),
-    (0, require_permission_decorator_1.RequirePermission)('org_chart', 'view'),
+    (0, require_permission_decorator_1.RequirePermission)('org_chart', 'update'),
     __param(0, (0, common_1.Body)()),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
@@ -198,7 +198,7 @@ __decorate([
 ], OrgChartController.prototype, "reorderCommissionMembers", null);
 __decorate([
     (0, common_1.Put)('commission-members/:userId'),
-    (0, require_permission_decorator_1.RequirePermission)('org_chart', 'view'),
+    (0, require_permission_decorator_1.RequirePermission)('org_chart', 'update'),
     __param(0, (0, common_1.Param)('userId')),
     __param(1, (0, common_1.Body)()),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),
@@ -208,7 +208,7 @@ __decorate([
 ], OrgChartController.prototype, "updateCommissionMember", null);
 __decorate([
     (0, common_1.Post)('assignments'),
-    (0, require_permission_decorator_1.RequirePermission)('org_chart', 'view'),
+    (0, require_permission_decorator_1.RequirePermission)('org_chart', 'create'),
     __param(0, (0, common_1.Body)()),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
@@ -217,7 +217,7 @@ __decorate([
 ], OrgChartController.prototype, "createAssignment", null);
 __decorate([
     (0, common_1.Put)('assignments/:id'),
-    (0, require_permission_decorator_1.RequirePermission)('org_chart', 'view'),
+    (0, require_permission_decorator_1.RequirePermission)('org_chart', 'update'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),
@@ -227,7 +227,7 @@ __decorate([
 ], OrgChartController.prototype, "updateAssignment", null);
 __decorate([
     (0, common_1.Delete)('assignments/:id'),
-    (0, require_permission_decorator_1.RequirePermission)('org_chart', 'view'),
+    (0, require_permission_decorator_1.RequirePermission)('org_chart', 'delete'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),

@@ -13,6 +13,7 @@ const passport_1 = require("@nestjs/passport");
 const config_1 = require("@nestjs/config");
 const auth_service_1 = require("./auth.service");
 const auth_controller_1 = require("./auth.controller");
+const admin_2fa_controller_1 = require("./admin-2fa.controller");
 const jwt_strategy_1 = require("./jwt.strategy");
 const users_module_1 = require("../users/users.module");
 const rbac_module_1 = require("../rbac/rbac.module");
@@ -28,7 +29,7 @@ exports.AuthModule = AuthModule = __decorate([
             users_module_1.UsersModule,
             rbac_module_1.RbacModule,
         ],
-        controllers: [auth_controller_1.AuthController],
+        controllers: [auth_controller_1.AuthController, admin_2fa_controller_1.Admin2faController],
         providers: [auth_service_1.AuthService, jwt_strategy_1.JwtStrategy],
         exports: [auth_service_1.AuthService],
     })

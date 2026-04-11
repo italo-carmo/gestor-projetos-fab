@@ -42,6 +42,15 @@ let AuthController = class AuthController {
     getSigpesPhoto(numeroOrdem) {
         return this.auth.getSigpesPhotoByOrder(numeroOrdem);
     }
+    confirmTwoFactorSetup(setupToken, code) {
+        return this.auth.confirmTwoFactorSetup(setupToken, code);
+    }
+    verifyTwoFactor(twoFactorToken, code) {
+        return this.auth.verifyTwoFactor(twoFactorToken, code);
+    }
+    async twoFactorStatus(req) {
+        return this.auth.getUserTwoFactorStatus(req.user?.userId ?? '');
+    }
 };
 exports.AuthController = AuthController;
 __decorate([
@@ -86,6 +95,34 @@ __decorate([
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", void 0)
 ], AuthController.prototype, "getSigpesPhoto", null);
+__decorate([
+    (0, common_1.Post)('2fa/confirm-setup'),
+    (0, common_1.UseGuards)(throttler_1.ThrottlerGuard),
+    (0, throttler_1.Throttle)({ default: { limit: 10, ttl: 60_000 } }),
+    __param(0, (0, common_1.Body)('setupToken')),
+    __param(1, (0, common_1.Body)('code')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:returntype", void 0)
+], AuthController.prototype, "confirmTwoFactorSetup", null);
+__decorate([
+    (0, common_1.Post)('2fa/verify'),
+    (0, common_1.UseGuards)(throttler_1.ThrottlerGuard),
+    (0, throttler_1.Throttle)({ default: { limit: 10, ttl: 60_000 } }),
+    __param(0, (0, common_1.Body)('twoFactorToken')),
+    __param(1, (0, common_1.Body)('code')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:returntype", void 0)
+], AuthController.prototype, "verifyTwoFactor", null);
+__decorate([
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, common_1.Get)('2fa/status'),
+    __param(0, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "twoFactorStatus", null);
 exports.AuthController = AuthController = __decorate([
     (0, common_1.Controller)('auth'),
     __metadata("design:paramtypes", [auth_service_1.AuthService])

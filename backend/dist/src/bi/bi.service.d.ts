@@ -17,6 +17,10 @@ type SurveyFilters = {
 type ImportSurveyOptions = {
     replaceAll?: boolean;
 };
+type SurveyCardSettingInput = {
+    title?: string;
+    description?: string | null;
+};
 type CorrelatedViolenceSummary = {
     sheetName: string;
     totalRows: number;
@@ -136,6 +140,10 @@ export declare class BiService {
         mode: string;
         deletedCount: number;
     }>;
+    listCardSettings(): Promise<{
+        items: any;
+    }>;
+    updateCardSetting(cardIdRaw: string, payload: SurveyCardSettingInput, user?: RbacUser): Promise<any>;
     dashboard(filters: SurveyFilters): Promise<{
         kpis: {
             totalResponses: number;
@@ -242,6 +250,7 @@ export declare class BiService {
                 sharePercent: number;
             } | null;
         };
+        cardSettings: any;
         latestImport: ({
             importedBy: {
                 id: string;

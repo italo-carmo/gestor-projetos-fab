@@ -5,6 +5,8 @@ exports.normalizeRoleName = normalizeRoleName;
 exports.canonicalRoleName = canonicalRoleName;
 exports.hasRole = hasRole;
 exports.hasAnyRole = hasAnyRole;
+exports.hasPermission = hasPermission;
+exports.hasAnyPermission = hasAnyPermission;
 exports.isNationalCommissionMember = isNationalCommissionMember;
 exports.isTiUser = isTiUser;
 exports.hasNationalManagementScope = hasNationalManagementScope;
@@ -57,6 +59,29 @@ function hasAnyRole(user, roleNames) {
     if (!user || roleNames.length === 0)
         return false;
     return roleNames.some((roleName) => hasRole(user, roleName));
+}
+function hasPermission(user, resource, action, scope) {
+    if (!user)
+        return false;
+    const targetResource = String(resource ?? '').trim();
+    const targetAction = String(action ?? '').trim();
+    const targetScope = scope ? String(scope).trim().toUpperCase() : null;
+    return user.permissions.some((permission) => {
+        const sameResource = permission.resource === targetResource || permission.resource === '*';
+        if (!sameResource)
+            return false;
+        const sameAction = permission.action === targetAction || permission.action === '*';
+        if (!sameAction)
+            return false;
+        if (!targetScope)
+            return true;
+        return String(permission.scope ?? '').toUpperCase() === targetScope;
+    });
+}
+function hasAnyPermission(user, requirements) {
+    if (!user)
+        return false;
+    return requirements.some((requirement) => hasPermission(user, requirement.resource, requirement.action, requirement.scope));
 }
 function isNationalCommissionMember(user) {
     return hasAnyRole(user, [

@@ -48,6 +48,7 @@ export declare class ChecklistsService {
             updatedAt: Date;
             name: string;
             code: string;
+            catalogType: import("@prisma/client").$Enums.LocalityCatalogType;
             commandName: string | null;
             commanderName: string | null;
             individualMeetingDate: Date | null;

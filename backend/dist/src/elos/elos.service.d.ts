@@ -165,6 +165,7 @@ export declare class ElosService {
     private getScopeConstraints;
     private assertConstraints;
     private assertCanManageOrgChart;
+    private hasNationalOrgChartScope;
     private getCommissionRole;
     private getCommissionRoleOrFail;
     private assertUserMatchesAssignment;

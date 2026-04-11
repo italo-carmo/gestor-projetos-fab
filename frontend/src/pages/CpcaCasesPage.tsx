@@ -764,6 +764,16 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
       form.detailedViolenceType,
     );
     const macroComplaintType = inferredComplaintType ?? form.complaintType;
+
+    if (macroComplaintType === "SEXUAL" && !form.confidentialityTermSigned) {
+      toast.push({
+        message:
+          "Para casos de assédio sexual, o Termo de Sigilo deve ser marcado antes de salvar. Acesse a aba 'Sigilo e Proteção' e marque o campo.",
+        severity: "warning",
+      });
+      return;
+    }
+
     const retaliationRisk =
       form.retaliationReported === "SIM"
         ? true

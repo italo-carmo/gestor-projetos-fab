@@ -15,6 +15,7 @@ class CreateMissionDto {
     title;
     description;
     localityId;
+    scope;
     startDate;
     endDate;
 }
@@ -33,6 +34,11 @@ __decorate([
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], CreateMissionDto.prototype, "localityId", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsIn)(['SMIF', 'CIPAVD']),
+    __metadata("design:type", String)
+], CreateMissionDto.prototype, "scope", void 0);
 __decorate([
     (0, class_validator_1.IsDateString)(),
     __metadata("design:type", String)

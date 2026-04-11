@@ -1,4 +1,5 @@
 import type { RbacUser } from './rbac.types';
+import { PermissionScope } from '@prisma/client';
 export declare const ROLE_COORDENACAO_CIPAVD = "Coordena\u00E7\u00E3o CIPAVD";
 export declare const ROLE_COMISSAO_CIPAVD = "Comiss\u00E3o CIPAVD";
 export declare const ROLE_CIPAVD = "CIPAVD";
@@ -15,6 +16,12 @@ export declare function normalizeRoleName(roleName: string | null | undefined): 
 export declare function canonicalRoleName(roleName: string | null | undefined): string;
 export declare function hasRole(user: RbacUser | undefined, roleName: string): boolean;
 export declare function hasAnyRole(user: RbacUser | undefined, roleNames: string[]): boolean;
+export declare function hasPermission(user: RbacUser | undefined, resource: string, action: string, scope?: PermissionScope | string): boolean;
+export declare function hasAnyPermission(user: RbacUser | undefined, requirements: Array<{
+    resource: string;
+    action: string;
+    scope?: PermissionScope | string;
+}>): boolean;
 export declare function isNationalCommissionMember(user: RbacUser | undefined): boolean;
 export declare function isTiUser(user: RbacUser | undefined): boolean;
 export declare function hasNationalManagementScope(user: RbacUser | undefined): boolean;

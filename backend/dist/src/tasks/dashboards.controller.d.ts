@@ -135,6 +135,7 @@ export declare class DashboardsController {
             participants: {
                 instructors: {
                     activityId: any;
+                    scope: any;
                     title: any;
                     localityId: any;
                     localityCode: string;
@@ -156,6 +157,7 @@ export declare class DashboardsController {
                 }[];
                 recruits: {
                     activityId: any;
+                    scope: any;
                     title: any;
                     localityId: any;
                     localityCode: string;
@@ -177,6 +179,7 @@ export declare class DashboardsController {
                 }[];
                 elos: {
                     activityId: any;
+                    scope: any;
                     title: any;
                     localityId: any;
                     localityCode: string;
@@ -198,6 +201,7 @@ export declare class DashboardsController {
                 }[];
                 graduadosMaster: {
                     activityId: any;
+                    scope: any;
                     title: any;
                     localityId: any;
                     localityCode: string;
@@ -220,6 +224,7 @@ export declare class DashboardsController {
             };
             completedReports: {
                 activityId: any;
+                scope: any;
                 title: any;
                 localityId: any;
                 localityCode: string;
@@ -254,6 +259,7 @@ export declare class DashboardsController {
             }[];
             completedFieldActivities: {
                 activityId: any;
+                scope: any;
                 title: any;
                 localityId: any;
                 localityCode: string;
@@ -275,6 +281,7 @@ export declare class DashboardsController {
             }[];
             completedVisits: {
                 activityId: any;
+                scope: any;
                 title: any;
                 localityId: any;
                 localityCode: string;
@@ -296,6 +303,7 @@ export declare class DashboardsController {
             }[];
             completedLectures: {
                 activityId: any;
+                scope: any;
                 title: any;
                 localityId: any;
                 localityCode: string;
@@ -317,6 +325,7 @@ export declare class DashboardsController {
             }[];
             completedBestPracticeCycles: {
                 activityId: any;
+                scope: any;
                 title: any;
                 localityId: any;
                 localityCode: string;
@@ -338,6 +347,7 @@ export declare class DashboardsController {
             }[];
             completedMappings: {
                 activityId: any;
+                scope: any;
                 title: any;
                 localityId: any;
                 localityCode: string;
@@ -360,6 +370,7 @@ export declare class DashboardsController {
             fieldActivitiesBySpecialty: {
                 psychology: {
                     activityId: any;
+                    scope: any;
                     title: any;
                     localityId: any;
                     localityCode: string;
@@ -381,6 +392,7 @@ export declare class DashboardsController {
                 }[];
                 socialService: {
                     activityId: any;
+                    scope: any;
                     title: any;
                     localityId: any;
                     localityCode: string;
@@ -402,6 +414,7 @@ export declare class DashboardsController {
                 }[];
                 doctrine: {
                     activityId: any;
+                    scope: any;
                     title: any;
                     localityId: any;
                     localityCode: string;
@@ -423,6 +436,7 @@ export declare class DashboardsController {
                 }[];
                 law: {
                     activityId: any;
+                    scope: any;
                     title: any;
                     localityId: any;
                     localityCode: string;
@@ -446,6 +460,7 @@ export declare class DashboardsController {
         };
         lateItems: {
             activityId: any;
+            scope: any;
             title: any;
             localityId: any;
             localityCode: string;
@@ -465,6 +480,7 @@ export declare class DashboardsController {
         }[];
         unassignedItems: {
             activityId: any;
+            scope: any;
             title: any;
             localityId: any;
             localityCode: string;
@@ -484,6 +500,7 @@ export declare class DashboardsController {
         }[];
         riskTasks: {
             activityId: any;
+            scope: any;
             title: any;
             localityId: any;
             localityCode: string;
@@ -565,7 +582,7 @@ export declare class DashboardsController {
             dismissedAt: string | null;
         }[];
     }>;
-    executive(from: string | undefined, to: string | undefined, phaseId: string | undefined, threshold: string | undefined, command: string | undefined, localityId: string | undefined, user: RbacUser): Promise<{
+    executive(from: string | undefined, to: string | undefined, phaseId: string | undefined, threshold: string | undefined, command: string | undefined, localityId: string | undefined, scope: string | undefined, user: RbacUser): Promise<{
         summary: {
             totalActivities: number;
             completedActivities: number;
@@ -690,6 +707,7 @@ export declare class DashboardsController {
             }[];
             items: {
                 activityId: any;
+                scope: any;
                 title: any;
                 activityTypeName: any;
                 specialtyId: string;
@@ -722,6 +740,7 @@ export declare class DashboardsController {
             }[];
             items: {
                 activityId: any;
+                scope: any;
                 title: any;
                 activityTypeName: any;
                 specialtyId: string;
@@ -779,6 +798,7 @@ export declare class DashboardsController {
                     closingDate: any;
                 } | null;
                 activityId: any;
+                scope: any;
                 title: any;
                 activityTypeName: any;
                 specialtyId: string;
@@ -801,6 +821,7 @@ export declare class DashboardsController {
             }[];
             pendingItems: {
                 activityId: any;
+                scope: any;
                 title: any;
                 activityTypeName: any;
                 specialtyId: string;
@@ -825,6 +846,7 @@ export declare class DashboardsController {
         kpiDetails: {
             completedActivities: {
                 activityId: any;
+                scope: any;
                 title: any;
                 activityTypeName: any;
                 specialtyId: string;
@@ -885,6 +907,7 @@ export declare class DashboardsController {
                     closingDate: any;
                 } | null;
                 activityId: any;
+                scope: any;
                 title: any;
                 activityTypeName: any;
                 specialtyId: string;
@@ -937,6 +960,7 @@ export declare class DashboardsController {
                     closingDate: any;
                 } | null;
                 activityId: any;
+                scope: any;
                 title: any;
                 activityTypeName: any;
                 specialtyId: string;

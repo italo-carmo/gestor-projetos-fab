@@ -20,11 +20,19 @@ export declare class MissionsService {
     private readonly fabLdap;
     private readonly missionPdfTimeZone;
     constructor(prisma: PrismaService, audit: AuditService, fabLdap: FabLdapService);
+    listLocalityOptions(scopeParam: string | undefined, user?: RbacUser): Promise<{
+        items: Array<{
+            id: string;
+            code: string | null;
+            name: string;
+        }>;
+    }>;
     list(filters: {
         localityId?: string;
         q?: string;
         page?: string;
         pageSize?: string;
+        scope?: string;
     }, user?: RbacUser): Promise<{
         items: {
             participantsCount: number;
@@ -61,9 +69,9 @@ export declare class MissionsService {
         pageSize: number;
         total: number;
     }>;
-    getStatistics(user?: RbacUser): Promise<{
+    getStatistics(user?: RbacUser, scopeParam?: string): Promise<{
         totalMissions: number;
-        totalParticipants: number;
+        totalParticipants: any;
         totalMissionDays: number;
         totalParticipantDays: number;
         missionsByUser: {
@@ -83,7 +91,7 @@ export declare class MissionsService {
         participantsByMission: {
             missionId: string;
             missionTitle: string;
-            participantsCount: number;
+            participantsCount: any;
             missionDays: number;
         }[];
         averageParticipantsPerMission: number;
@@ -92,11 +100,12 @@ export declare class MissionsService {
         missionsWithMostParticipants: {
             missionId: string;
             missionTitle: string;
-            participantsCount: number;
+            participantsCount: any;
         }[];
     }>;
     getChecklistMapping(filters: {
         localityId?: string;
+        scope?: string;
     }, user?: RbacUser): Promise<{
         generatedAt: string;
         localities: {
@@ -157,35 +166,16 @@ export declare class MissionsService {
                 startDate: Date;
                 endDate: Date;
                 updatedAt: Date;
-                locality: {
-                    id: string;
-                    name: string;
-                    code: string;
-                };
+                locality: any;
                 checklistOm: {
                     id: string;
                     name: string;
                     code: string | null;
                 };
-                participants: {
-                    id: string;
-                    name: string;
-                    email: string | null;
-                    ldapUid: string | null;
-                    fabom: string | null;
-                    cpf: string | null;
-                }[];
-                participantsCount: number;
-                scheduleItems: {
-                    id: string;
-                    title: string;
-                    location: string;
-                    participants: string;
-                    responsible: string;
-                    durationMinutes: number;
-                    startAt: Date;
-                }[];
-                scheduleItemsCount: number;
+                participants: any;
+                participantsCount: any;
+                scheduleItems: any;
+                scheduleItemsCount: any;
                 checklistSections: MissionChecklistSectionRuntime[];
             };
         })[];
@@ -355,37 +345,10 @@ export declare class MissionsService {
         localityId: string;
         startDate: string;
         endDate: string;
+        scope?: string;
     }, user?: RbacUser): Promise<{
-        participantsCount: number;
-        scheduleItemsCount: number;
-        locality: {
-            id: string;
-            name: string;
-            code: string;
-        };
-        participants: {
-            id: string;
-            createdAt: Date;
-            name: string;
-            email: string | null;
-            ldapUid: string | null;
-            userId: string | null;
-            fabom: string | null;
-            missionId: string;
-            cpf: string | null;
-        }[];
-        scheduleItems: {
-            id: string;
-            title: string;
-            createdAt: Date;
-            updatedAt: Date;
-            location: string;
-            participants: string;
-            responsible: string;
-            durationMinutes: number;
-            missionId: string;
-            startAt: Date;
-        }[];
+        participantsCount: any;
+        scheduleItemsCount: any;
         id: string;
         title: string;
         createdAt: Date;
@@ -572,7 +535,9 @@ export declare class MissionsService {
     private assertMissionChecklistEditAccess;
     assertChecklistUploadAccess(id: string, user?: RbacUser): Promise<void>;
     private assertMissionChecklistConfigAccess;
-    private getTargetLocalityIds;
+    private normalizeMissionScope;
+    private assertMissionLocalityAllowed;
+    private resolveAllowedLocalityIds;
     private sanitizeRequiredText;
     private parseRequiredDate;
     private normalizeDurationMinutes;

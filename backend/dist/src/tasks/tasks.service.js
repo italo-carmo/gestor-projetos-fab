@@ -743,7 +743,12 @@ let TasksService = class TasksService {
                 },
             }),
             this.prisma.user.findMany({
-                where: { localityId, isActive: true },
+                where: {
+                    localityId,
+                    isActive: true,
+                    ldapUid: { not: null },
+                    roles: { some: {} },
+                },
                 orderBy: { name: 'asc' },
                 select: {
                     id: true,
@@ -797,6 +802,39 @@ let TasksService = class TasksService {
             localityId: locality.id,
             localityName: locality.name,
             items,
+        };
+    }
+    async listAssignableUsers(user) {
+        if (!user?.id)
+            (0, http_error_1.throwError)('RBAC_FORBIDDEN');
+        const profile = (0, role_access_1.resolveAccessProfile)(user);
+        const where = {
+            isActive: true,
+            ldapUid: { not: null },
+            roles: { some: {} },
+        };
+        if (!profile.ti && !profile.nationalCommission) {
+            if (!profile.localityId) {
+                return { items: [] };
+            }
+            where.localityId = profile.localityId;
+        }
+        const users = await this.prisma.user.findMany({
+            where,
+            orderBy: { name: 'asc' },
+            select: {
+                id: true,
+                name: true,
+                email: true,
+                localityId: true,
+            },
+        });
+        return {
+            items: users.map((item) => ({
+                id: item.id,
+                name: item.name || item.email || `Usuário ${item.id.slice(0, 8)}`,
+                localityId: item.localityId ?? null,
+            })),
         };
     }
     async assignTask(id, payload, user) {
@@ -1045,7 +1083,10 @@ let TasksService = class TasksService {
             ? baseInstance.localityId
             : desiredLocalityIds[0];
         const localityRecords = await this.prisma.locality.findMany({
-            where: { id: { in: desiredLocalityIds } },
+            where: {
+                id: { in: desiredLocalityIds },
+                catalogType: client_1.LocalityCatalogType.SMIF,
+            },
             select: { id: true, commandName: true, commanderName: true },
         });
         if (localityRecords.length !== desiredLocalityIds.length) {
@@ -1602,7 +1643,7 @@ let TasksService = class TasksService {
             where.id = localityId;
         }
         const rawLocalities = await this.prisma.locality.findMany({
-            where,
+            where: { ...where, catalogType: client_1.LocalityCatalogType.SMIF },
             select: {
                 id: true,
                 name: true,
@@ -1694,6 +1735,7 @@ let TasksService = class TasksService {
         else {
             activityWhereClauses.push({ localityId: { in: localityAliasIds } });
         }
+        activityWhereClauses.push({ scope: client_1.ActivityScope.SMIF });
         if (constraints.specialtyId) {
             activityWhereClauses.push({
                 OR: [
@@ -1873,6 +1915,7 @@ let TasksService = class TasksService {
             const primarySpecialty = specialties[0] ?? null;
             return {
                 activityId: activity.id,
+                scope: activity.scope ?? null,
                 title: activity.title ?? 'Atividade',
                 localityId: canonicalId,
                 localityCode: locality?.code ?? '',
@@ -1906,6 +1949,7 @@ let TasksService = class TasksService {
             const primarySpecialty = specialties[0] ?? null;
             return {
                 activityId: activity.id,
+                scope: activity.scope ?? null,
                 title: activity.title ?? 'Atividade',
                 localityId: canonicalId,
                 localityCode: locality?.code ?? '',
@@ -2319,7 +2363,10 @@ let TasksService = class TasksService {
         }
         const [localitiesRaw, historyRaw, recruitMembersRaw] = await this.prisma.$transaction([
             this.prisma.locality.findMany({
-                where: localityWhere,
+                where: {
+                    ...localityWhere,
+                    catalogType: client_1.LocalityCatalogType.SMIF,
+                },
                 orderBy: { name: 'asc' },
                 select: {
                     id: true,
@@ -2526,8 +2573,17 @@ let TasksService = class TasksService {
                 top10: [],
             },
         };
-        const allowedLocalityIds = await this.getTargetLocalityIds();
-        if (allowedLocalityIds.length === 0) {
+        const scopeFilter = String(params.scope ?? '').toUpperCase() === 'CIPAVD'
+            ? client_1.ActivityScope.CIPAVD
+            : client_1.ActivityScope.SMIF;
+        const localityCatalogType = scopeFilter === client_1.ActivityScope.CIPAVD
+            ? client_1.LocalityCatalogType.CIPAVD
+            : client_1.LocalityCatalogType.SMIF;
+        const allowedLocalityIds = scopeFilter === client_1.ActivityScope.SMIF
+            ? await this.getTargetLocalityIds()
+            : [];
+        if (scopeFilter === client_1.ActivityScope.SMIF &&
+            allowedLocalityIds.length === 0) {
             return user?.executiveHidePii
                 ? (0, executive_1.sanitizeForExecutive)(emptyResponse)
                 : emptyResponse;
@@ -2537,7 +2593,9 @@ let TasksService = class TasksService {
         const thresholdRaw = Number(params.threshold ?? 70);
         const threshold = Number.isFinite(thresholdRaw) ? thresholdRaw : 70;
         const localityWhere = {
-            id: { in: allowedLocalityIds },
+            ...(scopeFilter === client_1.ActivityScope.SMIF
+                ? { id: { in: allowedLocalityIds } }
+                : {}),
         };
         if (params.command) {
             localityWhere.commandName = params.command;
@@ -2555,12 +2613,21 @@ let TasksService = class TasksService {
             localityWhere.id = params.localityId;
         }
         const localitiesRaw = await this.prisma.locality.findMany({
-            where: localityWhere,
+            where: { ...localityWhere, catalogType: localityCatalogType },
             orderBy: { name: 'asc' },
         });
-        const localityGroups = (0, priority_localities_1.groupTargetLocalities)(localitiesRaw);
-        const localities = localityGroups.map((group) => group.canonical);
-        const { aliasByLocalityId } = (0, priority_localities_1.createTargetLocalityAliasMap)(localityGroups);
+        const localityGroups = scopeFilter === client_1.ActivityScope.SMIF
+            ? (0, priority_localities_1.groupTargetLocalities)(localitiesRaw)
+            : [];
+        const localities = scopeFilter === client_1.ActivityScope.SMIF
+            ? localityGroups.map((group) => group.canonical)
+            : localitiesRaw;
+        const aliasByLocalityId = scopeFilter === client_1.ActivityScope.SMIF
+            ? (0, priority_localities_1.createTargetLocalityAliasMap)(localityGroups).aliasByLocalityId
+            : new Map(localitiesRaw.map((locality) => [
+                String(locality.id),
+                String(locality.id),
+            ]));
         const localityIds = Array.from(aliasByLocalityId.keys());
         if (!localityIds.length) {
             return user?.executiveHidePii
@@ -2589,6 +2656,7 @@ let TasksService = class TasksService {
         const activities = await this.prisma.activity.findMany({
             where: {
                 localityId: { in: localityIds },
+                scope: scopeFilter,
                 ...(activityDateRangeFilter ?? {}),
             },
             include: {
@@ -2720,6 +2788,7 @@ let TasksService = class TasksService {
             const primarySpecialty = specialties[0] ?? null;
             return {
                 activityId: activity.id,
+                scope: activity.scope ?? null,
                 title: activity.title ?? 'Atividade',
                 activityTypeName: activity.activityType?.name ?? null,
                 specialtyId: primarySpecialty?.id ?? null,
@@ -3175,7 +3244,10 @@ let TasksService = class TasksService {
         const from = params.from ? new Date(params.from) : null;
         const to = params.to ? new Date(params.to) : null;
         const localitiesRaw = await this.prisma.locality.findMany({
-            where: { id: { in: allowedLocalityIds } },
+            where: {
+                id: { in: allowedLocalityIds },
+                catalogType: client_1.LocalityCatalogType.SMIF,
+            },
             orderBy: { name: 'asc' },
         });
         const localityGroups = (0, priority_localities_1.groupTargetLocalities)(localitiesRaw);
@@ -3275,7 +3347,10 @@ let TasksService = class TasksService {
             select: { id: true, name: true },
         });
         const localitiesRaw = await this.prisma.locality.findMany({
-            where: { id: { in: allowedLocalityIds } },
+            where: {
+                id: { in: allowedLocalityIds },
+                catalogType: client_1.LocalityCatalogType.SMIF,
+            },
             orderBy: { name: 'asc' },
         });
         const localityGroups = (0, priority_localities_1.groupTargetLocalities)(localitiesRaw);
@@ -4282,7 +4357,7 @@ let TasksService = class TasksService {
         });
     }
     assertDashboardNationalCardManageAccess(user) {
-        if ((0, role_access_1.hasAnyRole)(user, [role_access_1.ROLE_TI])) {
+        if ((0, role_access_1.hasPermission)(user, 'dashboard', 'update', client_1.PermissionScope.NATIONAL)) {
             return;
         }
         (0, http_error_1.throwError)('RBAC_FORBIDDEN');
@@ -4317,6 +4392,7 @@ let TasksService = class TasksService {
     }
     async getTargetLocalityIds() {
         const localities = await this.prisma.locality.findMany({
+            where: { catalogType: client_1.LocalityCatalogType.SMIF },
             select: {
                 id: true,
                 name: true,

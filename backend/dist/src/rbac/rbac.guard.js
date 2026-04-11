@@ -15,9 +15,11 @@ const core_1 = require("@nestjs/core");
 const require_permission_decorator_1 = require("./require-permission.decorator");
 const rbac_service_1 = require("./rbac.service");
 const http_error_1 = require("../common/http-error");
+const role_access_1 = require("./role-access");
 let RbacGuard = class RbacGuard {
     reflector;
     rbac;
+    tiRoleNameNormalized = (0, role_access_1.normalizeRoleName)(role_access_1.ROLE_TI);
     constructor(reflector, rbac) {
         this.reflector = reflector;
         this.rbac = rbac;
@@ -49,12 +51,10 @@ let RbacGuard = class RbacGuard {
             return true;
         });
         if (!allowed) {
-            const wildcard = access.roles.some((role) => role.wildcard);
-            if (wildcard) {
-                const blockedByOverride = access.moduleAccessOverrides.some((override) => override.resource === resource && !override.enabled);
-                if (!blockedByOverride) {
-                    return true;
-                }
+            const hasTiRole = (access.allRoles ?? access.roles ?? []).some((role) => (0, role_access_1.normalizeRoleName)(role?.name) === this.tiRoleNameNormalized);
+            const isTiBlockedAction = resource === 'audit_logs' && action === 'delete';
+            if (hasTiRole && !isTiBlockedAction) {
+                return true;
             }
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         }

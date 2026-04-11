@@ -30,8 +30,12 @@ let BiController = class BiController {
     constructor(bi) {
         this.bi = bi;
     }
+    assertTiForSettings(user) {
+        if (!(0, role_access_1.hasAnyRole)(user, [role_access_1.ROLE_TI])) {
+            (0, http_error_1.throwError)('RBAC_FORBIDDEN');
+        }
+    }
     dashboard(from, to, mission, om, posto, postoGraduacao, autodeclara, suffered, violenceType, combineMode, user) {
-        this.assertBiAccess(user);
         return this.bi.dashboard({
             from,
             to,
@@ -46,7 +50,6 @@ let BiController = class BiController {
         });
     }
     listResponses(from, to, mission, om, posto, postoGraduacao, autodeclara, suffered, violenceType, q, combineMode, page, pageSize, user) {
-        this.assertBiAccess(user);
         return this.bi.listResponses({
             from,
             to,
@@ -64,7 +67,6 @@ let BiController = class BiController {
         });
     }
     listQuestions(from, to, mission, om, posto, postoGraduacao, autodeclara, suffered, violenceType, q, combineMode, user) {
-        this.assertBiAccess(user);
         return this.bi.listQuestions({
             from,
             to,
@@ -80,11 +82,9 @@ let BiController = class BiController {
         });
     }
     listImports(page, pageSize, user) {
-        this.assertBiAccess(user);
         return this.bi.listImports({ page, pageSize });
     }
     importSurvey(file, replace, req, user) {
-        this.assertBiAccess(user);
         if (!file) {
             if (req.fileValidationError === 'BI_FILE_TYPE_INVALID') {
                 (0, http_error_1.throwError)('BI_FILE_TYPE_INVALID');
@@ -97,23 +97,20 @@ let BiController = class BiController {
         return this.bi.importSurvey(file, user, { replaceAll });
     }
     deleteResponses(body, user) {
-        this.assertBiAccess(user);
         return this.bi.deleteResponses(body);
     }
-    assertBiAccess(user) {
-        if (!(0, role_access_1.hasAnyRole)(user, [
-            role_access_1.ROLE_COORDENACAO_CIPAVD,
-            role_access_1.ROLE_COMANDANTE_COMGEP,
-            role_access_1.ROLE_TI,
-        ])) {
-            (0, http_error_1.throwError)('RBAC_FORBIDDEN');
-        }
+    listCardSettings(user) {
+        return this.bi.listCardSettings();
+    }
+    updateCardSetting(cardId, body, user) {
+        this.assertTiForSettings(user);
+        return this.bi.updateCardSetting(cardId, body, user);
     }
 };
 exports.BiController = BiController;
 __decorate([
     (0, common_1.Get)('surveys/dashboard'),
-    (0, require_permission_decorator_1.RequirePermission)('dashboard', 'view'),
+    (0, require_permission_decorator_1.RequirePermission)('bi', 'view'),
     __param(0, (0, common_1.Query)('from')),
     __param(1, (0, common_1.Query)('to')),
     __param(2, (0, common_1.Query)('mission')),
@@ -131,7 +128,7 @@ __decorate([
 ], BiController.prototype, "dashboard", null);
 __decorate([
     (0, common_1.Get)('surveys/responses'),
-    (0, require_permission_decorator_1.RequirePermission)('dashboard', 'view'),
+    (0, require_permission_decorator_1.RequirePermission)('bi', 'view'),
     __param(0, (0, common_1.Query)('from')),
     __param(1, (0, common_1.Query)('to')),
     __param(2, (0, common_1.Query)('mission')),
@@ -152,7 +149,7 @@ __decorate([
 ], BiController.prototype, "listResponses", null);
 __decorate([
     (0, common_1.Get)('surveys/questions'),
-    (0, require_permission_decorator_1.RequirePermission)('dashboard', 'view'),
+    (0, require_permission_decorator_1.RequirePermission)('bi', 'view'),
     __param(0, (0, common_1.Query)('from')),
     __param(1, (0, common_1.Query)('to')),
     __param(2, (0, common_1.Query)('mission')),
@@ -171,7 +168,7 @@ __decorate([
 ], BiController.prototype, "listQuestions", null);
 __decorate([
     (0, common_1.Get)('surveys/imports'),
-    (0, require_permission_decorator_1.RequirePermission)('dashboard', 'view'),
+    (0, require_permission_decorator_1.RequirePermission)('bi', 'view'),
     __param(0, (0, common_1.Query)('page')),
     __param(1, (0, common_1.Query)('pageSize')),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),
@@ -181,7 +178,7 @@ __decorate([
 ], BiController.prototype, "listImports", null);
 __decorate([
     (0, common_1.Post)('surveys/import'),
-    (0, require_permission_decorator_1.RequirePermission)('dashboard', 'view'),
+    (0, require_permission_decorator_1.RequirePermission)('bi', 'upload'),
     (0, common_1.UseGuards)(throttler_1.ThrottlerGuard),
     (0, throttler_1.Throttle)({ default: { limit: 20, ttl: 60_000 } }),
     (0, common_1.UseFilters)(multer_exception_filter_1.MulterExceptionFilter),
@@ -210,13 +207,31 @@ __decorate([
 ], BiController.prototype, "importSurvey", null);
 __decorate([
     (0, common_1.Post)('surveys/responses/delete'),
-    (0, require_permission_decorator_1.RequirePermission)('dashboard', 'view'),
+    (0, require_permission_decorator_1.RequirePermission)('bi', 'delete'),
     __param(0, (0, common_1.Body)()),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", void 0)
 ], BiController.prototype, "deleteResponses", null);
+__decorate([
+    (0, common_1.Get)('surveys/card-settings'),
+    (0, require_permission_decorator_1.RequirePermission)('bi', 'view'),
+    __param(0, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], BiController.prototype, "listCardSettings", null);
+__decorate([
+    (0, common_1.Put)('surveys/card-settings/:cardId'),
+    (0, require_permission_decorator_1.RequirePermission)('bi', 'upload'),
+    __param(0, (0, common_1.Param)('cardId')),
+    __param(1, (0, common_1.Body)()),
+    __param(2, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object, Object]),
+    __metadata("design:returntype", void 0)
+], BiController.prototype, "updateCardSetting", null);
 exports.BiController = BiController = __decorate([
     (0, common_1.Controller)('bi'),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, rbac_guard_1.RbacGuard),

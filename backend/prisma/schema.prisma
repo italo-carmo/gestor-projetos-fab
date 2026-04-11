@@ -161,6 +161,7 @@ model Locality {
   id                         String          @id @default(cuid())
   code                       String          @unique
   name                       String
+  uf                         String?         // Sigla do estado (ex: SP, RJ, DF)
   catalogType                LocalityCatalogType @default(SMIF)
   commandName                String?
   commanderName              String?

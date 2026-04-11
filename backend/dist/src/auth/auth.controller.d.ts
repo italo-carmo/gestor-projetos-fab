@@ -5,17 +5,21 @@ export declare class AuthController {
     private readonly auth;
     constructor(auth: AuthService);
     login(dto: LoginDto): Promise<{
-        accessToken: string;
-        refreshToken: string;
-        user: {
-            id: string;
-            name: string;
-            email: string;
-            role: {
-                id: string;
-                name: string;
-            } | undefined;
-        };
+        requiresTwoFactor: boolean;
+        twoFactorToken: string;
+        requiresTwoFactorSetup?: undefined;
+        setupToken?: undefined;
+        qrCodeDataUrl?: undefined;
+        manualEntryKey?: undefined;
+        totpUri?: undefined;
+    } | {
+        requiresTwoFactorSetup: boolean;
+        setupToken: string;
+        qrCodeDataUrl: string;
+        manualEntryKey: string;
+        totpUri: string;
+        requiresTwoFactor?: undefined;
+        twoFactorToken?: undefined;
     }>;
     refresh(refreshToken: string): Promise<{
         accessToken: string;
@@ -72,5 +76,21 @@ export declare class AuthController {
         fileName: string | null;
         base64: string;
         dataUrl: string;
+    }>;
+    confirmTwoFactorSetup(setupToken: string, code: string): Promise<{
+        backupCodes: string[];
+        accessToken: string;
+        refreshToken: string;
+    }>;
+    verifyTwoFactor(twoFactorToken: string, code: string): Promise<{
+        accessToken: string;
+        refreshToken: string;
+    }>;
+    twoFactorStatus(req: Request & {
+        user?: {
+            userId: string;
+        };
+    }): Promise<{
+        totpEnabled: any;
     }>;
 }

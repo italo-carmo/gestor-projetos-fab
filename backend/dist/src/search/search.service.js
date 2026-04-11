@@ -11,6 +11,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SearchService = void 0;
 const common_1 = require("@nestjs/common");
+const client_1 = require("@prisma/client");
 const prisma_service_1 = require("../prisma/prisma.service");
 const executive_1 = require("../common/executive");
 const role_access_1 = require("../rbac/role-access");
@@ -72,6 +73,7 @@ let SearchService = class SearchService {
             ];
         }
         const localityWhere = {
+            catalogType: client_1.LocalityCatalogType.SMIF,
             OR: [
                 { name: { contains: query, mode: 'insensitive' } },
                 { code: { contains: query, mode: 'insensitive' } },

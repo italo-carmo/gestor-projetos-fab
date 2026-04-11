@@ -130,7 +130,7 @@ let SocialCommunicationService = class SocialCommunicationService {
         };
     }
     async lookupHighlightLdapProfile(email, user) {
-        this.assertHighlightEditorAccess(user);
+        this.assertHighlightEditorAccess(user, 'create');
         const normalizedEmail = this.normalizeHighlightEmail(email, 'email');
         const profile = await this.fabLdap.lookupByEmail(normalizedEmail);
         if (!profile) {
@@ -148,7 +148,7 @@ let SocialCommunicationService = class SocialCommunicationService {
         };
     }
     async createHighlight(payload, user) {
-        this.assertHighlightEditorAccess(user);
+        this.assertHighlightEditorAccess(user, 'create');
         const localityId = this.normalizeRequiredText(payload.localityId, 'localityId');
         await this.assertHighlightLocalityExists(localityId);
         const normalizedPhotoBase64 = this.normalizeHighlightPhotoBase64(payload.photoBase64, 'photoBase64') ??
@@ -189,7 +189,7 @@ let SocialCommunicationService = class SocialCommunicationService {
         return this.toHighlightResponse(created);
     }
     async updateHighlight(id, payload, user) {
-        this.assertHighlightEditorAccess(user);
+        this.assertHighlightEditorAccess(user, 'update');
         const existing = await this.prisma.socialCommunicationHighlight.findUnique({
             where: { id },
             select: { id: true },
@@ -262,7 +262,7 @@ let SocialCommunicationService = class SocialCommunicationService {
         return this.toHighlightResponse(updated);
     }
     async removeHighlight(id, user) {
-        this.assertHighlightEditorAccess(user);
+        this.assertHighlightEditorAccess(user, 'delete');
         const existing = await this.prisma.socialCommunicationHighlight.findUnique({
             where: { id },
             select: { id: true, militaryName: true, militaryEmail: true },
@@ -285,7 +285,7 @@ let SocialCommunicationService = class SocialCommunicationService {
         return { ok: true };
     }
     async create(payload, user) {
-        this.assertEditorAccess(user);
+        this.assertEditorAccess(user, 'create');
         const sourceUrl = this.normalizeUrl(payload.url, 'url');
         const metadata = await this.extractMetadataSafe(sourceUrl);
         const created = await this.prisma.socialCommunicationArticle.create({
@@ -316,7 +316,7 @@ let SocialCommunicationService = class SocialCommunicationService {
         return created;
     }
     async update(id, payload, user) {
-        this.assertEditorAccess(user);
+        this.assertEditorAccess(user, 'update');
         const existing = await this.prisma.socialCommunicationArticle.findUnique({
             where: { id },
         });
@@ -390,7 +390,7 @@ let SocialCommunicationService = class SocialCommunicationService {
         return updated;
     }
     async remove(id, user) {
-        this.assertEditorAccess(user);
+        this.assertEditorAccess(user, 'delete');
         const existing = await this.prisma.socialCommunicationArticle.findUnique({
             where: { id },
         });
@@ -410,7 +410,7 @@ let SocialCommunicationService = class SocialCommunicationService {
         return { ok: true };
     }
     async resolveMetadata(url, user) {
-        this.assertEditorAccess(user);
+        this.assertEditorAccess(user, 'create');
         const sourceUrl = this.normalizeUrl(url, 'url');
         const metadata = await this.extractMetadataSafe(sourceUrl);
         const title = this.normalizeRequiredText(metadata.title ?? this.buildFallbackTitle(sourceUrl), 'title');
@@ -515,19 +515,15 @@ let SocialCommunicationService = class SocialCommunicationService {
         return { html };
     }
     ensureEditorAccess(user) {
-        this.assertEditorAccess(user);
+        this.assertEditorAccess(user, 'upload');
     }
-    assertHighlightEditorAccess(user) {
-        if (!(0, role_access_1.hasAnyRole)(user, [role_access_1.ROLE_COORDENACAO_CIPAVD, role_access_1.ROLE_TI])) {
+    assertHighlightEditorAccess(user, action) {
+        if (!(0, role_access_1.hasPermission)(user, 'social_communication_highlight', action)) {
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         }
     }
-    assertEditorAccess(user) {
-        if (!(0, role_access_1.hasAnyRole)(user, [
-            role_access_1.ROLE_COORDENACAO_CIPAVD,
-            role_access_1.ROLE_COMANDANTE_COMGEP,
-            role_access_1.ROLE_TI,
-        ])) {
+    assertEditorAccess(user, action) {
+        if (!(0, role_access_1.hasPermission)(user, 'social_communication', action)) {
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         }
     }

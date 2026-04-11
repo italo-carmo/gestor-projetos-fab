@@ -4,6 +4,7 @@ import { RbacService } from './rbac.service';
 export declare class RbacGuard implements CanActivate {
     private readonly reflector;
     private readonly rbac;
+    private readonly tiRoleNameNormalized;
     constructor(reflector: Reflector, rbac: RbacService);
     canActivate(context: ExecutionContext): Promise<boolean>;
 }

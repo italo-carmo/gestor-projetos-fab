@@ -37,6 +37,9 @@ let TaskInstancesController = class TaskInstancesController {
     listAssignees(localityId, user) {
         return this.tasks.listAssignees(localityId, user);
     }
+    listAssignableUsers(user) {
+        return this.tasks.listAssignableUsers(user);
+    }
     list(localityId, phaseId, status, assigneeId, assigneeIds, dueFrom, dueTo, meetingId, eloRoleId, specialtyId, page, pageSize, user) {
         return this.tasks.listTaskInstances({
             localityId,
@@ -133,6 +136,14 @@ __decorate([
     __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", void 0)
 ], TaskInstancesController.prototype, "listAssignees", null);
+__decorate([
+    (0, common_1.Get)('assignable-users'),
+    (0, require_permission_decorator_1.RequirePermission)('task_instances', 'assign'),
+    __param(0, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], TaskInstancesController.prototype, "listAssignableUsers", null);
 __decorate([
     (0, common_1.Get)(),
     (0, require_permission_decorator_1.RequirePermission)('task_instances', 'view'),

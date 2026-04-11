@@ -78,7 +78,9 @@ let MenuUpdatesService = class MenuUpdatesService {
                 al."resource" AS "resource",
                 al."entityId" AS "entityId",
                 al."diffJson" AS "diffJson",
-                al."createdAt" AS "createdAt"
+                al."createdAt" AS "createdAt",
+                "al_comment"."activityId" AS "commentActivityId",
+                "al_sched"."activityId" AS "scheduleActivityId"
               FROM "menu_resources" mr
               LEFT JOIN "seen_by_menu" sbm
                 ON sbm."menuKey" = mr."menuKey"
@@ -88,12 +90,26 @@ let MenuUpdatesService = class MenuUpdatesService {
                AND (
                  sbm."seenAt" IS NULL OR al."createdAt" > sbm."seenAt"
                )
+              LEFT JOIN "ActivityComment" "al_comment"
+                ON al."resource" = 'activity_comments'
+               AND "al_comment"."id" = al."entityId"
+              LEFT JOIN "ActivityVisitScheduleItem" "al_sched"
+                ON al."resource" = 'activities'
+               AND "al_sched"."id" = al."entityId"
               LEFT JOIN "Activity" "act_scope"
                 ON (
                   (al."resource" = 'activities' AND "act_scope"."id" = al."entityId")
                   OR (
+                    al."resource" = 'activities'
+                    AND "al_sched"."id" IS NOT NULL
+                    AND "act_scope"."id" = "al_sched"."activityId"
+                  )
+                  OR (
                     al."resource" = 'activity_comments'
-                    AND "act_scope"."id" = NULLIF(btrim(al."diffJson"->>'activityId'), '')
+                    AND "act_scope"."id" = COALESCE(
+                      NULLIF(btrim(al."diffJson"->>'activityId'), ''),
+                      "al_comment"."activityId"
+                    )
                   )
                 )
               WHERE (
@@ -113,11 +129,17 @@ let MenuUpdatesService = class MenuUpdatesService {
                 cl."createdAt" AS "createdAt",
                 CASE
                   WHEN cl."resource" = 'activity_comments'
-                    THEN COALESCE(cl."diffJson"->>'activityId', cl."entityId")
+                    THEN COALESCE(
+                      NULLIF(btrim(cl."diffJson"->>'activityId'), ''),
+                      NULLIF(btrim(cl."commentActivityId"), '')
+                    )
                   WHEN cl."resource" = 'task_comments'
                     THEN COALESCE(cl."diffJson"->>'taskInstanceId', cl."entityId")
                   WHEN cl."resource" = 'activities' AND cl."diffJson" ? 'activityId'
-                    THEN cl."diffJson"->>'activityId'
+                    THEN NULLIF(btrim(cl."diffJson"->>'activityId'), '')
+                  WHEN cl."resource" = 'activities'
+                    AND cl."scheduleActivityId" IS NOT NULL
+                    THEN NULLIF(btrim(cl."scheduleActivityId"), '')
                   WHEN cl."resource" = 'task_instances' AND cl."diffJson" ? 'taskInstanceId'
                     THEN cl."diffJson"->>'taskInstanceId'
                   ELSE cl."entityId"

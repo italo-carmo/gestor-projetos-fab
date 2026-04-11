@@ -39,7 +39,7 @@ let ChecklistsService = class ChecklistsService {
         if (constraints.localityId)
             localityWhere.id = constraints.localityId;
         const localitiesRaw = await this.prisma.locality.findMany({
-            where: localityWhere,
+            where: { ...localityWhere, catalogType: client_1.LocalityCatalogType.SMIF },
             orderBy: { name: 'asc' },
         });
         const localityGroups = (0, priority_localities_1.groupTargetLocalities)(localitiesRaw);
@@ -164,7 +164,10 @@ let ChecklistsService = class ChecklistsService {
         const itemById = new Map(items.map((item) => [item.id, item]));
         const canonicalLocalityIds = Array.from(new Set(normalized.map((entry) => entry.localityId)));
         const allLocalities = await this.prisma.locality.findMany({
-            where: { id: { in: canonicalLocalityIds } },
+            where: {
+                id: { in: canonicalLocalityIds },
+                catalogType: client_1.LocalityCatalogType.SMIF,
+            },
             select: {
                 id: true,
                 name: true,

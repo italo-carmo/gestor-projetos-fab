@@ -7,6 +7,7 @@ export declare class RolesController {
     list(): Promise<{
         items: {
             name: string;
+            wildcard: boolean;
             permissions: {
                 resource: string;
                 action: string;
@@ -17,7 +18,6 @@ export declare class RolesController {
             updatedAt: Date;
             description: string | null;
             isSystemRole: boolean;
-            wildcard: boolean;
             flagsJson: import("@prisma/client/runtime/client").JsonValue | null;
             constraintsTemplateJson: import("@prisma/client/runtime/client").JsonValue | null;
         }[];

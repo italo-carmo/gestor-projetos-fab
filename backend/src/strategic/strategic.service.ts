@@ -106,6 +106,75 @@ export class StrategicService {
     };
   }
 
+  async geoMap() {
+    const localities = await this.prisma.locality.findMany({
+      select: { id: true, code: true, name: true, uf: true, catalogType: true },
+    });
+
+    const [complaints, activities, missions] = await Promise.all([
+      (this.prisma as any).cpcComplaintCase.findMany({
+        select: { localityId: true, complaintType: true, status: true },
+      }).catch(() => []),
+      this.prisma.activity.findMany({
+        select: { localityId: true, scope: true, status: true },
+      }),
+      (this.prisma as any).mission.findMany({
+        select: { localityId: true, scope: true },
+      }).catch(() => []),
+    ]);
+
+    const ufMap = new Map<string, {
+      uf: string;
+      complaints: number;
+      activities: number;
+      missions: number;
+      localities: string[];
+    }>();
+
+    const locUfMap = new Map<string, string>();
+    for (const loc of localities) {
+      if (loc.uf) locUfMap.set(loc.id, loc.uf);
+    }
+
+    const ensureUf = (uf: string) => {
+      if (!ufMap.has(uf)) {
+        ufMap.set(uf, { uf, complaints: 0, activities: 0, missions: 0, localities: [] });
+      }
+      return ufMap.get(uf)!;
+    };
+
+    for (const loc of localities) {
+      if (loc.uf) {
+        const entry = ensureUf(loc.uf);
+        entry.localities.push(loc.name);
+      }
+    }
+
+    for (const c of complaints) {
+      const uf = locUfMap.get(c.localityId);
+      if (uf) ensureUf(uf).complaints++;
+    }
+    for (const a of activities) {
+      const uf = a.localityId ? locUfMap.get(a.localityId) : null;
+      if (uf) ensureUf(uf).activities++;
+    }
+    for (const m of missions) {
+      const uf = locUfMap.get(m.localityId);
+      if (uf) ensureUf(uf).missions++;
+    }
+
+    return {
+      generatedAt: new Date().toISOString(),
+      states: Array.from(ufMap.values()).sort((a, b) => {
+        const totalA = a.complaints + a.activities + a.missions;
+        const totalB = b.complaints + b.activities + b.missions;
+        return totalB - totalA;
+      }),
+      totalLocalitiesWithUf: localities.filter((l) => l.uf).length,
+      totalLocalities: localities.length,
+    };
+  }
+
   async aggressorProfile() {
     const complaintModel = (this.prisma as any).cpcComplaintCase;
     const cases = await complaintModel.findMany({

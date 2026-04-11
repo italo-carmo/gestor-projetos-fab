@@ -26,9 +26,11 @@ const prisma_service_1 = require("../prisma/prisma.service");
 const sanitize_1 = require("../common/sanitize");
 const fab_ldap_service_1 = require("../ldap/fab-ldap.service");
 const rbac_service_1 = require("../rbac/rbac.service");
+const create_cipavd_locality_dto_1 = require("./dto/create-cipavd-locality.dto");
 const create_locality_dto_1 = require("./dto/create-locality.dto");
 const set_locality_commander_from_ldap_dto_1 = require("./dto/set-locality-commander-from-ldap.dto");
 const update_locality_recruit_designations_dto_1 = require("./dto/update-locality-recruit-designations.dto");
+const update_cipavd_locality_dto_1 = require("./dto/update-cipavd-locality.dto");
 const replace_locality_recruits_members_dto_1 = require("./dto/replace-locality-recruits-members.dto");
 const update_locality_recruits_dto_1 = require("./dto/update-locality-recruits.dto");
 const update_locality_dto_1 = require("./dto/update-locality.dto");
@@ -42,8 +44,13 @@ let LocalitiesController = class LocalitiesController {
         this.rbac = rbac;
     }
     async list(user) {
-        const canViewAll = (0, role_access_1.isNationalCommissionMember)(user) || (0, role_access_1.hasRole)(user, role_access_1.ROLE_TI);
-        const where = !canViewAll && user?.localityId ? { id: user.localityId } : undefined;
+        const canViewAll = (0, role_access_1.hasPermission)(user, 'localities', 'view', client_1.PermissionScope.NATIONAL);
+        const where = {
+            catalogType: client_1.LocalityCatalogType.SMIF,
+        };
+        if (!canViewAll && user?.localityId) {
+            where.id = user.localityId;
+        }
         const items = await this.prisma.locality.findMany({
             where,
             orderBy: { name: 'asc' },
@@ -52,16 +59,70 @@ let LocalitiesController = class LocalitiesController {
     }
     async listOmsCatalog() {
         const items = await this.prisma.locality.findMany({
+            where: { catalogType: client_1.LocalityCatalogType.SMIF },
             select: { id: true, code: true, name: true },
             orderBy: { name: 'asc' },
         });
         return { items };
+    }
+    async listCipavdLocalities() {
+        const items = await this.prisma.locality.findMany({
+            where: { catalogType: client_1.LocalityCatalogType.CIPAVD },
+            select: { id: true, code: true, name: true, createdAt: true },
+            orderBy: { name: 'asc' },
+        });
+        return { items };
+    }
+    async listCipavdCatalog() {
+        const items = await this.prisma.locality.findMany({
+            where: { catalogType: client_1.LocalityCatalogType.CIPAVD },
+            select: { id: true, code: true, name: true },
+            orderBy: { name: 'asc' },
+        });
+        return { items };
+    }
+    async createCipavdLocality(dto) {
+        return this.prisma.locality.create({
+            data: {
+                code: (0, sanitize_1.sanitizeText)(dto.code).toUpperCase(),
+                name: (0, sanitize_1.sanitizeText)(dto.name),
+                catalogType: client_1.LocalityCatalogType.CIPAVD,
+            },
+            select: { id: true, code: true, name: true, createdAt: true },
+        });
+    }
+    async updateCipavdLocality(id, dto) {
+        const existing = await this.prisma.locality.findFirst({
+            where: { id, catalogType: client_1.LocalityCatalogType.CIPAVD },
+            select: { id: true },
+        });
+        if (!existing)
+            (0, http_error_1.throwError)('NOT_FOUND');
+        return this.prisma.locality.update({
+            where: { id },
+            data: {
+                code: dto.code ? (0, sanitize_1.sanitizeText)(dto.code).toUpperCase() : undefined,
+                name: dto.name ? (0, sanitize_1.sanitizeText)(dto.name) : undefined,
+            },
+            select: { id: true, code: true, name: true, createdAt: true },
+        });
+    }
+    async removeCipavdLocality(id) {
+        const existing = await this.prisma.locality.findFirst({
+            where: { id, catalogType: client_1.LocalityCatalogType.CIPAVD },
+            select: { id: true },
+        });
+        if (!existing)
+            (0, http_error_1.throwError)('NOT_FOUND');
+        await this.prisma.locality.delete({ where: { id } });
+        return { ok: true };
     }
     async create(dto) {
         const created = await this.prisma.locality.create({
             data: {
                 code: (0, sanitize_1.sanitizeText)(dto.code),
                 name: (0, sanitize_1.sanitizeText)(dto.name),
+                catalogType: client_1.LocalityCatalogType.SMIF,
                 commandName: dto.commandName ? (0, sanitize_1.sanitizeText)(dto.commandName) : null,
                 commanderName: dto.commanderName
                     ? (0, sanitize_1.sanitizeText)(dto.commanderName)
@@ -89,10 +150,13 @@ let LocalitiesController = class LocalitiesController {
         }
         const currentLocality = await this.prisma.locality.findUnique({
             where: { id },
-            select: { recruitsFemaleCountCurrent: true },
+            select: { recruitsFemaleCountCurrent: true, catalogType: true },
         });
         if (!currentLocality)
             (0, http_error_1.throwError)('NOT_FOUND');
+        if (currentLocality.catalogType !== client_1.LocalityCatalogType.SMIF) {
+            (0, http_error_1.throwError)('NOT_FOUND');
+        }
         const updated = await this.prisma.locality.update({
             where: { id },
             data: {
@@ -264,7 +328,10 @@ let LocalitiesController = class LocalitiesController {
             .filter(Boolean)));
         if (destinationIds.length > 0) {
             const destinations = await this.prisma.locality.findMany({
-                where: { id: { in: destinationIds } },
+                where: {
+                    id: { in: destinationIds },
+                    catalogType: client_1.LocalityCatalogType.SMIF,
+                },
                 select: { id: true },
             });
             if (destinations.length !== destinationIds.length) {
@@ -481,7 +548,10 @@ let LocalitiesController = class LocalitiesController {
         if (normalizedItems.length > 0) {
             const destinationIds = normalizedItems.map((item) => item.destinationLocalityId);
             const destinationLocalities = await this.prisma.locality.findMany({
-                where: { id: { in: destinationIds } },
+                where: {
+                    id: { in: destinationIds },
+                    catalogType: client_1.LocalityCatalogType.SMIF,
+                },
                 select: { id: true },
             });
             if (destinationLocalities.length !== destinationIds.length) {
@@ -519,11 +589,17 @@ let LocalitiesController = class LocalitiesController {
         return this.buildRecruitDesignationsResponse(id);
     }
     async remove(id) {
+        const existing = await this.prisma.locality.findFirst({
+            where: { id, catalogType: client_1.LocalityCatalogType.SMIF },
+            select: { id: true },
+        });
+        if (!existing)
+            (0, http_error_1.throwError)('NOT_FOUND');
         await this.prisma.locality.delete({ where: { id } });
         return { ok: true };
     }
     assertLocalityAccess(localityId, user) {
-        const bypassLocalityConstraint = (0, role_access_1.isNationalCommissionMember)(user) || (0, role_access_1.hasRole)(user, role_access_1.ROLE_TI);
+        const bypassLocalityConstraint = this.hasNationalLocalitiesAccess(user);
         if (bypassLocalityConstraint)
             return;
         if (!user?.localityId)
@@ -536,14 +612,22 @@ let LocalitiesController = class LocalitiesController {
         if (recruitsFemaleCountCurrent === undefined ||
             recruitsFemaleCountCurrent === null)
             return;
-        if (!(0, role_access_1.canEditRecruitsByRole)(user, localityId)) {
+        if (!(0, role_access_1.hasPermission)(user, 'localities', 'update')) {
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         }
+        this.assertLocalityAccess(localityId, user);
     }
     assertRecruitsEditorAccess(localityId, user) {
-        if (!(0, role_access_1.canEditRecruitsByRole)(user, localityId)) {
+        if (!(0, role_access_1.hasPermission)(user, 'localities', 'update')) {
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         }
+        this.assertLocalityAccess(localityId, user);
+    }
+    hasNationalLocalitiesAccess(user) {
+        return ((0, role_access_1.hasPermission)(user, 'localities', 'view', client_1.PermissionScope.NATIONAL) ||
+            (0, role_access_1.hasPermission)(user, 'localities', 'create', client_1.PermissionScope.NATIONAL) ||
+            (0, role_access_1.hasPermission)(user, 'localities', 'update', client_1.PermissionScope.NATIONAL) ||
+            (0, role_access_1.hasPermission)(user, 'localities', 'delete', client_1.PermissionScope.NATIONAL));
     }
     async assertRecruitAssignmentsWithinTotal(localityId, recruitsFemaleCountCurrent) {
         const aggregate = await this.prisma.$queryRaw(client_1.Prisma.sql `
@@ -723,11 +807,50 @@ __decorate([
 ], LocalitiesController.prototype, "list", null);
 __decorate([
     (0, common_1.Get)('oms-catalog'),
-    (0, require_permission_decorator_1.RequirePermission)('dashboard', 'view'),
+    (0, require_permission_decorator_1.RequirePermission)('localities', 'view'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
 ], LocalitiesController.prototype, "listOmsCatalog", null);
+__decorate([
+    (0, common_1.Get)('cipavd'),
+    (0, require_permission_decorator_1.RequirePermission)('localities_cipavd', 'view'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], LocalitiesController.prototype, "listCipavdLocalities", null);
+__decorate([
+    (0, common_1.Get)('cipavd-catalog'),
+    (0, require_permission_decorator_1.RequirePermission)('task_instances', 'view'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], LocalitiesController.prototype, "listCipavdCatalog", null);
+__decorate([
+    (0, common_1.Post)('cipavd'),
+    (0, require_permission_decorator_1.RequirePermission)('localities_cipavd', 'create'),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [create_cipavd_locality_dto_1.CreateCipavdLocalityDto]),
+    __metadata("design:returntype", Promise)
+], LocalitiesController.prototype, "createCipavdLocality", null);
+__decorate([
+    (0, common_1.Put)('cipavd/:id'),
+    (0, require_permission_decorator_1.RequirePermission)('localities_cipavd', 'update'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, update_cipavd_locality_dto_1.UpdateCipavdLocalityDto]),
+    __metadata("design:returntype", Promise)
+], LocalitiesController.prototype, "updateCipavdLocality", null);
+__decorate([
+    (0, common_1.Delete)('cipavd/:id'),
+    (0, require_permission_decorator_1.RequirePermission)('localities_cipavd', 'delete'),
+    __param(0, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], LocalitiesController.prototype, "removeCipavdLocality", null);
 __decorate([
     (0, common_1.Post)(),
     (0, require_permission_decorator_1.RequirePermission)('localities', 'create'),
@@ -748,7 +871,7 @@ __decorate([
 ], LocalitiesController.prototype, "update", null);
 __decorate([
     (0, common_1.Put)(':id/recruits'),
-    (0, require_permission_decorator_1.RequirePermission)('dashboard', 'view'),
+    (0, require_permission_decorator_1.RequirePermission)('localities', 'update'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),
@@ -758,6 +881,7 @@ __decorate([
 ], LocalitiesController.prototype, "updateRecruits", null);
 __decorate([
     (0, common_1.Get)(':id/recruit-designations'),
+    (0, require_permission_decorator_1.RequirePermission)('localities', 'view'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
@@ -766,6 +890,7 @@ __decorate([
 ], LocalitiesController.prototype, "listRecruitDesignations", null);
 __decorate([
     (0, common_1.Get)(':id/recruits-members'),
+    (0, require_permission_decorator_1.RequirePermission)('localities', 'view'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
@@ -774,6 +899,7 @@ __decorate([
 ], LocalitiesController.prototype, "listRecruitMembers", null);
 __decorate([
     (0, common_1.Put)(':id/recruits-members'),
+    (0, require_permission_decorator_1.RequirePermission)('localities', 'update'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),
@@ -783,6 +909,7 @@ __decorate([
 ], LocalitiesController.prototype, "replaceRecruitMembers", null);
 __decorate([
     (0, common_1.Put)(':id/commander-from-ldap'),
+    (0, require_permission_decorator_1.RequirePermission)('localities', 'update'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),
@@ -792,6 +919,7 @@ __decorate([
 ], LocalitiesController.prototype, "setCommanderFromLdap", null);
 __decorate([
     (0, common_1.Put)(':id/recruit-designations'),
+    (0, require_permission_decorator_1.RequirePermission)('localities', 'update'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),

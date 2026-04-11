@@ -1,3 +1,5 @@
+import { OnModuleInit } from '@nestjs/common';
+import { DiscoveryService, MetadataScanner } from '@nestjs/core';
 import { PermissionScope, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -8,14 +10,21 @@ type PermissionEntry = {
     action: string;
     scope: PermissionScope;
 };
-export declare class RbacService {
+export declare class RbacService implements OnModuleInit {
     private readonly prisma;
     private readonly audit;
     private readonly fabLdap;
-    constructor(prisma: PrismaService, audit: AuditService, fabLdap: FabLdapService);
+    private readonly discovery;
+    private readonly metadataScanner;
+    private permissionCatalogSynced;
+    private permissionCatalogSyncPromise;
+    constructor(prisma: PrismaService, audit: AuditService, fabLdap: FabLdapService, discovery: DiscoveryService, metadataScanner: MetadataScanner);
+    onModuleInit(): Promise<void>;
+    private ensurePermissionCatalogSynced;
     getUserAccess(userId: string, activeRoleId?: string | null): Promise<RbacUser>;
     listRoles(): Promise<{
         name: string;
+        wildcard: boolean;
         permissions: {
             resource: string;
             action: string;
@@ -26,7 +35,6 @@ export declare class RbacService {
         updatedAt: Date;
         description: string | null;
         isSystemRole: boolean;
-        wildcard: boolean;
         flagsJson: Prisma.JsonValue | null;
         constraintsTemplateJson: Prisma.JsonValue | null;
     }[]>;
@@ -209,6 +217,12 @@ export declare class RbacService {
     private buildAccessFromUser;
     private listPermissionEntries;
     private listPermissionResources;
+    private syncPermissionCatalogFromMetadata;
+    private collectDeclaredPermissionRequirements;
+    private normalizePermissionScope;
+    private isTiRoleName;
+    private normalizeRoleWildcard;
+    private filterTiPermissions;
     private dedupePermissions;
     private pickDefaultActiveRole;
     private applyModuleAccessOverrides;

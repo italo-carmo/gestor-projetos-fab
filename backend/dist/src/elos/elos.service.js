@@ -11,6 +11,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ElosService = void 0;
 const common_1 = require("@nestjs/common");
+const client_1 = require("@prisma/client");
 const prisma_service_1 = require("../prisma/prisma.service");
 const http_error_1 = require("../common/http-error");
 const sanitize_1 = require("../common/sanitize");
@@ -394,7 +395,7 @@ let ElosService = class ElosService {
         return { items };
     }
     async addCommissionMember(payload, user) {
-        this.assertCanManageOrgChart(user);
+        this.assertCanManageOrgChart(user, 'create');
         const userId = String(payload.userId ?? '').trim();
         if (!userId) {
             (0, http_error_1.throwError)('VALIDATION_ERROR', { reason: 'USER_ID_REQUIRED' });
@@ -463,7 +464,7 @@ let ElosService = class ElosService {
         };
     }
     async removeCommissionMember(payload, user) {
-        this.assertCanManageOrgChart(user);
+        this.assertCanManageOrgChart(user, 'delete');
         const userId = String(payload.userId ?? '').trim();
         if (!userId) {
             (0, http_error_1.throwError)('VALIDATION_ERROR', { reason: 'USER_ID_REQUIRED' });
@@ -502,7 +503,7 @@ let ElosService = class ElosService {
         };
     }
     async updateCommissionMember(payload, user) {
-        this.assertCanManageOrgChart(user);
+        this.assertCanManageOrgChart(user, 'update');
         const userId = String(payload.userId ?? '').trim();
         if (!userId) {
             (0, http_error_1.throwError)('VALIDATION_ERROR', { reason: 'USER_ID_REQUIRED' });
@@ -569,7 +570,7 @@ let ElosService = class ElosService {
         };
     }
     async reorderCommissionMembers(payload, user) {
-        this.assertCanManageOrgChart(user);
+        this.assertCanManageOrgChart(user, 'update');
         const commissionRole = await this.getCommissionRoleOrFail();
         const normalizedIds = Array.from(new Set((payload.userIds ?? [])
             .map((id) => String(id ?? '').trim())
@@ -606,7 +607,7 @@ let ElosService = class ElosService {
         return { ok: true };
     }
     async createOrgChartAssignment(payload, user) {
-        this.assertCanManageOrgChart(user);
+        this.assertCanManageOrgChart(user, 'create');
         return this.create({
             localityId: payload.localityId,
             eloRoleId: payload.eloRoleId,
@@ -618,7 +619,7 @@ let ElosService = class ElosService {
         }, user);
     }
     async updateOrgChartAssignment(id, payload, user) {
-        this.assertCanManageOrgChart(user);
+        this.assertCanManageOrgChart(user, 'update');
         return this.update(id, {
             localityId: payload.localityId,
             eloRoleId: payload.eloRoleId,
@@ -629,13 +630,13 @@ let ElosService = class ElosService {
         }, user);
     }
     async removeOrgChartAssignment(id, user) {
-        this.assertCanManageOrgChart(user);
+        this.assertCanManageOrgChart(user, 'delete');
         return this.remove(id, user);
     }
     getScopeConstraints(user) {
         if (!user)
             return {};
-        if ((0, role_access_1.hasNationalManagementScope)(user))
+        if (this.hasNationalOrgChartScope(user))
             return {};
         return {
             localityId: user.localityId ?? undefined,
@@ -647,10 +648,16 @@ let ElosService = class ElosService {
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         }
     }
-    assertCanManageOrgChart(user) {
-        if (!(0, role_access_1.hasAnyRole)(user, [role_access_1.ROLE_CIPAVD, role_access_1.ROLE_COORDENACAO_CIPAVD, role_access_1.ROLE_TI])) {
+    assertCanManageOrgChart(user, action) {
+        if (!(0, role_access_1.hasPermission)(user, 'org_chart', action)) {
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         }
+    }
+    hasNationalOrgChartScope(user) {
+        return ((0, role_access_1.hasPermission)(user, 'org_chart', 'view', client_1.PermissionScope.NATIONAL) ||
+            (0, role_access_1.hasPermission)(user, 'org_chart', 'create', client_1.PermissionScope.NATIONAL) ||
+            (0, role_access_1.hasPermission)(user, 'org_chart', 'update', client_1.PermissionScope.NATIONAL) ||
+            (0, role_access_1.hasPermission)(user, 'org_chart', 'delete', client_1.PermissionScope.NATIONAL));
     }
     async getCommissionRole() {
         const roles = await this.prisma.role.findMany({

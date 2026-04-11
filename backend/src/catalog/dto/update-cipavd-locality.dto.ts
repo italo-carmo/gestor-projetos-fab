@@ -8,4 +8,8 @@ export class UpdateCipavdLocalityDto {
   @IsOptional()
   @IsString()
   name?: string;
+
+  @IsOptional()
+  @IsString()
+  uf?: string | null;
 }

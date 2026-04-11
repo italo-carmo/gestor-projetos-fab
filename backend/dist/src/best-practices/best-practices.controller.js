@@ -94,7 +94,7 @@ __decorate([
 ], BestPracticesController.prototype, "remove", null);
 __decorate([
     (0, common_1.Get)('types'),
-    (0, require_permission_decorator_1.RequirePermission)('best_practices', 'view'),
+    (0, require_permission_decorator_1.RequirePermission)('best_practice_types', 'view'),
     __param(0, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
@@ -102,7 +102,7 @@ __decorate([
 ], BestPracticesController.prototype, "listTypes", null);
 __decorate([
     (0, common_1.Post)('types'),
-    (0, require_permission_decorator_1.RequirePermission)('best_practices', 'create'),
+    (0, require_permission_decorator_1.RequirePermission)('best_practice_types', 'create'),
     __param(0, (0, common_1.Body)()),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
@@ -111,7 +111,7 @@ __decorate([
 ], BestPracticesController.prototype, "createType", null);
 __decorate([
     (0, common_1.Put)('types/:id'),
-    (0, require_permission_decorator_1.RequirePermission)('best_practices', 'update'),
+    (0, require_permission_decorator_1.RequirePermission)('best_practice_types', 'update'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),
@@ -121,7 +121,7 @@ __decorate([
 ], BestPracticesController.prototype, "updateType", null);
 __decorate([
     (0, common_1.Delete)('types/:id'),
-    (0, require_permission_decorator_1.RequirePermission)('best_practices', 'delete'),
+    (0, require_permission_decorator_1.RequirePermission)('best_practice_types', 'delete'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),

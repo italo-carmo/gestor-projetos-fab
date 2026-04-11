@@ -49,6 +49,7 @@ exports.SocialCommunicationController = void 0;
 const common_1 = require("@nestjs/common");
 const jwt_auth_guard_1 = require("../auth/jwt-auth.guard");
 const current_user_decorator_1 = require("../common/current-user.decorator");
+const require_permission_decorator_1 = require("../rbac/require-permission.decorator");
 const rbac_guard_1 = require("../rbac/rbac.guard");
 const create_social_communication_article_dto_1 = require("./dto/create-social-communication-article.dto");
 const create_social_communication_highlight_dto_1 = require("./dto/create-social-communication-highlight.dto");
@@ -116,6 +117,7 @@ let SocialCommunicationController = class SocialCommunicationController {
 exports.SocialCommunicationController = SocialCommunicationController;
 __decorate([
     (0, common_1.Get)(),
+    (0, require_permission_decorator_1.RequirePermission)('social_communication', 'view'),
     __param(0, (0, common_1.Query)('q')),
     __param(1, (0, common_1.Query)('tag')),
     __metadata("design:type", Function),
@@ -124,6 +126,7 @@ __decorate([
 ], SocialCommunicationController.prototype, "list", null);
 __decorate([
     (0, common_1.Post)('metadata'),
+    (0, require_permission_decorator_1.RequirePermission)('social_communication', 'create'),
     __param(0, (0, common_1.Body)()),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
@@ -132,6 +135,7 @@ __decorate([
 ], SocialCommunicationController.prototype, "resolveMetadata", null);
 __decorate([
     (0, common_1.Get)('highlights'),
+    (0, require_permission_decorator_1.RequirePermission)('social_communication_highlight', 'view'),
     __param(0, (0, common_1.Query)('q')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
@@ -139,6 +143,7 @@ __decorate([
 ], SocialCommunicationController.prototype, "listHighlights", null);
 __decorate([
     (0, common_1.Get)('highlights/ldap-profile'),
+    (0, require_permission_decorator_1.RequirePermission)('social_communication_highlight', 'create'),
     __param(0, (0, common_1.Query)()),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
@@ -147,6 +152,7 @@ __decorate([
 ], SocialCommunicationController.prototype, "lookupHighlightLdapProfile", null);
 __decorate([
     (0, common_1.Post)('highlights'),
+    (0, require_permission_decorator_1.RequirePermission)('social_communication_highlight', 'create'),
     __param(0, (0, common_1.Body)()),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
@@ -155,6 +161,7 @@ __decorate([
 ], SocialCommunicationController.prototype, "createHighlight", null);
 __decorate([
     (0, common_1.Post)(),
+    (0, require_permission_decorator_1.RequirePermission)('social_communication', 'create'),
     __param(0, (0, common_1.Body)()),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
@@ -163,6 +170,7 @@ __decorate([
 ], SocialCommunicationController.prototype, "create", null);
 __decorate([
     (0, common_1.Post)('upload-cover'),
+    (0, require_permission_decorator_1.RequirePermission)('social_communication', 'upload'),
     (0, common_1.UseInterceptors)((0, platform_express_1.FileInterceptor)('file', {
         storage: (0, multer_1.diskStorage)({
             destination: uploadDir,
@@ -187,6 +195,7 @@ __decorate([
 ], SocialCommunicationController.prototype, "uploadCover", null);
 __decorate([
     (0, common_1.Put)(':id'),
+    (0, require_permission_decorator_1.RequirePermission)('social_communication', 'update'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),
@@ -196,6 +205,7 @@ __decorate([
 ], SocialCommunicationController.prototype, "update", null);
 __decorate([
     (0, common_1.Put)('highlights/:id'),
+    (0, require_permission_decorator_1.RequirePermission)('social_communication_highlight', 'update'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),
@@ -205,6 +215,7 @@ __decorate([
 ], SocialCommunicationController.prototype, "updateHighlight", null);
 __decorate([
     (0, common_1.Delete)(':id'),
+    (0, require_permission_decorator_1.RequirePermission)('social_communication', 'delete'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
@@ -213,6 +224,7 @@ __decorate([
 ], SocialCommunicationController.prototype, "remove", null);
 __decorate([
     (0, common_1.Delete)('highlights/:id'),
+    (0, require_permission_decorator_1.RequirePermission)('social_communication_highlight', 'delete'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),

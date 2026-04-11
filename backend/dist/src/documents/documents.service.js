@@ -1078,7 +1078,7 @@ let DocumentsService = class DocumentsService {
             return false;
         if (this.isAdminUser(user))
             return false;
-        const hasNationalSearchScope = user.permissions.some((permission) => (permission.resource === 'search' || permission.resource === '*') &&
+        const hasNationalSearchScope = user.permissions.some((permission) => (permission.resource === 'documents' || permission.resource === '*') &&
             (permission.action === 'view' || permission.action === '*') &&
             permission.scope === client_1.PermissionScope.NATIONAL);
         return !hasNationalSearchScope;

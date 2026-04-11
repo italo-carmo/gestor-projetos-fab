@@ -31,13 +31,13 @@ let DashboardsController = class DashboardsController {
         return this.tasks.getLocalityProgress(id, user);
     }
     national(localityId, user) {
-        if (!(0, role_access_1.hasNationalManagementScope)(user)) {
+        if (!(0, role_access_1.hasPermission)(user, 'dashboard', 'view', 'NATIONAL')) {
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         }
         return this.tasks.getDashboardNational(user, localityId);
     }
     updateNationalCard(id, dto, user) {
-        if (!(0, role_access_1.hasAnyRole)(user, [role_access_1.ROLE_TI])) {
+        if (!(0, role_access_1.hasPermission)(user, 'dashboard', 'update', 'NATIONAL')) {
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');
         }
         return this.tasks.updateDashboardNationalCardSetting(id, dto, user);
@@ -45,8 +45,8 @@ let DashboardsController = class DashboardsController {
     recruits(localityId, user) {
         return this.tasks.getDashboardRecruits(user, localityId);
     }
-    executive(from, to, phaseId, threshold, command, localityId, user) {
-        return this.tasks.getDashboardExecutive({ from, to, phaseId, threshold, command, localityId }, user);
+    executive(from, to, phaseId, threshold, command, localityId, scope, user) {
+        return this.tasks.getDashboardExecutive({ from, to, phaseId, threshold, command, localityId, scope }, user);
     }
     async debugSpecialties(from, to, user) {
         const result = await this.tasks.getDashboardExecutive({ from, to, threshold: '70' }, user);
@@ -129,7 +129,7 @@ __decorate([
 ], DashboardsController.prototype, "national", null);
 __decorate([
     (0, common_1.Put)('dashboard/national/cards/:id'),
-    (0, require_permission_decorator_1.RequirePermission)('dashboard', 'view'),
+    (0, require_permission_decorator_1.RequirePermission)('dashboard', 'update'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),
@@ -155,9 +155,10 @@ __decorate([
     __param(3, (0, common_1.Query)('threshold')),
     __param(4, (0, common_1.Query)('command')),
     __param(5, (0, common_1.Query)('localityId')),
-    __param(6, (0, current_user_decorator_1.CurrentUser)()),
+    __param(6, (0, common_1.Query)('scope')),
+    __param(7, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, Object, Object, Object, Object, Object, Object]),
+    __metadata("design:paramtypes", [Object, Object, Object, Object, Object, Object, Object, Object]),
     __metadata("design:returntype", void 0)
 ], DashboardsController.prototype, "executive", null);
 __decorate([

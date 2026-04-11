@@ -56,7 +56,10 @@ let KpisService = class KpisService {
             : new Date(Date.now() - 56 * 24 * 60 * 60 * 1000);
         const to = filters.to ? new Date(filters.to) : new Date();
         const [localities, tasks, phases, reports] = await this.prisma.$transaction([
-            this.prisma.locality.findMany({ orderBy: { name: 'asc' } }),
+            this.prisma.locality.findMany({
+                where: { catalogType: client_1.LocalityCatalogType.SMIF },
+                orderBy: { name: 'asc' },
+            }),
             this.prisma.taskInstance.findMany({
                 where: {
                     createdAt: { gte: from, lte: to },

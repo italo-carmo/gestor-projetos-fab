@@ -197,6 +197,15 @@ export declare class TasksService {
             subtitle?: string;
         }[];
     }>;
+    listAssignableUsers(user?: RbacUser): Promise<{
+        items: Array<Record<string, unknown>>;
+    } | {
+        items: {
+            id: string;
+            name: string;
+            localityId: string | null;
+        }[];
+    }>;
     assignTask(id: string, payload: {
         assigneeIds?: string[];
         assignedToId?: string | null;
@@ -365,6 +374,7 @@ export declare class TasksService {
             participants: {
                 instructors: {
                     activityId: any;
+                    scope: any;
                     title: any;
                     localityId: any;
                     localityCode: string;
@@ -386,6 +396,7 @@ export declare class TasksService {
                 }[];
                 recruits: {
                     activityId: any;
+                    scope: any;
                     title: any;
                     localityId: any;
                     localityCode: string;
@@ -407,6 +418,7 @@ export declare class TasksService {
                 }[];
                 elos: {
                     activityId: any;
+                    scope: any;
                     title: any;
                     localityId: any;
                     localityCode: string;
@@ -428,6 +440,7 @@ export declare class TasksService {
                 }[];
                 graduadosMaster: {
                     activityId: any;
+                    scope: any;
                     title: any;
                     localityId: any;
                     localityCode: string;
@@ -450,6 +463,7 @@ export declare class TasksService {
             };
             completedReports: {
                 activityId: any;
+                scope: any;
                 title: any;
                 localityId: any;
                 localityCode: string;
@@ -484,6 +498,7 @@ export declare class TasksService {
             }[];
             completedFieldActivities: {
                 activityId: any;
+                scope: any;
                 title: any;
                 localityId: any;
                 localityCode: string;
@@ -505,6 +520,7 @@ export declare class TasksService {
             }[];
             completedVisits: {
                 activityId: any;
+                scope: any;
                 title: any;
                 localityId: any;
                 localityCode: string;
@@ -526,6 +542,7 @@ export declare class TasksService {
             }[];
             completedLectures: {
                 activityId: any;
+                scope: any;
                 title: any;
                 localityId: any;
                 localityCode: string;
@@ -547,6 +564,7 @@ export declare class TasksService {
             }[];
             completedBestPracticeCycles: {
                 activityId: any;
+                scope: any;
                 title: any;
                 localityId: any;
                 localityCode: string;
@@ -568,6 +586,7 @@ export declare class TasksService {
             }[];
             completedMappings: {
                 activityId: any;
+                scope: any;
                 title: any;
                 localityId: any;
                 localityCode: string;
@@ -590,6 +609,7 @@ export declare class TasksService {
             fieldActivitiesBySpecialty: {
                 psychology: ReturnType<(activity: any) => {
                     activityId: any;
+                    scope: any;
                     title: any;
                     localityId: any;
                     localityCode: string;
@@ -611,6 +631,7 @@ export declare class TasksService {
                 }>[];
                 socialService: ReturnType<(activity: any) => {
                     activityId: any;
+                    scope: any;
                     title: any;
                     localityId: any;
                     localityCode: string;
@@ -632,6 +653,7 @@ export declare class TasksService {
                 }>[];
                 doctrine: ReturnType<(activity: any) => {
                     activityId: any;
+                    scope: any;
                     title: any;
                     localityId: any;
                     localityCode: string;
@@ -653,6 +675,7 @@ export declare class TasksService {
                 }>[];
                 law: ReturnType<(activity: any) => {
                     activityId: any;
+                    scope: any;
                     title: any;
                     localityId: any;
                     localityCode: string;
@@ -676,6 +699,7 @@ export declare class TasksService {
         };
         lateItems: {
             activityId: any;
+            scope: any;
             title: any;
             localityId: any;
             localityCode: string;
@@ -695,6 +719,7 @@ export declare class TasksService {
         }[];
         unassignedItems: {
             activityId: any;
+            scope: any;
             title: any;
             localityId: any;
             localityCode: string;
@@ -714,6 +739,7 @@ export declare class TasksService {
         }[];
         riskTasks: {
             activityId: any;
+            scope: any;
             title: any;
             localityId: any;
             localityCode: string;
@@ -807,6 +833,7 @@ export declare class TasksService {
         threshold?: string;
         command?: string;
         localityId?: string;
+        scope?: string;
     }, user?: RbacUser): Promise<{
         summary: {
             totalActivities: number;
@@ -932,6 +959,7 @@ export declare class TasksService {
             }[];
             items: {
                 activityId: any;
+                scope: any;
                 title: any;
                 activityTypeName: any;
                 specialtyId: string;
@@ -964,6 +992,7 @@ export declare class TasksService {
             }[];
             items: {
                 activityId: any;
+                scope: any;
                 title: any;
                 activityTypeName: any;
                 specialtyId: string;
@@ -1021,6 +1050,7 @@ export declare class TasksService {
                     closingDate: any;
                 } | null;
                 activityId: any;
+                scope: any;
                 title: any;
                 activityTypeName: any;
                 specialtyId: string;
@@ -1043,6 +1073,7 @@ export declare class TasksService {
             }[];
             pendingItems: {
                 activityId: any;
+                scope: any;
                 title: any;
                 activityTypeName: any;
                 specialtyId: string;
@@ -1067,6 +1098,7 @@ export declare class TasksService {
         kpiDetails: {
             completedActivities: {
                 activityId: any;
+                scope: any;
                 title: any;
                 activityTypeName: any;
                 specialtyId: string;
@@ -1127,6 +1159,7 @@ export declare class TasksService {
                     closingDate: any;
                 } | null;
                 activityId: any;
+                scope: any;
                 title: any;
                 activityTypeName: any;
                 specialtyId: string;
@@ -1179,6 +1212,7 @@ export declare class TasksService {
                     closingDate: any;
                 } | null;
                 activityId: any;
+                scope: any;
                 title: any;
                 activityTypeName: any;
                 specialtyId: string;

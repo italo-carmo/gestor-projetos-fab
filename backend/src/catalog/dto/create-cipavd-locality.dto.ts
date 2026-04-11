@@ -1,4 +1,4 @@
-import { IsString } from 'class-validator';
+import { IsOptional, IsString } from 'class-validator';
 
 export class CreateCipavdLocalityDto {
   @IsString()
@@ -6,4 +6,8 @@ export class CreateCipavdLocalityDto {
 
   @IsString()
   name: string;
+
+  @IsOptional()
+  @IsString()
+  uf?: string | null;
 }

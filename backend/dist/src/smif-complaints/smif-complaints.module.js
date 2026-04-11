@@ -8,6 +8,7 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SmifComplaintsModule = void 0;
 const common_1 = require("@nestjs/common");
+const cpca_module_1 = require("../cpca/cpca.module");
 const rbac_module_1 = require("../rbac/rbac.module");
 const smif_complaints_controller_1 = require("./smif-complaints.controller");
 const smif_complaints_service_1 = require("./smif-complaints.service");
@@ -16,7 +17,7 @@ let SmifComplaintsModule = class SmifComplaintsModule {
 exports.SmifComplaintsModule = SmifComplaintsModule;
 exports.SmifComplaintsModule = SmifComplaintsModule = __decorate([
     (0, common_1.Module)({
-        imports: [rbac_module_1.RbacModule],
+        imports: [rbac_module_1.RbacModule, cpca_module_1.CpcaModule],
         controllers: [smif_complaints_controller_1.SmifComplaintsController],
         providers: [smif_complaints_service_1.SmifComplaintsService],
     })

@@ -54,6 +54,7 @@ const path = __importStar(require("node:path"));
 const node_crypto_1 = require("node:crypto");
 const jwt_auth_guard_1 = require("../auth/jwt-auth.guard");
 const current_user_decorator_1 = require("../common/current-user.decorator");
+const require_permission_decorator_1 = require("../rbac/require-permission.decorator");
 const rbac_guard_1 = require("../rbac/rbac.guard");
 const missions_service_1 = require("./missions.service");
 const create_mission_dto_1 = require("./dto/create-mission.dto");
@@ -78,14 +79,17 @@ let MissionsController = class MissionsController {
     constructor(missions) {
         this.missions = missions;
     }
-    list(localityId, q, page, pageSize, user) {
-        return this.missions.list({ localityId, q, page, pageSize }, user);
+    list(localityId, q, page, pageSize, scope, user) {
+        return this.missions.list({ localityId, q, page, pageSize, scope }, user);
     }
-    getStatistics(user) {
-        return this.missions.getStatistics(user);
+    getStatistics(scope, user) {
+        return this.missions.getStatistics(user, scope);
     }
-    getChecklistMapping(localityId, user) {
-        return this.missions.getChecklistMapping({ localityId }, user);
+    listLocalityOptions(scope, user) {
+        return this.missions.listLocalityOptions(scope, user);
+    }
+    getChecklistMapping(localityId, scope, user) {
+        return this.missions.getChecklistMapping({ localityId, scope }, user);
     }
     getChecklistConfig(user) {
         return this.missions.getChecklistConfig(user);
@@ -161,32 +165,48 @@ let MissionsController = class MissionsController {
 exports.MissionsController = MissionsController;
 __decorate([
     (0, common_1.Get)(),
+    (0, require_permission_decorator_1.RequirePermission)('missions', 'view'),
     __param(0, (0, common_1.Query)('localityId')),
     __param(1, (0, common_1.Query)('q')),
     __param(2, (0, common_1.Query)('page')),
     __param(3, (0, common_1.Query)('pageSize')),
-    __param(4, (0, current_user_decorator_1.CurrentUser)()),
+    __param(4, (0, common_1.Query)('scope')),
+    __param(5, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, Object, Object, Object, Object]),
+    __metadata("design:paramtypes", [Object, Object, Object, Object, Object, Object]),
     __metadata("design:returntype", void 0)
 ], MissionsController.prototype, "list", null);
 __decorate([
     (0, common_1.Get)('statistics'),
-    __param(0, (0, current_user_decorator_1.CurrentUser)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
-    __metadata("design:returntype", void 0)
-], MissionsController.prototype, "getStatistics", null);
-__decorate([
-    (0, common_1.Get)('checklist/mapping'),
-    __param(0, (0, common_1.Query)('localityId')),
+    (0, require_permission_decorator_1.RequirePermission)('missions', 'view'),
+    __param(0, (0, common_1.Query)('scope')),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", void 0)
+], MissionsController.prototype, "getStatistics", null);
+__decorate([
+    (0, common_1.Get)('locality-options'),
+    (0, require_permission_decorator_1.RequirePermission)('missions', 'view'),
+    __param(0, (0, common_1.Query)('scope')),
+    __param(1, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", void 0)
+], MissionsController.prototype, "listLocalityOptions", null);
+__decorate([
+    (0, common_1.Get)('checklist/mapping'),
+    (0, require_permission_decorator_1.RequirePermission)('missions', 'view'),
+    __param(0, (0, common_1.Query)('localityId')),
+    __param(1, (0, common_1.Query)('scope')),
+    __param(2, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object, Object]),
+    __metadata("design:returntype", void 0)
 ], MissionsController.prototype, "getChecklistMapping", null);
 __decorate([
     (0, common_1.Get)('checklist/config'),
+    (0, require_permission_decorator_1.RequirePermission)('missions', 'view'),
     __param(0, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
@@ -194,6 +214,7 @@ __decorate([
 ], MissionsController.prototype, "getChecklistConfig", null);
 __decorate([
     (0, common_1.Post)('checklist/config/dimensions'),
+    (0, require_permission_decorator_1.RequirePermission)('missions', 'update'),
     __param(0, (0, common_1.Body)()),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
@@ -202,6 +223,7 @@ __decorate([
 ], MissionsController.prototype, "createChecklistDimension", null);
 __decorate([
     (0, common_1.Put)('checklist/config/dimensions/:id'),
+    (0, require_permission_decorator_1.RequirePermission)('missions', 'update'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),
@@ -211,6 +233,7 @@ __decorate([
 ], MissionsController.prototype, "updateChecklistDimension", null);
 __decorate([
     (0, common_1.Delete)('checklist/config/dimensions/:id'),
+    (0, require_permission_decorator_1.RequirePermission)('missions', 'update'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
@@ -219,6 +242,7 @@ __decorate([
 ], MissionsController.prototype, "deleteChecklistDimension", null);
 __decorate([
     (0, common_1.Put)('checklist/config/classifications/:id'),
+    (0, require_permission_decorator_1.RequirePermission)('missions', 'update'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),
@@ -228,6 +252,7 @@ __decorate([
 ], MissionsController.prototype, "updateChecklistClassification", null);
 __decorate([
     (0, common_1.Post)(),
+    (0, require_permission_decorator_1.RequirePermission)('missions', 'create'),
     __param(0, (0, common_1.Body)()),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
@@ -236,6 +261,7 @@ __decorate([
 ], MissionsController.prototype, "create", null);
 __decorate([
     (0, common_1.Put)(':id'),
+    (0, require_permission_decorator_1.RequirePermission)('missions', 'update'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),
@@ -245,6 +271,7 @@ __decorate([
 ], MissionsController.prototype, "update", null);
 __decorate([
     (0, common_1.Delete)(':id'),
+    (0, require_permission_decorator_1.RequirePermission)('missions', 'delete'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
@@ -253,6 +280,7 @@ __decorate([
 ], MissionsController.prototype, "remove", null);
 __decorate([
     (0, common_1.Get)('ldap-participant'),
+    (0, require_permission_decorator_1.RequirePermission)('missions', 'view'),
     __param(0, (0, common_1.Query)('q')),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
@@ -261,6 +289,7 @@ __decorate([
 ], MissionsController.prototype, "lookupLdapParticipant", null);
 __decorate([
     (0, common_1.Get)(':id'),
+    (0, require_permission_decorator_1.RequirePermission)('missions', 'view'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
@@ -269,6 +298,7 @@ __decorate([
 ], MissionsController.prototype, "getById", null);
 __decorate([
     (0, common_1.Get)(':id/checklist'),
+    (0, require_permission_decorator_1.RequirePermission)('missions', 'view'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
@@ -277,6 +307,7 @@ __decorate([
 ], MissionsController.prototype, "getChecklist", null);
 __decorate([
     (0, common_1.Put)(':id/checklist'),
+    (0, require_permission_decorator_1.RequirePermission)('missions', 'update'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),
@@ -286,6 +317,7 @@ __decorate([
 ], MissionsController.prototype, "upsertChecklist", null);
 __decorate([
     (0, common_1.Post)(':id/checklist/photos'),
+    (0, require_permission_decorator_1.RequirePermission)('missions', 'upload'),
     (0, common_1.UseInterceptors)((0, platform_express_1.FileInterceptor)('file', {
         storage: (0, multer_1.diskStorage)({
             destination: checklistPhotosDir,
@@ -311,6 +343,7 @@ __decorate([
 ], MissionsController.prototype, "uploadChecklistPhoto", null);
 __decorate([
     (0, common_1.Post)(':id/participants/ldap'),
+    (0, require_permission_decorator_1.RequirePermission)('missions', 'update'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),
@@ -320,6 +353,7 @@ __decorate([
 ], MissionsController.prototype, "addParticipantFromLdap", null);
 __decorate([
     (0, common_1.Post)(':id/participants/user'),
+    (0, require_permission_decorator_1.RequirePermission)('missions', 'update'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),
@@ -329,6 +363,7 @@ __decorate([
 ], MissionsController.prototype, "addParticipantFromUser", null);
 __decorate([
     (0, common_1.Delete)(':id/participants/:participantId'),
+    (0, require_permission_decorator_1.RequirePermission)('missions', 'update'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Param)('participantId')),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),
@@ -338,6 +373,7 @@ __decorate([
 ], MissionsController.prototype, "removeParticipant", null);
 __decorate([
     (0, common_1.Get)(':id/schedule'),
+    (0, require_permission_decorator_1.RequirePermission)('missions', 'view'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
@@ -346,6 +382,7 @@ __decorate([
 ], MissionsController.prototype, "listSchedule", null);
 __decorate([
     (0, common_1.Post)(':id/schedule'),
+    (0, require_permission_decorator_1.RequirePermission)('missions', 'create'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),
@@ -355,6 +392,7 @@ __decorate([
 ], MissionsController.prototype, "createScheduleItem", null);
 __decorate([
     (0, common_1.Put)(':id/schedule/:itemId'),
+    (0, require_permission_decorator_1.RequirePermission)('missions', 'update'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Param)('itemId')),
     __param(2, (0, common_1.Body)()),
@@ -365,6 +403,7 @@ __decorate([
 ], MissionsController.prototype, "updateScheduleItem", null);
 __decorate([
     (0, common_1.Delete)(':id/schedule/:itemId'),
+    (0, require_permission_decorator_1.RequirePermission)('missions', 'delete'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Param)('itemId')),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),
@@ -374,6 +413,7 @@ __decorate([
 ], MissionsController.prototype, "deleteScheduleItem", null);
 __decorate([
     (0, common_1.Get)(':id/schedule/pdf'),
+    (0, require_permission_decorator_1.RequirePermission)('missions', 'download'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __param(2, (0, common_1.Res)()),

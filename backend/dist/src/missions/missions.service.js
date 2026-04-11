@@ -42,15 +42,31 @@ let MissionsService = class MissionsService {
         this.audit = audit;
         this.fabLdap = fabLdap;
     }
+    async listLocalityOptions(scopeParam, user) {
+        this.assertMissionAccess(user);
+        const scope = this.normalizeMissionScope(scopeParam);
+        const ids = await this.resolveAllowedLocalityIds(scope);
+        if (ids.length === 0) {
+            return { items: [] };
+        }
+        const items = await this.prisma.locality.findMany({
+            where: { id: { in: ids } },
+            select: { id: true, code: true, name: true },
+            orderBy: { name: 'asc' },
+        });
+        return { items };
+    }
     async list(filters, user) {
         this.assertMissionAccess(user);
         const { page, pageSize, skip, take } = (0, pagination_1.parsePagination)(filters.page, filters.pageSize);
-        const targetLocalityIds = await this.getTargetLocalityIds();
+        const scope = this.normalizeMissionScope(filters.scope);
+        const targetLocalityIds = await this.resolveAllowedLocalityIds(scope);
         if (targetLocalityIds.length === 0) {
             return { items: [], page, pageSize, total: 0 };
         }
         const andClauses = [
             { localityId: { in: targetLocalityIds } },
+            { scope },
         ];
         if (filters.localityId)
             andClauses.push({ localityId: filters.localityId });
@@ -101,9 +117,10 @@ let MissionsService = class MissionsService {
             total,
         };
     }
-    async getStatistics(user) {
+    async getStatistics(user, scopeParam) {
         this.assertMissionAccess(user);
-        const targetLocalityIds = await this.getTargetLocalityIds();
+        const scope = this.normalizeMissionScope(scopeParam);
+        const targetLocalityIds = await this.resolveAllowedLocalityIds(scope);
         if (targetLocalityIds.length === 0) {
             return {
                 totalMissions: 0,
@@ -120,7 +137,7 @@ let MissionsService = class MissionsService {
             };
         }
         const missions = await this.prisma.mission.findMany({
-            where: { localityId: { in: targetLocalityIds } },
+            where: { localityId: { in: targetLocalityIds }, scope },
             include: {
                 participants: {
                     select: {
@@ -204,13 +221,19 @@ let MissionsService = class MissionsService {
     async getChecklistMapping(filters, user) {
         this.assertMissionAccess(user);
         const selectedOmId = String(filters.localityId ?? '').trim() || null;
+        const scope = this.normalizeMissionScope(filters.scope);
+        const catalogType = scope === client_1.ActivityScope.CIPAVD
+            ? client_1.LocalityCatalogType.CIPAVD
+            : client_1.LocalityCatalogType.SMIF;
         const checklistConfig = await this.getMissionChecklistConfig();
         const [omsCatalog, missions] = await this.prisma.$transaction([
             this.prisma.locality.findMany({
+                where: { catalogType },
                 select: { id: true, name: true, code: true },
                 orderBy: { name: 'asc' },
             }),
             this.prisma.mission.findMany({
+                where: { scope },
                 include: {
                     locality: { select: { id: true, name: true, code: true } },
                     participants: {
@@ -574,6 +597,7 @@ let MissionsService = class MissionsService {
         });
         if (!mission)
             (0, http_error_1.throwError)('NOT_FOUND');
+        await this.assertMissionLocalityAllowed(mission);
         return mission;
     }
     async getChecklist(id, user) {
@@ -584,12 +608,14 @@ let MissionsService = class MissionsService {
             select: {
                 id: true,
                 localityId: true,
+                scope: true,
                 updatedAt: true,
                 checklistJson: true,
             },
         });
         if (!mission)
             (0, http_error_1.throwError)('NOT_FOUND');
+        await this.assertMissionLocalityAllowed(mission);
         const checklistOmId = this.readStoredMissionChecklistOmId(mission.checklistJson) ??
             mission.localityId;
         const checklistOm = checklistOmId &&
@@ -613,10 +639,11 @@ let MissionsService = class MissionsService {
         const checklistConfig = await this.getMissionChecklistConfig();
         const mission = await this.prisma.mission.findUnique({
             where: { id },
-            select: { id: true, localityId: true },
+            select: { id: true, localityId: true, scope: true },
         });
         if (!mission)
             (0, http_error_1.throwError)('NOT_FOUND');
+        await this.assertMissionLocalityAllowed(mission);
         const checklistOmId = String(payload.omId ?? '').trim();
         if (!checklistOmId) {
             (0, http_error_1.throwError)('VALIDATION_ERROR', {
@@ -624,14 +651,23 @@ let MissionsService = class MissionsService {
                 reason: 'REQUIRED',
             });
         }
-        const omExists = await this.prisma.locality.findUnique({
+        const omRow = await this.prisma.locality.findUnique({
             where: { id: checklistOmId },
-            select: { id: true },
+            select: { id: true, catalogType: true },
         });
-        if (!omExists) {
+        if (!omRow) {
             (0, http_error_1.throwError)('VALIDATION_ERROR', {
                 field: 'omId',
                 reason: 'OM_NOT_FOUND',
+            });
+        }
+        const expectedCatalog = mission.scope === client_1.ActivityScope.CIPAVD
+            ? client_1.LocalityCatalogType.CIPAVD
+            : client_1.LocalityCatalogType.SMIF;
+        if (omRow.catalogType !== expectedCatalog) {
+            (0, http_error_1.throwError)('VALIDATION_ERROR', {
+                field: 'omId',
+                reason: 'OM_CATALOG_MISMATCH',
             });
         }
         const normalizedItems = this.normalizeMissionChecklistItems(payload.items, checklistConfig);
@@ -676,7 +712,8 @@ let MissionsService = class MissionsService {
     }
     async create(payload, user) {
         this.assertMissionAccess(user);
-        const targetLocalityIds = await this.getTargetLocalityIds();
+        const scope = this.normalizeMissionScope(payload.scope);
+        const targetLocalityIds = await this.resolveAllowedLocalityIds(scope);
         if (!targetLocalityIds.includes(payload.localityId)) {
             (0, http_error_1.throwError)('VALIDATION_ERROR', {
                 field: 'localityId',
@@ -698,6 +735,7 @@ let MissionsService = class MissionsService {
                     ? (0, sanitize_1.sanitizeText)(payload.description)
                     : null,
                 localityId: payload.localityId,
+                scope,
                 startDate,
                 endDate,
                 createdById: user?.id ?? null,
@@ -731,7 +769,8 @@ let MissionsService = class MissionsService {
         const existing = await this.prisma.mission.findUnique({ where: { id } });
         if (!existing)
             (0, http_error_1.throwError)('NOT_FOUND');
-        const targetLocalityIds = await this.getTargetLocalityIds();
+        await this.assertMissionLocalityAllowed(existing);
+        const targetLocalityIds = await this.resolveAllowedLocalityIds(existing.scope);
         const localityId = payload.localityId ?? existing.localityId;
         if (!targetLocalityIds.includes(localityId)) {
             (0, http_error_1.throwError)('VALIDATION_ERROR', {
@@ -801,6 +840,7 @@ let MissionsService = class MissionsService {
         });
         if (!existing)
             (0, http_error_1.throwError)('NOT_FOUND');
+        await this.assertMissionLocalityAllowed(existing);
         await this.prisma.mission.delete({ where: { id } });
         await this.audit.log({
             userId: user?.id,
@@ -847,6 +887,7 @@ let MissionsService = class MissionsService {
         });
         if (!mission)
             (0, http_error_1.throwError)('NOT_FOUND');
+        await this.assertMissionLocalityAllowed(mission);
         const normalized = String(identifier ?? '').trim();
         if (!normalized) {
             (0, http_error_1.throwError)('VALIDATION_ERROR', {
@@ -912,6 +953,7 @@ let MissionsService = class MissionsService {
         });
         if (!mission)
             (0, http_error_1.throwError)('NOT_FOUND');
+        await this.assertMissionLocalityAllowed(mission);
         const systemUser = await this.prisma.user.findUnique({
             where: { id: userId },
             select: {
@@ -964,6 +1006,7 @@ let MissionsService = class MissionsService {
         });
         if (!mission)
             (0, http_error_1.throwError)('NOT_FOUND');
+        await this.assertMissionLocalityAllowed(mission);
         const participant = await this.prisma.missionParticipant.findFirst({
             where: { id: participantId, missionId },
         });
@@ -999,6 +1042,7 @@ let MissionsService = class MissionsService {
         });
         if (!mission)
             (0, http_error_1.throwError)('NOT_FOUND');
+        await this.assertMissionLocalityAllowed(mission);
         return {
             mission: {
                 id: mission.id,
@@ -1018,6 +1062,7 @@ let MissionsService = class MissionsService {
         });
         if (!mission)
             (0, http_error_1.throwError)('NOT_FOUND');
+        await this.assertMissionLocalityAllowed(mission);
         const created = await this.prisma.missionScheduleItem.create({
             data: {
                 missionId,
@@ -1046,6 +1091,7 @@ let MissionsService = class MissionsService {
         });
         if (!mission)
             (0, http_error_1.throwError)('NOT_FOUND');
+        await this.assertMissionLocalityAllowed(mission);
         const existing = await this.prisma.missionScheduleItem.findFirst({
             where: { id: itemId, missionId },
         });
@@ -1091,6 +1137,7 @@ let MissionsService = class MissionsService {
         });
         if (!mission)
             (0, http_error_1.throwError)('NOT_FOUND');
+        await this.assertMissionLocalityAllowed(mission);
         const existing = await this.prisma.missionScheduleItem.findFirst({
             where: { id: itemId, missionId },
             select: { id: true },
@@ -1125,6 +1172,7 @@ let MissionsService = class MissionsService {
         });
         if (!mission)
             (0, http_error_1.throwError)('NOT_FOUND');
+        await this.assertMissionLocalityAllowed(mission);
         const doc = new pdfkit_1.default({
             margin: 32,
             size: 'A4',
@@ -1876,18 +1924,23 @@ let MissionsService = class MissionsService {
         return typeof value === 'object' && value !== null && !Array.isArray(value);
     }
     assertMissionAccess(user) {
-        if ((0, role_access_1.hasAnyRole)(user, [
-            role_access_1.ROLE_CIPAVD,
-            role_access_1.ROLE_COORDENACAO_CIPAVD,
-            role_access_1.ROLE_COMANDANTE_COMGEP,
-            role_access_1.ROLE_TI,
+        if ((0, role_access_1.hasAnyPermission)(user, [
+            { resource: 'missions', action: 'view' },
+            { resource: 'missions', action: 'create' },
+            { resource: 'missions', action: 'update' },
+            { resource: 'missions', action: 'delete' },
+            { resource: 'missions', action: 'upload' },
+            { resource: 'missions', action: 'download' },
         ])) {
             return;
         }
         (0, http_error_1.throwError)('RBAC_FORBIDDEN');
     }
     assertMissionChecklistEditAccess(user) {
-        if ((0, role_access_1.hasAnyRole)(user, [role_access_1.ROLE_CIPAVD, role_access_1.ROLE_COORDENACAO_CIPAVD, role_access_1.ROLE_TI])) {
+        if ((0, role_access_1.hasAnyPermission)(user, [
+            { resource: 'missions', action: 'update' },
+            { resource: 'missions', action: 'upload' },
+        ])) {
             return;
         }
         (0, http_error_1.throwError)('RBAC_FORBIDDEN');
@@ -1896,19 +1949,40 @@ let MissionsService = class MissionsService {
         this.assertMissionChecklistEditAccess(user);
         const mission = await this.prisma.mission.findUnique({
             where: { id },
-            select: { id: true },
+            select: { id: true, localityId: true, scope: true },
         });
         if (!mission)
             (0, http_error_1.throwError)('NOT_FOUND');
+        await this.assertMissionLocalityAllowed(mission);
     }
     assertMissionChecklistConfigAccess(user) {
-        if ((0, role_access_1.hasAnyRole)(user, [role_access_1.ROLE_CIPAVD, role_access_1.ROLE_COORDENACAO_CIPAVD, role_access_1.ROLE_TI])) {
+        if ((0, role_access_1.hasPermission)(user, 'missions', 'update')) {
             return;
         }
         (0, http_error_1.throwError)('RBAC_FORBIDDEN');
     }
-    async getTargetLocalityIds() {
+    normalizeMissionScope(raw) {
+        const value = String(raw ?? '').trim().toUpperCase();
+        if (value === 'CIPAVD')
+            return client_1.ActivityScope.CIPAVD;
+        return client_1.ActivityScope.SMIF;
+    }
+    async assertMissionLocalityAllowed(mission) {
+        const allowed = await this.resolveAllowedLocalityIds(mission.scope);
+        if (!allowed.includes(mission.localityId)) {
+            (0, http_error_1.throwError)('NOT_FOUND');
+        }
+    }
+    async resolveAllowedLocalityIds(scope) {
+        if (scope === client_1.ActivityScope.CIPAVD) {
+            const rows = await this.prisma.locality.findMany({
+                where: { catalogType: client_1.LocalityCatalogType.CIPAVD },
+                select: { id: true },
+            });
+            return rows.map((row) => row.id);
+        }
         const localities = await this.prisma.locality.findMany({
+            where: { catalogType: client_1.LocalityCatalogType.SMIF },
             select: {
                 id: true,
                 name: true,

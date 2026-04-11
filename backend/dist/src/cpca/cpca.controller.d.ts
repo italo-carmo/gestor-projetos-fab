@@ -117,9 +117,11 @@ export declare class CpcaController {
     getById(id: string, user: RbacUser): Promise<any>;
     create(dto: CreateCpcaCaseDto, user: RbacUser): Promise<any>;
     update(id: string, dto: UpdateCpcaCaseDto, user: RbacUser): Promise<any>;
+    remove(id: string, user: RbacUser): Promise<{
+        ok: boolean;
+    }>;
     comments(id: string, user: RbacUser): Promise<{
         items: any;
     }>;
     addComment(id: string, dto: AddCpcaCaseCommentDto, user: RbacUser): Promise<any>;
-    private assertProcessAccess;
 }

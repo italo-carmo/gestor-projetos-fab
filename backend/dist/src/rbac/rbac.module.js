@@ -8,6 +8,7 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.RbacModule = void 0;
 const common_1 = require("@nestjs/common");
+const core_1 = require("@nestjs/core");
 const rbac_service_1 = require("./rbac.service");
 const roles_controller_1 = require("./roles.controller");
 const permissions_controller_1 = require("./permissions.controller");
@@ -18,6 +19,7 @@ let RbacModule = class RbacModule {
 exports.RbacModule = RbacModule;
 exports.RbacModule = RbacModule = __decorate([
     (0, common_1.Module)({
+        imports: [core_1.DiscoveryModule],
         controllers: [roles_controller_1.RolesController, permissions_controller_1.PermissionsController, admin_rbac_controller_1.AdminRbacController],
         providers: [rbac_service_1.RbacService, rbac_guard_1.RbacGuard],
         exports: [rbac_service_1.RbacService, rbac_guard_1.RbacGuard],

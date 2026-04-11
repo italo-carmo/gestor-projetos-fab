@@ -1,22 +1,26 @@
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { RbacUser } from '../rbac/rbac.types';
+type LibraryScope = 'SMIF' | 'CIPAVD';
 export declare class LibraryService {
     private readonly prisma;
     private readonly audit;
     constructor(prisma: PrismaService, audit: AuditService);
-    getData(): Promise<{
+    getData(scopeRaw?: string): Promise<{
+        scope: LibraryScope;
         photos: ({
             locality: {
                 id: string;
                 name: string;
                 code: string;
+                catalogType: import("@prisma/client").$Enums.LocalityCatalogType;
             } | null;
         } & {
             id: string;
             title: string;
             createdAt: Date;
             updatedAt: Date;
+            scope: import("@prisma/client").$Enums.ActivityScope;
             localityId: string | null;
             sortOrder: number;
             createdById: string | null;
@@ -30,6 +34,7 @@ export declare class LibraryService {
             title: string;
             createdAt: Date;
             updatedAt: Date;
+            scope: import("@prisma/client").$Enums.ActivityScope;
             fileName: string;
             createdById: string | null;
             fileUrl: string;
@@ -37,11 +42,16 @@ export declare class LibraryService {
             mimeType: string | null;
             fileSize: number | null;
         }[];
+        localities: {
+            id: string;
+            code: string;
+            name: string;
+        }[];
         settings: {
             carouselIntervalSeconds: number;
         };
     }>;
-    ensureEditorAccess(user?: RbacUser): void;
+    ensureEditorAccess(user: RbacUser | undefined, action: 'create' | 'update' | 'delete'): void;
     updateSettings(payload: {
         carouselIntervalSeconds: number;
     }, user?: RbacUser): Promise<{
@@ -53,11 +63,13 @@ export declare class LibraryService {
     createPhoto(file: Express.Multer.File, payload: {
         title?: string;
         localityId?: string;
+        scope?: string;
     }, user?: RbacUser): Promise<{
         id: string;
         title: string;
         createdAt: Date;
         updatedAt: Date;
+        scope: import("@prisma/client").$Enums.ActivityScope;
         localityId: string | null;
         sortOrder: number;
         createdById: string | null;
@@ -70,11 +82,13 @@ export declare class LibraryService {
         title?: string;
         sortOrder?: number;
         localityId?: string | null;
+        scope?: string;
     }, user?: RbacUser): Promise<{
         id: string;
         title: string;
         createdAt: Date;
         updatedAt: Date;
+        scope: import("@prisma/client").$Enums.ActivityScope;
         localityId: string | null;
         sortOrder: number;
         createdById: string | null;
@@ -88,11 +102,13 @@ export declare class LibraryService {
     }>;
     createDocument(file: Express.Multer.File, payload: {
         title?: string;
+        scope?: string;
     }, user?: RbacUser): Promise<{
         id: string;
         title: string;
         createdAt: Date;
         updatedAt: Date;
+        scope: import("@prisma/client").$Enums.ActivityScope;
         fileName: string;
         createdById: string | null;
         fileUrl: string;
@@ -107,6 +123,7 @@ export declare class LibraryService {
         title: string;
         createdAt: Date;
         updatedAt: Date;
+        scope: import("@prisma/client").$Enums.ActivityScope;
         fileName: string;
         createdById: string | null;
         fileUrl: string;
@@ -122,6 +139,7 @@ export declare class LibraryService {
         title: string;
         createdAt: Date;
         updatedAt: Date;
+        scope: import("@prisma/client").$Enums.ActivityScope;
         fileName: string;
         createdById: string | null;
         fileUrl: string;
@@ -129,4 +147,7 @@ export declare class LibraryService {
         mimeType: string | null;
         fileSize: number | null;
     }>;
+    private parseScope;
+    private assertLocalityForScope;
 }
+export {};

@@ -16,10 +16,8 @@ exports.CpcaController = void 0;
 const common_1 = require("@nestjs/common");
 const jwt_auth_guard_1 = require("../auth/jwt-auth.guard");
 const current_user_decorator_1 = require("../common/current-user.decorator");
-const http_error_1 = require("../common/http-error");
 const require_permission_decorator_1 = require("../rbac/require-permission.decorator");
 const rbac_guard_1 = require("../rbac/rbac.guard");
-const role_access_1 = require("../rbac/role-access");
 const add_cpca_case_comment_dto_1 = require("./dto/add-cpca-case-comment.dto");
 const create_cpca_case_dto_1 = require("./dto/create-cpca-case.dto");
 const update_cpca_case_dto_1 = require("./dto/update-cpca-case.dto");
@@ -30,7 +28,6 @@ let CpcaController = class CpcaController {
         this.cpca = cpca;
     }
     list(omId, localityId, status, complaintType, detailedViolenceType, procedureType, q, page, pageSize, user) {
-        this.assertProcessAccess(user);
         return this.cpca.list({
             localityId: omId ?? localityId,
             status,
@@ -43,38 +40,25 @@ let CpcaController = class CpcaController {
         }, user);
     }
     stats(omId, localityId, from, to, user) {
-        this.assertProcessAccess(user);
         return this.cpca.stats({ localityId: omId ?? localityId, from, to }, user);
     }
     getById(id, user) {
-        this.assertProcessAccess(user);
         return this.cpca.getById(id, user);
     }
     create(dto, user) {
-        this.assertProcessAccess(user);
         return this.cpca.create(dto, user);
     }
     update(id, dto, user) {
-        this.assertProcessAccess(user);
         return this.cpca.update(id, dto, user);
     }
+    remove(id, user) {
+        return this.cpca.remove(id, user);
+    }
     comments(id, user) {
-        this.assertProcessAccess(user);
         return this.cpca.listComments(id, user);
     }
     addComment(id, dto, user) {
-        this.assertProcessAccess(user);
         return this.cpca.addComment(id, dto.text, user);
-    }
-    assertProcessAccess(user) {
-        if (!(0, role_access_1.hasAnyRole)(user, [
-            role_access_1.ROLE_CPCA,
-            role_access_1.ROLE_COORDENACAO_CIPAVD,
-            role_access_1.ROLE_COMANDANTE_COMGEP,
-            role_access_1.ROLE_TI,
-        ])) {
-            (0, http_error_1.throwError)('RBAC_FORBIDDEN');
-        }
     }
 };
 exports.CpcaController = CpcaController;
@@ -135,6 +119,15 @@ __decorate([
     __metadata("design:paramtypes", [String, update_cpca_case_dto_1.UpdateCpcaCaseDto, Object]),
     __metadata("design:returntype", void 0)
 ], CpcaController.prototype, "update", null);
+__decorate([
+    (0, common_1.Delete)(':id'),
+    (0, require_permission_decorator_1.RequirePermission)('cpca_cases', 'delete'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", void 0)
+], CpcaController.prototype, "remove", null);
 __decorate([
     (0, common_1.Get)(':id/comments'),
     (0, require_permission_decorator_1.RequirePermission)('cpca_cases', 'view'),

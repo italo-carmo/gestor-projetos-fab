@@ -24,7 +24,6 @@ const current_user_decorator_1 = require("../common/current-user.decorator");
 const http_error_1 = require("../common/http-error");
 const require_permission_decorator_1 = require("../rbac/require-permission.decorator");
 const rbac_guard_1 = require("../rbac/rbac.guard");
-const role_access_1 = require("../rbac/role-access");
 const documents_service_1 = require("./documents.service");
 const create_document_subcategory_dto_1 = require("./dto/create-document-subcategory.dto");
 const update_document_subcategory_dto_1 = require("./dto/update-document-subcategory.dto");
@@ -41,63 +40,48 @@ let DocumentsController = class DocumentsController {
         this.documents = documents;
     }
     list(q, category, subcategoryId, localityId, page, pageSize, user) {
-        this.assertDocumentsAccess(user);
         return this.documents.list({ q, category, subcategoryId, localityId, page, pageSize }, user);
     }
     listSubcategories(category, user) {
-        this.assertDocumentsAccess(user);
         return this.documents.listSubcategories({ category }, user);
     }
     createSubcategory(dto, user) {
-        this.assertDocumentsAccess(user);
         return this.documents.createSubcategory(dto, user);
     }
     updateSubcategory(id, dto, user) {
-        this.assertDocumentsAccess(user);
         return this.documents.updateSubcategory(id, dto, user);
     }
     deleteSubcategory(id, user) {
-        this.assertDocumentsAccess(user);
         return this.documents.deleteSubcategory(id, user);
     }
     coverage(user) {
-        this.assertDocumentsAccess(user);
         return this.documents.coverage(user);
     }
     listLinks(documentId, entityType, entityId, pageSize, user) {
-        this.assertDocumentsAccess(user);
         return this.documents.listLinks({ documentId, entityType, entityId, pageSize }, user);
     }
     createLink(dto, user) {
-        this.assertDocumentsAccess(user);
         return this.documents.createLink(dto, user);
     }
     updateLink(linkId, dto, user) {
-        this.assertDocumentsAccess(user);
         return this.documents.updateLink(linkId, dto, user);
     }
     deleteLink(linkId, user) {
-        this.assertDocumentsAccess(user);
         return this.documents.deleteLink(linkId, user);
     }
     linkCandidates(entityType, q, pageSize, user) {
-        this.assertDocumentsAccess(user);
         return this.documents.listLinkCandidates({ entityType, q, pageSize }, user);
     }
     getContent(id, user) {
-        this.assertDocumentsAccess(user);
         return this.documents.getContent(id, user);
     }
     getById(id, user) {
-        this.assertDocumentsAccess(user);
         return this.documents.getById(id, user);
     }
     update(id, dto, user) {
-        this.assertDocumentsAccess(user);
         return this.documents.update(id, dto, user);
     }
     async download(id, user, res) {
-        this.assertDocumentsAccess(user);
         const document = await this.documents.getById(id, user);
         const fileName = document.storageKey ?? node_path_1.default.basename(document.fileUrl);
         const filePath = node_path_1.default.join(documentsDir, fileName);
@@ -106,16 +90,11 @@ let DocumentsController = class DocumentsController {
         }
         return res.download(filePath, document.fileName);
     }
-    assertDocumentsAccess(user) {
-        if (!(0, role_access_1.hasAnyRole)(user, [role_access_1.ROLE_COORDENACAO_CIPAVD, role_access_1.ROLE_TI])) {
-            (0, http_error_1.throwError)('RBAC_FORBIDDEN');
-        }
-    }
 };
 exports.DocumentsController = DocumentsController;
 __decorate([
     (0, common_1.Get)(),
-    (0, require_permission_decorator_1.RequirePermission)('search', 'view'),
+    (0, require_permission_decorator_1.RequirePermission)('documents', 'view'),
     __param(0, (0, common_1.Query)('q')),
     __param(1, (0, common_1.Query)('category')),
     __param(2, (0, common_1.Query)('subcategoryId')),
@@ -129,7 +108,7 @@ __decorate([
 ], DocumentsController.prototype, "list", null);
 __decorate([
     (0, common_1.Get)('subcategories'),
-    (0, require_permission_decorator_1.RequirePermission)('search', 'view'),
+    (0, require_permission_decorator_1.RequirePermission)('documents', 'view'),
     __param(0, (0, common_1.Query)('category')),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
@@ -138,7 +117,7 @@ __decorate([
 ], DocumentsController.prototype, "listSubcategories", null);
 __decorate([
     (0, common_1.Post)('subcategories'),
-    (0, require_permission_decorator_1.RequirePermission)('search', 'view'),
+    (0, require_permission_decorator_1.RequirePermission)('documents', 'create'),
     __param(0, (0, common_1.Body)()),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
@@ -147,7 +126,7 @@ __decorate([
 ], DocumentsController.prototype, "createSubcategory", null);
 __decorate([
     (0, common_1.Put)('subcategories/:id'),
-    (0, require_permission_decorator_1.RequirePermission)('search', 'view'),
+    (0, require_permission_decorator_1.RequirePermission)('documents', 'update'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),
@@ -157,7 +136,7 @@ __decorate([
 ], DocumentsController.prototype, "updateSubcategory", null);
 __decorate([
     (0, common_1.Delete)('subcategories/:id'),
-    (0, require_permission_decorator_1.RequirePermission)('search', 'view'),
+    (0, require_permission_decorator_1.RequirePermission)('documents', 'delete'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
@@ -166,7 +145,7 @@ __decorate([
 ], DocumentsController.prototype, "deleteSubcategory", null);
 __decorate([
     (0, common_1.Get)('coverage'),
-    (0, require_permission_decorator_1.RequirePermission)('search', 'view'),
+    (0, require_permission_decorator_1.RequirePermission)('documents', 'view'),
     __param(0, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
@@ -174,7 +153,7 @@ __decorate([
 ], DocumentsController.prototype, "coverage", null);
 __decorate([
     (0, common_1.Get)('links'),
-    (0, require_permission_decorator_1.RequirePermission)('search', 'view'),
+    (0, require_permission_decorator_1.RequirePermission)('documents', 'view'),
     __param(0, (0, common_1.Query)('documentId')),
     __param(1, (0, common_1.Query)('entityType')),
     __param(2, (0, common_1.Query)('entityId')),
@@ -186,7 +165,7 @@ __decorate([
 ], DocumentsController.prototype, "listLinks", null);
 __decorate([
     (0, common_1.Post)('links'),
-    (0, require_permission_decorator_1.RequirePermission)('search', 'view'),
+    (0, require_permission_decorator_1.RequirePermission)('documents', 'create'),
     __param(0, (0, common_1.Body)()),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
@@ -195,7 +174,7 @@ __decorate([
 ], DocumentsController.prototype, "createLink", null);
 __decorate([
     (0, common_1.Put)('links/:linkId'),
-    (0, require_permission_decorator_1.RequirePermission)('search', 'view'),
+    (0, require_permission_decorator_1.RequirePermission)('documents', 'update'),
     __param(0, (0, common_1.Param)('linkId')),
     __param(1, (0, common_1.Body)()),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),
@@ -205,7 +184,7 @@ __decorate([
 ], DocumentsController.prototype, "updateLink", null);
 __decorate([
     (0, common_1.Delete)('links/:linkId'),
-    (0, require_permission_decorator_1.RequirePermission)('search', 'view'),
+    (0, require_permission_decorator_1.RequirePermission)('documents', 'delete'),
     __param(0, (0, common_1.Param)('linkId')),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
@@ -214,7 +193,7 @@ __decorate([
 ], DocumentsController.prototype, "deleteLink", null);
 __decorate([
     (0, common_1.Get)('link-candidates'),
-    (0, require_permission_decorator_1.RequirePermission)('search', 'view'),
+    (0, require_permission_decorator_1.RequirePermission)('documents', 'view'),
     __param(0, (0, common_1.Query)('entityType')),
     __param(1, (0, common_1.Query)('q')),
     __param(2, (0, common_1.Query)('pageSize')),
@@ -225,7 +204,7 @@ __decorate([
 ], DocumentsController.prototype, "linkCandidates", null);
 __decorate([
     (0, common_1.Get)(':id/content'),
-    (0, require_permission_decorator_1.RequirePermission)('search', 'view'),
+    (0, require_permission_decorator_1.RequirePermission)('documents', 'view'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
@@ -234,7 +213,7 @@ __decorate([
 ], DocumentsController.prototype, "getContent", null);
 __decorate([
     (0, common_1.Get)(':id'),
-    (0, require_permission_decorator_1.RequirePermission)('search', 'view'),
+    (0, require_permission_decorator_1.RequirePermission)('documents', 'view'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
@@ -243,7 +222,7 @@ __decorate([
 ], DocumentsController.prototype, "getById", null);
 __decorate([
     (0, common_1.Put)(':id'),
-    (0, require_permission_decorator_1.RequirePermission)('search', 'view'),
+    (0, require_permission_decorator_1.RequirePermission)('documents', 'update'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),
@@ -253,7 +232,7 @@ __decorate([
 ], DocumentsController.prototype, "update", null);
 __decorate([
     (0, common_1.Get)(':id/download'),
-    (0, require_permission_decorator_1.RequirePermission)('search', 'view'),
+    (0, require_permission_decorator_1.RequirePermission)('documents', 'download'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __param(2, (0, common_1.Res)()),

@@ -14,7 +14,7 @@ import type { Response } from 'express';
 export declare class MissionsController {
     private readonly missions;
     constructor(missions: MissionsService);
-    list(localityId: string | undefined, q: string | undefined, page: string | undefined, pageSize: string | undefined, user: RbacUser): Promise<{
+    list(localityId: string | undefined, q: string | undefined, page: string | undefined, pageSize: string | undefined, scope: string | undefined, user: RbacUser): Promise<{
         items: {
             participantsCount: number;
             scheduleItemsCount: number;
@@ -50,9 +50,9 @@ export declare class MissionsController {
         pageSize: number;
         total: number;
     }>;
-    getStatistics(user: RbacUser): Promise<{
+    getStatistics(scope: string | undefined, user: RbacUser): Promise<{
         totalMissions: number;
-        totalParticipants: number;
+        totalParticipants: any;
         totalMissionDays: number;
         totalParticipantDays: number;
         missionsByUser: {
@@ -72,7 +72,7 @@ export declare class MissionsController {
         participantsByMission: {
             missionId: string;
             missionTitle: string;
-            participantsCount: number;
+            participantsCount: any;
             missionDays: number;
         }[];
         averageParticipantsPerMission: number;
@@ -81,10 +81,17 @@ export declare class MissionsController {
         missionsWithMostParticipants: {
             missionId: string;
             missionTitle: string;
-            participantsCount: number;
+            participantsCount: any;
         }[];
     }>;
-    getChecklistMapping(localityId: string | undefined, user: RbacUser): Promise<{
+    listLocalityOptions(scope: string | undefined, user: RbacUser): Promise<{
+        items: {
+            id: string;
+            code: string | null;
+            name: string;
+        }[];
+    }>;
+    getChecklistMapping(localityId: string | undefined, scope: string | undefined, user: RbacUser): Promise<{
         generatedAt: string;
         localities: {
             id: string;
@@ -144,35 +151,16 @@ export declare class MissionsController {
                 startDate: Date;
                 endDate: Date;
                 updatedAt: Date;
-                locality: {
-                    id: string;
-                    name: string;
-                    code: string;
-                };
+                locality: any;
                 checklistOm: {
                     id: string;
                     name: string;
                     code: string | null;
                 };
-                participants: {
-                    id: string;
-                    name: string;
-                    email: string | null;
-                    ldapUid: string | null;
-                    fabom: string | null;
-                    cpf: string | null;
-                }[];
-                participantsCount: number;
-                scheduleItems: {
-                    id: string;
-                    title: string;
-                    location: string;
-                    participants: string;
-                    responsible: string;
-                    durationMinutes: number;
-                    startAt: Date;
-                }[];
-                scheduleItemsCount: number;
+                participants: any;
+                participantsCount: any;
+                scheduleItems: any;
+                scheduleItemsCount: any;
                 checklistSections: {
                     id: import("./mission-checklist.constants").MissionChecklistSectionId;
                     title: string;
@@ -230,36 +218,8 @@ export declare class MissionsController {
         sortOrder: number;
     }>;
     create(dto: CreateMissionDto, user: RbacUser): Promise<{
-        participantsCount: number;
-        scheduleItemsCount: number;
-        locality: {
-            id: string;
-            name: string;
-            code: string;
-        };
-        participants: {
-            id: string;
-            createdAt: Date;
-            name: string;
-            email: string | null;
-            ldapUid: string | null;
-            userId: string | null;
-            fabom: string | null;
-            missionId: string;
-            cpf: string | null;
-        }[];
-        scheduleItems: {
-            id: string;
-            title: string;
-            createdAt: Date;
-            updatedAt: Date;
-            location: string;
-            participants: string;
-            responsible: string;
-            durationMinutes: number;
-            missionId: string;
-            startAt: Date;
-        }[];
+        participantsCount: any;
+        scheduleItemsCount: any;
         id: string;
         title: string;
         createdAt: Date;

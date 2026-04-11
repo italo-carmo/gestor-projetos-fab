@@ -242,7 +242,7 @@ export declare class ActivitiesService {
     removeReportPhoto(activityId: string, photoId: string, user?: RbacUser): Promise<{
         ok: boolean;
     }>;
-    signReport(activityId: string, user?: RbacUser): Promise<{
+    signReport(activityId: string, user?: RbacUser, totpCode?: string): Promise<{
         activityId: string;
         signedAt: Date | null;
         signedBy: any;

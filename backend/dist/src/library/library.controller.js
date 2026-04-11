@@ -54,6 +54,7 @@ const path = __importStar(require("node:path"));
 const node_crypto_1 = require("node:crypto");
 const jwt_auth_guard_1 = require("../auth/jwt-auth.guard");
 const current_user_decorator_1 = require("../common/current-user.decorator");
+const require_permission_decorator_1 = require("../rbac/require-permission.decorator");
 const rbac_guard_1 = require("../rbac/rbac.guard");
 const multer_exception_filter_1 = require("../reports/multer-exception.filter");
 const library_service_1 = require("./library.service");
@@ -71,8 +72,8 @@ let LibraryController = class LibraryController {
     constructor(library) {
         this.library = library;
     }
-    list() {
-        return this.library.getData();
+    list(scope) {
+        return this.library.getData(scope);
     }
     updateSettings(body, user) {
         return this.library.updateSettings({ carouselIntervalSeconds: body.carouselIntervalSeconds }, user);
@@ -113,12 +114,15 @@ let LibraryController = class LibraryController {
 exports.LibraryController = LibraryController;
 __decorate([
     (0, common_1.Get)(),
+    (0, require_permission_decorator_1.RequirePermission)('library', 'view'),
+    __param(0, (0, common_1.Query)('scope')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", []),
+    __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", void 0)
 ], LibraryController.prototype, "list", null);
 __decorate([
     (0, common_1.Put)('settings'),
+    (0, require_permission_decorator_1.RequirePermission)('library', 'update'),
     __param(0, (0, common_1.Body)()),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
@@ -127,6 +131,7 @@ __decorate([
 ], LibraryController.prototype, "updateSettings", null);
 __decorate([
     (0, common_1.Post)('photos/upload'),
+    (0, require_permission_decorator_1.RequirePermission)('library', 'create'),
     (0, common_1.UseInterceptors)((0, platform_express_1.FileInterceptor)('file', {
         storage: (0, multer_1.diskStorage)({
             destination: exports.libraryPhotosDir,
@@ -152,6 +157,7 @@ __decorate([
 ], LibraryController.prototype, "uploadPhoto", null);
 __decorate([
     (0, common_1.Put)('photos/:id'),
+    (0, require_permission_decorator_1.RequirePermission)('library', 'update'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),
@@ -161,6 +167,7 @@ __decorate([
 ], LibraryController.prototype, "updatePhoto", null);
 __decorate([
     (0, common_1.Delete)('photos/:id'),
+    (0, require_permission_decorator_1.RequirePermission)('library', 'delete'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
@@ -169,6 +176,7 @@ __decorate([
 ], LibraryController.prototype, "deletePhoto", null);
 __decorate([
     (0, common_1.Post)('documents/upload'),
+    (0, require_permission_decorator_1.RequirePermission)('library', 'create'),
     (0, common_1.UseInterceptors)((0, platform_express_1.FileInterceptor)('file', {
         storage: (0, multer_1.diskStorage)({
             destination: exports.libraryDocumentsDir,
@@ -190,6 +198,7 @@ __decorate([
 ], LibraryController.prototype, "uploadDocument", null);
 __decorate([
     (0, common_1.Put)('documents/:id'),
+    (0, require_permission_decorator_1.RequirePermission)('library', 'update'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),
@@ -199,6 +208,7 @@ __decorate([
 ], LibraryController.prototype, "updateDocument", null);
 __decorate([
     (0, common_1.Delete)('documents/:id'),
+    (0, require_permission_decorator_1.RequirePermission)('library', 'delete'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
@@ -207,6 +217,7 @@ __decorate([
 ], LibraryController.prototype, "deleteDocument", null);
 __decorate([
     (0, common_1.Get)('documents/:id/download'),
+    (0, require_permission_decorator_1.RequirePermission)('library', 'download'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Res)()),
     __metadata("design:type", Function),

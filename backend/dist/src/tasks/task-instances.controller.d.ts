@@ -27,6 +27,15 @@ export declare class TaskInstancesController {
             subtitle?: string;
         }[];
     }>;
+    listAssignableUsers(user: RbacUser): Promise<{
+        items: Array<Record<string, unknown>>;
+    } | {
+        items: {
+            id: string;
+            name: string;
+            localityId: string | null;
+        }[];
+    }>;
     list(localityId: string | undefined, phaseId: string | undefined, status: string | undefined, assigneeId: string | undefined, assigneeIds: string | undefined, dueFrom: string | undefined, dueTo: string | undefined, meetingId: string | undefined, eloRoleId: string | undefined, specialtyId: string | undefined, page: string | undefined, pageSize: string | undefined, user: RbacUser): Promise<{
         items: any[];
         page: number;

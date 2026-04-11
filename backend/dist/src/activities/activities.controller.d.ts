@@ -166,7 +166,7 @@ export declare class ActivitiesController {
     }>;
     exportSchedulePdf(id: string, user: RbacUser, res: Response): Promise<Response<any, Record<string, any>>>;
     upsertReport(id: string, dto: UpsertActivityReportDto, user: RbacUser): Promise<any>;
-    signReport(id: string, user: RbacUser): Promise<{
+    signReport(id: string, totpCode: string, user: RbacUser): Promise<{
         activityId: string;
         signedAt: Date | null;
         signedBy: any;

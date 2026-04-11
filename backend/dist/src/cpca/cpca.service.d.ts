@@ -3,6 +3,14 @@ import { AuditService } from '../audit/audit.service';
 import type { RbacUser } from '../rbac/rbac.types';
 import { CreateCpcaCaseDto } from './dto/create-cpca-case.dto';
 import { UpdateCpcaCaseDto } from './dto/update-cpca-case.dto';
+export type ComplaintWorkflowScope = 'CPCA' | 'SMIF';
+export type ComplaintWorkflowContext = {
+    workflowScope: ComplaintWorkflowScope;
+    resource: 'cpca_cases' | 'smif_complaints';
+    caseNumberPrefix: 'CPCA' | 'SMIF';
+};
+export declare const CPCA_WORKFLOW_CONTEXT: ComplaintWorkflowContext;
+export declare const SMIF_WORKFLOW_CONTEXT: ComplaintWorkflowContext;
 export declare class CpcaService {
     private readonly prisma;
     private readonly audit;
@@ -16,7 +24,7 @@ export declare class CpcaService {
         q?: string;
         page?: string;
         pageSize?: string;
-    }, user?: RbacUser): Promise<{
+    }, user?: RbacUser, context?: ComplaintWorkflowContext): Promise<{
         items: any;
         page: number;
         pageSize: number;
@@ -26,7 +34,7 @@ export declare class CpcaService {
         localityId?: string;
         from?: string;
         to?: string;
-    }, user?: RbacUser): Promise<{
+    }, user?: RbacUser, context?: ComplaintWorkflowContext): Promise<{
         filters: {
             localityId: any;
             from: string | null;
@@ -128,17 +136,23 @@ export declare class CpcaService {
             investigationOver30Days: any;
         };
     }>;
-    getById(id: string, user?: RbacUser): Promise<any>;
-    create(payload: CreateCpcaCaseDto, user?: RbacUser): Promise<any>;
-    update(id: string, payload: UpdateCpcaCaseDto, user?: RbacUser): Promise<any>;
-    addComment(id: string, text: string, user?: RbacUser): Promise<any>;
-    listComments(id: string, user?: RbacUser): Promise<{
+    getById(id: string, user?: RbacUser, context?: ComplaintWorkflowContext): Promise<any>;
+    create(payload: CreateCpcaCaseDto, user?: RbacUser, context?: ComplaintWorkflowContext): Promise<any>;
+    update(id: string, payload: UpdateCpcaCaseDto, user?: RbacUser, context?: ComplaintWorkflowContext): Promise<any>;
+    remove(id: string, user?: RbacUser, context?: ComplaintWorkflowContext): Promise<{
+        ok: boolean;
+    }>;
+    addComment(id: string, text: string, user?: RbacUser, context?: ComplaintWorkflowContext): Promise<any>;
+    listComments(id: string, user?: RbacUser, context?: ComplaintWorkflowContext): Promise<{
         items: any;
     }>;
     private getScopeConstraints;
-    private hasWorkflowAccess;
+    private hasCasePermission;
+    private hasNationalScope;
+    private hasLocalityScope;
     private assertCaseAccess;
     private resolveTargetLocalityId;
+    private resolveContext;
     private cleanText;
     private cleanOptional;
     private parseDateBoundary;
