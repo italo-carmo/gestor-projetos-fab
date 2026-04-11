@@ -303,6 +303,7 @@ export function OmsAdminPage() {
                 <TableRow sx={{ bgcolor: 'primary.main' }}>
                   <TableCell sx={{ color: 'white', fontWeight: 700 }}>Código</TableCell>
                   <TableCell sx={{ color: 'white', fontWeight: 700 }}>Nome</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 700, width: 80 }}>UF</TableCell>
                   <TableCell sx={{ color: 'white', fontWeight: 700 }}>Cobertura CPCA</TableCell>
                   <TableCell sx={{ color: 'white', fontWeight: 700 }}>Militares CPCA</TableCell>
                   <TableCell sx={{ color: 'white', fontWeight: 700 }} align="right">
@@ -326,6 +327,7 @@ export function OmsAdminPage() {
                           {locality.name}
                         </Typography>
                       </TableCell>
+                      <TableCell>{(locality as any).uf ?? '—'}</TableCell>
                       <TableCell>
                         <Chip
                           size="small"

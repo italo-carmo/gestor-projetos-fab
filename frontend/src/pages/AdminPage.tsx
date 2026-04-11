@@ -220,6 +220,7 @@ function LocalitiesTab() {
                 <TableRow sx={{ bgcolor: 'primary.main' }}>
                   <TableCell sx={{ color: 'white', fontWeight: 600, width: 160 }}>Sigla</TableCell>
                   <TableCell sx={{ color: 'white', fontWeight: 600 }}>Localidade</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 600, width: 80 }}>UF</TableCell>
                   <TableCell sx={{ color: 'white', fontWeight: 600 }} align="right">
                     Ações
                   </TableCell>
@@ -230,6 +231,7 @@ function LocalitiesTab() {
                   <TableRow key={item.id} hover>
                     <TableCell>{item.code}</TableCell>
                     <TableCell>{item.name}</TableCell>
+                    <TableCell>{item.uf ?? '—'}</TableCell>
                     <TableCell align="right">
                       <Button size="small" onClick={() => openEdit(item)}>
                         Editar
@@ -442,6 +444,7 @@ function CipavdLocalitiesTab() {
                 <TableRow sx={{ bgcolor: 'primary.main' }}>
                   <TableCell sx={{ color: 'white', fontWeight: 600, width: 160 }}>Sigla</TableCell>
                   <TableCell sx={{ color: 'white', fontWeight: 600 }}>Localidade</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 600, width: 80 }}>UF</TableCell>
                   <TableCell sx={{ color: 'white', fontWeight: 600 }} align="right">
                     Ações
                   </TableCell>
@@ -452,6 +455,7 @@ function CipavdLocalitiesTab() {
                   <TableRow key={item.id} hover>
                     <TableCell>{item.code}</TableCell>
                     <TableCell>{item.name}</TableCell>
+                    <TableCell>{item.uf ?? '—'}</TableCell>
                     <TableCell align="right">
                       {canManage ? (
                         <>
