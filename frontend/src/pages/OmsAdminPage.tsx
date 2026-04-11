@@ -48,6 +48,12 @@ type UserItem = {
   roles?: Array<{ role?: { id?: string; name?: string } | null }>;
 };
 
+const UF_OPTIONS = [
+  'AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS',
+  'MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC',
+  'SP','SE','TO',
+];
+
 type OmsForm = {
   code: string;
   name: string;
@@ -403,11 +409,17 @@ export function OmsAdminPage() {
             size="small"
             label="UF (Estado)"
             value={form.uf}
-            onChange={(event) => setForm((prev) => ({ ...prev, uf: event.target.value.toUpperCase().slice(0, 2) }))}
-            placeholder="Ex: SP, RJ, DF"
-            inputProps={{ maxLength: 2 }}
+            onChange={(event) => setForm((prev) => ({ ...prev, uf: event.target.value }))}
+            select
             helperText="Sigla do estado para o Mapa Geográfico"
-          />
+          >
+            <MenuItem value="">
+              <em>Nenhum</em>
+            </MenuItem>
+            {UF_OPTIONS.map((uf) => (
+              <MenuItem key={uf} value={uf}>{uf}</MenuItem>
+            ))}
+          </TextField>
           <TextField
             size="small"
             label="Comando"

@@ -53,6 +53,12 @@ import { ConfirmDialog } from '../components/dialogs/ConfirmDialog';
 import { useSearchParams } from 'react-router-dom';
 import { getTargetLocalityKey, selectTargetLocalities } from '../constants/localities';
 
+const UF_OPTIONS = [
+  'AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS',
+  'MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC',
+  'SP','SE','TO',
+];
+
 type LocalityForm = {
   code: string;
   name: string;
@@ -276,12 +282,18 @@ function LocalitiesTab() {
             size="small"
             label="UF (Estado)"
             value={form.uf}
-            onChange={(e) => setForm({ ...form, uf: e.target.value.toUpperCase().slice(0, 2) })}
-            placeholder="Ex: SP, RJ, DF"
+            onChange={(e) => setForm({ ...form, uf: e.target.value })}
             fullWidth
-            inputProps={{ maxLength: 2 }}
+            select
             helperText="Sigla do estado para o Mapa Geográfico do Painel Estratégico"
-          />
+          >
+            <MenuItem value="">
+              <em>Nenhum</em>
+            </MenuItem>
+            {UF_OPTIONS.map((uf) => (
+              <MenuItem key={uf} value={uf}>{uf}</MenuItem>
+            ))}
+          </TextField>
           <Box display="flex" gap={1} justifyContent="flex-end">
             <Button variant="outlined" color="error" onClick={() => setDrawerOpen(false)}>
               Cancelar
@@ -518,12 +530,18 @@ function CipavdLocalitiesTab() {
             size="small"
             label="UF (Estado)"
             value={form.uf}
-            onChange={(e) => setForm({ ...form, uf: e.target.value.toUpperCase().slice(0, 2) })}
-            placeholder="Ex: SP, RJ, DF"
+            onChange={(e) => setForm({ ...form, uf: e.target.value })}
             fullWidth
-            inputProps={{ maxLength: 2 }}
+            select
             helperText="Sigla do estado para o Mapa Geográfico do Painel Estratégico"
-          />
+          >
+            <MenuItem value="">
+              <em>Nenhum</em>
+            </MenuItem>
+            {UF_OPTIONS.map((uf) => (
+              <MenuItem key={uf} value={uf}>{uf}</MenuItem>
+            ))}
+          </TextField>
           <Box display="flex" gap={1} justifyContent="flex-end">
             <Button variant="outlined" color="error" onClick={() => setDrawerOpen(false)}>
               Cancelar
