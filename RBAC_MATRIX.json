@@ -203,6 +203,11 @@
           "resource": "search",
           "action": "view",
           "scope": "NATIONAL"
+        },
+        {
+          "resource": "bi",
+          "action": "view",
+          "scope": "NATIONAL"
         }
       ]
     },
@@ -834,6 +839,11 @@
         },
         {
           "resource": "localities",
+          "action": "view",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "bi",
           "action": "view",
           "scope": "NATIONAL"
         }

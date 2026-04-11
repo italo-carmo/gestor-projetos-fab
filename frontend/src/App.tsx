@@ -40,7 +40,7 @@ import { LessonsLearnedPage } from "./pages/LessonsLearnedPage";
 import { RequireAuth } from "./app/RequireAuth";
 import { RequireRoleAccess } from "./app/RequireRoleAccess";
 import { can, canAccessAdminCatalog } from "./app/rbac";
-import { hasAnyRole, resolveHomePath, ROLE_COMGEP, ROLE_TI } from "./app/roleAccess";
+import { hasAnyRole, resolveHomePath, ROLE_COMGEP, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from "./app/roleAccess";
 import { useMe } from "./api/hooks";
 
 function HomeRedirect() {
@@ -168,7 +168,9 @@ function App() {
                   path="/dashboard/estrategico"
                   element={
                     <RequireRoleAccess
-                      allow={(user) => can(user, "bi", "view")}
+                      allow={(user) =>
+                        hasAnyRole(user, [ROLE_COMGEP, ROLE_COORDENACAO_CIPAVD, ROLE_TI])
+                      }
                     >
                       <StrategicDashboardPage />
                     </RequireRoleAccess>

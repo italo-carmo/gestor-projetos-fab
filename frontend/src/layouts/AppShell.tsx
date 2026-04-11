@@ -59,6 +59,7 @@ import {
   hasAnyRole,
   normalizeRoleName,
   ROLE_COMGEP,
+  ROLE_COORDENACAO_CIPAVD,
   ROLE_TI,
 } from "../app/roleAccess";
 import {
@@ -109,6 +110,11 @@ const navSections: NavSection[] = [
     id: "command",
     label: "COMANDO",
     items: [
+      {
+        label: "Painel Estratégico",
+        to: "/dashboard/estrategico",
+        icon: <ShieldRoundedIcon fontSize="small" />,
+      },
       {
         label: "SMIF",
         to: "/dashboard/smif",
@@ -233,12 +239,6 @@ const navSections: NavSection[] = [
     id: "pesquisas",
     label: "PESQUISAS",
     items: [
-      {
-        label: "Painel Estratégico",
-        to: "/dashboard/estrategico",
-        icon: <ShieldRoundedIcon fontSize="small" />,
-        menuKey: "bi",
-      },
       {
         label: "Escolas",
         to: "/dashboard/bi",
@@ -437,6 +437,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   };
 
   const canSeeNavItem = (item: NavItem) => {
+    if (item.to === "/dashboard/estrategico") {
+      return hasAnyRole(me, [ROLE_COMGEP, ROLE_COORDENACAO_CIPAVD, ROLE_TI]);
+    }
     if (item.to === "/dashboard/smif") {
       return can(me, "dashboard", "view", "NATIONAL");
     }
