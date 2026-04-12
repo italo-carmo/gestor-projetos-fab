@@ -1199,9 +1199,6 @@ export class BiBestPracticesCycleService {
       return new Date(excelEpochUtc + numeric * 24 * 60 * 60 * 1000);
     }
 
-    const direct = new Date(raw);
-    if (!Number.isNaN(direct.getTime())) return direct;
-
     const match = raw.match(
       /(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/,
     );
@@ -1214,17 +1211,26 @@ export class BiBestPracticesCycleService {
       const minute = Number(match[5] ?? 0);
       const second = Number(match[6] ?? 0);
 
-      let month = p1;
-      let day = p2;
+      let day = p1;
+      let month = p2;
 
-      if (p1 > 12 && p2 <= 12) {
+      if (raw.includes('-') && !raw.includes('/')) {
+        month = p1;
+        day = p2;
+      } else if (p1 > 12 && p2 <= 12) {
         day = p1;
         month = p2;
+      } else if (p2 > 12 && p1 <= 12) {
+        month = p1;
+        day = p2;
       }
 
       const parsed = new Date(year, month - 1, day, hour, minute, second);
       if (!Number.isNaN(parsed.getTime())) return parsed;
     }
+
+    const direct = new Date(raw);
+    if (!Number.isNaN(direct.getTime())) return direct;
 
     return null;
   }
