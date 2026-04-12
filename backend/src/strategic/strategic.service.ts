@@ -273,7 +273,7 @@ export class StrategicService {
       cpcaComments,
     ] = await Promise.all([
       (this.prisma as any).biRecruitsResponse.findMany({
-        select: { suggestionComment: true, enlistmentDecisionInfluenceText: true },
+        select: { suggestionComment: true },
       }).catch(() => []),
       (this.prisma as any).activityReport.findMany({
         select: { mainPointsObserved: true, attentionPoints: true, conclusion: true },
@@ -288,9 +288,6 @@ export class StrategicService {
 
     const suggestionTexts = recruitsResponses
       .map((r: any) => r.suggestionComment)
-      .filter(Boolean);
-    const enlistmentTexts = recruitsResponses
-      .map((r: any) => r.enlistmentDecisionInfluenceText)
       .filter(Boolean);
     const reportObservations = activityReports
       .map((r: any) => r.mainPointsObserved)
@@ -310,7 +307,6 @@ export class StrategicService {
 
     const allTexts = [
       ...suggestionTexts,
-      ...enlistmentTexts,
       ...reportObservations,
       ...reportAttention,
       ...reportConclusions,
@@ -328,7 +324,6 @@ export class StrategicService {
       generatedAt: new Date().toISOString(),
       sources: {
         recruitsSuggestions: buildSource(suggestionTexts),
-        recruitsEnlistment: buildSource(enlistmentTexts),
         reportObservations: buildSource(reportObservations),
         reportAttentionPoints: buildSource(reportAttention),
         reportConclusions: buildSource(reportConclusions),

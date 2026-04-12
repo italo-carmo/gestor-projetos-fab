@@ -83,7 +83,6 @@ const GENDER_LABELS: Record<string, string> = {
 };
 const SOURCE_LABELS: Record<string, string> = {
   recruitsSuggestions: "Sugestões dos Recrutas",
-  recruitsEnlistment: "Motivos de Alistamento",
   reportObservations: "Observações dos Relatórios",
   reportAttentionPoints: "Pontos de Atenção",
   reportConclusions: "Conclusões dos Relatórios",
