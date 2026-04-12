@@ -113,32 +113,52 @@ export class StrategicService {
 
     const [complaints, activities, missions] = await Promise.all([
       (this.prisma as any).cpcComplaintCase.findMany({
-        select: { localityId: true, complaintType: true, status: true },
+        select: {
+          localityId: true, caseNumber: true, complaintType: true,
+          status: true, reportedAt: true, workflowScope: true,
+          locality: { select: { name: true } },
+        },
       }).catch(() => []),
       this.prisma.activity.findMany({
-        select: { localityId: true, scope: true, status: true },
+        select: {
+          localityId: true, title: true, scope: true,
+          status: true, eventDate: true,
+          locality: { select: { name: true } },
+        },
       }),
       (this.prisma as any).mission.findMany({
-        select: { localityId: true, scope: true },
+        select: {
+          localityId: true, title: true, scope: true,
+          startDate: true, endDate: true,
+          locality: { select: { name: true } },
+        },
       }).catch(() => []),
     ]);
 
-    const ufMap = new Map<string, {
+    type StateEntry = {
       uf: string;
       complaints: number;
       activities: number;
       missions: number;
       localities: string[];
-    }>();
+      complaintDetails: { caseNumber: string; type: string; status: string; date: string; locality: string; scope: string }[];
+      activityDetails: { title: string; scope: string; status: string; date: string; locality: string }[];
+      missionDetails: { title: string; scope: string; startDate: string; endDate: string; locality: string }[];
+    };
+
+    const ufMap = new Map<string, StateEntry>();
 
     const locUfMap = new Map<string, string>();
     for (const loc of localities) {
       if (loc.uf) locUfMap.set(loc.id, loc.uf);
     }
 
-    const ensureUf = (uf: string) => {
+    const ensureUf = (uf: string): StateEntry => {
       if (!ufMap.has(uf)) {
-        ufMap.set(uf, { uf, complaints: 0, activities: 0, missions: 0, localities: [] });
+        ufMap.set(uf, {
+          uf, complaints: 0, activities: 0, missions: 0,
+          localities: [], complaintDetails: [], activityDetails: [], missionDetails: [],
+        });
       }
       return ufMap.get(uf)!;
     };
@@ -152,15 +172,46 @@ export class StrategicService {
 
     for (const c of complaints) {
       const uf = locUfMap.get(c.localityId);
-      if (uf) ensureUf(uf).complaints++;
+      if (uf) {
+        const entry = ensureUf(uf);
+        entry.complaints++;
+        entry.complaintDetails.push({
+          caseNumber: c.caseNumber,
+          type: c.complaintType,
+          status: c.status,
+          date: c.reportedAt?.toISOString?.() ?? '',
+          locality: c.locality?.name ?? '',
+          scope: c.workflowScope ?? '',
+        });
+      }
     }
     for (const a of activities) {
       const uf = a.localityId ? locUfMap.get(a.localityId) : null;
-      if (uf) ensureUf(uf).activities++;
+      if (uf) {
+        const entry = ensureUf(uf);
+        entry.activities++;
+        entry.activityDetails.push({
+          title: a.title,
+          scope: a.scope,
+          status: a.status,
+          date: a.eventDate?.toISOString?.() ?? '',
+          locality: (a as any).locality?.name ?? '',
+        });
+      }
     }
     for (const m of missions) {
       const uf = locUfMap.get(m.localityId);
-      if (uf) ensureUf(uf).missions++;
+      if (uf) {
+        const entry = ensureUf(uf);
+        entry.missions++;
+        entry.missionDetails.push({
+          title: m.title,
+          scope: m.scope,
+          startDate: m.startDate?.toISOString?.() ?? '',
+          endDate: m.endDate?.toISOString?.() ?? '',
+          locality: m.locality?.name ?? '',
+        });
+      }
     }
 
     return {

@@ -24,7 +24,11 @@ import {
   Tabs,
   Tooltip,
   Typography,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
 } from "@mui/material";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import DownloadRoundedIcon from "@mui/icons-material/DownloadRounded";
 import DashboardRoundedIcon from "@mui/icons-material/DashboardRounded";
 import FingerprintRoundedIcon from "@mui/icons-material/FingerprintRounded";
@@ -1346,6 +1350,9 @@ function GeoMapTab() {
       activities: s.activities,
       missions: s.missions,
       localities: s.localities ?? [],
+      complaintDetails: s.complaintDetails ?? [],
+      activityDetails: s.activityDetails ?? [],
+      missionDetails: s.missionDetails ?? [],
     };
   }
 
@@ -1502,33 +1509,191 @@ function GeoMapTab() {
         </Card>
       )}
 
-      <KpiDetailModal
+      <Dialog
         open={!!selectedState}
-        title={selectedState ? `${BR_STATES[selectedState.uf]?.name ?? selectedState.uf} (${selectedState.uf})` : ""}
         onClose={() => setSelectedState(null)}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 2 } }}
       >
-        {selectedState?.data ? (
-          <Stack spacing={1}>
-            <DetailRow label="Total de registros" value={selectedState.data.total ?? 0} />
-            <DetailRow label="Denúncias/Casos" value={selectedState.data.complaints ?? 0} color="#D32F2F" />
-            <DetailRow label="Atividades de Campo" value={selectedState.data.activities ?? 0} color="#1A3C6E" />
-            <DetailRow label="Missões" value={selectedState.data.missions ?? 0} color="#2E7D32" />
-            <Divider sx={{ my: 1 }} />
-            <Typography variant="subtitle2">Localidades neste estado:</Typography>
-            {(selectedState.data.localities ?? []).length > 0 ? (
-              <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
-                {selectedState.data.localities.map((loc: string, i: number) => (
-                  <Chip key={i} label={loc} size="small" variant="outlined" />
-                ))}
-              </Box>
-            ) : (
-              <Typography variant="body2" color="text.secondary">Nenhuma localidade encontrada.</Typography>
-            )}
-          </Stack>
-        ) : (
-          <Typography color="text.secondary">Sem dados para este estado.</Typography>
-        )}
-      </KpiDetailModal>
+        <DialogTitle sx={{ bgcolor: "#1A3C6E", color: "#fff", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <Typography variant="h6" fontWeight={700}>
+            {selectedState ? `${BR_STATES[selectedState.uf]?.name ?? selectedState.uf} (${selectedState.uf})` : ""}
+          </Typography>
+          <Button onClick={() => setSelectedState(null)} sx={{ color: "#fff", minWidth: "auto" }}>
+            <CloseRoundedIcon />
+          </Button>
+        </DialogTitle>
+        <DialogContent sx={{ pt: 3, pb: 2 }}>
+          {selectedState?.data ? (
+            <Stack spacing={1.5} sx={{ mt: 1 }}>
+              <Grid container spacing={2}>
+                <Grid size={{ xs: 6, sm: 3 }}>
+                  <Card variant="outlined" sx={{ textAlign: "center", p: 1 }}>
+                    <Typography variant="h5" fontWeight={700}>{selectedState.data.total ?? 0}</Typography>
+                    <Typography variant="caption" color="text.secondary">Total</Typography>
+                  </Card>
+                </Grid>
+                <Grid size={{ xs: 6, sm: 3 }}>
+                  <Card variant="outlined" sx={{ textAlign: "center", p: 1, borderColor: "#D32F2F" }}>
+                    <Typography variant="h5" fontWeight={700} color="#D32F2F">{selectedState.data.complaints ?? 0}</Typography>
+                    <Typography variant="caption" color="text.secondary">Denúncias</Typography>
+                  </Card>
+                </Grid>
+                <Grid size={{ xs: 6, sm: 3 }}>
+                  <Card variant="outlined" sx={{ textAlign: "center", p: 1, borderColor: "#1A3C6E" }}>
+                    <Typography variant="h5" fontWeight={700} color="#1A3C6E">{selectedState.data.activities ?? 0}</Typography>
+                    <Typography variant="caption" color="text.secondary">Atividades</Typography>
+                  </Card>
+                </Grid>
+                <Grid size={{ xs: 6, sm: 3 }}>
+                  <Card variant="outlined" sx={{ textAlign: "center", p: 1, borderColor: "#2E7D32" }}>
+                    <Typography variant="h5" fontWeight={700} color="#2E7D32">{selectedState.data.missions ?? 0}</Typography>
+                    <Typography variant="caption" color="text.secondary">Missões</Typography>
+                  </Card>
+                </Grid>
+              </Grid>
+
+              {(selectedState.data.complaintDetails ?? []).length > 0 && (
+                <Accordion defaultExpanded={selectedState.data.complaints <= 10}>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ bgcolor: "#FFF5F5" }}>
+                    <Typography fontWeight={600} color="#D32F2F">
+                      Denúncias / Casos ({selectedState.data.complaints})
+                    </Typography>
+                  </AccordionSummary>
+                  <AccordionDetails sx={{ p: 0 }}>
+                    <TableContainer>
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow>
+                            <TableCell><strong>Caso</strong></TableCell>
+                            <TableCell><strong>Tipo</strong></TableCell>
+                            <TableCell><strong>Status</strong></TableCell>
+                            <TableCell><strong>Escopo</strong></TableCell>
+                            <TableCell><strong>Data</strong></TableCell>
+                            <TableCell><strong>Localidade</strong></TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {selectedState.data.complaintDetails.map((c: any, i: number) => (
+                            <TableRow key={i} hover>
+                              <TableCell>{c.caseNumber}</TableCell>
+                              <TableCell>
+                                <Chip label={c.type} size="small" sx={{ bgcolor: c.type === "SEXUAL" ? "#FFCDD2" : "#FFF9C4", fontSize: 11 }} />
+                              </TableCell>
+                              <TableCell>{c.status}</TableCell>
+                              <TableCell>{c.scope}</TableCell>
+                              <TableCell>{c.date ? new Date(c.date).toLocaleDateString("pt-BR") : "—"}</TableCell>
+                              <TableCell>{c.locality || "—"}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </AccordionDetails>
+                </Accordion>
+              )}
+
+              {(selectedState.data.activityDetails ?? []).length > 0 && (
+                <Accordion defaultExpanded={selectedState.data.activities <= 10}>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ bgcolor: "#EEF2F8" }}>
+                    <Typography fontWeight={600} color="#1A3C6E">
+                      Atividades de Campo ({selectedState.data.activities})
+                    </Typography>
+                  </AccordionSummary>
+                  <AccordionDetails sx={{ p: 0 }}>
+                    <TableContainer>
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow>
+                            <TableCell><strong>Título</strong></TableCell>
+                            <TableCell><strong>Escopo</strong></TableCell>
+                            <TableCell><strong>Status</strong></TableCell>
+                            <TableCell><strong>Data</strong></TableCell>
+                            <TableCell><strong>Localidade</strong></TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {selectedState.data.activityDetails.map((a: any, i: number) => (
+                            <TableRow key={i} hover>
+                              <TableCell>{a.title}</TableCell>
+                              <TableCell>
+                                <Chip label={a.scope} size="small" sx={{ bgcolor: a.scope === "SMIF" ? "#E3F2FD" : "#F3E5F5", fontSize: 11 }} />
+                              </TableCell>
+                              <TableCell>{a.status}</TableCell>
+                              <TableCell>{a.date ? new Date(a.date).toLocaleDateString("pt-BR") : "—"}</TableCell>
+                              <TableCell>{a.locality || "—"}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </AccordionDetails>
+                </Accordion>
+              )}
+
+              {(selectedState.data.missionDetails ?? []).length > 0 && (
+                <Accordion defaultExpanded={selectedState.data.missions <= 10}>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ bgcolor: "#E8F5E9" }}>
+                    <Typography fontWeight={600} color="#2E7D32">
+                      Missões ({selectedState.data.missions})
+                    </Typography>
+                  </AccordionSummary>
+                  <AccordionDetails sx={{ p: 0 }}>
+                    <TableContainer>
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow>
+                            <TableCell><strong>Título</strong></TableCell>
+                            <TableCell><strong>Escopo</strong></TableCell>
+                            <TableCell><strong>Início</strong></TableCell>
+                            <TableCell><strong>Fim</strong></TableCell>
+                            <TableCell><strong>Localidade</strong></TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {selectedState.data.missionDetails.map((m: any, i: number) => (
+                            <TableRow key={i} hover>
+                              <TableCell>{m.title}</TableCell>
+                              <TableCell>
+                                <Chip label={m.scope} size="small" sx={{ bgcolor: m.scope === "SMIF" ? "#E3F2FD" : "#F3E5F5", fontSize: 11 }} />
+                              </TableCell>
+                              <TableCell>{m.startDate ? new Date(m.startDate).toLocaleDateString("pt-BR") : "—"}</TableCell>
+                              <TableCell>{m.endDate ? new Date(m.endDate).toLocaleDateString("pt-BR") : "—"}</TableCell>
+                              <TableCell>{m.locality || "—"}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </AccordionDetails>
+                </Accordion>
+              )}
+
+              <Accordion>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ bgcolor: "#F5F5F5" }}>
+                  <Typography fontWeight={600} color="text.secondary">
+                    Localidades neste estado ({(selectedState.data.localities ?? []).length})
+                  </Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  {(selectedState.data.localities ?? []).length > 0 ? (
+                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                      {selectedState.data.localities.map((loc: string, i: number) => (
+                        <Chip key={i} label={loc} size="small" variant="outlined" />
+                      ))}
+                    </Box>
+                  ) : (
+                    <Typography variant="body2" color="text.secondary">Nenhuma localidade encontrada.</Typography>
+                  )}
+                </AccordionDetails>
+              </Accordion>
+            </Stack>
+          ) : (
+            <Typography color="text.secondary">Sem dados para este estado.</Typography>
+          )}
+        </DialogContent>
+      </Dialog>
     </Box>
   );
 }
