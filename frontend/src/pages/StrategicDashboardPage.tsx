@@ -1193,34 +1193,61 @@ function TextAnalysisTab() {
   );
 }
 
-const BR_STATES: Record<string, { name: string; path: string }> = {
-  AC: { name: "Acre", path: "M62,280 L75,278 L78,290 L68,295 L58,292Z" },
-  AL: { name: "Alagoas", path: "M500,260 L512,255 L518,262 L510,268 L498,265Z" },
-  AP: { name: "Amapá", path: "M290,80 L310,65 L325,75 L318,95 L295,98Z" },
-  AM: { name: "Amazonas", path: "M80,140 L200,120 L220,160 L200,210 L120,220 L75,200 L68,170Z" },
-  BA: { name: "Bahia", path: "M420,230 L490,220 L510,250 L495,300 L440,320 L400,290 L410,250Z" },
-  CE: { name: "Ceará", path: "M470,170 L505,165 L515,190 L500,210 L470,205Z" },
-  DF: { name: "Distrito Federal", path: "M365,300 L378,298 L380,308 L368,310Z" },
-  ES: { name: "Espírito Santo", path: "M460,330 L478,325 L482,345 L465,350Z" },
-  GO: { name: "Goiás", path: "M330,280 L390,270 L400,310 L370,340 L330,330 L320,300Z" },
-  MA: { name: "Maranhão", path: "M370,140 L420,130 L440,170 L420,210 L380,200 L360,170Z" },
-  MT: { name: "Mato Grosso", path: "M220,230 L320,220 L340,280 L310,330 L230,320 L210,270Z" },
-  MS: { name: "Mato Grosso do Sul", path: "M260,340 L330,330 L340,380 L310,410 L260,400 L250,370Z" },
-  MG: { name: "Minas Gerais", path: "M370,290 L450,280 L470,330 L440,370 L380,360 L360,330Z" },
-  PA: { name: "Pará", path: "M200,100 L340,90 L370,140 L350,180 L280,190 L220,170 L190,140Z" },
-  PB: { name: "Paraíba", path: "M485,200 L520,195 L525,208 L490,212Z" },
-  PR: { name: "Paraná", path: "M310,400 L380,390 L395,420 L350,440 L305,430Z" },
-  PE: { name: "Pernambuco", path: "M460,210 L520,205 L525,225 L470,230Z" },
-  PI: { name: "Piauí", path: "M420,170 L460,165 L470,210 L440,230 L415,215Z" },
-  RJ: { name: "Rio de Janeiro", path: "M420,370 L460,360 L470,375 L445,385 L420,380Z" },
-  RN: { name: "Rio Grande do Norte", path: "M490,180 L525,175 L530,192 L495,196Z" },
-  RS: { name: "Rio Grande do Sul", path: "M290,450 L350,440 L365,480 L330,510 L280,500 L275,470Z" },
-  RO: { name: "Rondônia", path: "M140,230 L200,220 L210,260 L180,280 L140,270Z" },
-  RR: { name: "Roraima", path: "M140,50 L190,40 L200,80 L180,110 L140,100Z" },
-  SC: { name: "Santa Catarina", path: "M320,440 L375,430 L385,455 L340,465 L315,460Z" },
-  SP: { name: "São Paulo", path: "M340,360 L420,350 L430,385 L390,410 L335,400Z" },
-  SE: { name: "Sergipe", path: "M498,245 L515,240 L518,255 L502,258Z" },
-  TO: { name: "Tocantins", path: "M340,180 L400,170 L410,230 L380,260 L340,250 L330,220Z" },
+const BR_STATES: Record<string, { name: string; path: string; labelX: number; labelY: number }> = {
+  AC: { name: "Acre", labelX: 80, labelY: 288,
+    path: "M50,270 L58,265 L72,262 L88,264 L95,272 L98,282 L92,294 L82,300 L68,302 L54,298 L48,290 L46,280Z" },
+  AL: { name: "Alagoas", labelX: 510, labelY: 262,
+    path: "M496,252 L504,248 L514,250 L520,256 L522,264 L518,270 L510,272 L500,270 L494,264 L494,258Z" },
+  AP: { name: "Amapá", labelX: 310, labelY: 78,
+    path: "M292,92 L296,82 L304,68 L314,58 L326,62 L332,72 L330,86 L324,98 L312,104 L300,102 L292,96Z" },
+  AM: { name: "Amazonas", labelX: 155, labelY: 170,
+    path: "M58,168 L62,148 L72,132 L92,118 L118,110 L152,106 L188,108 L218,116 L240,130 L248,148 L244,168 L236,188 L222,204 L202,216 L176,224 L148,226 L120,222 L96,214 L76,202 L64,188Z" },
+  BA: { name: "Bahia", labelX: 462, labelY: 272,
+    path: "M400,218 L418,212 L440,210 L462,214 L482,222 L498,234 L510,248 L516,264 L514,282 L506,300 L494,314 L478,324 L460,330 L440,332 L420,328 L404,318 L394,304 L390,288 L392,268 L396,248 L398,232Z" },
+  CE: { name: "Ceará", labelX: 492, labelY: 186,
+    path: "M468,174 L476,166 L488,160 L502,158 L514,162 L522,172 L524,184 L520,196 L512,206 L500,212 L486,214 L474,210 L466,200 L464,188Z" },
+  DF: { name: "Distrito Federal", labelX: 372, labelY: 302,
+    path: "M364,296 L372,292 L382,294 L386,302 L384,310 L376,314 L366,312 L362,304Z" },
+  ES: { name: "Espírito Santo", labelX: 472, labelY: 338,
+    path: "M458,322 L468,318 L478,322 L484,332 L486,344 L482,354 L474,360 L464,358 L456,348 L454,336Z" },
+  GO: { name: "Goiás", labelX: 362, labelY: 306,
+    path: "M318,270 L334,264 L354,260 L376,262 L394,268 L404,280 L408,296 L404,314 L396,330 L382,342 L366,348 L348,346 L332,338 L320,326 L312,310 L310,294 L314,280Z" },
+  MA: { name: "Maranhão", labelX: 398, labelY: 170,
+    path: "M352,142 L368,132 L388,126 L408,124 L428,128 L442,138 L450,152 L452,170 L446,188 L436,204 L420,214 L402,218 L384,216 L368,208 L356,196 L348,180 L348,162Z" },
+  MT: { name: "Mato Grosso", labelX: 280, labelY: 278,
+    path: "M202,228 L228,220 L260,214 L292,212 L320,216 L342,226 L352,242 L354,262 L348,282 L336,300 L318,314 L296,322 L272,326 L248,322 L228,312 L212,298 L202,280 L198,258 L200,240Z" },
+  MS: { name: "Mato Grosso do Sul", labelX: 298, labelY: 372,
+    path: "M248,338 L268,332 L290,328 L312,330 L330,338 L342,352 L346,370 L342,388 L332,402 L318,412 L300,418 L280,416 L262,408 L248,396 L240,380 L238,362 L242,348Z" },
+  MG: { name: "Minas Gerais", labelX: 420, labelY: 326,
+    path: "M362,282 L382,274 L406,270 L430,272 L452,280 L468,294 L478,312 L480,332 L474,352 L462,368 L446,378 L426,382 L406,380 L388,372 L372,360 L362,344 L356,326 L356,306 L358,292Z" },
+  PA: { name: "Pará", labelX: 276, labelY: 142,
+    path: "M192,108 L218,98 L250,88 L282,82 L314,80 L342,84 L362,94 L374,110 L378,130 L374,150 L364,168 L348,182 L328,190 L304,194 L278,194 L252,190 L230,182 L212,170 L198,154 L190,136 L190,120Z" },
+  PB: { name: "Paraíba", labelX: 508, labelY: 204,
+    path: "M482,196 L494,192 L508,190 L522,192 L530,200 L530,210 L524,218 L512,220 L498,218 L486,214 L480,206Z" },
+  PR: { name: "Paraná", labelX: 348, labelY: 414,
+    path: "M300,396 L318,390 L340,386 L364,388 L384,394 L398,406 L404,420 L400,434 L390,444 L374,450 L356,452 L336,448 L318,440 L304,430 L296,418 L296,406Z" },
+  PE: { name: "Pernambuco", labelX: 492, labelY: 222,
+    path: "M450,210 L468,204 L488,200 L508,202 L524,210 L532,222 L530,234 L522,242 L508,246 L490,248 L472,244 L458,236 L450,224Z" },
+  PI: { name: "Piauí", labelX: 442, labelY: 196,
+    path: "M414,168 L430,162 L448,160 L464,164 L474,176 L478,192 L474,208 L466,222 L452,232 L436,236 L420,232 L408,222 L402,208 L400,192 L404,178Z" },
+  RJ: { name: "Rio de Janeiro", labelX: 444, labelY: 380,
+    path: "M416,364 L430,358 L446,356 L462,360 L472,370 L476,382 L470,392 L458,398 L442,400 L428,396 L418,388 L414,378Z" },
+  RN: { name: "Rio Grande do Norte", labelX: 512, labelY: 184,
+    path: "M488,176 L500,170 L514,168 L528,170 L536,178 L538,190 L532,200 L520,204 L506,204 L494,200 L486,192 L486,184Z" },
+  RS: { name: "Rio Grande do Sul", labelX: 322, labelY: 478,
+    path: "M272,452 L292,444 L316,440 L340,442 L360,450 L374,462 L380,478 L378,496 L368,510 L352,520 L332,526 L310,524 L290,516 L274,504 L264,490 L260,474 L264,460Z" },
+  RO: { name: "Rondônia", labelX: 176, labelY: 256,
+    path: "M132,230 L150,224 L172,220 L194,224 L210,234 L218,250 L216,268 L206,282 L192,290 L174,294 L156,290 L140,282 L132,268 L128,252 L130,240Z" },
+  RR: { name: "Roraima", labelX: 168, labelY: 78,
+    path: "M132,64 L148,52 L168,44 L190,46 L206,56 L212,72 L210,90 L202,106 L188,116 L170,120 L152,116 L138,106 L130,92 L128,76Z" },
+  SC: { name: "Santa Catarina", labelX: 352, labelY: 450,
+    path: "M312,438 L330,432 L352,430 L374,434 L390,444 L396,458 L390,470 L378,478 L362,480 L344,478 L328,472 L316,462 L310,452 L310,444Z" },
+  SP: { name: "São Paulo", labelX: 382, labelY: 382,
+    path: "M328,354 L350,346 L376,342 L400,346 L420,356 L432,370 L436,388 L430,404 L418,416 L400,422 L380,424 L360,420 L342,410 L328,398 L322,382 L322,366Z" },
+  SE: { name: "Sergipe", labelX: 508, labelY: 250,
+    path: "M496,240 L506,236 L516,238 L522,246 L522,256 L516,262 L506,264 L498,260 L494,252 L494,244Z" },
+  TO: { name: "Tocantins", labelX: 370, labelY: 222,
+    path: "M332,178 L350,170 L372,166 L394,170 L410,180 L418,196 L420,214 L414,232 L402,248 L386,258 L368,262 L350,258 L336,248 L326,234 L322,216 L324,198 L328,188Z" },
 };
 
 function BrazilMap({
@@ -1251,8 +1278,13 @@ function BrazilMap({
   };
 
   return (
-    <Box sx={{ position: "relative" }}>
-      <svg viewBox="30 20 530 520" style={{ width: "100%", maxHeight: 500 }}>
+    <Box sx={{ position: "relative", display: "flex", justifyContent: "center" }}>
+      <svg viewBox="20 30 560 520" style={{ width: "100%", maxHeight: 560 }}>
+        <defs>
+          <filter id="shadow" x="-2%" y="-2%" width="104%" height="104%">
+            <feDropShadow dx="1" dy="1" stdDeviation="2" floodOpacity="0.15" />
+          </filter>
+        </defs>
         {Object.entries(BR_STATES).map(([uf, { path }]) => (
           <Tooltip
             key={uf}
@@ -1267,38 +1299,33 @@ function BrazilMap({
               d={path}
               fill={hoveredState === uf ? "#F9A825" : getColor(uf)}
               stroke="#fff"
-              strokeWidth={1.5}
+              strokeWidth={1.2}
+              strokeLinejoin="round"
               cursor="pointer"
+              filter="url(#shadow)"
+              style={{ transition: "fill 0.2s ease" }}
               onMouseEnter={() => setHoveredState(uf)}
               onMouseLeave={() => setHoveredState(null)}
               onClick={() => onStateClick?.(uf, stateData[uf])}
             />
           </Tooltip>
         ))}
-        {Object.entries(BR_STATES).map(([uf, { path }]) => {
-          const coords = path.match(/M(\d+),(\d+)/);
-          if (!coords) return null;
-          const allNums = path.match(/\d+/g)?.map(Number) ?? [];
-          const xs = allNums.filter((_, i) => i % 2 === 0);
-          const ys = allNums.filter((_, i) => i % 2 === 1);
-          const cx = xs.reduce((a, b) => a + b, 0) / xs.length;
-          const cy = ys.reduce((a, b) => a + b, 0) / ys.length;
-          return (
-            <text
-              key={`label-${uf}`}
-              x={cx}
-              y={cy}
-              textAnchor="middle"
-              dominantBaseline="central"
-              fontSize={8}
-              fontWeight={600}
-              fill={stateData[uf]?.total ? "#fff" : "#999"}
-              pointerEvents="none"
-            >
-              {uf}
-            </text>
-          );
-        })}
+        {Object.entries(BR_STATES).map(([uf, { labelX, labelY }]) => (
+          <text
+            key={`label-${uf}`}
+            x={labelX}
+            y={labelY}
+            textAnchor="middle"
+            dominantBaseline="central"
+            fontSize={9}
+            fontWeight={700}
+            fill={stateData[uf]?.total ? "#fff" : "#999"}
+            pointerEvents="none"
+            style={{ textShadow: stateData[uf]?.total ? "0 1px 2px rgba(0,0,0,0.4)" : "none" }}
+          >
+            {uf}
+          </text>
+        ))}
       </svg>
     </Box>
   );
