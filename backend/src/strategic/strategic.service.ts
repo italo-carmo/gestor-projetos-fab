@@ -286,9 +286,15 @@ export class StrategicService {
       }).catch(() => []),
     ]);
 
-    const suggestionTexts = recruitsResponses
-      .map((r: any) => r.suggestionComment)
-      .filter(Boolean);
+    const filterFreeText = (texts: string[]) => {
+      const freq = new Map<string, number>();
+      for (const t of texts) freq.set(t, (freq.get(t) ?? 0) + 1);
+      return texts.filter((t) => freq.get(t)! <= 3 && t.trim().length > 5);
+    };
+
+    const suggestionTexts = filterFreeText(
+      recruitsResponses.map((r: any) => r.suggestionComment).filter(Boolean),
+    );
     const reportObservations = activityReports
       .map((r: any) => r.mainPointsObserved)
       .filter(Boolean);
