@@ -454,7 +454,6 @@ export class StrategicService {
         doc.fontSize(10).fillColor(gray).text('Detalhamento por fonte:');
         const sourceLabels: Record<string, string> = {
           recruitsSuggestions: 'Sugestões dos recrutas',
-          recruitsEnlistment: 'Motivos de alistamento',
           reportObservations: 'Observações dos relatórios',
           reportAttentionPoints: 'Pontos de atenção',
           reportConclusions: 'Conclusões dos relatórios',
