@@ -1,7 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { LocalityCatalogType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { selectTargetLocalities } from '../common/priority-localities';
 import PDFDocument from 'pdfkit';
 
 const PT_STOPWORDS = new Set([
@@ -625,17 +623,9 @@ export class StrategicService {
 
   private async getActivitiesKpis() {
     try {
-      const smifLocalities = await this.prisma.locality.findMany({
-        where: { catalogType: LocalityCatalogType.SMIF },
-        select: { id: true, name: true, recruitsFemaleCountCurrent: true, updatedAt: true } as any,
-      } as any);
-      const smifTargetIds = selectTargetLocalities(smifLocalities).map((l: any) => l.id);
-
       const total = await this.prisma.activity.count();
       const done = await this.prisma.activity.count({ where: { status: 'DONE' } });
-      const smif = await this.prisma.activity.count({
-        where: { scope: 'SMIF', localityId: { in: smifTargetIds } },
-      });
+      const smif = await this.prisma.activity.count({ where: { scope: 'SMIF' } });
       const cipavd = await this.prisma.activity.count({ where: { scope: 'CIPAVD' } });
       const withReport = await (this.prisma as any).activityReport.count();
       const signed = await (this.prisma as any).activityReport.count({ where: { signedAt: { not: null } } });
