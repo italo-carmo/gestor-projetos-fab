@@ -4374,7 +4374,10 @@ export type StrategicAiNarrativeResponse = {
 export function useStrategicAiNarrative() {
   return useMutation({
     mutationFn: async () =>
-      (await api.post<StrategicAiNarrativeResponse>("/strategic/ai-narrative"))
-        .data,
+      (
+        await api.get<StrategicAiNarrativeResponse>("/strategic/ai-narrative", {
+          params: { t: Date.now() },
+        })
+      ).data,
   });
 }

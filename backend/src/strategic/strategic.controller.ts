@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Res, UseGuards } from '@nestjs/common';
+import { Controller, Get, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RbacGuard } from '../rbac/rbac.guard';
@@ -34,7 +34,8 @@ export class StrategicController {
     return this.service.geoMap();
   }
 
-  @Post('ai-narrative')
+  /** GET (como demais rotas /strategic/*) evita 404 em proxies que só encaminham GET para a API. */
+  @Get('ai-narrative')
   @RequirePermission('bi', 'view')
   aiNarrative() {
     return this.service.strategicAiNarrative();
