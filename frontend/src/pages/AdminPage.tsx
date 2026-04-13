@@ -1,9 +1,13 @@
 import {
+  Alert,
   Box,
   Button,
   Card,
   CardContent,
+  Chip,
   Drawer,
+  IconButton,
+  InputAdornment,
   MenuItem,
   Stack,
   Tab,
@@ -16,8 +20,10 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import { useEffect, useState } from 'react';
-import { useMe, usePhases, useUpdatePhase } from '../api/hooks';
+import { useMe, usePhases, useUpdatePhase, useAiSettings, useUpdateAiSettings, useTestAiConnection } from '../api/hooks';
 import {
   useCreatePosto,
   useCreateMissionChecklistDimension,
@@ -44,6 +50,7 @@ import {
   useUpdateEloRole,
 } from '../api/hooks';
 import { can } from '../app/rbac';
+import { hasAnyRole, ROLE_TI } from '../app/roleAccess';
 import { useToast } from '../app/toast';
 import { parseApiError } from '../app/apiErrors';
 import { SkeletonState } from '../components/states/SkeletonState';
@@ -1498,12 +1505,174 @@ function InstitutionalMappingTab() {
   );
 }
 
+function AiSettingsTab() {
+  const { data: me } = useMe();
+  const settingsQuery = useAiSettings();
+  const updateSettings = useUpdateAiSettings();
+  const testConnection = useTestAiConnection();
+  const toast = useToast();
+
+  const [form, setForm] = useState({
+    baseUrl: '',
+    apiKey: '',
+    model: '',
+    systemPrompt: '',
+  });
+  const [showKey, setShowKey] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    if (settingsQuery.data && !loaded) {
+      setForm({
+        baseUrl: settingsQuery.data.baseUrl ?? '',
+        apiKey: '',
+        model: settingsQuery.data.model ?? '',
+        systemPrompt: settingsQuery.data.systemPrompt ?? '',
+      });
+      setLoaded(true);
+    }
+  }, [settingsQuery.data, loaded]);
+
+  const handleSave = async () => {
+    const patch: Record<string, string> = {};
+    if (form.systemPrompt !== (settingsQuery.data?.systemPrompt ?? ''))
+      patch.systemPrompt = form.systemPrompt;
+    if (form.baseUrl !== (settingsQuery.data?.baseUrl ?? ''))
+      patch.baseUrl = form.baseUrl;
+    if (form.apiKey) patch.apiKey = form.apiKey;
+    if (form.model !== (settingsQuery.data?.model ?? ''))
+      patch.model = form.model;
+
+    if (Object.keys(patch).length === 0) {
+      toast.push({ message: 'Nenhuma alteração detectada.', severity: 'info' });
+      return;
+    }
+
+    try {
+      await updateSettings.mutateAsync(patch);
+      toast.push({ message: 'Configurações de IA salvas.', severity: 'success' });
+      setLoaded(false);
+    } catch (error) {
+      toast.push({ message: parseApiError(error).message ?? 'Erro ao salvar.', severity: 'error' });
+    }
+  };
+
+  const handleTest = async () => {
+    try {
+      const result = await testConnection.mutateAsync();
+      if (result.ok) {
+        toast.push({
+          message: `Conexão OK! ${result.models.length} modelo(s): ${result.models.slice(0, 5).join(', ')}`,
+          severity: 'success',
+        });
+      } else {
+        toast.push({
+          message: `Falha na conexão: ${result.error ?? 'Erro desconhecido'}`,
+          severity: 'error',
+        });
+      }
+    } catch (error) {
+      toast.push({ message: parseApiError(error).message ?? 'Erro ao testar.', severity: 'error' });
+    }
+  };
+
+  if (settingsQuery.isLoading) return <SkeletonState />;
+  if (settingsQuery.isError) return <ErrorState error={settingsQuery.error} onRetry={() => settingsQuery.refetch()} />;
+
+  return (
+    <Box>
+      <Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>
+        Configuração de IA (LiteLLM)
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+        Configure a conexão com o LiteLLM e personalize o prompt do sistema.
+        Alterações aqui sobrescrevem os valores do .env do servidor.
+      </Typography>
+
+      <Stack spacing={2.5} sx={{ maxWidth: 680 }}>
+        <TextField
+          size="small"
+          label="URL do LiteLLM"
+          value={form.baseUrl}
+          onChange={(e) => setForm({ ...form, baseUrl: e.target.value })}
+          placeholder="http://172.16.31.84:4000"
+          fullWidth
+          helperText="Endereço base do proxy LiteLLM (sem /v1)"
+        />
+
+        <TextField
+          size="small"
+          label="Chave API"
+          type={showKey ? 'text' : 'password'}
+          value={form.apiKey}
+          onChange={(e) => setForm({ ...form, apiKey: e.target.value })}
+          placeholder={settingsQuery.data?.apiKeyMasked || 'sk-...'}
+          fullWidth
+          helperText="Deixe vazio para manter a chave atual"
+          slotProps={{
+            input: {
+              endAdornment: (
+                <InputAdornment position="end">
+                  <IconButton onClick={() => setShowKey(!showKey)} size="small" edge="end">
+                    {showKey ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
+                  </IconButton>
+                </InputAdornment>
+              ),
+            },
+          }}
+        />
+
+        <TextField
+          size="small"
+          label="Modelo padrão"
+          value={form.model}
+          onChange={(e) => setForm({ ...form, model: e.target.value })}
+          placeholder="gpt-oss:20b"
+          fullWidth
+          helperText="ID do modelo conforme listado em GET /v1/models do LiteLLM"
+        />
+
+        <TextField
+          size="small"
+          label="System Prompt"
+          value={form.systemPrompt}
+          onChange={(e) => setForm({ ...form, systemPrompt: e.target.value })}
+          multiline
+          minRows={8}
+          maxRows={20}
+          fullWidth
+          helperText="Prompt enviado como 'system' em todas as requisições de IA. Aceita texto livre."
+        />
+
+        <Stack direction="row" spacing={1.5}>
+          <Button
+            variant="contained"
+            onClick={handleSave}
+            disabled={updateSettings.isPending}
+            sx={{ bgcolor: '#1A3C6E', '&:hover': { bgcolor: '#122B4E' } }}
+          >
+            {updateSettings.isPending ? 'Salvando...' : 'Salvar Configurações'}
+          </Button>
+          <Button
+            variant="outlined"
+            onClick={handleTest}
+            disabled={testConnection.isPending}
+          >
+            {testConnection.isPending ? 'Testando...' : 'Testar Conexão'}
+          </Button>
+        </Stack>
+      </Stack>
+    </Box>
+  );
+}
+
 export function AdminPage() {
   const { data: me } = useMe();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab') || 'postos';
   const [currentTab, setCurrentTab] = useState(tabParam);
   const canViewCipavdLocalities = can(me, 'localities_cipavd', 'view');
+  const canViewAiSettings = hasAnyRole(me, [ROLE_TI]);
 
   useEffect(() => {
     setCurrentTab(tabParam);
@@ -1548,6 +1717,7 @@ export function AdminPage() {
             <Tab label="Fases" value="phases" />
             <Tab label="Papéis de Elo" value="elo-roles" />
             <Tab label="Mapeamento Institucional" value="institutional-mapping" />
+            {canViewAiSettings && <Tab label="Configuração IA" value="ai-settings" />}
           </Tabs>
 
           {currentTab === 'localities' && <LocalitiesTab />}
@@ -1558,6 +1728,7 @@ export function AdminPage() {
           {currentTab === 'phases' && <PhasesTab />}
           {currentTab === 'elo-roles' && <EloRolesTab />}
           {currentTab === 'institutional-mapping' && <InstitutionalMappingTab />}
+          {canViewAiSettings && currentTab === 'ai-settings' && <AiSettingsTab />}
         </CardContent>
       </Card>
     </Box>

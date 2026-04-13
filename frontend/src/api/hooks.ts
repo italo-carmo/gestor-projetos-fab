@@ -4381,3 +4381,36 @@ export function useStrategicAiNarrative() {
       ).data,
   });
 }
+
+export function useAiSettings() {
+  return useQuery({
+    queryKey: qk.aiSettings,
+    queryFn: async () => (await api.get("/admin/ai-settings")).data,
+  });
+}
+
+export function useUpdateAiSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      systemPrompt?: string;
+      baseUrl?: string;
+      apiKey?: string;
+      model?: string;
+    }) => (await api.put("/admin/ai-settings", payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.aiSettings });
+    },
+  });
+}
+
+export function useTestAiConnection() {
+  return useMutation({
+    mutationFn: async () =>
+      (await api.get("/admin/ai-settings/test")).data as {
+        ok: boolean;
+        models: string[];
+        error?: string;
+      },
+  });
+}

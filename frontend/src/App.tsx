@@ -29,6 +29,7 @@ import { BiBestPracticesCycleDashboardPage } from "./pages/BiBestPracticesCycleD
 import { BiCpcaMeetingDashboardPage } from "./pages/BiCpcaMeetingDashboardPage";
 import { BiGsdEvaluationDashboardPage } from "./pages/BiGsdEvaluationDashboardPage";
 import { StrategicDashboardPage } from "./pages/StrategicDashboardPage";
+import { AiPage } from "./pages/AiPage";
 import { MissionsPage } from "./pages/MissionsPage";
 import { SocialCommunicationPage } from "./pages/SocialCommunicationPage";
 import { CpcaCasesPage } from "./pages/CpcaCasesPage";
@@ -173,6 +174,16 @@ function App() {
                       }
                     >
                       <StrategicDashboardPage />
+                    </RequireRoleAccess>
+                  }
+                />
+                <Route
+                  path="/ai"
+                  element={
+                    <RequireRoleAccess
+                      allow={(user) => can(user, "bi", "view")}
+                    >
+                      <AiPage />
                     </RequireRoleAccess>
                   }
                 />

@@ -51,6 +51,7 @@ import ShieldRoundedIcon from "@mui/icons-material/ShieldRounded";
 import PolicyRoundedIcon from "@mui/icons-material/PolicyRounded";
 import PhotoLibraryRoundedIcon from "@mui/icons-material/PhotoLibraryRounded";
 import LightbulbRoundedIcon from "@mui/icons-material/LightbulbRounded";
+import AutoAwesomeRoundedIcon from "@mui/icons-material/AutoAwesomeRounded";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { useDebounce } from "../app/useDebounce";
 import { can, canAccessAdminCatalog } from "../app/rbac";
@@ -114,6 +115,11 @@ const navSections: NavSection[] = [
         label: "Painel Estratégico",
         to: "/dashboard/estrategico",
         icon: <ShieldRoundedIcon fontSize="small" />,
+      },
+      {
+        label: "Inteligência Artificial",
+        to: "/ai",
+        icon: <AutoAwesomeRoundedIcon fontSize="small" />,
       },
       {
         label: "SMIF",
@@ -439,6 +445,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   const canSeeNavItem = (item: NavItem) => {
     if (item.to === "/dashboard/estrategico") {
       return hasAnyRole(me, [ROLE_COMGEP, ROLE_COORDENACAO_CIPAVD, ROLE_TI]);
+    }
+    if (item.to === "/ai") {
+      return can(me, "bi", "view");
     }
     if (item.to === "/dashboard/smif") {
       return can(me, "dashboard", "view", "NATIONAL");

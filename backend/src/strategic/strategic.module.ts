@@ -7,5 +7,6 @@ import { StrategicService } from './strategic.service';
   imports: [RbacModule],
   controllers: [StrategicController],
   providers: [StrategicService],
+  exports: [StrategicService],
 })
 export class StrategicModule {}

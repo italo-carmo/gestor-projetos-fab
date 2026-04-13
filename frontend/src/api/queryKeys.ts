@@ -137,4 +137,5 @@ export const qk = {
   smifComplaints: (filters: Record<string, any>) =>
     ["smifComplaints", filters] as const,
   smifComplaintCase: (id: string) => ["smifComplaintCase", id] as const,
+  aiSettings: ["admin", "aiSettings"] as const,
 };

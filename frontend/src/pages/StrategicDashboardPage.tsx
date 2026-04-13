@@ -5,7 +5,6 @@ import {
   CardContent,
   Chip,
   Dialog,
-  DialogActions,
   DialogContent,
   DialogTitle,
   Divider,
@@ -56,10 +55,8 @@ import {
   useTextAnalysis,
   useGeoMap,
   useExportExecutiveReportPdf,
-  useStrategicAiNarrative,
 } from "../api/hooks";
-import { useToast } from "../app/toast";
-import { parseApiError } from "../app/apiErrors";
+import { Link as RouterLink } from "react-router-dom";
 import { SkeletonState } from "../components/states/SkeletonState";
 import { EmptyState } from "../components/states/EmptyState";
 import { ErrorState } from "../components/states/ErrorState";
@@ -1703,15 +1700,7 @@ function GeoMapTab() {
 
 export function StrategicDashboardPage() {
   const [tab, setTab] = useState(0);
-  const [aiDialogOpen, setAiDialogOpen] = useState(false);
-  const [aiResult, setAiResult] = useState<{
-    narrative: string;
-    model: string;
-    generatedAt: string;
-  } | null>(null);
   const exportPdf = useExportExecutiveReportPdf();
-  const aiNarrative = useStrategicAiNarrative();
-  const toast = useToast();
 
   return (
     <Box sx={{ p: { xs: 1, sm: 2, md: 3 } }}>
@@ -1738,26 +1727,11 @@ export function StrategicDashboardPage() {
           <Button
             variant="outlined"
             startIcon={<AutoAwesomeRoundedIcon />}
-            onClick={() =>
-              aiNarrative.mutate(undefined, {
-                onSuccess: (data) => {
-                  setAiResult(data);
-                  setAiDialogOpen(true);
-                },
-                onError: (err) => {
-                  toast.push({
-                    message:
-                      parseApiError(err).message ??
-                      "Não foi possível gerar o resumo com IA.",
-                    severity: "error",
-                  });
-                },
-              })
-            }
-            disabled={aiNarrative.isPending}
+            component={RouterLink}
+            to="/ai"
             sx={{ borderColor: "#1A3C6E", color: "#1A3C6E" }}
           >
-            {aiNarrative.isPending ? "Gerando resumo…" : "Resumo com IA (LiteLLM)"}
+            Análises com IA
           </Button>
           <Button
             variant="contained"
@@ -1773,35 +1747,6 @@ export function StrategicDashboardPage() {
           </Button>
         </Stack>
       </Stack>
-
-      <Dialog
-        open={aiDialogOpen}
-        onClose={() => setAiDialogOpen(false)}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle>Resumo executivo (IA)</DialogTitle>
-        <DialogContent>
-          {aiResult ? (
-            <Stack spacing={1} sx={{ pt: 0.5 }}>
-              <Typography variant="caption" color="text.secondary">
-                Modelo: {aiResult.model} · Gerado em{" "}
-                {new Date(aiResult.generatedAt).toLocaleString("pt-BR")}
-              </Typography>
-              <Typography
-                component="div"
-                variant="body2"
-                sx={{ whiteSpace: "pre-wrap" }}
-              >
-                {aiResult.narrative}
-              </Typography>
-            </Stack>
-          ) : null}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setAiDialogOpen(false)}>Fechar</Button>
-        </DialogActions>
-      </Dialog>
 
       <Tabs
         value={tab}

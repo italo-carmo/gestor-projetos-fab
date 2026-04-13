@@ -33,6 +33,8 @@ import { SmifComplaintsModule } from './smif-complaints/smif-complaints.module';
 import { MenuUpdatesModule } from './menu-updates/menu-updates.module';
 import { StrategicModule } from './strategic/strategic.module';
 import { LitellmModule } from './llm/litellm.module';
+import { SettingsModule } from './settings/settings.module';
+import { AiModule } from './ai/ai.module';
 
 @Module({
   imports: [
@@ -73,6 +75,8 @@ import { LitellmModule } from './llm/litellm.module';
     SmifComplaintsModule,
     MenuUpdatesModule,
     StrategicModule,
+    SettingsModule,
+    AiModule,
   ],
   controllers: [AppController],
   providers: [AppService],
