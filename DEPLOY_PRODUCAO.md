@@ -108,16 +108,24 @@ npm install --workspaces --no-audit --no-fund
 cd backend
 npx prisma migrate deploy
 npx prisma generate
+rm -rf dist
 npm run build
 cd ../frontend
 npm install --no-audit --no-fund
+rm -rf dist
 npx vite build
-systemctl restart cipavd-backend.service
+# Reinicio limpo (evita EADDRINUSE se sobrar node na 3000)
+systemctl stop cipavd-backend.service || true
+sleep 2
+fuser -k 3000/tcp 2>/dev/null || true
+sleep 1
+systemctl start cipavd-backend.service
 systemctl restart nginx
 systemctl is-active cipavd-backend.service nginx
-sleep 2
+sleep 3
 curl -s -o /dev/null -w "HEALTH=%{http_code}\n" http://127.0.0.1:3000/health
 curl -s -o /dev/null -w "ROOT=%{http_code}\n" http://127.0.0.1/
+stat -c "FRONT index.html %y" /opt/gestao-projetos/frontend/dist/index.html
 '
 ```
 
@@ -128,3 +136,4 @@ curl -s -o /dev/null -w "ROOT=%{http_code}\n" http://127.0.0.1/
 - **Fotos do mapeamento institucional (NOT_FOUND)**: antigamente o rsync com `--delete` apagava a pasta de uploads a cada deploy. A partir deste fluxo, `backend/uploads` e `uploads` sao preservados. Fotos enviadas antes disso foram perdidas — e preciso reenviar. Opcional: definir `MISSION_CHECKLIST_UPLOADS_DIR` (ex: `/var/lib/cipavd/mission-checklist-uploads`) no systemd e criar o diretório para que as fotos fiquem fora da árvore do app.
 - **LiteLLM “nao configurado” apos deploy**: o `rsync --delete` podia **remover** `backend/.env` em `/opt/gestao-projetos` se o arquivo nao existisse no clone. O fluxo acima protege o `.env`. Se sumiu, recrie `/opt/gestao-projetos/backend/.env` (ou `scp` da maquina local) com `API_LITELLM` e `API_LITELLM_BASE_URL` e reinicie o backend.
 - **Frontend ou backend “antigo” apos deploy**: no servidor, apagar `backend/dist` e `frontend/dist`, rodar `npm run build` / `vite build` de novo, reiniciar `cipavd-backend`. No navegador use atualizacao forcada (Ctrl+F5) ou janela anonima; o Nginx em producao pode usar `Cache-Control: no-store` em `/index.html` e cache longo em `/assets/` para o hash do Vite sempre mandar no JS certo.
+- **Sintoma: backend novo e frontend de meses atras**: o `index.html` em `/opt/gestao-projetos/frontend/dist` fica com data antiga — o passo `npx vite build` **em /opt/gestao-projetos/frontend** nao foi executado (ou falhou). Confira `stat /opt/gestao-projetos/frontend/dist/index.html` apos cada deploy; o comando unico abaixo ja inclui `rm -rf dist` nos dois lados antes do build.
