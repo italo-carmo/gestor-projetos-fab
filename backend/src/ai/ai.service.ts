@@ -192,7 +192,7 @@ export class AiService {
       case 'aggressor':
         return { profile: await this.strategic.aggressorProfile() };
       case 'text':
-        return { textAnalysis: await this.strategic.textAnalysis() };
+        return { textSummary: this.compactText(await this.strategic.textAnalysis()) };
       case 'geo':
         return { geoMap: await this.strategic.geoMap() };
       default:
@@ -219,13 +219,30 @@ export class AiService {
         'Analise a distribuição geográfica: estados com mais registros, concentração de denúncias, atividades e missões por região.',
     };
 
-    return `${typeDescriptions[type]}\n\nDados JSON:\n${payloadJson}`;
+    return (
+      `${typeDescriptions[type]}\n\n` +
+      `IMPORTANTE: Responda diretamente com a análise final em português. ` +
+      `NÃO inclua raciocínio intermediário, cálculos auxiliares ou pensamentos internos.\n\n` +
+      `Dados JSON:\n${payloadJson}`
+    );
   }
 
   private compactText(text: any) {
+    const sources: Record<string, any> = {};
+    if (text?.sources) {
+      for (const [key, val] of Object.entries(text.sources as Record<string, any>)) {
+        if (val?.count > 0) {
+          sources[key] = {
+            count: val.count,
+            topWords: (val.topWords ?? []).slice(0, 15),
+          };
+        }
+      }
+    }
     return {
       totalTexts: text?.consolidated?.totalTexts ?? 0,
       topWords: (text?.consolidated?.topWords ?? []).slice(0, 30),
+      sources,
     };
   }
 
