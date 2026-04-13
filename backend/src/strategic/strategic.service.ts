@@ -1,5 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { LitellmService } from '../llm/litellm.service';
 import PDFDocument from 'pdfkit';
 
 const PT_STOPWORDS = new Set([
@@ -71,7 +72,10 @@ function countByField(items: any[], field: string): { label: string; count: numb
 
 @Injectable()
 export class StrategicService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly litellm: LitellmService,
+  ) {}
 
   async situationalDashboard() {
     const [
@@ -393,140 +397,456 @@ export class StrategicService {
     };
   }
 
-  async executiveReportPdf(): Promise<Buffer> {
-    const [dashboard, profileRaw, textData] = await Promise.all([
+  /**
+   * Narrativa executiva gerada via LiteLLM (API compatível com OpenAI),
+   * usando API_LITELLM + API_LITELLM_BASE_URL.
+   */
+  async strategicAiNarrative(): Promise<{
+    generatedAt: string;
+    narrative: string;
+    model: string;
+  }> {
+    if (!this.litellm.isConfigured()) {
+      throw new ServiceUnavailableException(
+        'LiteLLM não configurado. Defina API_LITELLM e API_LITELLM_BASE_URL no ambiente do backend.',
+      );
+    }
+
+    const [dashboard, profile, textSummary, geo] = await Promise.all([
       this.situationalDashboard(),
       this.aggressorProfile(),
       this.textAnalysis(),
+      this.geoMap(),
+    ]);
+
+    const profileAny = profile as Record<string, unknown>;
+    const compactGeo = {
+      statesSample: (geo.states ?? []).slice(0, 12).map((s: any) => ({
+        uf: s.uf,
+        complaints: s.complaints,
+        activities: s.activities,
+        missions: s.missions,
+      })),
+      totalLocalitiesWithUf: geo.totalLocalitiesWithUf,
+    };
+
+    const compactText = {
+      totalTexts: textSummary.consolidated.totalTexts,
+      topWords: textSummary.consolidated.topWords.slice(0, 30),
+    };
+
+    const payload = {
+      situationalDashboard: dashboard,
+      aggressorProfile: profileAny,
+      textAnalysisSummary: compactText,
+      geoSummary: compactGeo,
+    };
+
+    let payloadJson = JSON.stringify(payload);
+    const maxChars = 28_000;
+    if (payloadJson.length > maxChars) {
+      payloadJson = payloadJson.slice(0, maxChars) + '\n…(dados truncados)';
+    }
+
+    const system =
+      'Você é analista institucional da FAB (CIPAVD/SMIF). ' +
+      'Responda em português do Brasil, tom técnico e objetivo, sem inventar números que não constem no JSON. ' +
+      'Estruture em 3 a 5 parágrafos curtos: síntese situacional, riscos/padrões nas denúncias (se houver casos), ' +
+      'destaques da análise textual e distribuição geográfica quando relevante.';
+
+    try {
+      const { content, model } = await this.litellm.chatCompletion({
+        messages: [
+          { role: 'system', content: system },
+          {
+            role: 'user',
+            content:
+              'Com base exclusivamente nos dados JSON abaixo, redija um resumo executivo para comando.\n\n' +
+              payloadJson,
+          },
+        ],
+        max_tokens: 2500,
+      });
+
+      return {
+        generatedAt: new Date().toISOString(),
+        narrative: content,
+        model,
+      };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      throw new ServiceUnavailableException(`Falha ao gerar narrativa via LiteLLM: ${msg}`);
+    }
+  }
+
+  async executiveReportPdf(): Promise<Buffer> {
+    const [dashboard, profileRaw, textData, geoData] = await Promise.all([
+      this.situationalDashboard(),
+      this.aggressorProfile(),
+      this.textAnalysis(),
+      this.geoMap(),
     ]);
     const profile = profileRaw as any;
 
     return new Promise((resolve, reject) => {
-      const doc = new PDFDocument({ size: 'A4', margin: 50 });
+      const doc = new PDFDocument({ size: 'A4', margin: 40, bufferPages: true });
       const chunks: Buffer[] = [];
       doc.on('data', (chunk: Buffer) => chunks.push(chunk));
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      const blue = '#1A3C6E';
-      const gray = '#666666';
-      const lightBg = '#F5F7FA';
+      const BLUE = '#1A3C6E';
+      const BLUE_LIGHT = '#2E5A9E';
+      const RED = '#C62828';
+      const GREEN = '#2E7D32';
+      const ORANGE = '#E65100';
+      const GRAY = '#666666';
+      const DARK = '#222222';
+      const BG_LIGHT = '#F0F4F8';
+      const BG_CARD = '#FFFFFF';
+      const PAGE_W = 515;
+      const LEFT = 40;
+      const RIGHT = LEFT + PAGE_W;
 
-      doc.fontSize(22).fillColor(blue).text('Relatório Executivo Estratégico', { align: 'center' });
-      doc.moveDown(0.3);
-      doc.fontSize(12).fillColor(gray).text(
-        'CIPAVD / SMIF — Prevenção e Combate ao Assédio e Violência Doméstica',
-        { align: 'center' },
-      );
-      doc.moveDown(0.2);
-      doc.fontSize(10).text(
+      const ensureSpace = (needed: number) => {
+        if (doc.y + needed > 780) doc.addPage();
+      };
+
+      const drawHeaderBar = (y: number) => {
+        doc.rect(0, y, 595, 70).fill(BLUE);
+        doc.rect(0, y + 70, 595, 4).fill(ORANGE);
+      };
+
+      const sectionHeader = (num: string, title: string) => {
+        ensureSpace(40);
+        const y = doc.y;
+        doc.rect(LEFT, y, PAGE_W, 26).fill(BLUE);
+        doc.fontSize(12).fillColor('#FFFFFF').text(`${num}  ${title}`, LEFT + 10, y + 7, { width: PAGE_W - 20 });
+        doc.y = y + 32;
+      };
+
+      const kpiBox = (x: number, y: number, w: number, h: number, value: string, label: string, color: string) => {
+        doc.roundedRect(x, y, w, h, 4).fill(BG_LIGHT);
+        doc.roundedRect(x, y, 4, h, 2).fill(color);
+        doc.fontSize(18).fillColor(color).text(value, x + 12, y + 8, { width: w - 20, align: 'center' });
+        doc.fontSize(7).fillColor(GRAY).text(label, x + 8, y + 30, { width: w - 16, align: 'center' });
+        return y + h + 6;
+      };
+
+      const progressBar = (x: number, y: number, w: number, pct: number, color: string, label: string, valueText: string) => {
+        doc.fontSize(8).fillColor(DARK).text(label, x, y, { width: w * 0.55 });
+        const barX = x + w * 0.55;
+        const barW = w * 0.35;
+        const barH = 8;
+        doc.roundedRect(barX, y + 1, barW, barH, 3).fill('#E0E0E0');
+        const fillW = Math.max(2, (pct / 100) * barW);
+        doc.roundedRect(barX, y + 1, fillW, barH, 3).fill(color);
+        doc.fontSize(8).fillColor(color).text(valueText, barX + barW + 4, y, { width: 50 });
+        return y + 16;
+      };
+
+      const rankingRow = (x: number, y: number, w: number, rank: number, label: string, count: number, pct: number, color: string, maxCount: number) => {
+        doc.fontSize(8).fillColor(GRAY).text(`${rank}.`, x, y, { width: 14 });
+        doc.fontSize(8).fillColor(DARK).text(label, x + 14, y, { width: w * 0.45 });
+        const barX = x + w * 0.52;
+        const barW = w * 0.35;
+        const barH = 7;
+        doc.roundedRect(barX, y + 1, barW, barH, 3).fill('#E8EAF0');
+        const fillW = Math.max(2, maxCount > 0 ? (count / maxCount) * barW : 0);
+        doc.roundedRect(barX, y + 1, fillW, barH, 3).fill(color);
+        doc.fontSize(7).fillColor(DARK).text(`${count} (${pct}%)`, barX + barW + 4, y, { width: 55 });
+        return y + 14;
+      };
+
+      // ======================== COVER PAGE ========================
+      drawHeaderBar(0);
+      doc.fontSize(24).fillColor('#FFFFFF').text('RELATÓRIO EXECUTIVO', LEFT + 10, 18, { width: PAGE_W - 20, align: 'center' });
+      doc.fontSize(11).fillColor('#B0C4DE').text('CIPAVD / SMIF — Prevenção e Combate ao Assédio e Violência Doméstica', LEFT, 46, { width: PAGE_W, align: 'center' });
+
+      doc.y = 90;
+      doc.fontSize(9).fillColor(GRAY).text(
         `Gerado em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}`,
-        { align: 'center' },
+        { align: 'right' },
       );
-      doc.moveDown(1);
+      doc.moveDown(0.8);
 
-      const drawLine = () => {
-        doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor('#E0E0E0').stroke();
-        doc.moveDown(0.5);
-      };
+      // ======================== 1. INDICADORES-CHAVE ========================
+      sectionHeader('01', 'INDICADORES-CHAVE DE DESEMPENHO');
+      doc.moveDown(0.3);
 
-      const sectionTitle = (title: string) => {
-        doc.moveDown(0.5);
-        doc.fontSize(14).fillColor(blue).text(title);
-        drawLine();
-      };
+      let ky = doc.y;
+      const kw = (PAGE_W - 18) / 4;
+      kpiBox(LEFT, ky, kw, 44, String(dashboard.activities.totalActivities), 'Atividades de Campo', BLUE);
+      kpiBox(LEFT + kw + 6, ky, kw, 44, String(dashboard.missions.totalMissions), 'Missões Realizadas', GREEN);
+      kpiBox(LEFT + (kw + 6) * 2, ky, kw, 44, String(dashboard.complaints.totalCases), 'Denúncias Registradas', RED);
+      kpiBox(LEFT + (kw + 6) * 3, ky, kw, 44, String(dashboard.complaints.openCases), 'Casos em Aberto', ORANGE);
+      doc.y = ky + 56;
 
-      const kpiRow = (label: string, value: string | number) => {
-        doc.fontSize(10).fillColor('#333333').text(`${label}: `, { continued: true });
-        doc.fillColor(blue).text(String(value));
-      };
+      ky = doc.y;
+      kpiBox(LEFT, ky, kw, 44, String(dashboard.surveys.totalResponses), 'Pesquisas (Escolas)', BLUE_LIGHT);
+      kpiBox(LEFT + kw + 6, ky, kw, 44, String(dashboard.domesticViolence.totalResponses ?? 0), 'Pesq. Violência Domést.', RED);
+      kpiBox(LEFT + (kw + 6) * 2, ky, kw, 44, String(dashboard.recruits.totalResponses ?? 0), 'Pesq. Recrutas', GREEN);
+      kpiBox(LEFT + (kw + 6) * 3, ky, kw, 44, String(geoData.totalLocalitiesWithUf ?? 0) + '/' + String(geoData.totalLocalities ?? 0), 'Localidades c/ UF', GRAY);
+      doc.y = ky + 56;
 
-      sectionTitle('1. Painel Situacional');
-      kpiRow('Pesquisas (Escolas) — Respostas', dashboard.surveys.totalResponses);
-      kpiRow('Taxa de violência relatada', `${dashboard.surveys.violenceRatePercent}%`);
-      kpiRow('Violência Doméstica — Taxa na vida', `${dashboard.domesticViolence.lifetimeRatePercent}%`);
-      kpiRow('Violência Doméstica — Últimos 12 meses', `${dashboard.domesticViolence.last12MonthsRatePercent}%`);
-      kpiRow('Recrutas — Sensação de segurança', `${dashboard.recruits.safeToReportPercent}%`);
-      kpiRow('Denúncias ativas (CPCA + SMIF)', dashboard.complaints.openCases);
-      kpiRow('Total de denúncias', dashboard.complaints.totalCases);
-      kpiRow('Atividades de campo realizadas', dashboard.activities.totalActivities);
-      kpiRow('Missões realizadas', dashboard.missions.totalMissions);
+      // ======================== 2. TAXAS E INDICADORES ========================
+      sectionHeader('02', 'TAXAS E INDICADORES PERCENTUAIS');
+      doc.moveDown(0.3);
 
-      sectionTitle('2. Perfil de Assédio e Violência');
-      kpiRow('Total de casos analisados', profile.totalCases);
+      let py = doc.y;
+      const pw = PAGE_W;
+      py = progressBar(LEFT, py, pw, dashboard.surveys.violenceRatePercent, RED, 'Taxa de violência relatada (Escolas)', `${dashboard.surveys.violenceRatePercent}%`);
+      py = progressBar(LEFT, py, pw, dashboard.domesticViolence.lifetimeRatePercent, RED, 'Violência doméstica (na vida)', `${dashboard.domesticViolence.lifetimeRatePercent}%`);
+      py = progressBar(LEFT, py, pw, dashboard.domesticViolence.last12MonthsRatePercent, ORANGE, 'Violência doméstica (últimos 12 meses)', `${dashboard.domesticViolence.last12MonthsRatePercent}%`);
+      py = progressBar(LEFT, py, pw, dashboard.recruits.safeToReportPercent, GREEN, 'Recrutas — Segurança para denunciar', `${dashboard.recruits.safeToReportPercent}%`);
+      py = progressBar(LEFT, py, pw, dashboard.recruits.knowReportProcessPercent ?? 0, BLUE, 'Recrutas — Conhece processo de denúncia', `${dashboard.recruits.knowReportProcessPercent ?? 0}%`);
+      if (dashboard.domesticViolence.soughtHelpPercent) {
+        py = progressBar(LEFT, py, pw, dashboard.domesticViolence.soughtHelpPercent, GREEN, 'Vítimas que buscaram ajuda', `${dashboard.domesticViolence.soughtHelpPercent}%`);
+      }
+      doc.y = py + 4;
+
+      // ======================== 3. ATIVIDADES E MISSÕES ========================
+      ensureSpace(90);
+      sectionHeader('03', 'DISTRIBUIÇÃO DE ATIVIDADES E MISSÕES');
+      doc.moveDown(0.3);
+
+      const halfW = (PAGE_W - 12) / 2;
+      const actY = doc.y;
+
+      doc.roundedRect(LEFT, actY, halfW, 70, 4).fill(BG_LIGHT);
+      doc.fontSize(9).fillColor(BLUE).text('ATIVIDADES DE CAMPO', LEFT + 8, actY + 6, { width: halfW - 16 });
+      doc.fontSize(8).fillColor(DARK)
+        .text(`Total: ${dashboard.activities.totalActivities}`, LEFT + 8, actY + 20)
+        .text(`SMIF: ${dashboard.activities.smif}  |  CIPAVD: ${dashboard.activities.cipavd}`, LEFT + 8, actY + 32)
+        .text(`Concluídas: ${dashboard.activities.done}  |  Relatórios: ${dashboard.activities.withReport}`, LEFT + 8, actY + 44)
+        .text(`Relatórios assinados: ${dashboard.activities.signed}`, LEFT + 8, actY + 56);
+
+      doc.roundedRect(LEFT + halfW + 12, actY, halfW, 70, 4).fill(BG_LIGHT);
+      doc.fontSize(9).fillColor(GREEN).text('MISSÕES', LEFT + halfW + 20, actY + 6, { width: halfW - 16 });
+      doc.fontSize(8).fillColor(DARK)
+        .text(`Total: ${dashboard.missions.totalMissions}`, LEFT + halfW + 20, actY + 20)
+        .text(`SMIF: ${dashboard.missions.smif}  |  CIPAVD: ${dashboard.missions.cipavd}`, LEFT + halfW + 20, actY + 32)
+        .text(`Localidades cobertas: ${dashboard.missions.localitiesCovered}`, LEFT + halfW + 20, actY + 44);
+
+      doc.y = actY + 82;
+
+      // ======================== 4. DENÚNCIAS ========================
+      ensureSpace(100);
+      sectionHeader('04', 'PANORAMA DE DENÚNCIAS');
+      doc.moveDown(0.3);
+
+      const compY = doc.y;
+      const thirdW = (PAGE_W - 12) / 3;
+
+      doc.roundedRect(LEFT, compY, thirdW, 50, 4).fill(BG_LIGHT);
+      doc.roundedRect(LEFT, compY, 4, 50, 2).fill(RED);
+      doc.fontSize(20).fillColor(RED).text(String(dashboard.complaints.totalCases), LEFT + 12, compY + 6, { width: thirdW - 20, align: 'center' });
+      doc.fontSize(7).fillColor(GRAY).text('Total de denúncias', LEFT + 8, compY + 32, { width: thirdW - 16, align: 'center' });
+
+      doc.roundedRect(LEFT + thirdW + 6, compY, thirdW, 50, 4).fill(BG_LIGHT);
+      doc.roundedRect(LEFT + thirdW + 6, compY, 4, 50, 2).fill(ORANGE);
+      doc.fontSize(20).fillColor(ORANGE).text(String(dashboard.complaints.openCases), LEFT + thirdW + 18, compY + 6, { width: thirdW - 20, align: 'center' });
+      doc.fontSize(7).fillColor(GRAY).text('Casos em aberto', LEFT + thirdW + 12, compY + 32, { width: thirdW - 16, align: 'center' });
+
+      doc.roundedRect(LEFT + (thirdW + 6) * 2, compY, thirdW, 50, 4).fill(BG_LIGHT);
+      doc.roundedRect(LEFT + (thirdW + 6) * 2, compY, 4, 50, 2).fill(GREEN);
+      doc.fontSize(20).fillColor(GREEN).text(String(dashboard.complaints.concludedCases), LEFT + (thirdW + 6) * 2 + 12, compY + 6, { width: thirdW - 20, align: 'center' });
+      doc.fontSize(7).fillColor(GRAY).text('Concluídos', LEFT + (thirdW + 6) * 2 + 8, compY + 32, { width: thirdW - 16, align: 'center' });
+
+      doc.y = compY + 58;
+
+      if (dashboard.complaints.totalCases > 0) {
+        let dy = doc.y;
+        dy = progressBar(LEFT, dy, PAGE_W, dashboard.complaints.moralPercent ?? 0, ORANGE, `Assédio Moral (${dashboard.complaints.moral ?? 0})`, `${dashboard.complaints.moralPercent ?? 0}%`);
+        dy = progressBar(LEFT, dy, PAGE_W, dashboard.complaints.sexualPercent ?? 0, RED, `Assédio Sexual (${dashboard.complaints.sexual ?? 0})`, `${dashboard.complaints.sexualPercent ?? 0}%`);
+        const cpcaPct = dashboard.complaints.totalCases > 0 ? pct(dashboard.complaints.byCpca ?? 0, dashboard.complaints.totalCases) : 0;
+        const smifPct = dashboard.complaints.totalCases > 0 ? pct(dashboard.complaints.bySmif ?? 0, dashboard.complaints.totalCases) : 0;
+        dy = progressBar(LEFT, dy, PAGE_W, cpcaPct, BLUE, `Escopo CPCA (${dashboard.complaints.byCpca ?? 0})`, `${cpcaPct}%`);
+        dy = progressBar(LEFT, dy, PAGE_W, smifPct, BLUE_LIGHT, `Escopo SMIF (${dashboard.complaints.bySmif ?? 0})`, `${smifPct}%`);
+        doc.y = dy + 4;
+      }
+
+      // ======================== 5. PERFIL DO AGRESSOR ========================
       if (profile.totalCases > 0) {
-        kpiRow('Assédio Moral', `${profile.byComplaintType.moral.count} (${profile.byComplaintType.moral.percent}%)`);
-        kpiRow('Assédio Sexual', `${profile.byComplaintType.sexual.count} (${profile.byComplaintType.sexual.percent}%)`);
-        kpiRow('Relação hierárquica (superior)', `${profile.hierarchicalRelation.count} (${profile.hierarchicalRelation.percent}%)`);
-
-        if (profile.aggressorProfile.byRank.length > 0) {
-          doc.moveDown(0.3);
-          doc.fontSize(10).fillColor(gray).text('Postos/Graduações de agressores mais frequentes:');
-          for (const item of profile.aggressorProfile.byRank.slice(0, 5)) {
-            doc.fontSize(9).fillColor('#333333').text(`  • ${item.label}: ${item.count} (${item.percent}%)`);
-          }
-        }
-        if (profile.victimProfile?.byRank?.length > 0) {
-          doc.moveDown(0.3);
-          doc.fontSize(10).fillColor(gray).text('Postos/Graduações de vítimas mais frequentes:');
-          for (const item of profile.victimProfile.byRank.slice(0, 5)) {
-            doc.fontSize(9).fillColor('#333333').text(`  • ${item.label}: ${item.count} (${item.percent}%)`);
-          }
-        }
-        if (profile.context?.byViolenceType?.length > 0) {
-          doc.moveDown(0.3);
-          doc.fontSize(10).fillColor(gray).text('Tipos de violência mais frequentes:');
-          for (const item of profile.context.byViolenceType.slice(0, 5)) {
-            doc.fontSize(9).fillColor('#333333').text(`  • ${item.label}: ${item.count} (${item.percent}%)`);
-          }
-        }
-      }
-
-      sectionTitle('3. Análise de Texto — Termos mais frequentes');
-      const topWords = textData.consolidated.topWords.slice(0, 20);
-      if (topWords.length > 0) {
-        doc.fontSize(10).fillColor(gray).text(
-          `Total de textos analisados: ${textData.consolidated.totalTexts}`,
-        );
+        doc.addPage();
+        sectionHeader('05', 'PERFIL DE ASSÉDIO E VIOLÊNCIA');
         doc.moveDown(0.3);
-        const wordLines: string[] = [];
-        for (let i = 0; i < topWords.length; i += 4) {
-          const chunk = topWords.slice(i, i + 4);
-          wordLines.push(chunk.map((w: any) => `${w.word} (${w.count})`).join('  |  '));
+
+        const profHalfW = (PAGE_W - 12) / 2;
+
+        if (profile.aggressorProfile?.byRank?.length > 0) {
+          const startY = doc.y;
+          doc.roundedRect(LEFT, startY, profHalfW, 10, 0).fill(BLUE);
+          doc.fontSize(8).fillColor('#FFFFFF').text('RANKING — Postos/Graduações do Agressor', LEFT + 6, startY + 2, { width: profHalfW - 12 });
+          let ry = startY + 16;
+          const maxC = profile.aggressorProfile.byRank[0]?.count ?? 1;
+          for (const [i, item] of profile.aggressorProfile.byRank.slice(0, 8).entries()) {
+            ry = rankingRow(LEFT, ry, profHalfW, i + 1, item.label, item.count, item.percent, BLUE, maxC);
+          }
+          doc.y = Math.max(doc.y, ry);
         }
-        for (const line of wordLines) {
-          doc.fontSize(9).fillColor('#333333').text(line);
+
+        if (profile.victimProfile?.byRank?.length > 0) {
+          const startY2 = profile.aggressorProfile?.byRank?.length > 0 ? doc.y - ((profile.aggressorProfile.byRank.slice(0, 8).length) * 14 + 16) : doc.y;
+          const vx = LEFT + profHalfW + 12;
+          doc.roundedRect(vx, startY2, profHalfW, 10, 0).fill(RED);
+          doc.fontSize(8).fillColor('#FFFFFF').text('RANKING — Postos/Graduações da Vítima', vx + 6, startY2 + 2, { width: profHalfW - 12 });
+          let vy = startY2 + 16;
+          const maxV = profile.victimProfile.byRank[0]?.count ?? 1;
+          for (const [i, item] of profile.victimProfile.byRank.slice(0, 8).entries()) {
+            vy = rankingRow(vx, vy, profHalfW, i + 1, item.label, item.count, item.percent, RED, maxV);
+          }
+          doc.y = Math.max(doc.y, vy);
         }
-      } else {
-        doc.fontSize(10).fillColor(gray).text('Nenhum texto disponível para análise.');
+
+        doc.moveDown(0.5);
+
+        if (profile.context?.byViolenceType?.length > 0) {
+          ensureSpace(80);
+          doc.roundedRect(LEFT, doc.y, PAGE_W, 10, 0).fill(ORANGE);
+          doc.fontSize(8).fillColor('#FFFFFF').text('TIPOS DE VIOLÊNCIA MAIS FREQUENTES', LEFT + 6, doc.y + 2, { width: PAGE_W - 12 });
+          let ty = doc.y + 16;
+          const maxT = profile.context.byViolenceType[0]?.count ?? 1;
+          for (const [i, item] of profile.context.byViolenceType.slice(0, 8).entries()) {
+            ty = rankingRow(LEFT, ty, PAGE_W, i + 1, item.label, item.count, item.percent, ORANGE, maxT);
+          }
+          doc.y = ty + 4;
+        }
+
+        ensureSpace(50);
+        doc.moveDown(0.3);
+        doc.roundedRect(LEFT, doc.y, PAGE_W, 40, 4).fill(BG_LIGHT);
+        const insY = doc.y;
+        doc.fontSize(8).fillColor(BLUE).text('INSIGHT', LEFT + 8, insY + 6, { width: 40 });
+        const hierPct = profile.hierarchicalRelation?.percent ?? 0;
+        const hierCount = profile.hierarchicalRelation?.count ?? 0;
+        doc.fontSize(8).fillColor(DARK).text(
+          `${hierPct}% dos casos (${hierCount}) envolvem relação hierárquica superior-subordinado. ` +
+          `O tipo predominante é Assédio ${(profile.byComplaintType?.moral?.percent ?? 0) > (profile.byComplaintType?.sexual?.percent ?? 0) ? 'Moral' : 'Sexual'} ` +
+          `(${Math.max(profile.byComplaintType?.moral?.percent ?? 0, profile.byComplaintType?.sexual?.percent ?? 0)}%).`,
+          LEFT + 52, insY + 6, { width: PAGE_W - 68 },
+        );
+        doc.y = insY + 48;
       }
 
-      const sourcesWithData = Object.entries(textData.sources)
-        .filter(([, data]: [string, any]) => data.count > 0)
-        .map(([key, data]: [string, any]) => ({ key, ...data }));
-      if (sourcesWithData.length > 0) {
-        doc.moveDown(0.5);
-        doc.fontSize(10).fillColor(gray).text('Detalhamento por fonte:');
+      // ======================== 6. ANÁLISE DE TEXTO ========================
+      ensureSpace(100);
+      sectionHeader('06', 'ANÁLISE DE TEXTO — TERMOS MAIS CITADOS');
+      doc.moveDown(0.3);
+
+      const topWords = textData.consolidated.topWords.slice(0, 25);
+      if (topWords.length > 0) {
+        doc.fontSize(8).fillColor(GRAY).text(`${textData.consolidated.totalTexts} textos livres analisados de relatórios, sugestões e comentários.`);
+        doc.moveDown(0.4);
+
+        const maxWordCount = topWords[0]?.count ?? 1;
+        const wordBoxW = PAGE_W;
+        let wy = doc.y;
+        for (const w of topWords.slice(0, 15)) {
+          const barPct = w.count / maxWordCount;
+          const barW = Math.max(4, barPct * (wordBoxW * 0.5));
+          doc.fontSize(8).fillColor(DARK).text(w.word, LEFT, wy, { width: wordBoxW * 0.25 });
+          doc.roundedRect(LEFT + wordBoxW * 0.25, wy + 1, wordBoxW * 0.5, 8, 3).fill('#E8EAF0');
+          const barColor = barPct > 0.7 ? BLUE : barPct > 0.4 ? BLUE_LIGHT : '#7BA0D4';
+          doc.roundedRect(LEFT + wordBoxW * 0.25, wy + 1, barW, 8, 3).fill(barColor);
+          doc.fontSize(7).fillColor(GRAY).text(String(w.count), LEFT + wordBoxW * 0.78, wy, { width: 40 });
+          wy += 13;
+          if (wy > 760) { doc.addPage(); wy = doc.y; }
+        }
+        doc.y = wy + 4;
+
         const sourceLabels: Record<string, string> = {
-          recruitsSuggestions: 'Sugestões dos recrutas',
-          reportObservations: 'Observações dos relatórios',
-          reportAttentionPoints: 'Pontos de atenção',
-          reportConclusions: 'Conclusões dos relatórios',
-          bestPracticeComments: 'Comentários Boas Práticas',
+          recruitsSuggestions: 'Sugestões dos Recrutas',
+          reportObservations: 'Observações dos Relatórios',
+          reportAttentionPoints: 'Pontos de Atenção',
+          reportConclusions: 'Conclusões',
+          bestPracticeComments: 'Boas Práticas',
           cpcaComments: 'Comentários CPCA',
         };
-        for (const src of sourcesWithData) {
-          const label = sourceLabels[src.key] ?? src.key;
-          doc.fontSize(9).fillColor('#333333').text(
-            `  ${label} (${src.count} textos): ${src.topWords.slice(0, 8).map((w: any) => w.word).join(', ')}`,
-          );
+        const sourcesWithData = Object.entries(textData.sources)
+          .filter(([, d]: [string, any]) => d.count > 0)
+          .map(([key, d]: [string, any]) => ({ key, ...d }));
+
+        if (sourcesWithData.length > 0) {
+          ensureSpace(60);
+          doc.moveDown(0.3);
+          doc.fontSize(9).fillColor(BLUE).text('Detalhamento por fonte:');
+          doc.moveDown(0.2);
+
+          const srcColW = PAGE_W / Math.min(sourcesWithData.length, 3);
+          let sx = LEFT;
+          let sy = doc.y;
+          for (const [idx, src] of sourcesWithData.entries()) {
+            if (idx > 0 && idx % 3 === 0) { sx = LEFT; sy += 55; ensureSpace(55); }
+            const lbl = sourceLabels[src.key] ?? src.key;
+            doc.roundedRect(sx, sy, srcColW - 6, 50, 4).fill(BG_LIGHT);
+            doc.fontSize(7).fillColor(BLUE).text(lbl, sx + 6, sy + 4, { width: srcColW - 18 });
+            doc.fontSize(14).fillColor(DARK).text(String(src.count), sx + 6, sy + 16, { width: srcColW - 18 });
+            doc.fontSize(6).fillColor(GRAY).text(
+              src.topWords.slice(0, 5).map((w2: any) => w2.word).join(', '),
+              sx + 6, sy + 34, { width: srcColW - 18 },
+            );
+            sx += srcColW;
+          }
+          doc.y = sy + 58;
+        }
+      } else {
+        doc.fontSize(9).fillColor(GRAY).text('Nenhum texto disponível para análise.');
+      }
+
+      // ======================== 7. MAPA GEOGRÁFICO ========================
+      const statesWithData = (geoData.states ?? []).filter((s: any) => s.complaints + s.activities + s.missions > 0);
+      if (statesWithData.length > 0) {
+        ensureSpace(120);
+        sectionHeader('07', 'DISTRIBUIÇÃO GEOGRÁFICA');
+        doc.moveDown(0.3);
+
+        doc.fontSize(8).fillColor(GRAY).text(
+          `${statesWithData.length} estado(s) com registros de ${geoData.totalLocalitiesWithUf} localidades com UF preenchida.`,
+        );
+        doc.moveDown(0.3);
+
+        // Table header
+        const cols = [40, 60, 60, 60, 50, PAGE_W - 270];
+        const headers = ['UF', 'Denúncias', 'Atividades', 'Missões', 'Total', 'Localidades'];
+        let tx = LEFT;
+        const thY = doc.y;
+        doc.rect(LEFT, thY, PAGE_W, 14).fill(BLUE);
+        for (const [ci, hdr] of headers.entries()) {
+          doc.fontSize(7).fillColor('#FFFFFF').text(hdr, tx + 3, thY + 3, { width: cols[ci] - 6 });
+          tx += cols[ci];
+        }
+        doc.y = thY + 16;
+
+        for (const [ri, s] of statesWithData.slice(0, 15).entries()) {
+          ensureSpace(14);
+          const rowY = doc.y;
+          if (ri % 2 === 0) doc.rect(LEFT, rowY, PAGE_W, 13).fill(BG_LIGHT);
+          let rx = LEFT;
+          const total = s.complaints + s.activities + s.missions;
+          const vals = [s.uf, String(s.complaints), String(s.activities), String(s.missions), String(total), (s.localities ?? []).slice(0, 4).join(', ')];
+          for (const [ci, val] of vals.entries()) {
+            doc.fontSize(7).fillColor(DARK).text(val, rx + 3, rowY + 3, { width: cols[ci] - 6 });
+            rx += cols[ci];
+          }
+          doc.y = rowY + 14;
+        }
+        if (statesWithData.length > 15) {
+          doc.fontSize(7).fillColor(GRAY).text(`... e mais ${statesWithData.length - 15} estado(s).`);
         }
       }
 
-      doc.moveDown(1);
-      drawLine();
-      doc.fontSize(8).fillColor(gray).text(
-        'Documento gerado automaticamente pelo Sistema de Gestão CIPAVD/SMIF. Classificação: USO INTERNO.',
+      // ======================== FOOTER ========================
+      doc.moveDown(1.5);
+      ensureSpace(30);
+      doc.moveTo(LEFT, doc.y).lineTo(RIGHT, doc.y).strokeColor('#E0E0E0').lineWidth(0.5).stroke();
+      doc.moveDown(0.3);
+      doc.fontSize(7).fillColor(GRAY).text(
+        'DOCUMENTO CLASSIFICADO — USO INTERNO  |  Sistema de Gestão CIPAVD/SMIF  |  Força Aérea Brasileira',
+        { align: 'center' },
+      );
+      doc.fontSize(6).fillColor('#999999').text(
+        `Gerado automaticamente em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}. Dados sujeitos a atualização.`,
         { align: 'center' },
       );
 

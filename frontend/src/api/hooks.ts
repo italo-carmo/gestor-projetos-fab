@@ -4364,3 +4364,17 @@ export function useExportExecutiveReportPdf() {
     },
   });
 }
+
+export type StrategicAiNarrativeResponse = {
+  generatedAt: string;
+  narrative: string;
+  model: string;
+};
+
+export function useStrategicAiNarrative() {
+  return useMutation({
+    mutationFn: async () =>
+      (await api.post<StrategicAiNarrativeResponse>("/strategic/ai-narrative"))
+        .data,
+  });
+}

@@ -32,10 +32,12 @@ import { LessonsLearnedModule } from './lessons-learned/lessons-learned.module';
 import { SmifComplaintsModule } from './smif-complaints/smif-complaints.module';
 import { MenuUpdatesModule } from './menu-updates/menu-updates.module';
 import { StrategicModule } from './strategic/strategic.module';
+import { LitellmModule } from './llm/litellm.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    LitellmModule,
     ThrottlerModule.forRoot([
       {
         ttl: 60_000,

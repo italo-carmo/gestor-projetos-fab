@@ -1,4 +1,4 @@
-import { Controller, Get, Res, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RbacGuard } from '../rbac/rbac.guard';
@@ -32,6 +32,12 @@ export class StrategicController {
   @RequirePermission('bi', 'view')
   geoMap() {
     return this.service.geoMap();
+  }
+
+  @Post('ai-narrative')
+  @RequirePermission('bi', 'view')
+  aiNarrative() {
+    return this.service.strategicAiNarrative();
   }
 
   @Get('executive-report/pdf')

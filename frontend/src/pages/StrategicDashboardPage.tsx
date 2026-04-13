@@ -30,6 +30,7 @@ import {
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import DownloadRoundedIcon from "@mui/icons-material/DownloadRounded";
+import AutoAwesomeRoundedIcon from "@mui/icons-material/AutoAwesomeRounded";
 import DashboardRoundedIcon from "@mui/icons-material/DashboardRounded";
 import FingerprintRoundedIcon from "@mui/icons-material/FingerprintRounded";
 import TextSnippetRoundedIcon from "@mui/icons-material/TextSnippetRounded";
@@ -55,8 +56,10 @@ import {
   useTextAnalysis,
   useGeoMap,
   useExportExecutiveReportPdf,
-  useMe,
+  useStrategicAiNarrative,
 } from "../api/hooks";
+import { useToast } from "../app/toast";
+import { parseApiError } from "../app/apiErrors";
 import { SkeletonState } from "../components/states/SkeletonState";
 import { EmptyState } from "../components/states/EmptyState";
 import { ErrorState } from "../components/states/ErrorState";
@@ -1700,7 +1703,15 @@ function GeoMapTab() {
 
 export function StrategicDashboardPage() {
   const [tab, setTab] = useState(0);
+  const [aiDialogOpen, setAiDialogOpen] = useState(false);
+  const [aiResult, setAiResult] = useState<{
+    narrative: string;
+    model: string;
+    generatedAt: string;
+  } | null>(null);
   const exportPdf = useExportExecutiveReportPdf();
+  const aiNarrative = useStrategicAiNarrative();
+  const toast = useToast();
 
   return (
     <Box sx={{ p: { xs: 1, sm: 2, md: 3 } }}>
@@ -1719,20 +1730,78 @@ export function StrategicDashboardPage() {
             doméstica
           </Typography>
         </Box>
-        <Button
-          variant="contained"
-          startIcon={<DownloadRoundedIcon />}
-          onClick={() => exportPdf.mutate()}
-          disabled={exportPdf.isPending}
-          sx={{
-            mt: { xs: 1, sm: 0 },
-            bgcolor: "#1A3C6E",
-            "&:hover": { bgcolor: "#122B4E" },
-          }}
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          spacing={1}
+          sx={{ mt: { xs: 1, sm: 0 }, alignSelf: { xs: "stretch", sm: "auto" } }}
         >
-          {exportPdf.isPending ? "Gerando…" : "Relatório Executivo (PDF)"}
-        </Button>
+          <Button
+            variant="outlined"
+            startIcon={<AutoAwesomeRoundedIcon />}
+            onClick={() =>
+              aiNarrative.mutate(undefined, {
+                onSuccess: (data) => {
+                  setAiResult(data);
+                  setAiDialogOpen(true);
+                },
+                onError: (err) => {
+                  toast.push({
+                    message:
+                      parseApiError(err).message ??
+                      "Não foi possível gerar o resumo com IA.",
+                    severity: "error",
+                  });
+                },
+              })
+            }
+            disabled={aiNarrative.isPending}
+            sx={{ borderColor: "#1A3C6E", color: "#1A3C6E" }}
+          >
+            {aiNarrative.isPending ? "Gerando resumo…" : "Resumo com IA (LiteLLM)"}
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<DownloadRoundedIcon />}
+            onClick={() => exportPdf.mutate()}
+            disabled={exportPdf.isPending}
+            sx={{
+              bgcolor: "#1A3C6E",
+              "&:hover": { bgcolor: "#122B4E" },
+            }}
+          >
+            {exportPdf.isPending ? "Gerando…" : "Relatório Executivo (PDF)"}
+          </Button>
+        </Stack>
       </Stack>
+
+      <Dialog
+        open={aiDialogOpen}
+        onClose={() => setAiDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>Resumo executivo (IA)</DialogTitle>
+        <DialogContent>
+          {aiResult ? (
+            <Stack spacing={1} sx={{ pt: 0.5 }}>
+              <Typography variant="caption" color="text.secondary">
+                Modelo: {aiResult.model} · Gerado em{" "}
+                {new Date(aiResult.generatedAt).toLocaleString("pt-BR")}
+              </Typography>
+              <Typography
+                component="div"
+                variant="body2"
+                sx={{ whiteSpace: "pre-wrap" }}
+              >
+                {aiResult.narrative}
+              </Typography>
+            </Stack>
+          ) : null}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAiDialogOpen(false)}>Fechar</Button>
+        </DialogActions>
+      </Dialog>
 
       <Tabs
         value={tab}
