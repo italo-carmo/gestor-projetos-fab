@@ -87,10 +87,11 @@ export class LitellmService {
     return firstConfig(this.config, [...LITELLM_API_KEY_ENV_KEYS]);
   }
 
+  /** Padrão alinhado ao deployment LiteLLM interno (gpt-oss-20b). Sobrescreva com API_LITELLM_MODEL. */
   getDefaultModel(): string {
     return (
       firstConfig(this.config, [...LITELLM_MODEL_ENV_KEYS])?.trim() ||
-      'gpt-4o-mini'
+      'gpt-oss-20b'
     );
   }
 
