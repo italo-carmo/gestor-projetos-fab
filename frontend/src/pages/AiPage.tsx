@@ -27,76 +27,141 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { api } from "../api/client";
 
+const mdStyles = (dark?: boolean) => ({
+  "& h1": {
+    color: dark ? "#fff" : "#1A3C6E",
+    fontSize: "1.35rem",
+    fontWeight: 800,
+    mt: 2.5,
+    mb: 1,
+    pb: 0.5,
+    borderBottom: "2px solid",
+    borderColor: dark ? "rgba(255,255,255,0.15)" : "#E8EAF0",
+    "&:first-of-type": { mt: 0 },
+  },
+  "& h2": {
+    color: dark ? "#fff" : "#1A3C6E",
+    fontSize: "1.15rem",
+    fontWeight: 700,
+    mt: 2,
+    mb: 0.8,
+    "&:first-of-type": { mt: 0 },
+  },
+  "& h3": {
+    color: dark ? "rgba(255,255,255,0.9)" : "#2E5090",
+    fontSize: "1.02rem",
+    fontWeight: 700,
+    mt: 1.5,
+    mb: 0.5,
+  },
+  "& h4": {
+    color: dark ? "rgba(255,255,255,0.85)" : "#3A6098",
+    fontSize: "0.95rem",
+    fontWeight: 600,
+    mt: 1.2,
+    mb: 0.4,
+  },
+  "& p": {
+    my: 0.7,
+    lineHeight: 1.75,
+    fontSize: "0.875rem",
+    color: dark ? "rgba(255,255,255,0.92)" : "inherit",
+  },
+  "& ul, & ol": { pl: 3, my: 0.8 },
+  "& li": {
+    mb: 0.4,
+    fontSize: "0.875rem",
+    lineHeight: 1.7,
+    "& > p": { my: 0.2 },
+  },
+  "& li::marker": {
+    color: dark ? "rgba(255,255,255,0.5)" : "#1A3C6E",
+    fontWeight: 700,
+  },
+  "& strong": {
+    fontWeight: 700,
+    color: dark ? "#fff" : "#1A3C6E",
+  },
+  "& em": { fontStyle: "italic" },
+  "& table": {
+    width: "100%",
+    borderCollapse: "collapse",
+    my: 1.5,
+    fontSize: "0.84rem",
+    borderRadius: 1,
+    overflow: "hidden",
+  },
+  "& th, & td": {
+    border: "1px solid",
+    borderColor: dark ? "rgba(255,255,255,0.15)" : "#DEE2E6",
+    px: 1.2,
+    py: 0.7,
+    textAlign: "left",
+  },
+  "& th": {
+    bgcolor: dark ? "rgba(255,255,255,0.08)" : "#1A3C6E",
+    color: dark ? "#fff" : "#fff",
+    fontWeight: 700,
+    fontSize: "0.82rem",
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
+  },
+  "& tbody tr:nth-of-type(even)": {
+    bgcolor: dark ? "rgba(255,255,255,0.03)" : "#F8F9FA",
+  },
+  "& tbody tr:hover": {
+    bgcolor: dark ? "rgba(255,255,255,0.06)" : "#EEF2F8",
+  },
+  "& code": {
+    bgcolor: dark ? "rgba(255,255,255,0.1)" : "#EEF2F8",
+    color: dark ? "#fff" : "#1A3C6E",
+    px: 0.6,
+    py: 0.1,
+    borderRadius: 0.5,
+    fontSize: "0.82rem",
+    fontFamily: "'Fira Code', 'Consolas', monospace",
+  },
+  "& pre": {
+    bgcolor: dark ? "rgba(0,0,0,0.35)" : "#F5F5F5",
+    p: 1.5,
+    borderRadius: 1.5,
+    overflow: "auto",
+    my: 1.5,
+    border: "1px solid",
+    borderColor: dark ? "rgba(255,255,255,0.08)" : "#E0E0E0",
+    "& code": { bgcolor: "transparent", px: 0, py: 0 },
+  },
+  "& blockquote": {
+    borderLeft: "4px solid",
+    borderColor: dark ? "rgba(255,255,255,0.3)" : "#1A3C6E",
+    bgcolor: dark ? "rgba(255,255,255,0.04)" : "#EEF2F8",
+    pl: 2,
+    pr: 1.5,
+    py: 1,
+    ml: 0,
+    my: 1.5,
+    borderRadius: "0 8px 8px 0",
+    "& p": {
+      color: dark ? "rgba(255,255,255,0.85)" : "#2E5090",
+      fontStyle: "italic",
+    },
+  },
+  "& hr": {
+    border: "none",
+    borderTop: "1px solid",
+    borderColor: dark ? "rgba(255,255,255,0.12)" : "#DEE2E6",
+    my: 2,
+  },
+  "& a": {
+    color: dark ? "#90CAF9" : "#1565C0",
+    textDecoration: "none",
+    "&:hover": { textDecoration: "underline" },
+  },
+});
+
 function MdContent({ children, dark }: { children: string; dark?: boolean }) {
   return (
-    <Box
-      sx={{
-        "& h1, & h2, & h3, & h4": {
-          color: dark ? "#fff" : "#1A3C6E",
-          mt: 1.5,
-          mb: 0.5,
-          fontWeight: 700,
-          fontSize: "1.05rem",
-          "&:first-of-type": { mt: 0 },
-        },
-        "& h2": { fontSize: "1rem" },
-        "& h3, & h4": { fontSize: "0.95rem" },
-        "& p": {
-          my: 0.5,
-          lineHeight: 1.7,
-          fontSize: "0.875rem",
-        },
-        "& ul, & ol": { pl: 2.5, my: 0.5 },
-        "& li": { mb: 0.3, fontSize: "0.875rem", lineHeight: 1.6 },
-        "& strong": { fontWeight: 700 },
-        "& table": {
-          width: "100%",
-          borderCollapse: "collapse",
-          my: 1,
-          fontSize: "0.82rem",
-        },
-        "& th, & td": {
-          border: "1px solid",
-          borderColor: dark ? "rgba(255,255,255,0.2)" : "#E0E0E0",
-          px: 1,
-          py: 0.5,
-          textAlign: "left",
-        },
-        "& th": {
-          bgcolor: dark ? "rgba(255,255,255,0.1)" : "#F5F5F5",
-          fontWeight: 700,
-        },
-        "& code": {
-          bgcolor: dark ? "rgba(255,255,255,0.1)" : "#F0F0F0",
-          px: 0.5,
-          borderRadius: 0.5,
-          fontSize: "0.82rem",
-          fontFamily: "monospace",
-        },
-        "& pre": {
-          bgcolor: dark ? "rgba(0,0,0,0.3)" : "#F5F5F5",
-          p: 1.5,
-          borderRadius: 1,
-          overflow: "auto",
-          my: 1,
-        },
-        "& blockquote": {
-          borderLeft: "3px solid",
-          borderColor: dark ? "rgba(255,255,255,0.3)" : "#1A3C6E",
-          pl: 1.5,
-          ml: 0,
-          my: 1,
-          color: dark ? "rgba(255,255,255,0.8)" : "text.secondary",
-          fontStyle: "italic",
-        },
-        "& hr": {
-          border: "none",
-          borderTop: "1px solid",
-          borderColor: dark ? "rgba(255,255,255,0.15)" : "#E0E0E0",
-          my: 1.5,
-        },
-      }}
-    >
+    <Box sx={mdStyles(dark)}>
       <ReactMarkdown remarkPlugins={[remarkGfm]}>{children}</ReactMarkdown>
     </Box>
   );
@@ -355,12 +420,13 @@ function AnalysisCard({
           <Box
             sx={{
               bgcolor: "#F8F9FA",
-              borderRadius: 1,
-              p: 2,
+              borderRadius: 2,
+              p: 2.5,
               mb: 2,
-              maxHeight: 400,
+              maxHeight: 600,
               overflow: "auto",
               flexGrow: 1,
+              border: "1px solid #E8EAF0",
             }}
           >
             <MdContent>{state.narrative}</MdContent>
@@ -601,13 +667,16 @@ function ChatbotTab() {
             )}
             <Box
               sx={{
-                maxWidth: "75%",
+                maxWidth: msg.role === "assistant" ? "85%" : "75%",
                 px: 2,
                 py: 1.2,
                 borderRadius: 2,
                 bgcolor: msg.role === "user" ? "#1A3C6E" : "#FFFFFF",
                 color: msg.role === "user" ? "#fff" : "text.primary",
                 boxShadow: 1,
+                ...(msg.role === "assistant" && {
+                  border: "1px solid #E8EAF0",
+                }),
               }}
             >
               {msg.role === "assistant" ? (
