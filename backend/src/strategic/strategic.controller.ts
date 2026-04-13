@@ -1,4 +1,4 @@
-import { Controller, Get, Res, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RbacGuard } from '../rbac/rbac.guard';
@@ -34,10 +34,19 @@ export class StrategicController {
     return this.service.geoMap();
   }
 
-  /** GET (como demais rotas /strategic/*) evita 404 em proxies que só encaminham GET para a API. */
+  /**
+   * Dois métodos explícitos: em alguns deploys o bundle antigo só tinha POST;
+   * o frontend usa GET (como as outras rotas /strategic/*).
+   */
   @Get('ai-narrative')
   @RequirePermission('bi', 'view')
-  aiNarrative() {
+  getAiNarrative() {
+    return this.service.strategicAiNarrative();
+  }
+
+  @Post('ai-narrative')
+  @RequirePermission('bi', 'view')
+  postAiNarrative() {
     return this.service.strategicAiNarrative();
   }
 
