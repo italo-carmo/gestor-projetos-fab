@@ -4397,6 +4397,7 @@ export function useUpdateAiSettings() {
       baseUrl?: string;
       apiKey?: string;
       model?: string;
+      analysisPrompts?: Record<string, string>;
     }) => (await api.put("/admin/ai-settings", payload)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.aiSettings });

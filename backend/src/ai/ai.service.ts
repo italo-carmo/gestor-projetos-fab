@@ -77,7 +77,8 @@ export class AiService {
     yield this.sseEvent('progress', { percent: 25, stage: 'Preparando contexto...' });
 
     const systemPrompt = await this.settings.getSystemPrompt();
-    const userPrompt = this.buildUserPrompt(type, data);
+    const customPrompt = await this.settings.getAnalysisPrompt(type);
+    const userPrompt = this.buildUserPrompt(type, data, customPrompt);
 
     yield this.sseEvent('progress', { percent: 30, stage: 'Enviando ao modelo...' });
 
@@ -200,13 +201,17 @@ export class AiService {
     }
   }
 
-  private buildUserPrompt(type: AnalysisType, data: any): string {
+  private buildUserPrompt(
+    type: AnalysisType,
+    data: any,
+    customPrompt?: string | null,
+  ): string {
     let payloadJson = JSON.stringify(data);
     if (payloadJson.length > 28_000) {
       payloadJson = payloadJson.slice(0, 28_000) + '\n…(dados truncados)';
     }
 
-    const typeDescriptions: Record<AnalysisType, string> = {
+    const defaultDescriptions: Record<AnalysisType, string> = {
       executive:
         'Redija um resumo executivo completo para o comando, abordando panorama situacional, perfil de denúncias, destaques textuais e distribuição geográfica.',
       situational:
@@ -219,8 +224,10 @@ export class AiService {
         'Analise a distribuição geográfica: estados com mais registros, concentração de denúncias, atividades e missões por região.',
     };
 
+    const instruction = customPrompt?.trim() || defaultDescriptions[type];
+
     return (
-      `${typeDescriptions[type]}\n\n` +
+      `${instruction}\n\n` +
       `IMPORTANTE: Responda diretamente com a análise final em português. ` +
       `NÃO inclua raciocínio intermediário, cálculos auxiliares ou pensamentos internos.\n\n` +
       `Dados JSON:\n${payloadJson}`

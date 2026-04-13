@@ -1505,6 +1505,34 @@ function InstitutionalMappingTab() {
   );
 }
 
+const ANALYSIS_TYPES_META: { type: string; label: string; placeholder: string }[] = [
+  {
+    type: 'executive',
+    label: 'Resumo Executivo Completo',
+    placeholder: 'Redija um resumo executivo completo para o comando, abordando panorama situacional, perfil de denúncias, destaques textuais e distribuição geográfica.',
+  },
+  {
+    type: 'situational',
+    label: 'Análise Situacional',
+    placeholder: 'Analise o panorama situacional: pesquisas, taxas de violência, denúncias ativas, atividades e missões.',
+  },
+  {
+    type: 'aggressor',
+    label: 'Perfil de Assédio e Violência',
+    placeholder: 'Analise o perfil de assédio e violência: tipos de ocorrência, perfil do agressor e da vítima, relações hierárquicas e contextos.',
+  },
+  {
+    type: 'text',
+    label: 'Análise Textual',
+    placeholder: 'Analise os padrões e tendências identificados nos textos livres do sistema: termos mais frequentes, temas recorrentes e insights.',
+  },
+  {
+    type: 'geo',
+    label: 'Distribuição Geográfica',
+    placeholder: 'Analise a distribuição geográfica: estados com mais registros, concentração de denúncias, atividades e missões por região.',
+  },
+];
+
 function AiSettingsTab() {
   const { data: me } = useMe();
   const settingsQuery = useAiSettings();
@@ -1518,6 +1546,13 @@ function AiSettingsTab() {
     model: '',
     systemPrompt: '',
   });
+  const [analysisPrompts, setAnalysisPrompts] = useState<Record<string, string>>({
+    executive: '',
+    situational: '',
+    aggressor: '',
+    text: '',
+    geo: '',
+  });
   const [showKey, setShowKey] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
@@ -1529,12 +1564,20 @@ function AiSettingsTab() {
         model: settingsQuery.data.model ?? '',
         systemPrompt: settingsQuery.data.systemPrompt ?? '',
       });
+      const serverPrompts = settingsQuery.data.analysisPrompts ?? {};
+      setAnalysisPrompts({
+        executive: serverPrompts.executive ?? '',
+        situational: serverPrompts.situational ?? '',
+        aggressor: serverPrompts.aggressor ?? '',
+        text: serverPrompts.text ?? '',
+        geo: serverPrompts.geo ?? '',
+      });
       setLoaded(true);
     }
   }, [settingsQuery.data, loaded]);
 
   const handleSave = async () => {
-    const patch: Record<string, string> = {};
+    const patch: Record<string, any> = {};
     if (form.systemPrompt !== (settingsQuery.data?.systemPrompt ?? ''))
       patch.systemPrompt = form.systemPrompt;
     if (form.baseUrl !== (settingsQuery.data?.baseUrl ?? ''))
@@ -1542,6 +1585,17 @@ function AiSettingsTab() {
     if (form.apiKey) patch.apiKey = form.apiKey;
     if (form.model !== (settingsQuery.data?.model ?? ''))
       patch.model = form.model;
+
+    const serverPrompts = settingsQuery.data?.analysisPrompts ?? {};
+    const changedPrompts: Record<string, string> = {};
+    for (const { type } of ANALYSIS_TYPES_META) {
+      if (analysisPrompts[type] !== (serverPrompts[type] ?? '')) {
+        changedPrompts[type] = analysisPrompts[type];
+      }
+    }
+    if (Object.keys(changedPrompts).length > 0) {
+      patch.analysisPrompts = changedPrompts;
+    }
 
     if (Object.keys(patch).length === 0) {
       toast.push({ message: 'Nenhuma alteração detectada.', severity: 'info' });
@@ -1634,7 +1688,7 @@ function AiSettingsTab() {
 
         <TextField
           size="small"
-          label="System Prompt"
+          label="System Prompt (geral)"
           value={form.systemPrompt}
           onChange={(e) => setForm({ ...form, systemPrompt: e.target.value })}
           multiline
@@ -1643,6 +1697,35 @@ function AiSettingsTab() {
           fullWidth
           helperText="Prompt enviado como 'system' em todas as requisições de IA. Aceita texto livre."
         />
+
+        <Box sx={{ borderTop: 1, borderColor: 'divider', pt: 2.5 }}>
+          <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 0.5 }}>
+            Prompts por tipo de análise
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Personalize a instrução enviada ao modelo para cada tipo de análise.
+            Deixe vazio para usar o prompt padrão embutido.
+          </Typography>
+          <Stack spacing={2}>
+            {ANALYSIS_TYPES_META.map(({ type, label, placeholder }) => (
+              <TextField
+                key={type}
+                size="small"
+                label={label}
+                value={analysisPrompts[type] ?? ''}
+                onChange={(e) =>
+                  setAnalysisPrompts((prev) => ({ ...prev, [type]: e.target.value }))
+                }
+                placeholder={placeholder}
+                multiline
+                minRows={3}
+                maxRows={10}
+                fullWidth
+                helperText={`Instrução específica para "${label}". Deixe vazio para usar o padrão.`}
+              />
+            ))}
+          </Stack>
+        </Box>
 
         <Stack direction="row" spacing={1.5}>
           <Button

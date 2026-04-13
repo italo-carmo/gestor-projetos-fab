@@ -9,6 +9,14 @@ export const AI_SETTING_KEYS = {
   model: 'ai.litellm.model',
 } as const;
 
+export const ANALYSIS_PROMPT_KEYS: Record<string, string> = {
+  executive: 'ai.prompt.executive',
+  situational: 'ai.prompt.situational',
+  aggressor: 'ai.prompt.aggressor',
+  text: 'ai.prompt.text',
+  geo: 'ai.prompt.geo',
+};
+
 export const DEFAULT_SYSTEM_PROMPT = `Você é um analista institucional da Força Aérea Brasileira (FAB), especializado no programa CIPAVD/SMIF de prevenção e combate ao assédio e violência doméstica.
 
 REGRAS OBRIGATÓRIAS:
@@ -54,13 +62,24 @@ export class SettingsService implements OnModuleInit {
     apiKey: string;
     apiKeyMasked: string;
     model: string;
+    analysisPrompts: Record<string, string>;
   }> {
+    const allKeys = [
+      ...Object.values(AI_SETTING_KEYS),
+      ...Object.values(ANALYSIS_PROMPT_KEYS),
+    ];
     const rows: { key: string; value: string }[] =
       await this.appSetting.findMany({
-        where: { key: { in: Object.values(AI_SETTING_KEYS) } },
+        where: { key: { in: allKeys } },
       });
     const map = new Map<string, string>(rows.map((r) => [r.key, r.value]));
     const apiKey: string = map.get(AI_SETTING_KEYS.apiKey) ?? '';
+
+    const analysisPrompts: Record<string, string> = {};
+    for (const [type, key] of Object.entries(ANALYSIS_PROMPT_KEYS)) {
+      analysisPrompts[type] = map.get(key) ?? '';
+    }
+
     return {
       systemPrompt: map.get(AI_SETTING_KEYS.systemPrompt) ?? DEFAULT_SYSTEM_PROMPT,
       baseUrl: map.get(AI_SETTING_KEYS.baseUrl) ?? '',
@@ -69,6 +88,7 @@ export class SettingsService implements OnModuleInit {
         ? `${apiKey.slice(0, 5)}${'*'.repeat(Math.max(0, apiKey.length - 5))}`
         : '',
       model: map.get(AI_SETTING_KEYS.model) ?? '',
+      analysisPrompts,
     };
   }
 
@@ -78,6 +98,7 @@ export class SettingsService implements OnModuleInit {
       baseUrl: string;
       apiKey: string;
       model: string;
+      analysisPrompts: Record<string, string>;
     }>,
   ): Promise<void> {
     const ops: Promise<any>[] = [];
@@ -92,6 +113,12 @@ export class SettingsService implements OnModuleInit {
     }
     if (patch.model !== undefined) {
       ops.push(this.set(AI_SETTING_KEYS.model, patch.model));
+    }
+    if (patch.analysisPrompts) {
+      for (const [type, value] of Object.entries(patch.analysisPrompts)) {
+        const key = ANALYSIS_PROMPT_KEYS[type];
+        if (key) ops.push(this.set(key, value));
+      }
     }
     await Promise.all(ops);
     await this.syncLitellmOverrides();
@@ -114,5 +141,12 @@ export class SettingsService implements OnModuleInit {
   async getSystemPrompt(): Promise<string> {
     const val = await this.get(AI_SETTING_KEYS.systemPrompt);
     return val || DEFAULT_SYSTEM_PROMPT;
+  }
+
+  async getAnalysisPrompt(type: string): Promise<string | null> {
+    const key = ANALYSIS_PROMPT_KEYS[type];
+    if (!key) return null;
+    const val = await this.get(key);
+    return val || null;
   }
 }

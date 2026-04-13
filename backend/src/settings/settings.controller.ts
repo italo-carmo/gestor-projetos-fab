@@ -28,6 +28,7 @@ export class SettingsController {
       baseUrl?: string;
       apiKey?: string;
       model?: string;
+      analysisPrompts?: Record<string, string>;
     },
   ) {
     await this.settings.updateAiSettings(body);
