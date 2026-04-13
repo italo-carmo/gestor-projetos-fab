@@ -1,6 +1,10 @@
 import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { LitellmService } from '../llm/litellm.service';
+import {
+  LitellmService,
+  LITELLM_API_KEY_ENV_KEYS,
+  LITELLM_BASE_URL_ENV_KEYS,
+} from '../llm/litellm.service';
 import PDFDocument from 'pdfkit';
 
 const PT_STOPWORDS = new Set([
@@ -408,7 +412,9 @@ export class StrategicService {
   }> {
     if (!this.litellm.isConfigured()) {
       throw new ServiceUnavailableException(
-        'LiteLLM não configurado. Defina API_LITELLM e API_LITELLM_BASE_URL no ambiente do backend.',
+        `LiteLLM não configurado. No servidor, edite o .env do backend (ex.: /opt/gestao-projetos/backend/.env) e defina ` +
+          `chave (${LITELLM_API_KEY_ENV_KEYS.join(' ou ')}) e URL (${LITELLM_BASE_URL_ENV_KEYS.join(' ou ')}). ` +
+          `Depois: systemctl restart cipavd-backend.service`,
       );
     }
 

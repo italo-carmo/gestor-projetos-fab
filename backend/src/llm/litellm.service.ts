@@ -39,6 +39,36 @@ function openAiV1Base(baseUrl: string): string {
   return `${u}/v1`;
 }
 
+function firstConfig(
+  config: ConfigService,
+  keys: string[],
+): string | undefined {
+  for (const key of keys) {
+    const v = stripEnvQuotes(config.get<string>(key));
+    if (v) return v;
+  }
+  return undefined;
+}
+
+/** Chaves aceitas (ordem de prioridade). */
+export const LITELLM_API_KEY_ENV_KEYS = [
+  'API_LITELLM',
+  'LITELLM_API_KEY',
+  'OPENAI_API_KEY',
+] as const;
+
+export const LITELLM_BASE_URL_ENV_KEYS = [
+  'API_LITELLM_BASE_URL',
+  'LITELLM_BASE_URL',
+  'OPENAI_BASE_URL',
+] as const;
+
+export const LITELLM_MODEL_ENV_KEYS = [
+  'API_LITELLM_MODEL',
+  'LITELLM_MODEL',
+  'OPENAI_MODEL',
+] as const;
+
 @Injectable()
 export class LitellmService {
   private readonly logger = new Logger(LitellmService.name);
@@ -50,18 +80,16 @@ export class LitellmService {
   }
 
   getBaseUrl(): string | undefined {
-    const raw = stripEnvQuotes(this.config.get<string>('API_LITELLM_BASE_URL'));
-    return raw || undefined;
+    return firstConfig(this.config, [...LITELLM_BASE_URL_ENV_KEYS]);
   }
 
   getApiKey(): string | undefined {
-    const raw = stripEnvQuotes(this.config.get<string>('API_LITELLM'));
-    return raw || undefined;
+    return firstConfig(this.config, [...LITELLM_API_KEY_ENV_KEYS]);
   }
 
   getDefaultModel(): string {
     return (
-      stripEnvQuotes(this.config.get<string>('API_LITELLM_MODEL'))?.trim() ||
+      firstConfig(this.config, [...LITELLM_MODEL_ENV_KEYS])?.trim() ||
       'gpt-4o-mini'
     );
   }
@@ -77,7 +105,7 @@ export class LitellmService {
     const baseUrl = this.getBaseUrl();
     if (!apiKey || !baseUrl) {
       throw new Error(
-        'LiteLLM não configurado: defina API_LITELLM e API_LITELLM_BASE_URL.',
+        `LiteLLM não configurado: defina chave (${LITELLM_API_KEY_ENV_KEYS.join(' ou ')}) e base URL (${LITELLM_BASE_URL_ENV_KEYS.join(' ou ')}) no .env do backend.`,
       );
     }
 
