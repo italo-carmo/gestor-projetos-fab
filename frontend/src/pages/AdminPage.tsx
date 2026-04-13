@@ -1686,25 +1686,13 @@ function AiSettingsTab() {
           helperText="ID do modelo conforme listado em GET /v1/models do LiteLLM"
         />
 
-        <TextField
-          size="small"
-          label="System Prompt (geral)"
-          value={form.systemPrompt}
-          onChange={(e) => setForm({ ...form, systemPrompt: e.target.value })}
-          multiline
-          minRows={8}
-          maxRows={20}
-          fullWidth
-          helperText="Prompt enviado como 'system' em todas as requisições de IA. Aceita texto livre."
-        />
-
         <Box sx={{ borderTop: 1, borderColor: 'divider', pt: 2.5 }}>
           <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 0.5 }}>
             Prompts por tipo de análise
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Personalize a instrução enviada ao modelo para cada tipo de análise.
-            Deixe vazio para usar o prompt padrão embutido.
+            Instruções extras enviadas junto com os dados em cada análise da página IA (além do
+            system prompt geral). Deixe vazio para usar o texto padrão do sistema.
           </Typography>
           <Stack spacing={2}>
             {ANALYSIS_TYPES_META.map(({ type, label, placeholder }) => (
@@ -1726,6 +1714,18 @@ function AiSettingsTab() {
             ))}
           </Stack>
         </Box>
+
+        <TextField
+          size="small"
+          label="System Prompt (geral)"
+          value={form.systemPrompt}
+          onChange={(e) => setForm({ ...form, systemPrompt: e.target.value })}
+          multiline
+          minRows={8}
+          maxRows={20}
+          fullWidth
+          helperText="Prompt enviado como 'system' em todas as requisições de IA. Aceita texto livre."
+        />
 
         <Stack direction="row" spacing={1.5}>
           <Button
