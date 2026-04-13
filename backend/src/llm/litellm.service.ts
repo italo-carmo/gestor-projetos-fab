@@ -75,6 +75,48 @@ export const LITELLM_MODEL_ENV_KEYS = [
   'OPENAI_MODEL',
 ] as const;
 
+/** LiteLLM expõe este id em GET /v1/models (formato estilo Ollama, dois pontos). */
+export const LITELLM_DEFAULT_GPT_OSS = 'gpt-oss:20b';
+
+/**
+ * Alinha o id do modelo ao proxy (igual ao projeto Python: `gpt-oss:20b`, não `gpt-oss-20b`).
+ * Opcional: `API_LITELLM_OPENAI_STYLE_MODEL=1` reescreve `gpt-oss:20b` → `openai/gpt-oss-20b`.
+ */
+export function normalizeLitellmModelId(
+  raw: string,
+  config: ConfigService,
+): string {
+  let m = raw.trim();
+  if (!m) return LITELLM_DEFAULT_GPT_OSS;
+
+  const low = m.toLowerCase().replace(/_/g, '-');
+  if (low === 'gpt-oss-20b' || low === 'gptoss-20b') {
+    m = LITELLM_DEFAULT_GPT_OSS;
+  }
+
+  const styleFlag = firstConfig(config, [
+    'API_LITELLM_OPENAI_STYLE_MODEL',
+    'LITELLM_OPENAI_STYLE_MODEL',
+  ]);
+  const openAiStyle =
+    styleFlag === '1' ||
+    String(styleFlag ?? '')
+      .trim()
+      .toLowerCase() === 'true';
+
+  const mLow = m.toLowerCase();
+  if (
+    openAiStyle &&
+    !m.includes('/') &&
+    mLow.startsWith('gpt-oss:') &&
+    !mLow.startsWith('openai/')
+  ) {
+    return `openai/${m.replace(/:/g, '-')}`;
+  }
+
+  return m;
+}
+
 @Injectable()
 export class LitellmService {
   private readonly logger = new Logger(LitellmService.name);
@@ -93,12 +135,12 @@ export class LitellmService {
     return firstConfig(this.config, [...LITELLM_API_KEY_ENV_KEYS]);
   }
 
-  /** Padrão alinhado ao deployment LiteLLM interno (gpt-oss-20b). Sobrescreva com API_LITELLM_MODEL. */
+  /** Padrão = id listado em `/v1/models` do LiteLLM (`gpt-oss:20b`). Sobrescreva com API_LITELLM_MODEL. */
   getDefaultModel(): string {
-    return (
+    const raw =
       firstConfig(this.config, [...LITELLM_MODEL_ENV_KEYS])?.trim() ||
-      'gpt-oss-20b'
-    );
+      LITELLM_DEFAULT_GPT_OSS;
+    return normalizeLitellmModelId(raw, this.config);
   }
 
   /**
@@ -116,7 +158,9 @@ export class LitellmService {
       );
     }
 
-    const model = params.model?.trim() || this.getDefaultModel();
+    const model = params.model?.trim()
+      ? normalizeLitellmModelId(params.model, this.config)
+      : this.getDefaultModel();
     const url = `${openAiV1Base(baseUrl)}/chat/completions`;
     const body = {
       model,
