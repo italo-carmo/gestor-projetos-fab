@@ -30,13 +30,17 @@ export class SettingsService implements OnModuleInit {
     await this.syncLitellmOverrides();
   }
 
+  private get appSetting() {
+    return (this.prisma as any).appSetting;
+  }
+
   async get(key: string): Promise<string | null> {
-    const row = await this.prisma.appSetting.findUnique({ where: { key } });
-    return row?.value ?? null;
+    const row = await this.appSetting.findUnique({ where: { key } });
+    return (row as any)?.value ?? null;
   }
 
   async set(key: string, value: string): Promise<void> {
-    await this.prisma.appSetting.upsert({
+    await this.appSetting.upsert({
       where: { key },
       update: { value },
       create: { key, value },
@@ -50,17 +54,19 @@ export class SettingsService implements OnModuleInit {
     apiKeyMasked: string;
     model: string;
   }> {
-    const rows = await this.prisma.appSetting.findMany({
-      where: { key: { in: Object.values(AI_SETTING_KEYS) } },
-    });
-    const map = new Map(rows.map((r) => [r.key, r.value]));
-    const apiKey = map.get(AI_SETTING_KEYS.apiKey) ?? '';
+    const rows: { key: string; value: string }[] =
+      await this.appSetting.findMany({
+        where: { key: { in: Object.values(AI_SETTING_KEYS) } },
+      });
+    const map = new Map<string, string>(rows.map((r) => [r.key, r.value]));
+    const apiKey: string = map.get(AI_SETTING_KEYS.apiKey) ?? '';
     return {
-      systemPrompt:
-        map.get(AI_SETTING_KEYS.systemPrompt) ?? DEFAULT_SYSTEM_PROMPT,
+      systemPrompt: map.get(AI_SETTING_KEYS.systemPrompt) ?? DEFAULT_SYSTEM_PROMPT,
       baseUrl: map.get(AI_SETTING_KEYS.baseUrl) ?? '',
       apiKey,
-      apiKeyMasked: apiKey ? `${apiKey.slice(0, 5)}${'*'.repeat(Math.max(0, apiKey.length - 5))}` : '',
+      apiKeyMasked: apiKey
+        ? `${apiKey.slice(0, 5)}${'*'.repeat(Math.max(0, apiKey.length - 5))}`
+        : '',
       model: map.get(AI_SETTING_KEYS.model) ?? '',
     };
   }
