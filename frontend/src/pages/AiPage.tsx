@@ -23,7 +23,84 @@ import ContentCopyRoundedIcon from "@mui/icons-material/ContentCopyRounded";
 import SmartToyRoundedIcon from "@mui/icons-material/SmartToyRounded";
 import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
 import { useCallback, useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { api } from "../api/client";
+
+function MdContent({ children, dark }: { children: string; dark?: boolean }) {
+  return (
+    <Box
+      sx={{
+        "& h1, & h2, & h3, & h4": {
+          color: dark ? "#fff" : "#1A3C6E",
+          mt: 1.5,
+          mb: 0.5,
+          fontWeight: 700,
+          fontSize: "1.05rem",
+          "&:first-of-type": { mt: 0 },
+        },
+        "& h2": { fontSize: "1rem" },
+        "& h3, & h4": { fontSize: "0.95rem" },
+        "& p": {
+          my: 0.5,
+          lineHeight: 1.7,
+          fontSize: "0.875rem",
+        },
+        "& ul, & ol": { pl: 2.5, my: 0.5 },
+        "& li": { mb: 0.3, fontSize: "0.875rem", lineHeight: 1.6 },
+        "& strong": { fontWeight: 700 },
+        "& table": {
+          width: "100%",
+          borderCollapse: "collapse",
+          my: 1,
+          fontSize: "0.82rem",
+        },
+        "& th, & td": {
+          border: "1px solid",
+          borderColor: dark ? "rgba(255,255,255,0.2)" : "#E0E0E0",
+          px: 1,
+          py: 0.5,
+          textAlign: "left",
+        },
+        "& th": {
+          bgcolor: dark ? "rgba(255,255,255,0.1)" : "#F5F5F5",
+          fontWeight: 700,
+        },
+        "& code": {
+          bgcolor: dark ? "rgba(255,255,255,0.1)" : "#F0F0F0",
+          px: 0.5,
+          borderRadius: 0.5,
+          fontSize: "0.82rem",
+          fontFamily: "monospace",
+        },
+        "& pre": {
+          bgcolor: dark ? "rgba(0,0,0,0.3)" : "#F5F5F5",
+          p: 1.5,
+          borderRadius: 1,
+          overflow: "auto",
+          my: 1,
+        },
+        "& blockquote": {
+          borderLeft: "3px solid",
+          borderColor: dark ? "rgba(255,255,255,0.3)" : "#1A3C6E",
+          pl: 1.5,
+          ml: 0,
+          my: 1,
+          color: dark ? "rgba(255,255,255,0.8)" : "text.secondary",
+          fontStyle: "italic",
+        },
+        "& hr": {
+          border: "none",
+          borderTop: "1px solid",
+          borderColor: dark ? "rgba(255,255,255,0.15)" : "#E0E0E0",
+          my: 1.5,
+        },
+      }}
+    >
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>{children}</ReactMarkdown>
+    </Box>
+  );
+}
 
 const ANALYSIS_CARDS: {
   type: string;
@@ -286,12 +363,7 @@ function AnalysisCard({
               flexGrow: 1,
             }}
           >
-            <Typography
-              variant="body2"
-              sx={{ whiteSpace: "pre-wrap", lineHeight: 1.7 }}
-            >
-              {state.narrative}
-            </Typography>
+            <MdContent>{state.narrative}</MdContent>
             {state.model && !state.running && (
               <Stack direction="row" spacing={1} sx={{ mt: 1.5 }} alignItems="center">
                 <Chip
@@ -538,12 +610,20 @@ function ChatbotTab() {
                 boxShadow: 1,
               }}
             >
-              <Typography
-                variant="body2"
-                sx={{ whiteSpace: "pre-wrap", lineHeight: 1.7 }}
-              >
-                {msg.content || (streaming && i === messages.length - 1 ? "..." : "")}
-              </Typography>
+              {msg.role === "assistant" ? (
+                msg.content ? (
+                  <MdContent>{msg.content}</MdContent>
+                ) : streaming && i === messages.length - 1 ? (
+                  <Typography variant="body2" sx={{ lineHeight: 1.7 }}>...</Typography>
+                ) : null
+              ) : (
+                <Typography
+                  variant="body2"
+                  sx={{ whiteSpace: "pre-wrap", lineHeight: 1.7 }}
+                >
+                  {msg.content}
+                </Typography>
+              )}
             </Box>
             {msg.role === "user" && (
               <PersonRoundedIcon

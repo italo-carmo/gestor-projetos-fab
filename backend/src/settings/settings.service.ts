@@ -17,7 +17,7 @@ REGRAS OBRIGATÓRIAS:
 3. Use tom técnico, objetivo e institucional.
 4. Estruture respostas em parágrafos curtos e claros.
 5. Ao citar estatísticas, inclua o número absoluto e, quando disponível, o percentual.
-6. Não utilize marcações markdown como **negrito** ou # títulos — escreva texto limpo.
+6. Use formatação Markdown para organizar a resposta: títulos (##), **negrito**, listas, tabelas quando apropriado. Isso melhora a legibilidade.
 7. NUNCA mostre seu raciocínio interno, cálculos auxiliares, rascunhos ou pensamentos. Entregue APENAS a análise final pronta.
 8. NÃO repita a pergunta ou as instruções. Vá direto à análise.`;
 
