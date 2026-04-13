@@ -28,13 +28,19 @@ git rev-parse --short HEAD
 
 ### 2) Sincronizar codigo para runtime
 Preservar pastas de upload (fotos do mapeamento institucional): `-f 'P backend/uploads'` e `-f 'P uploads'`.
+
+**Importante:** com `--delete`, o `rsync` pode **apagar** `/opt/gestao-projetos/backend/.env` se ele nao existir no clone (segredos nao vao pro Git). Use **protecao** e **nao copie** `.env` do clone:
+- `-f 'P backend/.env'` — nao remove o `.env` de producao
+- `--exclude 'backend/.env'` — nao sobrescreve com um `.env` eventual no servidor de build
+
 ```bash
 rsync -a --delete \
   --exclude ".git" \
   --exclude "node_modules" \
   --exclude "frontend/node_modules" \
   --exclude "backend/node_modules" \
-  -f 'P backend/uploads' -f 'P uploads' \
+  --exclude "backend/.env" \
+  -f 'P backend/uploads' -f 'P uploads' -f 'P backend/.env' \
   /home/sddm/gestor-projetos-fab/ /opt/gestao-projetos/
 ```
 
@@ -92,7 +98,7 @@ git checkout main
 git pull --ff-only origin main
 echo "SOURCE_HEAD=$(git rev-parse --short HEAD)"
 
-rsync -a --delete --exclude ".git" --exclude "node_modules" --exclude "frontend/node_modules" --exclude "backend/node_modules" -f 'P backend/uploads' -f 'P uploads' \
+rsync -a --delete --exclude ".git" --exclude "node_modules" --exclude "frontend/node_modules" --exclude "backend/node_modules" --exclude "backend/.env" -f 'P backend/uploads' -f 'P uploads' -f 'P backend/.env' \
   /home/sddm/gestor-projetos-fab/ /opt/gestao-projetos/
 
 cd /opt/gestao-projetos
@@ -118,3 +124,4 @@ curl -s -o /dev/null -w "ROOT=%{http_code}\n" http://127.0.0.1/
 - Se health retornar `000` logo apos restart, aguarde 2-5s e teste novamente.
 - Se migration falhar, nao reinicie servicos antes de corrigir o banco.
 - **Fotos do mapeamento institucional (NOT_FOUND)**: antigamente o rsync com `--delete` apagava a pasta de uploads a cada deploy. A partir deste fluxo, `backend/uploads` e `uploads` sao preservados. Fotos enviadas antes disso foram perdidas — e preciso reenviar. Opcional: definir `MISSION_CHECKLIST_UPLOADS_DIR` (ex: `/var/lib/cipavd/mission-checklist-uploads`) no systemd e criar o diretório para que as fotos fiquem fora da árvore do app.
+- **LiteLLM “nao configurado” apos deploy**: o `rsync --delete` podia **remover** `backend/.env` em `/opt/gestao-projetos` se o arquivo nao existisse no clone. O fluxo acima protege o `.env`. Se sumiu, recrie `/opt/gestao-projetos/backend/.env` (ou `scp` da maquina local) com `API_LITELLM` e `API_LITELLM_BASE_URL` e reinicie o backend.

@@ -39,13 +39,19 @@ function openAiV1Base(baseUrl: string): string {
   return `${u}/v1`;
 }
 
+/**
+ * Lê variáveis do LiteLLM: primeiro `process.env` (systemd EnvironmentFile),
+ * depois ConfigService. Evita falha se o cache interno do Config divergir do ambiente.
+ */
 function firstConfig(
   config: ConfigService,
   keys: string[],
 ): string | undefined {
   for (const key of keys) {
-    const v = stripEnvQuotes(config.get<string>(key));
-    if (v) return v;
+    const fromEnv = stripEnvQuotes(process.env[key]);
+    if (fromEnv) return fromEnv;
+    const fromConfig = stripEnvQuotes(config.get<string>(key));
+    if (fromConfig) return fromConfig;
   }
   return undefined;
 }
