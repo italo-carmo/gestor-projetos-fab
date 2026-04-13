@@ -45,6 +45,7 @@ rsync -a --delete \
 ```
 
 ### 3) Instalar dependencias, migrar banco e build backend
+Se suspeitar de `dist` antigo ou incremental estranho, apague antes: `rm -rf /opt/gestao-projetos/backend/dist`.
 ```bash
 cd /opt/gestao-projetos
 npm install --workspaces --no-audit --no-fund
@@ -56,6 +57,7 @@ npm run build
 ```
 
 ### 4) Build frontend (producao)
+Idem: `rm -rf /opt/gestao-projetos/frontend/dist` antes do build se o bundle parecer desatualizado.
 ```bash
 cd /opt/gestao-projetos/frontend
 npm install --no-audit --no-fund
@@ -125,3 +127,4 @@ curl -s -o /dev/null -w "ROOT=%{http_code}\n" http://127.0.0.1/
 - Se migration falhar, nao reinicie servicos antes de corrigir o banco.
 - **Fotos do mapeamento institucional (NOT_FOUND)**: antigamente o rsync com `--delete` apagava a pasta de uploads a cada deploy. A partir deste fluxo, `backend/uploads` e `uploads` sao preservados. Fotos enviadas antes disso foram perdidas — e preciso reenviar. Opcional: definir `MISSION_CHECKLIST_UPLOADS_DIR` (ex: `/var/lib/cipavd/mission-checklist-uploads`) no systemd e criar o diretório para que as fotos fiquem fora da árvore do app.
 - **LiteLLM “nao configurado” apos deploy**: o `rsync --delete` podia **remover** `backend/.env` em `/opt/gestao-projetos` se o arquivo nao existisse no clone. O fluxo acima protege o `.env`. Se sumiu, recrie `/opt/gestao-projetos/backend/.env` (ou `scp` da maquina local) com `API_LITELLM` e `API_LITELLM_BASE_URL` e reinicie o backend.
+- **Frontend ou backend “antigo” apos deploy**: no servidor, apagar `backend/dist` e `frontend/dist`, rodar `npm run build` / `vite build` de novo, reiniciar `cipavd-backend`. No navegador use atualizacao forcada (Ctrl+F5) ou janela anonima; o Nginx em producao pode usar `Cache-Control: no-store` em `/index.html` e cache longo em `/assets/` para o hash do Vite sempre mandar no JS certo.
