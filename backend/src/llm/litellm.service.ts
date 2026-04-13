@@ -100,6 +100,27 @@ export function normalizeLitellmModelId(
 }
 
 /**
+ * Some reasoning models (e.g. gpt-oss:20b) output chain-of-thought
+ * before the real answer, delimited by a marker like "assistantfinal".
+ * Pattern: "analysis<thinking>...assistantfinal<actual answer>"
+ */
+const REASONING_MARKERS = ['assistantfinal', 'assistant_final', 'finalanswer', 'final_answer'];
+
+export function stripReasoningPrefix(text: string): string {
+  const lower = text.toLowerCase();
+  for (const marker of REASONING_MARKERS) {
+    const idx = lower.lastIndexOf(marker);
+    if (idx !== -1) {
+      return text.slice(idx + marker.length).trimStart();
+    }
+  }
+  if (lower.startsWith('analysis')) {
+    return text.slice(8).trimStart();
+  }
+  return text;
+}
+
+/**
  * Override values injected at runtime from AppSetting (DB).
  * Set by SettingsService on startup and after admin updates.
  */
@@ -212,10 +233,11 @@ export class LitellmService {
       throw new Error(errMsg || `LiteLLM HTTP ${res.status}`);
     }
 
-    const content = data.choices?.[0]?.message?.content?.trim() ?? '';
-    if (!content) {
+    const rawContent = data.choices?.[0]?.message?.content?.trim() ?? '';
+    if (!rawContent) {
       throw new Error('LiteLLM não retornou conteúdo na resposta.');
     }
+    const content = stripReasoningPrefix(rawContent);
     return { content, model: data.model ?? model };
   }
 
@@ -270,22 +292,29 @@ export class LitellmService {
     if (!reader) throw new Error('Sem body na resposta SSE do LiteLLM.');
 
     const decoder = new TextDecoder();
-    let buffer = '';
+    let sseBuffer = '';
     let resolvedModel = model;
+
+    let reasoningDone = false;
+    let accumulated = '';
 
     try {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        buffer += decoder.decode(value, { stream: true });
+        sseBuffer += decoder.decode(value, { stream: true });
 
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? '';
+        const lines = sseBuffer.split('\n');
+        sseBuffer = lines.pop() ?? '';
 
         for (const line of lines) {
           const trimmed = line.trim();
           if (!trimmed || trimmed.startsWith(':')) continue;
           if (trimmed === 'data: [DONE]') {
+            if (!reasoningDone && accumulated) {
+              const cleaned = stripReasoningPrefix(accumulated);
+              if (cleaned) yield { type: 'token', text: cleaned };
+            }
             yield { type: 'done', model: resolvedModel };
             return;
           }
@@ -294,14 +323,36 @@ export class LitellmService {
             const chunk = JSON.parse(trimmed.slice(6));
             resolvedModel = chunk.model ?? resolvedModel;
             const delta = chunk.choices?.[0]?.delta?.content;
-            if (delta) {
+            if (!delta) continue;
+
+            if (reasoningDone) {
               yield { type: 'token', text: delta };
+              continue;
+            }
+
+            accumulated += delta;
+            const accLower = accumulated.toLowerCase();
+            for (const marker of REASONING_MARKERS) {
+              const idx = accLower.lastIndexOf(marker);
+              if (idx !== -1) {
+                reasoningDone = true;
+                const afterMarker = accumulated.slice(idx + marker.length);
+                accumulated = '';
+                const clean = afterMarker.trimStart();
+                if (clean) yield { type: 'token', text: clean };
+                break;
+              }
             }
           } catch { /* skip malformed */ }
         }
       }
     } finally {
       reader.releaseLock();
+    }
+
+    if (!reasoningDone && accumulated) {
+      const cleaned = stripReasoningPrefix(accumulated);
+      if (cleaned) yield { type: 'token', text: cleaned };
     }
     yield { type: 'done', model: resolvedModel };
   }
