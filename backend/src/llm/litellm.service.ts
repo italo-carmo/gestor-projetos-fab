@@ -105,19 +105,62 @@ export function normalizeLitellmModelId(
  * Pattern: "analysis<thinking>...assistantfinal<actual answer>"
  */
 const REASONING_MARKERS = ['assistantfinal', 'assistant_final', 'finalanswer', 'final_answer'];
+const REASONING_PREAMBLE_PATTERN =
+  /^(we need to|let'?s\b|must\b|now\b|first\b|second\b|third\b|i need to|i should|we should|we must|analysis\b|thinking\b|preciso\b|devemos\b|temos que\b|vou\b|vamos\b)/i;
 
 export function stripReasoningPrefix(text: string): string {
-  const lower = text.toLowerCase();
+  const original = text;
+  let current = text;
+  const lower = current.toLowerCase();
   for (const marker of REASONING_MARKERS) {
     const idx = lower.lastIndexOf(marker);
     if (idx !== -1) {
-      return text.slice(idx + marker.length).trimStart();
+      current = current.slice(idx + marker.length).trimStart();
+      return stripReasoningPreamble(current);
     }
   }
   if (lower.startsWith('analysis')) {
-    return text.slice(8).trimStart();
+    current = current.slice(8).trimStart();
+    return stripReasoningPreamble(current);
   }
-  return text;
+  current = stripReasoningPreamble(current);
+  return current || original;
+}
+
+function stripReasoningPreamble(text: string): string {
+  const source = text.trimStart();
+  if (!source) return source;
+
+  // Se houver indícios de raciocínio antes de um heading Markdown, corta no heading.
+  const headingMatch = source.match(/\n##?\s+/);
+  if (headingMatch && typeof headingMatch.index === 'number' && headingMatch.index > 0) {
+    const before = source.slice(0, headingMatch.index);
+    if (REASONING_PREAMBLE_PATTERN.test(before.trim())) {
+      return source.slice(headingMatch.index + 1).trimStart();
+    }
+  }
+
+  const lines = source.split('\n');
+  let idx = 0;
+  while (idx < lines.length) {
+    const line = lines[idx].trim();
+    if (!line) {
+      idx++;
+      continue;
+    }
+    if (REASONING_PREAMBLE_PATTERN.test(line)) {
+      idx++;
+      continue;
+    }
+    if (/^[-*]\s+/.test(line) && REASONING_PREAMBLE_PATTERN.test(line.slice(2).trim())) {
+      idx++;
+      continue;
+    }
+    break;
+  }
+
+  const cleaned = lines.slice(idx).join('\n').trimStart();
+  return cleaned || source;
 }
 
 function extractTextLike(value: unknown): string {
