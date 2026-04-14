@@ -357,6 +357,15 @@ export function useActivities(filters: Record<string, any>) {
   });
 }
 
+export function useActivity(id: string, enabled = true) {
+  return useQuery({
+    queryKey: qk.activity(id || ""),
+    queryFn: async () => (await api.get(`/activities/${id}`)).data,
+    enabled: Boolean(id) && enabled,
+    staleTime: 15_000,
+  });
+}
+
 export function useActivityResponsibleUsers(filters: {
   localityId?: string;
   specialtyId?: string;

@@ -35,6 +35,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   useActivityComments,
+  useActivity,
   useActivityResponsibleUsers,
   useActivityTypes,
   useAddActivityComment,
@@ -545,21 +546,47 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
     }
   }, [sortState]);
 
-  useEffect(() => {
-    if (activitiesQuery.isLoading) return;
-    if (selectedId && !items.some((i: any) => i.id === selectedId)) {
-      setSelectedId(null);
-      if (!isCreateMode) setDrawerOpen(false);
-    }
-  }, [activitiesQuery.isLoading, items, selectedId, isCreateMode]);
-
-  const selected = items.find((i: any) => i.id === selectedId) ?? null;
+  const selectedFromList = useMemo(
+    () => items.find((i: any) => i.id === selectedId) ?? null,
+    [items, selectedId],
+  );
+  const selectedByIdQuery = useActivity(
+    selectedId ?? '',
+    Boolean(selectedId) && drawerOpen && !selectedFromList,
+  );
+  const selected = (selectedFromList ?? selectedByIdQuery.data ?? null) as any;
+  const selectedByIdLoading =
+    Boolean(selectedId) &&
+    drawerOpen &&
+    !selectedFromList &&
+    selectedByIdQuery.isLoading;
 
   useEffect(() => {
     if (!selectedId) return;
     setCommentText('');
     void markCommentsSeen.mutateAsync(selectedId).catch(() => {});
   }, [selectedId]);
+
+  useEffect(() => {
+    if (!selectedId || !drawerOpen || isCreateMode) return;
+    if (!selectedByIdQuery.isError) return;
+    const payload = parseApiError(selectedByIdQuery.error);
+    toast.push({
+      message:
+        payload.message ??
+        'Não foi possível abrir os detalhes da atividade pelo link informado.',
+      severity: 'warning',
+    });
+    setSelectedId(null);
+    setDrawerOpen(false);
+  }, [
+    selectedId,
+    drawerOpen,
+    isCreateMode,
+    selectedByIdQuery.isError,
+    selectedByIdQuery.error,
+    toast,
+  ]);
 
   useEffect(() => {
     setSelectedIds((prev) =>
@@ -1884,6 +1911,12 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
               <Tab value="activity" label="Dados da atividade" />
               <Tab value="report" label="Relatório" />
             </Tabs>
+          )}
+
+          {!isCreateMode && selectedByIdLoading && (
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Carregando atividade selecionada...
+            </Typography>
           )}
 
           {(isCreateMode || drawerTab === 'activity') && (

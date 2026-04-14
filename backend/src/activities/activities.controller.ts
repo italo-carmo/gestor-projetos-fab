@@ -204,6 +204,12 @@ export class ActivitiesController {
     return this.activities.delete(id, user);
   }
 
+  @Get(':id')
+  @RequirePermission('task_instances', 'view')
+  getById(@Param('id') id: string, @CurrentUser() user: RbacUser) {
+    return this.activities.getById(id, user);
+  }
+
   @Get(':id/comments')
   @RequirePermission('task_instances', 'view')
   comments(@Param('id') id: string, @CurrentUser() user: RbacUser) {

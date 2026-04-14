@@ -22,6 +22,7 @@ export const qk = {
     ["missionChecklistMapping", filters] as const,
   activities: (filters: Record<string, any>) =>
     ["activities", filters] as const,
+  activity: (id: string) => ["activity", id] as const,
   task: (id: string) => ["task", id] as const,
   gantt: (filters: Record<string, any>) => ["gantt", filters] as const,
   calendarYear: (year: number, filters: Record<string, any>) =>
