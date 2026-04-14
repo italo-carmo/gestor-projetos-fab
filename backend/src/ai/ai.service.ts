@@ -1124,7 +1124,7 @@ export class AiService {
     type: AnalysisType,
     narrative: string,
   ): Promise<string> {
-    const base = String(narrative || '').trim();
+    const base = this.normalizeReferenceLinks(String(narrative || '')).trim();
     if (!base) return base;
     if (/^##\s*refer[eê]ncias dos dados\b/im.test(base)) {
       return base;
@@ -1151,6 +1151,56 @@ export class AiService {
     if (!filtered.length) return base;
 
     return `${base}\n\n## Referências dos Dados\n${filtered.join('\n')}`;
+  }
+
+  private normalizeReferenceLinks(text: string): string {
+    let normalized = String(text || '');
+
+    // Corrige aliases legados de rota de pesquisas.
+    normalized = normalized
+      .replace(
+        /https?:\/\/cipavd\.ccabr\.intraer\/dashboard\/bi-survey\b/gi,
+        '/dashboard/bi',
+      )
+      .replace(
+        /https?:\/\/cipavd\.ccabr\.intraer\/dashboard\/bi-domestic-violence\b/gi,
+        '/dashboard/bi-violencia-domestica',
+      )
+      .replace(/\/dashboard\/bi-survey\b/g, '/dashboard/bi')
+      .replace(
+        /\/dashboard\/bi-domestic-violence\b/g,
+        '/dashboard/bi-violencia-domestica',
+      );
+
+    // Remove parâmetro espúrio de origem quando ele vier em links de atividades.
+    normalized = normalized.replace(
+      /(\/activities(?:-cipavd)?\?[^)\s\]]+)/g,
+      (match) => this.stripQueryParam(match, 'itemSourceType'),
+    );
+    normalized = normalized.replace(
+      /(https?:\/\/[^\s)\]]*\/activities(?:-cipavd)?\?[^)\s\]]+)/g,
+      (match) => this.stripQueryParam(match, 'itemSourceType'),
+    );
+
+    return normalized;
+  }
+
+  private stripQueryParam(input: string, paramName: string): string {
+    const raw = String(input || '').trim();
+    if (!raw || !raw.includes('?')) return raw;
+    const isAbsolute = /^https?:\/\//i.test(raw);
+
+    try {
+      const parsed = isAbsolute ? new URL(raw) : new URL(raw, 'https://local');
+      parsed.searchParams.delete(paramName);
+      const path =
+        parsed.pathname +
+        (parsed.search || '') +
+        (parsed.hash || '');
+      return isAbsolute ? parsed.toString() : path;
+    } catch {
+      return raw;
+    }
   }
 
   private compactText(text: any) {

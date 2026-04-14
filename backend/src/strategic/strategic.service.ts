@@ -448,12 +448,12 @@ export class StrategicService {
       pushRef(
         'bi-survey-dashboard',
         'Pesquisa institucional (BI Survey)',
-        '/dashboard/bi-survey',
+        '/dashboard/bi',
       );
       pushRef(
         'bi-domestic-dashboard',
         'Pesquisa de violência doméstica',
-        '/dashboard/bi-domestic-violence',
+        '/dashboard/bi-violencia-domestica',
       );
       pushRef(
         'bi-recruits-dashboard',
