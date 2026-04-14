@@ -4,7 +4,7 @@ export type ApiErrorPayload = { message?: string; code?: string; details?: any }
 
 const REASON_MESSAGES: Record<string, string> = {
   CONFIDENTIALITY_TERM_REQUIRED_FOR_SEXUAL:
-    'Para assédio sexual, o Termo de Sigilo deve ser marcado antes de salvar.',
+    'Para assédio sexual, o Termo de Sigilo deve ser marcado na etapa 2 (Acolhimento e proteção) antes de salvar.',
   PRELIMINARY_REPORT_DATE_REQUIRES_FLAG:
     'Informe que o relatório preliminar foi gerado antes de definir a data.',
   SEPARATION_APPLIED_REQUIRES_EVALUATION:

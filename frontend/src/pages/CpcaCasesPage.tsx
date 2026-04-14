@@ -367,7 +367,8 @@ function inferMacroComplaintTypeFromDetailed(
   if (!normalized) return null;
   if (
     normalized === "ASSEDIO_SEXUAL" ||
-    normalized === "VIOLENCIA_DOMESTICA_SEXUAL"
+    normalized === "VIOLENCIA_DOMESTICA_SEXUAL" ||
+    normalized === "VIOLENCIA_SEXUAL"
   ) {
     return "SEXUAL";
   }
@@ -766,9 +767,10 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     const macroComplaintType = inferredComplaintType ?? form.complaintType;
 
     if (macroComplaintType === "SEXUAL" && !form.confidentialityTermSigned) {
+      setActiveStep(1);
       toast.push({
         message:
-          "Para casos de assédio sexual, o Termo de Sigilo deve ser marcado antes de salvar. Acesse a aba 'Sigilo e Proteção' e marque o campo.",
+          "Para casos de assédio sexual, o Termo de Sigilo deve ser marcado na etapa 2 (Acolhimento e proteção).",
         severity: "warning",
       });
       return;
@@ -1249,8 +1251,8 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
           {complaintTypeForValidation === "SEXUAL" &&
             !form.confidentialityTermSigned && (
               <Alert severity="warning">
-                Em assédio sexual, o termo de sigilo deve ser marcado antes de
-                salvar.
+                Em assédio sexual, o termo de sigilo deve ser marcado na etapa 2
+                para concluir o salvamento.
               </Alert>
             )}
 
