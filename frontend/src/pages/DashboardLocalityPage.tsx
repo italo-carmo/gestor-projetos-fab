@@ -43,6 +43,8 @@ export function DashboardLocalityPage() {
   const missionsQuery = useMissions({ localityId: id, pageSize: '20' }, Boolean(id));
   const meetingsQuery = useMeetings({ localityId: id, pageSize: '20' }, canViewMeetings);
   const documentsQuery = useDocuments({ localityId: id, pageSize: '20' }, canViewDocuments);
+  // Hooks devem ser declarados antes de retornos condicionais para manter ordem estável.
+  const [selectedBestPractice, setSelectedBestPractice] = useState<any>(null);
 
   if (progressQuery.isLoading) return <SkeletonState />;
   if (progressQuery.isError) return <ErrorState error={progressQuery.error} onRetry={() => progressQuery.refetch()} />;
@@ -68,9 +70,6 @@ export function DashboardLocalityPage() {
   const missions = (missionsQuery.data?.items ?? []).slice(0, 5);
   const meetings = (meetingsQuery.data?.items ?? []).slice(0, 5);
   const documents = (documentsQuery.data?.items ?? []).slice(0, 5);
-
-  // Estado para modal de boas práticas
-  const [selectedBestPractice, setSelectedBestPractice] = useState<any>(null);
 
   return (
     <Box>
