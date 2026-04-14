@@ -54,6 +54,10 @@ export const ANALYSIS_CATALOG: {
   },
 ];
 
+type NarrativePdfBlock =
+  | { type: 'paragraph'; text: string }
+  | { type: 'table'; header: string[]; rows: string[][] };
+
 @Injectable()
 export class AiService {
   private readonly logger = new Logger(AiService.name);
@@ -386,7 +390,7 @@ export class AiService {
 
       const drawNarrative = () => {
         sectionHeader('01', 'SÍNTESE NARRATIVA DA IA');
-        const paragraphs = this.normalizeNarrativeForPdf(args.narrative);
+        const blocks = this.parseNarrativeBlocksForPdf(args.narrative);
         doc
           .font('Helvetica')
           .fontSize(9)
@@ -398,13 +402,125 @@ export class AiService {
             { width: PAGE_WIDTH },
           );
         doc.moveDown(0.4);
-        for (const paragraph of paragraphs) {
+        const drawNarrativeTable = (table: { header: string[]; rows: string[][] }) => {
+          const colCount = Math.max(
+            table.header.length,
+            ...table.rows.map((row) => row.length),
+          );
+          if (colCount < 2) return;
+          const colW = PAGE_WIDTH / colCount;
+          const colWidths = Array.from({ length: colCount }, () => colW);
+          const padX = 5;
+          const padY = 4;
+          const minRowHeight = 18;
+          const pageBottom = doc.page.height - 46;
+
+          const normalizeRow = (row: string[]) => {
+            const out = [...row];
+            while (out.length < colCount) out.push('');
+            return out.slice(0, colCount);
+          };
+
+          const headerCells = normalizeRow(table.header);
+          const bodyRows = table.rows.map((row) => normalizeRow(row));
+
+          const computeRowHeight = (
+            cells: string[],
+            font: 'Helvetica' | 'Helvetica-Bold',
+            size: number,
+          ) => {
+            let maxHeight = minRowHeight;
+            for (let i = 0; i < colCount; i++) {
+              const cell = cells[i] || ' ';
+              const textHeight =
+                doc
+                  .font(font)
+                  .fontSize(size)
+                  .heightOfString(cell, {
+                    width: colWidths[i] - padX * 2,
+                    align: 'left',
+                  }) +
+                padY * 2;
+              if (textHeight > maxHeight) maxHeight = textHeight;
+            }
+            return maxHeight;
+          };
+
+          const drawHeaderAt = (y: number) => {
+            const rowH = computeRowHeight(headerCells, 'Helvetica-Bold', 8);
+            doc.rect(LEFT, y, PAGE_WIDTH, rowH).fill(BLUE);
+            let x = LEFT;
+            for (let i = 0; i < colCount; i++) {
+              doc
+                .rect(x, y, colWidths[i], rowH)
+                .lineWidth(0.35)
+                .strokeColor(BORDER)
+                .stroke();
+              doc
+                .font('Helvetica-Bold')
+                .fontSize(8)
+                .fillColor('#FFFFFF')
+                .text(headerCells[i] || '', x + padX, y + padY, {
+                  width: colWidths[i] - padX * 2,
+                  align: 'left',
+                });
+              x += colWidths[i];
+            }
+            return y + rowH;
+          };
+
+          let y = doc.y;
+          if (y + minRowHeight > pageBottom) {
+            doc.addPage();
+            y = doc.y;
+          }
+          y = drawHeaderAt(y);
+
+          for (const [idx, row] of bodyRows.entries()) {
+            const rowH = computeRowHeight(row, 'Helvetica', 8);
+            if (y + rowH > pageBottom) {
+              doc.addPage();
+              y = drawHeaderAt(doc.y);
+            }
+
+            if (idx % 2 === 0) {
+              doc.rect(LEFT, y, PAGE_WIDTH, rowH).fill('#F8FAFC');
+            }
+
+            let x = LEFT;
+            for (let i = 0; i < colCount; i++) {
+              doc
+                .rect(x, y, colWidths[i], rowH)
+                .lineWidth(0.35)
+                .strokeColor(BORDER)
+                .stroke();
+              doc
+                .font('Helvetica')
+                .fontSize(8)
+                .fillColor(DARK)
+                .text(row[i] || '', x + padX, y + padY, {
+                  width: colWidths[i] - padX * 2,
+                  align: 'left',
+                });
+              x += colWidths[i];
+            }
+            y += rowH;
+          }
+
+          doc.y = y + 8;
+        };
+
+        for (const block of blocks) {
+          if (block.type === 'table') {
+            drawNarrativeTable(block);
+            continue;
+          }
           ensureSpace(42);
           doc
             .font('Helvetica')
             .fontSize(10)
             .fillColor(DARK)
-            .text(paragraph, LEFT, doc.y, {
+            .text(block.text, LEFT, doc.y, {
               width: PAGE_WIDTH,
               align: 'justify',
             });
@@ -770,23 +886,105 @@ export class AiService {
     });
   }
 
-  private normalizeNarrativeForPdf(narrative: string): string[] {
-    const cleaned = String(narrative || '')
+  private parseNarrativeBlocksForPdf(narrative: string): NarrativePdfBlock[] {
+    const lines = String(narrative || '')
       .replace(/\r/g, '')
-      .replace(/^#{1,6}\s*/gm, '')
+      .split('\n');
+
+    if (!lines.some((line) => line.trim())) {
+      return [
+        {
+          type: 'paragraph',
+          text: 'Análise ainda não disponível para esta execução.',
+        },
+      ];
+    }
+
+    const blocks: NarrativePdfBlock[] = [];
+    const paragraphBuffer: string[] = [];
+
+    const flushParagraph = () => {
+      if (paragraphBuffer.length === 0) return;
+      const text = paragraphBuffer.join('\n').trim();
+      paragraphBuffer.length = 0;
+      if (!text) return;
+      blocks.push({ type: 'paragraph', text });
+    };
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmed = line.trim();
+
+      const looksLikeTableHeader =
+        trimmed.includes('|') &&
+        i + 1 < lines.length &&
+        this.isMarkdownTableSeparator(lines[i + 1] ?? '');
+
+      if (looksLikeTableHeader) {
+        flushParagraph();
+        const header = this.parseMarkdownTableRow(line);
+        const rows: string[][] = [];
+        i += 1; // pula linha de separador
+        while (i + 1 < lines.length) {
+          const rowLine = lines[i + 1] ?? '';
+          if (!rowLine.trim() || !rowLine.includes('|')) break;
+          const parsed = this.parseMarkdownTableRow(rowLine);
+          if (parsed.length >= 2) rows.push(parsed);
+          i += 1;
+        }
+        if (header.length >= 2) {
+          blocks.push({ type: 'table', header, rows });
+        }
+        continue;
+      }
+
+      if (!trimmed) {
+        flushParagraph();
+        continue;
+      }
+
+      paragraphBuffer.push(this.normalizeInlineMarkdown(line).trim());
+    }
+
+    flushParagraph();
+    if (blocks.length === 0) {
+      return [
+        {
+          type: 'paragraph',
+          text: 'Análise ainda não disponível para esta execução.',
+        },
+      ];
+    }
+    return blocks;
+  }
+
+  private isMarkdownTableSeparator(line: string): boolean {
+    const trimmed = line.trim();
+    if (!trimmed || !trimmed.includes('-') || !trimmed.includes('|')) {
+      return false;
+    }
+    const withoutEdges = trimmed.replace(/^\|/, '').replace(/\|$/, '');
+    const parts = withoutEdges.split('|').map((part) => part.trim());
+    if (parts.length < 2) return false;
+    return parts.every((part) => /^:?-{3,}:?$/.test(part));
+  }
+
+  private parseMarkdownTableRow(line: string): string[] {
+    const trimmed = line.trim().replace(/^\|/, '').replace(/\|$/, '');
+    return trimmed
+      .split('|')
+      .map((cell) => this.normalizeInlineMarkdown(cell).trim());
+  }
+
+  private normalizeInlineMarkdown(text: string): string {
+    return String(text || '')
+      .replace(/^#{1,6}\s*/, '')
       .replace(/\*\*(.*?)\*\*/g, '$1')
       .replace(/\*(.*?)\*/g, '$1')
       .replace(/`([^`]+)`/g, '$1')
-      .replace(/^\s*[-*]\s+/gm, '• ')
-      .replace(/\n{3,}/g, '\n\n')
-      .trim();
-    if (!cleaned) {
-      return ['Análise ainda não disponível para esta execução.'];
-    }
-    return cleaned
-      .split(/\n{2,}/)
-      .map((p) => p.trim())
-      .filter(Boolean);
+      .replace(/^[-*]\s+/, '• ')
+      .replace(/\\([%|/])/g, '$1')
+      .replace(/\n{3,}/g, '\n\n');
   }
 
   private formatDateTimePtBr(input: string): string {
