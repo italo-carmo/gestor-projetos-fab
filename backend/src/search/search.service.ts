@@ -45,7 +45,7 @@ type LegacySearchPayload = {
 
 type SemanticSearchItem = {
   id: string;
-  entityType: 'TASK' | 'MEETING' | 'LOCALITY' | 'DOCUMENT';
+  entityType: 'TASK' | 'MEETING' | 'LOCALITY' | 'DOCUMENT' | 'SCREEN';
   entityTypeLabel: string;
   title: string;
   subtitle: string | null;
@@ -75,12 +75,26 @@ type SemanticCandidate = {
   fallbackProbability: number;
 };
 
+type SemanticScreenDefinition = {
+  id: string;
+  title: string;
+  subtitle: string;
+  route: string;
+  queryParam: string;
+  keywords: string[];
+};
+
 type SearchPermissionFlags = {
   canViewTasks: boolean;
   canViewNotices: boolean;
   canViewMeetings: boolean;
   canViewLocalities: boolean;
   canViewDocuments: boolean;
+  canViewActivities: boolean;
+  canViewMissions: boolean;
+  canViewBestPractices: boolean;
+  canViewCpcaCases: boolean;
+  canViewSmifComplaints: boolean;
 };
 
 type TaskSearchRow = {
@@ -132,6 +146,72 @@ export class SearchService {
   private readonly maxItemsPerEntity = 20;
   private readonly maxSemanticCandidates = 70;
   private readonly maxSemanticResults = 15;
+  private readonly semanticScreens: SemanticScreenDefinition[] = [
+    {
+      id: 'tasks',
+      title: 'Tarefas',
+      subtitle: 'Tela de tarefas com filtro por texto',
+      route: '/tasks',
+      queryParam: 'q',
+      keywords: ['tarefas', 'pendencias', 'execucao', 'cronograma'],
+    },
+    {
+      id: 'meetings',
+      title: 'Reuniões',
+      subtitle: 'Tela de reuniões com filtro por escopo',
+      route: '/meetings',
+      queryParam: 'scope',
+      keywords: ['reuniao', 'palestra', 'encontro', 'ata', 'agenda'],
+    },
+    {
+      id: 'activities',
+      title: 'Atividades de Campo',
+      subtitle: 'Tela de atividades com filtro textual',
+      route: '/activities',
+      queryParam: 'q',
+      keywords: ['atividade', 'campo', 'acao', 'evento'],
+    },
+    {
+      id: 'missions',
+      title: 'Missões',
+      subtitle: 'Tela de missões com filtro textual',
+      route: '/missions',
+      queryParam: 'q',
+      keywords: ['missao', 'operacao', 'agenda', 'planejamento'],
+    },
+    {
+      id: 'documents',
+      title: 'Documentos',
+      subtitle: 'Tela de documentos com filtro textual',
+      route: '/documents',
+      queryParam: 'q',
+      keywords: ['documento', 'arquivo', 'apresentacao', 'relatorio'],
+    },
+    {
+      id: 'cpca-cases',
+      title: 'Denúncias CPCA',
+      subtitle: 'Tela de denúncias CPCA com filtro textual',
+      route: '/cpca-cases',
+      queryParam: 'q',
+      keywords: ['denuncia', 'cpca', 'assedio', 'violencia'],
+    },
+    {
+      id: 'smif-complaints',
+      title: 'Denúncias SMIF',
+      subtitle: 'Tela de denúncias SMIF com filtro textual',
+      route: '/smif-complaints',
+      queryParam: 'q',
+      keywords: ['smif', 'denuncia', 'assedio', 'violencia'],
+    },
+    {
+      id: 'best-practices',
+      title: 'Boas Práticas',
+      subtitle: 'Tela de boas práticas com filtro textual',
+      route: '/best-practices',
+      queryParam: 'q',
+      keywords: ['boas praticas', 'aprendizados', 'experiencias'],
+    },
+  ];
 
   constructor(
     private readonly prisma: PrismaService,
@@ -164,77 +244,79 @@ export class SearchService {
       ? this.buildDocumentWhere(query, queryTokens, user)
       : null;
 
-    const [tasks, notices, meetings, localities, documents] = await Promise.all([
-      taskWhere
-        ? (this.prisma.taskInstance.findMany({
-            where: taskWhere,
-            select: {
-              id: true,
-              titleOverride: true,
-              localityId: true,
-              dueDate: true,
-              status: true,
-              specialtyId: true,
-              assignedToId: true,
-              eloRoleId: true,
-              taskTemplate: { select: { title: true } },
-              locality: { select: { id: true, name: true, code: true } },
-            },
-            orderBy: [{ dueDate: 'asc' }, { updatedAt: 'desc' }],
-            take: this.maxItemsPerEntity,
-          }) as Promise<TaskSearchRow[]>)
-        : Promise.resolve([] as TaskSearchRow[]),
-      noticeWhere
-        ? (this.prisma.notice.findMany({
-            where: noticeWhere,
-            select: {
-              id: true,
-              title: true,
-              priority: true,
-              dueDate: true,
-            },
-            orderBy: [{ pinned: 'desc' }, { updatedAt: 'desc' }],
-            take: this.maxItemsPerEntity,
-          }) as Promise<NoticeSearchRow[]>)
-        : Promise.resolve([] as NoticeSearchRow[]),
-      meetingWhere
-        ? (this.prisma.meeting.findMany({
-            where: meetingWhere,
-            select: {
-              id: true,
-              datetime: true,
-              status: true,
-              scope: true,
-              localityId: true,
-            },
-            orderBy: [{ datetime: 'desc' }, { updatedAt: 'desc' }],
-            take: this.maxItemsPerEntity,
-          }) as Promise<MeetingSearchRow[]>)
-        : Promise.resolve([] as MeetingSearchRow[]),
-      localityWhere
-        ? (this.prisma.locality.findMany({
-            where: localityWhere,
-            select: { id: true, code: true, name: true },
-            orderBy: { name: 'asc' },
-            take: this.maxItemsPerEntity,
-          }) as Promise<LocalitySearchRow[]>)
-        : Promise.resolve([] as LocalitySearchRow[]),
-      documentWhere
-        ? (this.prisma.documentAsset.findMany({
-            where: documentWhere,
-            select: {
-              id: true,
-              title: true,
-              category: true,
-              localityId: true,
-              fileName: true,
-              locality: { select: { id: true, name: true, code: true } },
-            },
-            orderBy: [{ updatedAt: 'desc' }, { title: 'asc' }],
-            take: this.maxItemsPerEntity,
-          }) as Promise<DocumentSearchRow[]>)
-        : Promise.resolve([] as DocumentSearchRow[]),
-    ]);
+    const [tasks, notices, meetings, localities, documents] = await Promise.all(
+      [
+        taskWhere
+          ? (this.prisma.taskInstance.findMany({
+              where: taskWhere,
+              select: {
+                id: true,
+                titleOverride: true,
+                localityId: true,
+                dueDate: true,
+                status: true,
+                specialtyId: true,
+                assignedToId: true,
+                eloRoleId: true,
+                taskTemplate: { select: { title: true } },
+                locality: { select: { id: true, name: true, code: true } },
+              },
+              orderBy: [{ dueDate: 'asc' }, { updatedAt: 'desc' }],
+              take: this.maxItemsPerEntity,
+            }) as Promise<TaskSearchRow[]>)
+          : Promise.resolve([] as TaskSearchRow[]),
+        noticeWhere
+          ? (this.prisma.notice.findMany({
+              where: noticeWhere,
+              select: {
+                id: true,
+                title: true,
+                priority: true,
+                dueDate: true,
+              },
+              orderBy: [{ pinned: 'desc' }, { updatedAt: 'desc' }],
+              take: this.maxItemsPerEntity,
+            }) as Promise<NoticeSearchRow[]>)
+          : Promise.resolve([] as NoticeSearchRow[]),
+        meetingWhere
+          ? (this.prisma.meeting.findMany({
+              where: meetingWhere,
+              select: {
+                id: true,
+                datetime: true,
+                status: true,
+                scope: true,
+                localityId: true,
+              },
+              orderBy: [{ datetime: 'desc' }, { updatedAt: 'desc' }],
+              take: this.maxItemsPerEntity,
+            }) as Promise<MeetingSearchRow[]>)
+          : Promise.resolve([] as MeetingSearchRow[]),
+        localityWhere
+          ? (this.prisma.locality.findMany({
+              where: localityWhere,
+              select: { id: true, code: true, name: true },
+              orderBy: { name: 'asc' },
+              take: this.maxItemsPerEntity,
+            }) as Promise<LocalitySearchRow[]>)
+          : Promise.resolve([] as LocalitySearchRow[]),
+        documentWhere
+          ? (this.prisma.documentAsset.findMany({
+              where: documentWhere,
+              select: {
+                id: true,
+                title: true,
+                category: true,
+                localityId: true,
+                fileName: true,
+                locality: { select: { id: true, name: true, code: true } },
+              },
+              orderBy: [{ updatedAt: 'desc' }, { title: 'asc' }],
+              take: this.maxItemsPerEntity,
+            }) as Promise<DocumentSearchRow[]>)
+          : Promise.resolve([] as DocumentSearchRow[]),
+      ],
+    );
 
     const payload: SearchPayload = {
       tasks: tasks.map((task) => ({
@@ -273,6 +355,7 @@ export class SearchService {
       })),
       semantic: await this.buildSemanticResults({
         query,
+        permissions,
         payload: {
           tasks: tasks.map((task) => ({
             id: task.id,
@@ -339,6 +422,11 @@ export class SearchService {
         hasPermission(user, 'dashboard', 'view') ||
         hasPermission(user, 'localities', 'view'),
       canViewDocuments: hasPermission(user, 'documents', 'view'),
+      canViewActivities: hasPermission(user, 'activities', 'view'),
+      canViewMissions: hasPermission(user, 'missions', 'view'),
+      canViewBestPractices: hasPermission(user, 'best_practices', 'view'),
+      canViewCpcaCases: hasPermission(user, 'cpca_cases', 'view'),
+      canViewSmifComplaints: hasPermission(user, 'smif_complaints', 'view'),
     };
   }
 
@@ -348,27 +436,21 @@ export class SearchService {
     constraints: { localityId?: string; specialtyId?: string },
     user?: RbacUser,
   ): Prisma.TaskInstanceWhereInput {
+    const needles = this.buildNeedles(query, tokens);
+    const matchAnyNeedle: Prisma.TaskInstanceWhereInput[] = needles.flatMap(
+      (needle) => [
+        { titleOverride: { contains: needle, mode: 'insensitive' } },
+        { taskTemplate: { title: { contains: needle, mode: 'insensitive' } } },
+        { locality: { name: { contains: needle, mode: 'insensitive' } } },
+        { locality: { code: { contains: needle, mode: 'insensitive' } } },
+      ],
+    );
+
     const and: Prisma.TaskInstanceWhereInput[] = [
       {
-        OR: [
-          { titleOverride: { contains: query, mode: 'insensitive' } },
-          { taskTemplate: { title: { contains: query, mode: 'insensitive' } } },
-          { locality: { name: { contains: query, mode: 'insensitive' } } },
-          { locality: { code: { contains: query, mode: 'insensitive' } } },
-        ],
+        OR: matchAnyNeedle,
       },
     ];
-
-    for (const token of tokens) {
-      and.push({
-        OR: [
-          { titleOverride: { contains: token, mode: 'insensitive' } },
-          { taskTemplate: { title: { contains: token, mode: 'insensitive' } } },
-          { locality: { name: { contains: token, mode: 'insensitive' } } },
-          { locality: { code: { contains: token, mode: 'insensitive' } } },
-        ],
-      });
-    }
 
     if (constraints.localityId)
       and.push({ localityId: constraints.localityId });
@@ -389,23 +471,19 @@ export class SearchService {
     tokens: string[],
     constraints: { localityId?: string; specialtyId?: string },
   ): Prisma.NoticeWhereInput {
+    const needles = this.buildNeedles(query, tokens);
+    const matchAnyNeedle: Prisma.NoticeWhereInput[] = needles.flatMap(
+      (needle) => [
+        { title: { contains: needle, mode: 'insensitive' } },
+        { body: { contains: needle, mode: 'insensitive' } },
+      ],
+    );
+
     const and: Prisma.NoticeWhereInput[] = [
       {
-        OR: [
-          { title: { contains: query, mode: 'insensitive' } },
-          { body: { contains: query, mode: 'insensitive' } },
-        ],
+        OR: matchAnyNeedle,
       },
     ];
-
-    for (const token of tokens) {
-      and.push({
-        OR: [
-          { title: { contains: token, mode: 'insensitive' } },
-          { body: { contains: token, mode: 'insensitive' } },
-        ],
-      });
-    }
 
     if (constraints.localityId) {
       and.push({
@@ -426,25 +504,20 @@ export class SearchService {
     tokens: string[],
     constraints: { localityId?: string; specialtyId?: string },
   ): Prisma.MeetingWhereInput {
+    const needles = this.buildNeedles(query, tokens);
+    const matchAnyNeedle: Prisma.MeetingWhereInput[] = needles.flatMap(
+      (needle) => [
+        { scope: { contains: needle, mode: 'insensitive' } },
+        { agenda: { contains: needle, mode: 'insensitive' } },
+        { location: { contains: needle, mode: 'insensitive' } },
+      ],
+    );
+
     const and: Prisma.MeetingWhereInput[] = [
       {
-        OR: [
-          { scope: { contains: query, mode: 'insensitive' } },
-          { agenda: { contains: query, mode: 'insensitive' } },
-          { location: { contains: query, mode: 'insensitive' } },
-        ],
+        OR: matchAnyNeedle,
       },
     ];
-
-    for (const token of tokens) {
-      and.push({
-        OR: [
-          { scope: { contains: token, mode: 'insensitive' } },
-          { agenda: { contains: token, mode: 'insensitive' } },
-          { location: { contains: token, mode: 'insensitive' } },
-        ],
-      });
-    }
 
     if (constraints.localityId) {
       and.push({
@@ -460,24 +533,20 @@ export class SearchService {
     tokens: string[],
     constraints: { localityId?: string; specialtyId?: string },
   ): Prisma.LocalityWhereInput {
+    const needles = this.buildNeedles(query, tokens);
+    const matchAnyNeedle: Prisma.LocalityWhereInput[] = needles.flatMap(
+      (needle) => [
+        { name: { contains: needle, mode: 'insensitive' } },
+        { code: { contains: needle, mode: 'insensitive' } },
+      ],
+    );
+
     const and: Prisma.LocalityWhereInput[] = [
       { catalogType: LocalityCatalogType.SMIF },
       {
-        OR: [
-          { name: { contains: query, mode: 'insensitive' } },
-          { code: { contains: query, mode: 'insensitive' } },
-        ],
+        OR: matchAnyNeedle,
       },
     ];
-
-    for (const token of tokens) {
-      and.push({
-        OR: [
-          { name: { contains: token, mode: 'insensitive' } },
-          { code: { contains: token, mode: 'insensitive' } },
-        ],
-      });
-    }
 
     if (constraints.localityId) and.push({ id: constraints.localityId });
     return { AND: and };
@@ -488,31 +557,23 @@ export class SearchService {
     tokens: string[],
     user?: RbacUser,
   ): Prisma.DocumentAssetWhereInput {
+    const needles = this.buildNeedles(query, tokens);
+    const matchAnyNeedle: Prisma.DocumentAssetWhereInput[] = needles.flatMap(
+      (needle) => [
+        { title: { contains: needle, mode: 'insensitive' } },
+        { sourcePath: { contains: needle, mode: 'insensitive' } },
+        { fileName: { contains: needle, mode: 'insensitive' } },
+        {
+          subcategory: { name: { contains: needle, mode: 'insensitive' } },
+        },
+      ],
+    );
+
     const and: Prisma.DocumentAssetWhereInput[] = [
       {
-        OR: [
-          { title: { contains: query, mode: 'insensitive' } },
-          { sourcePath: { contains: query, mode: 'insensitive' } },
-          { fileName: { contains: query, mode: 'insensitive' } },
-          {
-            subcategory: { name: { contains: query, mode: 'insensitive' } },
-          },
-        ],
+        OR: matchAnyNeedle,
       },
     ];
-
-    for (const token of tokens) {
-      and.push({
-        OR: [
-          { title: { contains: token, mode: 'insensitive' } },
-          { sourcePath: { contains: token, mode: 'insensitive' } },
-          { fileName: { contains: token, mode: 'insensitive' } },
-          {
-            subcategory: { name: { contains: token, mode: 'insensitive' } },
-          },
-        ],
-      });
-    }
 
     const scopeWhere = this.documentScopeWhere(user);
     if (Object.keys(scopeWhere).length > 0) and.push(scopeWhere);
@@ -630,21 +691,61 @@ export class SearchService {
   }
 
   private extractQueryTokens(query: string) {
-    return Array.from(
-      new Set(
-        query
-          .split(/\s+/)
-          .map((token) => token.trim())
-          .filter((token) => token.length >= 3),
-      ),
-    ).slice(0, 5);
+    const tokens = new Set<string>();
+    for (const rawToken of query.split(/\s+/)) {
+      const token = String(rawToken ?? '')
+        .trim()
+        .toLowerCase();
+      if (token.length < 3) continue;
+      const variants = new Set<string>([
+        token,
+        token.normalize('NFD').replace(/[\u0300-\u036f]/g, ''),
+      ]);
+
+      for (const variant of Array.from(variants)) {
+        if (!variant) continue;
+        // Heurística simples para reduzir plural/sufixos muito comuns.
+        if (variant.endsWith('es') && variant.length >= 6) {
+          variants.add(variant.slice(0, -2));
+        }
+        if (variant.endsWith('s') && variant.length >= 5) {
+          variants.add(variant.slice(0, -1));
+        }
+      }
+
+      for (const variant of variants) {
+        const clean = String(variant ?? '').trim();
+        if (clean.length >= 3) tokens.add(clean);
+      }
+    }
+    return Array.from(tokens).slice(0, 8);
+  }
+
+  private buildNeedles(query: string, tokens: string[]): string[] {
+    const needles = new Set<string>();
+    const full = String(query ?? '').trim();
+    if (full) {
+      needles.add(full);
+      needles.add(full.normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
+    }
+    for (const token of tokens) {
+      const clean = String(token ?? '').trim();
+      if (!clean) continue;
+      needles.add(clean);
+    }
+    return Array.from(needles);
   }
 
   private async buildSemanticResults(args: {
     query: string;
+    permissions: SearchPermissionFlags;
     payload: LegacySearchPayload;
   }): Promise<SemanticSearchPayload> {
-    const candidates = this.buildSemanticCandidates(args.query, args.payload)
+    const candidates = this.buildSemanticCandidates(
+      args.query,
+      args.payload,
+      args.permissions,
+    )
       .sort((a, b) => b.fallbackProbability - a.fallbackProbability)
       .slice(0, this.maxSemanticCandidates);
 
@@ -705,6 +806,7 @@ export class SearchService {
   private buildSemanticCandidates(
     query: string,
     payload: LegacySearchPayload,
+    permissions: SearchPermissionFlags,
   ): SemanticCandidate[] {
     const candidates: SemanticCandidate[] = [];
     const pushCandidate = (
@@ -774,7 +876,51 @@ export class SearchService {
       });
     }
 
+    const allowedScreenIds = new Set<string>();
+    if (permissions.canViewTasks) allowedScreenIds.add('tasks');
+    if (permissions.canViewMeetings) allowedScreenIds.add('meetings');
+    if (permissions.canViewActivities) allowedScreenIds.add('activities');
+    if (permissions.canViewMissions) allowedScreenIds.add('missions');
+    if (permissions.canViewDocuments) allowedScreenIds.add('documents');
+    if (permissions.canViewCpcaCases) allowedScreenIds.add('cpca-cases');
+    if (permissions.canViewSmifComplaints)
+      allowedScreenIds.add('smif-complaints');
+    if (permissions.canViewBestPractices)
+      allowedScreenIds.add('best-practices');
+
+    for (const screen of this.semanticScreens) {
+      if (!allowedScreenIds.has(screen.id)) continue;
+      const filteredUrl = this.buildScreenFilteredUrl(
+        screen.route,
+        screen.queryParam,
+        query,
+      );
+      pushCandidate({
+        candidateId: `screen:${screen.id}`,
+        id: screen.id,
+        entityType: 'SCREEN',
+        entityTypeLabel: 'Tela',
+        title: screen.title,
+        subtitle: screen.subtitle,
+        url: filteredUrl,
+        keywords: [screen.queryParam, ...screen.keywords],
+      });
+    }
+
     return candidates;
+  }
+
+  private buildScreenFilteredUrl(
+    route: string,
+    queryParam: string,
+    query: string,
+  ) {
+    const normalizedRoute = String(route ?? '').trim() || '/';
+    const cleanQuery = String(query ?? '').trim();
+    if (!cleanQuery) return normalizedRoute;
+    const params = new URLSearchParams();
+    params.set(queryParam, cleanQuery);
+    return `${normalizedRoute}?${params.toString()}`;
   }
 
   private async rankWithAi(
@@ -823,6 +969,8 @@ export class SearchService {
               'Regras obrigatórias:\n' +
               '- Use apenas candidateId da lista.\n' +
               '- Não invente links nem IDs.\n' +
+              '- Considere que existem candidatos de tela (SCREEN) e de registro.\n' +
+              '- Priorize os candidatos que melhor representem a intenção semântica da frase.\n' +
               '- Retorne no máximo 15 resultados.\n' +
               '- probability deve ser número entre 0 e 1.\n' +
               '- Ordene por probability desc.\n' +

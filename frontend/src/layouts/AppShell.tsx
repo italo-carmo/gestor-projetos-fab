@@ -901,6 +901,18 @@ export function AppShell({ children }: { children: ReactNode }) {
   const semanticResults = (searchQuery.data?.semantic?.items ??
     []) as SemanticResultItem[];
   const totalSearchResults = semanticResults.length;
+  const normalizedDebouncedQuery = String(debounced ?? "").trim();
+  const hasSearchInput = normalizedDebouncedQuery.length > 0;
+  const canExecuteSemanticSearch = normalizedDebouncedQuery.length >= 2;
+  const isSearchingSemantic =
+    canExecuteSemanticSearch &&
+    (searchQuery.isLoading || searchQuery.isFetching);
+  const semanticUsedAi = Boolean(searchQuery.data?.semantic?.usedAi);
+  const semanticModel = String(searchQuery.data?.semantic?.model ?? "").trim();
+  const semanticErrorMessage =
+    searchQuery.error instanceof Error
+      ? searchQuery.error.message
+      : "Falha ao executar a busca global.";
 
   return (
     <Box sx={{ display: "flex", minHeight: "100vh" }}>
@@ -1019,7 +1031,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   >
                     Resultados
                   </Typography>
-                  {!debounced ? (
+                  {!hasSearchInput ? (
                     <Typography
                       variant="body2"
                       color="text.secondary"
@@ -1027,8 +1039,41 @@ export function AppShell({ children }: { children: ReactNode }) {
                     >
                       Digite para buscar semanticamente links do sistema.
                     </Typography>
+                  ) : !canExecuteSemanticSearch ? (
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ px: 0.4, pb: 0.8 }}
+                    >
+                      Digite ao menos 2 caracteres.
+                    </Typography>
+                  ) : isSearchingSemantic ? (
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ px: 0.4, pb: 0.8 }}
+                    >
+                      Buscando semanticamente no sistema...
+                    </Typography>
+                  ) : searchQuery.isError ? (
+                    <Typography
+                      variant="body2"
+                      color="error.main"
+                      sx={{ px: 0.4, pb: 0.8 }}
+                    >
+                      {semanticErrorMessage}
+                    </Typography>
                   ) : (
                     <List dense>
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ px: 0.4, pb: 0.6, display: "block" }}
+                      >
+                        {semanticUsedAi
+                          ? `Ranking IA ativo${semanticModel ? ` • ${semanticModel}` : ""}`
+                          : "Ranking IA indisponível. Exibindo probabilidade heurística."}
+                      </Typography>
                       {semanticResults.map((item) => (
                         <ListItemButton
                           key={`${item.entityType}-${item.id}`}
@@ -1039,7 +1084,45 @@ export function AppShell({ children }: { children: ReactNode }) {
                           onClick={() => setAnchorEl(null)}
                         >
                           <ListItemText
-                            primary={item.title}
+                            primary={
+                              <Box
+                                sx={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 1,
+                                  flexWrap: "wrap",
+                                }}
+                              >
+                                <Typography
+                                  component="span"
+                                  variant="body2"
+                                  sx={{ fontWeight: 600 }}
+                                >
+                                  {item.title}
+                                </Typography>
+                                <Chip
+                                  size="small"
+                                  label={
+                                    String(item.entityType ?? "").toUpperCase() ===
+                                    "SCREEN"
+                                      ? "Tela"
+                                      : "Registro"
+                                  }
+                                  color={
+                                    String(item.entityType ?? "").toUpperCase() ===
+                                    "SCREEN"
+                                      ? "primary"
+                                      : "default"
+                                  }
+                                  variant={
+                                    String(item.entityType ?? "").toUpperCase() ===
+                                    "SCREEN"
+                                      ? "filled"
+                                      : "outlined"
+                                  }
+                                />
+                              </Box>
+                            }
                             secondary={`${item.entityTypeLabel ?? item.entityType} • ${Math.round(Number(item.probability ?? 0) * 100)}%${item.subtitle ? ` • ${item.subtitle}` : ""}`}
                           />
                         </ListItemButton>

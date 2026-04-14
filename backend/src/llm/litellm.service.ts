@@ -11,7 +11,10 @@ export type ChatCompletionParams = {
   max_tokens?: number;
 };
 
-type OpenAiChoiceMessage = { content?: string | null };
+type OpenAiChoiceMessage = {
+  content?: unknown;
+  reasoning_content?: unknown;
+};
 type OpenAiChatResponse = {
   model?: string;
   choices?: { message?: OpenAiChoiceMessage }[];
@@ -77,8 +80,8 @@ export function normalizeLitellmModelId(
   let m = raw.trim();
   if (!m) return LITELLM_DEFAULT_GPT_OSS;
   const low = m.toLowerCase().replace(/_/g, '-');
-  if (low === 'gpt-oss-20b' || low === 'gptoss-20b') {
-    m = LITELLM_DEFAULT_GPT_OSS;
+  if (low === 'gptoss-20b') {
+    m = 'gpt-oss-20b';
   }
   const styleFlag = firstConfig(config, [
     'API_LITELLM_OPENAI_STYLE_MODEL',
@@ -303,7 +306,10 @@ export class LitellmService {
       throw new Error(errMsg || `LiteLLM HTTP ${res.status}`);
     }
 
-    const rawContent = data.choices?.[0]?.message?.content?.trim() ?? '';
+    const message = data.choices?.[0]?.message;
+    const rawContent =
+      extractTextLike(message?.content).trim() ||
+      extractTextLike(message?.reasoning_content).trim();
     if (!rawContent) {
       throw new Error('LiteLLM não retornou conteúdo na resposta.');
     }
