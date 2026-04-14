@@ -380,8 +380,7 @@ export class StrategicService {
   private resolveSourceSet(
     sources?: readonly AiKnowledgeSourceId[],
   ): ReadonlySet<AiKnowledgeSourceId> {
-    const values =
-      sources !== undefined ? sources : ALL_KNOWLEDGE_SOURCE_IDS;
+    const values = sources !== undefined ? sources : ALL_KNOWLEDGE_SOURCE_IDS;
     return new Set(values);
   }
 
@@ -426,35 +425,48 @@ export class StrategicService {
     return this.hasSource(sourceSet, AI_KNOWLEDGE_SOURCE_IDS.TASKS);
   }
 
-  private hasMissionSource(sourceSet: ReadonlySet<AiKnowledgeSourceId>): boolean {
+  private hasMissionSource(
+    sourceSet: ReadonlySet<AiKnowledgeSourceId>,
+  ): boolean {
     return this.hasSource(sourceSet, AI_KNOWLEDGE_SOURCE_IDS.MISSIONS);
   }
 
-  private hasComplaintSources(sourceSet: ReadonlySet<AiKnowledgeSourceId>): boolean {
+  private hasComplaintSources(
+    sourceSet: ReadonlySet<AiKnowledgeSourceId>,
+  ): boolean {
     return (
       this.hasSource(sourceSet, AI_KNOWLEDGE_SOURCE_IDS.COMPLAINTS_CPCA) ||
       this.hasSource(sourceSet, AI_KNOWLEDGE_SOURCE_IDS.COMPLAINTS_SMIF)
     );
   }
 
-  private hasActivitySource(sourceSet: ReadonlySet<AiKnowledgeSourceId>): boolean {
+  private hasActivitySource(
+    sourceSet: ReadonlySet<AiKnowledgeSourceId>,
+  ): boolean {
     return (
       this.hasSource(sourceSet, AI_KNOWLEDGE_SOURCE_IDS.ACTIVITIES_SMIF) ||
       this.hasSource(sourceSet, AI_KNOWLEDGE_SOURCE_IDS.ACTIVITIES_CIPAVD)
     );
   }
 
-  private hasSurveySources(sourceSet: ReadonlySet<AiKnowledgeSourceId>): boolean {
+  private hasSurveySources(
+    sourceSet: ReadonlySet<AiKnowledgeSourceId>,
+  ): boolean {
     return this.hasSource(sourceSet, AI_KNOWLEDGE_SOURCE_IDS.SURVEY_SCHOOLS);
   }
 
   private hasDomesticViolenceSources(
     sourceSet: ReadonlySet<AiKnowledgeSourceId>,
   ): boolean {
-    return this.hasSource(sourceSet, AI_KNOWLEDGE_SOURCE_IDS.SURVEY_DOMESTIC_VIOLENCE);
+    return this.hasSource(
+      sourceSet,
+      AI_KNOWLEDGE_SOURCE_IDS.SURVEY_DOMESTIC_VIOLENCE,
+    );
   }
 
-  private hasRecruitSources(sourceSet: ReadonlySet<AiKnowledgeSourceId>): boolean {
+  private hasRecruitSources(
+    sourceSet: ReadonlySet<AiKnowledgeSourceId>,
+  ): boolean {
     return this.hasSource(sourceSet, AI_KNOWLEDGE_SOURCE_IDS.SURVEY_RECRUITS);
   }
 
@@ -471,7 +483,10 @@ export class StrategicService {
         sourceSet,
         AI_KNOWLEDGE_SOURCE_IDS.SURVEY_BEST_PRACTICE_CYCLE,
       ),
-      cpcaMeeting: this.hasSource(sourceSet, AI_KNOWLEDGE_SOURCE_IDS.SURVEY_CPCA_MEETING),
+      cpcaMeeting: this.hasSource(
+        sourceSet,
+        AI_KNOWLEDGE_SOURCE_IDS.SURVEY_CPCA_MEETING,
+      ),
       gsdEvaluation: this.hasSource(
         sourceSet,
         AI_KNOWLEDGE_SOURCE_IDS.SURVEY_GSD_EVALUATION,
@@ -529,7 +544,13 @@ export class StrategicService {
     const includeMissions = this.hasMissionSource(sourceSet);
     if (!includeComplaints && !includeActivities && !includeMissions) {
       const localities = await this.prisma.locality.findMany({
-        select: { id: true, code: true, name: true, uf: true, catalogType: true },
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          uf: true,
+          catalogType: true,
+        },
       });
       return {
         generatedAt: new Date().toISOString(),
@@ -577,17 +598,16 @@ export class StrategicService {
           })
         : Promise.resolve([]),
       includeMissions
-        ? (this.prisma as any).mission
-        .findMany({
-          select: {
-            localityId: true,
-            title: true,
-            scope: true,
-            startDate: true,
-            endDate: true,
-            locality: { select: { name: true } },
-          },
-        })
+        ? (this.prisma as any).mission.findMany({
+            select: {
+              localityId: true,
+              title: true,
+              scope: true,
+              startDate: true,
+              endDate: true,
+              locality: { select: { name: true } },
+            },
+          })
         : Promise.resolve([]),
     ]);
 
@@ -843,10 +863,8 @@ export class StrategicService {
     const includeBestPractice = textSources.bestPracticeCycle;
     const includeCpcaMeeting = textSources.cpcaMeeting;
     const includeGsdEvaluation = textSources.gsdEvaluation;
-    const includeComplaints = this.hasSource(
-      sourceSet,
-      AI_KNOWLEDGE_SOURCE_IDS.COMPLAINTS_CPCA,
-    ) ||
+    const includeComplaints =
+      this.hasSource(sourceSet, AI_KNOWLEDGE_SOURCE_IDS.COMPLAINTS_CPCA) ||
       this.hasSource(sourceSet, AI_KNOWLEDGE_SOURCE_IDS.COMPLAINTS_SMIF);
 
     if (
@@ -966,12 +984,8 @@ export class StrategicService {
     const cpcaCommentTexts = cpcaComments
       .map((r: any) => r.text)
       .filter(Boolean);
-    const allCpcaMeeting = includeCpcaMeeting
-      ? cpcaMeetingTexts
-      : [];
-    const allGsdEvaluation = includeGsdEvaluation
-      ? gsdEvaluationTexts
-      : [];
+    const allCpcaMeeting = includeCpcaMeeting ? cpcaMeetingTexts : [];
+    const allGsdEvaluation = includeGsdEvaluation ? gsdEvaluationTexts : [];
 
     const allTexts = [
       ...suggestionTexts,
@@ -1019,8 +1033,7 @@ export class StrategicService {
     const sourceSet = this.resolveSourceSet(filters?.sources);
 
     const shouldIncludeSurveys = this.hasSurveySources(sourceSet);
-    const shouldIncludeDomestic =
-      this.hasDomesticViolenceSources(sourceSet);
+    const shouldIncludeDomestic = this.hasDomesticViolenceSources(sourceSet);
     const shouldIncludeRecruits = this.hasRecruitSources(sourceSet);
     const shouldIncludeBestPracticeCycle = this.hasSource(
       sourceSet,
@@ -1138,20 +1151,18 @@ export class StrategicService {
       }
 
       if (this.hasSource(sourceSet, AI_KNOWLEDGE_SOURCE_IDS.BEST_PRACTICES)) {
-        pushRef(
-          'best-practices',
-          'Boas práticas',
-          '/best-practices',
-        );
+        pushRef('best-practices', 'Boas práticas', '/best-practices');
       }
 
-      pushRef('strategic-dashboard', 'Painel estratégico consolidado', '/dashboard/estrategico');
+      pushRef(
+        'strategic-dashboard',
+        'Painel estratégico consolidado',
+        '/dashboard/estrategico',
+      );
     }
 
     if (
-      (type === 'executive' ||
-        type === 'situational' ||
-        type === 'text') &&
+      (type === 'executive' || type === 'situational' || type === 'text') &&
       shouldIncludeRecruits
     ) {
       const latestRecruitBatch = await (
@@ -1178,9 +1189,7 @@ export class StrategicService {
     }
 
     if (
-      (type === 'executive' ||
-        type === 'situational' ||
-        type === 'text') &&
+      (type === 'executive' || type === 'situational' || type === 'text') &&
       shouldIncludeActivityReports
     ) {
       const recentReports = await (this.prisma as any).activityReport
@@ -1227,9 +1236,7 @@ export class StrategicService {
     }
 
     if (
-      (type === 'executive' ||
-        type === 'situational' ||
-        type === 'geo') &&
+      (type === 'executive' || type === 'situational' || type === 'geo') &&
       shouldIncludeMissions
     ) {
       const recentMissions = await (this.prisma as any).mission
@@ -1279,7 +1286,9 @@ export class StrategicService {
       if (shouldIncludeComplaints) {
         const complaintScopes = this.buildComplaintScopeFilter(sourceSet);
         const where =
-          complaintScopes.length === 0 ? {} : { workflowScope: { in: complaintScopes } };
+          complaintScopes.length === 0
+            ? {}
+            : { workflowScope: { in: complaintScopes } };
         const recentCases = await (this.prisma as any).cpcComplaintCase
           .findMany({
             where,
@@ -1318,12 +1327,7 @@ export class StrategicService {
     if (shouldIncludeTasks) {
       const totalTasks = await this.prisma.taskInstance.count();
       if (totalTasks > 0) {
-        pushRef(
-          'tasks-list',
-          'Tarefas',
-          '/tasks',
-          `Total: ${totalTasks}`,
-        );
+        pushRef('tasks-list', 'Tarefas', '/tasks', `Total: ${totalTasks}`);
       }
     }
 
@@ -2497,6 +2501,14 @@ export class StrategicService {
   private async getActivitiesKpis(filters?: StrategicSourceFilter) {
     const sourceSet = this.resolveSourceSet(filters?.sources);
     const scopeFilter = this.buildActivityScopeFilter(sourceSet);
+    const emptyDetails = {
+      total: [],
+      smif: [],
+      cipavd: [],
+      done: [],
+      withReport: [],
+      signed: [],
+    };
     if (!this.hasActivitySource(sourceSet)) {
       return {
         totalActivities: 0,
@@ -2505,35 +2517,89 @@ export class StrategicService {
         cipavd: 0,
         withReport: 0,
         signed: 0,
+        details: emptyDetails,
       };
     }
 
     const where = scopeFilter ? { scope: scopeFilter } : {};
     try {
-      const total = await this.prisma.activity.count({ where });
-      const done = await this.prisma.activity.count({
-        where: { ...where, status: 'DONE' },
-      });
-      const smif = await this.prisma.activity.count({
-        where: { ...where, scope: 'SMIF' },
-      });
-      const cipavd = await this.prisma.activity.count({
-        where: { ...where, scope: 'CIPAVD' },
-      });
-      const reportWhere =
-        scopeFilter && scopeFilter.in.length > 0
-          ? { activity: { scope: scopeFilter } }
-          : {};
-      const withReport = await (this.prisma as any).activityReport.count({
-        where: reportWhere,
-      });
-      const signed = await (this.prisma as any).activityReport.count({
-        where: {
-          ...reportWhere,
-          signedAt: { not: null },
+      const activities = await this.prisma.activity.findMany({
+        where,
+        orderBy: [{ eventDate: 'desc' }, { updatedAt: 'desc' }],
+        select: {
+          id: true,
+          title: true,
+          scope: true,
+          status: true,
+          eventDate: true,
+          locality: { select: { name: true } },
+          report: { select: { id: true, signedAt: true } },
         },
       });
-      return { totalActivities: total, done, smif, cipavd, withReport, signed };
+
+      const toLink = (activity: {
+        id: string;
+        scope: ActivityScope;
+      }, tab?: 'report') => {
+        const route = activity.scope === 'CIPAVD' ? '/activities-cipavd' : '/activities';
+        const qs = new URLSearchParams({ activityId: activity.id });
+        if (tab === 'report') qs.set('tab', 'report');
+        return `${route}?${qs.toString()}`;
+      };
+
+      const toDetail = (
+        activity: {
+          id: string;
+          title: string;
+          scope: ActivityScope;
+          status: string;
+          eventDate: Date | null;
+          locality: { name: string } | null;
+        },
+        tab?: 'report',
+      ) => ({
+        id: activity.id,
+        title: String(activity.title ?? '').trim() || `Atividade ${activity.id}`,
+        scope: activity.scope,
+        status: activity.status,
+        date: activity.eventDate?.toISOString() ?? '',
+        locality: activity.locality?.name ?? '',
+        link: toLink(activity, tab),
+      });
+
+      const totalDetails = activities.map((activity) => toDetail(activity));
+      const smifDetails = activities
+        .filter((activity) => activity.scope === 'SMIF')
+        .map((activity) => toDetail(activity));
+      const cipavdDetails = activities
+        .filter((activity) => activity.scope === 'CIPAVD')
+        .map((activity) => toDetail(activity));
+      const doneDetails = activities
+        .filter((activity) => activity.status === 'DONE')
+        .map((activity) => toDetail(activity));
+      const withReportDetails = activities
+        .filter((activity) => Boolean(activity.report))
+        .map((activity) => toDetail(activity, 'report'));
+      const signedDetails = activities
+        .filter((activity) => Boolean(activity.report?.signedAt))
+        .map((activity) => toDetail(activity, 'report'));
+
+      return {
+        totalActivities: totalDetails.length,
+        done: doneDetails.length,
+        smif: smifDetails.length,
+        cipavd: cipavdDetails.length,
+        withReport: withReportDetails.length,
+        signed: signedDetails.length,
+        details: {
+          total: totalDetails,
+          smif: smifDetails,
+          cipavd: cipavdDetails,
+          done: doneDetails,
+          withReport: withReportDetails,
+          signed: signedDetails,
+        },
+      };
     } catch {
       return {
         totalActivities: 0,
@@ -2542,6 +2608,7 @@ export class StrategicService {
         cipavd: 0,
         withReport: 0,
         signed: 0,
+        details: emptyDetails,
       };
     }
   }
@@ -2557,7 +2624,9 @@ export class StrategicService {
       const model = (this.prisma as any).mission;
       const total = await model.count({ where });
       const smif = await model.count({ where: { ...where, scope: 'SMIF' } });
-      const cipavd = await model.count({ where: { ...where, scope: 'CIPAVD' } });
+      const cipavd = await model.count({
+        where: { ...where, scope: 'CIPAVD' },
+      });
       const distinctLocalities = await model.findMany({
         where,
         select: { localityId: true },

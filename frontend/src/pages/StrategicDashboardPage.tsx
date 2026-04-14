@@ -4,11 +4,13 @@ import {
   Card,
   CardContent,
   Chip,
+  Collapse,
   Dialog,
   DialogContent,
   DialogTitle,
   Divider,
   Grid,
+  IconButton,
   List,
   ListItem,
   ListItemText,
@@ -36,7 +38,8 @@ import FingerprintRoundedIcon from "@mui/icons-material/FingerprintRounded";
 import TextSnippetRoundedIcon from "@mui/icons-material/TextSnippetRounded";
 import MapRoundedIcon from "@mui/icons-material/MapRounded";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
-import { useCallback, useMemo, useState } from "react";
+import OpenInNewRoundedIcon from "@mui/icons-material/OpenInNewRounded";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -448,9 +451,133 @@ function DetailRow({ label, value, color }: { label: string; value: string | num
   );
 }
 
+type ActivityKpiDetailItem = {
+  id: string;
+  title: string;
+  scope: string;
+  status: string;
+  date?: string;
+  locality?: string;
+  link: string;
+};
+
+function formatActivityStatusLabel(status: string) {
+  const normalized = String(status || "").trim().toUpperCase();
+  if (normalized === "NOT_STARTED") return "Não iniciada";
+  if (normalized === "IN_PROGRESS") return "Em andamento";
+  if (normalized === "DONE") return "Concluída";
+  return normalized || "—";
+}
+
+function ExpandableActivityMetricRow({
+  metricKey,
+  label,
+  value,
+  items,
+  color,
+  expandedKey,
+  onToggle,
+}: {
+  metricKey: string;
+  label: string;
+  value: number;
+  items: ActivityKpiDetailItem[];
+  color?: string;
+  expandedKey: string | null;
+  onToggle: (metricKey: string) => void;
+}) {
+  const expanded = expandedKey === metricKey;
+  return (
+    <Box sx={{ border: "1px solid #E0E0E0", borderRadius: 1, overflow: "hidden" }}>
+      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", px: 1.25, py: 0.75 }}>
+        <Typography variant="body2" fontWeight={500}>{label}</Typography>
+        <Stack direction="row" spacing={0.5} alignItems="center">
+          <Chip label={value} size="small" sx={color ? { bgcolor: color, color: "#fff" } : {}} />
+          <IconButton
+            size="small"
+            onClick={() => onToggle(metricKey)}
+            aria-label={expanded ? `Recolher ${label}` : `Expandir ${label}`}
+          >
+            <ExpandMoreIcon
+              sx={{
+                transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
+                transition: "transform 0.2s ease",
+              }}
+            />
+          </IconButton>
+        </Stack>
+      </Box>
+
+      <Collapse in={expanded} timeout="auto" unmountOnExit>
+        <Divider />
+        {items.length > 0 ? (
+          <TableContainer sx={{ maxHeight: 320 }}>
+            <Table size="small" stickyHeader>
+              <TableHead>
+                <TableRow>
+                  <TableCell><strong>Atividade</strong></TableCell>
+                  <TableCell><strong>Escopo</strong></TableCell>
+                  <TableCell><strong>Status</strong></TableCell>
+                  <TableCell><strong>Data</strong></TableCell>
+                  <TableCell><strong>Localidade</strong></TableCell>
+                  <TableCell align="right"><strong>Ação</strong></TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {items.map((item) => (
+                  <TableRow key={`${metricKey}-${item.id}`} hover>
+                    <TableCell>{item.title || "Atividade"}</TableCell>
+                    <TableCell>
+                      <Chip
+                        label={item.scope || "—"}
+                        size="small"
+                        sx={{
+                          bgcolor: item.scope === "CIPAVD" ? "#F3E5F5" : "#E3F2FD",
+                          fontSize: 11,
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell>{formatActivityStatusLabel(item.status)}</TableCell>
+                    <TableCell>{item.date ? new Date(item.date).toLocaleDateString("pt-BR") : "—"}</TableCell>
+                    <TableCell>{item.locality || "—"}</TableCell>
+                    <TableCell align="right">
+                      <Button
+                        component="a"
+                        href={item.link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        size="small"
+                        variant="outlined"
+                        endIcon={<OpenInNewRoundedIcon fontSize="inherit" />}
+                      >
+                        Abrir
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        ) : (
+          <Typography variant="body2" color="text.secondary" sx={{ px: 1.5, py: 1 }}>
+            Nenhum item encontrado nessa métrica.
+          </Typography>
+        )}
+      </Collapse>
+    </Box>
+  );
+}
+
 function SituationalTab() {
   const { data, isLoading, error } = useStrategicDashboard();
   const [detailModal, setDetailModal] = useState<string | null>(null);
+  const [expandedActivityMetric, setExpandedActivityMetric] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (detailModal !== "activities") {
+      setExpandedActivityMetric(null);
+    }
+  }, [detailModal]);
 
   if (isLoading) return <SkeletonState />;
   if (error) return <ErrorState message="Erro ao carregar painel situacional." />;
@@ -462,6 +589,52 @@ function SituationalTab() {
   const c = data.complaints ?? {};
   const a = data.activities ?? {};
   const m = data.missions ?? {};
+  const activityDetails = (a.details ?? {}) as Record<string, ActivityKpiDetailItem[]>;
+
+  const activityMetrics = [
+    {
+      key: "total",
+      label: "Total de atividades",
+      value: Number(a.totalActivities ?? 0),
+      color: undefined,
+      items: Array.isArray(activityDetails.total) ? activityDetails.total : [],
+    },
+    {
+      key: "smif",
+      label: "SMIF",
+      value: Number(a.smif ?? 0),
+      color: "#4E342E",
+      items: Array.isArray(activityDetails.smif) ? activityDetails.smif : [],
+    },
+    {
+      key: "cipavd",
+      label: "CIPAVD",
+      value: Number(a.cipavd ?? 0),
+      color: "#7B1FA2",
+      items: Array.isArray(activityDetails.cipavd) ? activityDetails.cipavd : [],
+    },
+    {
+      key: "done",
+      label: "Concluídas",
+      value: Number(a.done ?? 0),
+      color: "#2E7D32",
+      items: Array.isArray(activityDetails.done) ? activityDetails.done : [],
+    },
+    {
+      key: "withReport",
+      label: "Relatórios preenchidos",
+      value: Number(a.withReport ?? 0),
+      color: undefined,
+      items: Array.isArray(activityDetails.withReport) ? activityDetails.withReport : [],
+    },
+    {
+      key: "signed",
+      label: "Relatórios assinados",
+      value: Number(a.signed ?? 0),
+      color: "#2E7D32",
+      items: Array.isArray(activityDetails.signed) ? activityDetails.signed : [],
+    },
+  ];
 
   const complaintDonut = [
     { name: "Assédio Moral", value: c.moral ?? 0 },
@@ -540,16 +713,34 @@ function SituationalTab() {
       case "activities":
         return (
           <Stack spacing={1}>
-            <DetailRow label="Total de atividades" value={a.totalActivities ?? 0} />
-            <DetailRow label="SMIF" value={a.smif ?? 0} color="#4E342E" />
-            <DetailRow label="CIPAVD" value={a.cipavd ?? 0} color="#7B1FA2" />
-            <DetailRow label="Concluídas" value={a.done ?? 0} color="#2E7D32" />
+            {activityMetrics.map((metric) => (
+              <ExpandableActivityMetricRow
+                key={metric.key}
+                metricKey={metric.key}
+                label={metric.label}
+                value={metric.value}
+                color={metric.color}
+                items={metric.items}
+                expandedKey={expandedActivityMetric}
+                onToggle={(metricKey) =>
+                  setExpandedActivityMetric((prev) =>
+                    prev === metricKey ? null : metricKey,
+                  )
+                }
+              />
+            ))}
             <Divider sx={{ my: 0.5 }} />
-            <Typography variant="subtitle2" sx={{ mt: 1 }}>Relatórios</Typography>
-            <DetailRow label="Relatórios preenchidos" value={a.withReport ?? 0} />
-            <DetailRow label="Relatórios assinados" value={a.signed ?? 0} color="#2E7D32" />
-            <DetailRow label="Taxa de preenchimento" value={a.totalActivities ? `${((a.withReport / a.totalActivities) * 100).toFixed(1)}%` : "0%"} />
-            <DetailRow label="Taxa de assinatura" value={a.withReport ? `${((a.signed / a.withReport) * 100).toFixed(1)}%` : "0%"} />
+            <DetailRow
+              label="Taxa de preenchimento"
+              value={a.totalActivities ? `${((a.withReport / a.totalActivities) * 100).toFixed(1)}%` : "0%"}
+            />
+            <DetailRow
+              label="Taxa de assinatura"
+              value={a.withReport ? `${((a.signed / a.withReport) * 100).toFixed(1)}%` : "0%"}
+            />
+            <Typography variant="caption" color="text.secondary">
+              Clique na seta ao lado de cada número para ver a lista exata de atividades e abrir cada item.
+            </Typography>
           </Stack>
         );
       case "missions":
