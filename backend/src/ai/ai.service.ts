@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { LitellmService, ChatMessage } from '../llm/litellm.service';
 import { SettingsService } from '../settings/settings.service';
-import { StrategicService } from '../strategic/strategic.service';
+import { StrategicService, AiSourceReference } from '../strategic/strategic.service';
 import PDFDocument from 'pdfkit';
 
 export type AnalysisType =
@@ -88,7 +88,11 @@ export class AiService {
       ? type
       : 'executive';
     const data = await this.gatherDataForType(safeType);
-    const narrative = options?.narrative?.trim() ?? '';
+    const narrativeBase = options?.narrative?.trim() ?? '';
+    const narrative = await this.appendTraceabilityReferences(
+      safeType,
+      narrativeBase,
+    );
     const model = options?.model?.trim() || 'modelo não informado';
     const generatedAt = options?.generatedAt || new Date().toISOString();
     return this.renderAnalysisPdf({
@@ -166,9 +170,13 @@ export class AiService {
           );
           yield this.sseEvent('token', { text: chunk.text, percent: progress });
         } else if (chunk.type === 'done') {
+          const narrativeWithRefs = await this.appendTraceabilityReferences(
+            type,
+            fullText,
+          );
           yield this.sseEvent('done', {
             percent: 100,
-            narrative: fullText,
+            narrative: narrativeWithRefs,
             model: chunk.model,
             generatedAt: new Date().toISOString(),
           });
@@ -186,9 +194,13 @@ export class AiService {
       return;
     }
 
+    const narrativeWithRefs = await this.appendTraceabilityReferences(
+      type,
+      fullText,
+    );
     yield this.sseEvent('done', {
       percent: 100,
-      narrative: fullText,
+      narrative: narrativeWithRefs,
       model: 'unknown',
       generatedAt: new Date().toISOString(),
     });
@@ -1102,9 +1114,43 @@ export class AiService {
     return (
       `${instruction}\n\n` +
       `IMPORTANTE: Responda diretamente com a análise final em português. ` +
-      `NÃO inclua raciocínio intermediário, cálculos auxiliares ou pensamentos internos.\n\n` +
+      `NÃO inclua raciocínio intermediário, cálculos auxiliares ou pensamentos internos. ` +
+      `Quando fizer afirmações analíticas, cite claramente a origem dos dados (ex.: pesquisa de recrutas, denúncias, relatórios, missões).\n\n` +
       `Dados JSON:\n${payloadJson}`
     );
+  }
+
+  private async appendTraceabilityReferences(
+    type: AnalysisType,
+    narrative: string,
+  ): Promise<string> {
+    const base = String(narrative || '').trim();
+    if (!base) return base;
+    if (/^##\s*refer[eê]ncias dos dados\b/im.test(base)) {
+      return base;
+    }
+
+    let refs: AiSourceReference[] = [];
+    try {
+      refs = await this.strategic.aiSourceReferences(type);
+    } catch {
+      refs = [];
+    }
+    if (!refs.length) return base;
+
+    const lines = refs.map((ref) => {
+      const href = String(ref.href || '').trim();
+      if (!href) return '';
+      const label = String(ref.label || 'Referência').trim();
+      const desc = String(ref.description || '').trim();
+      return desc
+        ? `- [${label}](${href}) — ${desc}`
+        : `- [${label}](${href})`;
+    });
+    const filtered = lines.filter(Boolean);
+    if (!filtered.length) return base;
+
+    return `${base}\n\n## Referências dos Dados\n${filtered.join('\n')}`;
   }
 
   private compactText(text: any) {

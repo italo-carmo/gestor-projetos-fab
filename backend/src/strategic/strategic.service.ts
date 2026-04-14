@@ -74,6 +74,15 @@ function countByField(items: any[], field: string): { label: string; count: numb
     .sort((a, b) => b.count - a.count);
 }
 
+type AiAnalysisType = 'executive' | 'situational' | 'aggressor' | 'text' | 'geo';
+
+export type AiSourceReference = {
+  id: string;
+  label: string;
+  href: string;
+  description?: string;
+};
+
 @Injectable()
 export class StrategicService {
   constructor(
@@ -399,6 +408,199 @@ export class StrategicService {
         rawTexts: allTexts.slice(0, 1000),
       },
     };
+  }
+
+  async aiSourceReferences(type: AiAnalysisType): Promise<AiSourceReference[]> {
+    const refs: AiSourceReference[] = [];
+    const seen = new Set<string>();
+
+    const pushRef = (
+      id: string,
+      label: string,
+      href: string,
+      description?: string,
+    ) => {
+      const safeHref = String(href || '').trim();
+      if (!safeHref || seen.has(safeHref)) return;
+      seen.add(safeHref);
+      refs.push({
+        id,
+        label: String(label || '').trim() || 'Referência',
+        href: safeHref,
+        description: description?.trim() || undefined,
+      });
+    };
+
+    const fmtDate = (value: unknown) => {
+      if (!value) return '';
+      const dt = new Date(String(value));
+      if (Number.isNaN(dt.getTime())) return '';
+      return dt.toLocaleDateString('pt-BR');
+    };
+
+    const includePanels =
+      type === 'executive' ||
+      type === 'situational' ||
+      type === 'aggressor' ||
+      type === 'text';
+
+    if (includePanels) {
+      pushRef(
+        'bi-survey-dashboard',
+        'Pesquisa institucional (BI Survey)',
+        '/dashboard/bi-survey',
+      );
+      pushRef(
+        'bi-domestic-dashboard',
+        'Pesquisa de violência doméstica',
+        '/dashboard/bi-domestic-violence',
+      );
+      pushRef(
+        'bi-recruits-dashboard',
+        'Pesquisa de recrutas',
+        '/dashboard/bi-recrutas',
+      );
+    }
+
+    if (type === 'executive' || type === 'situational' || type === 'text') {
+      const latestRecruitBatch = await (this.prisma as any).biRecruitsImportBatch
+        .findFirst({
+          orderBy: { importedAt: 'desc' },
+          select: {
+            id: true,
+            fileName: true,
+            importedAt: true,
+            insertedRows: true,
+          },
+        })
+        .catch(() => null);
+      if (latestRecruitBatch) {
+        pushRef(
+          `recruits-batch-${latestRecruitBatch.id}`,
+          `Lote de recrutas: ${latestRecruitBatch.fileName || latestRecruitBatch.id}`,
+          '/dashboard/bi-recrutas',
+          `Importado em ${fmtDate(latestRecruitBatch.importedAt)} (${Number(latestRecruitBatch.insertedRows ?? 0)} linha(s))`,
+        );
+      }
+    }
+
+    if (type === 'executive' || type === 'situational' || type === 'text') {
+      const recentReports = await (this.prisma as any).activityReport
+        .findMany({
+          take: 3,
+          orderBy: [{ signedAt: 'desc' }, { updatedAt: 'desc' }],
+          select: {
+            id: true,
+            activityId: true,
+            signedAt: true,
+            updatedAt: true,
+            activity: {
+              select: {
+                id: true,
+                title: true,
+                scope: true,
+              },
+            },
+          },
+        })
+        .catch(() => []);
+
+      for (const report of recentReports as any[]) {
+        const activityId = String(report?.activityId ?? report?.activity?.id ?? '').trim();
+        if (!activityId) continue;
+        const scope = String(report?.activity?.scope ?? 'SMIF').toUpperCase();
+        const href =
+          scope === 'CIPAVD'
+            ? `/activities-cipavd?activityId=${encodeURIComponent(activityId)}&tab=report`
+            : `/activities?activityId=${encodeURIComponent(activityId)}&tab=report`;
+        const title = String(report?.activity?.title ?? '').trim() || `Atividade ${activityId}`;
+        const refDate = fmtDate(report?.signedAt ?? report?.updatedAt);
+        pushRef(
+          `activity-report-${report?.id ?? activityId}`,
+          `Relatório de atividade: ${title}`,
+          href,
+          refDate ? `Última atualização em ${refDate}` : undefined,
+        );
+      }
+    }
+
+    if (type === 'executive' || type === 'situational' || type === 'geo') {
+      const recentMissions = await (this.prisma as any).mission
+        .findMany({
+          take: 3,
+          orderBy: { startDate: 'desc' },
+          select: {
+            id: true,
+            title: true,
+            scope: true,
+            startDate: true,
+            endDate: true,
+          },
+        })
+        .catch(() => []);
+
+      for (const mission of recentMissions as any[]) {
+        const missionId = String(mission?.id ?? '').trim();
+        if (!missionId) continue;
+        const scope = String(mission?.scope ?? 'SMIF').toUpperCase() === 'CIPAVD' ? 'CIPAVD' : 'SMIF';
+        const href = `/missions?missionId=${encodeURIComponent(missionId)}&scope=${scope}`;
+        const title = String(mission?.title ?? '').trim() || `Missão ${missionId}`;
+        const periodStart = fmtDate(mission?.startDate);
+        const periodEnd = fmtDate(mission?.endDate);
+        const period =
+          periodStart && periodEnd
+            ? `${periodStart} a ${periodEnd}`
+            : periodStart || periodEnd || '';
+        pushRef(
+          `mission-${missionId}`,
+          `Missão: ${title}`,
+          href,
+          period ? `Período ${period}` : undefined,
+        );
+      }
+    }
+
+    if (type === 'executive' || type === 'aggressor' || type === 'situational') {
+      const recentCases = await (this.prisma as any).cpcComplaintCase
+        .findMany({
+          take: 3,
+          orderBy: { reportedAt: 'desc' },
+          select: {
+            id: true,
+            caseNumber: true,
+            workflowScope: true,
+            status: true,
+            reportedAt: true,
+          },
+        })
+        .catch(() => []);
+
+      for (const item of recentCases as any[]) {
+        const caseNumber = String(item?.caseNumber ?? '').trim();
+        if (!caseNumber) continue;
+        const workflow = String(item?.workflowScope ?? 'CPCA').toUpperCase();
+        const href =
+          workflow === 'SMIF'
+            ? `/smif-complaints?q=${encodeURIComponent(caseNumber)}`
+            : `/cpca-cases?q=${encodeURIComponent(caseNumber)}`;
+        const status = String(item?.status ?? '').trim();
+        const date = fmtDate(item?.reportedAt);
+        pushRef(
+          `complaint-${item?.id ?? caseNumber}`,
+          `Denúncia ${caseNumber}`,
+          href,
+          [workflow, status, date].filter(Boolean).join(' • '),
+        );
+      }
+    }
+
+    pushRef(
+      'strategic-dashboard',
+      'Painel estratégico consolidado',
+      '/dashboard/estrategico',
+    );
+
+    return refs.slice(0, 12);
   }
 
   /**
