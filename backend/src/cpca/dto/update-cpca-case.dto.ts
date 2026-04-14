@@ -83,6 +83,23 @@ export class UpdateCpcaCaseDto {
   victimAgeRange?: (typeof CPCA_AGE_RANGES)[number];
 
   @IsOptional()
+  @IsBoolean()
+  victimIsNotifier?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  notifierRank?: string;
+
+  @IsOptional()
+  @IsIn(CPCA_GENDERS)
+  notifierGender?: (typeof CPCA_GENDERS)[number];
+
+  @IsOptional()
+  @IsIn(CPCA_AGE_RANGES)
+  notifierAgeRange?: (typeof CPCA_AGE_RANGES)[number];
+
+  @IsOptional()
   @IsIn(CPCA_DETAILED_VIOLENCE_TYPES)
   detailedViolenceType?: (typeof CPCA_DETAILED_VIOLENCE_TYPES)[number];
 

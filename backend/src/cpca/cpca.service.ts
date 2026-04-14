@@ -844,6 +844,19 @@ export class CpcaService {
       accusedDefenseEnsured: payload.accusedDefenseEnsured ?? false,
     });
 
+    const victimRank = this.cleanText(payload.victimRank);
+    const victimGender = payload.victimGender;
+    const victimAgeRange = this.cleanOptional(payload.victimAgeRange);
+    const notifierProfile = this.resolveNotifierProfile({
+      victimIsNotifier: payload.victimIsNotifier ?? true,
+      victimRank,
+      victimGender,
+      victimAgeRange,
+      notifierRank: payload.notifierRank,
+      notifierGender: payload.notifierGender,
+      notifierAgeRange: payload.notifierAgeRange,
+    });
+
     const createData = {
       complaintType: payload.complaintType,
       notifierType: payload.notifierType ?? 'VITIMA',
@@ -855,9 +868,13 @@ export class CpcaService {
       aggressorRank: this.cleanText(payload.aggressorRank),
       aggressorGender: payload.aggressorGender,
       aggressorAgeRange: this.cleanOptional(payload.aggressorAgeRange),
-      victimRank: this.cleanText(payload.victimRank),
-      victimGender: payload.victimGender,
-      victimAgeRange: this.cleanOptional(payload.victimAgeRange),
+      victimRank,
+      victimGender,
+      victimAgeRange,
+      victimIsNotifier: notifierProfile.victimIsNotifier,
+      notifierRank: notifierProfile.notifierRank,
+      notifierGender: notifierProfile.notifierGender,
+      notifierAgeRange: notifierProfile.notifierAgeRange,
       detailedViolenceType: this.cleanOptional(payload.detailedViolenceType),
       harassmentContext: this.cleanOptional(payload.harassmentContext),
       occurrenceLocation: this.cleanOptional(payload.occurrenceLocation),
@@ -1013,6 +1030,13 @@ export class CpcaService {
         localityId: true,
         workflowScope: true,
         complaintType: true,
+        victimIsNotifier: true,
+        victimRank: true,
+        victimGender: true,
+        victimAgeRange: true,
+        notifierRank: true,
+        notifierGender: true,
+        notifierAgeRange: true,
         confidentialityTermSigned: true,
         status: true,
         procedureType: true,
@@ -1076,6 +1100,39 @@ export class CpcaService {
       payload.outcomeSummary === undefined
         ? current.outcomeSummary
         : this.cleanOptional(payload.outcomeSummary);
+    const nextVictimRank =
+      payload.victimRank === undefined
+        ? current.victimRank
+        : this.cleanText(payload.victimRank);
+    if (!nextVictimRank) {
+      throwError('VALIDATION_ERROR', {
+        field: 'victimRank',
+        reason: 'required',
+      });
+    }
+    const nextVictimGender = payload.victimGender ?? current.victimGender;
+    const nextVictimAgeRange =
+      payload.victimAgeRange === undefined
+        ? current.victimAgeRange
+        : this.cleanOptional(payload.victimAgeRange);
+    const notifierProfile = this.resolveNotifierProfile({
+      victimIsNotifier: payload.victimIsNotifier ?? current.victimIsNotifier,
+      victimRank: nextVictimRank,
+      victimGender: nextVictimGender,
+      victimAgeRange: nextVictimAgeRange,
+      notifierRank:
+        payload.notifierRank === undefined
+          ? current.notifierRank
+          : payload.notifierRank,
+      notifierGender:
+        payload.notifierGender === undefined
+          ? current.notifierGender
+          : payload.notifierGender,
+      notifierAgeRange:
+        payload.notifierAgeRange === undefined
+          ? current.notifierAgeRange
+          : payload.notifierAgeRange,
+    });
 
     this.assertIcaConsistency({
       status: nextStatus,
@@ -1110,14 +1167,13 @@ export class CpcaService {
           payload.aggressorAgeRange !== undefined
             ? this.cleanOptional(payload.aggressorAgeRange)
             : undefined,
-        victimRank: payload.victimRank
-          ? this.cleanText(payload.victimRank)
-          : undefined,
-        victimGender: payload.victimGender,
-        victimAgeRange:
-          payload.victimAgeRange !== undefined
-            ? this.cleanOptional(payload.victimAgeRange)
-            : undefined,
+        victimRank: nextVictimRank,
+        victimGender: nextVictimGender,
+        victimAgeRange: nextVictimAgeRange,
+        victimIsNotifier: notifierProfile.victimIsNotifier,
+        notifierRank: notifierProfile.notifierRank,
+        notifierGender: notifierProfile.notifierGender,
+        notifierAgeRange: notifierProfile.notifierAgeRange,
         detailedViolenceType:
           payload.detailedViolenceType !== undefined
             ? this.cleanOptional(payload.detailedViolenceType)
@@ -1520,6 +1576,50 @@ export class CpcaService {
     if (value === null) return null;
     const normalized = this.cleanText(value);
     return normalized || null;
+  }
+
+  private resolveNotifierProfile(input: {
+    victimIsNotifier: boolean | null | undefined;
+    victimRank: string;
+    victimGender: string;
+    victimAgeRange: string | null | undefined;
+    notifierRank?: string | null;
+    notifierGender?: string | null;
+    notifierAgeRange?: string | null;
+  }) {
+    const victimIsNotifier = input.victimIsNotifier !== false;
+
+    if (victimIsNotifier) {
+      return {
+        victimIsNotifier: true,
+        notifierRank: input.victimRank,
+        notifierGender: input.victimGender,
+        notifierAgeRange: input.victimAgeRange ?? null,
+      };
+    }
+
+    const notifierRank = this.cleanText(String(input.notifierRank ?? ''));
+    if (!notifierRank) {
+      throwError('VALIDATION_ERROR', {
+        field: 'notifierRank',
+        reason: 'NOTIFIER_RANK_REQUIRED_WHEN_DIFFERENT',
+      });
+    }
+
+    const notifierGender = String(input.notifierGender ?? '').trim();
+    if (!notifierGender) {
+      throwError('VALIDATION_ERROR', {
+        field: 'notifierGender',
+        reason: 'NOTIFIER_GENDER_REQUIRED_WHEN_DIFFERENT',
+      });
+    }
+
+    return {
+      victimIsNotifier: false,
+      notifierRank,
+      notifierGender,
+      notifierAgeRange: this.cleanOptional(input.notifierAgeRange),
+    };
   }
 
   private parseDateBoundary(

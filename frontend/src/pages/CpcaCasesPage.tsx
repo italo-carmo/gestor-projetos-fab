@@ -76,6 +76,10 @@ const NOTIFIER_TYPE_OPTIONS = [
   { value: "TESTEMUNHA", label: "Testemunha" },
   { value: "TERCEIRO", label: "Terceiro" },
 ];
+const SAME_PERSON_OPTIONS = [
+  { value: "SIM", label: "Sim" },
+  { value: "NAO", label: "Não" },
+];
 
 const PROCEDURE_OPTIONS = [
   { value: "NOT_DEFINED", label: "Não definido" },
@@ -300,6 +304,10 @@ const defaultForm = {
   victimRank: "",
   victimGender: "NAO_INFORMADO",
   victimAgeRange: "",
+  victimIsNotifier: true,
+  notifierRank: "",
+  notifierGender: "NAO_INFORMADO",
+  notifierAgeRange: "",
   detailedViolenceType: "",
   harassmentContext: "",
   occurrenceLocation: "",
@@ -519,6 +527,10 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     toNullable(form.occurrenceLocation) ||
     toNullable(form.aggressorAgeRange) ||
     toNullable(form.victimAgeRange) ||
+    (!form.victimIsNotifier &&
+      (toNullable(form.notifierRank) ||
+        toNullable(form.notifierAgeRange) ||
+        form.notifierGender !== "NAO_INFORMADO")) ||
     toNullable(form.incidentFrequency) ||
     toNullable(form.hierarchicalFunctionalRelation) ||
     toNullable(form.occurrenceForm) ||
@@ -588,6 +600,13 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
       victimRank: item.victimRank ?? "",
       victimGender: item.victimGender ?? "NAO_INFORMADO",
       victimAgeRange: item.victimAgeRange ?? "",
+      victimIsNotifier:
+        item.victimIsNotifier === undefined
+          ? true
+          : Boolean(item.victimIsNotifier),
+      notifierRank: item.notifierRank ?? item.victimRank ?? "",
+      notifierGender: item.notifierGender ?? item.victimGender ?? "NAO_INFORMADO",
+      notifierAgeRange: item.notifierAgeRange ?? item.victimAgeRange ?? "",
       detailedViolenceType: item.detailedViolenceType ?? "",
       harassmentContext: item.harassmentContext ?? "",
       occurrenceLocation: item.occurrenceLocation ?? "",
@@ -755,7 +774,15 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     }
     if (!form.aggressorRank || !form.victimRank) {
       toast.push({
-        message: "Informe posto/graduação do acusado e da vítima/noticiante.",
+        message: "Informe posto/graduação do acusado e da vítima.",
+        severity: "warning",
+      });
+      return;
+    }
+    if (!form.victimIsNotifier && !form.notifierRank) {
+      toast.push({
+        message:
+          "Quando vítima e noticiante forem pessoas diferentes, informe o posto/graduação do noticiante.",
         severity: "warning",
       });
       return;
@@ -796,6 +823,14 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
       victimRank: form.victimRank,
       victimGender: form.victimGender,
       victimAgeRange: toNullable(form.victimAgeRange),
+      victimIsNotifier: Boolean(form.victimIsNotifier),
+      notifierRank: form.victimIsNotifier ? form.victimRank : form.notifierRank,
+      notifierGender: form.victimIsNotifier
+        ? form.victimGender
+        : form.notifierGender,
+      notifierAgeRange: form.victimIsNotifier
+        ? toNullable(form.victimAgeRange)
+        : toNullable(form.notifierAgeRange),
       detailedViolenceType: toNullable(form.detailedViolenceType),
       harassmentContext: toNullable(form.harassmentContext),
       occurrenceLocation: toNullable(form.occurrenceLocation),
@@ -989,6 +1024,35 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
           <TextField
             select
             size="small"
+            label="A vítima é a mesma pessoa do noticiante?"
+            value={form.victimIsNotifier ? "SIM" : "NAO"}
+            onChange={(e) =>
+              setForm((prev) => {
+                const samePerson = e.target.value === "SIM";
+                return {
+                  ...prev,
+                  victimIsNotifier: samePerson,
+                  notifierRank: samePerson ? prev.victimRank : prev.notifierRank,
+                  notifierGender: samePerson
+                    ? prev.victimGender
+                    : prev.notifierGender,
+                  notifierAgeRange: samePerson
+                    ? prev.victimAgeRange
+                    : prev.notifierAgeRange,
+                };
+              })
+            }
+          >
+            {SAME_PERSON_OPTIONS.map((item) => (
+              <MenuItem key={item.value} value={item.value}>
+                {item.label}
+              </MenuItem>
+            ))}
+          </TextField>
+
+          <TextField
+            select
+            size="small"
             label="Contexto do assédio"
             value={form.harassmentContext}
             onChange={(e) =>
@@ -1093,10 +1157,19 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
           <TextField
             select
             size="small"
-            label="Posto/grad. vítima/noticiante"
+            label="Posto/grad. vítima"
             value={form.victimRank}
             onChange={(e) =>
-              setForm((prev) => ({ ...prev, victimRank: e.target.value }))
+              setForm((prev) => {
+                const nextVictimRank = e.target.value;
+                return {
+                  ...prev,
+                  victimRank: nextVictimRank,
+                  notifierRank: prev.victimIsNotifier
+                    ? nextVictimRank
+                    : prev.notifierRank,
+                };
+              })
             }
           >
             {rankOptions.map((rank: string) => (
@@ -1109,10 +1182,19 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
           <TextField
             select
             size="small"
-            label="Sexo da vítima/noticiante"
+            label="Sexo da vítima"
             value={form.victimGender}
             onChange={(e) =>
-              setForm((prev) => ({ ...prev, victimGender: e.target.value }))
+              setForm((prev) => {
+                const nextVictimGender = e.target.value;
+                return {
+                  ...prev,
+                  victimGender: nextVictimGender,
+                  notifierGender: prev.victimIsNotifier
+                    ? nextVictimGender
+                    : prev.notifierGender,
+                };
+              })
             }
           >
             {GENDER_OPTIONS.map((item) => (
@@ -1125,10 +1207,19 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
           <TextField
             select
             size="small"
-            label="Faixa etária da vítima/noticiante"
+            label="Faixa etária da vítima"
             value={form.victimAgeRange}
             onChange={(e) =>
-              setForm((prev) => ({ ...prev, victimAgeRange: e.target.value }))
+              setForm((prev) => {
+                const nextVictimAgeRange = e.target.value;
+                return {
+                  ...prev,
+                  victimAgeRange: nextVictimAgeRange,
+                  notifierAgeRange: prev.victimIsNotifier
+                    ? nextVictimAgeRange
+                    : prev.notifierAgeRange,
+                };
+              })
             }
           >
             <MenuItem value="">Selecionar</MenuItem>
@@ -1138,6 +1229,64 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
               </MenuItem>
             ))}
           </TextField>
+
+          {!form.victimIsNotifier && (
+            <TextField
+              select
+              size="small"
+              label="Posto/grad. noticiante"
+              value={form.notifierRank}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, notifierRank: e.target.value }))
+              }
+            >
+              {rankOptions.map((rank: string) => (
+                <MenuItem key={`notifier-rank-${rank}`} value={rank}>
+                  {rank}
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
+
+          {!form.victimIsNotifier && (
+            <TextField
+              select
+              size="small"
+              label="Sexo do noticiante"
+              value={form.notifierGender}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, notifierGender: e.target.value }))
+              }
+            >
+              {GENDER_OPTIONS.map((item) => (
+                <MenuItem key={`notifier-gender-${item.value}`} value={item.value}>
+                  {item.label}
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
+
+          {!form.victimIsNotifier && (
+            <TextField
+              select
+              size="small"
+              label="Faixa etária do noticiante"
+              value={form.notifierAgeRange}
+              onChange={(e) =>
+                setForm((prev) => ({
+                  ...prev,
+                  notifierAgeRange: e.target.value,
+                }))
+              }
+            >
+              <MenuItem value="">Selecionar</MenuItem>
+              {AGE_RANGE_OPTIONS.map((item) => (
+                <MenuItem key={`notifier-age-${item.value}`} value={item.value}>
+                  {item.label}
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
 
           <TextField
             select

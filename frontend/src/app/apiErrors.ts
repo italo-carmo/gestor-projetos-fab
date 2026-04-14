@@ -15,6 +15,10 @@ const REASON_MESSAGES: Record<string, string> = {
     'Preencha o resumo do desfecho para concluir/arquivar o caso.',
   DEFENSE_CONFIRMATION_REQUIRED_FOR_CLOSURE:
     'Confirme que o direito de defesa do acusado foi assegurado antes de concluir/arquivar.',
+  NOTIFIER_RANK_REQUIRED_WHEN_DIFFERENT:
+    'Quando noticiante e vítima forem pessoas diferentes, informe o posto/graduação do noticiante.',
+  NOTIFIER_GENDER_REQUIRED_WHEN_DIFFERENT:
+    'Quando noticiante e vítima forem pessoas diferentes, informe o sexo do noticiante.',
   INVALID_STATUS_TRANSITION:
     'Transição de status inválida.',
 };

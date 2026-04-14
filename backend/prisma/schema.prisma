@@ -1151,6 +1151,10 @@ model CpcComplaintCase {
   victimRank                      String
   victimGender                    CpcGender
   victimAgeRange                  String?
+  victimIsNotifier                Boolean            @default(true)
+  notifierRank                    String             @default("NAO INFORMADO")
+  notifierGender                  CpcGender          @default(NAO_INFORMADO)
+  notifierAgeRange                String?
   detailedViolenceType            String?
   harassmentContext               String?
   occurrenceLocation              String?
