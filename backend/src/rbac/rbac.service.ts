@@ -814,7 +814,9 @@ export class RbacService implements OnModuleInit {
         action: rp.permission.action,
         scope: rp.permission.scope,
       }));
-      const tiCatalogPermissions = isTiRole ? await this.listPermissionEntries() : [];
+      const tiCatalogPermissions = isTiRole
+        ? await this.listPermissionEntries()
+        : [];
       const mergedPermissions = this.dedupePermissions([
         ...basePermissions,
         ...tiCatalogPermissions,
@@ -960,7 +962,9 @@ export class RbacService implements OnModuleInit {
     const declared = this.collectDeclaredPermissionRequirements();
     if (declared.length === 0) return;
 
-    const resources = Array.from(new Set(declared.map((item) => item.resource)));
+    const resources = Array.from(
+      new Set(declared.map((item) => item.resource)),
+    );
     const existing = await this.prisma.permission.findMany({
       where: { resource: { in: resources } },
       select: { resource: true, action: true, scope: true },
@@ -1093,7 +1097,8 @@ export class RbacService implements OnModuleInit {
 
   private filterTiPermissions(items: PermissionEntry[]) {
     return items.filter(
-      (item) => !TI_BLOCKED_PERMISSION_KEYS.has(`${item.resource}:${item.action}`),
+      (item) =>
+        !TI_BLOCKED_PERMISSION_KEYS.has(`${item.resource}:${item.action}`),
     );
   }
 

@@ -1,9 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import {
-  ActivityScope,
-  LocalityCatalogType,
-  Prisma,
-} from '@prisma/client';
+import { ActivityScope, LocalityCatalogType, Prisma } from '@prisma/client';
 import fs from 'node:fs';
 import path from 'node:path';
 import PDFDocument from 'pdfkit';
@@ -104,7 +100,9 @@ export class MissionsService {
     const scope = this.normalizeMissionScope(scopeParam);
     const ids = await this.resolveAllowedLocalityIds(scope);
     if (ids.length === 0) {
-      return { items: [] as Array<{ id: string; code: string | null; name: string }> };
+      return {
+        items: [] as Array<{ id: string; code: string | null; name: string }>,
+      };
     }
     const items = await this.prisma.locality.findMany({
       where: { id: { in: ids } },
@@ -2610,7 +2608,9 @@ export class MissionsService {
   }
 
   private normalizeMissionScope(raw?: string): ActivityScope {
-    const value = String(raw ?? '').trim().toUpperCase();
+    const value = String(raw ?? '')
+      .trim()
+      .toUpperCase();
     if (value === 'CIPAVD') return ActivityScope.CIPAVD;
     return ActivityScope.SMIF;
   }

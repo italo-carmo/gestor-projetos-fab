@@ -45,7 +45,7 @@ export class SettingsService implements OnModuleInit {
 
   async get(key: string): Promise<string | null> {
     const row = await this.appSetting.findUnique({ where: { key } });
-    return (row as any)?.value ?? null;
+    return row?.value ?? null;
   }
 
   async set(key: string, value: string): Promise<void> {
@@ -81,7 +81,8 @@ export class SettingsService implements OnModuleInit {
     }
 
     return {
-      systemPrompt: map.get(AI_SETTING_KEYS.systemPrompt) ?? DEFAULT_SYSTEM_PROMPT,
+      systemPrompt:
+        map.get(AI_SETTING_KEYS.systemPrompt) ?? DEFAULT_SYSTEM_PROMPT,
       baseUrl: map.get(AI_SETTING_KEYS.baseUrl) ?? '',
       apiKey,
       apiKeyMasked: apiKey

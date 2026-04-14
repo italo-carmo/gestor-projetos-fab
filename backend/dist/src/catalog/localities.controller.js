@@ -60,7 +60,7 @@ let LocalitiesController = class LocalitiesController {
     async listOmsCatalog() {
         const items = await this.prisma.locality.findMany({
             where: { catalogType: client_1.LocalityCatalogType.SMIF },
-            select: { id: true, code: true, name: true },
+            select: { id: true, code: true, name: true, uf: true },
             orderBy: { name: 'asc' },
         });
         return { items };
@@ -68,7 +68,7 @@ let LocalitiesController = class LocalitiesController {
     async listCipavdLocalities() {
         const items = await this.prisma.locality.findMany({
             where: { catalogType: client_1.LocalityCatalogType.CIPAVD },
-            select: { id: true, code: true, name: true, createdAt: true },
+            select: { id: true, code: true, name: true, uf: true, createdAt: true },
             orderBy: { name: 'asc' },
         });
         return { items };
@@ -76,7 +76,7 @@ let LocalitiesController = class LocalitiesController {
     async listCipavdCatalog() {
         const items = await this.prisma.locality.findMany({
             where: { catalogType: client_1.LocalityCatalogType.CIPAVD },
-            select: { id: true, code: true, name: true },
+            select: { id: true, code: true, name: true, uf: true },
             orderBy: { name: 'asc' },
         });
         return { items };
@@ -86,9 +86,10 @@ let LocalitiesController = class LocalitiesController {
             data: {
                 code: (0, sanitize_1.sanitizeText)(dto.code).toUpperCase(),
                 name: (0, sanitize_1.sanitizeText)(dto.name),
+                uf: dto.uf ? (0, sanitize_1.sanitizeText)(dto.uf).toUpperCase().slice(0, 2) : null,
                 catalogType: client_1.LocalityCatalogType.CIPAVD,
             },
-            select: { id: true, code: true, name: true, createdAt: true },
+            select: { id: true, code: true, name: true, uf: true, createdAt: true },
         });
     }
     async updateCipavdLocality(id, dto) {
@@ -103,8 +104,11 @@ let LocalitiesController = class LocalitiesController {
             data: {
                 code: dto.code ? (0, sanitize_1.sanitizeText)(dto.code).toUpperCase() : undefined,
                 name: dto.name ? (0, sanitize_1.sanitizeText)(dto.name) : undefined,
+                uf: dto.uf !== undefined
+                    ? (dto.uf ? (0, sanitize_1.sanitizeText)(dto.uf).toUpperCase().slice(0, 2) : null)
+                    : undefined,
             },
-            select: { id: true, code: true, name: true, createdAt: true },
+            select: { id: true, code: true, name: true, uf: true, createdAt: true },
         });
     }
     async removeCipavdLocality(id) {
@@ -122,6 +126,7 @@ let LocalitiesController = class LocalitiesController {
             data: {
                 code: (0, sanitize_1.sanitizeText)(dto.code),
                 name: (0, sanitize_1.sanitizeText)(dto.name),
+                uf: dto.uf ? (0, sanitize_1.sanitizeText)(dto.uf).toUpperCase().slice(0, 2) : null,
                 catalogType: client_1.LocalityCatalogType.SMIF,
                 commandName: dto.commandName ? (0, sanitize_1.sanitizeText)(dto.commandName) : null,
                 commanderName: dto.commanderName
@@ -162,6 +167,9 @@ let LocalitiesController = class LocalitiesController {
             data: {
                 code: dto.code ? (0, sanitize_1.sanitizeText)(dto.code) : undefined,
                 name: dto.name ? (0, sanitize_1.sanitizeText)(dto.name) : undefined,
+                uf: dto.uf !== undefined
+                    ? (dto.uf ? (0, sanitize_1.sanitizeText)(dto.uf).toUpperCase().slice(0, 2) : null)
+                    : undefined,
                 commandName: dto.commandName
                     ? (0, sanitize_1.sanitizeText)(dto.commandName)
                     : dto.commandName === null

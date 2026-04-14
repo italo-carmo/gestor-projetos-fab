@@ -93,6 +93,9 @@ let ActivitiesController = class ActivitiesController {
     remove(id, user) {
         return this.activities.delete(id, user);
     }
+    getById(id, user) {
+        return this.activities.getById(id, user);
+    }
     comments(id, user) {
         return this.activities.listComments(id, user);
     }
@@ -296,6 +299,15 @@ __decorate([
     __metadata("design:paramtypes", [String, Object]),
     __metadata("design:returntype", void 0)
 ], ActivitiesController.prototype, "remove", null);
+__decorate([
+    (0, common_1.Get)(':id'),
+    (0, require_permission_decorator_1.RequirePermission)('task_instances', 'view'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", void 0)
+], ActivitiesController.prototype, "getById", null);
 __decorate([
     (0, common_1.Get)(':id/comments'),
     (0, require_permission_decorator_1.RequirePermission)('task_instances', 'view'),

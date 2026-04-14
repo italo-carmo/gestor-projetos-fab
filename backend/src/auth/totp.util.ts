@@ -1,4 +1,9 @@
-import { createCipheriv, createDecipheriv, randomBytes, createHash } from 'crypto';
+import {
+  createCipheriv,
+  createDecipheriv,
+  randomBytes,
+  createHash,
+} from 'crypto';
 import * as OTPAuth from 'otpauth';
 import * as QRCode from 'qrcode';
 import * as bcrypt from 'bcrypt';
@@ -16,22 +21,35 @@ function deriveKey(secret: string): Buffer {
   return createHash('sha256').update(secret).digest();
 }
 
-export function encryptSecret(plaintext: string, encryptionKey: string): string {
+export function encryptSecret(
+  plaintext: string,
+  encryptionKey: string,
+): string {
   const key = deriveKey(encryptionKey);
   const iv = randomBytes(IV_LENGTH);
-  const cipher = createCipheriv(ALGORITHM, key, iv, { authTagLength: AUTH_TAG_LENGTH });
-  const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
+  const cipher = createCipheriv(ALGORITHM, key, iv, {
+    authTagLength: AUTH_TAG_LENGTH,
+  });
+  const encrypted = Buffer.concat([
+    cipher.update(plaintext, 'utf8'),
+    cipher.final(),
+  ]);
   const authTag = cipher.getAuthTag();
   return Buffer.concat([iv, authTag, encrypted]).toString('base64');
 }
 
-export function decryptSecret(ciphertext: string, encryptionKey: string): string {
+export function decryptSecret(
+  ciphertext: string,
+  encryptionKey: string,
+): string {
   const key = deriveKey(encryptionKey);
   const data = Buffer.from(ciphertext, 'base64');
   const iv = data.subarray(0, IV_LENGTH);
   const authTag = data.subarray(IV_LENGTH, IV_LENGTH + AUTH_TAG_LENGTH);
   const encrypted = data.subarray(IV_LENGTH + AUTH_TAG_LENGTH);
-  const decipher = createDecipheriv(ALGORITHM, key, iv, { authTagLength: AUTH_TAG_LENGTH });
+  const decipher = createDecipheriv(ALGORITHM, key, iv, {
+    authTagLength: AUTH_TAG_LENGTH,
+  });
   decipher.setAuthTag(authTag);
   return decipher.update(encrypted) + decipher.final('utf8');
 }
@@ -41,7 +59,10 @@ export function generateTotpSecret(): string {
   return secret.base32;
 }
 
-export function buildTotpUri(secretBase32: string, accountName: string): string {
+export function buildTotpUri(
+  secretBase32: string,
+  accountName: string,
+): string {
   const totp = new OTPAuth.TOTP({
     issuer: TOTP_ISSUER,
     label: accountName,
@@ -83,10 +104,17 @@ export function generateBackupCodes(): string[] {
 }
 
 export async function hashBackupCodes(codes: string[]): Promise<string[]> {
-  return Promise.all(codes.map((code) => bcrypt.hash(code.replace('-', '').toLowerCase(), BCRYPT_ROUNDS)));
+  return Promise.all(
+    codes.map((code) =>
+      bcrypt.hash(code.replace('-', '').toLowerCase(), BCRYPT_ROUNDS),
+    ),
+  );
 }
 
-export async function verifyBackupCode(candidate: string, hashes: string[]): Promise<number> {
+export async function verifyBackupCode(
+  candidate: string,
+  hashes: string[],
+): Promise<number> {
   const normalized = candidate.replace(/[-\s]/g, '').toLowerCase();
   for (let i = 0; i < hashes.length; i++) {
     const match = await bcrypt.compare(normalized, hashes[i]);

@@ -29,41 +29,44 @@ export class LibraryService {
   async getData(scopeRaw?: string) {
     const scope = this.parseScope(scopeRaw);
     const localityCatalogType =
-      scope === 'CIPAVD' ? LocalityCatalogType.CIPAVD : LocalityCatalogType.SMIF;
-    const [photos, documents, settings, rawLocalities] = await this.prisma.$transaction([
-      this.prisma.libraryPhoto.findMany({
-        where: { scope },
-        include: {
-          locality: {
-            select: {
-              id: true,
-              code: true,
-              name: true,
-              catalogType: true,
+      scope === 'CIPAVD'
+        ? LocalityCatalogType.CIPAVD
+        : LocalityCatalogType.SMIF;
+    const [photos, documents, settings, rawLocalities] =
+      await this.prisma.$transaction([
+        this.prisma.libraryPhoto.findMany({
+          where: { scope },
+          include: {
+            locality: {
+              select: {
+                id: true,
+                code: true,
+                name: true,
+                catalogType: true,
+              },
             },
           },
-        },
-        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
-      }),
-      this.prisma.libraryDocument.findMany({
-        where: { scope },
-        orderBy: [{ createdAt: 'desc' }],
-      }),
-      this.prisma.librarySetting.findFirst({
-        orderBy: { createdAt: 'asc' },
-      }),
-      this.prisma.locality.findMany({
-        where: { catalogType: localityCatalogType },
-        select: {
-          id: true,
-          code: true,
-          name: true,
-          recruitsFemaleCountCurrent: true,
-          updatedAt: true,
-        },
-        orderBy: { name: 'asc' },
-      }),
-    ]);
+          orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+        }),
+        this.prisma.libraryDocument.findMany({
+          where: { scope },
+          orderBy: [{ createdAt: 'desc' }],
+        }),
+        this.prisma.librarySetting.findFirst({
+          orderBy: { createdAt: 'asc' },
+        }),
+        this.prisma.locality.findMany({
+          where: { catalogType: localityCatalogType },
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            recruitsFemaleCountCurrent: true,
+            updatedAt: true,
+          },
+          orderBy: { name: 'asc' },
+        }),
+      ]);
     const scopedLocalities =
       scope === 'SMIF' ? selectTargetLocalities(rawLocalities) : rawLocalities;
     const localities = scopedLocalities
@@ -478,7 +481,9 @@ export class LibraryService {
       });
     }
     const expectedCatalogType =
-      scope === 'CIPAVD' ? LocalityCatalogType.CIPAVD : LocalityCatalogType.SMIF;
+      scope === 'CIPAVD'
+        ? LocalityCatalogType.CIPAVD
+        : LocalityCatalogType.SMIF;
     if (locality.catalogType !== expectedCatalogType) {
       throwError('VALIDATION_ERROR', {
         field: 'localityId',

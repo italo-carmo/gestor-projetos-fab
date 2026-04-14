@@ -504,7 +504,8 @@ export class BiRecruitsService {
     );
 
     const topEducation = educationDistribution[0] ?? null;
-    const topDecisionDriver = enlistmentDecisionInfluenceDistribution[0] ?? null;
+    const topDecisionDriver =
+      enlistmentDecisionInfluenceDistribution[0] ?? null;
 
     const reportInsecureCount = rows.filter(
       (row) => row.willingnessReport === 'Inseguro(a)',
@@ -538,10 +539,14 @@ export class BiRecruitsService {
         totalRowsInDb,
         secureGuidanceCount,
         secureGuidanceRatePercent:
-          total > 0 ? Number(((secureGuidanceCount / total) * 100).toFixed(2)) : 0,
+          total > 0
+            ? Number(((secureGuidanceCount / total) * 100).toFixed(2))
+            : 0,
         secureReportCount,
         secureReportRatePercent:
-          total > 0 ? Number(((secureReportCount / total) * 100).toFixed(2)) : 0,
+          total > 0
+            ? Number(((secureReportCount / total) * 100).toFixed(2))
+            : 0,
         knowOrientationYesCount,
         knowOrientationYesRatePercent:
           total > 0
@@ -749,11 +754,14 @@ export class BiRecruitsService {
       });
   }
 
-  private buildFreeTextRows<T extends { id: string; submittedAt: Date | null; education: string | null; gender: string | null }>(
-    rows: T[],
-    textSelector: (row: T) => string | null,
-    limit = 220,
-  ) {
+  private buildFreeTextRows<
+    T extends {
+      id: string;
+      submittedAt: Date | null;
+      education: string | null;
+      gender: string | null;
+    },
+  >(rows: T[], textSelector: (row: T) => string | null, limit = 220) {
     const full = rows
       .map((row) => ({
         id: row.id,
@@ -827,7 +835,9 @@ export class BiRecruitsService {
       conditions.push({ gender: filters.gender.trim() });
     }
     if (filters.identifyHarassment?.trim()) {
-      conditions.push({ identifyHarassment: filters.identifyHarassment.trim() });
+      conditions.push({
+        identifyHarassment: filters.identifyHarassment.trim(),
+      });
     }
     if (filters.conductLimits?.trim()) {
       conditions.push({ conductLimits: filters.conductLimits.trim() });
@@ -1113,12 +1123,15 @@ export class BiRecruitsService {
     const submittedAt = this.parseSubmittedAt(submittedAtRaw);
     const education = this.cleanCategory(educationRaw);
     const gender = this.normalizeGender(genderRaw);
-    const identifyHarassment = this.normalizeYesNoPartial(identifyHarassmentRaw);
+    const identifyHarassment = this.normalizeYesNoPartial(
+      identifyHarassmentRaw,
+    );
     const conductLimits = this.normalizeYesNoPartial(conductLimitsRaw);
     const knowOrientation = this.normalizeYesNoPartial(knowOrientationRaw);
     const knowReportProcess = this.normalizeYesNoPartial(knowReportProcessRaw);
-    const willingnessOrientation =
-      this.normalizeWillingness(willingnessOrientationRaw);
+    const willingnessOrientation = this.normalizeWillingness(
+      willingnessOrientationRaw,
+    );
     const willingnessReport = this.normalizeWillingness(willingnessReportRaw);
     const enlistmentDecisionInfluenceText =
       this.normalizeEnlistmentDecisionInfluence(

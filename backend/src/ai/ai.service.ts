@@ -1,7 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { LitellmService, ChatMessage } from '../llm/litellm.service';
 import { SettingsService } from '../settings/settings.service';
-import { StrategicService, AiSourceReference } from '../strategic/strategic.service';
+import {
+  StrategicService,
+  AiSourceReference,
+} from '../strategic/strategic.service';
 import PDFDocument from 'pdfkit';
 
 export type AnalysisType =
@@ -137,10 +140,12 @@ export class AiService {
     type StreamChunk =
       | { type: 'token'; text: string }
       | { type: 'done'; model: string };
-    const iterator = this.litellm.chatCompletionStream({
-      messages,
-      max_tokens: 3000,
-    })[Symbol.asyncIterator]();
+    const iterator = this.litellm
+      .chatCompletionStream({
+        messages,
+        max_tokens: 3000,
+      })
+      [Symbol.asyncIterator]();
 
     try {
       while (true) {
@@ -415,7 +420,10 @@ export class AiService {
             { width: PAGE_WIDTH },
           );
         doc.moveDown(0.4);
-        const drawNarrativeTable = (table: { header: string[]; rows: string[][] }) => {
+        const drawNarrativeTable = (table: {
+          header: string[];
+          rows: string[][];
+        }) => {
           const colCount = Math.max(
             table.header.length,
             ...table.rows.map((row) => row.length),
@@ -525,7 +533,10 @@ export class AiService {
 
         for (const block of blocks) {
           if (block.type === 'heading') {
-            const safeLevel = Math.max(1, Math.min(6, Number(block.level) || 2));
+            const safeLevel = Math.max(
+              1,
+              Math.min(6, Number(block.level) || 2),
+            );
             const headingSizeByLevel: Record<number, number> = {
               1: 16,
               2: 14,
@@ -1143,9 +1154,7 @@ export class AiService {
       if (!href) return '';
       const label = String(ref.label || 'Referência').trim();
       const desc = String(ref.description || '').trim();
-      return desc
-        ? `- [${label}](${href}) — ${desc}`
-        : `- [${label}](${href})`;
+      return desc ? `- [${label}](${href}) — ${desc}` : `- [${label}](${href})`;
     });
     const filtered = lines.filter(Boolean);
     if (!filtered.length) return base;
@@ -1194,9 +1203,7 @@ export class AiService {
       const parsed = isAbsolute ? new URL(raw) : new URL(raw, 'https://local');
       parsed.searchParams.delete(paramName);
       const path =
-        parsed.pathname +
-        (parsed.search || '') +
-        (parsed.hash || '');
+        parsed.pathname + (parsed.search || '') + (parsed.hash || '');
       return isAbsolute ? parsed.toString() : path;
     } catch {
       return raw;

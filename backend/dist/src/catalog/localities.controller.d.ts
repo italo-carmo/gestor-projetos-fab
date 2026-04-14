@@ -34,36 +34,78 @@ export declare class LocalitiesController {
     listOmsCatalog(): Promise<{
         items: {
             id: string;
+            createdAt: Date;
+            updatedAt: Date;
             name: string;
             code: string;
+            catalogType: import("@prisma/client").$Enums.LocalityCatalogType;
+            commandName: string | null;
+            commanderName: string | null;
+            individualMeetingDate: Date | null;
+            visitDate: Date | null;
+            recruitsFemaleCountCurrent: number | null;
+            notes: string | null;
         }[];
     }>;
     listCipavdLocalities(): Promise<{
         items: {
             id: string;
             createdAt: Date;
+            updatedAt: Date;
             name: string;
             code: string;
+            catalogType: import("@prisma/client").$Enums.LocalityCatalogType;
+            commandName: string | null;
+            commanderName: string | null;
+            individualMeetingDate: Date | null;
+            visitDate: Date | null;
+            recruitsFemaleCountCurrent: number | null;
+            notes: string | null;
         }[];
     }>;
     listCipavdCatalog(): Promise<{
         items: {
             id: string;
+            createdAt: Date;
+            updatedAt: Date;
             name: string;
             code: string;
+            catalogType: import("@prisma/client").$Enums.LocalityCatalogType;
+            commandName: string | null;
+            commanderName: string | null;
+            individualMeetingDate: Date | null;
+            visitDate: Date | null;
+            recruitsFemaleCountCurrent: number | null;
+            notes: string | null;
         }[];
     }>;
     createCipavdLocality(dto: CreateCipavdLocalityDto): Promise<{
         id: string;
         createdAt: Date;
+        updatedAt: Date;
         name: string;
         code: string;
+        catalogType: import("@prisma/client").$Enums.LocalityCatalogType;
+        commandName: string | null;
+        commanderName: string | null;
+        individualMeetingDate: Date | null;
+        visitDate: Date | null;
+        recruitsFemaleCountCurrent: number | null;
+        notes: string | null;
     }>;
     updateCipavdLocality(id: string, dto: UpdateCipavdLocalityDto): Promise<{
         id: string;
         createdAt: Date;
+        updatedAt: Date;
         name: string;
         code: string;
+        catalogType: import("@prisma/client").$Enums.LocalityCatalogType;
+        commandName: string | null;
+        commanderName: string | null;
+        individualMeetingDate: Date | null;
+        visitDate: Date | null;
+        recruitsFemaleCountCurrent: number | null;
+        notes: string | null;
     }>;
     removeCipavdLocality(id: string): Promise<{
         ok: boolean;

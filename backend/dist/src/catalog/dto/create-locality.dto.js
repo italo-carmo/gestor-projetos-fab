@@ -14,6 +14,7 @@ const class_validator_1 = require("class-validator");
 class CreateLocalityDto {
     code;
     name;
+    uf;
     commandName;
     commanderName;
     individualMeetingDate;
@@ -30,6 +31,11 @@ __decorate([
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], CreateLocalityDto.prototype, "name", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", Object)
+], CreateLocalityDto.prototype, "uf", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),

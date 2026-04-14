@@ -16,10 +16,7 @@ import { AuditService } from '../audit/audit.service';
 import type { RbacUser } from '../rbac/rbac.types';
 import { sanitizeText } from '../common/sanitize';
 import { parsePagination } from '../common/pagination';
-import {
-  hasPermission,
-  resolveAccessProfile,
-} from '../rbac/role-access';
+import { hasPermission, resolveAccessProfile } from '../rbac/role-access';
 import { selectTargetLocalities } from '../common/priority-localities';
 import { decryptSecret, verifyTotpCode } from '../auth/totp.util';
 
@@ -2056,7 +2053,9 @@ export class ActivitiesService {
       throwError('RBAC_FORBIDDEN');
     }
 
-    const code = String(totpCode ?? '').replace(/\s/g, '').trim();
+    const code = String(totpCode ?? '')
+      .replace(/\s/g, '')
+      .trim();
     if (!code) throwError('AUTH_2FA_INVALID_CODE');
 
     const signer = await this.prisma.user.findUnique({

@@ -22,6 +22,7 @@ export declare class ActivitiesService {
         pageSize: number;
         total: number;
     }>;
+    getById(id: string, user?: RbacUser): Promise<any>;
     listResponsibleUsers(filters: {
         localityId?: string;
         specialtyId?: string;

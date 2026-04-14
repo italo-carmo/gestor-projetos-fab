@@ -51,8 +51,7 @@ export class RbacGuard implements CanActivate {
 
     if (!allowed) {
       const hasTiRole = (access.allRoles ?? access.roles ?? []).some(
-        (role) =>
-          normalizeRoleName(role?.name) === this.tiRoleNameNormalized,
+        (role) => normalizeRoleName(role?.name) === this.tiRoleNameNormalized,
       );
       const isTiBlockedAction =
         resource === 'audit_logs' && action === 'delete';

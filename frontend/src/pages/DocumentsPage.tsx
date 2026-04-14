@@ -179,12 +179,13 @@ function getLinkedEntityPath(link: DocumentLinkItem) {
 
 export function DocumentsPage() {
   const [searchParams] = useSearchParams();
+  const docIdFromUrl = searchParams.get('docId') ?? '';
   const [q, setQ] = useState(searchParams.get('q') ?? '');
   const [category, setCategory] = useState(searchParams.get('category') ?? '');
   const [currentFolderId, setCurrentFolderId] = useState(searchParams.get('subcategoryId') ?? '');
   const [localityId, setLocalityId] = useState('');
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(Boolean(docIdFromUrl));
+  const [selectedId, setSelectedId] = useState<string | null>(docIdFromUrl || null);
   const [newFolderName, setNewFolderName] = useState('');
   const [renamingFolderId, setRenamingFolderId] = useState('');
   const [renamingFolderName, setRenamingFolderName] = useState('');

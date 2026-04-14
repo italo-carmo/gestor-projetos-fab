@@ -40,6 +40,10 @@ const best_practices_module_1 = require("./best-practices/best-practices.module"
 const lessons_learned_module_1 = require("./lessons-learned/lessons-learned.module");
 const smif_complaints_module_1 = require("./smif-complaints/smif-complaints.module");
 const menu_updates_module_1 = require("./menu-updates/menu-updates.module");
+const strategic_module_1 = require("./strategic/strategic.module");
+const litellm_module_1 = require("./llm/litellm.module");
+const settings_module_1 = require("./settings/settings.module");
+const ai_module_1 = require("./ai/ai.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -47,6 +51,7 @@ exports.AppModule = AppModule = __decorate([
     (0, common_1.Module)({
         imports: [
             config_1.ConfigModule.forRoot({ isGlobal: true }),
+            litellm_module_1.LitellmModule,
             throttler_1.ThrottlerModule.forRoot([
                 {
                     ttl: 60_000,
@@ -81,6 +86,9 @@ exports.AppModule = AppModule = __decorate([
             lessons_learned_module_1.LessonsLearnedModule,
             smif_complaints_module_1.SmifComplaintsModule,
             menu_updates_module_1.MenuUpdatesModule,
+            strategic_module_1.StrategicModule,
+            settings_module_1.SettingsModule,
+            ai_module_1.AiModule,
         ],
         controllers: [app_controller_1.AppController],
         providers: [app_service_1.AppService],

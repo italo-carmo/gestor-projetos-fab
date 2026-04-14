@@ -1129,21 +1129,35 @@ let BiService = class BiService {
             const excelEpochUtc = Date.UTC(1899, 11, 30);
             return new Date(excelEpochUtc + numeric * 24 * 60 * 60 * 1000);
         }
-        const date = new Date(raw);
-        if (!Number.isNaN(date.getTime()))
-            return date;
         const brPattern = raw.match(/(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
         if (brPattern) {
-            const day = Number(brPattern[1]);
-            const month = Number(brPattern[2]) - 1;
+            const p1 = Number(brPattern[1]);
+            const p2 = Number(brPattern[2]);
             const year = Number(brPattern[3].length === 2 ? `20${brPattern[3]}` : brPattern[3]);
             const hour = Number(brPattern[4] ?? 0);
             const minute = Number(brPattern[5] ?? 0);
             const second = Number(brPattern[6] ?? 0);
-            const parsed = new Date(year, month, day, hour, minute, second);
+            let day = p1;
+            let month = p2;
+            if (raw.includes('-') && !raw.includes('/')) {
+                month = p1;
+                day = p2;
+            }
+            else if (p1 > 12 && p2 <= 12) {
+                day = p1;
+                month = p2;
+            }
+            else if (p2 > 12 && p1 <= 12) {
+                month = p1;
+                day = p2;
+            }
+            const parsed = new Date(year, month - 1, day, hour, minute, second);
             if (!Number.isNaN(parsed.getTime()))
                 return parsed;
         }
+        const date = new Date(raw);
+        if (!Number.isNaN(date.getTime()))
+            return date;
         return null;
     }
     parseSufferedViolence(raw) {

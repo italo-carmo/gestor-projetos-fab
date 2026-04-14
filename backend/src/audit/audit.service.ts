@@ -88,7 +88,9 @@ export class AuditService {
       _max: { createdAt: true },
     });
 
-    const userIds = grouped.map((g) => g.userId).filter((id): id is string => Boolean(id));
+    const userIds = grouped
+      .map((g) => g.userId)
+      .filter((id): id is string => Boolean(id));
     if (userIds.length === 0) {
       return { items: [] };
     }

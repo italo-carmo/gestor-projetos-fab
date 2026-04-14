@@ -68,8 +68,8 @@ export class MenuUpdatesService {
           >(Prisma.sql`
             WITH "menu_resources" ("menuKey", "resource") AS (
               VALUES ${Prisma.join(
-                menuResourcePairs.map((pair) =>
-                  Prisma.sql`(${pair.menuKey}, ${pair.resource})`,
+                menuResourcePairs.map(
+                  (pair) => Prisma.sql`(${pair.menuKey}, ${pair.resource})`,
                 ),
               )}
             ),
@@ -251,7 +251,10 @@ export class MenuUpdatesService {
     const userId = this.requireUserId(user);
     const menuKey = String(menuKeyRaw ?? '').trim();
 
-    if (!menuKey || !Object.prototype.hasOwnProperty.call(MENU_UPDATE_RESOURCES, menuKey)) {
+    if (
+      !menuKey ||
+      !Object.prototype.hasOwnProperty.call(MENU_UPDATE_RESOURCES, menuKey)
+    ) {
       throwError('VALIDATION_ERROR', {
         field: 'menuKey',
         reason: 'INVALID_MENU_KEY',

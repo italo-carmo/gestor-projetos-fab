@@ -110,7 +110,8 @@ export class BiGsdEvaluationService {
     options: ImportGsdEvaluationOptions = {},
   ) {
     const extension = this.fileExtension(file.originalname);
-    const format = extension === 'csv' ? BiImportFormat.CSV : BiImportFormat.XLSX;
+    const format =
+      extension === 'csv' ? BiImportFormat.CSV : BiImportFormat.XLSX;
     const replaceAll = options.replaceAll === true;
 
     const { sheetName, rows } = this.extractRows(file.buffer, format);
@@ -261,7 +262,9 @@ export class BiGsdEvaluationService {
   ) {
     const compiled = this.compileFilters(filters);
     const allRows = await this.fetchRows();
-    const filteredRows = allRows.filter((row) => this.matchesFilters(row, compiled));
+    const filteredRows = allRows.filter((row) =>
+      this.matchesFilters(row, compiled),
+    );
 
     filteredRows.sort((a, b) => {
       const bv = b.submittedAt?.getTime() ?? b.createdAt.getTime();
@@ -418,37 +421,38 @@ export class BiGsdEvaluationService {
     const importModel = (this.prisma as any).biGsdEvaluationImportBatch;
     const cardSettingModel = (this.prisma as any).biGsdEvaluationCardSetting;
 
-    const [allRowsRaw, latestImport, cardSettings] = await this.prisma.$transaction([
-      responseModel.findMany({
-        select: {
-          id: true,
-          submittedAt: true,
-          createdAt: true,
-          answersJson: true,
-          rawPayload: true,
-        },
-      }),
-      importModel.findFirst({
-        orderBy: { importedAt: 'desc' },
-        include: {
-          importedBy: {
-            select: { id: true, name: true, email: true },
+    const [allRowsRaw, latestImport, cardSettings] =
+      await this.prisma.$transaction([
+        responseModel.findMany({
+          select: {
+            id: true,
+            submittedAt: true,
+            createdAt: true,
+            answersJson: true,
+            rawPayload: true,
           },
-        },
-      }),
-      cardSettingModel.findMany({
-        orderBy: { cardId: 'asc' },
-        select: {
-          cardId: true,
-          title: true,
-          description: true,
-          updatedAt: true,
-          updatedBy: {
-            select: { id: true, name: true, email: true },
+        }),
+        importModel.findFirst({
+          orderBy: { importedAt: 'desc' },
+          include: {
+            importedBy: {
+              select: { id: true, name: true, email: true },
+            },
           },
-        },
-      }),
-    ]);
+        }),
+        cardSettingModel.findMany({
+          orderBy: { cardId: 'asc' },
+          select: {
+            cardId: true,
+            title: true,
+            description: true,
+            updatedAt: true,
+            updatedBy: {
+              select: { id: true, name: true, email: true },
+            },
+          },
+        }),
+      ]);
 
     const allRows: MeetingRow[] = (allRowsRaw as any[]).map((row: any) =>
       this.mapRow(row),
@@ -496,29 +500,33 @@ export class BiGsdEvaluationService {
       return sum + count;
     }, 0);
     const completionRatePercent =
-      totalCells > 0 ? Number(((filledCells / totalCells) * 100).toFixed(2)) : 0;
+      totalCells > 0
+        ? Number(((filledCells / totalCells) * 100).toFixed(2))
+        : 0;
 
-    const topDistribution = categoricalDistributions
-      .map((item) => {
-        const top = item.data[0];
-        if (!top) return null;
-        return {
-          questionLabel: item.label,
-          optionLabel: String(top.label),
-          count: Number(top.count),
-          percent: Number(top.percent),
-        };
-      })
-      .filter(Boolean)
-      .sort((a: any, b: any) => b.percent - a.percent)[0] ?? null;
+    const topDistribution =
+      categoricalDistributions
+        .map((item) => {
+          const top = item.data[0];
+          if (!top) return null;
+          return {
+            questionLabel: item.label,
+            optionLabel: String(top.label),
+            count: Number(top.count),
+            percent: Number(top.percent),
+          };
+        })
+        .filter(Boolean)
+        .sort((a: any, b: any) => b.percent - a.percent)[0] ?? null;
 
-    const topFreeText = freeTextLists
-      .map((item) => ({
-        key: item.key,
-        label: item.label,
-        totalResponses: item.totalResponses,
-      }))
-      .sort((a, b) => b.totalResponses - a.totalResponses)[0] ?? null;
+    const topFreeText =
+      freeTextLists
+        .map((item) => ({
+          key: item.key,
+          label: item.label,
+          totalResponses: item.totalResponses,
+        }))
+        .sort((a, b) => b.totalResponses - a.totalResponses)[0] ?? null;
 
     return {
       kpis: {
@@ -582,10 +590,9 @@ export class BiGsdEvaluationService {
   private mapRow(row: any): MeetingRow {
     const answers = this.toStringRecord(row.answersJson);
     const rawPayload = this.toNullableStringRecord(row.rawPayload);
-    const submittedAt =
-      row.submittedAt
-        ? new Date(row.submittedAt)
-        : this.inferSubmittedAtFromPayload(answers, rawPayload);
+    const submittedAt = row.submittedAt
+      ? new Date(row.submittedAt)
+      : this.inferSubmittedAtFromPayload(answers, rawPayload);
 
     return {
       id: String(row.id),
@@ -613,7 +620,10 @@ export class BiGsdEvaluationService {
       for (const [key, label] of Object.entries(latestColumns.labels ?? {})) {
         const normalizedKey = this.normalizeHeaderKey(key);
         if (!normalizedKey) continue;
-        labelsByKey.set(normalizedKey, String(label ?? '').trim() || normalizedKey);
+        labelsByKey.set(
+          normalizedKey,
+          String(label ?? '').trim() || normalizedKey,
+        );
       }
     }
 
@@ -642,12 +652,20 @@ export class BiGsdEvaluationService {
         .filter((value): value is string => Boolean(value));
 
       const label = labelsByKey.get(key) ?? this.humanizeHeaderKey(key);
-      if (this.isSubmittedAtColumn(key, label, latestColumns?.submittedAtKey ?? null)) {
+      if (
+        this.isSubmittedAtColumn(
+          key,
+          label,
+          latestColumns?.submittedAtKey ?? null,
+        )
+      ) {
         continue;
       }
 
       const questionNumber = this.extractQuestionNumber(label);
-      const uniqueValues = new Set(allValues.map((item) => this.normalizeForMatch(item)));
+      const uniqueValues = new Set(
+        allValues.map((item) => this.normalizeForMatch(item)),
+      );
       const avgLength =
         allValues.length > 0
           ? Number(
@@ -709,7 +727,8 @@ export class BiGsdEvaluationService {
         for (const token of this.splitMultiValues(raw, true)) {
           counter.set(token, (counter.get(token) ?? 0) + 1);
           if (localityValue) {
-            const localities = localitiesByOption.get(token) ?? new Set<string>();
+            const localities =
+              localitiesByOption.get(token) ?? new Set<string>();
             localities.add(localityValue);
             localitiesByOption.set(token, localities);
           }
@@ -735,9 +754,11 @@ export class BiGsdEvaluationService {
         label,
         count,
         percent:
-          totalMentions > 0 ? Number(((count / totalMentions) * 100).toFixed(2)) : 0,
-        localities: Array.from(localitiesByOption.get(label) ?? []).sort((a, b) =>
-          a.localeCompare(b, 'pt-BR'),
+          totalMentions > 0
+            ? Number(((count / totalMentions) * 100).toFixed(2))
+            : 0,
+        localities: Array.from(localitiesByOption.get(label) ?? []).sort(
+          (a, b) => a.localeCompare(b, 'pt-BR'),
         ),
       }))
       .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
@@ -812,20 +833,25 @@ export class BiGsdEvaluationService {
   }
 
   private buildQuestionTrendByDay(rows: MeetingRow[], column: ColumnMeta) {
-    const map = new Map<string, { total: number; counters: Map<string, number> }>();
+    const map = new Map<
+      string,
+      { total: number; counters: Map<string, number> }
+    >();
 
     for (const row of rows) {
       const day = row.submittedAt
         ? `${row.submittedAt.getFullYear()}-${String(
             row.submittedAt.getMonth() + 1,
-          ).padStart(2, '0')}-${String(row.submittedAt.getDate()).padStart(2, '0')}`
+          ).padStart(
+            2,
+            '0',
+          )}-${String(row.submittedAt.getDate()).padStart(2, '0')}`
         : 'SEM_DATA';
 
-      const current =
-        map.get(day) ?? {
-          total: 0,
-          counters: new Map<string, number>(),
-        };
+      const current = map.get(day) ?? {
+        total: 0,
+        counters: new Map<string, number>(),
+      };
 
       current.total += 1;
       const option = this.cleanCell(row.answers[column.key]) ?? 'Não informado';
@@ -857,7 +883,9 @@ export class BiGsdEvaluationService {
           const count = value.counters.get(option) ?? 0;
           item[`${option}__count`] = count;
           item[`${option}__percent`] =
-            value.total > 0 ? Number(((count / value.total) * 100).toFixed(2)) : 0;
+            value.total > 0
+              ? Number(((count / value.total) * 100).toFixed(2))
+              : 0;
         }
 
         return item;
@@ -882,7 +910,9 @@ export class BiGsdEvaluationService {
     const counter = new Map<string, number>();
 
     for (const value of values) {
-      const parts = allowMultiSplit ? this.splitMultiValues(value, true) : [value];
+      const parts = allowMultiSplit
+        ? this.splitMultiValues(value, true)
+        : [value];
       for (const part of parts) {
         counter.set(part, (counter.get(part) ?? 0) + 1);
       }
@@ -977,7 +1007,8 @@ export class BiGsdEvaluationService {
     if (!text) return {};
     try {
       const value = JSON.parse(text);
-      if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+      if (!value || typeof value !== 'object' || Array.isArray(value))
+        return {};
       return value as Record<string, string>;
     } catch {
       return {};
@@ -988,11 +1019,15 @@ export class BiGsdEvaluationService {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
     const value = raw as Record<string, unknown>;
     const order = Array.isArray(value.order)
-      ? value.order.map((item) => this.normalizeHeaderKey(String(item ?? ''))).filter(Boolean)
+      ? value.order
+          .map((item) => this.normalizeHeaderKey(String(item ?? '')))
+          .filter(Boolean)
       : [];
 
     const labelsInput =
-      value.labels && typeof value.labels === 'object' && !Array.isArray(value.labels)
+      value.labels &&
+      typeof value.labels === 'object' &&
+      !Array.isArray(value.labels)
         ? (value.labels as Record<string, unknown>)
         : {};
     const labels: Record<string, string> = {};
@@ -1073,8 +1108,13 @@ export class BiGsdEvaluationService {
     }
   }
 
-  private findPreferredSheetName(sheetNames: string[], preferredNames: string[]) {
-    const preferred = preferredNames.map((name) => this.normalizeForMatch(name));
+  private findPreferredSheetName(
+    sheetNames: string[],
+    preferredNames: string[],
+  ) {
+    const preferred = preferredNames.map((name) =>
+      this.normalizeForMatch(name),
+    );
     const match = sheetNames.find((name) => {
       const normalized = this.normalizeForMatch(name);
       return preferred.some((item) => normalized.includes(item));
@@ -1250,7 +1290,11 @@ export class BiGsdEvaluationService {
     return multiCandidateCount >= Math.max(3, Math.floor(values.length * 0.15));
   }
 
-  private isLikelyFreeText(label: string, values: string[], uniqueCount: number) {
+  private isLikelyFreeText(
+    label: string,
+    values: string[],
+    uniqueCount: number,
+  ) {
     if (values.length === 0) return false;
     const normalizedLabel = this.normalizeForMatch(label);
     if (
@@ -1261,7 +1305,10 @@ export class BiGsdEvaluationService {
       return true;
     }
 
-    const maxLength = values.reduce((max, value) => Math.max(max, value.length), 0);
+    const maxLength = values.reduce(
+      (max, value) => Math.max(max, value.length),
+      0,
+    );
     const avgLength =
       values.reduce((sum, value) => sum + value.length, 0) / values.length;
     const uniqueRate = uniqueCount / values.length;
@@ -1310,7 +1357,9 @@ export class BiGsdEvaluationService {
 
     for (const [label, value] of Object.entries(rawPayload)) {
       if (!value) continue;
-      if (!this.isSubmittedAtColumn(this.normalizeHeaderKey(label), label, null)) {
+      if (
+        !this.isSubmittedAtColumn(this.normalizeHeaderKey(label), label, null)
+      ) {
         continue;
       }
       const parsed = this.parseSubmittedAt(value);
@@ -1335,7 +1384,9 @@ export class BiGsdEvaluationService {
   }
 
   private extractQuestionNumber(label: string) {
-    const match = String(label ?? '').trim().match(/^(\d{1,2})[\).\-\s]/);
+    const match = String(label ?? '')
+      .trim()
+      .match(/^(\d{1,2})[\).\-\s]/);
     if (!match) return null;
     const parsed = Number(match[1]);
     return Number.isFinite(parsed) ? parsed : null;
@@ -1415,7 +1466,9 @@ export class BiGsdEvaluationService {
   }
 
   private fileExtension(fileName: string) {
-    const lower = String(fileName ?? '').toLowerCase().trim();
+    const lower = String(fileName ?? '')
+      .toLowerCase()
+      .trim();
     if (lower.endsWith('.csv')) return 'csv';
     if (lower.endsWith('.xls')) return 'xls';
     return 'xlsx';

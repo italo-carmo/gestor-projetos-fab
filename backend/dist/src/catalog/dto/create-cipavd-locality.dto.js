@@ -14,6 +14,7 @@ const class_validator_1 = require("class-validator");
 class CreateCipavdLocalityDto {
     code;
     name;
+    uf;
 }
 exports.CreateCipavdLocalityDto = CreateCipavdLocalityDto;
 __decorate([
@@ -24,4 +25,9 @@ __decorate([
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], CreateCipavdLocalityDto.prototype, "name", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", Object)
+], CreateCipavdLocalityDto.prototype, "uf", void 0);
 //# sourceMappingURL=create-cipavd-locality.dto.js.map

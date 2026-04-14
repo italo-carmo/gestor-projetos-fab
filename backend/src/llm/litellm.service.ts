@@ -86,7 +86,9 @@ export function normalizeLitellmModelId(
   ]);
   const openAiStyle =
     styleFlag === '1' ||
-    String(styleFlag ?? '').trim().toLowerCase() === 'true';
+    String(styleFlag ?? '')
+      .trim()
+      .toLowerCase() === 'true';
   const mLow = m.toLowerCase();
   if (
     openAiStyle &&
@@ -104,7 +106,12 @@ export function normalizeLitellmModelId(
  * before the real answer, delimited by a marker like "assistantfinal".
  * Pattern: "analysis<thinking>...assistantfinal<actual answer>"
  */
-const REASONING_MARKERS = ['assistantfinal', 'assistant_final', 'finalanswer', 'final_answer'];
+const REASONING_MARKERS = [
+  'assistantfinal',
+  'assistant_final',
+  'finalanswer',
+  'final_answer',
+];
 const REASONING_PREAMBLE_PATTERN =
   /^(we need to|let'?s\b|must\b|now\b|first\b|second\b|third\b|i need to|i should|we should|we must|analysis\b|thinking\b|preciso\b|devemos\b|temos que\b|vou\b|vamos\b)/i;
 
@@ -133,7 +140,11 @@ function stripReasoningPreamble(text: string): string {
 
   // Se houver indícios de raciocínio antes de um heading Markdown, corta no heading.
   const headingMatch = source.match(/\n##?\s+/);
-  if (headingMatch && typeof headingMatch.index === 'number' && headingMatch.index > 0) {
+  if (
+    headingMatch &&
+    typeof headingMatch.index === 'number' &&
+    headingMatch.index > 0
+  ) {
     const before = source.slice(0, headingMatch.index);
     if (REASONING_PREAMBLE_PATTERN.test(before.trim())) {
       return source.slice(headingMatch.index + 1).trimStart();
@@ -152,7 +163,10 @@ function stripReasoningPreamble(text: string): string {
       idx++;
       continue;
     }
-    if (/^[-*]\s+/.test(line) && REASONING_PREAMBLE_PATTERN.test(line.slice(2).trim())) {
+    if (
+      /^[-*]\s+/.test(line) &&
+      REASONING_PREAMBLE_PATTERN.test(line.slice(2).trim())
+    ) {
       idx++;
       continue;
     }
@@ -303,7 +317,9 @@ export class LitellmService {
    */
   async *chatCompletionStream(
     params: ChatCompletionParams,
-  ): AsyncGenerator<{ type: 'token'; text: string } | { type: 'done'; model: string }> {
+  ): AsyncGenerator<
+    { type: 'token'; text: string } | { type: 'done'; model: string }
+  > {
     const apiKey = this.getApiKey();
     const baseUrl = this.getBaseUrl();
     if (!apiKey || !baseUrl) {
@@ -340,7 +356,9 @@ export class LitellmService {
       try {
         const j = JSON.parse(text);
         errMsg = j?.error?.message || errMsg;
-      } catch { /* keep raw */ }
+      } catch {
+        /* keep raw */
+      }
       throw new Error(errMsg || `LiteLLM HTTP ${res.status}`);
     }
 

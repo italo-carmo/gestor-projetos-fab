@@ -78,6 +78,7 @@ export declare class ActivitiesController {
     remove(id: string, user: RbacUser): Promise<{
         ok: boolean;
     }>;
+    getById(id: string, user: RbacUser): Promise<any>;
     comments(id: string, user: RbacUser): Promise<{
         items: {
             id: any;

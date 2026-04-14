@@ -140,6 +140,65 @@ let ActivitiesService = class ActivitiesService {
             total,
         };
     }
+    async getById(id, user) {
+        const normalizedId = String(id ?? '').trim();
+        if (!normalizedId)
+            (0, http_error_1.throwError)('NOT_FOUND');
+        const accessWhere = this.buildActivityAccessWhere(user, 'view');
+        const andClauses = [{ id: normalizedId }];
+        if (Object.keys(accessWhere).length > 0) {
+            andClauses.push(accessWhere);
+        }
+        const where = andClauses.length > 1 ? { AND: andClauses } : andClauses[0];
+        const activity = await this.prisma.activity.findFirst({
+            where,
+            include: {
+                locality: { select: { id: true, code: true, name: true } },
+                activityType: { select: { id: true, name: true } },
+                specialty: { select: { id: true, name: true, color: true } },
+                specialties: {
+                    include: {
+                        specialty: { select: { id: true, name: true, color: true } },
+                    },
+                    orderBy: { createdAt: 'asc' },
+                },
+                createdBy: { select: { id: true, name: true } },
+                responsibles: {
+                    include: {
+                        user: {
+                            select: {
+                                id: true,
+                                name: true,
+                                email: true,
+                                localityId: true,
+                                specialtyId: true,
+                                eloRoleId: true,
+                            },
+                        },
+                    },
+                    orderBy: [{ createdAt: 'asc' }],
+                },
+                report: {
+                    include: {
+                        photos: {
+                            select: {
+                                id: true,
+                                fileName: true,
+                                fileUrl: true,
+                                createdAt: true,
+                            },
+                            orderBy: { createdAt: 'asc' },
+                        },
+                        signedBy: { select: { id: true, name: true, email: true } },
+                    },
+                },
+            },
+        });
+        if (!activity)
+            (0, http_error_1.throwError)('NOT_FOUND');
+        const [withCommentSummary] = await this.attachActivityCommentSummary([activity], user);
+        return this.mapActivity(withCommentSummary, user?.executiveHidePii);
+    }
     async listResponsibleUsers(filters, user) {
         if (!user?.id)
             (0, http_error_1.throwError)('RBAC_FORBIDDEN');

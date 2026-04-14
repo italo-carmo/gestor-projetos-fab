@@ -104,7 +104,8 @@ export class AuthService {
     const secretBase32 = generateTotpSecret();
     const encKey = this.getTotpEncryptionKey();
     const encrypted = encryptSecret(secretBase32, encKey);
-    const accountName = refreshedUser.email || refreshedUser.name || refreshedUser.id;
+    const accountName =
+      refreshedUser.email || refreshedUser.name || refreshedUser.id;
     const totpUri = buildTotpUri(secretBase32, accountName);
     const qrCodeDataUrl = await generateQrCodeDataUrl(totpUri);
     const manualEntryKey = formatManualKey(secretBase32);
@@ -374,7 +375,13 @@ export class AuthService {
     const payload = await this.verify2faToken(twoFactorToken, '2fa');
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
-      select: { id: true, email: true, totpSecret: true, totpEnabled: true, totpBackupCodes: true },
+      select: {
+        id: true,
+        email: true,
+        totpSecret: true,
+        totpEnabled: true,
+        totpBackupCodes: true,
+      },
     });
     if (!user || !user.totpSecret || !user.totpEnabled) {
       throwError('AUTH_INVALID_CREDENTIALS');
@@ -441,7 +448,10 @@ export class AuthService {
     } as any);
   }
 
-  private async verify2faToken(token: string, expectedPurpose: '2fa' | '2fa_setup') {
+  private async verify2faToken(
+    token: string,
+    expectedPurpose: '2fa' | '2fa_setup',
+  ) {
     let payload: Jwt2faPayload;
     try {
       payload = await this.jwt.verifyAsync<Jwt2faPayload>(token, {

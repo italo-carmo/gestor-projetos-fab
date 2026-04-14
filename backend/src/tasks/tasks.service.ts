@@ -627,7 +627,8 @@ export class TasksService {
     },
     user?: RbacUser,
   ) {
-    const allowedLocalityIds = await this.allowedLocalityIdsForTaskQueries(user);
+    const allowedLocalityIds =
+      await this.allowedLocalityIdsForTaskQueries(user);
     if (allowedLocalityIds !== undefined && allowedLocalityIds.length === 0) {
       const { page, pageSize } = this.parsePagination(
         filters.page,
@@ -1884,7 +1885,8 @@ export class TasksService {
     params: { localityId?: string; from?: string; to?: string },
     user?: RbacUser,
   ) {
-    const allowedLocalityIds = await this.allowedLocalityIdsForTaskQueries(user);
+    const allowedLocalityIds =
+      await this.allowedLocalityIdsForTaskQueries(user);
     if (allowedLocalityIds !== undefined && allowedLocalityIds.length === 0) {
       return { items: [] };
     }
@@ -1927,7 +1929,8 @@ export class TasksService {
   }
 
   async getCalendar(year: number, localityId?: string, user?: RbacUser) {
-    const allowedLocalityIds = await this.allowedLocalityIdsForTaskQueries(user);
+    const allowedLocalityIds =
+      await this.allowedLocalityIdsForTaskQueries(user);
     if (allowedLocalityIds !== undefined && allowedLocalityIds.length === 0) {
       return { items: [] };
     }
@@ -2439,8 +2442,7 @@ export class TasksService {
         ? Math.round(
             localityActivities.reduce(
               (acc, activity) =>
-                acc +
-                progressWeightByStatus[activity.status as ActivityStatus],
+                acc + progressWeightByStatus[activity.status as ActivityStatus],
               0,
             ) / localityActivities.length,
           )
@@ -2585,18 +2587,16 @@ export class TasksService {
     let totalElos = 0;
     let totalGraduadosMaster = 0;
     for (const activity of completedActivities) {
-      if ((activity as any).report) {
-        totalInstructors += (activity as any).report.instructorsCount ?? 0;
-        totalRecruitsFromReports += (activity as any).report.recruitsCount ?? 0;
-        const eloPsychologyCount =
-          (activity as any).report.eloPsychologyCount ?? 0;
+      if (activity.report) {
+        totalInstructors += activity.report.instructorsCount ?? 0;
+        totalRecruitsFromReports += activity.report.recruitsCount ?? 0;
+        const eloPsychologyCount = activity.report.eloPsychologyCount ?? 0;
         const eloSocialAssistanceCount =
-          (activity as any).report.eloSocialAssistanceCount ?? 0;
+          activity.report.eloSocialAssistanceCount ?? 0;
         totalEloPsychology += eloPsychologyCount;
         totalEloSocialAssistance += eloSocialAssistanceCount;
         totalElos += eloPsychologyCount + eloSocialAssistanceCount;
-        totalGraduadosMaster +=
-          (activity as any).report.eloGraduadoMasterCount ?? 0;
+        totalGraduadosMaster += activity.report.eloGraduadoMasterCount ?? 0;
       }
     }
     const participantsDrilldown = {
@@ -3213,10 +3213,7 @@ export class TasksService {
       scopeFilter === ActivityScope.SMIF
         ? await this.getTargetLocalityIds()
         : [];
-    if (
-      scopeFilter === ActivityScope.SMIF &&
-      allowedLocalityIds.length === 0
-    ) {
+    if (scopeFilter === ActivityScope.SMIF && allowedLocalityIds.length === 0) {
       return user?.executiveHidePii
         ? sanitizeForExecutive(emptyResponse)
         : emptyResponse;
@@ -3535,8 +3532,7 @@ export class TasksService {
         const avg = localityActivities.length
           ? localityActivities.reduce(
               (acc, activity) =>
-                acc +
-                progressWeightByStatus[activity.status as ActivityStatus],
+                acc + progressWeightByStatus[activity.status as ActivityStatus],
               0,
             ) / localityActivities.length
           : 0;
@@ -3729,7 +3725,10 @@ export class TasksService {
       }
     >();
     for (const activity of filteredActivities) {
-      if (activity.status !== ActivityStatus.DONE || !isVisitActivity(activity)) {
+      if (
+        activity.status !== ActivityStatus.DONE ||
+        !isVisitActivity(activity)
+      ) {
         continue;
       }
       const canonicalId =
@@ -4138,9 +4137,8 @@ export class TasksService {
     );
 
     const psicologiaActivities = filteredActivities.filter((activity) => {
-      const normalizedNames = this.resolveActivitySpecialtyNormalizedNames(
-        activity,
-      );
+      const normalizedNames =
+        this.resolveActivitySpecialtyNormalizedNames(activity);
       return normalizedNames.some(
         (name) =>
           name.includes('psicologia') ||
@@ -4358,8 +4356,7 @@ export class TasksService {
             {
               id: String(activity.specialty.id),
               name:
-                String(activity.specialty.name ?? '').trim() ||
-                'Especialidade',
+                String(activity.specialty.name ?? '').trim() || 'Especialidade',
             },
           ]
         : [];
@@ -5359,8 +5356,7 @@ export class TasksService {
 
     const merged = [...pageItems, ...siblings];
     merged.sort(
-      (a, b) =>
-        new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime(),
+      (a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime(),
     );
     return merged;
   }
@@ -5379,7 +5375,8 @@ export class TasksService {
     },
     user?: RbacUser,
   ) {
-    const allowedLocalityIds = await this.allowedLocalityIdsForTaskQueries(user);
+    const allowedLocalityIds =
+      await this.allowedLocalityIdsForTaskQueries(user);
     if (allowedLocalityIds !== undefined && allowedLocalityIds.length === 0)
       return [];
     const { where } = this.buildTaskWhere(
@@ -5452,8 +5449,7 @@ export class TasksService {
       const row = byId.get(defaults.id);
       return {
         id: defaults.id,
-        title:
-          this.sanitizeRequiredTextOrFallback(row?.title, defaults.title),
+        title: this.sanitizeRequiredTextOrFallback(row?.title, defaults.title),
         description: this.sanitizeRequiredTextOrFallback(
           row?.description,
           defaults.description,
@@ -5462,10 +5458,7 @@ export class TasksService {
           row?.backgroundColor,
           defaults.backgroundColor,
         ),
-        textColor: this.normalizeHexColor(
-          row?.textColor,
-          defaults.textColor,
-        ),
+        textColor: this.normalizeHexColor(row?.textColor, defaults.textColor),
       };
     });
   }

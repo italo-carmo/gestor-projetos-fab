@@ -77,10 +77,6 @@ import {
   GLOBAL_LOCALITY_STORAGE_KEY,
 } from "../api/client";
 import { selectTargetLocalities } from "../constants/localities";
-import {
-  MEETING_STATUS_LABELS,
-  NOTICE_PRIORITY_LABELS,
-} from "../constants/enums";
 
 const drawerExpandedWidth = 284;
 const drawerCollapsedWidth = 92;
@@ -94,6 +90,25 @@ type NavItem = {
   menuKey?: string;
 };
 type NavSection = { id: string; label?: string; items: NavItem[] };
+type SemanticResultItem = {
+  id: string;
+  entityType: string;
+  entityTypeLabel?: string;
+  title: string;
+  subtitle?: string | null;
+  url: string;
+  probability?: number;
+};
+type RoleLike = {
+  id?: string;
+  name?: string;
+  role?: { id?: string; name?: string };
+};
+type GlobalLocalityLike = {
+  id?: string;
+  name?: string;
+  recruitsFemaleCountCurrent?: number | null;
+};
 
 function toPathOnly(value: string) {
   const [path] = String(value ?? "").split("?");
@@ -349,7 +364,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       { id: string; name: string; roleId: string | null }
     >();
 
-    for (const raw of (me?.roles ?? []) as Array<any>) {
+    for (const raw of (me?.roles ?? []) as Array<RoleLike>) {
       const source = raw?.role ?? raw;
       const roleId = String(source?.id ?? "").trim();
       const roleName = canonicalRoleName(source?.name ?? raw?.name ?? "");
@@ -401,12 +416,14 @@ export function AppShell({ children }: { children: ReactNode }) {
     can(me, "localities", "view", "NATIONAL");
   const availableGlobalLocalities = useMemo(
     () =>
-      selectTargetLocalities((localitiesQuery.data?.items ?? []) as any[])
+      selectTargetLocalities(
+        (localitiesQuery.data?.items ?? []) as GlobalLocalityLike[],
+      )
         .filter(
-          (locality: any) =>
+          (locality) =>
             Number(locality?.recruitsFemaleCountCurrent ?? 0) > 0,
         )
-        .map((locality: any) => ({
+        .map((locality) => ({
           id: String(locality.id),
           name: String(locality.name),
         })),
@@ -881,15 +898,9 @@ export function AppShell({ children }: { children: ReactNode }) {
     ],
   );
 
-  const canSeeNotices = can(me, "notices", "view");
-  const canSeeMeetings = can(me, "meetings", "view");
-  const canSeeDocuments = can(me, "documents", "view");
-  const totalSearchResults =
-    (searchQuery.data?.tasks?.length ?? 0) +
-    (canSeeNotices ? (searchQuery.data?.notices?.length ?? 0) : 0) +
-    (canSeeMeetings ? (searchQuery.data?.meetings?.length ?? 0) : 0) +
-    (searchQuery.data?.localities?.length ?? 0) +
-    (canSeeDocuments ? (searchQuery.data?.documents?.length ?? 0) : 0);
+  const semanticResults = (searchQuery.data?.semantic?.items ??
+    []) as SemanticResultItem[];
+  const totalSearchResults = semanticResults.length;
 
   return (
     <Box sx={{ display: "flex", minHeight: "100vh" }}>
@@ -1014,94 +1025,25 @@ export function AppShell({ children }: { children: ReactNode }) {
                       color="text.secondary"
                       sx={{ px: 0.4, pb: 0.8 }}
                     >
-                      Digite para buscar tarefas, avisos, reuniões, localidades
-                      e documentos.
+                      Digite para buscar semanticamente links do sistema.
                     </Typography>
                   ) : (
                     <List dense>
-                      {(searchQuery.data?.tasks ?? []).map((task: any) => (
+                      {semanticResults.map((item) => (
                         <ListItemButton
-                          key={task.id}
-                          component={Link}
-                          to={`/tasks?q=${encodeURIComponent(task.title)}`}
+                          key={`${item.entityType}-${item.id}`}
+                          component="a"
+                          href={String(item.url ?? "")}
+                          target="_blank"
+                          rel="noreferrer"
                           onClick={() => setAnchorEl(null)}
                         >
                           <ListItemText
-                            primary={task.title}
-                            secondary={task.localityName ?? task.localityId}
+                            primary={item.title}
+                            secondary={`${item.entityTypeLabel ?? item.entityType} • ${Math.round(Number(item.probability ?? 0) * 100)}%${item.subtitle ? ` • ${item.subtitle}` : ""}`}
                           />
                         </ListItemButton>
                       ))}
-                      {canSeeNotices &&
-                        (searchQuery.data?.notices ?? []).map((notice: any) => (
-                          <ListItemButton
-                            key={notice.id}
-                            component={Link}
-                            to="/notices"
-                            onClick={() => setAnchorEl(null)}
-                          >
-                            <ListItemText
-                              primary={notice.title}
-                              secondary={`Aviso ${NOTICE_PRIORITY_LABELS[notice.priority] ?? notice.priority}`}
-                            />
-                          </ListItemButton>
-                        ))}
-                      {canSeeMeetings &&
-                        (searchQuery.data?.meetings ?? []).map(
-                          (meeting: any) => (
-                            <ListItemButton
-                              key={meeting.id}
-                              component={Link}
-                              to="/meetings"
-                              onClick={() => setAnchorEl(null)}
-                            >
-                              <ListItemText
-                                primary={
-                                  meeting.scope
-                                    ? meeting.scope.length > 35
-                                      ? `${meeting.scope.slice(0, 35)}…`
-                                      : meeting.scope
-                                    : "Reunião"
-                                }
-                                secondary={
-                                  MEETING_STATUS_LABELS[meeting.status] ??
-                                  meeting.status
-                                }
-                              />
-                            </ListItemButton>
-                          ),
-                        )}
-                      {(searchQuery.data?.localities ?? []).map((loc: any) => (
-                        <ListItemButton
-                          key={loc.id}
-                          component={Link}
-                          to={`/dashboard/locality/${loc.id}`}
-                          onClick={() => setAnchorEl(null)}
-                        >
-                          <ListItemText
-                            primary={loc.name}
-                            secondary={loc.code}
-                          />
-                        </ListItemButton>
-                      ))}
-                      {canSeeDocuments &&
-                        (searchQuery.data?.documents ?? []).map((doc: any) => (
-                          <ListItemButton
-                            key={doc.id}
-                            component={Link}
-                            to={`/documents?q=${encodeURIComponent(doc.title)}`}
-                            onClick={() => setAnchorEl(null)}
-                          >
-                            <ListItemText
-                              primary={doc.title}
-                              secondary={
-                                doc.localityName
-                                  ? `Impacto Positivo • ${doc.localityName}`
-                                  : "Impacto Positivo"
-                              }
-                            />
-                          </ListItemButton>
-                        ))}
                       {totalSearchResults === 0 && (
                         <Typography
                           variant="body2"

@@ -78,7 +78,12 @@ export function hasAnyPermission(
 ) {
   if (!user) return false;
   return requirements.some((requirement) =>
-    hasPermission(user, requirement.resource, requirement.action, requirement.scope),
+    hasPermission(
+      user,
+      requirement.resource,
+      requirement.action,
+      requirement.scope,
+    ),
   );
 }
 

@@ -1,6 +1,7 @@
 export declare class UpdateLocalityDto {
     code?: string;
     name?: string;
+    uf?: string | null;
     commandName?: string | null;
     commanderName?: string | null;
     individualMeetingDate?: string | null;

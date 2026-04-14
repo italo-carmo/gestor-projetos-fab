@@ -20,10 +20,7 @@ import { CurrentUser } from '../common/current-user.decorator';
 import { throwError } from '../common/http-error';
 import { RequirePermission } from '../rbac/require-permission.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
-import {
-  hasPermission,
-  ROLE_GSD_LOCALIDADE,
-} from '../rbac/role-access';
+import { hasPermission, ROLE_GSD_LOCALIDADE } from '../rbac/role-access';
 import type { RbacUser } from '../rbac/rbac.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { sanitizeText } from '../common/sanitize';
@@ -133,9 +130,12 @@ export class LocalitiesController {
       data: {
         code: dto.code ? sanitizeText(dto.code).toUpperCase() : undefined,
         name: dto.name ? sanitizeText(dto.name) : undefined,
-        uf: dto.uf !== undefined
-          ? (dto.uf ? sanitizeText(dto.uf).toUpperCase().slice(0, 2) : null)
-          : undefined,
+        uf:
+          dto.uf !== undefined
+            ? dto.uf
+              ? sanitizeText(dto.uf).toUpperCase().slice(0, 2)
+              : null
+            : undefined,
       },
       select: { id: true, code: true, name: true, uf: true, createdAt: true },
     });
@@ -216,9 +216,12 @@ export class LocalitiesController {
       data: {
         code: dto.code ? sanitizeText(dto.code) : undefined,
         name: dto.name ? sanitizeText(dto.name) : undefined,
-        uf: dto.uf !== undefined
-          ? (dto.uf ? sanitizeText(dto.uf).toUpperCase().slice(0, 2) : null)
-          : undefined,
+        uf:
+          dto.uf !== undefined
+            ? dto.uf
+              ? sanitizeText(dto.uf).toUpperCase().slice(0, 2)
+              : null
+            : undefined,
         commandName: dto.commandName
           ? sanitizeText(dto.commandName)
           : dto.commandName === null

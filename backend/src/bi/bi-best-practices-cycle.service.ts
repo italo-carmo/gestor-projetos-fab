@@ -102,7 +102,8 @@ export class BiBestPracticesCycleService {
     options: ImportBestPracticeCycleOptions = {},
   ) {
     const extension = this.fileExtension(file.originalname);
-    const format = extension === 'csv' ? BiImportFormat.CSV : BiImportFormat.XLSX;
+    const format =
+      extension === 'csv' ? BiImportFormat.CSV : BiImportFormat.XLSX;
     const replaceAll = options.replaceAll === true;
 
     const { sheetName, rows } = this.extractRows(file.buffer, format);
@@ -310,7 +311,8 @@ export class BiBestPracticesCycleService {
   }
 
   async listCardSettings() {
-    const cardSettingModel = (this.prisma as any).biBestPracticeCycleCardSetting;
+    const cardSettingModel = (this.prisma as any)
+      .biBestPracticeCycleCardSetting;
     const items = await cardSettingModel.findMany({
       orderBy: { cardId: 'asc' },
       select: {
@@ -356,7 +358,8 @@ export class BiBestPracticesCycleService {
         ? null
         : String(descriptionRaw).trim() || null;
 
-    const cardSettingModel = (this.prisma as any).biBestPracticeCycleCardSetting;
+    const cardSettingModel = (this.prisma as any)
+      .biBestPracticeCycleCardSetting;
 
     const updated = await cardSettingModel.upsert({
       where: { cardId },
@@ -391,7 +394,8 @@ export class BiBestPracticesCycleService {
 
     const responseModel = (this.prisma as any).biBestPracticeCycleResponse;
     const importModel = (this.prisma as any).biBestPracticeCycleImportBatch;
-    const cardSettingModel = (this.prisma as any).biBestPracticeCycleCardSetting;
+    const cardSettingModel = (this.prisma as any)
+      .biBestPracticeCycleCardSetting;
 
     const [rows, allRowsForFilters, totalRowsInDb, latestImport, cardSettings] =
       await this.prisma.$transaction([
@@ -515,16 +519,24 @@ export class BiBestPracticesCycleService {
         totalRowsInDb,
         preparedPositiveCount,
         preparedPositiveRatePercent:
-          total > 0 ? Number(((preparedPositiveCount / total) * 100).toFixed(2)) : 0,
+          total > 0
+            ? Number(((preparedPositiveCount / total) * 100).toFixed(2))
+            : 0,
         interactionYesCount,
         interactionYesRatePercent:
-          total > 0 ? Number(((interactionYesCount / total) * 100).toFixed(2)) : 0,
+          total > 0
+            ? Number(((interactionYesCount / total) * 100).toFixed(2))
+            : 0,
         supportFrequentCount,
         supportFrequentRatePercent:
-          total > 0 ? Number(((supportFrequentCount / total) * 100).toFixed(2)) : 0,
+          total > 0
+            ? Number(((supportFrequentCount / total) * 100).toFixed(2))
+            : 0,
         lowPreparednessCount,
         lowPreparednessRatePercent:
-          total > 0 ? Number(((lowPreparednessCount / total) * 100).toFixed(2)) : 0,
+          total > 0
+            ? Number(((lowPreparednessCount / total) * 100).toFixed(2))
+            : 0,
       },
       filters: this.buildAvailableFilters(allRowsForFilters),
       charts: {
@@ -559,7 +571,9 @@ export class BiBestPracticesCycleService {
           title: 'Grupo que ainda demanda reforço de preparo',
           affectedCount: lowPreparednessCount,
           affectedRatePercent:
-            total > 0 ? Number(((lowPreparednessCount / total) * 100).toFixed(2)) : 0,
+            total > 0
+              ? Number(((lowPreparednessCount / total) * 100).toFixed(2))
+              : 0,
         },
       },
       latestImport,
@@ -593,7 +607,9 @@ export class BiBestPracticesCycleService {
         technicalRigorPerception.add(row.technicalRigorPerception.trim());
       }
       if (row.preparednessToLeadMixedClass?.trim()) {
-        preparednessToLeadMixedClass.add(row.preparednessToLeadMixedClass.trim());
+        preparednessToLeadMixedClass.add(
+          row.preparednessToLeadMixedClass.trim(),
+        );
       }
       if (row.genderBiasImpact?.trim()) {
         genderBiasImpact.add(row.genderBiasImpact.trim());
@@ -628,7 +644,9 @@ export class BiBestPracticesCycleService {
       mainChallengeOptions: [...mainChallengeOptions].sort((a, b) =>
         a.localeCompare(b, 'pt-BR'),
       ),
-      identification: [...identification].sort((a, b) => a.localeCompare(b, 'pt-BR')),
+      identification: [...identification].sort((a, b) =>
+        a.localeCompare(b, 'pt-BR'),
+      ),
       specialty: [...specialty].sort((a, b) => a.localeCompare(b, 'pt-BR')),
     };
   }
@@ -654,7 +672,9 @@ export class BiBestPracticesCycleService {
         count,
         percent: total > 0 ? Number(((count / total) * 100).toFixed(2)) : 0,
       }))
-      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, 'pt-BR'));
+      .sort(
+        (a, b) => b.count - a.count || a.label.localeCompare(b.label, 'pt-BR'),
+      );
   }
 
   private buildMultiOptionDistribution<T>(
@@ -684,7 +704,9 @@ export class BiBestPracticesCycleService {
             ? Number(((count / totalMentions) * 100).toFixed(2))
             : 0,
       }))
-      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, 'pt-BR'));
+      .sort(
+        (a, b) => b.count - a.count || a.label.localeCompare(b.label, 'pt-BR'),
+      );
   }
 
   private buildPreparednessTrendByDay(
@@ -693,20 +715,25 @@ export class BiBestPracticesCycleService {
       preparednessToLeadMixedClass: string | null;
     }>,
   ) {
-    const map = new Map<string, { total: number; counters: Map<string, number> }>();
+    const map = new Map<
+      string,
+      { total: number; counters: Map<string, number> }
+    >();
 
     for (const row of rows) {
       const day = row.submittedAt
         ? `${row.submittedAt.getFullYear()}-${String(
             row.submittedAt.getMonth() + 1,
-          ).padStart(2, '0')}-${String(row.submittedAt.getDate()).padStart(2, '0')}`
+          ).padStart(
+            2,
+            '0',
+          )}-${String(row.submittedAt.getDate()).padStart(2, '0')}`
         : 'SEM_DATA';
 
-      const current =
-        map.get(day) ?? {
-          total: 0,
-          counters: new Map<string, number>(),
-        };
+      const current = map.get(day) ?? {
+        total: 0,
+        counters: new Map<string, number>(),
+      };
 
       current.total += 1;
       const option = row.preparednessToLeadMixedClass ?? 'Não informado';
@@ -738,7 +765,9 @@ export class BiBestPracticesCycleService {
           const count = value.counters.get(option) ?? 0;
           item[`${option}__count`] = count;
           item[`${option}__percent`] =
-            value.total > 0 ? Number(((count / value.total) * 100).toFixed(2)) : 0;
+            value.total > 0
+              ? Number(((count / value.total) * 100).toFixed(2))
+              : 0;
         }
 
         return item;
@@ -757,11 +786,14 @@ export class BiBestPracticesCycleService {
     };
   }
 
-  private buildFreeTextRows<T extends { id: string; submittedAt: Date | null; identification: string | null; specialty: string | null }>(
-    rows: T[],
-    textSelector: (row: T) => string | null,
-    limit = 200,
-  ) {
+  private buildFreeTextRows<
+    T extends {
+      id: string;
+      submittedAt: Date | null;
+      identification: string | null;
+      specialty: string | null;
+    },
+  >(rows: T[], textSelector: (row: T) => string | null, limit = 200) {
     const full = rows
       .map((row) => ({
         id: row.id,
@@ -806,7 +838,9 @@ export class BiBestPracticesCycleService {
         text,
         count,
         percent:
-          totalResponses > 0 ? Number(((count / totalResponses) * 100).toFixed(2)) : 0,
+          totalResponses > 0
+            ? Number(((count / totalResponses) * 100).toFixed(2))
+            : 0,
       }));
 
     return {
@@ -842,17 +876,22 @@ export class BiBestPracticesCycleService {
     }
     if (filters.preparednessToLeadMixedClass?.trim()) {
       conditions.push({
-        preparednessToLeadMixedClass: filters.preparednessToLeadMixedClass.trim(),
+        preparednessToLeadMixedClass:
+          filters.preparednessToLeadMixedClass.trim(),
       });
     }
     if (filters.genderBiasImpact?.trim()) {
       conditions.push({ genderBiasImpact: filters.genderBiasImpact.trim() });
     }
     if (filters.interactionDifference?.trim()) {
-      conditions.push({ interactionDifference: filters.interactionDifference.trim() });
+      conditions.push({
+        interactionDifference: filters.interactionDifference.trim(),
+      });
     }
     if (filters.supportNeedRecognition?.trim()) {
-      conditions.push({ supportNeedRecognition: filters.supportNeedRecognition.trim() });
+      conditions.push({
+        supportNeedRecognition: filters.supportNeedRecognition.trim(),
+      });
     }
     if (filters.mainChallengeOption?.trim()) {
       conditions.push({
@@ -962,14 +1001,19 @@ export class BiBestPracticesCycleService {
     }
   }
 
-  private findPreferredSheetName(sheetNames: string[], preferredNames: string[]) {
+  private findPreferredSheetName(
+    sheetNames: string[],
+    preferredNames: string[],
+  ) {
     const normalizedPreferred = preferredNames.map((name) =>
       this.normalizeForMatch(name),
     );
 
     const selected = sheetNames.find((name) => {
       const current = this.normalizeForMatch(name);
-      return normalizedPreferred.some((preferred) => current.includes(preferred));
+      return normalizedPreferred.some((preferred) =>
+        current.includes(preferred),
+      );
     });
 
     return selected ?? sheetNames[0];
@@ -1089,7 +1133,10 @@ export class BiBestPracticesCycleService {
       map.preparednessToLeadMixedClass,
     );
     const genderBiasImpactRaw = this.getCell(row, map.genderBiasImpact);
-    const interactionDifferenceRaw = this.getCell(row, map.interactionDifference);
+    const interactionDifferenceRaw = this.getCell(
+      row,
+      map.interactionDifference,
+    );
     const interactionDifferenceCommentRaw = this.getCell(
       row,
       map.interactionDifferenceComment,
@@ -1120,7 +1167,9 @@ export class BiBestPracticesCycleService {
     }
 
     const submittedAt = this.parseSubmittedAt(submittedAtRaw);
-    const technicalRigorPerception = this.normalizeLikert(technicalRigorPerceptionRaw);
+    const technicalRigorPerception = this.normalizeLikert(
+      technicalRigorPerceptionRaw,
+    );
     const preparednessToLeadMixedClass = this.normalizeLikert(
       preparednessToLeadMixedClassRaw,
     );
@@ -1129,7 +1178,9 @@ export class BiBestPracticesCycleService {
     const interactionDifferenceComment = this.cleanFreeText(
       interactionDifferenceCommentRaw,
     );
-    const supportNeedRecognition = this.normalizeFrequency(supportNeedRecognitionRaw);
+    const supportNeedRecognition = this.normalizeFrequency(
+      supportNeedRecognitionRaw,
+    );
     const mainChallengeOptions = this.normalizeMainChallengeOptions(
       mainChallengeOptionsRaw,
     );
