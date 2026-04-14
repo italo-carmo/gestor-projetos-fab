@@ -45,7 +45,7 @@ type LegacySearchPayload = {
 
 type SemanticSearchItem = {
   id: string;
-  entityType: 'TASK' | 'MEETING' | 'LOCALITY' | 'DOCUMENT' | 'SCREEN';
+  entityType: 'TASK' | 'MEETING' | 'LOCALITY' | 'DOCUMENT';
   entityTypeLabel: string;
   title: string;
   subtitle: string | null;
@@ -75,26 +75,12 @@ type SemanticCandidate = {
   fallbackProbability: number;
 };
 
-type SemanticScreenDefinition = {
-  id: string;
-  title: string;
-  subtitle: string;
-  route: string;
-  queryParam: string;
-  keywords: string[];
-};
-
 type SearchPermissionFlags = {
   canViewTasks: boolean;
   canViewNotices: boolean;
   canViewMeetings: boolean;
   canViewLocalities: boolean;
   canViewDocuments: boolean;
-  canViewActivities: boolean;
-  canViewMissions: boolean;
-  canViewBestPractices: boolean;
-  canViewCpcaCases: boolean;
-  canViewSmifComplaints: boolean;
 };
 
 type TaskSearchRow = {
@@ -146,72 +132,6 @@ export class SearchService {
   private readonly maxItemsPerEntity = 20;
   private readonly maxSemanticCandidates = 70;
   private readonly maxSemanticResults = 15;
-  private readonly semanticScreens: SemanticScreenDefinition[] = [
-    {
-      id: 'tasks',
-      title: 'Tarefas',
-      subtitle: 'Tela de tarefas com filtro por texto',
-      route: '/tasks',
-      queryParam: 'q',
-      keywords: ['tarefas', 'pendencias', 'execucao', 'cronograma'],
-    },
-    {
-      id: 'meetings',
-      title: 'Reuniões',
-      subtitle: 'Tela de reuniões com filtro por escopo',
-      route: '/meetings',
-      queryParam: 'scope',
-      keywords: ['reuniao', 'palestra', 'encontro', 'ata', 'agenda'],
-    },
-    {
-      id: 'activities',
-      title: 'Atividades de Campo',
-      subtitle: 'Tela de atividades com filtro textual',
-      route: '/activities',
-      queryParam: 'q',
-      keywords: ['atividade', 'campo', 'acao', 'evento'],
-    },
-    {
-      id: 'missions',
-      title: 'Missões',
-      subtitle: 'Tela de missões com filtro textual',
-      route: '/missions',
-      queryParam: 'q',
-      keywords: ['missao', 'operacao', 'agenda', 'planejamento'],
-    },
-    {
-      id: 'documents',
-      title: 'Documentos',
-      subtitle: 'Tela de documentos com filtro textual',
-      route: '/documents',
-      queryParam: 'q',
-      keywords: ['documento', 'arquivo', 'apresentacao', 'relatorio'],
-    },
-    {
-      id: 'cpca-cases',
-      title: 'Denúncias CPCA',
-      subtitle: 'Tela de denúncias CPCA com filtro textual',
-      route: '/cpca-cases',
-      queryParam: 'q',
-      keywords: ['denuncia', 'cpca', 'assedio', 'violencia'],
-    },
-    {
-      id: 'smif-complaints',
-      title: 'Denúncias SMIF',
-      subtitle: 'Tela de denúncias SMIF com filtro textual',
-      route: '/smif-complaints',
-      queryParam: 'q',
-      keywords: ['smif', 'denuncia', 'assedio', 'violencia'],
-    },
-    {
-      id: 'best-practices',
-      title: 'Boas Práticas',
-      subtitle: 'Tela de boas práticas com filtro textual',
-      route: '/best-practices',
-      queryParam: 'q',
-      keywords: ['boas praticas', 'aprendizados', 'experiencias'],
-    },
-  ];
 
   constructor(
     private readonly prisma: PrismaService,
@@ -355,7 +275,6 @@ export class SearchService {
       })),
       semantic: await this.buildSemanticResults({
         query,
-        permissions,
         payload: {
           tasks: tasks.map((task) => ({
             id: task.id,
@@ -422,11 +341,6 @@ export class SearchService {
         hasPermission(user, 'dashboard', 'view') ||
         hasPermission(user, 'localities', 'view'),
       canViewDocuments: hasPermission(user, 'documents', 'view'),
-      canViewActivities: hasPermission(user, 'activities', 'view'),
-      canViewMissions: hasPermission(user, 'missions', 'view'),
-      canViewBestPractices: hasPermission(user, 'best_practices', 'view'),
-      canViewCpcaCases: hasPermission(user, 'cpca_cases', 'view'),
-      canViewSmifComplaints: hasPermission(user, 'smif_complaints', 'view'),
     };
   }
 
@@ -738,14 +652,9 @@ export class SearchService {
 
   private async buildSemanticResults(args: {
     query: string;
-    permissions: SearchPermissionFlags;
     payload: LegacySearchPayload;
   }): Promise<SemanticSearchPayload> {
-    const candidates = this.buildSemanticCandidates(
-      args.query,
-      args.payload,
-      args.permissions,
-    )
+    const candidates = this.buildSemanticCandidates(args.query, args.payload)
       .sort((a, b) => b.fallbackProbability - a.fallbackProbability)
       .slice(0, this.maxSemanticCandidates);
 
@@ -806,7 +715,6 @@ export class SearchService {
   private buildSemanticCandidates(
     query: string,
     payload: LegacySearchPayload,
-    permissions: SearchPermissionFlags,
   ): SemanticCandidate[] {
     const candidates: SemanticCandidate[] = [];
     const pushCandidate = (
@@ -876,51 +784,7 @@ export class SearchService {
       });
     }
 
-    const allowedScreenIds = new Set<string>();
-    if (permissions.canViewTasks) allowedScreenIds.add('tasks');
-    if (permissions.canViewMeetings) allowedScreenIds.add('meetings');
-    if (permissions.canViewActivities) allowedScreenIds.add('activities');
-    if (permissions.canViewMissions) allowedScreenIds.add('missions');
-    if (permissions.canViewDocuments) allowedScreenIds.add('documents');
-    if (permissions.canViewCpcaCases) allowedScreenIds.add('cpca-cases');
-    if (permissions.canViewSmifComplaints)
-      allowedScreenIds.add('smif-complaints');
-    if (permissions.canViewBestPractices)
-      allowedScreenIds.add('best-practices');
-
-    for (const screen of this.semanticScreens) {
-      if (!allowedScreenIds.has(screen.id)) continue;
-      const filteredUrl = this.buildScreenFilteredUrl(
-        screen.route,
-        screen.queryParam,
-        query,
-      );
-      pushCandidate({
-        candidateId: `screen:${screen.id}`,
-        id: screen.id,
-        entityType: 'SCREEN',
-        entityTypeLabel: 'Tela',
-        title: screen.title,
-        subtitle: screen.subtitle,
-        url: filteredUrl,
-        keywords: [screen.queryParam, ...screen.keywords],
-      });
-    }
-
     return candidates;
-  }
-
-  private buildScreenFilteredUrl(
-    route: string,
-    queryParam: string,
-    query: string,
-  ) {
-    const normalizedRoute = String(route ?? '').trim() || '/';
-    const cleanQuery = String(query ?? '').trim();
-    if (!cleanQuery) return normalizedRoute;
-    const params = new URLSearchParams();
-    params.set(queryParam, cleanQuery);
-    return `${normalizedRoute}?${params.toString()}`;
   }
 
   private async rankWithAi(
@@ -969,7 +833,6 @@ export class SearchService {
               'Regras obrigatórias:\n' +
               '- Use apenas candidateId da lista.\n' +
               '- Não invente links nem IDs.\n' +
-              '- Considere que existem candidatos de tela (SCREEN) e de registro.\n' +
               '- Priorize os candidatos que melhor representem a intenção semântica da frase.\n' +
               '- Retorne no máximo 15 resultados.\n' +
               '- probability deve ser número entre 0 e 1.\n' +
