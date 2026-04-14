@@ -66,16 +66,8 @@ export class ActivitiesService {
       String(filters.scope ?? '').toUpperCase() === 'CIPAVD'
         ? 'CIPAVD'
         : 'SMIF';
-    const targetLocalityIds =
-      scopeFilter === 'SMIF' ? await this.getTargetLocalityIds() : [];
-    if (scopeFilter === 'SMIF' && targetLocalityIds.length === 0) {
-      return { items: [], page, pageSize, total: 0 };
-    }
 
     const andClauses: Prisma.ActivityWhereInput[] = [];
-    if (scopeFilter === 'SMIF') {
-      andClauses.push({ localityId: { in: targetLocalityIds } });
-    }
     andClauses.push({ scope: scopeFilter });
     if (filters.localityId) andClauses.push({ localityId: filters.localityId });
     if (filters.specialtyId) {
