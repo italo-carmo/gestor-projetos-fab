@@ -3,7 +3,15 @@ import { LocalityCatalogType, PermissionScope, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { RbacUser } from '../rbac/rbac.types';
 import { sanitizeForExecutive } from '../common/executive';
-import { hasPermission, resolveAccessProfile } from '../rbac/role-access';
+import {
+  ROLE_COMANDANTE_COMGEP,
+  ROLE_COMGEP,
+  ROLE_COORDENACAO_CIPAVD,
+  ROLE_TI,
+  hasAnyRole,
+  hasPermission,
+  resolveAccessProfile,
+} from '../rbac/role-access';
 import { LitellmService } from '../llm/litellm.service';
 
 type LegacySearchPayload = {
@@ -45,7 +53,7 @@ type LegacySearchPayload = {
 
 type SemanticSearchItem = {
   id: string;
-  entityType: 'TASK' | 'MEETING' | 'LOCALITY' | 'DOCUMENT';
+  entityType: 'TASK' | 'MEETING' | 'LOCALITY' | 'DOCUMENT' | 'SCREEN';
   entityTypeLabel: string;
   title: string;
   subtitle: string | null;
@@ -82,6 +90,255 @@ type SearchPermissionFlags = {
   canViewLocalities: boolean;
   canViewDocuments: boolean;
 };
+
+type SearchScreenCandidate = {
+  id: string;
+  entityType: 'SCREEN';
+  entityTypeLabel: string;
+  path: string;
+  title: string;
+  subtitle: string;
+  keywords: string[];
+  isAllowed?: (user: RbacUser | undefined) => boolean;
+};
+
+type RouteWhitelistEntry = {
+  path: string;
+  allowedQueryKeys?: Set<string>;
+  allowDynamicSuffix?: boolean;
+};
+
+const SEARCH_SCREEN_ALLOWED_ROUTES: RouteWhitelistEntry[] = [
+  { path: '/dashboard/smif' },
+  { path: '/dashboard/cipavd' },
+  { path: '/dashboard/bi' },
+  { path: '/dashboard/bi-violencia-domestica' },
+  { path: '/dashboard/bi-recrutas' },
+  { path: '/dashboard/bi-ciclo-boas-praticas' },
+  { path: '/dashboard/bi-encontro-cpca' },
+  { path: '/dashboard/bi-avaliacao-gsd' },
+  { path: '/dashboard/estrategico' },
+  { path: '/dashboard/cpca' },
+  { path: '/tasks', allowedQueryKeys: new Set(['taskId']) },
+  { path: '/meetings', allowedQueryKeys: new Set(['scope', 'meetingId']) },
+  { path: '/activities' },
+  { path: '/activities-cipavd' },
+  { path: '/missions', allowedQueryKeys: new Set(['scope', 'missionId']) },
+  { path: '/best-practices' },
+  { path: '/library' },
+  { path: '/smif-complaints', allowedQueryKeys: new Set(['scope', 'caseId']) },
+  { path: '/cpca-cases', allowedQueryKeys: new Set(['scope', 'caseId']) },
+  { path: '/documents', allowedQueryKeys: new Set(['docId']) },
+  { path: '/dashboard/locality', allowDynamicSuffix: true },
+];
+
+const SEARCH_SCREEN_CANDIDATES: SearchScreenCandidate[] = [
+  {
+    id: 'tasks',
+    entityType: 'SCREEN',
+    entityTypeLabel: 'Tela',
+    path: '/tasks',
+    title: 'Tarefas',
+    subtitle: 'Lista de tarefas do sistema',
+    keywords: ['tarefas', 'tarefas de campo', 'pendências', 'tarefas cipavd'],
+    isAllowed: (user) => hasPermission(user, 'task_instances', 'view'),
+  },
+  {
+    id: 'meetings',
+    entityType: 'SCREEN',
+    entityTypeLabel: 'Tela',
+    path: '/meetings',
+    title: 'Reuniões',
+    subtitle: 'Agenda e reuniões por localidade',
+    keywords: ['reuniões', 'reunioes', 'ata', 'reunião', 'palestra'],
+    isAllowed: (user) => hasPermission(user, 'meetings', 'view'),
+  },
+  {
+    id: 'activities-smif',
+    entityType: 'SCREEN',
+    entityTypeLabel: 'Tela',
+    path: '/activities',
+    title: 'Atividades de Campo (SMIF)',
+    subtitle: 'Painel de atividades de campo e relatórios',
+    keywords: ['atividade', 'atividades', 'campo', 'smif', 'atividade de campo'],
+  },
+  {
+    id: 'activities-cipavd',
+    entityType: 'SCREEN',
+    entityTypeLabel: 'Tela',
+    path: '/activities-cipavd',
+    title: 'Atividades de Campo (CIPAVD)',
+    subtitle: 'Atividades de campo específicas da CIPAVD',
+    keywords: ['atividade', 'atividades', 'campo', 'cipavd', 'atividade de campo'],
+  },
+  {
+    id: 'missions',
+    entityType: 'SCREEN',
+    entityTypeLabel: 'Tela',
+    path: '/missions',
+    title: 'Missões',
+    subtitle: 'Execução de missões e planejamento',
+    keywords: [
+      'missões',
+      'missoes',
+      'missão',
+      'plano de missão',
+      'missao',
+    ],
+    isAllowed: (user) => hasPermission(user, 'missions', 'view'),
+  },
+  {
+    id: 'best-practices',
+    entityType: 'SCREEN',
+    entityTypeLabel: 'Tela',
+    path: '/best-practices',
+    title: 'Boas Práticas',
+    subtitle: 'Base de boas práticas institucionais',
+    keywords: ['boas práticas', 'boas praticas', 'boas-práticas', 'boas'],
+    isAllowed: (user) => hasPermission(user, 'best_practices', 'view'),
+  },
+  {
+    id: 'bi-schools',
+    entityType: 'SCREEN',
+    entityTypeLabel: 'Tela',
+    path: '/dashboard/bi',
+    title: 'Pesquisas de escolas',
+    subtitle: 'Pesquisa institucional de escolas',
+    keywords: [
+      'pesquisa',
+      'pesquisas',
+      'escolas',
+      'institucional',
+      'questionário',
+    ],
+    isAllowed: (user) => hasPermission(user, 'bi', 'view'),
+  },
+  {
+    id: 'bi-domestic-violence',
+    entityType: 'SCREEN',
+    entityTypeLabel: 'Tela',
+    path: '/dashboard/bi-violencia-domestica',
+    title: 'Pesquisa de Violência Doméstica',
+    subtitle: 'Indicadores e histórico de violência doméstica',
+    keywords: ['violência', 'violencia', 'domestica', 'violência doméstica'],
+    isAllowed: (user) => hasPermission(user, 'bi', 'view'),
+  },
+  {
+    id: 'bi-recruits',
+    entityType: 'SCREEN',
+    entityTypeLabel: 'Tela',
+    path: '/dashboard/bi-recrutas',
+    title: 'Pesquisa de Recrutas',
+    subtitle: 'Percepção e riscos para recrutamento',
+    keywords: ['recrutas', 'recrutamento', 'pesquisa de recrutas', 'risco'],
+    isAllowed: (user) => hasPermission(user, 'bi', 'view'),
+  },
+  {
+    id: 'bi-best-practice-cycle',
+    entityType: 'SCREEN',
+    entityTypeLabel: 'Tela',
+    path: '/dashboard/bi-ciclo-boas-praticas',
+    title: 'Pesquisa de Ciclo de Boas Práticas',
+    subtitle: 'Monitoramento de ciclo de boas práticas',
+    keywords: [
+      'boas práticas',
+      'ciclo',
+      'boas praticas',
+      'pesquisa de ciclo',
+      'ciclo de boas praticas',
+    ],
+    isAllowed: (user) => hasPermission(user, 'bi', 'view'),
+  },
+  {
+    id: 'bi-cpca-meeting',
+    entityType: 'SCREEN',
+    entityTypeLabel: 'Tela',
+    path: '/dashboard/bi-encontro-cpca',
+    title: 'Pesquisa de Encontro CPCA',
+    subtitle: 'Indicadores de encontro CPCA',
+    keywords: ['cpca', 'encontro', 'cpca meeting', 'encontro cpca'],
+    isAllowed: (user) => hasPermission(user, 'bi', 'view'),
+  },
+  {
+    id: 'bi-gsd-evaluation',
+    entityType: 'SCREEN',
+    entityTypeLabel: 'Tela',
+    path: '/dashboard/bi-avaliacao-gsd',
+    title: 'Pesquisa de Avaliação GSD',
+    subtitle: 'Avaliação de clima e ambiente de segurança',
+    keywords: ['gsd', 'avaliação', 'avaliacao', 'pesquisa gsd'],
+    isAllowed: (user) => hasPermission(user, 'bi', 'view'),
+  },
+  {
+    id: 'complaints-smif',
+    entityType: 'SCREEN',
+    entityTypeLabel: 'Tela',
+    path: '/smif-complaints',
+    title: 'Denúncias SMIF',
+    subtitle: 'Fluxo de denúncias do sistema SMIF',
+    keywords: ['denúncia', 'denuncias', 'smif', 'caso'],
+    isAllowed: (user) => hasPermission(user, 'smif_complaints', 'view'),
+  },
+  {
+    id: 'complaints-cpca',
+    entityType: 'SCREEN',
+    entityTypeLabel: 'Tela',
+    path: '/cpca-cases',
+    title: 'Denúncias CPCA',
+    subtitle: 'Casos e andamento de denúncias CPCA',
+    keywords: ['cpca', 'denúncia', 'denuncias', 'caso cpca'],
+    isAllowed: (user) => hasPermission(user, 'cpca_cases', 'view'),
+  },
+  {
+    id: 'dashboard-cipavd',
+    entityType: 'SCREEN',
+    entityTypeLabel: 'Tela',
+    path: '/dashboard/cipavd',
+    title: 'Dashboard CIPAVD',
+    subtitle: 'Painel executivo com visão consolidada',
+    keywords: [
+      'painel',
+      'dashboard',
+      'estratégico',
+      'executivo',
+      'cipavd',
+      'dashboard cipavd',
+    ],
+    isAllowed: () => true,
+  },
+  {
+    id: 'dashboard-smif',
+    entityType: 'SCREEN',
+    entityTypeLabel: 'Tela',
+    path: '/dashboard/smif',
+    title: 'Dashboard SMIF',
+    subtitle: 'Indicadores nacionais do sistema SMIF',
+    keywords: ['dashboard', 'smif', 'comum', 'nacional', 'escolas'],
+    isAllowed: (user) =>
+      hasPermission(user, 'dashboard', 'view', PermissionScope.NATIONAL),
+  },
+  {
+    id: 'dashboard-estrategico',
+    entityType: 'SCREEN',
+    entityTypeLabel: 'Tela',
+    path: '/dashboard/estrategico',
+    title: 'Dashboard Estratégico',
+    subtitle: 'Painel consolidado de análise estratégica',
+    keywords: ['dashboard', 'estratégico', 'estrategico', 'estrategia'],
+    isAllowed: (user) =>
+      hasAnyRole(user, [ROLE_COMGEP, ROLE_TI, ROLE_COORDENACAO_CIPAVD]),
+  },
+  {
+    id: 'dashboard-cpca',
+    entityType: 'SCREEN',
+    entityTypeLabel: 'Tela',
+    path: '/dashboard/cpca',
+    title: 'Dashboard CPCA',
+    subtitle: 'Painel de indicadores de denúncias CPCA',
+    keywords: ['cpca', 'denúncia', 'denuncias', 'dashboard cpca'],
+    isAllowed: (user) => hasPermission(user, 'cpca_cases', 'view'),
+  },
+];
 
 type TaskSearchRow = {
   id: string;
@@ -275,6 +532,7 @@ export class SearchService {
       })),
       semantic: await this.buildSemanticResults({
         query,
+        user,
         payload: {
           tasks: tasks.map((task) => ({
             id: task.id,
@@ -652,9 +910,14 @@ export class SearchService {
 
   private async buildSemanticResults(args: {
     query: string;
+    user?: RbacUser;
     payload: LegacySearchPayload;
   }): Promise<SemanticSearchPayload> {
-    const candidates = this.buildSemanticCandidates(args.query, args.payload)
+    const candidates = this.buildSemanticCandidates(
+      args.query,
+      args.payload,
+      args.user,
+    )
       .sort((a, b) => b.fallbackProbability - a.fallbackProbability)
       .slice(0, this.maxSemanticCandidates);
 
@@ -715,11 +978,13 @@ export class SearchService {
   private buildSemanticCandidates(
     query: string,
     payload: LegacySearchPayload,
+    user?: RbacUser,
   ): SemanticCandidate[] {
     const candidates: SemanticCandidate[] = [];
     const pushCandidate = (
       candidate: Omit<SemanticCandidate, 'fallbackProbability'>,
     ) => {
+      if (!this.isAllowedSearchUrl(candidate.url)) return;
       const fallbackProbability = this.fallbackProbability(query, [
         candidate.title,
         candidate.subtitle ?? '',
@@ -731,6 +996,20 @@ export class SearchService {
         fallbackProbability,
       });
     };
+
+    for (const screen of SEARCH_SCREEN_CANDIDATES) {
+      if (screen.isAllowed && !screen.isAllowed(user)) continue;
+      pushCandidate({
+        candidateId: `screen:${screen.id}`,
+        id: screen.id,
+        entityType: 'SCREEN',
+        entityTypeLabel: screen.entityTypeLabel,
+        title: screen.title,
+        subtitle: screen.subtitle,
+        url: screen.path,
+        keywords: screen.keywords,
+      });
+    }
 
     for (const task of payload.tasks) {
       pushCandidate({
@@ -785,6 +1064,65 @@ export class SearchService {
     }
 
     return candidates;
+  }
+
+  private isAllowedSearchUrl(url: string) {
+    const parsed = this.parseSearchUrl(url);
+    if (!parsed) return false;
+    const { pathname, queryKeys } = parsed;
+
+    for (const entry of SEARCH_SCREEN_ALLOWED_ROUTES) {
+      if (!this.searchRouteMatches(pathname, entry)) continue;
+      if (!this.searchRouteQueryAllowed(queryKeys, entry)) continue;
+      return true;
+    }
+    return false;
+  }
+
+  private parseSearchUrl(url: string): {
+    pathname: string;
+    queryKeys: Set<string>;
+  } | null {
+    try {
+      const parsed = new URL(url, 'https://_placeholder');
+      const pathname = (parsed.pathname || '/')
+        .replace(/\/+$/, '')
+        .trim();
+      const queryKeys = new Set(Array.from(parsed.searchParams.keys()));
+      return { pathname, queryKeys };
+    } catch {
+      return null;
+    }
+  }
+
+  private searchRouteMatches(
+    pathname: string,
+    entry: RouteWhitelistEntry,
+  ): boolean {
+    const candidatePath = pathname || '/';
+    if (entry.allowDynamicSuffix) {
+      if (candidatePath === entry.path) return true;
+      if (!candidatePath.startsWith(`${entry.path}/`)) return false;
+      const parts = candidatePath
+        .slice(entry.path.length)
+        .split('/')
+        .filter(Boolean);
+      return parts.length === 1;
+    }
+    return candidatePath === entry.path;
+  }
+
+  private searchRouteQueryAllowed(
+    queryKeys: Set<string>,
+    entry: RouteWhitelistEntry,
+  ): boolean {
+    if (!entry.allowedQueryKeys) {
+      return queryKeys.size === 0;
+    }
+    for (const key of queryKeys) {
+      if (!entry.allowedQueryKeys.has(key)) return false;
+    }
+    return true;
   }
 
   private async rankWithAi(

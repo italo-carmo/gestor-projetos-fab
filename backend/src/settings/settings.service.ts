@@ -1,12 +1,21 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { setLitellmDbOverrides } from '../llm/litellm.service';
+import {
+  ANALYSIS_DEFAULT_SOURCES,
+  type AnalysisSourceSelection,
+  ALL_KNOWLEDGE_SOURCE_IDS,
+  type AiAnalysisType,
+  AI_ANALYSIS_TYPES,
+  type AiKnowledgeSourceId,
+} from '../ai/ai-knowledge-sources';
 
 export const AI_SETTING_KEYS = {
   systemPrompt: 'ai.systemPrompt',
   baseUrl: 'ai.litellm.baseUrl',
   apiKey: 'ai.litellm.apiKey',
   model: 'ai.litellm.model',
+  analysisSources: 'ai.analysisSources',
 } as const;
 
 export const ANALYSIS_PROMPT_KEYS: Record<string, string> = {
@@ -27,7 +36,58 @@ REGRAS OBRIGATÓRIAS:
 5. Ao citar estatísticas, inclua o número absoluto e, quando disponível, o percentual.
 6. Use formatação Markdown para organizar a resposta: títulos (##), **negrito**, listas, tabelas quando apropriado. Isso melhora a legibilidade.
 7. NUNCA mostre seu raciocínio interno, cálculos auxiliares, rascunhos ou pensamentos. Entregue APENAS a análise final pronta.
-8. NÃO repita a pergunta ou as instruções. Vá direto à análise.`;
+ 8. NÃO repita a pergunta ou as instruções. Vá direto à análise.`;
+
+const isAllowedSource = (value: unknown): value is AiKnowledgeSourceId => {
+  return String(value).trim() !== '' && ALL_KNOWLEDGE_SOURCE_IDS.includes(String(value) as AiKnowledgeSourceId);
+};
+
+const mergeUniqueSources = (values: unknown): AiKnowledgeSourceId[] => {
+  if (!Array.isArray(values)) return [];
+  const parsed = values
+    .map((value) => String(value ?? '').trim())
+    .filter(Boolean)
+    .filter((value, idx, arr) => arr.indexOf(value) === idx)
+    .filter((value): value is AiKnowledgeSourceId =>
+      isAllowedSource(value),
+    );
+  return parsed;
+};
+
+const parseAnalysisSources = (raw: unknown): AnalysisSourceSelection => {
+  const fallback = { ...ANALYSIS_DEFAULT_SOURCES } as AnalysisSourceSelection;
+  if (!raw || typeof raw !== 'string') return fallback;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return fallback;
+    const entries = Object.entries(parsed as Record<string, unknown>);
+    for (const [type, values] of entries) {
+      const validType = AI_ANALYSIS_TYPES.includes(type as AiAnalysisType);
+      if (!validType) continue;
+      const normalized = mergeUniqueSources(values);
+      (fallback as Record<string, AiKnowledgeSourceId[]>)[type] = normalized;
+    }
+    return fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+const stringifyAnalysisSources = (
+  sources: Partial<Record<string, unknown>>,
+): string => JSON.stringify(sources);
+
+const normalizeSourceSelectionForStorage = (
+  input: Partial<Record<AiAnalysisType, unknown>>,
+): AnalysisSourceSelection => {
+  const result = { ...ANALYSIS_DEFAULT_SOURCES } as AnalysisSourceSelection;
+  for (const type of AI_ANALYSIS_TYPES) {
+    if (!(type in input)) continue;
+    const normalized = mergeUniqueSources(input[type]);
+    (result as Record<string, AiKnowledgeSourceId[]>)[type] = normalized;
+  }
+  return result;
+};
 
 @Injectable()
 export class SettingsService implements OnModuleInit {
@@ -63,6 +123,7 @@ export class SettingsService implements OnModuleInit {
     apiKeyMasked: string;
     model: string;
     analysisPrompts: Record<string, string>;
+    analysisSources: AnalysisSourceSelection;
   }> {
     const allKeys = [
       ...Object.values(AI_SETTING_KEYS),
@@ -74,6 +135,8 @@ export class SettingsService implements OnModuleInit {
       });
     const map = new Map<string, string>(rows.map((r) => [r.key, r.value]));
     const apiKey: string = map.get(AI_SETTING_KEYS.apiKey) ?? '';
+    const rawSources = map.get(AI_SETTING_KEYS.analysisSources);
+    const analysisSources = parseAnalysisSources(rawSources);
 
     const analysisPrompts: Record<string, string> = {};
     for (const [type, key] of Object.entries(ANALYSIS_PROMPT_KEYS)) {
@@ -90,7 +153,20 @@ export class SettingsService implements OnModuleInit {
         : '',
       model: map.get(AI_SETTING_KEYS.model) ?? '',
       analysisPrompts,
+      analysisSources,
     };
+  }
+
+  async getAnalysisSources(): Promise<AnalysisSourceSelection> {
+    const row = await this.appSetting.findUnique({
+      where: { key: AI_SETTING_KEYS.analysisSources },
+    });
+    return parseAnalysisSources(row?.value ?? null);
+  }
+
+  async getAnalysisSourcesForType(type: AiAnalysisType): Promise<AiKnowledgeSourceId[]> {
+    const rows = await this.getAnalysisSources();
+    return rows[type] ?? ANALYSIS_DEFAULT_SOURCES[type];
   }
 
   async updateAiSettings(
@@ -100,6 +176,7 @@ export class SettingsService implements OnModuleInit {
       apiKey: string;
       model: string;
       analysisPrompts: Record<string, string>;
+      analysisSources: Partial<Record<string, AiKnowledgeSourceId[]>>;
     }>,
   ): Promise<void> {
     const ops: Promise<any>[] = [];
@@ -121,6 +198,17 @@ export class SettingsService implements OnModuleInit {
         if (key) ops.push(this.set(key, value));
       }
     }
+
+    if (patch.analysisSources) {
+      const normalized = normalizeSourceSelectionForStorage(patch.analysisSources);
+      ops.push(
+        this.set(
+          AI_SETTING_KEYS.analysisSources,
+          stringifyAnalysisSources(normalized),
+        ),
+      );
+    }
+
     await Promise.all(ops);
     await this.syncLitellmOverrides();
   }

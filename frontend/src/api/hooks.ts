@@ -4380,6 +4380,50 @@ export type StrategicAiNarrativeResponse = {
   model: string;
 };
 
+export type AiAnalysisType =
+  | "executive"
+  | "situational"
+  | "aggressor"
+  | "text"
+  | "geo";
+
+export type AiKnowledgeSourceId =
+  | "missions"
+  | "activities_smif"
+  | "activities_cipavd"
+  | "activity_reports"
+  | "best_practices"
+  | "tasks"
+  | "survey_schools"
+  | "survey_domestic_violence"
+  | "survey_recruits"
+  | "survey_best_practice_cycle"
+  | "survey_cpca_meeting"
+  | "survey_gsd_evaluation"
+  | "complaints_cpca"
+  | "complaints_smif";
+
+export type AiAnalysisSourceSelection = Record<AiAnalysisType, AiKnowledgeSourceId[]>;
+
+export type AiSettingsResponse = {
+  systemPrompt: string;
+  baseUrl: string;
+  apiKey: string;
+  apiKeyMasked: string;
+  model: string;
+  analysisPrompts: Record<string, string>;
+  analysisSources: AiAnalysisSourceSelection;
+};
+
+export type AiSettingsPatch = {
+  systemPrompt?: string;
+  baseUrl?: string;
+  apiKey?: string;
+  model?: string;
+  analysisPrompts?: Record<string, string>;
+  analysisSources?: Partial<Record<AiAnalysisType, AiKnowledgeSourceId[]>>;
+};
+
 export function useStrategicAiNarrative() {
   return useMutation({
     mutationFn: async () =>
@@ -4394,20 +4438,16 @@ export function useStrategicAiNarrative() {
 export function useAiSettings() {
   return useQuery({
     queryKey: qk.aiSettings,
-    queryFn: async () => (await api.get("/admin/ai-settings")).data,
+    queryFn: async () =>
+      (await api.get<AiSettingsResponse>("/admin/ai-settings")).data,
   });
 }
 
 export function useUpdateAiSettings() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (payload: {
-      systemPrompt?: string;
-      baseUrl?: string;
-      apiKey?: string;
-      model?: string;
-      analysisPrompts?: Record<string, string>;
-    }) => (await api.put("/admin/ai-settings", payload)).data,
+    mutationFn: async (payload: AiSettingsPatch) =>
+      (await api.put("/admin/ai-settings", payload)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.aiSettings });
     },

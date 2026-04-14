@@ -18,7 +18,10 @@ export class AiController {
 
   @Post('analyze')
   @RequirePermission('bi', 'view')
-  async analyze(@Body() body: { type: AnalysisType }, @Res() res: Response) {
+  async analyze(
+    @Body() body: { type: AnalysisType },
+    @Res() res: Response,
+  ) {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
@@ -69,7 +72,11 @@ export class AiController {
   @RequirePermission('bi', 'view')
   async chat(
     @Body()
-    body: { message: string; history?: { role: string; content: string }[] },
+    body: {
+      message: string;
+      history?: { role: string; content: string }[];
+      analysisType?: AnalysisType;
+    },
     @Res() res: Response,
   ) {
     res.setHeader('Content-Type', 'text/event-stream');
@@ -87,6 +94,7 @@ export class AiController {
       for await (const chunk of this.ai.chatStream(
         body.message ?? '',
         history,
+        body.analysisType,
       )) {
         res.write(chunk);
       }

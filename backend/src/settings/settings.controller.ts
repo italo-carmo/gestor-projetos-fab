@@ -4,6 +4,7 @@ import { RbacGuard } from '../rbac/rbac.guard';
 import { RequirePermission } from '../rbac/require-permission.decorator';
 import { SettingsService } from './settings.service';
 import { LitellmService } from '../llm/litellm.service';
+import { AiKnowledgeSourceId } from '../ai/ai-knowledge-sources';
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RbacGuard)
@@ -29,6 +30,7 @@ export class SettingsController {
       apiKey?: string;
       model?: string;
       analysisPrompts?: Record<string, string>;
+      analysisSources?: Partial<Record<string, AiKnowledgeSourceId[]>>;
     },
   ) {
     await this.settings.updateAiSettings(body);

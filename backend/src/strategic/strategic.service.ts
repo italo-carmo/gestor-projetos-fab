@@ -1,5 +1,12 @@
 import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { ActivityScope } from '@prisma/client';
+import {
+  AI_KNOWLEDGE_SOURCE_IDS,
+  ALL_KNOWLEDGE_SOURCE_IDS,
+  AiAnalysisType,
+  AiKnowledgeSourceId,
+} from '../ai/ai-knowledge-sources';
 import {
   LitellmService,
   LITELLM_API_KEY_ENV_KEYS,
@@ -352,12 +359,9 @@ function countByField(
     .sort((a, b) => b.count - a.count);
 }
 
-type AiAnalysisType =
-  | 'executive'
-  | 'situational'
-  | 'aggressor'
-  | 'text'
-  | 'geo';
+type StrategicSourceFilter = {
+  sources?: readonly AiKnowledgeSourceId[];
+};
 
 export type AiSourceReference = {
   id: string;
@@ -373,7 +377,116 @@ export class StrategicService {
     private readonly litellm: LitellmService,
   ) {}
 
-  async situationalDashboard() {
+  private resolveSourceSet(
+    sources?: readonly AiKnowledgeSourceId[],
+  ): ReadonlySet<AiKnowledgeSourceId> {
+    const values =
+      sources !== undefined ? sources : ALL_KNOWLEDGE_SOURCE_IDS;
+    return new Set(values);
+  }
+
+  private hasSource(
+    sourceSet: ReadonlySet<AiKnowledgeSourceId>,
+    sourceId: AiKnowledgeSourceId,
+  ): boolean {
+    return sourceSet.has(sourceId);
+  }
+
+  private buildComplaintScopeFilter(
+    sourceSet: ReadonlySet<AiKnowledgeSourceId>,
+  ): ('CPCA' | 'SMIF')[] {
+    const scopes: ('CPCA' | 'SMIF')[] = [];
+    if (this.hasSource(sourceSet, AI_KNOWLEDGE_SOURCE_IDS.COMPLAINTS_CPCA)) {
+      scopes.push('CPCA');
+    }
+    if (this.hasSource(sourceSet, AI_KNOWLEDGE_SOURCE_IDS.COMPLAINTS_SMIF)) {
+      scopes.push('SMIF');
+    }
+    return scopes;
+  }
+
+  private buildActivityScopeFilter(
+    sourceSet: ReadonlySet<AiKnowledgeSourceId>,
+  ): { in: ActivityScope[] } | undefined {
+    const scopes: ActivityScope[] = [];
+    if (this.hasSource(sourceSet, AI_KNOWLEDGE_SOURCE_IDS.ACTIVITIES_SMIF)) {
+      scopes.push('SMIF');
+    }
+    if (this.hasSource(sourceSet, AI_KNOWLEDGE_SOURCE_IDS.ACTIVITIES_CIPAVD)) {
+      scopes.push('CIPAVD');
+    }
+    if (scopes.length === 0 || scopes.length === 2) {
+      return undefined;
+    }
+
+    return { in: scopes };
+  }
+
+  private hasTaskSource(sourceSet: ReadonlySet<AiKnowledgeSourceId>): boolean {
+    return this.hasSource(sourceSet, AI_KNOWLEDGE_SOURCE_IDS.TASKS);
+  }
+
+  private hasMissionSource(sourceSet: ReadonlySet<AiKnowledgeSourceId>): boolean {
+    return this.hasSource(sourceSet, AI_KNOWLEDGE_SOURCE_IDS.MISSIONS);
+  }
+
+  private hasComplaintSources(sourceSet: ReadonlySet<AiKnowledgeSourceId>): boolean {
+    return (
+      this.hasSource(sourceSet, AI_KNOWLEDGE_SOURCE_IDS.COMPLAINTS_CPCA) ||
+      this.hasSource(sourceSet, AI_KNOWLEDGE_SOURCE_IDS.COMPLAINTS_SMIF)
+    );
+  }
+
+  private hasActivitySource(sourceSet: ReadonlySet<AiKnowledgeSourceId>): boolean {
+    return (
+      this.hasSource(sourceSet, AI_KNOWLEDGE_SOURCE_IDS.ACTIVITIES_SMIF) ||
+      this.hasSource(sourceSet, AI_KNOWLEDGE_SOURCE_IDS.ACTIVITIES_CIPAVD)
+    );
+  }
+
+  private hasSurveySources(sourceSet: ReadonlySet<AiKnowledgeSourceId>): boolean {
+    return this.hasSource(sourceSet, AI_KNOWLEDGE_SOURCE_IDS.SURVEY_SCHOOLS);
+  }
+
+  private hasDomesticViolenceSources(
+    sourceSet: ReadonlySet<AiKnowledgeSourceId>,
+  ): boolean {
+    return this.hasSource(sourceSet, AI_KNOWLEDGE_SOURCE_IDS.SURVEY_DOMESTIC_VIOLENCE);
+  }
+
+  private hasRecruitSources(sourceSet: ReadonlySet<AiKnowledgeSourceId>): boolean {
+    return this.hasSource(sourceSet, AI_KNOWLEDGE_SOURCE_IDS.SURVEY_RECRUITS);
+  }
+
+  private hasTextSourceSet(sourceSet: ReadonlySet<AiKnowledgeSourceId>): {
+    bestPracticeCycle: boolean;
+    cpcaMeeting: boolean;
+    gsdEvaluation: boolean;
+    activityReports: boolean;
+    recruits: boolean;
+    complaints: boolean;
+  } {
+    return {
+      bestPracticeCycle: this.hasSource(
+        sourceSet,
+        AI_KNOWLEDGE_SOURCE_IDS.SURVEY_BEST_PRACTICE_CYCLE,
+      ),
+      cpcaMeeting: this.hasSource(sourceSet, AI_KNOWLEDGE_SOURCE_IDS.SURVEY_CPCA_MEETING),
+      gsdEvaluation: this.hasSource(
+        sourceSet,
+        AI_KNOWLEDGE_SOURCE_IDS.SURVEY_GSD_EVALUATION,
+      ),
+      activityReports: this.hasSource(
+        sourceSet,
+        AI_KNOWLEDGE_SOURCE_IDS.ACTIVITY_REPORTS,
+      ),
+      recruits: this.hasRecruitSources(sourceSet),
+      complaints: this.hasComplaintSources(sourceSet),
+    };
+  }
+
+  async situationalDashboard(filters?: StrategicSourceFilter) {
+    const sourceSet = this.resolveSourceSet(filters?.sources);
     const [
       surveyData,
       domesticViolenceData,
@@ -381,14 +494,16 @@ export class StrategicService {
       complaintsData,
       activitiesData,
       missionsData,
+      tasksData,
       localities,
     ] = await Promise.all([
-      this.getSurveyKpis(),
-      this.getDomesticViolenceKpis(),
-      this.getRecruitsKpis(),
-      this.getComplaintsKpis(),
-      this.getActivitiesKpis(),
-      this.getMissionsKpis(),
+      this.getSurveyKpis({ sources: Array.from(sourceSet) }),
+      this.getDomesticViolenceKpis({ sources: Array.from(sourceSet) }),
+      this.getRecruitsKpis({ sources: Array.from(sourceSet) }),
+      this.getComplaintsKpis({ sources: Array.from(sourceSet) }),
+      this.getActivitiesKpis({ sources: Array.from(sourceSet) }),
+      this.getMissionsKpis({ sources: Array.from(sourceSet) }),
+      this.getTaskKpis({ sources: Array.from(sourceSet) }),
       this.prisma.locality.findMany({
         select: { id: true, code: true, name: true },
       }),
@@ -402,40 +517,67 @@ export class StrategicService {
       complaints: complaintsData,
       activities: activitiesData,
       missions: missionsData,
+      tasks: tasksData,
       localityCount: localities.length,
     };
   }
 
-  async geoMap() {
+  async geoMap(filters?: StrategicSourceFilter) {
+    const sourceSet = this.resolveSourceSet(filters?.sources);
+    const includeComplaints = this.hasComplaintSources(sourceSet);
+    const includeActivities = this.hasActivitySource(sourceSet);
+    const includeMissions = this.hasMissionSource(sourceSet);
+    if (!includeComplaints && !includeActivities && !includeMissions) {
+      const localities = await this.prisma.locality.findMany({
+        select: { id: true, code: true, name: true, uf: true, catalogType: true },
+      });
+      return {
+        generatedAt: new Date().toISOString(),
+        states: [],
+        totalLocalitiesWithUf: localities.filter((l) => l.uf).length,
+        totalLocalities: localities.length,
+      };
+    }
+
+    const complaintScopes = this.buildComplaintScopeFilter(sourceSet);
+    const activityScope = this.buildActivityScopeFilter(sourceSet);
     const localities = await this.prisma.locality.findMany({
       select: { id: true, code: true, name: true, uf: true, catalogType: true },
     });
 
     const [complaints, activities, missions] = await Promise.all([
-      (this.prisma as any).cpcComplaintCase
-        .findMany({
-          select: {
-            localityId: true,
-            caseNumber: true,
-            complaintType: true,
-            status: true,
-            reportedAt: true,
-            workflowScope: true,
-            locality: { select: { name: true } },
-          },
-        })
-        .catch(() => []),
-      this.prisma.activity.findMany({
-        select: {
-          localityId: true,
-          title: true,
-          scope: true,
-          status: true,
-          eventDate: true,
-          locality: { select: { name: true } },
-        },
-      }),
-      (this.prisma as any).mission
+      includeComplaints
+        ? (this.prisma as any).cpcComplaintCase.findMany({
+            where:
+              complaintScopes.length > 0
+                ? { workflowScope: { in: complaintScopes } }
+                : undefined,
+            select: {
+              localityId: true,
+              caseNumber: true,
+              complaintType: true,
+              status: true,
+              reportedAt: true,
+              workflowScope: true,
+              locality: { select: { name: true } },
+            },
+          })
+        : Promise.resolve([]),
+      includeActivities
+        ? this.prisma.activity.findMany({
+            where: activityScope ? { scope: activityScope } : undefined,
+            select: {
+              localityId: true,
+              title: true,
+              scope: true,
+              status: true,
+              eventDate: true,
+              locality: { select: { name: true } },
+            },
+          })
+        : Promise.resolve([]),
+      includeMissions
+        ? (this.prisma as any).mission
         .findMany({
           select: {
             localityId: true,
@@ -446,7 +588,7 @@ export class StrategicService {
             locality: { select: { name: true } },
           },
         })
-        .catch(() => []),
+        : Promise.resolve([]),
     ]);
 
     type StateEntry = {
@@ -565,9 +707,28 @@ export class StrategicService {
     };
   }
 
-  async aggressorProfile() {
+  async aggressorProfile(filters?: StrategicSourceFilter) {
+    const sourceSet = this.resolveSourceSet(filters?.sources);
+    if (!this.hasComplaintSources(sourceSet)) {
+      return {
+        totalCases: 0,
+        message: 'Nenhum caso registrado para as fontes selecionadas.',
+      };
+    }
+
     const complaintModel = (this.prisma as any).cpcComplaintCase;
+    const complaintScopes = this.buildComplaintScopeFilter(sourceSet);
+    const where =
+      complaintScopes.length > 0
+        ? {
+            workflowScope: {
+              in: complaintScopes,
+            },
+          }
+        : {};
+
     const cases = await complaintModel.findMany({
+      where,
       select: {
         complaintType: true,
         aggressorRank: true,
@@ -674,38 +835,112 @@ export class StrategicService {
     };
   }
 
-  async textAnalysis() {
+  async textAnalysis(filters?: StrategicSourceFilter) {
+    const sourceSet = this.resolveSourceSet(filters?.sources);
+    const textSources = this.hasTextSourceSet(sourceSet);
+    const includeRecruitSuggestions = textSources.recruits;
+    const includeActivityReports = textSources.activityReports;
+    const includeBestPractice = textSources.bestPracticeCycle;
+    const includeCpcaMeeting = textSources.cpcaMeeting;
+    const includeGsdEvaluation = textSources.gsdEvaluation;
+    const includeComplaints = this.hasSource(
+      sourceSet,
+      AI_KNOWLEDGE_SOURCE_IDS.COMPLAINTS_CPCA,
+    ) ||
+      this.hasSource(sourceSet, AI_KNOWLEDGE_SOURCE_IDS.COMPLAINTS_SMIF);
+
+    if (
+      !includeRecruitSuggestions &&
+      !includeActivityReports &&
+      !includeBestPractice &&
+      !includeCpcaMeeting &&
+      !includeGsdEvaluation &&
+      !includeComplaints
+    ) {
+      return {
+        generatedAt: new Date().toISOString(),
+        sources: {},
+        consolidated: {
+          totalTexts: 0,
+          topWords: [],
+          rawTexts: [],
+        },
+      };
+    }
+
     const [
       recruitsResponses,
       activityReports,
       bestPracticeCycleResponses,
+      cpcaMeetingResponses,
+      gsdEvaluationResponses,
       cpcaComments,
     ] = await Promise.all([
-      (this.prisma as any).biRecruitsResponse
-        .findMany({
-          select: { suggestionComment: true },
-        })
-        .catch(() => []),
-      (this.prisma as any).activityReport
-        .findMany({
-          select: {
-            mainPointsObserved: true,
-            attentionPoints: true,
-            conclusion: true,
-          },
-        })
-        .catch(() => []),
-      (this.prisma as any).biBestPracticeCycleResponse
-        .findMany({
-          select: { interactionDifferenceComment: true },
-        })
-        .catch(() => []),
-      (this.prisma as any).cpcComplaintComment
-        .findMany({
-          select: { text: true },
-        })
-        .catch(() => []),
+      includeRecruitSuggestions
+        ? (this.prisma as any).biRecruitsResponse
+            .findMany({
+              select: { suggestionComment: true },
+            })
+            .catch(() => [])
+        : Promise.resolve([] as any[]),
+      includeActivityReports
+        ? (this.prisma as any).activityReport
+            .findMany({
+              select: {
+                mainPointsObserved: true,
+                attentionPoints: true,
+                conclusion: true,
+              },
+            })
+            .catch(() => [])
+        : Promise.resolve([] as any[]),
+      includeBestPractice
+        ? (this.prisma as any).biBestPracticeCycleResponse
+            .findMany({
+              select: { interactionDifferenceComment: true },
+            })
+            .catch(() => [])
+        : Promise.resolve([] as any[]),
+      includeCpcaMeeting
+        ? (this.prisma as any).biCpcaMeetingResponse
+            .findMany({
+              select: { answersJson: true },
+            })
+            .catch(() => [])
+        : Promise.resolve([] as any[]),
+      includeGsdEvaluation
+        ? (this.prisma as any).biGsdEvaluationResponse
+            .findMany({
+              select: { answersJson: true },
+            })
+            .catch(() => [])
+        : Promise.resolve([] as any[]),
+      includeComplaints
+        ? (this.prisma as any).cpcComplaintComment
+            .findMany({
+              select: { text: true },
+            })
+            .catch(() => [])
+        : Promise.resolve([] as any[]),
     ]);
+
+    const extractFreeTexts = (answers: unknown[]) =>
+      answers
+        .map((entry) => {
+          if (!entry || typeof entry !== 'object') return '';
+          const objectValue = entry as Record<string, unknown>;
+          for (const value of Object.values(objectValue)) {
+            if (typeof value === 'string' && value.trim()) {
+              return value;
+            }
+          }
+          return '';
+        })
+        .filter(Boolean)
+        .map((value) => String(value));
+
+    const cpcaMeetingTexts = extractFreeTexts(cpcaMeetingResponses);
+    const gsdEvaluationTexts = extractFreeTexts(gsdEvaluationResponses);
 
     const filterFreeText = (texts: string[]) => {
       const freq = new Map<string, number>();
@@ -731,6 +966,12 @@ export class StrategicService {
     const cpcaCommentTexts = cpcaComments
       .map((r: any) => r.text)
       .filter(Boolean);
+    const allCpcaMeeting = includeCpcaMeeting
+      ? cpcaMeetingTexts
+      : [];
+    const allGsdEvaluation = includeGsdEvaluation
+      ? gsdEvaluationTexts
+      : [];
 
     const allTexts = [
       ...suggestionTexts,
@@ -739,6 +980,8 @@ export class StrategicService {
       ...reportConclusions,
       ...bestPracticeComments,
       ...cpcaCommentTexts,
+      ...allCpcaMeeting,
+      ...allGsdEvaluation,
     ];
 
     const buildSource = (texts: string[]) => ({
@@ -756,6 +999,8 @@ export class StrategicService {
         reportConclusions: buildSource(reportConclusions),
         bestPracticeComments: buildSource(bestPracticeComments),
         cpcaComments: buildSource(cpcaCommentTexts),
+        cpcaMeeting: buildSource(allCpcaMeeting),
+        gsdEvaluation: buildSource(allGsdEvaluation),
       },
       consolidated: {
         totalTexts: allTexts.length,
@@ -765,9 +1010,53 @@ export class StrategicService {
     };
   }
 
-  async aiSourceReferences(type: AiAnalysisType): Promise<AiSourceReference[]> {
+  async aiSourceReferences(
+    type: AiAnalysisType,
+    filters?: StrategicSourceFilter,
+  ): Promise<AiSourceReference[]> {
     const refs: AiSourceReference[] = [];
     const seen = new Set<string>();
+    const sourceSet = this.resolveSourceSet(filters?.sources);
+
+    const shouldIncludeSurveys = this.hasSurveySources(sourceSet);
+    const shouldIncludeDomestic =
+      this.hasDomesticViolenceSources(sourceSet);
+    const shouldIncludeRecruits = this.hasRecruitSources(sourceSet);
+    const shouldIncludeBestPracticeCycle = this.hasSource(
+      sourceSet,
+      AI_KNOWLEDGE_SOURCE_IDS.SURVEY_BEST_PRACTICE_CYCLE,
+    );
+    const shouldIncludeCpcaMeeting = this.hasSource(
+      sourceSet,
+      AI_KNOWLEDGE_SOURCE_IDS.SURVEY_CPCA_MEETING,
+    );
+    const shouldIncludeGsdEvaluation = this.hasSource(
+      sourceSet,
+      AI_KNOWLEDGE_SOURCE_IDS.SURVEY_GSD_EVALUATION,
+    );
+    const shouldIncludeComplaintsCpca = this.hasSource(
+      sourceSet,
+      AI_KNOWLEDGE_SOURCE_IDS.COMPLAINTS_CPCA,
+    );
+    const shouldIncludeComplaintsSmif = this.hasSource(
+      sourceSet,
+      AI_KNOWLEDGE_SOURCE_IDS.COMPLAINTS_SMIF,
+    );
+    const shouldIncludeComplaints =
+      shouldIncludeComplaintsCpca || shouldIncludeComplaintsSmif;
+    const shouldIncludeActivityReports = this.hasSource(
+      sourceSet,
+      AI_KNOWLEDGE_SOURCE_IDS.ACTIVITY_REPORTS,
+    );
+    const shouldIncludeMissions = this.hasSource(
+      sourceSet,
+      AI_KNOWLEDGE_SOURCE_IDS.MISSIONS,
+    );
+    const shouldIncludeTasks = this.hasSource(
+      sourceSet,
+      AI_KNOWLEDGE_SOURCE_IDS.TASKS,
+    );
+    const shouldIncludeActivities = this.hasActivitySource(sourceSet);
 
     const pushRef = (
       id: string,
@@ -800,24 +1089,71 @@ export class StrategicService {
       type === 'text';
 
     if (includePanels) {
-      pushRef(
-        'bi-survey-dashboard',
-        'Pesquisa institucional (BI Survey)',
-        '/dashboard/bi',
-      );
-      pushRef(
-        'bi-domestic-dashboard',
-        'Pesquisa de violência doméstica',
-        '/dashboard/bi-violencia-domestica',
-      );
-      pushRef(
-        'bi-recruits-dashboard',
-        'Pesquisa de recrutas',
-        '/dashboard/bi-recrutas',
-      );
+      if (shouldIncludeSurveys) {
+        pushRef(
+          'bi-survey-dashboard',
+          'Pesquisa institucional (BI Survey)',
+          '/dashboard/bi',
+        );
+      }
+
+      if (shouldIncludeDomestic) {
+        pushRef(
+          'bi-domestic-dashboard',
+          'Pesquisa de violência doméstica',
+          '/dashboard/bi-violencia-domestica',
+        );
+      }
+
+      if (shouldIncludeRecruits) {
+        pushRef(
+          'bi-recruits-dashboard',
+          'Pesquisa de recrutas',
+          '/dashboard/bi-recrutas',
+        );
+      }
+
+      if (shouldIncludeBestPracticeCycle) {
+        pushRef(
+          'bi-best-practice-cycle-dashboard',
+          'Pesquisa de ciclo de boas práticas',
+          '/dashboard/bi-ciclo-boas-praticas',
+        );
+      }
+
+      if (shouldIncludeCpcaMeeting) {
+        pushRef(
+          'bi-cpca-meeting-dashboard',
+          'Pesquisa de encontro CPCA',
+          '/dashboard/bi-encontro-cpca',
+        );
+      }
+
+      if (shouldIncludeGsdEvaluation) {
+        pushRef(
+          'bi-gsd-evaluation-dashboard',
+          'Pesquisa de avaliação GSD',
+          '/dashboard/bi-avaliacao-gsd',
+        );
+      }
+
+      if (this.hasSource(sourceSet, AI_KNOWLEDGE_SOURCE_IDS.BEST_PRACTICES)) {
+        pushRef(
+          'best-practices',
+          'Boas práticas',
+          '/best-practices',
+        );
+      }
+
+      pushRef('strategic-dashboard', 'Painel estratégico consolidado', '/dashboard/estrategico');
     }
 
-    if (type === 'executive' || type === 'situational' || type === 'text') {
+    if (
+      (type === 'executive' ||
+        type === 'situational' ||
+        type === 'text') &&
+      shouldIncludeRecruits
+    ) {
       const latestRecruitBatch = await (
         this.prisma as any
       ).biRecruitsImportBatch
@@ -841,7 +1177,12 @@ export class StrategicService {
       }
     }
 
-    if (type === 'executive' || type === 'situational' || type === 'text') {
+    if (
+      (type === 'executive' ||
+        type === 'situational' ||
+        type === 'text') &&
+      shouldIncludeActivityReports
+    ) {
       const recentReports = await (this.prisma as any).activityReport
         .findMany({
           take: 3,
@@ -885,7 +1226,12 @@ export class StrategicService {
       }
     }
 
-    if (type === 'executive' || type === 'situational' || type === 'geo') {
+    if (
+      (type === 'executive' ||
+        type === 'situational' ||
+        type === 'geo') &&
+      shouldIncludeMissions
+    ) {
       const recentMissions = await (this.prisma as any).mission
         .findMany({
           take: 3,
@@ -930,44 +1276,91 @@ export class StrategicService {
       type === 'aggressor' ||
       type === 'situational'
     ) {
-      const recentCases = await (this.prisma as any).cpcComplaintCase
-        .findMany({
-          take: 3,
-          orderBy: { reportedAt: 'desc' },
-          select: {
-            id: true,
-            caseNumber: true,
-            workflowScope: true,
-            status: true,
-            reportedAt: true,
-          },
-        })
-        .catch(() => []);
+      if (shouldIncludeComplaints) {
+        const complaintScopes = this.buildComplaintScopeFilter(sourceSet);
+        const where =
+          complaintScopes.length === 0 ? {} : { workflowScope: { in: complaintScopes } };
+        const recentCases = await (this.prisma as any).cpcComplaintCase
+          .findMany({
+            where,
+            take: 3,
+            orderBy: { reportedAt: 'desc' },
+            select: {
+              id: true,
+              caseNumber: true,
+              workflowScope: true,
+              status: true,
+              reportedAt: true,
+            },
+          })
+          .catch(() => []);
 
-      for (const item of recentCases as any[]) {
-        const caseNumber = String(item?.caseNumber ?? '').trim();
-        if (!caseNumber) continue;
-        const workflow = String(item?.workflowScope ?? 'CPCA').toUpperCase();
-        const href =
-          workflow === 'SMIF'
-            ? `/smif-complaints?q=${encodeURIComponent(caseNumber)}`
-            : `/cpca-cases?q=${encodeURIComponent(caseNumber)}`;
-        const status = String(item?.status ?? '').trim();
-        const date = fmtDate(item?.reportedAt);
+        for (const item of recentCases as any[]) {
+          const caseNumber = String(item?.caseNumber ?? '').trim();
+          if (!caseNumber) continue;
+          const workflow = String(item?.workflowScope ?? 'CPCA').toUpperCase();
+          const href =
+            workflow === 'SMIF'
+              ? `/smif-complaints?q=${encodeURIComponent(caseNumber)}`
+              : `/cpca-cases?q=${encodeURIComponent(caseNumber)}`;
+          const status = String(item?.status ?? '').trim();
+          const date = fmtDate(item?.reportedAt);
+          pushRef(
+            `complaint-${item?.id ?? caseNumber}`,
+            `Denúncia ${caseNumber}`,
+            href,
+            [workflow, status, date].filter(Boolean).join(' • '),
+          );
+        }
+      }
+    }
+
+    if (shouldIncludeTasks) {
+      const totalTasks = await this.prisma.taskInstance.count();
+      if (totalTasks > 0) {
         pushRef(
-          `complaint-${item?.id ?? caseNumber}`,
-          `Denúncia ${caseNumber}`,
-          href,
-          [workflow, status, date].filter(Boolean).join(' • '),
+          'tasks-list',
+          'Tarefas',
+          '/tasks',
+          `Total: ${totalTasks}`,
         );
       }
     }
 
-    pushRef(
-      'strategic-dashboard',
-      'Painel estratégico consolidado',
-      '/dashboard/estrategico',
-    );
+    if (shouldIncludeActivities) {
+      const scopeFilter = this.buildActivityScopeFilter(sourceSet);
+      const where = scopeFilter ? { scope: scopeFilter } : {};
+      const latestActivities = await this.prisma.activity.findMany({
+        where,
+        orderBy: [{ eventDate: 'desc' }, { updatedAt: 'desc' }],
+        take: 3,
+        select: {
+          id: true,
+          title: true,
+          scope: true,
+          eventDate: true,
+          locality: { select: { name: true } },
+        },
+      });
+      for (const activity of latestActivities) {
+        const activityId = String(activity?.id ?? '').trim();
+        if (!activityId) continue;
+        const route =
+          String(activity?.scope ?? 'SMIF').toUpperCase() === 'CIPAVD'
+            ? '/activities-cipavd'
+            : '/activities';
+        const href = `${route}?activityId=${encodeURIComponent(activityId)}`;
+        const title =
+          String(activity?.title ?? '').trim() || `Atividade ${activityId}`;
+        const date = fmtDate(activity?.eventDate);
+        pushRef(
+          `activity-${activityId}`,
+          `Atividade de campo: ${title}`,
+          href,
+          date ? `Data: ${date}` : undefined,
+        );
+      }
+    }
 
     return refs.slice(0, 12);
   }
@@ -1889,10 +2282,21 @@ export class StrategicService {
     });
   }
 
-  private async getSurveyKpis() {
+  private async getSurveyKpis(filters?: StrategicSourceFilter) {
+    const sourceSet = this.resolveSourceSet(filters?.sources);
+    if (!this.hasSurveySources(sourceSet)) {
+      return {
+        totalResponses: 0,
+        violenceRatePercent: 0,
+        yesCount: 0,
+        noCount: 0,
+      };
+    }
+
+    const where = {};
     try {
       const model = (this.prisma as any).biSurveyResponse;
-      const total = await model.count();
+      const total = await model.count({ where });
       if (total === 0)
         return {
           totalResponses: 0,
@@ -1900,7 +2304,9 @@ export class StrategicService {
           yesCount: 0,
           noCount: 0,
         };
-      const yesCount = await model.count({ where: { sufferedViolence: true } });
+      const yesCount = await model.count({
+        where: { ...where, sufferedViolence: true },
+      });
       return {
         totalResponses: total,
         yesCount,
@@ -1917,10 +2323,21 @@ export class StrategicService {
     }
   }
 
-  private async getDomesticViolenceKpis() {
+  private async getDomesticViolenceKpis(filters?: StrategicSourceFilter) {
+    const sourceSet = this.resolveSourceSet(filters?.sources);
+    if (!this.hasDomesticViolenceSources(sourceSet)) {
+      return {
+        totalResponses: 0,
+        lifetimeRatePercent: 0,
+        last12MonthsRatePercent: 0,
+        soughtHelpPercent: 0,
+      };
+    }
+
+    const where = {};
     try {
       const model = (this.prisma as any).biDomesticViolenceResponse;
-      const total = await model.count();
+      const total = await model.count({ where });
       if (total === 0)
         return {
           totalResponses: 0,
@@ -1929,12 +2346,14 @@ export class StrategicService {
           soughtHelpPercent: 0,
         };
       const lifetimeYes = await model.count({
-        where: { sufferedLifetime: true },
+        where: { ...where, sufferedLifetime: true },
       });
       const last12Yes = await model.count({
-        where: { sufferedLast12Months: true },
+        where: { ...where, sufferedLast12Months: true },
       });
-      const soughtHelp = await model.count({ where: { soughtHelp: true } });
+      const soughtHelp = await model.count({
+        where: { ...where, soughtHelp: true },
+      });
       return {
         totalResponses: total,
         lifetimeYes,
@@ -1957,10 +2376,20 @@ export class StrategicService {
     }
   }
 
-  private async getRecruitsKpis() {
+  private async getRecruitsKpis(filters?: StrategicSourceFilter) {
+    const sourceSet = this.resolveSourceSet(filters?.sources);
+    if (!this.hasRecruitSources(sourceSet)) {
+      return {
+        totalResponses: 0,
+        safeToReportPercent: 0,
+        knowReportProcessPercent: 0,
+      };
+    }
+
+    const where = {};
     try {
       const model = (this.prisma as any).biRecruitsResponse;
-      const total = await model.count();
+      const total = await model.count({ where });
       if (total === 0)
         return {
           totalResponses: 0,
@@ -1969,6 +2398,7 @@ export class StrategicService {
         };
       const all = await model.findMany({
         select: { willingnessReport: true, knowReportProcess: true },
+        where,
       });
       const safeCount = all.filter(
         (r: any) => r.willingnessReport === 'Seguro(a)',
@@ -1992,10 +2422,30 @@ export class StrategicService {
     }
   }
 
-  private async getComplaintsKpis() {
+  private async getComplaintsKpis(filters?: StrategicSourceFilter) {
+    const sourceSet = this.resolveSourceSet(filters?.sources);
+    if (!this.hasComplaintSources(sourceSet)) {
+      return {
+        totalCases: 0,
+        openCases: 0,
+        concludedCases: 0,
+        byCpca: 0,
+        bySmif: 0,
+        moral: 0,
+        sexual: 0,
+        moralPercent: 0,
+        sexualPercent: 0,
+      };
+    }
+
+    const complaintScopes = this.buildComplaintScopeFilter(sourceSet);
+    const where =
+      complaintScopes.length > 0
+        ? { workflowScope: { in: complaintScopes } }
+        : {};
     try {
       const model = (this.prisma as any).cpcComplaintCase;
-      const total = await model.count();
+      const total = await model.count({ where });
       const openStatuses = [
         'RECEIVED',
         'PROTECTION_MEASURES',
@@ -2004,12 +2454,20 @@ export class StrategicService {
         'INVESTIGATION',
       ];
       const openCases = await model.count({
-        where: { status: { in: openStatuses } },
+        where: { ...where, status: { in: openStatuses } },
       });
-      const byCpca = await model.count({ where: { workflowScope: 'CPCA' } });
-      const bySmif = await model.count({ where: { workflowScope: 'SMIF' } });
-      const moral = await model.count({ where: { complaintType: 'MORAL' } });
-      const sexual = await model.count({ where: { complaintType: 'SEXUAL' } });
+      const byCpca = await model.count({
+        where: { ...where, workflowScope: 'CPCA' },
+      });
+      const bySmif = await model.count({
+        where: { ...where, workflowScope: 'SMIF' },
+      });
+      const moral = await model.count({
+        where: { ...where, complaintType: 'MORAL' },
+      });
+      const sexual = await model.count({
+        where: { ...where, complaintType: 'SEXUAL' },
+      });
       return {
         totalCases: total,
         openCases,
@@ -2036,21 +2494,44 @@ export class StrategicService {
     }
   }
 
-  private async getActivitiesKpis() {
+  private async getActivitiesKpis(filters?: StrategicSourceFilter) {
+    const sourceSet = this.resolveSourceSet(filters?.sources);
+    const scopeFilter = this.buildActivityScopeFilter(sourceSet);
+    if (!this.hasActivitySource(sourceSet)) {
+      return {
+        totalActivities: 0,
+        done: 0,
+        smif: 0,
+        cipavd: 0,
+        withReport: 0,
+        signed: 0,
+      };
+    }
+
+    const where = scopeFilter ? { scope: scopeFilter } : {};
     try {
-      const total = await this.prisma.activity.count();
+      const total = await this.prisma.activity.count({ where });
       const done = await this.prisma.activity.count({
-        where: { status: 'DONE' },
+        where: { ...where, status: 'DONE' },
       });
       const smif = await this.prisma.activity.count({
-        where: { scope: 'SMIF' },
+        where: { ...where, scope: 'SMIF' },
       });
       const cipavd = await this.prisma.activity.count({
-        where: { scope: 'CIPAVD' },
+        where: { ...where, scope: 'CIPAVD' },
       });
-      const withReport = await (this.prisma as any).activityReport.count();
+      const reportWhere =
+        scopeFilter && scopeFilter.in.length > 0
+          ? { activity: { scope: scopeFilter } }
+          : {};
+      const withReport = await (this.prisma as any).activityReport.count({
+        where: reportWhere,
+      });
       const signed = await (this.prisma as any).activityReport.count({
-        where: { signedAt: { not: null } },
+        where: {
+          ...reportWhere,
+          signedAt: { not: null },
+        },
       });
       return { totalActivities: total, done, smif, cipavd, withReport, signed };
     } catch {
@@ -2065,13 +2546,20 @@ export class StrategicService {
     }
   }
 
-  private async getMissionsKpis() {
+  private async getMissionsKpis(filters?: StrategicSourceFilter) {
+    const sourceSet = this.resolveSourceSet(filters?.sources);
+    if (!this.hasMissionSource(sourceSet)) {
+      return { totalMissions: 0, smif: 0, cipavd: 0, localitiesCovered: 0 };
+    }
+
+    const where = {};
     try {
       const model = (this.prisma as any).mission;
-      const total = await model.count();
-      const smif = await model.count({ where: { scope: 'SMIF' } });
-      const cipavd = await model.count({ where: { scope: 'CIPAVD' } });
+      const total = await model.count({ where });
+      const smif = await model.count({ where: { ...where, scope: 'SMIF' } });
+      const cipavd = await model.count({ where: { ...where, scope: 'CIPAVD' } });
       const distinctLocalities = await model.findMany({
+        where,
         select: { localityId: true },
         distinct: ['localityId'],
       });
@@ -2083,6 +2571,45 @@ export class StrategicService {
       };
     } catch {
       return { totalMissions: 0, smif: 0, cipavd: 0, localitiesCovered: 0 };
+    }
+  }
+
+  private async getTaskKpis(filters?: StrategicSourceFilter) {
+    const sourceSet = this.resolveSourceSet(filters?.sources);
+    if (!this.hasTaskSource(sourceSet)) {
+      return {
+        totalTasks: 0,
+        totalOverdue: 0,
+        completed: 0,
+        pending: 0,
+      };
+    }
+
+    const now = new Date();
+    try {
+      const model = this.prisma.taskInstance;
+      const totalTasks = await model.count();
+      const completed = await model.count({ where: { status: 'DONE' } });
+      const totalOverdue = await model.count({
+        where: {
+          status: { not: 'DONE' },
+          dueDate: { lt: now },
+        },
+      });
+      const pending = Math.max(0, totalTasks - completed);
+      return {
+        totalTasks,
+        totalOverdue,
+        completed,
+        pending,
+      };
+    } catch {
+      return {
+        totalTasks: 0,
+        totalOverdue: 0,
+        completed: 0,
+        pending: 0,
+      };
     }
   }
 }

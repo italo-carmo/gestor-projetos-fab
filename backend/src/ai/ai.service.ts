@@ -1,5 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { LitellmService, ChatMessage } from '../llm/litellm.service';
+import {
+  type AiAnalysisType,
+  ALL_KNOWLEDGE_SOURCE_IDS,
+  type AiKnowledgeSourceId,
+} from './ai-knowledge-sources';
 import { SettingsService } from '../settings/settings.service';
 import {
   StrategicService,
@@ -73,6 +78,18 @@ export class AiService {
     private readonly strategic: StrategicService,
   ) {}
 
+  private async resolveAnalysisSources(
+    type: AnalysisType,
+  ): Promise<AiKnowledgeSourceId[]> {
+    try {
+      return await this.settings.getAnalysisSourcesForType(
+        type as AiAnalysisType,
+      );
+    } catch {
+      return [...ALL_KNOWLEDGE_SOURCE_IDS];
+    }
+  }
+
   getAnalysesCatalog() {
     return ANALYSIS_CATALOG;
   }
@@ -90,11 +107,13 @@ export class AiService {
     )
       ? type
       : 'executive';
-    const data = await this.gatherDataForType(safeType);
+    const sources = await this.resolveAnalysisSources(safeType);
+    const data = await this.gatherDataForType(safeType, sources);
     const narrativeBase = options?.narrative?.trim() ?? '';
     const narrative = await this.appendTraceabilityReferences(
       safeType,
       narrativeBase,
+      sources,
     );
     const model = options?.model?.trim() || 'modelo não informado';
     const generatedAt = options?.generatedAt || new Date().toISOString();
@@ -113,7 +132,8 @@ export class AiService {
       stage: 'Coletando dados...',
     });
 
-    const data = await this.gatherDataForType(type);
+    const sources = await this.resolveAnalysisSources(type);
+    const data = await this.gatherDataForType(type, sources);
 
     yield this.sseEvent('progress', {
       percent: 25,
@@ -165,7 +185,7 @@ export class AiService {
         }
         if (next.done) break;
 
-        const chunk = next.value;
+      const chunk = next.value;
         if (chunk.type === 'token') {
           fullText += chunk.text;
           tokenCount++;
@@ -178,6 +198,7 @@ export class AiService {
           const narrativeWithRefs = await this.appendTraceabilityReferences(
             type,
             fullText,
+            sources,
           );
           yield this.sseEvent('done', {
             percent: 100,
@@ -202,6 +223,7 @@ export class AiService {
     const narrativeWithRefs = await this.appendTraceabilityReferences(
       type,
       fullText,
+      sources,
     );
     yield this.sseEvent('done', {
       percent: 100,
@@ -214,12 +236,18 @@ export class AiService {
   async *chatStream(
     message: string,
     history: ChatMessage[],
+    analysisType?: AnalysisType,
   ): AsyncGenerator<string> {
     const systemPrompt = await this.settings.getSystemPrompt();
+    const analysisSources = analysisType
+      ? await this.resolveAnalysisSources(analysisType)
+      : undefined;
 
     let contextSummary: string;
     try {
-      const dashboard = await this.strategic.situationalDashboard();
+      const dashboard = analysisType
+        ? await this.strategic.situationalDashboard({ sources: analysisSources })
+        : await this.strategic.situationalDashboard();
       const complaints = (dashboard as any).complaints ?? {};
       const surveys = (dashboard as any).surveys ?? {};
       contextSummary =
@@ -1068,14 +1096,25 @@ export class AiService {
     return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
   }
 
-  private async gatherDataForType(type: AnalysisType): Promise<any> {
+  private async gatherDataForType(
+    type: AnalysisType,
+    sources?: readonly AiKnowledgeSourceId[],
+  ): Promise<any> {
     switch (type) {
       case 'executive': {
         const [dashboard, profile, text, geo] = await Promise.all([
-          this.strategic.situationalDashboard(),
-          this.strategic.aggressorProfile(),
-          this.strategic.textAnalysis(),
-          this.strategic.geoMap(),
+          this.strategic.situationalDashboard(
+            sources ? { sources: Array.from(sources) } : undefined,
+          ),
+          this.strategic.aggressorProfile(
+            sources ? { sources: Array.from(sources) } : undefined,
+          ),
+          this.strategic.textAnalysis(
+            sources ? { sources: Array.from(sources) } : undefined,
+          ),
+          this.strategic.geoMap(
+            sources ? { sources: Array.from(sources) } : undefined,
+          ),
         ]);
         return {
           dashboard,
@@ -1085,15 +1124,31 @@ export class AiService {
         };
       }
       case 'situational':
-        return { dashboard: await this.strategic.situationalDashboard() };
+        return {
+          dashboard: await this.strategic.situationalDashboard(
+            sources ? { sources: Array.from(sources) } : undefined,
+          ),
+        };
       case 'aggressor':
-        return { profile: await this.strategic.aggressorProfile() };
+        return {
+          profile: await this.strategic.aggressorProfile(
+            sources ? { sources: Array.from(sources) } : undefined,
+          ),
+        };
       case 'text':
         return {
-          textSummary: this.compactText(await this.strategic.textAnalysis()),
+          textSummary: this.compactText(
+            await this.strategic.textAnalysis(
+              sources ? { sources: Array.from(sources) } : undefined,
+            ),
+          ),
         };
       case 'geo':
-        return { geoMap: await this.strategic.geoMap() };
+        return {
+          geoMap: await this.strategic.geoMap(
+            sources ? { sources: Array.from(sources) } : undefined,
+          ),
+        };
       default:
         return {};
     }
@@ -1134,6 +1189,7 @@ export class AiService {
   private async appendTraceabilityReferences(
     type: AnalysisType,
     narrative: string,
+    sources?: readonly AiKnowledgeSourceId[],
   ): Promise<string> {
     const base = this.normalizeReferenceLinks(String(narrative || '')).trim();
     if (!base) return base;
@@ -1143,7 +1199,9 @@ export class AiService {
 
     let refs: AiSourceReference[] = [];
     try {
-      refs = await this.strategic.aiSourceReferences(type);
+      refs = await this.strategic.aiSourceReferences(type, {
+        sources: Array.isArray(sources) ? sources : undefined,
+      });
     } catch {
       refs = [];
     }

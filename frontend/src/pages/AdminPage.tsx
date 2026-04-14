@@ -5,9 +5,13 @@ import {
   Card,
   CardContent,
   Chip,
+  Checkbox,
+  Divider,
   Drawer,
   IconButton,
   InputAdornment,
+  FormControlLabel,
+  FormGroup,
   MenuItem,
   Paper,
   Stack,
@@ -31,7 +35,19 @@ import TextSnippetRoundedIcon from '@mui/icons-material/TextSnippetRounded';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import { useCallback, useEffect, useState, type ReactNode, type SyntheticEvent } from 'react';
-import { useMe, usePhases, useUpdatePhase, useAiSettings, useUpdateAiSettings, useTestAiConnection } from '../api/hooks';
+import {
+  useAiSettings,
+  useMe,
+  usePhases,
+  useUpdateAiSettings,
+  useUpdatePhase,
+  useTestAiConnection,
+  type AiAnalysisSourceSelection,
+  type AiAnalysisType,
+  type AiKnowledgeSourceId,
+  type AiSettingsPatch,
+  type AiSettingsResponse,
+} from '../api/hooks';
 import {
   useCreatePosto,
   useCreateMissionChecklistDimension,
@@ -73,6 +89,98 @@ const UF_OPTIONS = [
   'MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC',
   'SP','SE','TO',
 ];
+
+const ANALYSIS_SOURCE_CATALOG: Array<{
+  id: AiKnowledgeSourceId;
+  label: string;
+  description: string;
+}> = [
+  { id: 'missions', label: 'Missões', description: 'Missões do sistema.' },
+  {
+    id: 'activities_smif',
+    label: 'Atividades de campo SMIF',
+    description: 'Atividades de campo no escopo SMIF.',
+  },
+  {
+    id: 'activities_cipavd',
+    label: 'Atividades de campo CIPAVD',
+    description: 'Atividades de campo no escopo CIPAVD.',
+  },
+  {
+    id: 'activity_reports',
+    label: 'Relatórios de atividades de campo',
+    description: 'Relatórios técnicos e observações de campo.',
+  },
+  {
+    id: 'best_practices',
+    label: 'Boas práticas',
+    description: 'Registros de boas práticas do sistema.',
+  },
+  {
+    id: 'tasks',
+    label: 'Tarefas',
+    description: 'Tarefas por localidade, status e prazos.',
+  },
+  {
+    id: 'survey_schools',
+    label: 'Pesquisas de escolas',
+    description: 'Pesquisas institucionais de escolas.',
+  },
+  {
+    id: 'survey_domestic_violence',
+    label: 'Pesquisas de violência doméstica',
+    description: 'Respostas e indicadores de violência doméstica.',
+  },
+  {
+    id: 'survey_recruits',
+    label: 'Pesquisa de recrutas',
+    description: 'Percepção e risco em pesquisas de recrutamento.',
+  },
+  {
+    id: 'survey_best_practice_cycle',
+    label: 'Pesquisa ciclo de boas práticas',
+    description: 'Dados de ciclo de boas práticas.',
+  },
+  {
+    id: 'survey_cpca_meeting',
+    label: 'Pesquisa encontro CPCA',
+    description: 'Registros da pesquisa de encontros CPCA.',
+  },
+  {
+    id: 'survey_gsd_evaluation',
+    label: 'Pesquisa avaliação GSD',
+    description: 'Avaliação de GSD.',
+  },
+  {
+    id: 'complaints_cpca',
+    label: 'Denúncias CPCA',
+    description: 'Casos e andamento de denúncias CPCA.',
+  },
+  {
+    id: 'complaints_smif',
+    label: 'Denúncias SMIF',
+    description: 'Casos e andamento de denúncias SMIF.',
+  },
+];
+
+const ANALYSIS_TYPES: AiAnalysisType[] = [
+  'executive',
+  'situational',
+  'aggressor',
+  'text',
+  'geo',
+];
+
+const normalizeSourceArray = (value: AiKnowledgeSourceId[] | undefined) =>
+  Array.from(new Set((value ?? []).filter(Boolean).sort()));
+
+const buildDefaultAnalysisSources = (): AiAnalysisSourceSelection => ({
+  executive: [...ANALYSIS_SOURCE_CATALOG.map((entry) => entry.id)],
+  situational: [...ANALYSIS_SOURCE_CATALOG.map((entry) => entry.id)],
+  aggressor: [...ANALYSIS_SOURCE_CATALOG.map((entry) => entry.id)],
+  text: [...ANALYSIS_SOURCE_CATALOG.map((entry) => entry.id)],
+  geo: [...ANALYSIS_SOURCE_CATALOG.map((entry) => entry.id)],
+});
 
 type LocalityForm = {
   code: string;
@@ -1514,7 +1622,7 @@ function InstitutionalMappingTab() {
 }
 
 const ANALYSIS_PROMPTS_CONFIG: {
-  type: string;
+  type: AiAnalysisType;
   label: string;
   short: string;
   placeholder: string;
@@ -1568,6 +1676,24 @@ const ANALYSIS_PROMPTS_CONFIG: {
   },
 ];
 
+const sameSources = (
+  sourceA: AiKnowledgeSourceId[] = [],
+  sourceB: AiKnowledgeSourceId[] = [],
+) => {
+  const normalizedA = normalizeSourceArray(sourceA);
+  const normalizedB = normalizeSourceArray(sourceB);
+  if (normalizedA.length !== normalizedB.length) return false;
+  return normalizedA.every((value, index) => value === normalizedB[index]);
+};
+
+const sanitizeAnalysisSources = (input: AiSettingsResponse['analysisSources']) => {
+  const defaults = buildDefaultAnalysisSources();
+  return ANALYSIS_TYPES.reduce<AiAnalysisSourceSelection>((acc, type) => {
+    acc[type] = normalizeSourceArray(input?.[type]);
+    return acc;
+  }, defaults);
+};
+
 function AiSettingsTab() {
   const settingsQuery = useAiSettings();
   const updateSettings = useUpdateAiSettings();
@@ -1581,6 +1707,8 @@ function AiSettingsTab() {
     model: '',
     systemPrompt: '',
   });
+  const [analysisSources, setAnalysisSources] =
+    useState<AiAnalysisSourceSelection>(buildDefaultAnalysisSources());
   const [analysisPrompts, setAnalysisPrompts] = useState<Record<string, string>>({
     executive: '',
     situational: '',
@@ -1601,6 +1729,7 @@ function AiSettingsTab() {
         model: settingsQuery.data.model ?? '',
         systemPrompt: settingsQuery.data.systemPrompt ?? '',
       });
+      setAnalysisSources(sanitizeAnalysisSources(settingsQuery.data.analysisSources));
       const serverPrompts = settingsQuery.data.analysisPrompts ?? {};
       setAnalysisPrompts({
         executive: serverPrompts.executive ?? '',
@@ -1657,6 +1786,42 @@ function AiSettingsTab() {
     [form.model, testConnection, toast],
   );
 
+  const allSourceIds = ANALYSIS_SOURCE_CATALOG.map((source) => source.id);
+
+  const toggleSource = (
+    analysisType: AiAnalysisType,
+    sourceId: AiKnowledgeSourceId,
+    checked: boolean,
+  ) => {
+    setAnalysisSources((prev) => {
+      const next = normalizeSourceArray(prev[analysisType]);
+      const set = new Set(next);
+      if (checked) {
+        set.add(sourceId);
+      } else {
+        set.delete(sourceId);
+      }
+      return {
+        ...prev,
+        [analysisType]: Array.from(set),
+      };
+    });
+  };
+
+  const setAllSources = (analysisType: AiAnalysisType) => {
+    setAnalysisSources((prev) => ({
+      ...prev,
+      [analysisType]: [...allSourceIds],
+    }));
+  };
+
+  const clearSources = (analysisType: AiAnalysisType) => {
+    setAnalysisSources((prev) => ({
+      ...prev,
+      [analysisType]: [],
+    }));
+  };
+
   useEffect(() => {
     if (aiSection !== 'server') return;
     if (availableModels.length > 0) return;
@@ -1664,7 +1829,7 @@ function AiSettingsTab() {
   }, [aiSection, availableModels.length, loadModelsFromLiteLLM]);
 
   const handleSave = async () => {
-    const patch: Record<string, any> = {};
+    const patch: AiSettingsPatch = {};
     if (form.systemPrompt !== (settingsQuery.data?.systemPrompt ?? ''))
       patch.systemPrompt = form.systemPrompt;
     if (form.baseUrl !== (settingsQuery.data?.baseUrl ?? ''))
@@ -1682,6 +1847,18 @@ function AiSettingsTab() {
     }
     if (Object.keys(changedPrompts).length > 0) {
       patch.analysisPrompts = changedPrompts;
+    }
+
+    const changedSources: Partial<Record<string, AiKnowledgeSourceId[]>> = {};
+    for (const analysisType of ANALYSIS_TYPES) {
+      const baseline = settingsQuery.data?.analysisSources?.[analysisType] ?? [];
+      const selected = analysisSources[analysisType] ?? [];
+      if (!sameSources(selected, baseline)) {
+        changedSources[analysisType] = selected;
+      }
+    }
+    if (Object.keys(changedSources).length > 0) {
+      patch.analysisSources = changedSources;
     }
 
     if (Object.keys(patch).length === 0) {
@@ -1844,6 +2021,123 @@ function AiSettingsTab() {
 
       {aiSection === 'prompts' && (
         <Stack spacing={3}>
+          <Paper
+            variant="outlined"
+            sx={{
+              p: 2.5,
+              borderRadius: 2,
+              borderColor: (t) => alpha(t.palette.primary.main, 0.2),
+              bgcolor: (t) => alpha(t.palette.primary.main, 0.03),
+            }}
+          >
+            <Stack spacing={2}>
+              <Stack spacing={0.5}>
+                <Typography variant="subtitle1" fontWeight={800}>
+                  Fontes por análise
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Configure para cada análise quais bases o módulo de IA pode usar.
+                  Seleção vazia = nenhuma base considerada para essa análise.
+                </Typography>
+              </Stack>
+              {ANALYSIS_PROMPTS_CONFIG.map((item) => (
+                <Card
+                  key={`sources-${item.type}`}
+                  variant="outlined"
+                  sx={{
+                    borderRadius: 2,
+                    borderColor: alpha(item.accent, 0.25),
+                  }}
+                >
+                  <Box
+                    sx={{
+                      px: 2,
+                      py: 1.25,
+                      bgcolor: alpha(item.accent, 0.09),
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 1.25,
+                    }}
+                  >
+                    <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap">
+                      <Box sx={{ color: item.accent, display: 'flex', lineHeight: 0 }}>
+                        {item.icon}
+                      </Box>
+                      <Typography variant="subtitle2" fontWeight={700}>
+                        {item.label}
+                      </Typography>
+                      <Chip
+                        size="small"
+                        label={`${(analysisSources[item.type] ?? []).length} fonte(s)`}
+                        color="primary"
+                        variant="outlined"
+                        sx={{ ml: 'auto' }}
+                      />
+                    </Stack>
+                    <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
+                      <Button
+                        size="small"
+                        variant="text"
+                        onClick={() => setAllSources(item.type)}
+                      >
+                        Todas
+                      </Button>
+                      <Button
+                        size="small"
+                        variant="text"
+                        onClick={() => clearSources(item.type)}
+                      >
+                        Nenhuma
+                      </Button>
+                    </Stack>
+                  </Box>
+                  <Divider />
+                  <Box sx={{ p: 1.5, px: 1.75 }}>
+                    <FormGroup>
+                      {ANALYSIS_SOURCE_CATALOG.map((source) => (
+                        <FormControlLabel
+                          key={`${item.type}-${source.id}`}
+                          control={
+                            <Checkbox
+                              size="small"
+                              checked={
+                                analysisSources[item.type]?.includes(
+                                  source.id,
+                                ) ?? false
+                              }
+                              onChange={(event) =>
+                                toggleSource(
+                                  item.type,
+                                  source.id,
+                                  event.target.checked,
+                                )
+                              }
+                            />
+                          }
+                          label={
+                            <Stack spacing={0.1}>
+                              <Typography variant="body2" fontWeight={600}>
+                                {source.label}
+                              </Typography>
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                              >
+                                {source.description}
+                              </Typography>
+                            </Stack>
+                          }
+                          sx={{ alignItems: 'flex-start', mb: 0.2 }}
+                        />
+                      ))}
+                    </FormGroup>
+                  </Box>
+                </Card>
+              ))}
+            </Stack>
+          </Paper>
+
           <Alert severity="info" variant="outlined" sx={{ borderRadius: 2 }}>
             Abaixo há <strong>5 caixas de texto</strong>, uma para cada botão de análise na página IA.
             Conteúdo vazio = o sistema usa o texto padrão interno. O bloco final é o{' '}
