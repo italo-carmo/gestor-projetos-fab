@@ -57,6 +57,7 @@ export const ANALYSIS_CATALOG: {
 @Injectable()
 export class AiService {
   private readonly logger = new Logger(AiService.name);
+  private readonly streamIdleTimeoutMs = 90_000;
 
   constructor(
     private readonly litellm: LitellmService,
@@ -121,14 +122,36 @@ export class AiService {
       { role: 'user', content: userPrompt },
     ];
 
+    const configuredModel = this.litellm.getDefaultModel();
     let fullText = '';
     let tokenCount = 0;
+    type StreamChunk =
+      | { type: 'token'; text: string }
+      | { type: 'done'; model: string };
+    const iterator = this.litellm.chatCompletionStream({
+      messages,
+      max_tokens: 3000,
+    })[Symbol.asyncIterator]();
 
     try {
-      for await (const chunk of this.litellm.chatCompletionStream({
-        messages,
-        max_tokens: 3000,
-      })) {
+      while (true) {
+        let timeoutHandle: NodeJS.Timeout | undefined;
+        let next: IteratorResult<StreamChunk>;
+        try {
+          next = (await Promise.race([
+            iterator.next(),
+            new Promise<IteratorResult<StreamChunk>>((_, reject) => {
+              timeoutHandle = setTimeout(() => {
+                reject(new Error('LITELLM_STREAM_IDLE_TIMEOUT'));
+              }, this.streamIdleTimeoutMs);
+            }),
+          ])) as IteratorResult<StreamChunk>;
+        } finally {
+          if (timeoutHandle) clearTimeout(timeoutHandle);
+        }
+        if (next.done) break;
+
+        const chunk = next.value;
         if (chunk.type === 'token') {
           fullText += chunk.text;
           tokenCount++;
@@ -148,9 +171,16 @@ export class AiService {
         }
       }
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
+      let msg = e instanceof Error ? e.message : String(e);
+      if (msg === 'LITELLM_STREAM_IDLE_TIMEOUT') {
+        msg =
+          `Sem resposta do modelo por ${Math.round(this.streamIdleTimeoutMs / 1000)}s ` +
+          `(modelo configurado: ${configuredModel}). Verifique se o ID existe no LiteLLM e está disponível.`;
+      }
       yield this.sseEvent('error', { message: msg });
       return;
+    } finally {
+      await iterator.return?.();
     }
 
     yield this.sseEvent('done', {

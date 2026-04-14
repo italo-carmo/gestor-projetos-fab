@@ -30,7 +30,7 @@ import SmartToyRoundedIcon from '@mui/icons-material/SmartToyRounded';
 import TextSnippetRoundedIcon from '@mui/icons-material/TextSnippetRounded';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
-import { useEffect, useState, type ReactNode, type SyntheticEvent } from 'react';
+import { useCallback, useEffect, useState, type ReactNode, type SyntheticEvent } from 'react';
 import { useMe, usePhases, useUpdatePhase, useAiSettings, useUpdateAiSettings, useTestAiConnection } from '../api/hooks';
 import {
   useCreatePosto,
@@ -1590,6 +1590,8 @@ function AiSettingsTab() {
   });
   const [showKey, setShowKey] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [modelMode, setModelMode] = useState<'list' | 'manual'>('manual');
 
   useEffect(() => {
     if (settingsQuery.data && !loaded) {
@@ -1610,6 +1612,56 @@ function AiSettingsTab() {
       setLoaded(true);
     }
   }, [settingsQuery.data, loaded]);
+
+  const loadModelsFromLiteLLM = useCallback(
+    async (notify: boolean) => {
+      try {
+        const result = await testConnection.mutateAsync();
+        if (!result.ok) {
+          if (notify) {
+            toast.push({
+              message: `Falha na conexão: ${result.error ?? 'Erro desconhecido'}`,
+              severity: 'error',
+            });
+          }
+          return;
+        }
+
+        const models = Array.from(new Set((result.models ?? []).filter(Boolean))).sort((a, b) =>
+          a.localeCompare(b, 'pt-BR'),
+        );
+        setAvailableModels(models);
+
+        if (models.length > 0) {
+          if (form.model && !models.includes(form.model)) {
+            setModelMode('manual');
+          } else {
+            setModelMode('list');
+          }
+        }
+
+        if (notify) {
+          toast.push({
+            message: `Conexão OK! ${models.length} modelo(s) carregado(s).`,
+            severity: 'success',
+          });
+        }
+      } catch (error) {
+        if (!notify) return;
+        toast.push({
+          message: parseApiError(error).message ?? 'Erro ao carregar modelos do LiteLLM.',
+          severity: 'error',
+        });
+      }
+    },
+    [form.model, testConnection, toast],
+  );
+
+  useEffect(() => {
+    if (aiSection !== 'server') return;
+    if (availableModels.length > 0) return;
+    void loadModelsFromLiteLLM(false);
+  }, [aiSection, availableModels.length, loadModelsFromLiteLLM]);
 
   const handleSave = async () => {
     const patch: Record<string, any> = {};
@@ -1647,22 +1699,7 @@ function AiSettingsTab() {
   };
 
   const handleTest = async () => {
-    try {
-      const result = await testConnection.mutateAsync();
-      if (result.ok) {
-        toast.push({
-          message: `Conexão OK! ${result.models.length} modelo(s): ${result.models.slice(0, 5).join(', ')}`,
-          severity: 'success',
-        });
-      } else {
-        toast.push({
-          message: `Falha na conexão: ${result.error ?? 'Erro desconhecido'}`,
-          severity: 'error',
-        });
-      }
-    } catch (error) {
-      toast.push({ message: parseApiError(error).message ?? 'Erro ao testar.', severity: 'error' });
-    }
+    await loadModelsFromLiteLLM(true);
   };
 
   if (settingsQuery.isLoading) return <SkeletonState />;
@@ -1742,15 +1779,66 @@ function AiSettingsTab() {
               },
             }}
           />
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }}>
+            <Button
+              variant="outlined"
+              onClick={() => void loadModelsFromLiteLLM(true)}
+              disabled={testConnection.isPending}
+            >
+              {testConnection.isPending ? 'Carregando modelos...' : 'Atualizar modelos do LiteLLM'}
+            </Button>
+            {availableModels.length > 0 && (
+              <Chip
+                size="small"
+                color="primary"
+                variant="outlined"
+                label={`${availableModels.length} modelo(s) disponível(is)`}
+              />
+            )}
+          </Stack>
           <TextField
             size="small"
+            select
             label="Modelo padrão"
-            value={form.model}
-            onChange={(e) => setForm({ ...form, model: e.target.value })}
-            placeholder="gpt-oss:20b"
+            value={modelMode === 'manual' ? '__manual__' : form.model}
+            onChange={(e) => {
+              const value = e.target.value;
+              if (value === '__manual__') {
+                setModelMode('manual');
+                return;
+              }
+              setModelMode('list');
+              setForm({ ...form, model: value });
+            }}
             fullWidth
-            helperText="ID do modelo (GET /v1/models no LiteLLM)"
-          />
+            helperText="Selecione um modelo retornado por /v1/models do LiteLLM."
+          >
+            <MenuItem value="">
+              <em>Selecionar modelo...</em>
+            </MenuItem>
+            {availableModels.map((model) => (
+              <MenuItem key={model} value={model}>
+                {model}
+              </MenuItem>
+            ))}
+            {form.model && !availableModels.includes(form.model) && (
+              <MenuItem value={form.model}>{`${form.model} (atual, não listado)`}</MenuItem>
+            )}
+            <MenuItem value="__manual__">
+              <em>Outro (digitar manualmente)</em>
+            </MenuItem>
+          </TextField>
+          {modelMode === 'manual' && (
+            <TextField
+              size="small"
+              label="Modelo personalizado"
+              value={form.model}
+              onChange={(e) => setForm({ ...form, model: e.target.value })}
+              placeholder="Ex.: nemotron-3-nano:30b"
+              fullWidth
+              helperText="Use somente se o ID estiver correto no LiteLLM."
+            />
+          )}
         </Stack>
       )}
 
