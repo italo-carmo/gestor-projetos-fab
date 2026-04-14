@@ -56,6 +56,7 @@ export const ANALYSIS_CATALOG: {
 
 type NarrativePdfBlock =
   | { type: 'paragraph'; text: string }
+  | { type: 'heading'; level: number; text: string }
   | { type: 'table'; header: string[]; rows: string[][] };
 
 @Injectable()
@@ -511,6 +512,30 @@ export class AiService {
         };
 
         for (const block of blocks) {
+          if (block.type === 'heading') {
+            const safeLevel = Math.max(1, Math.min(6, Number(block.level) || 2));
+            const headingSizeByLevel: Record<number, number> = {
+              1: 16,
+              2: 14,
+              3: 12,
+              4: 11,
+              5: 10,
+              6: 10,
+            };
+            const headingSize = headingSizeByLevel[safeLevel] ?? 12;
+            const needed = Math.max(24, headingSize + 14);
+            ensureSpace(needed);
+            doc.moveDown(0.2);
+            doc
+              .font('Helvetica-Bold')
+              .fontSize(headingSize)
+              .fillColor(BLUE)
+              .text(block.text, LEFT, doc.y, {
+                width: PAGE_WIDTH,
+              });
+            doc.moveDown(0.35);
+            continue;
+          }
           if (block.type === 'table') {
             drawNarrativeTable(block);
             continue;
@@ -915,6 +940,28 @@ export class AiService {
       const line = lines[i];
       const trimmed = line.trim();
 
+      const headingMatch = trimmed.match(/^(#{1,6})\s+(.+)$/);
+      if (headingMatch) {
+        flushParagraph();
+        blocks.push({
+          type: 'heading',
+          level: headingMatch[1].length,
+          text: this.normalizeInlineMarkdown(headingMatch[2]).trim(),
+        });
+        continue;
+      }
+
+      const boldOnlyMatch = trimmed.match(/^\*\*(.+)\*\*$/);
+      if (boldOnlyMatch && !trimmed.includes('|')) {
+        flushParagraph();
+        blocks.push({
+          type: 'heading',
+          level: 3,
+          text: this.normalizeInlineMarkdown(boldOnlyMatch[1]).trim(),
+        });
+        continue;
+      }
+
       const looksLikeTableHeader =
         trimmed.includes('|') &&
         i + 1 < lines.length &&
@@ -978,7 +1025,6 @@ export class AiService {
 
   private normalizeInlineMarkdown(text: string): string {
     return String(text || '')
-      .replace(/^#{1,6}\s*/, '')
       .replace(/\*\*(.*?)\*\*/g, '$1')
       .replace(/\*(.*?)\*/g, '$1')
       .replace(/`([^`]+)`/g, '$1')
