@@ -179,8 +179,6 @@ export class AiService {
       }
       yield this.sseEvent('error', { message: msg });
       return;
-    } finally {
-      await iterator.return?.();
     }
 
     yield this.sseEvent('done', {
