@@ -6,9 +6,11 @@ import {
   CardContent,
   Chip,
   Drawer,
+  Grid,
   IconButton,
   InputAdornment,
   MenuItem,
+  Paper,
   Stack,
   Tab,
   Tabs,
@@ -20,9 +22,16 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
+import AutoAwesomeRoundedIcon from '@mui/icons-material/AutoAwesomeRounded';
+import DashboardRoundedIcon from '@mui/icons-material/DashboardRounded';
+import FingerprintRoundedIcon from '@mui/icons-material/FingerprintRounded';
+import MapRoundedIcon from '@mui/icons-material/MapRounded';
+import SmartToyRoundedIcon from '@mui/icons-material/SmartToyRounded';
+import TextSnippetRoundedIcon from '@mui/icons-material/TextSnippetRounded';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode, type SyntheticEvent } from 'react';
 import { useMe, usePhases, useUpdatePhase, useAiSettings, useUpdateAiSettings, useTestAiConnection } from '../api/hooks';
 import {
   useCreatePosto,
@@ -1505,41 +1514,68 @@ function InstitutionalMappingTab() {
   );
 }
 
-const ANALYSIS_TYPES_META: { type: string; label: string; placeholder: string }[] = [
+const ANALYSIS_PROMPTS_CONFIG: {
+  type: string;
+  label: string;
+  short: string;
+  placeholder: string;
+  accent: string;
+  icon: ReactNode;
+}[] = [
   {
     type: 'executive',
     label: 'Resumo Executivo Completo',
-    placeholder: 'Redija um resumo executivo completo para o comando, abordando panorama situacional, perfil de denúncias, destaques textuais e distribuição geográfica.',
+    short: 'Panorama completo para o comando.',
+    placeholder:
+      'Redija um resumo executivo completo para o comando, abordando panorama situacional, perfil de denúncias, destaques textuais e distribuição geográfica.',
+    accent: '#1A3C6E',
+    icon: <AutoAwesomeRoundedIcon sx={{ fontSize: 28 }} />,
   },
   {
     type: 'situational',
     label: 'Análise Situacional',
-    placeholder: 'Analise o panorama situacional: pesquisas, taxas de violência, denúncias ativas, atividades e missões.',
+    short: 'Pesquisas, denúncias, atividades e missões.',
+    placeholder:
+      'Analise o panorama situacional: pesquisas, taxas de violência, denúncias ativas, atividades e missões.',
+    accent: '#2E7D32',
+    icon: <DashboardRoundedIcon sx={{ fontSize: 28 }} />,
   },
   {
     type: 'aggressor',
     label: 'Perfil de Assédio e Violência',
-    placeholder: 'Analise o perfil de assédio e violência: tipos de ocorrência, perfil do agressor e da vítima, relações hierárquicas e contextos.',
+    short: 'Perfil de agressor, vítima e contexto.',
+    placeholder:
+      'Analise o perfil de assédio e violência: tipos de ocorrência, perfil do agressor e da vítima, relações hierárquicas e contextos.',
+    accent: '#D32F2F',
+    icon: <FingerprintRoundedIcon sx={{ fontSize: 28 }} />,
   },
   {
     type: 'text',
     label: 'Análise Textual',
-    placeholder: 'Analise os padrões e tendências identificados nos textos livres do sistema: termos mais frequentes, temas recorrentes e insights.',
+    short: 'Termos e tendências em textos livres.',
+    placeholder:
+      'Analise os padrões e tendências identificados nos textos livres do sistema: termos mais frequentes, temas recorrentes e insights.',
+    accent: '#7B1FA2',
+    icon: <TextSnippetRoundedIcon sx={{ fontSize: 28 }} />,
   },
   {
     type: 'geo',
     label: 'Distribuição Geográfica',
-    placeholder: 'Analise a distribuição geográfica: estados com mais registros, concentração de denúncias, atividades e missões por região.',
+    short: 'Concentração por estado e localidade.',
+    placeholder:
+      'Analise a distribuição geográfica: estados com mais registros, concentração de denúncias, atividades e missões por região.',
+    accent: '#ED6C02',
+    icon: <MapRoundedIcon sx={{ fontSize: 28 }} />,
   },
 ];
 
 function AiSettingsTab() {
-  const { data: me } = useMe();
   const settingsQuery = useAiSettings();
   const updateSettings = useUpdateAiSettings();
   const testConnection = useTestAiConnection();
   const toast = useToast();
 
+  const [aiSection, setAiSection] = useState<'prompts' | 'server'>('prompts');
   const [form, setForm] = useState({
     baseUrl: '',
     apiKey: '',
@@ -1588,7 +1624,7 @@ function AiSettingsTab() {
 
     const serverPrompts = settingsQuery.data?.analysisPrompts ?? {};
     const changedPrompts: Record<string, string> = {};
-    for (const { type } of ANALYSIS_TYPES_META) {
+    for (const { type } of ANALYSIS_PROMPTS_CONFIG) {
       if (analysisPrompts[type] !== (serverPrompts[type] ?? '')) {
         changedPrompts[type] = analysisPrompts[type];
       }
@@ -1634,116 +1670,210 @@ function AiSettingsTab() {
   if (settingsQuery.isError) return <ErrorState error={settingsQuery.error} onRetry={() => settingsQuery.refetch()} />;
 
   return (
-    <Box>
-      <Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>
-        Configuração de IA (LiteLLM)
-      </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        Configure a conexão com o LiteLLM e personalize o prompt do sistema.
-        Alterações aqui sobrescrevem os valores do .env do servidor.
-      </Typography>
-
-      <Stack spacing={2.5} sx={{ maxWidth: 680 }}>
-        <TextField
-          size="small"
-          label="URL do LiteLLM"
-          value={form.baseUrl}
-          onChange={(e) => setForm({ ...form, baseUrl: e.target.value })}
-          placeholder="http://172.16.31.84:4000"
-          fullWidth
-          helperText="Endereço base do proxy LiteLLM (sem /v1)"
-        />
-
-        <TextField
-          size="small"
-          label="Chave API"
-          type={showKey ? 'text' : 'password'}
-          value={form.apiKey}
-          onChange={(e) => setForm({ ...form, apiKey: e.target.value })}
-          placeholder={settingsQuery.data?.apiKeyMasked || 'sk-...'}
-          fullWidth
-          helperText="Deixe vazio para manter a chave atual"
-          slotProps={{
-            input: {
-              endAdornment: (
-                <InputAdornment position="end">
-                  <IconButton onClick={() => setShowKey(!showKey)} size="small" edge="end">
-                    {showKey ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
-                  </IconButton>
-                </InputAdornment>
-              ),
-            },
+    <Box sx={{ maxWidth: 1040 }}>
+      <Stack direction="row" spacing={2} alignItems="flex-start" sx={{ mb: 2 }}>
+        <Box
+          sx={{
+            width: 52,
+            height: 52,
+            borderRadius: 2,
+            bgcolor: (t) => alpha(t.palette.primary.main, 0.12),
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
           }}
-        />
-
-        <TextField
-          size="small"
-          label="Modelo padrão"
-          value={form.model}
-          onChange={(e) => setForm({ ...form, model: e.target.value })}
-          placeholder="gpt-oss:20b"
-          fullWidth
-          helperText="ID do modelo conforme listado em GET /v1/models do LiteLLM"
-        />
-
-        <Box sx={{ borderTop: 1, borderColor: 'divider', pt: 2.5 }}>
-          <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 0.5 }}>
-            Prompts por tipo de análise
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Instruções extras enviadas junto com os dados em cada análise da página IA (além do
-            system prompt geral). Deixe vazio para usar o texto padrão do sistema.
-          </Typography>
-          <Stack spacing={2}>
-            {ANALYSIS_TYPES_META.map(({ type, label, placeholder }) => (
-              <TextField
-                key={type}
-                size="small"
-                label={label}
-                value={analysisPrompts[type] ?? ''}
-                onChange={(e) =>
-                  setAnalysisPrompts((prev) => ({ ...prev, [type]: e.target.value }))
-                }
-                placeholder={placeholder}
-                multiline
-                minRows={3}
-                maxRows={10}
-                fullWidth
-                helperText={`Instrução específica para "${label}". Deixe vazio para usar o padrão.`}
-              />
-            ))}
-          </Stack>
+        >
+          <SmartToyRoundedIcon color="primary" sx={{ fontSize: 30 }} />
         </Box>
+        <Box>
+          <Typography variant="h6" fontWeight={700}>
+            Configuração de IA
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Prompts da página <strong>Análises com IA</strong> e conexão com o LiteLLM. Valores
+            salvos aqui substituem o <code>.env</code> do servidor para URL, chave e modelo.
+          </Typography>
+        </Box>
+      </Stack>
 
-        <TextField
-          size="small"
-          label="System Prompt (geral)"
-          value={form.systemPrompt}
-          onChange={(e) => setForm({ ...form, systemPrompt: e.target.value })}
-          multiline
-          minRows={8}
-          maxRows={20}
-          fullWidth
-          helperText="Prompt enviado como 'system' em todas as requisições de IA. Aceita texto livre."
-        />
+      <Tabs
+        value={aiSection}
+        onChange={(_, v: 'prompts' | 'server') => setAiSection(v)}
+        variant="fullWidth"
+        sx={{
+          mb: 2.5,
+          minHeight: 44,
+          '& .MuiTab-root': { fontWeight: 600, textTransform: 'none', fontSize: '0.95rem' },
+        }}
+      >
+        <Tab value="prompts" label="Prompts (5 análises + system)" />
+        <Tab value="server" label="Servidor LiteLLM" />
+      </Tabs>
 
-        <Stack direction="row" spacing={1.5}>
-          <Button
-            variant="contained"
-            onClick={handleSave}
-            disabled={updateSettings.isPending}
-            sx={{ bgcolor: '#1A3C6E', '&:hover': { bgcolor: '#122B4E' } }}
-          >
-            {updateSettings.isPending ? 'Salvando...' : 'Salvar Configurações'}
-          </Button>
-          <Button
-            variant="outlined"
-            onClick={handleTest}
-            disabled={testConnection.isPending}
-          >
-            {testConnection.isPending ? 'Testando...' : 'Testar Conexão'}
-          </Button>
+      {aiSection === 'server' && (
+        <Stack spacing={2.5}>
+          <TextField
+            size="small"
+            label="URL do LiteLLM"
+            value={form.baseUrl}
+            onChange={(e) => setForm({ ...form, baseUrl: e.target.value })}
+            placeholder="http://172.16.31.84:4000"
+            fullWidth
+            helperText="Endereço base do proxy (sem /v1)"
+          />
+          <TextField
+            size="small"
+            label="Chave API"
+            type={showKey ? 'text' : 'password'}
+            value={form.apiKey}
+            onChange={(e) => setForm({ ...form, apiKey: e.target.value })}
+            placeholder={settingsQuery.data?.apiKeyMasked || 'sk-...'}
+            fullWidth
+            helperText="Deixe vazio para manter a chave atual"
+            slotProps={{
+              input: {
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton onClick={() => setShowKey(!showKey)} size="small" edge="end">
+                      {showKey ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              },
+            }}
+          />
+          <TextField
+            size="small"
+            label="Modelo padrão"
+            value={form.model}
+            onChange={(e) => setForm({ ...form, model: e.target.value })}
+            placeholder="gpt-oss:20b"
+            fullWidth
+            helperText="ID do modelo (GET /v1/models no LiteLLM)"
+          />
         </Stack>
+      )}
+
+      {aiSection === 'prompts' && (
+        <Stack spacing={3}>
+          <Alert severity="info" variant="outlined" sx={{ borderRadius: 2 }}>
+            Abaixo há <strong>5 caixas de texto</strong>, uma para cada botão de análise na página IA.
+            Conteúdo vazio = o sistema usa o texto padrão interno. O bloco final é o{' '}
+            <strong>system prompt</strong>, aplicado a todas as chamadas (análises e chatbot).
+          </Alert>
+
+          <Grid container spacing={2}>
+            {ANALYSIS_PROMPTS_CONFIG.map((item, index) => (
+              <Grid key={item.type} size={{ xs: 12, md: 6 }}>
+                <Card
+                  variant="outlined"
+                  sx={{
+                    height: '100%',
+                    borderRadius: 2,
+                    overflow: 'hidden',
+                    borderColor: alpha(item.accent, 0.4),
+                    boxShadow: (t) => `0 1px 4px ${alpha(t.palette.common.black, 0.06)}`,
+                  }}
+                >
+                  <Box
+                    sx={{
+                      px: 2,
+                      py: 1.5,
+                      bgcolor: alpha(item.accent, 0.09),
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: 1.5,
+                    }}
+                  >
+                    <Box sx={{ color: item.accent, display: 'flex', lineHeight: 0 }}>{item.icon}</Box>
+                    <Box sx={{ minWidth: 0, flex: 1 }}>
+                      <Stack direction="row" alignItems="center" gap={1} flexWrap="wrap">
+                        <Chip
+                          label={`Análise ${index + 1} de 5`}
+                          size="small"
+                          sx={{
+                            bgcolor: item.accent,
+                            color: '#fff',
+                            fontWeight: 700,
+                            height: 24,
+                            '& .MuiChip-label': { px: 1 },
+                          }}
+                        />
+                      </Stack>
+                      <Typography variant="subtitle1" fontWeight={800} sx={{ mt: 0.75, lineHeight: 1.3 }}>
+                        {item.label}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.35 }}>
+                        {item.short}
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <CardContent sx={{ pt: 2, pb: 2 }}>
+                    <TextField
+                      size="small"
+                      label="Instrução enviada ao modelo (opcional)"
+                      value={analysisPrompts[item.type] ?? ''}
+                      onChange={(e) =>
+                        setAnalysisPrompts((prev) => ({ ...prev, [item.type]: e.target.value }))
+                      }
+                      placeholder={item.placeholder}
+                      multiline
+                      minRows={5}
+                      maxRows={16}
+                      fullWidth
+                      helperText="Deixe vazio para manter o padrão do sistema."
+                    />
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+
+          <Paper
+            variant="outlined"
+            sx={{
+              p: 2.5,
+              borderRadius: 2,
+              bgcolor: (t) => alpha(t.palette.primary.main, 0.04),
+              borderColor: (t) => alpha(t.palette.primary.main, 0.2),
+            }}
+          >
+            <Stack direction="row" alignItems="center" gap={1} sx={{ mb: 1 }}>
+              <Chip label="Global" size="small" color="primary" variant="filled" sx={{ fontWeight: 700 }} />
+              <Typography variant="subtitle1" fontWeight={800}>
+                System prompt (todas as IAs)
+              </Typography>
+            </Stack>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Tom, idioma, regras de formatação e proibições comuns a análises e ao chatbot.
+            </Typography>
+            <TextField
+              size="small"
+              label="Conteúdo do system prompt"
+              value={form.systemPrompt}
+              onChange={(e) => setForm({ ...form, systemPrompt: e.target.value })}
+              multiline
+              minRows={8}
+              maxRows={24}
+              fullWidth
+            />
+          </Paper>
+        </Stack>
+      )}
+
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mt: 3 }}>
+        <Button
+          variant="contained"
+          onClick={handleSave}
+          disabled={updateSettings.isPending}
+          sx={{ bgcolor: '#1A3C6E', '&:hover': { bgcolor: '#122B4E' } }}
+        >
+          {updateSettings.isPending ? 'Salvando...' : 'Salvar tudo'}
+        </Button>
+        <Button variant="outlined" onClick={handleTest} disabled={testConnection.isPending}>
+          {testConnection.isPending ? 'Testando...' : 'Testar conexão LiteLLM'}
+        </Button>
       </Stack>
     </Box>
   );
@@ -1768,7 +1898,7 @@ export function AdminPage() {
     setSearchParams(params, { replace: true });
   }, [canViewCipavdLocalities, currentTab, searchParams, setSearchParams]);
 
-  const handleTabChange = (_event: React.SyntheticEvent, newValue: string) => {
+  const handleTabChange = (_event: SyntheticEvent, newValue: string) => {
     setCurrentTab(newValue);
     const params = new URLSearchParams(searchParams);
     params.set('tab', newValue);
