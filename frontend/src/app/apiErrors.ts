@@ -15,6 +15,16 @@ const REASON_MESSAGES: Record<string, string> = {
     'Preencha o resumo do desfecho para concluir/arquivar o caso.',
   DEFENSE_CONFIRMATION_REQUIRED_FOR_CLOSURE:
     'Confirme que o direito de defesa do acusado foi assegurado antes de concluir/arquivar.',
+  CPCA_NOT_ENABLED_FOR_LOCALITY:
+    'A OM selecionada não está com CPCA habilitado no cadastro de OMs.',
+  CPCA_LOCALITY_ALREADY_HAS_PRESIDENT:
+    'Já existe presidente CPCA para esta OM. Confirme ciência para prosseguir com a troca.',
+  CPCA_PRESIDENT_REQUEST_ALREADY_PENDING:
+    'Já existe uma solicitação pendente para este militar nessa OM.',
+  CPCA_PRESIDENT_REQUEST_ALREADY_PROCESSED:
+    'Esta solicitação já foi processada anteriormente.',
+  CPCA_PRESIDENT_CANNOT_BE_MEMBER:
+    'O presidente da comissão não pode ser adicionado como membro.',
   NOTIFIER_RANK_REQUIRED_WHEN_DIFFERENT:
     'Quando noticiante e vítima forem pessoas diferentes, informe o posto/graduação do noticiante.',
   NOTIFIER_GENDER_REQUIRED_WHEN_DIFFERENT:

@@ -1192,6 +1192,11 @@ export class RbacService implements OnModuleInit {
     if (identifier.includes('@')) {
       return this.fabLdap.lookupByEmail(identifier);
     }
+    const onlyDigits = identifier.replace(/\D/g, '');
+    if (onlyDigits.length === 11) {
+      const byCpf = await this.fabLdap.lookupByCpf(onlyDigits);
+      if (byCpf) return byCpf;
+    }
     return this.fabLdap.lookupByUid(this.normalizeUidForLookup(identifier));
   }
 

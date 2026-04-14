@@ -33,6 +33,8 @@ import { AiPage } from "./pages/AiPage";
 import { MissionsPage } from "./pages/MissionsPage";
 import { SocialCommunicationPage } from "./pages/SocialCommunicationPage";
 import { CpcaCasesPage } from "./pages/CpcaCasesPage";
+import { CpcaCommissionPage } from "./pages/CpcaCommissionPage";
+import { CpcaPresidentApprovalsPage } from "./pages/CpcaPresidentApprovalsPage";
 import { CpcaStatsPage } from "./pages/CpcaStatsPage";
 import { SmifComplaintsPage } from "./pages/SmifComplaintsPage";
 import { LibraryPage } from "./pages/LibraryPage";
@@ -209,6 +211,29 @@ function App() {
                       allow={(user) => can(user, "cpca_cases", "view")}
                     >
                       <CpcaCasesPage />
+                    </RequireRoleAccess>
+                  }
+                />
+                <Route
+                  path="/cpca-commission"
+                  element={
+                    <RequireRoleAccess
+                      allow={(user) => can(user, "cpca_cases", "view")}
+                    >
+                      <CpcaCommissionPage />
+                    </RequireRoleAccess>
+                  }
+                />
+                <Route
+                  path="/cpca-president-approvals"
+                  element={
+                    <RequireRoleAccess
+                      allow={(user) =>
+                        can(user, "cpca_cases", "view") &&
+                        hasAnyRole(user, [ROLE_TI, ROLE_COMGEP])
+                      }
+                    >
+                      <CpcaPresidentApprovalsPage />
                     </RequireRoleAccess>
                   }
                 />

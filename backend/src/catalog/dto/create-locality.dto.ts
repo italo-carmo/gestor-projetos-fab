@@ -1,4 +1,4 @@
-import { IsDateString, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsDateString, IsOptional, IsString } from 'class-validator';
 
 export class CreateLocalityDto {
   @IsString()
@@ -33,4 +33,8 @@ export class CreateLocalityDto {
   @IsOptional()
   @IsString()
   notes?: string | null;
+
+  @IsOptional()
+  @IsBoolean()
+  hasCpca?: boolean;
 }

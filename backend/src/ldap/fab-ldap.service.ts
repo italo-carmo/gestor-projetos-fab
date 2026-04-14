@@ -73,11 +73,29 @@ export class FabLdapService {
       throwError('VALIDATION_ERROR', { reason: 'LDAP_EMAIL_REQUIRED' });
     }
 
+    const filter = `(mail=${this.escapeFilterValue(normalizedEmail)})`;
+    return this.searchByFilter(filter, normalizedEmail);
+  }
+
+  async lookupByCpf(cpf: string): Promise<FabLdapProfile | null> {
+    const normalizedCpf = String(cpf ?? '').replace(/\D/g, '');
+    if (!normalizedCpf) {
+      throwError('VALIDATION_ERROR', { reason: 'LDAP_CPF_REQUIRED' });
+    }
+
+    const escapedCpf = this.escapeFilterValue(normalizedCpf);
+    const filter = `(|(uid=${escapedCpf})(cpf=${escapedCpf})(brCpf=${escapedCpf})(employeeNumber=${escapedCpf})(FABcpf=${escapedCpf})(fabcpf=${escapedCpf}))`;
+    return this.searchByFilter(filter, normalizedCpf);
+  }
+
+  private async searchByFilter(
+    filter: string,
+    fallbackUid: string,
+  ): Promise<FabLdapProfile | null> {
     const client = this.createClient();
 
     try {
       await this.bindForLookup(client);
-      const filter = `(mail=${this.escapeFilterValue(normalizedEmail)})`;
       const { searchEntries } = await client.search(this.getBaseDn(), {
         scope: 'sub',
         filter,
@@ -95,7 +113,7 @@ export class FabLdapService {
         ],
       });
       if (!searchEntries.length) return null;
-      return this.mapEntry(searchEntries[0] as LdapEntry, normalizedEmail);
+      return this.mapEntry(searchEntries[0] as LdapEntry, fallbackUid);
     } catch (error) {
       this.handleLdapError(error, { invalidCredentials: false });
     } finally {

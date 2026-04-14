@@ -3072,6 +3072,162 @@ export function useAddCpcaCaseComment() {
   });
 }
 
+/** CPCA commission (presidente + membros + homologações) */
+export function useCpcaCommissionOverview(
+  localityId: string | undefined,
+  enabled = true,
+) {
+  const normalizedLocalityId = String(localityId ?? "").trim();
+  return useQuery({
+    queryKey: qk.cpcaCommissionOverview(normalizedLocalityId),
+    queryFn: async () =>
+      (
+        await api.get("/cpca-commission/overview", {
+          params: normalizedLocalityId
+            ? { localityId: normalizedLocalityId }
+            : undefined,
+        })
+      ).data,
+    enabled,
+    staleTime: 10_000,
+  });
+}
+
+export function useAssignCpcaPresident() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      identifier: string;
+      localityId: string;
+      isSubstitution?: boolean;
+      proceedWithExistingPresident?: boolean;
+      designationBulletin?: string;
+    }) => (await api.post("/cpca-commission/presidents", payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cpcaCommission"] });
+      qc.invalidateQueries({ queryKey: qk.cpcaPresidentRequestsPendingCount() });
+      qc.invalidateQueries({ queryKey: ["cpcaCommission", "presidentRequests"] });
+      qc.invalidateQueries({ queryKey: ["menuUpdates"] });
+      qc.invalidateQueries({ queryKey: qk.me });
+    },
+  });
+}
+
+export function useAddCpcaCommissionMember() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: { identifier: string; localityId?: string }) =>
+      (await api.post("/cpca-commission/members", payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cpcaCommission"] });
+      qc.invalidateQueries({ queryKey: qk.me });
+    },
+  });
+}
+
+export function useRemoveCpcaCommissionMember() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (memberId: string) =>
+      (await api.delete(`/cpca-commission/members/${memberId}`)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cpcaCommission"] });
+      qc.invalidateQueries({ queryKey: qk.me });
+    },
+  });
+}
+
+export function useCpcaPresidentRequests(
+  filters: Record<string, any>,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: qk.cpcaPresidentRequests(filters),
+    queryFn: async () =>
+      (await api.get("/cpca-commission/president-requests", { params: filters }))
+        .data,
+    enabled,
+    staleTime: 10_000,
+  });
+}
+
+export function useCpcaPresidentRequestsPendingCount(enabled = true) {
+  return useQuery({
+    queryKey: qk.cpcaPresidentRequestsPendingCount(),
+    queryFn: async () => {
+      const response = await api.get(
+        "/cpca-commission/president-requests/pending-count",
+      );
+      return response.data as { pendingCount: number };
+    },
+    enabled,
+    staleTime: 10_000,
+  });
+}
+
+export function useApproveCpcaPresidentRequest() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      proceedWithExistingPresident?: boolean;
+    }) =>
+      (
+        await api.post(
+          `/cpca-commission/president-requests/${args.id}/approve`,
+          { proceedWithExistingPresident: args.proceedWithExistingPresident },
+        )
+      ).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cpcaCommission"] });
+      qc.invalidateQueries({ queryKey: qk.cpcaPresidentRequestsPendingCount() });
+      qc.invalidateQueries({ queryKey: ["cpcaCommission", "presidentRequests"] });
+      qc.invalidateQueries({ queryKey: ["menuUpdates"] });
+      qc.invalidateQueries({ queryKey: qk.me });
+    },
+  });
+}
+
+export function useRejectCpcaPresidentRequest() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; notes?: string }) =>
+      (
+        await api.post(
+          `/cpca-commission/president-requests/${args.id}/reject`,
+          { notes: args.notes },
+        )
+      ).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cpcaCommission"] });
+      qc.invalidateQueries({ queryKey: qk.cpcaPresidentRequestsPendingCount() });
+      qc.invalidateQueries({ queryKey: ["cpcaCommission", "presidentRequests"] });
+      qc.invalidateQueries({ queryKey: ["menuUpdates"] });
+    },
+  });
+}
+
+export function useCpcaSelfRegistrationLocalities(enabled = true) {
+  return useQuery({
+    queryKey: qk.cpcaSelfRegistrationLocalities(),
+    queryFn: async () =>
+      (await api.get("/cpca-commission/self-registration/localities")).data,
+    enabled,
+    staleTime: 60_000,
+  });
+}
+
+export function useCreateCpcaPresidentSelfRegistration() {
+  return useMutation({
+    mutationFn: async (payload: {
+      identifier: string;
+      localityId: string;
+      isSubstitution: boolean;
+      bulletinNumber: string;
+    }) => (await api.post("/cpca-commission/self-registration", payload)).data,
+  });
+}
+
 /** SMIF complaints (full workflow parity with CPCA) */
 export function useSmifComplaintCases(
   filters: Record<string, any>,
@@ -3284,6 +3440,25 @@ export function useUpdateLocality() {
       (await api.put(`/localities/${args.id}`, args.payload)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.localities });
+      qc.invalidateQueries({ queryKey: ["dashboardRecruits"] });
+      qc.invalidateQueries({ queryKey: ["dashboardNational"] });
+      qc.invalidateQueries({ queryKey: ["dashboardExecutive"] });
+    },
+  });
+}
+
+export function useUpdateLocalitiesHasCpcaBatch() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: { ids: string[]; hasCpca: boolean }) =>
+      (await api.put("/localities/batch/has-cpca", payload)).data as {
+        updatedCount: number;
+        hasCpca: boolean;
+        ids: string[];
+      },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.localities });
+      qc.invalidateQueries({ queryKey: qk.omsCatalog });
       qc.invalidateQueries({ queryKey: ["dashboardRecruits"] });
       qc.invalidateQueries({ queryKey: ["dashboardNational"] });
       qc.invalidateQueries({ queryKey: ["dashboardExecutive"] });

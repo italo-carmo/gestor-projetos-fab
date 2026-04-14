@@ -32,6 +32,7 @@ import { SetLocalityCommanderFromLdapDto } from './dto/set-locality-commander-fr
 import { UpdateLocalityRecruitDesignationsDto } from './dto/update-locality-recruit-designations.dto';
 import { UpdateCipavdLocalityDto } from './dto/update-cipavd-locality.dto';
 import { ReplaceLocalityRecruitsMembersDto } from './dto/replace-locality-recruits-members.dto';
+import { UpdateLocalitiesHasCpcaBatchDto } from './dto/update-localities-has-cpca-batch.dto';
 import { UpdateLocalityRecruitsDto } from './dto/update-locality-recruits.dto';
 import { UpdateLocalityDto } from './dto/update-locality.dto';
 
@@ -71,7 +72,7 @@ export class LocalitiesController {
   async listOmsCatalog() {
     const items = await this.prisma.locality.findMany({
       where: { catalogType: LocalityCatalogType.SMIF },
-      select: { id: true, code: true, name: true, uf: true },
+      select: { id: true, code: true, name: true, uf: true, hasCpca: true },
       orderBy: { name: 'asc' },
     });
     return { items };
@@ -162,6 +163,7 @@ export class LocalitiesController {
         name: sanitizeText(dto.name),
         uf: dto.uf ? sanitizeText(dto.uf).toUpperCase().slice(0, 2) : null,
         catalogType: LocalityCatalogType.SMIF,
+        hasCpca: dto.hasCpca ?? false,
         commandName: dto.commandName ? sanitizeText(dto.commandName) : null,
         commanderName: dto.commanderName
           ? sanitizeText(dto.commanderName)
@@ -182,6 +184,56 @@ export class LocalitiesController {
       await this.syncLocalityRecruitCount(created.id);
     }
     return created;
+  }
+
+  @Put('batch/has-cpca')
+  @RequirePermission('localities', 'update')
+  async updateHasCpcaBatch(
+    @Body() dto: UpdateLocalitiesHasCpcaBatchDto,
+    @CurrentUser() user: RbacUser,
+  ) {
+    const ids = Array.from(
+      new Set(
+        (dto.ids ?? [])
+          .map((value) => String(value ?? '').trim())
+          .filter(Boolean),
+      ),
+    );
+    if (ids.length === 0) {
+      throwError('VALIDATION_ERROR', {
+        field: 'ids',
+        reason: 'required',
+      });
+    }
+
+    const localities = await this.prisma.locality.findMany({
+      where: {
+        id: { in: ids },
+        catalogType: LocalityCatalogType.SMIF,
+      },
+      select: { id: true },
+    });
+    if (localities.length !== ids.length) {
+      throwError('VALIDATION_ERROR', {
+        field: 'ids',
+        reason: 'LOCALITY_INVALID_ID',
+      });
+    }
+
+    for (const localityId of ids) {
+      this.assertLocalityAccess(localityId, user);
+    }
+
+    const result = await this.prisma.locality.updateMany({
+      where: { id: { in: ids } },
+      data: { hasCpca: dto.hasCpca },
+    });
+
+    return {
+      updatedCount: result.count,
+      hasCpca: dto.hasCpca,
+      ids,
+    };
   }
 
   @Put(':id')
@@ -248,6 +300,8 @@ export class LocalitiesController {
           : dto.notes === null
             ? null
             : undefined,
+        hasCpca:
+          dto.hasCpca !== undefined ? Boolean(dto.hasCpca) : undefined,
       },
     });
     if (

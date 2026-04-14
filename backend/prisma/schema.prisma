@@ -71,6 +71,12 @@ model User {
   cpcaCasesUpdated CpcComplaintCase[] @relation("CpcComplaintCaseUpdatedBy")
   cpcaCaseComments CpcComplaintComment[] @relation("CpcComplaintCommentAuthor")
   cpcaCaseStatusChanges CpcComplaintStatusHistory[] @relation("CpcComplaintStatusChangedBy")
+  cpcaCommissionPresidentAssignments CpcaCommissionPresident[] @relation("CpcaCommissionPresidentUser")
+  cpcaCommissionPresidentAssignmentsMade CpcaCommissionPresident[] @relation("CpcaCommissionPresidentAssignedBy")
+  cpcaCommissionMemberships CpcaCommissionMember[] @relation("CpcaCommissionMemberUser")
+  cpcaCommissionMembershipsAdded CpcaCommissionMember[] @relation("CpcaCommissionMemberAddedBy")
+  cpcaPresidentRequests CpcaPresidentSelfRegistration[] @relation("CpcaPresidentSelfRegistrationApplicant")
+  cpcaPresidentRequestDecisions CpcaPresidentSelfRegistration[] @relation("CpcaPresidentSelfRegistrationDecidedBy")
   libraryPhotosCreated LibraryPhoto[] @relation("LibraryPhotoCreator")
   libraryDocumentsCreated LibraryDocument[] @relation("LibraryDocumentCreator")
   bestPracticesCreated BestPracticePost[] @relation("BestPracticeCreator")
@@ -162,6 +168,7 @@ model Locality {
   code                       String          @unique
   name                       String
   uf                         String?         // Sigla do estado (ex: SP, RJ, DF)
+  hasCpca                    Boolean         @default(false)
   catalogType                LocalityCatalogType @default(SMIF)
   commandName                String?
   commanderName              String?
@@ -193,6 +200,9 @@ model Locality {
   bestPracticePosts          BestPracticePost[]
   socialCommunicationHighlights SocialCommunicationHighlight[]
   smifComplaints             SmifComplaint[]
+  cpcaCommissionPresident    CpcaCommissionPresident?
+  cpcaCommissionMembers      CpcaCommissionMember[]
+  cpcaPresidentRequests      CpcaPresidentSelfRegistration[]
 
   @@index([catalogType])
 }
@@ -1246,6 +1256,71 @@ model CpcComplaintStatusHistory {
   @@index([complaintCaseId, changedAt])
 }
 
+model CpcaCommissionPresident {
+  id                    String   @id @default(cuid())
+  localityId            String   @unique
+  userId                String
+  assignedByUserId      String?
+  designationBulletin   String?
+  isSubstitution        Boolean  @default(false)
+  assignedAt            DateTime @default(now())
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  locality              Locality @relation(fields: [localityId], references: [id], onDelete: Cascade)
+  user                  User     @relation("CpcaCommissionPresidentUser", fields: [userId], references: [id], onDelete: Restrict)
+  assignedByUser        User?    @relation("CpcaCommissionPresidentAssignedBy", fields: [assignedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([assignedByUserId])
+  @@index([assignedAt])
+}
+
+model CpcaCommissionMember {
+  id               String   @id @default(cuid())
+  localityId       String
+  userId           String
+  addedByUserId    String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  locality         Locality @relation(fields: [localityId], references: [id], onDelete: Cascade)
+  user             User     @relation("CpcaCommissionMemberUser", fields: [userId], references: [id], onDelete: Restrict)
+  addedByUser      User?    @relation("CpcaCommissionMemberAddedBy", fields: [addedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([localityId, userId])
+  @@index([localityId])
+  @@index([userId])
+  @@index([addedByUserId])
+}
+
+model CpcaPresidentSelfRegistration {
+  id                       String                    @id @default(cuid())
+  localityId               String
+  applicantUserId          String
+  applicantIdentifier      String
+  applicantUid             String
+  applicantEmail           String?
+  applicantName            String
+  requestedAsSubstitution  Boolean                   @default(false)
+  bulletinNumber           String
+  status                   CpcaPresidentRequestStatus @default(PENDING)
+  decidedByUserId          String?
+  decidedAt                DateTime?
+  decisionNotes            String?
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
+
+  locality                 Locality @relation(fields: [localityId], references: [id], onDelete: Cascade)
+  applicantUser            User     @relation("CpcaPresidentSelfRegistrationApplicant", fields: [applicantUserId], references: [id], onDelete: Restrict)
+  decidedByUser            User?    @relation("CpcaPresidentSelfRegistrationDecidedBy", fields: [decidedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([localityId, status])
+  @@index([applicantUserId])
+  @@index([decidedByUserId])
+}
+
 model AuditLog {
   id        String   @id @default(cuid())
   userId    String?
@@ -1765,6 +1840,12 @@ enum CpcGender {
   MASCULINO
   FEMININO
   NAO_INFORMADO
+}
+
+enum CpcaPresidentRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 enum PermissionScope {

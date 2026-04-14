@@ -135,6 +135,14 @@ export const qk = {
   cpcaCase: (id: string) => ["cpcaCase", id] as const,
   cpcaCaseStats: (filters: Record<string, any>) =>
     ["cpcaCaseStats", filters] as const,
+  cpcaCommissionOverview: (localityId: string) =>
+    ["cpcaCommission", "overview", localityId] as const,
+  cpcaPresidentRequests: (filters: Record<string, any>) =>
+    ["cpcaCommission", "presidentRequests", filters] as const,
+  cpcaPresidentRequestsPendingCount: () =>
+    ["cpcaCommission", "presidentRequests", "pendingCount"] as const,
+  cpcaSelfRegistrationLocalities: () =>
+    ["cpcaCommission", "selfRegistration", "localities"] as const,
   smifComplaints: (filters: Record<string, any>) =>
     ["smifComplaints", filters] as const,
   smifComplaintCase: (id: string) => ["smifComplaintCase", id] as const,

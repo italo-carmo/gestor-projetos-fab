@@ -1,4 +1,18 @@
-import { Box, Button, Card, CardContent, Divider, Stack, TextField, Typography } from '@mui/material';
+import {
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  MenuItem,
+  Stack,
+  TextField,
+  Typography,
+} from '@mui/material';
 import LockRoundedIcon from '@mui/icons-material/LockRounded';
 import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded';
 import { useState } from 'react';
@@ -7,7 +21,12 @@ import { useToast } from '../app/toast';
 import { parseApiError } from '../app/apiErrors';
 import { resolveHomePath } from '../app/roleAccess';
 import { ACTIVE_ROLE_STORAGE_KEY, api } from '../api/client';
-import { useLogin, useVerifyTwoFactor } from '../api/hooks';
+import {
+  useCreateCpcaPresidentSelfRegistration,
+  useCpcaSelfRegistrationLocalities,
+  useLogin,
+  useVerifyTwoFactor,
+} from '../api/hooks';
 
 type TwoFactorState = {
   twoFactorToken: string;
@@ -19,8 +38,15 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [twoFactorState, setTwoFactorState] = useState<TwoFactorState | null>(null);
   const [totpCode, setTotpCode] = useState('');
+  const [cpcaSelfRegistrationOpen, setCpcaSelfRegistrationOpen] = useState(false);
+  const [cpcaIdentifier, setCpcaIdentifier] = useState('');
+  const [cpcaLocalityId, setCpcaLocalityId] = useState('');
+  const [cpcaIsSubstitution, setCpcaIsSubstitution] = useState(false);
+  const [cpcaBulletinNumber, setCpcaBulletinNumber] = useState('');
   const loginMutation = useLogin();
   const verifyMutation = useVerifyTwoFactor();
+  const cpcaSelfRegistrationLocalitiesQuery = useCpcaSelfRegistrationLocalities(cpcaSelfRegistrationOpen);
+  const cpcaSelfRegistrationMutation = useCreateCpcaPresidentSelfRegistration();
   const navigate = useNavigate();
   const toast = useToast();
 
@@ -84,6 +110,46 @@ export function LoginPage() {
       const payload = parseApiError(error);
       toast.push({
         message: payload.message ?? 'Código inválido',
+        severity: 'error',
+      });
+    }
+  };
+
+  const resetCpcaSelfRegistrationForm = () => {
+    setCpcaIdentifier('');
+    setCpcaLocalityId('');
+    setCpcaIsSubstitution(false);
+    setCpcaBulletinNumber('');
+  };
+
+  const handleSubmitCpcaSelfRegistration = async () => {
+    const identifier = cpcaIdentifier.trim();
+    const localityId = cpcaLocalityId.trim();
+    const bulletinNumber = cpcaBulletinNumber.trim();
+    if (!identifier || !localityId || !bulletinNumber) {
+      toast.push({
+        message: 'Preencha e-mail/CPF, OM e boletim para enviar a solicitação.',
+        severity: 'warning',
+      });
+      return;
+    }
+    try {
+      await cpcaSelfRegistrationMutation.mutateAsync({
+        identifier,
+        localityId,
+        isSubstitution: cpcaIsSubstitution,
+        bulletinNumber,
+      });
+      toast.push({
+        message: 'Solicitação enviada para homologação de TI/COMGEP.',
+        severity: 'success',
+      });
+      setCpcaSelfRegistrationOpen(false);
+      resetCpcaSelfRegistrationForm();
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({
+        message: payload.message ?? 'Erro ao enviar solicitação de presidente CPCA.',
         severity: 'error',
       });
     }
@@ -313,10 +379,96 @@ export function LoginPage() {
               <Button variant="contained" type="submit" disabled={loginMutation.isPending} sx={{ mt: 0.6 }}>
                 {loginMutation.isPending ? 'Entrando...' : 'Entrar'}
               </Button>
+              <Button
+                variant="text"
+                onClick={() => setCpcaSelfRegistrationOpen(true)}
+                sx={{ mt: 0.4 }}
+              >
+                Cadastro de presidente CPCA
+              </Button>
             </Box>
           </CardContent>
         </Card>
       </Box>
+
+      <Dialog
+        open={cpcaSelfRegistrationOpen}
+        onClose={() => {
+          if (cpcaSelfRegistrationMutation.isPending) return;
+          setCpcaSelfRegistrationOpen(false);
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Solicitar cadastro como presidente CPCA</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.4 }}>
+            Este fluxo é para o militar que deseja se cadastrar como presidente da comissão CPCA da sua OM.
+            A solicitação ficará pendente até homologação por usuário TI ou COMGEP.
+          </Typography>
+          <Stack spacing={1.2}>
+            <TextField
+              size="small"
+              label="E-mail ou CPF"
+              value={cpcaIdentifier}
+              onChange={(event) => setCpcaIdentifier(event.target.value)}
+              fullWidth
+            />
+            <TextField
+              select
+              size="small"
+              label="OM"
+              value={cpcaLocalityId}
+              onChange={(event) => setCpcaLocalityId(event.target.value)}
+              fullWidth
+              disabled={cpcaSelfRegistrationLocalitiesQuery.isLoading}
+            >
+              {(cpcaSelfRegistrationLocalitiesQuery.data?.items ?? []).map(
+                (item: { id: string; code: string; name: string }) => (
+                  <MenuItem key={item.id} value={item.id}>
+                    {item.code} - {item.name}
+                  </MenuItem>
+                ),
+              )}
+            </TextField>
+            <TextField
+              select
+              size="small"
+              label="É substituição do presidente anterior?"
+              value={cpcaIsSubstitution ? 'SIM' : 'NAO'}
+              onChange={(event) => setCpcaIsSubstitution(event.target.value === 'SIM')}
+            >
+              <MenuItem value="SIM">Sim</MenuItem>
+              <MenuItem value="NAO">Não</MenuItem>
+            </TextField>
+            <TextField
+              size="small"
+              label="Número do boletim de designação"
+              value={cpcaBulletinNumber}
+              onChange={(event) => setCpcaBulletinNumber(event.target.value)}
+              fullWidth
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              if (cpcaSelfRegistrationMutation.isPending) return;
+              setCpcaSelfRegistrationOpen(false);
+            }}
+            color="inherit"
+          >
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleSubmitCpcaSelfRegistration}
+            disabled={cpcaSelfRegistrationMutation.isPending}
+          >
+            {cpcaSelfRegistrationMutation.isPending ? 'Enviando...' : 'Enviar para homologação'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

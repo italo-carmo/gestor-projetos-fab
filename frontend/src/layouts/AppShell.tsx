@@ -308,6 +308,18 @@ const navSections: NavSection[] = [
         icon: <PolicyRoundedIcon fontSize="small" />,
         menuKey: "cpca_cases",
       },
+      {
+        label: "Comissão CPCA",
+        to: "/cpca-commission",
+        icon: <GroupsIcon fontSize="small" />,
+        menuKey: "cpca_cases",
+      },
+      {
+        label: "Homologações CPCA",
+        to: "/cpca-president-approvals",
+        icon: <ShieldRoundedIcon fontSize="small" />,
+        menuKey: "cpca_president_approvals",
+      },
     ],
   },
   {
@@ -504,6 +516,15 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
     if (item.to === "/cpca-cases") {
       return can(me, "cpca_cases", "view");
+    }
+    if (item.to === "/cpca-commission") {
+      return can(me, "cpca_cases", "view");
+    }
+    if (item.to === "/cpca-president-approvals") {
+      return (
+        can(me, "cpca_cases", "view") &&
+        hasAnyRole(me, [ROLE_TI, ROLE_COMGEP])
+      );
     }
     if (item.to === "/cpca-stats") {
       return can(me, "cpca_cases", "view");

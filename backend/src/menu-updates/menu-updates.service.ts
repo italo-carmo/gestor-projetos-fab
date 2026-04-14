@@ -2,6 +2,11 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { throwError } from '../common/http-error';
 import type { RbacUser } from '../rbac/rbac.types';
+import {
+  normalizeRoleName,
+  ROLE_COMANDANTE_COMGEP,
+  ROLE_TI,
+} from '../rbac/role-access';
 import { Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 
@@ -23,6 +28,7 @@ const MENU_UPDATE_RESOURCES: Record<string, readonly string[]> = {
   ],
   library: ['library'],
   cpca_cases: ['cpca_cases'],
+  cpca_president_approvals: [],
   bi: ['bi', 'bi_survey'],
   admin_rbac: ['admin_rbac', 'roles', 'users'],
   admin_catalog: [
@@ -36,6 +42,10 @@ const MENU_UPDATE_RESOURCES: Record<string, readonly string[]> = {
 };
 
 const IGNORED_AUDIT_ACTIONS = ['view', 'list', 'read', 'query', 'search'];
+const CPCA_APPROVAL_ROLE_NAMES = new Set([
+  normalizeRoleName(ROLE_TI),
+  normalizeRoleName(ROLE_COMANDANTE_COMGEP),
+]);
 
 @Injectable()
 export class MenuUpdatesService {
@@ -57,7 +67,10 @@ export class MenuUpdatesService {
       ),
     );
 
-    const [aggregateRows, seenRows] = await Promise.all([
+    const shouldTrackCpcaApprovals = menuKeys.includes(
+      'cpca_president_approvals',
+    );
+    const [aggregateRows, seenRows, pendingCpcaApprovals] = await Promise.all([
       menuResourcePairs.length
         ? this.prisma.$queryRaw<
             Array<{
@@ -210,6 +223,11 @@ export class MenuUpdatesService {
             AND "menuKey" IN (${Prisma.join(menuKeys)})
         `,
       ),
+      shouldTrackCpcaApprovals && this.isCpcaApprovalsManager(user)
+        ? this.prisma.cpcaPresidentSelfRegistration.count({
+            where: { status: 'PENDING' },
+          })
+        : Promise.resolve(0),
     ]);
 
     const aggregatesByMenuKey = new Map<
@@ -229,8 +247,13 @@ export class MenuUpdatesService {
     }
 
     const items = menuKeys.map((menuKey) => {
+      const cpcaApprovalUnreadCount =
+        menuKey === 'cpca_president_approvals' ? pendingCpcaApprovals : null;
       const aggregate = aggregatesByMenuKey.get(menuKey);
-      const unreadCount = aggregate?.unreadCount ?? 0;
+      const unreadCount =
+        cpcaApprovalUnreadCount !== null
+          ? cpcaApprovalUnreadCount
+          : (aggregate?.unreadCount ?? 0);
       const lastEventAt = aggregate?.lastEventAt ?? null;
       const seenAt = seenAtByMenuKey.get(menuKey) ?? null;
       const hasUnread = unreadCount > 0;
@@ -354,5 +377,19 @@ export class MenuUpdatesService {
       throwError('RBAC_FORBIDDEN');
     }
     return userId;
+  }
+
+  private isCpcaApprovalsManager(user?: RbacUser) {
+    const roleNames = new Set(
+      [...(user?.roles ?? []), ...(user?.allRoles ?? [])].map((role) =>
+        normalizeRoleName(role.name),
+      ),
+    );
+    for (const roleName of CPCA_APPROVAL_ROLE_NAMES) {
+      if (roleNames.has(roleName)) {
+        return true;
+      }
+    }
+    return false;
   }
 }

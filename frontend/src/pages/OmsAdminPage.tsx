@@ -3,6 +3,7 @@ import {
   Button,
   Card,
   CardContent,
+  Checkbox,
   Chip,
   Drawer,
   MenuItem,
@@ -15,12 +16,13 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   useCreateLocality,
   useDeleteLocality,
   useLocalities,
   useMe,
+  useUpdateLocalitiesHasCpcaBatch,
   useUpdateLocality,
   useUsers,
 } from '../api/hooks';
@@ -36,6 +38,8 @@ type LocalityItem = {
   id: string;
   code: string;
   name: string;
+  uf?: string | null;
+  hasCpca?: boolean;
   commandName?: string | null;
   commanderName?: string | null;
   notes?: string | null;
@@ -58,6 +62,7 @@ type OmsForm = {
   code: string;
   name: string;
   uf: string;
+  hasCpca: boolean;
   commandName: string;
   commanderName: string;
   notes: string;
@@ -69,6 +74,7 @@ const DEFAULT_FORM: OmsForm = {
   code: '',
   name: '',
   uf: '',
+  hasCpca: false,
   commandName: '',
   commanderName: '',
   notes: '',
@@ -87,6 +93,7 @@ export function OmsAdminPage() {
   const usersQuery = useUsers(Boolean(me?.id));
   const createLocality = useCreateLocality();
   const updateLocality = useUpdateLocality();
+  const updateLocalitiesHasCpcaBatch = useUpdateLocalitiesHasCpcaBatch();
   const deleteLocality = useDeleteLocality();
 
   const [search, setSearch] = useState('');
@@ -95,6 +102,8 @@ export function OmsAdminPage() {
   const [editing, setEditing] = useState<LocalityItem | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [form, setForm] = useState<OmsForm>(DEFAULT_FORM);
+  const [selectedLocalityIds, setSelectedLocalityIds] = useState<string[]>([]);
+  const [batchHasCpcaValue, setBatchHasCpcaValue] = useState<'SIM' | 'NAO' | ''>('');
 
   const localities = useMemo(
     () =>
@@ -124,21 +133,46 @@ export function OmsAdminPage() {
   const filteredLocalities = useMemo(() => {
     const term = search.trim().toLowerCase();
     return localities.filter((item) => {
-      const hasCoverage = (cpcaByLocalityId.get(item.id)?.length ?? 0) > 0;
-      if (cpcaCoverageFilter === 'WITH_CPCA' && !hasCoverage) return false;
-      if (cpcaCoverageFilter === 'WITHOUT_CPCA' && hasCoverage) return false;
+      const hasCpca = Boolean(item.hasCpca);
+      if (cpcaCoverageFilter === 'WITH_CPCA' && !hasCpca) return false;
+      if (cpcaCoverageFilter === 'WITHOUT_CPCA' && hasCpca) return false;
       if (!term) return true;
       const code = String(item.code ?? '').toLowerCase();
       const name = String(item.name ?? '').toLowerCase();
       return code.includes(term) || name.includes(term);
     });
-  }, [localities, search, cpcaCoverageFilter, cpcaByLocalityId]);
+  }, [localities, search, cpcaCoverageFilter]);
 
   const coverage = useMemo(() => {
-    const withCpca = localities.filter((locality) => (cpcaByLocalityId.get(locality.id)?.length ?? 0) > 0);
-    const withoutCpca = localities.filter((locality) => (cpcaByLocalityId.get(locality.id)?.length ?? 0) === 0);
+    const withCpca = localities.filter((locality) => Boolean(locality.hasCpca));
+    const withoutCpca = localities.filter((locality) => !locality.hasCpca);
     return { total: localities.length, withCpca, withoutCpca };
-  }, [cpcaByLocalityId, localities]);
+  }, [localities]);
+
+  const filteredLocalityIds = useMemo(
+    () => filteredLocalities.map((item) => item.id),
+    [filteredLocalities],
+  );
+  const selectedIdSet = useMemo(
+    () => new Set(selectedLocalityIds),
+    [selectedLocalityIds],
+  );
+  const selectedVisibleCount = useMemo(
+    () => filteredLocalityIds.filter((id) => selectedIdSet.has(id)).length,
+    [filteredLocalityIds, selectedIdSet],
+  );
+  const allVisibleSelected =
+    filteredLocalityIds.length > 0 &&
+    selectedVisibleCount === filteredLocalityIds.length;
+  const someVisibleSelected =
+    selectedVisibleCount > 0 && !allVisibleSelected;
+
+  useEffect(() => {
+    const available = new Set(localities.map((item) => item.id));
+    setSelectedLocalityIds((prev) =>
+      prev.filter((id) => available.has(id)),
+    );
+  }, [localities]);
 
   const openCreate = () => {
     setEditing(null);
@@ -151,7 +185,8 @@ export function OmsAdminPage() {
     setForm({
       code: locality.code ?? '',
       name: locality.name ?? '',
-      uf: (locality as any).uf ?? '',
+      uf: locality.uf ?? '',
+      hasCpca: Boolean(locality.hasCpca),
       commandName: locality.commandName ?? '',
       commanderName: locality.commanderName ?? '',
       notes: locality.notes ?? '',
@@ -165,11 +200,73 @@ export function OmsAdminPage() {
     setForm(DEFAULT_FORM);
   };
 
+  const toggleSelectVisible = (checked: boolean) => {
+    if (checked) {
+      setSelectedLocalityIds((prev) =>
+        Array.from(new Set([...prev, ...filteredLocalityIds])),
+      );
+      return;
+    }
+    setSelectedLocalityIds((prev) =>
+      prev.filter((id) => !filteredLocalityIds.includes(id)),
+    );
+  };
+
+  const toggleSelectLocality = (id: string, checked: boolean) => {
+    setSelectedLocalityIds((prev) => {
+      if (checked) return Array.from(new Set([...prev, id]));
+      return prev.filter((itemId) => itemId !== id);
+    });
+  };
+
+  const applyHasCpcaBatch = async () => {
+    const ids = Array.from(
+      new Set(
+        selectedLocalityIds
+          .map((value) => String(value ?? '').trim())
+          .filter(Boolean),
+      ),
+    );
+    if (ids.length === 0) {
+      toast.push({
+        message: 'Selecione ao menos uma OM para aplicar em lote.',
+        severity: 'warning',
+      });
+      return;
+    }
+    if (!batchHasCpcaValue) {
+      toast.push({
+        message: 'Selecione o valor de "Possui CPCA" para aplicar em lote.',
+        severity: 'warning',
+      });
+      return;
+    }
+    const hasCpca = batchHasCpcaValue === 'SIM';
+    try {
+      const result = await updateLocalitiesHasCpcaBatch.mutateAsync({
+        ids,
+        hasCpca,
+      });
+      toast.push({
+        message: `${result.updatedCount} OMs atualizadas com sucesso.`,
+        severity: 'success',
+      });
+      setSelectedLocalityIds([]);
+      setBatchHasCpcaValue('');
+    } catch (error) {
+      toast.push({
+        message: parseApiError(error).message ?? 'Erro ao atualizar OMs em lote.',
+        severity: 'error',
+      });
+    }
+  };
+
   const handleSave = async () => {
     const payload = {
       code: form.code.trim().toUpperCase(),
       name: form.name.trim(),
       uf: form.uf.trim().toUpperCase() || null,
+      hasCpca: Boolean(form.hasCpca),
       commandName: form.commandName.trim() || null,
       commanderName: form.commanderName.trim() || null,
       notes: form.notes.trim() || null,
@@ -225,7 +322,7 @@ export function OmsAdminPage() {
             Cadastro de OMs
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            CRUD completo de OMs e cobertura do perfil CPCA por localidade.
+            CRUD completo de OMs com marcação de "Possui CPCA" e visão de militares CPCA por localidade.
           </Typography>
         </Box>
         <Button variant="contained" onClick={openCreate}>
@@ -280,20 +377,73 @@ export function OmsAdminPage() {
             <TextField
               select
               size="small"
-              label="Cobertura CPCA"
+              label="Filtro Possui CPCA"
               value={cpcaCoverageFilter}
               onChange={(event) => setCpcaCoverageFilter(event.target.value as CpcaCoverageFilter)}
               sx={{ minWidth: 220 }}
             >
               <MenuItem value="ALL">Todas</MenuItem>
-              <MenuItem value="WITH_CPCA">Com CPCA</MenuItem>
-              <MenuItem value="WITHOUT_CPCA">Sem CPCA</MenuItem>
+              <MenuItem value="WITH_CPCA">Possui CPCA = Sim</MenuItem>
+              <MenuItem value="WITHOUT_CPCA">Possui CPCA = Não</MenuItem>
             </TextField>
             <Button variant="text" onClick={() => setSearch('')}>
               Limpar
             </Button>
             <Button variant="text" onClick={() => setCpcaCoverageFilter('ALL')}>
               Limpar cobertura
+            </Button>
+          </Stack>
+        </CardContent>
+      </Card>
+
+      <Card sx={{ mb: 2 }}>
+        <CardContent>
+          <Stack
+            direction={{ xs: 'column', md: 'row' }}
+            spacing={1.2}
+            alignItems={{ xs: 'stretch', md: 'center' }}
+          >
+            <Typography variant="body2" color="text.secondary" sx={{ minWidth: 180 }}>
+              OMs selecionadas: <strong>{selectedLocalityIds.length}</strong>
+            </Typography>
+            <Button
+              variant="text"
+              onClick={() => toggleSelectVisible(true)}
+              disabled={filteredLocalityIds.length === 0}
+            >
+              Selecionar visíveis
+            </Button>
+            <Button
+              variant="text"
+              onClick={() => setSelectedLocalityIds([])}
+              disabled={selectedLocalityIds.length === 0}
+            >
+              Limpar seleção
+            </Button>
+            <TextField
+              select
+              size="small"
+              label="Possui CPCA (lote)"
+              value={batchHasCpcaValue}
+              onChange={(event) =>
+                setBatchHasCpcaValue(event.target.value as 'SIM' | 'NAO' | '')
+              }
+              sx={{ minWidth: 220 }}
+            >
+              <MenuItem value="">
+                <em>Selecione</em>
+              </MenuItem>
+              <MenuItem value="SIM">Sim</MenuItem>
+              <MenuItem value="NAO">Não</MenuItem>
+            </TextField>
+            <Button
+              variant="contained"
+              onClick={() => {
+                void applyHasCpcaBatch();
+              }}
+              disabled={updateLocalitiesHasCpcaBatch.isPending}
+            >
+              Aplicar em lote
             </Button>
           </Stack>
         </CardContent>
@@ -307,10 +457,19 @@ export function OmsAdminPage() {
             <Table size="small">
               <TableHead>
                 <TableRow sx={{ bgcolor: 'primary.main' }}>
+                  <TableCell padding="checkbox" sx={{ color: 'white' }}>
+                    <Checkbox
+                      size="small"
+                      checked={allVisibleSelected}
+                      indeterminate={someVisibleSelected}
+                      onChange={(_, checked) => toggleSelectVisible(checked)}
+                      sx={{ color: 'white', '&.Mui-checked': { color: 'white' } }}
+                    />
+                  </TableCell>
                   <TableCell sx={{ color: 'white', fontWeight: 700 }}>Código</TableCell>
                   <TableCell sx={{ color: 'white', fontWeight: 700 }}>Nome</TableCell>
                   <TableCell sx={{ color: 'white', fontWeight: 700, width: 80 }}>UF</TableCell>
-                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Cobertura CPCA</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Possui CPCA</TableCell>
                   <TableCell sx={{ color: 'white', fontWeight: 700 }}>Militares CPCA</TableCell>
                   <TableCell sx={{ color: 'white', fontWeight: 700 }} align="right">
                     Ações
@@ -320,9 +479,18 @@ export function OmsAdminPage() {
               <TableBody>
                 {filteredLocalities.map((locality) => {
                   const cpcaMembers = cpcaByLocalityId.get(locality.id) ?? [];
-                  const hasCoverage = cpcaMembers.length > 0;
+                  const hasCoverage = Boolean(locality.hasCpca);
                   return (
                     <TableRow key={locality.id} hover>
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          size="small"
+                          checked={selectedIdSet.has(locality.id)}
+                          onChange={(_, checked) =>
+                            toggleSelectLocality(locality.id, checked)
+                          }
+                        />
+                      </TableCell>
                       <TableCell>
                         <Typography variant="body2" fontWeight={700}>
                           {locality.code}
@@ -333,12 +501,12 @@ export function OmsAdminPage() {
                           {locality.name}
                         </Typography>
                       </TableCell>
-                      <TableCell>{(locality as any).uf ?? '—'}</TableCell>
+                      <TableCell>{locality.uf ?? '—'}</TableCell>
                       <TableCell>
                         <Chip
                           size="small"
-                          color={hasCoverage ? 'success' : 'warning'}
-                          label={hasCoverage ? 'Com CPCA' : 'Sem CPCA'}
+                          color={hasCoverage ? 'success' : 'default'}
+                          label={hasCoverage ? 'Sim' : 'Não'}
                         />
                       </TableCell>
                       <TableCell>
@@ -369,11 +537,11 @@ export function OmsAdminPage() {
       <Card sx={{ mt: 2 }}>
         <CardContent>
           <Typography variant="h6" gutterBottom>
-            OMs sem militar CPCA
+            OMs com "Possui CPCA = Não"
           </Typography>
           {coverage.withoutCpca.length === 0 ? (
             <Typography variant="body2" color="text.secondary">
-              Todas as OMs cadastradas possuem ao menos um militar com perfil CPCA.
+              Todas as OMs cadastradas estão marcadas com "Possui CPCA = Sim".
             </Typography>
           ) : (
             <Typography variant="body2" color="text.secondary">
@@ -419,6 +587,21 @@ export function OmsAdminPage() {
             {UF_OPTIONS.map((uf) => (
               <MenuItem key={uf} value={uf}>{uf}</MenuItem>
             ))}
+          </TextField>
+          <TextField
+            select
+            size="small"
+            label="Possui CPCA"
+            value={form.hasCpca ? 'SIM' : 'NAO'}
+            onChange={(event) =>
+              setForm((prev) => ({
+                ...prev,
+                hasCpca: event.target.value === 'SIM',
+              }))
+            }
+          >
+            <MenuItem value="SIM">Sim</MenuItem>
+            <MenuItem value="NAO">Não</MenuItem>
           </TextField>
           <TextField
             size="small"
