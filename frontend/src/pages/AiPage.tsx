@@ -27,7 +27,6 @@ import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
 import { useCallback, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Link as RouterLink } from "react-router-dom";
 import { api } from "../api/client";
 import { useToast } from "../app/toast";
 
@@ -172,15 +171,13 @@ function MdContent({ children, dark }: { children: string; dark?: boolean }) {
           a: ({ href, children, ...props }: any) => {
             const to = String(href ?? "").trim();
             if (!to) return <>{children}</>;
-            if (to.startsWith("/")) {
-              return (
-                <MuiLink component={RouterLink as any} to={to} {...props}>
-                  {children}
-                </MuiLink>
-              );
-            }
             return (
-              <MuiLink href={to} target="_blank" rel="noreferrer" {...props}>
+              <MuiLink
+                href={to}
+                target="_blank"
+                rel="noopener noreferrer"
+                {...props}
+              >
                 {children}
               </MuiLink>
             );
