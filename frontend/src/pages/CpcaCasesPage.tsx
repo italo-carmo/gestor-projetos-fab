@@ -76,10 +76,6 @@ const NOTIFIER_TYPE_OPTIONS = [
   { value: "TESTEMUNHA", label: "Testemunha" },
   { value: "TERCEIRO", label: "Terceiro" },
 ];
-const SAME_PERSON_OPTIONS = [
-  { value: "SIM", label: "Sim" },
-  { value: "NAO", label: "Não" },
-];
 
 const PROCEDURE_OPTIONS = [
   { value: "NOT_DEFINED", label: "Não definido" },
@@ -518,6 +514,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
   const rankOptions: string[] = (postosQuery.data?.items ?? []).map(
     (item: any) => String(item.name),
   );
+  const notifierIsVictim = form.notifierType === "VITIMA";
   const hasStep1Progress = Boolean(
     toNullable(form.incidentDate) ||
     toNullable(form.aggressorRank) ||
@@ -527,7 +524,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     toNullable(form.occurrenceLocation) ||
     toNullable(form.aggressorAgeRange) ||
     toNullable(form.victimAgeRange) ||
-    (!form.victimIsNotifier &&
+    (!notifierIsVictim &&
       (toNullable(form.notifierRank) ||
         toNullable(form.notifierAgeRange) ||
         form.notifierGender !== "NAO_INFORMADO")) ||
@@ -585,10 +582,12 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     const inferredComplaintType = inferMacroComplaintTypeFromDetailed(
       item.detailedViolenceType ?? "",
     );
+    const notifierType = item.notifierType ?? "VITIMA";
+    const nextNotifierIsVictim = notifierType === "VITIMA";
     setForm({
       localityId: item.localityId ?? "",
       complaintType: inferredComplaintType ?? item.complaintType ?? "MORAL",
-      notifierType: item.notifierType ?? "VITIMA",
+      notifierType,
       status: item.status ?? "RECEIVED",
       procedureType: item.procedureType ?? "NOT_DEFINED",
       incidentDate: item.incidentDate
@@ -600,10 +599,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
       victimRank: item.victimRank ?? "",
       victimGender: item.victimGender ?? "NAO_INFORMADO",
       victimAgeRange: item.victimAgeRange ?? "",
-      victimIsNotifier:
-        item.victimIsNotifier === undefined
-          ? true
-          : Boolean(item.victimIsNotifier),
+      victimIsNotifier: nextNotifierIsVictim,
       notifierRank: item.notifierRank ?? item.victimRank ?? "",
       notifierGender: item.notifierGender ?? item.victimGender ?? "NAO_INFORMADO",
       notifierAgeRange: item.notifierAgeRange ?? item.victimAgeRange ?? "",
@@ -779,7 +775,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
       });
       return;
     }
-    if (!form.victimIsNotifier && !form.notifierRank) {
+    if (!notifierIsVictim && !form.notifierRank) {
       toast.push({
         message:
           "Quando vítima e noticiante forem pessoas diferentes, informe o posto/graduação do noticiante.",
@@ -823,12 +819,12 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
       victimRank: form.victimRank,
       victimGender: form.victimGender,
       victimAgeRange: toNullable(form.victimAgeRange),
-      victimIsNotifier: Boolean(form.victimIsNotifier),
-      notifierRank: form.victimIsNotifier ? form.victimRank : form.notifierRank,
-      notifierGender: form.victimIsNotifier
+      victimIsNotifier: notifierIsVictim,
+      notifierRank: notifierIsVictim ? form.victimRank : form.notifierRank,
+      notifierGender: notifierIsVictim
         ? form.victimGender
         : form.notifierGender,
-      notifierAgeRange: form.victimIsNotifier
+      notifierAgeRange: notifierIsVictim
         ? toNullable(form.victimAgeRange)
         : toNullable(form.notifierAgeRange),
       detailedViolenceType: toNullable(form.detailedViolenceType),
@@ -963,6 +959,13 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
             gap: 1.2,
           }}
         >
+          <Box sx={{ gridColumn: "1 / -1" }}>
+            <Typography variant="subtitle2" fontWeight={700}>
+              Dados gerais da ocorrência
+            </Typography>
+            <Divider />
+          </Box>
+
           <TextField
             select
             size="small"
@@ -1011,39 +1014,27 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
             label="Noticiante"
             value={form.notifierType}
             onChange={(e) =>
-              setForm((prev) => ({ ...prev, notifierType: e.target.value }))
-            }
-          >
-            {NOTIFIER_TYPE_OPTIONS.map((item) => (
-              <MenuItem key={item.value} value={item.value}>
-                {item.label}
-              </MenuItem>
-            ))}
-          </TextField>
-
-          <TextField
-            select
-            size="small"
-            label="A vítima é a mesma pessoa do noticiante?"
-            value={form.victimIsNotifier ? "SIM" : "NAO"}
-            onChange={(e) =>
               setForm((prev) => {
-                const samePerson = e.target.value === "SIM";
+                const nextNotifierType = e.target.value;
+                const nextNotifierIsVictim = nextNotifierType === "VITIMA";
                 return {
                   ...prev,
-                  victimIsNotifier: samePerson,
-                  notifierRank: samePerson ? prev.victimRank : prev.notifierRank,
-                  notifierGender: samePerson
+                  notifierType: nextNotifierType,
+                  victimIsNotifier: nextNotifierIsVictim,
+                  notifierRank: nextNotifierIsVictim
+                    ? prev.victimRank
+                    : prev.notifierRank,
+                  notifierGender: nextNotifierIsVictim
                     ? prev.victimGender
                     : prev.notifierGender,
-                  notifierAgeRange: samePerson
+                  notifierAgeRange: nextNotifierIsVictim
                     ? prev.victimAgeRange
                     : prev.notifierAgeRange,
                 };
               })
             }
           >
-            {SAME_PERSON_OPTIONS.map((item) => (
+            {NOTIFIER_TYPE_OPTIONS.map((item) => (
               <MenuItem key={item.value} value={item.value}>
                 {item.label}
               </MenuItem>
@@ -1102,6 +1093,13 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
             ))}
           </TextField>
 
+          <Box sx={{ gridColumn: "1 / -1", mt: 0.5 }}>
+            <Typography variant="subtitle2" fontWeight={700}>
+              Dados do acusado
+            </Typography>
+            <Divider />
+          </Box>
+
           <TextField
             select
             size="small"
@@ -1154,6 +1152,13 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
             ))}
           </TextField>
 
+          <Box sx={{ gridColumn: "1 / -1", mt: 0.5 }}>
+            <Typography variant="subtitle2" fontWeight={700}>
+              Dados da vítima
+            </Typography>
+            <Divider />
+          </Box>
+
           <TextField
             select
             size="small"
@@ -1165,7 +1170,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                 return {
                   ...prev,
                   victimRank: nextVictimRank,
-                  notifierRank: prev.victimIsNotifier
+                  notifierRank: prev.notifierType === "VITIMA"
                     ? nextVictimRank
                     : prev.notifierRank,
                 };
@@ -1190,7 +1195,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                 return {
                   ...prev,
                   victimGender: nextVictimGender,
-                  notifierGender: prev.victimIsNotifier
+                  notifierGender: prev.notifierType === "VITIMA"
                     ? nextVictimGender
                     : prev.notifierGender,
                 };
@@ -1215,7 +1220,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                 return {
                   ...prev,
                   victimAgeRange: nextVictimAgeRange,
-                  notifierAgeRange: prev.victimIsNotifier
+                  notifierAgeRange: prev.notifierType === "VITIMA"
                     ? nextVictimAgeRange
                     : prev.notifierAgeRange,
                 };
@@ -1230,7 +1235,16 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
             ))}
           </TextField>
 
-          {!form.victimIsNotifier && (
+          {!notifierIsVictim && (
+            <Box sx={{ gridColumn: "1 / -1", mt: 0.5 }}>
+              <Typography variant="subtitle2" fontWeight={700}>
+                Dados do noticiante
+              </Typography>
+              <Divider />
+            </Box>
+          )}
+
+          {!notifierIsVictim && (
             <TextField
               select
               size="small"
@@ -1248,7 +1262,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
             </TextField>
           )}
 
-          {!form.victimIsNotifier && (
+          {!notifierIsVictim && (
             <TextField
               select
               size="small"
@@ -1266,7 +1280,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
             </TextField>
           )}
 
-          {!form.victimIsNotifier && (
+          {!notifierIsVictim && (
             <TextField
               select
               size="small"
@@ -1287,6 +1301,13 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
               ))}
             </TextField>
           )}
+
+          <Box sx={{ gridColumn: "1 / -1", mt: 0.5 }}>
+            <Typography variant="subtitle2" fontWeight={700}>
+              Dados complementares da ocorrência
+            </Typography>
+            <Divider />
+          </Box>
 
           <TextField
             select
@@ -1346,6 +1367,13 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
               </MenuItem>
             ))}
           </TextField>
+
+          <Box sx={{ gridColumn: "1 / -1", mt: 0.5 }}>
+            <Typography variant="subtitle2" fontWeight={700}>
+              Provas e evidências
+            </Typography>
+            <Divider />
+          </Box>
 
           <TextField
             size="small"
