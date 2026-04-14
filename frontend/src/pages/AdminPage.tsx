@@ -6,7 +6,6 @@ import {
   CardContent,
   Chip,
   Drawer,
-  Grid,
   IconButton,
   InputAdornment,
   MenuItem,
@@ -1763,10 +1762,21 @@ function AiSettingsTab() {
             <strong>system prompt</strong>, aplicado a todas as chamadas (análises e chatbot).
           </Alert>
 
-          <Grid container spacing={2}>
-            {ANALYSIS_PROMPTS_CONFIG.map((item, index) => (
-              <Grid key={item.type} size={{ xs: 12, md: 6 }}>
+          {ANALYSIS_PROMPTS_CONFIG.length === 0 ? (
+            <Alert severity="warning" variant="outlined">
+              Não foi possível carregar a configuração das 5 áreas de análise.
+            </Alert>
+          ) : (
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+                gap: 2,
+              }}
+            >
+              {ANALYSIS_PROMPTS_CONFIG.map((item, index) => (
                 <Card
+                  key={item.type}
                   variant="outlined"
                   sx={{
                     height: '100%',
@@ -1826,9 +1836,9 @@ function AiSettingsTab() {
                     />
                   </CardContent>
                 </Card>
-              </Grid>
-            ))}
-          </Grid>
+              ))}
+            </Box>
+          )}
 
           <Paper
             variant="outlined"
