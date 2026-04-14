@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { LitellmService, ChatMessage } from '../llm/litellm.service';
 import { SettingsService } from '../settings/settings.service';
 import { StrategicService } from '../strategic/strategic.service';
+import PDFDocument from 'pdfkit';
 
 export type AnalysisType =
   | 'executive'
@@ -67,20 +68,53 @@ export class AiService {
     return ANALYSIS_CATALOG;
   }
 
-  async *analyzeStream(
+  async analysisPdf(
     type: AnalysisType,
-  ): AsyncGenerator<string> {
-    yield this.sseEvent('progress', { percent: 5, stage: 'Coletando dados...' });
+    options?: {
+      narrative?: string;
+      model?: string;
+      generatedAt?: string;
+    },
+  ): Promise<Buffer> {
+    const safeType: AnalysisType = ANALYSIS_CATALOG.some(
+      (item) => item.type === type,
+    )
+      ? type
+      : 'executive';
+    const data = await this.gatherDataForType(safeType);
+    const narrative = options?.narrative?.trim() ?? '';
+    const model = options?.model?.trim() || 'modelo não informado';
+    const generatedAt = options?.generatedAt || new Date().toISOString();
+    return this.renderAnalysisPdf({
+      type: safeType,
+      data,
+      narrative,
+      model,
+      generatedAt,
+    });
+  }
+
+  async *analyzeStream(type: AnalysisType): AsyncGenerator<string> {
+    yield this.sseEvent('progress', {
+      percent: 5,
+      stage: 'Coletando dados...',
+    });
 
     const data = await this.gatherDataForType(type);
 
-    yield this.sseEvent('progress', { percent: 25, stage: 'Preparando contexto...' });
+    yield this.sseEvent('progress', {
+      percent: 25,
+      stage: 'Preparando contexto...',
+    });
 
     const systemPrompt = await this.settings.getSystemPrompt();
     const customPrompt = await this.settings.getAnalysisPrompt(type);
     const userPrompt = this.buildUserPrompt(type, data, customPrompt);
 
-    yield this.sseEvent('progress', { percent: 30, stage: 'Enviando ao modelo...' });
+    yield this.sseEvent('progress', {
+      percent: 30,
+      stage: 'Enviando ao modelo...',
+    });
 
     const messages: ChatMessage[] = [
       { role: 'system', content: systemPrompt },
@@ -98,7 +132,10 @@ export class AiService {
         if (chunk.type === 'token') {
           fullText += chunk.text;
           tokenCount++;
-          const progress = Math.min(95, 30 + Math.floor((tokenCount / 300) * 65));
+          const progress = Math.min(
+            95,
+            30 + Math.floor((tokenCount / 300) * 65),
+          );
           yield this.sseEvent('token', { text: chunk.text, percent: progress });
         } else if (chunk.type === 'done') {
           yield this.sseEvent('done', {
@@ -173,6 +210,565 @@ export class AiService {
     }
   }
 
+  private async renderAnalysisPdf(args: {
+    type: AnalysisType;
+    data: any;
+    narrative: string;
+    model: string;
+    generatedAt: string;
+  }): Promise<Buffer> {
+    const catalog = ANALYSIS_CATALOG.find((item) => item.type === args.type);
+    const title = catalog?.title ?? 'Análise IA';
+
+    return new Promise((resolve, reject) => {
+      const doc = new PDFDocument({
+        size: 'A4',
+        margin: 44,
+        bufferPages: true,
+      });
+      const chunks: Buffer[] = [];
+      doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      const BLUE = '#1A3C6E';
+      const BLUE_LIGHT = '#2E5A9E';
+      const RED = '#C62828';
+      const GREEN = '#2E7D32';
+      const ORANGE = '#E65100';
+      const DARK = '#1E1E1E';
+      const GRAY = '#6B7280';
+      const BG = '#F5F7FA';
+      const BORDER = '#D6DEE8';
+
+      const LEFT = 44;
+      const PAGE_WIDTH = doc.page.width - LEFT * 2;
+
+      const ensureSpace = (needed: number) => {
+        if (doc.y + needed > doc.page.height - 46) {
+          doc.addPage();
+        }
+      };
+
+      const sectionHeader = (num: string, text: string, color = BLUE) => {
+        ensureSpace(36);
+        doc.roundedRect(LEFT, doc.y, PAGE_WIDTH, 24, 4).fill(color);
+        doc
+          .font('Helvetica-Bold')
+          .fontSize(11)
+          .fillColor('#FFFFFF')
+          .text(`${num} ${text}`, LEFT + 10, doc.y + 7, {
+            width: PAGE_WIDTH - 20,
+          });
+        doc.y += 30;
+      };
+
+      const valueCard = (
+        x: number,
+        y: number,
+        width: number,
+        value: string,
+        label: string,
+        color: string,
+      ) => {
+        doc
+          .roundedRect(x, y, width, 56, 5)
+          .fill(BG)
+          .strokeColor(BORDER)
+          .lineWidth(0.5)
+          .stroke();
+        doc.roundedRect(x, y, 5, 56, 2).fill(color);
+        doc
+          .font('Helvetica-Bold')
+          .fontSize(18)
+          .fillColor(color)
+          .text(value, x + 10, y + 10, { width: width - 20, align: 'center' });
+        doc
+          .font('Helvetica')
+          .fontSize(7)
+          .fillColor(GRAY)
+          .text(label, x + 8, y + 34, { width: width - 16, align: 'center' });
+      };
+
+      const progressRow = (
+        label: string,
+        value: number,
+        color: string,
+        suffix = '%',
+      ) => {
+        ensureSpace(18);
+        const safe = Number.isFinite(value)
+          ? Math.max(0, Math.min(100, value))
+          : 0;
+        const y = doc.y;
+        const barX = LEFT + PAGE_WIDTH * 0.58;
+        const barW = PAGE_WIDTH * 0.3;
+        doc
+          .font('Helvetica')
+          .fontSize(8)
+          .fillColor(DARK)
+          .text(label, LEFT, y, { width: PAGE_WIDTH * 0.56 });
+        doc.roundedRect(barX, y + 1, barW, 8, 4).fill('#E5E7EB');
+        doc.roundedRect(barX, y + 1, (safe / 100) * barW, 8, 4).fill(color);
+        doc
+          .font('Helvetica-Bold')
+          .fontSize(8)
+          .fillColor(color)
+          .text(
+            `${safe.toFixed(1).replace('.', ',')}${suffix}`,
+            barX + barW + 6,
+            y,
+            {
+              width: 52,
+            },
+          );
+        doc.y += 16;
+      };
+
+      const rankingRow = (
+        index: number,
+        label: string,
+        count: number,
+        maxCount: number,
+        color: string,
+      ) => {
+        ensureSpace(15);
+        const y = doc.y;
+        const barX = LEFT + PAGE_WIDTH * 0.56;
+        const barW = PAGE_WIDTH * 0.3;
+        const fillW = maxCount > 0 ? Math.max(3, (count / maxCount) * barW) : 3;
+        doc
+          .font('Helvetica')
+          .fontSize(8)
+          .fillColor(DARK)
+          .text(`${index + 1}. ${label}`, LEFT, y, {
+            width: PAGE_WIDTH * 0.54,
+          });
+        doc.roundedRect(barX, y + 1, barW, 8, 4).fill('#E5E7EB');
+        doc.roundedRect(barX, y + 1, fillW, 8, 4).fill(color);
+        doc
+          .font('Helvetica-Bold')
+          .fontSize(8)
+          .fillColor(color)
+          .text(String(count), barX + barW + 8, y, {
+            width: 34,
+          });
+        doc.y += 14;
+      };
+
+      const drawNarrative = () => {
+        sectionHeader('01', 'SÍNTESE NARRATIVA DA IA');
+        const paragraphs = this.normalizeNarrativeForPdf(args.narrative);
+        doc
+          .font('Helvetica')
+          .fontSize(9)
+          .fillColor(GRAY)
+          .text(
+            'Texto gerado pela IA para apoio à tomada de decisão. Esta seção preserva a narrativa completa.',
+            LEFT,
+            doc.y,
+            { width: PAGE_WIDTH },
+          );
+        doc.moveDown(0.4);
+        for (const paragraph of paragraphs) {
+          ensureSpace(42);
+          doc
+            .font('Helvetica')
+            .fontSize(10)
+            .fillColor(DARK)
+            .text(paragraph, LEFT, doc.y, {
+              width: PAGE_WIDTH,
+              align: 'justify',
+            });
+          doc.moveDown(0.5);
+        }
+      };
+
+      const drawSituationalAndExecutiveCharts = (
+        dashboard: any,
+        states: any[],
+      ) => {
+        if (!dashboard) return;
+        sectionHeader('02', 'INDICADORES E GRÁFICOS OPERACIONAIS');
+        ensureSpace(70);
+        const cardW = (PAGE_WIDTH - 18) / 4;
+        const y = doc.y;
+        valueCard(
+          LEFT,
+          y,
+          cardW,
+          String(dashboard.activities?.totalActivities ?? 0),
+          'Atividades',
+          BLUE,
+        );
+        valueCard(
+          LEFT + (cardW + 6),
+          y,
+          cardW,
+          String(dashboard.missions?.totalMissions ?? 0),
+          'Missões',
+          GREEN,
+        );
+        valueCard(
+          LEFT + (cardW + 6) * 2,
+          y,
+          cardW,
+          String(dashboard.complaints?.totalCases ?? 0),
+          'Denúncias',
+          RED,
+        );
+        valueCard(
+          LEFT + (cardW + 6) * 3,
+          y,
+          cardW,
+          String(dashboard.complaints?.openCases ?? 0),
+          'Casos em aberto',
+          ORANGE,
+        );
+        doc.y = y + 66;
+
+        progressRow(
+          'Taxa de violência relatada (pesquisas)',
+          Number(dashboard.surveys?.violenceRatePercent ?? 0),
+          RED,
+        );
+        progressRow(
+          'Violência doméstica na vida',
+          Number(dashboard.domesticViolence?.lifetimeRatePercent ?? 0),
+          ORANGE,
+        );
+        progressRow(
+          'Recrutas que se sentem seguros para denunciar',
+          Number(dashboard.recruits?.safeToReportPercent ?? 0),
+          GREEN,
+        );
+        progressRow(
+          'Recrutas que conhecem o processo de denúncia',
+          Number(dashboard.recruits?.knowReportProcessPercent ?? 0),
+          BLUE_LIGHT,
+        );
+
+        const rankedStates = (states ?? [])
+          .map((s: any) => ({
+            label: s.uf ?? 'UF',
+            total:
+              Number(s.complaints ?? 0) +
+              Number(s.activities ?? 0) +
+              Number(s.missions ?? 0),
+          }))
+          .filter((s: any) => s.total > 0)
+          .sort((a: any, b: any) => b.total - a.total)
+          .slice(0, 8);
+
+        if (rankedStates.length > 0) {
+          ensureSpace(34);
+          doc.moveDown(0.3);
+          doc
+            .font('Helvetica-Bold')
+            .fontSize(9)
+            .fillColor(BLUE)
+            .text('Distribuição por UF (Top 8)', LEFT, doc.y);
+          doc.moveDown(0.3);
+          const max = rankedStates[0].total;
+          for (const [idx, item] of rankedStates.entries()) {
+            rankingRow(idx, item.label, item.total, max, BLUE);
+          }
+        }
+      };
+
+      const drawAggressorCharts = (profile: any) => {
+        if (!profile || Number(profile.totalCases ?? 0) <= 0) return;
+        sectionHeader(
+          '02',
+          'INDICADORES DO PERFIL DE ASSÉDIO E VIOLÊNCIA',
+          RED,
+        );
+        progressRow(
+          'Assédio moral',
+          Number(profile.byComplaintType?.moral?.percent ?? 0),
+          ORANGE,
+        );
+        progressRow(
+          'Assédio sexual',
+          Number(profile.byComplaintType?.sexual?.percent ?? 0),
+          RED,
+        );
+        progressRow(
+          'Casos com relação hierárquica superior-subordinado',
+          Number(profile.hierarchicalRelation?.percent ?? 0),
+          BLUE,
+        );
+
+        const aggressorRanks = (profile.aggressorProfile?.byRank ?? []).slice(
+          0,
+          6,
+        );
+        if (aggressorRanks.length > 0) {
+          ensureSpace(30);
+          doc.moveDown(0.3);
+          doc
+            .font('Helvetica-Bold')
+            .fontSize(9)
+            .fillColor(RED)
+            .text('Top postos/graduações do agressor', LEFT, doc.y);
+          doc.moveDown(0.3);
+          const max = aggressorRanks[0]?.count ?? 1;
+          for (const [idx, item] of aggressorRanks.entries()) {
+            rankingRow(
+              idx,
+              String(item.label ?? 'Não informado'),
+              Number(item.count ?? 0),
+              max,
+              RED,
+            );
+          }
+        }
+
+        const victimRanks = (profile.victimProfile?.byRank ?? []).slice(0, 6);
+        if (victimRanks.length > 0) {
+          ensureSpace(30);
+          doc.moveDown(0.3);
+          doc
+            .font('Helvetica-Bold')
+            .fontSize(9)
+            .fillColor(BLUE)
+            .text('Top postos/graduações da vítima', LEFT, doc.y);
+          doc.moveDown(0.3);
+          const max = victimRanks[0]?.count ?? 1;
+          for (const [idx, item] of victimRanks.entries()) {
+            rankingRow(
+              idx,
+              String(item.label ?? 'Não informado'),
+              Number(item.count ?? 0),
+              max,
+              BLUE,
+            );
+          }
+        }
+      };
+
+      const drawTextCharts = (textSummary: any) => {
+        sectionHeader('02', 'EVIDÊNCIAS TEXTUAIS E TENDÊNCIAS', BLUE_LIGHT);
+        ensureSpace(60);
+        const topWords = (textSummary?.topWords ?? []).slice(0, 12);
+        doc
+          .font('Helvetica')
+          .fontSize(9)
+          .fillColor(GRAY)
+          .text(
+            `${Number(textSummary?.totalTexts ?? 0)} texto(s) livre(s) considerados.`,
+            LEFT,
+            doc.y,
+            { width: PAGE_WIDTH },
+          );
+        doc.moveDown(0.4);
+        if (topWords.length === 0) {
+          doc
+            .font('Helvetica')
+            .fontSize(10)
+            .fillColor(DARK)
+            .text('Sem dados textuais suficientes para visualização.');
+          return;
+        }
+
+        const max = Number(topWords[0]?.count ?? 1);
+        for (const [idx, item] of topWords.entries()) {
+          rankingRow(
+            idx,
+            String(item.word ?? 'termo'),
+            Number(item.count ?? 0),
+            max,
+            BLUE_LIGHT,
+          );
+        }
+
+        const sources = Object.entries(textSummary?.sources ?? {})
+          .map(([key, value]: [string, any]) => ({
+            key,
+            count: Number(value?.count ?? 0),
+          }))
+          .filter((s) => s.count > 0)
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 8);
+        if (sources.length > 0) {
+          ensureSpace(30);
+          doc.moveDown(0.3);
+          doc
+            .font('Helvetica-Bold')
+            .fontSize(9)
+            .fillColor(BLUE)
+            .text('Textos por fonte', LEFT, doc.y);
+          doc.moveDown(0.3);
+          const maxSource = sources[0].count;
+          for (const [idx, source] of sources.entries()) {
+            rankingRow(idx, source.key, source.count, maxSource, GREEN);
+          }
+        }
+      };
+
+      const drawGeoCharts = (geoMap: any) => {
+        sectionHeader('02', 'DISTRIBUIÇÃO GEOGRÁFICA', ORANGE);
+        const states = (geoMap?.states ?? [])
+          .map((s: any) => ({
+            uf: String(s.uf ?? 'UF'),
+            complaints: Number(s.complaints ?? 0),
+            activities: Number(s.activities ?? 0),
+            missions: Number(s.missions ?? 0),
+            total:
+              Number(s.complaints ?? 0) +
+              Number(s.activities ?? 0) +
+              Number(s.missions ?? 0),
+          }))
+          .filter((s: any) => s.total > 0)
+          .sort((a: any, b: any) => b.total - a.total);
+
+        doc
+          .font('Helvetica')
+          .fontSize(9)
+          .fillColor(GRAY)
+          .text(
+            `${states.length} UF(s) com ocorrências. Localidades com UF: ${Number(geoMap?.totalLocalitiesWithUf ?? 0)}.`,
+            LEFT,
+            doc.y,
+            { width: PAGE_WIDTH },
+          );
+        doc.moveDown(0.4);
+
+        if (states.length === 0) {
+          doc
+            .font('Helvetica')
+            .fontSize(10)
+            .fillColor(DARK)
+            .text('Sem dados geográficos suficientes para gráficos.');
+          return;
+        }
+
+        const max = states[0].total;
+        for (const [idx, item] of states.slice(0, 12).entries()) {
+          rankingRow(
+            idx,
+            `${item.uf} (D:${item.complaints} A:${item.activities} M:${item.missions})`,
+            item.total,
+            max,
+            ORANGE,
+          );
+        }
+      };
+
+      // Capa
+      doc.rect(0, 0, doc.page.width, 84).fill(BLUE);
+      doc.rect(0, 84, doc.page.width, 4).fill(ORANGE);
+      doc
+        .font('Helvetica-Bold')
+        .fontSize(22)
+        .fillColor('#FFFFFF')
+        .text('RELATÓRIO DE ANÁLISE IA', LEFT, 20, {
+          width: PAGE_WIDTH,
+          align: 'center',
+        });
+      doc
+        .font('Helvetica')
+        .fontSize(10)
+        .fillColor('#D8E3F1')
+        .text('Sistema CIPAVD / SMIF', LEFT, 50, {
+          width: PAGE_WIDTH,
+          align: 'center',
+        });
+
+      doc.y = 104;
+      doc
+        .roundedRect(LEFT, doc.y, PAGE_WIDTH, 56, 6)
+        .fill(BG)
+        .strokeColor(BORDER)
+        .lineWidth(0.6)
+        .stroke();
+      doc
+        .font('Helvetica-Bold')
+        .fontSize(12)
+        .fillColor(BLUE)
+        .text(title, LEFT + 12, doc.y + 10, {
+          width: PAGE_WIDTH - 24,
+        });
+      doc
+        .font('Helvetica')
+        .fontSize(8)
+        .fillColor(GRAY)
+        .text(
+          `Modelo: ${args.model}  |  Gerado em: ${this.formatDateTimePtBr(args.generatedAt)}`,
+          LEFT + 12,
+          doc.y + 32,
+          { width: PAGE_WIDTH - 24 },
+        );
+      doc.y += 70;
+
+      drawNarrative();
+
+      if (args.type === 'executive' || args.type === 'situational') {
+        const dashboard = args.data?.dashboard;
+        const states =
+          args.type === 'executive'
+            ? (args.data?.geoSummary?.statesSample ?? [])
+            : [];
+        drawSituationalAndExecutiveCharts(dashboard, states);
+      } else if (args.type === 'aggressor') {
+        drawAggressorCharts(args.data?.profile);
+      } else if (args.type === 'text') {
+        drawTextCharts(args.data?.textSummary);
+      } else if (args.type === 'geo') {
+        drawGeoCharts(args.data?.geoMap);
+      }
+
+      ensureSpace(24);
+      doc.moveDown(1.2);
+      doc
+        .moveTo(LEFT, doc.y)
+        .lineTo(LEFT + PAGE_WIDTH, doc.y)
+        .strokeColor(BORDER)
+        .lineWidth(0.6)
+        .stroke();
+      doc.moveDown(0.3);
+      doc
+        .font('Helvetica')
+        .fontSize(7)
+        .fillColor(GRAY)
+        .text(
+          'Documento de apoio à decisão. Uso interno institucional. Os gráficos refletem os dados disponíveis no momento da geração.',
+          LEFT,
+          doc.y,
+          { width: PAGE_WIDTH, align: 'center' },
+        );
+
+      doc.end();
+    });
+  }
+
+  private normalizeNarrativeForPdf(narrative: string): string[] {
+    const cleaned = String(narrative || '')
+      .replace(/\r/g, '')
+      .replace(/^#{1,6}\s*/gm, '')
+      .replace(/\*\*(.*?)\*\*/g, '$1')
+      .replace(/\*(.*?)\*/g, '$1')
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/^\s*[-*]\s+/gm, '• ')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+    if (!cleaned) {
+      return ['Análise ainda não disponível para esta execução.'];
+    }
+    return cleaned
+      .split(/\n{2,}/)
+      .map((p) => p.trim())
+      .filter(Boolean);
+  }
+
+  private formatDateTimePtBr(input: string): string {
+    const dt = new Date(input);
+    if (Number.isNaN(dt.getTime())) {
+      return new Date().toLocaleString('pt-BR');
+    }
+    return dt.toLocaleString('pt-BR');
+  }
+
   private sseEvent(event: string, data: any): string {
     return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
   }
@@ -186,14 +782,21 @@ export class AiService {
           this.strategic.textAnalysis(),
           this.strategic.geoMap(),
         ]);
-        return { dashboard, profile, textSummary: this.compactText(text), geoSummary: this.compactGeo(geo) };
+        return {
+          dashboard,
+          profile,
+          textSummary: this.compactText(text),
+          geoSummary: this.compactGeo(geo),
+        };
       }
       case 'situational':
         return { dashboard: await this.strategic.situationalDashboard() };
       case 'aggressor':
         return { profile: await this.strategic.aggressorProfile() };
       case 'text':
-        return { textSummary: this.compactText(await this.strategic.textAnalysis()) };
+        return {
+          textSummary: this.compactText(await this.strategic.textAnalysis()),
+        };
       case 'geo':
         return { geoMap: await this.strategic.geoMap() };
       default:
@@ -218,10 +821,8 @@ export class AiService {
         'Analise o panorama situacional: pesquisas, taxas de violência, denúncias ativas, atividades e missões.',
       aggressor:
         'Analise o perfil de assédio e violência: tipos de ocorrência, perfil do agressor e da vítima, relações hierárquicas e contextos.',
-      text:
-        'Analise os padrões e tendências identificados nos textos livres do sistema: termos mais frequentes, temas recorrentes e insights.',
-      geo:
-        'Analise a distribuição geográfica: estados com mais registros, concentração de denúncias, atividades e missões por região.',
+      text: 'Analise os padrões e tendências identificados nos textos livres do sistema: termos mais frequentes, temas recorrentes e insights.',
+      geo: 'Analise a distribuição geográfica: estados com mais registros, concentração de denúncias, atividades e missões por região.',
     };
 
     const instruction = customPrompt?.trim() || defaultDescriptions[type];
@@ -237,7 +838,9 @@ export class AiService {
   private compactText(text: any) {
     const sources: Record<string, any> = {};
     if (text?.sources) {
-      for (const [key, val] of Object.entries(text.sources as Record<string, any>)) {
+      for (const [key, val] of Object.entries(
+        text.sources as Record<string, any>,
+      )) {
         if (val?.count > 0) {
           sources[key] = {
             count: val.count,

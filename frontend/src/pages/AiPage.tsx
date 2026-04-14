@@ -20,12 +20,14 @@ import TextSnippetRoundedIcon from "@mui/icons-material/TextSnippetRounded";
 import MapRoundedIcon from "@mui/icons-material/MapRounded";
 import SendRoundedIcon from "@mui/icons-material/SendRounded";
 import ContentCopyRoundedIcon from "@mui/icons-material/ContentCopyRounded";
+import PictureAsPdfRoundedIcon from "@mui/icons-material/PictureAsPdfRounded";
 import SmartToyRoundedIcon from "@mui/icons-material/SmartToyRounded";
 import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
 import { useCallback, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { api } from "../api/client";
+import { useToast } from "../app/toast";
 
 const mdStyles = (dark?: boolean) => ({
   "& h1": {
@@ -361,10 +363,14 @@ function AnalysisCard({
   card,
   state,
   onStart,
+  onExportPdf,
+  exportingPdf,
 }: {
   card: (typeof ANALYSIS_CARDS)[number];
   state?: AnalysisState;
   onStart: () => void;
+  onExportPdf: () => void;
+  exportingPdf?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
   const handleCopy = () => {
@@ -461,7 +467,7 @@ function AnalysisCard({
           </Typography>
         )}
 
-        <Box sx={{ mt: "auto" }}>
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={1.2} sx={{ mt: "auto" }}>
           <Button
             variant="contained"
             onClick={onStart}
@@ -477,7 +483,16 @@ function AnalysisCard({
                 ? "Gerar Novamente"
                 : "Gerar Análise"}
           </Button>
-        </Box>
+          <Button
+            variant="outlined"
+            onClick={onExportPdf}
+            disabled={!state?.narrative || state?.running || exportingPdf}
+            startIcon={<PictureAsPdfRoundedIcon />}
+            sx={{ borderColor: card.color, color: card.color }}
+          >
+            {exportingPdf ? "Exportando PDF..." : "Exportar PDF"}
+          </Button>
+        </Stack>
       </CardContent>
     </Card>
   );
@@ -485,15 +500,78 @@ function AnalysisCard({
 
 function AnalysesTab() {
   const { states, start } = useAnalysisSSE();
+  const [exportingByType, setExportingByType] = useState<Record<string, boolean>>({});
+  const toast = useToast();
+
+  const exportPdf = useCallback(
+    async (cardType: string, state?: AnalysisState) => {
+      if (!state?.narrative?.trim()) {
+        toast.push({ message: "Gere a análise antes de exportar o PDF.", severity: "warning" });
+        return;
+      }
+
+      setExportingByType((prev) => ({ ...prev, [cardType]: true }));
+      try {
+        const response = await fetch(`${getBaseUrl()}/ai/analyze/pdf`, {
+          method: "POST",
+          headers: getAuthHeaders(),
+          body: JSON.stringify({
+            type: cardType,
+            narrative: state.narrative,
+            model: state.model,
+            generatedAt: state.generatedAt,
+          }),
+        });
+
+        if (!response.ok) {
+          const text = await response.text();
+          let message = `Erro HTTP ${response.status}`;
+          try {
+            message = JSON.parse(text)?.message ?? message;
+          } catch {
+            // resposta pode não vir em JSON
+          }
+          throw new Error(message);
+        }
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        const datePart = (state.generatedAt ? new Date(state.generatedAt) : new Date())
+          .toISOString()
+          .slice(0, 19)
+          .replace(/[:T]/g, "-");
+        anchor.href = url;
+        anchor.download = `analise-ia-${cardType}-${datePart}.pdf`;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        window.URL.revokeObjectURL(url);
+        toast.push({ message: "PDF exportado com sucesso.", severity: "success" });
+      } catch (error: unknown) {
+        const message =
+          error instanceof Error ? error.message : "Falha ao exportar PDF.";
+        toast.push({
+          message,
+          severity: "error",
+        });
+      } finally {
+        setExportingByType((prev) => ({ ...prev, [cardType]: false }));
+      }
+    },
+    [toast],
+  );
 
   return (
     <Grid container spacing={2}>
       {ANALYSIS_CARDS.map((card) => (
-        <Grid key={card.type} size={{ xs: 12, md: 6 }}>
+        <Grid key={card.type} size={{ xs: 12 }}>
           <AnalysisCard
             card={card}
             state={states[card.type]}
             onStart={() => start(card.type)}
+            onExportPdf={() => exportPdf(card.type, states[card.type])}
+            exportingPdf={Boolean(exportingByType[card.type])}
           />
         </Grid>
       ))}

@@ -1669,7 +1669,7 @@ function AiSettingsTab() {
   if (settingsQuery.isError) return <ErrorState error={settingsQuery.error} onRetry={() => settingsQuery.refetch()} />;
 
   return (
-    <Box sx={{ maxWidth: 1040 }}>
+    <Box sx={{ width: '100%', maxWidth: 'none' }}>
       <Stack direction="row" spacing={2} alignItems="flex-start" sx={{ mb: 2 }}>
         <Box
           sx={{

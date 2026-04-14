@@ -18,10 +18,7 @@ export class AiController {
 
   @Post('analyze')
   @RequirePermission('bi', 'view')
-  async analyze(
-    @Body() body: { type: AnalysisType },
-    @Res() res: Response,
-  ) {
+  async analyze(@Body() body: { type: AnalysisType }, @Res() res: Response) {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
@@ -29,7 +26,9 @@ export class AiController {
     res.flushHeaders();
 
     try {
-      for await (const chunk of this.ai.analyzeStream(body.type ?? 'executive')) {
+      for await (const chunk of this.ai.analyzeStream(
+        body.type ?? 'executive',
+      )) {
         res.write(chunk);
       }
     } catch (e) {
@@ -39,10 +38,38 @@ export class AiController {
     res.end();
   }
 
+  @Post('analyze/pdf')
+  @RequirePermission('bi', 'view')
+  async analyzePdf(
+    @Body()
+    body: {
+      type: AnalysisType;
+      narrative?: string;
+      model?: string;
+      generatedAt?: string;
+    },
+    @Res() res: Response,
+  ) {
+    const type = body.type ?? 'executive';
+    const buffer = await this.ai.analysisPdf(type, {
+      narrative: body.narrative,
+      model: body.model,
+      generatedAt: body.generatedAt,
+    });
+    const filename = `analise-ia-${type}-${new Date().toISOString().slice(0, 10)}.pdf`;
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
+  }
+
   @Post('chat')
   @RequirePermission('bi', 'view')
   async chat(
-    @Body() body: { message: string; history?: { role: string; content: string }[] },
+    @Body()
+    body: { message: string; history?: { role: string; content: string }[] },
     @Res() res: Response,
   ) {
     res.setHeader('Content-Type', 'text/event-stream');
@@ -57,7 +84,10 @@ export class AiController {
     }));
 
     try {
-      for await (const chunk of this.ai.chatStream(body.message ?? '', history)) {
+      for await (const chunk of this.ai.chatStream(
+        body.message ?? '',
+        history,
+      )) {
         res.write(chunk);
       }
     } catch (e) {
