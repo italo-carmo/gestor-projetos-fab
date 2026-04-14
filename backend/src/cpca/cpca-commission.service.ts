@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
+import type { CpcaPresidentRequestStatus, Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { throwError } from '../common/http-error';
 import { sanitizeText } from '../common/sanitize';
@@ -291,14 +292,15 @@ export class CpcaCommissionService {
     const normalizedStatus = String(statusRaw ?? '')
       .trim()
       .toUpperCase();
-    const status =
+    const status: CpcaPresidentRequestStatus | null =
       normalizedStatus === 'PENDING' ||
       normalizedStatus === 'APPROVED' ||
       normalizedStatus === 'REJECTED'
-        ? normalizedStatus
+        ? (normalizedStatus as CpcaPresidentRequestStatus)
         : null;
 
-    const where = status ? { status } : undefined;
+    const where: Prisma.CpcaPresidentSelfRegistrationWhereInput | undefined =
+      status ? { status } : undefined;
 
     const [items, pendingCount] = await Promise.all([
       this.prisma.cpcaPresidentSelfRegistration.findMany({
