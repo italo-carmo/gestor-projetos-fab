@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Box,
@@ -62,6 +62,7 @@ import { EmptyState } from "../components/states/EmptyState";
 import { ErrorState } from "../components/states/ErrorState";
 import { SkeletonState } from "../components/states/SkeletonState";
 import { ConfirmDialog } from "../components/dialogs/ConfirmDialog";
+import { useSearchParams } from "react-router-dom";
 
 type MetricMode = "PERCENT" | "COUNT";
 type CombineMode = "AND" | "OR";
@@ -437,10 +438,14 @@ function buildBiCardTextDefaults(
 
 export function BiSurveyDashboardPage() {
   const toast = useToast();
+  const [searchParams] = useSearchParams();
+  const responseIdFromUrl = String(searchParams.get("responseId") ?? "").trim();
   const { data: me } = useMe();
   const [metricMode, setMetricMode] = useState<MetricMode>("PERCENT");
   const isTiProfile = hasAnyRole(me, [ROLE_TI]);
-  const [responsesExpanded, setResponsesExpanded] = useState(false);
+  const [responsesExpanded, setResponsesExpanded] = useState(
+    Boolean(responseIdFromUrl),
+  );
   const [file, setFile] = useState<File | null>(null);
   const [page, setPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -464,8 +469,17 @@ export function BiSurveyDashboardPage() {
     autodeclara: "",
     suffered: "",
     violenceType: "",
+    responseId: responseIdFromUrl,
     combineMode: "AND" as CombineMode,
   });
+
+  useEffect(() => {
+    setFilters((prev) => ({ ...prev, responseId: responseIdFromUrl }));
+    if (responseIdFromUrl) {
+      setPage(1);
+      setResponsesExpanded(true);
+    }
+  }, [responseIdFromUrl]);
 
   const cardTextDefaults = useMemo(
     () => buildBiCardTextDefaults(metricMode),
@@ -536,6 +550,7 @@ export function BiSurveyDashboardPage() {
       autodeclara: filters.autodeclara || undefined,
       suffered: filters.suffered || undefined,
       violenceType: filters.violenceType || undefined,
+      responseId: filters.responseId || undefined,
       combineMode: filters.combineMode || undefined,
     }),
     [filters],
@@ -621,6 +636,7 @@ export function BiSurveyDashboardPage() {
       autodeclara: "",
       suffered: "",
       violenceType: "",
+      responseId: responseIdFromUrl,
       combineMode: "AND",
     });
     setSelectedIds([]);

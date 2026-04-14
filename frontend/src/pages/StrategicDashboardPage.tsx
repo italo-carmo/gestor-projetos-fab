@@ -454,11 +454,16 @@ function DetailRow({ label, value, color }: { label: string; value: string | num
 type ActivityKpiDetailItem = {
   id: string;
   title: string;
+  subtitle?: string;
+  badge?: string;
+  link: string;
+  date?: string;
+};
+
+type ActivitySpecificKpiDetailItem = ActivityKpiDetailItem & {
   scope: string;
   status: string;
-  date?: string;
   locality?: string;
-  link: string;
 };
 
 function formatActivityStatusLabel(status: string) {
@@ -481,7 +486,7 @@ function ExpandableActivityMetricRow({
   metricKey: string;
   label: string;
   value: number;
-  items: ActivityKpiDetailItem[];
+  items: ActivitySpecificKpiDetailItem[];
   color?: string;
   expandedKey: string | null;
   onToggle: (metricKey: string) => void;
@@ -568,15 +573,110 @@ function ExpandableActivityMetricRow({
   );
 }
 
+function ExpandableKpiMetricRow({
+  metricKey,
+  label,
+  value,
+  items,
+  color,
+  expandedKey,
+  onToggle,
+}: {
+  metricKey: string;
+  label: string;
+  value: number;
+  items: ActivityKpiDetailItem[];
+  color?: string;
+  expandedKey: string | null;
+  onToggle: (metricKey: string) => void;
+}) {
+  const expanded = expandedKey === metricKey;
+  return (
+    <Box sx={{ border: "1px solid #E0E0E0", borderRadius: 1, overflow: "hidden" }}>
+      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", px: 1.25, py: 0.75 }}>
+        <Typography variant="body2" fontWeight={500}>{label}</Typography>
+        <Stack direction="row" spacing={0.5} alignItems="center">
+          <Chip label={value} size="small" sx={color ? { bgcolor: color, color: "#fff" } : {}} />
+          <IconButton
+            size="small"
+            onClick={() => onToggle(metricKey)}
+            aria-label={expanded ? `Recolher ${label}` : `Expandir ${label}`}
+          >
+            <ExpandMoreIcon
+              sx={{
+                transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
+                transition: "transform 0.2s ease",
+              }}
+            />
+          </IconButton>
+        </Stack>
+      </Box>
+      <Collapse in={expanded} timeout="auto" unmountOnExit>
+        <Divider />
+        {items.length > 0 ? (
+          <TableContainer sx={{ maxHeight: 320 }}>
+            <Table size="small" stickyHeader>
+              <TableHead>
+                <TableRow>
+                  <TableCell><strong>Item</strong></TableCell>
+                  <TableCell><strong>Detalhes</strong></TableCell>
+                  <TableCell><strong>Data</strong></TableCell>
+                  <TableCell><strong>Indicador</strong></TableCell>
+                  <TableCell align="right"><strong>Ação</strong></TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {items.map((item) => (
+                  <TableRow key={`${metricKey}-${item.id}`} hover>
+                    <TableCell>{item.title || "Item"}</TableCell>
+                    <TableCell>{item.subtitle || "—"}</TableCell>
+                    <TableCell>
+                      {item.date ? new Date(item.date).toLocaleDateString("pt-BR") : "—"}
+                    </TableCell>
+                    <TableCell>
+                      {item.badge ? <Chip label={item.badge} size="small" /> : "—"}
+                    </TableCell>
+                    <TableCell align="right">
+                      {item.link ? (
+                        <Button
+                          component="a"
+                          href={item.link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          size="small"
+                          variant="outlined"
+                          endIcon={<OpenInNewRoundedIcon fontSize="inherit" />}
+                        >
+                          Abrir
+                        </Button>
+                      ) : (
+                        <Button size="small" variant="outlined" disabled>
+                          Sem link
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        ) : (
+          <Typography variant="body2" color="text.secondary" sx={{ px: 1.5, py: 1 }}>
+            Nenhum item encontrado nessa métrica.
+          </Typography>
+        )}
+      </Collapse>
+    </Box>
+  );
+}
+
 function SituationalTab() {
   const { data, isLoading, error } = useStrategicDashboard();
   const [detailModal, setDetailModal] = useState<string | null>(null);
-  const [expandedActivityMetric, setExpandedActivityMetric] = useState<string | null>(null);
+  const [expandedMetric, setExpandedMetric] = useState<string | null>(null);
 
   useEffect(() => {
-    if (detailModal !== "activities") {
-      setExpandedActivityMetric(null);
-    }
+    setExpandedMetric(null);
   }, [detailModal]);
 
   if (isLoading) return <SkeletonState />;
@@ -589,7 +689,139 @@ function SituationalTab() {
   const c = data.complaints ?? {};
   const a = data.activities ?? {};
   const m = data.missions ?? {};
-  const activityDetails = (a.details ?? {}) as Record<string, ActivityKpiDetailItem[]>;
+  const surveyDetails = (s.details ?? {}) as Record<string, ActivityKpiDetailItem[]>;
+  const domesticDetails = (dv.details ?? {}) as Record<string, ActivityKpiDetailItem[]>;
+  const recruitDetails = (r.details ?? {}) as Record<string, ActivityKpiDetailItem[]>;
+  const complaintDetails = (c.details ?? {}) as Record<string, ActivityKpiDetailItem[]>;
+  const activityDetails = (a.details ?? {}) as Record<string, ActivitySpecificKpiDetailItem[]>;
+  const missionDetails = (m.details ?? {}) as Record<string, ActivityKpiDetailItem[]>;
+
+  const surveysMetrics = [
+    {
+      key: "total",
+      label: "Total de respondentes",
+      value: Number(s.totalResponses ?? 0),
+      items: Array.isArray(surveyDetails.total) ? surveyDetails.total : [],
+    },
+    {
+      key: "yes",
+      label: "Responderam SIM (sofreu violência)",
+      value: Number(s.yesCount ?? 0),
+      color: "#D32F2F",
+      items: Array.isArray(surveyDetails.yes) ? surveyDetails.yes : [],
+    },
+    {
+      key: "no",
+      label: "Responderam NÃO",
+      value: Number(s.noCount ?? 0),
+      color: "#2E7D32",
+      items: Array.isArray(surveyDetails.no) ? surveyDetails.no : [],
+    },
+  ];
+
+  const domesticMetrics = [
+    {
+      key: "total",
+      label: "Total de respondentes",
+      value: Number(dv.totalResponses ?? 0),
+      items: Array.isArray(domesticDetails.total) ? domesticDetails.total : [],
+    },
+    {
+      key: "lifetimeYes",
+      label: "Sofreram violência doméstica (alguma vez)",
+      value: Number(dv.lifetimeYes ?? 0),
+      color: "#ED6C02",
+      items: Array.isArray(domesticDetails.lifetimeYes) ? domesticDetails.lifetimeYes : [],
+    },
+    {
+      key: "last12MonthsYes",
+      label: "Sofreram nos últimos 12 meses",
+      value: Number(dv.last12MonthsYes ?? 0),
+      color: "#C2185B",
+      items: Array.isArray(domesticDetails.last12MonthsYes) ? domesticDetails.last12MonthsYes : [],
+    },
+    {
+      key: "soughtHelp",
+      label: "Buscaram ajuda",
+      value: Number(dv.soughtHelp ?? 0),
+      color: "#F9A825",
+      items: Array.isArray(domesticDetails.soughtHelp) ? domesticDetails.soughtHelp : [],
+    },
+  ];
+
+  const recruitMetrics = [
+    {
+      key: "total",
+      label: "Total de respondentes (recrutas)",
+      value: Number(r.totalResponses ?? 0),
+      items: Array.isArray(recruitDetails.total) ? recruitDetails.total : [],
+    },
+    {
+      key: "safe",
+      label: "Sentem-se seguros(as) para denunciar",
+      value: Number(r.safeCount ?? 0),
+      color: "#2E7D32",
+      items: Array.isArray(recruitDetails.safe) ? recruitDetails.safe : [],
+    },
+    {
+      key: "knowReportProcess",
+      label: "Conhecem o canal de denúncia",
+      value: Number(r.knowProcess ?? 0),
+      color: "#0288D1",
+      items: Array.isArray(recruitDetails.knowReportProcess) ? recruitDetails.knowReportProcess : [],
+    },
+  ];
+
+  const complaintMetrics = [
+    {
+      key: "total",
+      label: "Total de denúncias/casos",
+      value: Number(c.totalCases ?? 0),
+      items: Array.isArray(complaintDetails.total) ? complaintDetails.total : [],
+    },
+    {
+      key: "open",
+      label: "Casos abertos/ativos",
+      value: Number(c.openCases ?? 0),
+      color: "#D32F2F",
+      items: Array.isArray(complaintDetails.open) ? complaintDetails.open : [],
+    },
+    {
+      key: "concluded",
+      label: "Casos concluídos",
+      value: Number(c.concludedCases ?? 0),
+      color: "#2E7D32",
+      items: Array.isArray(complaintDetails.concluded) ? complaintDetails.concluded : [],
+    },
+    {
+      key: "moral",
+      label: "Assédio Moral",
+      value: Number(c.moral ?? 0),
+      color: "#ED6C02",
+      items: Array.isArray(complaintDetails.moral) ? complaintDetails.moral : [],
+    },
+    {
+      key: "sexual",
+      label: "Assédio Sexual",
+      value: Number(c.sexual ?? 0),
+      color: "#D32F2F",
+      items: Array.isArray(complaintDetails.sexual) ? complaintDetails.sexual : [],
+    },
+    {
+      key: "cpca",
+      label: "CPCA",
+      value: Number(c.byCpca ?? 0),
+      color: "#1A3C6E",
+      items: Array.isArray(complaintDetails.cpca) ? complaintDetails.cpca : [],
+    },
+    {
+      key: "smif",
+      label: "SMIF",
+      value: Number(c.bySmif ?? 0),
+      color: "#7B1FA2",
+      items: Array.isArray(complaintDetails.smif) ? complaintDetails.smif : [],
+    },
+  ];
 
   const activityMetrics = [
     {
@@ -636,6 +868,36 @@ function SituationalTab() {
     },
   ];
 
+  const missionMetrics = [
+    {
+      key: "total",
+      label: "Total de missões",
+      value: Number(m.totalMissions ?? 0),
+      items: Array.isArray(missionDetails.total) ? missionDetails.total : [],
+    },
+    {
+      key: "smif",
+      label: "SMIF",
+      value: Number(m.smif ?? 0),
+      color: "#4E342E",
+      items: Array.isArray(missionDetails.smif) ? missionDetails.smif : [],
+    },
+    {
+      key: "cipavd",
+      label: "CIPAVD",
+      value: Number(m.cipavd ?? 0),
+      color: "#7B1FA2",
+      items: Array.isArray(missionDetails.cipavd) ? missionDetails.cipavd : [],
+    },
+    {
+      key: "localitiesCovered",
+      label: "OMs visitadas (distintas)",
+      value: Number(m.localitiesCovered ?? 0),
+      color: "#0288D1",
+      items: Array.isArray(missionDetails.localitiesCovered) ? missionDetails.localitiesCovered : [],
+    },
+  ];
+
   const complaintDonut = [
     { name: "Assédio Moral", value: c.moral ?? 0 },
     { name: "Assédio Sexual", value: c.sexual ?? 0 },
@@ -651,9 +913,22 @@ function SituationalTab() {
       case "surveys":
         return (
           <Stack spacing={1}>
-            <DetailRow label="Total de respondentes" value={s.totalResponses ?? 0} />
-            <DetailRow label="Responderam SIM (sofreu violência)" value={s.yesCount ?? 0} color="#D32F2F" />
-            <DetailRow label="Responderam NÃO" value={s.noCount ?? 0} color="#2E7D32" />
+            {surveysMetrics.map((metric) => (
+              <ExpandableKpiMetricRow
+                key={metric.key}
+                metricKey={`surveys-${metric.key}`}
+                label={metric.label}
+                value={metric.value}
+                color={metric.color}
+                items={metric.items}
+                expandedKey={expandedMetric}
+                onToggle={(metricKey) =>
+                  setExpandedMetric((prev) =>
+                    prev === metricKey ? null : metricKey,
+                  )
+                }
+              />
+            ))}
             <DetailRow label="Taxa de violência" value={`${s.violenceRatePercent ?? 0}%`} color="#D32F2F" />
             <Divider sx={{ my: 1 }} />
             <Typography variant="body2" color="text.secondary">
@@ -665,12 +940,24 @@ function SituationalTab() {
       case "domesticViolence":
         return (
           <Stack spacing={1}>
-            <DetailRow label="Total de respondentes" value={dv.totalResponses ?? 0} />
-            <DetailRow label="Sofreram violência doméstica (alguma vez)" value={dv.lifetimeYes ?? 0} color="#ED6C02" />
+            {domesticMetrics.map((metric) => (
+              <ExpandableKpiMetricRow
+                key={metric.key}
+                metricKey={`domestic-${metric.key}`}
+                label={metric.label}
+                value={metric.value}
+                color={metric.color}
+                items={metric.items}
+                expandedKey={expandedMetric}
+                onToggle={(metricKey) =>
+                  setExpandedMetric((prev) =>
+                    prev === metricKey ? null : metricKey,
+                  )
+                }
+              />
+            ))}
             <DetailRow label="Taxa — alguma vez na vida" value={`${dv.lifetimeRatePercent ?? 0}%`} color="#ED6C02" />
-            <DetailRow label="Sofreram nos últimos 12 meses" value={dv.last12MonthsYes ?? 0} color="#C2185B" />
             <DetailRow label="Taxa — últimos 12 meses" value={`${dv.last12MonthsRatePercent ?? 0}%`} color="#C2185B" />
-            <DetailRow label="Buscaram ajuda" value={dv.soughtHelp ?? 0} color="#F9A825" />
             <DetailRow label="Taxa de busca de ajuda" value={`${dv.soughtHelpPercent ?? 0}%`} />
             <Divider sx={{ my: 1 }} />
             <Typography variant="body2" color="text.secondary">
@@ -682,10 +969,23 @@ function SituationalTab() {
       case "recruits":
         return (
           <Stack spacing={1}>
-            <DetailRow label="Total de respondentes (recrutas)" value={r.totalResponses ?? 0} />
-            <DetailRow label="Sentem-se seguros(as) para denunciar" value={r.safeCount ?? 0} color="#2E7D32" />
+            {recruitMetrics.map((metric) => (
+              <ExpandableKpiMetricRow
+                key={metric.key}
+                metricKey={`recruits-${metric.key}`}
+                label={metric.label}
+                value={metric.value}
+                color={metric.color}
+                items={metric.items}
+                expandedKey={expandedMetric}
+                onToggle={(metricKey) =>
+                  setExpandedMetric((prev) =>
+                    prev === metricKey ? null : metricKey,
+                  )
+                }
+              />
+            ))}
             <DetailRow label="Taxa de segurança para denúncia" value={`${r.safeToReportPercent ?? 0}%`} color="#2E7D32" />
-            <DetailRow label="Conhecem o canal de denúncia" value={r.knowProcess ?? 0} color="#0288D1" />
             <DetailRow label="Taxa de conhecimento do canal" value={`${r.knowReportProcessPercent ?? 0}%`} color="#0288D1" />
             <Divider sx={{ my: 1 }} />
             <Typography variant="body2" color="text.secondary">
@@ -697,17 +997,30 @@ function SituationalTab() {
       case "complaints":
         return (
           <Stack spacing={1}>
-            <DetailRow label="Total de denúncias/casos" value={c.totalCases ?? 0} />
-            <DetailRow label="Casos abertos/ativos" value={c.openCases ?? 0} color="#D32F2F" />
-            <DetailRow label="Casos concluídos" value={c.concludedCases ?? 0} color="#2E7D32" />
+            {complaintMetrics.map((metric) => (
+              <ExpandableKpiMetricRow
+                key={metric.key}
+                metricKey={`complaints-${metric.key}`}
+                label={metric.label}
+                value={metric.value}
+                color={metric.color}
+                items={metric.items}
+                expandedKey={expandedMetric}
+                onToggle={(metricKey) =>
+                  setExpandedMetric((prev) =>
+                    prev === metricKey ? null : metricKey,
+                  )
+                }
+              />
+            ))}
             <Divider sx={{ my: 0.5 }} />
             <Typography variant="subtitle2" sx={{ mt: 1 }}>Por tipo</Typography>
-            <DetailRow label="Assédio Moral" value={`${c.moral ?? 0} (${c.moralPercent ?? 0}%)`} color="#ED6C02" />
-            <DetailRow label="Assédio Sexual" value={`${c.sexual ?? 0} (${c.sexualPercent ?? 0}%)`} color="#D32F2F" />
+            <DetailRow label="Assédio Moral (%)" value={`${c.moralPercent ?? 0}%`} color="#ED6C02" />
+            <DetailRow label="Assédio Sexual (%)" value={`${c.sexualPercent ?? 0}%`} color="#D32F2F" />
             <Divider sx={{ my: 0.5 }} />
             <Typography variant="subtitle2" sx={{ mt: 1 }}>Por escopo</Typography>
-            <DetailRow label="CPCA" value={c.byCpca ?? 0} color="#1A3C6E" />
-            <DetailRow label="SMIF" value={c.bySmif ?? 0} color="#7B1FA2" />
+            <DetailRow label="CPCA (%)" value={`${c.totalCases ? ((Number(c.byCpca ?? 0) / Number(c.totalCases ?? 1)) * 100).toFixed(1) : "0.0"}%`} color="#1A3C6E" />
+            <DetailRow label="SMIF (%)" value={`${c.totalCases ? ((Number(c.bySmif ?? 0) / Number(c.totalCases ?? 1)) * 100).toFixed(1) : "0.0"}%`} color="#7B1FA2" />
           </Stack>
         );
       case "activities":
@@ -721,9 +1034,9 @@ function SituationalTab() {
                 value={metric.value}
                 color={metric.color}
                 items={metric.items}
-                expandedKey={expandedActivityMetric}
+                expandedKey={expandedMetric}
                 onToggle={(metricKey) =>
-                  setExpandedActivityMetric((prev) =>
+                  setExpandedMetric((prev) =>
                     prev === metricKey ? null : metricKey,
                   )
                 }
@@ -746,10 +1059,22 @@ function SituationalTab() {
       case "missions":
         return (
           <Stack spacing={1}>
-            <DetailRow label="Total de missões" value={m.totalMissions ?? 0} />
-            <DetailRow label="SMIF" value={m.smif ?? 0} color="#4E342E" />
-            <DetailRow label="CIPAVD" value={m.cipavd ?? 0} color="#7B1FA2" />
-            <DetailRow label="OMs visitadas (distintas)" value={m.localitiesCovered ?? 0} color="#0288D1" />
+            {missionMetrics.map((metric) => (
+              <ExpandableKpiMetricRow
+                key={metric.key}
+                metricKey={`missions-${metric.key}`}
+                label={metric.label}
+                value={metric.value}
+                color={metric.color}
+                items={metric.items}
+                expandedKey={expandedMetric}
+                onToggle={(metricKey) =>
+                  setExpandedMetric((prev) =>
+                    prev === metricKey ? null : metricKey,
+                  )
+                }
+              />
+            ))}
             <Divider sx={{ my: 1 }} />
             <Typography variant="body2" color="text.secondary">
               Missões realizadas pela comissão itinerante em todo o território nacional.

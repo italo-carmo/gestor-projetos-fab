@@ -63,6 +63,7 @@ export class BiDomesticViolenceController {
     @Query('authorMilitaryLink') authorMilitaryLink: string | undefined,
     @Query('occurrencePlace') occurrencePlace: string | undefined,
     @Query('witnesses') witnesses: string | undefined,
+    @Query('responseId') responseId: string | undefined,
     @Query('q') q: string | undefined,
     @Query('combineMode') combineMode: string | undefined,
     @CurrentUser() user: RbacUser,
@@ -91,6 +92,7 @@ export class BiDomesticViolenceController {
       authorMilitaryLink,
       occurrencePlace,
       witnesses,
+      responseId,
       q,
       combineMode,
     });

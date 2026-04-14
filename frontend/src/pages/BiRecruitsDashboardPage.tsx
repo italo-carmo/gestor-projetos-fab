@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Box,
@@ -62,6 +62,7 @@ import { useToast } from "../app/toast";
 import { ConfirmDialog } from "../components/dialogs/ConfirmDialog";
 import { ErrorState } from "../components/states/ErrorState";
 import { SkeletonState } from "../components/states/SkeletonState";
+import { useSearchParams } from "react-router-dom";
 
 type MetricMode = "PERCENT" | "COUNT";
 type CombineMode = "AND" | "OR";
@@ -512,10 +513,14 @@ function DistributionCard({
 
 export function BiRecruitsDashboardPage() {
   const toast = useToast();
+  const [searchParams] = useSearchParams();
+  const responseIdFromUrl = String(searchParams.get("responseId") ?? "").trim();
   const { data: me } = useMe();
   const isTiProfile = hasAnyRole(me, [ROLE_TI]);
   const [metricMode, setMetricMode] = useState<MetricMode>("PERCENT");
-  const [responsesExpanded, setResponsesExpanded] = useState(false);
+  const [responsesExpanded, setResponsesExpanded] = useState(
+    Boolean(responseIdFromUrl),
+  );
   const [file, setFile] = useState<File | null>(null);
   const [replaceOnImport, setReplaceOnImport] = useState(true);
   const [page, setPage] = useState(1);
@@ -540,9 +545,18 @@ export function BiRecruitsDashboardPage() {
     willingnessOrientation: "",
     willingnessReport: "",
     enlistmentDecisionInfluence: "",
+    responseId: responseIdFromUrl,
     q: "",
     combineMode: "AND" as CombineMode,
   });
+
+  useEffect(() => {
+    setFilters((prev) => ({ ...prev, responseId: responseIdFromUrl }));
+    if (responseIdFromUrl) {
+      setPage(1);
+      setResponsesExpanded(true);
+    }
+  }, [responseIdFromUrl]);
 
   const dashboardFilters = useMemo(
     () => ({
@@ -558,6 +572,7 @@ export function BiRecruitsDashboardPage() {
       willingnessReport: filters.willingnessReport || undefined,
       enlistmentDecisionInfluence:
         filters.enlistmentDecisionInfluence || undefined,
+      responseId: filters.responseId || undefined,
       q: filters.q || undefined,
       combineMode: filters.combineMode || undefined,
     }),
@@ -700,6 +715,7 @@ export function BiRecruitsDashboardPage() {
       willingnessOrientation: "",
       willingnessReport: "",
       enlistmentDecisionInfluence: "",
+      responseId: responseIdFromUrl,
       q: "",
       combineMode: "AND",
     });

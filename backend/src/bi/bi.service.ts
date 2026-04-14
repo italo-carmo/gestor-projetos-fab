@@ -17,6 +17,7 @@ type SurveyFilters = {
   autodeclara?: string;
   suffered?: string;
   violenceType?: string;
+  responseId?: string;
   q?: string;
   combineMode?: string;
 };
@@ -1062,6 +1063,10 @@ export class BiService {
           has: filters.violenceType.trim(),
         },
       });
+    }
+
+    if (filters.responseId?.trim()) {
+      conditions.push({ id: filters.responseId.trim() });
     }
 
     if (filters.q?.trim()) {

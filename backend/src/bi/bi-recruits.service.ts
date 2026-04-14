@@ -19,6 +19,7 @@ type RecruitsFilters = {
   willingnessOrientation?: string;
   willingnessReport?: string;
   enlistmentDecisionInfluence?: string;
+  responseId?: string;
   q?: string;
   combineMode?: string;
 };
@@ -861,6 +862,10 @@ export class BiRecruitsService {
         enlistmentDecisionInfluenceText:
           filters.enlistmentDecisionInfluence.trim(),
       });
+    }
+
+    if (filters.responseId?.trim()) {
+      conditions.push({ id: filters.responseId.trim() });
     }
 
     if (filters.q?.trim()) {

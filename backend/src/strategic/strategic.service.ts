@@ -370,6 +370,15 @@ export type AiSourceReference = {
   description?: string;
 };
 
+type StrategicKpiDetailItem = {
+  id: string;
+  title: string;
+  subtitle?: string;
+  date?: string;
+  badge?: string;
+  link: string;
+};
+
 @Injectable()
 export class StrategicService {
   constructor(
@@ -1409,8 +1418,60 @@ export class StrategicService {
       topWords: textSummary.consolidated.topWords.slice(0, 30),
     };
 
+    const compactDashboard = {
+      ...dashboard,
+      surveys: {
+        totalResponses: dashboard.surveys?.totalResponses ?? 0,
+        yesCount: dashboard.surveys?.yesCount ?? 0,
+        noCount: dashboard.surveys?.noCount ?? 0,
+        violenceRatePercent: dashboard.surveys?.violenceRatePercent ?? 0,
+      },
+      domesticViolence: {
+        totalResponses: dashboard.domesticViolence?.totalResponses ?? 0,
+        lifetimeYes: dashboard.domesticViolence?.lifetimeYes ?? 0,
+        lifetimeRatePercent:
+          dashboard.domesticViolence?.lifetimeRatePercent ?? 0,
+        last12MonthsYes: dashboard.domesticViolence?.last12MonthsYes ?? 0,
+        last12MonthsRatePercent:
+          dashboard.domesticViolence?.last12MonthsRatePercent ?? 0,
+        soughtHelp: dashboard.domesticViolence?.soughtHelp ?? 0,
+        soughtHelpPercent: dashboard.domesticViolence?.soughtHelpPercent ?? 0,
+      },
+      recruits: {
+        totalResponses: dashboard.recruits?.totalResponses ?? 0,
+        safeCount: dashboard.recruits?.safeCount ?? 0,
+        safeToReportPercent: dashboard.recruits?.safeToReportPercent ?? 0,
+        knowProcess: dashboard.recruits?.knowProcess ?? 0,
+        knowReportProcessPercent:
+          dashboard.recruits?.knowReportProcessPercent ?? 0,
+      },
+      complaints: {
+        totalCases: dashboard.complaints?.totalCases ?? 0,
+        openCases: dashboard.complaints?.openCases ?? 0,
+        concludedCases: dashboard.complaints?.concludedCases ?? 0,
+        byCpca: dashboard.complaints?.byCpca ?? 0,
+        bySmif: dashboard.complaints?.bySmif ?? 0,
+        moral: dashboard.complaints?.moral ?? 0,
+        sexual: dashboard.complaints?.sexual ?? 0,
+      },
+      activities: {
+        totalActivities: dashboard.activities?.totalActivities ?? 0,
+        done: dashboard.activities?.done ?? 0,
+        smif: dashboard.activities?.smif ?? 0,
+        cipavd: dashboard.activities?.cipavd ?? 0,
+        withReport: dashboard.activities?.withReport ?? 0,
+        signed: dashboard.activities?.signed ?? 0,
+      },
+      missions: {
+        totalMissions: dashboard.missions?.totalMissions ?? 0,
+        smif: dashboard.missions?.smif ?? 0,
+        cipavd: dashboard.missions?.cipavd ?? 0,
+        localitiesCovered: dashboard.missions?.localitiesCovered ?? 0,
+      },
+    };
+
     const payload = {
-      situationalDashboard: dashboard,
+      situationalDashboard: compactDashboard,
       aggressorProfile: profileAny,
       textAnalysisSummary: compactText,
       geoSummary: compactGeo,
@@ -2288,34 +2349,95 @@ export class StrategicService {
 
   private async getSurveyKpis(filters?: StrategicSourceFilter) {
     const sourceSet = this.resolveSourceSet(filters?.sources);
+    const emptyDetails = {
+      total: [] as StrategicKpiDetailItem[],
+      yes: [] as StrategicKpiDetailItem[],
+      no: [] as StrategicKpiDetailItem[],
+    };
     if (!this.hasSurveySources(sourceSet)) {
       return {
         totalResponses: 0,
         violenceRatePercent: 0,
         yesCount: 0,
         noCount: 0,
+        details: emptyDetails,
       };
     }
 
     const where = {};
     try {
       const model = (this.prisma as any).biSurveyResponse;
-      const total = await model.count({ where });
-      if (total === 0)
+      const rows = await model.findMany({
+        where,
+        orderBy: [{ submittedAt: 'desc' }, { createdAt: 'desc' }],
+        select: {
+          id: true,
+          sourceRow: true,
+          submittedAt: true,
+          om: true,
+          postoGraduacao: true,
+          posto: true,
+          sufferedViolence: true,
+        },
+      });
+      if (rows.length === 0)
         return {
           totalResponses: 0,
           violenceRatePercent: 0,
           yesCount: 0,
           noCount: 0,
+          details: emptyDetails,
         };
-      const yesCount = await model.count({
-        where: { ...where, sufferedViolence: true },
-      });
+
+      const toDetail = (row: any): StrategicKpiDetailItem => {
+        const id = String(row?.id ?? '').trim();
+        const sourceRow = Number(row?.sourceRow ?? 0);
+        const title =
+          sourceRow > 0
+            ? `Resposta linha ${sourceRow}`
+            : `Resposta ${id.slice(0, 8) || 'BI'}`;
+        const subtitle = [
+          String(row?.om ?? '').trim(),
+          String(row?.postoGraduacao ?? '').trim(),
+          String(row?.posto ?? '').trim(),
+        ]
+          .filter(Boolean)
+          .join(' • ');
+        return {
+          id: id || `survey-${sourceRow}`,
+          title,
+          subtitle: subtitle || undefined,
+          date: row?.submittedAt?.toISOString?.() ?? undefined,
+          badge:
+            row?.sufferedViolence === true
+              ? 'SIM'
+              : row?.sufferedViolence === false
+                ? 'NÃO'
+                : 'N/I',
+          link: `/dashboard/bi?responseId=${encodeURIComponent(id)}`,
+        };
+      };
+
+      const totalDetails = rows.map((row: any) => toDetail(row));
+      const yesDetails = rows
+        .filter((row: any) => row?.sufferedViolence === true)
+        .map((row: any) => toDetail(row));
+      const noDetails = rows
+        .filter((row: any) => row?.sufferedViolence !== true)
+        .map((row: any) => toDetail(row));
+
+      const total = totalDetails.length;
+      const yesCount = yesDetails.length;
       return {
         totalResponses: total,
         yesCount,
         noCount: total - yesCount,
         violenceRatePercent: pct(yesCount, total),
+        details: {
+          total: totalDetails,
+          yes: yesDetails,
+          no: noDetails,
+        },
       };
     } catch {
       return {
@@ -2323,41 +2445,88 @@ export class StrategicService {
         violenceRatePercent: 0,
         yesCount: 0,
         noCount: 0,
+        details: emptyDetails,
       };
     }
   }
 
   private async getDomesticViolenceKpis(filters?: StrategicSourceFilter) {
     const sourceSet = this.resolveSourceSet(filters?.sources);
+    const emptyDetails = {
+      total: [] as StrategicKpiDetailItem[],
+      lifetimeYes: [] as StrategicKpiDetailItem[],
+      last12MonthsYes: [] as StrategicKpiDetailItem[],
+      soughtHelp: [] as StrategicKpiDetailItem[],
+    };
     if (!this.hasDomesticViolenceSources(sourceSet)) {
       return {
         totalResponses: 0,
         lifetimeRatePercent: 0,
         last12MonthsRatePercent: 0,
         soughtHelpPercent: 0,
+        details: emptyDetails,
       };
     }
 
     const where = {};
     try {
       const model = (this.prisma as any).biDomesticViolenceResponse;
-      const total = await model.count({ where });
-      if (total === 0)
+      const rows = await model.findMany({
+        where,
+        orderBy: [{ submittedAt: 'desc' }, { createdAt: 'desc' }],
+        select: {
+          id: true,
+          sourceRow: true,
+          submittedAt: true,
+          organization: true,
+          rank: true,
+          sufferedLifetime: true,
+          sufferedLast12Months: true,
+          soughtHelp: true,
+        },
+      });
+      if (rows.length === 0)
         return {
           totalResponses: 0,
           lifetimeRatePercent: 0,
           last12MonthsRatePercent: 0,
           soughtHelpPercent: 0,
+          details: emptyDetails,
         };
-      const lifetimeYes = await model.count({
-        where: { ...where, sufferedLifetime: true },
-      });
-      const last12Yes = await model.count({
-        where: { ...where, sufferedLast12Months: true },
-      });
-      const soughtHelp = await model.count({
-        where: { ...where, soughtHelp: true },
-      });
+
+      const toDetail = (row: any): StrategicKpiDetailItem => {
+        const id = String(row?.id ?? '').trim();
+        const sourceRow = Number(row?.sourceRow ?? 0);
+        const title =
+          String(row?.organization ?? '').trim() ||
+          (sourceRow > 0
+            ? `Resposta linha ${sourceRow}`
+            : `Resposta ${id.slice(0, 8) || 'BI'}`);
+        return {
+          id: id || `domestic-${sourceRow}`,
+          title,
+          subtitle: String(row?.rank ?? '').trim() || undefined,
+          date: row?.submittedAt?.toISOString?.() ?? undefined,
+          link: `/dashboard/bi-violencia-domestica?responseId=${encodeURIComponent(id)}`,
+        };
+      };
+
+      const totalDetails = rows.map((row: any) => toDetail(row));
+      const lifetimeYesDetails = rows
+        .filter((row: any) => row?.sufferedLifetime === true)
+        .map((row: any) => toDetail(row));
+      const last12MonthsYesDetails = rows
+        .filter((row: any) => row?.sufferedLast12Months === true)
+        .map((row: any) => toDetail(row));
+      const soughtHelpDetails = rows
+        .filter((row: any) => row?.soughtHelp === true)
+        .map((row: any) => toDetail(row));
+
+      const total = totalDetails.length;
+      const lifetimeYes = lifetimeYesDetails.length;
+      const last12Yes = last12MonthsYesDetails.length;
+      const soughtHelp = soughtHelpDetails.length;
+
       return {
         totalResponses: total,
         lifetimeYes,
@@ -2369,6 +2538,12 @@ export class StrategicService {
           soughtHelp,
           lifetimeYes > 0 ? lifetimeYes : total,
         ),
+        details: {
+          total: totalDetails,
+          lifetimeYes: lifetimeYesDetails,
+          last12MonthsYes: last12MonthsYesDetails,
+          soughtHelp: soughtHelpDetails,
+        },
       };
     } catch {
       return {
@@ -2376,58 +2551,125 @@ export class StrategicService {
         lifetimeRatePercent: 0,
         last12MonthsRatePercent: 0,
         soughtHelpPercent: 0,
+        details: emptyDetails,
       };
     }
   }
 
   private async getRecruitsKpis(filters?: StrategicSourceFilter) {
     const sourceSet = this.resolveSourceSet(filters?.sources);
+    const emptyDetails = {
+      total: [] as StrategicKpiDetailItem[],
+      safe: [] as StrategicKpiDetailItem[],
+      knowReportProcess: [] as StrategicKpiDetailItem[],
+    };
     if (!this.hasRecruitSources(sourceSet)) {
       return {
         totalResponses: 0,
         safeToReportPercent: 0,
         knowReportProcessPercent: 0,
+        details: emptyDetails,
       };
     }
 
     const where = {};
     try {
       const model = (this.prisma as any).biRecruitsResponse;
-      const total = await model.count({ where });
-      if (total === 0)
+      const rows = await model.findMany({
+        where,
+        orderBy: [{ submittedAt: 'desc' }, { createdAt: 'desc' }],
+        select: {
+          id: true,
+          sourceRow: true,
+          submittedAt: true,
+          education: true,
+          gender: true,
+          willingnessReport: true,
+          knowReportProcess: true,
+        },
+      });
+
+      if (rows.length === 0)
         return {
           totalResponses: 0,
           safeToReportPercent: 0,
           knowReportProcessPercent: 0,
+          details: emptyDetails,
         };
-      const all = await model.findMany({
-        select: { willingnessReport: true, knowReportProcess: true },
-        where,
-      });
-      const safeCount = all.filter(
-        (r: any) => r.willingnessReport === 'Seguro(a)',
-      ).length;
-      const knowProcess = all.filter(
-        (r: any) => r.knowReportProcess === 'Sim',
-      ).length;
+
+      const toDetail = (row: any): StrategicKpiDetailItem => {
+        const id = String(row?.id ?? '').trim();
+        const sourceRow = Number(row?.sourceRow ?? 0);
+        const title =
+          sourceRow > 0
+            ? `Resposta linha ${sourceRow}`
+            : `Resposta ${id.slice(0, 8) || 'BI'}`;
+        const subtitle = [
+          String(row?.education ?? '').trim(),
+          String(row?.gender ?? '').trim(),
+        ]
+          .filter(Boolean)
+          .join(' • ');
+        const badge = [
+          String(row?.willingnessReport ?? '').trim(),
+          String(row?.knowReportProcess ?? '').trim(),
+        ]
+          .filter(Boolean)
+          .join(' | ');
+        return {
+          id: id || `recruit-${sourceRow}`,
+          title,
+          subtitle: subtitle || undefined,
+          date: row?.submittedAt?.toISOString?.() ?? undefined,
+          badge: badge || undefined,
+          link: `/dashboard/bi-recrutas?responseId=${encodeURIComponent(id)}`,
+        };
+      };
+
+      const totalDetails = rows.map((row: any) => toDetail(row));
+      const safeDetails = rows
+        .filter((row: any) => row?.willingnessReport === 'Seguro(a)')
+        .map((row: any) => toDetail(row));
+      const knowDetails = rows
+        .filter((row: any) => row?.knowReportProcess === 'Sim')
+        .map((row: any) => toDetail(row));
+      const safeCount = safeDetails.length;
+      const knowProcess = knowDetails.length;
+      const total = totalDetails.length;
+
       return {
         totalResponses: total,
         safeCount,
         safeToReportPercent: pct(safeCount, total),
         knowProcess,
         knowReportProcessPercent: pct(knowProcess, total),
+        details: {
+          total: totalDetails,
+          safe: safeDetails,
+          knowReportProcess: knowDetails,
+        },
       };
     } catch {
       return {
         totalResponses: 0,
         safeToReportPercent: 0,
         knowReportProcessPercent: 0,
+        details: emptyDetails,
       };
     }
   }
 
   private async getComplaintsKpis(filters?: StrategicSourceFilter) {
     const sourceSet = this.resolveSourceSet(filters?.sources);
+    const emptyDetails = {
+      total: [] as StrategicKpiDetailItem[],
+      open: [] as StrategicKpiDetailItem[],
+      concluded: [] as StrategicKpiDetailItem[],
+      cpca: [] as StrategicKpiDetailItem[],
+      smif: [] as StrategicKpiDetailItem[],
+      moral: [] as StrategicKpiDetailItem[],
+      sexual: [] as StrategicKpiDetailItem[],
+    };
     if (!this.hasComplaintSources(sourceSet)) {
       return {
         totalCases: 0,
@@ -2439,6 +2681,7 @@ export class StrategicService {
         sexual: 0,
         moralPercent: 0,
         sexualPercent: 0,
+        details: emptyDetails,
       };
     }
 
@@ -2449,29 +2692,73 @@ export class StrategicService {
         : {};
     try {
       const model = (this.prisma as any).cpcComplaintCase;
-      const total = await model.count({ where });
-      const openStatuses = [
+      const rows = await model.findMany({
+        where,
+        orderBy: [{ reportedAt: 'desc' }, { createdAt: 'desc' }],
+        select: {
+          id: true,
+          caseNumber: true,
+          workflowScope: true,
+          status: true,
+          complaintType: true,
+          reportedAt: true,
+          locality: { select: { name: true } },
+        },
+      });
+      const openStatuses = new Set([
         'RECEIVED',
         'PROTECTION_MEASURES',
         'PRELIMINARY_ANALYSIS',
         'PROCEDURE_DEFINED',
         'INVESTIGATION',
-      ];
-      const openCases = await model.count({
-        where: { ...where, status: { in: openStatuses } },
-      });
-      const byCpca = await model.count({
-        where: { ...where, workflowScope: 'CPCA' },
-      });
-      const bySmif = await model.count({
-        where: { ...where, workflowScope: 'SMIF' },
-      });
-      const moral = await model.count({
-        where: { ...where, complaintType: 'MORAL' },
-      });
-      const sexual = await model.count({
-        where: { ...where, complaintType: 'SEXUAL' },
-      });
+      ]);
+      const toDetail = (row: any): StrategicKpiDetailItem => {
+        const id = String(row?.id ?? '').trim();
+        const caseNumber = String(row?.caseNumber ?? '').trim();
+        const scope = String(row?.workflowScope ?? 'CPCA').trim().toUpperCase();
+        const link =
+          scope === 'SMIF'
+            ? `/smif-complaints?q=${encodeURIComponent(caseNumber)}`
+            : `/cpca-cases?q=${encodeURIComponent(caseNumber)}`;
+        return {
+          id: id || `complaint-${caseNumber}`,
+          title: caseNumber ? `Denúncia ${caseNumber}` : 'Denúncia',
+          subtitle: [scope, String(row?.locality?.name ?? '').trim()]
+            .filter(Boolean)
+            .join(' • '),
+          date: row?.reportedAt?.toISOString?.() ?? undefined,
+          badge: String(row?.status ?? '').trim() || undefined,
+          link,
+        };
+      };
+
+      const totalDetails = rows.map((row: any) => toDetail(row));
+      const openDetails = rows
+        .filter((row: any) => openStatuses.has(String(row?.status ?? '').trim()))
+        .map((row: any) => toDetail(row));
+      const concludedDetails = rows
+        .filter((row: any) => !openStatuses.has(String(row?.status ?? '').trim()))
+        .map((row: any) => toDetail(row));
+      const cpcaDetails = rows
+        .filter((row: any) => String(row?.workflowScope ?? '').trim().toUpperCase() === 'CPCA')
+        .map((row: any) => toDetail(row));
+      const smifDetails = rows
+        .filter((row: any) => String(row?.workflowScope ?? '').trim().toUpperCase() === 'SMIF')
+        .map((row: any) => toDetail(row));
+      const moralDetails = rows
+        .filter((row: any) => String(row?.complaintType ?? '').trim().toUpperCase() === 'MORAL')
+        .map((row: any) => toDetail(row));
+      const sexualDetails = rows
+        .filter((row: any) => String(row?.complaintType ?? '').trim().toUpperCase() === 'SEXUAL')
+        .map((row: any) => toDetail(row));
+
+      const total = totalDetails.length;
+      const openCases = openDetails.length;
+      const byCpca = cpcaDetails.length;
+      const bySmif = smifDetails.length;
+      const moral = moralDetails.length;
+      const sexual = sexualDetails.length;
+
       return {
         totalCases: total,
         openCases,
@@ -2482,6 +2769,15 @@ export class StrategicService {
         sexual,
         moralPercent: pct(moral, total),
         sexualPercent: pct(sexual, total),
+        details: {
+          total: totalDetails,
+          open: openDetails,
+          concluded: concludedDetails,
+          cpca: cpcaDetails,
+          smif: smifDetails,
+          moral: moralDetails,
+          sexual: sexualDetails,
+        },
       };
     } catch {
       return {
@@ -2494,6 +2790,7 @@ export class StrategicService {
         sexual: 0,
         moralPercent: 0,
         sexualPercent: 0,
+        details: emptyDetails,
       };
     }
   }
@@ -2615,31 +2912,123 @@ export class StrategicService {
 
   private async getMissionsKpis(filters?: StrategicSourceFilter) {
     const sourceSet = this.resolveSourceSet(filters?.sources);
+    const emptyDetails = {
+      total: [] as StrategicKpiDetailItem[],
+      smif: [] as StrategicKpiDetailItem[],
+      cipavd: [] as StrategicKpiDetailItem[],
+      localitiesCovered: [] as StrategicKpiDetailItem[],
+    };
     if (!this.hasMissionSource(sourceSet)) {
-      return { totalMissions: 0, smif: 0, cipavd: 0, localitiesCovered: 0 };
+      return {
+        totalMissions: 0,
+        smif: 0,
+        cipavd: 0,
+        localitiesCovered: 0,
+        details: emptyDetails,
+      };
     }
 
     const where = {};
     try {
       const model = (this.prisma as any).mission;
-      const total = await model.count({ where });
-      const smif = await model.count({ where: { ...where, scope: 'SMIF' } });
-      const cipavd = await model.count({
-        where: { ...where, scope: 'CIPAVD' },
-      });
-      const distinctLocalities = await model.findMany({
+      const rows = await model.findMany({
         where,
-        select: { localityId: true },
-        distinct: ['localityId'],
+        orderBy: [{ startDate: 'desc' }, { createdAt: 'desc' }],
+        select: {
+          id: true,
+          title: true,
+          scope: true,
+          startDate: true,
+          endDate: true,
+          localityId: true,
+          locality: { select: { name: true } },
+        },
       });
+
+      const toDetail = (row: any): StrategicKpiDetailItem => {
+        const missionId = String(row?.id ?? '').trim();
+        const scope = String(row?.scope ?? 'SMIF').trim().toUpperCase();
+        return {
+          id: missionId || `mission-${row?.title ?? ''}`,
+          title:
+            String(row?.title ?? '').trim() || `Missão ${missionId || 'sem-id'}`,
+          subtitle: [scope, String(row?.locality?.name ?? '').trim()]
+            .filter(Boolean)
+            .join(' • '),
+          date: row?.startDate?.toISOString?.() ?? undefined,
+          link: `/missions?missionId=${encodeURIComponent(missionId)}&scope=${encodeURIComponent(scope)}`,
+        };
+      };
+
+      const totalDetails = rows.map((row: any) => toDetail(row));
+      const smifDetails = rows
+        .filter((row: any) => String(row?.scope ?? '').trim().toUpperCase() === 'SMIF')
+        .map((row: any) => toDetail(row));
+      const cipavdDetails = rows
+        .filter((row: any) => String(row?.scope ?? '').trim().toUpperCase() === 'CIPAVD')
+        .map((row: any) => toDetail(row));
+
+      const localities = new Map<
+        string,
+        {
+          id: string;
+          name: string;
+          total: number;
+          smif: number;
+          cipavd: number;
+        }
+      >();
+      for (const row of rows as any[]) {
+        const localityId = String(row?.localityId ?? '').trim();
+        if (!localityId) continue;
+        if (!localities.has(localityId)) {
+          localities.set(localityId, {
+            id: localityId,
+            name: String(row?.locality?.name ?? '').trim() || localityId,
+            total: 0,
+            smif: 0,
+            cipavd: 0,
+          });
+        }
+        const entry = localities.get(localityId)!;
+        entry.total += 1;
+        const scope = String(row?.scope ?? '').trim().toUpperCase();
+        if (scope === 'CIPAVD') entry.cipavd += 1;
+        else entry.smif += 1;
+      }
+      const localitiesDetails = Array.from(localities.values())
+        .sort((a, b) => b.total - a.total)
+        .map((entry) => {
+          const scope = entry.cipavd > entry.smif ? 'CIPAVD' : 'SMIF';
+          return {
+            id: `mission-locality-${entry.id}`,
+            title: entry.name,
+            subtitle: `SMIF: ${entry.smif} • CIPAVD: ${entry.cipavd}`,
+            badge: String(entry.total),
+            link: `/missions?localityId=${encodeURIComponent(entry.id)}&scope=${scope}`,
+          };
+        });
+
       return {
-        totalMissions: total,
-        smif,
-        cipavd,
-        localitiesCovered: distinctLocalities.length,
+        totalMissions: totalDetails.length,
+        smif: smifDetails.length,
+        cipavd: cipavdDetails.length,
+        localitiesCovered: localitiesDetails.length,
+        details: {
+          total: totalDetails,
+          smif: smifDetails,
+          cipavd: cipavdDetails,
+          localitiesCovered: localitiesDetails,
+        },
       };
     } catch {
-      return { totalMissions: 0, smif: 0, cipavd: 0, localitiesCovered: 0 };
+      return {
+        totalMissions: 0,
+        smif: 0,
+        cipavd: 0,
+        localitiesCovered: 0,
+        details: emptyDetails,
+      };
     }
   }
 
@@ -2665,12 +3054,11 @@ export class StrategicService {
           dueDate: { lt: now },
         },
       });
-      const pending = Math.max(0, totalTasks - completed);
       return {
         totalTasks,
         totalOverdue,
         completed,
-        pending,
+        pending: Math.max(0, totalTasks - completed),
       };
     } catch {
       return {

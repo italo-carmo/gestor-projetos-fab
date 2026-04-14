@@ -31,6 +31,7 @@ type DomesticViolenceFilters = {
   authorMilitaryLink?: string;
   occurrencePlace?: string;
   witnesses?: string;
+  responseId?: string;
   q?: string;
   combineMode?: string;
 };
@@ -1308,6 +1309,10 @@ export class BiDomesticViolenceService {
       if (parsed !== null) {
         conditions.push({ witnesses: parsed });
       }
+    }
+
+    if (filters.responseId?.trim()) {
+      conditions.push({ id: filters.responseId.trim() });
     }
 
     if (filters.q?.trim()) {

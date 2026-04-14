@@ -58,6 +58,7 @@ export class BiRecruitsController {
     @Query('willingnessReport') willingnessReport: string | undefined,
     @Query('enlistmentDecisionInfluence')
     enlistmentDecisionInfluence: string | undefined,
+    @Query('responseId') responseId: string | undefined,
     @Query('q') q: string | undefined,
     @Query('combineMode') combineMode: string | undefined,
     @CurrentUser() user: RbacUser,
@@ -75,6 +76,7 @@ export class BiRecruitsController {
       willingnessOrientation,
       willingnessReport,
       enlistmentDecisionInfluence,
+      responseId,
       q,
       combineMode,
     });
