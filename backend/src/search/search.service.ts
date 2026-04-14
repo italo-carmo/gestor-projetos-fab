@@ -164,15 +164,7 @@ export class SearchService {
       ? this.buildDocumentWhere(query, queryTokens, user)
       : null;
 
-    const [tasks, notices, meetings, localities, documents] = await Promise.all<
-      [
-        TaskSearchRow[],
-        NoticeSearchRow[],
-        MeetingSearchRow[],
-        LocalitySearchRow[],
-        DocumentSearchRow[],
-      ]
-    >([
+    const [tasks, notices, meetings, localities, documents] = await Promise.all([
       taskWhere
         ? (this.prisma.taskInstance.findMany({
             where: taskWhere,
