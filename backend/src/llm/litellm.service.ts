@@ -120,6 +120,19 @@ export function stripReasoningPrefix(text: string): string {
   return text;
 }
 
+function extractTextLike(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) {
+    return value.map((item) => extractTextLike(item)).join('');
+  }
+  if (value && typeof value === 'object') {
+    const candidate = value as Record<string, unknown>;
+    if (typeof candidate.text === 'string') return candidate.text;
+    if (typeof candidate.content === 'string') return candidate.content;
+  }
+  return '';
+}
+
 /**
  * Override values injected at runtime from AppSetting (DB).
  * Set by SettingsService on startup and after admin updates.
@@ -322,28 +335,42 @@ export class LitellmService {
           try {
             const chunk = JSON.parse(trimmed.slice(6));
             resolvedModel = chunk.model ?? resolvedModel;
-            const delta = chunk.choices?.[0]?.delta?.content;
-            if (!delta) continue;
+            const choice = chunk.choices?.[0];
+            const finishReason = choice?.finish_reason;
+            const delta = extractTextLike(choice?.delta?.content);
 
-            if (reasoningDone) {
-              yield { type: 'token', text: delta };
-              continue;
-            }
-
-            accumulated += delta;
-            const accLower = accumulated.toLowerCase();
-            for (const marker of REASONING_MARKERS) {
-              const idx = accLower.lastIndexOf(marker);
-              if (idx !== -1) {
-                reasoningDone = true;
-                const afterMarker = accumulated.slice(idx + marker.length);
-                accumulated = '';
-                const clean = afterMarker.trimStart();
-                if (clean) yield { type: 'token', text: clean };
-                break;
+            if (delta) {
+              if (reasoningDone) {
+                yield { type: 'token', text: delta };
+              } else {
+                accumulated += delta;
+                const accLower = accumulated.toLowerCase();
+                for (const marker of REASONING_MARKERS) {
+                  const idx = accLower.lastIndexOf(marker);
+                  if (idx !== -1) {
+                    reasoningDone = true;
+                    const afterMarker = accumulated.slice(idx + marker.length);
+                    accumulated = '';
+                    const clean = afterMarker.trimStart();
+                    if (clean) yield { type: 'token', text: clean };
+                    break;
+                  }
+                }
               }
             }
-          } catch { /* skip malformed */ }
+
+            // Alguns provedores encerram por finish_reason sem emitir data: [DONE].
+            if (finishReason) {
+              if (!reasoningDone && accumulated) {
+                const cleaned = stripReasoningPrefix(accumulated);
+                if (cleaned) yield { type: 'token', text: cleaned };
+              }
+              yield { type: 'done', model: resolvedModel };
+              return;
+            }
+          } catch {
+            // ignora chunk malformado
+          }
         }
       }
     } finally {
