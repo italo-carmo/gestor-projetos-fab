@@ -27,6 +27,7 @@ export const CPCA_CASE_STATUSES = [
 export const CPCA_PROCEDURE_TYPES = [
   'NOT_DEFINED',
   'PATD',
+  'APF',
   'SINDICANCIA',
   'PAD',
   'IPM',
@@ -121,6 +122,7 @@ export const CPCA_ADMIN_PROCEDURES = [
   'SINDICANCIA',
   'IPM',
   'PATD',
+  'APF',
   'PAD',
   'BOLETIM_OCORRENCIA',
   'INQUERITO_CIVIL',

@@ -60,6 +60,7 @@ const STATUS_LABELS: Record<string, string> = {
 const PROCEDURE_LABELS: Record<string, string> = {
   NOT_DEFINED: "Não definido",
   PATD: "PATD",
+  APF: "APF",
   SINDICANCIA: "Sindicância",
   PAD: "PAD",
   IPM: "IPM",

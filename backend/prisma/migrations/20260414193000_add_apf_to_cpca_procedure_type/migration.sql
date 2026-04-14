@@ -1,0 +1,6 @@
+DO $$
+BEGIN
+  ALTER TYPE "CpcProcedureType" ADD VALUE IF NOT EXISTS 'APF';
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;

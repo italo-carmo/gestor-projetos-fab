@@ -21,6 +21,7 @@ const CPCA_STATUS_ORDER = [
 const CPCA_PROCEDURE_ORDER = [
   'NOT_DEFINED',
   'PATD',
+  'APF',
   'SINDICANCIA',
   'PAD',
   'IPM',

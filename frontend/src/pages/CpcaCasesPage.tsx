@@ -80,6 +80,7 @@ const NOTIFIER_TYPE_OPTIONS = [
 const PROCEDURE_OPTIONS = [
   { value: "NOT_DEFINED", label: "Não definido" },
   { value: "PATD", label: "PATD" },
+  { value: "APF", label: "APF" },
   { value: "SINDICANCIA", label: "Sindicância" },
   { value: "PAD", label: "PAD" },
   { value: "IPM", label: "IPM" },

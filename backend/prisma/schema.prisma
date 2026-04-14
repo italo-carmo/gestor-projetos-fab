@@ -1748,6 +1748,7 @@ enum SmifComplaintStatus {
 enum CpcProcedureType {
   NOT_DEFINED
   PATD
+  APF
   SINDICANCIA
   PAD
   IPM
