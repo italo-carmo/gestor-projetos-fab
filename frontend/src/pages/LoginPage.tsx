@@ -35,6 +35,11 @@ type TwoFactorState = {
   useBackupCode: boolean;
 };
 
+function asNonEmptyString(value: unknown) {
+  const normalized = String(value ?? "").trim();
+  return normalized || "";
+}
+
 type CpcaSelfRegistrationLookupPreview = {
   identifier: string;
   profile: {
@@ -109,31 +114,54 @@ export function LoginPage() {
         password,
       });
 
-      if (data?.requiresTwoFactorSetup) {
+      const requiresTwoFactorSetup = Boolean(
+        data?.requiresTwoFactorSetup ?? data?.requires_two_factor_setup,
+      );
+      const requiresTwoFactor = Boolean(
+        data?.requiresTwoFactor ?? data?.requires_two_factor,
+      );
+      const accessToken = asNonEmptyString(
+        data?.accessToken ?? data?.access_token,
+      );
+      const refreshToken = asNonEmptyString(
+        data?.refreshToken ?? data?.refresh_token,
+      );
+
+      if (requiresTwoFactorSetup) {
         sessionStorage.setItem(
           "2fa_setup",
           JSON.stringify({
-            setupToken: data.setupToken,
-            qrCodeDataUrl: data.qrCodeDataUrl,
-            manualEntryKey: data.manualEntryKey,
+            setupToken: asNonEmptyString(data?.setupToken ?? data?.setup_token),
+            qrCodeDataUrl: asNonEmptyString(
+              data?.qrCodeDataUrl ?? data?.qr_code_data_url,
+            ),
+            manualEntryKey: asNonEmptyString(
+              data?.manualEntryKey ?? data?.manual_entry_key,
+            ),
           }),
         );
         navigate("/2fa-setup", { replace: true });
         return;
       }
 
-      if (data?.requiresTwoFactor) {
+      if (requiresTwoFactor) {
         setTwoFactorState({
-          twoFactorToken: data.twoFactorToken,
+          twoFactorToken: asNonEmptyString(
+            data?.twoFactorToken ?? data?.two_factor_token,
+          ),
           useBackupCode: false,
         });
         return;
       }
 
-      if (data?.accessToken)
-        localStorage.setItem("accessToken", data.accessToken);
-      if (data?.refreshToken)
-        localStorage.setItem("refreshToken", data.refreshToken);
+      if (!accessToken) {
+        throw new Error(
+          "Não foi possível concluir o login. Atualize a página e tente novamente.",
+        );
+      }
+
+      localStorage.setItem("accessToken", accessToken);
+      if (refreshToken) localStorage.setItem("refreshToken", refreshToken);
       localStorage.removeItem(ACTIVE_ROLE_STORAGE_KEY);
       const me = (await api.get("/auth/me")).data;
       toast.push({ message: "Login realizado", severity: "success" });
@@ -159,10 +187,19 @@ export function LoginPage() {
         twoFactorToken: twoFactorState.twoFactorToken,
         code: normalized,
       });
-      if (data?.accessToken)
-        localStorage.setItem("accessToken", data.accessToken);
-      if (data?.refreshToken)
-        localStorage.setItem("refreshToken", data.refreshToken);
+      const accessToken = asNonEmptyString(
+        data?.accessToken ?? data?.access_token,
+      );
+      const refreshToken = asNonEmptyString(
+        data?.refreshToken ?? data?.refresh_token,
+      );
+      if (!accessToken) {
+        throw new Error(
+          "Não foi possível validar o token de acesso após o código 2FA.",
+        );
+      }
+      localStorage.setItem("accessToken", accessToken);
+      if (refreshToken) localStorage.setItem("refreshToken", refreshToken);
       localStorage.removeItem(ACTIVE_ROLE_STORAGE_KEY);
       const me = (await api.get("/auth/me")).data;
       toast.push({ message: "Login realizado", severity: "success" });
