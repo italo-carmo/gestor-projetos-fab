@@ -39,7 +39,10 @@ REGRAS OBRIGATÓRIAS:
  8. NÃO repita a pergunta ou as instruções. Vá direto à análise.`;
 
 const isAllowedSource = (value: unknown): value is AiKnowledgeSourceId => {
-  return String(value).trim() !== '' && ALL_KNOWLEDGE_SOURCE_IDS.includes(String(value) as AiKnowledgeSourceId);
+  return (
+    String(value).trim() !== '' &&
+    ALL_KNOWLEDGE_SOURCE_IDS.includes(String(value) as AiKnowledgeSourceId)
+  );
 };
 
 const mergeUniqueSources = (values: unknown): AiKnowledgeSourceId[] => {
@@ -48,9 +51,7 @@ const mergeUniqueSources = (values: unknown): AiKnowledgeSourceId[] => {
     .map((value) => String(value ?? '').trim())
     .filter(Boolean)
     .filter((value, idx, arr) => arr.indexOf(value) === idx)
-    .filter((value): value is AiKnowledgeSourceId =>
-      isAllowedSource(value),
-    );
+    .filter((value): value is AiKnowledgeSourceId => isAllowedSource(value));
   return parsed;
 };
 
@@ -164,7 +165,9 @@ export class SettingsService implements OnModuleInit {
     return parseAnalysisSources(row?.value ?? null);
   }
 
-  async getAnalysisSourcesForType(type: AiAnalysisType): Promise<AiKnowledgeSourceId[]> {
+  async getAnalysisSourcesForType(
+    type: AiAnalysisType,
+  ): Promise<AiKnowledgeSourceId[]> {
     const rows = await this.getAnalysisSources();
     return rows[type] ?? ANALYSIS_DEFAULT_SOURCES[type];
   }
@@ -200,7 +203,9 @@ export class SettingsService implements OnModuleInit {
     }
 
     if (patch.analysisSources) {
-      const normalized = normalizeSourceSelectionForStorage(patch.analysisSources);
+      const normalized = normalizeSourceSelectionForStorage(
+        patch.analysisSources,
+      );
       ops.push(
         this.set(
           AI_SETTING_KEYS.analysisSources,

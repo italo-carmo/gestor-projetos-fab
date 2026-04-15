@@ -160,7 +160,13 @@ const SEARCH_SCREEN_CANDIDATES: SearchScreenCandidate[] = [
     path: '/activities',
     title: 'Atividades de Campo (SMIF)',
     subtitle: 'Painel de atividades de campo e relatórios',
-    keywords: ['atividade', 'atividades', 'campo', 'smif', 'atividade de campo'],
+    keywords: [
+      'atividade',
+      'atividades',
+      'campo',
+      'smif',
+      'atividade de campo',
+    ],
   },
   {
     id: 'activities-cipavd',
@@ -169,7 +175,13 @@ const SEARCH_SCREEN_CANDIDATES: SearchScreenCandidate[] = [
     path: '/activities-cipavd',
     title: 'Atividades de Campo (CIPAVD)',
     subtitle: 'Atividades de campo específicas da CIPAVD',
-    keywords: ['atividade', 'atividades', 'campo', 'cipavd', 'atividade de campo'],
+    keywords: [
+      'atividade',
+      'atividades',
+      'campo',
+      'cipavd',
+      'atividade de campo',
+    ],
   },
   {
     id: 'missions',
@@ -178,13 +190,7 @@ const SEARCH_SCREEN_CANDIDATES: SearchScreenCandidate[] = [
     path: '/missions',
     title: 'Missões',
     subtitle: 'Execução de missões e planejamento',
-    keywords: [
-      'missões',
-      'missoes',
-      'missão',
-      'plano de missão',
-      'missao',
-    ],
+    keywords: ['missões', 'missoes', 'missão', 'plano de missão', 'missao'],
     isAllowed: (user) => hasPermission(user, 'missions', 'view'),
   },
   {
@@ -1085,9 +1091,7 @@ export class SearchService {
   } | null {
     try {
       const parsed = new URL(url, 'https://_placeholder');
-      const pathname = (parsed.pathname || '/')
-        .replace(/\/+$/, '')
-        .trim();
+      const pathname = (parsed.pathname || '/').replace(/\/+$/, '').trim();
       const queryKeys = new Set(Array.from(parsed.searchParams.keys()));
       return { pathname, queryKeys };
     } catch {

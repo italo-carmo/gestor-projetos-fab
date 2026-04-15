@@ -60,6 +60,7 @@ export class AuthService {
         ldapUid,
         name: ldapProfile.name,
         email: ldapProfile.email,
+        fabom: ldapProfile.fabom,
       });
     } catch (error) {
       if (this.getHttpErrorCode(error) === 'AUTH_INVALID_CREDENTIALS') {
@@ -195,6 +196,8 @@ export class AuthService {
   }
 
   async me(userId: string, activeRoleId?: string) {
+    await this.syncUserLocalityFromLdap(userId);
+
     const access = await this.rbac.getUserAccess(userId, activeRoleId);
     const allRoles = access.allRoles ?? access.roles;
     const activeRole = access.roles[0] ?? null;
@@ -744,11 +747,22 @@ export class AuthService {
 
   private async registerSuccessfulLogin(
     userId: string,
-    profile: { ldapUid: string; name: string | null; email: string | null },
+    profile: {
+      ldapUid: string;
+      name: string | null;
+      email: string | null;
+      fabom: string | null;
+    },
   ) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, name: true, email: true, ldapUid: true },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        ldapUid: true,
+        localityId: true,
+      },
     });
     if (!user) return;
 
@@ -780,10 +794,115 @@ export class AuthService {
       }
     }
 
+    const normalizedFabom = this.normalizeFabOm(profile.fabom);
+    if (normalizedFabom) {
+      const resolvedLocalityId = await this.resolveLocalityIdFromFabOm(
+        normalizedFabom,
+      );
+      if ((resolvedLocalityId ?? null) !== (user.localityId ?? null)) {
+        data.localityId = resolvedLocalityId ?? null;
+      }
+    }
+
     await this.prisma.user.update({
       where: { id: userId },
       data,
     });
+  }
+
+  private async syncUserLocalityFromLdap(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, ldapUid: true, email: true, localityId: true },
+    });
+    if (!user) return;
+
+    try {
+      const profile = await this.resolveFabProfileForUser({
+        ldapUid: user.ldapUid,
+        email: user.email,
+      });
+      const normalizedFabom = this.normalizeFabOm(profile?.fabom ?? null);
+      if (!normalizedFabom) return;
+
+      const resolvedLocalityId =
+        await this.resolveLocalityIdFromFabOm(normalizedFabom);
+      if ((resolvedLocalityId ?? null) === (user.localityId ?? null)) return;
+
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { localityId: resolvedLocalityId ?? null },
+      });
+    } catch {
+      // Fail-open: não bloqueia /auth/me quando LDAP estiver indisponível.
+    }
+  }
+
+  private normalizeFabOm(value: string | null | undefined) {
+    return String(value ?? '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim()
+      .toUpperCase();
+  }
+
+  private async resolveLocalityIdFromFabOm(fabom: string) {
+    const normalizedFabom = this.normalizeFabOm(fabom);
+    if (!normalizedFabom) return null;
+
+    const candidates = new Set<string>([normalizedFabom]);
+
+    for (const token of normalizedFabom.split(/[\/|;,]+/)) {
+      const trimmed = token.trim();
+      if (trimmed) candidates.add(trimmed);
+    }
+
+    if (normalizedFabom.includes('-')) {
+      const parts = normalizedFabom
+        .split('-')
+        .map((part) => part.trim())
+        .filter(Boolean);
+      const lastPart = parts[parts.length - 1];
+      if (lastPart) candidates.add(lastPart);
+      for (const part of parts) candidates.add(part);
+    }
+
+    const localityRows = await this.prisma.locality.findMany({
+      where: { catalogType: 'SMIF' },
+      select: { id: true, code: true, name: true },
+    });
+
+    const normalize = (value: string) =>
+      String(value ?? '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim()
+        .toUpperCase();
+
+    for (const candidate of candidates) {
+      const direct = localityRows.find(
+        (row) => normalize(row.code) === normalize(candidate),
+      );
+      if (direct) return direct.id;
+    }
+
+    for (const candidate of candidates) {
+      const byName = localityRows.find(
+        (row) => normalize(row.name) === normalize(candidate),
+      );
+      if (byName) return byName.id;
+    }
+
+    for (const candidate of candidates) {
+      const bySuffix = localityRows.find((row) => {
+        const rowCode = normalize(row.code);
+        const c = normalize(candidate);
+        return rowCode.endsWith(`-${c}`) || c.endsWith(`-${rowCode}`);
+      });
+      if (bySuffix) return bySuffix.id;
+    }
+
+    return null;
   }
 
   private getHttpErrorCode(error: unknown): string | null {

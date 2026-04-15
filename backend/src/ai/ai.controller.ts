@@ -18,10 +18,7 @@ export class AiController {
 
   @Post('analyze')
   @RequirePermission('bi', 'view')
-  async analyze(
-    @Body() body: { type: AnalysisType },
-    @Res() res: Response,
-  ) {
+  async analyze(@Body() body: { type: AnalysisType }, @Res() res: Response) {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');

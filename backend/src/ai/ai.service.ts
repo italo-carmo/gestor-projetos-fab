@@ -185,7 +185,7 @@ export class AiService {
         }
         if (next.done) break;
 
-      const chunk = next.value;
+        const chunk = next.value;
         if (chunk.type === 'token') {
           fullText += chunk.text;
           tokenCount++;
@@ -246,7 +246,9 @@ export class AiService {
     let contextSummary: string;
     try {
       const dashboard = analysisType
-        ? await this.strategic.situationalDashboard({ sources: analysisSources })
+        ? await this.strategic.situationalDashboard({
+            sources: analysisSources,
+          })
         : await this.strategic.situationalDashboard();
       const complaints = (dashboard as any).complaints ?? {};
       const surveys = (dashboard as any).surveys ?? {};

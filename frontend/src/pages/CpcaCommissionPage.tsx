@@ -25,6 +25,7 @@ import {
   useAssignCpcaPresident,
   useCpcaCommissionOverview,
   useMe,
+  useMyFabProfile,
   useOmsCatalog,
   useRemoveCpcaCommissionMember,
 } from '../api/hooks';
@@ -68,6 +69,7 @@ function extractReason(error: unknown) {
 export function CpcaCommissionPage() {
   const toast = useToast();
   const { data: me } = useMe();
+  const fabProfileQuery = useMyFabProfile();
   const isApprover = hasAnyRole(me, [ROLE_TI, ROLE_COMGEP]);
   const omsCatalogQuery = useOmsCatalog(isApprover);
 
@@ -94,7 +96,23 @@ export function CpcaCommissionPage() {
 
   useEffect(() => {
     if (isApprover) {
-      if (!selectedLocalityId && cpcaLocalities.length > 0) {
+      if (
+        selectedLocalityId &&
+        cpcaLocalities.some((item) => item.id === selectedLocalityId)
+      ) {
+        return;
+      }
+
+      const ownLocalityId = String(me?.localityId ?? '').trim();
+      if (
+        ownLocalityId &&
+        cpcaLocalities.some((item) => item.id === ownLocalityId)
+      ) {
+        setSelectedLocalityId(ownLocalityId);
+        return;
+      }
+
+      if (cpcaLocalities.length > 0) {
         setSelectedLocalityId(cpcaLocalities[0].id);
       }
       return;
@@ -134,10 +152,25 @@ export function CpcaCommissionPage() {
     | null
     | undefined;
 
+  const selectedLocalityCode =
+    locality?.code ??
+    cpcaLocalities.find((item) => item.id === selectedLocalityId)?.code ??
+    null;
   const selectedLocalityName =
     locality?.name ??
     cpcaLocalities.find((item) => item.id === selectedLocalityId)?.name ??
     null;
+  const selectedLocalityLabel =
+    selectedLocalityCode && selectedLocalityName
+      ? `${selectedLocalityCode} - ${selectedLocalityName}`
+      : selectedLocalityName ?? '';
+  const ldapFabom = String(fabProfileQuery.data?.fabom ?? '').trim();
+  const nonApproverOmLabel = ldapFabom
+    ? selectedLocalityLabel &&
+      selectedLocalityLabel.toLowerCase() !== ldapFabom.toLowerCase()
+      ? `${ldapFabom} (${selectedLocalityLabel})`
+      : ldapFabom
+    : selectedLocalityLabel;
 
   const handleAssignPresident = async (args: {
     identifier: string;
@@ -294,7 +327,7 @@ export function CpcaCommissionPage() {
                 <TextField
                   size="small"
                   label="OM"
-                  value={selectedLocalityName ?? ''}
+                  value={nonApproverOmLabel}
                   InputProps={{ readOnly: true }}
                   sx={{ minWidth: 320 }}
                 />

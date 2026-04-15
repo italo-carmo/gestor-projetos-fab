@@ -626,6 +626,9 @@ export class StrategicService {
       activities: number;
       missions: number;
       localities: string[];
+      smifLocalities: string[];
+      cipavdLocalities: string[];
+      localitiesCombined: string[];
       complaintDetails: {
         caseNumber: string;
         type: string;
@@ -665,6 +668,9 @@ export class StrategicService {
           activities: 0,
           missions: 0,
           localities: [],
+          smifLocalities: [],
+          cipavdLocalities: [],
+          localitiesCombined: [],
           complaintDetails: [],
           activityDetails: [],
           missionDetails: [],
@@ -673,11 +679,34 @@ export class StrategicService {
       return ufMap.get(uf)!;
     };
 
+    const pushUniqueLocality = (target: string[], name: string) => {
+      const normalizedName = name.trim().toLowerCase();
+      if (!normalizedName) return;
+      if (target.some((item) => item.trim().toLowerCase() === normalizedName)) {
+        return;
+      }
+      target.push(name.trim());
+    };
+
     for (const loc of localities) {
       if (loc.uf) {
         const entry = ensureUf(loc.uf);
-        entry.localities.push(loc.name);
+        if (loc.catalogType === 'CIPAVD') {
+          pushUniqueLocality(entry.cipavdLocalities, loc.name);
+        } else {
+          pushUniqueLocality(entry.smifLocalities, loc.name);
+        }
       }
+    }
+
+    for (const entry of ufMap.values()) {
+      for (const locName of entry.smifLocalities) {
+        pushUniqueLocality(entry.localitiesCombined, locName);
+      }
+      for (const locName of entry.cipavdLocalities) {
+        pushUniqueLocality(entry.localitiesCombined, locName);
+      }
+      entry.localities = [...entry.localitiesCombined];
     }
 
     for (const c of complaints) {
@@ -1524,6 +1553,9 @@ export class StrategicService {
       this.geoMap(),
     ]);
     const profile = profileRaw as any;
+    const statesWithRecordsCount = (geoData.states ?? []).filter(
+      (s: any) => s.complaints + s.activities + s.missions > 0,
+    ).length;
 
     return new Promise((resolve, reject) => {
       const doc = new PDFDocument({
@@ -1752,10 +1784,8 @@ export class StrategicService {
         ky,
         kw,
         44,
-        String(geoData.totalLocalitiesWithUf ?? 0) +
-          '/' +
-          String(geoData.totalLocalities ?? 0),
-        'Localidades c/ UF',
+        String(statesWithRecordsCount),
+        'UFs com registros',
         GRAY,
       );
       doc.y = ky + 56;
@@ -2016,20 +2046,22 @@ export class StrategicService {
         doc.moveDown(0.3);
 
         const profHalfW = (PAGE_W - 12) / 2;
+        const rankingTopY = doc.y;
+        let aggressorBottomY = rankingTopY;
+        let victimBottomY = rankingTopY;
 
         if (profile.aggressorProfile?.byRank?.length > 0) {
-          const startY = doc.y;
-          doc.roundedRect(LEFT, startY, profHalfW, 10, 0).fill(BLUE);
+          doc.roundedRect(LEFT, rankingTopY, profHalfW, 10, 0).fill(BLUE);
           doc
             .fontSize(8)
             .fillColor('#FFFFFF')
             .text(
               'RANKING — Postos/Graduações do Agressor',
               LEFT + 6,
-              startY + 2,
+              rankingTopY + 2,
               { width: profHalfW - 12 },
             );
-          let ry = startY + 16;
+          let ry = rankingTopY + 16;
           const maxC = profile.aggressorProfile.byRank[0]?.count ?? 1;
           for (const [i, item] of profile.aggressorProfile.byRank
             .slice(0, 8)
@@ -2046,27 +2078,22 @@ export class StrategicService {
               maxC,
             );
           }
-          doc.y = Math.max(doc.y, ry);
+          aggressorBottomY = ry;
         }
 
         if (profile.victimProfile?.byRank?.length > 0) {
-          const startY2 =
-            profile.aggressorProfile?.byRank?.length > 0
-              ? doc.y -
-                (profile.aggressorProfile.byRank.slice(0, 8).length * 14 + 16)
-              : doc.y;
           const vx = LEFT + profHalfW + 12;
-          doc.roundedRect(vx, startY2, profHalfW, 10, 0).fill(RED);
+          doc.roundedRect(vx, rankingTopY, profHalfW, 10, 0).fill(RED);
           doc
             .fontSize(8)
             .fillColor('#FFFFFF')
             .text(
               'RANKING — Postos/Graduações da Vítima',
               vx + 6,
-              startY2 + 2,
+              rankingTopY + 2,
               { width: profHalfW - 12 },
             );
-          let vy = startY2 + 16;
+          let vy = rankingTopY + 16;
           const maxV = profile.victimProfile.byRank[0]?.count ?? 1;
           for (const [i, item] of profile.victimProfile.byRank
             .slice(0, 8)
@@ -2083,10 +2110,10 @@ export class StrategicService {
               maxV,
             );
           }
-          doc.y = Math.max(doc.y, vy);
+          victimBottomY = vy;
         }
 
-        doc.moveDown(0.5);
+        doc.y = Math.max(aggressorBottomY, victimBottomY) + 4;
 
         if (profile.context?.byViolenceType?.length > 0) {
           ensureSpace(80);
@@ -2260,9 +2287,7 @@ export class StrategicService {
         doc
           .fontSize(8)
           .fillColor(GRAY)
-          .text(
-            `${statesWithData.length} estado(s) com registros de ${geoData.totalLocalitiesWithUf} localidades com UF preenchida.`,
-          );
+          .text(`${statesWithData.length} estado(s) com registros no período.`);
         doc.moveDown(0.3);
 
         // Table header
@@ -2273,7 +2298,7 @@ export class StrategicService {
           'Atividades',
           'Missões',
           'Total',
-          'Localidades',
+          'Localidades (SMIF/CIPAVD)',
         ];
         let tx = LEFT;
         const thY = doc.y;
@@ -2299,7 +2324,7 @@ export class StrategicService {
             String(s.activities),
             String(s.missions),
             String(total),
-            (s.localities ?? []).slice(0, 4).join(', '),
+            (s.localitiesCombined ?? s.localities ?? []).slice(0, 4).join(', '),
           ];
           for (const [ci, val] of vals.entries()) {
             doc
@@ -2315,6 +2340,32 @@ export class StrategicService {
             .fontSize(7)
             .fillColor(GRAY)
             .text(`... e mais ${statesWithData.length - 15} estado(s).`);
+        }
+
+        const topByComplaints = [...statesWithData].sort(
+          (a: any, b: any) => b.complaints - a.complaints,
+        )[0];
+        const topByActivities = [...statesWithData].sort(
+          (a: any, b: any) => b.activities - a.activities,
+        )[0];
+        const topByMissions = [...statesWithData].sort(
+          (a: any, b: any) => b.missions - a.missions,
+        )[0];
+
+        if (
+          (topByComplaints?.complaints ?? 0) > 0 ||
+          (topByActivities?.activities ?? 0) > 0 ||
+          (topByMissions?.missions ?? 0) > 0
+        ) {
+          doc.moveDown(0.4);
+          doc
+            .fontSize(7)
+            .fillColor(GRAY)
+            .text(
+              `Destaques por UF — Denúncias: ${topByComplaints?.uf ?? '-'} (${topByComplaints?.complaints ?? 0}) | ` +
+                `Atividades: ${topByActivities?.uf ?? '-'} (${topByActivities?.activities ?? 0}) | ` +
+                `Missões: ${topByMissions?.uf ?? '-'} (${topByMissions?.missions ?? 0}).`,
+            );
         }
       }
 
@@ -2332,7 +2383,7 @@ export class StrategicService {
         .fontSize(7)
         .fillColor(GRAY)
         .text(
-          'DOCUMENTO CLASSIFICADO — USO INTERNO  |  Sistema de Gestão CIPAVD/SMIF  |  Força Aérea Brasileira',
+          'DOCUMENTO RESTRITO — USO INTERNO  |  Sistema de Gestão CIPAVD/SMIF  |  Força Aérea Brasileira',
           { align: 'center' },
         );
       doc

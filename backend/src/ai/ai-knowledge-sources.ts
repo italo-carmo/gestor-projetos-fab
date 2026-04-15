@@ -122,7 +122,10 @@ export const AI_KNOWLEDGE_SOURCE_CATALOG: ReadonlyArray<{
   },
 ] as const;
 
-export const ANALYSIS_DEFAULT_SOURCES: Record<AiAnalysisType, AiKnowledgeSourceId[]> = {
+export const ANALYSIS_DEFAULT_SOURCES: Record<
+  AiAnalysisType,
+  AiKnowledgeSourceId[]
+> = {
   executive: [...ALL_KNOWLEDGE_SOURCE_IDS],
   situational: [...ALL_KNOWLEDGE_SOURCE_IDS],
   aggressor: [
@@ -144,4 +147,7 @@ export const ANALYSIS_DEFAULT_SOURCES: Record<AiAnalysisType, AiKnowledgeSourceI
   ],
 };
 
-export type AnalysisSourceSelection = Record<AiAnalysisType, AiKnowledgeSourceId[]>;
+export type AnalysisSourceSelection = Record<
+  AiAnalysisType,
+  AiKnowledgeSourceId[]
+>;
