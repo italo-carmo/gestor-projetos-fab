@@ -89,13 +89,46 @@ const GENDER_LABELS: Record<string, string> = {
   FEMININO: "Feminino",
   NAO_INFORMADO: "Não informado",
 };
-const SOURCE_LABELS: Record<string, string> = {
-  recruitsSuggestions: "Sugestões dos Recrutas",
-  reportObservations: "Observações dos Relatórios",
-  reportAttentionPoints: "Pontos de Atenção",
-  reportConclusions: "Conclusões dos Relatórios",
-  bestPracticeComments: "Comentários Boas Práticas",
-  cpcaComments: "Comentários CPCA/SMIF",
+const SOURCE_META: Record<string, { label: string; description: string }> = {
+  recruitsSuggestions: {
+    label: "Sugestões dos Recrutas",
+    description: "Origem: campo de sugestões livres da Pesquisa de Recrutas.",
+  },
+  reportObservations: {
+    label: "Observações dos Relatórios",
+    description:
+      "Origem: campo “Principais pontos observados” dos relatórios de Atividade de Campo.",
+  },
+  reportAttentionPoints: {
+    label: "Pontos de Atenção",
+    description:
+      "Origem: campo “Pontos de atenção” dos relatórios de Atividade de Campo.",
+  },
+  reportConclusions: {
+    label: "Conclusões dos Relatórios",
+    description:
+      "Origem: campo “Conclusão” dos relatórios de Atividade de Campo.",
+  },
+  bestPracticeComments: {
+    label: "Comentários Boas Práticas",
+    description:
+      "Origem: comentário livre da pesquisa do Ciclo de Boas Práticas.",
+  },
+  cpcaComments: {
+    label: "Comentários CPCA/SMIF",
+    description:
+      "Origem: comentários textuais registrados nas denúncias CPCA/SMIF.",
+  },
+  cpcaMeeting: {
+    label: "Respostas Reuniões CPCA",
+    description:
+      "Origem: respostas textuais livres dos formulários de Reuniões CPCA.",
+  },
+  gsdEvaluation: {
+    label: "Respostas Avaliação GSD",
+    description:
+      "Origem: respostas textuais livres da pesquisa de Avaliação GSD.",
+  },
 };
 
 function KpiCard({
@@ -286,6 +319,60 @@ function normalizeForSearch(text: string) {
     .replace(/[\u0300-\u036f]/g, "");
 }
 
+function getAccentInsensitiveHighlightParts(text: string, word: string) {
+  const needle = normalizeForSearch(word).trim();
+  if (!needle) return [{ value: text, highlight: false }];
+
+  let normalizedText = "";
+  const indexMap: number[] = [];
+
+  for (let i = 0; i < text.length; i++) {
+    const normalizedChar = text[i]
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+    if (!normalizedChar) continue;
+    for (const c of normalizedChar) {
+      normalizedText += c;
+      indexMap.push(i);
+    }
+  }
+
+  const ranges: Array<{ start: number; end: number }> = [];
+  let from = 0;
+  while (from < normalizedText.length) {
+    const idx = normalizedText.indexOf(needle, from);
+    if (idx === -1) break;
+
+    const start = indexMap[idx];
+    const end = (indexMap[idx + needle.length - 1] ?? start) + 1;
+    if (ranges.length > 0 && start <= ranges[ranges.length - 1].end) {
+      ranges[ranges.length - 1].end = Math.max(ranges[ranges.length - 1].end, end);
+    } else {
+      ranges.push({ start, end });
+    }
+
+    from = idx + needle.length;
+  }
+
+  if (ranges.length === 0) return [{ value: text, highlight: false }];
+
+  const parts: Array<{ value: string; highlight: boolean }> = [];
+  let cursor = 0;
+  for (const range of ranges) {
+    if (cursor < range.start) {
+      parts.push({ value: text.slice(cursor, range.start), highlight: false });
+    }
+    parts.push({ value: text.slice(range.start, range.end), highlight: true });
+    cursor = range.end;
+  }
+  if (cursor < text.length) {
+    parts.push({ value: text.slice(cursor), highlight: false });
+  }
+
+  return parts.filter((p) => p.value.length > 0);
+}
+
 function filterTextsByWord(texts: string[], word: string): string[] {
   const normalized = normalizeForSearch(word);
   return texts.filter((t) => normalizeForSearch(t).includes(normalized));
@@ -331,11 +418,7 @@ function TextsModal({
         ) : (
           <List dense>
             {filtered.map((text, i) => {
-              const regex = new RegExp(
-                `(${word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`,
-                "gi",
-              );
-              const parts = text.split(regex);
+              const parts = getAccentInsensitiveHighlightParts(text, word);
               return (
                 <ListItem
                   key={i}
@@ -349,7 +432,7 @@ function TextsModal({
                     primary={
                       <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
                         {parts.map((part, j) =>
-                          regex.test(part) ? (
+                          part.highlight ? (
                             <Box
                               key={j}
                               component="mark"
@@ -361,10 +444,10 @@ function TextsModal({
                                 fontWeight: 600,
                               }}
                             >
-                              {part}
+                              {part.value}
                             </Box>
                           ) : (
-                            <span key={j}>{part}</span>
+                            <span key={j}>{part.value}</span>
                           ),
                         )}
                       </Typography>
@@ -1567,7 +1650,10 @@ function TextAnalysisTab() {
       .filter(([, v]: [string, any]) => v.count > 0)
       .map(([key, v]: [string, any]) => ({
         key,
-        label: SOURCE_LABELS[key] ?? key,
+        label: SOURCE_META[key]?.label ?? key,
+        description:
+          SOURCE_META[key]?.description ??
+          "Origem: textos coletados da fonte selecionada.",
         ...v,
       }));
   }, [data]);
@@ -1598,6 +1684,10 @@ function TextAnalysisTab() {
   const activeLabel = activeSource
     ? sourcesWithData.find((s) => s.key === activeSource)?.label ?? ""
     : "Todas as fontes consolidadas";
+  const activeDescription = activeSource
+    ? sourcesWithData.find((s) => s.key === activeSource)?.description ??
+      "Origem: textos coletados da fonte selecionada."
+    : "Origem: consolidação de todas as fontes textuais selecionadas (pesquisas, relatórios e comentários).";
 
   return (
     <Box>
@@ -1664,6 +1754,9 @@ function TextAnalysisTab() {
             {activeLabel}
           </Typography>
           <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: "block" }}>
+            {activeDescription}
+          </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: "block" }}>
             Clique em qualquer palavra para ver os textos completos que a contêm.
           </Typography>
           <WordCloud words={activeWords} maxWords={60} onWordClick={handleWordClick} />
@@ -1684,6 +1777,9 @@ function TextAnalysisTab() {
                 <Typography variant="subtitle2" gutterBottom>
                   {source.label}{" "}
                   <Chip label={`${source.count} textos`} size="small" sx={{ ml: 1 }} />
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: "block" }}>
+                  {source.description}
                 </Typography>
                 <ClickableBarCard
                   data={source.topWords.slice(0, 15).map((w: any) => ({

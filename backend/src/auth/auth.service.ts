@@ -852,9 +852,15 @@ export class AuthService {
 
     const candidates = new Set<string>([normalizedFabom]);
 
+    const addCandidate = (value: string | null | undefined) => {
+      const trimmed = String(value ?? '').trim();
+      if (!trimmed) return;
+      if (trimmed.length <= 2) return;
+      candidates.add(trimmed);
+    };
+
     for (const token of normalizedFabom.split(/[\/|;,]+/)) {
-      const trimmed = token.trim();
-      if (trimmed) candidates.add(trimmed);
+      addCandidate(token);
     }
 
     if (normalizedFabom.includes('-')) {
@@ -862,9 +868,7 @@ export class AuthService {
         .split('-')
         .map((part) => part.trim())
         .filter(Boolean);
-      const lastPart = parts[parts.length - 1];
-      if (lastPart) candidates.add(lastPart);
-      for (const part of parts) candidates.add(part);
+      for (const part of parts) addCandidate(part);
     }
 
     const localityRows = await this.prisma.locality.findMany({
@@ -878,26 +882,33 @@ export class AuthService {
         .replace(/[\u0300-\u036f]/g, '')
         .trim()
         .toUpperCase();
+    const normalizeKey = (value: string) =>
+      normalize(value).replace(/[^A-Z0-9]/g, '');
 
     for (const candidate of candidates) {
+      const candidateKey = normalizeKey(candidate);
+      if (!candidateKey) continue;
       const direct = localityRows.find(
-        (row) => normalize(row.code) === normalize(candidate),
+        (row) => normalizeKey(row.code) === candidateKey,
       );
       if (direct) return direct.id;
     }
 
     for (const candidate of candidates) {
+      const candidateKey = normalizeKey(candidate);
+      if (!candidateKey) continue;
       const byName = localityRows.find(
-        (row) => normalize(row.name) === normalize(candidate),
+        (row) => normalizeKey(row.name) === candidateKey,
       );
       if (byName) return byName.id;
     }
 
     for (const candidate of candidates) {
       const bySuffix = localityRows.find((row) => {
-        const rowCode = normalize(row.code);
-        const c = normalize(candidate);
-        return rowCode.endsWith(`-${c}`) || c.endsWith(`-${rowCode}`);
+        const rowCode = normalizeKey(row.code);
+        const c = normalizeKey(candidate);
+        if (!rowCode || !c || c.length < 4) return false;
+        return rowCode.endsWith(c) || c.endsWith(rowCode);
       });
       if (bySuffix) return bySuffix.id;
     }
