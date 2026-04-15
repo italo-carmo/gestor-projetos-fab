@@ -894,8 +894,168 @@ export class LocalitiesController {
       select: { id: true },
     });
     if (!existing) throwError('NOT_FOUND');
-    await this.prisma.locality.delete({ where: { id } });
+
+    const blockers = await this.getLocalityDeletionBlockers(id);
+    if (blockers.length > 0) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'LOCALITY_HAS_LINKED_DATA',
+        localityId: id,
+        linkedResources: blockers,
+      });
+    }
+
+    await this.prisma.auditLog.updateMany({
+      where: { localityId: id },
+      data: { localityId: null },
+    });
+
+    try {
+      await this.prisma.locality.delete({ where: { id } });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        ['P2003', 'P2014'].includes(error.code)
+      ) {
+        throwError('VALIDATION_ERROR', {
+          reason: 'LOCALITY_HAS_LINKED_DATA',
+          localityId: id,
+        });
+      }
+      throw error;
+    }
     return { ok: true };
+  }
+
+  private async getLocalityDeletionBlockers(localityId: string) {
+    const [
+      users,
+      tasks,
+      activities,
+      missions,
+      meetings,
+      recruitsHistory,
+      notices,
+      elos,
+      documents,
+      checklistStatuses,
+      kpiValues,
+      cpcaCases,
+      recruitAssignmentsFrom,
+      recruitAssignmentsTo,
+      recruitMembers,
+      recruitsDesignatedHere,
+      libraryPhotos,
+      bestPracticePosts,
+      socialCommunicationHighlights,
+      smifComplaints,
+      cpcaCommissionPresident,
+      cpcaCommissionMembers,
+      cpcaPresidentRequests,
+    ] = await this.prisma.$transaction([
+      this.prisma.user.count({ where: { localityId } }),
+      this.prisma.taskInstance.count({ where: { localityId } }),
+      this.prisma.activity.count({ where: { localityId } }),
+      this.prisma.mission.count({ where: { localityId } }),
+      this.prisma.meeting.count({ where: { localityId } }),
+      this.prisma.recruitsHistory.count({ where: { localityId } }),
+      this.prisma.notice.count({ where: { localityId } }),
+      this.prisma.elo.count({ where: { localityId } }),
+      this.prisma.documentAsset.count({ where: { localityId } }),
+      this.prisma.checklistItemStatus.count({ where: { localityId } }),
+      this.prisma.kpiValue.count({ where: { localityId } }),
+      this.prisma.cpcComplaintCase.count({ where: { localityId } }),
+      this.prisma.recruitOmAssignment.count({
+        where: { sourceLocalityId: localityId },
+      }),
+      this.prisma.recruitOmAssignment.count({
+        where: { destinationLocalityId: localityId },
+      }),
+      this.prisma.recruitFemale.count({ where: { localityId } }),
+      this.prisma.recruitFemale.count({
+        where: { destinationLocalityId: localityId },
+      }),
+      this.prisma.libraryPhoto.count({ where: { localityId } }),
+      this.prisma.bestPracticePost.count({ where: { localityId } }),
+      this.prisma.socialCommunicationHighlight.count({ where: { localityId } }),
+      this.prisma.smifComplaint.count({ where: { localityId } }),
+      this.prisma.cpcaCommissionPresident.count({ where: { localityId } }),
+      this.prisma.cpcaCommissionMember.count({ where: { localityId } }),
+      this.prisma.cpcaPresidentSelfRegistration.count({ where: { localityId } }),
+    ]);
+
+    return [
+      { key: 'users', label: 'Usuários vinculados', count: users },
+      { key: 'tasks', label: 'Tarefas', count: tasks },
+      { key: 'activities', label: 'Atividades', count: activities },
+      { key: 'missions', label: 'Missões', count: missions },
+      { key: 'meetings', label: 'Reuniões', count: meetings },
+      {
+        key: 'recruitsHistory',
+        label: 'Histórico de efetivo de recrutas',
+        count: recruitsHistory,
+      },
+      { key: 'notices', label: 'Avisos', count: notices },
+      { key: 'elos', label: 'Elos', count: elos },
+      { key: 'documents', label: 'Documentos', count: documents },
+      {
+        key: 'checklistStatuses',
+        label: 'Status de checklist',
+        count: checklistStatuses,
+      },
+      { key: 'kpiValues', label: 'KPIs históricos', count: kpiValues },
+      { key: 'cpcaCases', label: 'Denúncias CPCA', count: cpcaCases },
+      {
+        key: 'recruitAssignmentsFrom',
+        label: 'Designações de recrutas de origem',
+        count: recruitAssignmentsFrom,
+      },
+      {
+        key: 'recruitAssignmentsTo',
+        label: 'Designações de recrutas de destino',
+        count: recruitAssignmentsTo,
+      },
+      {
+        key: 'recruitMembers',
+        label: 'Recrutas vinculadas à OM',
+        count: recruitMembers,
+      },
+      {
+        key: 'recruitsDesignatedHere',
+        label: 'Recrutas designadas para a OM',
+        count: recruitsDesignatedHere,
+      },
+      {
+        key: 'libraryPhotos',
+        label: 'Fotos da biblioteca',
+        count: libraryPhotos,
+      },
+      {
+        key: 'bestPracticePosts',
+        label: 'Boas práticas',
+        count: bestPracticePosts,
+      },
+      {
+        key: 'socialCommunicationHighlights',
+        label: 'Destaques de comunicação social',
+        count: socialCommunicationHighlights,
+      },
+      { key: 'smifComplaints', label: 'Denúncias SMIF', count: smifComplaints },
+      {
+        key: 'cpcaCommissionPresident',
+        label: 'Presidente CPCA',
+        count: cpcaCommissionPresident,
+      },
+      {
+        key: 'cpcaCommissionMembers',
+        label: 'Membros da comissão CPCA',
+        count: cpcaCommissionMembers,
+      },
+      {
+        key: 'cpcaPresidentRequests',
+        label: 'Solicitações de presidente CPCA',
+        count: cpcaPresidentRequests,
+      },
+    ].filter((item) => item.count > 0);
   }
 
   private assertLocalityAccess(localityId: string, user?: RbacUser) {

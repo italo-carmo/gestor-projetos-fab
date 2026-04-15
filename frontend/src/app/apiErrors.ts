@@ -35,6 +35,8 @@ const REASON_MESSAGES: Record<string, string> = {
     "Sua OM no LDAP ainda não está habilitada com CPCA no sistema.",
   CPCA_PRESIDENT_CANNOT_BE_MEMBER:
     "O presidente da comissão não pode ser adicionado como membro.",
+  LOCALITY_HAS_LINKED_DATA:
+    "Esta OM não pode ser excluída porque possui dados vinculados. Remova ou ajuste esses vínculos antes de excluir.",
   NOTIFIER_RANK_REQUIRED_WHEN_DIFFERENT:
     "Quando noticiante e vítima forem pessoas diferentes, informe o posto/graduação do noticiante.",
   NOTIFIER_GENDER_REQUIRED_WHEN_DIFFERENT:
@@ -48,6 +50,34 @@ export function parseApiError(error: unknown): ApiErrorPayload {
     const data = err.response.data;
     const reasonRaw = data.details?.reason;
     const reason = typeof reasonRaw === "string" ? reasonRaw : undefined;
+    if (
+      reason === "LOCALITY_HAS_LINKED_DATA" &&
+      Array.isArray(data.details?.linkedResources)
+    ) {
+      const labels = (data.details.linkedResources as Array<{
+        label?: unknown;
+        count?: unknown;
+      }>)
+        .map((item) => {
+          const label =
+            typeof item?.label === "string" ? item.label.trim() : "";
+          const count =
+            typeof item?.count === "number"
+              ? item.count
+              : Number(item?.count ?? 0);
+          if (!label || !Number.isFinite(count) || count <= 0) return null;
+          return `${label} (${count})`;
+        })
+        .filter(Boolean)
+        .join(", ");
+      if (labels) {
+        return {
+          ...data,
+          message:
+            "Esta OM não pode ser excluída porque possui vínculos: " + labels,
+        };
+      }
+    }
     if (reason && REASON_MESSAGES[reason]) {
       return { ...data, message: REASON_MESSAGES[reason] };
     }

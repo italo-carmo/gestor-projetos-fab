@@ -198,6 +198,7 @@ export function OmsAdminPage() {
   const [batchHasCpcaValue, setBatchHasCpcaValue] = useState<
     "SIM" | "NAO" | ""
   >("");
+  const [managedUfFilter, setManagedUfFilter] = useState("");
   const [presidentIdentifier, setPresidentIdentifier] = useState("");
   const [presidentBulletin, setPresidentBulletin] = useState("");
   const [presidentCandidate, setPresidentCandidate] =
@@ -296,6 +297,33 @@ export function OmsAdminPage() {
         ),
     [editingLocalityId, localities],
   );
+  const cpcaCoverageUfOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          cpcaCoverageOptions
+            .map((item) => String(item.uf ?? "").trim())
+            .filter(Boolean),
+        ),
+      ).sort((a, b) => a.localeCompare(b, "pt-BR")),
+    [cpcaCoverageOptions],
+  );
+  const visibleCpcaCoverageOptions = useMemo(
+    () =>
+      cpcaCoverageOptions.filter((item) => {
+        if (!managedUfFilter) return true;
+        if (form.managedLocalityIds.includes(item.id)) return true;
+        return String(item.uf ?? "").trim() === managedUfFilter;
+      }),
+    [cpcaCoverageOptions, form.managedLocalityIds, managedUfFilter],
+  );
+  const visibleCpcaCoverageCount = useMemo(
+    () =>
+      cpcaCoverageOptions.filter(
+        (item) => !managedUfFilter || String(item.uf ?? "").trim() === managedUfFilter,
+      ).length,
+    [cpcaCoverageOptions, managedUfFilter],
+  );
 
   const filteredLocalityIds = useMemo(
     () => filteredLocalities.map((item) => item.id),
@@ -322,6 +350,7 @@ export function OmsAdminPage() {
   const openCreate = () => {
     setEditing(null);
     setForm(DEFAULT_FORM);
+    setManagedUfFilter("");
     setPresidentIdentifier("");
     setPresidentBulletin("");
     setPresidentCandidate(null);
@@ -340,6 +369,7 @@ export function OmsAdminPage() {
       notes: locality.notes ?? "",
       managedLocalityIds: locality.cpcaManagedLocalityIds ?? [],
     });
+    setManagedUfFilter("");
     setPresidentIdentifier("");
     setPresidentBulletin("");
     setPresidentCandidate(null);
@@ -352,6 +382,7 @@ export function OmsAdminPage() {
     setDrawerOpen(false);
     setEditing(null);
     setForm(DEFAULT_FORM);
+    setManagedUfFilter("");
     setPresidentIdentifier("");
     setPresidentBulletin("");
     setPresidentCandidate(null);
@@ -923,37 +954,86 @@ export function OmsAdminPage() {
             <MenuItem value="NAO">Não</MenuItem>
           </TextField>
           {canManagePresident && editing ? (
-            <Autocomplete
-              multiple
-              disableCloseOnSelect
-              options={cpcaCoverageOptions}
-              value={cpcaCoverageOptions.filter((option) =>
-                form.managedLocalityIds.includes(option.id),
-              )}
-              onChange={(_, value) =>
-                setForm((prev) => ({
-                  ...prev,
-                  managedLocalityIds: value.map((item) => item.id),
-                }))
-              }
-              getOptionDisabled={(option) => option.hasCpca}
-              getOptionLabel={(option) =>
-                `${formatOmLabel(option.code, option.name)}${option.uf ? ` - ${option.uf}` : ""}`
-              }
-              renderInput={(params) => (
+            <Stack spacing={1.2}>
+              <Stack
+                direction={{ xs: "column", md: "row" }}
+                spacing={1.2}
+                alignItems={{ xs: "stretch", md: "center" }}
+              >
                 <TextField
-                  {...params}
+                  select
                   size="small"
-                  label="OMs gerenciadas pela CPCA desta OM"
+                  label="Filtrar OMs por UF"
+                  value={managedUfFilter}
+                  onChange={(event) => setManagedUfFilter(event.target.value)}
+                  sx={{ minWidth: { xs: "100%", md: 200 } }}
+                  disabled={!form.hasCpca}
                   helperText={
                     form.hasCpca
-                      ? "A própria OM já faz parte da cobertura automaticamente. OMs com CPCA próprio ficam bloqueadas."
-                      : 'Ative "Possui CPCA = Sim" para configurar a cobertura desta comissão.'
+                      ? "Filtra a lista de OMs disponíveis para vincular."
+                      : "Ative o CPCA da OM para liberar a cobertura."
                   }
-                />
-              )}
-              disabled={!form.hasCpca}
-            />
+                >
+                  <MenuItem value="">
+                    <em>Todas as UFs</em>
+                  </MenuItem>
+                  {cpcaCoverageUfOptions.map((uf) => (
+                    <MenuItem key={uf} value={uf}>
+                      {uf}
+                    </MenuItem>
+                  ))}
+                </TextField>
+                <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+                  <Chip
+                    size="small"
+                    variant="outlined"
+                    label={`${visibleCpcaCoverageCount} OMs visíveis`}
+                  />
+                  {managedUfFilter ? (
+                    <Chip
+                      size="small"
+                      color="primary"
+                      variant="outlined"
+                      label={`UF ${managedUfFilter}`}
+                      onDelete={() => setManagedUfFilter("")}
+                    />
+                  ) : null}
+                </Stack>
+              </Stack>
+              <Autocomplete
+                multiple
+                disableCloseOnSelect
+                options={visibleCpcaCoverageOptions}
+                value={cpcaCoverageOptions.filter((option) =>
+                  form.managedLocalityIds.includes(option.id),
+                )}
+                onChange={(_, value) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    managedLocalityIds: value.map((item) => item.id),
+                  }))
+                }
+                isOptionEqualToValue={(option, value) => option.id === value.id}
+                groupBy={(option) => String(option.uf ?? "").trim() || "Sem UF"}
+                getOptionDisabled={(option) => option.hasCpca}
+                getOptionLabel={(option) =>
+                  `${formatOmLabel(option.code, option.name)}${option.uf ? ` - ${option.uf}` : ""}`
+                }
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    size="small"
+                    label="OMs gerenciadas pela CPCA desta OM"
+                    helperText={
+                      form.hasCpca
+                        ? "A própria OM já faz parte da cobertura automaticamente. OMs com CPCA próprio ficam bloqueadas. Seleções já feitas continuam preservadas mesmo quando o filtro por UF estiver ativo."
+                        : 'Ative "Possui CPCA = Sim" para configurar a cobertura desta comissão.'
+                    }
+                  />
+                )}
+                disabled={!form.hasCpca}
+              />
+            </Stack>
           ) : null}
           {canManagePresident && editing && form.hasCpca ? (
             <Stack
