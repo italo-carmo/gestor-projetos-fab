@@ -639,8 +639,13 @@ export class CpcaCommissionService {
       });
     }
 
+    const requestOmId = this.requireCommissionOmId(
+      request.omId,
+      'CPCA_PRESIDENT_REQUEST_OM_REMOVED',
+    );
+
     const assignment = await this.assignPresidentToLocality({
-      localityId: request.omId,
+      localityId: requestOmId,
       targetUserId: request.applicantUserId,
       actorUserId,
       isSubstitution: Boolean(request.requestedAsSubstitution),
@@ -855,7 +860,12 @@ export class CpcaCommissionService {
       throwError('NOT_FOUND');
     }
 
-    await this.assertCanManageMembers(user, member.omId);
+    const memberOmId = this.requireCommissionOmId(
+      member.omId,
+      'CPCA_COMMISSION_MEMBER_OM_REMOVED',
+    );
+
+    await this.assertCanManageMembers(user, memberOmId);
 
     await this.prisma.cpcaCommissionMember.delete({ where: { id: memberId } });
 
@@ -1481,5 +1491,16 @@ export class CpcaCommissionService {
   private async createTemporaryPasswordHash(uid: string) {
     const raw = `ldap:${uid}:${Date.now()}:${randomBytes(12).toString('hex')}`;
     return bcrypt.hash(raw, 10);
+  }
+
+  private requireCommissionOmId(
+    omId: string | null | undefined,
+    reason: string,
+  ) {
+    const normalized = String(omId ?? '').trim();
+    if (!normalized) {
+      throwError('VALIDATION_ERROR', { reason });
+    }
+    return normalized;
   }
 }

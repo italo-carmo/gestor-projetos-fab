@@ -174,6 +174,37 @@ function formatOmLabel(
   return codeValue || nameValue;
 }
 
+type DeleteOmResponse = {
+  ok?: boolean;
+  detached?: {
+    users?: number;
+    cpcaCases?: number;
+    cpcaCommissionPresidents?: number;
+    cpcaCommissionMembers?: number;
+    cpcaPresidentRequests?: number;
+    cpcaCoverageAsManager?: number;
+    cpcaCoverageAsManaged?: number;
+  } | null;
+};
+
+function formatDetachedOmSummary(payload: DeleteOmResponse | null | undefined) {
+  const detached = payload?.detached;
+  if (!detached) return "";
+  const labels: Array<[number | undefined, string]> = [
+    [detached.users, "usuários"],
+    [detached.cpcaCases, "denúncias CPCA"],
+    [detached.cpcaCommissionPresidents, "presidências CPCA"],
+    [detached.cpcaCommissionMembers, "membros de comissão"],
+    [detached.cpcaPresidentRequests, "solicitações de presidente"],
+    [detached.cpcaCoverageAsManager, "coberturas CPCA geridas"],
+    [detached.cpcaCoverageAsManaged, "coberturas CPCA recebidas"],
+  ];
+  return labels
+    .filter(([count]) => Number(count ?? 0) > 0)
+    .map(([count, label]) => `${label}: ${Number(count ?? 0)}`)
+    .join(", ");
+}
+
 export function OmsAdminPage() {
   const toast = useToast();
   const { data: me } = useMe();
@@ -574,8 +605,14 @@ export function OmsAdminPage() {
 
   const handleDelete = async (id: string) => {
     try {
-      await deleteLocality.mutateAsync(id);
-      toast.push({ message: "OM removida com sucesso.", severity: "success" });
+      const result = (await deleteLocality.mutateAsync(id)) as DeleteOmResponse;
+      const detachedSummary = formatDetachedOmSummary(result);
+      toast.push({
+        message: detachedSummary
+          ? `OM removida com sucesso. Vínculos removidos: ${detachedSummary}.`
+          : "OM removida com sucesso.",
+        severity: "success",
+      });
       setDeleteId(null);
     } catch (error) {
       toast.push({
@@ -869,7 +906,6 @@ export function OmsAdminPage() {
                           size="small"
                           color="error"
                           onClick={() => setDeleteId(locality.id)}
-                          disabled={cpcaMembers.length > 0}
                         >
                           Excluir
                         </Button>
@@ -1226,8 +1262,10 @@ export function OmsAdminPage() {
       <ConfirmDialog
         open={Boolean(deleteId)}
         title="Excluir OM"
-        message="A exclusão remove o cadastro da OM e pode afetar vínculos existentes. Deseja continuar?"
-        note="OMs com militares CPCA vinculados não podem ser excluídas por esta tela."
+        message="A OM será removida do catálogo, mas os registros relacionados serão preservados. Usuários, denúncias e vínculos de comissão apenas perderão a associação com esta OM."
+        note="Esta ação não exclui os itens relacionados. Ela apenas desfaz os relacionamentos com a OM e remove a cobertura CPCA associada."
+        severity="warning"
+        confirmLabel="Excluir OM"
         onCancel={() => setDeleteId(null)}
         onConfirm={() => {
           if (deleteId) void handleDelete(deleteId);

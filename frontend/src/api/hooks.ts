@@ -3625,6 +3625,17 @@ export function useDeleteOm() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.oms });
       qc.invalidateQueries({ queryKey: qk.omsCatalog });
+      qc.invalidateQueries({ queryKey: ["users"] });
+      qc.invalidateQueries({ queryKey: ["cpcaCommission"] });
+      qc.invalidateQueries({ queryKey: qk.cpcaCaseLocalityOptions() });
+      qc.invalidateQueries({ queryKey: qk.cpcaSelfRegistrationLocalities() });
+      qc.invalidateQueries({
+        queryKey: qk.cpcaPresidentRequestsPendingCount(),
+      });
+      qc.invalidateQueries({
+        queryKey: ["cpcaCommission", "presidentRequests"],
+      });
+      qc.invalidateQueries({ queryKey: qk.me });
       qc.invalidateQueries({ queryKey: ["dashboardExecutive"] });
     },
   });

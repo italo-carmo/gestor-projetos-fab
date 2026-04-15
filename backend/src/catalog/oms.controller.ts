@@ -217,26 +217,51 @@ export class OmsController {
       this.prisma.cpcaCommissionCoverageOm.count({ where: { managedOmId: id } }),
     ]);
 
-    const blockers = [
-      usersCount ? `Usuários (${usersCount})` : null,
-      cpcaCasesCount ? `Denúncias (${cpcaCasesCount})` : null,
-      presidentsCount ? `Presidentes CPCA (${presidentsCount})` : null,
-      membersCount ? `Membros CPCA (${membersCount})` : null,
-      requestsCount ? `Solicitações de presidente (${requestsCount})` : null,
-      managesCount ? `Cobertura CPCA como gestora (${managesCount})` : null,
-      managedByCount ? `Cobertura CPCA como gerenciada (${managedByCount})` : null,
-    ].filter(Boolean);
-
-    if (blockers.length > 0) {
-      throwError('VALIDATION_ERROR', {
-        reason: 'OM_HAS_LINKED_DATA',
-        labels: blockers,
-        omCode: existing.code,
-        omName: existing.name,
+    await this.prisma.$transaction(async (tx) => {
+      await tx.cpcaCommissionCoverageOm.deleteMany({
+        where: {
+          OR: [{ managerOmId: id }, { managedOmId: id }],
+        },
       });
-    }
+      await tx.user.updateMany({
+        where: { omId: id },
+        data: { omId: null },
+      });
+      await tx.cpcComplaintCase.updateMany({
+        where: { omId: id },
+        data: { omId: null },
+      });
+      await tx.cpcaCommissionPresident.updateMany({
+        where: { omId: id },
+        data: { omId: null },
+      });
+      await tx.cpcaCommissionMember.updateMany({
+        where: { omId: id },
+        data: { omId: null },
+      });
+      await tx.cpcaPresidentSelfRegistration.updateMany({
+        where: { omId: id },
+        data: { omId: null },
+      });
+      await tx.om.delete({ where: { id } });
+    });
 
-    await this.prisma.om.delete({ where: { id } });
-    return { ok: true };
+    return {
+      ok: true,
+      detached: {
+        users: usersCount,
+        cpcaCases: cpcaCasesCount,
+        cpcaCommissionPresidents: presidentsCount,
+        cpcaCommissionMembers: membersCount,
+        cpcaPresidentRequests: requestsCount,
+        cpcaCoverageAsManager: managesCount,
+        cpcaCoverageAsManaged: managedByCount,
+      },
+      deletedOm: {
+        id: existing.id,
+        code: existing.code,
+        name: existing.name,
+      },
+    };
   }
 }

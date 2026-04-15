@@ -32,7 +32,7 @@ model User {
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
 
-  om               Om?            @relation(fields: [omId], references: [id])
+  om               Om?            @relation(fields: [omId], references: [id], onDelete: SetNull)
   locality         Locality?      @relation(fields: [localityId], references: [id])
   specialty        Specialty?     @relation(fields: [specialtyId], references: [id])
   eloRole          EloRole?      @relation(fields: [eloRoleId], references: [id])
@@ -1266,7 +1266,7 @@ model CpcComplaintCase {
   createdAt                       DateTime           @default(now())
   updatedAt                       DateTime           @updatedAt
 
-  om                              Om?                @relation(fields: [omId], references: [id])
+  om                              Om?                @relation(fields: [omId], references: [id], onDelete: SetNull)
   locality                        Locality?          @relation(fields: [localityId], references: [id])
   createdBy                       User               @relation("CpcComplaintCaseCreatedBy", fields: [createdById], references: [id])
   updatedBy                       User?              @relation("CpcComplaintCaseUpdatedBy", fields: [updatedById], references: [id])
@@ -1315,7 +1315,7 @@ model CpcComplaintStatusHistory {
 
 model CpcaCommissionPresident {
   id                    String   @id @default(cuid())
-  omId                  String   @unique
+  omId                  String?   @unique
   userId                String
   assignedByUserId      String?
   designationBulletin   String?
@@ -1324,7 +1324,7 @@ model CpcaCommissionPresident {
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
-  om                    Om       @relation(fields: [omId], references: [id], onDelete: Cascade)
+  om                    Om?       @relation(fields: [omId], references: [id], onDelete: SetNull)
   user                  User     @relation("CpcaCommissionPresidentUser", fields: [userId], references: [id], onDelete: Restrict)
   assignedByUser        User?    @relation("CpcaCommissionPresidentAssignedBy", fields: [assignedByUserId], references: [id], onDelete: SetNull)
 
@@ -1335,13 +1335,13 @@ model CpcaCommissionPresident {
 
 model CpcaCommissionMember {
   id               String   @id @default(cuid())
-  omId             String
+  omId             String?
   userId           String
   addedByUserId    String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  om               Om       @relation(fields: [omId], references: [id], onDelete: Cascade)
+  om               Om?       @relation(fields: [omId], references: [id], onDelete: SetNull)
   user             User     @relation("CpcaCommissionMemberUser", fields: [userId], references: [id], onDelete: Restrict)
   addedByUser      User?    @relation("CpcaCommissionMemberAddedBy", fields: [addedByUserId], references: [id], onDelete: SetNull)
 
@@ -1353,7 +1353,7 @@ model CpcaCommissionMember {
 
 model CpcaPresidentSelfRegistration {
   id                       String                    @id @default(cuid())
-  omId                     String
+  omId                     String?
   applicantUserId          String
   applicantIdentifier      String
   applicantUid             String
@@ -1368,7 +1368,7 @@ model CpcaPresidentSelfRegistration {
   createdAt                DateTime                  @default(now())
   updatedAt                DateTime                  @updatedAt
 
-  om                       Om       @relation(fields: [omId], references: [id], onDelete: Cascade)
+  om                       Om?       @relation(fields: [omId], references: [id], onDelete: SetNull)
   applicantUser            User     @relation("CpcaPresidentSelfRegistrationApplicant", fields: [applicantUserId], references: [id], onDelete: Restrict)
   decidedByUser            User?    @relation("CpcaPresidentSelfRegistrationDecidedBy", fields: [decidedByUserId], references: [id], onDelete: SetNull)
 
