@@ -30,6 +30,10 @@ WHERE l."catalogType" = 'SMIF';
 ALTER TABLE "User" ADD COLUMN "omId" TEXT;
 ALTER TABLE "CpcComplaintCase" ADD COLUMN "omId" TEXT;
 
+ALTER TABLE "CpcaCommissionPresident" DROP CONSTRAINT IF EXISTS "CpcaCommissionPresident_localityId_fkey";
+ALTER TABLE "CpcaCommissionMember" DROP CONSTRAINT IF EXISTS "CpcaCommissionMember_localityId_fkey";
+ALTER TABLE "CpcaPresidentSelfRegistration" DROP CONSTRAINT IF EXISTS "CpcaPresidentSelfRegistration_localityId_fkey";
+
 ALTER TABLE "CpcaCommissionPresident" RENAME COLUMN "localityId" TO "omId";
 ALTER TABLE "CpcaCommissionMember" RENAME COLUMN "localityId" TO "omId";
 ALTER TABLE "CpcaPresidentSelfRegistration" RENAME COLUMN "localityId" TO "omId";
@@ -74,10 +78,6 @@ ALTER TABLE "CpcComplaintCase"
   FOREIGN KEY ("omId") REFERENCES "Om"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 CREATE INDEX "CpcComplaintCase_omId_status_idx" ON "CpcComplaintCase"("omId", "status");
 CREATE INDEX "CpcComplaintCase_workflowScope_omId_status_idx" ON "CpcComplaintCase"("workflowScope", "omId", "status");
-
-ALTER TABLE "CpcaCommissionPresident" DROP CONSTRAINT IF EXISTS "CpcaCommissionPresident_localityId_fkey";
-ALTER TABLE "CpcaCommissionMember" DROP CONSTRAINT IF EXISTS "CpcaCommissionMember_localityId_fkey";
-ALTER TABLE "CpcaPresidentSelfRegistration" DROP CONSTRAINT IF EXISTS "CpcaPresidentSelfRegistration_localityId_fkey";
 
 ALTER TABLE "CpcaCommissionPresident"
   ADD CONSTRAINT "CpcaCommissionPresident_omId_fkey"
