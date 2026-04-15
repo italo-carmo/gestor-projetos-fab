@@ -3157,6 +3157,21 @@ export function useAddCpcaCommissionMember() {
   });
 }
 
+export function useUpdateCpcaCommissionCoverage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      localityId: string;
+      managedLocalityIds: string[];
+    }) => (await api.put("/cpca-commission/coverage", payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cpcaCommission"] });
+      qc.invalidateQueries({ queryKey: ["cpcaCases", "localityOptions"] });
+      qc.invalidateQueries({ queryKey: qk.localities });
+    },
+  });
+}
+
 export function useRemoveCpcaCommissionMember() {
   const qc = useQueryClient();
   return useMutation({
@@ -3491,6 +3506,9 @@ export function useUpdateLocality() {
       (await api.put(`/localities/${args.id}`, args.payload)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.localities });
+      qc.invalidateQueries({ queryKey: qk.omsCatalog });
+      qc.invalidateQueries({ queryKey: ["cpcaCommission"] });
+      qc.invalidateQueries({ queryKey: ["cpcaCases", "localityOptions"] });
       qc.invalidateQueries({ queryKey: ["dashboardRecruits"] });
       qc.invalidateQueries({ queryKey: ["dashboardNational"] });
       qc.invalidateQueries({ queryKey: ["dashboardExecutive"] });
@@ -3524,6 +3542,9 @@ export function useCreateLocality() {
       (await api.post("/localities", payload)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.localities });
+      qc.invalidateQueries({ queryKey: qk.omsCatalog });
+      qc.invalidateQueries({ queryKey: ["cpcaCommission"] });
+      qc.invalidateQueries({ queryKey: ["cpcaCases", "localityOptions"] });
       qc.invalidateQueries({ queryKey: ["dashboardRecruits"] });
       qc.invalidateQueries({ queryKey: ["dashboardNational"] });
       qc.invalidateQueries({ queryKey: ["dashboardExecutive"] });

@@ -234,7 +234,8 @@ export class CpcaCommissionService {
     }
 
     const locality = await this.assertLocalitySupportsCpca(localityId);
-    const [currentPresident, members] = await Promise.all([
+    const [currentPresident, members, managedLocalities, availableManagedLocalities] =
+      await Promise.all([
       this.prisma.cpcaCommissionPresident.findUnique({
         where: { localityId },
         include: {
@@ -270,10 +271,13 @@ export class CpcaCommissionService {
         },
         orderBy: { user: { name: 'asc' } },
       }),
+      this.listManagedLocalities(localityId),
+      this.listAvailableManagedLocalities(localityId),
     ]);
 
     const userIsPresident =
       Boolean(currentPresident) && currentPresident?.userId === userId;
+    const canManageCoverage = isApprover || userIsPresident;
 
     return {
       locality,
@@ -293,9 +297,161 @@ export class CpcaCommissionService {
         user: member.user,
         addedByUser: member.addedByUser,
       })),
+      managedLocalities,
+      availableManagedLocalities,
       canAssignPresident: isApprover,
       canManageMembers: isApprover || userIsPresident,
+      canManageCoverage,
       userIsPresident,
+    };
+  }
+
+  async updateCoverage(
+    payload: {
+      localityId: string;
+      managedLocalityIds: string[];
+    },
+    user: RbacUser | undefined,
+  ) {
+    const actorUserId = this.requireUserId(user);
+    const localityId = String(payload.localityId ?? '').trim();
+    if (!localityId) {
+      throwError('VALIDATION_ERROR', {
+        field: 'localityId',
+        reason: 'required',
+      });
+    }
+
+    await this.assertCanManageCoverage(user, localityId);
+
+    const locality = await this.prisma.locality.findUnique({
+      where: { id: localityId },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        hasCpca: true,
+        catalogType: true,
+      },
+    });
+    if (!locality || locality.catalogType !== 'SMIF') {
+      throwError('NOT_FOUND');
+    }
+
+    const managedLocalityIds = Array.from(
+      new Set(
+        (payload.managedLocalityIds ?? [])
+          .map((value) => String(value ?? '').trim())
+          .filter(Boolean)
+          .filter((value) => value !== localityId),
+      ),
+    );
+
+    if (!locality.hasCpca && managedLocalityIds.length > 0) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'CPCA_NOT_ENABLED_FOR_LOCALITY',
+      });
+    }
+
+    const managedLocalities = managedLocalityIds.length
+      ? await this.prisma.locality.findMany({
+          where: {
+            id: { in: managedLocalityIds },
+            catalogType: 'SMIF',
+          },
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            uf: true,
+            hasCpca: true,
+          },
+        })
+      : [];
+
+    if (managedLocalities.length !== managedLocalityIds.length) {
+      throwError('VALIDATION_ERROR', {
+        field: 'managedLocalityIds',
+        reason: 'LOCALITY_INVALID_ID',
+      });
+    }
+
+    const localityWithOwnCpca = managedLocalities.find((item) => item.hasCpca);
+    if (localityWithOwnCpca) {
+      throwError('VALIDATION_ERROR', {
+        field: 'managedLocalityIds',
+        reason: 'CPCA_COVERAGE_TARGET_ALREADY_HAS_CPCA',
+        localityId: localityWithOwnCpca.id,
+        localityCode: localityWithOwnCpca.code,
+        localityName: localityWithOwnCpca.name,
+      });
+    }
+
+    const conflictingCoverage = managedLocalityIds.length
+      ? await this.prisma.cpcaCommissionCoverage.findMany({
+          where: {
+            managedLocalityId: { in: managedLocalityIds },
+            managerLocalityId: { not: localityId },
+          },
+          include: {
+            managerLocality: {
+              select: { id: true, code: true, name: true },
+            },
+            managedLocality: {
+              select: { id: true, code: true, name: true },
+            },
+          },
+        })
+      : [];
+    if (conflictingCoverage.length > 0) {
+      const firstConflict = conflictingCoverage[0];
+      throwError('VALIDATION_ERROR', {
+        field: 'managedLocalityIds',
+        reason: 'CPCA_COVERAGE_TARGET_ALREADY_ASSIGNED',
+        managedLocalityId: firstConflict.managedLocality.id,
+        managedLocalityCode: firstConflict.managedLocality.code,
+        managedLocalityName: firstConflict.managedLocality.name,
+        managerLocalityId: firstConflict.managerLocality.id,
+        managerLocalityCode: firstConflict.managerLocality.code,
+        managerLocalityName: firstConflict.managerLocality.name,
+      });
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.cpcaCommissionCoverage.deleteMany({
+        where: { managerLocalityId: localityId },
+      });
+      if (managedLocalityIds.length > 0) {
+        await tx.cpcaCommissionCoverage.createMany({
+          data: managedLocalityIds.map((managedLocalityId) => ({
+            managerLocalityId: localityId,
+            managedLocalityId,
+          })),
+        });
+      }
+    });
+
+    const nextManagedLocalities = await this.listManagedLocalities(localityId);
+
+    await this.audit.log({
+      userId: actorUserId,
+      resource: 'cpca_cases',
+      action: 'cpca_commission_coverage_update',
+      entityId: localityId,
+      localityId,
+      diffJson: {
+        managedLocalityIds,
+      },
+    });
+
+    return {
+      locality: {
+        id: locality.id,
+        code: locality.code,
+        name: locality.name,
+        hasCpca: locality.hasCpca,
+      },
+      managedLocalities: nextManagedLocalities,
     };
   }
 
@@ -906,6 +1062,69 @@ export class CpcaCommissionService {
     if (!isPresident) {
       throwError('RBAC_FORBIDDEN');
     }
+  }
+
+  private async assertCanManageCoverage(
+    user: RbacUser | undefined,
+    localityId: string,
+  ) {
+    if (this.isApproverUser(user)) {
+      return;
+    }
+
+    const userId = this.requireUserId(user);
+    const isPresident = await this.prisma.cpcaCommissionPresident.findFirst({
+      where: {
+        localityId,
+        userId,
+      },
+      select: { id: true },
+    });
+
+    if (!isPresident) {
+      throwError('RBAC_FORBIDDEN');
+    }
+  }
+
+  private async listManagedLocalities(localityId: string) {
+    const items = await this.prisma.cpcaCommissionCoverage.findMany({
+      where: { managerLocalityId: localityId },
+      select: {
+        managedLocality: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            uf: true,
+            hasCpca: true,
+          },
+        },
+      },
+      orderBy: {
+        managedLocality: {
+          name: 'asc',
+        },
+      },
+    });
+
+    return items.map((entry) => entry.managedLocality);
+  }
+
+  private async listAvailableManagedLocalities(localityId: string) {
+    return this.prisma.locality.findMany({
+      where: {
+        catalogType: 'SMIF',
+        id: { not: localityId },
+      },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        uf: true,
+        hasCpca: true,
+      },
+      orderBy: { name: 'asc' },
+    });
   }
 
   private async assertLocalitySupportsCpca(localityId: string) {

@@ -5,6 +5,7 @@ import {
   Get,
   Param,
   Post,
+  Put,
   Query,
   Req,
   UseGuards,
@@ -23,6 +24,7 @@ import { CreateCpcaPresidentDto } from './dto/create-cpca-president.dto';
 import { CreateCpcaPresidentSelfRegistrationDto } from './dto/create-cpca-president-self-registration.dto';
 import { LookupCpcaPresidentCandidateDto } from './dto/lookup-cpca-president-candidate.dto';
 import { RejectCpcaPresidentRequestDto } from './dto/reject-cpca-president-request.dto';
+import { UpdateCpcaCommissionCoverageDto } from './dto/update-cpca-commission-coverage.dto';
 
 @Controller('cpca-commission')
 export class CpcaCommissionController {
@@ -110,6 +112,22 @@ export class CpcaCommissionController {
       {
         identifier: dto.identifier,
         localityId: dto.localityId,
+      },
+      user,
+    );
+  }
+
+  @Put('coverage')
+  @UseGuards(JwtAuthGuard, RbacGuard)
+  @RequirePermission('cpca_cases', 'update')
+  updateCoverage(
+    @Body() dto: UpdateCpcaCommissionCoverageDto,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.cpcaCommission.updateCoverage(
+      {
+        localityId: dto.localityId,
+        managedLocalityIds: dto.managedLocalityIds ?? [],
       },
       user,
     );

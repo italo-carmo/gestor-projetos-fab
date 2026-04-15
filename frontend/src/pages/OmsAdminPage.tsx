@@ -1,4 +1,5 @@
 import {
+  Autocomplete,
   Box,
   Button,
   Card,
@@ -25,6 +26,7 @@ import {
   useLocalities,
   useLookupCpcaPresidentCandidate,
   useMe,
+  useUpdateCpcaCommissionCoverage,
   useUpdateLocalitiesHasCpcaBatch,
   useUpdateLocality,
   useUsers,
@@ -50,6 +52,14 @@ type LocalityItem = {
   uf?: string | null;
   hasCpca?: boolean;
   notes?: string | null;
+  cpcaManagedLocalityIds?: string[];
+  cpcaManagedLocalities?: Array<{
+    id: string;
+    code: string;
+    name: string;
+    uf?: string | null;
+    hasCpca?: boolean;
+  }>;
 };
 
 type UserItem = {
@@ -95,6 +105,7 @@ type OmsForm = {
   uf: string;
   hasCpca: boolean;
   notes: string;
+  managedLocalityIds: string[];
 };
 
 type CpcaCoverageFilter = "ALL" | "WITH_CPCA" | "WITHOUT_CPCA";
@@ -105,6 +116,7 @@ const DEFAULT_FORM: OmsForm = {
   uf: "",
   hasCpca: false,
   notes: "",
+  managedLocalityIds: [],
 };
 
 type CpcaPresidentCandidate = {
@@ -139,6 +151,23 @@ function extractReason(error: unknown) {
   return String(responseData?.details?.reason ?? "").trim();
 }
 
+function formatOmLabel(
+  code: string | null | undefined,
+  name: string | null | undefined,
+) {
+  const codeValue = String(code ?? "").trim();
+  const nameValue = String(name ?? "").trim();
+  if (codeValue && nameValue) {
+    if (
+      codeValue.localeCompare(nameValue, "pt-BR", { sensitivity: "base" }) === 0
+    ) {
+      return codeValue;
+    }
+    return `${codeValue} - ${nameValue}`;
+  }
+  return codeValue || nameValue;
+}
+
 export function OmsAdminPage() {
   const toast = useToast();
   const { data: me } = useMe();
@@ -146,6 +175,7 @@ export function OmsAdminPage() {
   const usersQuery = useUsers(Boolean(me?.id));
   const createLocality = useCreateLocality();
   const updateLocality = useUpdateLocality();
+  const updateCpcaCoverage = useUpdateCpcaCommissionCoverage();
   const updateLocalitiesHasCpcaBatch = useUpdateLocalitiesHasCpcaBatch();
   const deleteLocality = useDeleteLocality();
   const assignPresident = useAssignCpcaPresident();
@@ -181,7 +211,10 @@ export function OmsAdminPage() {
   const editingLocalityId = String(editing?.id ?? "").trim();
   const cpcaOverviewQuery = useCpcaCommissionOverview(
     editingLocalityId || undefined,
-    drawerOpen && canManagePresident && Boolean(editingLocalityId),
+    drawerOpen &&
+      canManagePresident &&
+      Boolean(editingLocalityId) &&
+      Boolean(editing?.hasCpca),
   );
   const currentPresident = cpcaOverviewQuery.data?.currentPresident as
     | {
@@ -239,6 +272,26 @@ export function OmsAdminPage() {
     return { total: localities.length, withCpca, withoutCpca };
   }, [localities]);
 
+  const cpcaCoverageOptions = useMemo(
+    () =>
+      localities
+        .filter((item) => item.id !== editingLocalityId)
+        .map((item) => ({
+          id: item.id,
+          code: item.code,
+          name: item.name,
+          uf: item.uf ?? null,
+          hasCpca: Boolean(item.hasCpca),
+        }))
+        .sort((a, b) =>
+          formatOmLabel(a.code, a.name).localeCompare(
+            formatOmLabel(b.code, b.name),
+            "pt-BR",
+          ),
+        ),
+    [editingLocalityId, localities],
+  );
+
   const filteredLocalityIds = useMemo(
     () => filteredLocalities.map((item) => item.id),
     [filteredLocalities],
@@ -280,6 +333,7 @@ export function OmsAdminPage() {
       uf: locality.uf ?? "",
       hasCpca: Boolean(locality.hasCpca),
       notes: locality.notes ?? "",
+      managedLocalityIds: locality.cpcaManagedLocalityIds ?? [],
     });
     setPresidentIdentifier("");
     setPresidentBulletin("");
@@ -381,6 +435,12 @@ export function OmsAdminPage() {
     try {
       if (editing) {
         await updateLocality.mutateAsync({ id: editing.id, payload });
+        if (canManagePresident) {
+          await updateCpcaCoverage.mutateAsync({
+            localityId: editing.id,
+            managedLocalityIds: form.hasCpca ? form.managedLocalityIds : [],
+          });
+        }
         toast.push({
           message: "OM atualizada com sucesso.",
           severity: "success",
@@ -774,7 +834,7 @@ export function OmsAdminPage() {
         anchor="right"
         open={drawerOpen}
         onClose={closeDrawer}
-        PaperProps={{ sx: { width: { xs: "100%", md: 420 } } }}
+        PaperProps={{ sx: { width: { xs: "100%", md: 520 } } }}
       >
         <Box
           p={3}
@@ -841,6 +901,54 @@ export function OmsAdminPage() {
             <MenuItem value="SIM">Sim</MenuItem>
             <MenuItem value="NAO">Não</MenuItem>
           </TextField>
+          {canManagePresident && editing ? (
+            <Autocomplete
+              multiple
+              disableCloseOnSelect
+              options={cpcaCoverageOptions}
+              value={cpcaCoverageOptions.filter((option) =>
+                form.managedLocalityIds.includes(option.id),
+              )}
+              onChange={(_, value) =>
+                setForm((prev) => ({
+                  ...prev,
+                  managedLocalityIds: value.map((item) => item.id),
+                }))
+              }
+              getOptionDisabled={(option) => option.hasCpca}
+              getOptionLabel={(option) =>
+                `${formatOmLabel(option.code, option.name)}${option.uf ? ` - ${option.uf}` : ""}`
+              }
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  size="small"
+                  label="OMs gerenciadas pela CPCA desta OM"
+                  helperText={
+                    form.hasCpca
+                      ? "A própria OM já faz parte da cobertura automaticamente. OMs com CPCA próprio ficam bloqueadas."
+                      : 'Ative "Possui CPCA = Sim" para configurar a cobertura desta comissão.'
+                  }
+                />
+              )}
+              disabled={!form.hasCpca}
+            />
+          ) : null}
+          {canManagePresident && editing && form.hasCpca ? (
+            <Stack
+              direction="row"
+              spacing={1}
+              useFlexGap
+              flexWrap="wrap"
+            >
+              <Chip size="small" color="primary" label="A própria OM sempre entra na cobertura" />
+              <Chip
+                size="small"
+                variant="outlined"
+                label={`${form.managedLocalityIds.length} OMs adicionais vinculadas`}
+              />
+            </Stack>
+          ) : null}
           {canManagePresident && editing ? (
             <Box
               sx={{

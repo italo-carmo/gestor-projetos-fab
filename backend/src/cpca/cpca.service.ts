@@ -80,9 +80,16 @@ export class CpcaService {
   ) {}
 
   async localityOptions(user?: RbacUser) {
-    this.getScopeConstraints(user, CPCA_WORKFLOW_CONTEXT);
+    const constraints = this.getScopeConstraints(user, CPCA_WORKFLOW_CONTEXT);
+    const allowedLocalityIds = await this.resolveCpcaScopedLocalityIds(
+      constraints,
+      CPCA_WORKFLOW_CONTEXT,
+    );
     const items = await this.prisma.locality.findMany({
-      where: { catalogType: 'SMIF' as any },
+      where: {
+        catalogType: 'SMIF' as any,
+        ...(allowedLocalityIds ? { id: { in: allowedLocalityIds } } : {}),
+      },
       select: { id: true, code: true, name: true },
       orderBy: { name: 'asc' },
     });
@@ -109,31 +116,37 @@ export class CpcaService {
       constraints,
       workflowContext,
     );
+    const cpcaScopedLocalityIds = await this.resolveCpcaScopedLocalityIds(
+      constraints,
+      workflowContext,
+    );
     const where: any = {
       workflowScope: workflowContext.workflowScope,
     };
     const andConditions: any[] = [];
 
-    if (filters.localityId) where.localityId = filters.localityId;
-    if (
-      constraints.localityId &&
-      filters.localityId &&
-      constraints.localityId !== filters.localityId
-    ) {
-      if (
-        workflowContext.workflowScope !== 'CPCA' ||
-        !cpcaManagerCaseMarker
+    if (filters.localityId) {
+      where.localityId = filters.localityId;
+    }
+    if (constraints.localityId) {
+      if (workflowContext.workflowScope === 'CPCA') {
+        if (
+          filters.localityId &&
+          (!cpcaScopedLocalityIds ||
+            !cpcaScopedLocalityIds.includes(filters.localityId))
+        ) {
+          where.localityId = '__none__';
+        }
+        if (cpcaManagerCaseMarker) {
+          andConditions.push({
+            caseNumber: { contains: cpcaManagerCaseMarker },
+          });
+        }
+      } else if (
+        filters.localityId &&
+        constraints.localityId !== filters.localityId
       ) {
         where.localityId = '__none__';
-      }
-    } else if (constraints.localityId) {
-      if (
-        workflowContext.workflowScope === 'CPCA' &&
-        cpcaManagerCaseMarker
-      ) {
-        andConditions.push({
-          caseNumber: { contains: cpcaManagerCaseMarker },
-        });
       } else {
         where.localityId = constraints.localityId;
       }
@@ -207,31 +220,37 @@ export class CpcaService {
       constraints,
       workflowContext,
     );
+    const cpcaScopedLocalityIds = await this.resolveCpcaScopedLocalityIds(
+      constraints,
+      workflowContext,
+    );
     const where: any = {
       workflowScope: workflowContext.workflowScope,
     };
     const andConditions: any[] = [];
 
-    if (filters.localityId) where.localityId = filters.localityId;
-    if (
-      constraints.localityId &&
-      filters.localityId &&
-      constraints.localityId !== filters.localityId
-    ) {
-      if (
-        workflowContext.workflowScope !== 'CPCA' ||
-        !cpcaManagerCaseMarker
+    if (filters.localityId) {
+      where.localityId = filters.localityId;
+    }
+    if (constraints.localityId) {
+      if (workflowContext.workflowScope === 'CPCA') {
+        if (
+          filters.localityId &&
+          (!cpcaScopedLocalityIds ||
+            !cpcaScopedLocalityIds.includes(filters.localityId))
+        ) {
+          where.localityId = '__none__';
+        }
+        if (cpcaManagerCaseMarker) {
+          andConditions.push({
+            caseNumber: { contains: cpcaManagerCaseMarker },
+          });
+        }
+      } else if (
+        filters.localityId &&
+        constraints.localityId !== filters.localityId
       ) {
         where.localityId = '__none__';
-      }
-    } else if (constraints.localityId) {
-      if (
-        workflowContext.workflowScope === 'CPCA' &&
-        cpcaManagerCaseMarker
-      ) {
-        andConditions.push({
-          caseNumber: { contains: cpcaManagerCaseMarker },
-        });
       } else {
         where.localityId = constraints.localityId;
       }
@@ -1654,6 +1673,16 @@ export class CpcaService {
             reason: 'required',
           });
         }
+        const allowedLocalityIds = await this.resolveCpcaScopedLocalityIds(
+          constraints,
+          context,
+        );
+        if (
+          allowedLocalityIds &&
+          !allowedLocalityIds.includes(localityId)
+        ) {
+          throwError('RBAC_FORBIDDEN');
+        }
         return localityId;
       }
       if (localityId && localityId !== constraints.localityId) {
@@ -1713,6 +1742,32 @@ export class CpcaService {
       select: { code: true },
     });
     return String(managerLocality?.code ?? '').trim() || null;
+  }
+
+  private async resolveCpcaScopedLocalityIds(
+    constraints: { localityId?: string },
+    context: ComplaintWorkflowContext,
+  ) {
+    if (context.workflowScope !== 'CPCA') {
+      return null;
+    }
+
+    const managerLocalityId = String(constraints.localityId ?? '').trim();
+    if (!managerLocalityId) {
+      return null;
+    }
+
+    const coverage = await this.prisma.cpcaCommissionCoverage.findMany({
+      where: { managerLocalityId },
+      select: { managedLocalityId: true },
+    });
+
+    return Array.from(
+      new Set([
+        managerLocalityId,
+        ...coverage.map((item) => String(item.managedLocalityId ?? '').trim()),
+      ]),
+    ).filter(Boolean);
   }
 
   private normalizeCaseNumberLocalityToken(localityCode: string) {

@@ -63,8 +63,43 @@ export class LocalitiesController {
     const items = await this.prisma.locality.findMany({
       where,
       orderBy: { name: 'asc' },
+      include: {
+        cpcaCoverageAsManager: {
+          select: {
+            managedLocality: {
+              select: {
+                id: true,
+                code: true,
+                name: true,
+                uf: true,
+                hasCpca: true,
+              },
+            },
+          },
+          orderBy: {
+            managedLocality: {
+              name: 'asc',
+            },
+          },
+        },
+      },
     });
-    return { items };
+    return {
+      items: items.map((item) => ({
+        ...item,
+        cpcaManagedLocalities: item.cpcaCoverageAsManager.map((entry) => ({
+          id: entry.managedLocality.id,
+          code: entry.managedLocality.code,
+          name: entry.managedLocality.name,
+          uf: entry.managedLocality.uf,
+          hasCpca: entry.managedLocality.hasCpca,
+        })),
+        cpcaManagedLocalityIds: item.cpcaCoverageAsManager.map(
+          (entry) => entry.managedLocality.id,
+        ),
+        cpcaCoverageAsManager: undefined,
+      })),
+    };
   }
 
   @Get('oms-catalog')

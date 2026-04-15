@@ -1,4 +1,5 @@
 import {
+  Autocomplete,
   Box,
   Button,
   Card,
@@ -27,6 +28,7 @@ import {
   useMe,
   useOmsCatalog,
   useRemoveCpcaCommissionMember,
+  useUpdateCpcaCommissionCoverage,
 } from "../api/hooks";
 import { parseApiError } from "../app/apiErrors";
 import { hasAnyRole, ROLE_COMGEP, ROLE_TI } from "../app/roleAccess";
@@ -41,6 +43,7 @@ type OmsCatalogItem = {
   code: string;
   name: string;
   hasCpca?: boolean;
+  uf?: string | null;
 };
 
 type CommissionMemberItem = {
@@ -87,6 +90,7 @@ export function CpcaCommissionPage() {
   const toast = useToast();
   const { data: me } = useMe();
   const isApprover = hasAnyRole(me, [ROLE_TI, ROLE_COMGEP]);
+  const ownLocalityId = String(me?.localityId ?? "").trim();
   const omsCatalogQuery = useOmsCatalog(isApprover);
 
   const cpcaLocalities = useMemo(
@@ -102,6 +106,7 @@ export function CpcaCommissionPage() {
   const [presidentBulletin, setPresidentBulletin] = useState("");
   const [presidentIsSubstitution, setPresidentIsSubstitution] = useState(true);
   const [memberIdentifier, setMemberIdentifier] = useState("");
+  const [managedLocalityIds, setManagedLocalityIds] = useState<string[]>([]);
   const [pendingPresidentOverwrite, setPendingPresidentOverwrite] = useState<{
     identifier: string;
     localityId: string;
@@ -112,6 +117,13 @@ export function CpcaCommissionPage() {
     useState<CommissionMemberItem | null>(null);
 
   useEffect(() => {
+    if (!isApprover) {
+      setSelectedLocalityId("");
+      return;
+    }
+  }, [isApprover]);
+
+  useEffect(() => {
     if (isApprover) {
       if (
         selectedLocalityId &&
@@ -120,7 +132,6 @@ export function CpcaCommissionPage() {
         return;
       }
 
-      const ownLocalityId = String(me?.localityId ?? "").trim();
       if (
         ownLocalityId &&
         cpcaLocalities.some((item) => item.id === ownLocalityId)
@@ -135,7 +146,6 @@ export function CpcaCommissionPage() {
       return;
     }
 
-    const ownLocalityId = String(me?.localityId ?? "").trim();
     if (ownLocalityId) {
       setSelectedLocalityId(ownLocalityId);
     }
@@ -149,6 +159,7 @@ export function CpcaCommissionPage() {
   const assignPresidentMutation = useAssignCpcaPresident();
   const addMemberMutation = useAddCpcaCommissionMember();
   const removeMemberMutation = useRemoveCpcaCommissionMember();
+  const updateCoverageMutation = useUpdateCpcaCommissionCoverage();
 
   const canManageMembers = Boolean(overviewQuery.data?.canManageMembers);
   const canAssignPresident = Boolean(overviewQuery.data?.canAssignPresident);
@@ -173,6 +184,34 @@ export function CpcaCommissionPage() {
     | { id: string; code: string; name: string }
     | null
     | undefined;
+  const managedLocalities = ((overviewQuery.data?.managedLocalities ??
+    []) as OmsCatalogItem[]).sort((a, b) =>
+    formatOmLabel(a.code, a.name).localeCompare(
+      formatOmLabel(b.code, b.name),
+      "pt-BR",
+    ),
+  );
+  const availableManagedLocalities = ((overviewQuery.data
+    ?.availableManagedLocalities ?? []) as OmsCatalogItem[]).sort((a, b) =>
+    formatOmLabel(a.code, a.name).localeCompare(
+      formatOmLabel(b.code, b.name),
+      "pt-BR",
+    ),
+  );
+  const canManageCoverage = Boolean(overviewQuery.data?.canManageCoverage);
+
+  useEffect(() => {
+    if (isApprover) return;
+    const resolvedLocalityId = String(locality?.id ?? ownLocalityId).trim();
+    if (!resolvedLocalityId) return;
+    if (resolvedLocalityId !== selectedLocalityId) {
+      setSelectedLocalityId(resolvedLocalityId);
+    }
+  }, [isApprover, locality?.id, ownLocalityId, selectedLocalityId]);
+
+  useEffect(() => {
+    setManagedLocalityIds(managedLocalities.map((item) => item.id));
+  }, [locality?.id, managedLocalities]);
 
   const selectedLocalityCode =
     locality?.code ??
@@ -186,6 +225,35 @@ export function CpcaCommissionPage() {
     selectedLocalityCode,
     selectedLocalityName,
   );
+
+  const handleSaveCoverage = async () => {
+    const localityId = String(locality?.id ?? selectedLocalityId).trim();
+    if (!localityId) {
+      toast.push({
+        message: "Selecione uma OM para configurar a cobertura.",
+        severity: "warning",
+      });
+      return;
+    }
+
+    try {
+      await updateCoverageMutation.mutateAsync({
+        localityId,
+        managedLocalityIds,
+      });
+      toast.push({
+        message: "Cobertura CPCA atualizada com sucesso.",
+        severity: "success",
+      });
+    } catch (error) {
+      toast.push({
+        message:
+          parseApiError(error).message ??
+          "Erro ao atualizar a cobertura da comissão.",
+        severity: "error",
+      });
+    }
+  };
 
   const handleAssignPresident = async (args: {
     identifier: string;
@@ -349,7 +417,7 @@ export function CpcaCommissionPage() {
                 value={
                   isApprover
                     ? selectedLocalityId
-                    : (locality?.id ?? selectedLocalityId)
+                    : (ownLocalityId || locality?.id || selectedLocalityId)
                 }
                 onChange={(event) => {
                   if (!isApprover) return;
@@ -459,6 +527,74 @@ export function CpcaCommissionPage() {
             </CardContent>
           </Card>
         ) : null}
+
+        <Card>
+          <CardContent>
+            <Typography variant="h6" fontWeight={700}>
+              Cobertura da Comissão
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+              {canManageCoverage
+                ? "Defina quais OMs sem CPCA próprio ficam sob responsabilidade desta comissão. A própria OM já entra automaticamente."
+                : "Consulte abaixo quais OMs esta comissão atende além da própria OM."}
+            </Typography>
+
+            <Autocomplete
+              multiple
+              disableCloseOnSelect
+              options={availableManagedLocalities}
+              value={availableManagedLocalities.filter((option) =>
+                managedLocalityIds.includes(option.id),
+              )}
+              onChange={(_, value) =>
+                setManagedLocalityIds(value.map((item) => item.id))
+              }
+              getOptionDisabled={(option) => Boolean(option.hasCpca)}
+              getOptionLabel={(option) =>
+                `${formatOmLabel(option.code, option.name)}${option.uf ? ` - ${option.uf}` : ""}`
+              }
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  size="small"
+                  label="OMs adicionais cobertas por esta comissão"
+                  helperText="OMs com CPCA próprio ficam bloqueadas para evitar sobreposição de gestão."
+                />
+              )}
+              disabled={!canManageCoverage || updateCoverageMutation.isPending}
+            />
+
+            <Stack
+              direction={{ xs: "column", md: "row" }}
+              spacing={1.2}
+              alignItems={{ xs: "stretch", md: "center" }}
+              sx={{ mt: 1.5 }}
+            >
+              <Chip
+                size="small"
+                color="primary"
+                label="A própria OM sempre permanece vinculada"
+              />
+              <Chip
+                size="small"
+                variant="outlined"
+                label={`${managedLocalityIds.length} OMs adicionais vinculadas`}
+              />
+              {canManageCoverage ? (
+                <Button
+                  variant="contained"
+                  onClick={handleSaveCoverage}
+                  disabled={updateCoverageMutation.isPending}
+                  sx={{ minWidth: { md: 180 } }}
+                >
+                  {updateCoverageMutation.isPending
+                    ? "Salvando..."
+                    : "Salvar cobertura"}
+                </Button>
+              ) : null}
+            </Stack>
+          </CardContent>
+        </Card>
 
         <Card>
           <CardContent>
