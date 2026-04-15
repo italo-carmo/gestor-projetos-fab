@@ -14,28 +14,27 @@ import {
   TableRow,
   TextField,
   Typography,
-} from '@mui/material';
-import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
-import PersonSearchRoundedIcon from '@mui/icons-material/PersonSearchRounded';
-import WorkspacePremiumRoundedIcon from '@mui/icons-material/WorkspacePremiumRounded';
-import GroupRoundedIcon from '@mui/icons-material/GroupRounded';
-import { useEffect, useMemo, useState } from 'react';
+} from "@mui/material";
+import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
+import PersonSearchRoundedIcon from "@mui/icons-material/PersonSearchRounded";
+import WorkspacePremiumRoundedIcon from "@mui/icons-material/WorkspacePremiumRounded";
+import GroupRoundedIcon from "@mui/icons-material/GroupRounded";
+import { useEffect, useMemo, useState } from "react";
 import {
   useAddCpcaCommissionMember,
   useAssignCpcaPresident,
   useCpcaCommissionOverview,
   useMe,
-  useMyFabProfile,
   useOmsCatalog,
   useRemoveCpcaCommissionMember,
-} from '../api/hooks';
-import { parseApiError } from '../app/apiErrors';
-import { hasAnyRole, ROLE_COMGEP, ROLE_TI } from '../app/roleAccess';
-import { useToast } from '../app/toast';
-import { ConfirmDialog } from '../components/dialogs/ConfirmDialog';
-import { EmptyState } from '../components/states/EmptyState';
-import { ErrorState } from '../components/states/ErrorState';
-import { SkeletonState } from '../components/states/SkeletonState';
+} from "../api/hooks";
+import { parseApiError } from "../app/apiErrors";
+import { hasAnyRole, ROLE_COMGEP, ROLE_TI } from "../app/roleAccess";
+import { useToast } from "../app/toast";
+import { ConfirmDialog } from "../components/dialogs/ConfirmDialog";
+import { EmptyState } from "../components/states/EmptyState";
+import { ErrorState } from "../components/states/ErrorState";
+import { SkeletonState } from "../components/states/SkeletonState";
 
 type OmsCatalogItem = {
   id: string;
@@ -61,15 +60,32 @@ type CommissionMemberItem = {
 };
 
 function extractReason(error: unknown) {
-  const responseData = (error as { response?: { data?: { details?: { reason?: string } } } })
-    ?.response?.data;
-  return String(responseData?.details?.reason ?? '').trim();
+  const responseData = (
+    error as { response?: { data?: { details?: { reason?: string } } } }
+  )?.response?.data;
+  return String(responseData?.details?.reason ?? "").trim();
+}
+
+function formatOmLabel(
+  code: string | null | undefined,
+  name: string | null | undefined,
+) {
+  const codeValue = String(code ?? "").trim();
+  const nameValue = String(name ?? "").trim();
+  if (codeValue && nameValue) {
+    if (
+      codeValue.localeCompare(nameValue, "pt-BR", { sensitivity: "base" }) === 0
+    ) {
+      return codeValue;
+    }
+    return `${codeValue} - ${nameValue}`;
+  }
+  return codeValue || nameValue;
 }
 
 export function CpcaCommissionPage() {
   const toast = useToast();
   const { data: me } = useMe();
-  const fabProfileQuery = useMyFabProfile();
   const isApprover = hasAnyRole(me, [ROLE_TI, ROLE_COMGEP]);
   const omsCatalogQuery = useOmsCatalog(isApprover);
 
@@ -77,22 +93,23 @@ export function CpcaCommissionPage() {
     () =>
       ((omsCatalogQuery.data?.items ?? []) as OmsCatalogItem[])
         .filter((item) => Boolean(item.hasCpca))
-        .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')),
+        .sort((a, b) => a.name.localeCompare(b.name, "pt-BR")),
     [omsCatalogQuery.data?.items],
   );
 
-  const [selectedLocalityId, setSelectedLocalityId] = useState('');
-  const [presidentIdentifier, setPresidentIdentifier] = useState('');
-  const [presidentBulletin, setPresidentBulletin] = useState('');
+  const [selectedLocalityId, setSelectedLocalityId] = useState("");
+  const [presidentIdentifier, setPresidentIdentifier] = useState("");
+  const [presidentBulletin, setPresidentBulletin] = useState("");
   const [presidentIsSubstitution, setPresidentIsSubstitution] = useState(true);
-  const [memberIdentifier, setMemberIdentifier] = useState('');
+  const [memberIdentifier, setMemberIdentifier] = useState("");
   const [pendingPresidentOverwrite, setPendingPresidentOverwrite] = useState<{
     identifier: string;
     localityId: string;
     isSubstitution: boolean;
     designationBulletin: string;
   } | null>(null);
-  const [memberToRemove, setMemberToRemove] = useState<CommissionMemberItem | null>(null);
+  const [memberToRemove, setMemberToRemove] =
+    useState<CommissionMemberItem | null>(null);
 
   useEffect(() => {
     if (isApprover) {
@@ -103,7 +120,7 @@ export function CpcaCommissionPage() {
         return;
       }
 
-      const ownLocalityId = String(me?.localityId ?? '').trim();
+      const ownLocalityId = String(me?.localityId ?? "").trim();
       if (
         ownLocalityId &&
         cpcaLocalities.some((item) => item.id === ownLocalityId)
@@ -118,7 +135,7 @@ export function CpcaCommissionPage() {
       return;
     }
 
-    const ownLocalityId = String(me?.localityId ?? '').trim();
+    const ownLocalityId = String(me?.localityId ?? "").trim();
     if (ownLocalityId) {
       setSelectedLocalityId(ownLocalityId);
     }
@@ -141,7 +158,12 @@ export function CpcaCommissionPage() {
         designationBulletin?: string | null;
         isSubstitution: boolean;
         assignedAt: string;
-        user: { id: string; name: string; email: string; ldapUid?: string | null };
+        user: {
+          id: string;
+          name: string;
+          email: string;
+          ldapUid?: string | null;
+        };
         assignedByUser?: { id: string; name: string; email: string } | null;
       }
     | null
@@ -160,17 +182,10 @@ export function CpcaCommissionPage() {
     locality?.name ??
     cpcaLocalities.find((item) => item.id === selectedLocalityId)?.name ??
     null;
-  const selectedLocalityLabel =
-    selectedLocalityCode && selectedLocalityName
-      ? `${selectedLocalityCode} - ${selectedLocalityName}`
-      : selectedLocalityName ?? '';
-  const ldapFabom = String(fabProfileQuery.data?.fabom ?? '').trim();
-  const nonApproverOmLabel = ldapFabom
-    ? selectedLocalityLabel &&
-      selectedLocalityLabel.toLowerCase() !== ldapFabom.toLowerCase()
-      ? `${ldapFabom} (${selectedLocalityLabel})`
-      : ldapFabom
-    : selectedLocalityLabel;
+  const selectedLocalityLabel = formatOmLabel(
+    selectedLocalityCode,
+    selectedLocalityName,
+  );
 
   const handleAssignPresident = async (args: {
     identifier: string;
@@ -182,16 +197,16 @@ export function CpcaCommissionPage() {
     try {
       await assignPresidentMutation.mutateAsync(args);
       toast.push({
-        message: 'Presidente CPCA designado com sucesso.',
-        severity: 'success',
+        message: "Presidente CPCA designado com sucesso.",
+        severity: "success",
       });
-      setPresidentIdentifier('');
-      setPresidentBulletin('');
+      setPresidentIdentifier("");
+      setPresidentBulletin("");
       setPendingPresidentOverwrite(null);
     } catch (error) {
       const reason = extractReason(error);
       if (
-        reason === 'CPCA_LOCALITY_ALREADY_HAS_PRESIDENT' &&
+        reason === "CPCA_LOCALITY_ALREADY_HAS_PRESIDENT" &&
         !args.proceedWithExistingPresident
       ) {
         setPendingPresidentOverwrite({
@@ -203,8 +218,8 @@ export function CpcaCommissionPage() {
         return;
       }
       toast.push({
-        message: parseApiError(error).message ?? 'Erro ao designar presidente.',
-        severity: 'error',
+        message: parseApiError(error).message ?? "Erro ao designar presidente.",
+        severity: "error",
       });
     }
   };
@@ -213,8 +228,8 @@ export function CpcaCommissionPage() {
     const identifier = memberIdentifier.trim();
     if (!identifier) {
       toast.push({
-        message: 'Informe e-mail ou CPF para adicionar membro.',
-        severity: 'warning',
+        message: "Informe e-mail ou CPF para adicionar membro.",
+        severity: "warning",
       });
       return;
     }
@@ -225,14 +240,14 @@ export function CpcaCommissionPage() {
         localityId: isApprover ? selectedLocalityId : undefined,
       });
       toast.push({
-        message: 'Membro adicionado à comissão CPCA.',
-        severity: 'success',
+        message: "Membro adicionado à comissão CPCA.",
+        severity: "success",
       });
-      setMemberIdentifier('');
+      setMemberIdentifier("");
     } catch (error) {
       toast.push({
-        message: parseApiError(error).message ?? 'Erro ao adicionar membro.',
-        severity: 'error',
+        message: parseApiError(error).message ?? "Erro ao adicionar membro.",
+        severity: "error",
       });
     }
   };
@@ -242,14 +257,14 @@ export function CpcaCommissionPage() {
     try {
       await removeMemberMutation.mutateAsync(memberToRemove.id);
       toast.push({
-        message: 'Membro removido da comissão.',
-        severity: 'success',
+        message: "Membro removido da comissão.",
+        severity: "success",
       });
       setMemberToRemove(null);
     } catch (error) {
       toast.push({
-        message: parseApiError(error).message ?? 'Erro ao remover membro.',
-        severity: 'error',
+        message: parseApiError(error).message ?? "Erro ao remover membro.",
+        severity: "error",
       });
     }
   };
@@ -258,10 +273,20 @@ export function CpcaCommissionPage() {
     return <SkeletonState />;
   }
   if (overviewQuery.isError) {
-    return <ErrorState error={overviewQuery.error} onRetry={() => overviewQuery.refetch()} />;
+    return (
+      <ErrorState
+        error={overviewQuery.error}
+        onRetry={() => overviewQuery.refetch()}
+      />
+    );
   }
   if (isApprover && omsCatalogQuery.isError) {
-    return <ErrorState error={omsCatalogQuery.error} onRetry={() => omsCatalogQuery.refetch()} />;
+    return (
+      <ErrorState
+        error={omsCatalogQuery.error}
+        onRetry={() => omsCatalogQuery.refetch()}
+      />
+    );
   }
   if (!locality) {
     return (
@@ -278,10 +303,10 @@ export function CpcaCommissionPage() {
         <Card>
           <CardContent>
             <Stack
-              direction={{ xs: 'column', md: 'row' }}
+              direction={{ xs: "column", md: "row" }}
               spacing={2}
               justifyContent="space-between"
-              alignItems={{ xs: 'flex-start', md: 'center' }}
+              alignItems={{ xs: "flex-start", md: "center" }}
             >
               <Box>
                 <Typography variant="h4" fontWeight={800}>
@@ -291,12 +316,17 @@ export function CpcaCommissionPage() {
                   Gestão de presidente e membros da comissão por OM.
                 </Typography>
               </Box>
-              <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+              <Stack
+                direction="row"
+                spacing={1}
+                alignItems="center"
+                flexWrap="wrap"
+              >
                 <Chip
                   icon={<WorkspacePremiumRoundedIcon />}
-                  label={`Presidente: ${currentPresident?.user?.name ?? 'Não designado'}`}
-                  color={currentPresident ? 'primary' : 'default'}
-                  variant={currentPresident ? 'filled' : 'outlined'}
+                  label={`Presidente: ${currentPresident?.user?.name ?? "Não designado"}`}
+                  color={currentPresident ? "primary" : "default"}
+                  variant={currentPresident ? "filled" : "outlined"}
                 />
                 <Chip
                   icon={<GroupRoundedIcon />}
@@ -307,31 +337,39 @@ export function CpcaCommissionPage() {
               </Stack>
             </Stack>
 
-            <Stack direction={{ xs: 'column', lg: 'row' }} spacing={2} sx={{ mt: 2 }}>
-              {isApprover ? (
-                <TextField
-                  select
-                  label="OM"
-                  size="small"
-                  value={selectedLocalityId}
-                  onChange={(event) => setSelectedLocalityId(event.target.value)}
-                  sx={{ minWidth: 320 }}
-                >
-                  {cpcaLocalities.map((item) => (
+            <Stack
+              direction={{ xs: "column", lg: "row" }}
+              spacing={2}
+              sx={{ mt: 2 }}
+            >
+              <TextField
+                select
+                label="OM"
+                size="small"
+                value={
+                  isApprover
+                    ? selectedLocalityId
+                    : (locality?.id ?? selectedLocalityId)
+                }
+                onChange={(event) => {
+                  if (!isApprover) return;
+                  setSelectedLocalityId(event.target.value);
+                }}
+                sx={{ minWidth: 320 }}
+                disabled={!isApprover}
+              >
+                {isApprover ? (
+                  cpcaLocalities.map((item) => (
                     <MenuItem key={item.id} value={item.id}>
-                      {item.code} - {item.name}
+                      {formatOmLabel(item.code, item.name)}
                     </MenuItem>
-                  ))}
-                </TextField>
-              ) : (
-                <TextField
-                  size="small"
-                  label="OM"
-                  value={nonApproverOmLabel}
-                  InputProps={{ readOnly: true }}
-                  sx={{ minWidth: 320 }}
-                />
-              )}
+                  ))
+                ) : (
+                  <MenuItem value={locality?.id ?? selectedLocalityId}>
+                    {selectedLocalityLabel}
+                  </MenuItem>
+                )}
+              </TextField>
             </Stack>
           </CardContent>
         </Card>
@@ -342,16 +380,23 @@ export function CpcaCommissionPage() {
               <Typography variant="h6" fontWeight={700}>
                 Designar Presidente CPCA
               </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                Cadastro via LDAP por e-mail/CPF, com concessão automática da permissão CPCA na OM.
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ mb: 1.5 }}
+              >
+                Cadastro via LDAP por e-mail/CPF, com concessão automática da
+                permissão CPCA na OM.
               </Typography>
 
-              <Stack direction={{ xs: 'column', lg: 'row' }} spacing={1.2}>
+              <Stack direction={{ xs: "column", lg: "row" }} spacing={1.2}>
                 <TextField
                   size="small"
                   label="E-mail ou CPF"
                   value={presidentIdentifier}
-                  onChange={(event) => setPresidentIdentifier(event.target.value)}
+                  onChange={(event) =>
+                    setPresidentIdentifier(event.target.value)
+                  }
                   fullWidth
                 />
                 <TextField
@@ -365,9 +410,9 @@ export function CpcaCommissionPage() {
                   select
                   size="small"
                   label="Substituição"
-                  value={presidentIsSubstitution ? 'SIM' : 'NAO'}
+                  value={presidentIsSubstitution ? "SIM" : "NAO"}
                   onChange={(event) =>
-                    setPresidentIsSubstitution(event.target.value === 'SIM')
+                    setPresidentIsSubstitution(event.target.value === "SIM")
                   }
                   sx={{ minWidth: 150 }}
                 >
@@ -393,8 +438,8 @@ export function CpcaCommissionPage() {
                   }
                 >
                   {assignPresidentMutation.isPending
-                    ? 'Salvando...'
-                    : 'Designar'}
+                    ? "Salvando..."
+                    : "Designar"}
                 </Button>
               </Stack>
             </CardContent>
@@ -408,11 +453,15 @@ export function CpcaCommissionPage() {
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
               {canManageMembers
-                ? 'Cadastre membros por LDAP (e-mail ou CPF).'
-                : 'Somente o presidente da comissão (ou TI/COMGEP) pode cadastrar/remover membros.'}
+                ? "Cadastre membros por LDAP (e-mail ou CPF)."
+                : "Somente o presidente da comissão (ou TI/COMGEP) pode cadastrar/remover membros."}
             </Typography>
 
-            <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.2} sx={{ mb: 1.5 }}>
+            <Stack
+              direction={{ xs: "column", md: "row" }}
+              spacing={1.2}
+              sx={{ mb: 1.5 }}
+            >
               <TextField
                 size="small"
                 label="E-mail ou CPF"
@@ -430,7 +479,9 @@ export function CpcaCommissionPage() {
                 }
                 onClick={handleAddMember}
               >
-                {addMemberMutation.isPending ? 'Adicionando...' : 'Adicionar membro'}
+                {addMemberMutation.isPending
+                  ? "Adicionando..."
+                  : "Adicionar membro"}
               </Button>
             </Stack>
 
@@ -454,13 +505,15 @@ export function CpcaCommissionPage() {
                     <TableRow key={member.id}>
                       <TableCell>{member.user.name}</TableCell>
                       <TableCell>{member.user.email}</TableCell>
-                      <TableCell>{member.user.ldapUid ?? '-'}</TableCell>
-                      <TableCell>{member.addedByUser?.name ?? '-'}</TableCell>
+                      <TableCell>{member.user.ldapUid ?? "-"}</TableCell>
+                      <TableCell>{member.addedByUser?.name ?? "-"}</TableCell>
                       <TableCell align="right">
                         <IconButton
                           color="error"
                           size="small"
-                          disabled={!canManageMembers || removeMemberMutation.isPending}
+                          disabled={
+                            !canManageMembers || removeMemberMutation.isPending
+                          }
                           onClick={() => setMemberToRemove(member)}
                         >
                           <DeleteOutlineRoundedIcon fontSize="small" />
@@ -479,7 +532,9 @@ export function CpcaCommissionPage() {
         open={Boolean(pendingPresidentOverwrite)}
         title="Substituir presidente atual?"
         message="Já existe presidente registrado nesta OM. Confirma ciência e deseja prosseguir com a alteração?"
-        highlightText={currentPresident?.user?.name ?? 'Presidente atual já registrado'}
+        highlightText={
+          currentPresident?.user?.name ?? "Presidente atual já registrado"
+        }
         severity="warning"
         confirmLabel="Prosseguir"
         confirmLoading={assignPresidentMutation.isPending}
@@ -497,7 +552,7 @@ export function CpcaCommissionPage() {
         open={Boolean(memberToRemove)}
         title="Remover membro da comissão"
         message="Tem certeza que deseja remover este militar da comissão CPCA desta OM?"
-        highlightText={memberToRemove?.user?.name ?? ''}
+        highlightText={memberToRemove?.user?.name ?? ""}
         severity="error"
         confirmLabel="Remover"
         confirmLoading={removeMemberMutation.isPending}

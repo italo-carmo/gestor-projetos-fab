@@ -21,6 +21,7 @@ import { ApproveCpcaPresidentRequestDto } from './dto/approve-cpca-president-req
 import { CreateCpcaCommissionMemberDto } from './dto/create-cpca-commission-member.dto';
 import { CreateCpcaPresidentDto } from './dto/create-cpca-president.dto';
 import { CreateCpcaPresidentSelfRegistrationDto } from './dto/create-cpca-president-self-registration.dto';
+import { LookupCpcaPresidentCandidateDto } from './dto/lookup-cpca-president-candidate.dto';
 import { RejectCpcaPresidentRequestDto } from './dto/reject-cpca-president-request.dto';
 
 @Controller('cpca-commission')
@@ -77,6 +78,16 @@ export class CpcaCommissionController {
       },
       user,
     );
+  }
+
+  @Post('presidents/lookup')
+  @UseGuards(JwtAuthGuard, RbacGuard)
+  @RequirePermission('cpca_cases', 'update')
+  lookupPresidentCandidate(
+    @Body() dto: LookupCpcaPresidentCandidateDto,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.cpcaCommission.lookupPresidentCandidate(dto.identifier, user);
   }
 
   @Post('members')

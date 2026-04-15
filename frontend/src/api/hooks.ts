@@ -312,7 +312,11 @@ export function useVerifyTwoFactor() {
 export function useResetTwoFactor() {
   return useMutation({
     mutationFn: async (userId: string) =>
-      (await api.post(`/admin/rbac/users/${encodeURIComponent(userId)}/reset-2fa`)).data,
+      (
+        await api.post(
+          `/admin/rbac/users/${encodeURIComponent(userId)}/reset-2fa`,
+        )
+      ).data,
   });
 }
 
@@ -320,7 +324,11 @@ export function useUserTwoFactorStatus(userId: string, enabled = true) {
   return useQuery({
     queryKey: ["user-2fa-status", userId],
     queryFn: async () =>
-      (await api.get(`/admin/rbac/users/${encodeURIComponent(userId)}/2fa-status`)).data as {
+      (
+        await api.get(
+          `/admin/rbac/users/${encodeURIComponent(userId)}/2fa-status`,
+        )
+      ).data as {
         totpEnabled: boolean;
       },
     enabled: enabled && Boolean(userId),
@@ -1142,7 +1150,11 @@ export function useSignActivityReport() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (args: { id: string; totpCode: string }) =>
-      (await api.post(`/activities/${args.id}/report/sign`, { totpCode: args.totpCode })).data,
+      (
+        await api.post(`/activities/${args.id}/report/sign`, {
+          totpCode: args.totpCode,
+        })
+      ).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["activities"] }),
   });
 }
@@ -3105,11 +3117,22 @@ export function useAssignCpcaPresident() {
     }) => (await api.post("/cpca-commission/presidents", payload)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["cpcaCommission"] });
-      qc.invalidateQueries({ queryKey: qk.cpcaPresidentRequestsPendingCount() });
-      qc.invalidateQueries({ queryKey: ["cpcaCommission", "presidentRequests"] });
+      qc.invalidateQueries({
+        queryKey: qk.cpcaPresidentRequestsPendingCount(),
+      });
+      qc.invalidateQueries({
+        queryKey: ["cpcaCommission", "presidentRequests"],
+      });
       qc.invalidateQueries({ queryKey: ["menuUpdates"] });
       qc.invalidateQueries({ queryKey: qk.me });
     },
+  });
+}
+
+export function useLookupCpcaPresidentCandidate() {
+  return useMutation({
+    mutationFn: async (payload: { identifier: string }) =>
+      (await api.post("/cpca-commission/presidents/lookup", payload)).data,
   });
 }
 
@@ -3144,8 +3167,11 @@ export function useCpcaPresidentRequests(
   return useQuery({
     queryKey: qk.cpcaPresidentRequests(filters),
     queryFn: async () =>
-      (await api.get("/cpca-commission/president-requests", { params: filters }))
-        .data,
+      (
+        await api.get("/cpca-commission/president-requests", {
+          params: filters,
+        })
+      ).data,
     enabled,
     staleTime: 10_000,
   });
@@ -3180,8 +3206,12 @@ export function useApproveCpcaPresidentRequest() {
       ).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["cpcaCommission"] });
-      qc.invalidateQueries({ queryKey: qk.cpcaPresidentRequestsPendingCount() });
-      qc.invalidateQueries({ queryKey: ["cpcaCommission", "presidentRequests"] });
+      qc.invalidateQueries({
+        queryKey: qk.cpcaPresidentRequestsPendingCount(),
+      });
+      qc.invalidateQueries({
+        queryKey: ["cpcaCommission", "presidentRequests"],
+      });
       qc.invalidateQueries({ queryKey: ["menuUpdates"] });
       qc.invalidateQueries({ queryKey: qk.me });
     },
@@ -3200,8 +3230,12 @@ export function useRejectCpcaPresidentRequest() {
       ).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["cpcaCommission"] });
-      qc.invalidateQueries({ queryKey: qk.cpcaPresidentRequestsPendingCount() });
-      qc.invalidateQueries({ queryKey: ["cpcaCommission", "presidentRequests"] });
+      qc.invalidateQueries({
+        queryKey: qk.cpcaPresidentRequestsPendingCount(),
+      });
+      qc.invalidateQueries({
+        queryKey: ["cpcaCommission", "presidentRequests"],
+      });
       qc.invalidateQueries({ queryKey: ["menuUpdates"] });
     },
   });
@@ -4252,7 +4286,8 @@ export function useBiBestPracticesCycleImports(filters: Record<string, any>) {
 export function useBiBestPracticesCycleCardSettings(enabled = true) {
   return useQuery({
     queryKey: qk.biBestPracticesCycleCardSettings(),
-    queryFn: async () => (await api.get("/bi/best-practices-cycle/card-settings")).data,
+    queryFn: async () =>
+      (await api.get("/bi/best-practices-cycle/card-settings")).data,
     enabled,
     staleTime: 20_000,
   });
@@ -4443,7 +4478,8 @@ export function useBiGsdEvaluationImports(filters: Record<string, any>) {
 export function useBiGsdEvaluationCardSettings(enabled = true) {
   return useQuery({
     queryKey: qk.biGsdEvaluationCardSettings(),
-    queryFn: async () => (await api.get("/bi/gsd-evaluation/card-settings")).data,
+    queryFn: async () =>
+      (await api.get("/bi/gsd-evaluation/card-settings")).data,
     enabled,
     staleTime: 20_000,
   });
@@ -4578,7 +4614,10 @@ export type AiKnowledgeSourceId =
   | "complaints_cpca"
   | "complaints_smif";
 
-export type AiAnalysisSourceSelection = Record<AiAnalysisType, AiKnowledgeSourceId[]>;
+export type AiAnalysisSourceSelection = Record<
+  AiAnalysisType,
+  AiKnowledgeSourceId[]
+>;
 
 export type AiSettingsResponse = {
   systemPrompt: string;

@@ -78,14 +78,15 @@ export class CpcaCommissionService {
     const ldapProfile = await this.resolveLdapProfile(identifier);
     const user = await this.upsertLdapBackedUser(ldapProfile, null);
 
-    const pendingExisting = await this.prisma.cpcaPresidentSelfRegistration.findFirst({
-      where: {
-        localityId,
-        applicantUserId: user.id,
-        status: 'PENDING',
-      },
-      select: { id: true },
-    });
+    const pendingExisting =
+      await this.prisma.cpcaPresidentSelfRegistration.findFirst({
+        where: {
+          localityId,
+          applicantUserId: user.id,
+          status: 'PENDING',
+        },
+        select: { id: true },
+      });
     if (pendingExisting) {
       throwError('VALIDATION_ERROR', {
         reason: 'CPCA_PRESIDENT_REQUEST_ALREADY_PENDING',
@@ -274,7 +275,9 @@ export class CpcaCommissionService {
       targetUserId: targetUser.id,
       actorUserId,
       isSubstitution: Boolean(payload.isSubstitution),
-      proceedWithExistingPresident: Boolean(payload.proceedWithExistingPresident),
+      proceedWithExistingPresident: Boolean(
+        payload.proceedWithExistingPresident,
+      ),
       designationBulletin: this.cleanOptionalText(payload.designationBulletin, {
         maxLength: 220,
       }),
@@ -284,10 +287,52 @@ export class CpcaCommissionService {
     return assignment;
   }
 
-  async listPresidentRequests(
+  async lookupPresidentCandidate(
+    identifierRaw: string,
     user: RbacUser | undefined,
-    statusRaw?: string,
   ) {
+    this.assertApproverUser(user);
+
+    const identifier = this.normalizeIdentifier(identifierRaw);
+    if (!identifier) {
+      throwError('VALIDATION_ERROR', {
+        field: 'identifier',
+        reason: 'required',
+      });
+    }
+
+    const profile = await this.resolveLdapProfile(identifier);
+    const normalizedEmail = this.normalizeEmail(profile.email);
+    const existingUser = await this.prisma.user.findFirst({
+      where: {
+        OR: [
+          { ldapUid: profile.uid },
+          ...(normalizedEmail ? [{ email: normalizedEmail }] : []),
+        ],
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        ldapUid: true,
+        localityId: true,
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    return {
+      profile: {
+        uid: profile.uid,
+        name: profile.name,
+        email: normalizedEmail,
+        fabom: profile.fabom,
+        numeroOrdem: profile.numeroOrdem,
+      },
+      existingUser,
+    };
+  }
+
+  async listPresidentRequests(user: RbacUser | undefined, statusRaw?: string) {
     this.assertApproverUser(user);
     const normalizedStatus = String(statusRaw ?? '')
       .trim()
@@ -381,7 +426,9 @@ export class CpcaCommissionService {
       targetUserId: request.applicantUserId,
       actorUserId,
       isSubstitution: Boolean(request.requestedAsSubstitution),
-      proceedWithExistingPresident: Boolean(payload.proceedWithExistingPresident),
+      proceedWithExistingPresident: Boolean(
+        payload.proceedWithExistingPresident,
+      ),
       designationBulletin: request.bulletinNumber,
       requestId: request.id,
     });
@@ -444,7 +491,9 @@ export class CpcaCommissionService {
         status: 'REJECTED',
         decidedByUserId: actorUserId,
         decidedAt: new Date(),
-        decisionNotes: this.cleanOptionalText(payload.notes, { maxLength: 320 }),
+        decisionNotes: this.cleanOptionalText(payload.notes, {
+          maxLength: 320,
+        }),
       },
       include: {
         locality: { select: { id: true, code: true, name: true } },
@@ -738,7 +787,9 @@ export class CpcaCommissionService {
       },
       president: assigned,
       replacedPresident:
-        existing && existing.userId !== input.targetUserId ? existing.user : null,
+        existing && existing.userId !== input.targetUserId
+          ? existing.user
+          : null,
       proceededOverExistingPresident:
         existing && existing.userId !== input.targetUserId
           ? input.proceedWithExistingPresident
@@ -869,7 +920,9 @@ export class CpcaCommissionService {
     });
 
     const existing =
-      existingCandidates.find((candidate) => candidate.email === preferredEmail) ??
+      existingCandidates.find(
+        (candidate) => candidate.email === preferredEmail,
+      ) ??
       existingCandidates[0] ??
       null;
 
