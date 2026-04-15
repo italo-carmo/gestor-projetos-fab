@@ -24,6 +24,12 @@ import { CpcaService } from './cpca.service';
 export class CpcaController {
   constructor(private readonly cpca: CpcaService) {}
 
+  @Get('locality-options')
+  @RequirePermission('cpca_cases', 'view')
+  localityOptions(@CurrentUser() user: RbacUser) {
+    return this.cpca.localityOptions(user);
+  }
+
   @Get()
   @RequirePermission('cpca_cases', 'view')
   list(

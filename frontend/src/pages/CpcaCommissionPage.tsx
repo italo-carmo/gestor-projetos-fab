@@ -389,7 +389,11 @@ export function CpcaCommissionPage() {
                 permissão CPCA na OM.
               </Typography>
 
-              <Stack direction={{ xs: "column", lg: "row" }} spacing={1.2}>
+              <Stack
+                direction={{ xs: "column", lg: "row" }}
+                spacing={1.2}
+                alignItems={{ xs: "stretch", lg: "flex-end" }}
+              >
                 <TextField
                   size="small"
                   label="E-mail ou CPF"
@@ -398,6 +402,7 @@ export function CpcaCommissionPage() {
                     setPresidentIdentifier(event.target.value)
                   }
                   fullWidth
+                  sx={{ flex: 1 }}
                 />
                 <TextField
                   size="small"
@@ -405,6 +410,7 @@ export function CpcaCommissionPage() {
                   value={presidentBulletin}
                   onChange={(event) => setPresidentBulletin(event.target.value)}
                   fullWidth
+                  sx={{ flex: 1, maxWidth: { lg: 340 } }}
                 />
                 <TextField
                   select
@@ -414,7 +420,7 @@ export function CpcaCommissionPage() {
                   onChange={(event) =>
                     setPresidentIsSubstitution(event.target.value === "SIM")
                   }
-                  sx={{ minWidth: 150 }}
+                  sx={{ minWidth: 150, flexShrink: 0 }}
                 >
                   <MenuItem value="SIM">Sim</MenuItem>
                   <MenuItem value="NAO">Não</MenuItem>
@@ -436,6 +442,14 @@ export function CpcaCommissionPage() {
                       designationBulletin: presidentBulletin,
                     })
                   }
+                  sx={{
+                    minHeight: 40,
+                    height: { lg: 40 },
+                    minWidth: { lg: 120 },
+                    whiteSpace: "nowrap",
+                    alignSelf: { xs: "stretch", lg: "flex-end" },
+                    flexShrink: 0,
+                  }}
                 >
                   {assignPresidentMutation.isPending
                     ? "Salvando..."
@@ -460,6 +474,7 @@ export function CpcaCommissionPage() {
             <Stack
               direction={{ xs: "column", md: "row" }}
               spacing={1.2}
+              alignItems={{ xs: "stretch", md: "flex-end" }}
               sx={{ mb: 1.5 }}
             >
               <TextField
@@ -469,6 +484,7 @@ export function CpcaCommissionPage() {
                 onChange={(event) => setMemberIdentifier(event.target.value)}
                 fullWidth
                 disabled={!canManageMembers || addMemberMutation.isPending}
+                sx={{ flex: 1 }}
               />
               <Button
                 variant="contained"
@@ -478,6 +494,14 @@ export function CpcaCommissionPage() {
                   addMemberMutation.isPending
                 }
                 onClick={handleAddMember}
+                sx={{
+                  minHeight: 40,
+                  height: { md: 40 },
+                  minWidth: { md: 170 },
+                  whiteSpace: "nowrap",
+                  alignSelf: { xs: "stretch", md: "flex-end" },
+                  flexShrink: 0,
+                }}
               >
                 {addMemberMutation.isPending
                   ? "Adicionando..."

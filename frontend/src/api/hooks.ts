@@ -3017,6 +3017,15 @@ export function useCpcaCases(filters: Record<string, any>, enabled = true) {
   });
 }
 
+export function useCpcaCaseLocalityOptions(enabled = true) {
+  return useQuery({
+    queryKey: qk.cpcaCaseLocalityOptions(),
+    queryFn: async () => (await api.get("/cpca-cases/locality-options")).data,
+    enabled,
+    staleTime: 60_000,
+  });
+}
+
 export function useCpcaCase(id: string, enabled = true) {
   return useQuery({
     queryKey: qk.cpcaCase(id || ""),

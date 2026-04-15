@@ -79,6 +79,16 @@ export class CpcaService {
     private readonly audit: AuditService,
   ) {}
 
+  async localityOptions(user?: RbacUser) {
+    this.getScopeConstraints(user, CPCA_WORKFLOW_CONTEXT);
+    const items = await this.prisma.locality.findMany({
+      where: { catalogType: 'SMIF' as any },
+      select: { id: true, code: true, name: true },
+      orderBy: { name: 'asc' },
+    });
+    return { items };
+  }
+
   async list(
     filters: {
       localityId?: string;
@@ -95,9 +105,14 @@ export class CpcaService {
   ) {
     const workflowContext = this.resolveContext(context);
     const constraints = this.getScopeConstraints(user, workflowContext);
+    const cpcaManagerCaseMarker = await this.resolveCpcaManagerCaseMarker(
+      constraints,
+      workflowContext,
+    );
     const where: any = {
       workflowScope: workflowContext.workflowScope,
     };
+    const andConditions: any[] = [];
 
     if (filters.localityId) where.localityId = filters.localityId;
     if (
@@ -105,9 +120,23 @@ export class CpcaService {
       filters.localityId &&
       constraints.localityId !== filters.localityId
     ) {
-      where.localityId = '__none__';
+      if (
+        workflowContext.workflowScope !== 'CPCA' ||
+        !cpcaManagerCaseMarker
+      ) {
+        where.localityId = '__none__';
+      }
     } else if (constraints.localityId) {
-      where.localityId = constraints.localityId;
+      if (
+        workflowContext.workflowScope === 'CPCA' &&
+        cpcaManagerCaseMarker
+      ) {
+        andConditions.push({
+          caseNumber: { contains: cpcaManagerCaseMarker },
+        });
+      } else {
+        where.localityId = constraints.localityId;
+      }
     }
 
     if (filters.status) where.status = filters.status;
@@ -116,7 +145,14 @@ export class CpcaService {
       where.detailedViolenceType = filters.detailedViolenceType;
     if (filters.procedureType) where.procedureType = filters.procedureType;
     if (filters.q) {
-      where.caseNumber = { contains: filters.q.trim(), mode: 'insensitive' };
+      andConditions.push({
+        caseNumber: { contains: filters.q.trim(), mode: 'insensitive' },
+      });
+    }
+    if (andConditions.length === 1) {
+      Object.assign(where, andConditions[0]);
+    } else if (andConditions.length > 1) {
+      where.AND = andConditions;
     }
 
     const { page, pageSize, skip, take } = parsePagination(
@@ -167,9 +203,14 @@ export class CpcaService {
   ) {
     const workflowContext = this.resolveContext(context);
     const constraints = this.getScopeConstraints(user, workflowContext);
+    const cpcaManagerCaseMarker = await this.resolveCpcaManagerCaseMarker(
+      constraints,
+      workflowContext,
+    );
     const where: any = {
       workflowScope: workflowContext.workflowScope,
     };
+    const andConditions: any[] = [];
 
     if (filters.localityId) where.localityId = filters.localityId;
     if (
@@ -177,9 +218,28 @@ export class CpcaService {
       filters.localityId &&
       constraints.localityId !== filters.localityId
     ) {
-      where.localityId = '__none__';
+      if (
+        workflowContext.workflowScope !== 'CPCA' ||
+        !cpcaManagerCaseMarker
+      ) {
+        where.localityId = '__none__';
+      }
     } else if (constraints.localityId) {
-      where.localityId = constraints.localityId;
+      if (
+        workflowContext.workflowScope === 'CPCA' &&
+        cpcaManagerCaseMarker
+      ) {
+        andConditions.push({
+          caseNumber: { contains: cpcaManagerCaseMarker },
+        });
+      } else {
+        where.localityId = constraints.localityId;
+      }
+    }
+    if (andConditions.length === 1) {
+      Object.assign(where, andConditions[0]);
+    } else if (andConditions.length > 1) {
+      where.AND = andConditions;
     }
 
     const fromDate = this.parseDateBoundary(filters.from, 'from', false);
@@ -796,7 +856,11 @@ export class CpcaService {
     if (item.workflowScope !== workflowContext.workflowScope) {
       throwError('NOT_FOUND');
     }
-    this.assertCaseAccess(item.localityId, user, workflowContext);
+    await this.assertCaseAccess(
+      { localityId: item.localityId, caseNumber: item.caseNumber },
+      user,
+      workflowContext,
+    );
     return item;
   }
 
@@ -806,6 +870,7 @@ export class CpcaService {
     context: ComplaintWorkflowContext = CPCA_WORKFLOW_CONTEXT,
   ) {
     const workflowContext = this.resolveContext(context);
+    const constraints = this.getScopeConstraints(user, workflowContext);
     const localityId = await this.resolveTargetLocalityId(
       payload.omId ?? payload.localityId,
       user,
@@ -817,6 +882,10 @@ export class CpcaService {
       select: { id: true, code: true },
     });
     if (!locality) throwError('NOT_FOUND');
+    const cpcaManagerLocalityCode = await this.resolveCpcaManagerLocalityCode(
+      constraints,
+      workflowContext,
+    );
 
     const complaintModel = (this.prisma as any).cpcComplaintCase;
     const historyModel = (this.prisma as any).cpcComplaintStatusHistory;
@@ -952,7 +1021,7 @@ export class CpcaService {
     let created: any = null;
     for (let attempt = 0; attempt < 8; attempt += 1) {
       const nextCaseNumber = await this.generateCaseNumber(
-        locality.code ?? 'OM',
+        cpcaManagerLocalityCode ?? locality.code ?? 'OM',
         workflowContext.caseNumberPrefix,
       );
       try {
@@ -1029,6 +1098,7 @@ export class CpcaService {
       select: {
         id: true,
         localityId: true,
+        caseNumber: true,
         workflowScope: true,
         complaintType: true,
         victimIsNotifier: true,
@@ -1056,7 +1126,11 @@ export class CpcaService {
       throwError('NOT_FOUND');
     }
 
-    this.assertCaseAccess(current.localityId, user, workflowContext);
+    await this.assertCaseAccess(
+      { localityId: current.localityId, caseNumber: current.caseNumber },
+      user,
+      workflowContext,
+    );
 
     const targetLocalityIdRaw = payload.omId ?? payload.localityId;
     const nextLocalityId = targetLocalityIdRaw
@@ -1376,7 +1450,11 @@ export class CpcaService {
       throwError('NOT_FOUND');
     }
 
-    this.assertCaseAccess(current.localityId, user, workflowContext);
+    await this.assertCaseAccess(
+      { localityId: current.localityId, caseNumber: current.caseNumber },
+      user,
+      workflowContext,
+    );
 
     await complaintModel.delete({ where: { id } });
 
@@ -1410,13 +1488,17 @@ export class CpcaService {
 
     const complaint = await complaintModel.findUnique({
       where: { id },
-      select: { id: true, localityId: true, workflowScope: true },
+      select: { id: true, localityId: true, caseNumber: true, workflowScope: true },
     });
     if (!complaint) throwError('NOT_FOUND');
     if (complaint.workflowScope !== workflowContext.workflowScope) {
       throwError('NOT_FOUND');
     }
-    this.assertCaseAccess(complaint.localityId, user, workflowContext);
+    await this.assertCaseAccess(
+      { localityId: complaint.localityId, caseNumber: complaint.caseNumber },
+      user,
+      workflowContext,
+    );
 
     const normalizedText = this.cleanText(text);
     if (!normalizedText) {
@@ -1460,13 +1542,17 @@ export class CpcaService {
 
     const complaint = await complaintModel.findUnique({
       where: { id },
-      select: { id: true, localityId: true, workflowScope: true },
+      select: { id: true, localityId: true, caseNumber: true, workflowScope: true },
     });
     if (!complaint) throwError('NOT_FOUND');
     if (complaint.workflowScope !== workflowContext.workflowScope) {
       throwError('NOT_FOUND');
     }
-    this.assertCaseAccess(complaint.localityId, user, workflowContext);
+    await this.assertCaseAccess(
+      { localityId: complaint.localityId, caseNumber: complaint.caseNumber },
+      user,
+      workflowContext,
+    );
 
     const items = await commentModel.findMany({
       where: { complaintCaseId: id },
@@ -1526,13 +1612,28 @@ export class CpcaService {
     return this.hasCasePermission(user, context, 'LOCALITY');
   }
 
-  private assertCaseAccess(
-    localityId: string,
+  private async assertCaseAccess(
+    item: { localityId: string; caseNumber?: string | null },
     user: RbacUser | undefined,
     context: ComplaintWorkflowContext,
   ) {
     const constraints = this.getScopeConstraints(user, context);
-    if (constraints.localityId && constraints.localityId !== localityId) {
+    if (!constraints.localityId) {
+      return;
+    }
+
+    if (context.workflowScope === 'CPCA') {
+      const cpcaManagerCaseMarker = await this.resolveCpcaManagerCaseMarker(
+        constraints,
+        context,
+      );
+      const caseNumber = String(item.caseNumber ?? '');
+      if (cpcaManagerCaseMarker && caseNumber.includes(cpcaManagerCaseMarker)) {
+        return;
+      }
+    }
+
+    if (constraints.localityId !== item.localityId) {
       throwError('RBAC_FORBIDDEN');
     }
   }
@@ -1546,6 +1647,15 @@ export class CpcaService {
     const localityId = String(localityIdRaw ?? '').trim();
 
     if (constraints.localityId) {
+      if (context.workflowScope === 'CPCA') {
+        if (!localityId) {
+          throwError('VALIDATION_ERROR', {
+            field: 'localityId',
+            reason: 'required',
+          });
+        }
+        return localityId;
+      }
       if (localityId && localityId !== constraints.localityId) {
         throwError('RBAC_FORBIDDEN');
       }
@@ -1566,6 +1676,52 @@ export class CpcaService {
     context: ComplaintWorkflowContext | undefined,
   ): ComplaintWorkflowContext {
     return context ?? CPCA_WORKFLOW_CONTEXT;
+  }
+
+  private async resolveCpcaManagerCaseMarker(
+    constraints: { localityId?: string },
+    context: ComplaintWorkflowContext,
+  ) {
+    if (context.workflowScope !== 'CPCA') {
+      return null;
+    }
+    const managerLocalityCode = await this.resolveCpcaManagerLocalityCode(
+      constraints,
+      context,
+    );
+    if (!managerLocalityCode) {
+      return null;
+    }
+    const managerLocalityToken =
+      this.normalizeCaseNumberLocalityToken(managerLocalityCode);
+    return managerLocalityToken ? `-${managerLocalityToken}-` : null;
+  }
+
+  private async resolveCpcaManagerLocalityCode(
+    constraints: { localityId?: string },
+    context: ComplaintWorkflowContext,
+  ) {
+    if (context.workflowScope !== 'CPCA') {
+      return null;
+    }
+    const managerLocalityId = String(constraints.localityId ?? '').trim();
+    if (!managerLocalityId) {
+      return null;
+    }
+    const managerLocality = await this.prisma.locality.findUnique({
+      where: { id: managerLocalityId },
+      select: { code: true },
+    });
+    return String(managerLocality?.code ?? '').trim() || null;
+  }
+
+  private normalizeCaseNumberLocalityToken(localityCode: string) {
+    return (
+      String(localityCode || 'OM')
+        .replace(/[^A-Za-z0-9]/g, '')
+        .toUpperCase()
+        .slice(0, 6) || 'OM'
+    );
   }
 
   private cleanText(value: string) {
@@ -1774,11 +1930,7 @@ export class CpcaService {
   ) {
     const complaintModel = (this.prisma as any).cpcComplaintCase;
     const year = new Date().getUTCFullYear();
-    const localityToken =
-      String(localityCode || 'OM')
-        .replace(/[^A-Za-z0-9]/g, '')
-        .toUpperCase()
-        .slice(0, 6) || 'OM';
+    const localityToken = this.normalizeCaseNumberLocalityToken(localityCode);
     const prefix = `${caseNumberPrefix}-${year}-${localityToken}-`;
     const pattern = new RegExp(`^${prefix}(\\d{5})$`);
 

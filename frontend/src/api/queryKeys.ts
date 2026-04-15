@@ -132,6 +132,7 @@ export const qk = {
   biGsdEvaluationCardSettings: () =>
     ["biGsdEvaluation", "cardSettings"] as const,
   cpcaCases: (filters: Record<string, any>) => ["cpcaCases", filters] as const,
+  cpcaCaseLocalityOptions: () => ["cpcaCases", "localityOptions"] as const,
   cpcaCase: (id: string) => ["cpcaCase", id] as const,
   cpcaCaseStats: (filters: Record<string, any>) =>
     ["cpcaCaseStats", filters] as const,

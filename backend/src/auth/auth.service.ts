@@ -885,35 +885,68 @@ export class AuthService {
     const normalizeKey = (value: string) =>
       normalize(value).replace(/[^A-Z0-9]/g, '');
 
-    for (const candidate of candidates) {
-      const candidateKey = normalizeKey(candidate);
-      if (!candidateKey) continue;
-      const direct = localityRows.find(
-        (row) => normalizeKey(row.code) === candidateKey,
-      );
-      if (direct) return direct.id;
+    const candidateKeys = Array.from(candidates)
+      .map((candidate) => normalizeKey(candidate))
+      .filter(Boolean);
+
+    let bestId: string | null = null;
+    let bestCodeLen = -1;
+    let bestScore = -1;
+
+    const computeScore = (
+      rowCode: string,
+      rowName: string,
+      candidateKey: string,
+    ) => {
+      let score = -1;
+      if (rowCode && rowCode === candidateKey) {
+        score = Math.max(score, 1400 + rowCode.length);
+      }
+      if (rowCode && rowCode.length >= 3 && candidateKey.includes(rowCode)) {
+        score = Math.max(score, 1300 + rowCode.length);
+      }
+      if (rowCode && candidateKey.length >= 3 && rowCode.includes(candidateKey)) {
+        score = Math.max(score, 1250 + candidateKey.length);
+      }
+      if (rowName && rowName === candidateKey) {
+        score = Math.max(score, 1000 + rowName.length);
+      }
+      if (rowName && rowName.length >= 5 && candidateKey.includes(rowName)) {
+        score = Math.max(score, 950 + rowName.length);
+      }
+      if (
+        rowCode &&
+        candidateKey &&
+        rowCode.length >= 4 &&
+        candidateKey.length >= 4 &&
+        (rowCode.endsWith(candidateKey) || candidateKey.endsWith(rowCode))
+      ) {
+        score = Math.max(score, 900 + Math.min(rowCode.length, candidateKey.length));
+      }
+      return score;
+    };
+
+    for (const row of localityRows) {
+      const rowCodeKey = normalizeKey(row.code);
+      const rowNameKey = normalizeKey(row.name);
+      if (!rowCodeKey && !rowNameKey) continue;
+
+      for (const candidateKey of candidateKeys) {
+        const score = computeScore(rowCodeKey, rowNameKey, candidateKey);
+        if (score > bestScore) {
+          bestScore = score;
+          bestId = row.id;
+          bestCodeLen = rowCodeKey.length;
+          continue;
+        }
+        if (score === bestScore && rowCodeKey.length > bestCodeLen) {
+          bestId = row.id;
+          bestCodeLen = rowCodeKey.length;
+        }
+      }
     }
 
-    for (const candidate of candidates) {
-      const candidateKey = normalizeKey(candidate);
-      if (!candidateKey) continue;
-      const byName = localityRows.find(
-        (row) => normalizeKey(row.name) === candidateKey,
-      );
-      if (byName) return byName.id;
-    }
-
-    for (const candidate of candidates) {
-      const bySuffix = localityRows.find((row) => {
-        const rowCode = normalizeKey(row.code);
-        const c = normalizeKey(candidate);
-        if (!rowCode || !c || c.length < 4) return false;
-        return rowCode.endsWith(c) || c.endsWith(rowCode);
-      });
-      if (bySuffix) return bySuffix.id;
-    }
-
-    return null;
+    return bestScore >= 0 ? bestId : null;
   }
 
   private getHttpErrorCode(error: unknown): string | null {

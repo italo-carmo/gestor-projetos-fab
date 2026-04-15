@@ -329,7 +329,7 @@ export class CpcaCommissionService {
     }
 
     const ldapProfile = await this.resolveLdapProfile(identifier);
-    const targetUser = await this.upsertLdapBackedUser(ldapProfile, localityId);
+    const targetUser = await this.upsertLdapBackedUser(ldapProfile);
 
     const assignment = await this.assignPresidentToLocality({
       localityId,
@@ -611,7 +611,7 @@ export class CpcaCommissionService {
     }
 
     const profile = await this.resolveLdapProfile(identifier);
-    const memberUser = await this.upsertLdapBackedUser(profile, localityId);
+    const memberUser = await this.upsertLdapBackedUser(profile);
 
     const isPresident = await this.prisma.cpcaCommissionPresident.findFirst({
       where: {
@@ -1033,41 +1033,80 @@ export class CpcaCommissionService {
     const normalizeKey = (value: string) =>
       normalize(value).replace(/[^A-Z0-9]/g, '');
 
-    for (const candidate of candidates) {
-      const candidateKey = normalizeKey(candidate);
-      if (!candidateKey) continue;
-      const direct = localityRows.find(
-        (row) => normalizeKey(row.code) === candidateKey,
-      );
-      if (direct) return direct;
+    const candidateKeys = Array.from(candidates)
+      .map((candidate) => normalizeKey(candidate))
+      .filter(Boolean);
+
+    let best:
+      | { id: string; code: string; name: string; hasCpca: boolean }
+      | null = null;
+    let bestScore = -1;
+
+    const computeScore = (
+      rowCode: string,
+      rowName: string,
+      candidateKey: string,
+    ) => {
+      let score = -1;
+      if (rowCode && rowCode === candidateKey) {
+        score = Math.max(score, 1400 + rowCode.length);
+      }
+      if (rowCode && rowCode.length >= 3 && candidateKey.includes(rowCode)) {
+        score = Math.max(score, 1300 + rowCode.length);
+      }
+      if (rowCode && candidateKey.length >= 3 && rowCode.includes(candidateKey)) {
+        score = Math.max(score, 1250 + candidateKey.length);
+      }
+      if (rowName && rowName === candidateKey) {
+        score = Math.max(score, 1000 + rowName.length);
+      }
+      if (rowName && rowName.length >= 5 && candidateKey.includes(rowName)) {
+        score = Math.max(score, 950 + rowName.length);
+      }
+      if (
+        rowCode &&
+        candidateKey &&
+        rowCode.length >= 4 &&
+        candidateKey.length >= 4 &&
+        (rowCode.endsWith(candidateKey) || candidateKey.endsWith(rowCode))
+      ) {
+        score = Math.max(score, 900 + Math.min(rowCode.length, candidateKey.length));
+      }
+      return score;
+    };
+
+    for (const row of localityRows) {
+      const rowCodeKey = normalizeKey(row.code);
+      const rowNameKey = normalizeKey(row.name);
+      if (!rowCodeKey && !rowNameKey) continue;
+
+      for (const candidateKey of candidateKeys) {
+        const score = computeScore(rowCodeKey, rowNameKey, candidateKey);
+        if (score > bestScore) {
+          bestScore = score;
+          best = row;
+          continue;
+        }
+        if (score === bestScore && best) {
+          const bestCodeLen = normalizeKey(best.code).length;
+          if (rowCodeKey.length > bestCodeLen) {
+            best = row;
+          }
+        }
+      }
     }
 
-    for (const candidate of candidates) {
-      const candidateKey = normalizeKey(candidate);
-      if (!candidateKey) continue;
-      const byName = localityRows.find(
-        (row) => normalizeKey(row.name) === candidateKey,
-      );
-      if (byName) return byName;
-    }
-
-    for (const candidate of candidates) {
-      const bySuffix = localityRows.find((row) => {
-        const rowCode = normalizeKey(row.code);
-        const c = normalizeKey(candidate);
-        if (!rowCode || !c || c.length < 4) return false;
-        return rowCode.endsWith(c) || c.endsWith(rowCode);
-      });
-      if (bySuffix) return bySuffix;
-    }
-
-    return null;
+    return bestScore >= 0 ? best : null;
   }
 
   private async upsertLdapBackedUser(
     profile: FabLdapProfile,
-    localityId: string | null,
+    resolvedLdapLocalityId?: string | null,
   ) {
+    const ldapLocalityId =
+      resolvedLdapLocalityId ??
+      (await this.resolveSmifLocalityFromFabOm(profile.fabom))?.id ??
+      null;
     const uid = this.normalizeUid(profile.uid);
     const preferredEmail =
       this.normalizeEmail(profile.email) ?? `${uid}@fab.intraer`;
@@ -1107,7 +1146,7 @@ export class CpcaCommissionService {
           email: uniqueEmail,
           name: preferredName,
           isActive: true,
-          localityId: localityId !== null ? localityId : undefined,
+          localityId: ldapLocalityId !== null ? ldapLocalityId : undefined,
         },
         select: {
           id: true,
@@ -1125,7 +1164,7 @@ export class CpcaCommissionService {
         email: uniqueEmail,
         name: preferredName,
         isActive: true,
-        localityId,
+        localityId: ldapLocalityId,
         passwordHash: await this.createTemporaryPasswordHash(uid),
       },
       select: {
@@ -1144,7 +1183,6 @@ export class CpcaCommissionService {
     await this.prisma.user.update({
       where: { id: userId },
       data: {
-        localityId,
         isActive: true,
       },
     });

@@ -29,6 +29,7 @@ import {
   useAddSmifComplaintCaseComment,
   useCpcaCase,
   useCpcaCases,
+  useCpcaCaseLocalityOptions,
   useCreateCpcaCase,
   useDeleteCpcaCase,
   useLocalities,
@@ -446,7 +447,13 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     canAccessByRole && isSmifWorkflow,
   );
   const casesQuery = isSmifWorkflow ? smifCasesQuery : cpcaCasesQuery;
-  const localitiesQuery = useLocalities(canAccessByRole);
+  const cpcaLocalityOptionsQuery = useCpcaCaseLocalityOptions(
+    canAccessByRole && !isSmifWorkflow,
+  );
+  const smifLocalitiesQuery = useLocalities(canAccessByRole && isSmifWorkflow);
+  const localitiesQuery = isSmifWorkflow
+    ? smifLocalitiesQuery
+    : cpcaLocalityOptionsQuery;
   const postosQuery = usePostos();
 
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -571,11 +578,11 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     if (!isCreateMode || !drawerOpen) return;
     setForm((prev) => ({
       ...prev,
-      localityId: isNationalScope
+      localityId: isNationalScope || !isSmifWorkflow
         ? prev.localityId
         : String(me?.localityId ?? ""),
     }));
-  }, [drawerOpen, isCreateMode, isNationalScope, me?.localityId]);
+  }, [drawerOpen, isCreateMode, isNationalScope, isSmifWorkflow, me?.localityId]);
 
   useEffect(() => {
     if (!selectedCaseQuery.data || isCreateMode) return;
@@ -762,7 +769,10 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
       });
       return;
     }
-    if (isNationalScope && !form.localityId) {
+    if (
+      (isNationalScope || (!isSmifWorkflow && isCreateMode)) &&
+      !form.localityId
+    ) {
       toast.push({
         message: "Selecione a OM da ocorrência.",
         severity: "warning",
@@ -975,9 +985,11 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
             onChange={(e) =>
               setForm((prev) => ({ ...prev, localityId: e.target.value }))
             }
-            disabled={!isNationalScope}
+            disabled={!isNationalScope && (isSmifWorkflow || !isCreateMode)}
           >
-            {isNationalScope && <MenuItem value="">Selecionar</MenuItem>}
+            {(isNationalScope || (!isSmifWorkflow && isCreateMode)) && (
+              <MenuItem value="">Selecionar</MenuItem>
+            )}
             {localities.map((loc: any) => (
               <MenuItem key={loc.id} value={loc.id}>
                 {formatOmLabel(loc)}
