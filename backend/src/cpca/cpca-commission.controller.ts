@@ -51,6 +51,15 @@ export class CpcaCommissionController {
     );
   }
 
+  @Post('self-registration/lookup')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 8, ttl: 60_000 } })
+  lookupSelfRegistrationCandidate(
+    @Body() dto: LookupCpcaPresidentCandidateDto,
+  ) {
+    return this.cpcaCommission.lookupSelfRegistrationCandidate(dto.identifier);
+  }
+
   @Get('overview')
   @UseGuards(JwtAuthGuard, RbacGuard)
   @RequirePermission('cpca_cases', 'view')

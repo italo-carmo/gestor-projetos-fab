@@ -3251,6 +3251,14 @@ export function useCpcaSelfRegistrationLocalities(enabled = true) {
   });
 }
 
+export function useLookupCpcaSelfRegistrationCandidate() {
+  return useMutation({
+    mutationFn: async (payload: { identifier: string }) =>
+      (await api.post("/cpca-commission/self-registration/lookup", payload))
+        .data,
+  });
+}
+
 export function useCreateCpcaPresidentSelfRegistration() {
   return useMutation({
     mutationFn: async (payload: {

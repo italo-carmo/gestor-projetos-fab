@@ -19,6 +19,8 @@ const ROLE_NAMES_ALLOWED_TO_APPROVE = new Set([
   normalizeRoleName(ROLE_TI),
   normalizeRoleName(ROLE_COMANDANTE_COMGEP),
 ]);
+const MILITARY_RANK_PREFIX =
+  /^(ALUNO|SD|CB|3S|2S|1S|SO|ASP|CP|CL|MB|TB|2T|1T|CAP|MAJ|TCEL|TEN CEL|CEL|BRIG|BRIGADEIRO|GEN)\b/i;
 
 @Injectable()
 export class CpcaCommissionService {
@@ -76,7 +78,32 @@ export class CpcaCommissionService {
 
     const locality = await this.assertLocalitySupportsCpca(localityId);
     const ldapProfile = await this.resolveLdapProfile(identifier);
-    const user = await this.upsertLdapBackedUser(ldapProfile, null);
+    const ldapLocality = await this.resolveSmifLocalityFromFabOm(
+      ldapProfile.fabom,
+    );
+    if (!ldapLocality) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'CPCA_SELF_REGISTRATION_LDAP_LOCALITY_NOT_FOUND',
+      });
+    }
+    if (!ldapLocality.hasCpca) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'CPCA_SELF_REGISTRATION_LDAP_LOCALITY_WITHOUT_CPCA',
+      });
+    }
+    if (ldapLocality.id !== locality.id) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'CPCA_SELF_REGISTRATION_LOCALITY_MISMATCH',
+        selectedLocalityId: locality.id,
+        selectedLocalityCode: locality.code,
+        selectedLocalityName: locality.name,
+        ldapLocalityId: ldapLocality.id,
+        ldapLocalityCode: ldapLocality.code,
+        ldapLocalityName: ldapLocality.name,
+      });
+    }
+
+    const user = await this.upsertLdapBackedUser(ldapProfile, ldapLocality.id);
 
     const pendingExisting =
       await this.prisma.cpcaPresidentSelfRegistration.findFirst({
@@ -131,6 +158,40 @@ export class CpcaCommissionService {
         createdAt: created.createdAt,
         locality: created.locality,
       },
+    };
+  }
+
+  async lookupSelfRegistrationCandidate(identifierRaw: string) {
+    const identifier = this.normalizeIdentifier(identifierRaw);
+    if (!identifier) {
+      throwError('VALIDATION_ERROR', {
+        field: 'identifier',
+        reason: 'required',
+      });
+    }
+
+    const profile = await this.resolveLdapProfile(identifier);
+    const militaryIdentity = this.extractMilitaryIdentity(profile.name);
+    const locality = await this.resolveSmifLocalityFromFabOm(profile.fabom);
+
+    return {
+      profile: {
+        uid: profile.uid,
+        name: profile.name,
+        email: this.normalizeEmail(profile.email),
+        fabom: profile.fabom,
+        numeroOrdem: profile.numeroOrdem,
+        postoGraduacao: militaryIdentity.postoGraduacao,
+        warName: militaryIdentity.warName,
+      },
+      locality: locality
+        ? {
+            id: locality.id,
+            code: locality.code,
+            name: locality.name,
+            hasCpca: locality.hasCpca,
+          }
+        : null,
     };
   }
 
@@ -534,7 +595,7 @@ export class CpcaCommissionService {
     user: RbacUser | undefined,
   ) {
     const actorUserId = this.requireUserId(user);
-    const localityId = await this.resolveLocalityForMemberManagement(
+    const localityId = this.resolveLocalityForMemberManagement(
       user,
       payload.localityId,
     );
@@ -798,7 +859,7 @@ export class CpcaCommissionService {
     };
   }
 
-  private async resolveLocalityForMemberManagement(
+  private resolveLocalityForMemberManagement(
     user: RbacUser | undefined,
     requestedLocalityId?: string,
   ) {
@@ -895,6 +956,101 @@ export class CpcaCommissionService {
     }
 
     return profile;
+  }
+
+  private extractMilitaryIdentity(name: string | null | undefined) {
+    const fullName = String(name ?? '').trim();
+    if (!fullName) {
+      return {
+        postoGraduacao: null as string | null,
+        warName: null as string | null,
+      };
+    }
+
+    const match = fullName.match(MILITARY_RANK_PREFIX);
+    if (!match) {
+      return {
+        postoGraduacao: null as string | null,
+        warName: fullName,
+      };
+    }
+
+    const postoGraduacao =
+      String(match[1] ?? '')
+        .trim()
+        .toUpperCase() || null;
+    const warNameRaw = fullName.slice(match[0].length).trim();
+    return {
+      postoGraduacao,
+      warName: warNameRaw || fullName,
+    };
+  }
+
+  private normalizeFabOm(value: string | null | undefined) {
+    return String(value ?? '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim()
+      .toUpperCase();
+  }
+
+  private async resolveSmifLocalityFromFabOm(fabom: string | null | undefined) {
+    const normalizedFabom = this.normalizeFabOm(fabom);
+    if (!normalizedFabom) return null;
+
+    const candidates = new Set<string>([normalizedFabom]);
+
+    for (const token of normalizedFabom.split(/[/|;,]+/)) {
+      const trimmed = token.trim();
+      if (trimmed) candidates.add(trimmed);
+    }
+
+    if (normalizedFabom.includes('-')) {
+      const parts = normalizedFabom
+        .split('-')
+        .map((part) => part.trim())
+        .filter(Boolean);
+      const lastPart = parts[parts.length - 1];
+      if (lastPart) candidates.add(lastPart);
+      for (const part of parts) candidates.add(part);
+    }
+
+    const localityRows = await this.prisma.locality.findMany({
+      where: { catalogType: 'SMIF' },
+      select: { id: true, code: true, name: true, hasCpca: true },
+    });
+
+    const normalize = (value: string) =>
+      String(value ?? '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim()
+        .toUpperCase();
+
+    for (const candidate of candidates) {
+      const direct = localityRows.find(
+        (row) => normalize(row.code) === normalize(candidate),
+      );
+      if (direct) return direct;
+    }
+
+    for (const candidate of candidates) {
+      const byName = localityRows.find(
+        (row) => normalize(row.name) === normalize(candidate),
+      );
+      if (byName) return byName;
+    }
+
+    for (const candidate of candidates) {
+      const bySuffix = localityRows.find((row) => {
+        const rowCode = normalize(row.code);
+        const c = normalize(candidate);
+        return rowCode.endsWith(`-${c}`) || c.endsWith(`-${rowCode}`);
+      });
+      if (bySuffix) return bySuffix;
+    }
+
+    return null;
   }
 
   private async upsertLdapBackedUser(
