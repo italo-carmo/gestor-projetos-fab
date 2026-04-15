@@ -198,7 +198,7 @@ function LocalitiesTab() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<any | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [form, setForm] = useState<LocalityForm>({ code: '', name: '' });
+  const [form, setForm] = useState<LocalityForm>({ code: '', name: '', uf: '' });
 
   if (localitiesQuery.isLoading) return <SkeletonState />;
   if (localitiesQuery.isError) {

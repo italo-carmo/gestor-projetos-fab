@@ -172,8 +172,8 @@ export function AuditPage() {
     items.map((item) => String(item.userId ?? "").trim()).filter(Boolean),
   ).size;
   const lastEventAt = items.length ? String(items[0]?.createdAt ?? "") : "";
-  const formatDateTime = (value: string) =>
-    new Date(value).toLocaleString("pt-BR");
+  const formatDateTime = (value: string | null | undefined) =>
+    new Date(String(value ?? "")).toLocaleString("pt-BR");
 
   return (
     <Box>

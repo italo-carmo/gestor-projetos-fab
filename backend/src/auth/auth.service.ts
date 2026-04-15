@@ -9,6 +9,7 @@ import { UsersService } from '../users/users.service';
 import { JwtPayload, JwtRefreshPayload, Jwt2faPayload } from './auth.types';
 import { throwError } from '../common/http-error';
 import { AuditService } from '../audit/audit.service';
+import { resolveBestOmByFabOm } from '../catalog/om-resolver';
 import { RbacService } from '../rbac/rbac.service';
 import { FabLdapService } from '../ldap/fab-ldap.service';
 import {
@@ -196,7 +197,7 @@ export class AuthService {
   }
 
   async me(userId: string, activeRoleId?: string) {
-    await this.syncUserLocalityFromLdap(userId);
+    await this.syncUserOmFromLdap(userId);
 
     const access = await this.rbac.getUserAccess(userId, activeRoleId);
     const allRoles = access.allRoles ?? access.roles;
@@ -206,6 +207,7 @@ export class AuthService {
       id: access.id,
       email: access.email,
       name: access.name,
+      omId: access.omId ?? null,
       localityId: access.localityId ?? null,
       executive_hide_pii: access.executiveHidePii,
       elo_role_id: access.eloRoleId ?? null,
@@ -761,6 +763,7 @@ export class AuthService {
         name: true,
         email: true,
         ldapUid: true,
+        omId: true,
         localityId: true,
       },
     });
@@ -796,11 +799,9 @@ export class AuthService {
 
     const normalizedFabom = this.normalizeFabOm(profile.fabom);
     if (normalizedFabom) {
-      const resolvedLocalityId = await this.resolveLocalityIdFromFabOm(
-        normalizedFabom,
-      );
-      if ((resolvedLocalityId ?? null) !== (user.localityId ?? null)) {
-        data.localityId = resolvedLocalityId ?? null;
+      const resolvedOmId = await this.resolveOmIdFromFabOm(normalizedFabom);
+      if ((resolvedOmId ?? null) !== (user.omId ?? null)) {
+        data.omId = resolvedOmId ?? null;
       }
     }
 
@@ -810,10 +811,10 @@ export class AuthService {
     });
   }
 
-  private async syncUserLocalityFromLdap(userId: string) {
+  private async syncUserOmFromLdap(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, ldapUid: true, email: true, localityId: true },
+      select: { id: true, ldapUid: true, email: true, omId: true },
     });
     if (!user) return;
 
@@ -825,13 +826,12 @@ export class AuthService {
       const normalizedFabom = this.normalizeFabOm(profile?.fabom ?? null);
       if (!normalizedFabom) return;
 
-      const resolvedLocalityId =
-        await this.resolveLocalityIdFromFabOm(normalizedFabom);
-      if ((resolvedLocalityId ?? null) === (user.localityId ?? null)) return;
+      const resolvedOmId = await this.resolveOmIdFromFabOm(normalizedFabom);
+      if ((resolvedOmId ?? null) === (user.omId ?? null)) return;
 
       await this.prisma.user.update({
         where: { id: user.id },
-        data: { localityId: resolvedLocalityId ?? null },
+        data: { omId: resolvedOmId ?? null },
       });
     } catch {
       // Fail-open: não bloqueia /auth/me quando LDAP estiver indisponível.
@@ -846,107 +846,8 @@ export class AuthService {
       .toUpperCase();
   }
 
-  private async resolveLocalityIdFromFabOm(fabom: string) {
-    const normalizedFabom = this.normalizeFabOm(fabom);
-    if (!normalizedFabom) return null;
-
-    const candidates = new Set<string>([normalizedFabom]);
-
-    const addCandidate = (value: string | null | undefined) => {
-      const trimmed = String(value ?? '').trim();
-      if (!trimmed) return;
-      if (trimmed.length <= 2) return;
-      candidates.add(trimmed);
-    };
-
-    for (const token of normalizedFabom.split(/[\/|;,]+/)) {
-      addCandidate(token);
-    }
-
-    if (normalizedFabom.includes('-')) {
-      const parts = normalizedFabom
-        .split('-')
-        .map((part) => part.trim())
-        .filter(Boolean);
-      for (const part of parts) addCandidate(part);
-    }
-
-    const localityRows = await this.prisma.locality.findMany({
-      where: { catalogType: 'SMIF' },
-      select: { id: true, code: true, name: true },
-    });
-
-    const normalize = (value: string) =>
-      String(value ?? '')
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .trim()
-        .toUpperCase();
-    const normalizeKey = (value: string) =>
-      normalize(value).replace(/[^A-Z0-9]/g, '');
-
-    const candidateKeys = Array.from(candidates)
-      .map((candidate) => normalizeKey(candidate))
-      .filter(Boolean);
-
-    let bestId: string | null = null;
-    let bestCodeLen = -1;
-    let bestScore = -1;
-
-    const computeScore = (
-      rowCode: string,
-      rowName: string,
-      candidateKey: string,
-    ) => {
-      let score = -1;
-      if (rowCode && rowCode === candidateKey) {
-        score = Math.max(score, 1400 + rowCode.length);
-      }
-      if (rowCode && rowCode.length >= 3 && candidateKey.includes(rowCode)) {
-        score = Math.max(score, 1300 + rowCode.length);
-      }
-      if (rowCode && candidateKey.length >= 3 && rowCode.includes(candidateKey)) {
-        score = Math.max(score, 1250 + candidateKey.length);
-      }
-      if (rowName && rowName === candidateKey) {
-        score = Math.max(score, 1000 + rowName.length);
-      }
-      if (rowName && rowName.length >= 5 && candidateKey.includes(rowName)) {
-        score = Math.max(score, 950 + rowName.length);
-      }
-      if (
-        rowCode &&
-        candidateKey &&
-        rowCode.length >= 4 &&
-        candidateKey.length >= 4 &&
-        (rowCode.endsWith(candidateKey) || candidateKey.endsWith(rowCode))
-      ) {
-        score = Math.max(score, 900 + Math.min(rowCode.length, candidateKey.length));
-      }
-      return score;
-    };
-
-    for (const row of localityRows) {
-      const rowCodeKey = normalizeKey(row.code);
-      const rowNameKey = normalizeKey(row.name);
-      if (!rowCodeKey && !rowNameKey) continue;
-
-      for (const candidateKey of candidateKeys) {
-        const score = computeScore(rowCodeKey, rowNameKey, candidateKey);
-        if (score > bestScore) {
-          bestScore = score;
-          bestId = row.id;
-          bestCodeLen = rowCodeKey.length;
-          continue;
-        }
-        if (score === bestScore && rowCodeKey.length > bestCodeLen) {
-          bestId = row.id;
-          bestCodeLen = rowCodeKey.length;
-        }
-      }
-    }
-
-    return bestScore >= 0 ? bestId : null;
+  private async resolveOmIdFromFabOm(fabom: string) {
+    return (await resolveBestOmByFabOm(this.prisma, fabom))?.id ?? null;
   }
 
   private getHttpErrorCode(error: unknown): string | null {

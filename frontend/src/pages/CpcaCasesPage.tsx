@@ -580,9 +580,9 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
       ...prev,
       localityId: isNationalScope || !isSmifWorkflow
         ? prev.localityId
-        : String(me?.localityId ?? ""),
+        : String(me?.omId ?? ""),
     }));
-  }, [drawerOpen, isCreateMode, isNationalScope, isSmifWorkflow, me?.localityId]);
+  }, [drawerOpen, isCreateMode, isNationalScope, isSmifWorkflow, me?.omId]);
 
   useEffect(() => {
     if (!selectedCaseQuery.data || isCreateMode) return;
@@ -728,7 +728,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     setConfirmDeleteOpen(false);
     setForm({
       ...defaultForm,
-      localityId: isNationalScope ? "" : String(me?.localityId ?? ""),
+      localityId: isNationalScope ? "" : String(me?.omId ?? ""),
     });
     setNewComment("");
     setActiveStep(0);

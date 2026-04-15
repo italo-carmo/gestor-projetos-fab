@@ -9,8 +9,9 @@ const LOCALITY_REQUIRED_ROLE_NAMES = new Set([
   'gsd localidade',
   'admin localidade',
   'administracao local',
-  'cpca',
 ]);
+
+const OM_REQUIRED_ROLE_NAMES = new Set(['cpca']);
 
 const SPECIALTY_REQUIRED_ROLE_NAMES = new Set([
   'admin especialidade local',
@@ -27,6 +28,10 @@ function normalizeRoleName(roleName: string | null | undefined) {
 
 function roleRequiresLocality(roleName: string | null | undefined) {
   return LOCALITY_REQUIRED_ROLE_NAMES.has(normalizeRoleName(roleName));
+}
+
+function roleRequiresOm(roleName: string | null | undefined) {
+  return OM_REQUIRED_ROLE_NAMES.has(normalizeRoleName(roleName));
 }
 
 function roleRequiresSpecialty(roleName: string | null | undefined) {
@@ -139,6 +144,7 @@ export class UsersService {
         name: true,
         email: true,
         ldapUid: true,
+        omId: true,
         localityId: true,
         specialtyId: true,
         eloRoleId: true,
@@ -181,8 +187,9 @@ export class UsersService {
 
   async update(
     id: string,
-    payload: {
+      payload: {
       eloRoleId?: string | null;
+      omId?: string | null;
       localityId?: string | null;
       specialtyId?: string | null;
       roleId?: string | null;
@@ -193,6 +200,7 @@ export class UsersService {
       where: { id },
       select: {
         id: true,
+        omId: true,
         localityId: true,
         specialtyId: true,
         eloRoleId: true,
@@ -256,6 +264,14 @@ export class UsersService {
     ) {
       throwError('USER_LOCAL_ROLE_REQUIRES_LOCALITY');
     }
+    const targetOmId =
+      payload.omId !== undefined ? payload.omId : existingUser.omId;
+    if (
+      targetRoleNames.some((roleName) => roleRequiresOm(roleName)) &&
+      !targetOmId
+    ) {
+      throwError('USER_CPCA_ROLE_REQUIRES_OM');
+    }
     const targetSpecialtyId =
       payload.specialtyId !== undefined
         ? payload.specialtyId
@@ -276,6 +292,7 @@ export class UsersService {
       await tx.user.update({
         where: { id },
         data: {
+          omId: payload.omId !== undefined ? payload.omId : undefined,
           eloRoleId:
             payload.eloRoleId !== undefined ? payload.eloRoleId : undefined,
           specialtyId:
@@ -309,6 +326,7 @@ export class UsersService {
         name: true,
         email: true,
         ldapUid: true,
+        omId: true,
         localityId: true,
         specialtyId: true,
         eloRoleId: true,

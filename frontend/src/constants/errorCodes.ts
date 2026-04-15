@@ -1,6 +1,7 @@
 export const ERROR_CODES = {
   RBAC_FORBIDDEN: 'Acesso negado',
   USER_LOCAL_ROLE_REQUIRES_LOCALITY: 'Este papel exige localidade obrigatória',
+  USER_CPCA_ROLE_REQUIRES_OM: 'O papel CPCA exige uma OM obrigatória',
   USER_SPECIALTY_ROLE_REQUIRES_SPECIALTY: 'Este papel exige especialidade obrigatória',
   REPORT_REQUIRED: 'Relatório obrigatório para concluir',
   ACTIVITY_REPORT_REQUIRED: 'Relatório obrigatório para concluir a atividade',

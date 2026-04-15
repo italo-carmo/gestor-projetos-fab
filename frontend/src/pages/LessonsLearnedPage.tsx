@@ -52,6 +52,14 @@ type LessonPost = {
   typeId: string;
 };
 
+type LessonSection = {
+  key: string;
+  title: string;
+  subtitle: string;
+  posts: LessonPost[];
+  type: LessonType | null;
+};
+
 export function LessonsLearnedPage() {
   const toast = useToast();
   const { data: me } = useMe();
@@ -85,7 +93,7 @@ export function LessonsLearnedPage() {
     return grouped;
   }, [lessons]);
   const sections = useMemo(() => {
-    const typedSections = types.map((type) => ({
+    const typedSections: LessonSection[] = types.map((type) => ({
       key: type.id,
       title: type.name,
       subtitle: 'Lições deste tipo',

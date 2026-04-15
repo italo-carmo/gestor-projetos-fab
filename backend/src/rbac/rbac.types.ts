@@ -19,6 +19,7 @@ export type RbacUser = {
   id: string;
   name: string;
   email: string;
+  omId?: string | null;
   localityId?: string | null;
   specialtyId?: string | null;
   eloRoleId?: string | null;

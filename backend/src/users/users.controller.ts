@@ -30,6 +30,7 @@ export class UsersController {
   async update(@Param('id') id: string, @Body() dto: UpdateUserDto) {
     return this.users.update(id, {
       eloRoleId: dto.eloRoleId,
+      omId: dto.omId,
       localityId: dto.localityId,
       specialtyId: dto.specialtyId,
       roleId: dto.roleId,

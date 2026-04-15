@@ -1,10 +1,11 @@
+import type { ReactElement } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useMe } from '../api/hooks';
 import { resolveHomePath } from './roleAccess';
 
 type RequireRoleAccessProps = {
   allow: (user: any) => boolean;
-  children: JSX.Element;
+  children: ReactElement;
 };
 
 export function RequireRoleAccess({ allow, children }: RequireRoleAccessProps) {

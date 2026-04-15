@@ -17,6 +17,12 @@ export class UpdateUserDto {
   @ValidateIf((_o, v) => v != null)
   @IsString()
   @MinLength(3)
+  omId?: string | null;
+
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsString()
+  @MinLength(3)
   localityId?: string | null;
 
   @IsOptional()

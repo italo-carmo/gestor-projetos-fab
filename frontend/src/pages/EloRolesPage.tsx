@@ -77,7 +77,7 @@ export function EloRolesPage() {
       }
       setDrawerOpen(false);
     } catch (error) {
-      toast.push({ message: parseApiError(error).message, severity: 'error' });
+      toast.push({ message: parseApiError(error).message ?? 'Erro ao salvar tipo de elo.', severity: 'error' });
     }
   };
 
@@ -87,7 +87,7 @@ export function EloRolesPage() {
       toast.push({ message: 'Tipo de elo excluído', severity: 'success' });
       setDeleteId(null);
     } catch (error) {
-      toast.push({ message: parseApiError(error).message, severity: 'error' });
+      toast.push({ message: parseApiError(error).message ?? 'Erro ao excluir tipo de elo.', severity: 'error' });
     }
   };
 

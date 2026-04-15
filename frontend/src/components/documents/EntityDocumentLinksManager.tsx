@@ -53,7 +53,7 @@ function buildDocumentSemanticKey(document?: {
   fileName?: string | null;
   category?: string | null;
   sourcePath?: string | null;
-}) {
+} | null) {
   if (!document) return '';
   const title = (document.title ?? '').trim().toLowerCase();
   const fileName = (document.fileName ?? '').trim().toLowerCase();

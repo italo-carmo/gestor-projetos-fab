@@ -85,6 +85,7 @@ export class AdminRbacController {
         uid: dto.uid,
         roleId: dto.roleId,
         roleIds: dto.roleIds,
+        omId: dto.omId,
         localityId: dto.localityId,
         specialtyId: dto.specialtyId,
         eloRoleId: dto.eloRoleId,

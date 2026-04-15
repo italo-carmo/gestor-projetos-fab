@@ -87,7 +87,6 @@ function StatusIcon({
 export function ChecklistsPage() {
   const [params, setParams] = useSearchParams();
   const [viewByLocality, setViewByLocality] = useState(false);
-  const [showDuplicates, setShowDuplicates] = useState(false);
   const { data: me } = useMe();
 
   const phaseId = params.get('phaseId') ?? '';

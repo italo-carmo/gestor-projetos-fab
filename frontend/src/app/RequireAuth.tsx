@@ -1,7 +1,8 @@
+import type { ReactElement } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useMe } from '../api/hooks';
 
-export function RequireAuth({ children }: { children: JSX.Element }) {
+export function RequireAuth({ children }: { children: ReactElement }) {
   const { data, isLoading, isError } = useMe();
   if (isLoading) {
     return (

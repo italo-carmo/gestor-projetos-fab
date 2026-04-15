@@ -552,17 +552,32 @@ export class StrategicService {
     const includeActivities = this.hasActivitySource(sourceSet);
     const includeMissions = this.hasMissionSource(sourceSet);
     if (!includeComplaints && !includeActivities && !includeMissions) {
-      const localities = await this.prisma.locality.findMany({
-        select: {
-          id: true,
-          code: true,
-          name: true,
-          uf: true,
-          hasCpca: true,
-          catalogType: true,
-        },
-      });
+      const [localities, oms] = await Promise.all([
+        this.prisma.locality.findMany({
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            uf: true,
+            catalogType: true,
+          },
+        }),
+        this.prisma.om.findMany({
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            uf: true,
+            hasCpca: true,
+          },
+        }),
+      ]);
       const localitiesCatalog = [...localities].sort((a, b) =>
+        String(a.name ?? '').localeCompare(String(b.name ?? ''), 'pt-BR', {
+          sensitivity: 'base',
+        }),
+      );
+      const omsCatalog = [...oms].sort((a, b) =>
         String(a.name ?? '').localeCompare(String(b.name ?? ''), 'pt-BR', {
           sensitivity: 'base',
         }),
@@ -571,25 +586,41 @@ export class StrategicService {
         generatedAt: new Date().toISOString(),
         states: [],
         totalLocalitiesWithUf: localities.filter((l) => l.uf).length,
-        totalLocalitiesWithCpca: localities.filter((l) => l.hasCpca).length,
+        totalLocalitiesWithCpca: oms.filter((om) => om.hasCpca).length,
         totalLocalities: localities.length,
         localitiesCatalog,
+        omsCatalog,
       };
     }
 
     const complaintScopes = this.buildComplaintScopeFilter(sourceSet);
     const activityScope = this.buildActivityScopeFilter(sourceSet);
-    const localities = await this.prisma.locality.findMany({
-      select: {
-        id: true,
-        code: true,
-        name: true,
-        uf: true,
-        hasCpca: true,
-        catalogType: true,
-      },
-    });
+    const [localities, oms] = await Promise.all([
+      this.prisma.locality.findMany({
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          uf: true,
+          catalogType: true,
+        },
+      }),
+      this.prisma.om.findMany({
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          uf: true,
+          hasCpca: true,
+        },
+      }),
+    ]);
     const localitiesCatalog = [...localities].sort((a, b) =>
+      String(a.name ?? '').localeCompare(String(b.name ?? ''), 'pt-BR', {
+        sensitivity: 'base',
+      }),
+    );
+    const omsCatalog = [...oms].sort((a, b) =>
       String(a.name ?? '').localeCompare(String(b.name ?? ''), 'pt-BR', {
         sensitivity: 'base',
       }),
@@ -603,13 +634,13 @@ export class StrategicService {
                 ? { workflowScope: { in: complaintScopes } }
                 : undefined,
             select: {
-              localityId: true,
+              omId: true,
               caseNumber: true,
               complaintType: true,
               status: true,
               reportedAt: true,
               workflowScope: true,
-              locality: { select: { name: true } },
+              om: { select: { name: true } },
             },
           })
         : Promise.resolve([]),
@@ -679,6 +710,10 @@ export class StrategicService {
     for (const loc of localities) {
       if (loc.uf) locUfMap.set(loc.id, loc.uf);
     }
+    const omUfMap = new Map<string, string>();
+    for (const om of oms) {
+      if (om.uf) omUfMap.set(om.id, om.uf);
+    }
 
     const ensureUf = (uf: string): StateEntry => {
       if (!ufMap.has(uf)) {
@@ -730,7 +765,7 @@ export class StrategicService {
     }
 
     for (const c of complaints) {
-      const uf = locUfMap.get(c.localityId);
+      const uf = c.omId ? omUfMap.get(c.omId) : null;
       if (uf) {
         const entry = ensureUf(uf);
         entry.complaints++;
@@ -739,7 +774,7 @@ export class StrategicService {
           type: c.complaintType,
           status: c.status,
           date: c.reportedAt?.toISOString?.() ?? '',
-          locality: c.locality?.name ?? '',
+          locality: c.om?.name ?? '',
           scope: c.workflowScope ?? '',
         });
       }
@@ -781,9 +816,10 @@ export class StrategicService {
         return totalB - totalA;
       }),
       totalLocalitiesWithUf: localities.filter((l) => l.uf).length,
-      totalLocalitiesWithCpca: localities.filter((l) => l.hasCpca).length,
+      totalLocalitiesWithCpca: oms.filter((om) => om.hasCpca).length,
       totalLocalities: localities.length,
       localitiesCatalog,
+      omsCatalog,
     };
   }
 

@@ -125,8 +125,7 @@ export class LocalitiesController {
   @Get('oms-catalog')
   @RequirePermission('localities', 'view')
   async listOmsCatalog() {
-    const items = await this.prisma.locality.findMany({
-      where: { catalogType: LocalityCatalogType.SMIF },
+    const items = await this.prisma.om.findMany({
       select: { id: true, code: true, name: true, uf: true, hasCpca: true },
       orderBy: { name: 'asc' },
     });
@@ -948,9 +947,6 @@ export class LocalitiesController {
       bestPracticePosts,
       socialCommunicationHighlights,
       smifComplaints,
-      cpcaCommissionPresident,
-      cpcaCommissionMembers,
-      cpcaPresidentRequests,
     ] = await this.prisma.$transaction([
       this.prisma.user.count({ where: { localityId } }),
       this.prisma.taskInstance.count({ where: { localityId } }),
@@ -978,9 +974,6 @@ export class LocalitiesController {
       this.prisma.bestPracticePost.count({ where: { localityId } }),
       this.prisma.socialCommunicationHighlight.count({ where: { localityId } }),
       this.prisma.smifComplaint.count({ where: { localityId } }),
-      this.prisma.cpcaCommissionPresident.count({ where: { localityId } }),
-      this.prisma.cpcaCommissionMember.count({ where: { localityId } }),
-      this.prisma.cpcaPresidentSelfRegistration.count({ where: { localityId } }),
     ]);
 
     return [
@@ -1040,21 +1033,6 @@ export class LocalitiesController {
         count: socialCommunicationHighlights,
       },
       { key: 'smifComplaints', label: 'Denúncias SMIF', count: smifComplaints },
-      {
-        key: 'cpcaCommissionPresident',
-        label: 'Presidente CPCA',
-        count: cpcaCommissionPresident,
-      },
-      {
-        key: 'cpcaCommissionMembers',
-        label: 'Membros da comissão CPCA',
-        count: cpcaCommissionMembers,
-      },
-      {
-        key: 'cpcaPresidentRequests',
-        label: 'Solicitações de presidente CPCA',
-        count: cpcaPresidentRequests,
-      },
     ].filter((item) => item.count > 0);
   }
 

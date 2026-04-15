@@ -1894,6 +1894,7 @@ export function useUpdateUser() {
     mutationFn: async (args: {
       id: string;
       eloRoleId?: string | null;
+      omId?: string | null;
       localityId?: string | null;
       specialtyId?: string | null;
       roleId?: string | null;
@@ -1973,6 +1974,7 @@ export function useUpsertLdapUser() {
       uid: string;
       roleId?: string;
       roleIds?: string[];
+      omId?: string | null;
       localityId?: string | null;
       specialtyId?: string | null;
       eloRoleId?: string | null;
@@ -2389,7 +2391,7 @@ export function useDeleteLessonLearned() {
 export function useCreateLessonLearnedType() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (payload: { name: string; colorHex: string }) =>
+    mutationFn: async (payload: { name: string; colorHex: string; textColorHex?: string }) =>
       (await api.post("/lessons-learned/types", payload)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["lessonLearnedTypes"] });
@@ -2403,7 +2405,7 @@ export function useUpdateLessonLearnedType() {
   return useMutation({
     mutationFn: async (args: {
       id: string;
-      payload: { name?: string; colorHex?: string };
+      payload: { name?: string; colorHex?: string; textColorHex?: string };
     }) =>
       (await api.put(`/lessons-learned/types/${args.id}`, args.payload)).data,
     onSuccess: () => {
@@ -3167,7 +3169,8 @@ export function useUpdateCpcaCommissionCoverage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["cpcaCommission"] });
       qc.invalidateQueries({ queryKey: ["cpcaCases", "localityOptions"] });
-      qc.invalidateQueries({ queryKey: qk.localities });
+      qc.invalidateQueries({ queryKey: qk.oms });
+      qc.invalidateQueries({ queryKey: qk.omsCatalog });
     },
   });
 }
@@ -3403,10 +3406,19 @@ export function useLocalities(enabled = true) {
   });
 }
 
+export function useOms(enabled = true) {
+  return useQuery({
+    queryKey: qk.oms,
+    queryFn: async () => (await api.get("/oms")).data,
+    enabled,
+    staleTime: 60_000,
+  });
+}
+
 export function useOmsCatalog(enabled = true) {
   return useQuery({
     queryKey: qk.omsCatalog,
-    queryFn: async () => (await api.get("/localities/oms-catalog")).data,
+    queryFn: async () => (await api.get("/oms/catalog")).data,
     enabled,
     staleTime: 60_000,
   });
@@ -3506,11 +3518,23 @@ export function useUpdateLocality() {
       (await api.put(`/localities/${args.id}`, args.payload)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.localities });
+      qc.invalidateQueries({ queryKey: ["dashboardRecruits"] });
+      qc.invalidateQueries({ queryKey: ["dashboardNational"] });
+      qc.invalidateQueries({ queryKey: ["dashboardExecutive"] });
+    },
+  });
+}
+
+export function useUpdateOm() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; payload: Record<string, any> }) =>
+      (await api.put(`/oms/${args.id}`, args.payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.oms });
       qc.invalidateQueries({ queryKey: qk.omsCatalog });
       qc.invalidateQueries({ queryKey: ["cpcaCommission"] });
       qc.invalidateQueries({ queryKey: ["cpcaCases", "localityOptions"] });
-      qc.invalidateQueries({ queryKey: ["dashboardRecruits"] });
-      qc.invalidateQueries({ queryKey: ["dashboardNational"] });
       qc.invalidateQueries({ queryKey: ["dashboardExecutive"] });
     },
   });
@@ -3527,9 +3551,25 @@ export function useUpdateLocalitiesHasCpcaBatch() {
       },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.localities });
-      qc.invalidateQueries({ queryKey: qk.omsCatalog });
       qc.invalidateQueries({ queryKey: ["dashboardRecruits"] });
       qc.invalidateQueries({ queryKey: ["dashboardNational"] });
+      qc.invalidateQueries({ queryKey: ["dashboardExecutive"] });
+    },
+  });
+}
+
+export function useUpdateOmsHasCpcaBatch() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: { ids: string[]; hasCpca: boolean }) =>
+      (await api.put("/oms/batch/has-cpca", payload)).data as {
+        updatedCount: number;
+        hasCpca: boolean;
+        ids: string[];
+      },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.oms });
+      qc.invalidateQueries({ queryKey: qk.omsCatalog });
       qc.invalidateQueries({ queryKey: ["dashboardExecutive"] });
     },
   });
@@ -3542,11 +3582,23 @@ export function useCreateLocality() {
       (await api.post("/localities", payload)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.localities });
+      qc.invalidateQueries({ queryKey: ["dashboardRecruits"] });
+      qc.invalidateQueries({ queryKey: ["dashboardNational"] });
+      qc.invalidateQueries({ queryKey: ["dashboardExecutive"] });
+    },
+  });
+}
+
+export function useCreateOm() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: Record<string, any>) =>
+      (await api.post("/oms", payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.oms });
       qc.invalidateQueries({ queryKey: qk.omsCatalog });
       qc.invalidateQueries({ queryKey: ["cpcaCommission"] });
       qc.invalidateQueries({ queryKey: ["cpcaCases", "localityOptions"] });
-      qc.invalidateQueries({ queryKey: ["dashboardRecruits"] });
-      qc.invalidateQueries({ queryKey: ["dashboardNational"] });
       qc.invalidateQueries({ queryKey: ["dashboardExecutive"] });
     },
   });
@@ -3561,6 +3613,18 @@ export function useDeleteLocality() {
       qc.invalidateQueries({ queryKey: qk.localities });
       qc.invalidateQueries({ queryKey: ["dashboardRecruits"] });
       qc.invalidateQueries({ queryKey: ["dashboardNational"] });
+      qc.invalidateQueries({ queryKey: ["dashboardExecutive"] });
+    },
+  });
+}
+
+export function useDeleteOm() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await api.delete(`/oms/${id}`)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.oms });
+      qc.invalidateQueries({ queryKey: qk.omsCatalog });
       qc.invalidateQueries({ queryKey: ["dashboardExecutive"] });
     },
   });

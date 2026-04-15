@@ -52,6 +52,13 @@ export class UpsertLdapUserDto {
   @ValidateIf((_o, v) => v !== null && v !== undefined)
   @IsString()
   @MinLength(3)
+  omId?: string | null;
+
+  @IsOptional()
+  @Transform(trimUuidNullable)
+  @ValidateIf((_o, v) => v !== null && v !== undefined)
+  @IsString()
+  @MinLength(3)
   localityId?: string | null;
 
   @IsOptional()

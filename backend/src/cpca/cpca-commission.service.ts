@@ -3,6 +3,7 @@ import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
 import type { CpcaPresidentRequestStatus, Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
+import { resolveBestOmByFabOm } from '../catalog/om-resolver';
 import { throwError } from '../common/http-error';
 import { sanitizeText } from '../common/sanitize';
 import { FabLdapProfile, FabLdapService } from '../ldap/fab-ldap.service';
@@ -31,10 +32,9 @@ export class CpcaCommissionService {
   ) {}
 
   async listSelfRegistrationLocalities() {
-    const items = await this.prisma.locality.findMany({
+    const items = await this.prisma.om.findMany({
       where: {
         hasCpca: true,
-        catalogType: 'SMIF',
       },
       select: {
         id: true,
@@ -76,11 +76,9 @@ export class CpcaCommissionService {
       maxLength: 220,
     });
 
-    const locality = await this.assertLocalitySupportsCpca(localityId);
+    const locality = await this.assertOmSupportsCpca(localityId);
     const ldapProfile = await this.resolveLdapProfile(identifier);
-    const ldapLocality = await this.resolveSmifLocalityFromFabOm(
-      ldapProfile.fabom,
-    );
+    const ldapLocality = await this.resolveOmFromFabOm(ldapProfile.fabom);
     if (!ldapLocality) {
       throwError('VALIDATION_ERROR', {
         reason: 'CPCA_SELF_REGISTRATION_LDAP_LOCALITY_NOT_FOUND',
@@ -108,7 +106,7 @@ export class CpcaCommissionService {
     const pendingExisting =
       await this.prisma.cpcaPresidentSelfRegistration.findFirst({
         where: {
-          localityId,
+          omId: localityId,
           applicantUserId: user.id,
           status: 'PENDING',
         },
@@ -122,7 +120,7 @@ export class CpcaCommissionService {
 
     const created = await this.prisma.cpcaPresidentSelfRegistration.create({
       data: {
-        localityId,
+        omId: localityId,
         applicantUserId: user.id,
         applicantIdentifier: identifier,
         applicantUid: ldapProfile.uid,
@@ -132,7 +130,7 @@ export class CpcaCommissionService {
         bulletinNumber,
       },
       include: {
-        locality: { select: { id: true, code: true, name: true } },
+        om: { select: { id: true, code: true, name: true } },
       },
     });
 
@@ -141,10 +139,10 @@ export class CpcaCommissionService {
       resource: 'cpca_cases',
       action: 'cpca_president_self_registration_create',
       entityId: created.id,
-      localityId,
       diffJson: {
-        localityCode: locality.code,
-        localityName: locality.name,
+        omId: locality.id,
+        omCode: locality.code,
+        omName: locality.name,
         requestedAsSubstitution: Boolean(payload.isSubstitution),
         bulletinNumber,
         ip: ip || null,
@@ -156,7 +154,7 @@ export class CpcaCommissionService {
         id: created.id,
         status: created.status,
         createdAt: created.createdAt,
-        locality: created.locality,
+        locality: created.om,
       },
     };
   }
@@ -172,7 +170,7 @@ export class CpcaCommissionService {
 
     const profile = await this.resolveLdapProfile(identifier);
     const militaryIdentity = this.extractMilitaryIdentity(profile.name);
-    const locality = await this.resolveSmifLocalityFromFabOm(profile.fabom);
+    const locality = await this.resolveOmFromFabOm(profile.fabom);
 
     return {
       profile: {
@@ -205,15 +203,15 @@ export class CpcaCommissionService {
     let localityId = String(requestedLocalityId ?? '').trim();
     if (isApprover) {
       if (!localityId) {
-        const firstLocality = await this.prisma.locality.findFirst({
-          where: { hasCpca: true, catalogType: 'SMIF' },
+        const firstLocality = await this.prisma.om.findFirst({
+          where: { hasCpca: true },
           select: { id: true },
           orderBy: { name: 'asc' },
         });
         localityId = String(firstLocality?.id ?? '');
       }
     } else {
-      localityId = String(user?.localityId ?? '').trim();
+      localityId = String(user?.omId ?? '').trim();
       if (!localityId) {
         throwError('RBAC_FORBIDDEN');
       }
@@ -233,11 +231,11 @@ export class CpcaCommissionService {
       };
     }
 
-    const locality = await this.assertLocalitySupportsCpca(localityId);
+    const locality = await this.assertOmSupportsCpca(localityId);
     const [currentPresident, members, managedLocalities, availableManagedLocalities] =
       await Promise.all([
       this.prisma.cpcaCommissionPresident.findUnique({
-        where: { localityId },
+        where: { omId: localityId },
         include: {
           user: {
             select: {
@@ -245,6 +243,7 @@ export class CpcaCommissionService {
               name: true,
               email: true,
               ldapUid: true,
+              omId: true,
               localityId: true,
             },
           },
@@ -254,7 +253,7 @@ export class CpcaCommissionService {
         },
       }),
       this.prisma.cpcaCommissionMember.findMany({
-        where: { localityId },
+        where: { omId: localityId },
         include: {
           user: {
             select: {
@@ -262,6 +261,7 @@ export class CpcaCommissionService {
               name: true,
               email: true,
               ldapUid: true,
+              omId: true,
               localityId: true,
             },
           },
@@ -324,17 +324,16 @@ export class CpcaCommissionService {
 
     await this.assertCanManageCoverage(user, localityId);
 
-    const locality = await this.prisma.locality.findUnique({
+    const locality = await this.prisma.om.findUnique({
       where: { id: localityId },
       select: {
         id: true,
         code: true,
         name: true,
         hasCpca: true,
-        catalogType: true,
       },
     });
-    if (!locality || locality.catalogType !== 'SMIF') {
+    if (!locality) {
       throwError('NOT_FOUND');
     }
 
@@ -354,10 +353,9 @@ export class CpcaCommissionService {
     }
 
     const managedLocalities = managedLocalityIds.length
-      ? await this.prisma.locality.findMany({
+      ? await this.prisma.om.findMany({
           where: {
             id: { in: managedLocalityIds },
-            catalogType: 'SMIF',
           },
           select: {
             id: true,
@@ -388,16 +386,16 @@ export class CpcaCommissionService {
     }
 
     const conflictingCoverage = managedLocalityIds.length
-      ? await this.prisma.cpcaCommissionCoverage.findMany({
+      ? await this.prisma.cpcaCommissionCoverageOm.findMany({
           where: {
-            managedLocalityId: { in: managedLocalityIds },
-            managerLocalityId: { not: localityId },
+            managedOmId: { in: managedLocalityIds },
+            managerOmId: { not: localityId },
           },
           include: {
-            managerLocality: {
+            managerOm: {
               select: { id: true, code: true, name: true },
             },
-            managedLocality: {
+            managedOm: {
               select: { id: true, code: true, name: true },
             },
           },
@@ -408,24 +406,24 @@ export class CpcaCommissionService {
       throwError('VALIDATION_ERROR', {
         field: 'managedLocalityIds',
         reason: 'CPCA_COVERAGE_TARGET_ALREADY_ASSIGNED',
-        managedLocalityId: firstConflict.managedLocality.id,
-        managedLocalityCode: firstConflict.managedLocality.code,
-        managedLocalityName: firstConflict.managedLocality.name,
-        managerLocalityId: firstConflict.managerLocality.id,
-        managerLocalityCode: firstConflict.managerLocality.code,
-        managerLocalityName: firstConflict.managerLocality.name,
+        managedLocalityId: firstConflict.managedOm.id,
+        managedLocalityCode: firstConflict.managedOm.code,
+        managedLocalityName: firstConflict.managedOm.name,
+        managerLocalityId: firstConflict.managerOm.id,
+        managerLocalityCode: firstConflict.managerOm.code,
+        managerLocalityName: firstConflict.managerOm.name,
       });
     }
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.cpcaCommissionCoverage.deleteMany({
-        where: { managerLocalityId: localityId },
+      await tx.cpcaCommissionCoverageOm.deleteMany({
+        where: { managerOmId: localityId },
       });
       if (managedLocalityIds.length > 0) {
-        await tx.cpcaCommissionCoverage.createMany({
+        await tx.cpcaCommissionCoverageOm.createMany({
           data: managedLocalityIds.map((managedLocalityId) => ({
-            managerLocalityId: localityId,
-            managedLocalityId,
+            managerOmId: localityId,
+            managedOmId: managedLocalityId,
           })),
         });
       }
@@ -438,8 +436,8 @@ export class CpcaCommissionService {
       resource: 'cpca_cases',
       action: 'cpca_commission_coverage_update',
       entityId: localityId,
-      localityId,
       diffJson: {
+        omId: localityId,
         managedLocalityIds,
       },
     });
@@ -532,6 +530,7 @@ export class CpcaCommissionService {
         name: true,
         email: true,
         ldapUid: true,
+        omId: true,
         localityId: true,
       },
       orderBy: { createdAt: 'asc' },
@@ -568,13 +567,14 @@ export class CpcaCommissionService {
       this.prisma.cpcaPresidentSelfRegistration.findMany({
         where,
         include: {
-          locality: { select: { id: true, code: true, name: true } },
+          om: { select: { id: true, code: true, name: true } },
           applicantUser: {
             select: {
               id: true,
               name: true,
               email: true,
               ldapUid: true,
+              omId: true,
               localityId: true,
             },
           },
@@ -617,13 +617,14 @@ export class CpcaCommissionService {
     const request = await this.prisma.cpcaPresidentSelfRegistration.findUnique({
       where: { id: requestId },
       include: {
-        locality: { select: { id: true, code: true, name: true } },
+        om: { select: { id: true, code: true, name: true } },
         applicantUser: {
           select: {
             id: true,
             name: true,
             email: true,
             ldapUid: true,
+            omId: true,
             localityId: true,
           },
         },
@@ -639,7 +640,7 @@ export class CpcaCommissionService {
     }
 
     const assignment = await this.assignPresidentToLocality({
-      localityId: request.localityId,
+      localityId: request.omId,
       targetUserId: request.applicantUserId,
       actorUserId,
       isSubstitution: Boolean(request.requestedAsSubstitution),
@@ -659,13 +660,14 @@ export class CpcaCommissionService {
         decisionNotes: null,
       },
       include: {
-        locality: { select: { id: true, code: true, name: true } },
+        om: { select: { id: true, code: true, name: true } },
         applicantUser: {
           select: {
             id: true,
             name: true,
             email: true,
             ldapUid: true,
+            omId: true,
             localityId: true,
           },
         },
@@ -713,13 +715,14 @@ export class CpcaCommissionService {
         }),
       },
       include: {
-        locality: { select: { id: true, code: true, name: true } },
+        om: { select: { id: true, code: true, name: true } },
         applicantUser: {
           select: {
             id: true,
             name: true,
             email: true,
             ldapUid: true,
+            omId: true,
             localityId: true,
           },
         },
@@ -734,8 +737,8 @@ export class CpcaCommissionService {
       resource: 'cpca_cases',
       action: 'cpca_president_request_reject',
       entityId: rejected.id,
-      localityId: rejected.localityId,
       diffJson: {
+        omId: rejected.omId,
         decisionNotes: rejected.decisionNotes,
       },
     });
@@ -771,7 +774,7 @@ export class CpcaCommissionService {
 
     const isPresident = await this.prisma.cpcaCommissionPresident.findFirst({
       where: {
-        localityId,
+        omId: localityId,
         userId: memberUser.id,
       },
       select: { id: true },
@@ -786,8 +789,8 @@ export class CpcaCommissionService {
 
     const created = await this.prisma.cpcaCommissionMember.upsert({
       where: {
-        localityId_userId: {
-          localityId,
+        omId_userId: {
+          omId: localityId,
           userId: memberUser.id,
         },
       },
@@ -795,7 +798,7 @@ export class CpcaCommissionService {
         addedByUserId: actorUserId,
       },
       create: {
-        localityId,
+        omId: localityId,
         userId: memberUser.id,
         addedByUserId: actorUserId,
       },
@@ -806,6 +809,7 @@ export class CpcaCommissionService {
             name: true,
             email: true,
             ldapUid: true,
+            omId: true,
             localityId: true,
           },
         },
@@ -820,8 +824,8 @@ export class CpcaCommissionService {
       resource: 'cpca_cases',
       action: 'cpca_commission_member_add',
       entityId: created.id,
-      localityId,
       diffJson: {
+        omId: localityId,
         memberUserId: memberUser.id,
       },
     });
@@ -840,6 +844,7 @@ export class CpcaCommissionService {
             name: true,
             email: true,
             ldapUid: true,
+            omId: true,
             localityId: true,
           },
         },
@@ -850,7 +855,7 @@ export class CpcaCommissionService {
       throwError('NOT_FOUND');
     }
 
-    await this.assertCanManageMembers(user, member.localityId);
+    await this.assertCanManageMembers(user, member.omId);
 
     await this.prisma.cpcaCommissionMember.delete({ where: { id: memberId } });
 
@@ -872,8 +877,8 @@ export class CpcaCommissionService {
       resource: 'cpca_cases',
       action: 'cpca_commission_member_remove',
       entityId: member.id,
-      localityId: member.localityId,
       diffJson: {
+        omId: member.omId,
         memberUserId: member.userId,
       },
     });
@@ -894,10 +899,10 @@ export class CpcaCommissionService {
     designationBulletin: string | null;
     requestId: string | null;
   }) {
-    const locality = await this.assertLocalitySupportsCpca(input.localityId);
+    const locality = await this.assertOmSupportsCpca(input.localityId);
 
     const existing = await this.prisma.cpcaCommissionPresident.findUnique({
-      where: { localityId: input.localityId },
+      where: { omId: input.localityId },
       include: {
         user: {
           select: {
@@ -905,6 +910,7 @@ export class CpcaCommissionService {
             name: true,
             email: true,
             ldapUid: true,
+            omId: true,
             localityId: true,
           },
         },
@@ -932,7 +938,7 @@ export class CpcaCommissionService {
       await this.revokeCpcaRole(existing.userId);
       await this.prisma.cpcaCommissionMember.deleteMany({
         where: {
-          localityId: input.localityId,
+          omId: input.localityId,
           userId: existing.userId,
         },
       });
@@ -941,7 +947,7 @@ export class CpcaCommissionService {
     await this.grantCpcaRole(input.targetUserId, input.localityId);
 
     const assigned = await this.prisma.cpcaCommissionPresident.upsert({
-      where: { localityId: input.localityId },
+      where: { omId: input.localityId },
       update: {
         userId: input.targetUserId,
         assignedByUserId: input.actorUserId,
@@ -950,7 +956,7 @@ export class CpcaCommissionService {
         assignedAt: new Date(),
       },
       create: {
-        localityId: input.localityId,
+        omId: input.localityId,
         userId: input.targetUserId,
         assignedByUserId: input.actorUserId,
         designationBulletin: input.designationBulletin,
@@ -963,6 +969,7 @@ export class CpcaCommissionService {
             name: true,
             email: true,
             ldapUid: true,
+            omId: true,
             localityId: true,
           },
         },
@@ -974,7 +981,7 @@ export class CpcaCommissionService {
 
     await this.prisma.cpcaCommissionMember.deleteMany({
       where: {
-        localityId: input.localityId,
+        omId: input.localityId,
         userId: input.targetUserId,
       },
     });
@@ -984,8 +991,8 @@ export class CpcaCommissionService {
       resource: 'cpca_cases',
       action: 'cpca_commission_president_assign',
       entityId: assigned.id,
-      localityId: input.localityId,
       diffJson: {
+        omId: input.localityId,
         requestId: input.requestId,
         replacedUserId:
           existing && existing.userId !== input.targetUserId
@@ -1030,7 +1037,7 @@ export class CpcaCommissionService {
       return requested;
     }
 
-    const userLocalityId = String(user?.localityId ?? '').trim();
+    const userLocalityId = String(user?.omId ?? '').trim();
     if (!userLocalityId) {
       throwError('RBAC_FORBIDDEN');
     }
@@ -1044,7 +1051,7 @@ export class CpcaCommissionService {
     user: RbacUser | undefined,
     localityId: string,
   ) {
-    await this.assertLocalitySupportsCpca(localityId);
+    await this.assertOmSupportsCpca(localityId);
 
     if (this.isApproverUser(user)) {
       return;
@@ -1053,7 +1060,7 @@ export class CpcaCommissionService {
     const userId = this.requireUserId(user);
     const isPresident = await this.prisma.cpcaCommissionPresident.findFirst({
       where: {
-        localityId,
+        omId: localityId,
         userId,
       },
       select: { id: true },
@@ -1075,7 +1082,7 @@ export class CpcaCommissionService {
     const userId = this.requireUserId(user);
     const isPresident = await this.prisma.cpcaCommissionPresident.findFirst({
       where: {
-        localityId,
+        omId: localityId,
         userId,
       },
       select: { id: true },
@@ -1087,10 +1094,10 @@ export class CpcaCommissionService {
   }
 
   private async listManagedLocalities(localityId: string) {
-    const items = await this.prisma.cpcaCommissionCoverage.findMany({
-      where: { managerLocalityId: localityId },
+    const items = await this.prisma.cpcaCommissionCoverageOm.findMany({
+      where: { managerOmId: localityId },
       select: {
-        managedLocality: {
+        managedOm: {
           select: {
             id: true,
             code: true,
@@ -1101,19 +1108,18 @@ export class CpcaCommissionService {
         },
       },
       orderBy: {
-        managedLocality: {
+        managedOm: {
           name: 'asc',
         },
       },
     });
 
-    return items.map((entry) => entry.managedLocality);
+    return items.map((entry) => entry.managedOm);
   }
 
   private async listAvailableManagedLocalities(localityId: string) {
-    return this.prisma.locality.findMany({
+    return this.prisma.om.findMany({
       where: {
-        catalogType: 'SMIF',
         id: { not: localityId },
       },
       select: {
@@ -1127,19 +1133,18 @@ export class CpcaCommissionService {
     });
   }
 
-  private async assertLocalitySupportsCpca(localityId: string) {
-    const locality = await this.prisma.locality.findUnique({
+  private async assertOmSupportsCpca(localityId: string) {
+    const locality = await this.prisma.om.findUnique({
       where: { id: localityId },
       select: {
         id: true,
         code: true,
         name: true,
         hasCpca: true,
-        catalogType: true,
       },
     });
 
-    if (!locality || locality.catalogType !== 'SMIF') {
+    if (!locality) {
       throwError('NOT_FOUND');
     }
 
@@ -1213,109 +1218,8 @@ export class CpcaCommissionService {
       .toUpperCase();
   }
 
-  private async resolveSmifLocalityFromFabOm(fabom: string | null | undefined) {
-    const normalizedFabom = this.normalizeFabOm(fabom);
-    if (!normalizedFabom) return null;
-
-    const candidates = new Set<string>([normalizedFabom]);
-
-    const addCandidate = (value: string | null | undefined) => {
-      const trimmed = String(value ?? '').trim();
-      if (!trimmed) return;
-      if (trimmed.length <= 2) return;
-      candidates.add(trimmed);
-    };
-
-    for (const token of normalizedFabom.split(/[\/|;,]+/)) {
-      addCandidate(token);
-    }
-
-    if (normalizedFabom.includes('-')) {
-      const parts = normalizedFabom
-        .split('-')
-        .map((part) => part.trim())
-        .filter(Boolean);
-      for (const part of parts) addCandidate(part);
-    }
-
-    const localityRows = await this.prisma.locality.findMany({
-      where: { catalogType: 'SMIF' },
-      select: { id: true, code: true, name: true, hasCpca: true },
-    });
-
-    const normalize = (value: string) =>
-      String(value ?? '')
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .trim()
-        .toUpperCase();
-    const normalizeKey = (value: string) =>
-      normalize(value).replace(/[^A-Z0-9]/g, '');
-
-    const candidateKeys = Array.from(candidates)
-      .map((candidate) => normalizeKey(candidate))
-      .filter(Boolean);
-
-    let best:
-      | { id: string; code: string; name: string; hasCpca: boolean }
-      | null = null;
-    let bestScore = -1;
-
-    const computeScore = (
-      rowCode: string,
-      rowName: string,
-      candidateKey: string,
-    ) => {
-      let score = -1;
-      if (rowCode && rowCode === candidateKey) {
-        score = Math.max(score, 1400 + rowCode.length);
-      }
-      if (rowCode && rowCode.length >= 3 && candidateKey.includes(rowCode)) {
-        score = Math.max(score, 1300 + rowCode.length);
-      }
-      if (rowCode && candidateKey.length >= 3 && rowCode.includes(candidateKey)) {
-        score = Math.max(score, 1250 + candidateKey.length);
-      }
-      if (rowName && rowName === candidateKey) {
-        score = Math.max(score, 1000 + rowName.length);
-      }
-      if (rowName && rowName.length >= 5 && candidateKey.includes(rowName)) {
-        score = Math.max(score, 950 + rowName.length);
-      }
-      if (
-        rowCode &&
-        candidateKey &&
-        rowCode.length >= 4 &&
-        candidateKey.length >= 4 &&
-        (rowCode.endsWith(candidateKey) || candidateKey.endsWith(rowCode))
-      ) {
-        score = Math.max(score, 900 + Math.min(rowCode.length, candidateKey.length));
-      }
-      return score;
-    };
-
-    for (const row of localityRows) {
-      const rowCodeKey = normalizeKey(row.code);
-      const rowNameKey = normalizeKey(row.name);
-      if (!rowCodeKey && !rowNameKey) continue;
-
-      for (const candidateKey of candidateKeys) {
-        const score = computeScore(rowCodeKey, rowNameKey, candidateKey);
-        if (score > bestScore) {
-          bestScore = score;
-          best = row;
-          continue;
-        }
-        if (score === bestScore && best) {
-          const bestCodeLen = normalizeKey(best.code).length;
-          if (rowCodeKey.length > bestCodeLen) {
-            best = row;
-          }
-        }
-      }
-    }
-
-    return bestScore >= 0 ? best : null;
+  private async resolveOmFromFabOm(fabom: string | null | undefined) {
+    return resolveBestOmByFabOm(this.prisma, fabom);
   }
 
   private async upsertLdapBackedUser(
@@ -1324,7 +1228,7 @@ export class CpcaCommissionService {
   ) {
     const ldapLocalityId =
       resolvedLdapLocalityId ??
-      (await this.resolveSmifLocalityFromFabOm(profile.fabom))?.id ??
+      (await this.resolveOmFromFabOm(profile.fabom))?.id ??
       null;
     const uid = this.normalizeUid(profile.uid);
     const preferredEmail =
@@ -1338,6 +1242,7 @@ export class CpcaCommissionService {
       select: {
         id: true,
         email: true,
+        omId: true,
         localityId: true,
       },
       orderBy: { createdAt: 'asc' },
@@ -1365,13 +1270,14 @@ export class CpcaCommissionService {
           email: uniqueEmail,
           name: preferredName,
           isActive: true,
-          localityId: ldapLocalityId !== null ? ldapLocalityId : undefined,
+          omId: ldapLocalityId !== null ? ldapLocalityId : undefined,
         },
         select: {
           id: true,
           name: true,
           email: true,
           ldapUid: true,
+          omId: true,
           localityId: true,
         },
       });
@@ -1383,7 +1289,7 @@ export class CpcaCommissionService {
         email: uniqueEmail,
         name: preferredName,
         isActive: true,
-        localityId: ldapLocalityId,
+        omId: ldapLocalityId,
         passwordHash: await this.createTemporaryPasswordHash(uid),
       },
       select: {
@@ -1391,6 +1297,7 @@ export class CpcaCommissionService {
         name: true,
         email: true,
         ldapUid: true,
+        omId: true,
         localityId: true,
       },
     });
@@ -1403,6 +1310,7 @@ export class CpcaCommissionService {
       where: { id: userId },
       data: {
         isActive: true,
+        omId: localityId,
       },
     });
 

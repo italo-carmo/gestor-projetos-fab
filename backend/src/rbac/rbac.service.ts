@@ -45,8 +45,9 @@ const LOCALITY_REQUIRED_ROLE_NAMES = new Set([
   'gsd localidade',
   'admin localidade',
   'administracao local',
-  'cpca',
 ]);
+
+const OM_REQUIRED_ROLE_NAMES = new Set(['cpca']);
 
 const SPECIALTY_REQUIRED_ROLE_NAMES = new Set([
   'admin especialidade local',
@@ -58,6 +59,10 @@ const TI_BLOCKED_PERMISSION_KEYS = new Set(['audit_logs:delete']);
 
 function roleRequiresLocality(roleName: string | null | undefined) {
   return LOCALITY_REQUIRED_ROLE_NAMES.has(normalizeRoleName(roleName));
+}
+
+function roleRequiresOm(roleName: string | null | undefined) {
+  return OM_REQUIRED_ROLE_NAMES.has(normalizeRoleName(roleName));
 }
 
 function roleRequiresSpecialty(roleName: string | null | undefined) {
@@ -592,6 +597,7 @@ export class RbacService implements OnModuleInit {
       uid: string;
       roleId?: string;
       roleIds?: string[];
+      omId?: string | null;
       localityId?: string | null;
       specialtyId?: string | null;
       eloRoleId?: string | null;
@@ -646,6 +652,7 @@ export class RbacService implements OnModuleInit {
         id: true,
         email: true,
         name: true,
+        omId: true,
         localityId: true,
         specialtyId: true,
         eloRoleId: true,
@@ -661,6 +668,11 @@ export class RbacService implements OnModuleInit {
       !targetLocalityId
     ) {
       throwError('USER_LOCAL_ROLE_REQUIRES_LOCALITY');
+    }
+    const targetOmId =
+      payload.omId !== undefined ? payload.omId : (existing?.omId ?? null);
+    if (roles.some((role) => roleRequiresOm(role.name)) && !targetOmId) {
+      throwError('USER_CPCA_ROLE_REQUIRES_OM');
     }
     const targetSpecialtyId =
       payload.specialtyId !== undefined
@@ -691,6 +703,7 @@ export class RbacService implements OnModuleInit {
             name: preferredName,
             email: uniqueEmail,
             isActive: true,
+            omId: payload.omId !== undefined ? payload.omId : undefined,
             localityId:
               payload.localityId !== undefined ? payload.localityId : undefined,
             specialtyId:
@@ -708,6 +721,7 @@ export class RbacService implements OnModuleInit {
             email: uniqueEmail,
             passwordHash: await this.createTemporaryPasswordHash(uid),
             isActive: true,
+            omId: payload.omId ?? null,
             localityId: payload.localityId ?? null,
             specialtyId: payload.specialtyId ?? null,
             eloRoleId: payload.eloRoleId ?? null,
@@ -750,6 +764,7 @@ export class RbacService implements OnModuleInit {
         roleIds: roles.map((item) => item.id),
         roleNames: roles.map((item) => item.name),
         replaceExistingRoles,
+        omId: payload.omId ?? null,
         localityId: payload.localityId ?? null,
         specialtyId: payload.specialtyId ?? null,
         eloRoleId: payload.eloRoleId ?? null,
@@ -763,6 +778,7 @@ export class RbacService implements OnModuleInit {
             name: userWithRoles.name,
             email: userWithRoles.email,
             ldapUid: userWithRoles.ldapUid,
+            omId: userWithRoles.omId,
             localityId: userWithRoles.localityId,
             specialtyId: userWithRoles.specialtyId,
             eloRoleId: userWithRoles.eloRoleId,
@@ -921,6 +937,7 @@ export class RbacService implements OnModuleInit {
       id: user.id,
       name: user.name,
       email: user.email,
+      omId: user.omId,
       localityId: hasNationalScope ? null : user.localityId,
       specialtyId: user.specialtyId,
       eloRoleId: user.eloRoleId,

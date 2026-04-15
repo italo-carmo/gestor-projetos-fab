@@ -87,15 +87,24 @@ export function CalendarPage() {
     }));
   }, [localitiesCatalogQuery.data?.items]);
 
-  const localities = selectTargetLocalities(
-    (dashboardQuery.data?.items ?? []).map((loc: any) => ({
-      id: loc.localityId,
-      name: loc.localityName,
-    })),
-  ).filter(
-    (loc: any) =>
-      String(loc.id ?? '').trim() &&
-      String(loc.name ?? '').trim(),
+  const localities = useMemo(
+    () =>
+      selectTargetLocalities(
+        (dashboardQuery.data?.items ?? []).map((loc: any) => ({
+          id: loc.localityId,
+          name: loc.localityName,
+        })),
+      )
+        .filter(
+          (loc: any) =>
+            String(loc.id ?? '').trim() &&
+            String(loc.name ?? '').trim(),
+        )
+        .map((loc: any) => ({
+          id: String(loc.id),
+          name: String(loc.name),
+        })),
+    [dashboardQuery.data?.items],
   );
   const localityMap = useMemo(() => {
     const m = new Map(localityNameCatalog.map((l) => [l.id, l.name]));
@@ -201,9 +210,13 @@ export function CalendarPage() {
   }, [year]);
 
   const selectedTaskFromList = tasks.find((item: any) => item.id === selectedTaskId) ?? null;
+  const selectedTaskIsLinkedEntity = Boolean(
+    selectedTaskId &&
+      (selectedTaskId.startsWith('mission:') || selectedTaskId.startsWith('activity:')),
+  );
   const selectedTaskQuery = useTaskInstance(
     selectedTaskId ?? '',
-    Boolean(selectedTaskId) && !selectedTaskFromList && !selectedTaskId.startsWith('mission:') && !selectedTaskId.startsWith('activity:'),
+    Boolean(selectedTaskId) && !selectedTaskFromList && !selectedTaskIsLinkedEntity,
   );
   const selectedTask = selectedTaskFromList ?? selectedTaskQuery.data ?? null;
 

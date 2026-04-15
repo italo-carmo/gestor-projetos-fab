@@ -80,10 +80,6 @@ const COLORS = [
   "#1B5E20",
 ];
 
-const COMPLAINT_TYPE_LABELS: Record<string, string> = {
-  MORAL: "Assédio Moral",
-  SEXUAL: "Assédio Sexual",
-};
 const GENDER_LABELS: Record<string, string> = {
   MASCULINO: "Masculino",
   FEMININO: "Feminino",
@@ -1961,7 +1957,8 @@ function GeoMapTab() {
   const localitiesCatalog = Array.isArray(data.localitiesCatalog)
     ? data.localitiesCatalog
     : [];
-  const localitiesWithCpca = localitiesCatalog.filter((loc: any) =>
+  const omsCatalog = Array.isArray(data.omsCatalog) ? data.omsCatalog : [];
+  const localitiesWithCpca = omsCatalog.filter((loc: any) =>
     Boolean(loc?.hasCpca),
   );
   const statesWithData = (data.states ?? []).filter(
@@ -2196,30 +2193,17 @@ function GeoMapTab() {
             <Table size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell><strong>OM</strong></TableCell>
                   <TableCell><strong>Localidade</strong></TableCell>
                   <TableCell><strong>UF</strong></TableCell>
                   <TableCell><strong>Catálogo</strong></TableCell>
-                  <TableCell><strong>CPCA</strong></TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {localitiesCatalog.map((loc: any) => (
                   <TableRow key={loc.id}>
-                    <TableCell>{loc.code || "—"}</TableCell>
                     <TableCell>{loc.name || "—"}</TableCell>
                     <TableCell>{loc.uf || "—"}</TableCell>
                     <TableCell>{loc.catalogType || "—"}</TableCell>
-                    <TableCell>
-                      <Chip
-                        size="small"
-                        label={loc.hasCpca ? "Sim" : "Não"}
-                        sx={{
-                          bgcolor: loc.hasCpca ? "#E8F5E9" : "#F5F5F5",
-                          color: loc.hasCpca ? "#2E7D32" : "#616161",
-                        }}
-                      />
-                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -2233,7 +2217,7 @@ function GeoMapTab() {
               <TableHead>
                 <TableRow>
                   <TableCell><strong>OM</strong></TableCell>
-                  <TableCell><strong>Localidade</strong></TableCell>
+                  <TableCell><strong>Descrição</strong></TableCell>
                   <TableCell><strong>UF</strong></TableCell>
                 </TableRow>
               </TableHead>
@@ -2249,7 +2233,7 @@ function GeoMapTab() {
                   <TableRow>
                     <TableCell colSpan={3}>
                       <Typography variant="body2" color="text.secondary">
-                        Nenhuma OM/localidade com CPCA habilitado.
+                        Nenhuma OM com CPCA habilitado.
                       </Typography>
                     </TableCell>
                   </TableRow>

@@ -21,14 +21,14 @@ import { useEffect, useMemo, useState } from "react";
 import {
   useAssignCpcaPresident,
   useCpcaCommissionOverview,
-  useCreateLocality,
-  useDeleteLocality,
-  useLocalities,
+  useCreateOm,
+  useDeleteOm,
   useLookupCpcaPresidentCandidate,
   useMe,
+  useOms,
   useUpdateCpcaCommissionCoverage,
-  useUpdateLocalitiesHasCpcaBatch,
-  useUpdateLocality,
+  useUpdateOm,
+  useUpdateOmsHasCpcaBatch,
   useUsers,
 } from "../api/hooks";
 import { parseApiError } from "../app/apiErrors";
@@ -70,6 +70,7 @@ type LocalityItem = {
 type UserItem = {
   id: string;
   name: string;
+  omId?: string | null;
   localityId?: string | null;
   roles?: Array<{ role?: { id?: string; name?: string } | null }>;
 };
@@ -176,13 +177,13 @@ function formatOmLabel(
 export function OmsAdminPage() {
   const toast = useToast();
   const { data: me } = useMe();
-  const localitiesQuery = useLocalities();
+  const localitiesQuery = useOms();
   const usersQuery = useUsers(Boolean(me?.id));
-  const createLocality = useCreateLocality();
-  const updateLocality = useUpdateLocality();
+  const createLocality = useCreateOm();
+  const updateLocality = useUpdateOm();
   const updateCpcaCoverage = useUpdateCpcaCommissionCoverage();
-  const updateLocalitiesHasCpcaBatch = useUpdateLocalitiesHasCpcaBatch();
-  const deleteLocality = useDeleteLocality();
+  const updateLocalitiesHasCpcaBatch = useUpdateOmsHasCpcaBatch();
+  const deleteLocality = useDeleteOm();
   const assignPresident = useAssignCpcaPresident();
   const lookupPresidentCandidate = useLookupCpcaPresidentCandidate();
   const canManagePresident = hasAnyRole(me, [ROLE_TI, ROLE_COMGEP]);
@@ -246,7 +247,7 @@ export function OmsAdminPage() {
   const cpcaByLocalityId = useMemo(() => {
     const map = new Map<string, Array<{ id: string; name: string }>>();
     for (const user of users) {
-      const localityId = String(user.localityId ?? "").trim();
+      const localityId = String(user.omId ?? "").trim();
       if (!localityId || !hasCpcaRole(user)) continue;
       const current = map.get(localityId) ?? [];
       current.push({ id: user.id, name: user.name });

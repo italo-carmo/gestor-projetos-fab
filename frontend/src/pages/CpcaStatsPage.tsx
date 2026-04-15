@@ -42,7 +42,7 @@ import {
   ROLE_COORDENACAO_CIPAVD,
   ROLE_TI,
 } from "../app/roleAccess";
-import { useCpcaCaseStats, useLocalities, useMe } from "../api/hooks";
+import { useCpcaCaseStats, useMe, useOmsCatalog } from "../api/hooks";
 import { EmptyState } from "../components/states/EmptyState";
 import { ErrorState } from "../components/states/ErrorState";
 import { SkeletonState } from "../components/states/SkeletonState";
@@ -264,7 +264,7 @@ export function CpcaStatsPage() {
     ROLE_COMANDANTE_COMGEP,
     ROLE_TI,
   ]);
-  const localitiesQuery = useLocalities(isNationalScope);
+  const localitiesQuery = useOmsCatalog(isNationalScope);
 
   const localityId = params.get("localityId") ?? "";
   const from = params.get("from") ?? buildDefaultFromDate();

@@ -85,9 +85,8 @@ export class CpcaService {
       constraints,
       CPCA_WORKFLOW_CONTEXT,
     );
-    const items = await this.prisma.locality.findMany({
+    const items = await this.prisma.om.findMany({
       where: {
-        catalogType: 'SMIF' as any,
         ...(allowedLocalityIds ? { id: { in: allowedLocalityIds } } : {}),
       },
       select: { id: true, code: true, name: true },
@@ -126,7 +125,7 @@ export class CpcaService {
     const andConditions: any[] = [];
 
     if (filters.localityId) {
-      where.localityId = filters.localityId;
+      where.omId = filters.localityId;
     }
     if (constraints.localityId) {
       if (workflowContext.workflowScope === 'CPCA') {
@@ -135,7 +134,7 @@ export class CpcaService {
           (!cpcaScopedLocalityIds ||
             !cpcaScopedLocalityIds.includes(filters.localityId))
         ) {
-          where.localityId = '__none__';
+          where.omId = '__none__';
         }
         if (cpcaManagerCaseMarker) {
           andConditions.push({
@@ -146,9 +145,9 @@ export class CpcaService {
         filters.localityId &&
         constraints.localityId !== filters.localityId
       ) {
-        where.localityId = '__none__';
+        where.omId = '__none__';
       } else {
-        where.localityId = constraints.localityId;
+        where.omId = constraints.localityId;
       }
     }
 
@@ -180,6 +179,7 @@ export class CpcaService {
         where,
         orderBy: [{ reportedAt: 'desc' }, { createdAt: 'desc' }],
         include: {
+          om: { select: { id: true, code: true, name: true } },
           locality: { select: { id: true, code: true, name: true } },
           comments: {
             select: { createdAt: true },
@@ -196,6 +196,8 @@ export class CpcaService {
     return {
       items: (items ?? []).map((item: any) => ({
         ...item,
+        localityId: item.omId ?? item.localityId ?? null,
+        locality: item.om ?? item.locality ?? null,
         lastCommentAt: item.comments?.[0]?.createdAt ?? null,
         comments: undefined,
       })),
@@ -230,7 +232,7 @@ export class CpcaService {
     const andConditions: any[] = [];
 
     if (filters.localityId) {
-      where.localityId = filters.localityId;
+      where.omId = filters.localityId;
     }
     if (constraints.localityId) {
       if (workflowContext.workflowScope === 'CPCA') {
@@ -239,7 +241,7 @@ export class CpcaService {
           (!cpcaScopedLocalityIds ||
             !cpcaScopedLocalityIds.includes(filters.localityId))
         ) {
-          where.localityId = '__none__';
+          where.omId = '__none__';
         }
         if (cpcaManagerCaseMarker) {
           andConditions.push({
@@ -250,9 +252,9 @@ export class CpcaService {
         filters.localityId &&
         constraints.localityId !== filters.localityId
       ) {
-        where.localityId = '__none__';
+        where.omId = '__none__';
       } else {
-        where.localityId = constraints.localityId;
+        where.omId = constraints.localityId;
       }
     }
     if (andConditions.length === 1) {
@@ -277,11 +279,12 @@ export class CpcaService {
 
     const complaintModel = (this.prisma as any).cpcComplaintCase;
     const historyModel = (this.prisma as any).cpcComplaintStatusHistory;
-    const items = await complaintModel.findMany({
+    const rawItems = await complaintModel.findMany({
       where,
       select: {
         id: true,
         caseNumber: true,
+        omId: true,
         localityId: true,
         complaintType: true,
         status: true,
@@ -295,7 +298,7 @@ export class CpcaService {
         victimRank: true,
         victimAgeRange: true,
         detailedViolenceType: true,
-        locality: {
+        om: {
           select: {
             id: true,
             code: true,
@@ -304,6 +307,11 @@ export class CpcaService {
         },
       },
     });
+    const items = (rawItems ?? []).map((item: any) => ({
+      ...item,
+      localityId: item.omId ?? item.localityId ?? '',
+      locality: item.om ?? item.locality ?? null,
+    }));
 
     const statusCounter = new Map<string, number>(
       CPCA_STATUS_ORDER.map((status) => [status, 0]),
@@ -321,7 +329,7 @@ export class CpcaService {
     if (!items.length) {
       return {
         filters: {
-          localityId: where.localityId ?? null,
+          localityId: where.omId ?? null,
           from: fromDate ? fromDate.toISOString().slice(0, 10) : null,
           to: toDate ? toDate.toISOString().slice(0, 10) : null,
         },
@@ -764,8 +772,8 @@ export class CpcaService {
       .slice(0, 20);
 
     return {
-      filters: {
-        localityId: where.localityId ?? null,
+        filters: {
+          localityId: where.omId ?? null,
         from: fromDate ? fromDate.toISOString().slice(0, 10) : null,
         to: toDate ? toDate.toISOString().slice(0, 10) : null,
       },
@@ -855,6 +863,7 @@ export class CpcaService {
     const item = await complaintModel.findUnique({
       where: { id },
       include: {
+        om: { select: { id: true, code: true, name: true } },
         locality: { select: { id: true, code: true, name: true } },
         comments: {
           orderBy: { createdAt: 'asc' },
@@ -876,11 +885,15 @@ export class CpcaService {
       throwError('NOT_FOUND');
     }
     await this.assertCaseAccess(
-      { localityId: item.localityId, caseNumber: item.caseNumber },
+      { localityId: item.omId ?? item.localityId ?? '', caseNumber: item.caseNumber },
       user,
       workflowContext,
     );
-    return item;
+    return {
+      ...item,
+      localityId: item.omId ?? item.localityId ?? null,
+      locality: item.om ?? item.locality ?? null,
+    };
   }
 
   async create(
@@ -896,7 +909,7 @@ export class CpcaService {
       workflowContext,
     );
     const actorId = this.requireUserId(user);
-    const locality = await this.prisma.locality.findUnique({
+    const locality = await this.prisma.om.findUnique({
       where: { id: localityId },
       select: { id: true, code: true },
     });
@@ -1048,12 +1061,14 @@ export class CpcaService {
           data: {
             caseNumber: nextCaseNumber,
             workflowScope: workflowContext.workflowScope,
-            locality: { connect: { id: localityId } },
+            om: { connect: { id: localityId } },
+            localityId: null,
             createdBy: { connect: { id: actorId } },
             updatedBy: { connect: { id: actorId } },
             ...createData,
           },
           include: {
+            om: { select: { id: true, code: true, name: true } },
             locality: { select: { id: true, code: true, name: true } },
           },
         });
@@ -1088,8 +1103,8 @@ export class CpcaService {
       resource: workflowContext.resource,
       action: 'create',
       entityId: created.id,
-      localityId: created.localityId,
       diffJson: {
+        omId: created.omId,
         caseNumber: created.caseNumber,
         workflowScope: workflowContext.workflowScope,
         complaintType: created.complaintType,
@@ -1098,7 +1113,11 @@ export class CpcaService {
       },
     });
 
-    return created;
+    return {
+      ...created,
+      localityId: created.omId ?? created.localityId ?? null,
+      locality: created.om ?? created.locality ?? null,
+    };
   }
 
   async update(
@@ -1116,6 +1135,7 @@ export class CpcaService {
       where: { id },
       select: {
         id: true,
+        omId: true,
         localityId: true,
         caseNumber: true,
         workflowScope: true,
@@ -1146,7 +1166,7 @@ export class CpcaService {
     }
 
     await this.assertCaseAccess(
-      { localityId: current.localityId, caseNumber: current.caseNumber },
+      { localityId: current.omId ?? current.localityId ?? '', caseNumber: current.caseNumber },
       user,
       workflowContext,
     );
@@ -1158,7 +1178,7 @@ export class CpcaService {
           user,
           workflowContext,
         )
-      : current.localityId;
+      : current.omId ?? current.localityId ?? null;
 
     const nextStatus = payload.status ?? current.status;
     const nextProcedure = payload.procedureType ?? current.procedureType;
@@ -1245,7 +1265,9 @@ export class CpcaService {
     const updated = await complaintModel.update({
       where: { id },
       data: {
-        locality: { connect: { id: nextLocalityId } },
+        om: nextLocalityId ? { connect: { id: nextLocalityId } } : undefined,
+        locality: { disconnect: true },
+        localityId: null,
         complaintType: payload.complaintType,
         notifierType: payload.notifierType,
         status: payload.status,
@@ -1407,6 +1429,7 @@ export class CpcaService {
         updatedBy: { connect: { id: actorId } },
       },
       include: {
+        om: { select: { id: true, code: true, name: true } },
         locality: { select: { id: true, code: true, name: true } },
       },
     });
@@ -1433,15 +1456,19 @@ export class CpcaService {
       resource: workflowContext.resource,
       action: 'update',
       entityId: id,
-      localityId: updated.localityId,
       diffJson: {
+        omId: updated.omId,
         workflowScope: workflowContext.workflowScope,
         status: updated.status,
         procedureType: updated.procedureType,
       },
     });
 
-    return updated;
+    return {
+      ...updated,
+      localityId: updated.omId ?? updated.localityId ?? null,
+      locality: updated.om ?? updated.locality ?? null,
+    };
   }
 
   async remove(
@@ -1458,6 +1485,7 @@ export class CpcaService {
         id: true,
         workflowScope: true,
         caseNumber: true,
+        omId: true,
         localityId: true,
         complaintType: true,
         status: true,
@@ -1470,7 +1498,7 @@ export class CpcaService {
     }
 
     await this.assertCaseAccess(
-      { localityId: current.localityId, caseNumber: current.caseNumber },
+      { localityId: current.omId ?? current.localityId ?? '', caseNumber: current.caseNumber },
       user,
       workflowContext,
     );
@@ -1482,8 +1510,8 @@ export class CpcaService {
       resource: workflowContext.resource,
       action: 'delete',
       entityId: current.id,
-      localityId: current.localityId,
       diffJson: {
+        omId: current.omId,
         caseNumber: current.caseNumber,
         workflowScope: workflowContext.workflowScope,
         complaintType: current.complaintType,
@@ -1507,14 +1535,14 @@ export class CpcaService {
 
     const complaint = await complaintModel.findUnique({
       where: { id },
-      select: { id: true, localityId: true, caseNumber: true, workflowScope: true },
+      select: { id: true, omId: true, localityId: true, caseNumber: true, workflowScope: true },
     });
     if (!complaint) throwError('NOT_FOUND');
     if (complaint.workflowScope !== workflowContext.workflowScope) {
       throwError('NOT_FOUND');
     }
     await this.assertCaseAccess(
-      { localityId: complaint.localityId, caseNumber: complaint.caseNumber },
+      { localityId: complaint.omId ?? complaint.localityId ?? '', caseNumber: complaint.caseNumber },
       user,
       workflowContext,
     );
@@ -1540,9 +1568,9 @@ export class CpcaService {
       resource: workflowContext.resource,
       action: 'comment',
       entityId: id,
-      localityId: complaint.localityId,
       diffJson: {
         commentId: created.id,
+        omId: complaint.omId,
         workflowScope: workflowContext.workflowScope,
       },
     });
@@ -1561,14 +1589,14 @@ export class CpcaService {
 
     const complaint = await complaintModel.findUnique({
       where: { id },
-      select: { id: true, localityId: true, caseNumber: true, workflowScope: true },
+      select: { id: true, omId: true, localityId: true, caseNumber: true, workflowScope: true },
     });
     if (!complaint) throwError('NOT_FOUND');
     if (complaint.workflowScope !== workflowContext.workflowScope) {
       throwError('NOT_FOUND');
     }
     await this.assertCaseAccess(
-      { localityId: complaint.localityId, caseNumber: complaint.caseNumber },
+      { localityId: complaint.omId ?? complaint.localityId ?? '', caseNumber: complaint.caseNumber },
       user,
       workflowContext,
     );
@@ -1597,10 +1625,10 @@ export class CpcaService {
     }
 
     if (this.hasLocalityScope(user, context)) {
-      if (!user.localityId) {
+      if (!user.omId) {
         throwError('RBAC_FORBIDDEN');
       }
-      return { localityId: user.localityId };
+      return { localityId: user.omId };
     }
 
     throwError('RBAC_FORBIDDEN');
@@ -1737,7 +1765,7 @@ export class CpcaService {
     if (!managerLocalityId) {
       return null;
     }
-    const managerLocality = await this.prisma.locality.findUnique({
+    const managerLocality = await this.prisma.om.findUnique({
       where: { id: managerLocalityId },
       select: { code: true },
     });
@@ -1757,15 +1785,15 @@ export class CpcaService {
       return null;
     }
 
-    const coverage = await this.prisma.cpcaCommissionCoverage.findMany({
-      where: { managerLocalityId },
-      select: { managedLocalityId: true },
+    const coverage = await this.prisma.cpcaCommissionCoverageOm.findMany({
+      where: { managerOmId: managerLocalityId },
+      select: { managedOmId: true },
     });
 
     return Array.from(
       new Set([
         managerLocalityId,
-        ...coverage.map((item) => String(item.managedLocalityId ?? '').trim()),
+        ...coverage.map((item) => String(item.managedOmId ?? '').trim()),
       ]),
     ).filter(Boolean);
   }

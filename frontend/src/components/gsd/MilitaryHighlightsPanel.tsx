@@ -29,6 +29,7 @@ import {
   SOCIAL_CARD_EDITOR_DEFAULT_COLORS,
   SOCIAL_CARD_SETTINGS_STORAGE_KEY,
   type SocialCardId,
+  type SocialCardSetting,
 } from '../../app/socialCardSettingsStorage';
 import {
   buildInnerTheme,

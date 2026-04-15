@@ -18,6 +18,7 @@ model User {
   executiveHidePii Boolean        @default(false)
   loginFailedCount Int            @default(0)
   lockUntil        DateTime?
+  omId             String?
   localityId       String?
   specialtyId      String?
   eloRoleId        String?        // Responsável por este elo (ex: Psicologia a nível Brasil)
@@ -31,6 +32,7 @@ model User {
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
 
+  om               Om?            @relation(fields: [omId], references: [id])
   locality         Locality?      @relation(fields: [localityId], references: [id])
   specialty        Specialty?     @relation(fields: [specialtyId], references: [id])
   eloRole          EloRole?      @relation(fields: [eloRoleId], references: [id])
@@ -83,6 +85,28 @@ model User {
   lessonsLearnedCreated LessonLearnedPost[] @relation("LessonLearnedCreator")
   smifComplaintsCreated SmifComplaint[] @relation("SmifComplaintCreatedBy")
   smifComplaintsUpdated SmifComplaint[] @relation("SmifComplaintUpdatedBy")
+}
+
+model Om {
+  id                         String                    @id @default(cuid())
+  code                       String                    @unique
+  name                       String
+  uf                         String?
+  hasCpca                    Boolean                   @default(false)
+  notes                      String?
+  createdAt                  DateTime                  @default(now())
+  updatedAt                  DateTime                  @updatedAt
+
+  users                      User[]
+  cpcaCases                  CpcComplaintCase[]
+  cpcaCommissionPresident    CpcaCommissionPresident?
+  cpcaCommissionMembers      CpcaCommissionMember[]
+  cpcaPresidentRequests      CpcaPresidentSelfRegistration[]
+  cpcaCoverageAsManager      CpcaCommissionCoverageOm[] @relation("CpcaCoverageOmManager")
+  cpcaCoverageAsManaged      CpcaCommissionCoverageOm[] @relation("CpcaCoverageOmManaged")
+
+  @@index([hasCpca])
+  @@index([uf])
 }
 
 model UserModuleAccessOverride {
@@ -200,9 +224,6 @@ model Locality {
   bestPracticePosts          BestPracticePost[]
   socialCommunicationHighlights SocialCommunicationHighlight[]
   smifComplaints             SmifComplaint[]
-  cpcaCommissionPresident    CpcaCommissionPresident?
-  cpcaCommissionMembers      CpcaCommissionMember[]
-  cpcaPresidentRequests      CpcaPresidentSelfRegistration[]
   cpcaCoverageAsManager      CpcaCommissionCoverage[] @relation("CpcaCoverageManager")
   cpcaCoverageAsManaged      CpcaCommissionCoverage[] @relation("CpcaCoverageManaged")
 
@@ -222,6 +243,21 @@ model CpcaCommissionCoverage {
   @@unique([managerLocalityId, managedLocalityId])
   @@index([managerLocalityId])
   @@index([managedLocalityId])
+}
+
+model CpcaCommissionCoverageOm {
+  id          String   @id @default(cuid())
+  managerOmId String
+  managedOmId String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  managerOm   Om       @relation("CpcaCoverageOmManager", fields: [managerOmId], references: [id], onDelete: Cascade)
+  managedOm   Om       @relation("CpcaCoverageOmManaged", fields: [managedOmId], references: [id], onDelete: Cascade)
+
+  @@unique([managerOmId, managedOmId])
+  @@index([managerOmId])
+  @@index([managedOmId])
 }
 
 model Activity {
@@ -1165,7 +1201,8 @@ model CpcComplaintCase {
   caseNumber                      String             @unique
   workflowScope                   CpcComplaintWorkflowScope @default(CPCA)
   legacySmifComplaintId           String?            @unique
-  localityId                      String
+  omId                            String?
+  localityId                      String?
   complaintType                   CpcComplaintType
   notifierType                    CpcNotifierType    @default(VITIMA)
   status                          CpcComplaintStatus @default(RECEIVED)
@@ -1229,14 +1266,17 @@ model CpcComplaintCase {
   createdAt                       DateTime           @default(now())
   updatedAt                       DateTime           @updatedAt
 
-  locality                        Locality           @relation(fields: [localityId], references: [id])
+  om                              Om?                @relation(fields: [omId], references: [id])
+  locality                        Locality?          @relation(fields: [localityId], references: [id])
   createdBy                       User               @relation("CpcComplaintCaseCreatedBy", fields: [createdById], references: [id])
   updatedBy                       User?              @relation("CpcComplaintCaseUpdatedBy", fields: [updatedById], references: [id])
   comments                        CpcComplaintComment[]
   statusHistory                   CpcComplaintStatusHistory[]
 
+  @@index([omId, status])
   @@index([localityId, status])
   @@index([workflowScope, localityId, status])
+  @@index([workflowScope, omId, status])
   @@index([complaintType, status])
   @@index([procedureType])
   @@index([reportedAt])
@@ -1275,7 +1315,7 @@ model CpcComplaintStatusHistory {
 
 model CpcaCommissionPresident {
   id                    String   @id @default(cuid())
-  localityId            String   @unique
+  omId                  String   @unique
   userId                String
   assignedByUserId      String?
   designationBulletin   String?
@@ -1284,7 +1324,7 @@ model CpcaCommissionPresident {
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
-  locality              Locality @relation(fields: [localityId], references: [id], onDelete: Cascade)
+  om                    Om       @relation(fields: [omId], references: [id], onDelete: Cascade)
   user                  User     @relation("CpcaCommissionPresidentUser", fields: [userId], references: [id], onDelete: Restrict)
   assignedByUser        User?    @relation("CpcaCommissionPresidentAssignedBy", fields: [assignedByUserId], references: [id], onDelete: SetNull)
 
@@ -1295,25 +1335,25 @@ model CpcaCommissionPresident {
 
 model CpcaCommissionMember {
   id               String   @id @default(cuid())
-  localityId       String
+  omId             String
   userId           String
   addedByUserId    String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  locality         Locality @relation(fields: [localityId], references: [id], onDelete: Cascade)
+  om               Om       @relation(fields: [omId], references: [id], onDelete: Cascade)
   user             User     @relation("CpcaCommissionMemberUser", fields: [userId], references: [id], onDelete: Restrict)
   addedByUser      User?    @relation("CpcaCommissionMemberAddedBy", fields: [addedByUserId], references: [id], onDelete: SetNull)
 
-  @@unique([localityId, userId])
-  @@index([localityId])
+  @@unique([omId, userId])
+  @@index([omId])
   @@index([userId])
   @@index([addedByUserId])
 }
 
 model CpcaPresidentSelfRegistration {
   id                       String                    @id @default(cuid())
-  localityId               String
+  omId                     String
   applicantUserId          String
   applicantIdentifier      String
   applicantUid             String
@@ -1328,12 +1368,12 @@ model CpcaPresidentSelfRegistration {
   createdAt                DateTime                  @default(now())
   updatedAt                DateTime                  @updatedAt
 
-  locality                 Locality @relation(fields: [localityId], references: [id], onDelete: Cascade)
+  om                       Om       @relation(fields: [omId], references: [id], onDelete: Cascade)
   applicantUser            User     @relation("CpcaPresidentSelfRegistrationApplicant", fields: [applicantUserId], references: [id], onDelete: Restrict)
   decidedByUser            User?    @relation("CpcaPresidentSelfRegistrationDecidedBy", fields: [decidedByUserId], references: [id], onDelete: SetNull)
 
   @@index([status, createdAt])
-  @@index([localityId, status])
+  @@index([omId, status])
   @@index([applicantUserId])
   @@index([decidedByUserId])
 }

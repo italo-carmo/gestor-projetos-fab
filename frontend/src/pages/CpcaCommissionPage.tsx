@@ -90,7 +90,7 @@ export function CpcaCommissionPage() {
   const toast = useToast();
   const { data: me } = useMe();
   const isApprover = hasAnyRole(me, [ROLE_TI, ROLE_COMGEP]);
-  const ownLocalityId = String(me?.localityId ?? "").trim();
+  const ownLocalityId = String(me?.omId ?? "").trim();
   const omsCatalogQuery = useOmsCatalog(isApprover);
 
   const cpcaLocalities = useMemo(
@@ -149,7 +149,7 @@ export function CpcaCommissionPage() {
     if (ownLocalityId) {
       setSelectedLocalityId(ownLocalityId);
     }
-  }, [cpcaLocalities, isApprover, me?.localityId, selectedLocalityId]);
+  }, [cpcaLocalities, isApprover, me?.omId, selectedLocalityId]);
 
   const overviewQuery = useCpcaCommissionOverview(
     isApprover ? selectedLocalityId : undefined,

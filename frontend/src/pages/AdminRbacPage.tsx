@@ -34,6 +34,7 @@ import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import { can } from "../app/rbac";
 import {
   useLocalities,
+  useOmsCatalog,
   useLookupLdapUser,
   useMe,
   usePermissionsCatalog,
@@ -76,6 +77,7 @@ type UserItem = {
   email: string;
   ldapUid?: string | null;
   ldapOm?: string | null;
+  omId?: string | null;
   localityId?: string | null;
   specialtyId?: string | null;
   numeroOrdem?: string | null;
@@ -285,6 +287,7 @@ export function AdminRbacPage() {
   const usersQuery = useUsers(canViewUsers);
   const postosQuery = usePostos(canViewUsers);
   const localitiesQuery = useLocalities(canViewLocalities);
+  const omsCatalogQuery = useOmsCatalog(canViewUsers);
   const specialtiesQuery = useSpecialties(can(me, "specialties", "view"));
   const updateUser = useUpdateUser();
   const removeUserRole = useRemoveUserRole();
@@ -391,6 +394,13 @@ export function AdminRbacPage() {
         a.name.localeCompare(b.name, "pt-BR"),
       ),
     [localitiesQuery.data?.items],
+  );
+  const oms = useMemo(
+    () =>
+      ((omsCatalogQuery.data?.items ?? []) as LocalityItem[]).sort((a, b) =>
+        a.name.localeCompare(b.name, "pt-BR"),
+      ),
+    [omsCatalogQuery.data?.items],
   );
   const localityById = useMemo(
     () => new Map(localities.map((locality) => [locality.id, locality])),
@@ -672,9 +682,10 @@ export function AdminRbacPage() {
 
   const openEditModal = (user: UserItem) => {
     const rolesByUser = getUserRoles(user);
+    const editingCpca = rolesByUser.some((role) => roleIsCpca(role.name));
     setEditingUser(user);
     setEditRoleIds(rolesByUser.map((role) => role.id));
-    setEditLocalityId(user.localityId ?? "");
+    setEditLocalityId(editingCpca ? user.omId ?? "" : user.localityId ?? "");
     setEditSpecialtyId(user.specialtyId ?? "");
   };
 
@@ -708,7 +719,8 @@ export function AdminRbacPage() {
       await updateUser.mutateAsync({
         id: editingUser.id,
         roleIds: editRoleIds,
-        localityId: editLocalityId || null,
+        omId: editHasCpcaRole ? editLocalityId || null : undefined,
+        localityId: editHasCpcaRole ? null : editLocalityId || null,
         specialtyId: editSpecialtyId || null,
       });
       toast.push({
@@ -810,7 +822,8 @@ export function AdminRbacPage() {
       await upsertLdapUser.mutateAsync({
         uid: ldapPreview.uid,
         roleIds: ldapRoleIds,
-        localityId: ldapLocalityId || null,
+        omId: ldapHasCpcaRole ? ldapLocalityId || null : undefined,
+        localityId: ldapHasCpcaRole ? null : ldapLocalityId || null,
         specialtyId: ldapSpecialtyId || null,
         replaceExistingRoles: false,
       });
@@ -1171,9 +1184,9 @@ export function AdminRbacPage() {
                   {ldapRoleNeedsLocality && (
                     <Autocomplete
                       size="small"
-                      options={localities}
+                      options={ldapHasCpcaRole ? oms : localities}
                       value={
-                        localities.find(
+                        (ldapHasCpcaRole ? oms : localities).find(
                           (locality) => locality.id === ldapLocalityId,
                         ) ?? null
                       }
@@ -1862,9 +1875,9 @@ export function AdminRbacPage() {
             {editRoleNeedsLocality && (
               <Autocomplete
                 size="small"
-                options={localities}
+                options={editHasCpcaRole ? oms : localities}
                 value={
-                  localities.find(
+                  (editHasCpcaRole ? oms : localities).find(
                     (locality) => locality.id === editLocalityId,
                   ) ?? null
                 }

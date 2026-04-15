@@ -77,7 +77,7 @@ export function PostosPage() {
       }
       setDrawerOpen(false);
     } catch (error) {
-      toast.push({ message: parseApiError(error).message, severity: 'error' });
+      toast.push({ message: parseApiError(error).message ?? 'Erro ao salvar posto.', severity: 'error' });
     }
   };
 
@@ -87,7 +87,7 @@ export function PostosPage() {
       toast.push({ message: 'Posto excluído', severity: 'success' });
       setDeleteId(null);
     } catch (error) {
-      toast.push({ message: parseApiError(error).message, severity: 'error' });
+      toast.push({ message: parseApiError(error).message ?? 'Erro ao excluir posto.', severity: 'error' });
     }
   };
 
