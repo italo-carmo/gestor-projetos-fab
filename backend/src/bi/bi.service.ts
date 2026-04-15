@@ -6,6 +6,10 @@ import { parsePagination } from '../common/pagination';
 import { throwError } from '../common/http-error';
 import { PrismaService } from '../prisma/prisma.service';
 import type { RbacUser } from '../rbac/rbac.types';
+import {
+  BI_NORMALIZATION_SOURCE_TYPES,
+  BiNormalizationService,
+} from './bi-normalization.service';
 
 type SurveyFilters = {
   from?: string;
@@ -145,7 +149,10 @@ const SURVEY_CARD_IDS = new Set([
 
 @Injectable()
 export class BiService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly normalization: BiNormalizationService,
+  ) {}
 
   async importSurvey(
     file: Express.Multer.File,
@@ -239,6 +246,10 @@ export class BiService {
           select: { id: true, name: true, email: true },
         },
       },
+    });
+
+    await this.normalization.rebuild({
+      sourceType: BI_NORMALIZATION_SOURCE_TYPES.SURVEY_SCHOOLS,
     });
 
     return {

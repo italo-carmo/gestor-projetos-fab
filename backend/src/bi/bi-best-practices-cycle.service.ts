@@ -6,6 +6,10 @@ import { parsePagination } from '../common/pagination';
 import { throwError } from '../common/http-error';
 import { PrismaService } from '../prisma/prisma.service';
 import type { RbacUser } from '../rbac/rbac.types';
+import {
+  BI_NORMALIZATION_SOURCE_TYPES,
+  BiNormalizationService,
+} from './bi-normalization.service';
 
 type BestPracticeCycleFilters = {
   from?: string;
@@ -94,7 +98,10 @@ const BEST_PRACTICE_CARD_IDS = new Set([
 
 @Injectable()
 export class BiBestPracticesCycleService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly normalization: BiNormalizationService,
+  ) {}
 
   async importResponses(
     file: Express.Multer.File,
@@ -191,6 +198,10 @@ export class BiBestPracticesCycleService {
           select: { id: true, name: true, email: true },
         },
       },
+    });
+
+    await this.normalization.rebuild({
+      sourceType: BI_NORMALIZATION_SOURCE_TYPES.BEST_PRACTICE_CYCLE,
     });
 
     return {

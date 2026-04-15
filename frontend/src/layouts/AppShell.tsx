@@ -132,6 +132,11 @@ const navSections: NavSection[] = [
         icon: <ShieldRoundedIcon fontSize="small" />,
       },
       {
+        label: "Sala COMGEP",
+        to: "/dashboard/comgep",
+        icon: <InsightsRoundedIcon fontSize="small" />,
+      },
+      {
         label: "Inteligência Artificial",
         to: "/ai",
         icon: <AutoAwesomeRoundedIcon fontSize="small" />,
@@ -474,6 +479,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   const canSeeNavItem = (item: NavItem) => {
     if (item.to === "/dashboard/estrategico") {
       return hasAnyRole(me, [ROLE_COMGEP, ROLE_COORDENACAO_CIPAVD, ROLE_TI]);
+    }
+    if (item.to === "/dashboard/comgep") {
+      return hasAnyRole(me, [ROLE_COMGEP, ROLE_TI]) && can(me, "bi", "view");
     }
     if (item.to === "/ai") {
       return can(me, "bi", "view");

@@ -16,6 +16,12 @@ export class AiController {
     return this.ai.getAnalysesCatalog();
   }
 
+  @Get('action-agents')
+  @RequirePermission('bi', 'view')
+  listActionAgents() {
+    return this.ai.getActionAgentsCatalog();
+  }
+
   @Post('analyze')
   @RequirePermission('bi', 'view')
   async analyze(@Body() body: { type: AnalysisType }, @Res() res: Response) {
@@ -93,6 +99,35 @@ export class AiController {
         history,
         body.analysisType,
       )) {
+        res.write(chunk);
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      res.write(`event: error\ndata: ${JSON.stringify({ message: msg })}\n\n`);
+    }
+    res.end();
+  }
+
+  @Post('action-agents/run')
+  @RequirePermission('bi', 'view')
+  async runActionAgent(
+    @Body()
+    body: {
+      type: 'briefing_comgep' | 'priorizacao_intervencao' | 'governanca_cpca';
+      uf?: string | null;
+    },
+    @Res() res: Response,
+  ) {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+
+    try {
+      for await (const chunk of this.ai.runActionAgentStream(body.type, {
+        uf: body.uf,
+      })) {
         res.write(chunk);
       }
     } catch (e) {

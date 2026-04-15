@@ -6,6 +6,10 @@ import { parsePagination } from '../common/pagination';
 import { throwError } from '../common/http-error';
 import { PrismaService } from '../prisma/prisma.service';
 import type { RbacUser } from '../rbac/rbac.types';
+import {
+  BI_NORMALIZATION_SOURCE_TYPES,
+  BiNormalizationService,
+} from './bi-normalization.service';
 
 type DomesticViolenceFilters = {
   from?: string;
@@ -164,7 +168,10 @@ const DOMESTIC_VIOLENCE_CARD_IDS = new Set([
 
 @Injectable()
 export class BiDomesticViolenceService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly normalization: BiNormalizationService,
+  ) {}
 
   async importResponses(
     file: Express.Multer.File,
@@ -277,6 +284,10 @@ export class BiDomesticViolenceService {
         },
       },
     );
+
+    await this.normalization.rebuild({
+      sourceType: BI_NORMALIZATION_SOURCE_TYPES.DOMESTIC_VIOLENCE,
+    });
 
     return {
       batch: updatedBatch,

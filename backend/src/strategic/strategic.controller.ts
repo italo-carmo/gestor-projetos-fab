@@ -16,6 +16,12 @@ export class StrategicController {
     return this.service.situationalDashboard();
   }
 
+  @Get('comgep-room')
+  @RequirePermission('bi', 'view')
+  comgepRoom() {
+    return this.service.comgepSituationRoom();
+  }
+
   @Get('aggressor-profile')
   @RequirePermission('bi', 'view')
   aggressorProfile() {

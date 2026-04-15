@@ -6,6 +6,10 @@ import { parsePagination } from '../common/pagination';
 import { throwError } from '../common/http-error';
 import { PrismaService } from '../prisma/prisma.service';
 import type { RbacUser } from '../rbac/rbac.types';
+import {
+  BI_NORMALIZATION_SOURCE_TYPES,
+  BiNormalizationService,
+} from './bi-normalization.service';
 
 type GsdEvaluationFilters = {
   from?: string;
@@ -102,7 +106,10 @@ const HEADER_MULTI_HINTS = [
 
 @Injectable()
 export class BiGsdEvaluationService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly normalization: BiNormalizationService,
+  ) {}
 
   async importResponses(
     file: Express.Multer.File,
@@ -213,6 +220,10 @@ export class BiGsdEvaluationService {
           select: { id: true, name: true, email: true },
         },
       },
+    });
+
+    await this.normalization.rebuild({
+      sourceType: BI_NORMALIZATION_SOURCE_TYPES.GSD_EVALUATION,
     });
 
     return {

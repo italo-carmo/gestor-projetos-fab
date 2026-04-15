@@ -19,6 +19,11 @@ export type AnalysisType =
   | 'text'
   | 'geo';
 
+export type ActionAgentType =
+  | 'briefing_comgep'
+  | 'priorizacao_intervencao'
+  | 'governanca_cpca';
+
 export const ANALYSIS_CATALOG: {
   type: AnalysisType;
   title: string;
@@ -62,6 +67,35 @@ export const ANALYSIS_CATALOG: {
   },
 ];
 
+export const ACTION_AGENT_CATALOG: {
+  type: ActionAgentType;
+  title: string;
+  description: string;
+  icon: string;
+}[] = [
+  {
+    type: 'briefing_comgep',
+    title: 'Briefing COMGEP',
+    description:
+      'Consolida a sala de situação em um briefing executivo com riscos, decisões e ações imediatas.',
+    icon: 'Campaign',
+  },
+  {
+    type: 'priorizacao_intervencao',
+    title: 'Priorização de Intervenção',
+    description:
+      'Ordena UFs e OMs prioritárias e propõe pacote de intervenção com justificativa objetiva.',
+    icon: 'AssignmentTurnedIn',
+  },
+  {
+    type: 'governanca_cpca',
+    title: 'Governança CPCA',
+    description:
+      'Analisa cobertura, carga e gargalos da CPCA e propõe ajustes de governança e proteção.',
+    icon: 'Shield',
+  },
+];
+
 type NarrativePdfBlock =
   | { type: 'paragraph'; text: string }
   | { type: 'heading'; level: number; text: string }
@@ -92,6 +126,114 @@ export class AiService {
 
   getAnalysesCatalog() {
     return ANALYSIS_CATALOG;
+  }
+
+  getActionAgentsCatalog() {
+    return ACTION_AGENT_CATALOG;
+  }
+
+  async *runActionAgentStream(
+    type: ActionAgentType,
+    options?: { uf?: string | null },
+  ): AsyncGenerator<string> {
+    const safeType: ActionAgentType = ACTION_AGENT_CATALOG.some(
+      (item) => item.type === type,
+    )
+      ? type
+      : 'briefing_comgep';
+
+    yield this.sseEvent('progress', {
+      percent: 5,
+      stage: 'Coletando dados da sala de situação...',
+    });
+
+    const room = await this.strategic.comgepSituationRoom();
+    const scopeUf = String(options?.uf ?? '').trim().toUpperCase() || null;
+
+    yield this.sseEvent('progress', {
+      percent: 24,
+      stage: 'Preparando contexto executivo...',
+    });
+
+    const systemPrompt = await this.settings.getSystemPrompt();
+    const prompt = this.buildActionAgentPrompt(safeType, room, scopeUf);
+    const messages: ChatMessage[] = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: prompt },
+    ];
+
+    yield this.sseEvent('progress', {
+      percent: 30,
+      stage: 'Enviando ao modelo...',
+    });
+
+    const configuredModel = this.litellm.getDefaultModel();
+    const iterator = this.litellm
+      .chatCompletionStream({
+        messages,
+        max_tokens: 2600,
+      })
+      [Symbol.asyncIterator]();
+
+    let tokenCount = 0;
+    let fullText = '';
+
+    try {
+      while (true) {
+        let timeoutHandle: NodeJS.Timeout | undefined;
+        let next: IteratorResult<{ type: 'token'; text: string } | { type: 'done'; model: string }>;
+        try {
+          next = (await Promise.race([
+            iterator.next(),
+            new Promise<IteratorResult<any>>((_, reject) => {
+              timeoutHandle = setTimeout(() => {
+                reject(new Error('LITELLM_STREAM_IDLE_TIMEOUT'));
+              }, this.streamIdleTimeoutMs);
+            }),
+          ])) as IteratorResult<any>;
+        } finally {
+          if (timeoutHandle) clearTimeout(timeoutHandle);
+        }
+        if (next.done) break;
+
+        const chunk = next.value;
+        if (chunk.type === 'token') {
+          fullText += chunk.text;
+          tokenCount += 1;
+          const progress = Math.min(
+            95,
+            30 + Math.floor((tokenCount / 240) * 65),
+          );
+          yield this.sseEvent('token', { text: chunk.text, percent: progress });
+        } else if (chunk.type === 'done') {
+          yield this.sseEvent('done', {
+            percent: 100,
+            narrative: fullText,
+            model: chunk.model,
+            generatedAt: new Date().toISOString(),
+            scopeUf,
+          });
+          return;
+        }
+      }
+    } catch (e) {
+      let msg = e instanceof Error ? e.message : String(e);
+      if (msg === 'LITELLM_STREAM_IDLE_TIMEOUT') {
+        msg =
+          `Sem resposta do modelo por ${Math.round(this.streamIdleTimeoutMs / 1000)}s ` +
+          `(modelo configurado: ${configuredModel}). Verifique disponibilidade no LiteLLM.`;
+      }
+      yield this.sseEvent('error', { message: msg });
+      return;
+    }
+
+    yield this.sseEvent('done', {
+      percent: 100,
+      narrative: fullText,
+      model: configuredModel,
+      generatedAt: new Date().toISOString(),
+      scopeUf,
+    });
   }
 
   async analysisPdf(
@@ -1084,6 +1226,80 @@ export class AiService {
       .replace(/^[-*]\s+/, '• ')
       .replace(/\\([%|/])/g, '$1')
       .replace(/\n{3,}/g, '\n\n');
+  }
+
+  private buildActionAgentPrompt(
+    type: ActionAgentType,
+    room: any,
+    scopeUf: string | null,
+  ) {
+    const scopedMatrixItems = Array.isArray(room?.matrix?.items)
+      ? room.matrix.items.filter((item: any) =>
+          scopeUf
+            ? String(item?.uf ?? '').trim().toUpperCase() === scopeUf
+            : true,
+        )
+      : [];
+    const scopedCriticalUfs = Array.isArray(room?.watchlists?.criticalUfs)
+      ? room.watchlists.criticalUfs.filter((item: any) =>
+          scopeUf
+            ? String(item?.uf ?? '').trim().toUpperCase() === scopeUf
+            : true,
+        )
+      : [];
+    const scopedOms = Array.isArray(room?.watchlists?.topRiskOms)
+      ? room.watchlists.topRiskOms.filter((item: any) =>
+          scopeUf
+            ? String(item?.uf ?? '').trim().toUpperCase() === scopeUf
+            : true,
+        )
+      : [];
+    const scopedCoverageGaps = Array.isArray(room?.watchlists?.coverageGaps)
+      ? room.watchlists.coverageGaps.filter((item: any) =>
+          scopeUf
+            ? String(item?.uf ?? '').trim().toUpperCase() === scopeUf
+            : true,
+        )
+      : [];
+
+    const scopeLabel = scopeUf ? `UF ${scopeUf}` : 'visão nacional';
+    const roomSummary = {
+      summary: room?.summary ?? {},
+      dataConfidence: room?.dataConfidence ?? {},
+      criticalUfs: scopedCriticalUfs.slice(0, 8),
+      matrix: scopedMatrixItems.slice(0, 10),
+      topRiskOms: scopedOms.slice(0, 12),
+      coverageGaps: scopedCoverageGaps.slice(0, 10),
+      operationalPressure: Array.isArray(room?.watchlists?.operationalPressure)
+        ? room.watchlists.operationalPressure
+            .filter((item: any) =>
+              scopeUf
+                ? String(item?.uf ?? '').trim().toUpperCase() === scopeUf
+                : true,
+            )
+            .slice(0, 10)
+        : [],
+    };
+
+    const instructionsByType: Record<ActionAgentType, string> = {
+      briefing_comgep:
+        'Monte um briefing executivo. Estrutura obrigatória: 1) Síntese executiva; 2) Riscos prioritários; 3) UFs/OMs a observar; 4) Decisões recomendadas em 72h; 5) Ações em 30 dias; 6) Alertas sobre confiança do dado.',
+      priorizacao_intervencao:
+        'Monte uma priorização operacional. Estrutura obrigatória: 1) Ranking das prioridades; 2) Motivo objetivo por prioridade; 3) Pacote de intervenção recomendado por UF/OM; 4) Sequência sugerida de emprego; 5) Dependências e riscos de execução.',
+      governanca_cpca:
+        'Monte uma análise de governança CPCA. Estrutura obrigatória: 1) Situação da cobertura; 2) Gargalos de governança; 3) OMs descobertas ou fragilizadas; 4) Medidas imediatas; 5) Ajustes estruturais; 6) Riscos se nada for feito.',
+    };
+
+    return [
+      `Você está atuando como assessor executivo do COMGEP na ${scopeLabel}.`,
+      'Use somente o contexto fornecido abaixo. Não invente números.',
+      'Se houver lacuna de dado, declare isso explicitamente.',
+      'Escreva em português, com foco em decisão, objetividade e rastreabilidade.',
+      instructionsByType[type],
+      '',
+      'Contexto estruturado da Sala de Situação COMGEP:',
+      JSON.stringify(roomSummary, null, 2),
+    ].join('\n');
   }
 
   private formatDateTimePtBr(input: string): string {

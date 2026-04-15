@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { config } from 'dotenv';
+import { BiNormalizationService } from '../src/bi/bi-normalization.service';
 import { BiService } from '../src/bi/bi.service';
 import { PrismaService } from '../src/prisma/prisma.service';
 
@@ -37,7 +38,8 @@ async function main() {
   await prisma.$connect();
 
   try {
-    const service = new BiService(prisma);
+    const normalization = new BiNormalizationService(prisma);
+    const service = new BiService(prisma, normalization);
     const result = await service.importSurvey(
       {
         originalname: path.basename(resolved),

@@ -1,4 +1,5 @@
 import { Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { BiNormalizationService } from '../bi/bi-normalization.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ActivityScope } from '@prisma/client';
 import {
@@ -379,11 +380,41 @@ type StrategicKpiDetailItem = {
   link: string;
 };
 
+type StrategicGeoOmRow = {
+  id: string;
+  code: string;
+  name: string;
+  uf: string | null;
+  hasCpca: boolean;
+  cpcaCoverageAsManaged: {
+    managerOm: {
+      id: string;
+      code: string;
+      name: string;
+    };
+  }[];
+};
+
+type StrategicCoveredOmItem = {
+  id: string;
+  code: string;
+  name: string;
+  uf: string | null;
+  hasCpca: boolean;
+  coverageType: 'OWN' | 'MANAGED';
+  coveredByOms: {
+    id: string;
+    code: string;
+    name: string;
+  }[];
+};
+
 @Injectable()
 export class StrategicService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly litellm: LitellmService,
+    private readonly biNormalization: BiNormalizationService,
   ) {}
 
   private resolveSourceSet(
@@ -509,6 +540,585 @@ export class StrategicService {
     };
   }
 
+  private formatOmDisplayLabel(
+    code: string | null | undefined,
+    name: string | null | undefined,
+  ) {
+    const codeValue = String(code ?? '').trim();
+    const nameValue = String(name ?? '').trim();
+    if (codeValue && nameValue) {
+      if (
+        codeValue.localeCompare(nameValue, 'pt-BR', {
+          sensitivity: 'base',
+        }) === 0
+      ) {
+        return codeValue;
+      }
+      return `${codeValue} - ${nameValue}`;
+    }
+    return codeValue || nameValue;
+  }
+
+  private async listOmsForGeoMap(): Promise<StrategicGeoOmRow[]> {
+    return this.prisma.om.findMany({
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        uf: true,
+        hasCpca: true,
+        cpcaCoverageAsManaged: {
+          select: {
+            managerOm: {
+              select: {
+                id: true,
+                code: true,
+                name: true,
+              },
+            },
+          },
+          orderBy: {
+            managerOm: {
+              name: 'asc',
+            },
+          },
+        },
+      },
+    });
+  }
+
+  private buildCoveredOmsCatalog(oms: StrategicGeoOmRow[]): StrategicCoveredOmItem[] {
+    return oms
+      .filter(
+        (om) => Boolean(om.hasCpca) || (om.cpcaCoverageAsManaged?.length ?? 0) > 0,
+      )
+      .map((om) => ({
+        id: om.id,
+        code: om.code,
+        name: om.name,
+        uf: om.uf,
+        hasCpca: om.hasCpca,
+        coverageType: (om.hasCpca ? 'OWN' : 'MANAGED') as 'OWN' | 'MANAGED',
+        coveredByOms: (om.cpcaCoverageAsManaged ?? []).map((entry) => ({
+          id: entry.managerOm.id,
+          code: entry.managerOm.code,
+          name: entry.managerOm.name,
+        })),
+      }))
+      .sort((a, b) =>
+        String(a.name ?? '').localeCompare(String(b.name ?? ''), 'pt-BR', {
+          sensitivity: 'base',
+        }),
+      );
+  }
+
+  async comgepSituationRoom() {
+    const now = new Date();
+    const lookbackStart = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
+    const openStatuses = new Set([
+      'RECEIVED',
+      'PROTECTION_MEASURES',
+      'PRELIMINARY_ANALYSIS',
+      'PROCEDURE_DEFINED',
+      'INVESTIGATION',
+    ]);
+
+    const [
+      oms,
+      complaints,
+      activities,
+      missions,
+      surveyLinks,
+      surveyRows,
+      domesticLinks,
+      domesticRows,
+      normalizationOverview,
+    ] = await Promise.all([
+      this.listOmsForGeoMap(),
+      (this.prisma as any).cpcComplaintCase.findMany({
+        select: {
+          id: true,
+          caseNumber: true,
+          omId: true,
+          workflowScope: true,
+          status: true,
+          complaintType: true,
+          retaliationRisk: true,
+          reportedAt: true,
+          updatedAt: true,
+          archivedAt: true,
+          om: {
+            select: {
+              id: true,
+              code: true,
+              name: true,
+              uf: true,
+            },
+          },
+        },
+      }),
+      this.prisma.activity.findMany({
+        where: {
+          eventDate: { gte: lookbackStart },
+        },
+        select: {
+          id: true,
+          title: true,
+          scope: true,
+          status: true,
+          eventDate: true,
+          locality: {
+            select: {
+              id: true,
+              name: true,
+              uf: true,
+            },
+          },
+          report: {
+            select: {
+              id: true,
+              signedAt: true,
+            },
+          },
+        },
+      }),
+      (this.prisma as any).mission.findMany({
+        where: {
+          startDate: { gte: lookbackStart },
+        },
+        select: {
+          id: true,
+          title: true,
+          scope: true,
+          startDate: true,
+          locality: {
+            select: {
+              id: true,
+              name: true,
+              uf: true,
+            },
+          },
+        },
+      }),
+      this.prisma.biNormalizationLink.findMany({
+        where: {
+          sourceType: 'SURVEY_SCHOOLS',
+          status: { in: ['MATCHED', 'UF_ONLY'] },
+        },
+        select: {
+          sourceRecordId: true,
+          omId: true,
+          uf: true,
+          status: true,
+        },
+      }),
+      this.prisma.biSurveyResponse.findMany({
+        select: {
+          id: true,
+          sufferedViolence: true,
+        },
+      }),
+      this.prisma.biNormalizationLink.findMany({
+        where: {
+          sourceType: 'DOMESTIC_VIOLENCE',
+          status: { in: ['MATCHED', 'UF_ONLY'] },
+        },
+        select: {
+          sourceRecordId: true,
+          omId: true,
+          uf: true,
+          status: true,
+        },
+      }),
+      this.prisma.biDomesticViolenceResponse.findMany({
+        select: {
+          id: true,
+          sufferedLast12Months: true,
+        },
+      }),
+      this.biNormalization.overview(),
+    ]);
+
+    const coveredOmIds = new Set(
+      this.buildCoveredOmsCatalog(oms).map((item) => String(item.id)),
+    );
+    const ufSet = new Set<string>();
+
+    const ensureUf = (uf: string | null | undefined) => {
+      const value = String(uf ?? '').trim().toUpperCase();
+      if (value) ufSet.add(value);
+      return value;
+    };
+
+    const surveyById = new Map<string, { sufferedViolence: boolean }>(
+      (surveyRows as any[]).map((row: any) => [
+        String(row.id),
+        { sufferedViolence: row.sufferedViolence === true },
+      ]),
+    );
+    const domesticById = new Map<string, { sufferedLast12Months: boolean }>(
+      (domesticRows as any[]).map((row: any) => [
+        String(row.id),
+        { sufferedLast12Months: row.sufferedLast12Months === true },
+      ]),
+    );
+
+    const surveySignalsByUf = new Map<string, { total: number; yes: number }>();
+    const surveySignalsByOm = new Map<string, { total: number; yes: number }>();
+    for (const link of surveyLinks) {
+      const response = surveyById.get(String(link.sourceRecordId));
+      if (!response) continue;
+      const uf = ensureUf(link.uf);
+      if (uf) {
+        const current = surveySignalsByUf.get(uf) ?? { total: 0, yes: 0 };
+        current.total += 1;
+        if (response.sufferedViolence) current.yes += 1;
+        surveySignalsByUf.set(uf, current);
+      }
+      const omId = String(link.omId ?? '').trim();
+      if (omId) {
+        const current = surveySignalsByOm.get(omId) ?? { total: 0, yes: 0 };
+        current.total += 1;
+        if (response.sufferedViolence) current.yes += 1;
+        surveySignalsByOm.set(omId, current);
+      }
+    }
+
+    const domesticSignalsByUf = new Map<string, { total: number; yes: number }>();
+    const domesticSignalsByOm = new Map<string, { total: number; yes: number }>();
+    for (const link of domesticLinks) {
+      const response = domesticById.get(String(link.sourceRecordId));
+      if (!response) continue;
+      const uf = ensureUf(link.uf);
+      if (uf) {
+        const current = domesticSignalsByUf.get(uf) ?? { total: 0, yes: 0 };
+        current.total += 1;
+        if (response.sufferedLast12Months) current.yes += 1;
+        domesticSignalsByUf.set(uf, current);
+      }
+      const omId = String(link.omId ?? '').trim();
+      if (omId) {
+        const current = domesticSignalsByOm.get(omId) ?? { total: 0, yes: 0 };
+        current.total += 1;
+        if (response.sufferedLast12Months) current.yes += 1;
+        domesticSignalsByOm.set(omId, current);
+      }
+    }
+
+    const complaintsByUf = new Map<
+      string,
+      {
+        totalCases: number;
+        openCases: number;
+        retaliationCases: number;
+        stalledCases: number;
+        sexualCases: number;
+      }
+    >();
+    const complaintsByOm = new Map<
+      string,
+      {
+        totalCases: number;
+        openCases: number;
+        retaliationCases: number;
+        stalledCases: number;
+        sexualCases: number;
+      }
+    >();
+
+    for (const item of complaints as any[]) {
+      const omId = String(item?.omId ?? '').trim();
+      const omUf = ensureUf(item?.om?.uf);
+      if (!omId || !omUf) continue;
+
+      const isOpen = openStatuses.has(String(item?.status ?? '').trim());
+      const openDays = isOpen
+        ? Math.max(
+            0,
+            Math.floor(
+              (now.getTime() - new Date(item.reportedAt).getTime()) /
+                (1000 * 60 * 60 * 24),
+            ),
+          )
+        : 0;
+
+      const applyStats = (map: Map<string, any>, key: string) => {
+        const current = map.get(key) ?? {
+          totalCases: 0,
+          openCases: 0,
+          retaliationCases: 0,
+          stalledCases: 0,
+          sexualCases: 0,
+        };
+        current.totalCases += 1;
+        if (isOpen) {
+          current.openCases += 1;
+          if (openDays > 30) current.stalledCases += 1;
+          if (item?.retaliationRisk) current.retaliationCases += 1;
+        }
+        if (String(item?.complaintType ?? '').trim().toUpperCase() === 'SEXUAL') {
+          current.sexualCases += 1;
+        }
+        map.set(key, current);
+      };
+
+      applyStats(complaintsByUf, omUf);
+      applyStats(complaintsByOm, omId);
+    }
+
+    const presenceByUf = new Map<
+      string,
+      {
+        missions: number;
+        completedActivities: number;
+        signedReports: number;
+      }
+    >();
+
+    for (const activity of activities) {
+      const uf = ensureUf(activity.locality?.uf);
+      if (!uf) continue;
+      const current = presenceByUf.get(uf) ?? {
+        missions: 0,
+        completedActivities: 0,
+        signedReports: 0,
+      };
+      if (String(activity.status ?? '').trim().toUpperCase() === 'DONE') {
+        current.completedActivities += 1;
+      }
+      if (activity.report?.signedAt) {
+        current.signedReports += 1;
+      }
+      presenceByUf.set(uf, current);
+    }
+
+    for (const mission of missions as any[]) {
+      const uf = ensureUf(mission?.locality?.uf);
+      if (!uf) continue;
+      const current = presenceByUf.get(uf) ?? {
+        missions: 0,
+        completedActivities: 0,
+        signedReports: 0,
+      };
+      current.missions += 1;
+      presenceByUf.set(uf, current);
+    }
+
+    const omsByUf = new Map<string, StrategicGeoOmRow[]>();
+    for (const om of oms) {
+      const uf = ensureUf(om.uf);
+      if (!uf) continue;
+      const current = omsByUf.get(uf) ?? [];
+      current.push(om);
+      omsByUf.set(uf, current);
+    }
+
+    const omRiskRows = oms
+      .map((om: StrategicGeoOmRow) => {
+        const survey = surveySignalsByOm.get(om.id) ?? { total: 0, yes: 0 };
+        const domestic = domesticSignalsByOm.get(om.id) ?? { total: 0, yes: 0 };
+        const complaintsStats = complaintsByOm.get(om.id) ?? {
+          totalCases: 0,
+          openCases: 0,
+          retaliationCases: 0,
+          stalledCases: 0,
+          sexualCases: 0,
+        };
+        const surveyRate = survey.total > 0 ? (survey.yes / survey.total) * 100 : 0;
+        const domesticRate =
+          domestic.total > 0 ? (domestic.yes / domestic.total) * 100 : 0;
+        const covered = coveredOmIds.has(om.id);
+        const rawRisk =
+          complaintsStats.openCases * 8 +
+          complaintsStats.retaliationCases * 12 +
+          complaintsStats.stalledCases * 6 +
+          complaintsStats.sexualCases * 4 +
+          surveyRate * 0.7 +
+          domesticRate * 0.8 +
+          (covered ? 0 : 10);
+
+        return {
+          id: om.id,
+          code: om.code,
+          name: om.name,
+          uf: om.uf,
+          covered,
+          coverageType: covered
+            ? om.hasCpca
+              ? 'CPCA próprio'
+              : 'Coberta por outra OM'
+            : 'Sem cobertura',
+          surveyRate: Number(surveyRate.toFixed(1)),
+          domesticRate: Number(domesticRate.toFixed(1)),
+          complaints: complaintsStats,
+          rawRisk,
+          link: `/cpca-cases?omId=${encodeURIComponent(om.id)}`,
+        };
+      })
+      .sort((a: any, b: any) => b.rawRisk - a.rawRisk);
+
+    const maxOmRisk = Math.max(...omRiskRows.map((item: any) => item.rawRisk), 1);
+    const omRiskRowsWithScore = omRiskRows.map((item: any) => ({
+      ...item,
+      riskScore: Math.round((item.rawRisk / maxOmRisk) * 100),
+    }));
+
+    const ufRowsRaw = Array.from(ufSet)
+      .map((uf) => {
+        const ufOms = omsByUf.get(uf) ?? [];
+        const totalOms = ufOms.length;
+        const coveredOms = ufOms.filter((om) => coveredOmIds.has(om.id)).length;
+        const complaintsStats = complaintsByUf.get(uf) ?? {
+          totalCases: 0,
+          openCases: 0,
+          retaliationCases: 0,
+          stalledCases: 0,
+          sexualCases: 0,
+        };
+        const survey = surveySignalsByUf.get(uf) ?? { total: 0, yes: 0 };
+        const domestic = domesticSignalsByUf.get(uf) ?? { total: 0, yes: 0 };
+        const presence = presenceByUf.get(uf) ?? {
+          missions: 0,
+          completedActivities: 0,
+          signedReports: 0,
+        };
+
+        const surveyRate = survey.total > 0 ? (survey.yes / survey.total) * 100 : 0;
+        const domesticRate =
+          domestic.total > 0 ? (domestic.yes / domestic.total) * 100 : 0;
+        const coveragePercent =
+          totalOms > 0 ? Number(((coveredOms / totalOms) * 100).toFixed(1)) : 0;
+
+        const rawRisk =
+          complaintsStats.openCases * 8 +
+          complaintsStats.retaliationCases * 12 +
+          complaintsStats.stalledCases * 6 +
+          complaintsStats.sexualCases * 4 +
+          surveyRate * 0.7 +
+          domesticRate * 0.8;
+        const rawPresence =
+          presence.missions * 5 +
+          presence.completedActivities * 3 +
+          presence.signedReports * 2;
+
+        return {
+          uf,
+          totalOms,
+          coveredOms,
+          uncoveredOms: Math.max(totalOms - coveredOms, 0),
+          coveragePercent,
+          surveyRate: Number(surveyRate.toFixed(1)),
+          domesticRate: Number(domesticRate.toFixed(1)),
+          complaints: complaintsStats,
+          presence,
+          rawRisk,
+          rawPresence,
+          oms: omRiskRowsWithScore
+            .filter((item: any) => String(item.uf ?? '').trim().toUpperCase() === uf)
+            .slice(0, 12),
+        };
+      })
+      .filter((row: any) => row.totalOms > 0)
+      .sort((a: any, b: any) => b.rawRisk - a.rawRisk);
+
+    const maxUfRisk = Math.max(...ufRowsRaw.map((item: any) => item.rawRisk), 1);
+    const maxUfPresence = Math.max(
+      ...ufRowsRaw.map((item: any) => item.rawPresence),
+      1,
+    );
+
+    const ufRows = ufRowsRaw.map((item: any) => {
+      const riskScore = Math.round((item.rawRisk / maxUfRisk) * 100);
+      const presenceScore = Math.round((item.rawPresence / maxUfPresence) * 100);
+      let priorityBand = 'ESTÁVEL';
+      if (riskScore >= 70 && (item.coveragePercent < 80 || presenceScore < 45)) {
+        priorityBand = 'CRÍTICA';
+      } else if (riskScore >= 60) {
+        priorityBand = 'ALTA';
+      } else if (riskScore >= 40 || item.coveragePercent < 70) {
+        priorityBand = 'ATENÇÃO';
+      }
+
+      let recommendedFocus = 'Monitorar cenário e manter rotina de presença.';
+      if (item.coveragePercent < 70) {
+        recommendedFocus = 'Expandir cobertura CPCA e revisar governança local.';
+      } else if (presenceScore < 40) {
+        recommendedFocus = 'Reforçar presença operacional na UF.';
+      } else if (riskScore >= 70) {
+        recommendedFocus = 'Priorizar intervenção imediata de comando.';
+      }
+
+      return {
+        ...item,
+        riskScore,
+        presenceScore,
+        priorityBand,
+        recommendedFocus,
+      };
+    });
+
+    const criticalUfRows = ufRows
+      .filter((item: any) => item.priorityBand !== 'ESTÁVEL')
+      .sort((a: any, b: any) => b.riskScore - a.riskScore)
+      .slice(0, 8);
+    const topRiskOms = omRiskRowsWithScore.slice(0, 12);
+    const coverageGaps = omRiskRowsWithScore
+      .filter((item: any) => !item.covered)
+      .slice(0, 12);
+    const operationalPressure = ufRows
+      .map((item: any) => ({
+        ...item,
+        pressureScore: item.riskScore - item.presenceScore,
+      }))
+      .sort((a: any, b: any) => b.pressureScore - a.pressureScore)
+      .slice(0, 10);
+
+    return {
+      generatedAt: now.toISOString(),
+      lookbackDays: 180,
+      summary: {
+        totalOms: oms.length,
+        coveredOms: Array.from(coveredOmIds).length,
+        coveredOmsPercent:
+          oms.length > 0
+            ? Number(((coveredOmIds.size / oms.length) * 100).toFixed(1))
+            : 0,
+        criticalUfCount: ufRows.filter((item: any) => item.priorityBand === 'CRÍTICA')
+          .length,
+        highRiskOmCount: omRiskRowsWithScore.filter((item: any) => item.riskScore >= 70)
+          .length,
+        openComplaintCases: Array.from(complaintsByUf.values()).reduce(
+          (acc: number, item: any) => acc + item.openCases,
+          0,
+        ),
+        operationalPresenceEvents: Array.from(presenceByUf.values()).reduce(
+          (acc: number, item: any) =>
+            acc + item.missions + item.completedActivities + item.signedReports,
+          0,
+        ),
+      },
+      dataConfidence: {
+        supportedCoveragePercent:
+          normalizationOverview?.overall?.supportedCoveragePercent ?? 0,
+        totalRecords: normalizationOverview?.overall?.totalRecords ?? 0,
+        matched: normalizationOverview?.overall?.matched ?? 0,
+        ufOnly: normalizationOverview?.overall?.ufOnly ?? 0,
+        notFound: normalizationOverview?.overall?.notFound ?? 0,
+        lastUpdatedAt: normalizationOverview?.lastUpdatedAt ?? null,
+        sources: normalizationOverview?.sources ?? [],
+      },
+      matrix: {
+        items: ufRows,
+      },
+      watchlists: {
+        criticalUfs: criticalUfRows,
+        topRiskOms,
+        coverageGaps,
+        operationalPressure,
+      },
+    };
+  }
+
   async situationalDashboard(filters?: StrategicSourceFilter) {
     const sourceSet = this.resolveSourceSet(filters?.sources);
     const [
@@ -562,15 +1172,7 @@ export class StrategicService {
             catalogType: true,
           },
         }),
-        this.prisma.om.findMany({
-          select: {
-            id: true,
-            code: true,
-            name: true,
-            uf: true,
-            hasCpca: true,
-          },
-        }),
+        this.listOmsForGeoMap(),
       ]);
       const localitiesCatalog = [...localities].sort((a, b) =>
         String(a.name ?? '').localeCompare(String(b.name ?? ''), 'pt-BR', {
@@ -582,14 +1184,17 @@ export class StrategicService {
           sensitivity: 'base',
         }),
       );
+      const coveredOmsCatalog = this.buildCoveredOmsCatalog(oms);
       return {
         generatedAt: new Date().toISOString(),
         states: [],
         totalLocalitiesWithUf: localities.filter((l) => l.uf).length,
         totalLocalitiesWithCpca: oms.filter((om) => om.hasCpca).length,
+        totalOmsCoveredByCpca: coveredOmsCatalog.length,
         totalLocalities: localities.length,
         localitiesCatalog,
         omsCatalog,
+        cpcaCoveredOmsCatalog: coveredOmsCatalog,
       };
     }
 
@@ -605,15 +1210,7 @@ export class StrategicService {
           catalogType: true,
         },
       }),
-      this.prisma.om.findMany({
-        select: {
-          id: true,
-          code: true,
-          name: true,
-          uf: true,
-          hasCpca: true,
-        },
-      }),
+      this.listOmsForGeoMap(),
     ]);
     const localitiesCatalog = [...localities].sort((a, b) =>
       String(a.name ?? '').localeCompare(String(b.name ?? ''), 'pt-BR', {
@@ -625,6 +1222,7 @@ export class StrategicService {
         sensitivity: 'base',
       }),
     );
+    const coveredOmsCatalog = this.buildCoveredOmsCatalog(oms);
 
     const [complaints, activities, missions] = await Promise.all([
       includeComplaints
@@ -640,7 +1238,7 @@ export class StrategicService {
               status: true,
               reportedAt: true,
               workflowScope: true,
-              om: { select: { name: true } },
+              om: { select: { code: true, name: true } },
             },
           })
         : Promise.resolve([]),
@@ -677,6 +1275,7 @@ export class StrategicService {
       activities: number;
       missions: number;
       localities: string[];
+      oms: string[];
       smifLocalities: string[];
       cipavdLocalities: string[];
       localitiesCombined: string[];
@@ -723,6 +1322,7 @@ export class StrategicService {
           activities: 0,
           missions: 0,
           localities: [],
+          oms: [],
           smifLocalities: [],
           cipavdLocalities: [],
           localitiesCombined: [],
@@ -754,6 +1354,15 @@ export class StrategicService {
       }
     }
 
+    for (const om of omsCatalog) {
+      if (!om.uf) continue;
+      const entry = ensureUf(om.uf);
+      pushUniqueLocality(
+        entry.oms,
+        this.formatOmDisplayLabel(om.code, om.name),
+      );
+    }
+
     for (const entry of ufMap.values()) {
       for (const locName of entry.smifLocalities) {
         pushUniqueLocality(entry.localitiesCombined, locName);
@@ -774,7 +1383,7 @@ export class StrategicService {
           type: c.complaintType,
           status: c.status,
           date: c.reportedAt?.toISOString?.() ?? '',
-          locality: c.om?.name ?? '',
+          locality: this.formatOmDisplayLabel(c.om?.code, c.om?.name),
           scope: c.workflowScope ?? '',
         });
       }
@@ -817,9 +1426,11 @@ export class StrategicService {
       }),
       totalLocalitiesWithUf: localities.filter((l) => l.uf).length,
       totalLocalitiesWithCpca: oms.filter((om) => om.hasCpca).length,
+      totalOmsCoveredByCpca: coveredOmsCatalog.length,
       totalLocalities: localities.length,
       localitiesCatalog,
       omsCatalog,
+      cpcaCoveredOmsCatalog: coveredOmsCatalog,
     };
   }
 

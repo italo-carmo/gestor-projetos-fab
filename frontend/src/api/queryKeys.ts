@@ -82,6 +82,7 @@ export const qk = {
     ["documents", "link-candidates", filters] as const,
   executiveDashboard: (filters: Record<string, any>) =>
     ["dashboardExecutive", filters] as const,
+  comgepSituationRoom: ["strategic", "comgepRoom"] as const,
   kpiDashboard: (filters: Record<string, any>) =>
     ["kpiDashboard", filters] as const,
   biSurveyDashboard: (filters: Record<string, any>) =>
@@ -149,4 +150,6 @@ export const qk = {
     ["smifComplaints", filters] as const,
   smifComplaintCase: (id: string) => ["smifComplaintCase", id] as const,
   aiSettings: ["admin", "aiSettings"] as const,
+  biNormalizationOverview: ["bi", "normalization", "overview"] as const,
+  aiActionAgents: ["ai", "actionAgents"] as const,
 };

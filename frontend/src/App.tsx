@@ -30,6 +30,7 @@ import { BiCpcaMeetingDashboardPage } from "./pages/BiCpcaMeetingDashboardPage";
 import { BiGsdEvaluationDashboardPage } from "./pages/BiGsdEvaluationDashboardPage";
 import { StrategicDashboardPage } from "./pages/StrategicDashboardPage";
 import { AiPage } from "./pages/AiPage";
+import { ComgepSituationRoomPage } from "./pages/ComgepSituationRoomPage";
 import { MissionsPage } from "./pages/MissionsPage";
 import { SocialCommunicationPage } from "./pages/SocialCommunicationPage";
 import { CpcaCasesPage } from "./pages/CpcaCasesPage";
@@ -164,6 +165,19 @@ function App() {
                       allow={(user) => can(user, "bi", "view")}
                     >
                       <BiGsdEvaluationDashboardPage />
+                    </RequireRoleAccess>
+                  }
+                />
+                <Route
+                  path="/dashboard/comgep"
+                  element={
+                    <RequireRoleAccess
+                      allow={(user) =>
+                        hasAnyRole(user, [ROLE_COMGEP, ROLE_TI]) &&
+                        can(user, "bi", "view")
+                      }
+                    >
+                      <ComgepSituationRoomPage />
                     </RequireRoleAccess>
                   }
                 />

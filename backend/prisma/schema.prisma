@@ -104,6 +104,7 @@ model Om {
   cpcaPresidentRequests      CpcaPresidentSelfRegistration[]
   cpcaCoverageAsManager      CpcaCommissionCoverageOm[] @relation("CpcaCoverageOmManager")
   cpcaCoverageAsManaged      CpcaCommissionCoverageOm[] @relation("CpcaCoverageOmManaged")
+  biNormalizationLinks       BiNormalizationLink[]
 
   @@index([hasCpca])
   @@index([uf])
@@ -1761,6 +1762,46 @@ model BiGsdEvaluationCardSetting {
   updatedBy   User?    @relation("BiGsdEvaluationCardSettingUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
 
   @@index([updatedAt])
+}
+
+model BiNormalizationLink {
+  id               String                    @id @default(cuid())
+  sourceType       BiNormalizationSourceType
+  sourceRecordId   String
+  sourceBatchId    String?
+  rawReference     String?
+  secondaryReference String?
+  omId             String?
+  uf               String?
+  status           BiNormalizationStatus
+  confidence       Float?
+  resolutionMethod String?
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+
+  om               Om?                       @relation(fields: [omId], references: [id], onDelete: SetNull)
+
+  @@unique([sourceType, sourceRecordId])
+  @@index([sourceType, status])
+  @@index([omId])
+  @@index([uf])
+  @@index([sourceBatchId])
+}
+
+enum BiNormalizationSourceType {
+  SURVEY_SCHOOLS
+  DOMESTIC_VIOLENCE
+  RECRUITS
+  BEST_PRACTICE_CYCLE
+  CPCA_MEETING
+  GSD_EVALUATION
+}
+
+enum BiNormalizationStatus {
+  MATCHED
+  UF_ONLY
+  NOT_FOUND
+  NOT_APPLICABLE
 }
 
 enum TaskStatus {

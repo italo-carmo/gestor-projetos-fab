@@ -118,6 +118,7 @@ const SEARCH_SCREEN_ALLOWED_ROUTES: RouteWhitelistEntry[] = [
   { path: '/dashboard/bi-encontro-cpca' },
   { path: '/dashboard/bi-avaliacao-gsd' },
   { path: '/dashboard/estrategico' },
+  { path: '/dashboard/comgep' },
   { path: '/dashboard/cpca' },
   { path: '/tasks', allowedQueryKeys: new Set(['taskId']) },
   { path: '/meetings', allowedQueryKeys: new Set(['scope', 'meetingId']) },
@@ -133,6 +134,25 @@ const SEARCH_SCREEN_ALLOWED_ROUTES: RouteWhitelistEntry[] = [
 ];
 
 const SEARCH_SCREEN_CANDIDATES: SearchScreenCandidate[] = [
+  {
+    id: 'dashboard-comgep',
+    entityType: 'SCREEN',
+    entityTypeLabel: 'Tela',
+    path: '/dashboard/comgep',
+    title: 'Sala de Situação COMGEP',
+    subtitle: 'Risco institucional, cobertura CPCA e presença operacional',
+    keywords: [
+      'comgep',
+      'sala de situacao',
+      'sala de situação',
+      'risco institucional',
+      'cobertura cpca',
+      'presenca operacional',
+      'presença operacional',
+    ],
+    isAllowed: (user) =>
+      hasAnyRole(user, [ROLE_COMGEP, ROLE_TI]),
+  },
   {
     id: 'tasks',
     entityType: 'SCREEN',

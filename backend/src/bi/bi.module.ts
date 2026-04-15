@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { RbacModule } from '../rbac/rbac.module';
+import { BiNormalizationController } from './bi-normalization.controller';
+import { BiNormalizationService } from './bi-normalization.service';
 import { BiBestPracticesCycleController } from './bi-best-practices-cycle.controller';
 import { BiBestPracticesCycleService } from './bi-best-practices-cycle.service';
 import { BiCpcaMeetingController } from './bi-cpca-meeting.controller';
@@ -17,6 +19,7 @@ import { BiService } from './bi.service';
   imports: [RbacModule],
   controllers: [
     BiController,
+    BiNormalizationController,
     BiDomesticViolenceController,
     BiRecruitsController,
     BiBestPracticesCycleController,
@@ -25,11 +28,13 @@ import { BiService } from './bi.service';
   ],
   providers: [
     BiService,
+    BiNormalizationService,
     BiDomesticViolenceService,
     BiRecruitsService,
     BiBestPracticesCycleService,
     BiCpcaMeetingService,
     BiGsdEvaluationService,
   ],
+  exports: [BiNormalizationService],
 })
 export class BiModule {}

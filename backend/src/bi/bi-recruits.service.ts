@@ -6,6 +6,10 @@ import { parsePagination } from '../common/pagination';
 import { throwError } from '../common/http-error';
 import { PrismaService } from '../prisma/prisma.service';
 import type { RbacUser } from '../rbac/rbac.types';
+import {
+  BI_NORMALIZATION_SOURCE_TYPES,
+  BiNormalizationService,
+} from './bi-normalization.service';
 
 type RecruitsFilters = {
   from?: string;
@@ -91,7 +95,10 @@ const RECRUITS_CARD_IDS = new Set([
 
 @Injectable()
 export class BiRecruitsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly normalization: BiNormalizationService,
+  ) {}
 
   async importResponses(
     file: Express.Multer.File,
@@ -185,6 +192,10 @@ export class BiRecruitsService {
           select: { id: true, name: true, email: true },
         },
       },
+    });
+
+    await this.normalization.rebuild({
+      sourceType: BI_NORMALIZATION_SOURCE_TYPES.RECRUITS,
     });
 
     return {

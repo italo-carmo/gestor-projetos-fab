@@ -4659,6 +4659,15 @@ export function useStrategicDashboard() {
   });
 }
 
+export function useComgepSituationRoom(enabled = true) {
+  return useQuery({
+    queryKey: qk.comgepSituationRoom,
+    queryFn: async () => (await api.get("/strategic/comgep-room")).data,
+    enabled,
+    staleTime: 30_000,
+  });
+}
+
 export function useAggressorProfile() {
   return useQuery({
     queryKey: ["strategic", "aggressorProfile"],
@@ -4767,6 +4776,36 @@ export function useAiSettings() {
     queryKey: qk.aiSettings,
     queryFn: async () =>
       (await api.get<AiSettingsResponse>("/admin/ai-settings")).data,
+  });
+}
+
+export function useBiNormalizationOverview(enabled = true) {
+  return useQuery({
+    queryKey: qk.biNormalizationOverview,
+    queryFn: async () => (await api.get("/bi/normalization/overview")).data,
+    enabled,
+    staleTime: 30_000,
+  });
+}
+
+export function useRebuildBiNormalization() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload?: { sourceType?: string | null }) =>
+      (await api.post("/bi/normalization/rebuild", payload ?? {})).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.biNormalizationOverview });
+      qc.invalidateQueries({ queryKey: qk.comgepSituationRoom });
+    },
+  });
+}
+
+export function useAiActionAgents(enabled = true) {
+  return useQuery({
+    queryKey: qk.aiActionAgents,
+    queryFn: async () => (await api.get("/ai/action-agents")).data,
+    enabled,
+    staleTime: 60_000,
   });
 }
 

@@ -74,7 +74,7 @@ import {
   useUpdateEloRole,
 } from '../api/hooks';
 import { can } from '../app/rbac';
-import { hasAnyRole, ROLE_TI } from '../app/roleAccess';
+import { hasAnyRole, ROLE_COMGEP, ROLE_TI } from '../app/roleAccess';
 import { useToast } from '../app/toast';
 import { parseApiError } from '../app/apiErrors';
 import { SkeletonState } from '../components/states/SkeletonState';
@@ -83,6 +83,7 @@ import { EmptyState } from '../components/states/EmptyState';
 import { ConfirmDialog } from '../components/dialogs/ConfirmDialog';
 import { useSearchParams } from 'react-router-dom';
 import { getTargetLocalityKey, selectTargetLocalities } from '../constants/localities';
+import { BiNormalizationTab } from '../components/admin/BiNormalizationTab';
 
 const UF_OPTIONS = [
   'AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS',
@@ -2278,6 +2279,7 @@ export function AdminPage() {
   const [currentTab, setCurrentTab] = useState(tabParam);
   const canViewCipavdLocalities = can(me, 'localities_cipavd', 'view');
   const canViewAiSettings = hasAnyRole(me, [ROLE_TI]);
+  const canViewBiNormalization = hasAnyRole(me, [ROLE_TI, ROLE_COMGEP]);
 
   useEffect(() => {
     setCurrentTab(tabParam);
@@ -2289,6 +2291,13 @@ export function AdminPage() {
     params.set('tab', 'postos');
     setSearchParams(params, { replace: true });
   }, [canViewCipavdLocalities, currentTab, searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (currentTab !== 'bi-normalization' || canViewBiNormalization) return;
+    const params = new URLSearchParams(searchParams);
+    params.set('tab', 'postos');
+    setSearchParams(params, { replace: true });
+  }, [canViewBiNormalization, currentTab, searchParams, setSearchParams]);
 
   const handleTabChange = (_event: SyntheticEvent, newValue: string) => {
     setCurrentTab(newValue);
@@ -2322,6 +2331,9 @@ export function AdminPage() {
             <Tab label="Fases" value="phases" />
             <Tab label="Papéis de Elo" value="elo-roles" />
             <Tab label="Mapeamento Institucional" value="institutional-mapping" />
+            {canViewBiNormalization && (
+              <Tab label="Normalização BI" value="bi-normalization" />
+            )}
             {canViewAiSettings && <Tab label="Configuração IA" value="ai-settings" />}
           </Tabs>
 
@@ -2333,6 +2345,9 @@ export function AdminPage() {
           {currentTab === 'phases' && <PhasesTab />}
           {currentTab === 'elo-roles' && <EloRolesTab />}
           {currentTab === 'institutional-mapping' && <InstitutionalMappingTab />}
+          {canViewBiNormalization && currentTab === 'bi-normalization' && (
+            <BiNormalizationTab />
+          )}
           {canViewAiSettings && currentTab === 'ai-settings' && <AiSettingsTab />}
         </CardContent>
       </Card>
