@@ -52,6 +52,11 @@ type LocalityItem = {
   uf?: string | null;
   hasCpca?: boolean;
   notes?: string | null;
+  cpcaManagedByLocality?: {
+    id: string;
+    code: string;
+    name: string;
+  } | null;
   cpcaManagedLocalityIds?: string[];
   cpcaManagedLocalities?: Array<{
     id: string;
@@ -760,6 +765,9 @@ export function OmsAdminPage() {
                     Possui CPCA
                   </TableCell>
                   <TableCell sx={{ color: "white", fontWeight: 700 }}>
+                    Gerenciada por
+                  </TableCell>
+                  <TableCell sx={{ color: "white", fontWeight: 700 }}>
                     Militares CPCA
                   </TableCell>
                   <TableCell
@@ -774,6 +782,7 @@ export function OmsAdminPage() {
                 {filteredLocalities.map((locality) => {
                   const cpcaMembers = cpcaByLocalityId.get(locality.id) ?? [];
                   const hasCoverage = Boolean(locality.hasCpca);
+                  const managedBy = locality.cpcaManagedByLocality;
                   return (
                     <TableRow key={locality.id} hover>
                       <TableCell padding="checkbox">
@@ -802,6 +811,18 @@ export function OmsAdminPage() {
                           color={hasCoverage ? "success" : "default"}
                           label={hasCoverage ? "Sim" : "Não"}
                         />
+                      </TableCell>
+                      <TableCell>
+                        {managedBy ? (
+                          <Chip
+                            size="small"
+                            variant="outlined"
+                            label={managedBy.code}
+                            title={formatOmLabel(managedBy.code, managedBy.name)}
+                          />
+                        ) : (
+                          "—"
+                        )}
                       </TableCell>
                       <TableCell>
                         {cpcaMembers.length > 0

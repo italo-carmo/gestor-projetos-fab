@@ -82,6 +82,18 @@ export class LocalitiesController {
             },
           },
         },
+        cpcaCoverageAsManaged: {
+          select: {
+            managerLocality: {
+              select: {
+                id: true,
+                code: true,
+                name: true,
+              },
+            },
+          },
+          take: 1,
+        },
       },
     });
     return {
@@ -97,7 +109,15 @@ export class LocalitiesController {
         cpcaManagedLocalityIds: item.cpcaCoverageAsManager.map(
           (entry) => entry.managedLocality.id,
         ),
+        cpcaManagedByLocality: item.cpcaCoverageAsManaged[0]?.managerLocality
+          ? {
+              id: item.cpcaCoverageAsManaged[0].managerLocality.id,
+              code: item.cpcaCoverageAsManaged[0].managerLocality.code,
+              name: item.cpcaCoverageAsManaged[0].managerLocality.name,
+            }
+          : null,
         cpcaCoverageAsManager: undefined,
+        cpcaCoverageAsManaged: undefined,
       })),
     };
   }
