@@ -178,8 +178,16 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     title: "Casos CPCA",
     description: "Abertura, acompanhamento e comentarios em casos CPCA.",
     route: "/cpca-cases",
-    routeAliases: ["/dashboard/cpca"],
-    sidebarItems: ["CPCA", "Denuncias"],
+    sidebarItems: ["Denuncias", "Comissão CPCA"],
+  },
+  cpca_dashboard: {
+    menu: "CPCA",
+    menuOrder: 60,
+    title: "Dashboard CPCA",
+    description: "Visualização do painel analítico de denúncias CPCA.",
+    route: "/dashboard/cpca",
+    routeAliases: ["/cpca-stats"],
+    sidebarItems: ["CPCA"],
   },
   smif_complaints: {
     menu: "CPCA",

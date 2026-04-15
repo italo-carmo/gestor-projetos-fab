@@ -79,6 +79,7 @@ export function resolveHomePath(user: MePayload | undefined) {
   if (hasRole(user, ROLE_CIPAVD)) return '/dashboard/cipavd';
   if (hasNationalManagementScope(user)) return '/dashboard/smif';
   if (can(user, 'cpca_cases', 'view')) return '/cpca-cases';
+  if (can(user, 'cpca_dashboard', 'view')) return '/dashboard/cpca';
   if (can(user, 'task_instances', 'view')) return '/activities';
   return '/dashboard/cipavd';
 }

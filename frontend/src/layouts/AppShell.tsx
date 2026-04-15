@@ -162,7 +162,7 @@ const navSections: NavSection[] = [
         label: "CPCA",
         to: "/dashboard/cpca",
         icon: <PolicyRoundedIcon fontSize="small" />,
-        menuKey: "cpca_cases",
+        menuKey: "cpca_dashboard",
       },
     ],
   },
@@ -488,7 +488,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       );
     }
     if (item.to === "/dashboard/cpca") {
-      return can(me, "cpca_cases", "view");
+      return can(me, "cpca_dashboard", "view");
     }
     if (item.to === "/dashboard/bi") {
       return can(me, "bi", "view");
@@ -527,7 +527,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       );
     }
     if (item.to === "/cpca-stats") {
-      return can(me, "cpca_cases", "view");
+      return can(me, "cpca_dashboard", "view");
     }
     if (item.to === "/notices") {
       return can(me, "notices", "view");

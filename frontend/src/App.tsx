@@ -98,7 +98,7 @@ function App() {
                   path="/dashboard/cpca"
                   element={
                     <RequireRoleAccess
-                      allow={(user) => can(user, "cpca_cases", "view")}
+                      allow={(user) => can(user, "cpca_dashboard", "view")}
                     >
                       <CpcaStatsPage />
                     </RequireRoleAccess>
@@ -241,7 +241,7 @@ function App() {
                   path="/cpca-stats"
                   element={
                     <RequireRoleAccess
-                      allow={(user) => can(user, "cpca_cases", "view")}
+                      allow={(user) => can(user, "cpca_dashboard", "view")}
                     >
                       <CpcaStatsPage />
                     </RequireRoleAccess>

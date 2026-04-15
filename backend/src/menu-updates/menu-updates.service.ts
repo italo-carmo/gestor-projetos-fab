@@ -27,6 +27,7 @@ const MENU_UPDATE_RESOURCES: Record<string, readonly string[]> = {
     'social_communication_highlight',
   ],
   library: ['library'],
+  cpca_dashboard: [],
   cpca_cases: ['cpca_cases'],
   cpca_president_approvals: [],
   bi: ['bi', 'bi_survey'],

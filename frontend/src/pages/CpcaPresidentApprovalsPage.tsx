@@ -199,7 +199,6 @@ export function CpcaPresidentApprovalsPage() {
                 <TableHead>
                   <TableRow>
                     <TableCell>Solicitante</TableCell>
-                    <TableCell>UID</TableCell>
                     <TableCell>OM</TableCell>
                     <TableCell>Substituição</TableCell>
                     <TableCell>Boletim</TableCell>
@@ -222,7 +221,6 @@ export function CpcaPresidentApprovalsPage() {
                             </Typography>
                           </Stack>
                         </TableCell>
-                        <TableCell>{item.applicantUid || item.applicantUser?.ldapUid || '-'}</TableCell>
                         <TableCell>
                           {item.locality.code} - {item.locality.name}
                         </TableCell>

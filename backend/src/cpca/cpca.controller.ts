@@ -54,7 +54,7 @@ export class CpcaController {
   }
 
   @Get('stats')
-  @RequirePermission('cpca_cases', 'view')
+  @RequirePermission('cpca_dashboard', 'view')
   stats(
     @Query('omId') omId: string | undefined,
     @Query('localityId') localityId: string | undefined,

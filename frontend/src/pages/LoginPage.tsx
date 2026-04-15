@@ -24,7 +24,6 @@ import { resolveHomePath } from "../app/roleAccess";
 import { ACTIVE_ROLE_STORAGE_KEY, api } from "../api/client";
 import {
   useCreateCpcaPresidentSelfRegistration,
-  useCpcaSelfRegistrationLocalities,
   useLogin,
   useLookupCpcaSelfRegistrationCandidate,
   useVerifyTwoFactor,
@@ -85,16 +84,12 @@ export function LoginPage() {
   const [cpcaSelfRegistrationOpen, setCpcaSelfRegistrationOpen] =
     useState(false);
   const [cpcaIdentifier, setCpcaIdentifier] = useState("");
-  const [cpcaLocalityId, setCpcaLocalityId] = useState("");
   const [cpcaIsSubstitution, setCpcaIsSubstitution] = useState(false);
   const [cpcaBulletinNumber, setCpcaBulletinNumber] = useState("");
   const [cpcaLookupPreview, setCpcaLookupPreview] =
     useState<CpcaSelfRegistrationLookupPreview | null>(null);
   const loginMutation = useLogin();
   const verifyMutation = useVerifyTwoFactor();
-  const cpcaSelfRegistrationLocalitiesQuery = useCpcaSelfRegistrationLocalities(
-    cpcaSelfRegistrationOpen,
-  );
   const cpcaSelfRegistrationLookupMutation =
     useLookupCpcaSelfRegistrationCandidate();
   const cpcaSelfRegistrationMutation = useCreateCpcaPresidentSelfRegistration();
@@ -215,7 +210,6 @@ export function LoginPage() {
 
   const resetCpcaSelfRegistrationForm = () => {
     setCpcaIdentifier("");
-    setCpcaLocalityId("");
     setCpcaIsSubstitution(false);
     setCpcaBulletinNumber("");
     setCpcaLookupPreview(null);
@@ -262,9 +256,6 @@ export function LoginPage() {
         profile: result.profile,
         locality: result.locality ?? null,
       });
-      if (result.locality?.id && result.locality.hasCpca) {
-        setCpcaLocalityId(result.locality.id);
-      }
       toast.push({
         message: "Militar encontrado no LDAP.",
         severity: "success",
@@ -281,11 +272,12 @@ export function LoginPage() {
 
   const handleSubmitCpcaSelfRegistration = async () => {
     const identifier = cpcaIdentifier.trim();
-    const localityId = cpcaLocalityId.trim();
+    const localityId = String(cpcaLookupPreview?.locality?.id ?? "").trim();
     const bulletinNumber = cpcaBulletinNumber.trim();
     if (!identifier || !localityId || !bulletinNumber) {
       toast.push({
-        message: "Preencha e-mail/CPF, OM e boletim para enviar a solicitação.",
+        message:
+          "Preencha e-mail/CPF, faça a busca LDAP e informe o boletim para enviar a solicitação.",
         severity: "warning",
       });
       return;
@@ -309,7 +301,7 @@ export function LoginPage() {
         bulletinNumber,
       });
       toast.push({
-        message: "Solicitação enviada para homologação de TI/COMGEP.",
+        message: "Solicitação enviada para homologação da COMGEP.",
         severity: "success",
       });
       setCpcaSelfRegistrationOpen(false);
@@ -696,40 +688,24 @@ export function LoginPage() {
                     InputProps={{ readOnly: true }}
                     fullWidth
                   />
-                  <TextField
-                    size="small"
-                    label="OM (LDAP)"
-                    value={
-                      cpcaLookupPreview.locality
-                        ? formatOmLabel(
-                            cpcaLookupPreview.locality.code,
-                            cpcaLookupPreview.locality.name,
-                          )
-                        : cpcaLookupPreview.profile.fabom || "Não identificada"
-                    }
-                    InputProps={{ readOnly: true }}
-                    fullWidth
-                  />
                 </Stack>
               </>
             ) : null}
             <TextField
-              select
               size="small"
               label="OM"
-              value={cpcaLocalityId}
-              onChange={(event) => setCpcaLocalityId(event.target.value)}
+              value={
+                cpcaLookupPreview?.locality
+                  ? formatOmLabel(
+                      cpcaLookupPreview.locality.code,
+                      cpcaLookupPreview.locality.name,
+                    )
+                  : ""
+              }
+              InputProps={{ readOnly: true }}
               fullWidth
-              disabled={cpcaSelfRegistrationLocalitiesQuery.isLoading}
-            >
-              {(cpcaSelfRegistrationLocalitiesQuery.data?.items ?? []).map(
-                (item: { id: string; code: string; name: string }) => (
-                  <MenuItem key={item.id} value={item.id}>
-                    {formatOmLabel(item.code, item.name)}
-                  </MenuItem>
-                ),
-              )}
-            </TextField>
+              helperText="Preenchida automaticamente via LDAP. Não é possível alterar."
+            />
             <TextField
               select
               size="small"

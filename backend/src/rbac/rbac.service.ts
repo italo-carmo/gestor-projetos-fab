@@ -1024,9 +1024,80 @@ export class RbacService implements OnModuleInit {
       }
     }
 
+    if (toCreate.length > 0) {
+      await this.prisma.permission.createMany({
+        data: toCreate,
+        skipDuplicates: true,
+      });
+    }
+
+    await this.backfillCpcaDashboardViewPermission();
+  }
+
+  private async backfillCpcaDashboardViewPermission() {
+    const [sourcePermissions, targetPermissions] = await Promise.all([
+      this.prisma.permission.findMany({
+        where: { resource: 'cpca_cases', action: 'view' },
+        select: { id: true, scope: true },
+      }),
+      this.prisma.permission.findMany({
+        where: { resource: 'cpca_dashboard', action: 'view' },
+        select: { id: true, scope: true },
+      }),
+    ]);
+
+    if (sourcePermissions.length === 0 || targetPermissions.length === 0) {
+      return;
+    }
+
+    const sourceScopeByPermissionId = new Map(
+      sourcePermissions.map((item) => [item.id, item.scope] as const),
+    );
+    const targetPermissionByScope = new Map(
+      targetPermissions.map((item) => [item.scope, item.id] as const),
+    );
+    const fallbackTargetPermissionId = targetPermissions[0]?.id;
+    if (!fallbackTargetPermissionId) {
+      return;
+    }
+
+    const sourcePermissionIds = sourcePermissions.map((item) => item.id);
+    const targetPermissionIds = targetPermissions.map((item) => item.id);
+
+    const [rolePermissionsWithSource, rolePermissionsWithTarget] =
+      await Promise.all([
+        this.prisma.rolePermission.findMany({
+          where: { permissionId: { in: sourcePermissionIds } },
+          select: { roleId: true, permissionId: true },
+        }),
+        this.prisma.rolePermission.findMany({
+          where: { permissionId: { in: targetPermissionIds } },
+          select: { roleId: true, permissionId: true },
+        }),
+      ]);
+
+    const existingTargetByRole = new Set(
+      rolePermissionsWithTarget.map(
+        (item) => `${item.roleId}:${item.permissionId}`,
+      ),
+    );
+
+    const toCreate: Array<{ roleId: string; permissionId: string }> = [];
+    for (const item of rolePermissionsWithSource) {
+      const sourceScope = sourceScopeByPermissionId.get(item.permissionId);
+      const targetPermissionId =
+        (sourceScope
+          ? targetPermissionByScope.get(sourceScope)
+          : undefined) ?? fallbackTargetPermissionId;
+      const key = `${item.roleId}:${targetPermissionId}`;
+      if (existingTargetByRole.has(key)) continue;
+      existingTargetByRole.add(key);
+      toCreate.push({ roleId: item.roleId, permissionId: targetPermissionId });
+    }
+
     if (toCreate.length === 0) return;
 
-    await this.prisma.permission.createMany({
+    await this.prisma.rolePermission.createMany({
       data: toCreate,
       skipDuplicates: true,
     });
