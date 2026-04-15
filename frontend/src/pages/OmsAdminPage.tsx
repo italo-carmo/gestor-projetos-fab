@@ -1014,7 +1014,6 @@ export function OmsAdminPage() {
                   }))
                 }
                 isOptionEqualToValue={(option, value) => option.id === value.id}
-                groupBy={(option) => String(option.uf ?? "").trim() || "Sem UF"}
                 getOptionDisabled={(option) => option.hasCpca}
                 getOptionLabel={(option) =>
                   `${formatOmLabel(option.code, option.name)}${option.uf ? ` - ${option.uf}` : ""}`
@@ -1031,6 +1030,11 @@ export function OmsAdminPage() {
                     }
                   />
                 )}
+                noOptionsText={
+                  managedUfFilter
+                    ? `Nenhuma OM encontrada para a UF ${managedUfFilter}.`
+                    : "Nenhuma OM disponível."
+                }
                 disabled={!form.hasCpca}
               />
             </Stack>
