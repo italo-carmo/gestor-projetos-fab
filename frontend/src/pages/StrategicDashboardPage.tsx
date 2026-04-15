@@ -1854,10 +1854,60 @@ function BrazilMap({
 function GeoMapTab() {
   const { data, isLoading, error } = useGeoMap();
   const [selectedState, setSelectedState] = useState<{ uf: string; data: any } | null>(null);
+  const [geoKpiModal, setGeoKpiModal] = useState<
+    "localities" | "cpca" | "statesWithData" | "totalRecords" | null
+  >(null);
 
   if (isLoading) return <SkeletonState />;
   if (error) return <ErrorState message="Erro ao carregar mapa geográfico." />;
   if (!data) return <EmptyState message="Sem dados geográficos." />;
+
+  const localitiesCatalog = Array.isArray(data.localitiesCatalog)
+    ? data.localitiesCatalog
+    : [];
+  const localitiesWithCpca = localitiesCatalog.filter((loc: any) =>
+    Boolean(loc?.hasCpca),
+  );
+  const statesWithData = (data.states ?? []).filter(
+    (s: any) => s.complaints + s.activities + s.missions > 0,
+  );
+  const totalRecordsCount = (data.states ?? []).reduce(
+    (sum: number, s: any) => sum + s.complaints + s.activities + s.missions,
+    0,
+  );
+  const totalRecordItems = statesWithData.flatMap((s: any) => {
+    const complaintItems = (s.complaintDetails ?? []).map((item: any) => ({
+      type: "Denúncia",
+      uf: s.uf,
+      title: item.caseNumber || item.type || "Caso",
+      subtitle: [item.type, item.status, item.scope].filter(Boolean).join(" • "),
+      locality: item.locality || "—",
+      date: item.date || "",
+    }));
+    const activityItems = (s.activityDetails ?? []).map((item: any) => ({
+      type: "Atividade",
+      uf: s.uf,
+      title: item.title || "Atividade de Campo",
+      subtitle: [item.scope, item.status].filter(Boolean).join(" • "),
+      locality: item.locality || "—",
+      date: item.date || "",
+    }));
+    const missionItems = (s.missionDetails ?? []).map((item: any) => ({
+      type: "Missão",
+      uf: s.uf,
+      title: item.title || "Missão",
+      subtitle: item.scope ? `Escopo: ${item.scope}` : "",
+      locality: item.locality || "—",
+      date: item.startDate || item.endDate || "",
+    }));
+    return [...complaintItems, ...activityItems, ...missionItems];
+  });
+  const totalRecordItemsSorted = [...totalRecordItems].sort((a, b) => {
+    const dateA = a.date ? new Date(a.date).getTime() : 0;
+    const dateB = b.date ? new Date(b.date).getTime() : 0;
+    return dateB - dateA;
+  });
+  const totalRecordItemsLimited = totalRecordItemsSorted.slice(0, 500);
 
   const stateDataMap: Record<string, any> = {};
   for (const s of (data.states ?? [])) {
@@ -1891,30 +1941,34 @@ function GeoMapTab() {
             title="Localidades Cadastradas"
             value={data.totalLocalities ?? 0}
             color="#1A3C6E"
+            onClick={() => setGeoKpiModal("localities")}
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <KpiCard
-            title="Com UF Preenchida"
-            value={data.totalLocalitiesWithUf ?? 0}
+            title="OMs com CPCA"
+            value={data.totalLocalitiesWithCpca ?? 0}
             subtitle={data.totalLocalities
-              ? `${((data.totalLocalitiesWithUf / data.totalLocalities) * 100).toFixed(0)}% do total`
+              ? `${((Number(data.totalLocalitiesWithCpca ?? 0) / data.totalLocalities) * 100).toFixed(0)}% do total`
               : ""}
             color="#2E7D32"
+            onClick={() => setGeoKpiModal("cpca")}
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <KpiCard
             title="Estados com Dados"
-            value={(data.states ?? []).filter((s: any) => s.complaints + s.activities + s.missions > 0).length}
+            value={statesWithData.length}
             color="#ED6C02"
+            onClick={() => setGeoKpiModal("statesWithData")}
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <KpiCard
             title="Total de Registros"
-            value={(data.states ?? []).reduce((sum: number, s: any) => sum + s.complaints + s.activities + s.missions, 0)}
+            value={totalRecordsCount}
             color="#D32F2F"
+            onClick={() => setGeoKpiModal("totalRecords")}
           />
         </Grid>
       </Grid>
@@ -2025,6 +2079,176 @@ function GeoMapTab() {
           </CardContent>
         </Card>
       )}
+
+      <KpiDetailModal
+        open={Boolean(geoKpiModal)}
+        title={
+          geoKpiModal === "localities"
+            ? "Detalhamento — Localidades Cadastradas"
+            : geoKpiModal === "cpca"
+              ? "Detalhamento — OMs com CPCA"
+              : geoKpiModal === "statesWithData"
+                ? "Detalhamento — Estados com Dados"
+                : geoKpiModal === "totalRecords"
+                  ? "Detalhamento — Total de Registros"
+                  : ""
+        }
+        onClose={() => setGeoKpiModal(null)}
+      >
+        {geoKpiModal === "localities" && (
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell><strong>OM</strong></TableCell>
+                  <TableCell><strong>Localidade</strong></TableCell>
+                  <TableCell><strong>UF</strong></TableCell>
+                  <TableCell><strong>Catálogo</strong></TableCell>
+                  <TableCell><strong>CPCA</strong></TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {localitiesCatalog.map((loc: any) => (
+                  <TableRow key={loc.id}>
+                    <TableCell>{loc.code || "—"}</TableCell>
+                    <TableCell>{loc.name || "—"}</TableCell>
+                    <TableCell>{loc.uf || "—"}</TableCell>
+                    <TableCell>{loc.catalogType || "—"}</TableCell>
+                    <TableCell>
+                      <Chip
+                        size="small"
+                        label={loc.hasCpca ? "Sim" : "Não"}
+                        sx={{
+                          bgcolor: loc.hasCpca ? "#E8F5E9" : "#F5F5F5",
+                          color: loc.hasCpca ? "#2E7D32" : "#616161",
+                        }}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+
+        {geoKpiModal === "cpca" && (
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell><strong>OM</strong></TableCell>
+                  <TableCell><strong>Localidade</strong></TableCell>
+                  <TableCell><strong>UF</strong></TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {localitiesWithCpca.map((loc: any) => (
+                  <TableRow key={loc.id}>
+                    <TableCell>{loc.code || "—"}</TableCell>
+                    <TableCell>{loc.name || "—"}</TableCell>
+                    <TableCell>{loc.uf || "—"}</TableCell>
+                  </TableRow>
+                ))}
+                {localitiesWithCpca.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={3}>
+                      <Typography variant="body2" color="text.secondary">
+                        Nenhuma OM/localidade com CPCA habilitado.
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+
+        {geoKpiModal === "statesWithData" && (
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell><strong>UF</strong></TableCell>
+                  <TableCell><strong>Estado</strong></TableCell>
+                  <TableCell align="right"><strong>Denúncias</strong></TableCell>
+                  <TableCell align="right"><strong>Atividades</strong></TableCell>
+                  <TableCell align="right"><strong>Missões</strong></TableCell>
+                  <TableCell align="right"><strong>Total</strong></TableCell>
+                  <TableCell align="right"><strong>Ação</strong></TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {statesWithData.map((s: any) => (
+                  <TableRow key={s.uf}>
+                    <TableCell>{s.uf}</TableCell>
+                    <TableCell>{BR_STATES[s.uf]?.name ?? s.uf}</TableCell>
+                    <TableCell align="right">{s.complaints}</TableCell>
+                    <TableCell align="right">{s.activities}</TableCell>
+                    <TableCell align="right">{s.missions}</TableCell>
+                    <TableCell align="right">
+                      <strong>{s.complaints + s.activities + s.missions}</strong>
+                    </TableCell>
+                    <TableCell align="right">
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => {
+                          setGeoKpiModal(null);
+                          setSelectedState({ uf: s.uf, data: stateDataMap[s.uf] });
+                        }}
+                      >
+                        Abrir Estado
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+
+        {geoKpiModal === "totalRecords" && (
+          <Stack spacing={1.2}>
+            <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap" }}>
+              <Chip label={`Total: ${totalRecordsCount}`} />
+              <Chip label={`Denúncias: ${(data.states ?? []).reduce((sum: number, s: any) => sum + Number(s.complaints ?? 0), 0)}`} />
+              <Chip label={`Atividades: ${(data.states ?? []).reduce((sum: number, s: any) => sum + Number(s.activities ?? 0), 0)}`} />
+              <Chip label={`Missões: ${(data.states ?? []).reduce((sum: number, s: any) => sum + Number(s.missions ?? 0), 0)}`} />
+            </Stack>
+            <Typography variant="caption" color="text.secondary">
+              Exibindo {totalRecordItemsLimited.length} de {totalRecordItemsSorted.length} registros.
+            </Typography>
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell><strong>Tipo</strong></TableCell>
+                    <TableCell><strong>Item</strong></TableCell>
+                    <TableCell><strong>Detalhes</strong></TableCell>
+                    <TableCell><strong>UF</strong></TableCell>
+                    <TableCell><strong>Localidade</strong></TableCell>
+                    <TableCell><strong>Data</strong></TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {totalRecordItemsLimited.map((item: any, index: number) => (
+                    <TableRow key={`${item.type}-${item.uf}-${item.title}-${index}`}>
+                      <TableCell>{item.type}</TableCell>
+                      <TableCell>{item.title || "—"}</TableCell>
+                      <TableCell>{item.subtitle || "—"}</TableCell>
+                      <TableCell>{item.uf || "—"}</TableCell>
+                      <TableCell>{item.locality || "—"}</TableCell>
+                      <TableCell>
+                        {item.date ? new Date(item.date).toLocaleDateString("pt-BR") : "—"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Stack>
+        )}
+      </KpiDetailModal>
 
       <Dialog
         open={!!selectedState}

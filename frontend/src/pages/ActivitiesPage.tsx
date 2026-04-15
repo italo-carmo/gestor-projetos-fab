@@ -1821,23 +1821,22 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
                           })()}
                         </TableCell>
                         <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
-                          <IconButton
-                            size="small"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              openActivityDrawer(item.id, 'report');
-                            }}
-                            aria-label="Abrir relatório"
-                          >
-                            {item.report ? (
-                              <CheckBoxRoundedIcon
-                                color={item.report.hasSignature ? 'success' : 'primary'}
-                                fontSize="small"
-                              />
-                            ) : (
-                              <CheckBoxOutlineBlankRoundedIcon fontSize="small" />
-                            )}
-                          </IconButton>
+                          {item.reportRequired ? (
+                            <IconButton
+                              size="small"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                openActivityDrawer(item.id, 'report');
+                              }}
+                              aria-label="Abrir relatório"
+                            >
+                              {item.report?.hasSignature ? (
+                                <CheckBoxRoundedIcon color="success" fontSize="small" />
+                              ) : (
+                                <CheckBoxOutlineBlankRoundedIcon fontSize="small" />
+                              )}
+                            </IconButton>
+                          ) : null}
                         </TableCell>
                       </TableRow>
                     ))}

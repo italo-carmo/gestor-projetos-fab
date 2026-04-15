@@ -558,22 +558,42 @@ export class StrategicService {
           code: true,
           name: true,
           uf: true,
+          hasCpca: true,
           catalogType: true,
         },
       });
+      const localitiesCatalog = [...localities].sort((a, b) =>
+        String(a.name ?? '').localeCompare(String(b.name ?? ''), 'pt-BR', {
+          sensitivity: 'base',
+        }),
+      );
       return {
         generatedAt: new Date().toISOString(),
         states: [],
         totalLocalitiesWithUf: localities.filter((l) => l.uf).length,
+        totalLocalitiesWithCpca: localities.filter((l) => l.hasCpca).length,
         totalLocalities: localities.length,
+        localitiesCatalog,
       };
     }
 
     const complaintScopes = this.buildComplaintScopeFilter(sourceSet);
     const activityScope = this.buildActivityScopeFilter(sourceSet);
     const localities = await this.prisma.locality.findMany({
-      select: { id: true, code: true, name: true, uf: true, catalogType: true },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        uf: true,
+        hasCpca: true,
+        catalogType: true,
+      },
     });
+    const localitiesCatalog = [...localities].sort((a, b) =>
+      String(a.name ?? '').localeCompare(String(b.name ?? ''), 'pt-BR', {
+        sensitivity: 'base',
+      }),
+    );
 
     const [complaints, activities, missions] = await Promise.all([
       includeComplaints
@@ -761,7 +781,9 @@ export class StrategicService {
         return totalB - totalA;
       }),
       totalLocalitiesWithUf: localities.filter((l) => l.uf).length,
+      totalLocalitiesWithCpca: localities.filter((l) => l.hasCpca).length,
       totalLocalities: localities.length,
+      localitiesCatalog,
     };
   }
 
