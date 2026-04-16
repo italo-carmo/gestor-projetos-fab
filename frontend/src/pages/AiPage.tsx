@@ -742,11 +742,19 @@ function buildUserMessageLabel(
 }
 
 function formatScheduleDateTime(value: string) {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
+  const safe = String(value ?? "").trim();
+  const match = safe.match(
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::\d{2})?$/,
+  );
+  if (match) {
+    return `${match[3]}/${match[2]}/${match[1]}, ${match[4]}:${match[5]}`;
+  }
+  const parsed = new Date(safe);
+  if (Number.isNaN(parsed.getTime())) return safe;
   return parsed.toLocaleString("pt-BR", {
     dateStyle: "short",
     timeStyle: "short",
+    timeZone: "America/Sao_Paulo",
   });
 }
 

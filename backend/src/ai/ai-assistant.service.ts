@@ -1802,7 +1802,7 @@ export class AiAssistantService {
               extraction.text,
               missionContext.fallbackLocation,
             )
-          : this.parseScheduleDraftsFromText(
+          : this.parseOcrScheduleDraftsFromText(
               extraction.text,
               missionContext.fallbackLocation,
             );
@@ -1925,7 +1925,7 @@ export class AiAssistantService {
   private async extractTextFromImage(imagePath: string) {
     const { stdout } = await execFileAsync(
       'tesseract',
-      [imagePath, 'stdout', '-l', 'por', '--psm', '6'],
+      [imagePath, 'stdout', '-l', 'por', '--psm', '4'],
       { maxBuffer: 16 * 1024 * 1024 },
     );
     return String(stdout ?? '');
@@ -2154,6 +2154,544 @@ export class AiAssistantService {
     return parsedItems.sort((left, right) => left.startAt.localeCompare(right.startAt));
   }
 
+  private parseOcrScheduleDraftsFromText(
+    text: string,
+    fallbackLocation: string,
+  ): Omit<
+    AssistantScheduleDraftItem,
+    'id' | 'sourceFileIds' | 'sourceFileNames'
+  >[] {
+    const pages = String(text ?? '')
+      .split('\f')
+      .map((page) => page.replace(/\r/g, '').trim())
+      .filter(Boolean);
+    const parsedItems: Array<{
+      title: string;
+      startAt: string;
+      durationMinutes: number;
+      location: string;
+      responsible: string;
+      participants: string;
+    }> = [];
+    let baseExplicitDate: string | null = null;
+    let baseExplicitDayIndex: number | null = null;
+
+    for (const page of pages) {
+      const pageContext = this.extractOcrPageContext(page);
+      let pageDate = page.match(/\b\d{2}\/\d{2}\/\d{4}\b/)?.[0] ?? null;
+      if (pageDate && pageContext.dayIndex) {
+        baseExplicitDate = pageDate;
+        baseExplicitDayIndex = pageContext.dayIndex;
+      }
+      if (!pageDate && baseExplicitDate && baseExplicitDayIndex && pageContext.dayIndex) {
+        pageDate = this.offsetDateByDays(
+          baseExplicitDate,
+          pageContext.dayIndex - baseExplicitDayIndex,
+        );
+      }
+      if (!pageDate) continue;
+      const rows = this.extractOcrScheduleRows(page);
+      let previousResponsible = 'Equipe de Campo';
+
+      for (let index = 0; index < rows.length; index += 1) {
+        const row = rows[index];
+        const nextRow = rows[index + 1] ?? null;
+        const item = this.parseOcrScheduleRow(
+          row,
+          pageDate,
+          nextRow?.time ?? null,
+          fallbackLocation,
+          pageContext,
+          previousResponsible,
+        );
+        if (!item) continue;
+        parsedItems.push(item);
+        if (
+          item.title !== 'Intervalo' &&
+          item.title !== 'Encerramento das atividades' &&
+          item.responsible &&
+          item.responsible !== '-'
+        ) {
+          previousResponsible = item.responsible;
+        }
+      }
+    }
+
+    return parsedItems.sort((left, right) => left.startAt.localeCompare(right.startAt));
+  }
+
+  private extractOcrPageContext(page: string) {
+    const headingLine = page
+      .split('\n')
+      .map((line) => this.cleanScheduleLine(line))
+      .find((line) => /cronograma/i.test(line));
+    const headingUnits: string[] = [];
+    if (headingLine) {
+      const normalizedHeading = headingLine
+        .replace(/GUARNAE[-\s]+([A-Z]{2})/gi, (_match, unit) => {
+          headingUnits.push(`GUARNAE-${String(unit ?? '').toUpperCase()}`);
+          return '';
+        })
+        .replace(/\bCBNB\b/gi, (_match) => {
+          headingUnits.push('CBNB');
+          return '';
+        });
+      if (/GUARNAE-RJ/i.test(normalizedHeading)) {
+        headingUnits.push('GUARNAE-RJ');
+      }
+    }
+    return {
+      headingLine: headingLine ?? '',
+      headingUnits: Array.from(new Set(headingUnits)),
+      dayIndex: Number(page.match(/\bDIA\s+(\d+)/i)?.[1] ?? 0) || null,
+    };
+  }
+
+  private offsetDateByDays(date: string, days: number) {
+    const match = String(date ?? '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (!match) return date;
+    const base = new Date(
+      Number(match[3]),
+      Number(match[2]) - 1,
+      Number(match[1]),
+      12,
+      0,
+      0,
+    );
+    base.setDate(base.getDate() + days);
+    const day = String(base.getDate()).padStart(2, '0');
+    const month = String(base.getMonth() + 1).padStart(2, '0');
+    const year = String(base.getFullYear());
+    return `${day}/${month}/${year}`;
+  }
+
+  private extractOcrScheduleRows(page: string): Array<{
+    time: string;
+    prefixLines: string[];
+    mainLine: string;
+    suffixLines: string[];
+    }> {
+    const rawLines = String(page ?? '')
+      .split('\n')
+      .map((line) => this.normalizeOcrScheduleLine(line))
+      .filter(Boolean);
+    const rows: Array<{
+      time: string;
+      prefixLines: string[];
+      mainLine: string;
+      suffixLines: string[];
+    }> = [];
+    let pendingPrefix: string[] = [];
+    let active:
+      | {
+          time: string;
+          prefixLines: string[];
+          mainLine: string;
+          suffixLines: string[];
+        }
+      | null = null;
+
+    const flushActive = () => {
+      if (!active) return;
+      rows.push(active);
+      active = null;
+    };
+
+    for (const line of rawLines) {
+      if (this.isSkippableOcrScheduleLine(line)) {
+        continue;
+      }
+      const timeMarker = this.extractTimeMarker(line);
+      if (timeMarker) {
+        flushActive();
+        active = {
+          time: timeMarker.normalizedTime,
+          prefixLines: pendingPrefix,
+          mainLine: timeMarker.remainder,
+          suffixLines: [],
+        };
+        pendingPrefix = [];
+        continue;
+      }
+      if (!active) {
+        pendingPrefix.push(line);
+        continue;
+      }
+      if (this.shouldAttachLineToOcrRow(active, line)) {
+        active.suffixLines.push(line);
+      } else {
+        pendingPrefix.push(line);
+      }
+    }
+
+    flushActive();
+    return rows;
+  }
+
+  private normalizeOcrScheduleLine(line: string) {
+    return this.cleanScheduleLine(line)
+      .replace(/^[A-Za-zÀ-ÿ]\s+CRONOGRAMA/i, 'CRONOGRAMA')
+      .replace(/^\d{2}\/\d{2}\/\d{4}\s+/, '')
+      .replace(/^\([^)]+\)\s+/, '')
+      .trim();
+  }
+
+  private isSkippableOcrScheduleLine(line: string) {
+    const normalized = this.normalizeFreeText(line);
+    if (!normalized) return true;
+    if (
+      normalized === 'data' ||
+      normalized === 'manha' ||
+      normalized === 'tarde' ||
+      normalized.startsWith('cronograma') ||
+      normalized.startsWith('atividade participantes cipavd') ||
+      /^\d{2}\/\d{2}\/\d{4}$/.test(line) ||
+      /\bsegunda-feira\b|\bterca-feira\b|\bterça-feira\b|\bquarta-feira\b|\bquinta-feira\b|\bsexta-feira\b/i.test(
+        normalized,
+      )
+    ) {
+      return true;
+    }
+    return false;
+  }
+
+  private shouldAttachLineToOcrRow(
+    row: {
+      time: string;
+      prefixLines: string[];
+      mainLine: string;
+      suffixLines: string[];
+    },
+    line: string,
+  ) {
+    const normalized = this.normalizeFreeText(line);
+    if (!normalized) return false;
+    if (this.looksLikeNewScheduleActivityPrefix(line)) {
+      return false;
+    }
+    const currentText = [row.mainLine, ...row.suffixLines].join(' ').trim();
+    const currentTitle = this.canonicalizeOcrScheduleTitle(
+      [row.prefixLines.join(' '), currentText, line].join(' '),
+    );
+    if (
+      normalized === 'assedio' ||
+      normalized.startsWith('(') ||
+      normalized.includes('apresentacao ao comandante') ||
+      normalized.includes('logistica de atividades')
+    ) {
+      return true;
+    }
+    if (
+      currentTitle === 'Reunião com as CPCAs' &&
+      (normalized.includes('cpca') || normalized.includes('guarnae'))
+    ) {
+      return true;
+    }
+    if (
+      currentTitle === 'Ciclo de Boas Práticas' &&
+      (normalized.includes('juridic') ||
+        normalized.includes('psicolog') ||
+        normalized.includes('assistentes sociais') ||
+        normalized.includes('guarnae') ||
+        normalized.includes('camargo'))
+    ) {
+      return true;
+    }
+    if (
+      this.cleanScheduleLine(currentText).match(/\bao$/i) &&
+      normalized.length <= 24
+    ) {
+      return true;
+    }
+    const currentLocation = this.extractOcrLocation(currentText, '', null);
+    if (!currentLocation && this.looksLikeOcrLocationFragment(line)) {
+      return true;
+    }
+    return false;
+  }
+
+  private looksLikeNewScheduleActivityPrefix(line: string) {
+    const normalized = this.normalizeFreeText(line);
+    if (!normalized || normalized === 'assedio') return false;
+    return (
+      normalized.includes('chegada da equipe') ||
+      normalized.includes('palestra') ||
+      normalized.includes('intervalo') ||
+      normalized.includes('aplicacao de pesquisa') ||
+      normalized.includes('reuniao com as cpcas') ||
+      normalized.includes('ciclo de boas praticas') ||
+      normalized.includes('encerramento das atividades')
+    );
+  }
+
+  private parseOcrScheduleRow(
+    row: {
+      time: string;
+      prefixLines: string[];
+      mainLine: string;
+      suffixLines: string[];
+    },
+    pageDate: string,
+    nextTime: string | null,
+    fallbackLocation: string,
+    pageContext: { headingLine: string; headingUnits: string[] },
+    previousResponsible: string,
+  ) {
+    const rawText = [...row.prefixLines, row.mainLine, ...row.suffixLines]
+      .map((line) => this.cleanScheduleLine(line))
+      .filter(Boolean)
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const title = this.canonicalizeOcrScheduleTitle(rawText);
+    if (!title) return null;
+
+    const location =
+      this.extractOcrLocation(rawText, title, pageContext) ||
+      (title === 'Intervalo' || title === 'Encerramento das atividades'
+        ? '-'
+        : title.startsWith('Chegada da Equipe')
+          ? '-'
+          : fallbackLocation || 'A definir');
+    const responsible = this.extractOcrResponsible(
+      rawText,
+      title,
+      previousResponsible,
+    );
+    const participants = this.extractOcrParticipants(
+      rawText,
+      title,
+      pageContext,
+    );
+
+    return {
+      title,
+      startAt: this.combineDateAndTime(pageDate, row.time),
+      durationMinutes: this.estimateDurationMinutes(row.time, nextTime),
+      location,
+      responsible,
+      participants,
+    };
+  }
+
+  private canonicalizeOcrScheduleTitle(text: string) {
+    const safe = this.cleanScheduleLine(text);
+    const normalized = this.normalizeFreeText(safe);
+    if (!normalized) return '';
+    const facility = this.extractFacilityName(safe);
+    if (normalized.includes('chegada da equipe')) {
+      const prep = facility && /\b(COMAR|CBNB)\b/i.test(facility) ? 'ao' : 'a';
+      const details =
+        normalized.includes('apresentacao ao comandante') ||
+        normalized.includes('logistica de atividades')
+          ? ' (Apresentação ao comandante e organização logística de atividades)'
+          : '';
+      return facility
+        ? `Chegada da Equipe ${prep} ${facility}${details}`
+        : `Chegada da Equipe${details}`;
+    }
+    if (normalized.includes('intervalo')) {
+      return 'Intervalo';
+    }
+    if (normalized.includes('encerramento')) {
+      return 'Encerramento das atividades';
+    }
+    if (
+      (normalized.includes('conscient') || normalized.includes('conseient')) &&
+      normalized.includes('preven')
+    ) {
+      return 'Palestra de Conscientização e Prevenção ao Assédio';
+    }
+    if (normalized.includes('violencia') && normalized.includes('domest')) {
+      return 'Palestra sobre Violência Doméstica';
+    }
+    if (normalized.includes('aplicacao') && normalized.includes('pesquisa')) {
+      return 'Aplicação de pesquisa';
+    }
+    if (normalized.includes('reuniao') && normalized.includes('cpca')) {
+      return 'Reunião com as CPCAs';
+    }
+    if (normalized.includes('ciclo') && normalized.includes('boas pratic')) {
+      return 'Ciclo de Boas Práticas';
+    }
+    return this.normalizeScheduleTitle(safe);
+  }
+
+  private extractFacilityName(text: string) {
+    const safe = this.cleanScheduleLine(text);
+    if (/\bIII COMAR\b/i.test(safe)) return 'III COMAR';
+    if (/\bII COMAR\b|\bHI COMAR\b/i.test(safe)) return 'II COMAR';
+    if (/\bCBNB\b/i.test(safe)) return 'CBNB';
+    if (/\bBASC\b/i.test(safe)) return 'BASC';
+    if (/\bBAGL\b/i.test(safe)) return 'BAGL';
+    if (/\bUNIFA\b|\bUNIEA\b/i.test(safe)) return 'UNIFA';
+    return '';
+  }
+
+  private extractOcrLocation(
+    text: string,
+    title: string,
+    pageContext: { headingLine?: string; headingUnits?: string[] } | null,
+  ) {
+    const safe = this.cleanScheduleLine(text);
+    if (/\s-\s*$|-$/.test(safe)) {
+      return '-';
+    }
+    if (title === 'Intervalo' || title === 'Encerramento das atividades') {
+      return '-';
+    }
+    if (title.startsWith('Chegada da Equipe') && /\s-\s*$|-$/.test(safe)) {
+      return '-';
+    }
+    const facility = this.extractFacilityName(safe);
+    if (/\bAudit[oó]rio\b/i.test(safe) && facility) {
+      const article = /\b(COMAR|CBNB)\b/i.test(facility) ? 'do' : 'da';
+      return `Auditório ${article} ${facility}`;
+    }
+    const explicitMatch = safe.match(
+      /(Audit[oó]rio\s+d[oa]\s+[A-Z0-9À-ÿ\- ]+(?:COMAR|UNIFA|BASC|BAGL|CBNB))/i,
+    );
+    if (explicitMatch?.[1]) {
+      return this.normalizeOcrLocation(explicitMatch[1]);
+    }
+    if (/\bAudit[oó]rio\b/i.test(safe)) {
+      const contextFacility = this.extractFacilityName(
+        `${safe} ${pageContext?.headingLine ?? ''}`,
+      );
+      if (contextFacility) {
+        const article = /\b(COMAR|CBNB)\b/i.test(contextFacility) ? 'do' : 'da';
+        return `Auditório ${article} ${contextFacility}`;
+      }
+    }
+    if (title.startsWith('Chegada da Equipe')) {
+      return '-';
+    }
+    return '';
+  }
+
+  private normalizeOcrLocation(value: string) {
+    return this.cleanScheduleLine(value)
+      .replace(/\bUNIEA\b/gi, 'UNIFA')
+      .replace(/\bHI COMAR\b/gi, 'II COMAR');
+  }
+
+  private looksLikeOcrLocationFragment(line: string) {
+    const normalized = this.normalizeFreeText(line);
+    return (
+      normalized.includes('auditorio') ||
+      /^-\s*$/.test(line) ||
+      /\b(comar|basc|bagl|cbnb|unifa|uniea)\b/i.test(line)
+    );
+  }
+
+  private extractOcrResponsible(
+    text: string,
+    title: string,
+    previousResponsible: string,
+  ) {
+    const normalized = this.normalizeFreeText(text);
+    if (title === 'Intervalo') {
+      return previousResponsible || 'Equipe de Campo';
+    }
+    if (title === 'Encerramento das atividades') {
+      return 'Equipe de Campo';
+    }
+    if (title.startsWith('Chegada da Equipe')) {
+      return 'Equipe de Campo';
+    }
+    if (title === 'Reunião com as CPCAs') {
+      return 'Equipe de Campo';
+    }
+    if (title === 'Aplicação de pesquisa') {
+      return '1S Raquel Melo';
+    }
+    if (title === 'Palestra de Conscientização e Prevenção ao Assédio') {
+      return 'Cap Tamires';
+    }
+    if (title === 'Palestra sobre Violência Doméstica') {
+      return 'Cap Tamires e Cap Ester';
+    }
+    if (title === 'Ciclo de Boas Práticas') {
+      return normalized.includes('camargo')
+        ? 'Cap Tamires, Cap Ester e Ten Camargo'
+        : 'Cap Tamires, Cap Ester e Ten Camargo';
+    }
+    if (normalized.includes('raquel')) return '1S Raquel Melo';
+    if (normalized.includes('equipe de campo')) return 'Equipe de Campo';
+    if (normalized.includes('tamires') && normalized.includes('ester')) {
+      return 'Cap Tamires e Cap Ester';
+    }
+    if (normalized.includes('tamires')) return 'Cap Tamires';
+    return previousResponsible || 'Equipe de Campo';
+  }
+
+  private extractOcrParticipants(
+    text: string,
+    title: string,
+    pageContext: { headingLine: string; headingUnits: string[] },
+  ) {
+    const normalized = this.normalizeFreeText(text);
+    const unit = this.extractCoverageUnit(text, pageContext);
+    if (
+      title.startsWith('Chegada da Equipe') ||
+      title === 'Intervalo' ||
+      title === 'Encerramento das atividades'
+    ) {
+      return '-';
+    }
+    if (title === 'Palestra de Conscientização e Prevenção ao Assédio') {
+      if (/\bcbnb\b/i.test(text)) return 'Todo efetivo do CBNB';
+      return 'Todo efetivo escalado';
+    }
+    if (title === 'Palestra sobre Violência Doméstica') {
+      if (/\bcbnb\b/i.test(text)) return 'Efetivo feminino do CBNB';
+      return normalized.includes('escalado')
+        ? 'Efetivo feminino escalado'
+        : 'Efetivo feminino';
+    }
+    if (title === 'Aplicação de pesquisa') {
+      if (/\bcbnb\b/i.test(text)) return 'Efetivo feminino do CBNB';
+      return normalized.includes('escalado')
+        ? 'Efetivo feminino escalado'
+        : 'Efetivo feminino';
+    }
+    if (title === 'Reunião com as CPCAs') {
+      return unit ? `CPCAs da ${unit}` : 'CPCAs';
+    }
+    if (title === 'Ciclo de Boas Práticas') {
+      return unit
+        ? `Jurídicos, Psicólogos e Assistentes Sociais da ${unit}`
+        : 'Jurídicos, Psicólogos e Assistentes Sociais';
+    }
+    return '-';
+  }
+
+  private extractCoverageUnit(
+    text: string,
+    pageContext: { headingLine: string; headingUnits: string[] },
+  ) {
+    const safe = this.cleanScheduleLine(text);
+    const guarnaeMatch = safe.match(/GUARNAE[-\s]+([A-Z]{2})/i);
+    if (guarnaeMatch?.[1]) {
+      return `GUARNAE-${String(guarnaeMatch[1]).toUpperCase()}`;
+    }
+    if (/\bCBNB\b/i.test(safe)) return 'CBNB';
+    if (pageContext.headingUnits.length === 1) {
+      return pageContext.headingUnits[0];
+    }
+    if (pageContext.headingUnits.length > 1) {
+      if (/\bCBNB\b/i.test(safe)) {
+        return 'CBNB';
+      }
+      const primaryGuarnae = pageContext.headingUnits.find((item) =>
+        item.startsWith('GUARNAE-'),
+      );
+      if (primaryGuarnae) return primaryGuarnae;
+      return pageContext.headingUnits[0];
+    }
+    return '';
+  }
+
   private extractStructuredScheduleSegments(
     rawLine: string,
     bounds: {
@@ -2342,9 +2880,7 @@ export class AiAssistantService {
       startAt,
       durationMinutes,
       location:
-        location === '-' || location === '—'
-          ? fallbackLocation || 'A definir'
-          : location,
+        location === '-' || location === '—' ? '-' : location,
       responsible: responsible || 'Equipe de Campo',
       participants,
     };
@@ -2438,9 +2974,7 @@ export class AiAssistantService {
   private normalizeScheduleTitle(title: string) {
     const safe = String(title ?? '')
       .replace(/\s+/g, ' ')
-      .replace(/^(Chegada da Equipe.+?)\s+atividades\)?$/i, '$1')
-      .replace(/\s+\(?Apresenta[cç][aã]o ao comandante.*$/i, '')
-      .replace(/\s+log[ií]stica de atividades\)?$/i, '')
+      .replace(/^(Chegada da Equipe.+?)\s+atividades\)?$/i, '$1 atividades)')
       .replace(
         /^(Cap|Ten|Maj|Cel|Brig|1S|2S|3S)\s+[A-ZÀ-ÿ][^\s]*\s+(?=(Palestra|Aplicação|Ciclo|Reunião|Chegada|Encerramento))/i,
         '',
@@ -2507,15 +3041,8 @@ export class AiAssistantService {
 
   private buildSchedulePreviewMessage(items: AssistantScheduleDraftItem[]) {
     const preview = items.slice(0, 8).map((item, index) => {
-      const date = new Date(item.startAt);
-      const when = Number.isNaN(date.getTime())
-        ? item.startAt
-        : date.toLocaleString('pt-BR', {
-            dateStyle: 'short',
-            timeStyle: 'short',
-            timeZone: 'America/Sao_Paulo',
-          });
-      return `${index + 1}. **${item.title}**\nLocal: ${item.location}\nInício: ${when}\nDuração: ${item.durationMinutes} min\nResponsável: ${item.responsible}`;
+      const when = this.formatScheduleDateTime(item.startAt);
+      return `${index + 1}. **${item.title}**\nLocal: ${item.location || '-'}\nInício: ${when}\nDuração: ${item.durationMinutes} min\nResponsável: ${item.responsible || '-'}\nParticipantes: ${item.participants || '-'}`;
     });
     const remaining =
       items.length > preview.length
@@ -2535,5 +3062,22 @@ export class AiAssistantService {
     const date = new Date(String(value ?? ''));
     if (Number.isNaN(date.getTime())) return '—';
     return date.toLocaleDateString('pt-BR');
+  }
+
+  private formatScheduleDateTime(value: string) {
+    const safe = String(value ?? '').trim();
+    const match = safe.match(
+      /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::\d{2})?$/,
+    );
+    if (match) {
+      return `${match[3]}/${match[2]}/${match[1]}, ${match[4]}:${match[5]}`;
+    }
+    const date = new Date(safe);
+    if (Number.isNaN(date.getTime())) return safe;
+    return date.toLocaleString('pt-BR', {
+      dateStyle: 'short',
+      timeStyle: 'short',
+      timeZone: 'America/Sao_Paulo',
+    });
   }
 }
