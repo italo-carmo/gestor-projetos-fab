@@ -174,6 +174,7 @@ type NarrativePdfBlock =
 export class AiService {
   private readonly logger = new Logger(AiService.name);
   private readonly streamIdleTimeoutMs = 90_000;
+  private readonly streamHeartbeatMs = 12_000;
   private readonly comgepSessionTtlMs = 4 * 60 * 60 * 1000;
   private readonly comgepSessions = new Map<string, ComgepCopilotSession>();
 
@@ -1616,29 +1617,53 @@ export class AiService {
 
     let tokenCount = 0;
     let fullText = '';
+    let idleElapsedMs = 0;
+    let pendingNext: Promise<
+      IteratorResult<
+        { type: 'token'; text: string } | { type: 'done'; model: string }
+      >
+    > | null = iterator.next();
 
     try {
       while (true) {
-        let timeoutHandle: NodeJS.Timeout | undefined;
-        let next: IteratorResult<
-          { type: 'token'; text: string } | { type: 'done'; model: string }
-        >;
-        try {
-          next = (await Promise.race([
-            iterator.next(),
-            new Promise<IteratorResult<any>>((_, reject) => {
-              timeoutHandle = setTimeout(() => {
-                reject(new Error('LITELLM_STREAM_IDLE_TIMEOUT'));
-              }, this.streamIdleTimeoutMs);
-            }),
-          ])) as IteratorResult<any>;
-        } finally {
-          if (timeoutHandle) clearTimeout(timeoutHandle);
+        if (!pendingNext) break;
+        const raceResult = (await Promise.race([
+          pendingNext.then((value) => ({ kind: 'chunk' as const, value })),
+          new Promise<{ kind: 'heartbeat' }>((resolve) => {
+            setTimeout(() => resolve({ kind: 'heartbeat' }), this.streamHeartbeatMs);
+          }),
+        ])) as
+          | {
+              kind: 'chunk';
+              value: IteratorResult<
+                { type: 'token'; text: string } | { type: 'done'; model: string }
+              >;
+            }
+          | { kind: 'heartbeat' };
+
+        if (raceResult.kind === 'heartbeat') {
+          idleElapsedMs += this.streamHeartbeatMs;
+          if (idleElapsedMs >= this.streamIdleTimeoutMs) {
+            throw new Error('LITELLM_STREAM_IDLE_TIMEOUT');
+          }
+          yield this.sseEvent('progress', {
+            percent: Math.min(92, 34 + Math.floor(idleElapsedMs / 2000)),
+            stage:
+              tokenCount > 0
+                ? 'Modelo ainda consolidando a resposta...'
+                : 'Modelo analisando o contexto da Sala COMGEP...',
+          });
+          continue;
         }
+
+        const next = raceResult.value;
+        idleElapsedMs = 0;
+        pendingNext = null;
         if (next.done) break;
 
         const chunk = next.value;
         if (chunk.type === 'token') {
+          pendingNext = iterator.next();
           fullText += chunk.text;
           tokenCount += 1;
           const progress = Math.min(
