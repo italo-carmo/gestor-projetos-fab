@@ -3058,11 +3058,26 @@ export class MissionsService {
       const yPct = this.normalizeFiniteNumber(block.yPct, 0.05, 0.95);
       const fontScale = this.normalizeFiniteNumber(block.fontScale, 0.45, 1.8);
       const fontSizePx = this.normalizeFiniteNumber(block.fontSizePx, 8, 180);
+      const colorHex =
+        typeof block.colorHex === 'string' &&
+        /^#([0-9a-f]{6})$/i.test(block.colorHex.trim())
+          ? block.colorHex.trim().toUpperCase()
+          : null;
+      const textOverride =
+        typeof block.textOverride === 'string'
+          ? block.textOverride
+              .split('\n')
+              .map((line) => sanitizeText(line).trim().replace(/\s+/g, ' ').slice(0, 120))
+              .join('\n')
+              .trim()
+          : '';
 
       if (xPct !== null) next.xPct = xPct;
       if (yPct !== null) next.yPct = yPct;
       if (fontSizePx !== null) next.fontSizePx = fontSizePx;
       if (fontScale !== null) next.fontScale = fontScale;
+      if (colorHex) next.colorHex = colorHex;
+      if (textOverride) next.textOverride = textOverride;
 
       if (Object.keys(next).length > 0) {
         normalized[key] = next;

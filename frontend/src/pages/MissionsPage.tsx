@@ -573,6 +573,22 @@ function normalizeMissionBannerLayoutOverrides(
     if (typeof raw.fontScale === 'number' && Number.isFinite(raw.fontScale)) {
       block.fontScale = raw.fontScale;
     }
+    if (
+      typeof raw.colorHex === 'string' &&
+      /^#([0-9a-f]{6})$/i.test(raw.colorHex.trim())
+    ) {
+      block.colorHex = raw.colorHex.trim().toUpperCase();
+    }
+    if (typeof raw.textOverride === 'string') {
+      const normalizedText = raw.textOverride
+        .split('\n')
+        .map((line) => String(line ?? '').trim().replace(/\s+/g, ' ').slice(0, 120))
+        .join('\n')
+        .trim();
+      if (normalizedText) {
+        block.textOverride = normalizedText;
+      }
+    }
     if (Object.keys(block).length > 0) {
       next[key] = block;
     }

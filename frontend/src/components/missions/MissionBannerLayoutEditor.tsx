@@ -5,6 +5,7 @@ import {
   IconButton,
   Slider,
   Stack,
+  TextField,
   Typography,
 } from '@mui/material';
 import KeyboardArrowDownRoundedIcon from '@mui/icons-material/KeyboardArrowDownRounded';
@@ -40,6 +41,8 @@ export type MissionBannerLayoutBlockOverride = {
   yPct?: number;
   fontSizePx?: number;
   fontScale?: number;
+  colorHex?: string;
+  textOverride?: string;
 };
 
 export type MissionBannerLayoutOverrides = Partial<
@@ -59,7 +62,7 @@ type TextBlockDefinition = {
   key: MissionBannerLayoutBlockKey;
   label: string;
   text: string;
-  color: string;
+  defaultColor: string;
   fontWeight: number;
   xPct: number;
   yPct: number;
@@ -67,6 +70,15 @@ type TextBlockDefinition = {
   minFontSize: number;
   maxWidth: number;
 };
+
+const bannerColorPalette = [
+  COLOR_PINK,
+  COLOR_WHITE,
+  '#0F2D7A',
+  '#79C4FF',
+  '#111827',
+  '#D7263D',
+] as const;
 
 function parseBannerDate(value: string) {
   const match = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/.exec(value);
@@ -181,14 +193,14 @@ function fitTextToWidth(
   safetyFactor = 1.16,
 ) {
   if (!text) return maxSize;
-  const units = estimateTextUnits(text);
+  const units = getLongestLineUnits(text);
   if (units <= 0) return maxSize;
   const idealFont = maxWidth / (units * safetyFactor);
   return Math.max(minSize, Math.min(maxSize, idealFont));
 }
 
 function textFitsWithinWidth(text: string, maxWidth: number, minSize: number) {
-  return estimateTextUnits(text) * minSize * 1.16 <= maxWidth;
+  return getLongestLineUnits(text) * minSize * 1.16 <= maxWidth;
 }
 
 function estimateTextUnits(text: string) {
@@ -230,6 +242,15 @@ function estimateTextUnits(text: string) {
   return units;
 }
 
+function getLongestLineUnits(text: string) {
+  return Math.max(
+    ...String(text ?? '')
+      .split('\n')
+      .map((line) => estimateTextUnits(line)),
+    0,
+  );
+}
+
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
@@ -251,6 +272,22 @@ function normalizeLayoutOverrides(
     }
     if (typeof block.fontSizePx === 'number' && Number.isFinite(block.fontSizePx)) {
       next.fontSizePx = clamp(block.fontSizePx, 8, 180);
+    }
+    if (
+      typeof block.colorHex === 'string' &&
+      /^#([0-9a-f]{6})$/i.test(block.colorHex.trim())
+    ) {
+      next.colorHex = block.colorHex.trim().toUpperCase();
+    }
+    if (typeof block.textOverride === 'string') {
+      const normalizedText = block.textOverride
+        .split('\n')
+        .map((line) => sanitizeLine(line))
+        .join('\n')
+        .trim();
+      if (normalizedText) {
+        next.textOverride = normalizedText;
+      }
     }
     if (typeof block.fontScale === 'number' && Number.isFinite(block.fontScale)) {
       next.fontScale = clamp(block.fontScale, 0.45, 1.8);
@@ -274,6 +311,9 @@ export function MissionBannerLayoutEditor({
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [selectedBlock, setSelectedBlock] =
     useState<MissionBannerLayoutBlockKey>('locationPrimary');
+  const [inlineEditorValue, setInlineEditorValue] = useState('');
+  const [editingTextBlockKey, setEditingTextBlockKey] =
+    useState<MissionBannerLayoutBlockKey | null>(null);
 
   const normalizedOverrides = useMemo(
     () => normalizeLayoutOverrides(layoutOverrides),
@@ -320,7 +360,7 @@ export function MissionBannerLayoutEditor({
         key: 'day',
         label: 'Dia',
         text: dayLabel,
-        color: COLOR_PINK,
+        defaultColor: COLOR_PINK,
         fontWeight: 700,
         xPct: 0.632,
         yPct: 0.493,
@@ -332,7 +372,7 @@ export function MissionBannerLayoutEditor({
         key: 'month',
         label: 'Mês',
         text: monthLabel,
-        color: COLOR_WHITE,
+        defaultColor: COLOR_WHITE,
         fontWeight: 400,
         xPct: 0.632,
         yPct: 0.553,
@@ -344,7 +384,7 @@ export function MissionBannerLayoutEditor({
         key: 'time',
         label: 'Hora',
         text: timeLabel,
-        color: COLOR_PINK,
+        defaultColor: COLOR_PINK,
         fontWeight: 700,
         xPct: 0.632,
         yPct: 0.632,
@@ -356,7 +396,7 @@ export function MissionBannerLayoutEditor({
         key: 'weekday',
         label: 'Dia da semana',
         text: weekdayLabel,
-        color: COLOR_WHITE,
+        defaultColor: COLOR_WHITE,
         fontWeight: 400,
         xPct: 0.632,
         yPct: 0.694,
@@ -368,7 +408,7 @@ export function MissionBannerLayoutEditor({
         key: 'locationPrimary',
         label: 'Local linha 1',
         text: location.line1 || 'Local principal',
-        color: COLOR_PINK,
+        defaultColor: COLOR_PINK,
         fontWeight: 700,
         xPct: 0.632,
         yPct: 0.818,
@@ -380,7 +420,7 @@ export function MissionBannerLayoutEditor({
         key: 'locationSecondary',
         label: 'Local linha 2',
         text: location.line2,
-        color: COLOR_WHITE,
+        defaultColor: COLOR_WHITE,
         fontWeight: 400,
         xPct: 0.632,
         yPct: 0.878,
@@ -419,14 +459,21 @@ export function MissionBannerLayoutEditor({
     startY: number;
     baseXPct: number;
     baseYPct: number;
+    moved: boolean;
   } | null>(null);
+  const suppressNextClickRef = useRef(false);
 
   useEffect(() => {
     const handleMove = (event: PointerEvent) => {
       if (!dragStateRef.current || !containerRef.current) return;
       const rect = containerRef.current.getBoundingClientRect();
-      const deltaXPct = (event.clientX - dragStateRef.current.startX) / rect.width;
-      const deltaYPct = (event.clientY - dragStateRef.current.startY) / rect.height;
+      const deltaX = event.clientX - dragStateRef.current.startX;
+      const deltaY = event.clientY - dragStateRef.current.startY;
+      if (!dragStateRef.current.moved && (Math.abs(deltaX) > 3 || Math.abs(deltaY) > 3)) {
+        dragStateRef.current.moved = true;
+      }
+      const deltaXPct = deltaX / rect.width;
+      const deltaYPct = deltaY / rect.height;
       onChange({
         ...normalizedOverrides,
         [dragStateRef.current.key]: {
@@ -438,6 +485,9 @@ export function MissionBannerLayoutEditor({
     };
 
     const handleUp = () => {
+      if (dragStateRef.current?.moved) {
+        suppressNextClickRef.current = true;
+      }
       dragStateRef.current = null;
     };
 
@@ -464,6 +514,7 @@ export function MissionBannerLayoutEditor({
       startY: event.clientY,
       baseXPct: override?.xPct ?? block.xPct,
       baseYPct: override?.yPct ?? block.yPct,
+      moved: false,
     };
   };
 
@@ -503,16 +554,22 @@ export function MissionBannerLayoutEditor({
 
   const getCurrentFontSizePx = (block: TextBlockDefinition) => {
     const current = normalizedOverrides[block.key];
+    const autoFontSize = fitTextToWidth(
+      getCurrentBlockText(block),
+      block.maxWidth,
+      block.minFontSize,
+      Math.max(block.fontSizeBase, block.minFontSize),
+    );
     if (typeof current?.fontSizePx === 'number' && Number.isFinite(current.fontSizePx)) {
       return clamp(current.fontSizePx, block.minFontSize, 180);
     }
     if (typeof current?.fontScale === 'number' && Number.isFinite(current.fontScale)) {
       return Math.max(
         block.minFontSize,
-        block.fontSizeBase * clamp(current.fontScale, 0.45, 1.8),
+        autoFontSize * clamp(current.fontScale, 0.45, 1.8),
       );
     }
-    return Math.max(block.minFontSize, block.fontSizeBase);
+    return Math.max(block.minFontSize, autoFontSize);
   };
 
   const setSelectedBlockFontSize = (nextFontSizePx: number) => {
@@ -523,11 +580,42 @@ export function MissionBannerLayoutEditor({
     });
   };
 
+  const getCurrentBlockText = (block: TextBlockDefinition) => {
+    const override = normalizedOverrides[block.key];
+    return override?.textOverride ?? block.text;
+  };
+
+  const setSelectedBlockText = (nextText: string) => {
+    if (!activeBlock) return;
+    const normalized = nextText
+      .split('\n')
+      .map((line) => sanitizeLine(line))
+      .join('\n');
+    const defaultText = activeBlock.text;
+    const hasMeaningfulText = normalized.trim().length > 0;
+    updateSelectedBlock({
+      textOverride:
+        hasMeaningfulText && normalized !== defaultText ? normalized : undefined,
+    });
+  };
+
+  const setSelectedBlockColor = (colorHex: string | undefined) => {
+    if (!activeBlock) return;
+    updateSelectedBlock({ colorHex });
+  };
+
+  useEffect(() => {
+    if (!editingTextBlockKey) return;
+    const editingBlock = visibleBlocks.find((block) => block.key === editingTextBlockKey);
+    setInlineEditorValue(editingBlock ? getCurrentBlockText(editingBlock) : '');
+  }, [editingTextBlockKey, visibleBlocks]);
+
   return (
     <Stack spacing={1.5}>
       <Typography variant="body2" color="text.secondary">
         Arraste os blocos de texto na prévia e ajuste o tamanho conforme necessário. Os
-        ajustes ficam salvos no banner e valem para o PNG/PDF final.
+        ajustes ficam salvos no banner e valem para o PNG/PDF final. Clique no texto
+        já selecionado para editar e use Enter para quebrar a linha.
       </Typography>
 
       <Box
@@ -635,20 +723,43 @@ export function MissionBannerLayoutEditor({
           const xPct = override?.xPct ?? block.xPct;
           const yPct = override?.yPct ?? block.yPct;
           const sourceFontSizePx = getCurrentFontSizePx(block);
+          const displayText = getCurrentBlockText(block);
           const fontSize =
             dimensions.width > 0
               ? (sourceFontSizePx / TEMPLATE_WIDTH) * dimensions.width
               : sourceFontSizePx;
+          const currentColor = override?.colorHex ?? block.defaultColor;
+          const isEditingInline = editingTextBlockKey === block.key;
           return (
             <Box
               key={block.key}
               onPointerDown={(event) => handleStartDrag(event, block)}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                if (suppressNextClickRef.current) {
+                  suppressNextClickRef.current = false;
+                  return;
+                }
+                if (selectedBlock !== block.key) {
+                  setSelectedBlock(block.key);
+                  return;
+                }
+                setEditingTextBlockKey(block.key);
+                setInlineEditorValue(getCurrentBlockText(block));
+              }}
+              onDoubleClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                setEditingTextBlockKey(block.key);
+                setInlineEditorValue(getCurrentBlockText(block));
+              }}
               sx={{
                 position: 'absolute',
                 left: `${xPct * 100}%`,
                 top: `${yPct * 100}%`,
                 fontSize,
-                color: block.color,
+                color: currentColor,
                 fontWeight: block.fontWeight,
                 lineHeight: 1,
                 transform: 'translate(0, 0)',
@@ -656,7 +767,7 @@ export function MissionBannerLayoutEditor({
                 borderRadius: 1,
                 px: 0.4,
                 py: 0.15,
-                whiteSpace: 'nowrap',
+                whiteSpace: 'pre',
                 outline:
                   selectedBlock === block.key
                     ? '1px dashed rgba(255,255,255,0.72)'
@@ -668,7 +779,39 @@ export function MissionBannerLayoutEditor({
                 textShadow: '0 1px 2px rgba(15, 23, 42, 0.12)',
               }}
             >
-              {block.text}
+              {isEditingInline ? (
+                <Box
+                  component="textarea"
+                  autoFocus
+                  value={inlineEditorValue}
+                  onChange={(event) => setInlineEditorValue(event.target.value)}
+                  onBlur={() => {
+                    setSelectedBlockText(inlineEditorValue);
+                    setEditingTextBlockKey(null);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Escape') {
+                      event.preventDefault();
+                      setEditingTextBlockKey(null);
+                    }
+                  }}
+                  sx={{
+                    minWidth: 120,
+                    maxWidth: `${(block.maxWidth / TEMPLATE_WIDTH) * 100}%`,
+                    border: '1px solid rgba(255,255,255,0.35)',
+                    borderRadius: 1,
+                    bgcolor: 'rgba(15, 23, 42, 0.72)',
+                    color: '#fff',
+                    font: 'inherit',
+                    p: 0.6,
+                    lineHeight: 1.05,
+                    resize: 'both',
+                    outline: 'none',
+                  }}
+                />
+              ) : (
+                displayText
+              )}
             </Box>
           );
         })}
@@ -749,6 +892,51 @@ export function MissionBannerLayoutEditor({
               valueLabelFormat={(value) => `${value}px`}
               onChange={(_, value) => setSelectedBlockFontSize(Number(value))}
             />
+          </Box>
+
+          <TextField
+            size="small"
+            label="Texto do bloco"
+            value={getCurrentBlockText(activeBlock)}
+            onChange={(event) => setSelectedBlockText(event.target.value)}
+            multiline
+            minRows={2}
+            helperText='Use Enter para quebrar linha. Duplo clique no texto da imagem também abre edição inline.'
+            fullWidth
+          />
+
+          <Box>
+            <Typography variant="caption" color="text.secondary" display="block" mb={0.6}>
+              Cor do texto
+            </Typography>
+            <Stack direction="row" spacing={0.8} flexWrap="wrap" useFlexGap alignItems="center">
+              {bannerColorPalette.map((color) => {
+                const activeColor =
+                  normalizedOverrides[activeBlock.key]?.colorHex ?? activeBlock.defaultColor;
+                const selected = activeColor.toUpperCase() === color.toUpperCase();
+                return (
+                  <Box
+                    key={color}
+                    component="button"
+                    type="button"
+                    onClick={() => setSelectedBlockColor(color)}
+                    sx={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: '50%',
+                      border: selected
+                        ? '2px solid rgba(15, 23, 42, 0.88)'
+                        : '1px solid rgba(15, 23, 42, 0.22)',
+                      bgcolor: color,
+                      cursor: 'pointer',
+                    }}
+                  />
+                );
+              })}
+              <Button size="small" variant="text" onClick={() => setSelectedBlockColor(undefined)}>
+                Cor padrão
+              </Button>
+            </Stack>
           </Box>
 
           <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>

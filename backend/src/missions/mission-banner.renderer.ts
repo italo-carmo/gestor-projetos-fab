@@ -30,6 +30,8 @@ export type MissionBannerLayoutBlockOverride = {
   yPct?: number;
   fontSizePx?: number;
   fontScale?: number;
+  colorHex?: string;
+  textOverride?: string;
 };
 
 export type MissionBannerLayoutOverrides = Partial<
@@ -45,6 +47,7 @@ const templateCandidates = [
 
 const colorPink = '#F6C3CF';
 const colorWhite = '#FFFFFF';
+const bannerFontFamily = 'Arial, Helvetica, sans-serif';
 
 export function findMissionBannerTemplatePath() {
   for (const candidate of templateCandidates) {
@@ -117,29 +120,42 @@ function buildMissionBannerOverlaySvg(
     locationTextWidth,
   );
 
-  const daySizing = fitTextToWidth(dayLabel, dateTextWidth, width * 0.074, width * 0.10);
+  const dayText = resolveBlockText(layoutOverrides.day, dayLabel);
+  const monthText = resolveBlockText(layoutOverrides.month, monthLabel);
+  const timeText = resolveBlockText(layoutOverrides.time, timeLabel);
+  const weekdayText = resolveBlockText(layoutOverrides.weekday, weekdayLabel);
+  const locationPrimaryText = resolveBlockText(
+    layoutOverrides.locationPrimary,
+    location.line1,
+  );
+  const locationSecondaryText = resolveBlockText(
+    layoutOverrides.locationSecondary,
+    location.line2,
+  );
+
+  const daySizing = fitTextToWidth(dayText, dateTextWidth, width * 0.074, width * 0.10);
   const monthSizing = fitTextToWidth(
-    monthLabel,
+    monthText,
     dateTextWidth,
     width * 0.038,
     width * 0.075,
   );
-  const timeSizing = fitTextToWidth(timeLabel, timeTextWidth, width * 0.060, width * 0.10);
+  const timeSizing = fitTextToWidth(timeText, timeTextWidth, width * 0.060, width * 0.10);
   const weekdaySizing = fitTextToWidth(
-    weekdayLabel,
+    weekdayText,
     timeTextWidth,
     width * 0.040,
     width * 0.075,
   );
   const locationPrimarySizing = fitTextToWidth(
-    location.line1,
+    locationPrimaryText,
     locationTextWidth,
     width * 0.028,
     width * 0.086,
     1.42,
   );
   const locationSecondarySizing = fitTextToWidth(
-    location.line2,
+    locationSecondaryText,
     locationTextWidth,
     width * 0.024,
     width * 0.072,
@@ -207,18 +223,82 @@ function buildMissionBannerOverlaySvg(
     height,
   );
 
+  const dayColor = resolveBlockColor(layoutOverrides.day, colorPink);
+  const monthColor = resolveBlockColor(layoutOverrides.month, colorWhite);
+  const timeColor = resolveBlockColor(layoutOverrides.time, colorPink);
+  const weekdayColor = resolveBlockColor(layoutOverrides.weekday, colorWhite);
+  const locationPrimaryColor = resolveBlockColor(
+    layoutOverrides.locationPrimary,
+    colorPink,
+  );
+  const locationSecondaryColor = resolveBlockColor(
+    layoutOverrides.locationSecondary,
+    colorWhite,
+  );
+
   return `
     <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
       <style>
-        .pink { fill: ${colorPink}; font-family: Arial, Helvetica, sans-serif; font-weight: 700; }
-        .white { fill: ${colorWhite}; font-family: Arial, Helvetica, sans-serif; font-weight: 400; }
+        .banner-text { font-family: ${bannerFontFamily}; }
       </style>
-      <text class="pink" x="${dayBlock.x}" y="${dayBlock.y}" font-size="${dayBlock.fontSize}" dominant-baseline="text-before-edge"${buildSvgTextFitAttributes(dayLabel, dateTextWidth, dayBlock)}>${escapeXml(dayLabel)}</text>
-      <text class="white" x="${monthBlock.x}" y="${monthBlock.y}" font-size="${monthBlock.fontSize}" dominant-baseline="text-before-edge"${buildSvgTextFitAttributes(monthLabel, dateTextWidth, monthBlock)}>${escapeXml(monthLabel)}</text>
-      <text class="pink" x="${timeBlock.x}" y="${timeBlock.y}" font-size="${timeBlock.fontSize}" dominant-baseline="text-before-edge"${buildSvgTextFitAttributes(timeLabel, timeTextWidth, timeBlock)}>${escapeXml(timeLabel)}</text>
-      <text class="white" x="${weekdayBlock.x}" y="${weekdayBlock.y}" font-size="${weekdayBlock.fontSize}" dominant-baseline="text-before-edge"${buildSvgTextFitAttributes(weekdayLabel, timeTextWidth, weekdayBlock)}>${escapeXml(weekdayLabel)}</text>
-      <text class="pink" x="${locationPrimaryBlock.x}" y="${locationPrimaryBlock.y}" font-size="${locationPrimaryBlock.fontSize}" dominant-baseline="text-before-edge"${buildSvgTextFitAttributes(location.line1, locationTextWidth, locationPrimaryBlock)}>${escapeXml(location.line1)}</text>
-      ${location.line2 ? `<text class="white" x="${locationSecondaryBlock.x}" y="${locationSecondaryBlock.y}" font-size="${locationSecondaryBlock.fontSize}" dominant-baseline="text-before-edge"${buildSvgTextFitAttributes(location.line2, locationTextWidth, locationSecondaryBlock)}>${escapeXml(location.line2)}</text>` : ''}
+      ${renderSvgTextBlock(dayText, {
+        x: dayBlock.x,
+        y: dayBlock.y,
+        fontSize: dayBlock.fontSize,
+        fontWeight: 700,
+        colorHex: dayColor,
+        maxWidth: dateTextWidth,
+        hasManualFontSize: dayBlock.hasManualFontSize,
+      })}
+      ${renderSvgTextBlock(monthText, {
+        x: monthBlock.x,
+        y: monthBlock.y,
+        fontSize: monthBlock.fontSize,
+        fontWeight: 400,
+        colorHex: monthColor,
+        maxWidth: dateTextWidth,
+        hasManualFontSize: monthBlock.hasManualFontSize,
+      })}
+      ${renderSvgTextBlock(timeText, {
+        x: timeBlock.x,
+        y: timeBlock.y,
+        fontSize: timeBlock.fontSize,
+        fontWeight: 700,
+        colorHex: timeColor,
+        maxWidth: timeTextWidth,
+        hasManualFontSize: timeBlock.hasManualFontSize,
+      })}
+      ${renderSvgTextBlock(weekdayText, {
+        x: weekdayBlock.x,
+        y: weekdayBlock.y,
+        fontSize: weekdayBlock.fontSize,
+        fontWeight: 400,
+        colorHex: weekdayColor,
+        maxWidth: timeTextWidth,
+        hasManualFontSize: weekdayBlock.hasManualFontSize,
+      })}
+      ${renderSvgTextBlock(locationPrimaryText, {
+        x: locationPrimaryBlock.x,
+        y: locationPrimaryBlock.y,
+        fontSize: locationPrimaryBlock.fontSize,
+        fontWeight: 700,
+        colorHex: locationPrimaryColor,
+        maxWidth: locationTextWidth,
+        hasManualFontSize: locationPrimaryBlock.hasManualFontSize,
+      })}
+      ${
+        locationSecondaryText
+          ? renderSvgTextBlock(locationSecondaryText, {
+              x: locationSecondaryBlock.x,
+              y: locationSecondaryBlock.y,
+              fontSize: locationSecondaryBlock.fontSize,
+              fontWeight: 400,
+              colorHex: locationSecondaryColor,
+              maxWidth: locationTextWidth,
+              hasManualFontSize: locationSecondaryBlock.hasManualFontSize,
+            })
+          : ''
+      }
     </svg>
   `;
 }
@@ -353,6 +433,22 @@ function normalizeMissionBannerLayoutOverrides(
     if (typeof raw.fontScale === 'number' && Number.isFinite(raw.fontScale)) {
       next.fontScale = clamp(raw.fontScale, 0.45, 1.8);
     }
+    if (
+      typeof raw.colorHex === 'string' &&
+      /^#([0-9a-f]{6})$/i.test(raw.colorHex.trim())
+    ) {
+      next.colorHex = raw.colorHex.trim().toUpperCase();
+    }
+    if (typeof raw.textOverride === 'string') {
+      const textOverride = raw.textOverride
+        .split('\n')
+        .map((line) => sanitizeLine(line))
+        .join('\n')
+        .trim();
+      if (textOverride) {
+        next.textOverride = textOverride;
+      }
+    }
     if (Object.keys(next).length > 0) {
       result[key] = next;
     }
@@ -366,8 +462,13 @@ function applyMissionBannerLayoutOverride(
   override: MissionBannerLayoutBlockOverride | undefined,
   width: number,
   height: number,
-) {
-  if (!override) return base;
+): { x: number; y: number; fontSize: number; hasManualFontSize: boolean } {
+  if (!override) {
+    return {
+      ...base,
+      hasManualFontSize: false,
+    };
+  }
   const hasExplicitFontSize =
     typeof override.fontSizePx === 'number' && Number.isFinite(override.fontSizePx);
   return {
@@ -402,7 +503,7 @@ function fitTextToWidth(
   if (!text) {
     return { fontSize: maxSize, constrained: false };
   }
-  const units = estimateTextUnits(text);
+  const units = getLongestLineUnits(text);
   if (units <= 0) {
     return { fontSize: maxSize, constrained: false };
   }
@@ -414,7 +515,7 @@ function fitTextToWidth(
 }
 
 function textFitsWithinWidth(text: string, maxWidth: number, minSize: number) {
-  return estimateTextUnits(text) * minSize * 1.16 <= maxWidth;
+  return getLongestLineUnits(text) * minSize * 1.16 <= maxWidth;
 }
 
 function estimateTextUnits(text: string) {
@@ -454,6 +555,15 @@ function estimateTextUnits(text: string) {
   return units;
 }
 
+function getLongestLineUnits(text: string) {
+  return Math.max(
+    ...String(text ?? '')
+      .split('\n')
+      .map((line) => estimateTextUnits(line)),
+    0,
+  );
+}
+
 function buildSvgTextFitAttributes(
   text: string,
   maxWidth: number,
@@ -461,9 +571,76 @@ function buildSvgTextFitAttributes(
 ) {
   if (!text) return '';
   if (block.hasManualFontSize) return '';
-  const estimatedWidth = estimateTextUnits(text) * block.fontSize * 1.12;
+  const estimatedWidth = getLongestLineUnits(text) * block.fontSize * 1.12;
   if (estimatedWidth <= maxWidth * 0.9) return '';
   return ` textLength="${maxWidth}" lengthAdjust="spacingAndGlyphs"`;
+}
+
+function resolveBlockText(
+  override: MissionBannerLayoutBlockOverride | undefined,
+  fallback: string,
+) {
+  const overrideText = override?.textOverride
+    ?.split('\n')
+    .map((line) => sanitizeLine(line))
+    .join('\n')
+    .trim();
+  return overrideText || fallback;
+}
+
+function resolveBlockColor(
+  override: MissionBannerLayoutBlockOverride | undefined,
+  fallback: string,
+) {
+  if (
+    typeof override?.colorHex === 'string' &&
+    /^#([0-9a-f]{6})$/i.test(override.colorHex)
+  ) {
+    return override.colorHex.toUpperCase();
+  }
+  return fallback;
+}
+
+function renderSvgTextBlock(
+  text: string,
+  options: {
+    x: number;
+    y: number;
+    fontSize: number;
+    fontWeight: number;
+    colorHex: string;
+    maxWidth: number;
+    hasManualFontSize?: boolean;
+  },
+) {
+  const lines = String(text ?? '')
+    .split('\n')
+    .map((line) => sanitizeLine(line))
+    .filter(Boolean);
+  if (lines.length === 0) return '';
+
+  if (lines.length === 1) {
+    return `<text class="banner-text" fill="${escapeXml(
+      options.colorHex,
+    )}" x="${options.x}" y="${options.y}" font-size="${options.fontSize}" font-weight="${options.fontWeight}" dominant-baseline="text-before-edge"${buildSvgTextFitAttributes(
+      lines[0],
+      options.maxWidth,
+      options,
+    )}>${escapeXml(lines[0])}</text>`;
+  }
+
+  const lineHeightEm = 1.04;
+  const tspans = lines
+    .map((line, index) =>
+      index === 0
+        ? `<tspan x="${options.x}" y="${options.y}">${escapeXml(line)}</tspan>`
+        : `<tspan x="${options.x}" dy="${lineHeightEm}em">${escapeXml(line)}</tspan>`,
+    )
+    .join('');
+
+  return `<text class="banner-text" fill="${escapeXml(
+    options.colorHex,
+  )}" font-size="${options.fontSize}" font-weight="${options.fontWeight}" dominant-baseline="text-before-edge">${tspans}</text>`;
 }
 
 function clamp(value: number, min: number, max: number) {
