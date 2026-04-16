@@ -1736,19 +1736,21 @@ export class AiService {
         msg =
           `Sem resposta do modelo por ${Math.round(this.streamIdleTimeoutMs / 1000)}s ` +
           `(modelo configurado: ${configuredModel}). Verifique disponibilidade no LiteLLM.`;
-      } else if (tokenCount === 0 && this.isLiteLlmContextBug(msg)) {
+      } else if (
+        tokenCount === 0 &&
+        this.shouldUseDeterministicComgepFallback(msg)
+      ) {
         this.logger.warn(
-          `LiteLLM rejeitou o contexto do copiloto COMGEP em stream; tentando fallback compacto. Motivo: ${msg}`,
+          `LiteLLM indisponível para o copiloto COMGEP em stream; usando fallback local. Motivo: ${msg}`,
         );
         yield this.sseEvent('progress', {
           percent: 90,
-          stage: 'Contexto amplo rejeitado pelo gateway; refazendo com contexto compacto...',
+          stage: 'Gateway indisponível para análise generativa; produzindo briefing estruturado local...',
         });
-        return await this.completeComgepAssistantNonStream(
-          params,
-          systemPrompt,
-          'compact',
-        );
+        return {
+          narrative: this.buildDeterministicComgepFallbackNarrative(params),
+          model: 'local-fallback',
+        };
       } else {
         msg = this.formatComgepCopilotModelError(msg);
       }
@@ -1820,9 +1822,9 @@ export class AiService {
           'compact',
         );
       }
-      if (this.isLiteLlmContextBug(msg)) {
+      if (this.shouldUseDeterministicComgepFallback(msg)) {
         this.logger.warn(
-          `LiteLLM rejeitou também o fallback compacto do copiloto COMGEP; usando resposta determinística local. Motivo: ${msg}`,
+          `LiteLLM indisponível também no fallback do copiloto COMGEP; usando resposta determinística local. Motivo: ${msg}`,
         );
         return {
           narrative: this.buildDeterministicComgepFallbackNarrative(params),
@@ -1859,8 +1861,26 @@ export class AiService {
     );
   }
 
+  private isLiteLlmRoutingError(message: string) {
+    const normalized = String(message ?? '').toLowerCase();
+    return (
+      (normalized.includes('path ') && normalized.includes('not found')) ||
+      normalized.includes('notfounderror') ||
+      normalized.includes('no healthy deployments') ||
+      normalized.includes('model group') ||
+      normalized.includes('litellm.badrequesterror') ||
+      normalized.includes('litellm.notfounderror')
+    );
+  }
+
+  private shouldUseDeterministicComgepFallback(message: string) {
+    return (
+      this.isLiteLlmContextBug(message) || this.isLiteLlmRoutingError(message)
+    );
+  }
+
   private formatComgepCopilotModelError(message: string) {
-    if (this.isLiteLlmContextBug(message)) {
+    if (this.shouldUseDeterministicComgepFallback(message)) {
       return 'O gateway LiteLLM rejeitou o contexto desta execução e o fallback local não conseguiu concluir a resposta.';
     }
     return message;
@@ -1895,43 +1915,64 @@ export class AiService {
       ? roomSummary.pressaoOperacional.slice(0, 2)
       : [];
     const evidenceRows = params.evidences.slice(0, 4);
+    const coveragePercent = Number(
+      roomSummary?.resumo?.percentualCoberturaCpca ?? 0,
+    );
+    const dataConfidence = Number(
+      roomSummary?.confiancaDado?.coberturaSuportadaPercentual ?? 0,
+    );
+    const dominantRiskOm = topOms[0] ?? null;
+    const dominantUf = topUfs[0] ?? null;
 
     const lines: string[] = [];
-    lines.push('## Síntese');
+    lines.push('## Síntese executiva');
     lines.push(
-      `Resposta gerada em fallback local para ${scopeLabel}, com foco em ${focusLabel}, porque o gateway LiteLLM rejeitou esta execução específica.`,
+      `No recorte de ${scopeLabel}, com foco em ${focusLabel}, o cenário exige atenção sobre cobertura CPCA, risco institucional e presença operacional.`,
     );
     lines.push(
-      `Cobertura CPCA: ${roomSummary?.resumo?.omsCobertasCpca ?? 0}/${roomSummary?.resumo?.totalOms ?? 0} OMs (${roomSummary?.resumo?.percentualCoberturaCpca ?? 0}%).`,
+      `Hoje o sistema registra ${roomSummary?.resumo?.omsCobertasCpca ?? 0} de ${roomSummary?.resumo?.totalOms ?? 0} OMs cobertas (${coveragePercent.toFixed(1)}%), ${roomSummary?.resumo?.ufsCriticas ?? 0} UFs prioritárias, ${roomSummary?.resumo?.omsAltoRisco ?? 0} OMs de alto risco e ${roomSummary?.resumo?.denunciasAbertas ?? 0} denúncia(s) aberta(s).`,
     );
-    lines.push(
-      `UFs críticas: ${roomSummary?.resumo?.ufsCriticas ?? 0}. OMs de alto risco: ${roomSummary?.resumo?.omsAltoRisco ?? 0}. Denúncias abertas: ${roomSummary?.resumo?.denunciasAbertas ?? 0}.`,
-    );
+    if (dominantRiskOm) {
+      lines.push(
+        `A OM que mais pressiona o cenário atual é ${dominantRiskOm.om}, na UF ${dominantRiskOm.uf}, com score ${dominantRiskOm.risco}.`,
+      );
+    } else if (dominantUf) {
+      lines.push(
+        `A UF mais sensível neste recorte é ${dominantUf.uf}, combinando risco ${dominantUf.risco}, cobertura ${dominantUf.coberturaCpcaPercentual.toFixed(1)}% e presença operacional ${dominantUf.presencaOperacional}.`,
+      );
+    }
 
     if (params.agentType === 'briefing_comgep') {
       lines.push('');
-      lines.push('## Decisão recomendada');
-      if (topUfs.length) {
+      lines.push('## Decisão recomendada agora');
+      if (dominantUf && coverageGaps.length) {
+        lines.push(
+          `Priorizar a UF ${dominantUf.uf} com duas frentes simultâneas: corrigir a cobertura CPCA nas OMs descobertas e reforçar presença institucional nas OMs de maior risco.`,
+        );
+      } else if (topUfs.length) {
         lines.push(
           `Priorizar atuação nas UFs ${topUfs
             .map((item: any) => item.uf)
-            .join(', ')}, porque concentram maior risco combinado com cobertura e presença operacional insuficientes.`,
+            .join(', ')}, porque concentram risco elevado combinado com cobertura e presença operacional insuficientes.`,
         );
       } else {
         lines.push(
-          'Priorizar a revisão das OMs com maior risco e dos gaps de cobertura CPCA já identificados na sala.',
+          'Priorizar a revisão das OMs de maior risco e dos gaps de cobertura CPCA já identificados na sala.',
         );
       }
     }
 
     if (params.agentType === 'priorizacao_intervencao') {
       lines.push('');
-      lines.push('## Encaminhamento');
+      lines.push('## Encaminhamento prioritário');
       if (topOms.length) {
         lines.push(
           `Sequência sugerida de intervenção: ${topOms
-            .map((item: any) => `${item.om} (${item.uf}, risco ${item.risco})`)
+            .map((item: any) => `${item.om} (${item.uf}, score ${item.risco})`)
             .join('; ')}.`,
+        );
+        lines.push(
+          'A priorização considera, nesta ordem, risco da OM, denúncias abertas ou retaliação, ausência de cobertura CPCA e diferença entre risco e presença operacional.',
         );
       } else {
         lines.push(
@@ -1949,6 +1990,9 @@ export class AiService {
             .map((item: any) => `${item.om} (${item.uf})`)
             .join('; ')}.`,
         );
+        lines.push(
+          'A prioridade de governança é redistribuir cobertura ou designar comissão capaz de absorver essas OMs sem ampliar o passivo institucional.',
+        );
       } else {
         lines.push(
           'Não há gaps imediatos de cobertura no recorte atual, mas o quadro exige monitoramento contínuo da carga por comissão.',
@@ -1961,7 +2005,7 @@ export class AiService {
       lines.push('## OMs de maior risco');
       topOms.forEach((item: any) => {
         lines.push(
-          `- ${item.om} | ${item.uf} | score ${item.risco} | ${item.motivo}`,
+          `- ${item.om} | ${item.uf} | score ${item.risco} | cobertura ${item.cobertura} | ${item.motivo}`,
         );
       });
     }
@@ -1976,12 +2020,22 @@ export class AiService {
       });
     }
 
+    if (topUfs.length) {
+      lines.push('');
+      lines.push('## UFs prioritárias');
+      topUfs.forEach((item: any) => {
+        lines.push(
+          `- ${item.uf} | risco ${item.risco} | cobertura ${item.coberturaCpcaPercentual.toFixed(1)}% | presença ${item.presencaOperacional} | ${item.focoRecomendado}`,
+        );
+      });
+    }
+
     if (pressureRows.length) {
       lines.push('');
       lines.push('## Pressão operacional');
       pressureRows.forEach((item: any) => {
         lines.push(
-          `- ${item.uf} | pressão ${item.pressao} | presença ${item.presenca} | ${item.focoRecomendado}`,
+          `- ${item.uf} | pressão ${item.pressao} | risco ${item.risco} | presença ${item.presenca} | ${item.focoRecomendado}`,
         );
       });
     }
@@ -1996,10 +2050,42 @@ export class AiService {
       });
     }
 
+    if (params.mode === 'analyst') {
+      lines.push('');
+      lines.push('## Leitura analítica do dado');
+      lines.push(
+        `A confiança analítica do recorte está em ${dataConfidence.toFixed(1)}% de cobertura suportada por normalização BI. Isso representa ${roomSummary?.confiancaDado?.correspondidos ?? 0} registros vinculados diretamente, ${roomSummary?.confiancaDado?.apenasUf ?? 0} apoiados apenas por UF e ${roomSummary?.confiancaDado?.naoEncontrados ?? 0} ainda sem correspondência.`,
+      );
+      if (Array.isArray(roomSummary?.confiancaDado?.principaisFontes)) {
+        roomSummary.confiancaDado.principaisFontes
+          .slice(0, 3)
+          .forEach((item: any) => {
+            lines.push(
+              `- ${item.fonte}: ${item.registros} registros, ${Number(item.coberturaPercentual ?? 0).toFixed(1)}% cobertos.`,
+            );
+          });
+      }
+    }
+
     lines.push('');
-    lines.push('## Observação');
+    lines.push('## Próximo movimento sugerido');
+    if (params.agentType === 'governanca_cpca') {
+      lines.push(
+        'Consolidar o mapa de OMs descobertas, ajustar a comissão responsável e monitorar se o passivo institucional cai após a redistribuição de cobertura.',
+      );
+    } else if (params.agentType === 'priorizacao_intervencao') {
+      lines.push(
+        'Transformar as OMs e UFs acima em tarefa e missão com responsável, prazo e critério objetivo de impacto esperado.',
+      );
+    } else {
+      lines.push(
+        'Levar as OMs e UFs destacadas para decisão imediata, convertendo o diagnóstico em tarefa, missão ou ajuste de governança CPCA.',
+      );
+    }
+    lines.push('');
+    lines.push('## Nota metodológica');
     lines.push(
-      'Esta resposta foi produzida com base nos dados estruturados já carregados na Sala COMGEP. Se necessário, refine o foco para uma UF ou OM específica e execute novamente para obter uma resposta mais estreita.',
+      'Análise produzida a partir dos dados estruturados já carregados na Sala COMGEP. Se necessário, refine o foco para uma UF ou OM específica para estreitar a leitura.',
     );
     return lines.join('\n');
   }
