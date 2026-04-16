@@ -462,6 +462,81 @@ function buildMissionBannerLocationLabel(
   return line1 || line2 || '-';
 }
 
+function splitMissionBannerLocationPreset(value: string | null | undefined) {
+  const normalized = String(value ?? '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!normalized || normalized === '-') {
+    return {
+      locationPrimary: '',
+      locationSecondary: '',
+    };
+  }
+
+  for (const separator of [' • ', ' - ', ' — ', ' / ', ' | ']) {
+    if (!normalized.includes(separator)) continue;
+    const [left, ...rest] = normalized.split(separator);
+    const right = rest.join(separator).trim();
+    if (left.trim() && right) {
+      return {
+        locationPrimary: left.trim(),
+        locationSecondary: right,
+      };
+    }
+  }
+
+  if (normalized.length <= 24) {
+    return {
+      locationPrimary: normalized,
+      locationSecondary: '',
+    };
+  }
+
+  const midpoint = Math.floor(normalized.length / 2);
+  let splitIndex = -1;
+  for (let offset = 0; offset <= 12; offset += 1) {
+    const leftIndex = midpoint - offset;
+    const rightIndex = midpoint + offset;
+    if (leftIndex > 0 && normalized[leftIndex] === ' ') {
+      splitIndex = leftIndex;
+      break;
+    }
+    if (rightIndex < normalized.length && normalized[rightIndex] === ' ') {
+      splitIndex = rightIndex;
+      break;
+    }
+  }
+
+  if (splitIndex > 0) {
+    return {
+      locationPrimary: normalized.slice(0, splitIndex).trim(),
+      locationSecondary: normalized.slice(splitIndex + 1).trim(),
+    };
+  }
+
+  return {
+    locationPrimary: normalized,
+    locationSecondary: '',
+  };
+}
+
+function formatMissionBannerPresetLabel(item: any) {
+  const title = String(item?.title ?? '').trim() || 'Item de cronograma';
+  const location = String(item?.location ?? '').trim() || 'Local não informado';
+  const startAt = new Date(String(item?.startAt ?? ''));
+  const dateLabel = Number.isNaN(startAt.getTime())
+    ? 'Sem horário'
+    : startAt.toLocaleString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+
+  return `${dateLabel} • ${title} • ${location}`;
+}
+
 export function MissionsPage() {
   const toast = useToast();
   const [params, setParams] = useSearchParams();
@@ -514,6 +589,7 @@ export function MissionsPage() {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [bannerForm, setBannerForm] = useState(blankBannerForm);
   const [editingBannerId, setEditingBannerId] = useState<string | null>(null);
+  const [selectedBannerPresetId, setSelectedBannerPresetId] = useState<string | null>(null);
   const [scheduleForm, setScheduleForm] = useState(blankScheduleForm);
   const [editingScheduleItemId, setEditingScheduleItemId] = useState<string | null>(null);
   const [checklistState, setChecklistState] = useState<Record<string, MissionChecklistItemState>>(
@@ -723,6 +799,21 @@ export function MissionsPage() {
     () => ((selectedMission?.scheduleItems ?? []) as any[]),
     [selectedMission?.scheduleItems],
   );
+  const missionBannerPresetOptions = useMemo(
+    () =>
+      missionScheduleItems
+        .map((item: any) => {
+          const id = String(item?.id ?? '').trim();
+          if (!id) return null;
+          return {
+            id,
+            label: formatMissionBannerPresetLabel(item),
+            item,
+          };
+        })
+        .filter(Boolean) as Array<{ id: string; label: string; item: any }>,
+    [missionScheduleItems],
+  );
   const scheduleDayOptions = useMemo(() => {
     const dayMap = new Map<string, { key: string; label: string; ids: string[] }>();
     for (const item of missionScheduleItems) {
@@ -781,6 +872,7 @@ export function MissionsPage() {
 
   const resetBannerForm = useCallback(() => {
     setEditingBannerId(null);
+    setSelectedBannerPresetId(null);
     setBannerForm(blankBannerForm);
   }, []);
 
@@ -1319,6 +1411,7 @@ export function MissionsPage() {
 
   const handleStartCreateBanner = () => {
     setEditingBannerId(null);
+    setSelectedBannerPresetId(null);
     setBannerForm({
       ...blankBannerForm,
       eventDate: selectedMission?.startDate
@@ -1329,6 +1422,7 @@ export function MissionsPage() {
 
   const handleEditBanner = (banner: any) => {
     setEditingBannerId(String(banner.id));
+    setSelectedBannerPresetId(null);
     setBannerForm({
       name: String(banner.name ?? ''),
       eventDate: String(banner.eventDate ?? ''),
@@ -1336,6 +1430,25 @@ export function MissionsPage() {
       locationPrimary: String(banner.locationPrimary ?? ''),
       locationSecondary: String(banner.locationSecondary ?? ''),
     });
+  };
+
+  const handleApplyBannerPreset = (preset: { id: string; item: any } | null) => {
+    setSelectedBannerPresetId(preset?.id ?? null);
+    if (!preset?.item) return;
+
+    const formattedStartAt = formatDateTimeLocalValue(preset.item.startAt);
+    const [eventDate = '', eventTimeRaw = ''] = formattedStartAt.split('T');
+    const { locationPrimary, locationSecondary } = splitMissionBannerLocationPreset(
+      preset.item.location,
+    );
+
+    setBannerForm((current) => ({
+      ...current,
+      eventDate: eventDate || current.eventDate,
+      eventTime: eventTimeRaw.slice(0, 5) || current.eventTime,
+      locationPrimary: locationPrimary || current.locationPrimary,
+      locationSecondary: locationSecondary || '',
+    }));
   };
 
   const handleSaveBanner = async () => {
@@ -2567,6 +2680,29 @@ export function MissionsPage() {
                                   {editingBannerId ? 'Editar banner' : 'Criar banner'}
                                 </Typography>
                                 <Stack spacing={1}>
+                                  <Autocomplete
+                                    size="small"
+                                    options={missionBannerPresetOptions}
+                                    value={
+                                      missionBannerPresetOptions.find(
+                                        (option) => option.id === selectedBannerPresetId,
+                                      ) ?? null
+                                    }
+                                    onChange={(_, value) => handleApplyBannerPreset(value)}
+                                    isOptionEqualToValue={(option, value) =>
+                                      option.id === value.id
+                                    }
+                                    getOptionLabel={(option) => option.label}
+                                    noOptionsText="Esta missão ainda não possui itens no cronograma."
+                                    renderInput={(params) => (
+                                      <TextField
+                                        {...params}
+                                        label="Usar item do cronograma como base"
+                                        helperText="Preenche data, hora e local com base em um item já cadastrado no cronograma da missão."
+                                      />
+                                    )}
+                                    fullWidth
+                                  />
                                   <TextField
                                     size="small"
                                     label="Nome do banner"
