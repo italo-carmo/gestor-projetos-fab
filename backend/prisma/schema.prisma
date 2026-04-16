@@ -79,6 +79,7 @@ model User {
   cpcaCommissionMembershipsAdded CpcaCommissionMember[] @relation("CpcaCommissionMemberAddedBy")
   cpcaPresidentRequests CpcaPresidentSelfRegistration[] @relation("CpcaPresidentSelfRegistrationApplicant")
   cpcaPresidentRequestDecisions CpcaPresidentSelfRegistration[] @relation("CpcaPresidentSelfRegistrationDecidedBy")
+  strategicRecommendationsCreated StrategicRecommendation[] @relation("StrategicRecommendationCreator")
   libraryPhotosCreated LibraryPhoto[] @relation("LibraryPhotoCreator")
   libraryDocumentsCreated LibraryDocument[] @relation("LibraryDocumentCreator")
   bestPracticesCreated BestPracticePost[] @relation("BestPracticeCreator")
@@ -105,6 +106,7 @@ model Om {
   cpcaCoverageAsManager      CpcaCommissionCoverageOm[] @relation("CpcaCoverageOmManager")
   cpcaCoverageAsManaged      CpcaCommissionCoverageOm[] @relation("CpcaCoverageOmManaged")
   biNormalizationLinks       BiNormalizationLink[]
+  strategicRecommendations   StrategicRecommendation[]
 
   @@index([hasCpca])
   @@index([uf])
@@ -876,6 +878,31 @@ model Notice {
   specialty    Specialty?     @relation(fields: [specialtyId], references: [id])
 
   @@index([localityId, specialtyId, dueDate])
+}
+
+model StrategicRecommendation {
+  id              String   @id @default(cuid())
+  title           String
+  summary         String   @db.Text
+  sessionId       String?
+  sourceAgentType String
+  mode            String
+  focusType       String?
+  focusLabel      String?
+  uf              String?
+  omId            String?
+  evidenceJson    Json?
+  createdById     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  om              Om?      @relation(fields: [omId], references: [id], onDelete: SetNull)
+  createdBy       User?    @relation("StrategicRecommendationCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([createdById])
+  @@index([uf])
+  @@index([omId])
 }
 
 enum SocialCommunicationAudience {

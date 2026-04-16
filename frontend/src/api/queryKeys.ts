@@ -83,6 +83,8 @@ export const qk = {
   executiveDashboard: (filters: Record<string, any>) =>
     ["dashboardExecutive", filters] as const,
   comgepSituationRoom: ["strategic", "comgepRoom"] as const,
+  comgepRecommendations: (limit: number) =>
+    ["strategic", "comgepRecommendations", limit] as const,
   kpiDashboard: (filters: Record<string, any>) =>
     ["kpiDashboard", filters] as const,
   biSurveyDashboard: (filters: Record<string, any>) =>

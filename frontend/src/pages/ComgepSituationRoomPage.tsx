@@ -1,5 +1,6 @@
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Card,
@@ -10,8 +11,10 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
+  IconButton,
   LinearProgress,
   MenuItem,
+  Paper,
   Stack,
   Table,
   TableBody,
@@ -19,6 +22,8 @@ import {
   TableHead,
   TableRow,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from '@mui/material';
 import VisibilityRoundedIcon from '@mui/icons-material/VisibilityRounded';
@@ -29,6 +34,13 @@ import TrendingUpRoundedIcon from '@mui/icons-material/TrendingUpRounded';
 import GroupsRoundedIcon from '@mui/icons-material/GroupsRounded';
 import HubRoundedIcon from '@mui/icons-material/HubRounded';
 import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded';
+import AddTaskRoundedIcon from '@mui/icons-material/AddTaskRounded';
+import PictureAsPdfRoundedIcon from '@mui/icons-material/PictureAsPdfRounded';
+import PlaylistPlayRoundedIcon from '@mui/icons-material/PlaylistPlayRounded';
+import FactCheckRoundedIcon from '@mui/icons-material/FactCheckRounded';
+import RocketLaunchRoundedIcon from '@mui/icons-material/RocketLaunchRounded';
+import SendRoundedIcon from '@mui/icons-material/SendRounded';
+import RestartAltRoundedIcon from '@mui/icons-material/RestartAltRounded';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
@@ -44,8 +56,23 @@ import {
 } from 'recharts';
 import { useMemo, useRef, useState } from 'react';
 import { api } from '../api/client';
-import { useAiActionAgents, useComgepSituationRoom } from '../api/hooks';
+import {
+  useAiActionAgents,
+  useComgepRecommendations,
+  useComgepSituationRoom,
+  useCreateComgepRecommendation,
+  useCreateMission,
+  useCreateTaskInstance,
+  useCipavdLocalities,
+  useExportComgepCopilotPdf,
+  useLocalities,
+  useMe,
+  usePhases,
+} from '../api/hooks';
+import { can } from '../app/rbac';
+import { parseApiError } from '../app/apiErrors';
 import { consumeJsonSseStream } from '../app/sse';
+import { useToast } from '../app/toast';
 import { ErrorState } from '../components/states/ErrorState';
 import { SkeletonState } from '../components/states/SkeletonState';
 
@@ -223,51 +250,193 @@ function MarkdownPanel({ content }: { content: string }) {
   );
 }
 
-type AgentState = {
+type CopilotFocus = {
+  kind:
+    | 'overview'
+    | 'kpi_covered_oms'
+    | 'kpi_critical_ufs'
+    | 'kpi_high_risk_oms'
+    | 'kpi_operational_presence'
+    | 'uf'
+    | 'om'
+    | 'coverage_gap'
+    | 'operational_pressure';
+  label?: string;
+  description?: string;
+  uf?: string | null;
+  omId?: string | null;
+  refId?: string | null;
+};
+
+type CopilotEvidence = {
+  id: string;
+  omId: string | null;
+  omCode: string;
+  omName: string;
+  title: string;
+  uf: string;
+  score: number;
+  reason: string;
+  link: string;
+  source: string;
+  coverageType?: string | null;
+};
+
+type CopilotMessage = {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  createdAt: string;
+  mode: 'executive' | 'analyst';
+  focus: CopilotFocus | null;
+  evidences: CopilotEvidence[];
+};
+
+type CopilotState = {
   running: boolean;
   percent: number;
   stage: string;
-  narrative: string;
+  draft: string;
   model: string;
   generatedAt: string;
   error: string;
-  type: string;
+  agentType: string;
+  sessionId: string | null;
+  messages: CopilotMessage[];
+  mode: 'executive' | 'analyst';
+  focus: CopilotFocus | null;
+  scopeUf: string | null;
 };
 
-function useActionAgentRunner() {
+function describeCopilotFocus(
+  focus: CopilotFocus | null,
+  scopeUf?: string | null,
+) {
+  if (!focus) {
+    return scopeUf ? `cenário geral da UF ${scopeUf}` : 'cenário geral da Sala COMGEP';
+  }
+  if (focus.label) return focus.label;
+  switch (focus.kind) {
+    case 'kpi_covered_oms':
+      return 'OMs cobertas pela CPCA';
+    case 'kpi_critical_ufs':
+      return 'UFs prioritárias';
+    case 'kpi_high_risk_oms':
+      return 'OMs de maior risco';
+    case 'kpi_operational_presence':
+      return 'presença operacional';
+    case 'uf':
+      return focus.uf ? `UF ${focus.uf}` : 'UF selecionada';
+    case 'om':
+      return focus.description || 'OM selecionada';
+    case 'coverage_gap':
+      return focus.description || 'gaps de cobertura CPCA';
+    case 'operational_pressure':
+      return focus.description || 'pressão operacional';
+    default:
+      return scopeUf ? `cenário geral da UF ${scopeUf}` : 'cenário geral da Sala COMGEP';
+  }
+}
+
+function buildCopilotExecutionMessage(
+  agentTitle: string,
+  mode: 'executive' | 'analyst',
+  focus: CopilotFocus | null,
+  scopeUf?: string | null,
+) {
+  return `Executar ${agentTitle} no modo ${
+    mode === 'analyst' ? 'analista' : 'executivo'
+  } com foco em ${describeCopilotFocus(focus, scopeUf)}.`;
+}
+
+function buildRecommendationTitle(
+  agentTitle: string,
+  focus: CopilotFocus | null,
+  scopeUf?: string | null,
+) {
+  return `${agentTitle} · ${describeCopilotFocus(focus, scopeUf)}`;
+}
+
+function buildEvidenceSummary(evidences: CopilotEvidence[]) {
+  if (!evidences.length) return 'Sem evidências estruturadas retornadas pelo copiloto.';
+  return evidences
+    .slice(0, 6)
+    .map(
+      (item) =>
+        `${item.omCode} (${item.uf}) • score ${item.score} • ${item.reason}`,
+    )
+    .join('\n');
+}
+
+function useComgepCopilotRunner() {
   const abortRef = useRef<AbortController | null>(null);
-  const [state, setState] = useState<AgentState>({
+  const [state, setState] = useState<CopilotState>({
     running: false,
     percent: 0,
     stage: '',
-    narrative: '',
+    draft: '',
     model: '',
     generatedAt: '',
     error: '',
-    type: '',
+    agentType: '',
+    sessionId: null,
+    messages: [],
+    mode: 'executive',
+    focus: null,
+    scopeUf: null,
   });
 
-  const start = async (type: string, uf?: string) => {
+  const start = async (args: {
+    type: string;
+    title: string;
+    uf?: string | null;
+    mode: 'executive' | 'analyst';
+    focus: CopilotFocus | null;
+  }) => {
     if (abortRef.current) abortRef.current.abort();
     const controller = new AbortController();
     abortRef.current = controller;
+    const userMessage: CopilotMessage = {
+      id: `user-${Date.now()}`,
+      role: 'user',
+      content: buildCopilotExecutionMessage(
+        args.title,
+        args.mode,
+        args.focus,
+        args.uf || null,
+      ),
+      createdAt: new Date().toISOString(),
+      mode: args.mode,
+      focus: args.focus,
+      evidences: [],
+    };
 
     setState({
       running: true,
       percent: 0,
       stage: 'Iniciando...',
-      narrative: '',
+      draft: '',
       model: '',
       generatedAt: '',
       error: '',
-      type,
+      agentType: args.type,
+      sessionId: null,
+      messages: [userMessage],
+      mode: args.mode,
+      focus: args.focus,
+      scopeUf: args.uf || null,
     });
 
     try {
       const res = await fetch(`${getBaseUrl()}/ai/action-agents/run`, {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ type, uf: uf || null }),
+        body: JSON.stringify({
+          type: args.type,
+          uf: args.uf || null,
+          mode: args.mode,
+          focus: args.focus,
+        }),
         signal: controller.signal,
       });
 
@@ -306,20 +475,32 @@ function useActionAgentRunner() {
           setState((prev) => ({
             ...prev,
             percent: data.percent ?? prev.percent,
-            narrative: prev.narrative + (data.text ?? ''),
+            draft: prev.draft + (data.text ?? ''),
           }));
           return;
         }
 
         if (event === 'done') {
           sawTerminalEvent = true;
+          const assistantMessage: CopilotMessage = {
+            id: String(data.messageId ?? `assistant-${Date.now()}`),
+            role: 'assistant',
+            content: data.narrative ?? '',
+            createdAt: data.generatedAt ?? new Date().toISOString(),
+            mode: (data.mode ?? args.mode) as 'executive' | 'analyst',
+            focus: (data.focus as CopilotFocus | null | undefined) ?? args.focus,
+            evidences: Array.isArray(data.evidences) ? data.evidences : [],
+          };
           setState((prev) => ({
             ...prev,
             running: false,
             percent: 100,
-            narrative: data.narrative ?? prev.narrative,
+            draft: '',
             model: data.model ?? '',
             generatedAt: data.generatedAt ?? '',
+            sessionId: data.sessionId ?? prev.sessionId,
+            focus: assistantMessage.focus ?? prev.focus,
+            messages: [userMessage, assistantMessage],
           }));
           return;
         }
@@ -339,7 +520,7 @@ function useActionAgentRunner() {
           ...prev,
           running: false,
           error:
-            prev.narrative.trim() || prev.error
+            prev.draft.trim() || prev.error
               ? prev.error
               : 'A execução do agente foi encerrada sem resposta final.',
         }));
@@ -354,14 +535,1132 @@ function useActionAgentRunner() {
     }
   };
 
-  return { state, start };
+  const followUp = async (args: {
+    message: string;
+    mode: 'executive' | 'analyst';
+    focus: CopilotFocus | null;
+  }) => {
+    const safeMessage = String(args.message ?? '').trim();
+    if (!safeMessage || !state.sessionId) return;
+    if (abortRef.current) abortRef.current.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    const userMessage: CopilotMessage = {
+      id: `user-${Date.now()}`,
+      role: 'user',
+      content: safeMessage,
+      createdAt: new Date().toISOString(),
+      mode: args.mode,
+      focus: args.focus,
+      evidences: [],
+    };
+
+    setState((prev) => ({
+      ...prev,
+      running: true,
+      percent: 0,
+      stage: 'Processando follow-up...',
+      draft: '',
+      error: '',
+      mode: args.mode,
+      focus: args.focus,
+      messages: [...prev.messages, userMessage],
+    }));
+
+    try {
+      const res = await fetch(`${getBaseUrl()}/ai/action-agents/follow-up`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          sessionId: state.sessionId,
+          message: safeMessage,
+          mode: args.mode,
+          focus: args.focus,
+        }),
+        signal: controller.signal,
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        let message = `Erro HTTP ${res.status}`;
+        try {
+          message = JSON.parse(text)?.message ?? message;
+        } catch {}
+        setState((prev) => ({ ...prev, running: false, error: message }));
+        return;
+      }
+
+      const reader = res.body?.getReader();
+      if (!reader) {
+        setState((prev) => ({
+          ...prev,
+          running: false,
+          error: 'O servidor não retornou um stream válido para o copiloto.',
+        }));
+        return;
+      }
+
+      let sawTerminalEvent = false;
+      await consumeJsonSseStream(reader, (event, data) => {
+        if (event === 'progress') {
+          setState((prev) => ({
+            ...prev,
+            percent: data.percent ?? prev.percent,
+            stage: data.stage ?? prev.stage,
+          }));
+          return;
+        }
+
+        if (event === 'token') {
+          setState((prev) => ({
+            ...prev,
+            percent: data.percent ?? prev.percent,
+            draft: prev.draft + (data.text ?? ''),
+          }));
+          return;
+        }
+
+        if (event === 'done') {
+          sawTerminalEvent = true;
+          const assistantMessage: CopilotMessage = {
+            id: String(data.messageId ?? `assistant-${Date.now()}`),
+            role: 'assistant',
+            content: data.narrative ?? '',
+            createdAt: data.generatedAt ?? new Date().toISOString(),
+            mode: (data.mode ?? args.mode) as 'executive' | 'analyst',
+            focus: (data.focus as CopilotFocus | null | undefined) ?? args.focus,
+            evidences: Array.isArray(data.evidences) ? data.evidences : [],
+          };
+          setState((prev) => ({
+            ...prev,
+            running: false,
+            percent: 100,
+            draft: '',
+            model: data.model ?? prev.model,
+            generatedAt: data.generatedAt ?? prev.generatedAt,
+            sessionId: data.sessionId ?? prev.sessionId,
+            focus: assistantMessage.focus ?? prev.focus,
+            messages: [...prev.messages, assistantMessage],
+          }));
+          return;
+        }
+
+        if (event === 'error') {
+          sawTerminalEvent = true;
+          setState((prev) => ({
+            ...prev,
+            running: false,
+            error: data.message ?? 'Erro desconhecido',
+          }));
+        }
+      });
+
+      if (!sawTerminalEvent) {
+        setState((prev) => ({
+          ...prev,
+          running: false,
+          error:
+            prev.draft.trim() || prev.error
+              ? prev.error
+              : 'A execução do copiloto foi encerrada sem resposta final.',
+        }));
+      }
+    } catch (error: any) {
+      if (error?.name === 'AbortError') return;
+      setState((prev) => ({
+        ...prev,
+        running: false,
+        error: error?.message ?? 'Erro de rede',
+      }));
+    }
+  };
+
+  const reset = () => {
+    if (abortRef.current) abortRef.current.abort();
+    setState({
+      running: false,
+      percent: 0,
+      stage: '',
+      draft: '',
+      model: '',
+      generatedAt: '',
+      error: '',
+      agentType: '',
+      sessionId: null,
+      messages: [],
+      mode: 'executive',
+      focus: null,
+      scopeUf: null,
+    });
+  };
+
+  return { state, start, followUp, reset };
+}
+
+function ComgepCopilotPanel(props: {
+  agentCatalog: any[];
+  matrixItems: any[];
+  focus: CopilotFocus | null;
+  onFocusChange: (focus: CopilotFocus | null) => void;
+  scopeUf: string;
+  onScopeUfChange: (value: string) => void;
+}) {
+  const { push } = useToast();
+  const meQuery = useMe();
+  const phasesQuery = usePhases();
+  const recommendationsQuery = useComgepRecommendations(6);
+  const createTaskMutation = useCreateTaskInstance();
+  const createMissionMutation = useCreateMission();
+  const createRecommendationMutation = useCreateComgepRecommendation();
+  const exportPdfMutation = useExportComgepCopilotPdf();
+  const { state, start, followUp, reset } = useComgepCopilotRunner();
+  const [mode, setMode] = useState<'executive' | 'analyst'>('executive');
+  const [followUpMessage, setFollowUpMessage] = useState('');
+  const [taskDialogMessage, setTaskDialogMessage] = useState<CopilotMessage | null>(null);
+  const [missionDialogMessage, setMissionDialogMessage] = useState<CopilotMessage | null>(null);
+  const [recommendationDialogMessage, setRecommendationDialogMessage] =
+    useState<CopilotMessage | null>(null);
+  const [evidenceDialogMessage, setEvidenceDialogMessage] =
+    useState<CopilotMessage | null>(null);
+  const [taskForm, setTaskForm] = useState({
+    title: '',
+    description: '',
+    phaseId: '',
+    dueDate: '',
+    priority: 'MEDIUM',
+    localityIds: [] as string[],
+  });
+  const [missionForm, setMissionForm] = useState({
+    title: '',
+    description: '',
+    scope: 'SMIF' as 'SMIF' | 'CIPAVD',
+    localityId: '',
+    startDate: '',
+    endDate: '',
+  });
+  const [recommendationForm, setRecommendationForm] = useState({
+    title: '',
+    summary: '',
+  });
+
+  const me = meQuery.data;
+  const canCreateTask = can(me, 'task_instances', 'update');
+  const canCreateMission = can(me, 'missions', 'create');
+  const localitiesQuery = useLocalities(canCreateTask || canCreateMission);
+  const cipavdLocalitiesQuery = useCipavdLocalities(canCreateMission);
+
+  const effectiveFocus =
+    props.focus ??
+    (props.scopeUf
+      ? {
+          kind: 'uf',
+          label: `UF ${props.scopeUf}`,
+          description: `Leitura concentrada na UF ${props.scopeUf}.`,
+          uf: props.scopeUf,
+        }
+      : null);
+
+  const latestAssistantMessage = useMemo(
+    () =>
+      [...state.messages]
+        .reverse()
+        .find((item) => item.role === 'assistant') ?? null,
+    [state.messages],
+  );
+
+  const focusUf = String(
+    effectiveFocus?.uf ??
+      latestAssistantMessage?.focus?.uf ??
+      latestAssistantMessage?.evidences?.[0]?.uf ??
+      props.scopeUf ??
+      '',
+  )
+    .trim()
+    .toUpperCase();
+
+  const smifLocalities = Array.isArray(localitiesQuery.data?.items)
+    ? localitiesQuery.data.items
+    : [];
+  const cipavdLocalities = Array.isArray(cipavdLocalitiesQuery.data?.items)
+    ? cipavdLocalitiesQuery.data.items
+    : [];
+  const phases = Array.isArray(phasesQuery.data?.items) ? phasesQuery.data.items : [];
+  const recommendations = Array.isArray(recommendationsQuery.data?.items)
+    ? recommendationsQuery.data.items
+    : [];
+  const selectedAgentTitle =
+    String(
+      props.agentCatalog.find((item: any) => item.type === state.agentType)?.title ??
+        '',
+    ).trim() || 'Ação COMGEP';
+
+  const filteredTaskLocalities = useMemo(() => {
+    return smifLocalities.filter((item: any) => !focusUf || String(item.uf ?? '').toUpperCase() === focusUf);
+  }, [smifLocalities, focusUf]);
+
+  const missionLocalityOptions = useMemo(() => {
+    const source = missionForm.scope === 'CIPAVD' ? cipavdLocalities : smifLocalities;
+    return source.filter((item: any) => !focusUf || String(item.uf ?? '').toUpperCase() === focusUf);
+  }, [cipavdLocalities, focusUf, missionForm.scope, smifLocalities]);
+
+  const handleStartAgent = async (agent: any) => {
+    const nextFocus = effectiveFocus;
+    await start({
+      type: String(agent.type),
+      title: String(agent.title ?? 'copiloto COMGEP'),
+      uf: props.scopeUf || nextFocus?.uf || null,
+      mode,
+      focus: nextFocus,
+    });
+  };
+
+  const handleSendFollowUp = async () => {
+    const safeMessage = followUpMessage.trim();
+    if (!safeMessage || state.running || !state.sessionId) return;
+    await followUp({
+      message: safeMessage,
+      mode,
+      focus: effectiveFocus,
+    });
+    setFollowUpMessage('');
+  };
+
+  const openTaskDialog = (message: CopilotMessage) => {
+    const firstPhaseId = String(phases[0]?.id ?? '');
+    const defaultDueDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
+    setTaskForm({
+      title: buildRecommendationTitle(
+        selectedAgentTitle,
+        message.focus,
+        props.scopeUf,
+      ),
+      description: `${message.content}\n\nEvidências:\n${buildEvidenceSummary(
+        message.evidences,
+      )}`,
+      phaseId: firstPhaseId,
+      dueDate: defaultDueDate,
+      priority: 'MEDIUM',
+      localityIds: [],
+    });
+    setTaskDialogMessage(message);
+  };
+
+  const openMissionDialog = (message: CopilotMessage) => {
+    const today = new Date();
+    const inSevenDays = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+    setMissionForm({
+      title: buildRecommendationTitle('Missão proposta', message.focus, props.scopeUf),
+      description: `${message.content}\n\nEvidências:\n${buildEvidenceSummary(
+        message.evidences,
+      )}`,
+      scope: 'SMIF',
+      localityId: '',
+      startDate: today.toISOString().slice(0, 10),
+      endDate: inSevenDays.toISOString().slice(0, 10),
+    });
+    setMissionDialogMessage(message);
+  };
+
+  const openRecommendationDialog = (message: CopilotMessage) => {
+    setRecommendationForm({
+      title: buildRecommendationTitle(
+        selectedAgentTitle,
+        message.focus,
+        props.scopeUf,
+      ),
+      summary: message.content,
+    });
+    setRecommendationDialogMessage(message);
+  };
+
+  const submitTask = async () => {
+    try {
+      await createTaskMutation.mutateAsync(taskForm);
+      push({ severity: 'success', message: 'Tarefa criada a partir do copiloto.' });
+      setTaskDialogMessage(null);
+    } catch (error) {
+      push({
+        severity: 'error',
+        message: parseApiError(error).message ?? 'Não foi possível criar a tarefa.',
+      });
+    }
+  };
+
+  const submitMission = async () => {
+    try {
+      await createMissionMutation.mutateAsync(missionForm);
+      push({ severity: 'success', message: 'Missão proposta criada com sucesso.' });
+      setMissionDialogMessage(null);
+    } catch (error) {
+      push({
+        severity: 'error',
+        message: parseApiError(error).message ?? 'Não foi possível criar a missão.',
+      });
+    }
+  };
+
+  const submitRecommendation = async () => {
+    const message = recommendationDialogMessage;
+    if (!message) return;
+    try {
+      const omId = message.evidences.find((item) => item.omId)?.omId ?? null;
+      await createRecommendationMutation.mutateAsync({
+        title: recommendationForm.title,
+        summary: recommendationForm.summary,
+        sessionId: state.sessionId,
+        sourceAgentType: state.agentType || 'briefing_comgep',
+        mode,
+        focusType: message.focus?.kind ?? null,
+        focusLabel: describeCopilotFocus(message.focus, props.scopeUf),
+        uf: message.focus?.uf ?? (focusUf || null),
+        omId,
+        evidence: message.evidences,
+      });
+      push({ severity: 'success', message: 'Recomendação registrada para acompanhamento.' });
+      setRecommendationDialogMessage(null);
+    } catch (error) {
+      push({
+        severity: 'error',
+        message:
+          parseApiError(error).message ??
+          'Não foi possível registrar a recomendação.',
+      });
+    }
+  };
+
+  const exportSessionPdf = async () => {
+    if (!state.sessionId) return;
+    try {
+      await exportPdfMutation.mutateAsync({ sessionId: state.sessionId });
+    } catch (error) {
+      push({
+        severity: 'error',
+        message: parseApiError(error).message ?? 'Não foi possível gerar o PDF.',
+      });
+    }
+  };
+
+  return (
+    <>
+      <Card variant="outlined" sx={{ borderRadius: 3 }}>
+        <CardContent>
+          <Stack spacing={2}>
+            <Stack direction={{ xs: 'column', lg: 'row' }} justifyContent="space-between" spacing={1.5}>
+              <Box>
+                <Typography variant="h6" fontWeight={800}>
+                  Copiloto COMGEP contextual
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.6 }}>
+                  Conversa guiada com memória de sessão, foco clicável vindo da tela e respostas com evidências OM/UF prontas para ação.
+                </Typography>
+              </Box>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }}>
+                <ToggleButtonGroup
+                  size="small"
+                  exclusive
+                  value={mode}
+                  onChange={(_event, value) => {
+                    if (value) setMode(value);
+                  }}
+                >
+                  <ToggleButton value="executive">Executivo</ToggleButton>
+                  <ToggleButton value="analyst">Analista</ToggleButton>
+                </ToggleButtonGroup>
+                <TextField
+                  size="small"
+                  select
+                  label="Escopo do copiloto"
+                  value={props.scopeUf}
+                  onChange={(event) => {
+                    const nextUf = event.target.value;
+                    props.onScopeUfChange(nextUf);
+                    if (!nextUf) {
+                      props.onFocusChange(null);
+                      return;
+                    }
+                    if (!props.focus || props.focus.kind === 'uf' || props.focus.kind === 'overview') {
+                      props.onFocusChange({
+                        kind: 'uf',
+                        label: `UF ${nextUf}`,
+                        description: `Leitura concentrada na UF ${nextUf}.`,
+                        uf: nextUf,
+                      });
+                    }
+                  }}
+                  sx={{ minWidth: 220 }}
+                >
+                  <MenuItem value="">Visão nacional</MenuItem>
+                  {props.matrixItems.map((item: any) => (
+                    <MenuItem key={item.uf} value={item.uf}>
+                      {item.uf} · {item.priorityBand}
+                    </MenuItem>
+                  ))}
+                </TextField>
+                <Button
+                  variant="text"
+                  color="inherit"
+                  onClick={() => {
+                    props.onScopeUfChange('');
+                    props.onFocusChange(null);
+                    reset();
+                  }}
+                  startIcon={<RestartAltRoundedIcon />}
+                >
+                  Limpar sessão
+                </Button>
+              </Stack>
+            </Stack>
+
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+              <Chip
+                color="primary"
+                variant="outlined"
+                label={`Foco atual: ${describeCopilotFocus(effectiveFocus, props.scopeUf)}`}
+              />
+              {state.sessionId ? (
+                <Chip
+                  variant="outlined"
+                  label={`Sessão ${state.sessionId.slice(0, 8)}`}
+                />
+              ) : null}
+              {state.model ? <Chip variant="outlined" label={`Modelo: ${state.model}`} /> : null}
+            </Stack>
+
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', lg: 'repeat(3, minmax(0, 1fr))' },
+                gap: 2,
+              }}
+            >
+              {props.agentCatalog.map((agent: any) => (
+                <Card
+                  key={agent.type}
+                  variant="outlined"
+                  sx={{ borderRadius: 3, borderTop: '4px solid #1A3C6E' }}
+                >
+                  <CardContent>
+                    <Stack spacing={1.2}>
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <AutoAwesomeRoundedIcon sx={{ color: '#1A3C6E' }} />
+                        <Typography variant="subtitle1" fontWeight={800}>
+                          {agent.title}
+                        </Typography>
+                      </Stack>
+                      <Typography variant="body2" color="text.secondary">
+                        {agent.description}
+                      </Typography>
+                      <Button
+                        variant="contained"
+                        onClick={() => handleStartAgent(agent)}
+                        disabled={state.running}
+                        startIcon={<AutoAwesomeRoundedIcon />}
+                        sx={{ alignSelf: 'flex-start' }}
+                      >
+                        {state.running && state.agentType === agent.type ? 'Executando...' : 'Executar agente'}
+                      </Button>
+                    </Stack>
+                  </CardContent>
+                </Card>
+              ))}
+            </Box>
+
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', xl: 'minmax(0, 1.55fr) minmax(340px, 0.9fr)' },
+                gap: 2,
+              }}
+            >
+              <Card variant="outlined" sx={{ borderRadius: 3, minHeight: 520 }}>
+                <CardContent>
+                  <Stack spacing={2}>
+                    <Stack
+                      direction={{ xs: 'column', md: 'row' }}
+                      justifyContent="space-between"
+                      spacing={1}
+                    >
+                      <Box>
+                        <Typography variant="subtitle1" fontWeight={800}>
+                          Conversa operacional
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          O copiloto usa a sessão corrente para responder follow-ups como comparação entre UFs, filtragem de OMs sem CPCA e impacto das ações sugeridas.
+                        </Typography>
+                      </Box>
+                      {state.generatedAt ? (
+                        <Chip
+                          variant="outlined"
+                          label={`Última resposta ${formatDateTime(state.generatedAt)}`}
+                        />
+                      ) : null}
+                    </Stack>
+
+                    {state.running ? (
+                      <Box>
+                        <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.8 }}>
+                          <Typography variant="caption" color="text.secondary">
+                            {state.stage}
+                          </Typography>
+                          <Typography variant="caption" fontWeight={700}>
+                            {state.percent}%
+                          </Typography>
+                        </Stack>
+                        <LinearProgress
+                          variant="determinate"
+                          value={state.percent}
+                          sx={{ height: 8, borderRadius: 999 }}
+                        />
+                      </Box>
+                    ) : null}
+
+                    {state.error ? <Alert severity="error">{state.error}</Alert> : null}
+
+                    {state.messages.length === 0 ? (
+                      <Alert severity="info" variant="outlined">
+                        Selecione um foco na tela e execute um dos agentes. Depois disso você pode fazer follow-ups livres, mantendo a memória da sessão ativa.
+                      </Alert>
+                    ) : (
+                      <Stack spacing={1.5}>
+                        {state.messages.map((message) => {
+                          const isLatestAssistant =
+                            message.role === 'assistant' &&
+                            latestAssistantMessage?.id === message.id;
+                          return (
+                            <Paper
+                              key={message.id}
+                              variant="outlined"
+                              sx={{
+                                p: 2,
+                                borderRadius: 3,
+                                bgcolor: message.role === 'assistant' ? '#FAFBFD' : '#FFFFFF',
+                                borderColor: message.role === 'assistant' ? '#D7DEE9' : '#E5E7EB',
+                              }}
+                            >
+                              <Stack spacing={1.2}>
+                                <Stack
+                                  direction={{ xs: 'column', md: 'row' }}
+                                  justifyContent="space-between"
+                                  spacing={1}
+                                >
+                                  <Stack direction="row" spacing={1} alignItems="center">
+                                    <Chip
+                                      size="small"
+                                      color={message.role === 'assistant' ? 'primary' : 'default'}
+                                      label={message.role === 'assistant' ? 'Copiloto' : 'Você'}
+                                    />
+                                    <Typography variant="caption" color="text.secondary">
+                                      {describeCopilotFocus(message.focus, props.scopeUf)}
+                                    </Typography>
+                                  </Stack>
+                                  <Typography variant="caption" color="text.secondary">
+                                    {formatDateTime(message.createdAt)}
+                                  </Typography>
+                                </Stack>
+
+                                {message.role === 'assistant' ? (
+                                  <MarkdownPanel content={message.content} />
+                                ) : (
+                                  <Typography variant="body2">{message.content}</Typography>
+                                )}
+
+                                {message.role === 'assistant' && message.evidences.length > 0 ? (
+                                  <Table size="small">
+                                    <TableHead>
+                                      <TableRow>
+                                        <TableCell>OM</TableCell>
+                                        <TableCell>UF</TableCell>
+                                        <TableCell align="right">Score</TableCell>
+                                        <TableCell>Motivo</TableCell>
+                                        <TableCell align="right">Abrir</TableCell>
+                                      </TableRow>
+                                    </TableHead>
+                                    <TableBody>
+                                      {message.evidences.slice(0, 6).map((item) => (
+                                        <TableRow key={item.id} hover>
+                                          <TableCell>
+                                            <Typography variant="subtitle2" fontWeight={700}>
+                                              {item.omCode}
+                                            </Typography>
+                                            <Typography variant="caption" color="text.secondary">
+                                              {item.coverageType || item.omName}
+                                            </Typography>
+                                          </TableCell>
+                                          <TableCell>{item.uf}</TableCell>
+                                          <TableCell align="right">{item.score}</TableCell>
+                                          <TableCell>{item.reason}</TableCell>
+                                          <TableCell align="right">
+                                            <IconButton
+                                              size="small"
+                                              component="a"
+                                              href={item.link}
+                                              target="_blank"
+                                              rel="noreferrer"
+                                            >
+                                              <OpenInNewRoundedIcon fontSize="small" />
+                                            </IconButton>
+                                          </TableCell>
+                                        </TableRow>
+                                      ))}
+                                    </TableBody>
+                                  </Table>
+                                ) : null}
+
+                                {isLatestAssistant ? (
+                                  <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                                    {canCreateTask ? (
+                                      <Button
+                                        size="small"
+                                        variant="outlined"
+                                        startIcon={<AddTaskRoundedIcon />}
+                                        onClick={() => openTaskDialog(message)}
+                                      >
+                                        Criar tarefa
+                                      </Button>
+                                    ) : null}
+                                    <Button
+                                      size="small"
+                                      variant="outlined"
+                                      startIcon={<PictureAsPdfRoundedIcon />}
+                                      onClick={exportSessionPdf}
+                                      disabled={!state.sessionId || exportPdfMutation.isPending}
+                                    >
+                                      Gerar briefing PDF
+                                    </Button>
+                                    <Button
+                                      size="small"
+                                      variant="outlined"
+                                      startIcon={<PlaylistPlayRoundedIcon />}
+                                      onClick={() => setEvidenceDialogMessage(message)}
+                                      disabled={!message.evidences.length}
+                                    >
+                                      Abrir lista das OMs
+                                    </Button>
+                                    <Button
+                                      size="small"
+                                      variant="outlined"
+                                      startIcon={<FactCheckRoundedIcon />}
+                                      onClick={() => openRecommendationDialog(message)}
+                                    >
+                                      Registrar recomendação
+                                    </Button>
+                                    {canCreateMission ? (
+                                      <Button
+                                        size="small"
+                                        variant="outlined"
+                                        startIcon={<RocketLaunchRoundedIcon />}
+                                        onClick={() => openMissionDialog(message)}
+                                      >
+                                        Propor missão
+                                      </Button>
+                                    ) : null}
+                                  </Stack>
+                                ) : null}
+                              </Stack>
+                            </Paper>
+                          );
+                        })}
+
+                        {state.running && state.draft ? (
+                          <Paper variant="outlined" sx={{ p: 2, borderRadius: 3, bgcolor: '#FAFBFD' }}>
+                            <Typography variant="caption" color="text.secondary">
+                              Copiloto escrevendo...
+                            </Typography>
+                            <MarkdownPanel content={state.draft} />
+                          </Paper>
+                        ) : null}
+                      </Stack>
+                    )}
+
+                    <Divider />
+
+                    <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.2}>
+                      <TextField
+                        fullWidth
+                        multiline
+                        minRows={2}
+                        label="Follow-up contextual"
+                        placeholder="Ex.: por que SP ficou acima de DF? • Mostre só OMs sem CPCA no RJ • Qual dessas ações gera mais impacto?"
+                        value={followUpMessage}
+                        onChange={(event) => setFollowUpMessage(event.target.value)}
+                        disabled={!state.sessionId || state.running}
+                      />
+                      <Button
+                        variant="contained"
+                        onClick={handleSendFollowUp}
+                        disabled={!state.sessionId || state.running || !followUpMessage.trim()}
+                        startIcon={<SendRoundedIcon />}
+                        sx={{ minWidth: 180 }}
+                      >
+                        Enviar
+                      </Button>
+                    </Stack>
+                  </Stack>
+                </CardContent>
+              </Card>
+
+              <Stack spacing={2}>
+                <Card variant="outlined" sx={{ borderRadius: 3 }}>
+                  <CardContent>
+                    <Typography variant="h6" fontWeight={800} sx={{ mb: 1.2 }}>
+                      Contexto ativo do copiloto
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1.4 }}>
+                      O gestor consegue apontar o foco da conversa diretamente a partir dos KPI, UFs e OMs abertas na Sala COMGEP.
+                    </Typography>
+                    <Stack spacing={1}>
+                      <Chip
+                        color="primary"
+                        variant="outlined"
+                        label={`Modo: ${mode === 'analyst' ? 'Analista' : 'Executivo'}`}
+                      />
+                      <Chip
+                        variant="outlined"
+                        label={`Foco: ${describeCopilotFocus(effectiveFocus, props.scopeUf)}`}
+                      />
+                      <Chip
+                        variant="outlined"
+                        label={`Escopo: ${props.scopeUf ? `UF ${props.scopeUf}` : 'Nacional'}`}
+                      />
+                    </Stack>
+                  </CardContent>
+                </Card>
+
+                <Card variant="outlined" sx={{ borderRadius: 3 }}>
+                  <CardContent>
+                    <Typography variant="h6" fontWeight={800} sx={{ mb: 1.2 }}>
+                      Recomendações registradas
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1.4 }}>
+                      Últimos encaminhamentos formalizados a partir do copiloto, preservando foco, modo e evidências vinculadas.
+                    </Typography>
+                    <Stack spacing={1.2}>
+                      {recommendations.length === 0 ? (
+                        <Alert severity="info" variant="outlined">
+                          Ainda não existem recomendações registradas na Sala COMGEP.
+                        </Alert>
+                      ) : (
+                        recommendations.map((item: any) => (
+                          <Paper key={item.id} variant="outlined" sx={{ p: 1.5, borderRadius: 2 }}>
+                            <Typography variant="subtitle2" fontWeight={800}>
+                              {item.title}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.4 }}>
+                              {item.sourceAgentType} • {item.mode === 'analyst' ? 'Analista' : 'Executivo'} • {formatDateTime(item.createdAt)}
+                            </Typography>
+                            <Typography variant="body2" sx={{ mt: 0.8 }}>
+                              {String(item.summary ?? '').slice(0, 220)}
+                              {String(item.summary ?? '').length > 220 ? '…' : ''}
+                            </Typography>
+                          </Paper>
+                        ))
+                      )}
+                    </Stack>
+                  </CardContent>
+                </Card>
+              </Stack>
+            </Box>
+          </Stack>
+        </CardContent>
+      </Card>
+
+      <Dialog open={Boolean(taskDialogMessage)} onClose={() => setTaskDialogMessage(null)} maxWidth="md" fullWidth>
+        <DialogTitle>Criar tarefa a partir do copiloto</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2}>
+            <TextField
+              label="Título"
+              value={taskForm.title}
+              onChange={(event) => setTaskForm((prev) => ({ ...prev, title: event.target.value }))}
+              fullWidth
+            />
+            <TextField
+              label="Descrição"
+              value={taskForm.description}
+              onChange={(event) => setTaskForm((prev) => ({ ...prev, description: event.target.value }))}
+              multiline
+              minRows={5}
+              fullWidth
+            />
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
+              <TextField
+                select
+                label="Fase"
+                value={taskForm.phaseId}
+                onChange={(event) => setTaskForm((prev) => ({ ...prev, phaseId: event.target.value }))}
+                fullWidth
+              >
+                {phases.map((phase: any) => (
+                  <MenuItem key={phase.id} value={phase.id}>
+                    {phase.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+              <TextField
+                type="date"
+                label="Prazo"
+                value={taskForm.dueDate}
+                onChange={(event) => setTaskForm((prev) => ({ ...prev, dueDate: event.target.value }))}
+                InputLabelProps={{ shrink: true }}
+                fullWidth
+              />
+              <TextField
+                select
+                label="Prioridade"
+                value={taskForm.priority}
+                onChange={(event) => setTaskForm((prev) => ({ ...prev, priority: event.target.value }))}
+                fullWidth
+              >
+                <MenuItem value="LOW">Baixa</MenuItem>
+                <MenuItem value="MEDIUM">Média</MenuItem>
+                <MenuItem value="HIGH">Alta</MenuItem>
+              </TextField>
+            </Stack>
+            <Autocomplete
+              multiple
+              options={filteredTaskLocalities}
+              value={filteredTaskLocalities.filter((item: any) => taskForm.localityIds.includes(item.id))}
+              getOptionLabel={(option: any) =>
+                `${option.code ? `${option.code} · ` : ''}${option.name}${option.uf ? ` (${option.uf})` : ''}`
+              }
+              onChange={(_event, value) =>
+                setTaskForm((prev) => ({
+                  ...prev,
+                  localityIds: value.map((item: any) => item.id),
+                }))
+              }
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Localidades SMIF relacionadas"
+                  helperText={
+                    focusUf
+                      ? `Mostrando localidades SMIF da UF ${focusUf}.`
+                      : 'Selecione as localidades SMIF onde a ação deve ser acompanhada.'
+                  }
+                />
+              )}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setTaskDialogMessage(null)}>Cancelar</Button>
+          <Button
+            variant="contained"
+            onClick={submitTask}
+            disabled={
+              createTaskMutation.isPending ||
+              !taskForm.title.trim() ||
+              !taskForm.phaseId ||
+              !taskForm.dueDate ||
+              taskForm.localityIds.length === 0
+            }
+          >
+            Criar tarefa
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={Boolean(missionDialogMessage)} onClose={() => setMissionDialogMessage(null)} maxWidth="md" fullWidth>
+        <DialogTitle>Propor missão a partir do copiloto</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2}>
+            <TextField
+              label="Título"
+              value={missionForm.title}
+              onChange={(event) => setMissionForm((prev) => ({ ...prev, title: event.target.value }))}
+              fullWidth
+            />
+            <TextField
+              label="Descrição"
+              value={missionForm.description}
+              onChange={(event) => setMissionForm((prev) => ({ ...prev, description: event.target.value }))}
+              multiline
+              minRows={5}
+              fullWidth
+            />
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
+              <TextField
+                select
+                label="Escopo"
+                value={missionForm.scope}
+                onChange={(event) =>
+                  setMissionForm((prev) => ({
+                    ...prev,
+                    scope: event.target.value as 'SMIF' | 'CIPAVD',
+                    localityId: '',
+                  }))
+                }
+                fullWidth
+              >
+                <MenuItem value="SMIF">SMIF</MenuItem>
+                <MenuItem value="CIPAVD">CIPAVD</MenuItem>
+              </TextField>
+              <TextField
+                type="date"
+                label="Início"
+                value={missionForm.startDate}
+                onChange={(event) => setMissionForm((prev) => ({ ...prev, startDate: event.target.value }))}
+                InputLabelProps={{ shrink: true }}
+                fullWidth
+              />
+              <TextField
+                type="date"
+                label="Fim"
+                value={missionForm.endDate}
+                onChange={(event) => setMissionForm((prev) => ({ ...prev, endDate: event.target.value }))}
+                InputLabelProps={{ shrink: true }}
+                fullWidth
+              />
+            </Stack>
+            <Autocomplete
+              options={missionLocalityOptions}
+              value={missionLocalityOptions.find((item: any) => item.id === missionForm.localityId) ?? null}
+              getOptionLabel={(option: any) =>
+                `${option.code ? `${option.code} · ` : ''}${option.name}${option.uf ? ` (${option.uf})` : ''}`
+              }
+              onChange={(_event, value) =>
+                setMissionForm((prev) => ({
+                  ...prev,
+                  localityId: value?.id ?? '',
+                }))
+              }
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label={`Localidade ${missionForm.scope}`}
+                  helperText={
+                    focusUf
+                      ? `Mostrando localidades ${missionForm.scope} da UF ${focusUf}.`
+                      : `Selecione a localidade ${missionForm.scope} para a missão.`
+                  }
+                />
+              )}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setMissionDialogMessage(null)}>Cancelar</Button>
+          <Button
+            variant="contained"
+            onClick={submitMission}
+            disabled={
+              createMissionMutation.isPending ||
+              !missionForm.title.trim() ||
+              !missionForm.localityId ||
+              !missionForm.startDate ||
+              !missionForm.endDate
+            }
+          >
+            Criar missão
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(recommendationDialogMessage)}
+        onClose={() => setRecommendationDialogMessage(null)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>Registrar recomendação</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2}>
+            <TextField
+              label="Título"
+              value={recommendationForm.title}
+              onChange={(event) =>
+                setRecommendationForm((prev) => ({ ...prev, title: event.target.value }))
+              }
+              fullWidth
+            />
+            <TextField
+              label="Resumo da recomendação"
+              value={recommendationForm.summary}
+              onChange={(event) =>
+                setRecommendationForm((prev) => ({ ...prev, summary: event.target.value }))
+              }
+              multiline
+              minRows={8}
+              fullWidth
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRecommendationDialogMessage(null)}>Cancelar</Button>
+          <Button
+            variant="contained"
+            onClick={submitRecommendation}
+            disabled={
+              createRecommendationMutation.isPending ||
+              !recommendationForm.title.trim() ||
+              !recommendationForm.summary.trim()
+            }
+          >
+            Registrar
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={Boolean(evidenceDialogMessage)} onClose={() => setEvidenceDialogMessage(null)} maxWidth="lg" fullWidth>
+        <DialogTitle>Lista de OMs vinculadas à resposta</DialogTitle>
+        <DialogContent dividers>
+          {evidenceDialogMessage?.evidences?.length ? (
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>OM</TableCell>
+                  <TableCell>UF</TableCell>
+                  <TableCell align="right">Score</TableCell>
+                  <TableCell>Motivo</TableCell>
+                  <TableCell align="right">Abrir</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {evidenceDialogMessage.evidences.map((item) => (
+                  <TableRow key={item.id} hover>
+                    <TableCell>
+                      <Typography variant="subtitle2" fontWeight={700}>
+                        {item.omCode}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {item.omName}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>{item.uf}</TableCell>
+                    <TableCell align="right">{item.score}</TableCell>
+                    <TableCell>{item.reason}</TableCell>
+                    <TableCell align="right">
+                      <Button size="small" href={item.link} target="_blank" rel="noreferrer">
+                        <OpenInNewRoundedIcon fontSize="small" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          ) : (
+            <Alert severity="info" variant="outlined">
+              Esta resposta não retornou evidências OM estruturadas.
+            </Alert>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEvidenceDialogMessage(null)}>Fechar</Button>
+        </DialogActions>
+      </Dialog>
+    </>
+  );
 }
 
 export function ComgepSituationRoomPage() {
   const roomQuery = useComgepSituationRoom();
   const agentsQuery = useAiActionAgents();
-  const { state: agentState, start: runAgent } = useActionAgentRunner();
   const [selectedUf, setSelectedUf] = useState('');
+  const [copilotFocus, setCopilotFocus] = useState<CopilotFocus | null>(null);
   const [detailUf, setDetailUf] = useState<any | null>(null);
   const [detailKpi, setDetailKpi] = useState<string | null>(null);
 
@@ -458,7 +1757,14 @@ export function ComgepSituationRoomPage() {
             subtitle={`${formatPercent(summary.coveredOmsPercent)} do catálogo com cobertura CPCA efetiva.`}
             color="#1A3C6E"
             description="Conta as OMs com CPCA próprio e também as OMs cobertas formalmente pela comissão de outra OM."
-            onClick={() => setDetailKpi('coveredOms')}
+            onClick={() => {
+              setDetailKpi('coveredOms');
+              setCopilotFocus({
+                kind: 'kpi_covered_oms',
+                label: 'OMs cobertas pela CPCA',
+                description: 'OMs com CPCA próprio ou cobertura delegada.',
+              });
+            }}
           />
           <SummaryCard
             icon={<WarningAmberRoundedIcon />}
@@ -467,7 +1773,15 @@ export function ComgepSituationRoomPage() {
             subtitle="UFs com risco alto e cobertura ou presença insuficientes."
             color="#D32F2F"
             description="São as UFs que combinam risco elevado com baixa cobertura institucional ou baixa presença operacional recente."
-            onClick={() => setDetailKpi('criticalUfs')}
+            onClick={() => {
+              setDetailKpi('criticalUfs');
+              setCopilotFocus({
+                kind: 'kpi_critical_ufs',
+                label: 'UFs prioritárias',
+                description: 'UFs com risco alto e cobertura ou presença insuficientes.',
+                uf: selectedUf || null,
+              });
+            }}
           />
           <SummaryCard
             icon={<GroupsRoundedIcon />}
@@ -476,7 +1790,15 @@ export function ComgepSituationRoomPage() {
             subtitle="OMs com score elevado a partir de denúncias, sinais BI e cobertura."
             color="#ED6C02"
             description="O score soma denúncias abertas, risco de retaliação, morosidade, sinais das pesquisas e situação de cobertura CPCA."
-            onClick={() => setDetailKpi('highRiskOms')}
+            onClick={() => {
+              setDetailKpi('highRiskOms');
+              setCopilotFocus({
+                kind: 'kpi_high_risk_oms',
+                label: 'OMs de maior risco',
+                description: 'Ranking das OMs com maior score composto de risco.',
+                uf: selectedUf || null,
+              });
+            }}
           />
           <SummaryCard
             icon={<HubRoundedIcon />}
@@ -485,7 +1807,15 @@ export function ComgepSituationRoomPage() {
             subtitle="Missões, atividades concluídas e relatórios assinados na janela ativa."
             color="#2E7D32"
             description="Mostra a intensidade da atuação recente nas UFs, somando missões, atividades concluídas e relatórios assinados."
-            onClick={() => setDetailKpi('operationalPresence')}
+            onClick={() => {
+              setDetailKpi('operationalPresence');
+              setCopilotFocus({
+                kind: 'kpi_operational_presence',
+                label: 'Presença operacional',
+                description: 'Distribuição recente de missões, atividades e relatórios.',
+                uf: selectedUf || null,
+              });
+            }}
           />
         </Box>
 
@@ -555,7 +1885,16 @@ export function ComgepSituationRoomPage() {
                         name="UFs"
                         data={matrixChartData}
                         fill="#1A3C6E"
-                        onClick={(payload: any) => setDetailUf(payload)}
+                        onClick={(payload: any) => {
+                          setDetailUf(payload);
+                          setSelectedUf(String(payload?.uf ?? '').trim().toUpperCase());
+                          setCopilotFocus({
+                            kind: 'uf',
+                            uf: String(payload?.uf ?? '').trim().toUpperCase() || null,
+                            label: payload?.uf ? `UF ${payload.uf}` : 'UF selecionada',
+                            description: payload?.recommendedFocus ?? 'UF selecionada na matriz.',
+                          });
+                        }}
                       />
                     </ScatterChart>
                   </ResponsiveContainer>
@@ -594,7 +1933,19 @@ export function ComgepSituationRoomPage() {
                         <TableCell align="right">{item.riskScore}</TableCell>
                         <TableCell align="right">{formatPercent(item.coveragePercent)}</TableCell>
                         <TableCell align="right">
-                          <Button size="small" onClick={() => setDetailUf(item)}>
+                          <Button
+                            size="small"
+                            onClick={() => {
+                              setDetailUf(item);
+                              setSelectedUf(String(item?.uf ?? '').trim().toUpperCase());
+                              setCopilotFocus({
+                                kind: 'uf',
+                                uf: String(item?.uf ?? '').trim().toUpperCase() || null,
+                                label: item?.uf ? `UF ${item.uf}` : 'UF selecionada',
+                                description: item?.recommendedFocus ?? 'UF prioritária selecionada.',
+                              });
+                            }}
+                          >
                             <VisibilityRoundedIcon fontSize="small" />
                           </Button>
                         </TableCell>
@@ -663,6 +2014,7 @@ export function ComgepSituationRoomPage() {
                   <TableRow>
                     <TableCell>OM</TableCell>
                     <TableCell align="right">Risco</TableCell>
+                    <TableCell align="right">Copiloto</TableCell>
                     <TableCell align="right">Abrir</TableCell>
                   </TableRow>
                 </TableHead>
@@ -679,6 +2031,23 @@ export function ComgepSituationRoomPage() {
                         </Typography>
                       </TableCell>
                       <TableCell align="right">{item.riskScore}</TableCell>
+                      <TableCell align="right">
+                        <Button
+                          size="small"
+                          onClick={() => {
+                            setSelectedUf(String(item?.uf ?? '').trim().toUpperCase());
+                            setCopilotFocus({
+                              kind: 'om',
+                              omId: item.id,
+                              uf: String(item?.uf ?? '').trim().toUpperCase() || null,
+                              label: `${item.code} · maior risco`,
+                              description: buildRiskReason(item),
+                            });
+                          }}
+                        >
+                          <AutoAwesomeRoundedIcon fontSize="small" />
+                        </Button>
+                      </TableCell>
                       <TableCell align="right">
                         <Button size="small" href={item.link} target="_blank" rel="noreferrer">
                           <OpenInNewRoundedIcon fontSize="small" />
@@ -705,6 +2074,7 @@ export function ComgepSituationRoomPage() {
                     <TableCell>OM</TableCell>
                     <TableCell align="right">Risco</TableCell>
                     <TableCell align="right">Casos</TableCell>
+                    <TableCell align="right">Copiloto</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -721,6 +2091,23 @@ export function ComgepSituationRoomPage() {
                       </TableCell>
                       <TableCell align="right">{item.riskScore}</TableCell>
                       <TableCell align="right">{item.complaints?.openCases ?? 0}</TableCell>
+                      <TableCell align="right">
+                        <Button
+                          size="small"
+                          onClick={() => {
+                            setSelectedUf(String(item?.uf ?? '').trim().toUpperCase());
+                            setCopilotFocus({
+                              kind: 'coverage_gap',
+                              omId: item.id,
+                              uf: String(item?.uf ?? '').trim().toUpperCase() || null,
+                              label: `${item.code} · gap de cobertura`,
+                              description: buildCoverageGapReason(item),
+                            });
+                          }}
+                        >
+                          <AutoAwesomeRoundedIcon fontSize="small" />
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -758,7 +2145,19 @@ export function ComgepSituationRoomPage() {
                       </TableCell>
                       <TableCell align="right">{item.pressureScore}</TableCell>
                       <TableCell align="right">
-                        <Button size="small" onClick={() => setDetailUf(item)}>
+                        <Button
+                          size="small"
+                          onClick={() => {
+                            setDetailUf(item);
+                            setSelectedUf(String(item?.uf ?? '').trim().toUpperCase());
+                            setCopilotFocus({
+                              kind: 'operational_pressure',
+                              uf: String(item?.uf ?? '').trim().toUpperCase() || null,
+                              label: item?.uf ? `Pressão operacional em ${item.uf}` : 'Pressão operacional',
+                              description: item?.recommendedFocus ?? 'UF com pressão operacional elevada.',
+                            });
+                          }}
+                        >
                           <VisibilityRoundedIcon fontSize="small" />
                         </Button>
                       </TableCell>
@@ -770,114 +2169,14 @@ export function ComgepSituationRoomPage() {
           </Card>
         </Box>
 
-        <Card variant="outlined" sx={{ borderRadius: 3 }}>
-          <CardContent>
-            <Stack spacing={2}>
-              <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={1.5}>
-                <Box>
-                  <Typography variant="h6" fontWeight={800}>
-                    Agentes de IA orientados à ação
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.6 }}>
-                    Cada agente usa a mesma base da Sala COMGEP. O objetivo aqui é gerar briefing, priorização e encaminhamento executivo, não conversa genérica.
-                  </Typography>
-                </Box>
-                <TextField
-                  size="small"
-                  select
-                  label="Escopo do agente"
-                  value={selectedUf}
-                  onChange={(event) => setSelectedUf(event.target.value)}
-                  sx={{ minWidth: 220 }}
-                >
-                  <MenuItem value="">Visão nacional</MenuItem>
-                  {matrixItems.map((item: any) => (
-                    <MenuItem key={item.uf} value={item.uf}>
-                      {item.uf} · {item.priorityBand}
-                    </MenuItem>
-                  ))}
-                </TextField>
-              </Stack>
-
-              <Box
-                sx={{
-                  display: 'grid',
-                  gridTemplateColumns: { xs: '1fr', lg: 'repeat(3, minmax(0, 1fr))' },
-                  gap: 2,
-                }}
-              >
-                {agentCatalog.map((agent: any) => (
-                  <Card key={agent.type} variant="outlined" sx={{ borderRadius: 3, borderTop: '4px solid #1A3C6E' }}>
-                    <CardContent>
-                      <Stack spacing={1.2}>
-                        <Stack direction="row" spacing={1} alignItems="center">
-                          <AutoAwesomeRoundedIcon sx={{ color: '#1A3C6E' }} />
-                          <Typography variant="subtitle1" fontWeight={800}>
-                            {agent.title}
-                          </Typography>
-                        </Stack>
-                        <Typography variant="body2" color="text.secondary">
-                          {agent.description}
-                        </Typography>
-                        <Button
-                          variant="contained"
-                          onClick={() => runAgent(String(agent.type), selectedUf || undefined)}
-                          disabled={agentState.running}
-                          startIcon={<AutoAwesomeRoundedIcon />}
-                          sx={{ alignSelf: 'flex-start' }}
-                        >
-                          {agentState.running && agentState.type === agent.type ? 'Executando...' : 'Executar agente'}
-                        </Button>
-                      </Stack>
-                    </CardContent>
-                  </Card>
-                ))}
-              </Box>
-
-              {(agentState.running || agentState.narrative || agentState.error) && (
-                <Card variant="outlined" sx={{ borderRadius: 3, bgcolor: '#FAFBFD' }}>
-                  <CardContent>
-                    <Stack spacing={1.5}>
-                      <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={1}>
-                        <Box>
-                          <Typography variant="subtitle1" fontWeight={800}>
-                            Saída do agente {agentState.type ? `· ${agentState.type}` : ''}
-                          </Typography>
-                          <Typography variant="body2" color="text.secondary">
-                            Escopo: {selectedUf || 'visão nacional'}
-                          </Typography>
-                        </Box>
-                        {agentState.model ? (
-                          <Chip size="small" label={`Modelo: ${agentState.model}`} />
-                        ) : null}
-                      </Stack>
-
-                      {agentState.running && (
-                        <Box>
-                          <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.8 }}>
-                            <Typography variant="caption" color="text.secondary">
-                              {agentState.stage}
-                            </Typography>
-                            <Typography variant="caption" fontWeight={700}>
-                              {agentState.percent}%
-                            </Typography>
-                          </Stack>
-                          <LinearProgress variant="determinate" value={agentState.percent} sx={{ height: 8, borderRadius: 999 }} />
-                        </Box>
-                      )}
-
-                      {agentState.error ? (
-                        <Alert severity="error">{agentState.error}</Alert>
-                      ) : null}
-
-                      {agentState.narrative ? <MarkdownPanel content={agentState.narrative} /> : null}
-                    </Stack>
-                  </CardContent>
-                </Card>
-              )}
-            </Stack>
-          </CardContent>
-        </Card>
+        <ComgepCopilotPanel
+          agentCatalog={agentCatalog}
+          matrixItems={matrixItems}
+          focus={copilotFocus}
+          onFocusChange={setCopilotFocus}
+          scopeUf={selectedUf}
+          onScopeUfChange={setSelectedUf}
+        />
       </Stack>
 
       <Dialog open={Boolean(detailKpi)} onClose={() => setDetailKpi(null)} maxWidth="lg" fullWidth>

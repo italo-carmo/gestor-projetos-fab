@@ -1,8 +1,18 @@
-import { Controller, Get, Post, Res, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Post,
+  Query,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { CurrentUser } from '../common/current-user.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
 import { RequirePermission } from '../rbac/require-permission.decorator';
+import type { RbacUser } from '../rbac/rbac.types';
 import { StrategicService } from './strategic.service';
 
 @Controller('strategic')
@@ -20,6 +30,33 @@ export class StrategicController {
   @RequirePermission('bi', 'view')
   comgepRoom() {
     return this.service.comgepSituationRoom();
+  }
+
+  @Get('comgep-recommendations')
+  @RequirePermission('bi', 'view')
+  listComgepRecommendations(@Query('limit') limit: string | undefined) {
+    return this.service.listComgepRecommendations(Number(limit ?? 8));
+  }
+
+  @Post('comgep-recommendations')
+  @RequirePermission('bi', 'view')
+  createComgepRecommendation(
+    @Body()
+    body: {
+      title: string;
+      summary: string;
+      sessionId?: string | null;
+      sourceAgentType: string;
+      mode: string;
+      focusType?: string | null;
+      focusLabel?: string | null;
+      uf?: string | null;
+      omId?: string | null;
+      evidence?: unknown;
+    },
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.service.createComgepRecommendation(body, user);
   }
 
   @Get('aggressor-profile')

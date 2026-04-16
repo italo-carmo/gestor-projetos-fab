@@ -4668,6 +4668,20 @@ export function useComgepSituationRoom(enabled = true) {
   });
 }
 
+export function useComgepRecommendations(limit = 8, enabled = true) {
+  return useQuery({
+    queryKey: qk.comgepRecommendations(limit),
+    queryFn: async () =>
+      (
+        await api.get("/strategic/comgep-recommendations", {
+          params: { limit },
+        })
+      ).data,
+    enabled,
+    staleTime: 30_000,
+  });
+}
+
 export function useAggressorProfile() {
   return useQuery({
     queryKey: ["strategic", "aggressorProfile"],
@@ -4787,6 +4801,18 @@ export function useExportBiExecutiveNotebookPdf() {
   });
 }
 
+export function useExportComgepCopilotPdf() {
+  return useMutation({
+    mutationFn: async (payload: { sessionId: string }) => {
+      const response = await api.post("/ai/action-agents/pdf", payload, {
+        responseType: "blob",
+      });
+      downloadPdfBlobResponse(response, "copiloto-comgep");
+      return true;
+    },
+  });
+}
+
 export type StrategicAiNarrativeResponse = {
   generatedAt: string;
   narrative: string;
@@ -4886,6 +4912,27 @@ export function useAiActionAgents(enabled = true) {
     queryFn: async () => (await api.get("/ai/action-agents")).data,
     enabled,
     staleTime: 60_000,
+  });
+}
+
+export function useCreateComgepRecommendation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      title: string;
+      summary: string;
+      sessionId?: string | null;
+      sourceAgentType: string;
+      mode: string;
+      focusType?: string | null;
+      focusLabel?: string | null;
+      uf?: string | null;
+      omId?: string | null;
+      evidence?: unknown;
+    }) => (await api.post("/strategic/comgep-recommendations", payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["strategic", "comgepRecommendations"] });
+    },
   });
 }
 

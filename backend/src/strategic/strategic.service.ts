@@ -1,4 +1,9 @@
-import { Injectable, ServiceUnavailableException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { BiNormalizationService } from '../bi/bi-normalization.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ActivityScope } from '@prisma/client';
@@ -14,6 +19,7 @@ import {
   LITELLM_BASE_URL_ENV_KEYS,
 } from '../llm/litellm.service';
 import PDFDocument from 'pdfkit';
+import type { RbacUser } from '../rbac/rbac.types';
 
 const PT_STOPWORDS = new Set([
   'a',
@@ -1140,6 +1146,20 @@ export class StrategicService {
               (item.presence?.signedReports ?? 0),
           }))
           .sort((a: any, b: any) => b.totalEvents - a.totalEvents),
+        uncoveredOms: omRiskRowsWithScore
+          .filter((item: any) => !item.covered)
+          .sort((a: any, b: any) => {
+            if (b.riskScore !== a.riskScore) return b.riskScore - a.riskScore;
+            return String(a.code ?? '').localeCompare(
+              String(b.code ?? ''),
+              'pt-BR',
+              {
+                sensitivity: 'base',
+              },
+            );
+          }),
+        omRiskIndex: omRiskRowsWithScore,
+        ufMatrix: ufRows,
       },
       watchlists: {
         criticalUfs: criticalUfRows,
@@ -1148,6 +1168,127 @@ export class StrategicService {
         operationalPressure,
       },
     };
+  }
+
+  async listComgepRecommendations(limit = 8) {
+    const take = Math.max(1, Math.min(50, Number(limit) || 8));
+    const items = await (this.prisma as any).strategicRecommendation.findMany({
+      orderBy: [{ createdAt: 'desc' }],
+      take,
+      include: {
+        om: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            uf: true,
+          },
+        },
+        createdBy: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    return {
+      items: items.map((item: any) => ({
+        ...item,
+        evidenceCount: Array.isArray(item.evidenceJson)
+          ? item.evidenceJson.length
+          : 0,
+      })),
+    };
+  }
+
+  async createComgepRecommendation(
+    payload: {
+      title: string;
+      summary: string;
+      sessionId?: string | null;
+      sourceAgentType: string;
+      mode: string;
+      focusType?: string | null;
+      focusLabel?: string | null;
+      uf?: string | null;
+      omId?: string | null;
+      evidence?: unknown;
+    },
+    user?: RbacUser,
+  ) {
+    const title = String(payload.title ?? '').trim();
+    const summary = this.normalizeStrategicRecommendationText(payload.summary);
+    if (!title) {
+      throw new BadRequestException('Título da recomendação não informado.');
+    }
+    if (!summary) {
+      throw new BadRequestException('Resumo da recomendação não informado.');
+    }
+
+    const omId = String(payload.omId ?? '').trim() || null;
+    if (omId) {
+      const om = await this.prisma.om.findUnique({
+        where: { id: omId },
+        select: { id: true },
+      });
+      if (!om) {
+        throw new NotFoundException('OM da recomendação não encontrada.');
+      }
+    }
+
+    const created = await (this.prisma as any).strategicRecommendation.create({
+      data: {
+        title,
+        summary,
+        sessionId: String(payload.sessionId ?? '').trim() || null,
+        sourceAgentType:
+          String(payload.sourceAgentType ?? '').trim() || 'briefing_comgep',
+        mode: String(payload.mode ?? '').trim() || 'executive',
+        focusType: String(payload.focusType ?? '').trim() || null,
+        focusLabel: String(payload.focusLabel ?? '').trim() || null,
+        uf: String(payload.uf ?? '').trim().toUpperCase() || null,
+        omId,
+        evidenceJson:
+          payload.evidence && typeof payload.evidence === 'object'
+            ? (payload.evidence as any)
+            : null,
+        createdById: String(user?.id ?? '').trim() || null,
+      },
+      include: {
+        om: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            uf: true,
+          },
+        },
+        createdBy: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    return {
+      ...created,
+      evidenceCount: Array.isArray(created.evidenceJson)
+        ? created.evidenceJson.length
+        : 0,
+    };
+  }
+
+  private normalizeStrategicRecommendationText(value: unknown) {
+    return String(value ?? '')
+      .replace(/\r\n/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
   }
 
   async situationalDashboard(filters?: StrategicSourceFilter) {

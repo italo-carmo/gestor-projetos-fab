@@ -3,7 +3,12 @@ import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RbacGuard } from '../rbac/rbac.guard';
 import { RequirePermission } from '../rbac/require-permission.decorator';
-import { AiService, AnalysisType } from './ai.service';
+import {
+  AiService,
+  AnalysisType,
+  type ComgepCopilotMode,
+  type ComgepCopilotFocus,
+} from './ai.service';
 
 @Controller('ai')
 @UseGuards(JwtAuthGuard, RbacGuard)
@@ -115,6 +120,8 @@ export class AiController {
     body: {
       type: 'briefing_comgep' | 'priorizacao_intervencao' | 'governanca_cpca';
       uf?: string | null;
+      mode?: ComgepCopilotMode | null;
+      focus?: Partial<ComgepCopilotFocus> | null;
     },
     @Res() res: Response,
   ) {
@@ -127,6 +134,8 @@ export class AiController {
     try {
       for await (const chunk of this.ai.runActionAgentStream(body.type, {
         uf: body.uf,
+        mode: body.mode,
+        focus: body.focus,
       })) {
         res.write(chunk);
       }
@@ -135,5 +144,50 @@ export class AiController {
       res.write(`event: error\ndata: ${JSON.stringify({ message: msg })}\n\n`);
     }
     res.end();
+  }
+
+  @Post('action-agents/follow-up')
+  @RequirePermission('bi', 'view')
+  async followUpActionAgent(
+    @Body()
+    body: {
+      sessionId: string;
+      message: string;
+      mode?: ComgepCopilotMode | null;
+      focus?: Partial<ComgepCopilotFocus> | null;
+    },
+    @Res() res: Response,
+  ) {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+
+    try {
+      for await (const chunk of this.ai.followUpActionAgentStream(body)) {
+        res.write(chunk);
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      res.write(`event: error\ndata: ${JSON.stringify({ message: msg })}\n\n`);
+    }
+    res.end();
+  }
+
+  @Post('action-agents/pdf')
+  @RequirePermission('bi', 'view')
+  async actionAgentPdf(
+    @Body() body: { sessionId: string },
+    @Res() res: Response,
+  ) {
+    const buffer = await this.ai.actionAgentSessionPdf(body.sessionId);
+    const filename = `copiloto-comgep-${new Date().toISOString().slice(0, 10)}.pdf`;
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
   }
 }

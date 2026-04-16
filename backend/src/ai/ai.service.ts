@@ -1,4 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import { LitellmService, ChatMessage } from '../llm/litellm.service';
 import {
   type AiAnalysisType,
@@ -23,6 +24,74 @@ export type ActionAgentType =
   | 'briefing_comgep'
   | 'priorizacao_intervencao'
   | 'governanca_cpca';
+
+export type ComgepCopilotMode = 'executive' | 'analyst';
+
+export type ComgepCopilotFocus = {
+  kind:
+    | 'overview'
+    | 'kpi_covered_oms'
+    | 'kpi_critical_ufs'
+    | 'kpi_high_risk_oms'
+    | 'kpi_operational_presence'
+    | 'uf'
+    | 'om'
+    | 'coverage_gap'
+    | 'operational_pressure';
+  label?: string;
+  description?: string;
+  uf?: string | null;
+  omId?: string | null;
+  refId?: string | null;
+};
+
+type ComgepCopilotEvidenceItem = {
+  id: string;
+  type: 'om';
+  omId: string | null;
+  omCode: string;
+  omName: string;
+  title: string;
+  uf: string;
+  score: number;
+  reason: string;
+  link: string;
+  source: string;
+  coverageType?: string | null;
+};
+
+type ComgepCopilotMessage = {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  createdAt: string;
+  mode: ComgepCopilotMode;
+  focus: ComgepCopilotFocus | null;
+  evidences: ComgepCopilotEvidenceItem[];
+  agentType: ActionAgentType;
+};
+
+type ComgepCopilotSession = {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  agentType: ActionAgentType;
+  scopeUf: string | null;
+  mode: ComgepCopilotMode;
+  focus: ComgepCopilotFocus | null;
+  messages: ComgepCopilotMessage[];
+};
+
+type ComgepCopilotStreamParams = {
+  agentType: ActionAgentType;
+  room: any;
+  scopeUf: string | null;
+  mode: ComgepCopilotMode;
+  focus: ComgepCopilotFocus | null;
+  evidences: ComgepCopilotEvidenceItem[];
+  history: ComgepCopilotMessage[];
+  userMessage: string;
+};
 
 export const ANALYSIS_CATALOG: {
   type: AnalysisType;
@@ -105,6 +174,8 @@ type NarrativePdfBlock =
 export class AiService {
   private readonly logger = new Logger(AiService.name);
   private readonly streamIdleTimeoutMs = 90_000;
+  private readonly comgepSessionTtlMs = 4 * 60 * 60 * 1000;
+  private readonly comgepSessions = new Map<string, ComgepCopilotSession>();
 
   constructor(
     private readonly litellm: LitellmService,
@@ -134,13 +205,18 @@ export class AiService {
 
   async *runActionAgentStream(
     type: ActionAgentType,
-    options?: { uf?: string | null },
+    options?: {
+      uf?: string | null;
+      mode?: ComgepCopilotMode | null;
+      focus?: Partial<ComgepCopilotFocus> | null;
+    },
   ): AsyncGenerator<string> {
-    const safeType: ActionAgentType = ACTION_AGENT_CATALOG.some(
-      (item) => item.type === type,
-    )
-      ? type
-      : 'briefing_comgep';
+    const safeType = this.normalizeActionAgentType(type);
+    const scopeUf = String(options?.uf ?? '').trim().toUpperCase() || null;
+    const mode = this.normalizeComgepMode(options?.mode);
+    const focus = this.normalizeComgepFocus(options?.focus, scopeUf);
+
+    this.pruneComgepSessions();
 
     yield this.sseEvent('progress', {
       percent: 5,
@@ -148,127 +224,202 @@ export class AiService {
     });
 
     const room = await this.strategic.comgepSituationRoom();
-    const scopeUf = String(options?.uf ?? '').trim().toUpperCase() || null;
+    const initialUserMessage = this.buildInitialComgepUserMessage(
+      safeType,
+      mode,
+      focus,
+      scopeUf,
+    );
+    const session = this.createComgepSession({
+      agentType: safeType,
+      scopeUf,
+      mode,
+      focus,
+    });
+    this.pushComgepMessage(session, {
+      role: 'user',
+      content: initialUserMessage,
+      mode,
+      focus,
+      evidences: [],
+    });
+
+    yield this.sseEvent('progress', {
+      percent: 18,
+      stage: 'Selecionando evidências e foco atual...',
+    });
+
+    const evidences = this.selectComgepEvidences({
+      room,
+      scopeUf,
+      focus,
+      agentType: safeType,
+    });
 
     yield this.sseEvent('progress', {
       percent: 24,
-      stage: 'Preparando contexto executivo...',
+      stage: 'Preparando contexto conversacional...',
     });
-
-    const systemPrompt = await this.settings.getSystemPrompt();
-    const prompt = this.buildActionAgentPrompt(safeType, room, scopeUf);
-    const messages: ChatMessage[] = [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: prompt },
-    ];
-
-    yield this.sseEvent('progress', {
-      percent: 30,
-      stage: 'Enviando ao modelo...',
-    });
-
-    const configuredModel = this.litellm.getDefaultModel();
-    const iterator = this.litellm
-      .chatCompletionStream({
-        messages,
-        temperature: 0.2,
-        max_tokens: 1600,
-      })
-      [Symbol.asyncIterator]();
-
-    let tokenCount = 0;
-    let fullText = '';
 
     try {
-      while (true) {
-        let timeoutHandle: NodeJS.Timeout | undefined;
-        let next: IteratorResult<{ type: 'token'; text: string } | { type: 'done'; model: string }>;
-        try {
-          next = (await Promise.race([
-            iterator.next(),
-            new Promise<IteratorResult<any>>((_, reject) => {
-              timeoutHandle = setTimeout(() => {
-                reject(new Error('LITELLM_STREAM_IDLE_TIMEOUT'));
-              }, this.streamIdleTimeoutMs);
-            }),
-          ])) as IteratorResult<any>;
-        } finally {
-          if (timeoutHandle) clearTimeout(timeoutHandle);
-        }
-        if (next.done) break;
+      const completion = this.streamComgepAssistantCompletion({
+        agentType: safeType,
+        room,
+        scopeUf,
+        mode,
+        focus,
+        evidences,
+        history: session.messages,
+        userMessage: initialUserMessage,
+      });
 
-        const chunk = next.value;
-        if (chunk.type === 'token') {
-          fullText += chunk.text;
-          tokenCount += 1;
-          const progress = Math.min(
-            95,
-            30 + Math.floor((tokenCount / 240) * 65),
-          );
-          yield this.sseEvent('token', { text: chunk.text, percent: progress });
-        } else if (chunk.type === 'done') {
-          if (!fullText.trim()) {
-            try {
-              yield this.sseEvent('progress', {
-                percent: 88,
-                stage: 'Recuperando resposta final do modelo...',
-              });
-              const fallback = await this.litellm.chatCompletion({
-                messages,
-                temperature: 0.2,
-                max_tokens: 1400,
-              });
-              fullText = fallback.content.trim();
-              if (!fullText) {
-                throw new Error(
-                  'O modelo encerrou a execução sem gerar conteúdo útil.',
-                );
-              }
-              yield this.sseEvent('done', {
-                percent: 100,
-                narrative: fullText,
-                model: fallback.model,
-                generatedAt: new Date().toISOString(),
-                scopeUf,
-              });
-              return;
-            } catch (fallbackError) {
-              const msg =
-                fallbackError instanceof Error
-                  ? fallbackError.message
-                  : String(fallbackError);
-              yield this.sseEvent('error', { message: msg });
-              return;
-            }
-          }
-          yield this.sseEvent('done', {
-            percent: 100,
-            narrative: fullText,
-            model: chunk.model,
-            generatedAt: new Date().toISOString(),
-            scopeUf,
-          });
-          return;
+      let finalResult: { narrative: string; model: string } | undefined;
+      while (true) {
+        const next = await completion.next();
+        if (next.done) {
+          finalResult = next.value;
+          break;
         }
+        yield next.value;
       }
+
+      if (!finalResult || !String(finalResult.narrative ?? '').trim()) {
+        throw new Error('O modelo encerrou a execução sem retorno final.');
+      }
+
+      const assistantMessage = this.pushComgepMessage(session, {
+        role: 'assistant',
+        content: finalResult.narrative,
+        mode,
+        focus,
+        evidences,
+      });
+      const latestEvidenceLinks = this.extractEvidenceLinks(evidences);
+
+      yield this.sseEvent('done', {
+        percent: 100,
+        narrative: finalResult.narrative,
+        model: finalResult.model,
+        generatedAt: assistantMessage.createdAt,
+        scopeUf,
+        sessionId: session.id,
+        messageId: assistantMessage.id,
+        mode,
+        focus,
+        evidences,
+        evidenceLinks: latestEvidenceLinks,
+      });
     } catch (e) {
-      let msg = e instanceof Error ? e.message : String(e);
-      if (msg === 'LITELLM_STREAM_IDLE_TIMEOUT') {
-        msg =
-          `Sem resposta do modelo por ${Math.round(this.streamIdleTimeoutMs / 1000)}s ` +
-          `(modelo configurado: ${configuredModel}). Verifique disponibilidade no LiteLLM.`;
-      }
+      const msg = e instanceof Error ? e.message : String(e);
       yield this.sseEvent('error', { message: msg });
+    }
+  }
+
+  async *followUpActionAgentStream(args: {
+    sessionId: string;
+    message: string;
+    mode?: ComgepCopilotMode | null;
+    focus?: Partial<ComgepCopilotFocus> | null;
+  }): AsyncGenerator<string> {
+    const session = this.getComgepSessionOrThrow(args.sessionId);
+    const message = String(args.message ?? '').trim();
+    if (!message) {
+      yield this.sseEvent('error', {
+        message: 'Escreva uma pergunta para continuar a sessão.',
+      });
       return;
     }
 
-    yield this.sseEvent('done', {
-      percent: 100,
-      narrative: fullText,
-      model: configuredModel,
-      generatedAt: new Date().toISOString(),
-      scopeUf,
+    const mode = this.normalizeComgepMode(args.mode ?? session.mode);
+    const scopeUf = session.scopeUf;
+    const focus = this.normalizeComgepFocus(args.focus, scopeUf) ?? session.focus;
+
+    session.mode = mode;
+    session.focus = focus;
+    session.updatedAt = new Date().toISOString();
+
+    yield this.sseEvent('progress', {
+      percent: 5,
+      stage: 'Atualizando o contexto da sessão...',
     });
+
+    const room = await this.strategic.comgepSituationRoom();
+    const userMessage = this.pushComgepMessage(session, {
+      role: 'user',
+      content: message,
+      mode,
+      focus,
+      evidences: [],
+    });
+
+    yield this.sseEvent('progress', {
+      percent: 18,
+      stage: 'Reavaliando foco e evidências...',
+    });
+
+    const evidences = this.selectComgepEvidences({
+      room,
+      scopeUf,
+      focus,
+      agentType: session.agentType,
+    });
+
+    try {
+      const completion = this.streamComgepAssistantCompletion({
+        agentType: session.agentType,
+        room,
+        scopeUf,
+        mode,
+        focus,
+        evidences,
+        history: session.messages,
+        userMessage: userMessage.content,
+      });
+
+      let finalResult: { narrative: string; model: string } | undefined;
+      while (true) {
+        const next = await completion.next();
+        if (next.done) {
+          finalResult = next.value;
+          break;
+        }
+        yield next.value;
+      }
+
+      if (!finalResult || !String(finalResult.narrative ?? '').trim()) {
+        throw new Error('O modelo encerrou a execução sem retorno final.');
+      }
+
+      const assistantMessage = this.pushComgepMessage(session, {
+        role: 'assistant',
+        content: finalResult.narrative,
+        mode,
+        focus,
+        evidences,
+      });
+
+      yield this.sseEvent('done', {
+        percent: 100,
+        narrative: finalResult.narrative,
+        model: finalResult.model,
+        generatedAt: assistantMessage.createdAt,
+        scopeUf,
+        sessionId: session.id,
+        messageId: assistantMessage.id,
+        mode,
+        focus,
+        evidences,
+        evidenceLinks: this.extractEvidenceLinks(evidences),
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      yield this.sseEvent('error', { message: msg });
+    }
+  }
+
+  async actionAgentSessionPdf(sessionId: string): Promise<Buffer> {
+    const session = this.getComgepSessionOrThrow(sessionId);
+    return this.renderComgepSessionPdf(session);
   }
 
   async analysisPdf(
@@ -1263,35 +1414,765 @@ export class AiService {
       .replace(/\n{3,}/g, '\n\n');
   }
 
-  private buildActionAgentPrompt(
-    type: ActionAgentType,
-    room: any,
+  private normalizeActionAgentType(type: ActionAgentType): ActionAgentType {
+    return ACTION_AGENT_CATALOG.some((item) => item.type === type)
+      ? type
+      : 'briefing_comgep';
+  }
+
+  private normalizeComgepMode(
+    value: ComgepCopilotMode | string | null | undefined,
+  ): ComgepCopilotMode {
+    return String(value ?? '').trim().toLowerCase() === 'analyst'
+      ? 'analyst'
+      : 'executive';
+  }
+
+  private normalizeComgepFocus(
+    value: Partial<ComgepCopilotFocus> | null | undefined,
+    scopeUf: string | null,
+  ): ComgepCopilotFocus | null {
+    if (!value || typeof value !== 'object') {
+      return scopeUf
+        ? {
+            kind: 'uf',
+            label: `UF ${scopeUf}`,
+            description: `Leitura concentrada na UF ${scopeUf}.`,
+            uf: scopeUf,
+          }
+        : null;
+    }
+
+    const kindSet = new Set<ComgepCopilotFocus['kind']>([
+      'overview',
+      'kpi_covered_oms',
+      'kpi_critical_ufs',
+      'kpi_high_risk_oms',
+      'kpi_operational_presence',
+      'uf',
+      'om',
+      'coverage_gap',
+      'operational_pressure',
+    ]);
+    const rawKind = String(value.kind ?? '').trim() as ComgepCopilotFocus['kind'];
+    const kind = kindSet.has(rawKind) ? rawKind : 'overview';
+    const uf = String(value.uf ?? '').trim().toUpperCase() || scopeUf || null;
+    const focus: ComgepCopilotFocus = {
+      kind,
+      label: String(value.label ?? '').trim() || undefined,
+      description: String(value.description ?? '').trim() || undefined,
+      uf:
+        kind === 'uf' ||
+        kind === 'coverage_gap' ||
+        kind === 'operational_pressure'
+          ? uf
+          : uf && kind === 'overview'
+            ? uf
+            : value.uf
+              ? uf
+              : null,
+      omId: String(value.omId ?? '').trim() || null,
+      refId: String(value.refId ?? '').trim() || null,
+    };
+
+    return focus;
+  }
+
+  private createComgepSession(args: {
+    agentType: ActionAgentType;
+    scopeUf: string | null;
+    mode: ComgepCopilotMode;
+    focus: ComgepCopilotFocus | null;
+  }) {
+    const now = new Date().toISOString();
+    const session: ComgepCopilotSession = {
+      id: randomUUID(),
+      createdAt: now,
+      updatedAt: now,
+      agentType: args.agentType,
+      scopeUf: args.scopeUf,
+      mode: args.mode,
+      focus: args.focus,
+      messages: [],
+    };
+    this.comgepSessions.set(session.id, session);
+    return session;
+  }
+
+  private pushComgepMessage(
+    session: ComgepCopilotSession,
+    input: Omit<ComgepCopilotMessage, 'id' | 'createdAt' | 'agentType'>,
+  ) {
+    const message: ComgepCopilotMessage = {
+      id: randomUUID(),
+      createdAt: new Date().toISOString(),
+      agentType: session.agentType,
+      ...input,
+    };
+    session.messages = [...session.messages.slice(-11), message];
+    session.updatedAt = message.createdAt;
+    session.mode = input.mode;
+    session.focus = input.focus;
+    this.comgepSessions.set(session.id, session);
+    return message;
+  }
+
+  private pruneComgepSessions() {
+    const now = Date.now();
+    for (const [sessionId, session] of this.comgepSessions.entries()) {
+      const updatedAtMs = new Date(session.updatedAt).getTime();
+      if (
+        !Number.isFinite(updatedAtMs) ||
+        now - updatedAtMs > this.comgepSessionTtlMs
+      ) {
+        this.comgepSessions.delete(sessionId);
+      }
+    }
+  }
+
+  private getComgepSessionOrThrow(sessionId: string) {
+    this.pruneComgepSessions();
+    const safeSessionId = String(sessionId ?? '').trim();
+    if (!safeSessionId) {
+      throw new NotFoundException('Sessão do copiloto não informada.');
+    }
+    const session = this.comgepSessions.get(safeSessionId);
+    if (!session) {
+      throw new NotFoundException(
+        'Sessão do copiloto expirou ou não foi encontrada.',
+      );
+    }
+    return session;
+  }
+
+  private buildInitialComgepUserMessage(
+    agentType: ActionAgentType,
+    mode: ComgepCopilotMode,
+    focus: ComgepCopilotFocus | null,
     scopeUf: string | null,
   ) {
-    const scopeLabel = scopeUf ? `UF ${scopeUf}` : 'visão nacional';
-    const roomSummary = this.buildCompactActionAgentContext(room, scopeUf);
+    const agent = ACTION_AGENT_CATALOG.find((item) => item.type === agentType);
+    const scopeLabel = scopeUf ? `na UF ${scopeUf}` : 'em visão nacional';
+    return `Executar ${agent?.title ?? 'copiloto COMGEP'} no modo ${mode === 'analyst' ? 'analista' : 'executivo'} ${scopeLabel}, com foco em ${this.describeComgepFocus(focus, scopeUf)}.`;
+  }
+
+  private describeComgepFocus(
+    focus: ComgepCopilotFocus | null,
+    scopeUf: string | null,
+  ) {
+    if (!focus) {
+      return scopeUf
+        ? `cenário geral da UF ${scopeUf}`
+        : 'cenário geral da Sala COMGEP';
+    }
+    if (focus.label) return focus.label;
+    switch (focus.kind) {
+      case 'kpi_covered_oms':
+        return 'OMs cobertas pela CPCA';
+      case 'kpi_critical_ufs':
+        return 'UFs prioritárias';
+      case 'kpi_high_risk_oms':
+        return 'OMs de maior risco';
+      case 'kpi_operational_presence':
+        return 'presença operacional';
+      case 'uf':
+        return focus.uf ? `UF ${focus.uf}` : 'UF selecionada';
+      case 'om':
+        return focus.description || 'OM selecionada';
+      case 'coverage_gap':
+        return focus.description || 'gaps de cobertura CPCA';
+      case 'operational_pressure':
+        return focus.description || 'pressão operacional';
+      default:
+        return scopeUf
+          ? `cenário geral da UF ${scopeUf}`
+          : 'cenário geral da Sala COMGEP';
+    }
+  }
+
+  private async *streamComgepAssistantCompletion(
+    params: ComgepCopilotStreamParams,
+  ): AsyncGenerator<string, { narrative: string; model: string }, void> {
+    const systemPrompt = await this.settings.getSystemPrompt();
+    const prompt = this.buildComgepCopilotPrompt(params);
+    const messages: ChatMessage[] = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: prompt },
+    ];
+
+    yield this.sseEvent('progress', {
+      percent: 30,
+      stage: 'Enviando ao modelo...',
+    });
+
+    const configuredModel = this.litellm.getDefaultModel();
+    const iterator = this.litellm
+      .chatCompletionStream({
+        messages,
+        temperature: params.mode === 'analyst' ? 0.12 : 0.18,
+        max_tokens: params.mode === 'analyst' ? 1900 : 1500,
+      })
+      [Symbol.asyncIterator]();
+
+    let tokenCount = 0;
+    let fullText = '';
+
+    try {
+      while (true) {
+        let timeoutHandle: NodeJS.Timeout | undefined;
+        let next: IteratorResult<
+          { type: 'token'; text: string } | { type: 'done'; model: string }
+        >;
+        try {
+          next = (await Promise.race([
+            iterator.next(),
+            new Promise<IteratorResult<any>>((_, reject) => {
+              timeoutHandle = setTimeout(() => {
+                reject(new Error('LITELLM_STREAM_IDLE_TIMEOUT'));
+              }, this.streamIdleTimeoutMs);
+            }),
+          ])) as IteratorResult<any>;
+        } finally {
+          if (timeoutHandle) clearTimeout(timeoutHandle);
+        }
+        if (next.done) break;
+
+        const chunk = next.value;
+        if (chunk.type === 'token') {
+          fullText += chunk.text;
+          tokenCount += 1;
+          const progress = Math.min(
+            95,
+            32 + Math.floor((tokenCount / 240) * 63),
+          );
+          yield this.sseEvent('token', { text: chunk.text, percent: progress });
+          continue;
+        }
+
+        if (!fullText.trim()) {
+          yield this.sseEvent('progress', {
+            percent: 88,
+            stage: 'Recuperando resposta final do modelo...',
+          });
+          const fallback = await this.litellm.chatCompletion({
+            messages,
+            temperature: params.mode === 'analyst' ? 0.12 : 0.18,
+            max_tokens: params.mode === 'analyst' ? 1800 : 1400,
+          });
+          fullText = fallback.content.trim();
+          if (!fullText) {
+            throw new Error(
+              'O modelo encerrou a execução sem gerar conteúdo útil.',
+            );
+          }
+          return {
+            narrative: fullText,
+            model: fallback.model,
+          };
+        }
+
+        return {
+          narrative: fullText,
+          model: chunk.model,
+        };
+      }
+    } catch (e) {
+      let msg = e instanceof Error ? e.message : String(e);
+      if (msg === 'LITELLM_STREAM_IDLE_TIMEOUT') {
+        msg =
+          `Sem resposta do modelo por ${Math.round(this.streamIdleTimeoutMs / 1000)}s ` +
+          `(modelo configurado: ${configuredModel}). Verifique disponibilidade no LiteLLM.`;
+      }
+      throw new Error(msg);
+    }
+
+    return {
+      narrative: fullText,
+      model: configuredModel,
+    };
+  }
+
+  private buildComgepCopilotPrompt(params: ComgepCopilotStreamParams) {
+    const scopeLabel = params.scopeUf
+      ? `UF ${params.scopeUf}`
+      : 'visão nacional';
+    const focusLabel = this.describeComgepFocus(params.focus, params.scopeUf);
+    const roomSummary = this.buildCompactActionAgentContext(
+      params.room,
+      params.scopeUf,
+    );
+    const compactRoomJson = this.truncateText(
+      JSON.stringify(roomSummary, null, 2),
+      14_000,
+    );
+    const evidenceLines =
+      params.evidences.length > 0
+        ? params.evidences
+            .slice(0, 8)
+            .map(
+              (item, index) =>
+                `${index + 1}. ${item.omCode} | ${item.uf} | score ${item.score} | ${item.reason} | ${item.link}`,
+            )
+            .join('\n')
+        : 'Nenhuma evidência OM específica foi selecionada. Use o resumo da sala.';
+    const historyLines =
+      params.history.length > 0
+        ? params.history
+            .slice(-6)
+            .map((item) => {
+              const roleLabel =
+                item.role === 'assistant' ? 'Assistente' : 'Usuário';
+              const focusLabelLine = this.describeComgepFocus(
+                item.focus,
+                params.scopeUf,
+              );
+              return `- ${roleLabel} [modo=${item.mode}; foco=${focusLabelLine}]: ${this.truncateText(
+                this.normalizeInlineMarkdown(item.content),
+                420,
+              )}`;
+            })
+            .join('\n')
+        : 'Sem histórico anterior.';
+
+    const modeInstruction =
+      params.mode === 'analyst'
+        ? [
+            'Modo analista: detalhe a lógica, mas de forma objetiva.',
+            'Explique por que a conclusão foi formada, cite lacunas e mostre rastreabilidade.',
+            'Estruture em: 1) Resposta direta; 2) Evidências; 3) Riscos e limites; 4) Encaminhamento.',
+          ].join(' ')
+        : [
+            'Modo executivo: responda curto e direto.',
+            'Estruture em: 1) Síntese; 2) Decisão recomendada; 3) Risco se nada for feito; 4) Próxima ação.',
+            'Use no máximo 4 bullets por seção.',
+          ].join(' ');
 
     const instructionsByType: Record<ActionAgentType, string> = {
       briefing_comgep:
-        'Monte um briefing executivo. Estrutura obrigatória: 1) Síntese executiva; 2) Riscos prioritários; 3) UFs/OMs a observar; 4) Decisões recomendadas em 72h; 5) Ações em 30 dias; 6) Alertas sobre confiança do dado.',
+        'Você é o copiloto executivo da Sala COMGEP. Seu papel é transformar o quadro atual em decisão objetiva para o gestor.',
       priorizacao_intervencao:
-        'Monte uma priorização operacional. Estrutura obrigatória: 1) Ranking das prioridades; 2) Motivo objetivo por prioridade; 3) Pacote de intervenção recomendado por UF/OM; 4) Sequência sugerida de emprego; 5) Dependências e riscos de execução.',
+        'Você é o copiloto de priorização. Seu papel é ordenar esforço, comparar impacto e sugerir a melhor sequência de intervenção.',
       governanca_cpca:
-        'Monte uma análise de governança CPCA. Estrutura obrigatória: 1) Situação da cobertura; 2) Gargalos de governança; 3) OMs descobertas ou fragilizadas; 4) Medidas imediatas; 5) Ajustes estruturais; 6) Riscos se nada for feito.',
+        'Você é o copiloto de governança CPCA. Seu papel é explicar cobertura, gargalos, risco de exposição institucional e ajuste de comissão.',
     };
 
     return [
-      `Você está atuando como assessor executivo do COMGEP na ${scopeLabel}.`,
-      'Use somente o contexto fornecido abaixo. Não invente números.',
-      'Se houver lacuna de dado, declare isso explicitamente.',
-      'Escreva em português, com foco em decisão, objetividade e rastreabilidade.',
+      instructionsByType[params.agentType],
+      `Escopo ativo: ${scopeLabel}.`,
+      `Foco atual: ${focusLabel}.`,
+      modeInstruction,
+      'Use somente o contexto fornecido. Não invente números nem links.',
+      'Quando citar uma conclusão, explicite OM/UF, score e motivo sempre que existirem nas evidências.',
       'Não use tabelas markdown.',
-      'Use seções curtas com no máximo 4 bullets por seção e frases objetivas.',
-      instructionsByType[type],
       '',
-      'Contexto estruturado da Sala de Situação COMGEP:',
-      JSON.stringify(roomSummary, null, 2),
+      'Histórico resumido da sessão:',
+      historyLines,
+      '',
+      'Pergunta ou comando atual do usuário:',
+      params.userMessage,
+      '',
+      'Evidências selecionadas para esta resposta:',
+      evidenceLines,
+      '',
+      'Resumo estruturado da Sala COMGEP:',
+      compactRoomJson,
     ].join('\n');
+  }
+
+  private selectComgepEvidences(args: {
+    room: any;
+    scopeUf: string | null;
+    focus: ComgepCopilotFocus | null;
+    agentType: ActionAgentType;
+  }): ComgepCopilotEvidenceItem[] {
+    const byId = new Map<string, ComgepCopilotEvidenceItem>();
+    const add = (item: any, source: string, reason?: string | null) => {
+      if (!item) return;
+      const omId = String(item.id ?? item.omId ?? '').trim() || null;
+      const code = String(item.code ?? item.omCode ?? '').trim();
+      const name = String(item.name ?? item.omName ?? '').trim();
+      const uf = String(item.uf ?? '').trim().toUpperCase();
+      if (!code || !uf) return;
+      const evidence: ComgepCopilotEvidenceItem = {
+        id: omId || `${code}-${uf}-${source}`,
+        type: 'om',
+        omId,
+        omCode: code,
+        omName: name || code,
+        title: name ? `${code} - ${name}` : code,
+        uf,
+        score: Number(item.riskScore ?? item.score ?? 0),
+        reason:
+          String(reason ?? '').trim() ||
+          this.describeComgepEvidenceReason(item, source),
+        link:
+          String(item.link ?? '').trim() ||
+          `/cpca-cases?omId=${encodeURIComponent(omId ?? code)}`,
+        source,
+        coverageType: String(item.coverageType ?? '').trim() || null,
+      };
+      byId.set(evidence.id, evidence);
+    };
+
+    const omRiskIndex = Array.isArray(args.room?.details?.omRiskIndex)
+      ? args.room.details.omRiskIndex
+      : [];
+    const ufMatrix = Array.isArray(args.room?.details?.ufMatrix)
+      ? args.room.details.ufMatrix
+      : [];
+    const highRiskOms = Array.isArray(args.room?.details?.highRiskOms)
+      ? args.room.details.highRiskOms
+      : [];
+    const uncoveredOms = Array.isArray(args.room?.details?.uncoveredOms)
+      ? args.room.details.uncoveredOms
+      : [];
+    const coveredOms = Array.isArray(args.room?.details?.coveredOms)
+      ? args.room.details.coveredOms
+      : [];
+
+    const addUfTopOms = (uf: string | null | undefined, source: string) => {
+      const safeUf = String(uf ?? '').trim().toUpperCase();
+      if (!safeUf) return;
+      const ufRow = ufMatrix.find(
+        (item: any) => String(item?.uf ?? '').trim().toUpperCase() === safeUf,
+      );
+      const ufOms = Array.isArray(ufRow?.oms) ? ufRow.oms.slice(0, 6) : [];
+      for (const om of ufOms) add(om, source);
+    };
+
+    switch (args.focus?.kind) {
+      case 'kpi_covered_oms':
+        coveredOms.slice(0, 8).forEach((item: any) =>
+          add(item, 'Cobertura CPCA'),
+        );
+        break;
+      case 'kpi_high_risk_oms':
+        highRiskOms.slice(0, 8).forEach((item: any) =>
+          add(item, 'OMs de maior risco'),
+        );
+        break;
+      case 'kpi_critical_ufs':
+        (Array.isArray(args.room?.details?.criticalUfs)
+          ? args.room.details.criticalUfs
+          : []
+        )
+          .slice(0, 4)
+          .forEach((item: any) => addUfTopOms(item.uf, 'UF prioritária'));
+        break;
+      case 'kpi_operational_presence':
+        (Array.isArray(args.room?.details?.operationalPresenceByUf)
+          ? args.room.details.operationalPresenceByUf
+          : []
+        )
+          .slice(0, 4)
+          .forEach((item: any) =>
+            addUfTopOms(item.uf, 'Presença operacional'),
+          );
+        break;
+      case 'uf':
+      case 'operational_pressure':
+        addUfTopOms(args.focus.uf, 'UF em foco');
+        break;
+      case 'om': {
+        const om = omRiskIndex.find(
+          (item: any) =>
+            String(item?.id ?? '').trim() === String(args.focus?.omId ?? '').trim(),
+        );
+        add(om, 'OM em foco');
+        break;
+      }
+      case 'coverage_gap':
+        if (args.focus.omId) {
+          const om = uncoveredOms.find(
+            (item: any) =>
+              String(item?.id ?? '').trim() ===
+              String(args.focus?.omId ?? '').trim(),
+          );
+          add(om, 'Gap de cobertura');
+        } else {
+          uncoveredOms.slice(0, 8).forEach((item: any) =>
+            add(item, 'Gap de cobertura'),
+          );
+        }
+        break;
+      default:
+        break;
+    }
+
+    if (byId.size === 0 && args.scopeUf) {
+      addUfTopOms(args.scopeUf, 'Escopo da sessão');
+    }
+
+    if (byId.size === 0) {
+      const baseList =
+        args.agentType === 'governanca_cpca'
+          ? uncoveredOms
+          : args.agentType === 'priorizacao_intervencao'
+            ? highRiskOms
+            : omRiskIndex;
+      baseList.slice(0, 8).forEach((item: any) =>
+        add(
+          item,
+          args.agentType === 'governanca_cpca'
+            ? 'Governança CPCA'
+            : args.agentType === 'priorizacao_intervencao'
+              ? 'Priorização'
+              : 'Sala COMGEP',
+        ),
+      );
+    }
+
+    return Array.from(byId.values()).slice(0, 8);
+  }
+
+  private describeComgepEvidenceReason(item: any, source: string) {
+    const sourceLabel = String(source ?? '').trim();
+    const complaints = item?.complaints ?? {};
+    const openCases = Number(complaints?.openCases ?? 0);
+    const retaliationCases = Number(complaints?.retaliationCases ?? 0);
+    const stalledCases = Number(complaints?.stalledCases ?? 0);
+    const surveyRate = Number(item?.surveyRate ?? 0);
+    const domesticRate = Number(item?.domesticRate ?? 0);
+    const reasons: string[] = [];
+    if (openCases > 0) reasons.push(`${openCases} denúncia(s) aberta(s)`);
+    if (retaliationCases > 0) {
+      reasons.push(`${retaliationCases} risco(s) de retaliação`);
+    }
+    if (stalledCases > 0) reasons.push(`${stalledCases} caso(s) parado(s)`);
+    if (surveyRate >= 20) {
+      reasons.push(`${surveyRate.toFixed(1)}% de sinal em pesquisa`);
+    }
+    if (domesticRate >= 15) {
+      reasons.push(`${domesticRate.toFixed(1)}% em violência doméstica`);
+    }
+    if (!reasons.length && item?.coverageType) {
+      reasons.push(String(item.coverageType));
+    }
+    if (!reasons.length) reasons.push(`evidência selecionada em ${sourceLabel}`);
+    return `${sourceLabel}: ${reasons.join(' • ')}`;
+  }
+
+  private extractEvidenceLinks(evidences: ComgepCopilotEvidenceItem[]) {
+    return evidences.map((item) => ({
+      omId: item.omId,
+      omCode: item.omCode,
+      title: item.title,
+      link: item.link,
+    }));
+  }
+
+  private async renderComgepSessionPdf(
+    session: ComgepCopilotSession,
+  ): Promise<Buffer> {
+    const agent = ACTION_AGENT_CATALOG.find(
+      (item) => item.type === session.agentType,
+    );
+    const latestAssistant = [...session.messages]
+      .reverse()
+      .find((item) => item.role === 'assistant');
+    const latestUser = [...session.messages]
+      .reverse()
+      .find((item) => item.role === 'user');
+    const evidences = latestAssistant?.evidences ?? [];
+    const narrativeBlocks = this.parseNarrativeBlocksForPdf(
+      latestAssistant?.content ?? '',
+    );
+
+    return new Promise((resolve, reject) => {
+      const doc = new PDFDocument({
+        size: 'A4',
+        margin: 44,
+        bufferPages: true,
+      });
+      const chunks: Buffer[] = [];
+      doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      const LEFT = 44;
+      const WIDTH = doc.page.width - LEFT * 2;
+      const PAGE_BOTTOM = doc.page.height - 44;
+      const BLUE = '#1A3C6E';
+      const DARK = '#1F2937';
+      const GRAY = '#6B7280';
+      const BORDER = '#D7DEE9';
+
+      const ensureSpace = (height: number) => {
+        if (doc.y + height > PAGE_BOTTOM) doc.addPage();
+      };
+
+      const section = (title: string) => {
+        ensureSpace(28);
+        doc.roundedRect(LEFT, doc.y, WIDTH, 22, 4).fill(BLUE);
+        doc
+          .font('Helvetica-Bold')
+          .fontSize(10)
+          .fillColor('#FFFFFF')
+          .text(title, LEFT + 10, doc.y + 6, { width: WIDTH - 20 });
+        doc.y += 30;
+      };
+
+      doc
+        .font('Helvetica-Bold')
+        .fontSize(18)
+        .fillColor(BLUE)
+        .text('Caderno do Copiloto COMGEP', LEFT, doc.y, { width: WIDTH });
+      doc.moveDown(0.25);
+      doc
+        .font('Helvetica')
+        .fontSize(10)
+        .fillColor(GRAY)
+        .text(
+          `${agent?.title ?? 'Copiloto COMGEP'} • sessão ${session.id.slice(0, 8)} • ${this.formatDateTimePtBr(session.updatedAt)}`,
+          LEFT,
+          doc.y,
+          { width: WIDTH },
+        );
+      doc.moveDown(0.6);
+
+      doc
+        .font('Helvetica')
+        .fontSize(9)
+        .fillColor(DARK)
+        .text(`Modo: ${session.mode === 'analyst' ? 'Analista' : 'Executivo'}`)
+        .text(
+          `Foco: ${this.describeComgepFocus(session.focus, session.scopeUf)}`,
+        )
+        .text(`Escopo: ${session.scopeUf ? `UF ${session.scopeUf}` : 'Nacional'}`)
+        .text(`Mensagens na sessão: ${session.messages.length}`);
+      doc.moveDown(0.6);
+
+      section('Pergunta mais recente');
+      doc
+        .font('Helvetica')
+        .fontSize(10)
+        .fillColor(DARK)
+        .text(latestUser?.content || 'Sem pergunta registrada.', LEFT, doc.y, {
+          width: WIDTH,
+          align: 'justify',
+        });
+      doc.moveDown(0.6);
+
+      section('Resposta consolidada');
+      for (const block of narrativeBlocks) {
+        if (block.type === 'heading') {
+          ensureSpace(20);
+          doc
+            .font('Helvetica-Bold')
+            .fontSize(12)
+            .fillColor(BLUE)
+            .text(block.text, LEFT, doc.y, { width: WIDTH });
+          doc.moveDown(0.25);
+          continue;
+        }
+        if (block.type === 'table') {
+          const header = block.header.join(' | ');
+          const rows = block.rows.map((row) => row.join(' | ')).join('\n');
+          ensureSpace(36);
+          doc
+            .font('Helvetica-Bold')
+            .fontSize(9)
+            .fillColor(DARK)
+            .text(header, LEFT, doc.y, { width: WIDTH });
+          doc.moveDown(0.15);
+          doc
+            .font('Helvetica')
+            .fontSize(8.5)
+            .fillColor(DARK)
+            .text(rows, LEFT, doc.y, { width: WIDTH });
+          doc.moveDown(0.35);
+          continue;
+        }
+        ensureSpace(42);
+        doc
+          .font('Helvetica')
+          .fontSize(10)
+          .fillColor(DARK)
+          .text(block.text, LEFT, doc.y, {
+            width: WIDTH,
+            align: 'justify',
+          });
+        doc.moveDown(0.45);
+      }
+
+      section('Evidências vinculadas');
+      if (!evidences.length) {
+        doc
+          .font('Helvetica')
+          .fontSize(10)
+          .fillColor(DARK)
+          .text('Esta resposta não retornou evidências OM estruturadas.', LEFT, doc.y, {
+            width: WIDTH,
+          });
+      } else {
+        for (const item of evidences) {
+          ensureSpace(42);
+          doc
+            .roundedRect(LEFT, doc.y, WIDTH, 38, 4)
+            .lineWidth(0.6)
+            .strokeColor(BORDER)
+            .stroke();
+          doc
+            .font('Helvetica-Bold')
+            .fontSize(10)
+            .fillColor(BLUE)
+            .text(
+              `${item.omCode} • ${item.uf} • score ${item.score}`,
+              LEFT + 10,
+              doc.y + 8,
+              { width: WIDTH - 20 },
+            );
+          doc
+            .font('Helvetica')
+            .fontSize(9)
+            .fillColor(DARK)
+            .text(item.reason, LEFT + 10, doc.y + 20, {
+              width: WIDTH - 20,
+            });
+          doc.y += 46;
+        }
+      }
+
+      section('Memória resumida da sessão');
+      for (const item of session.messages.slice(-8)) {
+        ensureSpace(26);
+        doc
+          .font('Helvetica-Bold')
+          .fontSize(9)
+          .fillColor(item.role === 'assistant' ? BLUE : DARK)
+          .text(
+            `${item.role === 'assistant' ? 'Assistente' : 'Usuário'} • ${this.formatDateTimePtBr(item.createdAt)}`,
+            LEFT,
+            doc.y,
+            { width: WIDTH },
+          );
+        doc
+          .font('Helvetica')
+          .fontSize(8.8)
+          .fillColor(DARK)
+          .text(this.truncateText(this.normalizeInlineMarkdown(item.content), 900), LEFT, doc.y + 2, {
+            width: WIDTH,
+          });
+        doc.moveDown(0.35);
+      }
+
+      const range = doc.bufferedPageRange();
+      for (let i = 0; i < range.count; i += 1) {
+        doc.switchToPage(i);
+        doc
+          .font('Helvetica')
+          .fontSize(8)
+          .fillColor(GRAY)
+          .text(
+            `Documento restrito • Copiloto COMGEP • Página ${i + 1}/${range.count}`,
+            LEFT,
+            doc.page.height - 28,
+            { width: WIDTH, align: 'center' },
+          );
+      }
+
+      doc.end();
+    });
   }
 
   private buildCompactActionAgentContext(room: any, scopeUf: string | null) {
