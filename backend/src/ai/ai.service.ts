@@ -30,6 +30,8 @@ export type ActionAgentType =
   | 'priorizacao_intervencao'
   | 'governanca_cpca';
 
+export type ChatProfileType = AnalysisType | 'chatbot';
+
 export type ComgepCopilotMode = 'executive' | 'analyst';
 
 export type ComgepCopilotFocus = {
@@ -197,6 +199,16 @@ Regras:
 5. Sempre que houver evidência, cite OM, UF, score e motivo.
 6. Não use tabelas markdown nem raciocínio interno.`;
 
+const CHATBOT_SYSTEM_PROMPT = `Você é o chatbot institucional do sistema CIPAVD/SMIF/CPCA.
+Regras:
+1. Responda sempre em português do Brasil.
+2. Use Markdown bem formatado.
+3. Use somente o contexto e as fontes permitidas desta execução.
+4. Não invente dados, registros, números ou links.
+5. Se a pergunta exigir informação fora do escopo permitido ou ausente no contexto, diga isso claramente e peça refinamento.
+6. Prefira resposta objetiva, com seções curtas, listas e destaque do que é mais relevante para o gestor ou operador.
+7. Nunca exponha raciocínio interno.`;
+
 const COMGEP_UF_ALIASES: Record<string, string[]> = {
   AC: ['acre'],
   AL: ['alagoas'],
@@ -282,6 +294,35 @@ export class AiService {
     } catch {
       return [...ALL_KNOWLEDGE_SOURCE_IDS];
     }
+  }
+
+  private async resolveChatProfileConfig(profile: ChatProfileType) {
+    const type = (profile === 'chatbot' ? 'chatbot' : profile) as AiAnalysisType;
+    const [configuredPrompt, configuredSources] = await Promise.all([
+      this.settings.getAnalysisPrompt(type),
+      this.resolveAnalysisSources(type),
+    ]);
+    return {
+      configuredPrompt: configuredPrompt?.trim() || null,
+      configuredSources: configuredSources,
+    };
+  }
+
+  private getDefaultChatbotInstruction(profile: ChatProfileType) {
+    if (profile === 'chatbot') {
+      return 'Responda como um analista conversacional do sistema inteiro, apto a orientar perguntas abertas sobre CIPAVD, SMIF e CPCA.';
+    }
+    const instructionsByType: Record<AnalysisType, string> = {
+      executive:
+        'Responda com leitura ampla do sistema, sintetizando o que for mais relevante para a pergunta.',
+      situational:
+        'Responda com foco em panorama situacional: pesquisas, denúncias, atividades, missões e tarefas.',
+      aggressor:
+        'Responda com foco em perfil de assédio, violência, agressor, vítima e relações hierárquicas.',
+      text: 'Responda com foco em análise textual, termos, tendências e padrões em textos livres.',
+      geo: 'Responda com foco geográfico, territorial e por UF/localidade.',
+    };
+    return instructionsByType[profile];
   }
 
   private async resolveActionAgentConfig(type: ActionAgentType) {
@@ -808,104 +849,452 @@ export class AiService {
   async *chatStream(
     message: string,
     history: ChatMessage[],
-    analysisType?: AnalysisType,
+    profile?: ChatProfileType,
   ): AsyncGenerator<string> {
-    const systemPrompt = await this.settings.getSystemPrompt();
-    const analysisSources = analysisType
-      ? await this.resolveAnalysisSources(analysisType)
-      : undefined;
-
-    let contextSummary: string;
-    try {
-      const dashboard = analysisType
-        ? await this.strategic.situationalDashboard({
-            sources: analysisSources,
-          })
-        : await this.strategic.situationalDashboard();
-      const complaints = (dashboard as any).complaints ?? {};
-      const surveys = (dashboard as any).surveys ?? {};
-      contextSummary =
-        `Dados do sistema (resumo compacto para contexto):\n` +
-        `- Pesquisas: ${surveys.totalResponses ?? 0} respondentes, taxa de violência ${surveys.violenceRatePercent ?? 0}%\n` +
-        `- Denúncias: ${complaints.totalCases ?? 0} total, ${complaints.openCases ?? 0} em aberto\n` +
-        `- Atividades: ${(dashboard as any).activities?.totalActivities ?? 0}\n` +
-        `- Missões: ${(dashboard as any).missions?.totalMissions ?? 0}\n` +
-        `- Localidades: ${(dashboard as any).localityCount ?? 0}`;
-    } catch {
-      contextSummary = 'Dados do sistema indisponíveis no momento.';
+    const safeMessage = String(message ?? '').trim();
+    if (!safeMessage) {
+      yield this.sseEvent('error', {
+        message: 'Escreva uma pergunta para o chatbot.',
+      });
+      return;
     }
+
+    const safeProfile = this.normalizeChatProfile(profile);
+
+    yield this.sseEvent('progress', {
+      percent: 8,
+      stage: 'Lendo o escopo configurado do chatbot...',
+    });
+
+    const [systemPrompt, config] = await Promise.all([
+      this.settings.getSystemPrompt(),
+      this.resolveChatProfileConfig(safeProfile),
+    ]);
+
+    yield this.sseEvent('progress', {
+      percent: 20,
+      stage: 'Selecionando contexto de alta relevância...',
+    });
+
+    const context = await this.buildChatContext(
+      safeMessage,
+      safeProfile,
+      config.configuredSources,
+    );
 
     const messages: ChatMessage[] = [
       {
         role: 'system',
-        content: `${systemPrompt}\n\n${contextSummary}`,
+        content: [
+          systemPrompt,
+          CHATBOT_SYSTEM_PROMPT,
+          this.getDefaultChatbotInstruction(safeProfile),
+          config.configuredPrompt?.trim() || '',
+        ]
+          .map((item) => String(item ?? '').trim())
+          .filter(Boolean)
+          .join('\n\n'),
       },
-      ...history.slice(-20),
-      { role: 'user', content: message },
+      ...history
+        .filter((item) => item.role === 'user' || item.role === 'assistant')
+        .slice(-12)
+        .map((item) => ({
+          role: item.role,
+          content: this.compactChatHistoryMessage(item.content),
+        })),
+      {
+        role: 'user',
+        content: this.buildChatUserPrompt({
+          message: safeMessage,
+          profile: safeProfile,
+          contextJson: context.contextJson,
+          sourceLabels: context.sourceLabels,
+        }),
+      },
     ];
 
-    type StreamChunk =
-      | { type: 'token'; text: string }
-      | { type: 'done'; model: string };
-    const iterator = this.litellm
-      .chatCompletionStream({
-        messages,
-        max_tokens: 2048,
-      })
-      [Symbol.asyncIterator]();
-
     try {
-      while (true) {
-        let timeoutHandle: NodeJS.Timeout | undefined;
-        let next: IteratorResult<StreamChunk>;
-        try {
-          next = (await Promise.race([
-            iterator.next(),
-            new Promise<IteratorResult<StreamChunk>>((_, reject) => {
-              timeoutHandle = setTimeout(() => {
-                reject(new Error('LITELLM_STREAM_IDLE_TIMEOUT'));
-              }, this.streamIdleTimeoutMs);
-            }),
-          ])) as IteratorResult<StreamChunk>;
-        } finally {
-          if (timeoutHandle) clearTimeout(timeoutHandle);
-        }
-        if (next.done) break;
+      yield this.sseEvent('progress', {
+        percent: 42,
+        stage: 'Consultando o modelo com o recorte configurado...',
+      });
 
-        const chunk = next.value;
-        if (chunk.type === 'token') {
-          yield this.sseEvent('token', { text: chunk.text });
-        } else if (chunk.type === 'done') {
-          yield this.sseEvent('done', { model: chunk.model });
-          return;
-        }
+      const completion = (await Promise.race([
+        this.litellm.chatCompletion({
+          messages,
+          max_tokens: 2200,
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error('LITELLM_CHAT_TIMEOUT')),
+            this.streamIdleTimeoutMs,
+          ),
+        ),
+      ])) as { content: string; model: string };
+
+      let finalNarrative = stripReasoningPrefix(
+        String(completion?.content ?? '').trim(),
+      ).trim();
+      if (!finalNarrative || looksLikeInternalReasoning(finalNarrative)) {
+        finalNarrative = this.buildDeterministicChatFallback({
+          question: safeMessage,
+          profile: safeProfile,
+          contextSummary: context.summaryMarkdown,
+          sourceLabels: context.sourceLabels,
+        });
       }
+
+      finalNarrative = await this.appendTraceabilityReferences(
+        safeProfile === 'chatbot' ? 'chatbot' : safeProfile,
+        finalNarrative,
+        config.configuredSources,
+      );
+
+      yield this.sseEvent('done', {
+        model: completion.model,
+        narrative: finalNarrative,
+        generatedAt: new Date().toISOString(),
+      });
+      return;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (
+        msg === 'LITELLM_CHAT_TIMEOUT' ||
         msg === 'LITELLM_STREAM_IDLE_TIMEOUT' ||
         this.shouldUseDeterministicComgepFallback(msg)
       ) {
-        const fallback = this.buildDeterministicChatFallback(contextSummary);
-        yield this.sseEvent('token', { text: fallback });
-        yield this.sseEvent('done', { model: 'local-fallback' });
+        const fallback = await this.appendTraceabilityReferences(
+          safeProfile === 'chatbot' ? 'chatbot' : safeProfile,
+          this.buildDeterministicChatFallback({
+            question: safeMessage,
+            profile: safeProfile,
+            contextSummary: context.summaryMarkdown,
+            sourceLabels: context.sourceLabels,
+          }),
+          config.configuredSources,
+        );
+        yield this.sseEvent('done', {
+          model: 'local-fallback',
+          narrative: fallback,
+          generatedAt: new Date().toISOString(),
+        });
         return;
       }
       yield this.sseEvent('error', { message: msg });
     }
   }
 
-  private buildDeterministicChatFallback(contextSummary: string) {
+  private buildDeterministicChatFallback(args: {
+    question: string;
+    profile: ChatProfileType;
+    contextSummary: string;
+    sourceLabels: string[];
+  }) {
     return [
-      '## Resposta direta',
-      'O gateway generativo está indisponível neste momento. Abaixo segue uma resposta estruturada com base no resumo de dados já carregado no sistema.',
+      '## Resposta estruturada local',
+      'O gateway generativo está indisponível neste momento. A resposta abaixo foi montada diretamente a partir dos dados já consolidados no sistema.',
       '',
-      '## Panorama atual',
-      String(contextSummary || 'Resumo do sistema indisponível.'),
+      '## Pergunta recebida',
+      String(args.question || 'Pergunta não informada.'),
+      '',
+      '## Escopo considerado',
+      args.sourceLabels.length
+        ? `Fontes permitidas: ${args.sourceLabels.join(', ')}.`
+        : 'Nenhuma fonte de dados está permitida para este perfil. Ajuste em Administração > Configuração IA.',
+      '',
+      '## Resumo disponível',
+      String(args.contextSummary || 'Resumo do sistema indisponível.'),
       '',
       '## Encaminhamento',
-      'Para uma leitura mais profunda, use as análises estruturadas da aba IA ou refine o recorte diretamente na Sala COMGEP.',
+      'Se precisar de uma resposta mais específica, refine a pergunta com UF, OM, escopo ou tipo de dado desejado.',
     ].join('\n');
+  }
+
+  private normalizeChatProfile(
+    profile: ChatProfileType | null | undefined,
+  ): ChatProfileType {
+    const raw = String(profile ?? '').trim();
+    if (raw === 'chatbot') return 'chatbot';
+    return ANALYSIS_CATALOG.some((item) => item.type === raw)
+      ? (raw as AnalysisType)
+      : 'chatbot';
+  }
+
+  private compactChatHistoryMessage(content: string) {
+    const normalized = stripReasoningPrefix(String(content ?? '')).trim();
+    if (normalized.length <= 1400) return normalized;
+    return `${normalized.slice(0, 1400)}\n…(histórico resumido)`;
+  }
+
+  private async buildChatContext(
+    message: string,
+    profile: ChatProfileType,
+    sourceIds: readonly AiKnowledgeSourceId[],
+  ) {
+    const sourceProfile = this.buildActionAgentSourceProfile(sourceIds);
+    const needs = this.selectChatContextNeeds(message, profile);
+    if (!sourceProfile.hasAnySource) {
+      const summaryMarkdown = [
+        'Nenhuma base de dados está liberada para este perfil do chatbot.',
+        'Peça ao administrador para ajustar as fontes em Administração > Configuração IA.',
+      ].join('\n');
+      return {
+        contextJson: JSON.stringify({
+          fontesPermitidas: [],
+          observacao:
+            'Nenhuma base de dados está permitida para este perfil do chatbot.',
+        }),
+        summaryMarkdown,
+        sourceLabels: [],
+      };
+    }
+
+    const filters = { sources: Array.from(sourceIds) };
+    const [dashboard, profileData, textData, geoData] = await Promise.all([
+      needs.includeOverview
+        ? this.strategic.situationalDashboard(filters)
+        : Promise.resolve(null),
+      needs.includeComplaints
+        ? this.strategic.aggressorProfile(filters)
+        : Promise.resolve(null),
+      needs.includeText
+        ? this.strategic.textAnalysis(filters)
+        : Promise.resolve(null),
+      needs.includeGeo
+        ? this.strategic.geoMap(filters)
+        : Promise.resolve(null),
+    ]);
+
+    const payload: Record<string, unknown> = {
+      fontesPermitidas: sourceProfile.sourceLabels,
+      focoDetectado: needs.focusSummary,
+    };
+
+    const summaryBlocks: string[] = [];
+    if (dashboard) {
+      payload.panoramaSituacional = this.compactDashboardForChat(dashboard);
+      summaryBlocks.push('## Panorama situacional');
+      summaryBlocks.push(...this.buildSituationalHighlights(dashboard));
+    }
+    if (profileData) {
+      payload.perfilDenuncias = this.compactAggressorProfile(profileData);
+      summaryBlocks.push('');
+      summaryBlocks.push('## Denúncias e perfis');
+      summaryBlocks.push(...this.buildAggressorHighlights(profileData));
+    }
+    if (textData) {
+      const compactText = this.compactText(textData);
+      payload.sinaisTextuais = compactText;
+      summaryBlocks.push('');
+      summaryBlocks.push('## Sinais textuais');
+      summaryBlocks.push(...this.buildTextHighlights(compactText));
+    }
+    if (geoData) {
+      const compactGeo = this.compactGeo(geoData);
+      payload.distribuicaoGeografica = compactGeo;
+      summaryBlocks.push('');
+      summaryBlocks.push('## Distribuição geográfica');
+      summaryBlocks.push(...this.buildGeoHighlights(compactGeo));
+    }
+
+    let contextJson = JSON.stringify(payload);
+    if (contextJson.length > 24_000) {
+      contextJson = `${contextJson.slice(0, 24_000)}\n…(dados truncados)`;
+    }
+
+    return {
+      contextJson,
+      summaryMarkdown: summaryBlocks.join('\n').trim(),
+      sourceLabels: sourceProfile.sourceLabels,
+    };
+  }
+
+  private buildChatUserPrompt(args: {
+    message: string;
+    profile: ChatProfileType;
+    contextJson: string;
+    sourceLabels: string[];
+  }) {
+    const sourceLine = args.sourceLabels.length
+      ? `Fontes permitidas nesta conversa: ${args.sourceLabels.join(', ')}.`
+      : 'Nenhuma fonte está liberada para este perfil.';
+    return [
+      `Pergunta do usuário: ${args.message}`,
+      '',
+      sourceLine,
+      'Se a resposta depender de base não permitida ou dado ausente, diga isso claramente.',
+      'Responda com Markdown limpo, sem tabelas desnecessárias e sem raciocínio interno.',
+      '',
+      'Contexto JSON:',
+      args.contextJson,
+    ].join('\n');
+  }
+
+  private selectChatContextNeeds(
+    message: string,
+    profile: ChatProfileType,
+  ): {
+    includeOverview: boolean;
+    includeComplaints: boolean;
+    includeText: boolean;
+    includeGeo: boolean;
+    focusSummary: string;
+  } {
+    const normalized = this.normalizeComgepQueryText(message);
+    const mentionsGeo =
+      /\b(uf|estado|localidade|mapa|regiao|região|geograf)/.test(normalized) ||
+      Object.entries(COMGEP_UF_ALIASES).some(
+        ([uf, aliases]) =>
+          normalized.includes(uf.toLowerCase()) ||
+          aliases.some((alias) => normalized.includes(alias)),
+      );
+    const mentionsText =
+      /\b(texto|textual|termo|termos|palavra|palavras|observa|coment|relato|sugest)/.test(
+        normalized,
+      );
+    const mentionsComplaints =
+      /\b(denunc|assed|violenc|agressor|vitim|retali|cpca|sigilo|sexual|moral)/.test(
+        normalized,
+      );
+    const mentionsOperational =
+      /\b(missao|missaoes|missões|atividade|atividades|tarefa|tarefas|smif|cipavd|relatorio|relatórios|relatorios)/.test(
+        normalized,
+      );
+
+    const defaultsByProfile: Record<
+      ChatProfileType,
+      { includeOverview: boolean; includeComplaints: boolean; includeText: boolean; includeGeo: boolean; focusSummary: string }
+    > = {
+      chatbot: {
+        includeOverview: true,
+        includeComplaints: true,
+        includeText: true,
+        includeGeo: true,
+        focusSummary: 'visão ampla do sistema',
+      },
+      executive: {
+        includeOverview: true,
+        includeComplaints: true,
+        includeText: true,
+        includeGeo: true,
+        focusSummary: 'panorama executivo',
+      },
+      situational: {
+        includeOverview: true,
+        includeComplaints: false,
+        includeText: false,
+        includeGeo: false,
+        focusSummary: 'panorama situacional',
+      },
+      aggressor: {
+        includeOverview: true,
+        includeComplaints: true,
+        includeText: false,
+        includeGeo: false,
+        focusSummary: 'perfil de denúncias e violência',
+      },
+      text: {
+        includeOverview: false,
+        includeComplaints: false,
+        includeText: true,
+        includeGeo: false,
+        focusSummary: 'análise textual',
+      },
+      geo: {
+        includeOverview: true,
+        includeComplaints: false,
+        includeText: false,
+        includeGeo: true,
+        focusSummary: 'distribuição geográfica',
+      },
+    };
+
+    const base = defaultsByProfile[profile];
+    const explicitSignal =
+      mentionsGeo || mentionsText || mentionsComplaints || mentionsOperational;
+    if (!explicitSignal || profile !== 'chatbot') return base;
+
+    return {
+      includeOverview: mentionsOperational || mentionsComplaints || mentionsGeo,
+      includeComplaints: mentionsComplaints,
+      includeText: mentionsText,
+      includeGeo: mentionsGeo,
+      focusSummary: mentionsGeo
+        ? 'geografia e recorte territorial'
+        : mentionsText
+          ? 'textos livres e padrões'
+          : mentionsComplaints
+            ? 'denúncias, CPCA e proteção'
+            : 'operações e execução',
+    };
+  }
+
+  private compactDashboardForChat(dashboard: any) {
+    return {
+      surveys: {
+        totalResponses: dashboard?.surveys?.totalResponses ?? 0,
+        violenceRatePercent: dashboard?.surveys?.violenceRatePercent ?? 0,
+      },
+      domesticViolence: {
+        totalResponses: dashboard?.domesticViolence?.totalResponses ?? 0,
+        lifetimeRatePercent:
+          dashboard?.domesticViolence?.lifetimeRatePercent ?? 0,
+        last12MonthsRatePercent:
+          dashboard?.domesticViolence?.last12MonthsRatePercent ?? 0,
+      },
+      recruits: {
+        totalResponses: dashboard?.recruits?.totalResponses ?? 0,
+        safeToReportPercent:
+          dashboard?.recruits?.safeToReportPercent ?? 0,
+        knowReportProcessPercent:
+          dashboard?.recruits?.knowReportProcessPercent ?? 0,
+      },
+      complaints: {
+        totalCases: dashboard?.complaints?.totalCases ?? 0,
+        openCases: dashboard?.complaints?.openCases ?? 0,
+        concludedCases: dashboard?.complaints?.concludedCases ?? 0,
+        byCpca: dashboard?.complaints?.byCpca ?? 0,
+        bySmif: dashboard?.complaints?.bySmif ?? 0,
+        moral: dashboard?.complaints?.moral ?? 0,
+        sexual: dashboard?.complaints?.sexual ?? 0,
+      },
+      activities: {
+        totalActivities: dashboard?.activities?.totalActivities ?? 0,
+        done: dashboard?.activities?.done ?? 0,
+        smif: dashboard?.activities?.smif ?? 0,
+        cipavd: dashboard?.activities?.cipavd ?? 0,
+      },
+      missions: {
+        totalMissions: dashboard?.missions?.totalMissions ?? 0,
+        smif: dashboard?.missions?.smif ?? 0,
+        cipavd: dashboard?.missions?.cipavd ?? 0,
+        localitiesCovered: dashboard?.missions?.localitiesCovered ?? 0,
+      },
+      tasks: {
+        totalTasks: dashboard?.tasks?.totalTasks ?? 0,
+        totalOverdue: dashboard?.tasks?.totalOverdue ?? 0,
+        pending: dashboard?.tasks?.pending ?? 0,
+        completed: dashboard?.tasks?.completed ?? 0,
+      },
+    };
+  }
+
+  private compactAggressorProfile(profile: any) {
+    return {
+      totalCases: profile?.totalCases ?? 0,
+      byComplaintType: profile?.byComplaintType ?? {},
+      hierarchicalRelation: profile?.hierarchicalRelation ?? {},
+      aggressorProfile: {
+        byRank: Array.isArray(profile?.aggressorProfile?.byRank)
+          ? profile.aggressorProfile.byRank.slice(0, 8)
+          : [],
+      },
+      victimProfile: {
+        byRank: Array.isArray(profile?.victimProfile?.byRank)
+          ? profile.victimProfile.byRank.slice(0, 8)
+          : [],
+      },
+    };
   }
 
   private buildDeterministicAnalysisNarrative(type: AnalysisType, data: any) {
@@ -4466,7 +4855,7 @@ export class AiService {
   }
 
   private async appendTraceabilityReferences(
-    type: AnalysisType,
+    type: AnalysisType | 'chatbot',
     narrative: string,
     sources?: readonly AiKnowledgeSourceId[],
   ): Promise<string> {

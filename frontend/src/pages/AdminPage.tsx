@@ -173,6 +173,7 @@ const ANALYSIS_TYPES: AiAnalysisType[] = [
   'aggressor',
   'text',
   'geo',
+  'chatbot',
   'briefing_comgep',
   'priorizacao_intervencao',
   'governanca_cpca',
@@ -187,6 +188,7 @@ const buildDefaultAnalysisSources = (): AiAnalysisSourceSelection => ({
   aggressor: [...ANALYSIS_SOURCE_CATALOG.map((entry) => entry.id)],
   text: [...ANALYSIS_SOURCE_CATALOG.map((entry) => entry.id)],
   geo: [...ANALYSIS_SOURCE_CATALOG.map((entry) => entry.id)],
+  chatbot: [...ANALYSIS_SOURCE_CATALOG.map((entry) => entry.id)],
   briefing_comgep: [...ANALYSIS_SOURCE_CATALOG.map((entry) => entry.id)],
   priorizacao_intervencao: [...ANALYSIS_SOURCE_CATALOG.map((entry) => entry.id)],
   governanca_cpca: [...ANALYSIS_SOURCE_CATALOG.map((entry) => entry.id)],
@@ -1633,7 +1635,7 @@ function InstitutionalMappingTab() {
 
 const ANALYSIS_PROMPTS_CONFIG: {
   type: AiAnalysisType;
-  group: 'ia' | 'copilot';
+  group: 'ia' | 'chatbot' | 'copilot';
   label: string;
   short: string;
   placeholder: string;
@@ -1691,6 +1693,16 @@ const ANALYSIS_PROMPTS_CONFIG: {
     icon: <MapRoundedIcon sx={{ fontSize: 28 }} />,
   },
   {
+    type: 'chatbot',
+    group: 'chatbot',
+    label: 'Chatbot livre',
+    short: 'Perguntas abertas sobre CIPAVD, SMIF e CPCA.',
+    placeholder:
+      'Responda perguntas abertas sobre o sistema com Markdown, linguagem institucional, foco em CIPAVD, SMIF e CPCA, sempre respeitando as fontes permitidas e sem inventar dados fora do contexto.',
+    accent: '#00695C',
+    icon: <SmartToyRoundedIcon sx={{ fontSize: 28 }} />,
+  },
+  {
     type: 'briefing_comgep',
     group: 'copilot',
     label: 'Briefing COMGEP',
@@ -1723,7 +1735,7 @@ const ANALYSIS_PROMPTS_CONFIG: {
 ];
 
 const AI_SETTINGS_GROUPS: Array<{
-  id: 'ia' | 'copilot';
+  id: 'ia' | 'chatbot' | 'copilot';
   label: string;
   description: string;
 }> = [
@@ -1732,6 +1744,12 @@ const AI_SETTINGS_GROUPS: Array<{
     label: 'Análises da Página IA',
     description:
       'Configura as 5 análises estruturadas da aba IA, incluindo fontes permitidas e instrução específica.',
+  },
+  {
+    id: 'chatbot',
+    label: 'Chatbot',
+    description:
+      'Configura o chatbot livre da aba IA, incluindo as bases que ele pode enxergar e a instrução-base usada nas respostas.',
   },
   {
     id: 'copilot',
@@ -1970,8 +1988,9 @@ function AiSettingsTab() {
           </Typography>
           <Typography variant="body2" color="text.secondary">
             Prompts, escopo de fontes e conexão do LiteLLM para as análises estruturadas da
-            página IA e para os copilotos gerenciais da aba Assistente. Valores salvos aqui
-            substituem o <code>.env</code> do servidor para URL, chave e modelo.
+            página IA, para o chatbot livre e para os copilotos gerenciais da aba
+            Assistente. Valores salvos aqui substituem o <code>.env</code> do servidor
+            para URL, chave e modelo.
           </Typography>
         </Box>
       </Stack>
@@ -1986,7 +2005,7 @@ function AiSettingsTab() {
           '& .MuiTab-root': { fontWeight: 600, textTransform: 'none', fontSize: '0.95rem' },
         }}
       >
-        <Tab value="prompts" label="Prompts e escopo (8 análises + system)" />
+        <Tab value="prompts" label="Prompts e escopo (9 perfis + system)" />
         <Tab value="server" label="Servidor LiteLLM" />
       </Tabs>
 
@@ -2099,11 +2118,11 @@ function AiSettingsTab() {
             <Stack spacing={2}>
               <Stack spacing={0.5}>
                 <Typography variant="subtitle1" fontWeight={800}>
-                  Fontes por análise
+                  Fontes por perfil
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Configure, para cada análise ou copiloto, quais bases o módulo de IA pode usar.
-                  Seleção vazia = nenhuma base considerada naquele perfil.
+                  Configure, para cada análise, chatbot ou copiloto, quais bases o módulo de IA
+                  pode usar. Seleção vazia = nenhuma base considerada naquele perfil.
                 </Typography>
               </Stack>
               {AI_SETTINGS_GROUPS.map((group) => {
@@ -2235,10 +2254,10 @@ function AiSettingsTab() {
           </Paper>
 
           <Alert severity="info" variant="outlined" sx={{ borderRadius: 2 }}>
-            Abaixo há <strong>8 caixas de texto</strong>: 5 para as análises estruturadas da página
-            IA e 3 para os copilotos gerenciais da aba Assistente. Conteúdo vazio = o sistema usa
-            o texto padrão interno. O bloco final é o <strong>system prompt</strong>, aplicado a
-            todas as chamadas de IA.
+            Abaixo há <strong>9 caixas de texto</strong>: 5 para as análises estruturadas da
+            página IA, 1 para o chatbot livre e 3 para os copilotos gerenciais da aba
+            Assistente. Conteúdo vazio = o sistema usa o texto padrão interno. O bloco final é o
+            <strong> system prompt</strong>, aplicado a todas as chamadas de IA.
           </Alert>
 
           {ANALYSIS_PROMPTS_CONFIG.length === 0 ? (
@@ -2297,7 +2316,13 @@ function AiSettingsTab() {
                             <Box sx={{ minWidth: 0, flex: 1 }}>
                               <Stack direction="row" alignItems="center" gap={1} flexWrap="wrap">
                                 <Chip
-                                  label={`${group.id === 'ia' ? 'Análise' : 'Copiloto'} ${index + 1} de ${items.length}`}
+                                  label={`${
+                                    group.id === 'ia'
+                                      ? 'Análise'
+                                      : group.id === 'chatbot'
+                                        ? 'Chatbot'
+                                        : 'Copiloto'
+                                  } ${index + 1} de ${items.length}`}
                                   size="small"
                                   sx={{
                                     bgcolor: item.accent,

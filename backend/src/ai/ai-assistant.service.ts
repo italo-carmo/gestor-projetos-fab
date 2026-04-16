@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { LocalityCatalogType } from '@prisma/client';
+import { ActivityScope, LocalityCatalogType } from '@prisma/client';
 import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
@@ -658,6 +658,9 @@ export class AiAssistantService {
         workflow.intent === 'create_mission_schedule' &&
         workflow.draft.scheduleOperation !== 'EDIT'
           ? this.buildScheduleReadyToConfirmMessage(updatedView, workflow.draft)
+          : workflow.intent === 'create_activity' ||
+              workflow.intent === 'create_task'
+            ? this.buildEntityReadyToConfirmMessage(updatedView)
           : [
               `Rascunho de **${updatedView.title.toLowerCase()}** pronto para conferência.`,
               'Revise os dados abaixo. Se estiver tudo certo, confirme a execução.',
@@ -1278,7 +1281,7 @@ export class AiAssistantService {
           field: 'activityTypeId',
           label: 'Tipo de atividade',
           inputType: 'single_select',
-          options: await this.listActivityTypeOptions(),
+          options: await this.listActivityTypeOptions(draft.scope),
         },
         {
           field: 'eventDate',
@@ -1301,13 +1304,27 @@ export class AiAssistantService {
     }
 
     if (intent === 'create_task') {
+      const scopeField: AssistantFieldConfig = {
+        field: 'scope',
+        label: 'Escopo da tarefa',
+        inputType: 'single_select',
+        options: [
+          { value: 'SMIF', label: 'SMIF' },
+          { value: 'CIPAVD', label: 'CIPAVD' },
+        ],
+      };
+      const scopeValue = String(draft.scope ?? '').trim().toUpperCase();
+      if (scopeValue !== 'SMIF' && scopeValue !== 'CIPAVD') {
+        return [scopeField];
+      }
       return [
+        scopeField,
         {
           field: 'localityIds',
           label: 'Localidades da tarefa',
           inputType: 'multi_select',
           multiple: true,
-          options: await this.listSmifLocalityOptions(),
+          options: await this.listTaskLocalityOptions(draft.scope),
         },
         {
           field: 'title',
@@ -1603,9 +1620,17 @@ export class AiAssistantService {
     }));
   }
 
-  private async listSmifLocalityOptions() {
+  private async listTaskLocalityOptions(scope: string | undefined) {
+    const normalizedScope = String(scope ?? '').toUpperCase();
+    if (normalizedScope !== 'SMIF' && normalizedScope !== 'CIPAVD') {
+      return [];
+    }
+    const catalogType =
+      normalizedScope === 'CIPAVD'
+        ? LocalityCatalogType.CIPAVD
+        : LocalityCatalogType.SMIF;
     const items = await this.prisma.locality.findMany({
-      where: { catalogType: LocalityCatalogType.SMIF },
+      where: { catalogType },
       select: { id: true, code: true, name: true, uf: true },
       orderBy: [{ name: 'asc' }],
     });
@@ -1616,8 +1641,8 @@ export class AiAssistantService {
     }));
   }
 
-  private async listActivityTypeOptions() {
-    const response = await this.activities.listTypes();
+  private async listActivityTypeOptions(scope?: string) {
+    const response = await this.activities.listTypes(scope);
     return (response?.items ?? []).map((item: any) => ({
       value: String(item.id),
       label: String(item.name),
@@ -1724,6 +1749,7 @@ export class AiAssistantService {
 
     if (intent === 'create_task') {
       return [
+        { label: 'Escopo', value: draft.scope || 'SMIF' },
         {
           label: 'Localidades',
           value: (await localityLookup(draft.localityIds)) || '—',
@@ -1910,6 +1936,7 @@ export class AiAssistantService {
     if (workflow.intent === 'create_task') {
       const created = await this.tasks.createTaskInstancesManual(
         {
+          scope: draft.scope || ActivityScope.SMIF,
           title: draft.title,
           description: draft.description || null,
           phaseId: draft.phaseId,
@@ -1927,7 +1954,9 @@ export class AiAssistantService {
         entityType: 'task',
         id: String(first.id),
         title: String(first.title ?? draft.title),
-        url: `/tasks?taskId=${encodeURIComponent(String(first.id))}`,
+        url: `/tasks?scope=${encodeURIComponent(
+          String(draft.scope || 'SMIF'),
+        )}&taskId=${encodeURIComponent(String(first.id))}`,
       };
     }
 
@@ -4058,6 +4087,7 @@ export class AiAssistantService {
       title: string;
       currentField: AssistantFieldConfig | null;
       readyToConfirm: boolean;
+      summary?: Array<{ label: string; value: string }>;
     },
     draft: Record<string, any>,
   ) {
@@ -4071,6 +4101,29 @@ export class AiAssistantService {
     } else {
       lines.push('Revise os dados abaixo. Se estiver tudo certo, confirme a execução.');
     }
+    return lines.join('\n\n');
+  }
+
+  private buildEntityReadyToConfirmMessage(workflowView: {
+    title: string;
+    summary?: Array<{ label: string; value: string }>;
+  }) {
+    const lines = [
+      `Rascunho de **${workflowView.title.toLowerCase()}** pronto para conferência.`,
+    ];
+
+    const summary = Array.isArray(workflowView.summary)
+      ? workflowView.summary
+      : [];
+    if (summary.length) {
+      lines.push(
+        summary
+          .map((item) => `- **${item.label}:** ${item.value || '—'}`)
+          .join('\n'),
+      );
+    }
+
+    lines.push('Se estiver tudo certo, confirme a execução.');
     return lines.join('\n\n');
   }
 

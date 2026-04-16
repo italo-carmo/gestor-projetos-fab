@@ -129,6 +129,13 @@ const OPERATIONAL_QUICK_ACTIONS = [
   },
 ] as const;
 
+const CHATBOT_QUICK_PROMPTS = [
+  "Quais são os principais pontos de atenção hoje em CIPAVD, SMIF e CPCA?",
+  "Explique a diferença entre denúncias CPCA e denúncias SMIF com base no sistema.",
+  "Quais estados parecem concentrar mais pressão institucional ou operacional?",
+  "Resuma o que o sistema mostra sobre missões, atividades e tarefas em andamento.",
+] as const;
+
 type AnalysisState = {
   running: boolean;
   percent: number;
@@ -727,6 +734,382 @@ function AssistantQuickActionCard({
   );
 }
 
+type ChatbotMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  createdAt: string;
+  model?: string | null;
+};
+
+function ChatbotTab() {
+  const toast = useToast();
+  const [messages, setMessages] = useState<ChatbotMessage[]>([]);
+  const [running, setRunning] = useState(false);
+  const [statusText, setStatusText] = useState("");
+  const [input, setInput] = useState("");
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({
+      top: scrollRef.current.scrollHeight,
+      behavior: "smooth",
+    });
+  }, [messages, statusText]);
+
+  const resetConversation = useCallback(() => {
+    setMessages([]);
+    setInput("");
+    setRunning(false);
+    setStatusText("");
+  }, []);
+
+  const appendMessage = useCallback((message: ChatbotMessage) => {
+    setMessages((prev) => [...prev, message]);
+  }, []);
+
+  const sendMessage = useCallback(
+    async (text: string) => {
+      const safeText = text.trim();
+      if (!safeText || running) return;
+
+      const history = messages.map((item) => ({
+        role: item.role,
+        content: item.content,
+      }));
+
+      const userMessage: ChatbotMessage = {
+        id: `chatbot-user-${Date.now()}`,
+        role: "user",
+        content: safeText,
+        createdAt: new Date().toISOString(),
+      };
+      appendMessage(userMessage);
+      setInput("");
+      setRunning(true);
+      setStatusText("Selecionando contexto do chatbot...");
+
+      let partialText = "";
+      try {
+        const res = await fetch(`${getBaseUrl()}/ai/chat`, {
+          method: "POST",
+          headers: getAuthHeaders(),
+          body: JSON.stringify({
+            message: safeText,
+            history,
+            profile: "chatbot",
+          }),
+        });
+
+        if (!res.ok) {
+          const raw = await res.text();
+          let message = `Erro HTTP ${res.status}`;
+          try {
+            message = JSON.parse(raw)?.message ?? message;
+          } catch {}
+          throw new Error(message);
+        }
+
+        const reader = res.body?.getReader();
+        if (!reader) {
+          throw new Error("O servidor não retornou um stream válido.");
+        }
+
+        let sawTerminalEvent = false;
+        await consumeJsonSseStream(reader, (event, data) => {
+          if (event === "progress") {
+            setStatusText(String(data.stage ?? "Processando..."));
+            return;
+          }
+          if (event === "token") {
+            partialText += String(data.text ?? "");
+            return;
+          }
+          if (event === "done") {
+            sawTerminalEvent = true;
+            appendMessage({
+              id: `chatbot-assistant-${Date.now()}`,
+              role: "assistant",
+              content: String(data.narrative ?? partialText ?? ""),
+              createdAt: String(data.generatedAt ?? new Date().toISOString()),
+              model: String(data.model ?? ""),
+            });
+            return;
+          }
+          if (event === "error") {
+            sawTerminalEvent = true;
+            appendMessage({
+              id: `chatbot-error-${Date.now()}`,
+              role: "assistant",
+              content: `Erro: ${String(data.message ?? "Falha ao responder.")}`,
+              createdAt: new Date().toISOString(),
+            });
+          }
+        });
+
+        if (!sawTerminalEvent) {
+          appendMessage({
+            id: `chatbot-error-${Date.now()}`,
+            role: "assistant",
+            content: "A conversa foi encerrada sem resposta final.",
+            createdAt: new Date().toISOString(),
+          });
+        }
+      } catch (error: any) {
+        const message =
+          error?.message ?? "Falha ao conversar com o chatbot.";
+        appendMessage({
+          id: `chatbot-error-${Date.now()}`,
+          role: "assistant",
+          content: `Erro: ${message}`,
+          createdAt: new Date().toISOString(),
+        });
+        toast.push({ message, severity: "error" });
+      } finally {
+        setRunning(false);
+        setStatusText("");
+      }
+    },
+    [appendMessage, messages, running, toast],
+  );
+
+  return (
+    <Stack spacing={2}>
+      <Alert
+        severity="info"
+        sx={{
+          borderRadius: 3,
+          alignItems: "flex-start",
+          "& .MuiAlert-message": { width: "100%" },
+        }}
+      >
+        <Typography variant="subtitle1" fontWeight={800}>
+          Chatbot livre com escopo administrado
+        </Typography>
+        <Typography variant="body2" sx={{ mt: 0.5, lineHeight: 1.65 }}>
+          Esta aba é para perguntas abertas sobre CIPAVD, SMIF e CPCA. O chatbot
+          responde somente com base nas fontes permitidas em{" "}
+          <strong>Administração &gt; Configuração IA</strong>. Para criar missão,
+          atividade, tarefa ou cronograma, use a aba <strong>Assistente virtual</strong>.
+        </Typography>
+      </Alert>
+
+      <Grid container spacing={2}>
+        <Grid size={{ xs: 12, md: 4 }}>
+          <Card variant="outlined" sx={{ borderRadius: 3, height: "100%" }}>
+            <CardContent>
+              <Stack spacing={1.5}>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <SmartToyRoundedIcon sx={{ color: "#00695C" }} />
+                  <Typography variant="subtitle1" fontWeight={800} color="#1A3C6E">
+                    Como usar
+                  </Typography>
+                </Stack>
+                <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
+                  Faça perguntas livres sobre dados, tendências, diferenças entre fluxos,
+                  panorama operacional e sinais institucionais do sistema.
+                </Typography>
+                <Stack spacing={1}>
+                  {CHATBOT_QUICK_PROMPTS.map((prompt) => (
+                    <Button
+                      key={prompt}
+                      variant="outlined"
+                      color="inherit"
+                      sx={{ justifyContent: "flex-start", textAlign: "left", borderRadius: 2.5 }}
+                      disabled={running}
+                      onClick={() => void sendMessage(prompt)}
+                    >
+                      {prompt}
+                    </Button>
+                  ))}
+                </Stack>
+              </Stack>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid size={{ xs: 12, md: 8 }}>
+          <Card variant="outlined" sx={{ borderRadius: 3 }}>
+            <CardContent>
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                spacing={1}
+                justifyContent="space-between"
+                alignItems={{ sm: "center" }}
+                sx={{ mb: 1.5 }}
+              >
+                <Box>
+                  <Typography variant="subtitle1" fontWeight={800} color="#1A3C6E">
+                    Conversa
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Perguntas abertas com resposta em Markdown, respeitando o escopo configurado.
+                  </Typography>
+                </Box>
+                <Button
+                  variant="outlined"
+                  color="inherit"
+                  startIcon={<RestartAltRoundedIcon />}
+                  onClick={resetConversation}
+                  disabled={running && !messages.length}
+                >
+                  Nova conversa
+                </Button>
+              </Stack>
+
+              <Box
+                ref={scrollRef}
+                sx={{
+                  minHeight: 360,
+                  maxHeight: 720,
+                  overflow: "auto",
+                  p: 1.5,
+                  bgcolor: "#F8F9FA",
+                  borderRadius: 2.5,
+                  border: "1px solid #E8EAF0",
+                }}
+              >
+                {!messages.length ? (
+                  <Box sx={{ textAlign: "center", py: 8 }}>
+                    <SmartToyRoundedIcon sx={{ fontSize: 48, color: "#00695C", mb: 1 }} />
+                    <Typography variant="h6" color="#1A3C6E" fontWeight={700}>
+                      Chatbot institucional
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ maxWidth: 560, mx: "auto", mt: 1, lineHeight: 1.7 }}
+                    >
+                      Pergunte livremente sobre CIPAVD, SMIF e CPCA. O chatbot vai
+                      responder com base no escopo liberado pelo administrador.
+                    </Typography>
+                  </Box>
+                ) : null}
+
+                <Stack spacing={1.5}>
+                  {messages.map((msg) => (
+                    <Stack
+                      key={msg.id}
+                      direction="row"
+                      spacing={1}
+                      justifyContent={msg.role === "user" ? "flex-end" : "flex-start"}
+                    >
+                      {msg.role === "assistant" ? (
+                        <SmartToyRoundedIcon
+                          sx={{ fontSize: 28, color: "#00695C", mt: 0.5, flexShrink: 0 }}
+                        />
+                      ) : null}
+                      <Box
+                        sx={{
+                          maxWidth: msg.role === "assistant" ? "86%" : "75%",
+                          px: 2,
+                          py: 1.35,
+                          borderRadius: 2.5,
+                          bgcolor: msg.role === "user" ? "#163A6B" : "#FFFFFF",
+                          color:
+                            msg.role === "user"
+                              ? "rgba(248, 251, 255, 0.98)"
+                              : "text.primary",
+                          boxShadow: 1,
+                          border:
+                            msg.role === "assistant" ? "1px solid #E2E8F0" : undefined,
+                        }}
+                      >
+                        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.8 }}>
+                          <Chip
+                            size="small"
+                            label={msg.role === "assistant" ? "Chatbot" : "Você"}
+                            color={msg.role === "assistant" ? "success" : "default"}
+                            sx={
+                              msg.role === "user"
+                                ? {
+                                    bgcolor: "rgba(255,255,255,0.18)",
+                                    color: "rgba(248, 251, 255, 0.98)",
+                                    borderColor: "rgba(255,255,255,0.22)",
+                                  }
+                                : undefined
+                            }
+                          />
+                          {msg.model ? (
+                            <Chip size="small" variant="outlined" label={msg.model} />
+                          ) : null}
+                        </Stack>
+                        {msg.role === "assistant" ? (
+                          <MdContent>{msg.content}</MdContent>
+                        ) : (
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              whiteSpace: "pre-wrap",
+                              lineHeight: 1.7,
+                              color: "rgba(248, 251, 255, 0.98)",
+                              fontWeight: 500,
+                            }}
+                          >
+                            {msg.content}
+                          </Typography>
+                        )}
+                      </Box>
+                      {msg.role === "user" ? (
+                        <PersonRoundedIcon
+                          sx={{ fontSize: 28, color: "#1A3C6E", mt: 0.5, flexShrink: 0 }}
+                        />
+                      ) : null}
+                    </Stack>
+                  ))}
+                  {running || statusText ? (
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <SmartToyRoundedIcon sx={{ fontSize: 28, color: "#00695C" }} />
+                      <Paper variant="outlined" sx={{ px: 2, py: 1.2, borderRadius: 2.5 }}>
+                        <Typography variant="body2" color="text.secondary">
+                          {statusText || "Processando..."}
+                        </Typography>
+                      </Paper>
+                    </Stack>
+                  ) : null}
+                </Stack>
+              </Box>
+
+              <Stack spacing={1.25} sx={{ mt: 1.5 }}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Pergunta"
+                  placeholder="Ex.: Quais são os principais riscos hoje em CIPAVD, SMIF e CPCA?"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      void sendMessage(input);
+                    }
+                  }}
+                  multiline
+                  maxRows={4}
+                  disabled={running}
+                />
+                <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+                  <Button
+                    variant="contained"
+                    onClick={() => void sendMessage(input)}
+                    disabled={running || !input.trim()}
+                    startIcon={<SendRoundedIcon />}
+                    sx={{
+                      bgcolor: "#00695C",
+                      "&:hover": { bgcolor: "#004D40" },
+                    }}
+                  >
+                    Enviar pergunta
+                  </Button>
+                </Stack>
+              </Stack>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+    </Stack>
+  );
+}
+
 function buildUserMessageLabel(
   workflow: AssistantWorkflow | null,
   text: string,
@@ -844,6 +1227,9 @@ function AssistantTab() {
     workflow?.draft?.scheduleOperation === "EDIT";
   const isMissionScheduleWorkflow =
     workflow?.intent === "create_mission_schedule";
+  const isChatOnlyAssistantWorkflow =
+    workflow?.intent === "create_activity" ||
+    workflow?.intent === "create_task";
 
   const postAssistant = useCallback(
     async (payload: Record<string, unknown>, userContent?: string) => {
@@ -1324,7 +1710,7 @@ function AssistantTab() {
         </CardContent>
       </Card>
 
-      {workflow && !isMissionScheduleWorkflow ? (
+      {workflow && !isMissionScheduleWorkflow && !isChatOnlyAssistantWorkflow ? (
         <Card variant="outlined" sx={{ borderRadius: 3, bgcolor: "#FAFBFD" }}>
           <CardContent>
             <Stack spacing={1.25}>
@@ -2007,16 +2393,23 @@ function AssistantTab() {
 export function AiPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = String(searchParams.get("tab") ?? "analyses");
-  const [tab, setTab] = useState(tabParam === "assistant" ? 1 : 0);
+  const tabIndexFromParam = useCallback((value: string) => {
+    if (value === "chatbot") return 1;
+    if (value === "assistant") return 2;
+    return 0;
+  }, []);
+  const [tab, setTab] = useState(tabIndexFromParam(tabParam));
 
   useEffect(() => {
-    setTab(tabParam === "assistant" ? 1 : 0);
-  }, [tabParam]);
+    setTab(tabIndexFromParam(tabParam));
+  }, [tabIndexFromParam, tabParam]);
 
   const handleTabChange = (_: unknown, nextValue: number) => {
     setTab(nextValue);
     const next = new URLSearchParams(searchParams);
     if (nextValue === 1) {
+      next.set("tab", "chatbot");
+    } else if (nextValue === 2) {
       next.set("tab", "assistant");
     } else {
       next.delete("tab");
@@ -2033,7 +2426,7 @@ export function AiPage() {
             Inteligência Artificial
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Análises automatizadas, copilotos gerenciais e assistente virtual operacional
+            Análises automatizadas, chatbot livre e assistente virtual operacional
           </Typography>
         </Box>
       </Stack>
@@ -2050,6 +2443,12 @@ export function AiPage() {
           sx={{ textTransform: "none" }}
         />
         <Tab
+          label="Chatbot"
+          icon={<SmartToyRoundedIcon />}
+          iconPosition="start"
+          sx={{ textTransform: "none" }}
+        />
+        <Tab
           label="Assistente virtual"
           icon={<SmartToyRoundedIcon />}
           iconPosition="start"
@@ -2058,7 +2457,8 @@ export function AiPage() {
       </Tabs>
 
       {tab === 0 && <AnalysesTab />}
-      {tab === 1 && <AssistantTab />}
+      {tab === 1 && <ChatbotTab />}
+      {tab === 2 && <AssistantTab />}
     </Box>
   );
 }

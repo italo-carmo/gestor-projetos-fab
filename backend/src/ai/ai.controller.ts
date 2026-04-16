@@ -19,6 +19,7 @@ import { AiAssistantService } from './ai-assistant.service';
 import {
   AiService,
   AnalysisType,
+  type ChatProfileType,
   type ComgepCopilotMode,
   type ComgepCopilotFocus,
 } from './ai.service';
@@ -130,7 +131,8 @@ export class AiController {
     body: {
       message: string;
       history?: { role: string; content: string }[];
-      analysisType?: AnalysisType;
+      analysisType?: AnalysisType | 'chatbot';
+      profile?: ChatProfileType;
     },
     @Res() res: Response,
   ) {
@@ -145,7 +147,7 @@ export class AiController {
       for await (const chunk of this.ai.chatStream(
         body.message ?? '',
         history,
-        body.analysisType,
+        body.profile ?? body.analysisType,
       )) {
         this.writeSseChunk(res, chunk);
       }

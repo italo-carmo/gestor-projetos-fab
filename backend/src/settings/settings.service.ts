@@ -31,6 +31,7 @@ export const ANALYSIS_PROMPT_KEYS: Record<string, string> = {
   aggressor: 'ai.prompt.aggressor',
   text: 'ai.prompt.text',
   geo: 'ai.prompt.geo',
+  chatbot: 'ai.prompt.chatbot',
   briefing_comgep: 'ai.prompt.briefing_comgep',
   priorizacao_intervencao: 'ai.prompt.priorizacao_intervencao',
   governanca_cpca: 'ai.prompt.governanca_cpca',

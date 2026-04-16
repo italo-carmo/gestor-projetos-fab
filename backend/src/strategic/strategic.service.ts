@@ -1978,7 +1978,8 @@ export class StrategicService {
       type === 'executive' ||
       type === 'situational' ||
       type === 'aggressor' ||
-      type === 'text';
+      type === 'text' ||
+      type === 'chatbot';
 
     if (includePanels) {
       if (shouldIncludeSurveys) {

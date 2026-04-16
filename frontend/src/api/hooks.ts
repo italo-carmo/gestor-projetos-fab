@@ -4825,6 +4825,7 @@ export type AiAnalysisType =
   | "aggressor"
   | "text"
   | "geo"
+  | "chatbot"
   | "briefing_comgep"
   | "priorizacao_intervencao"
   | "governanca_cpca";
