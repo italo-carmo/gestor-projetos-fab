@@ -2903,6 +2903,10 @@ export class AiAssistantService {
           [
             `Itens **${preview.startNumber}-${preview.endNumber}** cadastrados com sucesso.`,
             `Agora revise o próximo lote (**${nextPreview.startNumber}-${nextPreview.endNumber}**) e confirme quando estiver correto.`,
+            this.buildSchedulePreviewMessage(
+              nextPreview.items,
+              nextPreview.savedCount,
+            ),
           ].join('\n\n'),
         ),
         updatedView,
