@@ -45,6 +45,7 @@ import {
 import { useMemo, useRef, useState } from 'react';
 import { api } from '../api/client';
 import { useAiActionAgents, useComgepSituationRoom } from '../api/hooks';
+import { consumeJsonSseStream } from '../app/sse';
 import { ErrorState } from '../components/states/ErrorState';
 import { SkeletonState } from '../components/states/SkeletonState';
 
@@ -281,55 +282,67 @@ function useActionAgentRunner() {
       }
 
       const reader = res.body?.getReader();
-      if (!reader) return;
-      const decoder = new TextDecoder();
-      let buffer = '';
+      if (!reader) {
+        setState((prev) => ({
+          ...prev,
+          running: false,
+          error: 'O servidor não retornou um stream válido para o agente.',
+        }));
+        return;
+      }
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? '';
-        let currentEvent = '';
-
-        for (const line of lines) {
-          if (line.startsWith('event: ')) {
-            currentEvent = line.slice(7).trim();
-          } else if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6));
-              if (currentEvent === 'progress') {
-                setState((prev) => ({
-                  ...prev,
-                  percent: data.percent ?? prev.percent,
-                  stage: data.stage ?? prev.stage,
-                }));
-              } else if (currentEvent === 'token') {
-                setState((prev) => ({
-                  ...prev,
-                  percent: data.percent ?? prev.percent,
-                  narrative: prev.narrative + (data.text ?? ''),
-                }));
-              } else if (currentEvent === 'done') {
-                setState((prev) => ({
-                  ...prev,
-                  running: false,
-                  percent: 100,
-                  narrative: data.narrative ?? prev.narrative,
-                  model: data.model ?? '',
-                  generatedAt: data.generatedAt ?? '',
-                }));
-              } else if (currentEvent === 'error') {
-                setState((prev) => ({
-                  ...prev,
-                  running: false,
-                  error: data.message ?? 'Erro desconhecido',
-                }));
-              }
-            } catch {}
-          }
+      let sawTerminalEvent = false;
+      await consumeJsonSseStream(reader, (event, data) => {
+        if (event === 'progress') {
+          setState((prev) => ({
+            ...prev,
+            percent: data.percent ?? prev.percent,
+            stage: data.stage ?? prev.stage,
+          }));
+          return;
         }
+
+        if (event === 'token') {
+          setState((prev) => ({
+            ...prev,
+            percent: data.percent ?? prev.percent,
+            narrative: prev.narrative + (data.text ?? ''),
+          }));
+          return;
+        }
+
+        if (event === 'done') {
+          sawTerminalEvent = true;
+          setState((prev) => ({
+            ...prev,
+            running: false,
+            percent: 100,
+            narrative: data.narrative ?? prev.narrative,
+            model: data.model ?? '',
+            generatedAt: data.generatedAt ?? '',
+          }));
+          return;
+        }
+
+        if (event === 'error') {
+          sawTerminalEvent = true;
+          setState((prev) => ({
+            ...prev,
+            running: false,
+            error: data.message ?? 'Erro desconhecido',
+          }));
+        }
+      });
+
+      if (!sawTerminalEvent) {
+        setState((prev) => ({
+          ...prev,
+          running: false,
+          error:
+            prev.narrative.trim() || prev.error
+              ? prev.error
+              : 'A execução do agente foi encerrada sem resposta final.',
+        }));
       }
     } catch (error: any) {
       if (error?.name === 'AbortError') return;

@@ -28,6 +28,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { api } from "../api/client";
+import { consumeJsonSseStream } from "../app/sse";
 import { useToast } from "../app/toast";
 
 const mdStyles = (dark?: boolean) => ({
@@ -305,63 +306,85 @@ function useAnalysisSSE() {
         }
 
         const reader = res.body?.getReader();
-        if (!reader) return;
-        const decoder = new TextDecoder();
-        let buffer = "";
+        if (!reader) {
+          setStates((prev) => ({
+            ...prev,
+            [type]: {
+              ...prev[type],
+              running: false,
+              error: "O servidor não retornou um stream válido para a análise.",
+            },
+          }));
+          return;
+        }
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() ?? "";
-
-          let currentEvent = "";
-          for (const line of lines) {
-            if (line.startsWith("event: ")) {
-              currentEvent = line.slice(7).trim();
-            } else if (line.startsWith("data: ")) {
-              try {
-                const data = JSON.parse(line.slice(6));
-                if (currentEvent === "progress") {
-                  setStates((prev) => ({
-                    ...prev,
-                    [type]: {
-                      ...prev[type],
-                      percent: data.percent ?? prev[type].percent,
-                      stage: data.stage ?? prev[type].stage,
-                    },
-                  }));
-                } else if (currentEvent === "token") {
-                  setStates((prev) => ({
-                    ...prev,
-                    [type]: {
-                      ...prev[type],
-                      narrative: prev[type].narrative + (data.text ?? ""),
-                      percent: data.percent ?? prev[type].percent,
-                    },
-                  }));
-                } else if (currentEvent === "done") {
-                  setStates((prev) => ({
-                    ...prev,
-                    [type]: {
-                      ...prev[type],
-                      running: false,
-                      percent: 100,
-                      narrative: data.narrative ?? prev[type].narrative,
-                      model: data.model ?? "",
-                      generatedAt: data.generatedAt ?? new Date().toISOString(),
-                    },
-                  }));
-                } else if (currentEvent === "error") {
-                  setStates((prev) => ({
-                    ...prev,
-                    [type]: { ...prev[type], running: false, error: data.message ?? "Erro desconhecido" },
-                  }));
-                }
-              } catch {}
-            }
+        let sawTerminalEvent = false;
+        await consumeJsonSseStream(reader, (event, data) => {
+          if (event === "progress") {
+            setStates((prev) => ({
+              ...prev,
+              [type]: {
+                ...prev[type],
+                percent: data.percent ?? prev[type].percent,
+                stage: data.stage ?? prev[type].stage,
+              },
+            }));
+            return;
           }
+
+          if (event === "token") {
+            setStates((prev) => ({
+              ...prev,
+              [type]: {
+                ...prev[type],
+                narrative: prev[type].narrative + (data.text ?? ""),
+                percent: data.percent ?? prev[type].percent,
+              },
+            }));
+            return;
+          }
+
+          if (event === "done") {
+            sawTerminalEvent = true;
+            setStates((prev) => ({
+              ...prev,
+              [type]: {
+                ...prev[type],
+                running: false,
+                percent: 100,
+                narrative: data.narrative ?? prev[type].narrative,
+                model: data.model ?? "",
+                generatedAt: data.generatedAt ?? new Date().toISOString(),
+              },
+            }));
+            return;
+          }
+
+          if (event === "error") {
+            sawTerminalEvent = true;
+            setStates((prev) => ({
+              ...prev,
+              [type]: {
+                ...prev[type],
+                running: false,
+                error: data.message ?? "Erro desconhecido",
+              },
+            }));
+          }
+        });
+
+        if (!sawTerminalEvent) {
+          setStates((prev) => ({
+            ...prev,
+            [type]: {
+              ...prev[type],
+              running: false,
+              error:
+                prev[type].narrative.trim() || prev[type].error
+                  ? prev[type].error
+                  : "A análise foi encerrada sem resposta final.",
+            },
+          }));
         }
       } catch (e: any) {
         if (e.name === "AbortError") return;
@@ -658,47 +681,57 @@ function ChatbotTab() {
       }
 
       const reader = res.body?.getReader();
-      if (!reader) return;
-      const decoder = new TextDecoder();
-      let buffer = "";
+      if (!reader) {
+        setMessages((prev) => {
+          const copy = [...prev];
+          copy[copy.length - 1] = {
+            role: "assistant",
+            content: "Erro: O servidor não retornou um stream válido para o chat.",
+          };
+          return copy;
+        });
+        setStreaming(false);
+        return;
+      }
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-
-        let currentEvent = "";
-        for (const line of lines) {
-          if (line.startsWith("event: ")) {
-            currentEvent = line.slice(7).trim();
-          } else if (line.startsWith("data: ")) {
-            try {
-              const data = JSON.parse(line.slice(6));
-              if (currentEvent === "token" && data.text) {
-                setMessages((prev) => {
-                  const copy = [...prev];
-                  const last = copy[copy.length - 1];
-                  copy[copy.length - 1] = {
-                    ...last,
-                    content: last.content + data.text,
-                  };
-                  return copy;
-                });
-              } else if (currentEvent === "error") {
-                setMessages((prev) => {
-                  const copy = [...prev];
-                  copy[copy.length - 1] = {
-                    role: "assistant",
-                    content: `Erro: ${data.message}`,
-                  };
-                  return copy;
-                });
-              }
-            } catch {}
-          }
+      let receivedContent = false;
+      await consumeJsonSseStream(reader, (event, data) => {
+        if (event === "token" && data.text) {
+          receivedContent = true;
+          setMessages((prev) => {
+            const copy = [...prev];
+            const last = copy[copy.length - 1];
+            copy[copy.length - 1] = {
+              ...last,
+              content: last.content + data.text,
+            };
+            return copy;
+          });
+          return;
         }
+
+        if (event === "error") {
+          receivedContent = true;
+          setMessages((prev) => {
+            const copy = [...prev];
+            copy[copy.length - 1] = {
+              role: "assistant",
+              content: `Erro: ${data.message}`,
+            };
+            return copy;
+          });
+        }
+      });
+
+      if (!receivedContent) {
+        setMessages((prev) => {
+          const copy = [...prev];
+          copy[copy.length - 1] = {
+            role: "assistant",
+            content: "Erro: O stream do chat foi encerrado sem conteúdo.",
+          };
+          return copy;
+        });
       }
     } catch (e: any) {
       if (e.name !== "AbortError") {
