@@ -1,6 +1,13 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
-import { setLitellmDbOverrides } from '../llm/litellm.service';
+import {
+  firstConfig,
+  LITELLM_API_KEY_ENV_KEYS,
+  LITELLM_BASE_URL_ENV_KEYS,
+  LITELLM_MODEL_ENV_KEYS,
+  setLitellmDbOverrides,
+} from '../llm/litellm.service';
 import {
   ANALYSIS_DEFAULT_SOURCES,
   type AnalysisSourceSelection,
@@ -90,11 +97,23 @@ const normalizeSourceSelectionForStorage = (
   return result;
 };
 
+const pickConfiguredValue = (
+  dbValue: string | null | undefined,
+  envValue: string | undefined,
+): string => {
+  const fromDb = String(dbValue ?? '').trim();
+  if (fromDb) return fromDb;
+  return String(envValue ?? '').trim();
+};
+
 @Injectable()
 export class SettingsService implements OnModuleInit {
   private readonly logger = new Logger(SettingsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService,
+  ) {}
 
   async onModuleInit() {
     await this.syncLitellmOverrides();
@@ -135,7 +154,6 @@ export class SettingsService implements OnModuleInit {
         where: { key: { in: allKeys } },
       });
     const map = new Map<string, string>(rows.map((r) => [r.key, r.value]));
-    const apiKey: string = map.get(AI_SETTING_KEYS.apiKey) ?? '';
     const rawSources = map.get(AI_SETTING_KEYS.analysisSources);
     const analysisSources = parseAnalysisSources(rawSources);
 
@@ -144,15 +162,34 @@ export class SettingsService implements OnModuleInit {
       analysisPrompts[type] = map.get(key) ?? '';
     }
 
+    const runtimeBaseUrl = pickConfiguredValue(
+      map.get(AI_SETTING_KEYS.baseUrl),
+      firstConfig(this.config, [
+        ...LITELLM_BASE_URL_ENV_KEYS,
+      ]),
+    );
+    const runtimeApiKey = pickConfiguredValue(
+      map.get(AI_SETTING_KEYS.apiKey),
+      firstConfig(this.config, [
+        ...LITELLM_API_KEY_ENV_KEYS,
+      ]),
+    );
+    const runtimeModel = pickConfiguredValue(
+      map.get(AI_SETTING_KEYS.model),
+      firstConfig(this.config, [
+        ...LITELLM_MODEL_ENV_KEYS,
+      ]),
+    );
+
     return {
       systemPrompt:
         map.get(AI_SETTING_KEYS.systemPrompt) ?? DEFAULT_SYSTEM_PROMPT,
-      baseUrl: map.get(AI_SETTING_KEYS.baseUrl) ?? '',
-      apiKey,
-      apiKeyMasked: apiKey
-        ? `${apiKey.slice(0, 5)}${'*'.repeat(Math.max(0, apiKey.length - 5))}`
+      baseUrl: runtimeBaseUrl,
+      apiKey: runtimeApiKey,
+      apiKeyMasked: runtimeApiKey
+        ? `${runtimeApiKey.slice(0, 5)}${'*'.repeat(Math.max(0, runtimeApiKey.length - 5))}`
         : '',
-      model: map.get(AI_SETTING_KEYS.model) ?? '',
+      model: runtimeModel,
       analysisPrompts,
       analysisSources,
     };
