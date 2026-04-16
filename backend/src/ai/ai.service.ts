@@ -1595,11 +1595,11 @@ export class AiService {
     params: ComgepCopilotStreamParams,
   ): AsyncGenerator<string, { narrative: string; model: string }, void> {
     const systemPrompt = await this.settings.getSystemPrompt();
-    const prompt = this.buildComgepCopilotPrompt(params);
-    const messages: ChatMessage[] = [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: prompt },
-    ];
+    const messages = this.buildComgepCopilotMessages(
+      systemPrompt,
+      params,
+      'standard',
+    );
 
     yield this.sseEvent('progress', {
       percent: 30,
@@ -1611,7 +1611,7 @@ export class AiService {
       .chatCompletionStream({
         messages,
         temperature: params.mode === 'analyst' ? 0.12 : 0.18,
-        max_tokens: params.mode === 'analyst' ? 1900 : 1500,
+        max_tokens: this.getComgepCompletionMaxTokens(params.mode, 'stream'),
       })
       [Symbol.asyncIterator]();
 
@@ -1679,21 +1679,11 @@ export class AiService {
             percent: 88,
             stage: 'Recuperando resposta final do modelo...',
           });
-          const fallback = await this.litellm.chatCompletion({
-            messages,
-            temperature: params.mode === 'analyst' ? 0.12 : 0.18,
-            max_tokens: params.mode === 'analyst' ? 1800 : 1400,
-          });
-          fullText = fallback.content.trim();
-          if (!fullText) {
-            throw new Error(
-              'O modelo encerrou a execução sem gerar conteúdo útil.',
-            );
-          }
-          return {
-            narrative: fullText,
-            model: fallback.model,
-          };
+          return await this.completeComgepAssistantNonStream(
+            params,
+            systemPrompt,
+            'standard',
+          );
         }
 
         return {
@@ -1707,6 +1697,21 @@ export class AiService {
         msg =
           `Sem resposta do modelo por ${Math.round(this.streamIdleTimeoutMs / 1000)}s ` +
           `(modelo configurado: ${configuredModel}). Verifique disponibilidade no LiteLLM.`;
+      } else if (tokenCount === 0 && this.isLiteLlmContextBug(msg)) {
+        this.logger.warn(
+          `LiteLLM rejeitou o contexto do copiloto COMGEP em stream; tentando fallback compacto. Motivo: ${msg}`,
+        );
+        yield this.sseEvent('progress', {
+          percent: 90,
+          stage: 'Contexto amplo rejeitado pelo gateway; refazendo com contexto compacto...',
+        });
+        return await this.completeComgepAssistantNonStream(
+          params,
+          systemPrompt,
+          'compact',
+        );
+      } else {
+        msg = this.formatComgepCopilotModelError(msg);
       }
       throw new Error(msg);
     }
@@ -1717,7 +1722,95 @@ export class AiService {
     };
   }
 
-  private buildComgepCopilotPrompt(params: ComgepCopilotStreamParams) {
+  private buildComgepCopilotMessages(
+    systemPrompt: string,
+    params: ComgepCopilotStreamParams,
+    variant: 'standard' | 'compact',
+  ): ChatMessage[] {
+    return [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: this.buildComgepCopilotPrompt(params, variant) },
+    ];
+  }
+
+  private async completeComgepAssistantNonStream(
+    params: ComgepCopilotStreamParams,
+    systemPrompt: string,
+    variant: 'standard' | 'compact',
+  ): Promise<{ narrative: string; model: string }> {
+    const messages = this.buildComgepCopilotMessages(
+      systemPrompt,
+      params,
+      variant,
+    );
+
+    try {
+      const fallback = await this.litellm.chatCompletion({
+        messages,
+        temperature: params.mode === 'analyst' ? 0.12 : 0.18,
+        max_tokens: this.getComgepCompletionMaxTokens(params.mode, variant),
+      });
+      const narrative = fallback.content.trim();
+      if (!narrative) {
+        throw new Error('O modelo encerrou a execução sem gerar conteúdo útil.');
+      }
+      return {
+        narrative,
+        model: fallback.model,
+      };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (variant === 'standard' && this.isLiteLlmContextBug(msg)) {
+        this.logger.warn(
+          `LiteLLM rejeitou o fallback padrão do copiloto COMGEP; tentando versão compacta. Motivo: ${msg}`,
+        );
+        return this.completeComgepAssistantNonStream(
+          params,
+          systemPrompt,
+          'compact',
+        );
+      }
+      throw new Error(this.formatComgepCopilotModelError(msg));
+    }
+  }
+
+  private getComgepCompletionMaxTokens(
+    mode: ComgepCopilotMode,
+    variant: 'stream' | 'standard' | 'compact',
+  ) {
+    if (variant === 'compact') {
+      return mode === 'analyst' ? 950 : 760;
+    }
+    if (variant === 'standard') {
+      return mode === 'analyst' ? 1500 : 1200;
+    }
+    return mode === 'analyst' ? 1700 : 1300;
+  }
+
+  private isLiteLlmContextBug(message: string) {
+    const normalized = String(message ?? '').toLowerCase();
+    return (
+      normalized.includes('not supported between instances of') &&
+      normalized.includes('nonetype') &&
+      normalized.includes('int')
+    );
+  }
+
+  private formatComgepCopilotModelError(message: string) {
+    if (this.isLiteLlmContextBug(message)) {
+      return 'O gateway LiteLLM rejeitou o contexto desta execução. Tente novamente com um foco mais específico ou use o modo Executivo.';
+    }
+    return message;
+  }
+
+  private buildComgepCopilotPrompt(
+    params: ComgepCopilotStreamParams,
+    variant: 'standard' | 'compact' = 'standard',
+  ) {
+    if (variant === 'compact') {
+      return this.buildComgepCompactPrompt(params);
+    }
+
     const scopeLabel = params.scopeUf
       ? `UF ${params.scopeUf}`
       : 'visão nacional';
@@ -1728,22 +1821,22 @@ export class AiService {
     );
     const compactRoomJson = this.truncateText(
       JSON.stringify(roomSummary, null, 2),
-      14_000,
+      8_000,
     );
     const evidenceLines =
       params.evidences.length > 0
         ? params.evidences
-            .slice(0, 8)
+            .slice(0, 5)
             .map(
               (item, index) =>
-                `${index + 1}. ${item.omCode} | ${item.uf} | score ${item.score} | ${item.reason} | ${item.link}`,
+                `${index + 1}. ${item.omCode} | ${item.uf} | score ${item.score} | ${this.truncateText(item.reason, 160)} | ${item.link}`,
             )
             .join('\n')
         : 'Nenhuma evidência OM específica foi selecionada. Use o resumo da sala.';
     const historyLines =
       params.history.length > 0
         ? params.history
-            .slice(-6)
+            .slice(-4)
             .map((item) => {
               const roleLabel =
                 item.role === 'assistant' ? 'Assistente' : 'Usuário';
@@ -1753,7 +1846,7 @@ export class AiService {
               );
               return `- ${roleLabel} [modo=${item.mode}; foco=${focusLabelLine}]: ${this.truncateText(
                 this.normalizeInlineMarkdown(item.content),
-                420,
+                280,
               )}`;
             })
             .join('\n')
@@ -1802,6 +1895,157 @@ export class AiService {
       'Resumo estruturado da Sala COMGEP:',
       compactRoomJson,
     ].join('\n');
+  }
+
+  private buildComgepCompactPrompt(params: ComgepCopilotStreamParams) {
+    const scopeLabel = params.scopeUf
+      ? `UF ${params.scopeUf}`
+      : 'visão nacional';
+    const focusLabel = this.describeComgepFocus(params.focus, params.scopeUf);
+    const roomSummary = this.buildCompactActionAgentContext(
+      params.room,
+      params.scopeUf,
+    );
+    const evidenceLines =
+      params.evidences.length > 0
+        ? params.evidences
+            .slice(0, 4)
+            .map(
+              (item, index) =>
+                `${index + 1}. ${item.omCode}/${item.uf} | score ${item.score} | ${this.truncateText(item.reason, 110)} | ${item.link}`,
+            )
+            .join('\n')
+        : 'Sem evidências OM específicas; use apenas o resumo abaixo.';
+    const historyLines =
+      params.history.length > 0
+        ? params.history
+            .slice(-2)
+            .map((item) => {
+              const roleLabel =
+                item.role === 'assistant' ? 'Assistente' : 'Usuário';
+              return `- ${roleLabel}: ${this.truncateText(
+                this.normalizeInlineMarkdown(item.content),
+                180,
+              )}`;
+            })
+            .join('\n')
+        : 'Sem histórico anterior.';
+    const compactLines = this.buildComgepCompactSummaryLines(
+      roomSummary,
+      params.focus,
+    );
+
+    return [
+      'Você é o copiloto executivo da Sala COMGEP.',
+      `Modo: ${params.mode === 'analyst' ? 'analista' : 'executivo'}.`,
+      `Escopo ativo: ${scopeLabel}.`,
+      `Foco atual: ${focusLabel}.`,
+      'Responda apenas com base no contexto abaixo. Não invente números, causas ou links.',
+      'Sempre que concluir algo, cite OM/UF, score e motivo quando houver evidência.',
+      'Não use tabelas markdown.',
+      '',
+      'Histórico curto da sessão:',
+      historyLines,
+      '',
+      'Pergunta atual:',
+      this.truncateText(params.userMessage, 280),
+      '',
+      'Resumo compacto da sala:',
+      ...compactLines,
+      '',
+      'Evidências selecionadas:',
+      evidenceLines,
+    ].join('\n');
+  }
+
+  private buildComgepCompactSummaryLines(
+    roomSummary: any,
+    focus: ComgepCopilotFocus | null,
+  ) {
+    const lines = [
+      `- Cobertura CPCA: ${roomSummary?.resumo?.omsCobertasCpca ?? 0}/${roomSummary?.resumo?.totalOms ?? 0} OMs (${roomSummary?.resumo?.percentualCoberturaCpca ?? 0}%).`,
+      `- UFs críticas: ${roomSummary?.resumo?.ufsCriticas ?? 0}.`,
+      `- OMs de alto risco: ${roomSummary?.resumo?.omsAltoRisco ?? 0}.`,
+      `- Denúncias abertas: ${roomSummary?.resumo?.denunciasAbertas ?? 0}.`,
+      `- Presença operacional: ${roomSummary?.resumo?.eventosPresencaOperacional ?? 0} eventos.`,
+      `- Confiança do dado: ${roomSummary?.confiancaDado?.coberturaSuportadaPercentual ?? 0}% de cobertura suportada; ${roomSummary?.confiancaDado?.naoEncontrados ?? 0} não encontrados.`,
+    ];
+
+    const pushRows = (title: string, rows: string[]) => {
+      if (!rows.length) return;
+      lines.push(`- ${title}:`);
+      rows.forEach((row) => lines.push(`  ${row}`));
+    };
+
+    const topRiskOms = Array.isArray(roomSummary?.omsMaiorRisco)
+      ? roomSummary.omsMaiorRisco
+          .slice(0, focus?.kind === 'kpi_high_risk_oms' || focus?.kind === 'om' ? 4 : 2)
+          .map(
+            (item: any) =>
+              `* ${item.om} | ${item.uf} | risco ${item.risco} | ${this.truncateText(item.motivo, 130)}`,
+          )
+      : [];
+    const coverageGaps = Array.isArray(roomSummary?.gapsCoberturaCpca)
+      ? roomSummary.gapsCoberturaCpca
+          .slice(
+            0,
+            focus?.kind === 'coverage_gap' || focus?.kind === 'kpi_covered_oms'
+              ? 4
+              : 2,
+          )
+          .map(
+            (item: any) =>
+              `* ${item.om} | ${item.uf} | risco ${item.risco} | ${this.truncateText(item.motivo, 130)}`,
+          )
+      : [];
+    const priorityUfs = Array.isArray(roomSummary?.ufsPrioritarias)
+      ? roomSummary.ufsPrioritarias
+          .slice(0, focus?.kind === 'uf' || focus?.kind === 'kpi_critical_ufs' ? 3 : 2)
+          .map(
+            (item: any) =>
+              `* ${item.uf} | risco ${item.risco} | cobertura ${item.coberturaCpcaPercentual}% | ${this.truncateText(item.focoRecomendado, 120)}`,
+          )
+      : [];
+    const pressureRows = Array.isArray(roomSummary?.pressaoOperacional)
+      ? roomSummary.pressaoOperacional
+          .slice(
+            0,
+            focus?.kind === 'operational_pressure' ||
+              focus?.kind === 'kpi_operational_presence'
+              ? 3
+              : 2,
+          )
+          .map(
+            (item: any) =>
+              `* ${item.uf} | pressão ${item.pressao} | presença ${item.presenca} | ${this.truncateText(item.focoRecomendado, 120)}`,
+          )
+      : [];
+
+    switch (focus?.kind) {
+      case 'kpi_high_risk_oms':
+      case 'om':
+        pushRows('OMs mais críticas', topRiskOms);
+        break;
+      case 'kpi_covered_oms':
+      case 'coverage_gap':
+        pushRows('Gaps de cobertura CPCA', coverageGaps);
+        break;
+      case 'kpi_critical_ufs':
+      case 'uf':
+        pushRows('UFs prioritárias', priorityUfs);
+        break;
+      case 'kpi_operational_presence':
+      case 'operational_pressure':
+        pushRows('Pressão operacional', pressureRows);
+        break;
+      default:
+        pushRows('UFs prioritárias', priorityUfs);
+        pushRows('OMs mais críticas', topRiskOms);
+        pushRows('Gaps de cobertura CPCA', coverageGaps);
+        break;
+    }
+
+    return lines;
   }
 
   private selectComgepEvidences(args: {
