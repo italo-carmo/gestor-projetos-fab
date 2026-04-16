@@ -2011,7 +2011,39 @@ export class AiService {
     if (!message) return null;
 
     const normalized = this.normalizeComgepQueryText(message);
+    const mentionedOms = this.extractMentionedOms(params, message);
     const mentionedUfs = this.extractMentionedUfs(message);
+
+    if (
+      mentionedOms.length >= 2 &&
+      (normalized.includes('acima de') ||
+        normalized.includes('compar') ||
+        normalized.includes('diferenca') ||
+        normalized.includes('diferença') ||
+        normalized.includes('por que'))
+    ) {
+      return this.buildComgepOmComparisonFallback(
+        mentionedOms[0],
+        mentionedOms[1],
+      );
+    }
+
+    if (mentionedOms.length >= 1) {
+      const om = mentionedOms[0];
+      if (
+        normalized.includes('por que') ||
+        normalized.includes('risco') ||
+        normalized.includes('detalh') ||
+        normalized.includes('cobertura') ||
+        normalized.includes('cpca') ||
+        normalized.includes('essa om') ||
+        normalized.includes('esta om') ||
+        normalized.includes('essa organizacao') ||
+        normalized.includes('essa organização')
+      ) {
+        return this.buildComgepOmWhyFallback(om);
+      }
+    }
 
     if (
       mentionedUfs.length >= 2 &&
@@ -2239,6 +2271,50 @@ export class AiService {
     return lines.join('\n');
   }
 
+  private buildComgepOmWhyFallback(om: any) {
+    const lines = [
+      '## Resposta direta',
+      `${om.code} - ${om.name} aparece no radar porque combina score ${om.riskScore}, cobertura ${om.coverageType} e sinais institucionais relevantes no recorte.`,
+      '',
+      '## Fatores do score',
+      `- Cobertura CPCA: ${om.coverageType}.`,
+      `- Denúncias abertas: ${om.complaints?.openCases ?? 0}.`,
+      `- Casos com retaliação: ${om.complaints?.retaliationCases ?? 0}.`,
+      `- Casos parados: ${om.complaints?.stalledCases ?? 0}.`,
+      `- Casos sexuais: ${om.complaints?.sexualCases ?? 0}.`,
+      `- Taxa de violência em pesquisa: ${om.surveyRate}%.`,
+      `- Taxa de violência doméstica: ${om.domesticRate}%.`,
+      '',
+      '## Leitura executiva',
+      `- Principal motivo: ${this.describeActionAgentOmRisk(om)}.`,
+      `- UF: ${om.uf}.`,
+      `- Link: ${om.link}.`,
+    ];
+    return lines.join('\n');
+  }
+
+  private buildComgepOmComparisonFallback(omA: any, omB: any) {
+    const higher = Number(omA?.riskScore ?? 0) >= Number(omB?.riskScore ?? 0) ? omA : omB;
+    const lower = higher === omA ? omB : omA;
+    const reasons = this.describeComgepOmDeltaReasons(higher, lower);
+
+    return [
+      '## Resposta direta',
+      `${higher.code} ficou acima de ${lower.code} porque apresenta risco agregado maior e condicionantes mais críticos neste recorte.`,
+      '',
+      '## Comparação objetiva',
+      `- ${higher.code} - ${higher.name}: score ${higher.riskScore}, cobertura ${higher.coverageType}, denúncias abertas ${higher.complaints?.openCases ?? 0}, retaliação ${higher.complaints?.retaliationCases ?? 0}, pesquisa ${higher.surveyRate}%, violência doméstica ${higher.domesticRate}%.`,
+      `- ${lower.code} - ${lower.name}: score ${lower.riskScore}, cobertura ${lower.coverageType}, denúncias abertas ${lower.complaints?.openCases ?? 0}, retaliação ${lower.complaints?.retaliationCases ?? 0}, pesquisa ${lower.surveyRate}%, violência doméstica ${lower.domesticRate}%.`,
+      '',
+      '## Fatores que explicam a diferença',
+      ...reasons.map((reason) => `- ${reason}`),
+      '',
+      '## Links',
+      `- ${higher.code}: ${higher.link}`,
+      `- ${lower.code}: ${lower.link}`,
+    ].join('\n');
+  }
+
   private findComgepUfRow(room: any, uf: string) {
     const safeUf = String(uf ?? '').trim().toUpperCase();
     const ufRows = Array.isArray(room?.details?.ufMatrix) ? room.details.ufMatrix : [];
@@ -2247,6 +2323,28 @@ export class AiService {
         (item: any) => String(item?.uf ?? '').trim().toUpperCase() === safeUf,
       ) ?? null
     );
+  }
+
+  private findComgepOmRow(room: any, matcher: {
+    omId?: string | null;
+    code?: string | null;
+  }) {
+    const rows = this.listComgepOmRiskRows(room);
+    const safeOmId = String(matcher.omId ?? '').trim();
+    const safeCode = String(matcher.code ?? '').trim().toUpperCase();
+    return (
+      rows.find((item: any) =>
+        safeOmId
+          ? String(item?.id ?? '').trim() === safeOmId
+          : safeCode
+            ? String(item?.code ?? '').trim().toUpperCase() === safeCode
+            : false,
+      ) ?? null
+    );
+  }
+
+  private listComgepOmRiskRows(room: any) {
+    return Array.isArray(room?.details?.omRiskIndex) ? room.details.omRiskIndex : [];
   }
 
   private listComgepUncoveredOms(room: any, uf: string | null) {
@@ -2323,6 +2421,132 @@ export class AiService {
       );
     }
     return reasons;
+  }
+
+  private describeComgepOmDeltaReasons(higher: any, lower: any) {
+    const reasons: string[] = [];
+    if (Number(higher?.complaints?.retaliationCases ?? 0) > Number(lower?.complaints?.retaliationCases ?? 0)) {
+      reasons.push(
+        `${higher.code} tem mais casos com risco de retaliação (${higher.complaints?.retaliationCases ?? 0} vs ${lower.complaints?.retaliationCases ?? 0}).`,
+      );
+    }
+    if (Number(higher?.complaints?.openCases ?? 0) > Number(lower?.complaints?.openCases ?? 0)) {
+      reasons.push(
+        `${higher.code} tem mais denúncias abertas (${higher.complaints?.openCases ?? 0} vs ${lower.complaints?.openCases ?? 0}).`,
+      );
+    }
+    if (String(higher?.coverageType ?? '') !== String(lower?.coverageType ?? '')) {
+      reasons.push(
+        `${higher.code} está em condição de cobertura "${higher.coverageType}", enquanto ${lower.code} está em "${lower.coverageType}".`,
+      );
+    }
+    if (Number(higher?.surveyRate ?? 0) > Number(lower?.surveyRate ?? 0)) {
+      reasons.push(
+        `${higher.code} apresenta taxa maior de sinais em pesquisa (${higher.surveyRate}% vs ${lower.surveyRate}%).`,
+      );
+    }
+    if (Number(higher?.domesticRate ?? 0) > Number(lower?.domesticRate ?? 0)) {
+      reasons.push(
+        `${higher.code} apresenta taxa maior de violência doméstica (${higher.domesticRate}% vs ${lower.domesticRate}%).`,
+      );
+    }
+    if (!reasons.length) {
+      reasons.push(
+        `${higher.code} ficou acima de ${lower.code} pelo índice composto de risco da Sala COMGEP.`,
+      );
+    }
+    return reasons;
+  }
+
+  private extractMentionedOms(
+    params: ComgepCopilotStreamParams,
+    text: string,
+  ) {
+    const rows = this.listComgepOmRiskRows(params.room);
+    const source = String(text ?? '');
+    const normalized = this.normalizeComgepQueryText(source);
+    const result = new Map<string, { row: any; score: number }>();
+
+    const push = (row: any, score: number) => {
+      const id = String(row?.id ?? '').trim() || `${row?.code ?? ''}-${row?.uf ?? ''}`;
+      const current = result.get(id);
+      if (!current || score > current.score) {
+        result.set(id, { row, score });
+      }
+    };
+
+    for (const row of rows) {
+      const code = String(row?.code ?? '').trim();
+      const name = String(row?.name ?? '').trim();
+      if (!code) continue;
+      const codePattern = this.buildComgepOmCodeRegex(code);
+      if (codePattern.test(source)) {
+        push(row, 100);
+        continue;
+      }
+
+      const normalizedName = this.normalizeComgepQueryText(name);
+      const normalizedTitle = this.normalizeComgepQueryText(`${code} ${name}`);
+      if (normalizedName && normalized.includes(normalizedName)) {
+        push(row, 80);
+      } else if (normalizedTitle && normalized.includes(normalizedTitle)) {
+        push(row, 85);
+      }
+    }
+
+    if (!result.size) {
+      const focusOm = this.resolveImplicitComgepOmFocus(params, normalized);
+      if (focusOm) push(focusOm, 60);
+    }
+
+    return Array.from(result.values())
+      .sort((a, b) => b.score - a.score)
+      .map((item) => item.row);
+  }
+
+  private resolveImplicitComgepOmFocus(
+    params: ComgepCopilotStreamParams,
+    normalizedMessage: string,
+  ) {
+    const mentionsImplicitOm =
+      normalizedMessage.includes('essa om') ||
+      normalizedMessage.includes('esta om') ||
+      normalizedMessage.includes('essa organizacao') ||
+      normalizedMessage.includes('essa organização') ||
+      normalizedMessage.includes('essa unidade') ||
+      normalizedMessage.includes('essa') ||
+      normalizedMessage.includes('ela');
+
+    if (!mentionsImplicitOm) {
+      return null;
+    }
+
+    if (params.focus?.kind === 'om') {
+      const focused = this.findComgepOmRow(params.room, {
+        omId: params.focus.omId,
+        code: params.focus.label ?? params.focus.description ?? null,
+      });
+      if (focused) return focused;
+    }
+
+    if (params.evidences.length === 1) {
+      const evidence = params.evidences[0];
+      const fromEvidence = this.findComgepOmRow(params.room, {
+        omId: evidence.omId,
+        code: evidence.omCode,
+      });
+      if (fromEvidence) return fromEvidence;
+    }
+
+    return null;
+  }
+
+  private buildComgepOmCodeRegex(code: string) {
+    const escaped = String(code ?? '')
+      .trim()
+      .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      .replace(/[-_/.\s]+/g, '[-_/\\.\\s]*');
+    return new RegExp(`(^|[^A-Z0-9])${escaped}([^A-Z0-9]|$)`, 'i');
   }
 
   private extractMentionedUfs(text: string) {
