@@ -456,6 +456,8 @@ export class LitellmService {
     ok: boolean;
     models: string[];
     error?: string;
+    chatOk?: boolean;
+    chatError?: string;
   }> {
     const apiKey = this.getApiKey();
     const baseUrl = this.getBaseUrl();
@@ -477,7 +479,38 @@ export class LitellmService {
       const models = (body?.data ?? [])
         .map((m: any) => m?.id)
         .filter(Boolean) as string[];
-      return { ok: true, models };
+
+      const chatUrl = `${openAiV1Base(baseUrl)}/chat/completions`;
+      const chatRes = await fetch(chatUrl, {
+        method: 'POST',
+        headers: this.buildHeaders(apiKey),
+        body: JSON.stringify({
+          model: this.getDefaultModel(),
+          messages: [{ role: 'user', content: 'Responda apenas OK' }],
+          temperature: 0.1,
+          max_tokens: 20,
+        }),
+      });
+
+      if (!chatRes.ok) {
+        const chatText = await chatRes.text();
+        let chatError = chatText.slice(0, 800);
+        try {
+          const parsed = JSON.parse(chatText);
+          chatError = parsed?.error?.message || chatError;
+        } catch {
+          /* keep raw */
+        }
+        return {
+          ok: false,
+          models,
+          chatOk: false,
+          error: 'O gateway respondeu /models, mas falhou no teste de chat.',
+          chatError,
+        };
+      }
+
+      return { ok: true, models, chatOk: true };
     } catch (e) {
       return {
         ok: false,

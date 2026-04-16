@@ -212,7 +212,7 @@ type NarrativePdfBlock =
 @Injectable()
 export class AiService {
   private readonly logger = new Logger(AiService.name);
-  private readonly streamIdleTimeoutMs = 90_000;
+  private readonly streamIdleTimeoutMs = 25_000;
   private readonly streamHeartbeatMs = 12_000;
   private readonly comgepSessionTtlMs = 4 * 60 * 60 * 1000;
   private readonly comgepSessions = new Map<string, ComgepCopilotSession>();
@@ -580,9 +580,50 @@ export class AiService {
     } catch (e) {
       let msg = e instanceof Error ? e.message : String(e);
       if (msg === 'LITELLM_STREAM_IDLE_TIMEOUT') {
-        msg =
-          `Sem resposta do modelo por ${Math.round(this.streamIdleTimeoutMs / 1000)}s ` +
-          `(modelo configurado: ${configuredModel}). Verifique se o ID existe no LiteLLM e está disponível.`;
+        this.logger.warn(
+          `LiteLLM não respondeu para análise ${type} em ${Math.round(
+            this.streamIdleTimeoutMs / 1000,
+          )}s; usando análise estruturada local.`,
+        );
+        yield this.sseEvent('progress', {
+          percent: 90,
+          stage:
+            'Gateway indisponível para análise generativa; produzindo análise estruturada local...',
+        });
+        const narrativeWithRefs = await this.appendTraceabilityReferences(
+          type,
+          this.buildDeterministicAnalysisNarrative(type, data),
+          sources,
+        );
+        yield this.sseEvent('done', {
+          percent: 100,
+          narrative: narrativeWithRefs,
+          model: 'local-fallback',
+          generatedAt: new Date().toISOString(),
+        });
+        return;
+      }
+      if (this.shouldUseDeterministicComgepFallback(msg)) {
+        this.logger.warn(
+          `LiteLLM indisponível para análise ${type}; usando análise estruturada local. Motivo: ${msg}`,
+        );
+        yield this.sseEvent('progress', {
+          percent: 90,
+          stage:
+            'Gateway indisponível para análise generativa; produzindo análise estruturada local...',
+        });
+        const narrativeWithRefs = await this.appendTraceabilityReferences(
+          type,
+          this.buildDeterministicAnalysisNarrative(type, data),
+          sources,
+        );
+        yield this.sseEvent('done', {
+          percent: 100,
+          narrative: narrativeWithRefs,
+          model: 'local-fallback',
+          generatedAt: new Date().toISOString(),
+        });
+        return;
       }
       yield this.sseEvent('error', { message: msg });
       return;
@@ -640,11 +681,35 @@ export class AiService {
       { role: 'user', content: message },
     ];
 
-    try {
-      for await (const chunk of this.litellm.chatCompletionStream({
+    type StreamChunk =
+      | { type: 'token'; text: string }
+      | { type: 'done'; model: string };
+    const iterator = this.litellm
+      .chatCompletionStream({
         messages,
         max_tokens: 2048,
-      })) {
+      })
+      [Symbol.asyncIterator]();
+
+    try {
+      while (true) {
+        let timeoutHandle: NodeJS.Timeout | undefined;
+        let next: IteratorResult<StreamChunk>;
+        try {
+          next = (await Promise.race([
+            iterator.next(),
+            new Promise<IteratorResult<StreamChunk>>((_, reject) => {
+              timeoutHandle = setTimeout(() => {
+                reject(new Error('LITELLM_STREAM_IDLE_TIMEOUT'));
+              }, this.streamIdleTimeoutMs);
+            }),
+          ])) as IteratorResult<StreamChunk>;
+        } finally {
+          if (timeoutHandle) clearTimeout(timeoutHandle);
+        }
+        if (next.done) break;
+
+        const chunk = next.value;
         if (chunk.type === 'token') {
           yield this.sseEvent('token', { text: chunk.text });
         } else if (chunk.type === 'done') {
@@ -654,8 +719,395 @@ export class AiService {
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
+      if (
+        msg === 'LITELLM_STREAM_IDLE_TIMEOUT' ||
+        this.shouldUseDeterministicComgepFallback(msg)
+      ) {
+        const fallback = this.buildDeterministicChatFallback(contextSummary);
+        yield this.sseEvent('token', { text: fallback });
+        yield this.sseEvent('done', { model: 'local-fallback' });
+        return;
+      }
       yield this.sseEvent('error', { message: msg });
     }
+  }
+
+  private buildDeterministicChatFallback(contextSummary: string) {
+    return [
+      '## Resposta direta',
+      'O gateway generativo está indisponível neste momento. Abaixo segue uma resposta estruturada com base no resumo de dados já carregado no sistema.',
+      '',
+      '## Panorama atual',
+      String(contextSummary || 'Resumo do sistema indisponível.'),
+      '',
+      '## Encaminhamento',
+      'Para uma leitura mais profunda, use as análises estruturadas da aba IA ou refine o recorte diretamente na Sala COMGEP.',
+    ].join('\n');
+  }
+
+  private buildDeterministicAnalysisNarrative(type: AnalysisType, data: any) {
+    switch (type) {
+      case 'executive':
+        return this.buildDeterministicExecutiveNarrative(data);
+      case 'situational':
+        return this.buildDeterministicSituationalNarrative(data?.dashboard ?? {});
+      case 'aggressor':
+        return this.buildDeterministicAggressorNarrative(data?.profile ?? {});
+      case 'text':
+        return this.buildDeterministicTextNarrative(data?.textSummary ?? {});
+      case 'geo':
+        return this.buildDeterministicGeoNarrative(
+          data?.geoMap ?? data?.geoSummary ?? {},
+        );
+      default:
+        return '## Síntese\nNão foi possível gerar análise local para este tipo.';
+    }
+  }
+
+  private buildDeterministicExecutiveNarrative(data: any) {
+    const dashboard = data?.dashboard ?? {};
+    const profile = data?.profile ?? {};
+    const textSummary = data?.textSummary ?? {};
+    const geoSummary = data?.geoSummary ?? {};
+
+    return [
+      '## Síntese executiva',
+      this.buildExecutiveOpening(dashboard, geoSummary),
+      '',
+      '## Panorama situacional',
+      ...this.buildSituationalHighlights(dashboard),
+      '',
+      '## Perfil das denúncias',
+      ...this.buildAggressorHighlights(profile),
+      '',
+      '## Sinais textuais',
+      ...this.buildTextHighlights(textSummary),
+      '',
+      '## Distribuição geográfica',
+      ...this.buildGeoHighlights(geoSummary),
+      '',
+      '## Encaminhamento',
+      this.buildExecutiveRecommendation(dashboard, profile, geoSummary),
+      '',
+      '## Nota técnica',
+      'Análise estruturada local, baseada diretamente nos dados do sistema, produzida porque o gateway generativo está indisponível neste momento.',
+    ].join('\n');
+  }
+
+  private buildDeterministicSituationalNarrative(dashboard: any) {
+    return [
+      '## Síntese situacional',
+      this.buildExecutiveOpening(dashboard, null),
+      '',
+      '## Indicadores centrais',
+      ...this.buildSituationalHighlights(dashboard),
+      '',
+      '## Leitura gerencial',
+      this.buildExecutiveRecommendation(dashboard, null, null),
+      '',
+      '## Nota técnica',
+      'Análise estruturada local produzida a partir dos dados consolidados do painel situacional.',
+    ].join('\n');
+  }
+
+  private buildDeterministicAggressorNarrative(profile: any) {
+    return [
+      '## Síntese do perfil de violência',
+      `O recorte atual reúne ${this.formatInt(profile?.totalCases ?? 0)} caso(s) consolidados para leitura do perfil do agressor e da vítima.`,
+      '',
+      '## Destaques',
+      ...this.buildAggressorHighlights(profile),
+      '',
+      '## Leitura gerencial',
+      this.buildAggressorRecommendation(profile),
+      '',
+      '## Nota técnica',
+      'Análise estruturada local produzida a partir do perfil consolidado de denúncias.',
+    ].join('\n');
+  }
+
+  private buildDeterministicTextNarrative(textSummary: any) {
+    return [
+      '## Síntese da análise textual',
+      `Foram consolidados ${this.formatInt(textSummary?.totalTexts ?? 0)} texto(s) livres para análise lexical.`,
+      '',
+      '## Termos e fontes',
+      ...this.buildTextHighlights(textSummary),
+      '',
+      '## Leitura gerencial',
+      this.buildTextRecommendation(textSummary),
+      '',
+      '## Nota técnica',
+      'Análise estruturada local produzida a partir dos textos já indexados no sistema.',
+    ].join('\n');
+  }
+
+  private buildDeterministicGeoNarrative(geoSummary: any) {
+    return [
+      '## Síntese geográfica',
+      `O recorte geográfico cobre ${this.formatInt(geoSummary?.totalLocalitiesWithUf ?? 0)} localidade(s) com UF identificada.`,
+      '',
+      '## Estados com maior concentração',
+      ...this.buildGeoHighlights(geoSummary),
+      '',
+      '## Leitura gerencial',
+      this.buildGeoRecommendation(geoSummary),
+      '',
+      '## Nota técnica',
+      'Análise estruturada local produzida a partir da consolidação geográfica já disponível no sistema.',
+    ].join('\n');
+  }
+
+  private buildExecutiveOpening(dashboard: any, geoSummary: any | null) {
+    const complaints = dashboard?.complaints ?? {};
+    const surveys = dashboard?.surveys ?? {};
+    const domestic = dashboard?.domesticViolence ?? {};
+    const activities = dashboard?.activities ?? {};
+    const missions = dashboard?.missions ?? {};
+    const statesCount = Array.isArray(geoSummary?.statesSample)
+      ? geoSummary.statesSample.filter(
+          (item: any) =>
+            Number(item?.complaints ?? 0) +
+              Number(item?.activities ?? 0) +
+              Number(item?.missions ?? 0) >
+            0,
+        ).length
+      : 0;
+
+    return `O sistema registra ${this.formatInt(
+      complaints?.totalCases ?? 0,
+    )} denúncia(s), com ${this.formatInt(
+      complaints?.openCases ?? 0,
+    )} em aberto, ${this.formatInt(
+      activities?.totalActivities ?? 0,
+    )} atividade(s), ${this.formatInt(
+      missions?.totalMissions ?? 0,
+    )} missão(ões) e ${this.formatInt(
+      surveys?.totalResponses ?? 0,
+    )} resposta(s) de pesquisa. A taxa de violência em pesquisa está em ${this.formatPct(
+      surveys?.violenceRatePercent ?? 0,
+    )} e a de violência doméstica ao longo da vida em ${this.formatPct(
+      domestic?.lifetimeRatePercent ?? 0,
+    )}${statesCount ? `, com registros distribuídos em ${statesCount} UF(s)` : ''}.`;
+  }
+
+  private buildSituationalHighlights(dashboard: any) {
+    const complaints = dashboard?.complaints ?? {};
+    const surveys = dashboard?.surveys ?? {};
+    const domestic = dashboard?.domesticViolence ?? {};
+    const recruits = dashboard?.recruits ?? {};
+    const activities = dashboard?.activities ?? {};
+    const missions = dashboard?.missions ?? {};
+
+    return [
+      `- Pesquisas: ${this.formatInt(
+        surveys?.totalResponses ?? 0,
+      )} resposta(s), com taxa de violência de ${this.formatPct(
+        surveys?.violenceRatePercent ?? 0,
+      )}.`,
+      `- Violência doméstica: ${this.formatInt(
+        domestic?.totalResponses ?? 0,
+      )} resposta(s), ${this.formatInt(
+        domestic?.lifetimeYes ?? 0,
+      )} relato(s) ao longo da vida e ${this.formatPct(
+        domestic?.last12MonthsRatePercent ?? 0,
+      )} nos últimos 12 meses.`,
+      `- Recrutas: segurança para denunciar em ${this.formatPct(
+        recruits?.safeToReportPercent ?? 0,
+      )} e conhecimento do processo em ${this.formatPct(
+        recruits?.knowReportProcessPercent ?? 0,
+      )}.`,
+      `- Denúncias: ${this.formatInt(
+        complaints?.totalCases ?? 0,
+      )} total, ${this.formatInt(
+        complaints?.openCases ?? 0,
+      )} em aberto e ${this.formatInt(
+        complaints?.concludedCases ?? 0,
+      )} concluída(s).`,
+      `- Operação: ${this.formatInt(
+        activities?.totalActivities ?? 0,
+      )} atividade(s), ${this.formatInt(
+        activities?.done ?? 0,
+      )} concluída(s), ${this.formatInt(
+        missions?.totalMissions ?? 0,
+      )} missão(ões) e ${this.formatInt(
+        missions?.localitiesCovered ?? 0,
+      )} localidade(s) cobertas.`,
+    ];
+  }
+
+  private buildAggressorHighlights(profile: any) {
+    const byType = profile?.byComplaintType ?? {};
+    const moral = Number(byType?.moral?.percent ?? 0);
+    const sexual = Number(byType?.sexual?.percent ?? 0);
+    const hierarchical = Number(profile?.hierarchicalRelation?.percent ?? 0);
+    const topAggressorRank = Array.isArray(profile?.aggressorProfile?.byRank)
+      ? profile.aggressorProfile.byRank[0]
+      : null;
+    const topVictimRank = Array.isArray(profile?.victimProfile?.byRank)
+      ? profile.victimProfile.byRank[0]
+      : null;
+
+    return [
+      `- Tipo predominante: moral ${this.formatPct(moral)} e sexual ${this.formatPct(sexual)}.`,
+      `- Relação hierárquica presente em ${this.formatPct(hierarchical)} dos casos.`,
+      topAggressorRank
+        ? `- Posto/graduação mais recorrente do agressor: ${topAggressorRank.label ?? topAggressorRank.rank ?? 'não informado'} (${this.formatInt(topAggressorRank.count ?? 0)} caso(s)).`
+        : '- Não há distribuição suficiente por posto/graduação do agressor.',
+      topVictimRank
+        ? `- Posto/graduação mais recorrente da vítima: ${topVictimRank.label ?? topVictimRank.rank ?? 'não informado'} (${this.formatInt(topVictimRank.count ?? 0)} caso(s)).`
+        : '- Não há distribuição suficiente por posto/graduação da vítima.',
+    ];
+  }
+
+  private buildTextHighlights(textSummary: any) {
+    const terms = Array.isArray(textSummary?.topWords)
+      ? textSummary.topWords.slice(0, 8)
+      : [];
+    const sources = textSummary?.sources ?? {};
+    const sourceEntries = Object.entries(sources)
+      .slice(0, 4)
+      .map(([key, value]: [string, any]) => {
+        const top = Array.isArray(value?.topWords) ? value.topWords[0] : null;
+        const topLabel = top?.word ?? top?.label ?? top?.term ?? null;
+        return `- ${key}: ${this.formatInt(value?.count ?? 0)} texto(s)${
+          topLabel ? `, com destaque para "${topLabel}"` : ''
+        }.`;
+      });
+
+    const termLine = terms.length
+      ? `- Termos mais frequentes: ${terms
+          .map((item: any) => {
+            const label = item?.word ?? item?.label ?? item?.term ?? 'termo';
+            const count = this.formatInt(item?.count ?? 0);
+            return `${label} (${count})`;
+          })
+          .join(', ')}.`
+      : '- Não há massa textual suficiente para destacar termos recorrentes.';
+
+    return [termLine, ...sourceEntries];
+  }
+
+  private buildGeoHighlights(geoSummary: any) {
+    const rows = Array.isArray(geoSummary?.statesSample)
+      ? [...geoSummary.statesSample]
+      : [];
+    const ranked = rows
+      .map((item: any) => ({
+        ...item,
+        total:
+          Number(item?.complaints ?? 0) +
+          Number(item?.activities ?? 0) +
+          Number(item?.missions ?? 0),
+      }))
+      .sort((a: any, b: any) => Number(b.total ?? 0) - Number(a.total ?? 0))
+      .slice(0, 5);
+
+    if (!ranked.length) {
+      return ['- Não há estados com volume suficiente para ranqueamento no recorte atual.'];
+    }
+
+    return ranked.map(
+      (item: any) =>
+        `- ${item.uf}: ${this.formatInt(item?.complaints ?? 0)} denúncia(s), ${this.formatInt(item?.activities ?? 0)} atividade(s) e ${this.formatInt(item?.missions ?? 0)} missão(ões).`,
+    );
+  }
+
+  private buildExecutiveRecommendation(
+    dashboard: any,
+    profile: any,
+    geoSummary: any | null,
+  ) {
+    const complaints = dashboard?.complaints ?? {};
+    const openCases = Number(complaints?.openCases ?? 0);
+    const violenceRate = Number(dashboard?.surveys?.violenceRatePercent ?? 0);
+    const domesticRate = Number(
+      dashboard?.domesticViolence?.last12MonthsRatePercent ?? 0,
+    );
+    const safeToReport = Number(
+      dashboard?.recruits?.safeToReportPercent ?? 0,
+    );
+    const topState = Array.isArray(geoSummary?.statesSample)
+      ? [...geoSummary.statesSample]
+          .map((item: any) => ({
+            ...item,
+            total:
+              Number(item?.complaints ?? 0) +
+              Number(item?.activities ?? 0) +
+              Number(item?.missions ?? 0),
+          }))
+          .sort((a: any, b: any) => Number(b.total ?? 0) - Number(a.total ?? 0))[0]
+      : null;
+
+    if (openCases > 0 || violenceRate >= 20 || domesticRate >= 10) {
+      return `O recorte indica necessidade de intervenção imediata, combinando acompanhamento das denúncias em aberto, reforço de ações preventivas e foco nas UFs ou localidades mais carregadas${
+        topState?.uf ? `, com atenção especial para ${topState.uf}` : ''
+      }.`;
+    }
+    if (safeToReport < 60) {
+      return 'O principal ponto de atenção está na confiança para denunciar. O encaminhamento prioritário é ampliar comunicação institucional e proteção percebida pelos militares.';
+    }
+    if (Number(profile?.totalCases ?? 0) > 0) {
+      return 'O cenário não aponta crise aguda, mas recomenda manutenção da vigilância institucional sobre o perfil das denúncias e monitoramento contínuo dos grupos mais expostos.';
+    }
+    return 'O recorte atual sugere estabilidade relativa. O foco recomendado é manter cobertura institucional e monitorar sinais precoces nas pesquisas e textos livres.';
+  }
+
+  private buildAggressorRecommendation(profile: any) {
+    const hierarchical = Number(profile?.hierarchicalRelation?.percent ?? 0);
+    const sexual = Number(profile?.byComplaintType?.sexual?.percent ?? 0);
+    if (hierarchical >= 50) {
+      return 'A incidência elevada de relação hierárquica exige reforço de governança, proteção à vítima e vigilância de ambiente nas cadeias de comando mais sensíveis.';
+    }
+    if (sexual >= 20) {
+      return 'A proporção de casos sexuais demanda resposta institucional qualificada, com prioridade para sigilo, acolhimento e tratamento célere dos casos.';
+    }
+    return 'O perfil atual recomenda manter leitura segmentada por tipo de violência e posto/graduação para orientar ações preventivas mais direcionadas.';
+  }
+
+  private buildTextRecommendation(textSummary: any) {
+    const totalTexts = Number(textSummary?.totalTexts ?? 0);
+    if (totalTexts <= 0) {
+      return 'Não há massa textual suficiente para inferência qualitativa no recorte atual.';
+    }
+    const firstWord = Array.isArray(textSummary?.topWords)
+      ? textSummary.topWords[0]?.word ?? textSummary.topWords[0]?.label
+      : null;
+    return firstWord
+      ? `O termo "${firstWord}" deve ser usado como trilha inicial de investigação qualitativa e cruzado com denúncias, pesquisas e relatórios operacionais.`
+      : 'Os textos devem ser lidos em conjunto com os indicadores quantitativos para identificar sinais precoces e temas recorrentes.';
+  }
+
+  private buildGeoRecommendation(geoSummary: any) {
+    const rows = Array.isArray(geoSummary?.statesSample)
+      ? [...geoSummary.statesSample]
+      : [];
+    if (!rows.length) {
+      return 'Não há base geográfica suficiente para recomendação territorial neste recorte.';
+    }
+    const top = rows
+      .map((item: any) => ({
+        ...item,
+        total:
+          Number(item?.complaints ?? 0) +
+          Number(item?.activities ?? 0) +
+          Number(item?.missions ?? 0),
+      }))
+      .sort((a: any, b: any) => Number(b.total ?? 0) - Number(a.total ?? 0))[0];
+    return top?.uf
+      ? `O principal foco territorial do recorte está em ${top.uf}. O passo seguinte é cruzar esse estado com cobertura institucional, denúncias e presença operacional.`
+      : 'Use a distribuição por estado para ordenar onde concentrar análise e presença institucional.';
+  }
+
+  private formatPct(value: unknown) {
+    const numeric = Number(value ?? 0);
+    return `${numeric.toFixed(1).replace('.', ',')}%`;
+  }
+
+  private formatInt(value: unknown) {
+    const numeric = Number(value ?? 0);
+    if (!Number.isFinite(numeric)) return '0';
+    return Math.round(numeric).toLocaleString('pt-BR');
   }
 
   private async renderAnalysisPdf(args: {
