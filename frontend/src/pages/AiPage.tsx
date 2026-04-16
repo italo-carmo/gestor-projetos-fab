@@ -842,6 +842,8 @@ function AssistantTab() {
   const isEditingExistingSchedule =
     workflow?.intent === "create_mission_schedule" &&
     workflow?.draft?.scheduleOperation === "EDIT";
+  const isMissionScheduleWorkflow =
+    workflow?.intent === "create_mission_schedule";
 
   const postAssistant = useCallback(
     async (payload: Record<string, unknown>, userContent?: string) => {
@@ -1322,7 +1324,7 @@ function AssistantTab() {
         </CardContent>
       </Card>
 
-      {workflow ? (
+      {workflow && !isMissionScheduleWorkflow ? (
         <Card variant="outlined" sx={{ borderRadius: 3, bgcolor: "#FAFBFD" }}>
           <CardContent>
             <Stack spacing={1.25}>
@@ -1567,6 +1569,8 @@ function AssistantTab() {
               <Typography variant="body2" color="text.secondary">
                 {conversationKind === "copilot"
                   ? "Sessão analítica com memória de follow-up."
+                  : isMissionScheduleWorkflow
+                    ? "Fluxo de cronograma conduzido diretamente no chat, com confirmação no rodapé da conversa."
                   : conversationKind === "assistant"
                     ? "Sessão operacional guiada com rascunho e confirmação."
                     : "Escolha uma ação rápida ou escreva o que deseja criar."}
@@ -1595,6 +1599,25 @@ function AssistantTab() {
               border: "1px solid #E8EAF0",
             }}
           >
+            {isMissionScheduleWorkflow ? (
+              <Alert
+                severity={workflow?.readyToConfirm ? "success" : "info"}
+                sx={{ mb: 1.5, borderRadius: 2.5, alignItems: "flex-start" }}
+              >
+                <Typography variant="subtitle2" fontWeight={800}>
+                  {workflow?.readyToConfirm
+                    ? "Pronto para confirmar no chat"
+                    : "Fluxo de cronograma em andamento"}
+                </Typography>
+                <Typography variant="body2" sx={{ mt: 0.35, lineHeight: 1.6 }}>
+                  {workflow?.readyToConfirm
+                    ? "Revise a última mensagem do assistente e confirme pelo botão abaixo do chat."
+                    : workflow?.currentField
+                      ? `O próximo passo está no rodapé do chat: ${workflow.currentField.label.toLowerCase()}.`
+                      : "O assistente vai guiando o cronograma passo a passo na própria conversa."}
+                </Typography>
+              </Alert>
+            ) : null}
             {!messages.length ? (
               <Box sx={{ textAlign: "center", py: 7 }}>
                 <SmartToyRoundedIcon sx={{ fontSize: 48, color: "#1A3C6E", mb: 1 }} />
