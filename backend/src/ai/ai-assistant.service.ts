@@ -127,6 +127,10 @@ type AssistantReply = {
     confirmLabel: string;
     attachments?: AssistantScheduleSourceFile[];
     scheduleItems?: AssistantScheduleDraftItem[];
+    schedulePreviewStartNumber?: number;
+    schedulePreviewEndNumber?: number;
+    scheduleTotalItems?: number;
+    scheduleSavedCount?: number;
   };
   quickActions: AssistantQuickAction[];
   createdItem?: AssistantResultLink | null;
@@ -272,6 +276,11 @@ export class AiAssistantService {
         id: item.id || `schedule-item-${index + 1}`,
       }));
     workflow.draft.scheduleSourceFiles = [...existingFiles, ...parseResult.files];
+    workflow.draft.scheduleBatchSize = this.getScheduleBatchSize();
+    workflow.draft.scheduleSavedCount = 0;
+    workflow.draft.scheduleTotalItems = (
+      workflow.draft.scheduleItemsDraft as AssistantScheduleDraftItem[]
+    ).length;
     workflow.status = 'confirming';
     session.updatedAt = new Date().toISOString();
 
@@ -287,7 +296,7 @@ export class AiAssistantService {
       this.pushMessage(
         session,
         'assistant',
-        this.buildScheduleUploadMessage(parseResult.files, parseResult.items),
+        this.buildScheduleUploadMessage(parseResult.files, parseResult.items, 0),
       ),
       updatedView,
       null,
@@ -438,6 +447,12 @@ export class AiAssistantService {
 
     if (wantsConfirm && workflow.status === 'confirming') {
       try {
+        if (
+          workflow.intent === 'create_mission_schedule' &&
+          workflow.draft.scheduleInputMode === 'UPLOAD'
+        ) {
+          return await this.confirmScheduleUploadBatch(session, workflow, user);
+        }
         const createdItem = await this.executeWorkflow(workflow, user);
         workflow.status = 'completed';
         session.workflow = null;
@@ -598,9 +613,9 @@ export class AiAssistantService {
     const attachments = Array.isArray(workflow?.draft?.scheduleSourceFiles)
       ? (workflow?.draft?.scheduleSourceFiles as AssistantScheduleSourceFile[])
       : [];
-    const scheduleItems = Array.isArray(workflow?.draft?.scheduleItemsDraft)
-      ? (workflow?.draft?.scheduleItemsDraft as AssistantScheduleDraftItem[])
-      : [];
+    const schedulePreview = workflow
+      ? this.getSchedulePreviewState(workflow.draft)
+      : null;
     return {
       sessionId: session.id,
       message,
@@ -608,7 +623,11 @@ export class AiAssistantService {
         ? {
             ...workflow,
             attachments,
-            scheduleItems,
+            scheduleItems: schedulePreview?.items ?? [],
+            schedulePreviewStartNumber: schedulePreview?.startNumber,
+            schedulePreviewEndNumber: schedulePreview?.endNumber,
+            scheduleTotalItems: schedulePreview?.total,
+            scheduleSavedCount: schedulePreview?.savedCount,
           }
         : null,
       quickActions: QUICK_ACTIONS,
@@ -729,6 +748,11 @@ export class AiAssistantService {
       fields.find((field) => this.isFieldMissing(field, workflow.draft)) ?? null;
     workflow.currentField = currentField?.field ?? null;
     const summary = await this.buildDraftSummary(workflow.intent, workflow.draft, user);
+    const schedulePreview =
+      workflow.intent === 'create_mission_schedule' &&
+      workflow.draft.scheduleInputMode === 'UPLOAD'
+        ? this.getSchedulePreviewState(workflow.draft)
+        : null;
     return {
       intent: workflow.intent,
       title: INTENT_META[workflow.intent].title,
@@ -738,7 +762,9 @@ export class AiAssistantService {
       summary,
       currentField,
       readyToConfirm: !currentField,
-      confirmLabel: INTENT_META[workflow.intent].confirmLabel,
+      confirmLabel: schedulePreview
+        ? `Confirmar itens ${schedulePreview.startNumber}-${schedulePreview.endNumber}`
+        : INTENT_META[workflow.intent].confirmLabel,
     };
   }
 
@@ -1155,7 +1181,9 @@ export class AiAssistantService {
           ...baseFields,
           this.buildScheduleEditValueField(
             draft.scheduleEditFieldKey,
-            Number(draft.scheduleEditIndex) + 1,
+            this.getScheduleSavedCount(draft) +
+              Number(draft.scheduleEditIndex) +
+              1,
           ),
         ];
       }
@@ -1382,9 +1410,7 @@ export class AiAssistantService {
       const sourceFiles = Array.isArray(draft.scheduleSourceFiles)
         ? (draft.scheduleSourceFiles as AssistantScheduleSourceFile[])
         : [];
-      const scheduleItems = Array.isArray(draft.scheduleItemsDraft)
-        ? (draft.scheduleItemsDraft as AssistantScheduleDraftItem[])
-        : [];
+      const schedulePreview = this.getSchedulePreviewState(draft);
       return [
         { label: 'Escopo', value: draft.scope || '—' },
         { label: 'Missão', value: missionLabel || '—' },
@@ -1397,17 +1423,27 @@ export class AiAssistantService {
         },
         {
           label: 'Itens montados',
-          value: scheduleItems.length
-            ? `${scheduleItems.length} item(ns) prontos para revisão`
+          value: schedulePreview.total
+            ? `${schedulePreview.total} item(ns) no total`
             : 'Aguardando leitura do cronograma',
+        },
+        {
+          label: 'Lote em revisão',
+          value: schedulePreview.items.length
+            ? `${schedulePreview.startNumber}-${schedulePreview.endNumber}`
+            : '—',
         },
         {
           label: 'Próxima ação',
           value:
             draft.scheduleEditIndex !== undefined && draft.scheduleEditIndex !== null
-              ? `Ajustando item ${Number(draft.scheduleEditIndex) + 1}`
-              : scheduleItems.length
-                ? 'Você pode confirmar, remover ou alterar itens específicos.'
+              ? `Ajustando item ${
+                  this.getScheduleSavedCount(draft) +
+                  Number(draft.scheduleEditIndex) +
+                  1
+                }`
+              : schedulePreview.total
+                ? 'Você pode confirmar o lote atual, remover ou alterar itens específicos.'
                 : 'Envie um ou mais PDFs para o assistente montar o cronograma.',
         },
       ];
@@ -1620,6 +1656,7 @@ export class AiAssistantService {
     }
     const normalized = this.normalizeFreeText(rawMessage);
     if (!normalized) return null;
+    const savedCount = this.getScheduleSavedCount(workflow.draft);
 
     const removeMatch = normalized.match(/(?:remover|excluir)\s+item\s+(\d+)/);
     if (removeMatch) {
@@ -1639,7 +1676,13 @@ export class AiAssistantService {
           null,
         );
       }
-      if (!Number.isInteger(itemNumber) || itemNumber < 1 || itemNumber > items.length) {
+      const itemIndex = itemNumber - savedCount - 1;
+      if (
+        !Number.isInteger(itemNumber) ||
+        itemNumber <= savedCount ||
+        itemIndex < 0 ||
+        itemIndex >= items.length
+      ) {
         return this.buildReply(
           session,
           this.pushMessage(
@@ -1651,8 +1694,12 @@ export class AiAssistantService {
           null,
         );
       }
-      const [removed] = items.splice(itemNumber - 1, 1);
+      const [removed] = items.splice(itemIndex, 1);
       workflow.draft.scheduleItemsDraft = items;
+      workflow.draft.scheduleTotalItems = Math.max(
+        savedCount,
+        this.getScheduleTotalItems(workflow.draft) - 1,
+      );
       workflow.draft.scheduleEditIndex = null;
       workflow.draft.scheduleEditFieldKey = null;
       workflow.status = items.length ? 'confirming' : 'collecting';
@@ -1679,7 +1726,13 @@ export class AiAssistantService {
       const items = Array.isArray(workflow.draft.scheduleItemsDraft)
         ? (workflow.draft.scheduleItemsDraft as AssistantScheduleDraftItem[])
         : [];
-      if (!Number.isInteger(itemNumber) || itemNumber < 1 || itemNumber > items.length) {
+      const itemIndex = itemNumber - savedCount - 1;
+      if (
+        !Number.isInteger(itemNumber) ||
+        itemNumber <= savedCount ||
+        itemIndex < 0 ||
+        itemIndex >= items.length
+      ) {
         return this.buildReply(
           session,
           this.pushMessage(
@@ -1691,7 +1744,7 @@ export class AiAssistantService {
           null,
         );
       }
-      workflow.draft.scheduleEditIndex = itemNumber - 1;
+      workflow.draft.scheduleEditIndex = itemIndex;
       workflow.draft.scheduleEditFieldKey = null;
       workflow.status = 'collecting';
       const updatedView = await this.buildWorkflowView(workflow, user);
@@ -1723,7 +1776,7 @@ export class AiAssistantService {
           session,
           'assistant',
           items.length
-            ? this.buildSchedulePreviewMessage(items)
+            ? this.buildSchedulePreviewMessage(items, savedCount)
             : 'Ainda não há itens montados no rascunho atual.',
         ),
         updatedView,
@@ -2218,6 +2271,138 @@ export class AiAssistantService {
     }
 
     return parsedItems.sort((left, right) => left.startAt.localeCompare(right.startAt));
+  }
+
+  private getScheduleBatchSize() {
+    return 10;
+  }
+
+  private getScheduleSavedCount(draft: Record<string, any>) {
+    const parsed = Number(draft.scheduleSavedCount ?? 0);
+    if (!Number.isFinite(parsed) || parsed < 0) return 0;
+    return Math.floor(parsed);
+  }
+
+  private getScheduleTotalItems(draft: Record<string, any>) {
+    const pendingCount = Array.isArray(draft.scheduleItemsDraft)
+      ? (draft.scheduleItemsDraft as AssistantScheduleDraftItem[]).length
+      : 0;
+    const parsed = Number(
+      draft.scheduleTotalItems ?? pendingCount + this.getScheduleSavedCount(draft),
+    );
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      return pendingCount + this.getScheduleSavedCount(draft);
+    }
+    return Math.floor(parsed);
+  }
+
+  private getSchedulePreviewState(draft: Record<string, any>) {
+    const pendingItems = Array.isArray(draft.scheduleItemsDraft)
+      ? (draft.scheduleItemsDraft as AssistantScheduleDraftItem[])
+      : [];
+    const batchSize = Math.max(
+      1,
+      Number(draft.scheduleBatchSize ?? this.getScheduleBatchSize()) ||
+        this.getScheduleBatchSize(),
+    );
+    const savedCount = this.getScheduleSavedCount(draft);
+    const items = pendingItems.slice(0, batchSize);
+    const startNumber = items.length ? savedCount + 1 : savedCount;
+    const endNumber = items.length ? savedCount + items.length : savedCount;
+    return {
+      items,
+      batchSize,
+      savedCount,
+      total: this.getScheduleTotalItems(draft),
+      startNumber,
+      endNumber,
+      hasMore: pendingItems.length > batchSize,
+      pendingCount: pendingItems.length,
+    };
+  }
+
+  private async confirmScheduleUploadBatch(
+    session: AssistantSession,
+    workflow: AssistantWorkflow,
+    user?: RbacUser,
+  ) {
+    const pendingItems = Array.isArray(workflow.draft.scheduleItemsDraft)
+      ? [...(workflow.draft.scheduleItemsDraft as AssistantScheduleDraftItem[])]
+      : [];
+    const preview = this.getSchedulePreviewState(workflow.draft);
+    const batchItems = preview.items;
+    if (!batchItems.length) {
+      throw new BadRequestException(
+        'Não há itens pendentes para cadastrar neste cronograma.',
+      );
+    }
+
+    for (const item of batchItems) {
+      await this.missions.createScheduleItem(
+        workflow.draft.missionId,
+        {
+          title: item.title,
+          startAt: item.startAt,
+          durationMinutes: item.durationMinutes,
+          location: item.location,
+          responsible: item.responsible,
+          participants: item.participants || '',
+        },
+        user,
+      );
+    }
+
+    workflow.draft.scheduleItemsDraft = pendingItems.slice(batchItems.length);
+    workflow.draft.scheduleSavedCount = preview.savedCount + batchItems.length;
+    workflow.status = Array.isArray(workflow.draft.scheduleItemsDraft) &&
+      workflow.draft.scheduleItemsDraft.length
+        ? 'confirming'
+        : 'completed';
+    session.updatedAt = new Date().toISOString();
+
+    if (
+      Array.isArray(workflow.draft.scheduleItemsDraft) &&
+      workflow.draft.scheduleItemsDraft.length
+    ) {
+      const nextPreview = this.getSchedulePreviewState(workflow.draft);
+      const updatedView = await this.buildWorkflowView(workflow, user);
+      return this.buildReply(
+        session,
+        this.pushMessage(
+          session,
+          'assistant',
+          [
+            `Itens **${preview.startNumber}-${preview.endNumber}** cadastrados com sucesso.`,
+            `Agora revise o próximo lote (**${nextPreview.startNumber}-${nextPreview.endNumber}**) e confirme quando estiver correto.`,
+          ].join('\n\n'),
+        ),
+        updatedView,
+        null,
+      );
+    }
+
+    const totalCreated = this.getScheduleTotalItems(workflow.draft);
+    workflow.status = 'completed';
+    session.workflow = null;
+    return this.buildReply(
+      session,
+      this.pushMessage(
+        session,
+        'assistant',
+        [
+          'Ação executada com sucesso.',
+          `Registro criado: **Cronograma cadastrado com ${totalCreated} item(ns)**.`,
+          'Você pode abrir o item pelo link retornado ou iniciar outra ação assistida.',
+        ].join('\n\n'),
+      ),
+      null,
+      {
+        entityType: 'mission_schedule',
+        id: String(workflow.draft.missionId),
+        title: `Cronograma cadastrado com ${totalCreated} item(ns)`,
+        url: `/missions?scope=${encodeURIComponent(String(workflow.draft.scope ?? 'SMIF'))}&missionId=${encodeURIComponent(String(workflow.draft.missionId))}`,
+      },
+    );
   }
 
   private extractOcrPageContext(page: string) {
@@ -3020,6 +3205,7 @@ export class AiAssistantService {
   private buildScheduleUploadMessage(
     files: AssistantScheduleSourceFile[],
     items: AssistantScheduleDraftItem[],
+    startOffset = 0,
   ) {
     const fileSummary = files
       .map(
@@ -3031,18 +3217,21 @@ export class AiAssistantService {
       'Analisei os arquivos enviados e montei um rascunho do cronograma para revisão.',
       fileSummary,
       '',
-      this.buildSchedulePreviewMessage(items),
+      this.buildSchedulePreviewMessage(items, startOffset),
       '',
-      'Se estiver correto, confirme o cadastro. Se precisar ajustar, escreva por exemplo **alterar item 2** ou **remover item 3**.',
+      'Se estiver correto, confirme o lote atual. Se precisar ajustar, use a numeração exibida no rascunho, por exemplo **alterar item 2** ou **remover item 3**.',
     ]
       .filter(Boolean)
       .join('\n');
   }
 
-  private buildSchedulePreviewMessage(items: AssistantScheduleDraftItem[]) {
-    const preview = items.slice(0, 8).map((item, index) => {
+  private buildSchedulePreviewMessage(
+    items: AssistantScheduleDraftItem[],
+    startOffset = 0,
+  ) {
+    const preview = items.slice(0, this.getScheduleBatchSize()).map((item, index) => {
       const when = this.formatScheduleDateTime(item.startAt);
-      return `${index + 1}. **${item.title}**\nLocal: ${item.location || '-'}\nInício: ${when}\nDuração: ${item.durationMinutes} min\nResponsável: ${item.responsible || '-'}\nParticipantes: ${item.participants || '-'}`;
+      return `${startOffset + index + 1}. **${item.title}**\nLocal: ${item.location || '-'}\nInício: ${when}\nDuração: ${item.durationMinutes} min\nResponsável: ${item.responsible || '-'}\nParticipantes: ${item.participants || '-'}`;
     });
     const remaining =
       items.length > preview.length

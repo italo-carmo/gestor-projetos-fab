@@ -1468,7 +1468,7 @@ export class MissionsService {
       data: {
         missionId,
         title: this.sanitizeRequiredText(payload.title, 'title'),
-        startAt: this.parseRequiredDate(payload.startAt, 'startAt'),
+        startAt: this.parseScheduleDateTime(payload.startAt, 'startAt'),
         durationMinutes: this.normalizeDurationMinutes(payload.durationMinutes),
         location: sanitizeText(payload.location ?? ''),
         responsible: this.sanitizeRequiredText(
@@ -1526,7 +1526,7 @@ export class MissionsService {
         startAt:
           payload.startAt === undefined
             ? undefined
-            : this.parseRequiredDate(payload.startAt, 'startAt'),
+            : this.parseScheduleDateTime(payload.startAt, 'startAt'),
         durationMinutes:
           payload.durationMinutes === undefined
             ? undefined
@@ -2662,6 +2662,43 @@ export class MissionsService {
     return parsed;
   }
 
+  private parseScheduleDateTime(value: string, field: string) {
+    const safe = String(value ?? '').trim();
+    const localMatch = safe.match(
+      /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/,
+    );
+    if (!localMatch) {
+      return this.parseRequiredDate(safe, field);
+    }
+
+    const year = Number(localMatch[1]);
+    const month = Number(localMatch[2]);
+    const day = Number(localMatch[3]);
+    const hour = Number(localMatch[4]);
+    const minute = Number(localMatch[5]);
+    const second = Number(localMatch[6] ?? '0');
+
+    const utcGuess = Date.UTC(year, month - 1, day, hour, minute, second);
+    let resolved = utcGuess;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const offsetMinutes = this.getTimeZoneOffsetMinutes(
+        new Date(resolved),
+        this.missionPdfTimeZone,
+      );
+      const adjusted =
+        Date.UTC(year, month - 1, day, hour, minute, second) -
+        offsetMinutes * 60_000;
+      if (adjusted === resolved) break;
+      resolved = adjusted;
+    }
+
+    const parsed = new Date(resolved);
+    if (Number.isNaN(parsed.getTime())) {
+      throwError('VALIDATION_ERROR', { field, reason: 'DATE_INVALID' });
+    }
+    return parsed;
+  }
+
   private normalizeDurationMinutes(value: number) {
     const parsed = Number(value);
     if (!Number.isFinite(parsed) || parsed < 1) {
@@ -2755,6 +2792,33 @@ export class MissionsService {
       hour: byType.hour ?? '00',
       minute: byType.minute ?? '00',
     };
+  }
+
+  private getTimeZoneOffsetMinutes(
+    value: Date,
+    timeZone = this.missionPdfTimeZone,
+  ) {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    }).formatToParts(value);
+
+    const byType = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    const asUtc = Date.UTC(
+      Number(byType.year ?? '0'),
+      Number(byType.month ?? '1') - 1,
+      Number(byType.day ?? '1'),
+      Number(byType.hour ?? '0'),
+      Number(byType.minute ?? '0'),
+      Number(byType.second ?? '0'),
+    );
+    return (asUtc - value.getTime()) / 60_000;
   }
 
   private removeOmFromParticipantName(name: string, fabom?: string | null) {

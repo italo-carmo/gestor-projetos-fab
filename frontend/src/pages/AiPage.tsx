@@ -199,6 +199,10 @@ type AssistantWorkflow = {
   confirmLabel: string;
   attachments?: AssistantAttachment[];
   scheduleItems?: AssistantScheduleItem[];
+  schedulePreviewStartNumber?: number;
+  schedulePreviewEndNumber?: number;
+  scheduleTotalItems?: number;
+  scheduleSavedCount?: number;
 };
 
 type CopilotEvidence = {
@@ -1406,7 +1410,7 @@ function AssistantTab() {
                         Rascunho do cronograma
                       </Typography>
                       <Typography variant="body2" color="text.secondary" sx={{ mt: 0.4 }}>
-                        Revise os itens abaixo. Para ajustar, escreva por exemplo
+                        Revise os itens abaixo. Para ajustar, use a numeração exibida e escreva por exemplo
                         {" "}
                         <strong>alterar item 2</strong>
                         {" "}
@@ -1419,11 +1423,17 @@ function AssistantTab() {
                       size="small"
                       color="info"
                       variant="outlined"
-                      label={`${workflow.scheduleItems.length} item(ns)`}
+                      label={
+                        workflow.schedulePreviewStartNumber &&
+                        workflow.schedulePreviewEndNumber &&
+                        workflow.scheduleTotalItems
+                          ? `Itens ${workflow.schedulePreviewStartNumber}-${workflow.schedulePreviewEndNumber} de ${workflow.scheduleTotalItems}`
+                          : `${workflow.scheduleItems.length} item(ns)`
+                      }
                     />
                   </Stack>
                   <Stack spacing={1} sx={{ mt: 1.25 }}>
-                    {workflow.scheduleItems.slice(0, 10).map((item, index) => (
+                    {workflow.scheduleItems.map((item, index) => (
                       <Paper
                         key={item.id}
                         variant="outlined"
@@ -1436,7 +1446,7 @@ function AssistantTab() {
                         >
                           <Box>
                             <Typography variant="body2" fontWeight={800}>
-                              {index + 1}. {item.title}
+                              {(workflow.schedulePreviewStartNumber ?? 1) + index}. {item.title}
                             </Typography>
                             <Typography variant="caption" color="text.secondary">
                               {formatScheduleDateTime(item.startAt)} • {item.durationMinutes} min
@@ -1461,9 +1471,11 @@ function AssistantTab() {
                         ) : null}
                       </Paper>
                     ))}
-                    {workflow.scheduleItems.length > 10 ? (
+                    {workflow.scheduleTotalItems &&
+                    workflow.schedulePreviewEndNumber &&
+                    workflow.scheduleTotalItems > workflow.schedulePreviewEndNumber ? (
                       <Typography variant="caption" color="text.secondary">
-                        Exibindo os 10 primeiros itens. O rascunho completo será cadastrado após sua confirmação.
+                        Confirme este lote para cadastrar esses itens e avançar para o próximo bloco.
                       </Typography>
                     ) : null}
                   </Stack>
