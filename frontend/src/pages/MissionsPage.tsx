@@ -4,6 +4,7 @@ import {
   Button,
   Card,
   CardContent,
+  Checkbox,
   Chip,
   Collapse,
   Divider,
@@ -483,7 +484,12 @@ export function MissionsPage() {
   const [checklistDirty, setChecklistDirty] = useState(false);
   const [cloneSourceMissionId, setCloneSourceMissionId] = useState('');
   const [missionDeleteTarget, setMissionDeleteTarget] = useState<{ id: string; title: string } | null>(null);
-  const [scheduleDeleteTarget, setScheduleDeleteTarget] = useState<{ id: string; title: string } | null>(null);
+  const [scheduleDeleteTarget, setScheduleDeleteTarget] = useState<{
+    ids: string[];
+    title?: string | null;
+    count: number;
+  } | null>(null);
+  const [selectedScheduleItemIds, setSelectedScheduleItemIds] = useState<string[]>([]);
   const [expandedStatsCards, setExpandedStatsCards] = useState<
     Record<MissionStatsCardKey, boolean>
   >({
@@ -650,6 +656,21 @@ export function MissionsPage() {
     () => getNextMissionScheduleStart((selectedMission?.scheduleItems ?? []) as any[]),
     [selectedMission?.scheduleItems],
   );
+  const missionScheduleItems = useMemo(
+    () => ((selectedMission?.scheduleItems ?? []) as any[]),
+    [selectedMission?.scheduleItems],
+  );
+  const allScheduleItemIds = useMemo(
+    () => missionScheduleItems.map((item: any) => String(item.id)).filter(Boolean),
+    [missionScheduleItems],
+  );
+  const selectedScheduleCount = selectedScheduleItemIds.length;
+  const allScheduleItemsSelected =
+    allScheduleItemIds.length > 0 &&
+    selectedScheduleItemIds.length === allScheduleItemIds.length;
+  const someScheduleItemsSelected =
+    selectedScheduleItemIds.length > 0 &&
+    selectedScheduleItemIds.length < allScheduleItemIds.length;
 
   const resetScheduleForm = useCallback((scheduleItems?: any[] | null) => {
     setEditingScheduleItemId(null);
@@ -660,6 +681,7 @@ export function MissionsPage() {
     if (!missionIdFromUrl) {
       setDrawerOpen(false);
       setMissionTab(0);
+      setSelectedScheduleItemIds([]);
       if (!isCreateMode) {
         resetScheduleForm();
       }
@@ -668,6 +690,12 @@ export function MissionsPage() {
     setDrawerOpen(true);
     setIsCreateMode(false);
   }, [isCreateMode, missionIdFromUrl, resetScheduleForm]);
+
+  useEffect(() => {
+    setSelectedScheduleItemIds((current) =>
+      current.filter((itemId) => allScheduleItemIds.includes(itemId)),
+    );
+  }, [allScheduleItemIds]);
 
   useEffect(() => {
     if (!selectedMission) return;
@@ -1060,7 +1088,29 @@ export function MissionsPage() {
   };
 
   const handleDeleteScheduleItem = (itemId: string, itemTitle: string) => {
-    setScheduleDeleteTarget({ id: itemId, title: itemTitle });
+    setScheduleDeleteTarget({ ids: [itemId], title: itemTitle, count: 1 });
+  };
+
+  const handleToggleScheduleItemSelection = (itemId: string) => {
+    setSelectedScheduleItemIds((current) =>
+      current.includes(itemId)
+        ? current.filter((candidate) => candidate !== itemId)
+        : [...current, itemId],
+    );
+  };
+
+  const handleToggleAllScheduleItems = () => {
+    setSelectedScheduleItemIds((current) =>
+      current.length === allScheduleItemIds.length ? [] : allScheduleItemIds,
+    );
+  };
+
+  const handleDeleteSelectedScheduleItems = () => {
+    if (!selectedScheduleItemIds.length) return;
+    setScheduleDeleteTarget({
+      ids: selectedScheduleItemIds,
+      count: selectedScheduleItemIds.length,
+    });
   };
 
   const handleConfirmDeleteScheduleItem = async () => {
@@ -1068,19 +1118,40 @@ export function MissionsPage() {
     if (!scheduleDeleteTarget) return;
 
     try {
-      await deleteScheduleItem.mutateAsync({ id: selectedMission.id, itemId: scheduleDeleteTarget.id });
-      toast.push({ message: 'Item removido.', severity: 'success' });
+      for (const itemId of scheduleDeleteTarget.ids) {
+        await deleteScheduleItem.mutateAsync({ id: selectedMission.id, itemId });
+      }
+      toast.push({
+        message:
+          scheduleDeleteTarget.count > 1
+            ? `${scheduleDeleteTarget.count} itens removidos.`
+            : 'Item removido.',
+        severity: 'success',
+      });
       const nextScheduleItems = ((selectedMission.scheduleItems ?? []) as any[]).filter(
-        (item: any) => item.id !== scheduleDeleteTarget.id,
+        (item: any) => !scheduleDeleteTarget.ids.includes(String(item.id)),
       );
-      if (editingScheduleItemId === scheduleDeleteTarget.id) {
+      if (
+        editingScheduleItemId &&
+        scheduleDeleteTarget.ids.includes(editingScheduleItemId)
+      ) {
         resetScheduleForm(nextScheduleItems);
       } else {
         setScheduleForm((current) => (isScheduleFormEmpty(current) ? buildBlankScheduleForm(nextScheduleItems) : current));
       }
+      setSelectedScheduleItemIds((current) =>
+        current.filter((itemId) => !scheduleDeleteTarget.ids.includes(itemId)),
+      );
       setScheduleDeleteTarget(null);
     } catch (error) {
-      toast.push({ message: parseApiError(error).message ?? 'Erro ao remover item.', severity: 'error' });
+      toast.push({
+        message:
+          parseApiError(error).message ??
+          (scheduleDeleteTarget.count > 1
+            ? 'Erro ao remover itens selecionados.'
+            : 'Erro ao remover item.'),
+        severity: 'error',
+      });
     }
   };
 
@@ -2075,60 +2146,116 @@ export function MissionsPage() {
                           Nenhum item no cronograma da missão.
                         </Typography>
                       ) : (
-                        <Table size="small">
-                          <TableHead>
-                            <TableRow sx={{ bgcolor: 'primary.main' }}>
-                              <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Horário</TableCell>
-                              <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Atividade</TableCell>
-                              <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Local</TableCell>
-                              <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Responsável</TableCell>
-                              <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Participantes</TableCell>
-                              <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Ações</TableCell>
-                            </TableRow>
-                          </TableHead>
-                          <TableBody>
-                            {(selectedMission.scheduleItems ?? []).map((item: any) => (
-                              <TableRow key={item.id}>
-                                <TableCell>
-                                  {new Date(item.startAt).toLocaleString('pt-BR', {
-                                    day: '2-digit',
-                                    month: '2-digit',
-                                    hour: '2-digit',
-                                    minute: '2-digit',
-                                  })}
-                                  <Typography variant="caption" color="text.secondary" display="block">
-                                    {item.durationMinutes} min
-                                  </Typography>
-                                </TableCell>
-                                <TableCell>{item.title}</TableCell>
-                                <TableCell>{item.location}</TableCell>
-                                <TableCell>{item.responsible}</TableCell>
-                                <TableCell sx={{ maxWidth: 220, whiteSpace: 'pre-wrap' }}>{item.participants}</TableCell>
-                                <TableCell>
-                                  <IconButton
+                        <Stack spacing={1}>
+                          <Stack
+                            direction={{ xs: 'column', sm: 'row' }}
+                            spacing={1}
+                            justifyContent="space-between"
+                            alignItems={{ sm: 'center' }}
+                          >
+                            <Typography variant="body2" color="text.secondary">
+                              Selecione um ou mais itens para exclusão em lote.
+                            </Typography>
+                            <Stack direction="row" spacing={1} alignItems="center">
+                              {selectedScheduleCount > 0 ? (
+                                <Chip
+                                  size="small"
+                                  color="primary"
+                                  variant="outlined"
+                                  label={`${selectedScheduleCount} selecionado(s)`}
+                                />
+                              ) : null}
+                              <Button
+                                variant="outlined"
+                                color="error"
+                                startIcon={<DeleteOutlineIcon />}
+                                onClick={handleDeleteSelectedScheduleItems}
+                                disabled={selectedScheduleCount === 0 || deleteScheduleItem.isPending}
+                              >
+                                Excluir selecionados
+                              </Button>
+                            </Stack>
+                          </Stack>
+
+                          <Table size="small">
+                            <TableHead>
+                              <TableRow sx={{ bgcolor: 'primary.main' }}>
+                                <TableCell padding="checkbox" sx={{ color: '#fff' }}>
+                                  <Checkbox
                                     size="small"
-                                    onClick={() => {
-                                      setEditingScheduleItemId(item.id);
-                                      setScheduleForm({
-                                        title: item.title ?? '',
-                                        startAt: formatDateTimeLocalValue(item.startAt),
-                                        durationMinutes: Number(item.durationMinutes ?? 60),
-                                        location: item.location ?? '',
-                                        responsible: item.responsible ?? '',
-                                        participants: item.participants ?? '',
-                                      });
+                                    checked={allScheduleItemsSelected}
+                                    indeterminate={someScheduleItemsSelected}
+                                    onChange={handleToggleAllScheduleItems}
+                                    sx={{
+                                      color: '#fff',
+                                      '&.Mui-checked': { color: '#fff' },
+                                      '&.MuiCheckbox-indeterminate': { color: '#fff' },
                                     }}
-                                  >
-                                    <EditOutlinedIcon fontSize="small" />
-                                  </IconButton>
-                                  <IconButton size="small" color="error" onClick={() => handleDeleteScheduleItem(item.id, item.title ?? 'Item de cronograma')}>
-                                    <DeleteOutlineIcon fontSize="small" />
-                                  </IconButton>
+                                  />
                                 </TableCell>
+                                <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Horário</TableCell>
+                                <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Atividade</TableCell>
+                                <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Local</TableCell>
+                                <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Responsável</TableCell>
+                                <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Participantes</TableCell>
+                                <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Ações</TableCell>
                               </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
+                            </TableHead>
+                            <TableBody>
+                              {missionScheduleItems.map((item: any) => {
+                                const itemId = String(item.id);
+                                const checked = selectedScheduleItemIds.includes(itemId);
+                                return (
+                                  <TableRow key={item.id} selected={checked}>
+                                    <TableCell padding="checkbox">
+                                      <Checkbox
+                                        size="small"
+                                        checked={checked}
+                                        onChange={() => handleToggleScheduleItemSelection(itemId)}
+                                      />
+                                    </TableCell>
+                                    <TableCell>
+                                      {new Date(item.startAt).toLocaleString('pt-BR', {
+                                        day: '2-digit',
+                                        month: '2-digit',
+                                        hour: '2-digit',
+                                        minute: '2-digit',
+                                      })}
+                                      <Typography variant="caption" color="text.secondary" display="block">
+                                        {item.durationMinutes} min
+                                      </Typography>
+                                    </TableCell>
+                                    <TableCell>{item.title}</TableCell>
+                                    <TableCell>{item.location}</TableCell>
+                                    <TableCell>{item.responsible}</TableCell>
+                                    <TableCell sx={{ maxWidth: 220, whiteSpace: 'pre-wrap' }}>{item.participants}</TableCell>
+                                    <TableCell>
+                                      <IconButton
+                                        size="small"
+                                        onClick={() => {
+                                          setEditingScheduleItemId(item.id);
+                                          setScheduleForm({
+                                            title: item.title ?? '',
+                                            startAt: formatDateTimeLocalValue(item.startAt),
+                                            durationMinutes: Number(item.durationMinutes ?? 60),
+                                            location: item.location ?? '',
+                                            responsible: item.responsible ?? '',
+                                            participants: item.participants ?? '',
+                                          });
+                                        }}
+                                      >
+                                        <EditOutlinedIcon fontSize="small" />
+                                      </IconButton>
+                                      <IconButton size="small" color="error" onClick={() => handleDeleteScheduleItem(itemId, item.title ?? 'Item de cronograma')}>
+                                        <DeleteOutlineIcon fontSize="small" />
+                                      </IconButton>
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        </Stack>
                       )}
                     </CardContent>
                   </Card>
@@ -2462,11 +2589,27 @@ export function MissionsPage() {
         open={Boolean(scheduleDeleteTarget)}
         onCancel={() => setScheduleDeleteTarget(null)}
         onConfirm={handleConfirmDeleteScheduleItem}
-        title="Excluir item do cronograma"
-        message="Deseja remover este item do cronograma?"
-        highlightText={scheduleDeleteTarget?.title ?? ''}
+        title={
+          scheduleDeleteTarget?.count && scheduleDeleteTarget.count > 1
+            ? 'Excluir itens do cronograma'
+            : 'Excluir item do cronograma'
+        }
+        message={
+          scheduleDeleteTarget?.count && scheduleDeleteTarget.count > 1
+            ? `Deseja remover os ${scheduleDeleteTarget.count} itens selecionados do cronograma?`
+            : 'Deseja remover este item do cronograma?'
+        }
+        highlightText={
+          scheduleDeleteTarget?.count && scheduleDeleteTarget.count > 1
+            ? `${scheduleDeleteTarget.count} itens selecionados`
+            : scheduleDeleteTarget?.title ?? ''
+        }
         note="A exclusão é permanente."
-        confirmLabel="Excluir item"
+        confirmLabel={
+          scheduleDeleteTarget?.count && scheduleDeleteTarget.count > 1
+            ? 'Excluir itens'
+            : 'Excluir item'
+        }
         severity="error"
         confirmLoading={deleteScheduleItem.isPending}
       />
