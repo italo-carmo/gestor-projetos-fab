@@ -1,4 +1,4 @@
-import { IsOptional, IsString, Matches, MaxLength } from 'class-validator';
+import { IsObject, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
 
 export class CreateMissionBannerDto {
   @IsString()
@@ -21,4 +21,8 @@ export class CreateMissionBannerDto {
   @IsString()
   @MaxLength(120)
   locationSecondary?: string;
+
+  @IsOptional()
+  @IsObject()
+  layoutOverrides?: Record<string, unknown>;
 }

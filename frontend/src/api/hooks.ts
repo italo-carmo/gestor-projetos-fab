@@ -132,6 +132,12 @@ function getTaskAssigneeIds(task: any) {
 function taskMatchesFilters(task: any, filters: Record<string, any>) {
   if (!task || typeof task !== "object") return false;
 
+  const scopeFilter = String(filters.scope ?? "").trim().toUpperCase();
+  const taskScope = String(task.scope ?? "SMIF").trim().toUpperCase();
+  if (scopeFilter && taskScope !== scopeFilter) {
+    return false;
+  }
+
   const localityFilter = String(filters.localityId ?? "").trim();
   if (
     localityFilter &&
@@ -391,10 +397,13 @@ export function useActivityResponsibleUsers(filters: {
   });
 }
 
-export function useActivityTypes() {
+export function useActivityTypes(scope: string) {
+  const normalizedScope = scope === "CIPAVD" ? "CIPAVD" : "SMIF";
   return useQuery({
-    queryKey: qk.activityTypes,
-    queryFn: async () => (await api.get("/activities/types")).data,
+    queryKey: qk.activityTypes(normalizedScope),
+    queryFn: async () =>
+      (await api.get("/activities/types", { params: { scope: normalizedScope } }))
+        .data,
     staleTime: 60_000,
   });
 }
@@ -874,6 +883,7 @@ export function useCreateMissionBanner() {
         eventTime: string;
         locationPrimary: string;
         locationSecondary?: string | null;
+        layoutOverrides?: Record<string, unknown> | null;
       };
     }) => (await api.post(`/missions/${args.id}/banners`, args.payload)).data,
     onSuccess: (_data, args) => {
@@ -895,6 +905,7 @@ export function useUpdateMissionBanner() {
         eventTime?: string;
         locationPrimary?: string;
         locationSecondary?: string | null;
+        layoutOverrides?: Record<string, unknown> | null;
       };
     }) =>
       (
@@ -1139,10 +1150,26 @@ export function useUpdateActivity() {
 export function useCreateActivityType() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (payload: { name: string }) =>
+    mutationFn: async (payload: { name: string; scope: string }) =>
       (await api.post("/activities/types", payload)).data,
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: qk.activityTypes });
+      qc.invalidateQueries({ queryKey: ["activityTypes"] });
+    },
+  });
+}
+
+export function useDeleteActivityType() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; scope: string }) =>
+      (
+        await api.delete(`/activities/types/${args.id}`, {
+          params: { scope: args.scope === "CIPAVD" ? "CIPAVD" : "SMIF" },
+        })
+      ).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["activityTypes"] });
+      qc.invalidateQueries({ queryKey: ["activities"] });
     },
   });
 }
@@ -1593,11 +1620,13 @@ export function useUpdateTaskLocalities() {
   return useMutation({
     mutationFn: async (args: {
       id: string;
+      scope?: string;
       localityIds: string[];
       sourceTaskIds?: string[];
     }) =>
       (
         await api.put(`/task-instances/${args.id}/localities`, {
+          scope: args.scope,
           localityIds: args.localityIds,
           sourceTaskIds: args.sourceTaskIds ?? [],
         })
@@ -1909,6 +1938,7 @@ export function useCreateTaskInstance() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (payload: {
+      scope?: string;
       title: string;
       description?: string | null;
       phaseId: string;

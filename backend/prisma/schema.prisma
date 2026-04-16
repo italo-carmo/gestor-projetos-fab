@@ -391,6 +391,7 @@ model MissionBanner {
   eventTime         String
   locationPrimary   String
   locationSecondary String?
+  layoutOverrides   Json?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 

@@ -23,6 +23,8 @@ import {
   type MissionChecklistClassification,
 } from './mission-checklist.constants';
 import {
+  missionBannerLayoutKeys,
+  type MissionBannerLayoutOverrides,
   renderMissionBannerPdf,
   renderMissionBannerPng,
   type MissionBannerRenderable,
@@ -1495,6 +1497,7 @@ export class MissionsService {
       eventTime: string;
       locationPrimary: string;
       locationSecondary?: string;
+      layoutOverrides?: Record<string, unknown>;
     },
     user?: RbacUser,
   ) {
@@ -1504,6 +1507,8 @@ export class MissionsService {
     });
     if (!mission) throwError('NOT_FOUND');
     await this.assertMissionLocalityAllowed(mission);
+    const normalizedLayoutOverrides =
+      this.normalizeMissionBannerLayoutOverrides(payload.layoutOverrides);
 
     const created = await this.prisma.missionBanner.create({
       data: {
@@ -1518,6 +1523,7 @@ export class MissionsService {
         locationSecondary: this.normalizeOptionalBannerText(
           payload.locationSecondary,
         ),
+        layoutOverrides: normalizedLayoutOverrides ?? Prisma.JsonNull,
       },
     });
 
@@ -1542,6 +1548,7 @@ export class MissionsService {
       eventTime?: string;
       locationPrimary?: string;
       locationSecondary?: string;
+      layoutOverrides?: Record<string, unknown>;
     },
     user?: RbacUser,
   ) {
@@ -1551,6 +1558,10 @@ export class MissionsService {
     });
     if (!mission) throwError('NOT_FOUND');
     await this.assertMissionLocalityAllowed(mission);
+    const normalizedLayoutOverrides =
+      payload.layoutOverrides === undefined
+        ? undefined
+        : this.normalizeMissionBannerLayoutOverrides(payload.layoutOverrides);
 
     const existing = await this.prisma.missionBanner.findFirst({
       where: { id: bannerId, missionId },
@@ -1583,6 +1594,10 @@ export class MissionsService {
           payload.locationSecondary === undefined
             ? undefined
             : this.normalizeOptionalBannerText(payload.locationSecondary),
+        layoutOverrides:
+          normalizedLayoutOverrides === undefined
+            ? undefined
+            : normalizedLayoutOverrides ?? Prisma.JsonNull,
       },
     });
 
@@ -1599,12 +1614,14 @@ export class MissionsService {
           eventTime: existing.eventTime,
           locationPrimary: existing.locationPrimary,
           locationSecondary: existing.locationSecondary,
+          layoutOverrides: existing.layoutOverrides,
         },
         after: {
           eventDate: updated.eventDate,
           eventTime: updated.eventTime,
           locationPrimary: updated.locationPrimary,
           locationSecondary: updated.locationSecondary,
+          layoutOverrides: updated.layoutOverrides,
         },
       },
     });
@@ -3007,6 +3024,7 @@ export class MissionsService {
     eventTime: string;
     locationPrimary: string;
     locationSecondary: string | null;
+    layoutOverrides: unknown;
   }): MissionBannerRenderable {
     return {
       id: banner.id,
@@ -3015,7 +3033,51 @@ export class MissionsService {
       eventTime: banner.eventTime,
       locationPrimary: banner.locationPrimary,
       locationSecondary: banner.locationSecondary ?? null,
+      layoutOverrides: this.normalizeMissionBannerLayoutOverrides(
+        banner.layoutOverrides,
+      ),
     };
+  }
+
+  private normalizeMissionBannerLayoutOverrides(
+    value: unknown,
+  ): MissionBannerLayoutOverrides | null {
+    if (!value || typeof value !== 'object') return null;
+    const source = value as Record<string, unknown>;
+    const normalized: MissionBannerLayoutOverrides = {};
+
+    for (const key of missionBannerLayoutKeys) {
+      const block =
+        source[key] && typeof source[key] === 'object'
+          ? (source[key] as Record<string, unknown>)
+          : null;
+      if (!block) continue;
+
+      const next: NonNullable<MissionBannerLayoutOverrides[typeof key]> = {};
+      const xPct = this.normalizeFiniteNumber(block.xPct, 0.05, 0.92);
+      const yPct = this.normalizeFiniteNumber(block.yPct, 0.05, 0.95);
+      const fontScale = this.normalizeFiniteNumber(block.fontScale, 0.45, 1.8);
+
+      if (xPct !== null) next.xPct = xPct;
+      if (yPct !== null) next.yPct = yPct;
+      if (fontScale !== null) next.fontScale = fontScale;
+
+      if (Object.keys(next).length > 0) {
+        normalized[key] = next;
+      }
+    }
+
+    return Object.keys(normalized).length > 0 ? normalized : null;
+  }
+
+  private normalizeFiniteNumber(
+    value: unknown,
+    min: number,
+    max: number,
+  ) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return null;
+    return Math.min(max, Math.max(min, numeric));
   }
 
   private normalizeBannerDownloadFormat(formatRaw?: string) {

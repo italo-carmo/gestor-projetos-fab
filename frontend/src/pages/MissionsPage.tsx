@@ -50,7 +50,6 @@ import {
   useExportMissionSchedulePdf,
   useLookupMissionLdapParticipant,
   useMission,
-  useMissionBannerPreview,
   useMissionChecklist,
   useMe,
   useMissionLocalityOptions,
@@ -75,6 +74,10 @@ import {
 import { hasAnyRole, ROLE_TI } from '../app/roleAccess';
 import { useToast } from '../app/toast';
 import { ConfirmDialog } from '../components/dialogs/ConfirmDialog';
+import {
+  MissionBannerLayoutEditor,
+  type MissionBannerLayoutOverrides,
+} from '../components/missions/MissionBannerLayoutEditor';
 import { EmptyState } from '../components/states/EmptyState';
 import { ErrorState } from '../components/states/ErrorState';
 import { SkeletonState } from '../components/states/SkeletonState';
@@ -111,6 +114,7 @@ const blankBannerForm = {
   eventTime: '',
   locationPrimary: '',
   locationSecondary: '',
+  layoutOverrides: {} as MissionBannerLayoutOverrides,
 };
 
 type MissionChecklistClassification =
@@ -537,6 +541,42 @@ function formatMissionBannerPresetLabel(item: any) {
   return `${dateLabel} • ${title} • ${location}`;
 }
 
+function normalizeMissionBannerLayoutOverrides(
+  value: unknown,
+): MissionBannerLayoutOverrides {
+  if (!value || typeof value !== 'object') return {};
+  const source = value as Record<string, unknown>;
+  const next: MissionBannerLayoutOverrides = {};
+  for (const key of [
+    'day',
+    'month',
+    'time',
+    'weekday',
+    'locationPrimary',
+    'locationSecondary',
+  ] as const) {
+    const raw =
+      source[key] && typeof source[key] === 'object'
+        ? (source[key] as Record<string, unknown>)
+        : null;
+    if (!raw) continue;
+    const block: NonNullable<MissionBannerLayoutOverrides[typeof key]> = {};
+    if (typeof raw.xPct === 'number' && Number.isFinite(raw.xPct)) {
+      block.xPct = raw.xPct;
+    }
+    if (typeof raw.yPct === 'number' && Number.isFinite(raw.yPct)) {
+      block.yPct = raw.yPct;
+    }
+    if (typeof raw.fontScale === 'number' && Number.isFinite(raw.fontScale)) {
+      block.fontScale = raw.fontScale;
+    }
+    if (Object.keys(block).length > 0) {
+      next[key] = block;
+    }
+  }
+  return next;
+}
+
 export function MissionsPage() {
   const toast = useToast();
   const [params, setParams] = useSearchParams();
@@ -587,7 +627,10 @@ export function MissionsPage() {
   const [participantTab, setParticipantTab] = useState(0);
   const [userSearch, setUserSearch] = useState('');
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-  const [bannerForm, setBannerForm] = useState(blankBannerForm);
+  const [bannerForm, setBannerForm] = useState(() => ({
+    ...blankBannerForm,
+    layoutOverrides: {},
+  }));
   const [editingBannerId, setEditingBannerId] = useState<string | null>(null);
   const [selectedBannerPresetId, setSelectedBannerPresetId] = useState<string | null>(null);
   const [scheduleForm, setScheduleForm] = useState(blankScheduleForm);
@@ -702,18 +745,6 @@ export function MissionsPage() {
   const missionBanners = useMemo(
     () => ((selectedMission?.banners ?? []) as any[]),
     [selectedMission?.banners],
-  );
-  const selectedBannerForPreview = useMemo(() => {
-    if (!editingBannerId) return null;
-    return (
-      missionBanners.find((banner: any) => String(banner.id) === String(editingBannerId)) ??
-      null
-    );
-  }, [editingBannerId, missionBanners]);
-  const bannerPreviewQuery = useMissionBannerPreview(
-    String(selectedMission?.id ?? ''),
-    String(selectedBannerForPreview?.id ?? ''),
-    Boolean(selectedMission?.id) && Boolean(selectedBannerForPreview?.id),
   );
   const missionChecklistQuery = useMissionChecklist(
     String(selectedMission?.id ?? ''),
@@ -863,7 +894,6 @@ export function MissionsPage() {
     );
     return matchingDay?.key ?? null;
   }, [scheduleDayOptions, selectedScheduleItemIds]);
-  const [bannerPreviewUrl, setBannerPreviewUrl] = useState<string | null>(null);
 
   const resetScheduleForm = useCallback((scheduleItems?: any[] | null) => {
     setEditingScheduleItemId(null);
@@ -873,7 +903,10 @@ export function MissionsPage() {
   const resetBannerForm = useCallback(() => {
     setEditingBannerId(null);
     setSelectedBannerPresetId(null);
-    setBannerForm(blankBannerForm);
+    setBannerForm({
+      ...blankBannerForm,
+      layoutOverrides: {},
+    });
   }, []);
 
   useEffect(() => {
@@ -921,38 +954,32 @@ export function MissionsPage() {
   }, [missionBanners, resetBannerForm, selectedMission?.id]);
 
   useEffect(() => {
-    if (!selectedBannerForPreview) {
+    const selectedBanner =
+      editingBannerId && selectedMission
+        ? missionBanners.find(
+            (banner: any) => String(banner.id) === String(editingBannerId),
+          ) ?? null
+        : null;
+    if (!selectedBanner) {
       if (!editingBannerId) {
-        setBannerForm(blankBannerForm);
+        setBannerForm({
+          ...blankBannerForm,
+          layoutOverrides: {},
+        });
       }
       return;
     }
     setBannerForm({
-      name: String(selectedBannerForPreview.name ?? ''),
-      eventDate: String(selectedBannerForPreview.eventDate ?? ''),
-      eventTime: String(selectedBannerForPreview.eventTime ?? ''),
-      locationPrimary: String(selectedBannerForPreview.locationPrimary ?? ''),
-      locationSecondary: String(selectedBannerForPreview.locationSecondary ?? ''),
+      name: String(selectedBanner.name ?? ''),
+      eventDate: String(selectedBanner.eventDate ?? ''),
+      eventTime: String(selectedBanner.eventTime ?? ''),
+      locationPrimary: String(selectedBanner.locationPrimary ?? ''),
+      locationSecondary: String(selectedBanner.locationSecondary ?? ''),
+      layoutOverrides: normalizeMissionBannerLayoutOverrides(
+        selectedBanner.layoutOverrides,
+      ),
     });
-  }, [editingBannerId, selectedBannerForPreview]);
-
-  useEffect(() => {
-    if (!bannerPreviewQuery.data) {
-      setBannerPreviewUrl((current) => {
-        if (current) URL.revokeObjectURL(current);
-        return null;
-      });
-      return;
-    }
-    const nextUrl = URL.createObjectURL(bannerPreviewQuery.data);
-    setBannerPreviewUrl((current) => {
-      if (current) URL.revokeObjectURL(current);
-      return nextUrl;
-    });
-    return () => {
-      URL.revokeObjectURL(nextUrl);
-    };
-  }, [bannerPreviewQuery.data]);
+  }, [editingBannerId, missionBanners, selectedMission]);
 
   useEffect(() => {
     if (!selectedMission?.id) {
@@ -1417,6 +1444,7 @@ export function MissionsPage() {
       eventDate: selectedMission?.startDate
         ? String(selectedMission.startDate).slice(0, 10)
         : '',
+      layoutOverrides: {},
     });
   };
 
@@ -1429,6 +1457,9 @@ export function MissionsPage() {
       eventTime: String(banner.eventTime ?? ''),
       locationPrimary: String(banner.locationPrimary ?? ''),
       locationSecondary: String(banner.locationSecondary ?? ''),
+      layoutOverrides: normalizeMissionBannerLayoutOverrides(
+        banner.layoutOverrides,
+      ),
     });
   };
 
@@ -1472,6 +1503,10 @@ export function MissionsPage() {
       eventTime: bannerForm.eventTime,
       locationPrimary: bannerForm.locationPrimary.trim(),
       locationSecondary: bannerForm.locationSecondary.trim() || null,
+      layoutOverrides:
+        Object.keys(bannerForm.layoutOverrides ?? {}).length > 0
+          ? bannerForm.layoutOverrides
+          : null,
     };
 
     try {
@@ -2903,42 +2938,21 @@ export function MissionsPage() {
                           <Card variant="outlined" sx={{ flex: 0.9 }}>
                             <CardContent>
                               <Typography variant="subtitle2" fontWeight={700} mb={1.2}>
-                                Prévia do banner
+                                Editor visual do banner
                               </Typography>
-                              {!editingBannerId ? (
-                                <Typography variant="body2" color="text.secondary">
-                                  Selecione um banner já salvo para ver a prévia final renderizada.
-                                </Typography>
-                              ) : bannerPreviewQuery.isLoading ? (
-                                <Stack spacing={1}>
-                                  <LinearProgress />
-                                  <Typography variant="body2" color="text.secondary">
-                                    Gerando prévia do banner...
-                                  </Typography>
-                                </Stack>
-                              ) : bannerPreviewQuery.isError ? (
-                                <Typography variant="body2" color="error">
-                                  Não foi possível carregar a prévia do banner.
-                                </Typography>
-                              ) : bannerPreviewUrl ? (
-                                <Box
-                                  component="img"
-                                  src={bannerPreviewUrl}
-                                  alt={`Prévia do banner ${selectedBannerForPreview?.name ?? ''}`}
-                                  sx={{
-                                    width: '100%',
-                                    maxWidth: 360,
-                                    mx: 'auto',
-                                    display: 'block',
-                                    borderRadius: 2,
-                                    boxShadow: 3,
-                                  }}
-                                />
-                              ) : (
-                                <Typography variant="body2" color="text.secondary">
-                                  Salve o banner para visualizar a composição final.
-                                </Typography>
-                              )}
+                              <MissionBannerLayoutEditor
+                                eventDate={bannerForm.eventDate}
+                                eventTime={bannerForm.eventTime}
+                                locationPrimary={bannerForm.locationPrimary}
+                                locationSecondary={bannerForm.locationSecondary}
+                                layoutOverrides={bannerForm.layoutOverrides}
+                                onChange={(next) =>
+                                  setBannerForm((current) => ({
+                                    ...current,
+                                    layoutOverrides: next,
+                                  }))
+                                }
+                              />
                             </CardContent>
                           </Card>
                         </Stack>
