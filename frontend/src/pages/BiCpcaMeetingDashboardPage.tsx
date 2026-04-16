@@ -34,6 +34,7 @@ import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import KeyboardArrowDownRoundedIcon from "@mui/icons-material/KeyboardArrowDownRounded";
 import KeyboardArrowUpRoundedIcon from "@mui/icons-material/KeyboardArrowUpRounded";
+import MenuBookRoundedIcon from "@mui/icons-material/MenuBookRounded";
 import PictureAsPdfRoundedIcon from "@mui/icons-material/PictureAsPdfRounded";
 import {
   Bar,
@@ -53,6 +54,7 @@ import {
   useBiCpcaMeetingResponses,
   useDeleteBiCpcaMeetingResponses,
   useExportBiDashboardPdf,
+  useExportBiExecutiveNotebookPdf,
   useImportBiCpcaMeeting,
   useMe,
   useUpdateBiCpcaMeetingCardSetting,
@@ -61,6 +63,10 @@ import { parseApiError } from "../app/apiErrors";
 import { can } from "../app/rbac";
 import { hasAnyRole, ROLE_TI } from "../app/roleAccess";
 import { useToast } from "../app/toast";
+import {
+  BiExecutiveNotebookDialog,
+  type BiExecutiveNotebookPayload,
+} from "../components/bi/BiExecutiveNotebookDialog";
 import { ConfirmDialog } from "../components/dialogs/ConfirmDialog";
 import { ErrorState } from "../components/states/ErrorState";
 import { SkeletonState } from "../components/states/SkeletonState";
@@ -430,6 +436,7 @@ export function BiCpcaMeetingDashboardPage() {
 
   const [metricMode, setMetricMode] = useState<MetricMode>("PERCENT");
   const [responsesExpanded, setResponsesExpanded] = useState(false);
+  const [notebookDialogOpen, setNotebookDialogOpen] = useState(false);
   const [replaceOnImport, setReplaceOnImport] = useState(true);
   const [file, setFile] = useState<File | null>(null);
   const [page, setPage] = useState(1);
@@ -482,6 +489,7 @@ export function BiCpcaMeetingDashboardPage() {
     "/bi/cpca-meeting/dashboard/pdf",
     "bi-encontro-cpca",
   );
+  const exportNotebookMutation = useExportBiExecutiveNotebookPdf();
   const updateCardSettingMutation = useUpdateBiCpcaMeetingCardSetting();
 
   const dashboard = dashboardQuery.data as CpcaMeetingDashboardResponse | undefined;
@@ -730,6 +738,25 @@ export function BiCpcaMeetingDashboardPage() {
     }
   };
 
+  const handleExportNotebookPdf = async (
+    payload: BiExecutiveNotebookPayload,
+  ) => {
+    try {
+      await exportNotebookMutation.mutateAsync(payload);
+      setNotebookDialogOpen(false);
+      toast.push({
+        message: "Caderno executivo gerado com sucesso.",
+        severity: "success",
+      });
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({
+        message: payload.message ?? "Falha ao gerar o caderno executivo.",
+        severity: "error",
+      });
+    }
+  };
+
   const handleConfirmDelete = async () => {
     if (!deleteConfirmMode) return;
 
@@ -904,6 +931,30 @@ export function BiCpcaMeetingDashboardPage() {
             }}
           >
             {exportPdfMutation.isPending ? "Gerando PDF..." : "Exportar PDF"}
+          </Button>
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<MenuBookRoundedIcon />}
+            onClick={() => setNotebookDialogOpen(true)}
+            disabled={exportNotebookMutation.isPending}
+            sx={{
+              height: 36,
+              px: 1.4,
+              fontSize: 13,
+              whiteSpace: "nowrap",
+              borderColor: alpha(CPCA_BI_PALETTE.primary, 0.5),
+              color: CPCA_BI_PALETTE.primary,
+              "& .MuiButton-startIcon > *": { fontSize: 18 },
+              "&:hover": {
+                borderColor: CPCA_BI_PALETTE.primary,
+                bgcolor: alpha(CPCA_BI_PALETTE.primary, 0.06),
+              },
+            }}
+          >
+            {exportNotebookMutation.isPending
+              ? "Gerando caderno..."
+              : "Caderno PDF"}
           </Button>
           <Button
             size="small"
@@ -1640,6 +1691,16 @@ export function BiCpcaMeetingDashboardPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <BiExecutiveNotebookDialog
+        open={notebookDialogOpen}
+        onClose={() => setNotebookDialogOpen(false)}
+        onSubmit={handleExportNotebookPdf}
+        isPending={exportNotebookMutation.isPending}
+        accentColor={CPCA_BI_PALETTE.primary}
+        currentPanelKey="cpca-meeting"
+        currentPanelFilters={dashboardFilters}
+      />
     </Box>
   );
 }

@@ -36,6 +36,7 @@ import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import KeyboardArrowDownRoundedIcon from "@mui/icons-material/KeyboardArrowDownRounded";
 import KeyboardArrowUpRoundedIcon from "@mui/icons-material/KeyboardArrowUpRounded";
+import MenuBookRoundedIcon from "@mui/icons-material/MenuBookRounded";
 import PictureAsPdfRoundedIcon from "@mui/icons-material/PictureAsPdfRounded";
 import {
   Bar,
@@ -57,6 +58,7 @@ import {
   useImportBiDomesticViolence,
   useDeleteBiDomesticViolenceResponses,
   useExportBiDashboardPdf,
+  useExportBiExecutiveNotebookPdf,
   useMe,
   useUpdateBiDomesticViolenceCardSetting,
 } from "../api/hooks";
@@ -64,6 +66,10 @@ import { parseApiError } from "../app/apiErrors";
 import { can } from "../app/rbac";
 import { hasAnyRole, ROLE_TI } from "../app/roleAccess";
 import { useToast } from "../app/toast";
+import {
+  BiExecutiveNotebookDialog,
+  type BiExecutiveNotebookPayload,
+} from "../components/bi/BiExecutiveNotebookDialog";
 import { ErrorState } from "../components/states/ErrorState";
 import { SkeletonState } from "../components/states/SkeletonState";
 import { ConfirmDialog } from "../components/dialogs/ConfirmDialog";
@@ -559,6 +565,7 @@ export function BiDomesticViolenceDashboardPage() {
   const [responsesExpanded, setResponsesExpanded] = useState(
     Boolean(responseIdFromUrl),
   );
+  const [notebookDialogOpen, setNotebookDialogOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [replaceOnImport, setReplaceOnImport] = useState(true);
   const [page, setPage] = useState(1);
@@ -653,6 +660,7 @@ export function BiDomesticViolenceDashboardPage() {
     "/bi/domestic-violence/dashboard/pdf",
     "bi-violencia-domestica",
   );
+  const exportNotebookMutation = useExportBiExecutiveNotebookPdf();
   const updateCardSettingMutation = useUpdateBiDomesticViolenceCardSetting();
 
   const dashboard = dashboardQuery.data as
@@ -987,6 +995,25 @@ export function BiDomesticViolenceDashboardPage() {
     }
   };
 
+  const handleExportNotebookPdf = async (
+    payload: BiExecutiveNotebookPayload,
+  ) => {
+    try {
+      await exportNotebookMutation.mutateAsync(payload);
+      setNotebookDialogOpen(false);
+      toast.push({
+        message: "Caderno executivo gerado com sucesso.",
+        severity: "success",
+      });
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({
+        message: payload.message ?? "Falha ao gerar o caderno executivo.",
+        severity: "error",
+      });
+    }
+  };
+
   const handleConfirmDelete = async () => {
     if (!deleteConfirmMode) return;
 
@@ -1181,6 +1208,26 @@ export function BiDomesticViolenceDashboardPage() {
             }}
           >
             {exportPdfMutation.isPending ? "Gerando PDF..." : "Exportar PDF"}
+          </Button>
+
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<MenuBookRoundedIcon />}
+            onClick={() => setNotebookDialogOpen(true)}
+            disabled={exportNotebookMutation.isPending}
+            sx={{
+              borderColor: alpha(DV_PALETTE.primary, 0.45),
+              color: DV_PALETTE.primary,
+              "&:hover": {
+                borderColor: DV_PALETTE.primary,
+                bgcolor: alpha(DV_PALETTE.primary, 0.08),
+              },
+            }}
+          >
+            {exportNotebookMutation.isPending
+              ? "Gerando caderno..."
+              : "Caderno PDF"}
           </Button>
 
           <Button
@@ -3669,6 +3716,16 @@ export function BiDomesticViolenceDashboardPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <BiExecutiveNotebookDialog
+        open={notebookDialogOpen}
+        onClose={() => setNotebookDialogOpen(false)}
+        onSubmit={handleExportNotebookPdf}
+        isPending={exportNotebookMutation.isPending}
+        accentColor={DV_PALETTE.primary}
+        currentPanelKey="domestic-violence"
+        currentPanelFilters={dashboardFilters}
+      />
 
       <ConfirmDialog
         open={deleteConfirmMode !== null}

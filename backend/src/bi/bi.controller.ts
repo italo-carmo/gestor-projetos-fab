@@ -25,7 +25,10 @@ import { RequirePermission } from '../rbac/require-permission.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
 import { hasAnyRole, ROLE_TI } from '../rbac/role-access';
 import type { RbacUser } from '../rbac/rbac.types';
-import { BiPdfService } from './bi-pdf.service';
+import {
+  BiPdfService,
+  type BiExecutiveNotebookPanelKey,
+} from './bi-pdf.service';
 import { BiService } from './bi.service';
 
 @Controller('bi')
@@ -99,6 +102,40 @@ export class BiController {
       combineMode,
     });
     const filename = `bi-pesquisa-institucional-${new Date().toISOString().slice(0, 10)}.pdf`;
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
+  }
+
+  @Post('executive-notebook/pdf')
+  @RequirePermission('bi', 'view')
+  async executiveNotebookPdf(
+    @Body()
+    body:
+      | {
+          title?: string;
+          panels?: Array<{
+            key?: string;
+            filters?: Record<string, unknown>;
+          }>;
+        }
+      | undefined,
+    @Res() res: Response,
+  ) {
+    const buffer = await this.biPdf.executiveNotebookPdf({
+      title: body?.title,
+      panels: body?.panels?.map((panel) => ({
+        key: String(panel?.key ?? '').trim() as BiExecutiveNotebookPanelKey,
+        filters:
+          panel?.filters && typeof panel.filters === 'object'
+            ? { ...panel.filters }
+            : undefined,
+      })),
+    });
+    const filename = `caderno-executivo-bi-${new Date().toISOString().slice(0, 10)}.pdf`;
     res.set({
       'Content-Type': 'application/pdf',
       'Content-Disposition': `attachment; filename="${filename}"`,

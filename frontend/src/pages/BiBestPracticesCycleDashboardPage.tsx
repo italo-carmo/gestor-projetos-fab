@@ -35,6 +35,7 @@ import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import KeyboardArrowDownRoundedIcon from "@mui/icons-material/KeyboardArrowDownRounded";
 import KeyboardArrowUpRoundedIcon from "@mui/icons-material/KeyboardArrowUpRounded";
+import MenuBookRoundedIcon from "@mui/icons-material/MenuBookRounded";
 import PictureAsPdfRoundedIcon from "@mui/icons-material/PictureAsPdfRounded";
 import {
   Bar,
@@ -53,6 +54,7 @@ import {
   useBiBestPracticesCycleResponses,
   useDeleteBiBestPracticesCycleResponses,
   useExportBiDashboardPdf,
+  useExportBiExecutiveNotebookPdf,
   useImportBiBestPracticesCycle,
   useMe,
   useUpdateBiBestPracticesCycleCardSetting,
@@ -61,6 +63,10 @@ import { parseApiError } from "../app/apiErrors";
 import { can } from "../app/rbac";
 import { hasAnyRole, ROLE_TI } from "../app/roleAccess";
 import { useToast } from "../app/toast";
+import {
+  BiExecutiveNotebookDialog,
+  type BiExecutiveNotebookPayload,
+} from "../components/bi/BiExecutiveNotebookDialog";
 import { ConfirmDialog } from "../components/dialogs/ConfirmDialog";
 import { ErrorState } from "../components/states/ErrorState";
 import { SkeletonState } from "../components/states/SkeletonState";
@@ -507,6 +513,7 @@ export function BiBestPracticesCycleDashboardPage() {
 
   const [metricMode, setMetricMode] = useState<MetricMode>("PERCENT");
   const [responsesExpanded, setResponsesExpanded] = useState(false);
+  const [notebookDialogOpen, setNotebookDialogOpen] = useState(false);
   const [replaceOnImport, setReplaceOnImport] = useState(true);
   const [file, setFile] = useState<File | null>(null);
   const [page, setPage] = useState(1);
@@ -568,6 +575,7 @@ export function BiBestPracticesCycleDashboardPage() {
     "/bi/best-practices-cycle/dashboard/pdf",
     "bi-ciclo-boas-praticas",
   );
+  const exportNotebookMutation = useExportBiExecutiveNotebookPdf();
   const updateCardSettingMutation = useUpdateBiBestPracticesCycleCardSetting();
 
   const dashboard = dashboardQuery.data as
@@ -775,6 +783,25 @@ export function BiBestPracticesCycleDashboardPage() {
       const payload = parseApiError(error);
       toast.push({
         message: payload.message ?? "Falha ao exportar o PDF.",
+        severity: "error",
+      });
+    }
+  };
+
+  const handleExportNotebookPdf = async (
+    payload: BiExecutiveNotebookPayload,
+  ) => {
+    try {
+      await exportNotebookMutation.mutateAsync(payload);
+      setNotebookDialogOpen(false);
+      toast.push({
+        message: "Caderno executivo gerado com sucesso.",
+        severity: "success",
+      });
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({
+        message: payload.message ?? "Falha ao gerar o caderno executivo.",
         severity: "error",
       });
     }
@@ -988,6 +1015,30 @@ export function BiBestPracticesCycleDashboardPage() {
             }}
           >
             {exportPdfMutation.isPending ? "Gerando PDF..." : "Exportar PDF"}
+          </Button>
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<MenuBookRoundedIcon />}
+            onClick={() => setNotebookDialogOpen(true)}
+            disabled={exportNotebookMutation.isPending}
+            sx={{
+              height: 36,
+              px: 1.4,
+              fontSize: 13,
+              whiteSpace: "nowrap",
+              borderColor: alpha(BPC_PALETTE.primary, 0.5),
+              color: BPC_PALETTE.primary,
+              "& .MuiButton-startIcon > *": { fontSize: 18 },
+              "&:hover": {
+                borderColor: BPC_PALETTE.primary,
+                bgcolor: alpha(BPC_PALETTE.primary, 0.06),
+              },
+            }}
+          >
+            {exportNotebookMutation.isPending
+              ? "Gerando caderno..."
+              : "Caderno PDF"}
           </Button>
           <Button
             size="small"
@@ -1791,6 +1842,16 @@ export function BiBestPracticesCycleDashboardPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <BiExecutiveNotebookDialog
+        open={notebookDialogOpen}
+        onClose={() => setNotebookDialogOpen(false)}
+        onSubmit={handleExportNotebookPdf}
+        isPending={exportNotebookMutation.isPending}
+        accentColor={BPC_PALETTE.primary}
+        currentPanelKey="best-practices-cycle"
+        currentPanelFilters={dashboardFilters}
+      />
 
       <Card sx={{ mt: 1.2, ...cardSx }}>
         <CardContent>

@@ -4707,6 +4707,52 @@ export function useExportExecutiveReportPdf() {
   });
 }
 
+function extractPdfFileName(
+  contentDisposition: string | undefined,
+  fallbackFileName: string,
+) {
+  const safeDisposition = String(contentDisposition ?? "");
+  const fileNameMatch =
+    /filename\*=(?:UTF-8'')?([^;]+)/i.exec(safeDisposition) ??
+    /filename="?([^"]+)"?/i.exec(safeDisposition);
+  const decodedName = fileNameMatch?.[1]
+    ? decodeURIComponent(fileNameMatch[1].trim())
+    : "";
+  return (
+    decodedName ||
+    `${fallbackFileName}-${new Date().toISOString().slice(0, 10)}.pdf`
+  );
+}
+
+function downloadPdfBlobResponse(
+  response: {
+    data: BlobPart;
+    headers?: Record<string, unknown>;
+  },
+  fallbackFileName: string,
+) {
+  const contentType = String(
+    response.headers?.["content-type"] ?? "",
+  ).toLowerCase();
+  if (!contentType.includes("application/pdf")) {
+    throw new Error(
+      "Não foi possível gerar o PDF. Faça login novamente e tente de novo.",
+    );
+  }
+  const blob = new Blob([response.data], { type: "application/pdf" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = extractPdfFileName(
+    String(response.headers?.["content-disposition"] ?? ""),
+    fallbackFileName,
+  );
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
 export function useExportBiDashboardPdf(
   endpoint: string,
   fallbackFileName: string,
@@ -4717,34 +4763,25 @@ export function useExportBiDashboardPdf(
         params,
         responseType: "blob",
       });
-      const contentType = String(
-        response.headers?.["content-type"] ?? "",
-      ).toLowerCase();
-      if (!contentType.includes("application/pdf")) {
-        throw new Error(
-          "Não foi possível gerar o PDF. Faça login novamente e tente de novo.",
-        );
-      }
-      const blob = new Blob([response.data], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      const contentDisposition = String(
-        response.headers?.["content-disposition"] ?? "",
-      );
-      const fileNameMatch =
-        /filename\*=(?:UTF-8'')?([^;]+)/i.exec(contentDisposition) ??
-        /filename="?([^"]+)"?/i.exec(contentDisposition);
-      const decodedName = fileNameMatch?.[1]
-        ? decodeURIComponent(fileNameMatch[1].trim())
-        : "";
-      a.download =
-        decodedName ||
-        `${fallbackFileName}-${new Date().toISOString().slice(0, 10)}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1500);
+      downloadPdfBlobResponse(response, fallbackFileName);
+      return true;
+    },
+  });
+}
+
+export function useExportBiExecutiveNotebookPdf() {
+  return useMutation({
+    mutationFn: async (payload: {
+      title?: string;
+      panels: Array<{
+        key: string;
+        filters?: Record<string, unknown>;
+      }>;
+    }) => {
+      const response = await api.post("/bi/executive-notebook/pdf", payload, {
+        responseType: "blob",
+      });
+      downloadPdfBlobResponse(response, "caderno-executivo-bi");
       return true;
     },
   });

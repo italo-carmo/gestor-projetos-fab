@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import PDFDocument from 'pdfkit';
 import { BiBestPracticesCycleService } from './bi-best-practices-cycle.service';
 import { BiCpcaMeetingService } from './bi-cpca-meeting.service';
@@ -74,6 +74,24 @@ type PdfDefinition = {
   latestImport?: { importedAt?: string | Date | null; fileName?: string | null } | null;
 };
 
+export type BiExecutiveNotebookPanelKey =
+  | 'surveys'
+  | 'domestic-violence'
+  | 'recruits'
+  | 'best-practices-cycle'
+  | 'cpca-meeting'
+  | 'gsd-evaluation';
+
+type PdfNotebookPanelRequest = {
+  key: BiExecutiveNotebookPanelKey;
+  filters?: Record<string, unknown>;
+};
+
+type PdfNotebookRequest = {
+  title?: string;
+  panels?: PdfNotebookPanelRequest[];
+};
+
 type FilterLabelMap = Record<string, string>;
 
 const BASE_THEME: PdfTheme = {
@@ -98,10 +116,36 @@ export class BiPdfService {
   ) {}
 
   async surveysDashboardPdf(filters: Record<string, unknown>) {
+    return this.renderDashboardPdf(
+      await this.buildSurveysDashboardDefinition(filters),
+    );
+  }
+
+  async executiveNotebookPdf(request: PdfNotebookRequest) {
+    const panels = this.normalizeNotebookPanels(request?.panels);
+    if (panels.length === 0) {
+      throw new BadRequestException(
+        'Selecione ao menos um painel BI para gerar o caderno executivo.',
+      );
+    }
+
+    const definitions = await Promise.all(
+      panels.map(async (panel) =>
+        this.buildDashboardDefinition(panel.key, panel.filters ?? {}),
+      ),
+    );
+
+    return this.renderNotebookPdf(
+      this.cleanText(request?.title) || 'Caderno Executivo de Painéis BI',
+      definitions,
+    );
+  }
+
+  private async buildSurveysDashboardDefinition(filters: Record<string, unknown>) {
     const dashboard = await this.surveys.dashboard(filters as any);
     const cardSettings = dashboard?.cardSettings ?? [];
 
-    return this.renderDashboardPdf({
+    return {
       title: this.resolveCardTitle(
         cardSettings,
         'page-header',
@@ -259,14 +303,22 @@ export class BiPdfService {
       ].filter((section) => section.rows.length > 0),
       totalRowsInDb: dashboard?.kpis?.totalRowsInDb,
       latestImport: dashboard?.latestImport,
-    });
+    };
   }
 
   async domesticViolenceDashboardPdf(filters: Record<string, unknown>) {
+    return this.renderDashboardPdf(
+      await this.buildDomesticViolenceDashboardDefinition(filters),
+    );
+  }
+
+  private async buildDomesticViolenceDashboardDefinition(
+    filters: Record<string, unknown>,
+  ) {
     const dashboard = await this.domesticViolence.dashboard(filters as any);
     const cardSettings = dashboard?.cardSettings ?? [];
 
-    return this.renderDashboardPdf({
+    return {
       title: this.resolveCardTitle(
         cardSettings,
         'page-header',
@@ -471,14 +523,20 @@ export class BiPdfService {
       ].filter((section) => section.rows.length > 0),
       totalRowsInDb: dashboard?.kpis?.totalRowsInDb,
       latestImport: dashboard?.latestImport,
-    });
+    };
   }
 
   async recruitsDashboardPdf(filters: Record<string, unknown>) {
+    return this.renderDashboardPdf(
+      await this.buildRecruitsDashboardDefinition(filters),
+    );
+  }
+
+  private async buildRecruitsDashboardDefinition(filters: Record<string, unknown>) {
     const dashboard = await this.recruits.dashboard(filters as any);
     const cardSettings = dashboard?.cardSettings ?? [];
 
-    return this.renderDashboardPdf({
+    return {
       title: this.resolveCardTitle(
         cardSettings,
         'page-header',
@@ -666,14 +724,22 @@ export class BiPdfService {
       ].filter((section) => section.items.length > 0),
       totalRowsInDb: dashboard?.kpis?.totalRowsInDb,
       latestImport: dashboard?.latestImport,
-    });
+    };
   }
 
   async bestPracticesCycleDashboardPdf(filters: Record<string, unknown>) {
+    return this.renderDashboardPdf(
+      await this.buildBestPracticesCycleDashboardDefinition(filters),
+    );
+  }
+
+  private async buildBestPracticesCycleDashboardDefinition(
+    filters: Record<string, unknown>,
+  ) {
     const dashboard = await this.bestPracticesCycle.dashboard(filters as any);
     const cardSettings = dashboard?.cardSettings ?? [];
 
-    return this.renderDashboardPdf({
+    return {
       title: this.resolveCardTitle(
         cardSettings,
         'page-header',
@@ -853,10 +919,18 @@ export class BiPdfService {
       ].filter((section) => section.items.length > 0),
       totalRowsInDb: dashboard?.kpis?.totalRowsInDb,
       latestImport: dashboard?.latestImport,
-    });
+    };
   }
 
   async cpcaMeetingDashboardPdf(filters: Record<string, unknown>) {
+    return this.renderDashboardPdf(
+      await this.buildCpcaMeetingDashboardDefinition(filters),
+    );
+  }
+
+  private async buildCpcaMeetingDashboardDefinition(
+    filters: Record<string, unknown>,
+  ) {
     const dashboard = await this.cpcaMeeting.dashboard(filters as any);
     const cardSettings = dashboard?.cardSettings ?? [];
     const columnsMeta = dashboard?.columnsMeta ?? [];
@@ -864,7 +938,7 @@ export class BiPdfService {
       columnsMeta.map((item: any) => [String(item?.key ?? ''), String(item?.label ?? '')]),
     );
 
-    return this.renderDashboardPdf({
+    return {
       title: this.resolveCardTitle(
         cardSettings,
         'page-header',
@@ -989,14 +1063,22 @@ export class BiPdfService {
               meta: `${this.formatPercent(item?.percent)}`,
             }))
             .filter((item: PdfTextItem) => item.title && item.body),
-        }))
+      }))
         .filter((section: PdfTextSection) => section.items.length > 0),
       totalRowsInDb: dashboard?.kpis?.totalRowsInDb,
       latestImport: dashboard?.latestImport,
-    });
+    };
   }
 
   async gsdEvaluationDashboardPdf(filters: Record<string, unknown>) {
+    return this.renderDashboardPdf(
+      await this.buildGsdEvaluationDashboardDefinition(filters),
+    );
+  }
+
+  private async buildGsdEvaluationDashboardDefinition(
+    filters: Record<string, unknown>,
+  ) {
     const dashboard = await this.gsdEvaluation.dashboard(filters as any);
     const cardSettings = dashboard?.cardSettings ?? [];
     const columnsMeta = dashboard?.columnsMeta ?? [];
@@ -1004,7 +1086,7 @@ export class BiPdfService {
       columnsMeta.map((item: any) => [String(item?.key ?? ''), String(item?.label ?? '')]),
     );
 
-    return this.renderDashboardPdf({
+    return {
       title: this.resolveCardTitle(
         cardSettings,
         'page-header',
@@ -1107,11 +1189,64 @@ export class BiPdfService {
               meta: `${this.formatPercent(item?.percent)}`,
             }))
             .filter((item: PdfTextItem) => item.title && item.body),
-        }))
+      }))
         .filter((section: PdfTextSection) => section.items.length > 0),
       totalRowsInDb: dashboard?.kpis?.totalRowsInDb,
       latestImport: dashboard?.latestImport,
-    });
+    };
+  }
+
+  private async buildDashboardDefinition(
+    key: BiExecutiveNotebookPanelKey,
+    filters: Record<string, unknown>,
+  ) {
+    switch (key) {
+      case 'surveys':
+        return this.buildSurveysDashboardDefinition(filters);
+      case 'domestic-violence':
+        return this.buildDomesticViolenceDashboardDefinition(filters);
+      case 'recruits':
+        return this.buildRecruitsDashboardDefinition(filters);
+      case 'best-practices-cycle':
+        return this.buildBestPracticesCycleDashboardDefinition(filters);
+      case 'cpca-meeting':
+        return this.buildCpcaMeetingDashboardDefinition(filters);
+      case 'gsd-evaluation':
+        return this.buildGsdEvaluationDashboardDefinition(filters);
+      default:
+        throw new BadRequestException(`Painel BI inválido: ${String(key)}`);
+    }
+  }
+
+  private normalizeNotebookPanels(
+    panels: PdfNotebookRequest['panels'],
+  ): PdfNotebookPanelRequest[] {
+    const allowed = new Set<BiExecutiveNotebookPanelKey>([
+      'surveys',
+      'domestic-violence',
+      'recruits',
+      'best-practices-cycle',
+      'cpca-meeting',
+      'gsd-evaluation',
+    ]);
+
+    const normalized: PdfNotebookPanelRequest[] = [];
+    const seen = new Set<BiExecutiveNotebookPanelKey>();
+
+    for (const panel of panels ?? []) {
+      const key = String(panel?.key ?? '').trim() as BiExecutiveNotebookPanelKey;
+      if (!allowed.has(key) || seen.has(key)) continue;
+      seen.add(key);
+      normalized.push({
+        key,
+        filters:
+          panel?.filters && typeof panel.filters === 'object'
+            ? { ...panel.filters }
+            : undefined,
+      });
+    }
+
+    return normalized;
   }
 
   private createDistributionSection(
@@ -1230,6 +1365,26 @@ export class BiPdfService {
   }
 
   private renderDashboardPdf(def: PdfDefinition): Promise<Buffer> {
+    return this.renderPdfDocument({ dashboards: [def] });
+  }
+
+  private renderNotebookPdf(
+    notebookTitle: string,
+    dashboards: PdfDefinition[],
+  ): Promise<Buffer> {
+    return this.renderPdfDocument({
+      notebookTitle,
+      dashboards,
+    });
+  }
+
+  private renderPdfDocument({
+    notebookTitle,
+    dashboards,
+  }: {
+    notebookTitle?: string;
+    dashboards: PdfDefinition[];
+  }): Promise<Buffer> {
     return new Promise((resolve, reject) => {
       const doc = new PDFDocument({
         size: 'A4',
@@ -1245,407 +1400,595 @@ export class BiPdfService {
       const RIGHT = doc.page.width - 42;
       const WIDTH = RIGHT - LEFT;
       const BOTTOM = doc.page.height - 40;
+      const isNotebook = dashboards.length > 1;
+      const footerLabel = isNotebook
+        ? 'Caderno executivo BI • Documento gerencial interno'
+        : 'Documento gerencial interno';
 
-      const ensureSpace = (needed: number) => {
-        if (doc.y + needed > BOTTOM) {
-          doc.addPage();
-          doc.y = 52;
-        }
-      };
+      const drawNotebookCover = () => {
+        const coverPrimary = '#0C314D';
+        const coverSecondary = '#164D72';
+        const coverAccent = '#F4A261';
+        const panels = dashboards.slice(0, 6);
 
-      const drawHeader = () => {
-        doc.rect(0, 0, doc.page.width, 86).fill(def.theme.primary);
-        doc.rect(0, 86, doc.page.width, 5).fill(def.theme.accent);
+        doc.rect(0, 0, doc.page.width, 210).fill(coverPrimary);
+        doc.rect(0, 210, doc.page.width, 8).fill(coverAccent);
         doc
           .font('Helvetica-Bold')
-          .fontSize(20)
+          .fontSize(27)
           .fillColor('#FFFFFF')
-          .text(def.title, LEFT, 28, {
+          .text(notebookTitle || 'Caderno Executivo de Painéis BI', LEFT, 48, {
             width: WIDTH,
           });
         doc
           .font('Helvetica')
-          .fontSize(9.5)
-          .fillColor('#E9F1F7')
-          .text(def.subtitle, LEFT, 54, {
-            width: WIDTH,
-          });
-        doc.y = 110;
-      };
+          .fontSize(11)
+          .fillColor('#D8E7F2')
+          .text(
+            'Consolidação única dos painéis selecionados para briefing gerencial, com capítulos independentes e filtros explícitos por painel.',
+            LEFT,
+            96,
+            { width: WIDTH * 0.84 },
+          );
 
-      const sectionHeader = (index: string, title: string) => {
-        ensureSpace(30);
-        doc
-          .roundedRect(LEFT, doc.y, WIDTH, 24, 5)
-          .fill(def.theme.primary);
-        doc
-          .font('Helvetica-Bold')
-          .fontSize(10.5)
-          .fillColor('#FFFFFF')
-          .text(`${index} ${title}`, LEFT + 10, doc.y + 7, {
-            width: WIDTH - 20,
-          });
-        doc.y += 32;
-      };
-
-      const drawMetaCard = (
-        x: number,
-        y: number,
-        width: number,
-        label: string,
-        value: string,
-      ) => {
-        doc
-          .roundedRect(x, y, width, 44, 6)
-          .fill(def.theme.panel)
-          .strokeColor(def.theme.border)
-          .lineWidth(0.7)
-          .stroke();
-        doc
-          .font('Helvetica')
-          .fontSize(7.5)
-          .fillColor(def.theme.muted)
-          .text(label, x + 10, y + 8, { width: width - 20 });
-        doc
-          .font('Helvetica-Bold')
-          .fontSize(10)
-          .fillColor(def.theme.text)
-          .text(value, x + 10, y + 20, { width: width - 20 });
-      };
-
-      const drawBadge = (badge: PdfFilterBadge) => {
-        const text = `${badge.label}: ${badge.value}`;
-        doc.font('Helvetica').fontSize(8);
-        const width = Math.min(
-          WIDTH,
-          Math.max(110, doc.widthOfString(text) + 22),
-        );
-        if (doc.x + width > RIGHT) {
-          doc.x = LEFT;
-          doc.y += 26;
-        }
-        doc
-          .roundedRect(doc.x, doc.y, width, 20, 10)
-          .fill(def.theme.panel)
-          .strokeColor(def.theme.border)
-          .lineWidth(0.6)
-          .stroke();
-        doc
-          .font('Helvetica')
-          .fontSize(8)
-          .fillColor(def.theme.text)
-          .text(text, doc.x + 10, doc.y + 6, {
-            width: width - 20,
-          });
-        doc.x += width + 8;
-      };
-
-      const drawStatCard = (x: number, y: number, width: number, stat: PdfStat) => {
-        const color = stat.color || def.theme.primary;
-        doc
-          .roundedRect(x, y, width, 72, 7)
-          .fill('#FFFFFF')
-          .strokeColor(def.theme.border)
-          .lineWidth(0.8)
-          .stroke();
-        doc.roundedRect(x, y, 6, 72, 3).fill(color);
-        doc
-          .font('Helvetica')
-          .fontSize(7.5)
-          .fillColor(def.theme.muted)
-          .text(stat.label, x + 14, y + 10, {
-            width: width - 24,
-          });
-        doc
-          .font('Helvetica-Bold')
-          .fontSize(18)
-          .fillColor(color)
-          .text(stat.value, x + 14, y + 28, {
-            width: width - 24,
-          });
-        if (stat.note) {
+        const metaWidth = (WIDTH - 16) / 3;
+        const metaY = 246;
+        const drawCoverMetaCard = (
+          x: number,
+          label: string,
+          value: string,
+        ) => {
           doc
-            .font('Helvetica')
-            .fontSize(7.5)
-            .fillColor(def.theme.text)
-            .text(stat.note, x + 14, y + 52, {
-              width: width - 24,
-            });
-        }
-      };
-
-      const drawInsightCard = (
-        x: number,
-        y: number,
-        width: number,
-        insight: PdfInsight,
-      ) => {
-        const height = 68;
-        doc
-          .roundedRect(x, y, width, height, 7)
-          .fill(def.theme.panel)
-          .strokeColor(def.theme.border)
-          .lineWidth(0.7)
-          .stroke();
-        doc
-          .font('Helvetica')
-          .fontSize(7.5)
-          .fillColor(def.theme.muted)
-          .text(insight.title, x + 10, y + 9, { width: width - 20 });
-        doc
-          .font('Helvetica-Bold')
-          .fontSize(11.5)
-          .fillColor(def.theme.text)
-          .text(insight.value, x + 10, y + 24, { width: width - 20 });
-        if (insight.detail) {
+            .roundedRect(x, metaY, metaWidth, 52, 8)
+            .fill('#FFFFFF')
+            .strokeColor('#D8E2EC')
+            .lineWidth(0.7)
+            .stroke();
           doc
             .font('Helvetica')
             .fontSize(8)
-            .fillColor(def.theme.primary)
-            .text(insight.detail, x + 10, y + 45, { width: width - 20 });
-        }
-      };
-
-      const drawMetricSection = (section: PdfSection) => {
-        ensureSpace(54);
-        if (section.title) {
+            .fillColor('#607085')
+            .text(label, x + 12, metaY + 10, { width: metaWidth - 24 });
           doc
             .font('Helvetica-Bold')
-            .fontSize(12)
-            .fillColor(def.theme.text)
-            .text(section.title, LEFT, doc.y, { width: WIDTH });
-          doc.y += 16;
-        }
-        if (section.description) {
-          doc
-            .font('Helvetica')
-            .fontSize(8.5)
-            .fillColor(def.theme.muted)
-            .text(section.description, LEFT, doc.y, {
-              width: WIDTH,
-            });
-          doc.y += 18;
-        }
+            .fontSize(11)
+            .fillColor(coverPrimary)
+            .text(value, x + 12, metaY + 24, { width: metaWidth - 24 });
+        };
 
-        const maxScore = Math.max(
-          1,
-          ...section.rows.map((row) => Number(row.score || 0)),
+        drawCoverMetaCard(LEFT, 'Gerado em', this.formatDateTime(new Date().toISOString()));
+        drawCoverMetaCard(LEFT + metaWidth + 8, 'Painéis incluídos', String(dashboards.length));
+        drawCoverMetaCard(
+          LEFT + (metaWidth + 8) * 2,
+          'Formato',
+          'Caderno PDF executivo',
         );
-        for (const row of section.rows) {
-          ensureSpace(24);
-          const rowY = doc.y;
-          const labelWidth = WIDTH * 0.42;
-          const barX = LEFT + labelWidth + 10;
-          const barW = WIDTH * 0.32;
-          const barH = 8;
-          const score = Number(row.score || 0);
-          const fillW = Math.max(3, (Math.max(0, score) / maxScore) * barW);
+
+        doc
+          .font('Helvetica-Bold')
+          .fontSize(11)
+          .fillColor(coverPrimary)
+          .text('Capítulos incluídos', LEFT, 332, { width: WIDTH });
+        doc
+          .font('Helvetica')
+          .fontSize(8.8)
+          .fillColor('#607085')
+          .text(
+            'Cada capítulo preserva o layout executivo do painel original e explicita se houve uso de base completa ou recorte filtrado.',
+            LEFT,
+            348,
+            { width: WIDTH },
+          );
+
+        const cardWidth = (WIDTH - 14) / 2;
+        const cardHeight = 86;
+        const startY = 384;
+
+        panels.forEach((panel, index) => {
+          const col = index % 2;
+          const row = Math.floor(index / 2);
+          const x = LEFT + col * (cardWidth + 14);
+          const y = startY + row * (cardHeight + 14);
+          const filterNote =
+            panel.filters.length === 1 && panel.filters[0]?.label === 'Recorte'
+              ? 'Base completa'
+              : `${panel.filters.length} filtro(s) aplicados`;
 
           doc
-            .font('Helvetica')
-            .fontSize(8.4)
-            .fillColor(def.theme.text)
-            .text(row.label, LEFT, rowY, {
-              width: labelWidth,
-            });
-          doc.roundedRect(barX, rowY + 2, barW, barH, 4).fill('#E8EEF4');
-          doc.roundedRect(barX, rowY + 2, fillW, barH, 4).fill(def.theme.secondary);
-          doc
-            .font('Helvetica-Bold')
-            .fontSize(8.3)
-            .fillColor(def.theme.primary)
-            .text(row.value, barX + barW + 10, rowY, {
-              width: WIDTH - (barX + barW + 10 - LEFT),
-            });
-          if (row.note) {
-            doc
-              .font('Helvetica')
-              .fontSize(7.4)
-              .fillColor(def.theme.muted)
-              .text(row.note, LEFT, rowY + 12, {
-                width: WIDTH,
-              });
-            doc.y += 24;
-          } else {
-            doc.y += 16;
-          }
-        }
-        doc.y += 8;
-      };
-
-      const drawTextSection = (section: PdfTextSection) => {
-        ensureSpace(54);
-        if (section.title) {
-          doc
-            .font('Helvetica-Bold')
-            .fontSize(12)
-            .fillColor(def.theme.text)
-            .text(section.title, LEFT, doc.y, { width: WIDTH });
-          doc.y += 16;
-        }
-        if (section.description) {
-          doc
-            .font('Helvetica')
-            .fontSize(8.5)
-            .fillColor(def.theme.muted)
-            .text(section.description, LEFT, doc.y, {
-              width: WIDTH,
-            });
-          doc.y += 18;
-        }
-
-        for (const item of section.items) {
-          const titleHeight = item.title
-            ? doc.font('Helvetica-Bold').fontSize(9).heightOfString(item.title, {
-                width: WIDTH - 32,
-              })
-            : 0;
-          const bodyHeight = doc.font('Helvetica').fontSize(9).heightOfString(item.body, {
-            width: WIDTH - 32,
-          });
-          const metaHeight = item.meta
-            ? doc.font('Helvetica').fontSize(7.5).heightOfString(item.meta, {
-                width: WIDTH - 32,
-              })
-            : 0;
-          const totalHeight = 18 + titleHeight + bodyHeight + metaHeight;
-          ensureSpace(totalHeight + 10);
-
-          const y = doc.y;
-          doc
-            .roundedRect(LEFT, y, WIDTH, totalHeight, 7)
-            .fill('#FFFFFF')
-            .strokeColor(def.theme.border)
-            .lineWidth(0.7)
+            .roundedRect(x, y, cardWidth, cardHeight, 10)
+            .fill('#F8FBFD')
+            .strokeColor('#D8E2EC')
+            .lineWidth(0.8)
             .stroke();
-          doc.roundedRect(LEFT, y, 5, totalHeight, 3).fill(def.theme.accent);
-
-          let cursorY = y + 10;
-          if (item.title) {
-            doc
-              .font('Helvetica-Bold')
-              .fontSize(9)
-              .fillColor(def.theme.text)
-              .text(item.title, LEFT + 12, cursorY, {
-                width: WIDTH - 24,
-              });
-            cursorY += titleHeight + 4;
-          }
+          doc
+            .roundedRect(x + 12, y + 12, 26, 26, 13)
+            .fill(coverSecondary);
+          doc
+            .font('Helvetica-Bold')
+            .fontSize(10)
+            .fillColor('#FFFFFF')
+            .text(String(index + 1).padStart(2, '0'), x + 12, y + 19, {
+              width: 26,
+              align: 'center',
+            });
+          doc
+            .font('Helvetica-Bold')
+            .fontSize(10.2)
+            .fillColor(coverPrimary)
+            .text(panel.title, x + 48, y + 12, {
+              width: cardWidth - 60,
+            });
           doc
             .font('Helvetica')
-            .fontSize(8.7)
-            .fillColor(def.theme.text)
-            .text(item.body, LEFT + 12, cursorY, {
-              width: WIDTH - 24,
-              align: 'justify',
+            .fontSize(7.8)
+            .fillColor('#607085')
+            .text(panel.subtitle, x + 48, y + 30, {
+              width: cardWidth - 60,
+              height: 28,
             });
-          cursorY += bodyHeight + 4;
-          if (item.meta) {
-            doc
-              .font('Helvetica')
-              .fontSize(7.5)
-              .fillColor(def.theme.muted)
-              .text(item.meta, LEFT + 12, cursorY, {
-                width: WIDTH - 24,
-              });
-          }
-          doc.y = y + totalHeight + 10;
-        }
-      };
+          doc
+            .font('Helvetica-Bold')
+            .fontSize(8)
+            .fillColor(coverSecondary)
+            .text(filterNote, x + 14, y + 62, { width: cardWidth - 28 });
+        });
 
-      drawHeader();
-
-      sectionHeader('01', 'Contexto do recorte');
-      const metaY = doc.y;
-      const metaWidth = (WIDTH - 16) / 3;
-      drawMetaCard(
-        LEFT,
-        metaY,
-        metaWidth,
-        'Gerado em',
-        this.formatDateTime(def.generatedAt),
-      );
-      drawMetaCard(
-        LEFT + metaWidth + 8,
-        metaY,
-        metaWidth,
-        'Respostas na base total',
-        this.formatInteger(def.totalRowsInDb),
-      );
-      drawMetaCard(
-        LEFT + (metaWidth + 8) * 2,
-        metaY,
-        metaWidth,
-        'Última importação',
-        def.latestImport?.importedAt
-          ? this.formatDateTime(def.latestImport.importedAt)
-          : 'Não informada',
-      );
-      doc.y = metaY + 56;
-      if (def.latestImport?.fileName) {
         doc
           .font('Helvetica')
           .fontSize(8)
-          .fillColor(def.theme.muted)
-          .text(`Arquivo-base mais recente: ${def.latestImport.fileName}`, LEFT, doc.y, {
-            width: WIDTH,
+          .fillColor('#607085')
+          .text(
+            'Uso restrito para gestão. Cada capítulo foi gerado a partir do estado atual dos painéis BI do sistema.',
+            LEFT,
+            doc.page.height - 54,
+            { width: WIDTH, align: 'center' },
+          );
+      };
+
+      const drawDashboardChapter = (def: PdfDefinition, chapterIndex: number) => {
+        const chapterLabel = isNotebook
+          ? `Capítulo ${chapterIndex}/${dashboards.length}`
+          : null;
+
+        const ensureSpace = (needed: number) => {
+          if (doc.y + needed > BOTTOM) {
+            doc.addPage();
+            doc.y = 52;
+          }
+        };
+
+        const drawHeader = () => {
+          doc.rect(0, 0, doc.page.width, 86).fill(def.theme.primary);
+          doc.rect(0, 86, doc.page.width, 5).fill(def.theme.accent);
+          doc
+            .font('Helvetica-Bold')
+            .fontSize(20)
+            .fillColor('#FFFFFF')
+            .text(def.title, LEFT, 28, {
+              width: WIDTH - (chapterLabel ? 118 : 0),
+            });
+          doc
+            .font('Helvetica')
+            .fontSize(9.5)
+            .fillColor('#E9F1F7')
+            .text(def.subtitle, LEFT, 54, {
+              width: WIDTH - (chapterLabel ? 118 : 0),
+            });
+          if (chapterLabel) {
+            const chipWidth = 104;
+            const chipX = RIGHT - chipWidth;
+            doc
+              .roundedRect(chipX, 26, chipWidth, 28, 14)
+              .fill('#FFFFFF');
+            doc
+              .font('Helvetica-Bold')
+              .fontSize(8.8)
+              .fillColor(def.theme.primary)
+              .text(chapterLabel, chipX, 36, {
+                width: chipWidth,
+                align: 'center',
+              });
+          }
+          doc.y = 110;
+        };
+
+        const sectionHeader = (index: string, title: string) => {
+          ensureSpace(30);
+          doc
+            .roundedRect(LEFT, doc.y, WIDTH, 24, 5)
+            .fill(def.theme.primary);
+          doc
+            .font('Helvetica-Bold')
+            .fontSize(10.5)
+            .fillColor('#FFFFFF')
+            .text(`${index} ${title}`, LEFT + 10, doc.y + 7, {
+              width: WIDTH - 20,
+            });
+          doc.y += 32;
+        };
+
+        const drawMetaCard = (
+          x: number,
+          y: number,
+          width: number,
+          label: string,
+          value: string,
+        ) => {
+          doc
+            .roundedRect(x, y, width, 44, 6)
+            .fill(def.theme.panel)
+            .strokeColor(def.theme.border)
+            .lineWidth(0.7)
+            .stroke();
+          doc
+            .font('Helvetica')
+            .fontSize(7.5)
+            .fillColor(def.theme.muted)
+            .text(label, x + 10, y + 8, { width: width - 20 });
+          doc
+            .font('Helvetica-Bold')
+            .fontSize(10)
+            .fillColor(def.theme.text)
+            .text(value, x + 10, y + 20, { width: width - 20 });
+        };
+
+        const drawBadge = (badge: PdfFilterBadge) => {
+          const text = `${badge.label}: ${badge.value}`;
+          doc.font('Helvetica').fontSize(8);
+          const width = Math.min(WIDTH, Math.max(110, doc.widthOfString(text) + 22));
+          if (doc.x + width > RIGHT) {
+            doc.x = LEFT;
+            doc.y += 26;
+          }
+          doc
+            .roundedRect(doc.x, doc.y, width, 20, 10)
+            .fill(def.theme.panel)
+            .strokeColor(def.theme.border)
+            .lineWidth(0.6)
+            .stroke();
+          doc
+            .font('Helvetica')
+            .fontSize(8)
+            .fillColor(def.theme.text)
+            .text(text, doc.x + 10, doc.y + 6, {
+              width: width - 20,
+            });
+          doc.x += width + 8;
+        };
+
+        const drawStatCard = (
+          x: number,
+          y: number,
+          width: number,
+          stat: PdfStat,
+        ) => {
+          const color = stat.color || def.theme.primary;
+          doc
+            .roundedRect(x, y, width, 72, 7)
+            .fill('#FFFFFF')
+            .strokeColor(def.theme.border)
+            .lineWidth(0.8)
+            .stroke();
+          doc.roundedRect(x, y, 6, 72, 3).fill(color);
+          doc
+            .font('Helvetica')
+            .fontSize(7.5)
+            .fillColor(def.theme.muted)
+            .text(stat.label, x + 14, y + 10, {
+              width: width - 24,
+            });
+          doc
+            .font('Helvetica-Bold')
+            .fontSize(18)
+            .fillColor(color)
+            .text(stat.value, x + 14, y + 28, {
+              width: width - 24,
+            });
+          if (stat.note) {
+            doc
+              .font('Helvetica')
+              .fontSize(7.5)
+              .fillColor(def.theme.text)
+              .text(stat.note, x + 14, y + 52, {
+                width: width - 24,
+              });
+          }
+        };
+
+        const drawInsightCard = (
+          x: number,
+          y: number,
+          width: number,
+          insight: PdfInsight,
+        ) => {
+          const height = 68;
+          doc
+            .roundedRect(x, y, width, height, 7)
+            .fill(def.theme.panel)
+            .strokeColor(def.theme.border)
+            .lineWidth(0.7)
+            .stroke();
+          doc
+            .font('Helvetica')
+            .fontSize(7.5)
+            .fillColor(def.theme.muted)
+            .text(insight.title, x + 10, y + 9, { width: width - 20 });
+          doc
+            .font('Helvetica-Bold')
+            .fontSize(11.5)
+            .fillColor(def.theme.text)
+            .text(insight.value, x + 10, y + 24, { width: width - 20 });
+          if (insight.detail) {
+            doc
+              .font('Helvetica')
+              .fontSize(8)
+              .fillColor(def.theme.primary)
+              .text(insight.detail, x + 10, y + 45, { width: width - 20 });
+          }
+        };
+
+        const drawMetricSection = (section: PdfSection) => {
+          ensureSpace(54);
+          if (section.title) {
+            doc
+              .font('Helvetica-Bold')
+              .fontSize(12)
+              .fillColor(def.theme.text)
+              .text(section.title, LEFT, doc.y, { width: WIDTH });
+            doc.y += 16;
+          }
+          if (section.description) {
+            doc
+              .font('Helvetica')
+              .fontSize(8.5)
+              .fillColor(def.theme.muted)
+              .text(section.description, LEFT, doc.y, {
+                width: WIDTH,
+              });
+            doc.y += 18;
+          }
+
+          const maxScore = Math.max(
+            1,
+            ...section.rows.map((row) => Number(row.score || 0)),
+          );
+          for (const row of section.rows) {
+            ensureSpace(24);
+            const rowY = doc.y;
+            const labelWidth = WIDTH * 0.42;
+            const barX = LEFT + labelWidth + 10;
+            const barW = WIDTH * 0.32;
+            const barH = 8;
+            const score = Number(row.score || 0);
+            const fillW = Math.max(3, (Math.max(0, score) / maxScore) * barW);
+
+            doc
+              .font('Helvetica')
+              .fontSize(8.4)
+              .fillColor(def.theme.text)
+              .text(row.label, LEFT, rowY, {
+                width: labelWidth,
+              });
+            doc.roundedRect(barX, rowY + 2, barW, barH, 4).fill('#E8EEF4');
+            doc
+              .roundedRect(barX, rowY + 2, fillW, barH, 4)
+              .fill(def.theme.secondary);
+            doc
+              .font('Helvetica-Bold')
+              .fontSize(8.3)
+              .fillColor(def.theme.primary)
+              .text(row.value, barX + barW + 10, rowY, {
+                width: WIDTH - (barX + barW + 10 - LEFT),
+              });
+            if (row.note) {
+              doc
+                .font('Helvetica')
+                .fontSize(7.4)
+                .fillColor(def.theme.muted)
+                .text(row.note, LEFT, rowY + 12, {
+                  width: WIDTH,
+                });
+              doc.y += 24;
+            } else {
+              doc.y += 16;
+            }
+          }
+          doc.y += 8;
+        };
+
+        const drawTextSection = (section: PdfTextSection) => {
+          ensureSpace(54);
+          if (section.title) {
+            doc
+              .font('Helvetica-Bold')
+              .fontSize(12)
+              .fillColor(def.theme.text)
+              .text(section.title, LEFT, doc.y, { width: WIDTH });
+            doc.y += 16;
+          }
+          if (section.description) {
+            doc
+              .font('Helvetica')
+              .fontSize(8.5)
+              .fillColor(def.theme.muted)
+              .text(section.description, LEFT, doc.y, {
+                width: WIDTH,
+              });
+            doc.y += 18;
+          }
+
+          for (const item of section.items) {
+            const titleHeight = item.title
+              ? doc
+                  .font('Helvetica-Bold')
+                  .fontSize(9)
+                  .heightOfString(item.title, {
+                    width: WIDTH - 32,
+                  })
+              : 0;
+            const bodyHeight = doc
+              .font('Helvetica')
+              .fontSize(9)
+              .heightOfString(item.body, {
+                width: WIDTH - 32,
+              });
+            const metaHeight = item.meta
+              ? doc
+                  .font('Helvetica')
+                  .fontSize(7.5)
+                  .heightOfString(item.meta, {
+                    width: WIDTH - 32,
+                  })
+              : 0;
+            const totalHeight = 18 + titleHeight + bodyHeight + metaHeight;
+            ensureSpace(totalHeight + 10);
+
+            const y = doc.y;
+            doc
+              .roundedRect(LEFT, y, WIDTH, totalHeight, 7)
+              .fill('#FFFFFF')
+              .strokeColor(def.theme.border)
+              .lineWidth(0.7)
+              .stroke();
+            doc.roundedRect(LEFT, y, 5, totalHeight, 3).fill(def.theme.accent);
+
+            let cursorY = y + 10;
+            if (item.title) {
+              doc
+                .font('Helvetica-Bold')
+                .fontSize(9)
+                .fillColor(def.theme.text)
+                .text(item.title, LEFT + 12, cursorY, {
+                  width: WIDTH - 24,
+                });
+              cursorY += titleHeight + 4;
+            }
+            doc
+              .font('Helvetica')
+              .fontSize(8.7)
+              .fillColor(def.theme.text)
+              .text(item.body, LEFT + 12, cursorY, {
+                width: WIDTH - 24,
+                align: 'justify',
+              });
+            cursorY += bodyHeight + 4;
+            if (item.meta) {
+              doc
+                .font('Helvetica')
+                .fontSize(7.5)
+                .fillColor(def.theme.muted)
+                .text(item.meta, LEFT + 12, cursorY, {
+                  width: WIDTH - 24,
+                });
+            }
+            doc.y = y + totalHeight + 10;
+          }
+        };
+
+        drawHeader();
+
+        sectionHeader('01', 'Contexto do recorte');
+        const metaY = doc.y;
+        const metaWidth = (WIDTH - 16) / 3;
+        drawMetaCard(
+          LEFT,
+          metaY,
+          metaWidth,
+          'Gerado em',
+          this.formatDateTime(def.generatedAt),
+        );
+        drawMetaCard(
+          LEFT + metaWidth + 8,
+          metaY,
+          metaWidth,
+          'Respostas na base total',
+          this.formatInteger(def.totalRowsInDb),
+        );
+        drawMetaCard(
+          LEFT + (metaWidth + 8) * 2,
+          metaY,
+          metaWidth,
+          'Última importação',
+          def.latestImport?.importedAt
+            ? this.formatDateTime(def.latestImport.importedAt)
+            : 'Não informada',
+        );
+        doc.y = metaY + 56;
+        if (def.latestImport?.fileName) {
+          doc
+            .font('Helvetica')
+            .fontSize(8)
+            .fillColor(def.theme.muted)
+            .text(`Arquivo-base mais recente: ${def.latestImport.fileName}`, LEFT, doc.y, {
+              width: WIDTH,
+            });
+          doc.y += 16;
+        }
+
+        doc
+          .font('Helvetica-Bold')
+          .fontSize(9)
+          .fillColor(def.theme.text)
+          .text('Filtros aplicados', LEFT, doc.y, { width: WIDTH });
+        doc.y += 12;
+        doc.x = LEFT;
+        for (const badge of def.filters) {
+          drawBadge(badge);
+        }
+        doc.x = LEFT;
+        doc.y += 28;
+
+        sectionHeader('02', 'Indicadores prioritários');
+        const statWidth = (WIDTH - 16) / 3;
+        for (let index = 0; index < def.stats.length; index += 1) {
+          const rowIndex = Math.floor(index / 3);
+          const colIndex = index % 3;
+          const x = LEFT + colIndex * (statWidth + 8);
+          const y = doc.y + rowIndex * 80;
+          drawStatCard(x, y, statWidth, def.stats[index]);
+        }
+        doc.y += Math.ceil(def.stats.length / 3) * 80 + 4;
+
+        sectionHeader('03', 'Leituras executivas');
+        const insightWidth = (WIDTH - 8) / 2;
+        for (let index = 0; index < def.insights.length; index += 1) {
+          ensureSpace(76);
+          const rowIndex = Math.floor(index / 2);
+          const colIndex = index % 2;
+          const x = LEFT + colIndex * (insightWidth + 8);
+          const y = doc.y + rowIndex * 76;
+          drawInsightCard(x, y, insightWidth, def.insights[index]);
+        }
+        doc.y += Math.ceil(def.insights.length / 2) * 76 + 4;
+
+        let sectionIndex = 4;
+        for (const section of def.sections) {
+          sectionHeader(this.padSection(sectionIndex), section.title);
+          drawMetricSection({
+            ...section,
+            title: '',
           });
-        doc.y += 16;
-      }
+          sectionIndex += 1;
+        }
 
-      doc
-        .font('Helvetica-Bold')
-        .fontSize(9)
-        .fillColor(def.theme.text)
-        .text('Filtros aplicados', LEFT, doc.y, { width: WIDTH });
-      doc.y += 12;
-      doc.x = LEFT;
-      for (const badge of def.filters) {
-        drawBadge(badge);
-      }
-      doc.x = LEFT;
-      doc.y += 28;
+        for (const textSection of def.textSections ?? []) {
+          sectionHeader(this.padSection(sectionIndex), textSection.title);
+          drawTextSection({
+            ...textSection,
+            title: '',
+          });
+          sectionIndex += 1;
+        }
+      };
 
-      sectionHeader('02', 'Indicadores prioritários');
-      const statWidth = (WIDTH - 16) / 3;
-      for (let index = 0; index < def.stats.length; index += 1) {
-        const rowIndex = Math.floor(index / 3);
-        const colIndex = index % 3;
-        const x = LEFT + colIndex * (statWidth + 8);
-        const y = doc.y + rowIndex * 80;
-        drawStatCard(x, y, statWidth, def.stats[index]);
-      }
-      doc.y += Math.ceil(def.stats.length / 3) * 80 + 4;
-
-      sectionHeader('03', 'Leituras executivas');
-      const insightWidth = (WIDTH - 8) / 2;
-      for (let index = 0; index < def.insights.length; index += 1) {
-        ensureSpace(76);
-        const rowIndex = Math.floor(index / 2);
-        const colIndex = index % 2;
-        const x = LEFT + colIndex * (insightWidth + 8);
-        const y = doc.y + rowIndex * 76;
-        drawInsightCard(x, y, insightWidth, def.insights[index]);
-      }
-      doc.y += Math.ceil(def.insights.length / 2) * 76 + 4;
-
-      let sectionIndex = 4;
-      for (const section of def.sections) {
-        sectionHeader(this.padSection(sectionIndex), section.title);
-        drawMetricSection({
-          ...section,
-          title: '',
+      if (isNotebook) {
+        drawNotebookCover();
+        dashboards.forEach((dashboard, index) => {
+          doc.addPage();
+          drawDashboardChapter(dashboard, index + 1);
         });
-        sectionIndex += 1;
-      }
-
-      for (const textSection of def.textSections ?? []) {
-        sectionHeader(this.padSection(sectionIndex), textSection.title);
-        drawTextSection({
-          ...textSection,
-          title: '',
-        });
-        sectionIndex += 1;
+      } else if (dashboards[0]) {
+        drawDashboardChapter(dashboards[0], 1);
       }
 
       const pageRange = doc.bufferedPageRange();
@@ -1654,9 +1997,9 @@ export class BiPdfService {
         doc
           .font('Helvetica')
           .fontSize(8)
-          .fillColor(def.theme.muted)
+          .fillColor('#607085')
           .text(
-            `Documento gerencial interno • Página ${i + 1}/${pageRange.count}`,
+            `${footerLabel} • Página ${i + 1}/${pageRange.count}`,
             LEFT,
             doc.page.height - 24,
             { width: WIDTH, align: 'center' },
