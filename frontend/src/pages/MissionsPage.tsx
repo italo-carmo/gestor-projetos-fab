@@ -567,6 +567,9 @@ function normalizeMissionBannerLayoutOverrides(
     if (typeof raw.yPct === 'number' && Number.isFinite(raw.yPct)) {
       block.yPct = raw.yPct;
     }
+    if (typeof raw.fontSizePx === 'number' && Number.isFinite(raw.fontSizePx)) {
+      block.fontSizePx = raw.fontSizePx;
+    }
     if (typeof raw.fontScale === 'number' && Number.isFinite(raw.fontScale)) {
       block.fontScale = raw.fontScale;
     }

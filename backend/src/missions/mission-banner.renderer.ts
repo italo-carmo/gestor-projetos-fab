@@ -28,6 +28,7 @@ export type MissionBannerLayoutBlockKey =
 export type MissionBannerLayoutBlockOverride = {
   xPct?: number;
   yPct?: number;
+  fontSizePx?: number;
   fontScale?: number;
 };
 
@@ -212,12 +213,12 @@ function buildMissionBannerOverlaySvg(
         .pink { fill: ${colorPink}; font-family: Arial, Helvetica, sans-serif; font-weight: 700; }
         .white { fill: ${colorWhite}; font-family: Arial, Helvetica, sans-serif; font-weight: 400; }
       </style>
-      <text class="pink" x="${dayBlock.x}" y="${dayBlock.y}" font-size="${dayBlock.fontSize}" dominant-baseline="text-before-edge"${buildSvgTextFitAttributes(dayLabel, dateTextWidth, dayBlock.fontSize)}>${escapeXml(dayLabel)}</text>
-      <text class="white" x="${monthBlock.x}" y="${monthBlock.y}" font-size="${monthBlock.fontSize}" dominant-baseline="text-before-edge"${buildSvgTextFitAttributes(monthLabel, dateTextWidth, monthBlock.fontSize)}>${escapeXml(monthLabel)}</text>
-      <text class="pink" x="${timeBlock.x}" y="${timeBlock.y}" font-size="${timeBlock.fontSize}" dominant-baseline="text-before-edge"${buildSvgTextFitAttributes(timeLabel, timeTextWidth, timeBlock.fontSize)}>${escapeXml(timeLabel)}</text>
-      <text class="white" x="${weekdayBlock.x}" y="${weekdayBlock.y}" font-size="${weekdayBlock.fontSize}" dominant-baseline="text-before-edge"${buildSvgTextFitAttributes(weekdayLabel, timeTextWidth, weekdayBlock.fontSize)}>${escapeXml(weekdayLabel)}</text>
-      <text class="pink" x="${locationPrimaryBlock.x}" y="${locationPrimaryBlock.y}" font-size="${locationPrimaryBlock.fontSize}" dominant-baseline="text-before-edge"${buildSvgTextFitAttributes(location.line1, locationTextWidth, locationPrimaryBlock.fontSize)}>${escapeXml(location.line1)}</text>
-      ${location.line2 ? `<text class="white" x="${locationSecondaryBlock.x}" y="${locationSecondaryBlock.y}" font-size="${locationSecondaryBlock.fontSize}" dominant-baseline="text-before-edge"${buildSvgTextFitAttributes(location.line2, locationTextWidth, locationSecondaryBlock.fontSize)}>${escapeXml(location.line2)}</text>` : ''}
+      <text class="pink" x="${dayBlock.x}" y="${dayBlock.y}" font-size="${dayBlock.fontSize}" dominant-baseline="text-before-edge"${buildSvgTextFitAttributes(dayLabel, dateTextWidth, dayBlock)}>${escapeXml(dayLabel)}</text>
+      <text class="white" x="${monthBlock.x}" y="${monthBlock.y}" font-size="${monthBlock.fontSize}" dominant-baseline="text-before-edge"${buildSvgTextFitAttributes(monthLabel, dateTextWidth, monthBlock)}>${escapeXml(monthLabel)}</text>
+      <text class="pink" x="${timeBlock.x}" y="${timeBlock.y}" font-size="${timeBlock.fontSize}" dominant-baseline="text-before-edge"${buildSvgTextFitAttributes(timeLabel, timeTextWidth, timeBlock)}>${escapeXml(timeLabel)}</text>
+      <text class="white" x="${weekdayBlock.x}" y="${weekdayBlock.y}" font-size="${weekdayBlock.fontSize}" dominant-baseline="text-before-edge"${buildSvgTextFitAttributes(weekdayLabel, timeTextWidth, weekdayBlock)}>${escapeXml(weekdayLabel)}</text>
+      <text class="pink" x="${locationPrimaryBlock.x}" y="${locationPrimaryBlock.y}" font-size="${locationPrimaryBlock.fontSize}" dominant-baseline="text-before-edge"${buildSvgTextFitAttributes(location.line1, locationTextWidth, locationPrimaryBlock)}>${escapeXml(location.line1)}</text>
+      ${location.line2 ? `<text class="white" x="${locationSecondaryBlock.x}" y="${locationSecondaryBlock.y}" font-size="${locationSecondaryBlock.fontSize}" dominant-baseline="text-before-edge"${buildSvgTextFitAttributes(location.line2, locationTextWidth, locationSecondaryBlock)}>${escapeXml(location.line2)}</text>` : ''}
     </svg>
   `;
 }
@@ -346,6 +347,9 @@ function normalizeMissionBannerLayoutOverrides(
     if (typeof raw.yPct === 'number' && Number.isFinite(raw.yPct)) {
       next.yPct = clamp(raw.yPct, 0.05, 0.95);
     }
+    if (typeof raw.fontSizePx === 'number' && Number.isFinite(raw.fontSizePx)) {
+      next.fontSizePx = clamp(raw.fontSizePx, 8, 180);
+    }
     if (typeof raw.fontScale === 'number' && Number.isFinite(raw.fontScale)) {
       next.fontScale = clamp(raw.fontScale, 0.45, 1.8);
     }
@@ -364,6 +368,8 @@ function applyMissionBannerLayoutOverride(
   height: number,
 ) {
   if (!override) return base;
+  const hasExplicitFontSize =
+    typeof override.fontSizePx === 'number' && Number.isFinite(override.fontSizePx);
   return {
     x:
       typeof override.xPct === 'number'
@@ -374,9 +380,15 @@ function applyMissionBannerLayoutOverride(
         ? clamp(override.yPct, 0.05, 0.95) * height
         : base.y,
     fontSize:
-      typeof override.fontScale === 'number'
-        ? Math.max(base.fontSize * 0.45, base.fontSize * clamp(override.fontScale, 0.45, 1.8))
+      hasExplicitFontSize
+        ? clamp(override.fontSizePx!, 8, 180)
+        : typeof override.fontScale === 'number'
+        ? Math.max(
+            base.fontSize * 0.45,
+            base.fontSize * clamp(override.fontScale, 0.45, 1.8),
+          )
         : base.fontSize,
+    hasManualFontSize: hasExplicitFontSize || typeof override.fontScale === 'number',
   };
 }
 
@@ -445,10 +457,11 @@ function estimateTextUnits(text: string) {
 function buildSvgTextFitAttributes(
   text: string,
   maxWidth: number,
-  fontSize: number,
+  block: { fontSize: number; hasManualFontSize?: boolean },
 ) {
   if (!text) return '';
-  const estimatedWidth = estimateTextUnits(text) * fontSize * 1.12;
+  if (block.hasManualFontSize) return '';
+  const estimatedWidth = estimateTextUnits(text) * block.fontSize * 1.12;
   if (estimatedWidth <= maxWidth * 0.9) return '';
   return ` textLength="${maxWidth}" lengthAdjust="spacingAndGlyphs"`;
 }

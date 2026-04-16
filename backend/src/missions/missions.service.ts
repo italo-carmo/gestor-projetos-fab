@@ -3057,9 +3057,11 @@ export class MissionsService {
       const xPct = this.normalizeFiniteNumber(block.xPct, 0.05, 0.92);
       const yPct = this.normalizeFiniteNumber(block.yPct, 0.05, 0.95);
       const fontScale = this.normalizeFiniteNumber(block.fontScale, 0.45, 1.8);
+      const fontSizePx = this.normalizeFiniteNumber(block.fontSizePx, 8, 180);
 
       if (xPct !== null) next.xPct = xPct;
       if (yPct !== null) next.yPct = yPct;
+      if (fontSizePx !== null) next.fontSizePx = fontSizePx;
       if (fontScale !== null) next.fontScale = fontScale;
 
       if (Object.keys(next).length > 0) {

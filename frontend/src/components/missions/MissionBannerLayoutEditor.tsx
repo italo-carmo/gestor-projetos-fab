@@ -2,10 +2,13 @@ import {
   Box,
   Button,
   Chip,
+  IconButton,
   Slider,
   Stack,
   Typography,
 } from '@mui/material';
+import KeyboardArrowDownRoundedIcon from '@mui/icons-material/KeyboardArrowDownRounded';
+import KeyboardArrowUpRoundedIcon from '@mui/icons-material/KeyboardArrowUpRounded';
 import {
   useEffect,
   useMemo,
@@ -35,6 +38,7 @@ export type MissionBannerLayoutBlockKey =
 export type MissionBannerLayoutBlockOverride = {
   xPct?: number;
   yPct?: number;
+  fontSizePx?: number;
   fontScale?: number;
 };
 
@@ -245,6 +249,9 @@ function normalizeLayoutOverrides(
     if (typeof block.yPct === 'number' && Number.isFinite(block.yPct)) {
       next.yPct = clamp(block.yPct, 0.05, 0.95);
     }
+    if (typeof block.fontSizePx === 'number' && Number.isFinite(block.fontSizePx)) {
+      next.fontSizePx = clamp(block.fontSizePx, 8, 180);
+    }
     if (typeof block.fontScale === 'number' && Number.isFinite(block.fontScale)) {
       next.fontScale = clamp(block.fontScale, 0.45, 1.8);
     }
@@ -396,6 +403,16 @@ export function MissionBannerLayoutEditor({
   }, [selectedBlock, visibleBlocks]);
 
   const activeBlock = visibleBlocks.find((block) => block.key === selectedBlock) ?? null;
+  const activeGuidePosition = activeBlock
+    ? {
+        currentXPct:
+          normalizedOverrides[activeBlock.key]?.xPct ?? activeBlock.xPct,
+        currentYPct:
+          normalizedOverrides[activeBlock.key]?.yPct ?? activeBlock.yPct,
+        baseXPct: activeBlock.xPct,
+        baseYPct: activeBlock.yPct,
+      }
+    : null;
   const dragStateRef = useRef<{
     key: MissionBannerLayoutBlockKey;
     startX: number;
@@ -484,6 +501,28 @@ export function MissionBannerLayoutEditor({
     });
   };
 
+  const getCurrentFontSizePx = (block: TextBlockDefinition) => {
+    const current = normalizedOverrides[block.key];
+    if (typeof current?.fontSizePx === 'number' && Number.isFinite(current.fontSizePx)) {
+      return clamp(current.fontSizePx, block.minFontSize, 180);
+    }
+    if (typeof current?.fontScale === 'number' && Number.isFinite(current.fontScale)) {
+      return Math.max(
+        block.minFontSize,
+        block.fontSizeBase * clamp(current.fontScale, 0.45, 1.8),
+      );
+    }
+    return Math.max(block.minFontSize, block.fontSizeBase);
+  };
+
+  const setSelectedBlockFontSize = (nextFontSizePx: number) => {
+    if (!activeBlock) return;
+    updateSelectedBlock({
+      fontSizePx: clamp(nextFontSizePx, activeBlock.minFontSize, 180),
+      fontScale: undefined,
+    });
+  };
+
   return (
     <Stack spacing={1.5}>
       <Typography variant="body2" color="text.secondary">
@@ -510,16 +549,96 @@ export function MissionBannerLayoutEditor({
           userSelect: 'none',
         }}
       >
+        <Box
+          sx={{
+            position: 'absolute',
+            left: '58%',
+            top: '45%',
+            width: '33%',
+            height: '46%',
+            border: '1px dashed rgba(255,255,255,0.18)',
+            borderRadius: 2,
+            pointerEvents: 'none',
+          }}
+        />
+        {activeGuidePosition ? (
+          <>
+            <Box
+              sx={{
+                position: 'absolute',
+                left: `${activeGuidePosition.baseXPct * 100}%`,
+                top: '0%',
+                width: '1px',
+                height: '100%',
+                backgroundColor: 'rgba(255,255,255,0.14)',
+                borderLeft: '1px dashed rgba(255,255,255,0.22)',
+                pointerEvents: 'none',
+              }}
+            />
+            <Box
+              sx={{
+                position: 'absolute',
+                left: '0%',
+                top: `${activeGuidePosition.baseYPct * 100}%`,
+                width: '100%',
+                height: '1px',
+                backgroundColor: 'rgba(255,255,255,0.14)',
+                borderTop: '1px dashed rgba(255,255,255,0.22)',
+                pointerEvents: 'none',
+              }}
+            />
+            <Box
+              sx={{
+                position: 'absolute',
+                left: `${activeGuidePosition.currentXPct * 100}%`,
+                top: '0%',
+                width: '1px',
+                height: '100%',
+                backgroundColor: 'rgba(121, 196, 255, 0.72)',
+                boxShadow: '0 0 0 1px rgba(15, 23, 42, 0.08)',
+                pointerEvents: 'none',
+              }}
+            />
+            <Box
+              sx={{
+                position: 'absolute',
+                left: '0%',
+                top: `${activeGuidePosition.currentYPct * 100}%`,
+                width: '100%',
+                height: '1px',
+                backgroundColor: 'rgba(121, 196, 255, 0.72)',
+                boxShadow: '0 0 0 1px rgba(15, 23, 42, 0.08)',
+                pointerEvents: 'none',
+              }}
+            />
+            <Chip
+              size="small"
+              label={`${Math.round(activeGuidePosition.currentXPct * 100)}% · ${Math.round(activeGuidePosition.currentYPct * 100)}%`}
+              sx={{
+                position: 'absolute',
+                top: 10,
+                right: 10,
+                height: 22,
+                bgcolor: 'rgba(15, 23, 42, 0.62)',
+                color: '#fff',
+                fontWeight: 700,
+                pointerEvents: 'none',
+                '& .MuiChip-label': {
+                  px: 1,
+                },
+              }}
+            />
+          </>
+        ) : null}
         {visibleBlocks.map((block) => {
           const override = normalizedOverrides[block.key];
           const xPct = override?.xPct ?? block.xPct;
           const yPct = override?.yPct ?? block.yPct;
-          const fontScale = override?.fontScale ?? 1;
-          const baseFontPx =
+          const sourceFontSizePx = getCurrentFontSizePx(block);
+          const fontSize =
             dimensions.width > 0
-              ? (block.fontSizeBase / TEMPLATE_WIDTH) * dimensions.width
-              : 14;
-          const fontSize = Math.max(block.minFontSize, baseFontPx * fontScale);
+              ? (sourceFontSizePx / TEMPLATE_WIDTH) * dimensions.width
+              : sourceFontSizePx;
           return (
             <Box
               key={block.key}
@@ -537,8 +656,7 @@ export function MissionBannerLayoutEditor({
                 borderRadius: 1,
                 px: 0.4,
                 py: 0.15,
-                maxWidth: `${(block.maxWidth / TEMPLATE_WIDTH) * 100}%`,
-                overflowWrap: 'anywhere',
+                whiteSpace: 'nowrap',
                 outline:
                   selectedBlock === block.key
                     ? '1px dashed rgba(255,255,255,0.72)'
@@ -557,6 +675,16 @@ export function MissionBannerLayoutEditor({
       </Box>
 
       <Stack spacing={1}>
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={0.8}
+          alignItems={{ xs: 'flex-start', sm: 'center' }}
+          justifyContent="space-between"
+        >
+          <Typography variant="caption" color="text.secondary">
+            Linhas azuis mostram a posição atual do bloco ativo. Linhas tracejadas mostram a posição base do layout.
+          </Typography>
+        </Stack>
         <Typography variant="caption" color="text.secondary">
           Blocos do banner
         </Typography>
@@ -590,16 +718,36 @@ export function MissionBannerLayoutEditor({
             <Typography variant="caption" color="text.secondary" display="block">
               Tamanho da letra
             </Typography>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <IconButton
+                size="small"
+                onClick={() => setSelectedBlockFontSize(getCurrentFontSizePx(activeBlock) - 1)}
+              >
+                <KeyboardArrowDownRoundedIcon />
+              </IconButton>
+              <Chip
+                size="small"
+                label={`${Math.round(getCurrentFontSizePx(activeBlock))} px`}
+                variant="outlined"
+              />
+              <IconButton
+                size="small"
+                onClick={() => setSelectedBlockFontSize(getCurrentFontSizePx(activeBlock) + 1)}
+              >
+                <KeyboardArrowUpRoundedIcon />
+              </IconButton>
+            </Stack>
             <Slider
-              value={(normalizedOverrides[activeBlock.key]?.fontScale ?? 1) * 100}
-              min={45}
-              max={180}
-              step={5}
+              value={Math.round(getCurrentFontSizePx(activeBlock))}
+              min={Math.round(activeBlock.minFontSize)}
+              max={Math.max(
+                Math.round(activeBlock.minFontSize + 36),
+                Math.round(activeBlock.fontSizeBase * 2.2),
+              )}
+              step={1}
               valueLabelDisplay="auto"
-              valueLabelFormat={(value) => `${value}%`}
-              onChange={(_, value) =>
-                updateSelectedBlock({ fontScale: Number(value) / 100 })
-              }
+              valueLabelFormat={(value) => `${value}px`}
+              onChange={(_, value) => setSelectedBlockFontSize(Number(value))}
             />
           </Box>
 
