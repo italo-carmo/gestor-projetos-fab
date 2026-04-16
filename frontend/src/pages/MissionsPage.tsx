@@ -660,10 +660,40 @@ export function MissionsPage() {
     () => ((selectedMission?.scheduleItems ?? []) as any[]),
     [selectedMission?.scheduleItems],
   );
+  const scheduleDayOptions = useMemo(() => {
+    const dayMap = new Map<string, { key: string; label: string; ids: string[] }>();
+    for (const item of missionScheduleItems) {
+      const itemId = String(item?.id ?? '').trim();
+      const date = new Date(String(item?.startAt ?? ''));
+      if (!itemId || Number.isNaN(date.getTime())) continue;
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const key = `${year}-${month}-${day}`;
+      const existing = dayMap.get(key);
+      if (existing) {
+        existing.ids.push(itemId);
+        continue;
+      }
+      dayMap.set(key, {
+        key,
+        label: `${day}/${month}`,
+        ids: [itemId],
+      });
+    }
+    return Array.from(dayMap.values()).sort((left, right) => left.key.localeCompare(right.key));
+  }, [missionScheduleItems]);
   const allScheduleItemIds = useMemo(
     () => missionScheduleItems.map((item: any) => String(item.id)).filter(Boolean),
     [missionScheduleItems],
   );
+  const scheduleDeleteSummaryTitles = useMemo(() => {
+    if (!scheduleDeleteTarget?.ids?.length) return [];
+    const selectedIds = new Set(scheduleDeleteTarget.ids);
+    return missionScheduleItems
+      .filter((item: any) => selectedIds.has(String(item.id)))
+      .map((item: any) => String(item.title ?? 'Item de cronograma').trim() || 'Item de cronograma');
+  }, [missionScheduleItems, scheduleDeleteTarget]);
   const selectedScheduleCount = selectedScheduleItemIds.length;
   const allScheduleItemsSelected =
     allScheduleItemIds.length > 0 &&
@@ -671,6 +701,14 @@ export function MissionsPage() {
   const someScheduleItemsSelected =
     selectedScheduleItemIds.length > 0 &&
     selectedScheduleItemIds.length < allScheduleItemIds.length;
+  const selectedScheduleDayKey = useMemo(() => {
+    if (!selectedScheduleItemIds.length || !scheduleDayOptions.length) return null;
+    const normalizedSelection = [...selectedScheduleItemIds].sort().join('|');
+    const matchingDay = scheduleDayOptions.find(
+      (option) => [...option.ids].sort().join('|') === normalizedSelection,
+    );
+    return matchingDay?.key ?? null;
+  }, [scheduleDayOptions, selectedScheduleItemIds]);
 
   const resetScheduleForm = useCallback((scheduleItems?: any[] | null) => {
     setEditingScheduleItemId(null);
@@ -1103,6 +1141,10 @@ export function MissionsPage() {
     setSelectedScheduleItemIds((current) =>
       current.length === allScheduleItemIds.length ? [] : allScheduleItemIds,
     );
+  };
+
+  const handleSelectScheduleItemsByDay = (itemIds: string[]) => {
+    setSelectedScheduleItemIds(itemIds);
   };
 
   const handleDeleteSelectedScheduleItems = () => {
@@ -2166,6 +2208,14 @@ export function MissionsPage() {
                                 />
                               ) : null}
                               <Button
+                                variant="text"
+                                color="inherit"
+                                onClick={() => setSelectedScheduleItemIds([])}
+                                disabled={selectedScheduleCount === 0}
+                              >
+                                Desfazer seleção
+                              </Button>
+                              <Button
                                 variant="outlined"
                                 color="error"
                                 startIcon={<DeleteOutlineIcon />}
@@ -2176,6 +2226,30 @@ export function MissionsPage() {
                               </Button>
                             </Stack>
                           </Stack>
+                          {scheduleDayOptions.length > 0 ? (
+                            <Stack
+                              direction={{ xs: 'column', md: 'row' }}
+                              spacing={1}
+                              alignItems={{ xs: 'flex-start', md: 'center' }}
+                            >
+                              <Typography variant="caption" color="text.secondary">
+                                Selecionar apenas os itens do dia:
+                              </Typography>
+                              <Stack direction="row" spacing={0.8} flexWrap="wrap" useFlexGap>
+                                {scheduleDayOptions.map((option) => (
+                                  <Chip
+                                    key={option.key}
+                                    size="small"
+                                    clickable
+                                    color={selectedScheduleDayKey === option.key ? 'primary' : 'default'}
+                                    variant={selectedScheduleDayKey === option.key ? 'filled' : 'outlined'}
+                                    label={`${option.label} (${option.ids.length})`}
+                                    onClick={() => handleSelectScheduleItemsByDay(option.ids)}
+                                  />
+                                ))}
+                              </Stack>
+                            </Stack>
+                          ) : null}
 
                           <Table size="small">
                             <TableHead>
@@ -2604,7 +2678,32 @@ export function MissionsPage() {
             ? `${scheduleDeleteTarget.count} itens selecionados`
             : scheduleDeleteTarget?.title ?? ''
         }
-        note="A exclusão é permanente."
+        note={
+          scheduleDeleteTarget?.count && scheduleDeleteTarget.count > 1 ? (
+            <Stack spacing={0.8}>
+              <Typography variant="body2" fontWeight={700}>
+                Itens que serão excluídos:
+              </Typography>
+              <Stack spacing={0.4}>
+                {scheduleDeleteSummaryTitles.slice(0, 6).map((title, index) => (
+                  <Typography key={`${title}-${index}`} variant="body2" color="text.secondary">
+                    {index + 1}. {title}
+                  </Typography>
+                ))}
+                {scheduleDeleteSummaryTitles.length > 6 ? (
+                  <Typography variant="caption" color="text.secondary">
+                    ... e mais {scheduleDeleteSummaryTitles.length - 6} item(ns).
+                  </Typography>
+                ) : null}
+              </Stack>
+              <Typography variant="caption" color="text.secondary">
+                A exclusão é permanente.
+              </Typography>
+            </Stack>
+          ) : (
+            'A exclusão é permanente.'
+          )
+        }
         confirmLabel={
           scheduleDeleteTarget?.count && scheduleDeleteTarget.count > 1
             ? 'Excluir itens'
