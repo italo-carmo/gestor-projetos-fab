@@ -46,6 +46,15 @@ type PdfSection = {
   title: string;
   description?: string;
   rows: PdfMetricRow[];
+  pieChart?: {
+    title?: string;
+    slices: Array<{
+      label: string;
+      value: number;
+      percent: number;
+      color: string;
+    }>;
+  };
 };
 
 type PdfTextItem = {
@@ -103,6 +112,15 @@ const BASE_THEME: PdfTheme = {
   border: '#D7E0EA',
   panel: '#F7FAFC',
 };
+
+const PIE_COLORS = [
+  '#0F4C5C',
+  '#2D6A4F',
+  '#E76F51',
+  '#F4A261',
+  '#4C6FFF',
+  '#8E44AD',
+];
 
 @Injectable()
 export class BiPdfService {
@@ -1255,7 +1273,7 @@ export class BiPdfService {
     items: Array<Record<string, unknown>> | undefined,
     labelKeys: string[],
   ): PdfSection {
-    const rows = (items ?? []).slice(0, 8).map((item) => {
+    const normalized = (items ?? []).slice(0, 8).map((item) => {
       const label =
         labelKeys
           .map((key) => String(item?.[key] ?? '').trim())
@@ -1264,15 +1282,38 @@ export class BiPdfService {
       const percent = Number(item?.percent ?? 0);
       return {
         label,
+        count,
+        percent,
         value: `${this.formatInteger(count)} • ${this.formatPercent(percent)}`,
         score: Number.isFinite(percent) && percent > 0 ? percent : count,
       };
     });
 
+    const rows = normalized.map(({ label, value, score }) => ({
+      label,
+      value,
+      score,
+    }));
+
     return {
       title,
       description,
       rows,
+      pieChart:
+        normalized.filter((item) => item.count > 0).length >= 2
+          ? {
+              title: 'Distribuição visual',
+              slices: normalized
+                .filter((item) => item.count > 0)
+                .slice(0, 5)
+                .map((item, index) => ({
+                  label: item.label,
+                  value: item.count,
+                  percent: item.percent,
+                  color: PIE_COLORS[index % PIE_COLORS.length],
+                })),
+            }
+          : undefined,
     };
   }
 
@@ -1661,27 +1702,31 @@ export class BiPdfService {
           y: number,
           width: number,
           stat: PdfStat,
+          height: number,
         ) => {
           const color = stat.color || def.theme.primary;
           doc
-            .roundedRect(x, y, width, 72, 7)
+            .roundedRect(x, y, width, height, 7)
             .fill('#FFFFFF')
             .strokeColor(def.theme.border)
             .lineWidth(0.8)
             .stroke();
-          doc.roundedRect(x, y, 6, 72, 3).fill(color);
+          doc.roundedRect(x, y, 6, height, 3).fill(color);
+          const labelY = y + 10;
+          const valueY = y + 30;
+          const noteY = height - 22;
           doc
             .font('Helvetica')
             .fontSize(7.5)
             .fillColor(def.theme.muted)
-            .text(stat.label, x + 14, y + 10, {
+            .text(stat.label, x + 14, labelY, {
               width: width - 24,
             });
           doc
             .font('Helvetica-Bold')
             .fontSize(18)
             .fillColor(color)
-            .text(stat.value, x + 14, y + 28, {
+            .text(stat.value, x + 14, valueY, {
               width: width - 24,
             });
           if (stat.note) {
@@ -1689,7 +1734,7 @@ export class BiPdfService {
               .font('Helvetica')
               .fontSize(7.5)
               .fillColor(def.theme.text)
-              .text(stat.note, x + 14, y + 52, {
+              .text(stat.note, x + 14, y + noteY, {
                 width: width - 24,
               });
           }
@@ -1700,8 +1745,16 @@ export class BiPdfService {
           y: number,
           width: number,
           insight: PdfInsight,
+          height: number,
         ) => {
-          const height = 68;
+          const titleHeight = doc
+            .font('Helvetica')
+            .fontSize(7.5)
+            .heightOfString(insight.title, { width: width - 20 });
+          const valueHeight = doc
+            .font('Helvetica-Bold')
+            .fontSize(11.5)
+            .heightOfString(insight.value, { width: width - 20 });
           doc
             .roundedRect(x, y, width, height, 7)
             .fill(def.theme.panel)
@@ -1717,14 +1770,97 @@ export class BiPdfService {
             .font('Helvetica-Bold')
             .fontSize(11.5)
             .fillColor(def.theme.text)
-            .text(insight.value, x + 10, y + 24, { width: width - 20 });
+            .text(insight.value, x + 10, y + 13 + titleHeight, { width: width - 20 });
           if (insight.detail) {
             doc
               .font('Helvetica')
               .fontSize(8)
               .fillColor(def.theme.primary)
-              .text(insight.detail, x + 10, y + 45, { width: width - 20 });
+              .text(insight.detail, x + 10, y + 17 + titleHeight + valueHeight, {
+                width: width - 20,
+              });
           }
+        };
+
+        const drawPieChartBlock = (section: PdfSection) => {
+          if (!section.pieChart?.slices?.length) return;
+          const slices = section.pieChart.slices;
+          const blockHeight = 158;
+          ensureSpace(blockHeight + 10);
+          const y = doc.y;
+          doc
+            .roundedRect(LEFT, y, WIDTH, blockHeight, 9)
+            .fill('#FBFCFE')
+            .strokeColor(def.theme.border)
+            .lineWidth(0.7)
+            .stroke();
+
+          const chartCenterX = LEFT + 86;
+          const chartCenterY = y + 82;
+          const radius = 42;
+          let startAngle = -90;
+          const totalValue = Math.max(
+            1,
+            slices.reduce((acc, item) => acc + Number(item.value ?? 0), 0),
+          );
+
+          slices.forEach((slice) => {
+            const percent = (Number(slice.value ?? 0) / totalValue) * 100;
+            const angle = (percent / 100) * 360;
+            if (angle <= 0) return;
+            if (percent >= 99.9) {
+              doc.circle(chartCenterX, chartCenterY, radius).fill(slice.color);
+              startAngle = 270;
+              return;
+            }
+            const endAngle = startAngle + angle;
+            const startRadians = (Math.PI / 180) * startAngle;
+            (doc as any)
+              .moveTo(chartCenterX, chartCenterY)
+              .lineTo(
+                chartCenterX + Math.cos(startRadians) * radius,
+                chartCenterY + Math.sin(startRadians) * radius,
+              )
+              .arc(chartCenterX, chartCenterY, radius, startAngle, endAngle)
+              .closePath()
+              .fill(slice.color);
+            startAngle = endAngle;
+          });
+
+          doc
+            .font('Helvetica-Bold')
+            .fontSize(10)
+            .fillColor(def.theme.text)
+            .text(section.pieChart.title || 'Distribuição visual', LEFT + 150, y + 16, {
+              width: WIDTH - 170,
+            });
+
+          let legendY = y + 38;
+          slices.forEach((slice) => {
+            doc.roundedRect(LEFT + 150, legendY + 2, 10, 10, 2).fill(slice.color);
+            doc
+              .font('Helvetica-Bold')
+              .fontSize(8.4)
+              .fillColor(def.theme.text)
+              .text(slice.label, LEFT + 168, legendY, {
+                width: WIDTH - 200,
+              });
+            doc
+              .font('Helvetica')
+              .fontSize(7.6)
+              .fillColor(def.theme.muted)
+              .text(
+                `${this.formatInteger(slice.value)} respostas • ${this.formatPercent(slice.percent)}`,
+                LEFT + 168,
+                legendY + 12,
+                {
+                  width: WIDTH - 200,
+                },
+              );
+            legendY += 24;
+          });
+
+          doc.y = y + blockHeight + 10;
         };
 
         const drawMetricSection = (section: PdfSection) => {
@@ -1743,10 +1879,12 @@ export class BiPdfService {
               .fontSize(8.5)
               .fillColor(def.theme.muted)
               .text(section.description, LEFT, doc.y, {
-                width: WIDTH,
-              });
+              width: WIDTH,
+            });
             doc.y += 18;
           }
+
+          drawPieChartBlock(section);
 
           const maxScore = Math.max(
             1,
@@ -1939,27 +2077,67 @@ export class BiPdfService {
         doc.y += 28;
 
         sectionHeader('02', 'Indicadores prioritários');
-        const statWidth = (WIDTH - 16) / 3;
-        for (let index = 0; index < def.stats.length; index += 1) {
-          const rowIndex = Math.floor(index / 3);
-          const colIndex = index % 3;
-          const x = LEFT + colIndex * (statWidth + 8);
-          const y = doc.y + rowIndex * 80;
-          drawStatCard(x, y, statWidth, def.stats[index]);
+        const statColumns =
+          def.stats.length <= 2 ? def.stats.length : def.stats.length === 4 ? 2 : 3;
+        const statGap = 10;
+        const statWidth =
+          statColumns > 0 ? (WIDTH - statGap * (statColumns - 1)) / statColumns : WIDTH;
+        let statsCursorY = doc.y;
+        for (let index = 0; index < def.stats.length; index += statColumns) {
+          const rowItems = def.stats.slice(index, index + statColumns);
+          const rowHeight = rowItems.reduce((max, stat) => {
+            const labelHeight = doc
+              .font('Helvetica')
+              .fontSize(7.5)
+              .heightOfString(stat.label, { width: statWidth - 24 });
+            const noteHeight = stat.note
+              ? doc
+                  .font('Helvetica')
+                  .fontSize(7.5)
+                  .heightOfString(stat.note, { width: statWidth - 24 })
+              : 0;
+            return Math.max(max, Math.max(86, 52 + labelHeight + noteHeight));
+          }, 86);
+          ensureSpace(rowHeight + 8);
+
+          rowItems.forEach((stat, columnIndex) => {
+            const x = LEFT + columnIndex * (statWidth + statGap);
+            drawStatCard(x, statsCursorY, statWidth, stat, rowHeight);
+          });
+          statsCursorY += rowHeight + 10;
         }
-        doc.y += Math.ceil(def.stats.length / 3) * 80 + 4;
+        doc.y = statsCursorY + 2;
 
         sectionHeader('03', 'Leituras executivas');
         const insightWidth = (WIDTH - 8) / 2;
-        for (let index = 0; index < def.insights.length; index += 1) {
-          ensureSpace(76);
-          const rowIndex = Math.floor(index / 2);
-          const colIndex = index % 2;
-          const x = LEFT + colIndex * (insightWidth + 8);
-          const y = doc.y + rowIndex * 76;
-          drawInsightCard(x, y, insightWidth, def.insights[index]);
+        let insightsCursorY = doc.y;
+        for (let index = 0; index < def.insights.length; index += 2) {
+          const rowItems = def.insights.slice(index, index + 2);
+          const rowHeight = rowItems.reduce((max, insight) => {
+            const titleHeight = doc
+              .font('Helvetica')
+              .fontSize(7.5)
+              .heightOfString(insight.title, { width: insightWidth - 20 });
+            const valueHeight = doc
+              .font('Helvetica-Bold')
+              .fontSize(11.5)
+              .heightOfString(insight.value, { width: insightWidth - 20 });
+            const detailHeight = insight.detail
+              ? doc
+                  .font('Helvetica')
+                  .fontSize(8)
+                  .heightOfString(insight.detail, { width: insightWidth - 20 })
+              : 0;
+            return Math.max(max, Math.max(76, 26 + titleHeight + valueHeight + detailHeight));
+          }, 76);
+          ensureSpace(rowHeight + 8);
+          rowItems.forEach((insight, columnIndex) => {
+            const x = LEFT + columnIndex * (insightWidth + 8);
+            drawInsightCard(x, insightsCursorY, insightWidth, insight, rowHeight);
+          });
+          insightsCursorY += rowHeight + 8;
         }
-        doc.y += Math.ceil(def.insights.length / 2) * 76 + 4;
+        doc.y = insightsCursorY + 2;
 
         let sectionIndex = 4;
         for (const section of def.sections) {

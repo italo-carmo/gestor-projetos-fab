@@ -1110,6 +1110,37 @@ export class StrategicService {
       matrix: {
         items: ufRows,
       },
+      details: {
+        coveredOms: omRiskRowsWithScore
+          .filter((item: any) => item.covered)
+          .sort((a: any, b: any) => {
+            if (b.riskScore !== a.riskScore) return b.riskScore - a.riskScore;
+            return String(a.code ?? '').localeCompare(String(b.code ?? ''), 'pt-BR', {
+              sensitivity: 'base',
+            });
+          }),
+        criticalUfs: ufRows
+          .filter((item: any) => item.priorityBand !== 'ESTÁVEL')
+          .sort((a: any, b: any) => b.riskScore - a.riskScore),
+        highRiskOms: omRiskRowsWithScore.filter((item: any) => item.riskScore >= 70),
+        operationalPresenceByUf: ufRows
+          .map((item: any) => ({
+            uf: item.uf,
+            priorityBand: item.priorityBand,
+            presenceScore: item.presenceScore,
+            riskScore: item.riskScore,
+            coveragePercent: item.coveragePercent,
+            recommendedFocus: item.recommendedFocus,
+            missions: item.presence?.missions ?? 0,
+            completedActivities: item.presence?.completedActivities ?? 0,
+            signedReports: item.presence?.signedReports ?? 0,
+            totalEvents:
+              (item.presence?.missions ?? 0) +
+              (item.presence?.completedActivities ?? 0) +
+              (item.presence?.signedReports ?? 0),
+          }))
+          .sort((a: any, b: any) => b.totalEvents - a.totalEvents),
+      },
       watchlists: {
         criticalUfs: criticalUfRows,
         topRiskOms,

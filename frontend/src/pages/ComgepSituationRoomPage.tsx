@@ -80,21 +80,99 @@ function resolvePriorityColor(value: string) {
   return 'success';
 }
 
+function buildRiskReason(item: any) {
+  const reasons: string[] = [];
+  const complaints = item?.complaints ?? {};
+  if (Number(complaints?.openCases ?? 0) > 0) {
+    reasons.push(`${complaints.openCases} denúncia(s) aberta(s)`);
+  }
+  if (Number(complaints?.retaliationCases ?? 0) > 0) {
+    reasons.push(`${complaints.retaliationCases} com risco de retaliação`);
+  }
+  if (Number(complaints?.stalledCases ?? 0) > 0) {
+    reasons.push(`${complaints.stalledCases} parada(s) além do prazo`);
+  }
+  if (Number(item?.surveyRate ?? 0) >= 20) {
+    reasons.push(`sinal elevado em pesquisa institucional (${formatPercent(item.surveyRate)})`);
+  }
+  if (Number(item?.domesticRate ?? 0) >= 15) {
+    reasons.push(`sinal elevado em violência doméstica (${formatPercent(item.domesticRate)})`);
+  }
+  if (item?.covered === false) {
+    reasons.push('sem cobertura CPCA associada');
+  }
+  return reasons.slice(0, 3).join(' • ') || 'Risco composto por denúncias, sinais BI e condição de cobertura.';
+}
+
+function buildPriorityUfReason(item: any) {
+  return `Cobertura ${formatPercent(item?.coveragePercent)} • Presença ${item?.presenceScore ?? 0} • ${item?.recommendedFocus ?? 'Monitorar cenário.'}`;
+}
+
+function buildCoverageGapReason(item: any) {
+  const complaints = item?.complaints ?? {};
+  return [
+    'A OM permanece sem CPCA própria ou sem cobertura por outra comissão.',
+    Number(complaints?.openCases ?? 0) > 0
+      ? `${complaints.openCases} denúncia(s) aberta(s) elevam a urgência.`
+      : null,
+    Number(item?.riskScore ?? 0) >= 70
+      ? `Score de risco ${item.riskScore} exige correção de governança.`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+function buildPressureReason(item: any) {
+  return `Pressão calculada pela diferença entre risco (${item?.riskScore ?? 0}) e presença (${item?.presenceScore ?? 0}). ${item?.recommendedFocus ?? ''}`.trim();
+}
+
+function buildDataConfidenceExplanation(dataConfidence: any) {
+  const coverage = Number(dataConfidence?.supportedCoveragePercent ?? 0);
+  if (coverage >= 80) {
+    return 'A maior parte dos registros BI já está vinculada a OM ou UF, permitindo leitura executiva com boa sustentação analítica.';
+  }
+  if (coverage >= 50) {
+    return 'A leitura já é útil, mas parte relevante da base ainda depende só de UF ou permanece sem vínculo suficiente para cruzamento fino por OM.';
+  }
+  return 'A base ainda tem baixa sustentação para leitura executiva detalhada. O gestor deve interpretar sinais com cautela até ampliar a normalização.';
+}
+
 function SummaryCard({
   icon,
   title,
   value,
   subtitle,
+  description,
   color,
+  onClick,
 }: {
   icon: React.ReactNode;
   title: string;
   value: string | number;
   subtitle: string;
+  description?: string;
   color: string;
+  onClick?: () => void;
 }) {
   return (
-    <Card variant="outlined" sx={{ borderRadius: 3, borderTop: `4px solid ${color}` }}>
+    <Card
+      variant="outlined"
+      onClick={onClick}
+      sx={{
+        borderRadius: 3,
+        borderTop: `4px solid ${color}`,
+        cursor: onClick ? 'pointer' : 'default',
+        transition: 'transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease',
+        '&:hover': onClick
+          ? {
+              transform: 'translateY(-2px)',
+              boxShadow: '0 16px 36px rgba(15, 35, 64, 0.08)',
+              borderColor: color,
+            }
+          : undefined,
+      }}
+    >
       <CardContent>
         <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1.5}>
           <Box>
@@ -107,6 +185,16 @@ function SummaryCard({
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.8 }}>
               {subtitle}
             </Typography>
+            {description ? (
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.8, display: 'block', lineHeight: 1.55 }}>
+                {description}
+              </Typography>
+            ) : null}
+            {onClick ? (
+              <Typography variant="caption" sx={{ mt: 1.1, display: 'block', color, fontWeight: 700 }}>
+                Clique para detalhar
+              </Typography>
+            ) : null}
           </Box>
           <Box sx={{ color }}>{icon}</Box>
         </Stack>
@@ -262,6 +350,7 @@ export function ComgepSituationRoomPage() {
   const { state: agentState, start: runAgent } = useActionAgentRunner();
   const [selectedUf, setSelectedUf] = useState('');
   const [detailUf, setDetailUf] = useState<any | null>(null);
+  const [detailKpi, setDetailKpi] = useState<string | null>(null);
 
   const data = roomQuery.data;
   const matrixItems = Array.isArray(data?.matrix?.items) ? data.matrix.items : [];
@@ -290,7 +379,36 @@ export function ComgepSituationRoomPage() {
     ? watchlists.operationalPressure
     : [];
   const dataConfidence = data?.dataConfidence ?? {};
+  const details = data?.details ?? {};
+  const coveredOmsDetails = Array.isArray(details?.coveredOms) ? details.coveredOms : [];
+  const criticalUfDetails = Array.isArray(details?.criticalUfs) ? details.criticalUfs : [];
+  const highRiskOmDetails = Array.isArray(details?.highRiskOms) ? details.highRiskOms : [];
+  const operationalPresenceDetails = Array.isArray(details?.operationalPresenceByUf)
+    ? details.operationalPresenceByUf
+    : [];
   const agentCatalog = Array.isArray(agentsQuery.data) ? agentsQuery.data : [];
+
+  const detailKpiTitle =
+    detailKpi === 'coveredOms'
+      ? 'OMs cobertas pela estrutura CPCA'
+      : detailKpi === 'criticalUfs'
+        ? 'UFs críticas'
+        : detailKpi === 'highRiskOms'
+          ? 'OMs de maior risco'
+          : detailKpi === 'operationalPresence'
+            ? 'Presença operacional por UF'
+            : '';
+
+  const detailKpiDescription =
+    detailKpi === 'coveredOms'
+      ? 'Detalha as OMs que já possuem cobertura CPCA efetiva, seja por comissão própria ou por cobertura delegada de outra OM.'
+      : detailKpi === 'criticalUfs'
+        ? 'Mostra as UFs cuja combinação entre risco, cobertura e presença operacional justificou priorização na Sala COMGEP.'
+        : detailKpi === 'highRiskOms'
+          ? 'Explica por que cada OM entrou no grupo de maior risco, destacando fatores como denúncias, retaliação, morosidade e sinais BI.'
+          : detailKpi === 'operationalPresence'
+            ? 'Lista a distribuição da atuação institucional recente por UF, somando missões, atividades concluídas e relatórios assinados.'
+            : '';
 
   return (
     <Box>
@@ -326,6 +444,8 @@ export function ComgepSituationRoomPage() {
             value={`${summary.coveredOms ?? 0}/${summary.totalOms ?? 0}`}
             subtitle={`${formatPercent(summary.coveredOmsPercent)} do catálogo com cobertura CPCA efetiva.`}
             color="#1A3C6E"
+            description="Conta as OMs com CPCA próprio e também as OMs cobertas formalmente pela comissão de outra OM."
+            onClick={() => setDetailKpi('coveredOms')}
           />
           <SummaryCard
             icon={<WarningAmberRoundedIcon />}
@@ -333,6 +453,8 @@ export function ComgepSituationRoomPage() {
             value={summary.criticalUfCount ?? 0}
             subtitle="UFs com risco alto e cobertura ou presença insuficientes."
             color="#D32F2F"
+            description="São as UFs que combinam risco elevado com baixa cobertura institucional ou baixa presença operacional recente."
+            onClick={() => setDetailKpi('criticalUfs')}
           />
           <SummaryCard
             icon={<GroupsRoundedIcon />}
@@ -340,6 +462,8 @@ export function ComgepSituationRoomPage() {
             value={summary.highRiskOmCount ?? 0}
             subtitle="OMs com score elevado a partir de denúncias, sinais BI e cobertura."
             color="#ED6C02"
+            description="O score soma denúncias abertas, risco de retaliação, morosidade, sinais das pesquisas e situação de cobertura CPCA."
+            onClick={() => setDetailKpi('highRiskOms')}
           />
           <SummaryCard
             icon={<HubRoundedIcon />}
@@ -347,6 +471,8 @@ export function ComgepSituationRoomPage() {
             value={summary.operationalPresenceEvents ?? 0}
             subtitle="Missões, atividades concluídas e relatórios assinados na janela ativa."
             color="#2E7D32"
+            description="Mostra a intensidade da atuação recente nas UFs, somando missões, atividades concluídas e relatórios assinados."
+            onClick={() => setDetailKpi('operationalPresence')}
           />
         </Box>
 
@@ -431,6 +557,9 @@ export function ComgepSituationRoomPage() {
                 <Typography variant="h6" fontWeight={800} sx={{ mb: 1.2 }}>
                   UFs prioritárias
                 </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.4 }}>
+                  Lista as UFs que exigem atenção do gestor porque concentram risco relevante e, ao mesmo tempo, ainda não estão suficientemente protegidas por cobertura CPCA ou presença operacional.
+                </Typography>
                 <Table size="small">
                   <TableHead>
                     <TableRow>
@@ -468,6 +597,9 @@ export function ComgepSituationRoomPage() {
                 <Typography variant="h6" fontWeight={800} sx={{ mb: 1.2 }}>
                   Confiança do dado
                 </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.2 }}>
+                  Mede o quanto a base BI já consegue ser vinculada com segurança a OM ou UF. Quanto maior esse indicador, mais robusto é o cruzamento executivo do sistema.
+                </Typography>
                 <Stack spacing={1.4}>
                   <Stack direction="row" justifyContent="space-between">
                     <Typography variant="body2" color="text.secondary">
@@ -486,6 +618,9 @@ export function ComgepSituationRoomPage() {
                   <Typography variant="body2" color="text.secondary">
                     Última atualização de normalização: {formatDateTime(dataConfidence?.lastUpdatedAt)}.
                   </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {buildDataConfidenceExplanation(dataConfidence)}
+                  </Typography>
                   <Alert severity={Number(dataConfidence?.supportedCoveragePercent ?? 0) >= 80 ? 'success' : 'warning'} variant="outlined">
                     A sala de situação já expõe a confiança do dado para evitar leitura executiva sobre base frágil.
                   </Alert>
@@ -502,12 +637,15 @@ export function ComgepSituationRoomPage() {
             gap: 2,
           }}
         >
-          <Card variant="outlined" sx={{ borderRadius: 3 }}>
-            <CardContent>
-              <Typography variant="h6" fontWeight={800} sx={{ mb: 1.2 }}>
-                OMs de maior risco
-              </Typography>
-              <Table size="small">
+            <Card variant="outlined" sx={{ borderRadius: 3 }}>
+              <CardContent>
+                <Typography variant="h6" fontWeight={800} sx={{ mb: 1.2 }}>
+                  OMs de maior risco
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.4 }}>
+                  O ranking abaixo mostra as OMs com maior score composto de risco. O objetivo não é punir, e sim apontar onde a intervenção institucional tende a ser mais necessária.
+                </Typography>
+                <Table size="small">
                 <TableHead>
                   <TableRow>
                     <TableCell>OM</TableCell>
@@ -523,6 +661,9 @@ export function ComgepSituationRoomPage() {
                         <Typography variant="caption" color="text.secondary">
                           {item.coverageType}
                         </Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.4 }}>
+                          {buildRiskReason(item)}
+                        </Typography>
                       </TableCell>
                       <TableCell align="right">{item.riskScore}</TableCell>
                       <TableCell align="right">
@@ -537,12 +678,15 @@ export function ComgepSituationRoomPage() {
             </CardContent>
           </Card>
 
-          <Card variant="outlined" sx={{ borderRadius: 3 }}>
-            <CardContent>
-              <Typography variant="h6" fontWeight={800} sx={{ mb: 1.2 }}>
-                Gaps de cobertura CPCA
-              </Typography>
-              <Table size="small">
+            <Card variant="outlined" sx={{ borderRadius: 3 }}>
+              <CardContent>
+                <Typography variant="h6" fontWeight={800} sx={{ mb: 1.2 }}>
+                  Gaps de cobertura CPCA
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.4 }}>
+                  Aqui entram as OMs que ainda não possuem cobertura CPCA suficiente. O gestor usa esse bloco para saber onde a governança da comissão ainda não alcançou o risco existente.
+                </Typography>
+                <Table size="small">
                 <TableHead>
                   <TableRow>
                     <TableCell>OM</TableCell>
@@ -558,6 +702,9 @@ export function ComgepSituationRoomPage() {
                         <Typography variant="caption" color="text.secondary">
                           {item.uf || 'UF não informada'}
                         </Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.4 }}>
+                          {buildCoverageGapReason(item)}
+                        </Typography>
                       </TableCell>
                       <TableCell align="right">{item.riskScore}</TableCell>
                       <TableCell align="right">{item.complaints?.openCases ?? 0}</TableCell>
@@ -568,12 +715,15 @@ export function ComgepSituationRoomPage() {
             </CardContent>
           </Card>
 
-          <Card variant="outlined" sx={{ borderRadius: 3 }}>
-            <CardContent>
-              <Typography variant="h6" fontWeight={800} sx={{ mb: 1.2 }}>
-                Pressão operacional
-              </Typography>
-              <Table size="small">
+            <Card variant="outlined" sx={{ borderRadius: 3 }}>
+              <CardContent>
+                <Typography variant="h6" fontWeight={800} sx={{ mb: 1.2 }}>
+                  Pressão operacional
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.4 }}>
+                  A pressão operacional compara o tamanho do risco com a intensidade da presença institucional recente. Quanto maior a diferença, maior a necessidade de reforço de atuação.
+                </Typography>
+                <Table size="small">
                 <TableHead>
                   <TableRow>
                     <TableCell>UF</TableCell>
@@ -588,6 +738,9 @@ export function ComgepSituationRoomPage() {
                         <Typography variant="subtitle2" fontWeight={700}>{item.uf}</Typography>
                         <Typography variant="caption" color="text.secondary">
                           {item.recommendedFocus}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.4 }}>
+                          {buildPressureReason(item)}
                         </Typography>
                       </TableCell>
                       <TableCell align="right">{item.pressureScore}</TableCell>
@@ -713,6 +866,151 @@ export function ComgepSituationRoomPage() {
           </CardContent>
         </Card>
       </Stack>
+
+      <Dialog open={Boolean(detailKpi)} onClose={() => setDetailKpi(null)} maxWidth="lg" fullWidth>
+        <DialogTitle>{detailKpiTitle}</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2}>
+            <Alert severity="info" variant="outlined">
+              {detailKpiDescription}
+            </Alert>
+
+            {detailKpi === 'coveredOms' ? (
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>OM</TableCell>
+                    <TableCell>Tipo de cobertura</TableCell>
+                    <TableCell align="right">Risco</TableCell>
+                    <TableCell align="right">Abrir</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {coveredOmsDetails.map((item: any) => (
+                    <TableRow key={item.id} hover>
+                      <TableCell>
+                        <Typography variant="subtitle2" fontWeight={700}>{item.code}</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {item.uf || 'UF não informada'}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.4 }}>
+                          {buildRiskReason(item)}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>{item.coverageType}</TableCell>
+                      <TableCell align="right">{item.riskScore}</TableCell>
+                      <TableCell align="right">
+                        <Button size="small" href={item.link} target="_blank" rel="noreferrer">
+                          <OpenInNewRoundedIcon fontSize="small" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : null}
+
+            {detailKpi === 'criticalUfs' ? (
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>UF</TableCell>
+                    <TableCell align="right">Risco</TableCell>
+                    <TableCell align="right">Cobertura</TableCell>
+                    <TableCell align="right">Presença</TableCell>
+                    <TableCell>Leitura</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {criticalUfDetails.map((item: any) => (
+                    <TableRow key={item.uf} hover>
+                      <TableCell>
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <Typography variant="subtitle2" fontWeight={700}>{item.uf}</Typography>
+                          <Chip size="small" color={resolvePriorityColor(item.priorityBand) as any} label={item.priorityBand} />
+                        </Stack>
+                      </TableCell>
+                      <TableCell align="right">{item.riskScore}</TableCell>
+                      <TableCell align="right">{formatPercent(item.coveragePercent)}</TableCell>
+                      <TableCell align="right">{item.presenceScore}</TableCell>
+                      <TableCell>{buildPriorityUfReason(item)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : null}
+
+            {detailKpi === 'highRiskOms' ? (
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>OM</TableCell>
+                    <TableCell>UF</TableCell>
+                    <TableCell align="right">Risco</TableCell>
+                    <TableCell>Leitura</TableCell>
+                    <TableCell align="right">Abrir</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {highRiskOmDetails.map((item: any) => (
+                    <TableRow key={item.id} hover>
+                      <TableCell>
+                        <Typography variant="subtitle2" fontWeight={700}>{item.code}</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {item.coverageType}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>{item.uf || '—'}</TableCell>
+                      <TableCell align="right">{item.riskScore}</TableCell>
+                      <TableCell>{buildRiskReason(item)}</TableCell>
+                      <TableCell align="right">
+                        <Button size="small" href={item.link} target="_blank" rel="noreferrer">
+                          <OpenInNewRoundedIcon fontSize="small" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : null}
+
+            {detailKpi === 'operationalPresence' ? (
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>UF</TableCell>
+                    <TableCell align="right">Eventos</TableCell>
+                    <TableCell align="right">Missões</TableCell>
+                    <TableCell align="right">Atividades</TableCell>
+                    <TableCell align="right">Relatórios</TableCell>
+                    <TableCell>Leitura</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {operationalPresenceDetails.map((item: any) => (
+                    <TableRow key={item.uf} hover>
+                      <TableCell>
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <Typography variant="subtitle2" fontWeight={700}>{item.uf}</Typography>
+                          <Chip size="small" color={resolvePriorityColor(item.priorityBand) as any} label={item.priorityBand} />
+                        </Stack>
+                      </TableCell>
+                      <TableCell align="right">{item.totalEvents}</TableCell>
+                      <TableCell align="right">{item.missions}</TableCell>
+                      <TableCell align="right">{item.completedActivities}</TableCell>
+                      <TableCell align="right">{item.signedReports}</TableCell>
+                      <TableCell>{buildPressureReason(item)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : null}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDetailKpi(null)}>Fechar</Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={Boolean(detailUf)} onClose={() => setDetailUf(null)} maxWidth="lg" fullWidth>
         <DialogTitle>
