@@ -13,9 +13,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 var AiService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.AiService = exports.ANALYSIS_CATALOG = void 0;
+exports.AiService = exports.ACTION_AGENT_CATALOG = exports.ANALYSIS_CATALOG = void 0;
 const common_1 = require("@nestjs/common");
 const litellm_service_1 = require("../llm/litellm.service");
+const ai_knowledge_sources_1 = require("./ai-knowledge-sources");
 const settings_service_1 = require("../settings/settings.service");
 const strategic_service_1 = require("../strategic/strategic.service");
 const pdfkit_1 = __importDefault(require("pdfkit"));
@@ -51,6 +52,26 @@ exports.ANALYSIS_CATALOG = [
         icon: 'Map',
     },
 ];
+exports.ACTION_AGENT_CATALOG = [
+    {
+        type: 'briefing_comgep',
+        title: 'Briefing COMGEP',
+        description: 'Consolida a sala de situação em um briefing executivo com riscos, decisões e ações imediatas.',
+        icon: 'Campaign',
+    },
+    {
+        type: 'priorizacao_intervencao',
+        title: 'Priorização de Intervenção',
+        description: 'Ordena UFs e OMs prioritárias e propõe pacote de intervenção com justificativa objetiva.',
+        icon: 'AssignmentTurnedIn',
+    },
+    {
+        type: 'governanca_cpca',
+        title: 'Governança CPCA',
+        description: 'Analisa cobertura, carga e gargalos da CPCA e propõe ajustes de governança e proteção.',
+        icon: 'Shield',
+    },
+];
 let AiService = AiService_1 = class AiService {
     litellm;
     settings;
@@ -62,16 +83,150 @@ let AiService = AiService_1 = class AiService {
         this.settings = settings;
         this.strategic = strategic;
     }
+    async resolveAnalysisSources(type) {
+        try {
+            return await this.settings.getAnalysisSourcesForType(type);
+        }
+        catch {
+            return [...ai_knowledge_sources_1.ALL_KNOWLEDGE_SOURCE_IDS];
+        }
+    }
     getAnalysesCatalog() {
         return exports.ANALYSIS_CATALOG;
+    }
+    getActionAgentsCatalog() {
+        return exports.ACTION_AGENT_CATALOG;
+    }
+    async *runActionAgentStream(type, options) {
+        const safeType = exports.ACTION_AGENT_CATALOG.some((item) => item.type === type)
+            ? type
+            : 'briefing_comgep';
+        yield this.sseEvent('progress', {
+            percent: 5,
+            stage: 'Coletando dados da sala de situação...',
+        });
+        const room = await this.strategic.comgepSituationRoom();
+        const scopeUf = String(options?.uf ?? '').trim().toUpperCase() || null;
+        yield this.sseEvent('progress', {
+            percent: 24,
+            stage: 'Preparando contexto executivo...',
+        });
+        const systemPrompt = await this.settings.getSystemPrompt();
+        const prompt = this.buildActionAgentPrompt(safeType, room, scopeUf);
+        const messages = [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: prompt },
+        ];
+        yield this.sseEvent('progress', {
+            percent: 30,
+            stage: 'Enviando ao modelo...',
+        });
+        const configuredModel = this.litellm.getDefaultModel();
+        const iterator = this.litellm
+            .chatCompletionStream({
+            messages,
+            temperature: 0.2,
+            max_tokens: 1600,
+        })[Symbol.asyncIterator]();
+        let tokenCount = 0;
+        let fullText = '';
+        try {
+            while (true) {
+                let timeoutHandle;
+                let next;
+                try {
+                    next = (await Promise.race([
+                        iterator.next(),
+                        new Promise((_, reject) => {
+                            timeoutHandle = setTimeout(() => {
+                                reject(new Error('LITELLM_STREAM_IDLE_TIMEOUT'));
+                            }, this.streamIdleTimeoutMs);
+                        }),
+                    ]));
+                }
+                finally {
+                    if (timeoutHandle)
+                        clearTimeout(timeoutHandle);
+                }
+                if (next.done)
+                    break;
+                const chunk = next.value;
+                if (chunk.type === 'token') {
+                    fullText += chunk.text;
+                    tokenCount += 1;
+                    const progress = Math.min(95, 30 + Math.floor((tokenCount / 240) * 65));
+                    yield this.sseEvent('token', { text: chunk.text, percent: progress });
+                }
+                else if (chunk.type === 'done') {
+                    if (!fullText.trim()) {
+                        try {
+                            yield this.sseEvent('progress', {
+                                percent: 88,
+                                stage: 'Recuperando resposta final do modelo...',
+                            });
+                            const fallback = await this.litellm.chatCompletion({
+                                messages,
+                                temperature: 0.2,
+                                max_tokens: 1400,
+                            });
+                            fullText = fallback.content.trim();
+                            if (!fullText) {
+                                throw new Error('O modelo encerrou a execução sem gerar conteúdo útil.');
+                            }
+                            yield this.sseEvent('done', {
+                                percent: 100,
+                                narrative: fullText,
+                                model: fallback.model,
+                                generatedAt: new Date().toISOString(),
+                                scopeUf,
+                            });
+                            return;
+                        }
+                        catch (fallbackError) {
+                            const msg = fallbackError instanceof Error
+                                ? fallbackError.message
+                                : String(fallbackError);
+                            yield this.sseEvent('error', { message: msg });
+                            return;
+                        }
+                    }
+                    yield this.sseEvent('done', {
+                        percent: 100,
+                        narrative: fullText,
+                        model: chunk.model,
+                        generatedAt: new Date().toISOString(),
+                        scopeUf,
+                    });
+                    return;
+                }
+            }
+        }
+        catch (e) {
+            let msg = e instanceof Error ? e.message : String(e);
+            if (msg === 'LITELLM_STREAM_IDLE_TIMEOUT') {
+                msg =
+                    `Sem resposta do modelo por ${Math.round(this.streamIdleTimeoutMs / 1000)}s ` +
+                        `(modelo configurado: ${configuredModel}). Verifique disponibilidade no LiteLLM.`;
+            }
+            yield this.sseEvent('error', { message: msg });
+            return;
+        }
+        yield this.sseEvent('done', {
+            percent: 100,
+            narrative: fullText,
+            model: configuredModel,
+            generatedAt: new Date().toISOString(),
+            scopeUf,
+        });
     }
     async analysisPdf(type, options) {
         const safeType = exports.ANALYSIS_CATALOG.some((item) => item.type === type)
             ? type
             : 'executive';
-        const data = await this.gatherDataForType(safeType);
+        const sources = await this.resolveAnalysisSources(safeType);
+        const data = await this.gatherDataForType(safeType, sources);
         const narrativeBase = options?.narrative?.trim() ?? '';
-        const narrative = await this.appendTraceabilityReferences(safeType, narrativeBase);
+        const narrative = await this.appendTraceabilityReferences(safeType, narrativeBase, sources);
         const model = options?.model?.trim() || 'modelo não informado';
         const generatedAt = options?.generatedAt || new Date().toISOString();
         return this.renderAnalysisPdf({
@@ -87,7 +242,8 @@ let AiService = AiService_1 = class AiService {
             percent: 5,
             stage: 'Coletando dados...',
         });
-        const data = await this.gatherDataForType(type);
+        const sources = await this.resolveAnalysisSources(type);
+        const data = await this.gatherDataForType(type, sources);
         yield this.sseEvent('progress', {
             percent: 25,
             stage: 'Preparando contexto...',
@@ -106,7 +262,8 @@ let AiService = AiService_1 = class AiService {
         const configuredModel = this.litellm.getDefaultModel();
         let fullText = '';
         let tokenCount = 0;
-        const iterator = this.litellm.chatCompletionStream({
+        const iterator = this.litellm
+            .chatCompletionStream({
             messages,
             max_tokens: 3000,
         })[Symbol.asyncIterator]();
@@ -138,7 +295,7 @@ let AiService = AiService_1 = class AiService {
                     yield this.sseEvent('token', { text: chunk.text, percent: progress });
                 }
                 else if (chunk.type === 'done') {
-                    const narrativeWithRefs = await this.appendTraceabilityReferences(type, fullText);
+                    const narrativeWithRefs = await this.appendTraceabilityReferences(type, fullText, sources);
                     yield this.sseEvent('done', {
                         percent: 100,
                         narrative: narrativeWithRefs,
@@ -159,7 +316,7 @@ let AiService = AiService_1 = class AiService {
             yield this.sseEvent('error', { message: msg });
             return;
         }
-        const narrativeWithRefs = await this.appendTraceabilityReferences(type, fullText);
+        const narrativeWithRefs = await this.appendTraceabilityReferences(type, fullText, sources);
         yield this.sseEvent('done', {
             percent: 100,
             narrative: narrativeWithRefs,
@@ -167,11 +324,18 @@ let AiService = AiService_1 = class AiService {
             generatedAt: new Date().toISOString(),
         });
     }
-    async *chatStream(message, history) {
+    async *chatStream(message, history, analysisType) {
         const systemPrompt = await this.settings.getSystemPrompt();
+        const analysisSources = analysisType
+            ? await this.resolveAnalysisSources(analysisType)
+            : undefined;
         let contextSummary;
         try {
-            const dashboard = await this.strategic.situationalDashboard();
+            const dashboard = analysisType
+                ? await this.strategic.situationalDashboard({
+                    sources: analysisSources,
+                })
+                : await this.strategic.situationalDashboard();
             const complaints = dashboard.complaints ?? {};
             const surveys = dashboard.surveys ?? {};
             contextSummary =
@@ -803,6 +967,193 @@ let AiService = AiService_1 = class AiService {
             .replace(/\\([%|/])/g, '$1')
             .replace(/\n{3,}/g, '\n\n');
     }
+    buildActionAgentPrompt(type, room, scopeUf) {
+        const scopeLabel = scopeUf ? `UF ${scopeUf}` : 'visão nacional';
+        const roomSummary = this.buildCompactActionAgentContext(room, scopeUf);
+        const instructionsByType = {
+            briefing_comgep: 'Monte um briefing executivo. Estrutura obrigatória: 1) Síntese executiva; 2) Riscos prioritários; 3) UFs/OMs a observar; 4) Decisões recomendadas em 72h; 5) Ações em 30 dias; 6) Alertas sobre confiança do dado.',
+            priorizacao_intervencao: 'Monte uma priorização operacional. Estrutura obrigatória: 1) Ranking das prioridades; 2) Motivo objetivo por prioridade; 3) Pacote de intervenção recomendado por UF/OM; 4) Sequência sugerida de emprego; 5) Dependências e riscos de execução.',
+            governanca_cpca: 'Monte uma análise de governança CPCA. Estrutura obrigatória: 1) Situação da cobertura; 2) Gargalos de governança; 3) OMs descobertas ou fragilizadas; 4) Medidas imediatas; 5) Ajustes estruturais; 6) Riscos se nada for feito.',
+        };
+        return [
+            `Você está atuando como assessor executivo do COMGEP na ${scopeLabel}.`,
+            'Use somente o contexto fornecido abaixo. Não invente números.',
+            'Se houver lacuna de dado, declare isso explicitamente.',
+            'Escreva em português, com foco em decisão, objetividade e rastreabilidade.',
+            'Não use tabelas markdown.',
+            'Use seções curtas com no máximo 4 bullets por seção e frases objetivas.',
+            instructionsByType[type],
+            '',
+            'Contexto estruturado da Sala de Situação COMGEP:',
+            JSON.stringify(roomSummary, null, 2),
+        ].join('\n');
+    }
+    buildCompactActionAgentContext(room, scopeUf) {
+        const matchesScope = (item) => scopeUf
+            ? String(item?.uf ?? '').trim().toUpperCase() === scopeUf
+            : true;
+        const scopedCriticalUfs = Array.isArray(room?.watchlists?.criticalUfs)
+            ? room.watchlists.criticalUfs.filter(matchesScope)
+            : [];
+        const scopedOms = Array.isArray(room?.watchlists?.topRiskOms)
+            ? room.watchlists.topRiskOms.filter(matchesScope)
+            : [];
+        const scopedCoverageGaps = Array.isArray(room?.watchlists?.coverageGaps)
+            ? room.watchlists.coverageGaps.filter(matchesScope)
+            : [];
+        const scopedPressure = Array.isArray(room?.watchlists?.operationalPressure)
+            ? room.watchlists.operationalPressure.filter(matchesScope)
+            : [];
+        const confidenceSources = Array.isArray(room?.dataConfidence?.sources)
+            ? [...room.dataConfidence.sources]
+                .filter((item) => Number(item?.totalRecords ?? 0) > 0)
+                .sort((a, b) => Number(b?.totalRecords ?? 0) - Number(a?.totalRecords ?? 0))
+                .slice(0, 6)
+                .map((item) => ({
+                fonte: item?.label ?? 'Fonte não identificada',
+                capacidade: item?.capability ?? 'N/A',
+                registros: Number(item?.totalRecords ?? 0),
+                coberturaPercentual: Number(item?.coveragePercent ?? 0),
+                correspondidos: Number(item?.statusCounts?.matched ?? 0),
+                apenasUf: Number(item?.statusCounts?.ufOnly ?? 0),
+                naoEncontrados: Number(item?.statusCounts?.notFound ?? 0),
+                ultimaAtualizacao: item?.latestUpdatedAt ?? null,
+            }))
+            : [];
+        return {
+            generatedAt: room?.generatedAt ?? new Date().toISOString(),
+            escopo: scopeUf ? `UF ${scopeUf}` : 'Nacional',
+            resumo: {
+                totalOms: Number(room?.summary?.totalOms ?? 0),
+                omsCobertasCpca: Number(room?.summary?.coveredOms ?? 0),
+                percentualCoberturaCpca: Number(room?.summary?.coveredOmsPercent ?? 0),
+                ufsCriticas: Number(room?.summary?.criticalUfCount ?? 0),
+                omsAltoRisco: Number(room?.summary?.highRiskOmCount ?? 0),
+                denunciasAbertas: Number(room?.summary?.openComplaintCases ?? 0),
+                eventosPresencaOperacional: Number(room?.summary?.operationalPresenceEvents ?? 0),
+            },
+            confiancaDado: {
+                coberturaSuportadaPercentual: Number(room?.dataConfidence?.supportedCoveragePercent ?? 0),
+                registrosNormalizados: Number(room?.dataConfidence?.totalRecords ?? 0),
+                correspondidos: Number(room?.dataConfidence?.matched ?? 0),
+                apenasUf: Number(room?.dataConfidence?.ufOnly ?? 0),
+                naoEncontrados: Number(room?.dataConfidence?.notFound ?? 0),
+                ultimaAtualizacao: room?.dataConfidence?.lastUpdatedAt ?? null,
+                principaisFontes: confidenceSources,
+            },
+            ufsPrioritarias: scopedCriticalUfs.slice(0, 6).map((item) => ({
+                uf: item?.uf ?? 'N/D',
+                faixa: item?.priorityBand ?? 'N/D',
+                risco: Number(item?.riskScore ?? 0),
+                coberturaCpcaPercentual: Number(item?.coveragePercent ?? 0),
+                presencaOperacional: Number(item?.presenceScore ?? 0),
+                denunciasAbertas: Number(item?.complaints?.openCases ?? 0),
+                retaliacao: Number(item?.complaints?.retaliationCases ?? 0),
+                taxaViolenciaPesquisa: Number(item?.surveyRate ?? 0),
+                taxaViolenciaDomestica: Number(item?.domesticRate ?? 0),
+                omsMaisSensíveis: Array.isArray(item?.oms)
+                    ? item.oms
+                        .slice(0, 4)
+                        .map((om) => `${String(om?.code ?? 'OM')} (${Number(om?.riskScore ?? 0)})`)
+                    : [],
+                focoRecomendado: this.truncateText(item?.recommendedFocus, 180),
+            })),
+            omsMaiorRisco: scopedOms.slice(0, 8).map((item) => ({
+                om: this.formatActionAgentOmLabel(item),
+                uf: item?.uf ?? 'N/D',
+                risco: Number(item?.riskScore ?? 0),
+                cobertura: item?.coverageType ?? 'N/D',
+                denunciasAbertas: Number(item?.complaints?.openCases ?? 0),
+                retaliacao: Number(item?.complaints?.retaliationCases ?? 0),
+                casosParados: Number(item?.complaints?.stalledCases ?? 0),
+                casosSexuais: Number(item?.complaints?.sexualCases ?? 0),
+                taxaViolenciaPesquisa: Number(item?.surveyRate ?? 0),
+                taxaViolenciaDomestica: Number(item?.domesticRate ?? 0),
+                motivo: this.describeActionAgentOmRisk(item),
+            })),
+            gapsCoberturaCpca: scopedCoverageGaps.slice(0, 8).map((item) => ({
+                om: this.formatActionAgentOmLabel(item),
+                uf: item?.uf ?? 'N/D',
+                risco: Number(item?.riskScore ?? 0),
+                denunciasAbertas: Number(item?.complaints?.openCases ?? 0),
+                retaliacao: Number(item?.complaints?.retaliationCases ?? 0),
+                motivo: this.describeActionAgentCoverageGap(item),
+            })),
+            pressaoOperacional: scopedPressure.slice(0, 6).map((item) => ({
+                uf: item?.uf ?? 'N/D',
+                pressao: Number(item?.pressureScore ?? 0),
+                risco: Number(item?.riskScore ?? 0),
+                presenca: Number(item?.presenceScore ?? 0),
+                coberturaCpcaPercentual: Number(item?.coveragePercent ?? 0),
+                missoes: Number(item?.presence?.missions ?? 0),
+                atividadesConcluidas: Number(item?.presence?.completedActivities ?? 0),
+                relatoriosAssinados: Number(item?.presence?.signedReports ?? 0),
+                focoRecomendado: this.truncateText(item?.recommendedFocus, 180),
+            })),
+        };
+    }
+    formatActionAgentOmLabel(item) {
+        const code = String(item?.code ?? '').trim();
+        const name = String(item?.name ?? '').trim();
+        if (code && name)
+            return `${code} - ${name}`;
+        return code || name || 'OM não identificada';
+    }
+    describeActionAgentOmRisk(item) {
+        const reasons = [];
+        const openCases = Number(item?.complaints?.openCases ?? 0);
+        const retaliationCases = Number(item?.complaints?.retaliationCases ?? 0);
+        const stalledCases = Number(item?.complaints?.stalledCases ?? 0);
+        const sexualCases = Number(item?.complaints?.sexualCases ?? 0);
+        const surveyRate = Number(item?.surveyRate ?? 0);
+        const domesticRate = Number(item?.domesticRate ?? 0);
+        if (openCases > 0)
+            reasons.push(`${openCases} denúncia(s) aberta(s)`);
+        if (retaliationCases > 0) {
+            reasons.push(`${retaliationCases} caso(s) com risco de retaliação`);
+        }
+        if (stalledCases > 0)
+            reasons.push(`${stalledCases} caso(s) parado(s)`);
+        if (sexualCases > 0)
+            reasons.push(`${sexualCases} caso(s) sexual(is)`);
+        if (surveyRate >= 20) {
+            reasons.push(`${surveyRate.toFixed(1)}% de sinal em pesquisa de violência`);
+        }
+        if (domesticRate >= 15) {
+            reasons.push(`${domesticRate.toFixed(1)}% de sinal em violência doméstica`);
+        }
+        if (!reasons.length) {
+            reasons.push('pontuação elevada no índice composto de risco');
+        }
+        return this.truncateText(reasons.join('; '), 220);
+    }
+    describeActionAgentCoverageGap(item) {
+        const reasons = ['OM sem cobertura CPCA própria ou delegada'];
+        const openCases = Number(item?.complaints?.openCases ?? 0);
+        const retaliationCases = Number(item?.complaints?.retaliationCases ?? 0);
+        const surveyRate = Number(item?.surveyRate ?? 0);
+        const domesticRate = Number(item?.domesticRate ?? 0);
+        if (openCases > 0)
+            reasons.push(`${openCases} denúncia(s) aberta(s)`);
+        if (retaliationCases > 0) {
+            reasons.push(`${retaliationCases} caso(s) com risco de retaliação`);
+        }
+        if (surveyRate >= 20) {
+            reasons.push(`${surveyRate.toFixed(1)}% de sinal em pesquisa`);
+        }
+        if (domesticRate >= 15) {
+            reasons.push(`${domesticRate.toFixed(1)}% em violência doméstica`);
+        }
+        return this.truncateText(reasons.join('; '), 220);
+    }
+    truncateText(value, maxLength) {
+        const text = String(value ?? '').trim();
+        if (!text)
+            return '';
+        if (text.length <= maxLength)
+            return text;
+        return `${text.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
+    }
     formatDateTimePtBr(input) {
         const dt = new Date(input);
         if (Number.isNaN(dt.getTime())) {
@@ -813,14 +1164,14 @@ let AiService = AiService_1 = class AiService {
     sseEvent(event, data) {
         return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
     }
-    async gatherDataForType(type) {
+    async gatherDataForType(type, sources) {
         switch (type) {
             case 'executive': {
                 const [dashboard, profile, text, geo] = await Promise.all([
-                    this.strategic.situationalDashboard(),
-                    this.strategic.aggressorProfile(),
-                    this.strategic.textAnalysis(),
-                    this.strategic.geoMap(),
+                    this.strategic.situationalDashboard(sources ? { sources: Array.from(sources) } : undefined),
+                    this.strategic.aggressorProfile(sources ? { sources: Array.from(sources) } : undefined),
+                    this.strategic.textAnalysis(sources ? { sources: Array.from(sources) } : undefined),
+                    this.strategic.geoMap(sources ? { sources: Array.from(sources) } : undefined),
                 ]);
                 return {
                     dashboard,
@@ -830,15 +1181,21 @@ let AiService = AiService_1 = class AiService {
                 };
             }
             case 'situational':
-                return { dashboard: await this.strategic.situationalDashboard() };
+                return {
+                    dashboard: await this.strategic.situationalDashboard(sources ? { sources: Array.from(sources) } : undefined),
+                };
             case 'aggressor':
-                return { profile: await this.strategic.aggressorProfile() };
+                return {
+                    profile: await this.strategic.aggressorProfile(sources ? { sources: Array.from(sources) } : undefined),
+                };
             case 'text':
                 return {
-                    textSummary: this.compactText(await this.strategic.textAnalysis()),
+                    textSummary: this.compactText(await this.strategic.textAnalysis(sources ? { sources: Array.from(sources) } : undefined)),
                 };
             case 'geo':
-                return { geoMap: await this.strategic.geoMap() };
+                return {
+                    geoMap: await this.strategic.geoMap(sources ? { sources: Array.from(sources) } : undefined),
+                };
             default:
                 return {};
         }
@@ -862,7 +1219,7 @@ let AiService = AiService_1 = class AiService {
             `Quando fizer afirmações analíticas, cite claramente a origem dos dados (ex.: pesquisa de recrutas, denúncias, relatórios, missões).\n\n` +
             `Dados JSON:\n${payloadJson}`);
     }
-    async appendTraceabilityReferences(type, narrative) {
+    async appendTraceabilityReferences(type, narrative, sources) {
         const base = this.normalizeReferenceLinks(String(narrative || '')).trim();
         if (!base)
             return base;
@@ -871,7 +1228,9 @@ let AiService = AiService_1 = class AiService {
         }
         let refs = [];
         try {
-            refs = await this.strategic.aiSourceReferences(type);
+            refs = await this.strategic.aiSourceReferences(type, {
+                sources: Array.isArray(sources) ? sources : undefined,
+            });
         }
         catch {
             refs = [];
@@ -884,9 +1243,7 @@ let AiService = AiService_1 = class AiService {
                 return '';
             const label = String(ref.label || 'Referência').trim();
             const desc = String(ref.description || '').trim();
-            return desc
-                ? `- [${label}](${href}) — ${desc}`
-                : `- [${label}](${href})`;
+            return desc ? `- [${label}](${href}) — ${desc}` : `- [${label}](${href})`;
         });
         const filtered = lines.filter(Boolean);
         if (!filtered.length)
@@ -912,9 +1269,7 @@ let AiService = AiService_1 = class AiService {
         try {
             const parsed = isAbsolute ? new URL(raw) : new URL(raw, 'https://local');
             parsed.searchParams.delete(paramName);
-            const path = parsed.pathname +
-                (parsed.search || '') +
-                (parsed.hash || '');
+            const path = parsed.pathname + (parsed.search || '') + (parsed.hash || '');
             return isAbsolute ? parsed.toString() : path;
         }
         catch {

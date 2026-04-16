@@ -171,7 +171,8 @@ export class AiService {
     const iterator = this.litellm
       .chatCompletionStream({
         messages,
-        max_tokens: 2600,
+        temperature: 0.2,
+        max_tokens: 1600,
       })
       [Symbol.asyncIterator]();
 
@@ -206,6 +207,40 @@ export class AiService {
           );
           yield this.sseEvent('token', { text: chunk.text, percent: progress });
         } else if (chunk.type === 'done') {
+          if (!fullText.trim()) {
+            try {
+              yield this.sseEvent('progress', {
+                percent: 88,
+                stage: 'Recuperando resposta final do modelo...',
+              });
+              const fallback = await this.litellm.chatCompletion({
+                messages,
+                temperature: 0.2,
+                max_tokens: 1400,
+              });
+              fullText = fallback.content.trim();
+              if (!fullText) {
+                throw new Error(
+                  'O modelo encerrou a execução sem gerar conteúdo útil.',
+                );
+              }
+              yield this.sseEvent('done', {
+                percent: 100,
+                narrative: fullText,
+                model: fallback.model,
+                generatedAt: new Date().toISOString(),
+                scopeUf,
+              });
+              return;
+            } catch (fallbackError) {
+              const msg =
+                fallbackError instanceof Error
+                  ? fallbackError.message
+                  : String(fallbackError);
+              yield this.sseEvent('error', { message: msg });
+              return;
+            }
+          }
           yield this.sseEvent('done', {
             percent: 100,
             narrative: fullText,
@@ -1233,53 +1268,8 @@ export class AiService {
     room: any,
     scopeUf: string | null,
   ) {
-    const scopedMatrixItems = Array.isArray(room?.matrix?.items)
-      ? room.matrix.items.filter((item: any) =>
-          scopeUf
-            ? String(item?.uf ?? '').trim().toUpperCase() === scopeUf
-            : true,
-        )
-      : [];
-    const scopedCriticalUfs = Array.isArray(room?.watchlists?.criticalUfs)
-      ? room.watchlists.criticalUfs.filter((item: any) =>
-          scopeUf
-            ? String(item?.uf ?? '').trim().toUpperCase() === scopeUf
-            : true,
-        )
-      : [];
-    const scopedOms = Array.isArray(room?.watchlists?.topRiskOms)
-      ? room.watchlists.topRiskOms.filter((item: any) =>
-          scopeUf
-            ? String(item?.uf ?? '').trim().toUpperCase() === scopeUf
-            : true,
-        )
-      : [];
-    const scopedCoverageGaps = Array.isArray(room?.watchlists?.coverageGaps)
-      ? room.watchlists.coverageGaps.filter((item: any) =>
-          scopeUf
-            ? String(item?.uf ?? '').trim().toUpperCase() === scopeUf
-            : true,
-        )
-      : [];
-
     const scopeLabel = scopeUf ? `UF ${scopeUf}` : 'visão nacional';
-    const roomSummary = {
-      summary: room?.summary ?? {},
-      dataConfidence: room?.dataConfidence ?? {},
-      criticalUfs: scopedCriticalUfs.slice(0, 8),
-      matrix: scopedMatrixItems.slice(0, 10),
-      topRiskOms: scopedOms.slice(0, 12),
-      coverageGaps: scopedCoverageGaps.slice(0, 10),
-      operationalPressure: Array.isArray(room?.watchlists?.operationalPressure)
-        ? room.watchlists.operationalPressure
-            .filter((item: any) =>
-              scopeUf
-                ? String(item?.uf ?? '').trim().toUpperCase() === scopeUf
-                : true,
-            )
-            .slice(0, 10)
-        : [],
-    };
+    const roomSummary = this.buildCompactActionAgentContext(room, scopeUf);
 
     const instructionsByType: Record<ActionAgentType, string> = {
       briefing_comgep:
@@ -1295,11 +1285,200 @@ export class AiService {
       'Use somente o contexto fornecido abaixo. Não invente números.',
       'Se houver lacuna de dado, declare isso explicitamente.',
       'Escreva em português, com foco em decisão, objetividade e rastreabilidade.',
+      'Não use tabelas markdown.',
+      'Use seções curtas com no máximo 4 bullets por seção e frases objetivas.',
       instructionsByType[type],
       '',
       'Contexto estruturado da Sala de Situação COMGEP:',
       JSON.stringify(roomSummary, null, 2),
     ].join('\n');
+  }
+
+  private buildCompactActionAgentContext(room: any, scopeUf: string | null) {
+    const matchesScope = (item: any) =>
+      scopeUf
+        ? String(item?.uf ?? '').trim().toUpperCase() === scopeUf
+        : true;
+
+    const scopedCriticalUfs = Array.isArray(room?.watchlists?.criticalUfs)
+      ? room.watchlists.criticalUfs.filter(matchesScope)
+      : [];
+    const scopedOms = Array.isArray(room?.watchlists?.topRiskOms)
+      ? room.watchlists.topRiskOms.filter(matchesScope)
+      : [];
+    const scopedCoverageGaps = Array.isArray(room?.watchlists?.coverageGaps)
+      ? room.watchlists.coverageGaps.filter(matchesScope)
+      : [];
+    const scopedPressure = Array.isArray(room?.watchlists?.operationalPressure)
+      ? room.watchlists.operationalPressure.filter(matchesScope)
+      : [];
+
+    const confidenceSources = Array.isArray(room?.dataConfidence?.sources)
+      ? [...room.dataConfidence.sources]
+          .filter((item: any) => Number(item?.totalRecords ?? 0) > 0)
+          .sort(
+            (a: any, b: any) =>
+              Number(b?.totalRecords ?? 0) - Number(a?.totalRecords ?? 0),
+          )
+          .slice(0, 6)
+          .map((item: any) => ({
+            fonte: item?.label ?? 'Fonte não identificada',
+            capacidade: item?.capability ?? 'N/A',
+            registros: Number(item?.totalRecords ?? 0),
+            coberturaPercentual: Number(item?.coveragePercent ?? 0),
+            correspondidos: Number(item?.statusCounts?.matched ?? 0),
+            apenasUf: Number(item?.statusCounts?.ufOnly ?? 0),
+            naoEncontrados: Number(item?.statusCounts?.notFound ?? 0),
+            ultimaAtualizacao: item?.latestUpdatedAt ?? null,
+          }))
+      : [];
+
+    return {
+      generatedAt: room?.generatedAt ?? new Date().toISOString(),
+      escopo: scopeUf ? `UF ${scopeUf}` : 'Nacional',
+      resumo: {
+        totalOms: Number(room?.summary?.totalOms ?? 0),
+        omsCobertasCpca: Number(room?.summary?.coveredOms ?? 0),
+        percentualCoberturaCpca: Number(room?.summary?.coveredOmsPercent ?? 0),
+        ufsCriticas: Number(room?.summary?.criticalUfCount ?? 0),
+        omsAltoRisco: Number(room?.summary?.highRiskOmCount ?? 0),
+        denunciasAbertas: Number(room?.summary?.openComplaintCases ?? 0),
+        eventosPresencaOperacional: Number(
+          room?.summary?.operationalPresenceEvents ?? 0,
+        ),
+      },
+      confiancaDado: {
+        coberturaSuportadaPercentual: Number(
+          room?.dataConfidence?.supportedCoveragePercent ?? 0,
+        ),
+        registrosNormalizados: Number(room?.dataConfidence?.totalRecords ?? 0),
+        correspondidos: Number(room?.dataConfidence?.matched ?? 0),
+        apenasUf: Number(room?.dataConfidence?.ufOnly ?? 0),
+        naoEncontrados: Number(room?.dataConfidence?.notFound ?? 0),
+        ultimaAtualizacao: room?.dataConfidence?.lastUpdatedAt ?? null,
+        principaisFontes: confidenceSources,
+      },
+      ufsPrioritarias: scopedCriticalUfs.slice(0, 6).map((item: any) => ({
+        uf: item?.uf ?? 'N/D',
+        faixa: item?.priorityBand ?? 'N/D',
+        risco: Number(item?.riskScore ?? 0),
+        coberturaCpcaPercentual: Number(item?.coveragePercent ?? 0),
+        presencaOperacional: Number(item?.presenceScore ?? 0),
+        denunciasAbertas: Number(item?.complaints?.openCases ?? 0),
+        retaliacao: Number(item?.complaints?.retaliationCases ?? 0),
+        taxaViolenciaPesquisa: Number(item?.surveyRate ?? 0),
+        taxaViolenciaDomestica: Number(item?.domesticRate ?? 0),
+        omsMaisSensíveis: Array.isArray(item?.oms)
+          ? item.oms
+              .slice(0, 4)
+              .map(
+                (om: any) =>
+                  `${String(om?.code ?? 'OM')} (${Number(om?.riskScore ?? 0)})`,
+              )
+          : [],
+        focoRecomendado: this.truncateText(item?.recommendedFocus, 180),
+      })),
+      omsMaiorRisco: scopedOms.slice(0, 8).map((item: any) => ({
+        om: this.formatActionAgentOmLabel(item),
+        uf: item?.uf ?? 'N/D',
+        risco: Number(item?.riskScore ?? 0),
+        cobertura: item?.coverageType ?? 'N/D',
+        denunciasAbertas: Number(item?.complaints?.openCases ?? 0),
+        retaliacao: Number(item?.complaints?.retaliationCases ?? 0),
+        casosParados: Number(item?.complaints?.stalledCases ?? 0),
+        casosSexuais: Number(item?.complaints?.sexualCases ?? 0),
+        taxaViolenciaPesquisa: Number(item?.surveyRate ?? 0),
+        taxaViolenciaDomestica: Number(item?.domesticRate ?? 0),
+        motivo: this.describeActionAgentOmRisk(item),
+      })),
+      gapsCoberturaCpca: scopedCoverageGaps.slice(0, 8).map((item: any) => ({
+        om: this.formatActionAgentOmLabel(item),
+        uf: item?.uf ?? 'N/D',
+        risco: Number(item?.riskScore ?? 0),
+        denunciasAbertas: Number(item?.complaints?.openCases ?? 0),
+        retaliacao: Number(item?.complaints?.retaliationCases ?? 0),
+        motivo: this.describeActionAgentCoverageGap(item),
+      })),
+      pressaoOperacional: scopedPressure.slice(0, 6).map((item: any) => ({
+        uf: item?.uf ?? 'N/D',
+        pressao: Number(item?.pressureScore ?? 0),
+        risco: Number(item?.riskScore ?? 0),
+        presenca: Number(item?.presenceScore ?? 0),
+        coberturaCpcaPercentual: Number(item?.coveragePercent ?? 0),
+        missoes: Number(item?.presence?.missions ?? 0),
+        atividadesConcluidas: Number(
+          item?.presence?.completedActivities ?? 0,
+        ),
+        relatoriosAssinados: Number(item?.presence?.signedReports ?? 0),
+        focoRecomendado: this.truncateText(item?.recommendedFocus, 180),
+      })),
+    };
+  }
+
+  private formatActionAgentOmLabel(item: any) {
+    const code = String(item?.code ?? '').trim();
+    const name = String(item?.name ?? '').trim();
+    if (code && name) return `${code} - ${name}`;
+    return code || name || 'OM não identificada';
+  }
+
+  private describeActionAgentOmRisk(item: any) {
+    const reasons: string[] = [];
+    const openCases = Number(item?.complaints?.openCases ?? 0);
+    const retaliationCases = Number(item?.complaints?.retaliationCases ?? 0);
+    const stalledCases = Number(item?.complaints?.stalledCases ?? 0);
+    const sexualCases = Number(item?.complaints?.sexualCases ?? 0);
+    const surveyRate = Number(item?.surveyRate ?? 0);
+    const domesticRate = Number(item?.domesticRate ?? 0);
+
+    if (openCases > 0) reasons.push(`${openCases} denúncia(s) aberta(s)`);
+    if (retaliationCases > 0) {
+      reasons.push(`${retaliationCases} caso(s) com risco de retaliação`);
+    }
+    if (stalledCases > 0) reasons.push(`${stalledCases} caso(s) parado(s)`);
+    if (sexualCases > 0) reasons.push(`${sexualCases} caso(s) sexual(is)`);
+    if (surveyRate >= 20) {
+      reasons.push(
+        `${surveyRate.toFixed(1)}% de sinal em pesquisa de violência`,
+      );
+    }
+    if (domesticRate >= 15) {
+      reasons.push(
+        `${domesticRate.toFixed(1)}% de sinal em violência doméstica`,
+      );
+    }
+    if (!reasons.length) {
+      reasons.push('pontuação elevada no índice composto de risco');
+    }
+    return this.truncateText(reasons.join('; '), 220);
+  }
+
+  private describeActionAgentCoverageGap(item: any) {
+    const reasons: string[] = ['OM sem cobertura CPCA própria ou delegada'];
+    const openCases = Number(item?.complaints?.openCases ?? 0);
+    const retaliationCases = Number(item?.complaints?.retaliationCases ?? 0);
+    const surveyRate = Number(item?.surveyRate ?? 0);
+    const domesticRate = Number(item?.domesticRate ?? 0);
+
+    if (openCases > 0) reasons.push(`${openCases} denúncia(s) aberta(s)`);
+    if (retaliationCases > 0) {
+      reasons.push(`${retaliationCases} caso(s) com risco de retaliação`);
+    }
+    if (surveyRate >= 20) {
+      reasons.push(`${surveyRate.toFixed(1)}% de sinal em pesquisa`);
+    }
+    if (domesticRate >= 15) {
+      reasons.push(`${domesticRate.toFixed(1)}% em violência doméstica`);
+    }
+
+    return this.truncateText(reasons.join('; '), 220);
+  }
+
+  private truncateText(value: unknown, maxLength: number) {
+    const text = String(value ?? '').trim();
+    if (!text) return '';
+    if (text.length <= maxLength) return text;
+    return `${text.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
   }
 
   private formatDateTimePtBr(input: string): string {
