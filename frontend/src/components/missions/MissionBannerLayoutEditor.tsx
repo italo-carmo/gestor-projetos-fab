@@ -299,6 +299,23 @@ function normalizeLayoutOverrides(
   return normalized;
 }
 
+function normalizeHexColorInput(value: string) {
+  const trimmed = String(value ?? '').trim();
+  if (!trimmed) return null;
+  const prefixed = trimmed.startsWith('#') ? trimmed : `#${trimmed}`;
+  const match = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(prefixed);
+  if (!match) return null;
+  const hex = match[1];
+  if (hex.length === 3) {
+    return `#${hex
+      .split('')
+      .map((char) => `${char}${char}`)
+      .join('')
+      .toUpperCase()}`;
+  }
+  return prefixed.toUpperCase();
+}
+
 export function MissionBannerLayoutEditor({
   eventDate,
   eventTime,
@@ -312,6 +329,7 @@ export function MissionBannerLayoutEditor({
   const [selectedBlock, setSelectedBlock] =
     useState<MissionBannerLayoutBlockKey>('locationPrimary');
   const [inlineEditorValue, setInlineEditorValue] = useState('');
+  const [colorInputValue, setColorInputValue] = useState(COLOR_PINK);
   const [editingTextBlockKey, setEditingTextBlockKey] =
     useState<MissionBannerLayoutBlockKey | null>(null);
 
@@ -612,6 +630,13 @@ export function MissionBannerLayoutEditor({
     const editingBlock = visibleBlocks.find((block) => block.key === editingTextBlockKey);
     setInlineEditorValue(editingBlock ? getCurrentBlockText(editingBlock) : '');
   }, [editingTextBlockKey, visibleBlocks]);
+
+  useEffect(() => {
+    if (!activeBlock) return;
+    const activeColor =
+      normalizedOverrides[activeBlock.key]?.colorHex ?? activeBlock.defaultColor;
+    setColorInputValue(activeColor.toUpperCase());
+  }, [activeBlock, normalizedOverrides]);
 
   return (
     <Stack spacing={1.5}>
@@ -930,7 +955,77 @@ export function MissionBannerLayoutEditor({
             <Typography variant="caption" color="text.secondary" display="block" mb={0.6}>
               Cor do texto
             </Typography>
-            <Stack direction="row" spacing={0.8} flexWrap="wrap" useFlexGap alignItems="center">
+            <Stack spacing={1}>
+              <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                <Box
+                  component="label"
+                  sx={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 1.5,
+                    border: '1px solid rgba(15, 23, 42, 0.18)',
+                    overflow: 'hidden',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    bgcolor: '#fff',
+                  }}
+                >
+                  <Box
+                    component="input"
+                    type="color"
+                    value={normalizeHexColorInput(colorInputValue) ?? COLOR_PINK}
+                    onChange={(event) => {
+                      const next = normalizeHexColorInput(event.target.value) ?? COLOR_PINK;
+                      setColorInputValue(next);
+                      setSelectedBlockColor(next);
+                    }}
+                    sx={{
+                      width: 56,
+                      height: 56,
+                      border: 'none',
+                      p: 0,
+                      m: -0.5,
+                      bgcolor: 'transparent',
+                      cursor: 'pointer',
+                    }}
+                  />
+                </Box>
+                <TextField
+                  size="small"
+                  label="Hexadecimal"
+                  value={colorInputValue}
+                  onChange={(event) => setColorInputValue(event.target.value)}
+                  onBlur={() => {
+                    const normalized = normalizeHexColorInput(colorInputValue);
+                    if (!normalized) {
+                      const fallback =
+                        normalizedOverrides[activeBlock.key]?.colorHex ?? activeBlock.defaultColor;
+                      setColorInputValue(fallback.toUpperCase());
+                      return;
+                    }
+                    setColorInputValue(normalized);
+                    setSelectedBlockColor(normalized);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      const normalized = normalizeHexColorInput(colorInputValue);
+                      if (!normalized) return;
+                      setColorInputValue(normalized);
+                      setSelectedBlockColor(normalized);
+                    }
+                  }}
+                  placeholder="#F6C3CF"
+                  sx={{ width: 150 }}
+                  helperText="Use #RRGGBB"
+                />
+                <Button size="small" variant="text" onClick={() => setSelectedBlockColor(undefined)}>
+                  Cor padrão
+                </Button>
+              </Stack>
+              <Stack direction="row" spacing={0.8} flexWrap="wrap" useFlexGap alignItems="center">
               {bannerColorPalette.map((color) => {
                 const activeColor =
                   normalizedOverrides[activeBlock.key]?.colorHex ?? activeBlock.defaultColor;
@@ -954,9 +1049,7 @@ export function MissionBannerLayoutEditor({
                   />
                 );
               })}
-              <Button size="small" variant="text" onClick={() => setSelectedBlockColor(undefined)}>
-                Cor padrão
-              </Button>
+              </Stack>
             </Stack>
           </Box>
 
