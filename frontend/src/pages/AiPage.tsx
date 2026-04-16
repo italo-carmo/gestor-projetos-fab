@@ -1,4 +1,6 @@
 import {
+  Alert,
+  Autocomplete,
   Box,
   Button,
   Card,
@@ -8,10 +10,13 @@ import {
   IconButton,
   LinearProgress,
   Link as MuiLink,
+  Paper,
   Stack,
   Tab,
   Tabs,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from "@mui/material";
 import AutoAwesomeRoundedIcon from "@mui/icons-material/AutoAwesomeRounded";
@@ -24,172 +29,21 @@ import ContentCopyRoundedIcon from "@mui/icons-material/ContentCopyRounded";
 import PictureAsPdfRoundedIcon from "@mui/icons-material/PictureAsPdfRounded";
 import SmartToyRoundedIcon from "@mui/icons-material/SmartToyRounded";
 import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
+import RocketLaunchRoundedIcon from "@mui/icons-material/RocketLaunchRounded";
+import ShieldRoundedIcon from "@mui/icons-material/ShieldRounded";
+import AddTaskRoundedIcon from "@mui/icons-material/AddTaskRounded";
+import EventAvailableRoundedIcon from "@mui/icons-material/EventAvailableRounded";
+import PlaylistAddCheckRoundedIcon from "@mui/icons-material/PlaylistAddCheckRounded";
+import RestartAltRoundedIcon from "@mui/icons-material/RestartAltRounded";
+import OpenInNewRoundedIcon from "@mui/icons-material/OpenInNewRounded";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { api } from "../api/client";
 import { consumeJsonSseStream } from "../app/sse";
 import { useToast } from "../app/toast";
-
-const mdStyles = (dark?: boolean) => ({
-  "& h1": {
-    color: dark ? "#fff" : "#1A3C6E",
-    fontSize: "1.35rem",
-    fontWeight: 800,
-    mt: 2.5,
-    mb: 1,
-    pb: 0.5,
-    borderBottom: "2px solid",
-    borderColor: dark ? "rgba(255,255,255,0.15)" : "#E8EAF0",
-    "&:first-of-type": { mt: 0 },
-  },
-  "& h2": {
-    color: dark ? "#fff" : "#1A3C6E",
-    fontSize: "1.15rem",
-    fontWeight: 700,
-    mt: 2,
-    mb: 0.8,
-    "&:first-of-type": { mt: 0 },
-  },
-  "& h3": {
-    color: dark ? "rgba(255,255,255,0.9)" : "#2E5090",
-    fontSize: "1.02rem",
-    fontWeight: 700,
-    mt: 1.5,
-    mb: 0.5,
-  },
-  "& h4": {
-    color: dark ? "rgba(255,255,255,0.85)" : "#3A6098",
-    fontSize: "0.95rem",
-    fontWeight: 600,
-    mt: 1.2,
-    mb: 0.4,
-  },
-  "& p": {
-    my: 0.7,
-    lineHeight: 1.75,
-    fontSize: "0.875rem",
-    color: dark ? "rgba(255,255,255,0.92)" : "inherit",
-  },
-  "& ul, & ol": { pl: 3, my: 0.8 },
-  "& li": {
-    mb: 0.4,
-    fontSize: "0.875rem",
-    lineHeight: 1.7,
-    "& > p": { my: 0.2 },
-  },
-  "& li::marker": {
-    color: dark ? "rgba(255,255,255,0.5)" : "#1A3C6E",
-    fontWeight: 700,
-  },
-  "& strong": {
-    fontWeight: 700,
-    color: dark ? "#fff" : "#1A3C6E",
-  },
-  "& em": { fontStyle: "italic" },
-  "& table": {
-    width: "100%",
-    borderCollapse: "collapse",
-    my: 1.5,
-    fontSize: "0.84rem",
-    borderRadius: 1,
-    overflow: "hidden",
-  },
-  "& th, & td": {
-    border: "1px solid",
-    borderColor: dark ? "rgba(255,255,255,0.15)" : "#DEE2E6",
-    px: 1.2,
-    py: 0.7,
-    textAlign: "left",
-  },
-  "& th": {
-    bgcolor: dark ? "rgba(255,255,255,0.08)" : "#1A3C6E",
-    color: dark ? "#fff" : "#fff",
-    fontWeight: 700,
-    fontSize: "0.82rem",
-    textTransform: "uppercase",
-    letterSpacing: 0.3,
-  },
-  "& tbody tr:nth-of-type(even)": {
-    bgcolor: dark ? "rgba(255,255,255,0.03)" : "#F8F9FA",
-  },
-  "& tbody tr:hover": {
-    bgcolor: dark ? "rgba(255,255,255,0.06)" : "#EEF2F8",
-  },
-  "& code": {
-    bgcolor: dark ? "rgba(255,255,255,0.1)" : "#EEF2F8",
-    color: dark ? "#fff" : "#1A3C6E",
-    px: 0.6,
-    py: 0.1,
-    borderRadius: 0.5,
-    fontSize: "0.82rem",
-    fontFamily: "'Fira Code', 'Consolas', monospace",
-  },
-  "& pre": {
-    bgcolor: dark ? "rgba(0,0,0,0.35)" : "#F5F5F5",
-    p: 1.5,
-    borderRadius: 1.5,
-    overflow: "auto",
-    my: 1.5,
-    border: "1px solid",
-    borderColor: dark ? "rgba(255,255,255,0.08)" : "#E0E0E0",
-    "& code": { bgcolor: "transparent", px: 0, py: 0 },
-  },
-  "& blockquote": {
-    borderLeft: "4px solid",
-    borderColor: dark ? "rgba(255,255,255,0.3)" : "#1A3C6E",
-    bgcolor: dark ? "rgba(255,255,255,0.04)" : "#EEF2F8",
-    pl: 2,
-    pr: 1.5,
-    py: 1,
-    ml: 0,
-    my: 1.5,
-    borderRadius: "0 8px 8px 0",
-    "& p": {
-      color: dark ? "rgba(255,255,255,0.85)" : "#2E5090",
-      fontStyle: "italic",
-    },
-  },
-  "& hr": {
-    border: "none",
-    borderTop: "1px solid",
-    borderColor: dark ? "rgba(255,255,255,0.12)" : "#DEE2E6",
-    my: 2,
-  },
-  "& a": {
-    color: dark ? "#90CAF9" : "#1565C0",
-    textDecoration: "none",
-    "&:hover": { textDecoration: "underline" },
-  },
-});
-
-function MdContent({ children, dark }: { children: string; dark?: boolean }) {
-  return (
-    <Box sx={mdStyles(dark)}>
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={{
-          a: ({ href, children, ...props }: any) => {
-            const to = String(href ?? "").trim();
-            if (!to) return <>{children}</>;
-            return (
-              <MuiLink
-                href={to}
-                target="_blank"
-                rel="noopener noreferrer"
-                {...props}
-              >
-                {children}
-              </MuiLink>
-            );
-          },
-        }}
-      >
-        {children}
-      </ReactMarkdown>
-    </Box>
-  );
-}
+import { useAiActionAgents } from "../api/hooks";
 
 const ANALYSIS_CARDS: {
   type: string;
@@ -240,6 +94,41 @@ const ANALYSIS_CARDS: {
   },
 ];
 
+const OPERATIONAL_QUICK_ACTIONS = [
+  {
+    id: "create_mission",
+    title: "Criar missão",
+    description:
+      "Fluxo assistido para cadastrar missão SMIF ou CIPAVD com confirmação final.",
+    icon: <RocketLaunchRoundedIcon />,
+    color: "#1A3C6E",
+  },
+  {
+    id: "create_activity",
+    title: "Criar atividade de campo",
+    description:
+      "Pede os dados essenciais da atividade e grava apenas após confirmação.",
+    icon: <EventAvailableRoundedIcon />,
+    color: "#2E7D32",
+  },
+  {
+    id: "create_task",
+    title: "Criar tarefa",
+    description:
+      "Monta uma tarefa manual com fase, prazo, prioridade e localidades.",
+    icon: <AddTaskRoundedIcon />,
+    color: "#ED6C02",
+  },
+  {
+    id: "create_mission_schedule",
+    title: "Criar cronograma em missão",
+    description:
+      "Inclui um item de cronograma em missão já existente, passo a passo.",
+    icon: <PlaylistAddCheckRoundedIcon />,
+    color: "#7B1FA2",
+  },
+] as const;
+
 type AnalysisState = {
   running: boolean;
   percent: number;
@@ -250,6 +139,78 @@ type AnalysisState = {
   error: string;
 };
 
+type AssistantOption = {
+  value: string;
+  label: string;
+  description?: string | null;
+};
+
+type AssistantField = {
+  field: string;
+  label: string;
+  inputType:
+    | "text"
+    | "textarea"
+    | "date"
+    | "datetime"
+    | "number"
+    | "single_select"
+    | "multi_select"
+    | "boolean";
+  placeholder?: string;
+  helperText?: string;
+  optional?: boolean;
+  options?: AssistantOption[];
+  min?: number;
+  max?: number;
+  multiple?: boolean;
+};
+
+type AssistantWorkflow = {
+  intent: string;
+  title: string;
+  description: string;
+  status: "collecting" | "confirming" | "completed";
+  draft: Record<string, any>;
+  summary: Array<{ label: string; value: string }>;
+  currentField: AssistantField | null;
+  readyToConfirm: boolean;
+  confirmLabel: string;
+};
+
+type CopilotEvidence = {
+  id: string;
+  omId: string | null;
+  omCode: string;
+  omName: string;
+  title: string;
+  uf: string;
+  score: number;
+  reason: string;
+  link: string;
+  source: string;
+  coverageType?: string | null;
+};
+
+type UnifiedMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  createdAt: string;
+  origin: "assistant" | "copilot";
+  evidences?: CopilotEvidence[];
+  createdItem?: {
+    entityType: string;
+    id: string;
+    title: string;
+    url: string;
+  } | null;
+};
+
+function getBaseUrl(): string {
+  return (api.defaults.baseURL as string) ?? "/api";
+}
+
 function getAuthHeaders(): Record<string, string> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   const token = localStorage.getItem("accessToken");
@@ -259,8 +220,73 @@ function getAuthHeaders(): Record<string, string> {
   return headers;
 }
 
-function getBaseUrl(): string {
-  return (api.defaults.baseURL as string) ?? "/api";
+const mdStyles = {
+  "& h1, & h2, & h3": { color: "#1A3C6E", fontWeight: 800, mt: 1.6 },
+  "& p": { my: 0.7, lineHeight: 1.75, fontSize: "0.875rem" },
+  "& ul, & ol": { pl: 3, my: 0.8 },
+  "& li": { mb: 0.4, lineHeight: 1.65 },
+  "& strong": { color: "#102C57" },
+  "& table": {
+    width: "100%",
+    borderCollapse: "collapse",
+    my: 1.5,
+    fontSize: "0.84rem",
+  },
+  "& th, & td": {
+    border: "1px solid #DEE2E6",
+    padding: "8px 10px",
+    textAlign: "left",
+  },
+  "& th": {
+    backgroundColor: "#1A3C6E",
+    color: "#fff",
+    fontWeight: 700,
+  },
+  "& code": {
+    backgroundColor: "#EEF2F8",
+    padding: "1px 6px",
+    borderRadius: 6,
+    color: "#1A3C6E",
+  },
+  "& pre": {
+    backgroundColor: "#F5F5F5",
+    padding: 12,
+    borderRadius: 8,
+    overflow: "auto",
+  },
+  "& a": {
+    color: "#1565C0",
+    textDecoration: "none",
+    "&:hover": { textDecoration: "underline" },
+  },
+};
+
+function MdContent({ children }: { children: string }) {
+  return (
+    <Box sx={mdStyles}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          a: ({ href, children, ...props }: any) => {
+            const to = String(href ?? "").trim();
+            if (!to) return <>{children}</>;
+            return (
+              <MuiLink
+                href={to}
+                target="_blank"
+                rel="noopener noreferrer"
+                {...props}
+              >
+                {children}
+              </MuiLink>
+            );
+          },
+        }}
+      >
+        {children}
+      </ReactMarkdown>
+    </Box>
+  );
 }
 
 function useAnalysisSSE() {
@@ -297,7 +323,9 @@ function useAnalysisSSE() {
         if (!res.ok) {
           const text = await res.text();
           let msg = `Erro HTTP ${res.status}`;
-          try { msg = JSON.parse(text)?.message ?? msg; } catch {}
+          try {
+            msg = JSON.parse(text)?.message ?? msg;
+          } catch {}
           setStates((prev) => ({
             ...prev,
             [type]: { ...prev[type], running: false, error: msg },
@@ -417,6 +445,7 @@ function AnalysisCard({
   exportingPdf?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
+
   const handleCopy = () => {
     navigator.clipboard.writeText(state?.narrative ?? "");
     setCopied(true);
@@ -481,7 +510,7 @@ function AnalysisCard({
           >
             <MdContent>{state.narrative}</MdContent>
             {state.model && !state.running && (
-              <Stack direction="row" spacing={1} sx={{ mt: 1.5 }} alignItems="center">
+              <Stack direction="row" spacing={1} sx={{ mt: 1.5 }} alignItems="center" flexWrap="wrap" useFlexGap>
                 <Chip
                   label={`Modelo: ${state.model}`}
                   size="small"
@@ -497,7 +526,7 @@ function AnalysisCard({
                 </IconButton>
                 {copied && (
                   <Typography variant="caption" color="success.main">
-                    Copiado!
+                    Copiado
                   </Typography>
                 )}
               </Stack>
@@ -524,8 +553,8 @@ function AnalysisCard({
             {state?.running
               ? "Gerando..."
               : state?.narrative
-                ? "Gerar Novamente"
-                : "Gerar Análise"}
+                ? "Gerar novamente"
+                : "Gerar análise"}
           </Button>
           <Button
             variant="outlined"
@@ -550,7 +579,10 @@ function AnalysesTab() {
   const exportPdf = useCallback(
     async (cardType: string, state?: AnalysisState) => {
       if (!state?.narrative?.trim()) {
-        toast.push({ message: "Gere a análise antes de exportar o PDF.", severity: "warning" });
+        toast.push({
+          message: "Gere a análise antes de exportar o PDF.",
+          severity: "warning",
+        });
         return;
       }
 
@@ -572,9 +604,7 @@ function AnalysesTab() {
           let message = `Erro HTTP ${response.status}`;
           try {
             message = JSON.parse(text)?.message ?? message;
-          } catch {
-            // resposta pode não vir em JSON
-          }
+          } catch {}
           throw new Error(message);
         }
 
@@ -595,10 +625,7 @@ function AnalysesTab() {
       } catch (error: unknown) {
         const message =
           error instanceof Error ? error.message : "Falha ao exportar PDF.";
-        toast.push({
-          message,
-          severity: "error",
-        });
+        toast.push({ message, severity: "error" });
       } finally {
         setExportingByType((prev) => ({ ...prev, [cardType]: false }));
       }
@@ -623,256 +650,1030 @@ function AnalysesTab() {
   );
 }
 
-type ChatMsg = {
-  role: "user" | "assistant";
-  content: string;
-};
-
-function ChatbotTab() {
-  const [messages, setMessages] = useState<ChatMsg[]>([]);
-  const [input, setInput] = useState("");
-  const [streaming, setStreaming] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const abortRef = useRef<AbortController | null>(null);
-
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages]);
-
-  const send = useCallback(async () => {
-    const text = input.trim();
-    if (!text || streaming) return;
-    setInput("");
-
-    const userMsg: ChatMsg = { role: "user", content: text };
-    setMessages((prev) => [...prev, userMsg]);
-
-    const assistantMsg: ChatMsg = { role: "assistant", content: "" };
-    setMessages((prev) => [...prev, assistantMsg]);
-    setStreaming(true);
-
-    const controller = new AbortController();
-    abortRef.current = controller;
-
-    try {
-      const history = [...messages, userMsg].slice(-20).map((m) => ({
-        role: m.role,
-        content: m.content,
-      }));
-
-      const res = await fetch(`${getBaseUrl()}/ai/chat`, {
-        method: "POST",
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ message: text, history }),
-        signal: controller.signal,
-      });
-
-      if (!res.ok) {
-        const t = await res.text();
-        let errMsg = `Erro HTTP ${res.status}`;
-        try { errMsg = JSON.parse(t)?.message ?? errMsg; } catch {}
-        setMessages((prev) => {
-          const copy = [...prev];
-          copy[copy.length - 1] = { role: "assistant", content: `Erro: ${errMsg}` };
-          return copy;
-        });
-        setStreaming(false);
-        return;
-      }
-
-      const reader = res.body?.getReader();
-      if (!reader) {
-        setMessages((prev) => {
-          const copy = [...prev];
-          copy[copy.length - 1] = {
-            role: "assistant",
-            content: "Erro: O servidor não retornou um stream válido para o chat.",
-          };
-          return copy;
-        });
-        setStreaming(false);
-        return;
-      }
-
-      let receivedContent = false;
-      await consumeJsonSseStream(reader, (event, data) => {
-        if (event === "token" && data.text) {
-          receivedContent = true;
-          setMessages((prev) => {
-            const copy = [...prev];
-            const last = copy[copy.length - 1];
-            copy[copy.length - 1] = {
-              ...last,
-              content: last.content + data.text,
-            };
-            return copy;
-          });
-          return;
-        }
-
-        if (event === "error") {
-          receivedContent = true;
-          setMessages((prev) => {
-            const copy = [...prev];
-            copy[copy.length - 1] = {
-              role: "assistant",
-              content: `Erro: ${data.message}`,
-            };
-            return copy;
-          });
-        }
-      });
-
-      if (!receivedContent) {
-        setMessages((prev) => {
-          const copy = [...prev];
-          copy[copy.length - 1] = {
-            role: "assistant",
-            content: "Erro: O stream do chat foi encerrado sem conteúdo.",
-          };
-          return copy;
-        });
-      }
-    } catch (e: any) {
-      if (e.name !== "AbortError") {
-        setMessages((prev) => {
-          const copy = [...prev];
-          copy[copy.length - 1] = {
-            role: "assistant",
-            content: `Erro: ${e.message ?? "Falha de rede"}`,
-          };
-          return copy;
-        });
-      }
-    }
-    setStreaming(false);
-  }, [input, streaming, messages]);
-
+function AssistantQuickActionCard({
+  title,
+  description,
+  icon,
+  color,
+  onClick,
+  disabled,
+}: {
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+  color: string;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
   return (
-    <Box
+    <Card
+      variant="outlined"
+      onClick={disabled ? undefined : onClick}
       sx={{
-        display: "flex",
-        flexDirection: "column",
-        height: "calc(100vh - 280px)",
-        minHeight: 400,
-        maxHeight: 800,
+        height: "100%",
+        cursor: disabled ? "default" : "pointer",
+        borderRadius: 3,
+        borderTop: `4px solid ${color}`,
+        transition: "transform 0.18s ease, box-shadow 0.18s ease",
+        "&:hover": disabled
+          ? undefined
+          : {
+              transform: "translateY(-2px)",
+              boxShadow: "0 14px 28px rgba(15, 35, 64, 0.10)",
+            },
       }}
     >
-      <Box
-        ref={scrollRef}
-        sx={{
-          flexGrow: 1,
-          overflow: "auto",
-          px: 2,
-          py: 1,
-          bgcolor: "#F8F9FA",
-          borderRadius: 2,
-          mb: 2,
-        }}
-      >
-        {messages.length === 0 && (
-          <Box sx={{ textAlign: "center", py: 6 }}>
-            <SmartToyRoundedIcon sx={{ fontSize: 48, color: "#1A3C6E", mb: 1 }} />
-            <Typography variant="h6" color="#1A3C6E" fontWeight={700}>
-              Assistente de IA — CIPAVD/SMIF
+      <CardContent>
+        <Stack direction="row" spacing={1.5} alignItems="flex-start">
+          <Box sx={{ color, mt: 0.2 }}>{icon}</Box>
+          <Box>
+            <Typography variant="subtitle2" fontWeight={800}>
+              {title}
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 480, mx: "auto", mt: 1 }}>
-              Olá! Posso responder perguntas sobre os dados de pesquisas, denúncias, atividades e
-              missões do sistema. Faça uma pergunta para começar.
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.7, lineHeight: 1.65 }}>
+              {description}
             </Typography>
           </Box>
-        )}
-        {messages.map((msg, i) => (
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+}
+
+function buildUserMessageLabel(
+  workflow: AssistantWorkflow | null,
+  text: string,
+  field?: AssistantField | null,
+  selectedOptions?: AssistantOption[],
+  selectedSingleOption?: AssistantOption | null,
+) {
+  if (!field) return text;
+  if (field.inputType === "multi_select" && selectedOptions?.length) {
+    return `${field.label}: ${selectedOptions.map((item) => item.label).join(", ")}`;
+  }
+  if (field.inputType === "single_select" && selectedSingleOption) {
+    return `${field.label}: ${selectedSingleOption.label}`;
+  }
+  if (field.inputType === "boolean") return `${field.label}: ${text}`;
+  return workflow ? `${field.label}: ${text}` : text;
+}
+
+function AssistantTab() {
+  const toast = useToast();
+  const agentsQuery = useAiActionAgents();
+  const [messages, setMessages] = useState<UnifiedMessage[]>([]);
+  const [running, setRunning] = useState(false);
+  const [statusText, setStatusText] = useState("");
+  const [conversationKind, setConversationKind] = useState<"assistant" | "copilot" | null>(null);
+  const [assistantSessionId, setAssistantSessionId] = useState<string | null>(null);
+  const [copilotSessionId, setCopilotSessionId] = useState<string | null>(null);
+  const [workflow, setWorkflow] = useState<AssistantWorkflow | null>(null);
+  const [copilotMode, setCopilotMode] = useState<"executive" | "analyst">("executive");
+  const [textInput, setTextInput] = useState("");
+  const [singleOption, setSingleOption] = useState<AssistantOption | null>(null);
+  const [multiOptions, setMultiOptions] = useState<AssistantOption[]>([]);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({
+      top: scrollRef.current.scrollHeight,
+      behavior: "smooth",
+    });
+  }, [messages, statusText, workflow]);
+
+  useEffect(() => {
+    setTextInput("");
+    setSingleOption(null);
+    setMultiOptions([]);
+  }, [workflow?.currentField?.field, conversationKind]);
+
+  const appendMessage = useCallback((message: UnifiedMessage) => {
+    setMessages((prev) => [...prev, message]);
+  }, []);
+
+  const resetConversation = useCallback(async () => {
+    if (assistantSessionId) {
+      try {
+        await api.post("/ai/assistant/reset", { sessionId: assistantSessionId });
+      } catch {
+        // best effort
+      }
+    }
+    setMessages([]);
+    setWorkflow(null);
+    setConversationKind(null);
+    setAssistantSessionId(null);
+    setCopilotSessionId(null);
+    setRunning(false);
+    setStatusText("");
+    setTextInput("");
+    setSingleOption(null);
+    setMultiOptions([]);
+  }, [assistantSessionId]);
+
+  const handleAssistantResponse = useCallback(
+    (data: any) => {
+      setConversationKind("assistant");
+      setAssistantSessionId(String(data.sessionId ?? ""));
+      setWorkflow((data.workflow as AssistantWorkflow | null) ?? null);
+      appendMessage({
+        id: String(data.message?.id ?? `assistant-${Date.now()}`),
+        role: "assistant",
+        content: String(data.message?.content ?? ""),
+        createdAt: String(data.message?.createdAt ?? new Date().toISOString()),
+        origin: "assistant",
+        createdItem: data.createdItem ?? null,
+      });
+      if (data.createdItem?.url) {
+        toast.push({
+          message: "Ação executada com sucesso.",
+          severity: "success",
+        });
+      }
+    },
+    [appendMessage, toast],
+  );
+
+  const postAssistant = useCallback(
+    async (payload: Record<string, unknown>, userContent?: string) => {
+      setRunning(true);
+      setStatusText("Assistente preparando o próximo passo...");
+      try {
+        if (userContent) {
+          appendMessage({
+            id: `user-${Date.now()}`,
+            role: "user",
+            content: userContent,
+            createdAt: new Date().toISOString(),
+            origin: "assistant",
+          });
+        }
+        const data = (await api.post("/ai/assistant/message", {
+          sessionId: assistantSessionId,
+          ...payload,
+        })).data;
+        handleAssistantResponse(data);
+      } catch (error: any) {
+        const message =
+          error?.response?.data?.message ??
+          error?.message ??
+          "Falha ao conversar com o assistente.";
+        appendMessage({
+          id: `assistant-error-${Date.now()}`,
+          role: "assistant",
+          content: `Erro: ${message}`,
+          createdAt: new Date().toISOString(),
+          origin: "assistant",
+        });
+        toast.push({ message, severity: "error" });
+      } finally {
+        setRunning(false);
+        setStatusText("");
+      }
+    },
+    [appendMessage, assistantSessionId, handleAssistantResponse, toast],
+  );
+
+  const startCopilot = useCallback(
+    async (type: string, title: string) => {
+      setRunning(true);
+      setStatusText("Inicializando copiloto gerencial...");
+      setConversationKind("copilot");
+      setWorkflow(null);
+      appendMessage({
+        id: `user-${Date.now()}`,
+        role: "user",
+        content: `Executar ${title}`,
+        createdAt: new Date().toISOString(),
+        origin: "copilot",
+      });
+
+      try {
+        const res = await fetch(`${getBaseUrl()}/ai/action-agents/run`, {
+          method: "POST",
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ type, mode: copilotMode }),
+        });
+
+        if (!res.ok) {
+          const text = await res.text();
+          let message = `Erro HTTP ${res.status}`;
+          try {
+            message = JSON.parse(text)?.message ?? message;
+          } catch {}
+          throw new Error(message);
+        }
+
+        const reader = res.body?.getReader();
+        if (!reader) {
+          throw new Error("O servidor não retornou um stream válido.");
+        }
+
+        let sawTerminalEvent = false;
+        await consumeJsonSseStream(reader, (event, data) => {
+          if (event === "progress") {
+            setStatusText(String(data.stage ?? "Processando..."));
+            return;
+          }
+          if (event === "done") {
+            sawTerminalEvent = true;
+            setCopilotSessionId(String(data.sessionId ?? ""));
+            appendMessage({
+              id: String(data.messageId ?? `assistant-${Date.now()}`),
+              role: "assistant",
+              content: String(data.narrative ?? ""),
+              createdAt: String(data.generatedAt ?? new Date().toISOString()),
+              origin: "copilot",
+              evidences: (data.evidences ?? []) as CopilotEvidence[],
+            });
+            return;
+          }
+          if (event === "error") {
+            sawTerminalEvent = true;
+            appendMessage({
+              id: `assistant-error-${Date.now()}`,
+              role: "assistant",
+              content: `Erro: ${String(data.message ?? "Falha na execução do copiloto.")}`,
+              createdAt: new Date().toISOString(),
+              origin: "copilot",
+            });
+          }
+        });
+
+        if (!sawTerminalEvent) {
+          appendMessage({
+            id: `assistant-error-${Date.now()}`,
+            role: "assistant",
+            content: "A execução do copiloto foi encerrada sem resposta final.",
+            createdAt: new Date().toISOString(),
+            origin: "copilot",
+          });
+        }
+      } catch (error: any) {
+        const message = error?.message ?? "Falha ao iniciar o copiloto.";
+        appendMessage({
+          id: `assistant-error-${Date.now()}`,
+          role: "assistant",
+          content: `Erro: ${message}`,
+          createdAt: new Date().toISOString(),
+          origin: "copilot",
+        });
+        toast.push({ message, severity: "error" });
+      } finally {
+        setRunning(false);
+        setStatusText("");
+      }
+    },
+    [appendMessage, copilotMode, toast],
+  );
+
+  const sendCopilotFollowUp = useCallback(
+    async (text: string) => {
+      if (!copilotSessionId) {
+        toast.push({
+          message: "Execute um copiloto gerencial antes do follow-up.",
+          severity: "warning",
+        });
+        return;
+      }
+      setRunning(true);
+      setStatusText("Copiloto reavaliando contexto...");
+      appendMessage({
+        id: `user-${Date.now()}`,
+        role: "user",
+        content: text,
+        createdAt: new Date().toISOString(),
+        origin: "copilot",
+      });
+
+      try {
+        const res = await fetch(`${getBaseUrl()}/ai/action-agents/follow-up`, {
+          method: "POST",
+          headers: getAuthHeaders(),
+          body: JSON.stringify({
+            sessionId: copilotSessionId,
+            message: text,
+            mode: copilotMode,
+          }),
+        });
+
+        if (!res.ok) {
+          const content = await res.text();
+          let message = `Erro HTTP ${res.status}`;
+          try {
+            message = JSON.parse(content)?.message ?? message;
+          } catch {}
+          throw new Error(message);
+        }
+
+        const reader = res.body?.getReader();
+        if (!reader) throw new Error("O servidor não retornou um stream válido.");
+
+        let sawTerminalEvent = false;
+        await consumeJsonSseStream(reader, (event, data) => {
+          if (event === "progress") {
+            setStatusText(String(data.stage ?? "Processando..."));
+            return;
+          }
+          if (event === "done") {
+            sawTerminalEvent = true;
+            appendMessage({
+              id: String(data.messageId ?? `assistant-${Date.now()}`),
+              role: "assistant",
+              content: String(data.narrative ?? ""),
+              createdAt: String(data.generatedAt ?? new Date().toISOString()),
+              origin: "copilot",
+              evidences: (data.evidences ?? []) as CopilotEvidence[],
+            });
+            return;
+          }
+          if (event === "error") {
+            sawTerminalEvent = true;
+            appendMessage({
+              id: `assistant-error-${Date.now()}`,
+              role: "assistant",
+              content: `Erro: ${String(data.message ?? "Falha no follow-up do copiloto.")}`,
+              createdAt: new Date().toISOString(),
+              origin: "copilot",
+            });
+          }
+        });
+
+        if (!sawTerminalEvent) {
+          appendMessage({
+            id: `assistant-error-${Date.now()}`,
+            role: "assistant",
+            content: "O follow-up foi encerrado sem resposta final.",
+            createdAt: new Date().toISOString(),
+            origin: "copilot",
+          });
+        }
+      } catch (error: any) {
+        const message = error?.message ?? "Falha no follow-up do copiloto.";
+        appendMessage({
+          id: `assistant-error-${Date.now()}`,
+          role: "assistant",
+          content: `Erro: ${message}`,
+          createdAt: new Date().toISOString(),
+          origin: "copilot",
+        });
+        toast.push({ message, severity: "error" });
+      } finally {
+        setRunning(false);
+        setStatusText("");
+      }
+    },
+    [appendMessage, copilotMode, copilotSessionId, toast],
+  );
+
+  const submitCurrentStep = useCallback(async () => {
+    if (running) return;
+    const field = workflow?.currentField;
+    if (workflow?.readyToConfirm) {
+      await postAssistant(
+        { confirmExecution: true },
+        workflow.confirmLabel,
+      );
+      return;
+    }
+    if (!field) {
+      const text = textInput.trim();
+      if (!text) return;
+      await postAssistant({ message: text }, text);
+      setTextInput("");
+      return;
+    }
+
+    if (field.inputType === "single_select") {
+      if (!singleOption) {
+        toast.push({
+          message: `Selecione ${field.label.toLowerCase()}.`,
+          severity: "warning",
+        });
+        return;
+      }
+      await postAssistant(
+        {
+          fieldInput: { field: field.field, value: singleOption.value },
+        },
+        buildUserMessageLabel(workflow, singleOption.label, field, [], singleOption),
+      );
+      return;
+    }
+
+    if (field.inputType === "multi_select") {
+      if (!multiOptions.length) {
+        toast.push({
+          message: `Selecione ao menos uma opção para ${field.label.toLowerCase()}.`,
+          severity: "warning",
+        });
+        return;
+      }
+      await postAssistant(
+        {
+          fieldInput: {
+            field: field.field,
+            value: multiOptions.map((item) => item.value),
+          },
+        },
+        buildUserMessageLabel(workflow, "", field, multiOptions, null),
+      );
+      return;
+    }
+
+    const text = textInput.trim();
+    if (!text && !field.optional) {
+      toast.push({
+        message: `Informe ${field.label.toLowerCase()}.`,
+        severity: "warning",
+      });
+      return;
+    }
+    await postAssistant(
+      {
+        fieldInput: { field: field.field, value: text },
+      },
+      buildUserMessageLabel(workflow, text || "Não informar", field),
+    );
+    setTextInput("");
+  }, [multiOptions, postAssistant, running, singleOption, textInput, toast, workflow]);
+
+  const handleSend = useCallback(async () => {
+    if (running) return;
+    const text = textInput.trim();
+    if (conversationKind === "copilot" && copilotSessionId) {
+      if (!text) return;
+      setTextInput("");
+      await sendCopilotFollowUp(text);
+      return;
+    }
+    await submitCurrentStep();
+  }, [conversationKind, copilotSessionId, running, sendCopilotFollowUp, submitCurrentStep, textInput]);
+
+  const currentField = workflow?.currentField ?? null;
+  const copilotCards = (agentsQuery.data ?? []).map((item: any) => ({
+    type: String(item.type),
+    title: String(item.title),
+    description: String(item.description),
+  }));
+
+  return (
+    <Stack spacing={2}>
+      <Alert
+        severity="info"
+        sx={{
+          borderRadius: 3,
+          alignItems: "flex-start",
+          "& .MuiAlert-message": { width: "100%" },
+        }}
+      >
+        <Typography variant="subtitle1" fontWeight={800}>
+          Assistente virtual centralizado
+        </Typography>
+        <Typography variant="body2" sx={{ mt: 0.5, lineHeight: 1.65 }}>
+          Esta área concentra os copilotos gerenciais e os fluxos operacionais
+          assistidos. Para ações de escrita, o sistema trabalha em modo guiado:
+          coleta só os campos essenciais, mostra opções válidas do sistema e só
+          executa após confirmação explícita.
+        </Typography>
+      </Alert>
+
+      <Card variant="outlined" sx={{ borderRadius: 3 }}>
+        <CardContent>
+          <Stack spacing={2}>
+            <Box>
+              <Typography variant="subtitle1" fontWeight={800} color="#1A3C6E">
+                Copilotos gerenciais
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                Use estes copilotos para briefing, priorização e governança CPCA.
+                O follow-up permanece na mesma conversa.
+              </Typography>
+            </Box>
+            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+              <Typography variant="body2" color="text.secondary">
+                Modo:
+              </Typography>
+              <ToggleButtonGroup
+                size="small"
+                exclusive
+                value={copilotMode}
+                onChange={(_, value) => {
+                  if (value) setCopilotMode(value);
+                }}
+              >
+                <ToggleButton value="executive">Executivo</ToggleButton>
+                <ToggleButton value="analyst">Analista</ToggleButton>
+              </ToggleButtonGroup>
+            </Stack>
+            <Grid container spacing={1.5}>
+              {copilotCards.map((item: any) => (
+                <Grid key={item.type} size={{ xs: 12, md: 4 }}>
+                  <AssistantQuickActionCard
+                    title={item.title}
+                    description={item.description}
+                    icon={<ShieldRoundedIcon />}
+                    color="#1A3C6E"
+                    onClick={() => startCopilot(item.type, item.title)}
+                    disabled={running}
+                  />
+                </Grid>
+              ))}
+            </Grid>
+          </Stack>
+        </CardContent>
+      </Card>
+
+      <Card variant="outlined" sx={{ borderRadius: 3 }}>
+        <CardContent>
+          <Stack spacing={2}>
+            <Box>
+              <Typography variant="subtitle1" fontWeight={800} color="#1A3C6E">
+                Ações assistidas
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                Use ações rápidas ou descreva o que deseja criar. O assistente
+                conduz um passo por vez e confirma a gravação antes de escrever.
+              </Typography>
+            </Box>
+            <Grid container spacing={1.5}>
+              {OPERATIONAL_QUICK_ACTIONS.map((item) => (
+                <Grid key={item.id} size={{ xs: 12, md: 6 }}>
+                  <AssistantQuickActionCard
+                    title={item.title}
+                    description={item.description}
+                    icon={item.icon}
+                    color={item.color}
+                    onClick={() => postAssistant({ quickAction: item.id }, item.title)}
+                    disabled={running}
+                  />
+                </Grid>
+              ))}
+            </Grid>
+          </Stack>
+        </CardContent>
+      </Card>
+
+      {workflow ? (
+        <Card variant="outlined" sx={{ borderRadius: 3, bgcolor: "#FAFBFD" }}>
+          <CardContent>
+            <Stack spacing={1.25}>
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                spacing={1}
+                justifyContent="space-between"
+              >
+                <Box>
+                  <Typography variant="subtitle1" fontWeight={800} color="#1A3C6E">
+                    {workflow.title}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                    {workflow.description}
+                  </Typography>
+                </Box>
+                <Chip
+                  label={
+                    workflow.readyToConfirm
+                      ? "Pronto para confirmar"
+                      : "Coletando dados"
+                  }
+                  color={workflow.readyToConfirm ? "success" : "info"}
+                  variant="outlined"
+                />
+              </Stack>
+              <Grid container spacing={1}>
+                {workflow.summary.map((item) => (
+                  <Grid key={item.label} size={{ xs: 12, md: 6 }}>
+                    <Paper
+                      variant="outlined"
+                      sx={{ p: 1.2, borderRadius: 2, bgcolor: "#fff" }}
+                    >
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ textTransform: "uppercase", letterSpacing: 0.6 }}
+                      >
+                        {item.label}
+                      </Typography>
+                      <Typography variant="body2" sx={{ mt: 0.35, lineHeight: 1.55 }}>
+                        {item.value || "—"}
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                ))}
+              </Grid>
+              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                {workflow.readyToConfirm ? (
+                  <Button
+                    variant="contained"
+                    onClick={() => handleSend()}
+                    disabled={running}
+                    sx={{
+                      bgcolor: "#1A3C6E",
+                      "&:hover": { bgcolor: "#122B4E" },
+                    }}
+                  >
+                    {workflow.confirmLabel}
+                  </Button>
+                ) : null}
+                {currentField?.optional ? (
+                  <Button
+                    variant="outlined"
+                    onClick={() =>
+                      postAssistant(
+                        { skipCurrentField: true },
+                        `Pular ${currentField.label.toLowerCase()}`,
+                      )
+                    }
+                    disabled={running}
+                  >
+                    Pular campo opcional
+                  </Button>
+                ) : null}
+                <Button
+                  variant="text"
+                  color="inherit"
+                  onClick={() =>
+                    postAssistant({ cancelWorkflow: true }, "Cancelar fluxo")
+                  }
+                  disabled={running}
+                >
+                  Cancelar fluxo
+                </Button>
+              </Stack>
+            </Stack>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      <Card variant="outlined" sx={{ borderRadius: 3 }}>
+        <CardContent>
           <Stack
-            key={i}
-            direction="row"
+            direction={{ xs: "column", sm: "row" }}
             spacing={1}
+            justifyContent="space-between"
+            alignItems={{ sm: "center" }}
+            sx={{ mb: 1.5 }}
+          >
+            <Box>
+              <Typography variant="subtitle1" fontWeight={800} color="#1A3C6E">
+                Conversa
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {conversationKind === "copilot"
+                  ? "Sessão analítica com memória de follow-up."
+                  : conversationKind === "assistant"
+                    ? "Sessão operacional guiada com rascunho e confirmação."
+                    : "Escolha uma ação rápida ou escreva o que deseja criar."}
+              </Typography>
+            </Box>
+            <Button
+              variant="outlined"
+              color="inherit"
+              startIcon={<RestartAltRoundedIcon />}
+              onClick={resetConversation}
+              disabled={running && !messages.length}
+            >
+              Nova conversa
+            </Button>
+          </Stack>
+
+          <Box
+            ref={scrollRef}
             sx={{
-              mb: 1.5,
-              justifyContent: msg.role === "user" ? "flex-end" : "flex-start",
+              minHeight: 340,
+              maxHeight: 700,
+              overflow: "auto",
+              p: 1.5,
+              bgcolor: "#F8F9FA",
+              borderRadius: 2.5,
+              border: "1px solid #E8EAF0",
             }}
           >
-            {msg.role === "assistant" && (
-              <SmartToyRoundedIcon
-                sx={{ fontSize: 28, color: "#1A3C6E", mt: 0.5, flexShrink: 0 }}
-              />
-            )}
-            <Box
-              sx={{
-                maxWidth: msg.role === "assistant" ? "85%" : "75%",
-                px: 2,
-                py: 1.2,
-                borderRadius: 2,
-                bgcolor: msg.role === "user" ? "#1A3C6E" : "#FFFFFF",
-                color: msg.role === "user" ? "#fff" : "text.primary",
-                boxShadow: 1,
-                ...(msg.role === "assistant" && {
-                  border: "1px solid #E8EAF0",
-                }),
-              }}
-            >
-              {msg.role === "assistant" ? (
-                msg.content ? (
-                  <MdContent>{msg.content}</MdContent>
-                ) : streaming && i === messages.length - 1 ? (
-                  <Typography variant="body2" sx={{ lineHeight: 1.7 }}>...</Typography>
-                ) : null
-              ) : (
+            {!messages.length ? (
+              <Box sx={{ textAlign: "center", py: 7 }}>
+                <SmartToyRoundedIcon sx={{ fontSize: 48, color: "#1A3C6E", mb: 1 }} />
+                <Typography variant="h6" color="#1A3C6E" fontWeight={700}>
+                  Assistente virtual CIPAVD/SMIF
+                </Typography>
                 <Typography
                   variant="body2"
-                  sx={{ whiteSpace: "pre-wrap", lineHeight: 1.7 }}
+                  color="text.secondary"
+                  sx={{ maxWidth: 560, mx: "auto", mt: 1, lineHeight: 1.7 }}
                 >
-                  {msg.content}
+                  Use os copilotos gerenciais para briefing e priorização ou
+                  inicie um fluxo assistido para criar missão, atividade de
+                  campo, tarefa ou cronograma em missão.
                 </Typography>
-              )}
-            </Box>
-            {msg.role === "user" && (
-              <PersonRoundedIcon
-                sx={{ fontSize: 28, color: "#1A3C6E", mt: 0.5, flexShrink: 0 }}
-              />
-            )}
-          </Stack>
-        ))}
-      </Box>
+              </Box>
+            ) : null}
 
-      <Stack direction="row" spacing={1}>
-        <TextField
-          fullWidth
-          size="small"
-          placeholder="Faça uma pergunta sobre os dados do sistema..."
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              send();
-            }
-          }}
-          disabled={streaming}
-          multiline
-          maxRows={3}
-        />
-        <IconButton
-          onClick={send}
-          disabled={streaming || !input.trim()}
-          sx={{
-            bgcolor: "#1A3C6E",
-            color: "#fff",
-            "&:hover": { bgcolor: "#122B4E" },
-            "&.Mui-disabled": { bgcolor: "#E0E0E0" },
-            width: 48,
-            height: 40,
-          }}
-        >
-          <SendRoundedIcon />
-        </IconButton>
-      </Stack>
-    </Box>
+            <Stack spacing={1.5}>
+              {messages.map((msg) => (
+                <Stack
+                  key={msg.id}
+                  direction="row"
+                  spacing={1}
+                  justifyContent={msg.role === "user" ? "flex-end" : "flex-start"}
+                >
+                  {msg.role === "assistant" ? (
+                    <SmartToyRoundedIcon
+                      sx={{ fontSize: 28, color: "#1A3C6E", mt: 0.5, flexShrink: 0 }}
+                    />
+                  ) : null}
+                  <Box
+                    sx={{
+                      maxWidth: msg.role === "assistant" ? "85%" : "75%",
+                      px: 2,
+                      py: 1.35,
+                      borderRadius: 2.5,
+                      bgcolor: msg.role === "user" ? "#1A3C6E" : "#FFFFFF",
+                      color: msg.role === "user" ? "#fff" : "text.primary",
+                      boxShadow: 1,
+                      border:
+                        msg.role === "assistant" ? "1px solid #E2E8F0" : undefined,
+                    }}
+                  >
+                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.8 }}>
+                      <Chip
+                        size="small"
+                        label={msg.role === "assistant" ? "Assistente" : "Você"}
+                        color={msg.role === "assistant" ? "primary" : "default"}
+                      />
+                      <Chip
+                        size="small"
+                        variant="outlined"
+                        label={msg.origin === "copilot" ? "Copiloto gerencial" : "Ação assistida"}
+                      />
+                    </Stack>
+                    {msg.role === "assistant" ? (
+                      <MdContent>{msg.content}</MdContent>
+                    ) : (
+                      <Typography
+                        variant="body2"
+                        sx={{ whiteSpace: "pre-wrap", lineHeight: 1.7 }}
+                      >
+                        {msg.content}
+                      </Typography>
+                    )}
+                    {msg.createdItem?.url ? (
+                      <Stack direction="row" spacing={1} sx={{ mt: 1.2 }}>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          href={msg.createdItem.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          startIcon={<OpenInNewRoundedIcon />}
+                        >
+                          Abrir item criado
+                        </Button>
+                      </Stack>
+                    ) : null}
+                    {msg.evidences?.length ? (
+                      <Stack spacing={1} sx={{ mt: 1.2 }}>
+                        {msg.evidences.slice(0, 4).map((evidence) => (
+                          <Paper
+                            key={evidence.id}
+                            variant="outlined"
+                            sx={{ p: 1.1, borderRadius: 2, bgcolor: "#FAFBFD" }}
+                          >
+                            <Stack
+                              direction={{ xs: "column", sm: "row" }}
+                              spacing={1}
+                              justifyContent="space-between"
+                            >
+                              <Box>
+                                <Typography variant="body2" fontWeight={700}>
+                                  {evidence.omCode || evidence.omName || evidence.title}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                  UF {evidence.uf || "—"} • Score {evidence.score ?? 0}
+                                </Typography>
+                              </Box>
+                              {evidence.link ? (
+                                <Button
+                                  size="small"
+                                  variant="text"
+                                  href={evidence.link}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  startIcon={<OpenInNewRoundedIcon />}
+                                >
+                                  Evidência
+                                </Button>
+                              ) : null}
+                            </Stack>
+                            <Typography variant="body2" sx={{ mt: 0.8, lineHeight: 1.6 }}>
+                              {evidence.reason}
+                            </Typography>
+                          </Paper>
+                        ))}
+                      </Stack>
+                    ) : null}
+                  </Box>
+                  {msg.role === "user" ? (
+                    <PersonRoundedIcon
+                      sx={{ fontSize: 28, color: "#1A3C6E", mt: 0.5, flexShrink: 0 }}
+                    />
+                  ) : null}
+                </Stack>
+              ))}
+              {running || statusText ? (
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <SmartToyRoundedIcon sx={{ fontSize: 28, color: "#1A3C6E" }} />
+                  <Paper variant="outlined" sx={{ px: 2, py: 1.2, borderRadius: 2.5 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      {statusText || "Processando..."}
+                    </Typography>
+                  </Paper>
+                </Stack>
+              ) : null}
+            </Stack>
+          </Box>
+
+          <Stack spacing={1.25} sx={{ mt: 1.5 }}>
+            {currentField?.inputType === "single_select" ? (
+              <Autocomplete
+                value={singleOption}
+                onChange={(_, value) => setSingleOption(value)}
+                options={currentField.options ?? []}
+                getOptionLabel={(option) => option.label}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label={currentField.label}
+                    helperText={currentField.helperText}
+                    placeholder={currentField.placeholder}
+                    size="small"
+                  />
+                )}
+              />
+            ) : null}
+
+            {currentField?.inputType === "multi_select" ? (
+              <Autocomplete
+                multiple
+                value={multiOptions}
+                onChange={(_, value) => setMultiOptions(value)}
+                options={currentField.options ?? []}
+                getOptionLabel={(option) => option.label}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label={currentField.label}
+                    helperText={
+                      currentField.helperText ??
+                      "Você pode selecionar uma ou mais opções."
+                    }
+                    size="small"
+                  />
+                )}
+              />
+            ) : null}
+
+            {currentField?.inputType === "boolean" ? (
+              <Stack direction="row" spacing={1}>
+                <Button
+                  variant="outlined"
+                  onClick={() => {
+                    setTextInput("Sim");
+                    postAssistant(
+                      { fieldInput: { field: currentField.field, value: "Sim" } },
+                      `${currentField.label}: Sim`,
+                    );
+                  }}
+                  disabled={running}
+                >
+                  Sim
+                </Button>
+                <Button
+                  variant="outlined"
+                  onClick={() => {
+                    setTextInput("Não");
+                    postAssistant(
+                      { fieldInput: { field: currentField.field, value: "Não" } },
+                      `${currentField.label}: Não`,
+                    );
+                  }}
+                  disabled={running}
+                >
+                  Não
+                </Button>
+              </Stack>
+            ) : null}
+
+            {!currentField ||
+            ["text", "textarea", "date", "datetime", "number"].includes(
+              currentField.inputType,
+            ) ? (
+              <TextField
+                fullWidth
+                size="small"
+                label={currentField?.label ?? "Mensagem"}
+                placeholder={
+                  currentField?.placeholder ??
+                  (conversationKind === "copilot"
+                    ? "Faça um follow-up sobre a análise..."
+                    : "Descreva o que deseja criar ou responda ao passo atual...")
+                }
+                helperText={currentField?.helperText}
+                value={textInput}
+                onChange={(e) => setTextInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey && currentField?.inputType !== "textarea") {
+                    e.preventDefault();
+                    handleSend();
+                  }
+                }}
+                multiline={currentField?.inputType === "textarea" || !currentField}
+                maxRows={currentField?.inputType === "textarea" || !currentField ? 4 : 1}
+                type={
+                  currentField?.inputType === "date"
+                    ? "date"
+                    : currentField?.inputType === "datetime"
+                      ? "datetime-local"
+                      : currentField?.inputType === "number"
+                        ? "number"
+                        : "text"
+                }
+                InputLabelProps={
+                  currentField?.inputType === "date" ||
+                  currentField?.inputType === "datetime"
+                    ? { shrink: true }
+                    : undefined
+                }
+                disabled={running}
+              />
+            ) : null}
+
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+              <Button
+                variant="contained"
+                onClick={handleSend}
+                disabled={
+                  running ||
+                  (currentField?.inputType === "single_select"
+                    ? !singleOption
+                    : currentField?.inputType === "multi_select"
+                      ? !multiOptions.length
+                      : currentField?.inputType === "boolean"
+                        ? true
+                        : !textInput.trim() && !workflow?.readyToConfirm)
+                }
+                startIcon={<SendRoundedIcon />}
+                sx={{
+                  bgcolor: "#1A3C6E",
+                  "&:hover": { bgcolor: "#122B4E" },
+                }}
+              >
+                {workflow?.readyToConfirm
+                  ? workflow.confirmLabel
+                  : conversationKind === "copilot"
+                    ? "Enviar follow-up"
+                    : "Enviar"}
+              </Button>
+              {currentField?.optional ? (
+                <Button
+                  variant="outlined"
+                  onClick={() =>
+                    postAssistant(
+                      { skipCurrentField: true },
+                      `Pular ${currentField.label.toLowerCase()}`,
+                    )
+                  }
+                  disabled={running}
+                >
+                  Pular campo opcional
+                </Button>
+              ) : null}
+            </Stack>
+          </Stack>
+        </CardContent>
+      </Card>
+    </Stack>
   );
 }
 
 export function AiPage() {
-  const [tab, setTab] = useState(0);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = String(searchParams.get("tab") ?? "analyses");
+  const [tab, setTab] = useState(tabParam === "assistant" ? 1 : 0);
+
+  useEffect(() => {
+    setTab(tabParam === "assistant" ? 1 : 0);
+  }, [tabParam]);
+
+  const handleTabChange = (_: unknown, nextValue: number) => {
+    setTab(nextValue);
+    const next = new URLSearchParams(searchParams);
+    if (nextValue === 1) {
+      next.set("tab", "assistant");
+    } else {
+      next.delete("tab");
+    }
+    setSearchParams(next, { replace: true });
+  };
 
   return (
     <Box sx={{ p: { xs: 1, sm: 2, md: 3 } }}>
@@ -883,14 +1684,14 @@ export function AiPage() {
             Inteligência Artificial
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Análises automatizadas e chatbot baseado nos dados do CIPAVD/SMIF
+            Análises automatizadas, copilotos gerenciais e assistente virtual operacional
           </Typography>
         </Box>
       </Stack>
 
       <Tabs
         value={tab}
-        onChange={(_, v) => setTab(v)}
+        onChange={handleTabChange}
         sx={{ mb: 2, borderBottom: 1, borderColor: "divider" }}
       >
         <Tab
@@ -900,7 +1701,7 @@ export function AiPage() {
           sx={{ textTransform: "none" }}
         />
         <Tab
-          label="Chatbot"
+          label="Assistente virtual"
           icon={<SmartToyRoundedIcon />}
           iconPosition="start"
           sx={{ textTransform: "none" }}
@@ -908,7 +1709,7 @@ export function AiPage() {
       </Tabs>
 
       {tab === 0 && <AnalysesTab />}
-      {tab === 1 && <ChatbotTab />}
+      {tab === 1 && <AssistantTab />}
     </Box>
   );
 }

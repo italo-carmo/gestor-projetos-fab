@@ -10,5 +10,6 @@ import { MissionsService } from './missions.service';
   imports: [RbacModule],
   controllers: [MissionsController, MissionsChecklistUploadsController],
   providers: [MissionsService],
+  exports: [MissionsService],
 })
 export class MissionsModule {}

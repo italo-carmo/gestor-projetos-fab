@@ -1,12 +1,22 @@
 import { Module } from '@nestjs/common';
+import { ActivitiesModule } from '../activities/activities.module';
+import { MissionsModule } from '../missions/missions.module';
 import { RbacModule } from '../rbac/rbac.module';
 import { StrategicModule } from '../strategic/strategic.module';
+import { TasksModule } from '../tasks/tasks.module';
 import { AiController } from './ai.controller';
+import { AiAssistantService } from './ai-assistant.service';
 import { AiService } from './ai.service';
 
 @Module({
-  imports: [RbacModule, StrategicModule],
+  imports: [
+    RbacModule,
+    StrategicModule,
+    MissionsModule,
+    ActivitiesModule,
+    TasksModule,
+  ],
   controllers: [AiController],
-  providers: [AiService],
+  providers: [AiService, AiAssistantService],
 })
 export class AiModule {}

@@ -39,6 +39,7 @@ import TextSnippetRoundedIcon from "@mui/icons-material/TextSnippetRounded";
 import MapRoundedIcon from "@mui/icons-material/MapRounded";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import OpenInNewRoundedIcon from "@mui/icons-material/OpenInNewRounded";
+import ShieldRoundedIcon from "@mui/icons-material/ShieldRounded";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Bar,
@@ -60,10 +61,11 @@ import {
   useGeoMap,
   useExportExecutiveReportPdf,
 } from "../api/hooks";
-import { Link as RouterLink } from "react-router-dom";
+import { Link as RouterLink, useSearchParams } from "react-router-dom";
 import { SkeletonState } from "../components/states/SkeletonState";
 import { EmptyState } from "../components/states/EmptyState";
 import { ErrorState } from "../components/states/ErrorState";
+import { ComgepStrategicTab } from "../components/strategic/ComgepStrategicTab";
 
 const COLORS = [
   "#1A3C6E",
@@ -550,7 +552,77 @@ function formatActivityStatusLabel(status: string) {
   if (normalized === "NOT_STARTED") return "Não iniciada";
   if (normalized === "IN_PROGRESS") return "Em andamento";
   if (normalized === "DONE") return "Concluída";
+  if (normalized === "CANCELLED") return "Cancelada";
   return normalized || "—";
+}
+
+function formatComplaintTypeLabel(type: string) {
+  const normalized = String(type || "").trim().toUpperCase();
+  if (normalized === "MORAL") return "Assédio Moral";
+  if (normalized === "SEXUAL") return "Assédio Sexual";
+  return normalized || "—";
+}
+
+function formatComplaintStatusLabel(status: string) {
+  const normalized = String(status || "").trim().toUpperCase();
+  if (normalized === "RECEIVED") return "Recebida";
+  if (normalized === "PROTECTION_MEASURES") return "Medidas protetivas";
+  if (normalized === "PRELIMINARY_ANALYSIS") return "Análise preliminar";
+  if (normalized === "PROCEDURE_DEFINED") return "Procedimento definido";
+  if (normalized === "INVESTIGATION") return "Em apuração";
+  if (normalized === "CONCLUDED") return "Concluída";
+  if (normalized === "ARCHIVED") return "Arquivada";
+  return normalized || "—";
+}
+
+function formatWorkflowScopeLabel(scope: string) {
+  const normalized = String(scope || "").trim().toUpperCase();
+  if (normalized === "CPCA") return "CPCA";
+  if (normalized === "SMIF") return "SMIF";
+  return normalized || "—";
+}
+
+function formatActivityScopeLabel(scope: string) {
+  const normalized = String(scope || "").trim().toUpperCase();
+  if (normalized === "SMIF") return "SMIF";
+  if (normalized === "CIPAVD") return "CIPAVD";
+  return normalized || "—";
+}
+
+function formatGeoComplaintDetails(item: any) {
+  return [
+    `Tipo: ${formatComplaintTypeLabel(item?.type ?? "")}`,
+    `Status: ${formatComplaintStatusLabel(item?.status ?? "")}`,
+    `Fluxo: ${formatWorkflowScopeLabel(item?.scope ?? "")}`,
+  ].join(" • ");
+}
+
+function formatGeoActivityDetails(item: any) {
+  return [
+    `Escopo: ${formatActivityScopeLabel(item?.scope ?? "")}`,
+    `Status: ${formatActivityStatusLabel(item?.status ?? "")}`,
+  ].join(" • ");
+}
+
+function formatGeoMissionDetails(item: any) {
+  return `Escopo: ${formatActivityScopeLabel(item?.scope ?? "")}`;
+}
+
+function formatCoveredOmResponsibility(item: any) {
+  const managers = Array.isArray(item?.coveredByOms) ? item.coveredByOms : [];
+  if (Boolean(item?.hasCpca)) return "Própria OM";
+  if (managers.length === 0) return "Cobertura vinculada";
+  return managers
+    .map((manager: any) => [manager?.code, manager?.name].filter(Boolean).join(" - "))
+    .filter(Boolean)
+    .join(", ");
+}
+
+function formatCoveredOmCoverageType(item: any) {
+  if (Boolean(item?.hasCpca) || String(item?.coverageType ?? "").toUpperCase() === "OWN") {
+    return "CPCA própria";
+  }
+  return "Coberta por outra OM";
 }
 
 function ExpandableActivityMetricRow({
@@ -1958,9 +2030,16 @@ function GeoMapTab() {
     ? data.localitiesCatalog
     : [];
   const omsCatalog = Array.isArray(data.omsCatalog) ? data.omsCatalog : [];
-  const localitiesWithCpca = omsCatalog.filter((loc: any) =>
-    Boolean(loc?.hasCpca),
+  const coveredOmsCatalog = Array.isArray(data.cpcaCoveredOmsCatalog)
+    ? data.cpcaCoveredOmsCatalog
+    : [];
+  const omsCoveredByCpca = coveredOmsCatalog.length > 0
+    ? coveredOmsCatalog
+    : omsCatalog.filter((loc: any) => Boolean(loc?.hasCpca));
+  const totalOmsCoveredByCpca = Number(
+    data.totalOmsCoveredByCpca ?? omsCoveredByCpca.length,
   );
+  const totalOms = omsCatalog.length;
   const statesWithData = (data.states ?? []).filter(
     (s: any) => s.complaints + s.activities + s.missions > 0,
   );
@@ -1972,8 +2051,8 @@ function GeoMapTab() {
     const complaintItems = (s.complaintDetails ?? []).map((item: any) => ({
       type: "Denúncia",
       uf: s.uf,
-      title: item.caseNumber || item.type || "Caso",
-      subtitle: [item.type, item.status, item.scope].filter(Boolean).join(" • "),
+      title: item.caseNumber || formatComplaintTypeLabel(item.type) || "Caso",
+      subtitle: formatGeoComplaintDetails(item),
       locality: item.locality || "—",
       date: item.date || "",
     }));
@@ -1981,7 +2060,7 @@ function GeoMapTab() {
       type: "Atividade",
       uf: s.uf,
       title: item.title || "Atividade de Campo",
-      subtitle: [item.scope, item.status].filter(Boolean).join(" • "),
+      subtitle: formatGeoActivityDetails(item),
       locality: item.locality || "—",
       date: item.date || "",
     }));
@@ -1989,7 +2068,7 @@ function GeoMapTab() {
       type: "Missão",
       uf: s.uf,
       title: item.title || "Missão",
-      subtitle: item.scope ? `Escopo: ${item.scope}` : "",
+      subtitle: formatGeoMissionDetails(item),
       locality: item.locality || "—",
       date: item.startDate || item.endDate || "",
     }));
@@ -2010,6 +2089,7 @@ function GeoMapTab() {
       activities: s.activities,
       missions: s.missions,
       localities: s.localities ?? [],
+      oms: s.oms ?? [],
       complaintDetails: s.complaintDetails ?? [],
       activityDetails: s.activityDetails ?? [],
       missionDetails: s.missionDetails ?? [],
@@ -2039,10 +2119,10 @@ function GeoMapTab() {
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <KpiCard
-            title="OMs com CPCA"
-            value={data.totalLocalitiesWithCpca ?? 0}
-            subtitle={data.totalLocalities
-              ? `${((Number(data.totalLocalitiesWithCpca ?? 0) / data.totalLocalities) * 100).toFixed(0)}% do total`
+            title="OMs cobertas pela CPCA"
+            value={totalOmsCoveredByCpca}
+            subtitle={totalOms
+              ? `${((totalOmsCoveredByCpca / totalOms) * 100).toFixed(0)}% das OMs`
               : ""}
             color="#2E7D32"
             onClick={() => setGeoKpiModal("cpca")}
@@ -2142,7 +2222,7 @@ function GeoMapTab() {
                     <TableCell align="right"><strong>Atividades</strong></TableCell>
                     <TableCell align="right"><strong>Missões</strong></TableCell>
                     <TableCell align="right"><strong>Total</strong></TableCell>
-                    <TableCell><strong>Localidades</strong></TableCell>
+                    <TableCell><strong>OMs</strong></TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -2161,7 +2241,7 @@ function GeoMapTab() {
                       <TableCell align="right"><strong>{s.complaints + s.activities + s.missions}</strong></TableCell>
                       <TableCell>
                         <Typography variant="caption" sx={{ maxWidth: 250, display: "inline-block" }} noWrap>
-                          {s.localities?.join(", ")}
+                          {s.oms?.join(", ")}
                         </Typography>
                       </TableCell>
                     </TableRow>
@@ -2179,7 +2259,7 @@ function GeoMapTab() {
           geoKpiModal === "localities"
             ? "Detalhamento — Localidades Cadastradas"
             : geoKpiModal === "cpca"
-              ? "Detalhamento — OMs com CPCA"
+              ? "Detalhamento — OMs cobertas pela CPCA"
               : geoKpiModal === "statesWithData"
                 ? "Detalhamento — Estados com Dados"
                 : geoKpiModal === "totalRecords"
@@ -2219,21 +2299,25 @@ function GeoMapTab() {
                   <TableCell><strong>OM</strong></TableCell>
                   <TableCell><strong>Descrição</strong></TableCell>
                   <TableCell><strong>UF</strong></TableCell>
+                  <TableCell><strong>Cobertura</strong></TableCell>
+                  <TableCell><strong>Comissão responsável</strong></TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {localitiesWithCpca.map((loc: any) => (
+                {omsCoveredByCpca.map((loc: any) => (
                   <TableRow key={loc.id}>
                     <TableCell>{loc.code || "—"}</TableCell>
                     <TableCell>{loc.name || "—"}</TableCell>
                     <TableCell>{loc.uf || "—"}</TableCell>
+                    <TableCell>{formatCoveredOmCoverageType(loc)}</TableCell>
+                    <TableCell>{formatCoveredOmResponsibility(loc)}</TableCell>
                   </TableRow>
                 ))}
-                {localitiesWithCpca.length === 0 && (
+                {omsCoveredByCpca.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={3}>
+                    <TableCell colSpan={5}>
                       <Typography variant="body2" color="text.secondary">
-                        Nenhuma OM com CPCA habilitado.
+                        Nenhuma OM coberta pela CPCA.
                       </Typography>
                     </TableCell>
                   </TableRow>
@@ -2400,10 +2484,17 @@ function GeoMapTab() {
                             <TableRow key={i} hover>
                               <TableCell>{c.caseNumber}</TableCell>
                               <TableCell>
-                                <Chip label={c.type} size="small" sx={{ bgcolor: c.type === "SEXUAL" ? "#FFCDD2" : "#FFF9C4", fontSize: 11 }} />
+                                <Chip
+                                  label={formatComplaintTypeLabel(c.type)}
+                                  size="small"
+                                  sx={{
+                                    bgcolor: String(c.type || "").toUpperCase() === "SEXUAL" ? "#FFCDD2" : "#FFF9C4",
+                                    fontSize: 11,
+                                  }}
+                                />
                               </TableCell>
-                              <TableCell>{c.status}</TableCell>
-                              <TableCell>{c.scope}</TableCell>
+                              <TableCell>{formatComplaintStatusLabel(c.status)}</TableCell>
+                              <TableCell>{formatWorkflowScopeLabel(c.scope)}</TableCell>
                               <TableCell>{c.date ? new Date(c.date).toLocaleDateString("pt-BR") : "—"}</TableCell>
                               <TableCell>{c.locality || "—"}</TableCell>
                             </TableRow>
@@ -2439,9 +2530,16 @@ function GeoMapTab() {
                             <TableRow key={i} hover>
                               <TableCell>{a.title}</TableCell>
                               <TableCell>
-                                <Chip label={a.scope} size="small" sx={{ bgcolor: a.scope === "SMIF" ? "#E3F2FD" : "#F3E5F5", fontSize: 11 }} />
+                                <Chip
+                                  label={formatActivityScopeLabel(a.scope)}
+                                  size="small"
+                                  sx={{
+                                    bgcolor: String(a.scope || "").toUpperCase() === "SMIF" ? "#E3F2FD" : "#F3E5F5",
+                                    fontSize: 11,
+                                  }}
+                                />
                               </TableCell>
-                              <TableCell>{a.status}</TableCell>
+                              <TableCell>{formatActivityStatusLabel(a.status)}</TableCell>
                               <TableCell>{a.date ? new Date(a.date).toLocaleDateString("pt-BR") : "—"}</TableCell>
                               <TableCell>{a.locality || "—"}</TableCell>
                             </TableRow>
@@ -2477,7 +2575,14 @@ function GeoMapTab() {
                             <TableRow key={i} hover>
                               <TableCell>{m.title}</TableCell>
                               <TableCell>
-                                <Chip label={m.scope} size="small" sx={{ bgcolor: m.scope === "SMIF" ? "#E3F2FD" : "#F3E5F5", fontSize: 11 }} />
+                                <Chip
+                                  label={formatActivityScopeLabel(m.scope)}
+                                  size="small"
+                                  sx={{
+                                    bgcolor: String(m.scope || "").toUpperCase() === "SMIF" ? "#E3F2FD" : "#F3E5F5",
+                                    fontSize: 11,
+                                  }}
+                                />
                               </TableCell>
                               <TableCell>{m.startDate ? new Date(m.startDate).toLocaleDateString("pt-BR") : "—"}</TableCell>
                               <TableCell>{m.endDate ? new Date(m.endDate).toLocaleDateString("pt-BR") : "—"}</TableCell>
@@ -2494,18 +2599,18 @@ function GeoMapTab() {
               <Accordion>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ bgcolor: "#F5F5F5" }}>
                   <Typography fontWeight={600} color="text.secondary">
-                    Localidades neste estado ({(selectedState.data.localities ?? []).length})
+                    OMs neste estado ({(selectedState.data.oms ?? []).length})
                   </Typography>
                 </AccordionSummary>
                 <AccordionDetails>
-                  {(selectedState.data.localities ?? []).length > 0 ? (
+                  {(selectedState.data.oms ?? []).length > 0 ? (
                     <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
-                      {selectedState.data.localities.map((loc: string, i: number) => (
+                      {selectedState.data.oms.map((loc: string, i: number) => (
                         <Chip key={i} label={loc} size="small" variant="outlined" />
                       ))}
                     </Box>
                   ) : (
-                    <Typography variant="body2" color="text.secondary">Nenhuma localidade encontrada.</Typography>
+                    <Typography variant="body2" color="text.secondary">Nenhuma OM encontrada.</Typography>
                   )}
                 </AccordionDetails>
               </Accordion>
@@ -2520,8 +2625,35 @@ function GeoMapTab() {
 }
 
 export function StrategicDashboardPage() {
-  const [tab, setTab] = useState(0);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const currentTabParam = String(searchParams.get("tab") ?? "situational");
+  const tabKeyByIndex = [
+    "situational",
+    "aggressor",
+    "geo",
+    "text",
+    "comgep",
+  ];
+  const initialIndex = Math.max(0, tabKeyByIndex.indexOf(currentTabParam));
+  const [tab, setTab] = useState(initialIndex);
   const exportPdf = useExportExecutiveReportPdf();
+
+  useEffect(() => {
+    const nextIndex = Math.max(0, tabKeyByIndex.indexOf(currentTabParam));
+    setTab((prev) => (prev === nextIndex ? prev : nextIndex));
+  }, [currentTabParam]);
+
+  const handleTabChange = (_: unknown, value: number) => {
+    setTab(value);
+    const next = new URLSearchParams(searchParams);
+    const nextTabKey = tabKeyByIndex[value] ?? "situational";
+    if (nextTabKey === "situational") {
+      next.delete("tab");
+    } else {
+      next.set("tab", nextTabKey);
+    }
+    setSearchParams(next, { replace: true });
+  };
 
   return (
     <Box sx={{ p: { xs: 1, sm: 2, md: 3 } }}>
@@ -2571,7 +2703,7 @@ export function StrategicDashboardPage() {
 
       <Tabs
         value={tab}
-        onChange={(_, v) => setTab(v)}
+        onChange={handleTabChange}
         variant="scrollable"
         scrollButtons="auto"
         sx={{ mb: 2, borderBottom: 1, borderColor: "divider" }}
@@ -2600,12 +2732,19 @@ export function StrategicDashboardPage() {
           iconPosition="start"
           sx={{ textTransform: "none" }}
         />
+        <Tab
+          label="Sala COMGEP"
+          icon={<ShieldRoundedIcon />}
+          iconPosition="start"
+          sx={{ textTransform: "none" }}
+        />
       </Tabs>
 
       {tab === 0 && <SituationalTab />}
       {tab === 1 && <AggressorProfileTab />}
       {tab === 2 && <GeoMapTab />}
       {tab === 3 && <TextAnalysisTab />}
+      {tab === 4 && <ComgepStrategicTab />}
     </Box>
   );
 }

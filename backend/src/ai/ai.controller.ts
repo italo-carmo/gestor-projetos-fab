@@ -1,8 +1,11 @@
 import { Body, Controller, Get, Post, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { CurrentUser } from '../common/current-user.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
 import { RequirePermission } from '../rbac/require-permission.decorator';
+import type { RbacUser } from '../rbac/rbac.types';
+import { AiAssistantService } from './ai-assistant.service';
 import {
   AiService,
   AnalysisType,
@@ -13,7 +16,10 @@ import {
 @Controller('ai')
 @UseGuards(JwtAuthGuard, RbacGuard)
 export class AiController {
-  constructor(private readonly ai: AiService) {}
+  constructor(
+    private readonly ai: AiService,
+    private readonly assistant: AiAssistantService,
+  ) {}
 
   private openSse(
     res: Response,
@@ -48,6 +54,12 @@ export class AiController {
   @RequirePermission('bi', 'view')
   listActionAgents() {
     return this.ai.getActionAgentsCatalog();
+  }
+
+  @Get('assistant/quick-actions')
+  @RequirePermission('bi', 'view')
+  listAssistantQuickActions() {
+    return { items: this.assistant.listQuickActions() };
   }
 
   @Post('analyze')
@@ -217,5 +229,34 @@ export class AiController {
       'Content-Length': buffer.length,
     });
     res.end(buffer);
+  }
+
+  @Post('assistant/message')
+  @RequirePermission('bi', 'view')
+  async assistantMessage(
+    @Body()
+    body: {
+      sessionId?: string | null;
+      message?: string | null;
+      quickAction?:
+        | 'create_mission'
+        | 'create_activity'
+        | 'create_task'
+        | 'create_mission_schedule'
+        | null;
+      fieldInput?: { field?: string; value?: unknown } | null;
+      confirmExecution?: boolean;
+      cancelWorkflow?: boolean;
+      skipCurrentField?: boolean;
+    },
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.assistant.handleMessage(body, user);
+  }
+
+  @Post('assistant/reset')
+  @RequirePermission('bi', 'view')
+  resetAssistantSession(@Body() body: { sessionId?: string | null }) {
+    return this.assistant.resetSession(body.sessionId);
   }
 }
