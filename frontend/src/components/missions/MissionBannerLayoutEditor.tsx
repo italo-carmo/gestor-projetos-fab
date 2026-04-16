@@ -3,7 +3,6 @@ import {
   Button,
   Chip,
   IconButton,
-  Slider,
   Stack,
   TextField,
   Typography,
@@ -23,6 +22,7 @@ const TEMPLATE_WIDTH = 904;
 const TEMPLATE_HEIGHT = 1280;
 const COLOR_PINK = '#F6C3CF';
 const COLOR_WHITE = '#FFFFFF';
+const BANNER_FONT_FAMILY = 'Arial, Helvetica, sans-serif';
 
 export const missionBannerLayoutKeys = [
   'day',
@@ -575,12 +575,6 @@ export function MissionBannerLayoutEditor({
       Math.max(block.fontSizeBase, block.minFontSize),
     );
 
-  const getCurrentFontPercentOfRecommended = (block: TextBlockDefinition) => {
-    const recommended = getRecommendedFontSizePx(block);
-    if (recommended <= 0) return 100;
-    return Math.round((getCurrentFontSizePx(block) / recommended) * 100);
-  };
-
   const setSelectedBlockFontSize = (nextFontSizePx: number) => {
     if (!activeBlock) return;
     updateSelectedBlock({
@@ -768,9 +762,10 @@ export function MissionBannerLayoutEditor({
                 left: `${xPct * 100}%`,
                 top: `${yPct * 100}%`,
                 fontSize,
+                fontFamily: BANNER_FONT_FAMILY,
                 color: currentColor,
                 fontWeight: block.fontWeight,
-                lineHeight: 1,
+                lineHeight: 1.04,
                 transform: 'translate(0, 0)',
                 cursor: 'grab',
                 borderRadius: 1,
@@ -811,7 +806,9 @@ export function MissionBannerLayoutEditor({
                     borderRadius: 1,
                     bgcolor: 'rgba(15, 23, 42, 0.72)',
                     color: '#fff',
-                    font: 'inherit',
+                    fontFamily: BANNER_FONT_FAMILY,
+                    fontSize: 'inherit',
+                    fontWeight: 'inherit',
                     p: 0.6,
                     lineHeight: 1.05,
                     resize: 'both',
@@ -882,16 +879,28 @@ export function MissionBannerLayoutEditor({
                 label={`${Math.round(getCurrentFontSizePx(activeBlock))} px`}
                 variant="outlined"
               />
-              <Chip
+              <TextField
                 size="small"
-                color="primary"
-                variant="filled"
-                label={`${getCurrentFontPercentOfRecommended(activeBlock)}% do recomendado`}
-              />
-              <Chip
-                size="small"
-                label={`Recomendado: ${Math.round(getRecommendedFontSizePx(activeBlock))} px`}
-                variant="outlined"
+                type="number"
+                label="Fonte"
+                value={Math.round(getCurrentFontSizePx(activeBlock))}
+                onChange={(event) => {
+                  const nextValue = Number(event.target.value);
+                  if (!Number.isFinite(nextValue)) return;
+                  setSelectedBlockFontSize(nextValue);
+                }}
+                inputProps={{
+                  min: Math.round(activeBlock.minFontSize),
+                  max: 180,
+                  step: 1,
+                }}
+                sx={{
+                  width: 116,
+                  '& input': {
+                    textAlign: 'center',
+                  },
+                }}
+                helperText="px"
               />
               <IconButton
                 size="small"
@@ -899,31 +908,10 @@ export function MissionBannerLayoutEditor({
               >
                 <KeyboardArrowUpRoundedIcon />
               </IconButton>
-              <Button
-                size="small"
-                variant="text"
-                onClick={() => setSelectedBlockFontSize(getRecommendedFontSizePx(activeBlock))}
-              >
-                Usar recomendado
-              </Button>
             </Stack>
-            <Slider
-              value={Math.round(getCurrentFontSizePx(activeBlock))}
-              min={Math.round(activeBlock.minFontSize)}
-              max={Math.max(
-                Math.round(activeBlock.minFontSize + 36),
-                Math.round(getRecommendedFontSizePx(activeBlock) * 2.2),
-              )}
-              step={1}
-              valueLabelDisplay="auto"
-              valueLabelFormat={(value) =>
-                `${value}px · ${Math.round((Number(value) / getRecommendedFontSizePx(activeBlock)) * 100)}%`
-              }
-              onChange={(_, value) => setSelectedBlockFontSize(Number(value))}
-            />
             <Typography variant="caption" color="text.secondary">
-              Use o percentual do recomendado como referência comparável entre os blocos.
-              `100%` mantém a proporção ideal deste texto dentro da área padrão do banner.
+              O valor acima é o tamanho real da fonte em `px`. Se dois blocos estiverem com
+              o mesmo valor, eles usarão o mesmo tamanho tipográfico base no banner final.
             </Typography>
           </Box>
 
