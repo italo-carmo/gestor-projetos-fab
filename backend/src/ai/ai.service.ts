@@ -1,6 +1,11 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { LitellmService, ChatMessage } from '../llm/litellm.service';
+import {
+  LitellmService,
+  ChatMessage,
+  looksLikeInternalReasoning,
+  stripReasoningPrefix,
+} from '../llm/litellm.service';
 import {
   type AiAnalysisType,
   ALL_KNOWLEDGE_SOURCE_IDS,
@@ -327,6 +332,23 @@ export class AiService {
         throw new Error('O modelo encerrou a execução sem retorno final.');
       }
 
+      finalResult = {
+        ...finalResult,
+        narrative: this.sanitizeComgepNarrative(
+          finalResult.narrative,
+          {
+            agentType: safeType,
+            room,
+            scopeUf,
+            mode,
+            focus,
+            evidences,
+            history: session.messages,
+            userMessage: initialUserMessage,
+          },
+        ),
+      };
+
       const assistantMessage = this.pushComgepMessage(session, {
         role: 'assistant',
         content: finalResult.narrative,
@@ -429,6 +451,20 @@ export class AiService {
       if (!finalResult || !String(finalResult.narrative ?? '').trim()) {
         throw new Error('O modelo encerrou a execução sem retorno final.');
       }
+
+      finalResult = {
+        ...finalResult,
+        narrative: this.sanitizeComgepNarrative(finalResult.narrative, {
+          agentType: session.agentType,
+          room,
+          scopeUf,
+          mode,
+          focus,
+          evidences,
+          history: session.messages,
+          userMessage: userMessage.content,
+        }),
+      };
 
       const assistantMessage = this.pushComgepMessage(session, {
         role: 'assistant',
@@ -2259,7 +2295,7 @@ export class AiService {
         throw new Error('O modelo encerrou a execução sem gerar conteúdo útil.');
       }
       return {
-        narrative,
+        narrative: this.sanitizeComgepNarrative(narrative, params),
         model: fallback.model,
       };
     } catch (e) {
@@ -2336,6 +2372,20 @@ export class AiService {
       return 'O gateway LiteLLM rejeitou o contexto desta execução e o fallback local não conseguiu concluir a resposta.';
     }
     return message;
+  }
+
+  private sanitizeComgepNarrative(
+    narrative: string,
+    params: ComgepCopilotStreamParams,
+  ) {
+    const cleaned = stripReasoningPrefix(String(narrative ?? '')).trim();
+    if (!cleaned || looksLikeInternalReasoning(cleaned)) {
+      this.logger.warn(
+        'Saída do copiloto COMGEP detectada como raciocínio interno; substituindo por fallback determinístico.',
+      );
+      return this.buildDeterministicComgepFallbackNarrative(params);
+    }
+    return cleaned;
   }
 
   private buildDeterministicComgepFallbackNarrative(

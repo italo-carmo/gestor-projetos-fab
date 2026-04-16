@@ -116,7 +116,7 @@ const REASONING_MARKERS = [
   'final_answer',
 ];
 const REASONING_PREAMBLE_PATTERN =
-  /^(we need to|let'?s\b|must\b|now\b|first\b|second\b|third\b|i need to|i should|we should|we must|analysis\b|thinking\b|preciso\b|devemos\b|temos que\b|vou\b|vamos\b)/i;
+  /^(we need to|we have\b|let'?s\b|must\b|now\b|first\b|second\b|third\b|i need to|i should|we should|we must|the summary shows\b|the user\b|need to mention\b|we can cite\b|analysis\b|thinking\b|preciso\b|devemos\b|temos que\b|vou\b|vamos\b)/i;
 
 export function stripReasoningPrefix(text: string): string {
   const original = text;
@@ -178,6 +178,49 @@ function stripReasoningPreamble(text: string): string {
 
   const cleaned = lines.slice(idx).join('\n').trimStart();
   return cleaned || source;
+}
+
+export function looksLikeInternalReasoning(text: string): boolean {
+  const source = String(text ?? '').trim();
+  if (!source) return true;
+
+  const normalized = source
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase();
+
+  const suspiciousStarts = [
+    /^we have\b/,
+    /^the summary shows\b/,
+    /^the user\b/,
+    /^need to\b/,
+    /^need mention\b/,
+    /^we can cite\b/,
+    /^also\b/,
+    /^first\b/,
+    /^second\b/,
+    /^third\b/,
+    /^analysis\b/,
+    /^thinking\b/,
+  ];
+  if (suspiciousStarts.some((pattern) => pattern.test(normalized))) {
+    return true;
+  }
+
+  const suspiciousPhrases = [
+    'we have evidence',
+    'the summary shows',
+    'need mention',
+    'we can cite',
+    'the user asks',
+    'also other oms',
+    'the list includes',
+    'score 100',
+  ];
+  const hits = suspiciousPhrases.filter((item) => normalized.includes(item));
+  if (hits.length >= 2) return true;
+
+  return false;
 }
 
 function extractTextLike(value: unknown): string {
