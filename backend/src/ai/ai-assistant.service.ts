@@ -4,12 +4,19 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { LocalityCatalogType } from '@prisma/client';
+import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { promisify } from 'node:util';
 import { ActivitiesService } from '../activities/activities.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { RbacUser } from '../rbac/rbac.types';
 import { MissionsService } from '../missions/missions.service';
 import { TasksService } from '../tasks/tasks.service';
+
+const execFileAsync = promisify(execFile);
 
 type AssistantIntent =
   | 'create_mission'
@@ -27,7 +34,8 @@ type AssistantInputType =
   | 'number'
   | 'single_select'
   | 'multi_select'
-  | 'boolean';
+  | 'boolean'
+  | 'file_upload';
 
 type AssistantFieldOption = {
   value: string;
@@ -53,6 +61,27 @@ type AssistantMessage = {
   role: AssistantRole;
   content: string;
   createdAt: string;
+};
+
+type AssistantScheduleSourceFile = {
+  id: string;
+  name: string;
+  mimeType: string;
+  extractionMethod: 'text' | 'ocr';
+  pageCount: number | null;
+  itemCount: number;
+};
+
+type AssistantScheduleDraftItem = {
+  id: string;
+  title: string;
+  startAt: string;
+  durationMinutes: number;
+  location: string;
+  responsible: string;
+  participants: string;
+  sourceFileIds: string[];
+  sourceFileNames: string[];
 };
 
 type AssistantWorkflow = {
@@ -96,6 +125,8 @@ type AssistantReply = {
     currentField: AssistantFieldConfig | null;
     readyToConfirm: boolean;
     confirmLabel: string;
+    attachments?: AssistantScheduleSourceFile[];
+    scheduleItems?: AssistantScheduleDraftItem[];
   };
   quickActions: AssistantQuickAction[];
   createdItem?: AssistantResultLink | null;
@@ -123,7 +154,7 @@ const QUICK_ACTIONS: AssistantQuickAction[] = [
     id: 'create_mission_schedule',
     title: 'Criar cronograma em missão',
     description:
-      'Adiciona um item de cronograma em uma missão já existente, com revisão antes da gravação.',
+      'Monta o cronograma da missão por PDF ou manualmente, com revisão assistida antes da gravação.',
   },
 ];
 
@@ -152,7 +183,7 @@ const INTENT_META: Record<
   create_mission_schedule: {
     title: 'Criar cronograma em missão',
     description:
-      'Fluxo assistido para inserir um item de cronograma em missão já cadastrada.',
+      'Fluxo assistido para montar o cronograma da missão por PDF ou manualmente, revisar os itens e só depois cadastrar.',
     confirmLabel: 'Confirmar inclusão no cronograma',
   },
 };
@@ -179,6 +210,88 @@ export class AiAssistantService {
       this.sessions.delete(safeSessionId);
     }
     return { ok: true };
+  }
+
+  async handleUpload(
+    payload: {
+      sessionId?: string | null;
+      files: Express.Multer.File[];
+    },
+    user?: RbacUser,
+  ): Promise<AssistantReply> {
+    this.pruneSessions();
+    const session = this.getOrCreateSession(payload.sessionId);
+    const workflow = session.workflow;
+    if (!workflow || workflow.intent !== 'create_mission_schedule') {
+      throw new BadRequestException(
+        'Inicie primeiro o fluxo de cronograma em missão.',
+      );
+    }
+
+    const workflowView = await this.buildWorkflowView(workflow, user);
+    if (workflow.draft.scheduleInputMode !== 'UPLOAD') {
+      throw new BadRequestException(
+        'O envio de arquivos está disponível apenas quando o modo do cronograma for análise de PDF.',
+      );
+    }
+    if (workflowView.currentField?.field !== 'scheduleFiles') {
+      throw new BadRequestException(
+        'Nesta etapa o assistente não está aguardando arquivos.',
+      );
+    }
+
+    const files = (payload.files ?? []).filter(Boolean);
+    if (!files.length) {
+      throw new BadRequestException(
+        'Envie ao menos um arquivo PDF ou imagem do cronograma.',
+      );
+    }
+
+    const parseResult = await this.parseScheduleFiles(
+      files,
+      workflow.draft,
+      user,
+    );
+    if (!parseResult.items.length) {
+      throw new BadRequestException(
+        'Não consegui montar itens de cronograma a partir dos arquivos enviados. Revise o PDF ou envie uma versão mais legível.',
+      );
+    }
+
+    const existingItems = Array.isArray(workflow.draft.scheduleItemsDraft)
+      ? (workflow.draft.scheduleItemsDraft as AssistantScheduleDraftItem[])
+      : [];
+    const existingFiles = Array.isArray(workflow.draft.scheduleSourceFiles)
+      ? (workflow.draft.scheduleSourceFiles as AssistantScheduleSourceFile[])
+      : [];
+
+    workflow.draft.scheduleItemsDraft = [...existingItems, ...parseResult.items]
+      .sort((left, right) => left.startAt.localeCompare(right.startAt))
+      .map((item, index) => ({
+        ...item,
+        id: item.id || `schedule-item-${index + 1}`,
+      }));
+    workflow.draft.scheduleSourceFiles = [...existingFiles, ...parseResult.files];
+    workflow.status = 'confirming';
+    session.updatedAt = new Date().toISOString();
+
+    this.pushMessage(
+      session,
+      'user',
+      `Arquivos enviados: ${files.map((file) => file.originalname || 'arquivo').join(', ')}`,
+    );
+
+    const updatedView = await this.buildWorkflowView(workflow, user);
+    return this.buildReply(
+      session,
+      this.pushMessage(
+        session,
+        'assistant',
+        this.buildScheduleUploadMessage(parseResult.files, parseResult.items),
+      ),
+      updatedView,
+      null,
+    );
   }
 
   async handleMessage(
@@ -304,6 +417,25 @@ export class AiAssistantService {
       this.pushMessage(session, 'user', rawMessage);
     }
 
+    if (
+      workflow.intent === 'create_mission_schedule' &&
+      rawMessage &&
+      !fieldInput?.field &&
+      !wantsSkip &&
+      !wantsConfirm &&
+      !workflowView.currentField
+    ) {
+      const commandReply = await this.handleScheduleDraftCommand(
+        session,
+        workflow,
+        rawMessage,
+        user,
+      );
+      if (commandReply) {
+        return commandReply;
+      }
+    }
+
     if (wantsConfirm && workflow.status === 'confirming') {
       try {
         const createdItem = await this.executeWorkflow(workflow, user);
@@ -355,12 +487,29 @@ export class AiAssistantService {
       }
       workflow.draft[currentField.field] = null;
     } else if (fieldInput?.field) {
+      const isScheduleEditValue =
+        workflow.intent === 'create_mission_schedule' &&
+        fieldInput.field === 'scheduleEditValue';
       await this.applyFieldValue(
         workflow,
         String(fieldInput.field),
         fieldInput.value,
         user,
       );
+      if (isScheduleEditValue) {
+        session.updatedAt = new Date().toISOString();
+        const updatedView = await this.buildWorkflowView(workflow, user);
+        return this.buildReply(
+          session,
+          this.pushMessage(
+            session,
+            'assistant',
+            'Item do cronograma atualizado. Revise o rascunho e confirme quando estiver correto.',
+          ),
+          updatedView,
+          null,
+        );
+      }
     } else if (rawMessage) {
       const currentField = workflowView.currentField;
       if (!currentField) {
@@ -375,7 +524,24 @@ export class AiAssistantService {
           null,
         );
       }
+      const isScheduleEditValue =
+        workflow.intent === 'create_mission_schedule' &&
+        currentField.field === 'scheduleEditValue';
       await this.applyFieldValue(workflow, currentField.field, rawMessage, user);
+      if (isScheduleEditValue) {
+        session.updatedAt = new Date().toISOString();
+        const updatedView = await this.buildWorkflowView(workflow, user);
+        return this.buildReply(
+          session,
+          this.pushMessage(
+            session,
+            'assistant',
+            'Item do cronograma atualizado. Revise o rascunho e confirme quando estiver correto.',
+          ),
+          updatedView,
+          null,
+        );
+      }
     }
 
     session.updatedAt = new Date().toISOString();
@@ -429,10 +595,22 @@ export class AiAssistantService {
       | null,
     createdItem: AssistantResultLink | null,
   ): AssistantReply {
+    const attachments = Array.isArray(workflow?.draft?.scheduleSourceFiles)
+      ? (workflow?.draft?.scheduleSourceFiles as AssistantScheduleSourceFile[])
+      : [];
+    const scheduleItems = Array.isArray(workflow?.draft?.scheduleItemsDraft)
+      ? (workflow?.draft?.scheduleItemsDraft as AssistantScheduleDraftItem[])
+      : [];
     return {
       sessionId: session.id,
       message,
-      workflow,
+      workflow: workflow
+        ? {
+            ...workflow,
+            attachments,
+            scheduleItems,
+          }
+        : null,
       quickActions: QUICK_ACTIONS,
       createdItem,
     };
@@ -569,6 +747,12 @@ export class AiAssistantService {
     draft: Record<string, any>,
   ) {
     const value = draft[field.field];
+    if (field.inputType === 'file_upload') {
+      const items = Array.isArray(draft.scheduleItemsDraft)
+        ? draft.scheduleItemsDraft
+        : [];
+      return items.length === 0;
+    }
     if (field.optional && (value === undefined || value === null || value === '')) {
       return false;
     }
@@ -592,6 +776,11 @@ export class AiAssistantService {
     if (!field) {
       throw new BadRequestException('Campo do assistente não reconhecido.');
     }
+    if (field.inputType === 'file_upload') {
+      throw new BadRequestException(
+        'Use o envio de arquivo do assistente para anexar o cronograma.',
+      );
+    }
     const normalized = this.normalizeFieldValue(field, value);
     if (field.inputType === 'single_select' && field.options?.length) {
       const option = this.resolveSingleOption(field.options, normalized);
@@ -599,6 +788,10 @@ export class AiAssistantService {
         throw new BadRequestException(
           `Selecione uma opção válida para ${field.label.toLowerCase()}.`,
         );
+      }
+      if (field.field === 'scheduleEditFieldKey') {
+        workflow.draft.scheduleEditFieldKey = option.value;
+        return;
       }
       workflow.draft[field.field] = option.value;
       return;
@@ -634,6 +827,10 @@ export class AiAssistantService {
           `${field.label} deve ser menor ou igual a ${field.max}.`,
         );
       }
+      if (field.field === 'scheduleEditValue') {
+        this.applyScheduleItemEdit(workflow, parsed);
+        return;
+      }
       workflow.draft[field.field] = parsed;
       return;
     }
@@ -641,6 +838,10 @@ export class AiAssistantService {
       const parsed = this.parseDateOnly(
         Array.isArray(normalized) ? normalized[0] ?? '' : normalized,
       );
+      if (field.field === 'scheduleEditValue') {
+        this.applyScheduleItemEdit(workflow, `${parsed}T00:00:00`);
+        return;
+      }
       workflow.draft[field.field] = parsed;
       return;
     }
@@ -648,6 +849,10 @@ export class AiAssistantService {
       const parsed = this.parseDateTime(
         Array.isArray(normalized) ? normalized[0] ?? '' : normalized,
       );
+      if (field.field === 'scheduleEditValue') {
+        this.applyScheduleItemEdit(workflow, parsed);
+        return;
+      }
       workflow.draft[field.field] = parsed;
       return;
     }
@@ -656,6 +861,10 @@ export class AiAssistantService {
       throw new BadRequestException(
         `Informe ${field.label.toLowerCase()} para continuar.`,
       );
+    }
+    if (field.field === 'scheduleEditValue') {
+      this.applyScheduleItemEdit(workflow, text || '');
+      return;
     }
     workflow.draft[field.field] = text || null;
   }
@@ -885,7 +1094,7 @@ export class AiAssistantService {
       ];
     }
 
-    return [
+    const baseFields: AssistantFieldConfig[] = [
       {
         field: 'scope',
         label: 'Escopo da missão',
@@ -901,6 +1110,69 @@ export class AiAssistantService {
         inputType: 'single_select',
         options: await this.listMissionOptions(draft.scope, user),
       },
+      {
+        field: 'scheduleInputMode',
+        label: 'Como deseja montar o cronograma?',
+        inputType: 'single_select',
+        options: [
+          {
+            value: 'UPLOAD',
+            label: 'Analisar arquivo PDF',
+            description:
+              'Envia um ou mais PDFs, monta o rascunho e permite revisar antes de gravar.',
+          },
+          {
+            value: 'MANUAL',
+            label: 'Preencher manualmente',
+            description:
+              'Mantém o fluxo item a item para inserir o cronograma sem anexos.',
+          },
+        ],
+      },
+    ];
+
+    if (draft.scheduleInputMode === 'UPLOAD') {
+      if (draft.scheduleEditIndex !== undefined && draft.scheduleEditIndex !== null) {
+        if (!draft.scheduleEditFieldKey) {
+          return [
+            ...baseFields,
+            {
+              field: 'scheduleEditFieldKey',
+              label: 'Campo a ajustar',
+              inputType: 'single_select',
+              options: [
+                { value: 'title', label: 'Título' },
+                { value: 'startAt', label: 'Início' },
+                { value: 'durationMinutes', label: 'Duração em minutos' },
+                { value: 'location', label: 'Local' },
+                { value: 'responsible', label: 'Responsável' },
+                { value: 'participants', label: 'Participantes' },
+              ],
+            },
+          ];
+        }
+        return [
+          ...baseFields,
+          this.buildScheduleEditValueField(
+            draft.scheduleEditFieldKey,
+            Number(draft.scheduleEditIndex) + 1,
+          ),
+        ];
+      }
+      return [
+        ...baseFields,
+        {
+          field: 'scheduleFiles',
+          label: 'Arquivos do cronograma',
+          inputType: 'file_upload',
+          helperText:
+            'Envie um ou mais PDFs neste formato. O assistente analisa, monta o rascunho e permite ajustes antes do cadastro final.',
+        },
+      ];
+    }
+
+    return [
+      ...baseFields,
       {
         field: 'title',
         label: 'Título do item',
@@ -1106,9 +1378,44 @@ export class AiAssistantService {
     }
 
     const missionLabel = await findOptionLabel('missionId', draft.missionId);
+    if (draft.scheduleInputMode === 'UPLOAD') {
+      const sourceFiles = Array.isArray(draft.scheduleSourceFiles)
+        ? (draft.scheduleSourceFiles as AssistantScheduleSourceFile[])
+        : [];
+      const scheduleItems = Array.isArray(draft.scheduleItemsDraft)
+        ? (draft.scheduleItemsDraft as AssistantScheduleDraftItem[])
+        : [];
+      return [
+        { label: 'Escopo', value: draft.scope || '—' },
+        { label: 'Missão', value: missionLabel || '—' },
+        { label: 'Modo', value: 'Análise de arquivo PDF' },
+        {
+          label: 'Arquivos',
+          value: sourceFiles.length
+            ? sourceFiles.map((item) => item.name).join(', ')
+            : 'Nenhum arquivo enviado',
+        },
+        {
+          label: 'Itens montados',
+          value: scheduleItems.length
+            ? `${scheduleItems.length} item(ns) prontos para revisão`
+            : 'Aguardando leitura do cronograma',
+        },
+        {
+          label: 'Próxima ação',
+          value:
+            draft.scheduleEditIndex !== undefined && draft.scheduleEditIndex !== null
+              ? `Ajustando item ${Number(draft.scheduleEditIndex) + 1}`
+              : scheduleItems.length
+                ? 'Você pode confirmar, remover ou alterar itens específicos.'
+                : 'Envie um ou mais PDFs para o assistente montar o cronograma.',
+        },
+      ];
+    }
     return [
       { label: 'Escopo', value: draft.scope || '—' },
       { label: 'Missão', value: missionLabel || '—' },
+      { label: 'Modo', value: 'Preenchimento manual' },
       { label: 'Título do item', value: draft.title || '—' },
       { label: 'Início', value: draft.startAt || '—' },
       {
@@ -1202,6 +1509,37 @@ export class AiAssistantService {
       };
     }
 
+    if (draft.scheduleInputMode === 'UPLOAD') {
+      const scheduleItems = Array.isArray(draft.scheduleItemsDraft)
+        ? (draft.scheduleItemsDraft as AssistantScheduleDraftItem[])
+        : [];
+      if (!scheduleItems.length) {
+        throw new BadRequestException(
+          'Envie um arquivo e revise o cronograma antes de confirmar o cadastro.',
+        );
+      }
+      for (const item of scheduleItems) {
+        await this.missions.createScheduleItem(
+          draft.missionId,
+          {
+            title: item.title,
+            startAt: item.startAt,
+            durationMinutes: item.durationMinutes,
+            location: item.location,
+            responsible: item.responsible,
+            participants: item.participants || '',
+          },
+          user,
+        );
+      }
+      return {
+        entityType: 'mission_schedule',
+        id: String(draft.missionId),
+        title: `Cronograma cadastrado com ${scheduleItems.length} item(ns)`,
+        url: `/missions?scope=${encodeURIComponent(String(draft.scope ?? 'SMIF'))}&missionId=${encodeURIComponent(String(draft.missionId))}`,
+      };
+    }
+
     const created = await this.missions.createScheduleItem(
       draft.missionId,
       {
@@ -1220,6 +1558,970 @@ export class AiAssistantService {
       title: String(created.title),
       url: `/missions?scope=${encodeURIComponent(String(draft.scope ?? 'SMIF'))}&missionId=${encodeURIComponent(String(draft.missionId))}`,
     };
+  }
+
+  private buildScheduleEditValueField(
+    fieldKey: string,
+    itemNumber: number,
+  ): AssistantFieldConfig {
+    switch (fieldKey) {
+      case 'startAt':
+        return {
+          field: 'scheduleEditValue',
+          label: `Novo início do item ${itemNumber}`,
+          inputType: 'datetime',
+          helperText: 'Use DD/MM/AAAA HH:MM ou o seletor de data e hora.',
+        };
+      case 'durationMinutes':
+        return {
+          field: 'scheduleEditValue',
+          label: `Nova duração do item ${itemNumber}`,
+          inputType: 'number',
+          min: 1,
+          max: 1440,
+        };
+      case 'location':
+        return {
+          field: 'scheduleEditValue',
+          label: `Novo local do item ${itemNumber}`,
+          inputType: 'text',
+        };
+      case 'responsible':
+        return {
+          field: 'scheduleEditValue',
+          label: `Novo responsável do item ${itemNumber}`,
+          inputType: 'text',
+        };
+      case 'participants':
+        return {
+          field: 'scheduleEditValue',
+          label: `Novos participantes do item ${itemNumber}`,
+          inputType: 'textarea',
+          optional: true,
+          helperText: 'Campo opcional.',
+        };
+      default:
+        return {
+          field: 'scheduleEditValue',
+          label: `Novo título do item ${itemNumber}`,
+          inputType: 'text',
+        };
+    }
+  }
+
+  private async handleScheduleDraftCommand(
+    session: AssistantSession,
+    workflow: AssistantWorkflow,
+    rawMessage: string,
+    user?: RbacUser,
+  ): Promise<AssistantReply | null> {
+    if (workflow.draft.scheduleInputMode !== 'UPLOAD') {
+      return null;
+    }
+    const normalized = this.normalizeFreeText(rawMessage);
+    if (!normalized) return null;
+
+    const removeMatch = normalized.match(/(?:remover|excluir)\s+item\s+(\d+)/);
+    if (removeMatch) {
+      const itemNumber = Number(removeMatch[1]);
+      const items = Array.isArray(workflow.draft.scheduleItemsDraft)
+        ? [...(workflow.draft.scheduleItemsDraft as AssistantScheduleDraftItem[])]
+        : [];
+      if (!items.length) {
+        return this.buildReply(
+          session,
+          this.pushMessage(
+            session,
+            'assistant',
+            'Ainda não há itens de cronograma montados para remover.',
+          ),
+          await this.buildWorkflowView(workflow, user),
+          null,
+        );
+      }
+      if (!Number.isInteger(itemNumber) || itemNumber < 1 || itemNumber > items.length) {
+        return this.buildReply(
+          session,
+          this.pushMessage(
+            session,
+            'assistant',
+            `Não encontrei o item ${itemNumber}. Use a numeração exibida no rascunho atual.`,
+          ),
+          await this.buildWorkflowView(workflow, user),
+          null,
+        );
+      }
+      const [removed] = items.splice(itemNumber - 1, 1);
+      workflow.draft.scheduleItemsDraft = items;
+      workflow.draft.scheduleEditIndex = null;
+      workflow.draft.scheduleEditFieldKey = null;
+      workflow.status = items.length ? 'confirming' : 'collecting';
+      const updatedView = await this.buildWorkflowView(workflow, user);
+      return this.buildReply(
+        session,
+        this.pushMessage(
+          session,
+          'assistant',
+          items.length
+            ? `Item ${itemNumber} removido: **${removed?.title ?? 'sem título'}**.\n\nRevise o rascunho e confirme quando estiver correto.`
+            : 'Todos os itens foram removidos. Envie outro arquivo para montar um novo rascunho.',
+        ),
+        updatedView,
+        null,
+      );
+    }
+
+    const editMatch = normalized.match(
+      /(?:alterar|ajustar|editar)\s+item\s+(\d+)/,
+    );
+    if (editMatch) {
+      const itemNumber = Number(editMatch[1]);
+      const items = Array.isArray(workflow.draft.scheduleItemsDraft)
+        ? (workflow.draft.scheduleItemsDraft as AssistantScheduleDraftItem[])
+        : [];
+      if (!Number.isInteger(itemNumber) || itemNumber < 1 || itemNumber > items.length) {
+        return this.buildReply(
+          session,
+          this.pushMessage(
+            session,
+            'assistant',
+            `Não encontrei o item ${itemNumber}. Use a numeração exibida no rascunho atual.`,
+          ),
+          await this.buildWorkflowView(workflow, user),
+          null,
+        );
+      }
+      workflow.draft.scheduleEditIndex = itemNumber - 1;
+      workflow.draft.scheduleEditFieldKey = null;
+      workflow.status = 'collecting';
+      const updatedView = await this.buildWorkflowView(workflow, user);
+      return this.buildReply(
+        session,
+        this.pushMessage(
+          session,
+          'assistant',
+          `Certo. Vou ajustar o **item ${itemNumber}**. Primeiro, escolha qual campo deseja alterar.`,
+        ),
+        updatedView,
+        null,
+      );
+    }
+
+    if (
+      normalized.includes('mostrar cronograma') ||
+      normalized.includes('mostrar itens') ||
+      normalized.includes('listar itens') ||
+      normalized.includes('ver cronograma')
+    ) {
+      const items = Array.isArray(workflow.draft.scheduleItemsDraft)
+        ? (workflow.draft.scheduleItemsDraft as AssistantScheduleDraftItem[])
+        : [];
+      const updatedView = await this.buildWorkflowView(workflow, user);
+      return this.buildReply(
+        session,
+        this.pushMessage(
+          session,
+          'assistant',
+          items.length
+            ? this.buildSchedulePreviewMessage(items)
+            : 'Ainda não há itens montados no rascunho atual.',
+        ),
+        updatedView,
+        null,
+      );
+    }
+
+    return null;
+  }
+
+  private applyScheduleItemEdit(
+    workflow: AssistantWorkflow,
+    rawValue: string | number,
+  ) {
+    const itemIndex = Number(workflow.draft.scheduleEditIndex);
+    const fieldKey = String(workflow.draft.scheduleEditFieldKey ?? '').trim();
+    const items = Array.isArray(workflow.draft.scheduleItemsDraft)
+      ? [...(workflow.draft.scheduleItemsDraft as AssistantScheduleDraftItem[])]
+      : [];
+    if (!Number.isInteger(itemIndex) || itemIndex < 0 || itemIndex >= items.length) {
+      throw new BadRequestException(
+        'O item de cronograma selecionado para ajuste não está mais disponível.',
+      );
+    }
+    if (!fieldKey) {
+      throw new BadRequestException(
+        'Selecione primeiro qual campo do item deseja ajustar.',
+      );
+    }
+
+    const item = { ...items[itemIndex] };
+    if (fieldKey === 'durationMinutes') {
+      const parsed = Number(rawValue);
+      if (!Number.isFinite(parsed) || parsed < 1) {
+        throw new BadRequestException(
+          'Informe uma duração válida em minutos.',
+        );
+      }
+      item.durationMinutes = Math.round(parsed);
+    } else if (fieldKey === 'participants') {
+      item.participants = String(rawValue ?? '').trim();
+    } else if (fieldKey === 'startAt') {
+      item.startAt = String(rawValue ?? '').trim();
+    } else if (fieldKey === 'location') {
+      item.location = String(rawValue ?? '').trim() || 'A definir';
+    } else if (fieldKey === 'responsible') {
+      item.responsible = String(rawValue ?? '').trim() || 'Equipe de Campo';
+    } else {
+      item.title = String(rawValue ?? '').trim();
+    }
+
+    items[itemIndex] = item;
+    workflow.draft.scheduleItemsDraft = items;
+    workflow.draft.scheduleEditIndex = null;
+    workflow.draft.scheduleEditFieldKey = null;
+    workflow.status = 'confirming';
+  }
+
+  private async parseScheduleFiles(
+    files: Express.Multer.File[],
+    draft: Record<string, any>,
+    user?: RbacUser,
+  ): Promise<{
+    files: AssistantScheduleSourceFile[];
+    items: AssistantScheduleDraftItem[];
+  }> {
+    const missionContext = await this.resolveMissionContext(draft.missionId, user);
+    const parsedFiles: AssistantScheduleSourceFile[] = [];
+    const parsedItems: AssistantScheduleDraftItem[] = [];
+
+    for (const file of files) {
+      const extraction = await this.extractTextFromScheduleFile(file);
+      const itemDrafts =
+        extraction.method === 'text'
+          ? this.parseStructuredScheduleDraftsFromText(
+              extraction.text,
+              missionContext.fallbackLocation,
+            )
+          : this.parseScheduleDraftsFromText(
+              extraction.text,
+              missionContext.fallbackLocation,
+            );
+      const sourceFile: AssistantScheduleSourceFile = {
+        id: randomUUID(),
+        name: file.originalname || 'arquivo.pdf',
+        mimeType: file.mimetype || 'application/pdf',
+        extractionMethod: extraction.method,
+        pageCount: extraction.pageCount,
+        itemCount: itemDrafts.length,
+      };
+      parsedFiles.push(sourceFile);
+      parsedItems.push(
+        ...itemDrafts.map((item) => ({
+          ...item,
+          id: randomUUID(),
+          sourceFileIds: [sourceFile.id],
+          sourceFileNames: [sourceFile.name],
+        })),
+      );
+    }
+
+    return {
+      files: parsedFiles,
+      items: parsedItems.sort((left, right) =>
+        left.startAt.localeCompare(right.startAt),
+      ),
+    };
+  }
+
+  private async resolveMissionContext(missionId: string, user?: RbacUser) {
+    if (!missionId) {
+      throw new BadRequestException(
+        'Selecione a missão antes de enviar o cronograma.',
+      );
+    }
+    const mission = await this.missions.getById(missionId, user);
+    const localityName = String(mission?.locality?.name ?? '').trim();
+    const localityCode = String(mission?.locality?.code ?? '').trim();
+    return {
+      fallbackLocation:
+        localityName || localityCode
+          ? [localityCode, localityName].filter(Boolean).join(' - ')
+          : 'A definir',
+    };
+  }
+
+  private async extractTextFromScheduleFile(file: Express.Multer.File): Promise<{
+    text: string;
+    method: 'text' | 'ocr';
+    pageCount: number | null;
+  }> {
+    const workdir = await mkdtemp(path.join(tmpdir(), 'ai-schedule-'));
+    const safeExt =
+      path.extname(file.originalname || '').toLowerCase() ||
+      (String(file.mimetype ?? '').startsWith('image/') ? '.png' : '.pdf');
+    const inputPath = path.join(workdir, `input${safeExt}`);
+    await writeFile(inputPath, file.buffer);
+
+    try {
+      if (String(file.mimetype ?? '').startsWith('image/')) {
+        const ocrText = await this.extractTextFromImage(inputPath);
+        return { text: ocrText, method: 'ocr', pageCount: 1 };
+      }
+
+      try {
+        const { stdout } = await execFileAsync(
+          'pdftotext',
+          ['-layout', inputPath, '-'],
+          {
+            maxBuffer: 24 * 1024 * 1024,
+          },
+        );
+        const plainText = String(stdout ?? '');
+        if (this.isExtractedTextUseful(plainText)) {
+          return {
+            text: plainText,
+            method: 'text',
+            pageCount: this.countPdfPagesFromText(plainText),
+          };
+        }
+      } catch {
+        // segue para OCR
+      }
+
+      const ocrText = await this.extractTextFromPdfViaOcr(inputPath, workdir);
+      return {
+        text: ocrText,
+        method: 'ocr',
+        pageCount: this.countPdfPagesFromText(ocrText),
+      };
+    } finally {
+      await rm(workdir, { recursive: true, force: true });
+    }
+  }
+
+  private async extractTextFromPdfViaOcr(inputPath: string, workdir: string) {
+    const pagePrefix = path.join(workdir, 'page');
+    await execFileAsync(
+      'pdftoppm',
+      ['-r', '240', '-png', inputPath, pagePrefix],
+      { maxBuffer: 8 * 1024 * 1024 },
+    );
+    const files = (await readdir(workdir))
+      .filter((name) => /^page-\d+\.png$/i.test(name))
+      .sort((left, right) => left.localeCompare(right, undefined, { numeric: true }));
+    if (!files.length) {
+      throw new BadRequestException(
+        'Não consegui converter o PDF do cronograma para análise.',
+      );
+    }
+
+    const pages: string[] = [];
+    for (const fileName of files) {
+      pages.push(await this.extractTextFromImage(path.join(workdir, fileName)));
+    }
+    return pages.join('\n\f\n');
+  }
+
+  private async extractTextFromImage(imagePath: string) {
+    const { stdout } = await execFileAsync(
+      'tesseract',
+      [imagePath, 'stdout', '-l', 'por', '--psm', '6'],
+      { maxBuffer: 16 * 1024 * 1024 },
+    );
+    return String(stdout ?? '');
+  }
+
+  private isExtractedTextUseful(text: string) {
+    const normalized = String(text ?? '').replace(/\s+/g, ' ').trim();
+    const letters = normalized.match(/[A-Za-zÀ-ÿ]/g)?.length ?? 0;
+    return normalized.length >= 120 && letters >= 40;
+  }
+
+  private countPdfPagesFromText(text: string) {
+    const safe = String(text ?? '');
+    if (!safe.includes('\f')) {
+      return safe.trim() ? 1 : 0;
+    }
+    return safe
+      .split('\f')
+      .map((chunk) => chunk.trim())
+      .filter(Boolean).length;
+  }
+
+  private parseStructuredScheduleDraftsFromText(
+    text: string,
+    fallbackLocation: string,
+  ): Omit<
+    AssistantScheduleDraftItem,
+    'id' | 'sourceFileIds' | 'sourceFileNames'
+  >[] {
+    const pages = String(text ?? '')
+      .split('\f')
+      .map((page) => page.replace(/\r/g, ''))
+      .filter((page) => page.trim());
+    const parsedItems: Array<{
+      title: string;
+      startAt: string;
+      durationMinutes: number;
+      location: string;
+      responsible: string;
+      participants: string;
+    }> = [];
+
+    for (const page of pages) {
+      const lines = page.split('\n');
+      const headerLine =
+        lines.find(
+          (line) =>
+            line.includes('Horário') &&
+            line.includes('Atividade') &&
+            line.includes('Local Sugerido'),
+        ) ?? null;
+      if (!headerLine) {
+        parsedItems.push(...this.parseScheduleDraftsFromText(page, fallbackLocation));
+        continue;
+      }
+      const rawActivityStart = headerLine.indexOf('Atividade');
+      const rawCipavdStart = headerLine.indexOf('Participantes CIPAVD');
+      const rawParticipantsStart = headerLine.indexOf(
+        'Participantes',
+        rawCipavdStart + 'Participantes CIPAVD'.length,
+      );
+      const rawLocationStart = headerLine.indexOf('Local Sugerido');
+      const activityStart = Math.max(0, rawActivityStart - 23);
+      const cipavdStart = Math.max(activityStart + 1, rawCipavdStart - 6);
+      const participantsStart = Math.max(
+        cipavdStart + 1,
+        rawParticipantsStart - 6,
+      );
+      const locationStart = Math.max(participantsStart + 1, rawLocationStart - 9);
+      const pageDate = page.match(/\b\d{2}\/\d{2}\/\d{4}\b/)?.[0] ?? null;
+      if (
+        !pageDate ||
+        rawActivityStart < 0 ||
+        rawCipavdStart < 0 ||
+        rawParticipantsStart < 0 ||
+        rawLocationStart < 0
+      ) {
+        parsedItems.push(...this.parseScheduleDraftsFromText(page, fallbackLocation));
+        continue;
+      }
+
+      const rows: Array<{
+        time: string;
+        activity: string[];
+        responsible: string[];
+        participants: string[];
+        location: string[];
+      }> = [];
+      let activeRow:
+        | {
+            time: string;
+            activity: string[];
+            responsible: string[];
+            participants: string[];
+            location: string[];
+          }
+        | null = null;
+      let pendingPrelude: string[] = [];
+      let pendingResponsibleForNext: string[] = [];
+
+      const flushActiveRow = () => {
+        if (!activeRow) return;
+        rows.push(activeRow);
+        activeRow = null;
+      };
+
+      for (let index = 0; index < lines.length; index += 1) {
+        const rawLine = lines[index] ?? '';
+        const trimmed = rawLine.trim();
+        if (!trimmed) continue;
+        if (
+          trimmed.includes('Horário') ||
+          trimmed.startsWith('CRONOGRAMA') ||
+          trimmed === 'DATA' ||
+          (trimmed.includes('DATA') && trimmed.includes('MANHÃ')) ||
+          trimmed === 'MANHÃ' ||
+          trimmed === 'TARDE' ||
+          /^\(.+\)$/.test(trimmed)
+        ) {
+          if (trimmed === 'MANHÃ' || trimmed === 'TARDE') {
+            flushActiveRow();
+          }
+          continue;
+        }
+
+        const timeMarker = this.extractTimeMarker(trimmed);
+        if (timeMarker) {
+          flushActiveRow();
+          activeRow = {
+            time: timeMarker.normalizedTime,
+            activity: [],
+            responsible: [],
+            participants: [],
+            location: [],
+          };
+          if (pendingPrelude.length) {
+            activeRow.activity.push(...pendingPrelude);
+            pendingPrelude = [];
+          }
+          if (pendingResponsibleForNext.length) {
+            activeRow.responsible.push(...pendingResponsibleForNext);
+            pendingResponsibleForNext = [];
+          }
+          const segments = this.extractStructuredScheduleSegments(rawLine, {
+            activityStart,
+            cipavdStart,
+            participantsStart,
+            locationStart,
+          });
+          this.appendStructuredSegments(activeRow, segments);
+          continue;
+        }
+
+        const nextNonEmpty = lines
+          .slice(index + 1)
+          .map((line) => line.trim())
+          .find(Boolean);
+        const nextIsTimedRow = !!nextNonEmpty && !!this.extractTimeMarker(nextNonEmpty);
+
+        if (!activeRow) {
+          if (nextIsTimedRow && this.isLikelyResponsibleLine(trimmed)) {
+            pendingResponsibleForNext.push(trimmed);
+          } else {
+            pendingPrelude.push(trimmed);
+          }
+          continue;
+        }
+
+        if (
+          nextIsTimedRow &&
+          this.isLikelyResponsibleLine(trimmed) &&
+          !trimmed.includes('CPCAs')
+        ) {
+          pendingResponsibleForNext.push(trimmed);
+          continue;
+        }
+
+        const segments = this.extractStructuredScheduleSegments(rawLine, {
+          activityStart,
+          cipavdStart,
+          participantsStart,
+          locationStart,
+        });
+        this.appendStructuredSegments(activeRow, segments);
+      }
+
+      flushActiveRow();
+
+      for (let index = 0; index < rows.length; index += 1) {
+        const row = rows[index];
+        const nextRow = rows[index + 1] ?? null;
+        const activityText = row.activity.join(' ').replace(/\s+/g, ' ').trim();
+        const responsibleText = row.responsible
+          .join(' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        const cleanedResponsibleText = responsibleText
+          .replace(/^Intervalo\s+/i, '')
+          .trim();
+        const participantsText = row.participants
+          .join(' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        const locationText = row.location.join(' ').replace(/\s+/g, ' ').trim();
+        const title =
+          activityText ||
+          (!this.isLikelyResponsibleLine(responsibleText) ? responsibleText : '') ||
+          (!this.isLikelyLocationLine(participantsText) ? participantsText : '') ||
+          'Atividade a confirmar';
+        const normalizedTitle = this.normalizeScheduleTitle(title);
+        if (!normalizedTitle) continue;
+        parsedItems.push({
+          title: normalizedTitle,
+          startAt: this.combineDateAndTime(pageDate, row.time),
+          durationMinutes: this.estimateDurationMinutes(row.time, nextRow?.time ?? null),
+          location: locationText || fallbackLocation || 'A definir',
+          responsible:
+            (this.isLikelyResponsibleLine(cleanedResponsibleText)
+              ? cleanedResponsibleText
+              : '') || this.inferResponsibleFromTitle(normalizedTitle),
+          participants: participantsText,
+        });
+      }
+    }
+
+    return parsedItems.sort((left, right) => left.startAt.localeCompare(right.startAt));
+  }
+
+  private extractStructuredScheduleSegments(
+    rawLine: string,
+    bounds: {
+      activityStart: number;
+      cipavdStart: number;
+      participantsStart: number;
+      locationStart: number;
+    },
+  ) {
+    const safeLine = rawLine.replace(/\r/g, '');
+    const activity = safeLine
+      .slice(bounds.activityStart, bounds.cipavdStart)
+      .trim();
+    const responsible = safeLine
+      .slice(bounds.cipavdStart, bounds.participantsStart)
+      .trim();
+    const participants = safeLine
+      .slice(bounds.participantsStart, bounds.locationStart)
+      .trim();
+    const location = safeLine.slice(bounds.locationStart).trim();
+    return { activity, responsible, participants, location };
+  }
+
+  private appendStructuredSegments(
+    row: {
+      time: string;
+      activity: string[];
+      responsible: string[];
+      participants: string[];
+      location: string[];
+    },
+    segments: {
+      activity?: string;
+      responsible?: string;
+      participants?: string;
+      location?: string;
+    },
+  ) {
+    if (segments.activity && !this.isSkippableScheduleLine(segments.activity)) {
+      row.activity.push(segments.activity);
+    }
+    if (segments.responsible && !this.isLikelyNoiseLine(segments.responsible)) {
+      row.responsible.push(segments.responsible);
+    }
+    if (segments.participants && !this.isLikelyNoiseLine(segments.participants)) {
+      row.participants.push(segments.participants);
+    }
+    if (segments.location && !this.isLikelyNoiseLine(segments.location)) {
+      row.location.push(segments.location);
+    }
+  }
+
+  private parseScheduleDraftsFromText(
+    text: string,
+    fallbackLocation: string,
+  ): Omit<
+    AssistantScheduleDraftItem,
+    'id' | 'sourceFileIds' | 'sourceFileNames'
+  >[] {
+    const pages = String(text ?? '')
+      .split('\f')
+      .map((page) => page.trim())
+      .filter(Boolean);
+    const parsedItems: Array<{
+      title: string;
+      startAt: string;
+      durationMinutes: number;
+      location: string;
+      responsible: string;
+      participants: string;
+    }> = [];
+
+    for (const page of pages) {
+      const dateMatch = page.match(/\b\d{2}\/\d{2}\/\d{4}\b/);
+      const pageDate = dateMatch?.[0] ?? null;
+      const chunks = this.extractScheduleChunks(page);
+      if (!pageDate || !chunks.length) {
+        continue;
+      }
+      for (let index = 0; index < chunks.length; index += 1) {
+        const chunk = chunks[index];
+        const nextChunk = chunks[index + 1] ?? null;
+        const item = this.parseScheduleChunk(
+          chunk,
+          pageDate,
+          nextChunk?.normalizedTime ?? null,
+          fallbackLocation,
+        );
+        if (item) {
+          parsedItems.push(item);
+        }
+      }
+    }
+
+    return parsedItems.sort((left, right) => left.startAt.localeCompare(right.startAt));
+  }
+
+  private extractScheduleChunks(pageText: string) {
+    const lines = String(pageText ?? '')
+      .split('\n')
+      .map((line) => this.cleanScheduleLine(line))
+      .filter(Boolean);
+    const chunks: Array<{ normalizedTime: string; lines: string[] }> = [];
+    let active: { normalizedTime: string; lines: string[] } | null = null;
+
+    for (const line of lines) {
+      const timeMarker = this.extractTimeMarker(line);
+      if (timeMarker) {
+        if (active && active.lines.length) {
+          chunks.push(active);
+        }
+        active = {
+          normalizedTime: timeMarker.normalizedTime,
+          lines: timeMarker.remainder ? [timeMarker.remainder] : [],
+        };
+        continue;
+      }
+      if (!active) {
+        continue;
+      }
+      if (this.isSkippableScheduleLine(line)) {
+        continue;
+      }
+      active.lines.push(line);
+    }
+
+    if (active && active.lines.length) {
+      chunks.push(active);
+    }
+    return chunks;
+  }
+
+  private parseScheduleChunk(
+    chunk: { normalizedTime: string; lines: string[] },
+    pageDate: string,
+    nextTime: string | null,
+    fallbackLocation: string,
+  ) {
+    const contentLines = chunk.lines
+      .map((line) => this.cleanScheduleLine(line))
+      .filter((line) => line && !this.isSkippableScheduleLine(line));
+    if (!contentLines.length) return null;
+
+    let title = contentLines[0];
+    let titleLinesConsumed = 1;
+    if (
+      contentLines[1] &&
+      (contentLines[1].startsWith('(') ||
+        /^[a-zà-ÿ]/i.test(contentLines[1]) ||
+        /organiza(c|ç)[aã]o|log[ií]stica|atividades/i.test(contentLines[1]))
+    ) {
+      title = `${title} ${contentLines[1]}`.replace(/\s+/g, ' ').trim();
+      titleLinesConsumed = 2;
+    }
+
+    const normalizedTitle = this.normalizeScheduleTitle(title);
+    if (!normalizedTitle) return null;
+
+    const remainingLines = contentLines.slice(titleLinesConsumed);
+    const location =
+      [...remainingLines].reverse().find((line) => this.isLikelyLocationLine(line)) ||
+      fallbackLocation ||
+      'A definir';
+    const responsible =
+      remainingLines.find((line) => this.isLikelyResponsibleLine(line)) ||
+      this.inferResponsibleFromTitle(normalizedTitle);
+    const participants = remainingLines
+      .filter(
+        (line) =>
+          line !== location &&
+          line !== responsible &&
+          !this.isLikelyNoiseLine(line),
+      )
+      .join(' | ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    const startAt = this.combineDateAndTime(pageDate, chunk.normalizedTime);
+    const durationMinutes = this.estimateDurationMinutes(
+      chunk.normalizedTime,
+      nextTime,
+    );
+
+    return {
+      title: normalizedTitle,
+      startAt,
+      durationMinutes,
+      location:
+        location === '-' || location === '—'
+          ? fallbackLocation || 'A definir'
+          : location,
+      responsible: responsible || 'Equipe de Campo',
+      participants,
+    };
+  }
+
+  private extractTimeMarker(line: string) {
+    const match = line.match(/^(\d{1,2})h(?:([0-5]\d))?(?:\s+|$)(.*)$/i);
+    if (!match) return null;
+    const hour = Number(match[1]);
+    const minute = Number(match[2] ?? '0');
+    if (!Number.isInteger(hour) || hour < 0 || hour > 23) {
+      return null;
+    }
+    return {
+      normalizedTime: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`,
+      remainder: this.cleanScheduleLine(match[3] ?? ''),
+    };
+  }
+
+  private cleanScheduleLine(line: string) {
+    return String(line ?? '')
+      .replace(/[|¦]+/g, ' ')
+      .replace(/[—–]/g, '-')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  private isSkippableScheduleLine(line: string) {
+    const normalized = this.normalizeFreeText(line);
+    if (!normalized) return true;
+    if (
+      [
+        'data',
+        'manha',
+        'manha tarde',
+        'tarde',
+        'horario',
+        'atividade',
+        'participantes',
+        'participantes cipavd',
+        'local sugerido',
+        'local',
+      ].includes(normalized)
+    ) {
+      return true;
+    }
+    if (
+      normalized.startsWith('cronograma') ||
+      normalized.startsWith('dia ') ||
+      /^\(\w+/i.test(line) ||
+      /\bsegunda-feira\b|\bterca-feira\b|\bterça-feira\b|\bquarta-feira\b|\bquinta-feira\b|\bsexta-feira\b/i.test(
+        normalized,
+      ) ||
+      /^\d{2}\/\d{2}\/\d{4}$/.test(line)
+    ) {
+      return true;
+    }
+    return false;
+  }
+
+  private isLikelyLocationLine(line: string) {
+    return /(audit[oó]rio|comar|unifa|basc|bagl|cbnb|base|sala|hangar|ala|guarnae|esquadrao|esquadr[aã]o)/i.test(
+      line,
+    );
+  }
+
+  private isLikelyResponsibleLine(line: string) {
+    return /\b(cap|ten|maj|cel|brig|1s|2s|3s|cb|sd|equipe de campo|ten camargo|cap ester|cap tamires|raquel)\b/i.test(
+      line,
+    );
+  }
+
+  private inferResponsibleFromTitle(title: string) {
+    if (/pesquisa/i.test(title)) return 'Equipe de Campo';
+    if (/chegada da equipe|reuniao com as cpcas|encerramento|intervalo/i.test(this.normalizeFreeText(title))) {
+      return 'Equipe de Campo';
+    }
+    return 'Equipe de Campo';
+  }
+
+  private isLikelyNoiseLine(line: string) {
+    const normalized = this.normalizeFreeText(line);
+    return (
+      !normalized ||
+      normalized === '-' ||
+      normalized.length <= 2 ||
+      /^[\W_]+$/.test(line)
+    );
+  }
+
+  private normalizeScheduleTitle(title: string) {
+    const safe = String(title ?? '')
+      .replace(/\s+/g, ' ')
+      .replace(/^(Chegada da Equipe.+?)\s+atividades\)?$/i, '$1')
+      .replace(/\s+\(?Apresenta[cç][aã]o ao comandante.*$/i, '')
+      .replace(/\s+log[ií]stica de atividades\)?$/i, '')
+      .replace(
+        /^(Cap|Ten|Maj|Cel|Brig|1S|2S|3S)\s+[A-ZÀ-ÿ][^\s]*\s+(?=(Palestra|Aplicação|Ciclo|Reunião|Chegada|Encerramento))/i,
+        '',
+      )
+      .trim();
+    if (!safe) return '';
+    if (
+      this.isSkippableScheduleLine(safe) ||
+      /^(todo efetivo|efetivo feminino|juridicos|jur[ií]dicos|cpcas da)/i.test(
+        safe,
+      )
+    ) {
+      return '';
+    }
+    return safe;
+  }
+
+  private combineDateAndTime(date: string, normalizedTime: string) {
+    const match = date.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (!match) {
+      throw new BadRequestException(
+        'Não consegui identificar a data do cronograma no arquivo enviado.',
+      );
+    }
+    return `${match[3]}-${match[2]}-${match[1]}T${normalizedTime}:00`;
+  }
+
+  private estimateDurationMinutes(
+    currentTime: string,
+    nextTime: string | null,
+  ) {
+    if (!nextTime) return 60;
+    const [currentHour, currentMinute] = currentTime.split(':').map(Number);
+    const [nextHour, nextMinute] = nextTime.split(':').map(Number);
+    const currentTotal = currentHour * 60 + currentMinute;
+    const nextTotal = nextHour * 60 + nextMinute;
+    const diff = nextTotal - currentTotal;
+    if (!Number.isFinite(diff) || diff < 10) return 60;
+    if (diff > 240) return 60;
+    return diff;
+  }
+
+  private buildScheduleUploadMessage(
+    files: AssistantScheduleSourceFile[],
+    items: AssistantScheduleDraftItem[],
+  ) {
+    const fileSummary = files
+      .map(
+        (file) =>
+          `- **${file.name}**: ${file.itemCount} item(ns), extração por ${file.extractionMethod === 'text' ? 'texto' : 'OCR'}${file.pageCount ? `, ${file.pageCount} página(s)` : ''}`,
+      )
+      .join('\n');
+    return [
+      'Analisei os arquivos enviados e montei um rascunho do cronograma para revisão.',
+      fileSummary,
+      '',
+      this.buildSchedulePreviewMessage(items),
+      '',
+      'Se estiver correto, confirme o cadastro. Se precisar ajustar, escreva por exemplo **alterar item 2** ou **remover item 3**.',
+    ]
+      .filter(Boolean)
+      .join('\n');
+  }
+
+  private buildSchedulePreviewMessage(items: AssistantScheduleDraftItem[]) {
+    const preview = items.slice(0, 8).map((item, index) => {
+      const date = new Date(item.startAt);
+      const when = Number.isNaN(date.getTime())
+        ? item.startAt
+        : date.toLocaleString('pt-BR', {
+            dateStyle: 'short',
+            timeStyle: 'short',
+            timeZone: 'America/Sao_Paulo',
+          });
+      return `${index + 1}. **${item.title}**\nLocal: ${item.location}\nInício: ${when}\nDuração: ${item.durationMinutes} min\nResponsável: ${item.responsible}`;
+    });
+    const remaining =
+      items.length > preview.length
+        ? `\n... e mais ${items.length - preview.length} item(ns) no rascunho.`
+        : '';
+    return `**Itens montados**\n\n${preview.join('\n\n')}${remaining}`;
   }
 
   private extractErrorMessage(error: unknown) {

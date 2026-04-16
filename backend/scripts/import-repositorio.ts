@@ -9,6 +9,7 @@ import {
   DocumentCategory,
   DocumentLinkEntity,
   DocumentParseStatus,
+  LocalityCatalogType,
   MeetingStatus,
   PermissionScope,
   PhaseName,
@@ -634,13 +635,19 @@ async function upsertLocalities() {
 
   for (const locality of all.values()) {
     const saved = await prisma.locality.upsert({
-      where: { code: locality.code },
+      where: {
+        code_catalogType: {
+          code: locality.code,
+          catalogType: LocalityCatalogType.SMIF,
+        },
+      },
       update: {
         name: locality.name,
         recruitsFemaleCountCurrent: locality.recruits ?? undefined,
       },
       create: {
         code: locality.code,
+        catalogType: LocalityCatalogType.SMIF,
         name: locality.name,
         recruitsFemaleCountCurrent: locality.recruits ?? null,
       },

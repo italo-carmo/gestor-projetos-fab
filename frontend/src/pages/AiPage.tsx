@@ -123,7 +123,7 @@ const OPERATIONAL_QUICK_ACTIONS = [
     id: "create_mission_schedule",
     title: "Criar cronograma em missão",
     description:
-      "Inclui um item de cronograma em missão já existente, passo a passo.",
+      "Analisa PDF ou conduz o preenchimento manual do cronograma, com revisão antes do cadastro.",
     icon: <PlaylistAddCheckRoundedIcon />,
     color: "#7B1FA2",
   },
@@ -156,7 +156,8 @@ type AssistantField = {
     | "number"
     | "single_select"
     | "multi_select"
-    | "boolean";
+    | "boolean"
+    | "file_upload";
   placeholder?: string;
   helperText?: string;
   optional?: boolean;
@@ -164,6 +165,26 @@ type AssistantField = {
   min?: number;
   max?: number;
   multiple?: boolean;
+};
+
+type AssistantAttachment = {
+  id: string;
+  name: string;
+  mimeType: string;
+  extractionMethod: "text" | "ocr";
+  pageCount: number | null;
+  itemCount: number;
+};
+
+type AssistantScheduleItem = {
+  id: string;
+  title: string;
+  startAt: string;
+  durationMinutes: number;
+  location: string;
+  responsible: string;
+  participants: string;
+  sourceFileNames: string[];
 };
 
 type AssistantWorkflow = {
@@ -176,6 +197,8 @@ type AssistantWorkflow = {
   currentField: AssistantField | null;
   readyToConfirm: boolean;
   confirmLabel: string;
+  attachments?: AssistantAttachment[];
+  scheduleItems?: AssistantScheduleItem[];
 };
 
 type CopilotEvidence = {
@@ -718,6 +741,15 @@ function buildUserMessageLabel(
   return workflow ? `${field.label}: ${text}` : text;
 }
 
+function formatScheduleDateTime(value: string) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleString("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short",
+  });
+}
+
 function AssistantTab() {
   const toast = useToast();
   const agentsQuery = useAiActionAgents();
@@ -733,6 +765,7 @@ function AssistantTab() {
   const [singleOption, setSingleOption] = useState<AssistantOption | null>(null);
   const [multiOptions, setMultiOptions] = useState<AssistantOption[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const scheduleFileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({
@@ -829,6 +862,59 @@ function AssistantTab() {
       } finally {
         setRunning(false);
         setStatusText("");
+      }
+    },
+    [appendMessage, assistantSessionId, handleAssistantResponse, toast],
+  );
+
+  const uploadAssistantScheduleFiles = useCallback(
+    async (files: File[]) => {
+      if (!assistantSessionId) {
+        toast.push({
+          message: "Inicie o fluxo do cronograma antes de enviar arquivos.",
+          severity: "warning",
+        });
+        return;
+      }
+      if (!files.length) return;
+      setRunning(true);
+      setStatusText("Analisando arquivos do cronograma...");
+      try {
+        appendMessage({
+          id: `user-upload-${Date.now()}`,
+          role: "user",
+          content: `Arquivos enviados: ${files.map((file) => file.name).join(", ")}`,
+          createdAt: new Date().toISOString(),
+          origin: "assistant",
+        });
+        const formData = new FormData();
+        formData.append("sessionId", assistantSessionId);
+        files.forEach((file) => formData.append("files", file));
+        const data = (
+          await api.post("/ai/assistant/upload", formData, {
+            headers: { "Content-Type": "multipart/form-data" },
+          })
+        ).data;
+        handleAssistantResponse(data);
+      } catch (error: any) {
+        const message =
+          error?.response?.data?.message ??
+          error?.message ??
+          "Falha ao analisar o cronograma enviado.";
+        appendMessage({
+          id: `assistant-upload-error-${Date.now()}`,
+          role: "assistant",
+          content: `Erro: ${message}`,
+          createdAt: new Date().toISOString(),
+          origin: "assistant",
+        });
+        toast.push({ message, severity: "error" });
+      } finally {
+        setRunning(false);
+        setStatusText("");
+        if (scheduleFileInputRef.current) {
+          scheduleFileInputRef.current.value = "";
+        }
       }
     },
     [appendMessage, assistantSessionId, handleAssistantResponse, toast],
@@ -1030,6 +1116,12 @@ function AssistantTab() {
     if (running) return;
     const field = workflow?.currentField;
     if (workflow?.readyToConfirm) {
+      const followUpText = textInput.trim();
+      if (followUpText) {
+        await postAssistant({ message: followUpText }, followUpText);
+        setTextInput("");
+        return;
+      }
       await postAssistant(
         { confirmExecution: true },
         workflow.confirmLabel,
@@ -1262,6 +1354,113 @@ function AssistantTab() {
                   </Grid>
                 ))}
               </Grid>
+              {workflow.attachments?.length ? (
+                <Paper
+                  variant="outlined"
+                  sx={{ p: 1.5, borderRadius: 2.5, bgcolor: "#fff" }}
+                >
+                  <Typography variant="subtitle2" fontWeight={800} color="#1A3C6E">
+                    Arquivos analisados
+                  </Typography>
+                  <Stack spacing={1} sx={{ mt: 1 }}>
+                    {workflow.attachments.map((file) => (
+                      <Stack
+                        key={file.id}
+                        direction={{ xs: "column", sm: "row" }}
+                        spacing={1}
+                        justifyContent="space-between"
+                      >
+                        <Typography variant="body2">
+                          {file.name}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {file.itemCount} item(ns) • {file.extractionMethod === "text" ? "texto" : "OCR"}
+                          {file.pageCount ? ` • ${file.pageCount} pág.` : ""}
+                        </Typography>
+                      </Stack>
+                    ))}
+                  </Stack>
+                </Paper>
+              ) : null}
+              {workflow.scheduleItems?.length ? (
+                <Paper
+                  variant="outlined"
+                  sx={{ p: 1.5, borderRadius: 2.5, bgcolor: "#fff" }}
+                >
+                  <Stack
+                    direction={{ xs: "column", sm: "row" }}
+                    spacing={1}
+                    justifyContent="space-between"
+                    alignItems={{ sm: "center" }}
+                  >
+                    <Box>
+                      <Typography variant="subtitle2" fontWeight={800} color="#1A3C6E">
+                        Rascunho do cronograma
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.4 }}>
+                        Revise os itens abaixo. Para ajustar, escreva por exemplo
+                        {" "}
+                        <strong>alterar item 2</strong>
+                        {" "}
+                        ou
+                        {" "}
+                        <strong>remover item 3</strong>.
+                      </Typography>
+                    </Box>
+                    <Chip
+                      size="small"
+                      color="info"
+                      variant="outlined"
+                      label={`${workflow.scheduleItems.length} item(ns)`}
+                    />
+                  </Stack>
+                  <Stack spacing={1} sx={{ mt: 1.25 }}>
+                    {workflow.scheduleItems.slice(0, 10).map((item, index) => (
+                      <Paper
+                        key={item.id}
+                        variant="outlined"
+                        sx={{ p: 1.25, borderRadius: 2, bgcolor: "#FAFBFD" }}
+                      >
+                        <Stack
+                          direction={{ xs: "column", md: "row" }}
+                          spacing={1}
+                          justifyContent="space-between"
+                        >
+                          <Box>
+                            <Typography variant="body2" fontWeight={800}>
+                              {index + 1}. {item.title}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {formatScheduleDateTime(item.startAt)} • {item.durationMinutes} min
+                            </Typography>
+                          </Box>
+                          <Chip
+                            size="small"
+                            variant="outlined"
+                            label={item.sourceFileNames?.join(", ") || "Entrada manual"}
+                          />
+                        </Stack>
+                        <Typography variant="body2" sx={{ mt: 0.8 }}>
+                          Local: {item.location}
+                        </Typography>
+                        <Typography variant="body2" sx={{ mt: 0.35 }}>
+                          Responsável: {item.responsible}
+                        </Typography>
+                        {item.participants ? (
+                          <Typography variant="body2" sx={{ mt: 0.35 }}>
+                            Participantes: {item.participants}
+                          </Typography>
+                        ) : null}
+                      </Paper>
+                    ))}
+                    {workflow.scheduleItems.length > 10 ? (
+                      <Typography variant="caption" color="text.secondary">
+                        Exibindo os 10 primeiros itens. O rascunho completo será cadastrado após sua confirmação.
+                      </Typography>
+                    ) : null}
+                  </Stack>
+                </Paper>
+              ) : null}
               <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
                 {workflow.readyToConfirm ? (
                   <Button
@@ -1586,6 +1785,59 @@ function AssistantTab() {
               </Stack>
             ) : null}
 
+            {currentField?.inputType === "file_upload" ? (
+              <Paper
+                variant="outlined"
+                sx={{
+                  p: 1.5,
+                  borderRadius: 2.5,
+                  bgcolor: "#FAFBFD",
+                  borderStyle: "dashed",
+                }}
+              >
+                <Stack spacing={1.2}>
+                  <Box>
+                    <Typography variant="subtitle2" fontWeight={800} color="#1A3C6E">
+                      {currentField.label}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                      {currentField.helperText ??
+                        "Envie um ou mais PDFs do cronograma. O assistente vai ler, montar o rascunho e pedir sua confirmação final."}
+                    </Typography>
+                  </Box>
+                  <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+                    <Button
+                      variant="contained"
+                      startIcon={<PictureAsPdfRoundedIcon />}
+                      disabled={running}
+                      onClick={() => scheduleFileInputRef.current?.click()}
+                      sx={{
+                        bgcolor: "#7B1FA2",
+                        "&:hover": { bgcolor: "#5E1380" },
+                      }}
+                    >
+                      Selecionar PDFs
+                    </Button>
+                    <Typography variant="caption" color="text.secondary" sx={{ alignSelf: "center" }}>
+                      Você pode enviar vários arquivos de uma vez.
+                    </Typography>
+                  </Stack>
+                  <input
+                    ref={scheduleFileInputRef}
+                    type="file"
+                    accept="application/pdf,image/*"
+                    multiple
+                    hidden
+                    onChange={(event) => {
+                      const files = Array.from(event.target.files ?? []);
+                      if (!files.length) return;
+                      uploadAssistantScheduleFiles(files);
+                    }}
+                  />
+                </Stack>
+              </Paper>
+            ) : null}
+
             {!currentField ||
             ["text", "textarea", "date", "datetime", "number"].includes(
               currentField.inputType,
@@ -1636,6 +1888,7 @@ function AssistantTab() {
                 onClick={handleSend}
                 disabled={
                   running ||
+                  currentField?.inputType === "file_upload" ||
                   (currentField?.inputType === "single_select"
                     ? !singleOption
                     : currentField?.inputType === "multi_select"
@@ -1651,7 +1904,11 @@ function AssistantTab() {
                 }}
               >
                 {workflow?.readyToConfirm
-                  ? workflow.confirmLabel
+                  ? textInput.trim()
+                    ? "Enviar ajuste"
+                    : workflow.confirmLabel
+                  : currentField?.inputType === "file_upload"
+                    ? "Aguardando arquivo"
                   : conversationKind === "copilot"
                     ? "Enviar follow-up"
                     : "Enviar"}

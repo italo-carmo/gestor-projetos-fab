@@ -1,5 +1,15 @@
-import { Body, Controller, Get, Post, Res, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Post,
+  Res,
+  UploadedFiles,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
 import type { Response } from 'express';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../common/current-user.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
@@ -252,6 +262,31 @@ export class AiController {
     @CurrentUser() user: RbacUser,
   ) {
     return this.assistant.handleMessage(body, user);
+  }
+
+  @Post('assistant/upload')
+  @RequirePermission('bi', 'view')
+  @UseInterceptors(
+    FilesInterceptor('files', 6, {
+      limits: { fileSize: 12 * 1024 * 1024 },
+      fileFilter: (_req, file, cb) => {
+        const mimetype = String(file.mimetype ?? '').toLowerCase();
+        cb(
+          null,
+          mimetype === 'application/pdf' || mimetype.startsWith('image/'),
+        );
+      },
+    }),
+  )
+  async assistantUpload(
+    @Body() body: { sessionId?: string | null },
+    @UploadedFiles() files: Express.Multer.File[],
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.assistant.handleUpload(
+      { sessionId: body.sessionId, files: files ?? [] },
+      user,
+    );
   }
 
   @Post('assistant/reset')

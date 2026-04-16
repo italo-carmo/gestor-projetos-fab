@@ -8,7 +8,13 @@ import { config } from "dotenv";
 // Carrega .env do backend (cwd ao rodar npm run seed:demo é o backend)
 config({ path: path.join(__dirname, "..", ".env") });
 
-import { PrismaClient, PermissionScope, TaskPriority, TaskStatus } from "@prisma/client";
+import {
+  LocalityCatalogType,
+  PermissionScope,
+  PrismaClient,
+  TaskPriority,
+  TaskStatus,
+} from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import fs from "node:fs";
 import bcrypt from "bcrypt";
@@ -122,7 +128,12 @@ async function main() {
 
   for (const l of localities) {
     await prisma.locality.upsert({
-      where: { code: l.code },
+      where: {
+        code_catalogType: {
+          code: l.code,
+          catalogType: LocalityCatalogType.SMIF,
+        },
+      },
       update: {
         name: l.name,
         commandName: l.commandName ?? null,
@@ -133,6 +144,7 @@ async function main() {
       },
       create: {
         code: l.code,
+        catalogType: LocalityCatalogType.SMIF,
         name: l.name,
         commandName: l.commandName ?? null,
         commanderName: l.commanderName ?? null,
@@ -182,7 +194,14 @@ async function main() {
   for (const u of users) {
     const role = await prisma.role.findUnique({ where: { name: u.roleName } });
     if (!role) continue;
-    const locality = u.localityCode ? await prisma.locality.findUnique({ where: { code: u.localityCode } }) : null;
+    const locality = u.localityCode
+      ? await prisma.locality.findFirst({
+          where: {
+            code: u.localityCode,
+            catalogType: LocalityCatalogType.SMIF,
+          },
+        })
+      : null;
     const hash = await bcrypt.hash(u.password, 10);
     const execFlag = !!(role.flagsJson && (role.flagsJson as any).executive_hide_pii === true);
 
@@ -252,7 +271,12 @@ async function main() {
     const tmpl = templateByTitle.get(ti.taskTitle);
     if (!tmpl) continue;
 
-    const locality = await prisma.locality.findUnique({ where: { code: ti.localityCode } });
+    const locality = await prisma.locality.findFirst({
+      where: {
+        code: ti.localityCode,
+        catalogType: LocalityCatalogType.SMIF,
+      },
+    });
     if (!locality) continue;
 
     const assignee = ti.assignedToEmail ? await prisma.user.findUnique({ where: { email: ti.assignedToEmail } }) : null;
@@ -272,7 +296,12 @@ async function main() {
   }
 
   for (const entry of recruitsHistory) {
-    const locality = await prisma.locality.findUnique({ where: { code: entry.localityCode } });
+    const locality = await prisma.locality.findFirst({
+      where: {
+        code: entry.localityCode,
+        catalogType: LocalityCatalogType.SMIF,
+      },
+    });
     if (!locality) continue;
     await prisma.recruitsHistory.upsert({
       where: { localityId_date: { localityId: locality.id, date: new Date(entry.date) } },
@@ -291,7 +320,12 @@ async function main() {
 
   for (const notice of notices) {
     const locality = notice.localityCode
-      ? await prisma.locality.findUnique({ where: { code: notice.localityCode } })
+      ? await prisma.locality.findFirst({
+          where: {
+            code: notice.localityCode,
+            catalogType: LocalityCatalogType.SMIF,
+          },
+        })
       : null;
     const specialty = notice.specialtyName
       ? await prisma.specialty.findUnique({ where: { name: notice.specialtyName } })
@@ -364,7 +398,12 @@ async function main() {
   }
 
   for (const elo of elos) {
-    const locality = await prisma.locality.findUnique({ where: { code: elo.localityCode } });
+    const locality = await prisma.locality.findFirst({
+      where: {
+        code: elo.localityCode,
+        catalogType: LocalityCatalogType.SMIF,
+      },
+    });
     const eloRole = await prisma.eloRole.findUnique({ where: { code: elo.roleType } });
     if (!locality) continue;
     if (!eloRole) continue;
