@@ -2758,13 +2758,23 @@ export class AiAssistantService {
       ? (draft.scheduleItemsDraft as AssistantScheduleDraftItem[])
       : [];
     const item = items[missingField.itemIndex];
+    const itemScheduleLabel = item?.startAt
+      ? this.formatScheduleDateTime(item.startAt)
+      : '';
     return {
       field: 'scheduleMissingFieldValue',
-      label: `${missingField.fieldLabel} do item ${missingField.itemNumber}`,
+      label: itemScheduleLabel
+        ? `${missingField.fieldLabel} do item ${missingField.itemNumber} (${itemScheduleLabel})`
+        : `${missingField.fieldLabel} do item ${missingField.itemNumber}`,
       inputType: 'text',
       placeholder: 'Ex.: Auditório da UNIFA ou -',
       helperText: item
-        ? `Não consegui identificar ${missingField.fieldLabel.toLowerCase()} para "${item.title}". Informe o valor correto ou use "-" se não se aplica.`
+        ? [
+            `Não consegui identificar ${missingField.fieldLabel.toLowerCase()} para "${item.title}"${
+              itemScheduleLabel ? ` em ${itemScheduleLabel}` : ''
+            }.`,
+            'Informe o valor correto ou use "-" se não se aplica.',
+          ].join(' ')
         : `Informe ${missingField.fieldLabel.toLowerCase()} do item ${missingField.itemNumber}.`,
     };
   }
