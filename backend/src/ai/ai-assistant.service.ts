@@ -654,15 +654,20 @@ export class AiAssistantService {
     }
     if (updatedView.readyToConfirm) {
       workflow.status = 'confirming';
+      const confirmationMessage =
+        workflow.intent === 'create_mission_schedule' &&
+        workflow.draft.scheduleOperation !== 'EDIT'
+          ? this.buildScheduleReadyToConfirmMessage(updatedView, workflow.draft)
+          : [
+              `Rascunho de **${updatedView.title.toLowerCase()}** pronto para conferência.`,
+              'Revise os dados abaixo. Se estiver tudo certo, confirme a execução.',
+            ].join('\n\n');
       return this.buildReply(
         session,
         this.pushMessage(
           session,
           'assistant',
-          [
-            `Rascunho de **${updatedView.title.toLowerCase()}** pronto para conferência.`,
-            'Revise os dados abaixo. Se estiver tudo certo, confirme a execução.',
-          ].join('\n\n'),
+          confirmationMessage,
         ),
         updatedView,
         null,
@@ -674,9 +679,7 @@ export class AiAssistantService {
       this.pushMessage(
         session,
         'assistant',
-        updatedView.currentField
-          ? `Certo. Agora preciso de **${updatedView.currentField.label.toLowerCase()}**.`
-          : 'Fluxo atualizado.',
+        this.buildCurrentFieldPromptMessage(updatedView.currentField),
       ),
       updatedView,
       null,
@@ -3991,6 +3994,40 @@ export class AiAssistantService {
         ? `\n... e mais ${items.length - preview.length} item(ns) no rascunho.`
         : '';
     return `**Itens montados**\n\n${preview.join('\n\n')}${remaining}`;
+  }
+
+  private buildCurrentFieldPromptMessage(currentField: AssistantFieldConfig | null) {
+    if (!currentField) {
+      return 'Fluxo atualizado.';
+    }
+    if (
+      currentField.field === 'scheduleMissingFieldValue' &&
+      currentField.helperText
+    ) {
+      return `Certo. ${currentField.helperText}`;
+    }
+    return `Certo. Agora preciso de **${currentField.label.toLowerCase()}**.`;
+  }
+
+  private buildScheduleReadyToConfirmMessage(
+    workflowView: {
+      title: string;
+      currentField: AssistantFieldConfig | null;
+      readyToConfirm: boolean;
+    },
+    draft: Record<string, any>,
+  ) {
+    const preview = this.getSchedulePreviewState(draft);
+    const lines = [
+      `Rascunho de **${workflowView.title.toLowerCase()}** pronto para conferência.`,
+    ];
+    if (preview.items.length) {
+      lines.push(this.buildSchedulePreviewMessage(preview.items, preview.savedCount));
+      lines.push('Revise os itens acima. Se estiver tudo certo, confirme a execução.');
+    } else {
+      lines.push('Revise os dados abaixo. Se estiver tudo certo, confirme a execução.');
+    }
+    return lines.join('\n\n');
   }
 
   private buildExistingScheduleListMessage(items: AssistantScheduleDraftItem[]) {
