@@ -174,6 +174,36 @@ Regras:
 5. Sempre que houver evidência, cite OM, UF, score e motivo.
 6. Não use tabelas markdown nem raciocínio interno.`;
 
+const COMGEP_UF_ALIASES: Record<string, string[]> = {
+  AC: ['acre'],
+  AL: ['alagoas'],
+  AP: ['amapa', 'amapá'],
+  AM: ['amazonas'],
+  BA: ['bahia'],
+  CE: ['ceara', 'ceará'],
+  DF: ['distrito federal', 'brasilia', 'brasília'],
+  ES: ['espirito santo', 'espírito santo'],
+  GO: ['goias', 'goiás'],
+  MA: ['maranhao', 'maranhão'],
+  MT: ['mato grosso'],
+  MS: ['mato grosso do sul'],
+  MG: ['minas gerais'],
+  PA: ['para', 'pará'],
+  PB: ['paraiba', 'paraíba'],
+  PR: ['parana', 'paraná'],
+  PE: ['pernambuco'],
+  PI: ['piaui', 'piauí'],
+  RJ: ['rio de janeiro'],
+  RN: ['rio grande do norte'],
+  RS: ['rio grande do sul'],
+  RO: ['rondonia', 'rondônia'],
+  RR: ['roraima'],
+  SC: ['santa catarina'],
+  SP: ['sao paulo', 'são paulo'],
+  SE: ['sergipe'],
+  TO: ['tocantins'],
+};
+
 type NarrativePdfBlock =
   | { type: 'paragraph'; text: string }
   | { type: 'heading'; level: number; text: string }
@@ -1839,6 +1869,11 @@ export class AiService {
   private buildDeterministicComgepFallbackNarrative(
     params: ComgepCopilotStreamParams,
   ) {
+    const contextualAnswer = this.buildComgepQuestionDrivenFallback(params);
+    if (contextualAnswer) {
+      return contextualAnswer;
+    }
+
     const roomSummary = this.buildCompactActionAgentContext(
       params.room,
       params.scopeUf,
@@ -1967,6 +2002,354 @@ export class AiService {
       'Esta resposta foi produzida com base nos dados estruturados já carregados na Sala COMGEP. Se necessário, refine o foco para uma UF ou OM específica e execute novamente para obter uma resposta mais estreita.',
     );
     return lines.join('\n');
+  }
+
+  private buildComgepQuestionDrivenFallback(
+    params: ComgepCopilotStreamParams,
+  ) {
+    const message = String(params.userMessage ?? '').trim();
+    if (!message) return null;
+
+    const normalized = this.normalizeComgepQueryText(message);
+    const mentionedUfs = this.extractMentionedUfs(message);
+
+    if (
+      mentionedUfs.length >= 2 &&
+      (normalized.includes('acima de') ||
+        normalized.includes('compar') ||
+        normalized.includes('diferenca') ||
+        normalized.includes('diferença') ||
+        normalized.includes('por que'))
+    ) {
+      return this.buildComgepUfComparisonFallback(
+        params,
+        mentionedUfs[0],
+        mentionedUfs[1],
+      );
+    }
+
+    if (
+      (normalized.includes('sem cpca') ||
+        normalized.includes('gaps de cobertura') ||
+        normalized.includes('gap de cobertura') ||
+        normalized.includes('sem cobertura') ||
+        normalized.includes('nao coberta') ||
+        normalized.includes('não coberta')) &&
+      (normalized.includes('om') || normalized.includes('oms'))
+    ) {
+      return this.buildComgepUncoveredOmsFallback(
+        params,
+        mentionedUfs[0] ?? params.scopeUf ?? null,
+      );
+    }
+
+    if (
+      normalized.includes('maior impacto') ||
+      normalized.includes('mais impacto') ||
+      normalized.includes('gera mais impacto') ||
+      normalized.includes('qual dessas acoes') ||
+      normalized.includes('qual dessas ações')
+    ) {
+      return this.buildComgepActionImpactFallback(
+        params,
+        mentionedUfs[0] ?? params.scopeUf ?? null,
+      );
+    }
+
+    if (mentionedUfs.length === 1 && normalized.includes('por que')) {
+      return this.buildComgepUfWhyFallback(params, mentionedUfs[0]);
+    }
+
+    return null;
+  }
+
+  private buildComgepUfComparisonFallback(
+    params: ComgepCopilotStreamParams,
+    ufA: string,
+    ufB: string,
+  ) {
+    const rowA = this.findComgepUfRow(params.room, ufA);
+    const rowB = this.findComgepUfRow(params.room, ufB);
+    if (!rowA || !rowB) return null;
+
+    const higher = rowA.riskScore >= rowB.riskScore ? rowA : rowB;
+    const lower = higher === rowA ? rowB : rowA;
+    const reasons = this.describeComgepUfDeltaReasons(higher, lower);
+
+    const lines = [
+      '## Resposta direta',
+      `${higher.uf} ficou acima de ${lower.uf} porque combina risco mais alto com piores condicionantes estruturais neste recorte.`,
+      '',
+      '## Comparação objetiva',
+      `- ${higher.uf}: risco ${higher.riskScore}, cobertura CPCA ${higher.coveragePercent}%, presença ${higher.presenceScore}, denúncias abertas ${higher.complaints?.openCases ?? 0}, retaliação ${higher.complaints?.retaliationCases ?? 0}.`,
+      `- ${lower.uf}: risco ${lower.riskScore}, cobertura CPCA ${lower.coveragePercent}%, presença ${lower.presenceScore}, denúncias abertas ${lower.complaints?.openCases ?? 0}, retaliação ${lower.complaints?.retaliationCases ?? 0}.`,
+      '',
+      '## Fatores que explicam a diferença',
+      ...reasons.map((reason) => `- ${reason}`),
+    ];
+
+    const topOms = Array.isArray(higher.oms) ? higher.oms.slice(0, 3) : [];
+    if (topOms.length) {
+      lines.push('');
+      lines.push(`## OMs que mais puxam ${higher.uf}`);
+      topOms.forEach((item: any) => {
+        lines.push(
+          `- ${item.code} - ${item.name} | score ${item.riskScore} | cobertura ${item.coverageType} | ${this.describeActionAgentOmRisk(item)}`,
+        );
+        lines.push(`  Link: ${item.link}`);
+      });
+    }
+
+    return lines.join('\n');
+  }
+
+  private buildComgepUncoveredOmsFallback(
+    params: ComgepCopilotStreamParams,
+    uf: string | null,
+  ) {
+    const uncoveredOms = this.listComgepUncoveredOms(params.room, uf).slice(0, 10);
+    const safeUf = String(uf ?? '').trim().toUpperCase() || null;
+    const title = safeUf
+      ? `## OMs sem cobertura CPCA em ${safeUf}`
+      : '## OMs sem cobertura CPCA no recorte atual';
+
+    if (!uncoveredOms.length) {
+      return [
+        title,
+        safeUf
+          ? `Não há OMs sem cobertura CPCA no recorte da UF ${safeUf}.`
+          : 'Não há OMs sem cobertura CPCA no recorte atual.',
+      ].join('\n');
+    }
+
+    const lines = [
+      title,
+      `Foram encontradas ${uncoveredOms.length} OMs sem cobertura CPCA${safeUf ? ` na UF ${safeUf}` : ''}.`,
+      '',
+    ];
+    uncoveredOms.forEach((item: any) => {
+      lines.push(
+        `- ${item.code} - ${item.name} | ${item.uf} | score ${item.riskScore} | ${this.describeActionAgentCoverageGap(item)}`,
+      );
+      lines.push(`  Link: ${item.link}`);
+    });
+    return lines.join('\n');
+  }
+
+  private buildComgepActionImpactFallback(
+    params: ComgepCopilotStreamParams,
+    uf: string | null,
+  ) {
+    const safeUf = String(uf ?? '').trim().toUpperCase() || null;
+    const ufRow = safeUf ? this.findComgepUfRow(params.room, safeUf) : null;
+    const uncoveredOms = this.listComgepUncoveredOms(params.room, safeUf);
+    const highRiskOms = this.listComgepHighRiskOms(params.room, safeUf);
+    const pressureRows = this.listComgepPressureRows(params.room, safeUf);
+
+    const coverageSeverity = uncoveredOms
+      .slice(0, 6)
+      .reduce((acc: number, item: any) => acc + Number(item.riskScore ?? 0), 0);
+    const presenceSeverity = pressureRows
+      .slice(0, 4)
+      .reduce(
+        (acc: number, item: any) => acc + Math.max(Number(item.pressureScore ?? 0), 0),
+        0,
+      );
+    const commandSeverity = highRiskOms
+      .slice(0, 4)
+      .reduce(
+        (acc: number, item: any) =>
+          acc +
+          Number(item?.complaints?.openCases ?? 0) * 8 +
+          Number(item?.complaints?.retaliationCases ?? 0) * 12,
+        0,
+      );
+
+    const ranked = [
+      {
+        key: 'coverage',
+        title: 'Expandir cobertura CPCA',
+        score: coverageSeverity,
+        reason:
+          uncoveredOms.length > 0
+            ? `${uncoveredOms.length} OM(s) sem cobertura${safeUf ? ` em ${safeUf}` : ''}, incluindo casos com score elevado.`
+            : 'não há gaps estruturais relevantes de cobertura neste recorte.',
+      },
+      {
+        key: 'presence',
+        title: 'Reforçar presença operacional',
+        score: presenceSeverity,
+        reason:
+          pressureRows.length > 0
+            ? `pressão operacional acumulada de ${presenceSeverity} ponto(s), indicando risco acima da presença institucional.`
+            : 'a pressão operacional não aparece como gargalo principal neste recorte.',
+      },
+      {
+        key: 'command',
+        title: 'Intervenção imediata de comando',
+        score: commandSeverity,
+        reason:
+          highRiskOms.length > 0
+            ? `${highRiskOms.length} OM(s) críticas com denúncias abertas ou risco de retaliação puxando o índice.`
+            : 'não há massa crítica suficiente de denúncias abertas neste recorte.',
+      },
+    ].sort((a, b) => b.score - a.score);
+
+    const top = ranked[0];
+    const lines = [
+      '## Resposta direta',
+      `${top.title} é a ação que tende a gerar mais impacto imediato${safeUf ? ` em ${safeUf}` : ''}, porque hoje ela ataca o maior gargalo observado no recorte.`,
+      '',
+      '## Justificativa',
+      `- ${top.reason}`,
+    ];
+
+    if (ufRow) {
+      lines.push(
+        `- ${ufRow.uf}: risco ${ufRow.riskScore}, cobertura ${ufRow.coveragePercent}%, presença ${ufRow.presenceScore}, denúncias abertas ${ufRow.complaints?.openCases ?? 0}.`,
+      );
+    }
+
+    lines.push('');
+    lines.push('## Ranking das alavancas');
+    ranked.forEach((item) => {
+      lines.push(`- ${item.title}: score de impacto ${item.score}. ${item.reason}`);
+    });
+
+    return lines.join('\n');
+  }
+
+  private buildComgepUfWhyFallback(
+    params: ComgepCopilotStreamParams,
+    uf: string,
+  ) {
+    const row = this.findComgepUfRow(params.room, uf);
+    if (!row) return null;
+    const lines = [
+      '## Resposta direta',
+      `${row.uf} aparece como UF prioritária porque combina risco ${row.riskScore}, cobertura CPCA de ${row.coveragePercent}% e presença operacional ${row.presenceScore}.`,
+      '',
+      '## Fatores do score',
+      `- Denúncias abertas: ${row.complaints?.openCases ?? 0}.`,
+      `- Casos com retaliação: ${row.complaints?.retaliationCases ?? 0}.`,
+      `- Taxa de violência em pesquisa: ${row.surveyRate}%.`,
+      `- Taxa de violência doméstica: ${row.domesticRate}%.`,
+      `- Foco recomendado: ${row.recommendedFocus}.`,
+    ];
+    return lines.join('\n');
+  }
+
+  private findComgepUfRow(room: any, uf: string) {
+    const safeUf = String(uf ?? '').trim().toUpperCase();
+    const ufRows = Array.isArray(room?.details?.ufMatrix) ? room.details.ufMatrix : [];
+    return (
+      ufRows.find(
+        (item: any) => String(item?.uf ?? '').trim().toUpperCase() === safeUf,
+      ) ?? null
+    );
+  }
+
+  private listComgepUncoveredOms(room: any, uf: string | null) {
+    const rows = Array.isArray(room?.details?.uncoveredOms)
+      ? room.details.uncoveredOms
+      : [];
+    const safeUf = String(uf ?? '').trim().toUpperCase();
+    return safeUf
+      ? rows.filter(
+          (item: any) => String(item?.uf ?? '').trim().toUpperCase() === safeUf,
+        )
+      : rows;
+  }
+
+  private listComgepHighRiskOms(room: any, uf: string | null) {
+    const rows = Array.isArray(room?.details?.highRiskOms)
+      ? room.details.highRiskOms
+      : [];
+    const safeUf = String(uf ?? '').trim().toUpperCase();
+    return safeUf
+      ? rows.filter(
+          (item: any) => String(item?.uf ?? '').trim().toUpperCase() === safeUf,
+        )
+      : rows;
+  }
+
+  private listComgepPressureRows(room: any, uf: string | null) {
+    const rows = Array.isArray(room?.watchlists?.operationalPressure)
+      ? room.watchlists.operationalPressure
+      : [];
+    const safeUf = String(uf ?? '').trim().toUpperCase();
+    return safeUf
+      ? rows.filter(
+          (item: any) => String(item?.uf ?? '').trim().toUpperCase() === safeUf,
+        )
+      : rows;
+  }
+
+  private describeComgepUfDeltaReasons(higher: any, lower: any) {
+    const reasons: string[] = [];
+    if (Number(higher?.complaints?.retaliationCases ?? 0) > Number(lower?.complaints?.retaliationCases ?? 0)) {
+      reasons.push(
+        `${higher.uf} tem mais casos com risco de retaliação (${higher.complaints?.retaliationCases ?? 0} vs ${lower.complaints?.retaliationCases ?? 0}).`,
+      );
+    }
+    if (Number(higher?.complaints?.openCases ?? 0) > Number(lower?.complaints?.openCases ?? 0)) {
+      reasons.push(
+        `${higher.uf} tem mais denúncias abertas (${higher.complaints?.openCases ?? 0} vs ${lower.complaints?.openCases ?? 0}).`,
+      );
+    }
+    if (Number(higher?.coveragePercent ?? 0) < Number(lower?.coveragePercent ?? 0)) {
+      reasons.push(
+        `${higher.uf} tem cobertura CPCA menor (${higher.coveragePercent}% vs ${lower.coveragePercent}%).`,
+      );
+    }
+    if (Number(higher?.presenceScore ?? 0) < Number(lower?.presenceScore ?? 0)) {
+      reasons.push(
+        `${higher.uf} tem presença operacional mais baixa (${higher.presenceScore} vs ${lower.presenceScore}).`,
+      );
+    }
+    if (Number(higher?.surveyRate ?? 0) > Number(lower?.surveyRate ?? 0)) {
+      reasons.push(
+        `${higher.uf} mostra taxa maior de sinais em pesquisa (${higher.surveyRate}% vs ${lower.surveyRate}%).`,
+      );
+    }
+    if (Number(higher?.domesticRate ?? 0) > Number(lower?.domesticRate ?? 0)) {
+      reasons.push(
+        `${higher.uf} tem taxa maior de violência doméstica reportada (${higher.domesticRate}% vs ${lower.domesticRate}%).`,
+      );
+    }
+    if (!reasons.length) {
+      reasons.push(
+        `${higher.uf} ficou acima de ${lower.uf} pelo índice composto de risco agregado da Sala COMGEP.`,
+      );
+    }
+    return reasons;
+  }
+
+  private extractMentionedUfs(text: string) {
+    const source = String(text ?? '');
+    const normalized = this.normalizeComgepQueryText(source);
+    const upper = source.toUpperCase();
+    const result: string[] = [];
+
+    for (const [uf, aliases] of Object.entries(COMGEP_UF_ALIASES)) {
+      const codeRegex = new RegExp(`(^|[^A-Z])${uf}([^A-Z]|$)`, 'i');
+      if (codeRegex.test(upper)) {
+        result.push(uf);
+        continue;
+      }
+      if (aliases.some((alias) => normalized.includes(this.normalizeComgepQueryText(alias)))) {
+        result.push(uf);
+      }
+    }
+
+    return result.filter((value, index, array) => array.indexOf(value) === index);
+  }
+
+  private normalizeComgepQueryText(text: string) {
+    return String(text ?? '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
   }
 
   private buildComgepCopilotPrompt(
