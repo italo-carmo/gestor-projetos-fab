@@ -165,6 +165,15 @@ export const ACTION_AGENT_CATALOG: {
   },
 ];
 
+const COMGEP_COPILOT_SYSTEM_PROMPT = `Você é o copiloto executivo da Sala COMGEP.
+Regras:
+1. Responda sempre em português do Brasil.
+2. Use apenas o contexto fornecido na própria execução.
+3. Não invente números, causas, links ou registros.
+4. Seja objetivo, institucional e acionável.
+5. Sempre que houver evidência, cite OM, UF, score e motivo.
+6. Não use tabelas markdown nem raciocínio interno.`;
+
 type NarrativePdfBlock =
   | { type: 'paragraph'; text: string }
   | { type: 'heading'; level: number; text: string }
@@ -1594,7 +1603,7 @@ export class AiService {
   private async *streamComgepAssistantCompletion(
     params: ComgepCopilotStreamParams,
   ): AsyncGenerator<string, { narrative: string; model: string }, void> {
-    const systemPrompt = await this.settings.getSystemPrompt();
+    const systemPrompt = this.getComgepCopilotSystemPrompt();
     const messages = this.buildComgepCopilotMessages(
       systemPrompt,
       params,
@@ -1727,6 +1736,17 @@ export class AiService {
     params: ComgepCopilotStreamParams,
     variant: 'standard' | 'compact',
   ): ChatMessage[] {
+    if (variant === 'compact') {
+      return [
+        {
+          role: 'user',
+          content: `${systemPrompt}\n\n${this.buildComgepCopilotPrompt(
+            params,
+            variant,
+          )}`,
+        },
+      ];
+    }
     return [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: this.buildComgepCopilotPrompt(params, variant) },
@@ -1770,8 +1790,21 @@ export class AiService {
           'compact',
         );
       }
+      if (this.isLiteLlmContextBug(msg)) {
+        this.logger.warn(
+          `LiteLLM rejeitou também o fallback compacto do copiloto COMGEP; usando resposta determinística local. Motivo: ${msg}`,
+        );
+        return {
+          narrative: this.buildDeterministicComgepFallbackNarrative(params),
+          model: 'local-fallback',
+        };
+      }
       throw new Error(this.formatComgepCopilotModelError(msg));
     }
+  }
+
+  private getComgepCopilotSystemPrompt() {
+    return COMGEP_COPILOT_SYSTEM_PROMPT;
   }
 
   private getComgepCompletionMaxTokens(
@@ -1798,9 +1831,142 @@ export class AiService {
 
   private formatComgepCopilotModelError(message: string) {
     if (this.isLiteLlmContextBug(message)) {
-      return 'O gateway LiteLLM rejeitou o contexto desta execução. Tente novamente com um foco mais específico ou use o modo Executivo.';
+      return 'O gateway LiteLLM rejeitou o contexto desta execução e o fallback local não conseguiu concluir a resposta.';
     }
     return message;
+  }
+
+  private buildDeterministicComgepFallbackNarrative(
+    params: ComgepCopilotStreamParams,
+  ) {
+    const roomSummary = this.buildCompactActionAgentContext(
+      params.room,
+      params.scopeUf,
+    );
+    const scopeLabel = params.scopeUf
+      ? `UF ${params.scopeUf}`
+      : 'visão nacional';
+    const focusLabel = this.describeComgepFocus(params.focus, params.scopeUf);
+    const topOms = Array.isArray(roomSummary?.omsMaiorRisco)
+      ? roomSummary.omsMaiorRisco.slice(0, 3)
+      : [];
+    const topUfs = Array.isArray(roomSummary?.ufsPrioritarias)
+      ? roomSummary.ufsPrioritarias.slice(0, 3)
+      : [];
+    const coverageGaps = Array.isArray(roomSummary?.gapsCoberturaCpca)
+      ? roomSummary.gapsCoberturaCpca.slice(0, 3)
+      : [];
+    const pressureRows = Array.isArray(roomSummary?.pressaoOperacional)
+      ? roomSummary.pressaoOperacional.slice(0, 2)
+      : [];
+    const evidenceRows = params.evidences.slice(0, 4);
+
+    const lines: string[] = [];
+    lines.push('## Síntese');
+    lines.push(
+      `Resposta gerada em fallback local para ${scopeLabel}, com foco em ${focusLabel}, porque o gateway LiteLLM rejeitou esta execução específica.`,
+    );
+    lines.push(
+      `Cobertura CPCA: ${roomSummary?.resumo?.omsCobertasCpca ?? 0}/${roomSummary?.resumo?.totalOms ?? 0} OMs (${roomSummary?.resumo?.percentualCoberturaCpca ?? 0}%).`,
+    );
+    lines.push(
+      `UFs críticas: ${roomSummary?.resumo?.ufsCriticas ?? 0}. OMs de alto risco: ${roomSummary?.resumo?.omsAltoRisco ?? 0}. Denúncias abertas: ${roomSummary?.resumo?.denunciasAbertas ?? 0}.`,
+    );
+
+    if (params.agentType === 'briefing_comgep') {
+      lines.push('');
+      lines.push('## Decisão recomendada');
+      if (topUfs.length) {
+        lines.push(
+          `Priorizar atuação nas UFs ${topUfs
+            .map((item: any) => item.uf)
+            .join(', ')}, porque concentram maior risco combinado com cobertura e presença operacional insuficientes.`,
+        );
+      } else {
+        lines.push(
+          'Priorizar a revisão das OMs com maior risco e dos gaps de cobertura CPCA já identificados na sala.',
+        );
+      }
+    }
+
+    if (params.agentType === 'priorizacao_intervencao') {
+      lines.push('');
+      lines.push('## Encaminhamento');
+      if (topOms.length) {
+        lines.push(
+          `Sequência sugerida de intervenção: ${topOms
+            .map((item: any) => `${item.om} (${item.uf}, risco ${item.risco})`)
+            .join('; ')}.`,
+        );
+      } else {
+        lines.push(
+          'Sem OMs suficientes no recorte para ordenar intervenção automaticamente; use os gaps e UFs prioritárias como critério inicial.',
+        );
+      }
+    }
+
+    if (params.agentType === 'governanca_cpca') {
+      lines.push('');
+      lines.push('## Governança CPCA');
+      if (coverageGaps.length) {
+        lines.push(
+          `Gaps imediatos de cobertura: ${coverageGaps
+            .map((item: any) => `${item.om} (${item.uf})`)
+            .join('; ')}.`,
+        );
+      } else {
+        lines.push(
+          'Não há gaps imediatos de cobertura no recorte atual, mas o quadro exige monitoramento contínuo da carga por comissão.',
+        );
+      }
+    }
+
+    if (topOms.length) {
+      lines.push('');
+      lines.push('## OMs de maior risco');
+      topOms.forEach((item: any) => {
+        lines.push(
+          `- ${item.om} | ${item.uf} | score ${item.risco} | ${item.motivo}`,
+        );
+      });
+    }
+
+    if (coverageGaps.length) {
+      lines.push('');
+      lines.push('## Gaps de cobertura CPCA');
+      coverageGaps.forEach((item: any) => {
+        lines.push(
+          `- ${item.om} | ${item.uf} | score ${item.risco} | ${item.motivo}`,
+        );
+      });
+    }
+
+    if (pressureRows.length) {
+      lines.push('');
+      lines.push('## Pressão operacional');
+      pressureRows.forEach((item: any) => {
+        lines.push(
+          `- ${item.uf} | pressão ${item.pressao} | presença ${item.presenca} | ${item.focoRecomendado}`,
+        );
+      });
+    }
+
+    if (evidenceRows.length) {
+      lines.push('');
+      lines.push('## Evidências e links');
+      evidenceRows.forEach((item) => {
+        lines.push(
+          `- ${item.omCode} | ${item.uf} | score ${item.score} | ${item.reason} | ${item.link}`,
+        );
+      });
+    }
+
+    lines.push('');
+    lines.push('## Observação');
+    lines.push(
+      'Esta resposta foi produzida com base nos dados estruturados já carregados na Sala COMGEP. Se necessário, refine o foco para uma UF ou OM específica e execute novamente para obter uma resposta mais estreita.',
+    );
+    return lines.join('\n');
   }
 
   private buildComgepCopilotPrompt(
