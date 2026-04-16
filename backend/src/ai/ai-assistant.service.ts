@@ -679,7 +679,7 @@ export class AiAssistantService {
       this.pushMessage(
         session,
         'assistant',
-        this.buildCurrentFieldPromptMessage(updatedView.currentField),
+        this.buildCurrentFieldPromptMessage(updatedView.currentField, workflow.draft),
       ),
       updatedView,
       null,
@@ -2772,12 +2772,7 @@ export class AiAssistantService {
       inputType: 'text',
       placeholder: 'Ex.: Auditório da UNIFA ou -',
       helperText: item
-        ? [
-            `Não consegui identificar ${missingField.fieldLabel.toLowerCase()} para "${item.title}"${
-              itemScheduleLabel ? ` em ${itemScheduleLabel}` : ''
-            }.`,
-            'Informe o valor correto ou use "-" se não se aplica.',
-          ].join(' ')
+        ? this.buildMissingScheduleFieldPromptMessage(draft, missingField)
         : `Informe ${missingField.fieldLabel.toLowerCase()} do item ${missingField.itemNumber}.`,
     };
   }
@@ -3970,15 +3965,17 @@ export class AiAssistantService {
     return [
       'Analisei os arquivos enviados e montei um rascunho do cronograma para revisão.',
       fileSummary,
-      '',
       this.buildSchedulePreviewMessage(items, startOffset),
-      '',
       missingField
-        ? `Não consegui identificar **${missingField.fieldLabel.toLowerCase()}** do item **${missingField.itemNumber}** no PDF. Responda aqui no chat com o valor correto ou use **-** se não se aplica.`
+        ? this.buildMissingScheduleFieldPromptMessage(
+            { scheduleItemsDraft: items },
+            missingField,
+            { markdown: true },
+          )
         : 'Se estiver correto, confirme o lote atual. Se precisar ajustar, use a numeração exibida no rascunho, por exemplo **alterar item 2** ou **remover item 3**.',
     ]
       .filter(Boolean)
-      .join('\n');
+      .join('\n\n');
   }
 
   private buildSchedulePreviewMessage(
@@ -3991,22 +3988,69 @@ export class AiAssistantService {
     });
     const remaining =
       items.length > preview.length
-        ? `\n... e mais ${items.length - preview.length} item(ns) no rascunho.`
+        ? `... e mais ${items.length - preview.length} item(ns) no rascunho.`
         : '';
-    return `**Itens montados**\n\n${preview.join('\n\n')}${remaining}`;
+    return `**Itens montados**\n\n${preview.join('\n\n')}${remaining ? `\n\n${remaining}` : ''}`;
   }
 
-  private buildCurrentFieldPromptMessage(currentField: AssistantFieldConfig | null) {
+  private buildCurrentFieldPromptMessage(
+    currentField: AssistantFieldConfig | null,
+    draft?: Record<string, any>,
+  ) {
     if (!currentField) {
       return 'Fluxo atualizado.';
     }
     if (
       currentField.field === 'scheduleMissingFieldValue' &&
-      currentField.helperText
+      draft
     ) {
-      return `Certo. ${currentField.helperText}`;
+      const missingField = this.getCurrentScheduleMissingField(draft);
+      if (missingField) {
+        return `Certo. ${this.buildMissingScheduleFieldPromptMessage(draft, missingField, {
+          markdown: true,
+        })}`;
+      }
+      if (currentField.helperText) {
+        return `Certo. ${currentField.helperText}`;
+      }
     }
     return `Certo. Agora preciso de **${currentField.label.toLowerCase()}**.`;
+  }
+
+  private buildMissingScheduleFieldPromptMessage(
+    draft: Record<string, any>,
+    missingField: {
+      itemId: string;
+      itemNumber: number;
+      itemIndex: number;
+      fieldKey: 'location';
+      fieldLabel: string;
+    },
+    options?: { markdown?: boolean },
+  ) {
+    const items = Array.isArray(draft.scheduleItemsDraft)
+      ? (draft.scheduleItemsDraft as AssistantScheduleDraftItem[])
+      : [];
+    const item = items[missingField.itemIndex];
+    const itemTitle = String(item?.title ?? `item ${missingField.itemNumber}`).trim();
+    const itemScheduleLabel = item?.startAt
+      ? this.formatScheduleDateTime(item.startAt)
+      : '';
+    const markdown = Boolean(options?.markdown);
+    const titleText = markdown ? `**"${itemTitle}"**` : `"${itemTitle}"`;
+    const scheduleText = itemScheduleLabel
+      ? markdown
+        ? ` em **${itemScheduleLabel}**`
+        : ` em ${itemScheduleLabel}`
+      : '';
+    const fieldText = markdown
+      ? `**${missingField.fieldLabel.toLowerCase()}**`
+      : missingField.fieldLabel.toLowerCase();
+    const fallbackValueText = markdown ? '**"-"**' : '"-"';
+    return [
+      `Não consegui identificar ${fieldText} para ${titleText}${scheduleText}.`,
+      `Informe o valor correto ou use ${fallbackValueText} se não se aplica.`,
+    ].join(' ');
   }
 
   private buildScheduleReadyToConfirmMessage(
