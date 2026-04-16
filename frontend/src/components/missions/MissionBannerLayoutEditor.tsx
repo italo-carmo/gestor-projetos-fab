@@ -553,23 +553,32 @@ export function MissionBannerLayoutEditor({
   };
 
   const getCurrentFontSizePx = (block: TextBlockDefinition) => {
+    const recommendedFontSize = getRecommendedFontSizePx(block);
     const current = normalizedOverrides[block.key];
-    const autoFontSize = fitTextToWidth(
-      getCurrentBlockText(block),
-      block.maxWidth,
-      block.minFontSize,
-      Math.max(block.fontSizeBase, block.minFontSize),
-    );
     if (typeof current?.fontSizePx === 'number' && Number.isFinite(current.fontSizePx)) {
       return clamp(current.fontSizePx, block.minFontSize, 180);
     }
     if (typeof current?.fontScale === 'number' && Number.isFinite(current.fontScale)) {
       return Math.max(
         block.minFontSize,
-        autoFontSize * clamp(current.fontScale, 0.45, 1.8),
+        recommendedFontSize * clamp(current.fontScale, 0.45, 1.8),
       );
     }
-    return Math.max(block.minFontSize, autoFontSize);
+    return Math.max(block.minFontSize, recommendedFontSize);
+  };
+
+  const getRecommendedFontSizePx = (block: TextBlockDefinition) =>
+    fitTextToWidth(
+      getCurrentBlockText(block),
+      block.maxWidth,
+      block.minFontSize,
+      Math.max(block.fontSizeBase, block.minFontSize),
+    );
+
+  const getCurrentFontPercentOfRecommended = (block: TextBlockDefinition) => {
+    const recommended = getRecommendedFontSizePx(block);
+    if (recommended <= 0) return 100;
+    return Math.round((getCurrentFontSizePx(block) / recommended) * 100);
   };
 
   const setSelectedBlockFontSize = (nextFontSizePx: number) => {
@@ -861,7 +870,7 @@ export function MissionBannerLayoutEditor({
             <Typography variant="caption" color="text.secondary" display="block">
               Tamanho da letra
             </Typography>
-            <Stack direction="row" spacing={1} alignItems="center">
+            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
               <IconButton
                 size="small"
                 onClick={() => setSelectedBlockFontSize(getCurrentFontSizePx(activeBlock) - 1)}
@@ -873,25 +882,49 @@ export function MissionBannerLayoutEditor({
                 label={`${Math.round(getCurrentFontSizePx(activeBlock))} px`}
                 variant="outlined"
               />
+              <Chip
+                size="small"
+                color="primary"
+                variant="filled"
+                label={`${getCurrentFontPercentOfRecommended(activeBlock)}% do recomendado`}
+              />
+              <Chip
+                size="small"
+                label={`Recomendado: ${Math.round(getRecommendedFontSizePx(activeBlock))} px`}
+                variant="outlined"
+              />
               <IconButton
                 size="small"
                 onClick={() => setSelectedBlockFontSize(getCurrentFontSizePx(activeBlock) + 1)}
               >
                 <KeyboardArrowUpRoundedIcon />
               </IconButton>
+              <Button
+                size="small"
+                variant="text"
+                onClick={() => setSelectedBlockFontSize(getRecommendedFontSizePx(activeBlock))}
+              >
+                Usar recomendado
+              </Button>
             </Stack>
             <Slider
               value={Math.round(getCurrentFontSizePx(activeBlock))}
               min={Math.round(activeBlock.minFontSize)}
               max={Math.max(
                 Math.round(activeBlock.minFontSize + 36),
-                Math.round(activeBlock.fontSizeBase * 2.2),
+                Math.round(getRecommendedFontSizePx(activeBlock) * 2.2),
               )}
               step={1}
               valueLabelDisplay="auto"
-              valueLabelFormat={(value) => `${value}px`}
+              valueLabelFormat={(value) =>
+                `${value}px · ${Math.round((Number(value) / getRecommendedFontSizePx(activeBlock)) * 100)}%`
+              }
               onChange={(_, value) => setSelectedBlockFontSize(Number(value))}
             />
+            <Typography variant="caption" color="text.secondary">
+              Use o percentual do recomendado como referência comparável entre os blocos.
+              `100%` mantém a proporção ideal deste texto dentro da área padrão do banner.
+            </Typography>
           </Box>
 
           <TextField
