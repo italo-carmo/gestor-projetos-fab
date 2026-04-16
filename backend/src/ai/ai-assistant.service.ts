@@ -275,13 +275,19 @@ export class AiAssistantService {
         ...item,
         id: item.id || `schedule-item-${index + 1}`,
       }));
+    workflow.draft.scheduleMissingFieldQueue = this.buildScheduleMissingFieldQueue(
+      workflow.draft.scheduleItemsDraft as AssistantScheduleDraftItem[],
+    );
     workflow.draft.scheduleSourceFiles = [...existingFiles, ...parseResult.files];
     workflow.draft.scheduleBatchSize = this.getScheduleBatchSize();
     workflow.draft.scheduleSavedCount = 0;
     workflow.draft.scheduleTotalItems = (
       workflow.draft.scheduleItemsDraft as AssistantScheduleDraftItem[]
     ).length;
-    workflow.status = 'confirming';
+    workflow.status = Array.isArray(workflow.draft.scheduleMissingFieldQueue) &&
+      workflow.draft.scheduleMissingFieldQueue.length
+        ? 'collecting'
+        : 'confirming';
     session.updatedAt = new Date().toISOString();
 
     this.pushMessage(
@@ -296,7 +302,12 @@ export class AiAssistantService {
       this.pushMessage(
         session,
         'assistant',
-        this.buildScheduleUploadMessage(parseResult.files, parseResult.items, 0),
+        this.buildScheduleUploadMessage(
+          parseResult.files,
+          parseResult.items,
+          0,
+          this.getCurrentScheduleMissingField(workflow.draft),
+        ),
       ),
       updatedView,
       null,
@@ -931,7 +942,7 @@ export class AiAssistantService {
         }
         return;
       }
-      if (field.field === 'scheduleCreateIfMissing') {
+    if (field.field === 'scheduleCreateIfMissing') {
         const shouldCreate = this.parseBooleanValue(
           this.normalizeFieldValue(field, value),
           field.label,
@@ -984,6 +995,10 @@ export class AiAssistantService {
       );
     }
     const normalized = this.normalizeFieldValue(field, value);
+    if (field.field === 'scheduleMissingFieldValue') {
+      this.applyMissingScheduleFieldValue(workflow, normalized);
+      return;
+    }
     if (field.inputType === 'single_select' && field.options?.length) {
       const option = this.resolveSingleOption(field.options, normalized);
       if (!option) {
@@ -1033,6 +1048,10 @@ export class AiAssistantService {
         this.applyScheduleItemEdit(workflow, parsed);
         return;
       }
+      if (field.field === 'scheduleMissingFieldValue') {
+        this.applyMissingScheduleFieldValue(workflow, parsed);
+        return;
+      }
       if (field.field === 'scheduleExistingEditValue') {
         this.stageExistingScheduleItemEdit(workflow, parsed);
         return;
@@ -1046,6 +1065,10 @@ export class AiAssistantService {
       );
       if (field.field === 'scheduleEditValue') {
         this.applyScheduleItemEdit(workflow, `${parsed}T00:00:00`);
+        return;
+      }
+      if (field.field === 'scheduleMissingFieldValue') {
+        this.applyMissingScheduleFieldValue(workflow, `${parsed}T00:00:00`);
         return;
       }
       if (field.field === 'scheduleExistingEditValue') {
@@ -1063,6 +1086,10 @@ export class AiAssistantService {
         this.applyScheduleItemEdit(workflow, parsed);
         return;
       }
+      if (field.field === 'scheduleMissingFieldValue') {
+        this.applyMissingScheduleFieldValue(workflow, parsed);
+        return;
+      }
       if (field.field === 'scheduleExistingEditValue') {
         this.stageExistingScheduleItemEdit(workflow, parsed);
         return;
@@ -1078,6 +1105,10 @@ export class AiAssistantService {
     }
     if (field.field === 'scheduleEditValue') {
       this.applyScheduleItemEdit(workflow, text || '');
+      return;
+    }
+    if (field.field === 'scheduleMissingFieldValue') {
+      this.applyMissingScheduleFieldValue(workflow, text || '');
       return;
     }
     if (field.field === 'scheduleExistingEditValue') {
@@ -1448,6 +1479,17 @@ export class AiAssistantService {
       },
     ];
 
+    const currentMissingField =
+      draft.scheduleInputMode === 'UPLOAD'
+        ? this.getCurrentScheduleMissingField(draft)
+        : null;
+    if (currentMissingField) {
+      return [
+        ...createBaseFields,
+        this.buildMissingScheduleFieldConfig(draft, currentMissingField),
+      ];
+    }
+
     if (draft.scheduleInputMode === 'UPLOAD') {
       if (draft.scheduleEditIndex !== undefined && draft.scheduleEditIndex !== null) {
         if (!draft.scheduleEditFieldKey) {
@@ -1774,7 +1816,9 @@ export class AiAssistantService {
         {
           label: 'Próxima ação',
           value:
-            draft.scheduleEditIndex !== undefined && draft.scheduleEditIndex !== null
+            this.getCurrentScheduleMissingField(draft)
+              ? `Informar ${this.getCurrentScheduleMissingField(draft)?.fieldLabel.toLowerCase()} do item ${this.getCurrentScheduleMissingField(draft)?.itemNumber}.`
+              : draft.scheduleEditIndex !== undefined && draft.scheduleEditIndex !== null
               ? `Ajustando item ${
                   this.getScheduleSavedCount(draft) +
                   Number(draft.scheduleEditIndex) +
@@ -2218,11 +2262,11 @@ export class AiAssistantService {
       );
     }
 
+    const deduplicatedItems = this.deduplicateScheduleDraftItems(parsedItems)
+      .sort((left, right) => left.startAt.localeCompare(right.startAt));
     return {
       files: parsedFiles,
-      items: parsedItems.sort((left, right) =>
-        left.startAt.localeCompare(right.startAt),
-      ),
+      items: deduplicatedItems,
     };
   }
 
@@ -2534,7 +2578,10 @@ export class AiAssistantService {
           title: normalizedTitle,
           startAt: this.combineDateAndTime(pageDate, row.time),
           durationMinutes: this.estimateDurationMinutes(row.time, nextRow?.time ?? null),
-          location: locationText || fallbackLocation || 'A definir',
+          location: this.defaultScheduleLocationForTitle(
+            normalizedTitle,
+            locationText,
+          ),
           responsible:
             (this.isLikelyResponsibleLine(cleanedResponsibleText)
               ? cleanedResponsibleText
@@ -2659,6 +2706,144 @@ export class AiAssistantService {
       hasMore: pendingItems.length > batchSize,
       pendingCount: pendingItems.length,
     };
+  }
+
+  private buildScheduleMissingFieldQueue(items: AssistantScheduleDraftItem[]) {
+    const queue: Array<{
+      itemId: string;
+      itemNumber: number;
+      itemIndex: number;
+      fieldKey: 'location';
+      fieldLabel: string;
+    }> = [];
+    items.forEach((item, index) => {
+      if (this.requiresScheduleLocationConfirmation(item)) {
+        queue.push({
+          itemId: item.id,
+          itemNumber: index + 1,
+          itemIndex: index,
+          fieldKey: 'location',
+          fieldLabel: 'Local',
+        });
+      }
+    });
+    return queue;
+  }
+
+  private getCurrentScheduleMissingField(draft: Record<string, any>) {
+    const queue = Array.isArray(draft.scheduleMissingFieldQueue)
+      ? draft.scheduleMissingFieldQueue
+      : [];
+    if (!queue.length) return null;
+    return queue[0] as {
+      itemId: string;
+      itemNumber: number;
+      itemIndex: number;
+      fieldKey: 'location';
+      fieldLabel: string;
+    };
+  }
+
+  private buildMissingScheduleFieldConfig(
+    draft: Record<string, any>,
+    missingField: {
+      itemId: string;
+      itemNumber: number;
+      itemIndex: number;
+      fieldKey: 'location';
+      fieldLabel: string;
+    },
+  ): AssistantFieldConfig {
+    const items = Array.isArray(draft.scheduleItemsDraft)
+      ? (draft.scheduleItemsDraft as AssistantScheduleDraftItem[])
+      : [];
+    const item = items[missingField.itemIndex];
+    return {
+      field: 'scheduleMissingFieldValue',
+      label: `${missingField.fieldLabel} do item ${missingField.itemNumber}`,
+      inputType: 'text',
+      placeholder: 'Ex.: Auditório da UNIFA ou -',
+      helperText: item
+        ? `Não consegui identificar ${missingField.fieldLabel.toLowerCase()} para "${item.title}". Informe o valor correto ou use "-" se não se aplica.`
+        : `Informe ${missingField.fieldLabel.toLowerCase()} do item ${missingField.itemNumber}.`,
+    };
+  }
+
+  private applyMissingScheduleFieldValue(
+    workflow: AssistantWorkflow,
+    rawValue: string | string[] | number,
+  ) {
+    const currentMissing = this.getCurrentScheduleMissingField(workflow.draft);
+    if (!currentMissing) {
+      throw new BadRequestException(
+        'Não há campo pendente do cronograma aguardando confirmação.',
+      );
+    }
+    const items = Array.isArray(workflow.draft.scheduleItemsDraft)
+      ? [...(workflow.draft.scheduleItemsDraft as AssistantScheduleDraftItem[])]
+      : [];
+    const item = items[currentMissing.itemIndex];
+    if (!item || item.id !== currentMissing.itemId) {
+      throw new BadRequestException(
+        'O item do cronograma aguardando complementação não está mais disponível.',
+      );
+    }
+    const text = Array.isArray(rawValue)
+      ? String(rawValue[0] ?? '').trim()
+      : String(rawValue ?? '').trim();
+    if (!text) {
+      throw new BadRequestException(
+        `Informe ${currentMissing.fieldLabel.toLowerCase()} ou use "-" se não se aplica.`,
+      );
+    }
+    item[currentMissing.fieldKey] = text;
+    items[currentMissing.itemIndex] = item;
+    workflow.draft.scheduleItemsDraft = items;
+    const remainingQueue = Array.isArray(workflow.draft.scheduleMissingFieldQueue)
+      ? [...workflow.draft.scheduleMissingFieldQueue]
+      : [];
+    remainingQueue.shift();
+    workflow.draft.scheduleMissingFieldQueue = remainingQueue;
+    workflow.status = remainingQueue.length ? 'collecting' : 'confirming';
+  }
+
+  private requiresScheduleLocationConfirmation(item: AssistantScheduleDraftItem) {
+    const title = this.normalizeFreeText(item.title);
+    if (
+      title.startsWith('chegada da equipe') ||
+      title === 'intervalo' ||
+      title === 'encerramento das atividades'
+    ) {
+      return false;
+    }
+    const location = String(item.location ?? '').trim();
+    return !location;
+  }
+
+  private deduplicateScheduleDraftItems(items: AssistantScheduleDraftItem[]) {
+    const seen = new Map<string, AssistantScheduleDraftItem>();
+    for (const item of items) {
+      const key = [
+        this.normalizeFreeText(item.title),
+        String(item.startAt ?? '').trim(),
+        String(item.durationMinutes ?? '').trim(),
+        this.normalizeFreeText(item.location || '-'),
+        this.normalizeFreeText(item.responsible || '-'),
+        this.normalizeFreeText(item.participants || '-'),
+      ].join('|');
+      const existing = seen.get(key);
+      if (!existing) {
+        seen.set(key, item);
+        continue;
+      }
+      existing.sourceFileIds = Array.from(
+        new Set([...(existing.sourceFileIds ?? []), ...(item.sourceFileIds ?? [])]),
+      );
+      existing.sourceFileNames = Array.from(
+        new Set([...(existing.sourceFileNames ?? []), ...(item.sourceFileNames ?? [])]),
+      );
+    }
+    return Array.from(seen.values());
   }
 
   private resetMissionScheduleDraftForOperationChange(draft: Record<string, any>) {
@@ -3170,7 +3355,7 @@ export class AiAssistantService {
         ? '-'
         : title.startsWith('Chegada da Equipe')
           ? '-'
-          : fallbackLocation || 'A definir');
+          : '');
     const responsible = this.extractOcrResponsible(
       rawText,
       title,
@@ -3571,8 +3756,7 @@ export class AiAssistantService {
     const remainingLines = contentLines.slice(titleLinesConsumed);
     const location =
       [...remainingLines].reverse().find((line) => this.isLikelyLocationLine(line)) ||
-      fallbackLocation ||
-      'A definir';
+      this.defaultScheduleLocationForTitle(normalizedTitle);
     const responsible =
       remainingLines.find((line) => this.isLikelyResponsibleLine(line)) ||
       this.inferResponsibleFromTitle(normalizedTitle);
@@ -3598,7 +3782,7 @@ export class AiAssistantService {
       startAt,
       durationMinutes,
       location:
-        location === '-' || location === '—' ? '-' : location,
+        this.defaultScheduleLocationForTitle(normalizedTitle, location),
       responsible: responsible || 'Equipe de Campo',
       participants,
     };
@@ -3679,6 +3863,21 @@ export class AiAssistantService {
     return 'Equipe de Campo';
   }
 
+  private defaultScheduleLocationForTitle(title: string, explicitLocation = '') {
+    const safeLocation = String(explicitLocation ?? '').trim();
+    if (safeLocation === '-' || safeLocation === '—') return '-';
+    if (safeLocation) return safeLocation;
+    const normalizedTitle = this.normalizeFreeText(title);
+    if (
+      normalizedTitle.startsWith('chegada da equipe') ||
+      normalizedTitle === 'intervalo' ||
+      normalizedTitle === 'encerramento das atividades'
+    ) {
+      return '-';
+    }
+    return '';
+  }
+
   private isLikelyNoiseLine(line: string) {
     const normalized = this.normalizeFreeText(line);
     return (
@@ -3739,6 +3938,15 @@ export class AiAssistantService {
     files: AssistantScheduleSourceFile[],
     items: AssistantScheduleDraftItem[],
     startOffset = 0,
+    missingField:
+      | {
+          itemId: string;
+          itemNumber: number;
+          itemIndex: number;
+          fieldKey: 'location';
+          fieldLabel: string;
+        }
+      | null = null,
   ) {
     const fileSummary = files
       .map(
@@ -3752,7 +3960,9 @@ export class AiAssistantService {
       '',
       this.buildSchedulePreviewMessage(items, startOffset),
       '',
-      'Se estiver correto, confirme o lote atual. Se precisar ajustar, use a numeração exibida no rascunho, por exemplo **alterar item 2** ou **remover item 3**.',
+      missingField
+        ? `Não consegui identificar **${missingField.fieldLabel.toLowerCase()}** do item **${missingField.itemNumber}** no PDF. Responda aqui no chat com o valor correto ou use **-** se não se aplica.`
+        : 'Se estiver correto, confirme o lote atual. Se precisar ajustar, use a numeração exibida no rascunho, por exemplo **alterar item 2** ou **remover item 3**.',
     ]
       .filter(Boolean)
       .join('\n');
@@ -3764,7 +3974,7 @@ export class AiAssistantService {
   ) {
     const preview = items.slice(0, this.getScheduleBatchSize()).map((item, index) => {
       const when = this.formatScheduleDateTime(item.startAt);
-      return `${startOffset + index + 1}. **${item.title}**\nLocal: ${item.location || '-'}\nInício: ${when}\nDuração: ${item.durationMinutes} min\nResponsável: ${item.responsible || '-'}\nParticipantes: ${item.participants || '-'}`;
+      return `${startOffset + index + 1}. **${item.title}**\nLocal: ${item.location || '(a confirmar)'}\nInício: ${when}\nDuração: ${item.durationMinutes} min\nResponsável: ${item.responsible || '-'}\nParticipantes: ${item.participants || '-'}`;
     });
     const remaining =
       items.length > preview.length
@@ -3779,7 +3989,7 @@ export class AiAssistantService {
     }
     const lines = items.map((item, index) => {
       const when = this.formatScheduleDateTime(item.startAt);
-      return `${index + 1}. **${item.title}**\nLocal: ${item.location || '-'}\nInício: ${when}\nDuração: ${item.durationMinutes} min\nResponsável: ${item.responsible || '-'}\nParticipantes: ${item.participants || '-'}`;
+      return `${index + 1}. **${item.title}**\nLocal: ${item.location || '(a confirmar)'}\nInício: ${when}\nDuração: ${item.durationMinutes} min\nResponsável: ${item.responsible || '-'}\nParticipantes: ${item.participants || '-'}`;
     });
     return [
       `A missão já possui **${items.length} item(ns)** no cronograma.`,
