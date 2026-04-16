@@ -27,10 +27,13 @@ import {
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import AutoAwesomeRoundedIcon from '@mui/icons-material/AutoAwesomeRounded';
+import CampaignRoundedIcon from '@mui/icons-material/CampaignRounded';
 import DashboardRoundedIcon from '@mui/icons-material/DashboardRounded';
 import FingerprintRoundedIcon from '@mui/icons-material/FingerprintRounded';
 import MapRoundedIcon from '@mui/icons-material/MapRounded';
 import SmartToyRoundedIcon from '@mui/icons-material/SmartToyRounded';
+import AssignmentTurnedInRoundedIcon from '@mui/icons-material/AssignmentTurnedInRounded';
+import ShieldRoundedIcon from '@mui/icons-material/ShieldRounded';
 import TextSnippetRoundedIcon from '@mui/icons-material/TextSnippetRounded';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
@@ -170,6 +173,9 @@ const ANALYSIS_TYPES: AiAnalysisType[] = [
   'aggressor',
   'text',
   'geo',
+  'briefing_comgep',
+  'priorizacao_intervencao',
+  'governanca_cpca',
 ];
 
 const normalizeSourceArray = (value: AiKnowledgeSourceId[] | undefined) =>
@@ -181,6 +187,9 @@ const buildDefaultAnalysisSources = (): AiAnalysisSourceSelection => ({
   aggressor: [...ANALYSIS_SOURCE_CATALOG.map((entry) => entry.id)],
   text: [...ANALYSIS_SOURCE_CATALOG.map((entry) => entry.id)],
   geo: [...ANALYSIS_SOURCE_CATALOG.map((entry) => entry.id)],
+  briefing_comgep: [...ANALYSIS_SOURCE_CATALOG.map((entry) => entry.id)],
+  priorizacao_intervencao: [...ANALYSIS_SOURCE_CATALOG.map((entry) => entry.id)],
+  governanca_cpca: [...ANALYSIS_SOURCE_CATALOG.map((entry) => entry.id)],
 });
 
 type LocalityForm = {
@@ -1624,6 +1633,7 @@ function InstitutionalMappingTab() {
 
 const ANALYSIS_PROMPTS_CONFIG: {
   type: AiAnalysisType;
+  group: 'ia' | 'copilot';
   label: string;
   short: string;
   placeholder: string;
@@ -1632,6 +1642,7 @@ const ANALYSIS_PROMPTS_CONFIG: {
 }[] = [
   {
     type: 'executive',
+    group: 'ia',
     label: 'Resumo Executivo Completo',
     short: 'Panorama completo para o comando.',
     placeholder:
@@ -1641,6 +1652,7 @@ const ANALYSIS_PROMPTS_CONFIG: {
   },
   {
     type: 'situational',
+    group: 'ia',
     label: 'Análise Situacional',
     short: 'Pesquisas, denúncias, atividades e missões.',
     placeholder:
@@ -1650,6 +1662,7 @@ const ANALYSIS_PROMPTS_CONFIG: {
   },
   {
     type: 'aggressor',
+    group: 'ia',
     label: 'Perfil de Assédio e Violência',
     short: 'Perfil de agressor, vítima e contexto.',
     placeholder:
@@ -1659,6 +1672,7 @@ const ANALYSIS_PROMPTS_CONFIG: {
   },
   {
     type: 'text',
+    group: 'ia',
     label: 'Análise Textual',
     short: 'Termos e tendências em textos livres.',
     placeholder:
@@ -1668,6 +1682,7 @@ const ANALYSIS_PROMPTS_CONFIG: {
   },
   {
     type: 'geo',
+    group: 'ia',
     label: 'Distribuição Geográfica',
     short: 'Concentração por estado e localidade.',
     placeholder:
@@ -1675,7 +1690,62 @@ const ANALYSIS_PROMPTS_CONFIG: {
     accent: '#ED6C02',
     icon: <MapRoundedIcon sx={{ fontSize: 28 }} />,
   },
+  {
+    type: 'briefing_comgep',
+    group: 'copilot',
+    label: 'Briefing COMGEP',
+    short: 'Síntese executiva com decisão e risco.',
+    placeholder:
+      'Consolide a Sala COMGEP em um briefing curto, institucional e orientado à decisão, destacando riscos, cobertura CPCA, pressão operacional e ação imediata.',
+    accent: '#1A3C6E',
+    icon: <CampaignRoundedIcon sx={{ fontSize: 28 }} />,
+  },
+  {
+    type: 'priorizacao_intervencao',
+    group: 'copilot',
+    label: 'Priorização de Intervenção',
+    short: 'Ordena esforço e impacto esperado.',
+    placeholder:
+      'Priorize UFs e OMs com maior impacto potencial, explique a ordem sugerida e recomende a melhor sequência de intervenção.',
+    accent: '#2E7D32',
+    icon: <AssignmentTurnedInRoundedIcon sx={{ fontSize: 28 }} />,
+  },
+  {
+    type: 'governanca_cpca',
+    group: 'copilot',
+    label: 'Governança CPCA',
+    short: 'Cobertura, gargalos e exposição institucional.',
+    placeholder:
+      'Analise cobertura CPCA, sobrecarga, OMs descobertas e ajustes de governança necessários, com linguagem objetiva para gestores.',
+    accent: '#6A1B9A',
+    icon: <ShieldRoundedIcon sx={{ fontSize: 28 }} />,
+  },
 ];
+
+const AI_SETTINGS_GROUPS: Array<{
+  id: 'ia' | 'copilot';
+  label: string;
+  description: string;
+}> = [
+  {
+    id: 'ia',
+    label: 'Análises da Página IA',
+    description:
+      'Configura as 5 análises estruturadas da aba IA, incluindo fontes permitidas e instrução específica.',
+  },
+  {
+    id: 'copilot',
+    label: 'Copilotos Gerenciais',
+    description:
+      'Configura os 3 copilotos executivos da aba Assistente IA: Briefing COMGEP, Priorização de intervenção e Governança CPCA.',
+  },
+];
+
+const buildDefaultAnalysisPrompts = () =>
+  ANALYSIS_PROMPTS_CONFIG.reduce<Record<string, string>>((acc, item) => {
+    acc[item.type] = '';
+    return acc;
+  }, {});
 
 const sameSources = (
   sourceA: AiKnowledgeSourceId[] = [],
@@ -1710,13 +1780,8 @@ function AiSettingsTab() {
   });
   const [analysisSources, setAnalysisSources] =
     useState<AiAnalysisSourceSelection>(buildDefaultAnalysisSources());
-  const [analysisPrompts, setAnalysisPrompts] = useState<Record<string, string>>({
-    executive: '',
-    situational: '',
-    aggressor: '',
-    text: '',
-    geo: '',
-  });
+  const [analysisPrompts, setAnalysisPrompts] =
+    useState<Record<string, string>>(buildDefaultAnalysisPrompts());
   const [showKey, setShowKey] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [availableModels, setAvailableModels] = useState<string[]>([]);
@@ -1732,13 +1797,12 @@ function AiSettingsTab() {
       });
       setAnalysisSources(sanitizeAnalysisSources(settingsQuery.data.analysisSources));
       const serverPrompts = settingsQuery.data.analysisPrompts ?? {};
-      setAnalysisPrompts({
-        executive: serverPrompts.executive ?? '',
-        situational: serverPrompts.situational ?? '',
-        aggressor: serverPrompts.aggressor ?? '',
-        text: serverPrompts.text ?? '',
-        geo: serverPrompts.geo ?? '',
-      });
+      setAnalysisPrompts(
+        ANALYSIS_PROMPTS_CONFIG.reduce<Record<string, string>>((acc, item) => {
+          acc[item.type] = serverPrompts[item.type] ?? '';
+          return acc;
+        }, buildDefaultAnalysisPrompts()),
+      );
       setLoaded(true);
     }
   }, [settingsQuery.data, loaded]);
@@ -1905,8 +1969,9 @@ function AiSettingsTab() {
             Configuração de IA
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Prompts da página <strong>Análises com IA</strong> e conexão com o LiteLLM. Valores
-            salvos aqui substituem o <code>.env</code> do servidor para URL, chave e modelo.
+            Prompts, escopo de fontes e conexão do LiteLLM para as análises estruturadas da
+            página IA e para os copilotos gerenciais da aba Assistente. Valores salvos aqui
+            substituem o <code>.env</code> do servidor para URL, chave e modelo.
           </Typography>
         </Box>
       </Stack>
@@ -1921,7 +1986,7 @@ function AiSettingsTab() {
           '& .MuiTab-root': { fontWeight: 600, textTransform: 'none', fontSize: '0.95rem' },
         }}
       >
-        <Tab value="prompts" label="Prompts (5 análises + system)" />
+        <Tab value="prompts" label="Prompts e escopo (8 análises + system)" />
         <Tab value="server" label="Servidor LiteLLM" />
       </Tabs>
 
@@ -2037,190 +2102,254 @@ function AiSettingsTab() {
                   Fontes por análise
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Configure para cada análise quais bases o módulo de IA pode usar.
-                  Seleção vazia = nenhuma base considerada para essa análise.
+                  Configure, para cada análise ou copiloto, quais bases o módulo de IA pode usar.
+                  Seleção vazia = nenhuma base considerada naquele perfil.
                 </Typography>
               </Stack>
-              {ANALYSIS_PROMPTS_CONFIG.map((item) => (
-                <Card
-                  key={`sources-${item.type}`}
-                  variant="outlined"
-                  sx={{
-                    borderRadius: 2,
-                    borderColor: alpha(item.accent, 0.25),
-                  }}
-                >
-                  <Box
-                    sx={{
-                      px: 2,
-                      py: 1.25,
-                      bgcolor: alpha(item.accent, 0.09),
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: 1.25,
-                    }}
-                  >
-                    <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap">
-                      <Box sx={{ color: item.accent, display: 'flex', lineHeight: 0 }}>
-                        {item.icon}
-                      </Box>
-                      <Typography variant="subtitle2" fontWeight={700}>
-                        {item.label}
-                      </Typography>
-                      <Chip
-                        size="small"
-                        label={`${(analysisSources[item.type] ?? []).length} fonte(s)`}
-                        color="primary"
-                        variant="outlined"
-                        sx={{ ml: 'auto' }}
-                      />
-                    </Stack>
-                    <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
-                      <Button
-                        size="small"
-                        variant="text"
-                        onClick={() => setAllSources(item.type)}
+              {AI_SETTINGS_GROUPS.map((group) => {
+                const items = ANALYSIS_PROMPTS_CONFIG.filter(
+                  (item) => item.group === group.id,
+                );
+                return (
+                  <Stack key={`sources-group-${group.id}`} spacing={1.25}>
+                    <Box>
+                      <Stack
+                        direction={{ xs: 'column', sm: 'row' }}
+                        spacing={1}
+                        alignItems={{ sm: 'center' }}
+                        justifyContent="space-between"
                       >
-                        Todas
-                      </Button>
-                      <Button
-                        size="small"
-                        variant="text"
-                        onClick={() => clearSources(item.type)}
-                      >
-                        Nenhuma
-                      </Button>
-                    </Stack>
-                  </Box>
-                  <Divider />
-                  <Box sx={{ p: 1.5, px: 1.75 }}>
-                    <FormGroup>
-                      {ANALYSIS_SOURCE_CATALOG.map((source) => (
-                        <FormControlLabel
-                          key={`${item.type}-${source.id}`}
-                          control={
-                            <Checkbox
-                              size="small"
-                              checked={
-                                analysisSources[item.type]?.includes(
-                                  source.id,
-                                ) ?? false
-                              }
-                              onChange={(event) =>
-                                toggleSource(
-                                  item.type,
-                                  source.id,
-                                  event.target.checked,
-                                )
-                              }
-                            />
-                          }
-                          label={
-                            <Stack spacing={0.1}>
-                              <Typography variant="body2" fontWeight={600}>
-                                {source.label}
-                              </Typography>
-                              <Typography
-                                variant="caption"
-                                color="text.secondary"
-                              >
-                                {source.description}
-                              </Typography>
-                            </Stack>
-                          }
-                          sx={{ alignItems: 'flex-start', mb: 0.2 }}
+                        <Typography variant="subtitle2" fontWeight={800}>
+                          {group.label}
+                        </Typography>
+                        <Chip
+                          size="small"
+                          color="primary"
+                          variant="outlined"
+                          label={`${items.length} perfil(is)`}
                         />
-                      ))}
-                    </FormGroup>
-                  </Box>
-                </Card>
-              ))}
+                      </Stack>
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.35 }}>
+                        {group.description}
+                      </Typography>
+                    </Box>
+                    {items.map((item) => (
+                      <Card
+                        key={`sources-${item.type}`}
+                        variant="outlined"
+                        sx={{
+                          borderRadius: 2,
+                          borderColor: alpha(item.accent, 0.25),
+                        }}
+                      >
+                        <Box
+                          sx={{
+                            px: 2,
+                            py: 1.25,
+                            bgcolor: alpha(item.accent, 0.09),
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: 1.25,
+                          }}
+                        >
+                          <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap">
+                            <Box sx={{ color: item.accent, display: 'flex', lineHeight: 0 }}>
+                              {item.icon}
+                            </Box>
+                            <Typography variant="subtitle2" fontWeight={700}>
+                              {item.label}
+                            </Typography>
+                            <Chip
+                              size="small"
+                              label={`${(analysisSources[item.type] ?? []).length} fonte(s)`}
+                              color="primary"
+                              variant="outlined"
+                              sx={{ ml: 'auto' }}
+                            />
+                          </Stack>
+                          <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
+                            <Button
+                              size="small"
+                              variant="text"
+                              onClick={() => setAllSources(item.type)}
+                            >
+                              Todas
+                            </Button>
+                            <Button
+                              size="small"
+                              variant="text"
+                              onClick={() => clearSources(item.type)}
+                            >
+                              Nenhuma
+                            </Button>
+                          </Stack>
+                        </Box>
+                        <Divider />
+                        <Box sx={{ p: 1.5, px: 1.75 }}>
+                          <FormGroup>
+                            {ANALYSIS_SOURCE_CATALOG.map((source) => (
+                              <FormControlLabel
+                                key={`${item.type}-${source.id}`}
+                                control={
+                                  <Checkbox
+                                    size="small"
+                                    checked={
+                                      analysisSources[item.type]?.includes(
+                                        source.id,
+                                      ) ?? false
+                                    }
+                                    onChange={(event) =>
+                                      toggleSource(
+                                        item.type,
+                                        source.id,
+                                        event.target.checked,
+                                      )
+                                    }
+                                  />
+                                }
+                                label={
+                                  <Stack spacing={0.1}>
+                                    <Typography variant="body2" fontWeight={600}>
+                                      {source.label}
+                                    </Typography>
+                                    <Typography
+                                      variant="caption"
+                                      color="text.secondary"
+                                    >
+                                      {source.description}
+                                    </Typography>
+                                  </Stack>
+                                }
+                                sx={{ alignItems: 'flex-start', mb: 0.2 }}
+                              />
+                            ))}
+                          </FormGroup>
+                        </Box>
+                      </Card>
+                    ))}
+                  </Stack>
+                );
+              })}
             </Stack>
           </Paper>
 
           <Alert severity="info" variant="outlined" sx={{ borderRadius: 2 }}>
-            Abaixo há <strong>5 caixas de texto</strong>, uma para cada botão de análise na página IA.
-            Conteúdo vazio = o sistema usa o texto padrão interno. O bloco final é o{' '}
-            <strong>system prompt</strong>, aplicado a todas as chamadas (análises e chatbot).
+            Abaixo há <strong>8 caixas de texto</strong>: 5 para as análises estruturadas da página
+            IA e 3 para os copilotos gerenciais da aba Assistente. Conteúdo vazio = o sistema usa
+            o texto padrão interno. O bloco final é o <strong>system prompt</strong>, aplicado a
+            todas as chamadas de IA.
           </Alert>
 
           {ANALYSIS_PROMPTS_CONFIG.length === 0 ? (
             <Alert severity="warning" variant="outlined">
-              Não foi possível carregar a configuração das 5 áreas de análise.
+              Não foi possível carregar a configuração dos perfis de IA.
             </Alert>
           ) : (
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
-                gap: 2,
-              }}
-            >
-              {ANALYSIS_PROMPTS_CONFIG.map((item, index) => (
-                <Card
-                  key={item.type}
-                  variant="outlined"
-                  sx={{
-                    height: '100%',
-                    borderRadius: 2,
-                    overflow: 'hidden',
-                    borderColor: alpha(item.accent, 0.4),
-                    boxShadow: (t) => `0 1px 4px ${alpha(t.palette.common.black, 0.06)}`,
-                  }}
-                >
-                  <Box
-                    sx={{
-                      px: 2,
-                      py: 1.5,
-                      bgcolor: alpha(item.accent, 0.09),
-                      display: 'flex',
-                      alignItems: 'flex-start',
-                      gap: 1.5,
-                    }}
-                  >
-                    <Box sx={{ color: item.accent, display: 'flex', lineHeight: 0 }}>{item.icon}</Box>
-                    <Box sx={{ minWidth: 0, flex: 1 }}>
-                      <Stack direction="row" alignItems="center" gap={1} flexWrap="wrap">
-                        <Chip
-                          label={`Análise ${index + 1} de 5`}
-                          size="small"
-                          sx={{
-                            bgcolor: item.accent,
-                            color: '#fff',
-                            fontWeight: 700,
-                            height: 24,
-                            '& .MuiChip-label': { px: 1 },
-                          }}
-                        />
-                      </Stack>
-                      <Typography variant="subtitle1" fontWeight={800} sx={{ mt: 0.75, lineHeight: 1.3 }}>
-                        {item.label}
+            <Stack spacing={2.25}>
+              {AI_SETTINGS_GROUPS.map((group) => {
+                const items = ANALYSIS_PROMPTS_CONFIG.filter(
+                  (item) => item.group === group.id,
+                );
+                return (
+                  <Stack key={`prompt-group-${group.id}`} spacing={1.25}>
+                    <Box>
+                      <Typography variant="subtitle2" fontWeight={800}>
+                        {group.label}
                       </Typography>
-                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.35 }}>
-                        {item.short}
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.35 }}>
+                        {group.description}
                       </Typography>
                     </Box>
-                  </Box>
-                  <CardContent sx={{ pt: 2, pb: 2 }}>
-                    <TextField
-                      size="small"
-                      label="Instrução enviada ao modelo (opcional)"
-                      value={analysisPrompts[item.type] ?? ''}
-                      onChange={(e) =>
-                        setAnalysisPrompts((prev) => ({ ...prev, [item.type]: e.target.value }))
-                      }
-                      placeholder={item.placeholder}
-                      multiline
-                      minRows={5}
-                      maxRows={16}
-                      fullWidth
-                      helperText="Deixe vazio para manter o padrão do sistema."
-                    />
-                  </CardContent>
-                </Card>
-              ))}
-            </Box>
+                    <Box
+                      sx={{
+                        display: 'grid',
+                        gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+                        gap: 2,
+                      }}
+                    >
+                      {items.map((item, index) => (
+                        <Card
+                          key={item.type}
+                          variant="outlined"
+                          sx={{
+                            height: '100%',
+                            borderRadius: 2,
+                            overflow: 'hidden',
+                            borderColor: alpha(item.accent, 0.4),
+                            boxShadow: (t) =>
+                              `0 1px 4px ${alpha(t.palette.common.black, 0.06)}`,
+                          }}
+                        >
+                          <Box
+                            sx={{
+                              px: 2,
+                              py: 1.5,
+                              bgcolor: alpha(item.accent, 0.09),
+                              display: 'flex',
+                              alignItems: 'flex-start',
+                              gap: 1.5,
+                            }}
+                          >
+                            <Box sx={{ color: item.accent, display: 'flex', lineHeight: 0 }}>
+                              {item.icon}
+                            </Box>
+                            <Box sx={{ minWidth: 0, flex: 1 }}>
+                              <Stack direction="row" alignItems="center" gap={1} flexWrap="wrap">
+                                <Chip
+                                  label={`${group.id === 'ia' ? 'Análise' : 'Copiloto'} ${index + 1} de ${items.length}`}
+                                  size="small"
+                                  sx={{
+                                    bgcolor: item.accent,
+                                    color: '#fff',
+                                    fontWeight: 700,
+                                    height: 24,
+                                    '& .MuiChip-label': { px: 1 },
+                                  }}
+                                />
+                              </Stack>
+                              <Typography
+                                variant="subtitle1"
+                                fontWeight={800}
+                                sx={{ mt: 0.75, lineHeight: 1.3 }}
+                              >
+                                {item.label}
+                              </Typography>
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                                sx={{ display: 'block', mt: 0.35 }}
+                              >
+                                {item.short}
+                              </Typography>
+                            </Box>
+                          </Box>
+                          <CardContent sx={{ pt: 2, pb: 2 }}>
+                            <TextField
+                              size="small"
+                              label="Instrução enviada ao modelo (opcional)"
+                              value={analysisPrompts[item.type] ?? ''}
+                              onChange={(e) =>
+                                setAnalysisPrompts((prev) => ({
+                                  ...prev,
+                                  [item.type]: e.target.value,
+                                }))
+                              }
+                              placeholder={item.placeholder}
+                              multiline
+                              minRows={5}
+                              maxRows={16}
+                              fullWidth
+                              helperText="Deixe vazio para manter o padrão do sistema."
+                            />
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </Box>
+                  </Stack>
+                );
+              })}
+            </Stack>
           )}
 
           <Paper

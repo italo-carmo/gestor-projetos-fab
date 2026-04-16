@@ -84,6 +84,8 @@ type ComgepCopilotSession = {
   scopeUf: string | null;
   mode: ComgepCopilotMode;
   focus: ComgepCopilotFocus | null;
+  configuredPrompt: string | null;
+  configuredSources: AiKnowledgeSourceId[];
   messages: ComgepCopilotMessage[];
 };
 
@@ -96,6 +98,22 @@ type ComgepCopilotStreamParams = {
   evidences: ComgepCopilotEvidenceItem[];
   history: ComgepCopilotMessage[];
   userMessage: string;
+  configuredPrompt: string | null;
+  configuredSources: AiKnowledgeSourceId[];
+};
+
+type ActionAgentSourceProfile = {
+  sourceIds: AiKnowledgeSourceId[];
+  sourceLabels: string[];
+  biSourceTypes: string[];
+  hasAnySource: boolean;
+  allowComplaints: boolean;
+  allowOperational: boolean;
+  allowSurveySignals: boolean;
+  allowPressure: boolean;
+  allowHighRisk: boolean;
+  allowPriorityUfs: boolean;
+  allowCoverageGaps: boolean;
 };
 
 export const ANALYSIS_CATALOG: {
@@ -209,6 +227,32 @@ const COMGEP_UF_ALIASES: Record<string, string[]> = {
   TO: ['tocantins'],
 };
 
+const ACTION_AGENT_BI_SOURCE_MAP: Partial<Record<AiKnowledgeSourceId, string>> = {
+  survey_schools: 'SURVEY_SCHOOLS',
+  survey_domestic_violence: 'DOMESTIC_VIOLENCE',
+  survey_recruits: 'RECRUITS',
+  survey_best_practice_cycle: 'BEST_PRACTICE_CYCLE',
+  survey_cpca_meeting: 'CPCA_MEETING',
+  survey_gsd_evaluation: 'GSD_EVALUATION',
+};
+
+const ACTION_AGENT_SOURCE_LABELS: Partial<Record<AiKnowledgeSourceId, string>> = {
+  missions: 'Missões',
+  activities_smif: 'Atividades de campo SMIF',
+  activities_cipavd: 'Atividades de campo CIPAVD',
+  activity_reports: 'Relatórios de atividades de campo',
+  best_practices: 'Boas práticas',
+  tasks: 'Tarefas',
+  survey_schools: 'Pesquisas de escolas',
+  survey_domestic_violence: 'Pesquisas de violência doméstica',
+  survey_recruits: 'Pesquisa de recrutas',
+  survey_best_practice_cycle: 'Pesquisa ciclo de boas práticas',
+  survey_cpca_meeting: 'Pesquisa encontro CPCA',
+  survey_gsd_evaluation: 'Pesquisa avaliação GSD',
+  complaints_cpca: 'Denúncias CPCA',
+  complaints_smif: 'Denúncias SMIF',
+};
+
 type NarrativePdfBlock =
   | { type: 'paragraph'; text: string }
   | { type: 'heading'; level: number; text: string }
@@ -229,15 +273,85 @@ export class AiService {
   ) {}
 
   private async resolveAnalysisSources(
-    type: AnalysisType,
+    type: AiAnalysisType,
   ): Promise<AiKnowledgeSourceId[]> {
     try {
       return await this.settings.getAnalysisSourcesForType(
-        type as AiAnalysisType,
+        type,
       );
     } catch {
       return [...ALL_KNOWLEDGE_SOURCE_IDS];
     }
+  }
+
+  private async resolveActionAgentConfig(type: ActionAgentType) {
+    const [configuredPrompt, configuredSources] = await Promise.all([
+      this.settings.getAnalysisPrompt(type),
+      this.resolveAnalysisSources(type),
+    ]);
+    return {
+      configuredPrompt: configuredPrompt?.trim() || null,
+      configuredSources:
+        configuredSources.length > 0
+          ? configuredSources
+          : [...ALL_KNOWLEDGE_SOURCE_IDS],
+    };
+  }
+
+  private getDefaultActionAgentInstruction(type: ActionAgentType) {
+    const instructionsByType: Record<ActionAgentType, string> = {
+      briefing_comgep:
+        'Você é o copiloto executivo da Sala COMGEP. Seu papel é transformar o quadro atual em decisão objetiva para o gestor.',
+      priorizacao_intervencao:
+        'Você é o copiloto de priorização. Seu papel é ordenar esforço, comparar impacto e sugerir a melhor sequência de intervenção.',
+      governanca_cpca:
+        'Você é o copiloto de governança CPCA. Seu papel é explicar cobertura, gargalos, risco de exposição institucional e ajuste de comissão.',
+    };
+    return instructionsByType[type];
+  }
+
+  private buildActionAgentSourceProfile(
+    sourceIds: readonly AiKnowledgeSourceId[],
+  ): ActionAgentSourceProfile {
+    const normalized = Array.from(
+      new Set(
+        (sourceIds ?? [])
+          .map((item) => String(item ?? '').trim())
+          .filter(Boolean),
+      ),
+    ) as AiKnowledgeSourceId[];
+    const sourceLabels = normalized
+      .map((id) => ACTION_AGENT_SOURCE_LABELS[id] ?? id)
+      .filter(Boolean);
+    const biSourceTypes = normalized
+      .map((id) => ACTION_AGENT_BI_SOURCE_MAP[id])
+      .filter((value): value is string => Boolean(value));
+    const hasAnySource = normalized.length > 0;
+    const allowComplaints =
+      hasAnySource &&
+      (normalized.includes('complaints_cpca') ||
+        normalized.includes('complaints_smif'));
+    const allowOperational =
+      hasAnySource &&
+      (normalized.includes('missions') ||
+        normalized.includes('activities_smif') ||
+        normalized.includes('activities_cipavd') ||
+        normalized.includes('activity_reports'));
+    const allowSurveySignals = hasAnySource && biSourceTypes.length > 0;
+
+    return {
+      sourceIds: normalized,
+      sourceLabels,
+      biSourceTypes,
+      hasAnySource,
+      allowComplaints,
+      allowOperational,
+      allowSurveySignals,
+      allowPressure: allowOperational,
+      allowHighRisk: allowComplaints || allowSurveySignals,
+      allowPriorityUfs: allowComplaints || allowSurveySignals || allowOperational,
+      allowCoverageGaps: hasAnySource,
+    };
   }
 
   getAnalysesCatalog() {
@@ -268,6 +382,7 @@ export class AiService {
       stage: 'Coletando dados da sala de situação...',
     });
 
+    const config = await this.resolveActionAgentConfig(safeType);
     const room = await this.strategic.comgepSituationRoom();
     const initialUserMessage = this.buildInitialComgepUserMessage(
       safeType,
@@ -280,6 +395,8 @@ export class AiService {
       scopeUf,
       mode,
       focus,
+      configuredPrompt: config.configuredPrompt,
+      configuredSources: config.configuredSources,
     });
     this.pushComgepMessage(session, {
       role: 'user',
@@ -299,6 +416,7 @@ export class AiService {
       scopeUf,
       focus,
       agentType: safeType,
+      sourceIds: config.configuredSources,
     });
 
     yield this.sseEvent('progress', {
@@ -316,6 +434,8 @@ export class AiService {
         evidences,
         history: session.messages,
         userMessage: initialUserMessage,
+        configuredPrompt: config.configuredPrompt,
+        configuredSources: config.configuredSources,
       });
 
       let finalResult: { narrative: string; model: string } | undefined;
@@ -345,6 +465,8 @@ export class AiService {
             evidences,
             history: session.messages,
             userMessage: initialUserMessage,
+            configuredPrompt: config.configuredPrompt,
+            configuredSources: config.configuredSources,
           },
         ),
       };
@@ -424,6 +546,7 @@ export class AiService {
       scopeUf,
       focus,
       agentType: session.agentType,
+      sourceIds: session.configuredSources,
     });
 
     try {
@@ -436,6 +559,8 @@ export class AiService {
         evidences,
         history: session.messages,
         userMessage: userMessage.content,
+        configuredPrompt: session.configuredPrompt,
+        configuredSources: session.configuredSources,
       });
 
       let finalResult: { narrative: string; model: string } | undefined;
@@ -463,6 +588,8 @@ export class AiService {
           evidences,
           history: session.messages,
           userMessage: userMessage.content,
+          configuredPrompt: session.configuredPrompt,
+          configuredSources: session.configuredSources,
         }),
       };
 
@@ -2011,6 +2138,8 @@ export class AiService {
     scopeUf: string | null;
     mode: ComgepCopilotMode;
     focus: ComgepCopilotFocus | null;
+    configuredPrompt: string | null;
+    configuredSources: AiKnowledgeSourceId[];
   }) {
     const now = new Date().toISOString();
     const session: ComgepCopilotSession = {
@@ -2021,6 +2150,8 @@ export class AiService {
       scopeUf: args.scopeUf,
       mode: args.mode,
       focus: args.focus,
+      configuredPrompt: args.configuredPrompt,
+      configuredSources: [...args.configuredSources],
       messages: [],
     };
     this.comgepSessions.set(session.id, session);
@@ -2399,6 +2530,7 @@ export class AiService {
     const roomSummary = this.buildCompactActionAgentContext(
       params.room,
       params.scopeUf,
+      params.configuredSources,
     );
     const scopeLabel = params.scopeUf
       ? `UF ${params.scopeUf}`
@@ -2613,6 +2745,7 @@ export class AiService {
       return this.buildComgepOmComparisonFallback(
         mentionedOms[0],
         mentionedOms[1],
+        params.configuredSources,
       );
     }
 
@@ -2629,7 +2762,7 @@ export class AiService {
         normalized.includes('essa organizacao') ||
         normalized.includes('essa organização')
       ) {
-        return this.buildComgepOmWhyFallback(om);
+        return this.buildComgepOmWhyFallback(om, params.configuredSources);
       }
     }
 
@@ -2688,8 +2821,11 @@ export class AiService {
     ufA: string,
     ufB: string,
   ) {
-    const rowA = this.findComgepUfRow(params.room, ufA);
-    const rowB = this.findComgepUfRow(params.room, ufB);
+    const sourceProfile = this.buildActionAgentSourceProfile(
+      params.configuredSources,
+    );
+    const rowA = this.findComgepUfRow(params.room, ufA, params.configuredSources);
+    const rowB = this.findComgepUfRow(params.room, ufB, params.configuredSources);
     if (!rowA || !rowB) return null;
 
     const higher = rowA.riskScore >= rowB.riskScore ? rowA : rowB;
@@ -2714,7 +2850,7 @@ export class AiService {
       lines.push(`## OMs que mais puxam ${higher.uf}`);
       topOms.forEach((item: any) => {
         lines.push(
-          `- ${item.code} - ${item.name} | score ${item.riskScore} | cobertura ${item.coverageType} | ${this.describeActionAgentOmRisk(item)}`,
+          `- ${item.code} - ${item.name} | score ${item.riskScore} | cobertura ${item.coverageType} | ${this.describeActionAgentOmRisk(item, sourceProfile)}`,
         );
         lines.push(`  Link: ${item.link}`);
       });
@@ -2727,7 +2863,14 @@ export class AiService {
     params: ComgepCopilotStreamParams,
     uf: string | null,
   ) {
-    const uncoveredOms = this.listComgepUncoveredOms(params.room, uf).slice(0, 10);
+    const sourceProfile = this.buildActionAgentSourceProfile(
+      params.configuredSources,
+    );
+    const uncoveredOms = this.listComgepUncoveredOms(
+      params.room,
+      uf,
+      params.configuredSources,
+    ).slice(0, 10);
     const safeUf = String(uf ?? '').trim().toUpperCase() || null;
     const title = safeUf
       ? `## OMs sem cobertura CPCA em ${safeUf}`
@@ -2749,7 +2892,7 @@ export class AiService {
     ];
     uncoveredOms.forEach((item: any) => {
       lines.push(
-        `- ${item.code} - ${item.name} | ${item.uf} | score ${item.riskScore} | ${this.describeActionAgentCoverageGap(item)}`,
+        `- ${item.code} - ${item.name} | ${item.uf} | score ${item.riskScore} | ${this.describeActionAgentCoverageGap(item, sourceProfile)}`,
       );
       lines.push(`  Link: ${item.link}`);
     });
@@ -2761,10 +2904,24 @@ export class AiService {
     uf: string | null,
   ) {
     const safeUf = String(uf ?? '').trim().toUpperCase() || null;
-    const ufRow = safeUf ? this.findComgepUfRow(params.room, safeUf) : null;
-    const uncoveredOms = this.listComgepUncoveredOms(params.room, safeUf);
-    const highRiskOms = this.listComgepHighRiskOms(params.room, safeUf);
-    const pressureRows = this.listComgepPressureRows(params.room, safeUf);
+    const ufRow = safeUf
+      ? this.findComgepUfRow(params.room, safeUf, params.configuredSources)
+      : null;
+    const uncoveredOms = this.listComgepUncoveredOms(
+      params.room,
+      safeUf,
+      params.configuredSources,
+    );
+    const highRiskOms = this.listComgepHighRiskOms(
+      params.room,
+      safeUf,
+      params.configuredSources,
+    );
+    const pressureRows = this.listComgepPressureRows(
+      params.room,
+      safeUf,
+      params.configuredSources,
+    );
 
     const coverageSeverity = uncoveredOms
       .slice(0, 6)
@@ -2843,7 +3000,7 @@ export class AiService {
     params: ComgepCopilotStreamParams,
     uf: string,
   ) {
-    const row = this.findComgepUfRow(params.room, uf);
+    const row = this.findComgepUfRow(params.room, uf, params.configuredSources);
     if (!row) return null;
     const lines = [
       '## Resposta direta',
@@ -2859,7 +3016,11 @@ export class AiService {
     return lines.join('\n');
   }
 
-  private buildComgepOmWhyFallback(om: any) {
+  private buildComgepOmWhyFallback(
+    om: any,
+    sourceIds: readonly AiKnowledgeSourceId[] = ALL_KNOWLEDGE_SOURCE_IDS,
+  ) {
+    const sourceProfile = this.buildActionAgentSourceProfile(sourceIds);
     const lines = [
       '## Resposta direta',
       `${om.code} - ${om.name} aparece no radar porque combina score ${om.riskScore}, cobertura ${om.coverageType} e sinais institucionais relevantes no recorte.`,
@@ -2874,14 +3035,19 @@ export class AiService {
       `- Taxa de violência doméstica: ${om.domesticRate}%.`,
       '',
       '## Leitura executiva',
-      `- Principal motivo: ${this.describeActionAgentOmRisk(om)}.`,
+      `- Principal motivo: ${this.describeActionAgentOmRisk(om, sourceProfile)}.`,
       `- UF: ${om.uf}.`,
       `- Link: ${om.link}.`,
     ];
     return lines.join('\n');
   }
 
-  private buildComgepOmComparisonFallback(omA: any, omB: any) {
+  private buildComgepOmComparisonFallback(
+    omA: any,
+    omB: any,
+    sourceIds: readonly AiKnowledgeSourceId[] = ALL_KNOWLEDGE_SOURCE_IDS,
+  ) {
+    const sourceProfile = this.buildActionAgentSourceProfile(sourceIds);
     const higher = Number(omA?.riskScore ?? 0) >= Number(omB?.riskScore ?? 0) ? omA : omB;
     const lower = higher === omA ? omB : omA;
     const reasons = this.describeComgepOmDeltaReasons(higher, lower);
@@ -2897,13 +3063,22 @@ export class AiService {
       '## Fatores que explicam a diferença',
       ...reasons.map((reason) => `- ${reason}`),
       '',
+      `## Motivo predominante de ${higher.code}`,
+      `- ${this.describeActionAgentOmRisk(higher, sourceProfile)}.`,
+      '',
       '## Links',
       `- ${higher.code}: ${higher.link}`,
       `- ${lower.code}: ${lower.link}`,
     ].join('\n');
   }
 
-  private findComgepUfRow(room: any, uf: string) {
+  private findComgepUfRow(
+    room: any,
+    uf: string,
+    sourceIds: readonly AiKnowledgeSourceId[] = ALL_KNOWLEDGE_SOURCE_IDS,
+  ) {
+    const sourceProfile = this.buildActionAgentSourceProfile(sourceIds);
+    if (!sourceProfile.allowPriorityUfs) return null;
     const safeUf = String(uf ?? '').trim().toUpperCase();
     const ufRows = Array.isArray(room?.details?.ufMatrix) ? room.details.ufMatrix : [];
     return (
@@ -2913,11 +3088,15 @@ export class AiService {
     );
   }
 
-  private findComgepOmRow(room: any, matcher: {
-    omId?: string | null;
-    code?: string | null;
-  }) {
-    const rows = this.listComgepOmRiskRows(room);
+  private findComgepOmRow(
+    room: any,
+    matcher: {
+      omId?: string | null;
+      code?: string | null;
+    },
+    sourceIds: readonly AiKnowledgeSourceId[] = ALL_KNOWLEDGE_SOURCE_IDS,
+  ) {
+    const rows = this.listComgepOmRiskRows(room, sourceIds);
     const safeOmId = String(matcher.omId ?? '').trim();
     const safeCode = String(matcher.code ?? '').trim().toUpperCase();
     return (
@@ -2931,11 +3110,22 @@ export class AiService {
     );
   }
 
-  private listComgepOmRiskRows(room: any) {
+  private listComgepOmRiskRows(
+    room: any,
+    sourceIds: readonly AiKnowledgeSourceId[] = ALL_KNOWLEDGE_SOURCE_IDS,
+  ) {
+    const sourceProfile = this.buildActionAgentSourceProfile(sourceIds);
+    if (!sourceProfile.allowHighRisk) return [];
     return Array.isArray(room?.details?.omRiskIndex) ? room.details.omRiskIndex : [];
   }
 
-  private listComgepUncoveredOms(room: any, uf: string | null) {
+  private listComgepUncoveredOms(
+    room: any,
+    uf: string | null,
+    sourceIds: readonly AiKnowledgeSourceId[] = ALL_KNOWLEDGE_SOURCE_IDS,
+  ) {
+    const sourceProfile = this.buildActionAgentSourceProfile(sourceIds);
+    if (!sourceProfile.allowCoverageGaps) return [];
     const rows = Array.isArray(room?.details?.uncoveredOms)
       ? room.details.uncoveredOms
       : [];
@@ -2947,7 +3137,13 @@ export class AiService {
       : rows;
   }
 
-  private listComgepHighRiskOms(room: any, uf: string | null) {
+  private listComgepHighRiskOms(
+    room: any,
+    uf: string | null,
+    sourceIds: readonly AiKnowledgeSourceId[] = ALL_KNOWLEDGE_SOURCE_IDS,
+  ) {
+    const sourceProfile = this.buildActionAgentSourceProfile(sourceIds);
+    if (!sourceProfile.allowHighRisk) return [];
     const rows = Array.isArray(room?.details?.highRiskOms)
       ? room.details.highRiskOms
       : [];
@@ -2959,7 +3155,13 @@ export class AiService {
       : rows;
   }
 
-  private listComgepPressureRows(room: any, uf: string | null) {
+  private listComgepPressureRows(
+    room: any,
+    uf: string | null,
+    sourceIds: readonly AiKnowledgeSourceId[] = ALL_KNOWLEDGE_SOURCE_IDS,
+  ) {
+    const sourceProfile = this.buildActionAgentSourceProfile(sourceIds);
+    if (!sourceProfile.allowPressure) return [];
     const rows = Array.isArray(room?.watchlists?.operationalPressure)
       ? room.watchlists.operationalPressure
       : [];
@@ -3050,7 +3252,7 @@ export class AiService {
     params: ComgepCopilotStreamParams,
     text: string,
   ) {
-    const rows = this.listComgepOmRiskRows(params.room);
+    const rows = this.listComgepOmRiskRows(params.room, params.configuredSources);
     const source = String(text ?? '');
     const normalized = this.normalizeComgepQueryText(source);
     const result = new Map<string, { row: any; score: number }>();
@@ -3113,7 +3315,7 @@ export class AiService {
       const focused = this.findComgepOmRow(params.room, {
         omId: params.focus.omId,
         code: params.focus.label ?? params.focus.description ?? null,
-      });
+      }, params.configuredSources);
       if (focused) return focused;
     }
 
@@ -3122,7 +3324,7 @@ export class AiService {
       const fromEvidence = this.findComgepOmRow(params.room, {
         omId: evidence.omId,
         code: evidence.omCode,
-      });
+      }, params.configuredSources);
       if (fromEvidence) return fromEvidence;
     }
 
@@ -3176,9 +3378,13 @@ export class AiService {
       ? `UF ${params.scopeUf}`
       : 'visão nacional';
     const focusLabel = this.describeComgepFocus(params.focus, params.scopeUf);
+    const sourceProfile = this.buildActionAgentSourceProfile(
+      params.configuredSources,
+    );
     const roomSummary = this.buildCompactActionAgentContext(
       params.room,
       params.scopeUf,
+      params.configuredSources,
     );
     const compactRoomJson = this.truncateText(
       JSON.stringify(roomSummary, null, 2),
@@ -3226,19 +3432,15 @@ export class AiService {
             'Use no máximo 4 bullets por seção.',
           ].join(' ');
 
-    const instructionsByType: Record<ActionAgentType, string> = {
-      briefing_comgep:
-        'Você é o copiloto executivo da Sala COMGEP. Seu papel é transformar o quadro atual em decisão objetiva para o gestor.',
-      priorizacao_intervencao:
-        'Você é o copiloto de priorização. Seu papel é ordenar esforço, comparar impacto e sugerir a melhor sequência de intervenção.',
-      governanca_cpca:
-        'Você é o copiloto de governança CPCA. Seu papel é explicar cobertura, gargalos, risco de exposição institucional e ajuste de comissão.',
-    };
+    const specificInstruction =
+      params.configuredPrompt?.trim() ||
+      this.getDefaultActionAgentInstruction(params.agentType);
 
     return [
-      instructionsByType[params.agentType],
+      specificInstruction,
       `Escopo ativo: ${scopeLabel}.`,
       `Foco atual: ${focusLabel}.`,
+      `Fontes permitidas nesta análise: ${sourceProfile.sourceLabels.join(', ') || 'nenhuma base selecionada'}.`,
       modeInstruction,
       'Use somente o contexto fornecido. Não invente números nem links.',
       'Quando citar uma conclusão, explicite OM/UF, score e motivo sempre que existirem nas evidências.',
@@ -3263,9 +3465,13 @@ export class AiService {
       ? `UF ${params.scopeUf}`
       : 'visão nacional';
     const focusLabel = this.describeComgepFocus(params.focus, params.scopeUf);
+    const sourceProfile = this.buildActionAgentSourceProfile(
+      params.configuredSources,
+    );
     const roomSummary = this.buildCompactActionAgentContext(
       params.room,
       params.scopeUf,
+      params.configuredSources,
     );
     const evidenceLines =
       params.evidences.length > 0
@@ -3298,9 +3504,14 @@ export class AiService {
 
     return [
       'Você é o copiloto executivo da Sala COMGEP.',
+      `Instrução específica: ${
+        params.configuredPrompt?.trim() ||
+        this.getDefaultActionAgentInstruction(params.agentType)
+      }`,
       `Modo: ${params.mode === 'analyst' ? 'analista' : 'executivo'}.`,
       `Escopo ativo: ${scopeLabel}.`,
       `Foco atual: ${focusLabel}.`,
+      `Fontes permitidas: ${sourceProfile.sourceLabels.join(', ') || 'nenhuma base selecionada'}.`,
       'Responda apenas com base no contexto abaixo. Não invente números, causas ou links.',
       'Sempre que concluir algo, cite OM/UF, score e motivo quando houver evidência.',
       'Não use tabelas markdown.',
@@ -3324,6 +3535,12 @@ export class AiService {
     focus: ComgepCopilotFocus | null,
   ) {
     const lines = [
+      `- Fontes consideradas: ${
+        Array.isArray(roomSummary?.fontesConsideradas) &&
+        roomSummary.fontesConsideradas.length > 0
+          ? roomSummary.fontesConsideradas.join(', ')
+          : 'nenhuma base selecionada'
+      }.`,
       `- Cobertura CPCA: ${roomSummary?.resumo?.omsCobertasCpca ?? 0}/${roomSummary?.resumo?.totalOms ?? 0} OMs (${roomSummary?.resumo?.percentualCoberturaCpca ?? 0}%).`,
       `- UFs críticas: ${roomSummary?.resumo?.ufsCriticas ?? 0}.`,
       `- OMs de alto risco: ${roomSummary?.resumo?.omsAltoRisco ?? 0}.`,
@@ -3414,8 +3631,10 @@ export class AiService {
     scopeUf: string | null;
     focus: ComgepCopilotFocus | null;
     agentType: ActionAgentType;
+    sourceIds: AiKnowledgeSourceId[];
   }): ComgepCopilotEvidenceItem[] {
     const byId = new Map<string, ComgepCopilotEvidenceItem>();
+    const sourceProfile = this.buildActionAgentSourceProfile(args.sourceIds);
     const add = (item: any, source: string, reason?: string | null) => {
       if (!item) return;
       const omId = String(item.id ?? item.omId ?? '').trim() || null;
@@ -3434,7 +3653,7 @@ export class AiService {
         score: Number(item.riskScore ?? item.score ?? 0),
         reason:
           String(reason ?? '').trim() ||
-          this.describeComgepEvidenceReason(item, source),
+          this.describeComgepEvidenceReason(item, source, sourceProfile),
         link:
           String(item.link ?? '').trim() ||
           `/cpca-cases?omId=${encodeURIComponent(omId ?? code)}`,
@@ -3445,19 +3664,27 @@ export class AiService {
     };
 
     const omRiskIndex = Array.isArray(args.room?.details?.omRiskIndex)
-      ? args.room.details.omRiskIndex
+      ? sourceProfile.allowHighRisk
+        ? args.room.details.omRiskIndex
+        : []
       : [];
     const ufMatrix = Array.isArray(args.room?.details?.ufMatrix)
       ? args.room.details.ufMatrix
       : [];
     const highRiskOms = Array.isArray(args.room?.details?.highRiskOms)
-      ? args.room.details.highRiskOms
+      ? sourceProfile.allowHighRisk
+        ? args.room.details.highRiskOms
+        : []
       : [];
     const uncoveredOms = Array.isArray(args.room?.details?.uncoveredOms)
-      ? args.room.details.uncoveredOms
+      ? sourceProfile.allowCoverageGaps
+        ? args.room.details.uncoveredOms
+        : []
       : [];
     const coveredOms = Array.isArray(args.room?.details?.coveredOms)
-      ? args.room.details.coveredOms
+      ? sourceProfile.allowCoverageGaps
+        ? args.room.details.coveredOms
+        : []
       : [];
 
     const addUfTopOms = (uf: string | null | undefined, source: string) => {
@@ -3482,18 +3709,18 @@ export class AiService {
         );
         break;
       case 'kpi_critical_ufs':
-        (Array.isArray(args.room?.details?.criticalUfs)
+        (sourceProfile.allowPriorityUfs &&
+        Array.isArray(args.room?.details?.criticalUfs)
           ? args.room.details.criticalUfs
-          : []
-        )
+          : [])
           .slice(0, 4)
           .forEach((item: any) => addUfTopOms(item.uf, 'UF prioritária'));
         break;
       case 'kpi_operational_presence':
-        (Array.isArray(args.room?.details?.operationalPresenceByUf)
+        (sourceProfile.allowPressure &&
+        Array.isArray(args.room?.details?.operationalPresenceByUf)
           ? args.room.details.operationalPresenceByUf
-          : []
-        )
+          : [])
           .slice(0, 4)
           .forEach((item: any) =>
             addUfTopOms(item.uf, 'Presença operacional'),
@@ -3529,11 +3756,11 @@ export class AiService {
         break;
     }
 
-    if (byId.size === 0 && args.scopeUf) {
+    if (byId.size === 0 && args.scopeUf && sourceProfile.hasAnySource) {
       addUfTopOms(args.scopeUf, 'Escopo da sessão');
     }
 
-    if (byId.size === 0) {
+    if (byId.size === 0 && sourceProfile.hasAnySource) {
       const baseList =
         args.agentType === 'governanca_cpca'
           ? uncoveredOms
@@ -3555,7 +3782,13 @@ export class AiService {
     return Array.from(byId.values()).slice(0, 8);
   }
 
-  private describeComgepEvidenceReason(item: any, source: string) {
+  private describeComgepEvidenceReason(
+    item: any,
+    source: string,
+    profile?: ActionAgentSourceProfile,
+  ) {
+    const safeProfile =
+      profile ?? this.buildActionAgentSourceProfile(ALL_KNOWLEDGE_SOURCE_IDS);
     const sourceLabel = String(source ?? '').trim();
     const complaints = item?.complaints ?? {};
     const openCases = Number(complaints?.openCases ?? 0);
@@ -3564,15 +3797,19 @@ export class AiService {
     const surveyRate = Number(item?.surveyRate ?? 0);
     const domesticRate = Number(item?.domesticRate ?? 0);
     const reasons: string[] = [];
-    if (openCases > 0) reasons.push(`${openCases} denúncia(s) aberta(s)`);
-    if (retaliationCases > 0) {
+    if (safeProfile.allowComplaints && openCases > 0) {
+      reasons.push(`${openCases} denúncia(s) aberta(s)`);
+    }
+    if (safeProfile.allowComplaints && retaliationCases > 0) {
       reasons.push(`${retaliationCases} risco(s) de retaliação`);
     }
-    if (stalledCases > 0) reasons.push(`${stalledCases} caso(s) parado(s)`);
-    if (surveyRate >= 20) {
+    if (safeProfile.allowComplaints && stalledCases > 0) {
+      reasons.push(`${stalledCases} caso(s) parado(s)`);
+    }
+    if (safeProfile.allowSurveySignals && surveyRate >= 20) {
       reasons.push(`${surveyRate.toFixed(1)}% de sinal em pesquisa`);
     }
-    if (domesticRate >= 15) {
+    if (safeProfile.allowSurveySignals && domesticRate >= 15) {
       reasons.push(`${domesticRate.toFixed(1)}% em violência doméstica`);
     }
     if (!reasons.length && item?.coverageType) {
@@ -3805,27 +4042,74 @@ export class AiService {
     });
   }
 
-  private buildCompactActionAgentContext(room: any, scopeUf: string | null) {
+  private buildCompactActionAgentContext(
+    room: any,
+    scopeUf: string | null,
+    sourceIds: readonly AiKnowledgeSourceId[] = ALL_KNOWLEDGE_SOURCE_IDS,
+  ) {
+    const sourceProfile = this.buildActionAgentSourceProfile(sourceIds);
+    if (!sourceProfile.hasAnySource) {
+      return {
+        generatedAt: room?.generatedAt ?? new Date().toISOString(),
+        escopo: scopeUf ? `UF ${scopeUf}` : 'Nacional',
+        fontesConsideradas: [],
+        resumo: {
+          totalOms: 0,
+          omsCobertasCpca: 0,
+          percentualCoberturaCpca: 0,
+          ufsCriticas: 0,
+          omsAltoRisco: 0,
+          denunciasAbertas: 0,
+          eventosPresencaOperacional: 0,
+        },
+        confiancaDado: {
+          coberturaSuportadaPercentual: 0,
+          registrosNormalizados: 0,
+          correspondidos: 0,
+          apenasUf: 0,
+          naoEncontrados: 0,
+          ultimaAtualizacao: null,
+          principaisFontes: [],
+        },
+        ufsPrioritarias: [],
+        omsMaiorRisco: [],
+        gapsCoberturaCpca: [],
+        pressaoOperacional: [],
+      };
+    }
     const matchesScope = (item: any) =>
       scopeUf
         ? String(item?.uf ?? '').trim().toUpperCase() === scopeUf
         : true;
 
     const scopedCriticalUfs = Array.isArray(room?.watchlists?.criticalUfs)
-      ? room.watchlists.criticalUfs.filter(matchesScope)
+      ? sourceProfile.allowPriorityUfs
+        ? room.watchlists.criticalUfs.filter(matchesScope)
+        : []
       : [];
     const scopedOms = Array.isArray(room?.watchlists?.topRiskOms)
-      ? room.watchlists.topRiskOms.filter(matchesScope)
+      ? sourceProfile.allowHighRisk
+        ? room.watchlists.topRiskOms.filter(matchesScope)
+        : []
       : [];
     const scopedCoverageGaps = Array.isArray(room?.watchlists?.coverageGaps)
-      ? room.watchlists.coverageGaps.filter(matchesScope)
+      ? sourceProfile.allowCoverageGaps
+        ? room.watchlists.coverageGaps.filter(matchesScope)
+        : []
       : [];
     const scopedPressure = Array.isArray(room?.watchlists?.operationalPressure)
-      ? room.watchlists.operationalPressure.filter(matchesScope)
+      ? sourceProfile.allowPressure
+        ? room.watchlists.operationalPressure.filter(matchesScope)
+        : []
       : [];
 
     const confidenceSources = Array.isArray(room?.dataConfidence?.sources)
       ? [...room.dataConfidence.sources]
+          .filter((item: any) =>
+            sourceProfile.biSourceTypes.includes(
+              String(item?.sourceType ?? '').trim(),
+            ),
+          )
           .filter((item: any) => Number(item?.totalRecords ?? 0) > 0)
           .sort(
             (a: any, b: any) =>
@@ -3841,32 +4125,69 @@ export class AiService {
             apenasUf: Number(item?.statusCounts?.ufOnly ?? 0),
             naoEncontrados: Number(item?.statusCounts?.notFound ?? 0),
             ultimaAtualizacao: item?.latestUpdatedAt ?? null,
-          }))
+            }))
       : [];
+
+    const confidenceTotals = confidenceSources.reduce(
+      (acc, item: any) => {
+        acc.totalRecords += Number(item?.totalRecords ?? 0);
+        acc.matched += Number(item?.statusCounts?.matched ?? 0);
+        acc.ufOnly += Number(item?.statusCounts?.ufOnly ?? 0);
+        acc.notFound += Number(item?.statusCounts?.notFound ?? 0);
+        const latest = item?.latestUpdatedAt
+          ? new Date(item.latestUpdatedAt).getTime()
+          : NaN;
+        if (Number.isFinite(latest) && latest > acc.lastUpdatedAtMs) {
+          acc.lastUpdatedAtMs = latest;
+        }
+        return acc;
+      },
+      {
+        totalRecords: 0,
+        matched: 0,
+        ufOnly: 0,
+        notFound: 0,
+        lastUpdatedAtMs: 0,
+      },
+    );
+    const supportedCount = confidenceTotals.matched + confidenceTotals.ufOnly;
+    const supportedCoveragePercent =
+      confidenceTotals.totalRecords > 0
+        ? Number(
+            (
+              (supportedCount / Math.max(confidenceTotals.totalRecords, 1)) *
+              100
+            ).toFixed(1),
+          )
+        : 0;
 
     return {
       generatedAt: room?.generatedAt ?? new Date().toISOString(),
       escopo: scopeUf ? `UF ${scopeUf}` : 'Nacional',
+      fontesConsideradas: sourceProfile.sourceLabels,
       resumo: {
         totalOms: Number(room?.summary?.totalOms ?? 0),
         omsCobertasCpca: Number(room?.summary?.coveredOms ?? 0),
         percentualCoberturaCpca: Number(room?.summary?.coveredOmsPercent ?? 0),
-        ufsCriticas: Number(room?.summary?.criticalUfCount ?? 0),
-        omsAltoRisco: Number(room?.summary?.highRiskOmCount ?? 0),
-        denunciasAbertas: Number(room?.summary?.openComplaintCases ?? 0),
-        eventosPresencaOperacional: Number(
-          room?.summary?.operationalPresenceEvents ?? 0,
-        ),
+        ufsCriticas: scopedCriticalUfs.length,
+        omsAltoRisco: scopedOms.length,
+        denunciasAbertas: sourceProfile.allowComplaints
+          ? Number(room?.summary?.openComplaintCases ?? 0)
+          : 0,
+        eventosPresencaOperacional: sourceProfile.allowOperational
+          ? Number(room?.summary?.operationalPresenceEvents ?? 0)
+          : 0,
       },
       confiancaDado: {
-        coberturaSuportadaPercentual: Number(
-          room?.dataConfidence?.supportedCoveragePercent ?? 0,
-        ),
-        registrosNormalizados: Number(room?.dataConfidence?.totalRecords ?? 0),
-        correspondidos: Number(room?.dataConfidence?.matched ?? 0),
-        apenasUf: Number(room?.dataConfidence?.ufOnly ?? 0),
-        naoEncontrados: Number(room?.dataConfidence?.notFound ?? 0),
-        ultimaAtualizacao: room?.dataConfidence?.lastUpdatedAt ?? null,
+        coberturaSuportadaPercentual: supportedCoveragePercent,
+        registrosNormalizados: confidenceTotals.totalRecords,
+        correspondidos: confidenceTotals.matched,
+        apenasUf: confidenceTotals.ufOnly,
+        naoEncontrados: confidenceTotals.notFound,
+        ultimaAtualizacao:
+          confidenceTotals.lastUpdatedAtMs > 0
+            ? new Date(confidenceTotals.lastUpdatedAtMs).toISOString()
+            : null,
         principaisFontes: confidenceSources,
       },
       ufsPrioritarias: scopedCriticalUfs.slice(0, 6).map((item: any) => ({
@@ -3874,11 +4195,21 @@ export class AiService {
         faixa: item?.priorityBand ?? 'N/D',
         risco: Number(item?.riskScore ?? 0),
         coberturaCpcaPercentual: Number(item?.coveragePercent ?? 0),
-        presencaOperacional: Number(item?.presenceScore ?? 0),
-        denunciasAbertas: Number(item?.complaints?.openCases ?? 0),
-        retaliacao: Number(item?.complaints?.retaliationCases ?? 0),
-        taxaViolenciaPesquisa: Number(item?.surveyRate ?? 0),
-        taxaViolenciaDomestica: Number(item?.domesticRate ?? 0),
+        presencaOperacional: sourceProfile.allowOperational
+          ? Number(item?.presenceScore ?? 0)
+          : 0,
+        denunciasAbertas: sourceProfile.allowComplaints
+          ? Number(item?.complaints?.openCases ?? 0)
+          : 0,
+        retaliacao: sourceProfile.allowComplaints
+          ? Number(item?.complaints?.retaliationCases ?? 0)
+          : 0,
+        taxaViolenciaPesquisa: sourceProfile.allowSurveySignals
+          ? Number(item?.surveyRate ?? 0)
+          : 0,
+        taxaViolenciaDomestica: sourceProfile.allowSurveySignals
+          ? Number(item?.domesticRate ?? 0)
+          : 0,
         omsMaisSensíveis: Array.isArray(item?.oms)
           ? item.oms
               .slice(0, 4)
@@ -3894,33 +4225,55 @@ export class AiService {
         uf: item?.uf ?? 'N/D',
         risco: Number(item?.riskScore ?? 0),
         cobertura: item?.coverageType ?? 'N/D',
-        denunciasAbertas: Number(item?.complaints?.openCases ?? 0),
-        retaliacao: Number(item?.complaints?.retaliationCases ?? 0),
-        casosParados: Number(item?.complaints?.stalledCases ?? 0),
-        casosSexuais: Number(item?.complaints?.sexualCases ?? 0),
-        taxaViolenciaPesquisa: Number(item?.surveyRate ?? 0),
-        taxaViolenciaDomestica: Number(item?.domesticRate ?? 0),
-        motivo: this.describeActionAgentOmRisk(item),
+        denunciasAbertas: sourceProfile.allowComplaints
+          ? Number(item?.complaints?.openCases ?? 0)
+          : 0,
+        retaliacao: sourceProfile.allowComplaints
+          ? Number(item?.complaints?.retaliationCases ?? 0)
+          : 0,
+        casosParados: sourceProfile.allowComplaints
+          ? Number(item?.complaints?.stalledCases ?? 0)
+          : 0,
+        casosSexuais: sourceProfile.allowComplaints
+          ? Number(item?.complaints?.sexualCases ?? 0)
+          : 0,
+        taxaViolenciaPesquisa: sourceProfile.allowSurveySignals
+          ? Number(item?.surveyRate ?? 0)
+          : 0,
+        taxaViolenciaDomestica: sourceProfile.allowSurveySignals
+          ? Number(item?.domesticRate ?? 0)
+          : 0,
+        motivo: this.describeActionAgentOmRisk(item, sourceProfile),
       })),
       gapsCoberturaCpca: scopedCoverageGaps.slice(0, 8).map((item: any) => ({
         om: this.formatActionAgentOmLabel(item),
         uf: item?.uf ?? 'N/D',
         risco: Number(item?.riskScore ?? 0),
-        denunciasAbertas: Number(item?.complaints?.openCases ?? 0),
-        retaliacao: Number(item?.complaints?.retaliationCases ?? 0),
-        motivo: this.describeActionAgentCoverageGap(item),
+        denunciasAbertas: sourceProfile.allowComplaints
+          ? Number(item?.complaints?.openCases ?? 0)
+          : 0,
+        retaliacao: sourceProfile.allowComplaints
+          ? Number(item?.complaints?.retaliationCases ?? 0)
+          : 0,
+        motivo: this.describeActionAgentCoverageGap(item, sourceProfile),
       })),
       pressaoOperacional: scopedPressure.slice(0, 6).map((item: any) => ({
         uf: item?.uf ?? 'N/D',
         pressao: Number(item?.pressureScore ?? 0),
         risco: Number(item?.riskScore ?? 0),
-        presenca: Number(item?.presenceScore ?? 0),
+        presenca: sourceProfile.allowOperational
+          ? Number(item?.presenceScore ?? 0)
+          : 0,
         coberturaCpcaPercentual: Number(item?.coveragePercent ?? 0),
-        missoes: Number(item?.presence?.missions ?? 0),
-        atividadesConcluidas: Number(
-          item?.presence?.completedActivities ?? 0,
-        ),
-        relatoriosAssinados: Number(item?.presence?.signedReports ?? 0),
+        missoes: sourceProfile.allowOperational
+          ? Number(item?.presence?.missions ?? 0)
+          : 0,
+        atividadesConcluidas: sourceProfile.allowOperational
+          ? Number(item?.presence?.completedActivities ?? 0)
+          : 0,
+        relatoriosAssinados: sourceProfile.allowOperational
+          ? Number(item?.presence?.signedReports ?? 0)
+          : 0,
         focoRecomendado: this.truncateText(item?.recommendedFocus, 180),
       })),
     };
@@ -3933,7 +4286,12 @@ export class AiService {
     return code || name || 'OM não identificada';
   }
 
-  private describeActionAgentOmRisk(item: any) {
+  private describeActionAgentOmRisk(
+    item: any,
+    profile?: ActionAgentSourceProfile,
+  ) {
+    const safeProfile =
+      profile ?? this.buildActionAgentSourceProfile(ALL_KNOWLEDGE_SOURCE_IDS);
     const reasons: string[] = [];
     const openCases = Number(item?.complaints?.openCases ?? 0);
     const retaliationCases = Number(item?.complaints?.retaliationCases ?? 0);
@@ -3942,18 +4300,24 @@ export class AiService {
     const surveyRate = Number(item?.surveyRate ?? 0);
     const domesticRate = Number(item?.domesticRate ?? 0);
 
-    if (openCases > 0) reasons.push(`${openCases} denúncia(s) aberta(s)`);
-    if (retaliationCases > 0) {
+    if (safeProfile.allowComplaints && openCases > 0) {
+      reasons.push(`${openCases} denúncia(s) aberta(s)`);
+    }
+    if (safeProfile.allowComplaints && retaliationCases > 0) {
       reasons.push(`${retaliationCases} caso(s) com risco de retaliação`);
     }
-    if (stalledCases > 0) reasons.push(`${stalledCases} caso(s) parado(s)`);
-    if (sexualCases > 0) reasons.push(`${sexualCases} caso(s) sexual(is)`);
-    if (surveyRate >= 20) {
+    if (safeProfile.allowComplaints && stalledCases > 0) {
+      reasons.push(`${stalledCases} caso(s) parado(s)`);
+    }
+    if (safeProfile.allowComplaints && sexualCases > 0) {
+      reasons.push(`${sexualCases} caso(s) sexual(is)`);
+    }
+    if (safeProfile.allowSurveySignals && surveyRate >= 20) {
       reasons.push(
         `${surveyRate.toFixed(1)}% de sinal em pesquisa de violência`,
       );
     }
-    if (domesticRate >= 15) {
+    if (safeProfile.allowSurveySignals && domesticRate >= 15) {
       reasons.push(
         `${domesticRate.toFixed(1)}% de sinal em violência doméstica`,
       );
@@ -3964,21 +4328,28 @@ export class AiService {
     return this.truncateText(reasons.join('; '), 220);
   }
 
-  private describeActionAgentCoverageGap(item: any) {
+  private describeActionAgentCoverageGap(
+    item: any,
+    profile?: ActionAgentSourceProfile,
+  ) {
+    const safeProfile =
+      profile ?? this.buildActionAgentSourceProfile(ALL_KNOWLEDGE_SOURCE_IDS);
     const reasons: string[] = ['OM sem cobertura CPCA própria ou delegada'];
     const openCases = Number(item?.complaints?.openCases ?? 0);
     const retaliationCases = Number(item?.complaints?.retaliationCases ?? 0);
     const surveyRate = Number(item?.surveyRate ?? 0);
     const domesticRate = Number(item?.domesticRate ?? 0);
 
-    if (openCases > 0) reasons.push(`${openCases} denúncia(s) aberta(s)`);
-    if (retaliationCases > 0) {
+    if (safeProfile.allowComplaints && openCases > 0) {
+      reasons.push(`${openCases} denúncia(s) aberta(s)`);
+    }
+    if (safeProfile.allowComplaints && retaliationCases > 0) {
       reasons.push(`${retaliationCases} caso(s) com risco de retaliação`);
     }
-    if (surveyRate >= 20) {
+    if (safeProfile.allowSurveySignals && surveyRate >= 20) {
       reasons.push(`${surveyRate.toFixed(1)}% de sinal em pesquisa`);
     }
-    if (domesticRate >= 15) {
+    if (safeProfile.allowSurveySignals && domesticRate >= 15) {
       reasons.push(`${domesticRate.toFixed(1)}% em violência doméstica`);
     }
 

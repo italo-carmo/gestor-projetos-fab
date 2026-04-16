@@ -31,6 +31,9 @@ export const ANALYSIS_PROMPT_KEYS: Record<string, string> = {
   aggressor: 'ai.prompt.aggressor',
   text: 'ai.prompt.text',
   geo: 'ai.prompt.geo',
+  briefing_comgep: 'ai.prompt.briefing_comgep',
+  priorizacao_intervencao: 'ai.prompt.priorizacao_intervencao',
+  governanca_cpca: 'ai.prompt.governanca_cpca',
 };
 
 export const DEFAULT_SYSTEM_PROMPT = `Você é um analista institucional da Força Aérea Brasileira (FAB), especializado no programa CIPAVD/SMIF de prevenção e combate ao assédio e violência doméstica.

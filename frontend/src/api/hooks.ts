@@ -4824,7 +4824,10 @@ export type AiAnalysisType =
   | "situational"
   | "aggressor"
   | "text"
-  | "geo";
+  | "geo"
+  | "briefing_comgep"
+  | "priorizacao_intervencao"
+  | "governanca_cpca";
 
 export type AiKnowledgeSourceId =
   | "missions"

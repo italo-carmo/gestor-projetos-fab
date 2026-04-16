@@ -4,6 +4,9 @@ export const AI_ANALYSIS_TYPES = [
   'aggressor',
   'text',
   'geo',
+  'briefing_comgep',
+  'priorizacao_intervencao',
+  'governanca_cpca',
 ] as const;
 
 export type AiAnalysisType = (typeof AI_ANALYSIS_TYPES)[number];
@@ -145,6 +148,9 @@ export const ANALYSIS_DEFAULT_SOURCES: Record<
     AI_KNOWLEDGE_SOURCE_IDS.COMPLAINTS_CPCA,
     AI_KNOWLEDGE_SOURCE_IDS.COMPLAINTS_SMIF,
   ],
+  briefing_comgep: [...ALL_KNOWLEDGE_SOURCE_IDS],
+  priorizacao_intervencao: [...ALL_KNOWLEDGE_SOURCE_IDS],
+  governanca_cpca: [...ALL_KNOWLEDGE_SOURCE_IDS],
 };
 
 export type AnalysisSourceSelection = Record<
