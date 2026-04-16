@@ -121,9 +121,9 @@ const OPERATIONAL_QUICK_ACTIONS = [
   },
   {
     id: "create_mission_schedule",
-    title: "Criar cronograma em missão",
+    title: "Criar ou editar cronograma em missão",
     description:
-      "Analisa PDF ou conduz o preenchimento manual do cronograma, com revisão antes do cadastro.",
+      "Permite criar um cronograma novo ou editar um cronograma já salvo, sempre com confirmação antes de gravar.",
     icon: <PlaylistAddCheckRoundedIcon />,
     color: "#7B1FA2",
   },
@@ -839,6 +839,10 @@ function AssistantTab() {
     [appendMessage, toast],
   );
 
+  const isEditingExistingSchedule =
+    workflow?.intent === "create_mission_schedule" &&
+    workflow?.draft?.scheduleOperation === "EDIT";
+
   const postAssistant = useCallback(
     async (payload: Record<string, unknown>, userContent?: string) => {
       setRunning(true);
@@ -1407,16 +1411,27 @@ function AssistantTab() {
                   >
                     <Box>
                       <Typography variant="subtitle2" fontWeight={800} color="#1A3C6E">
-                        Rascunho do cronograma
+                        {isEditingExistingSchedule
+                          ? "Cronograma atual da missão"
+                          : "Rascunho do cronograma"}
                       </Typography>
                       <Typography variant="body2" color="text.secondary" sx={{ mt: 0.4 }}>
-                        Revise os itens abaixo. Para ajustar, use a numeração exibida e escreva por exemplo
-                        {" "}
-                        <strong>alterar item 2</strong>
-                        {" "}
-                        ou
-                        {" "}
-                        <strong>remover item 3</strong>.
+                        {isEditingExistingSchedule ? (
+                          <>
+                            Revise os itens já salvos da missão. Selecione qual item deseja alterar
+                            nos campos guiados abaixo; a alteração só é gravada após sua confirmação.
+                          </>
+                        ) : (
+                          <>
+                            Revise os itens abaixo. Para ajustar, use a numeração exibida e escreva por exemplo
+                            {" "}
+                            <strong>alterar item 2</strong>
+                            {" "}
+                            ou
+                            {" "}
+                            <strong>remover item 3</strong>.
+                          </>
+                        )}
                       </Typography>
                     </Box>
                     <Chip
@@ -1424,9 +1439,11 @@ function AssistantTab() {
                       color="info"
                       variant="outlined"
                       label={
-                        workflow.schedulePreviewStartNumber &&
-                        workflow.schedulePreviewEndNumber &&
-                        workflow.scheduleTotalItems
+                        isEditingExistingSchedule
+                          ? `${workflow.scheduleItems.length} item(ns) salvos`
+                          : workflow.schedulePreviewStartNumber &&
+                            workflow.schedulePreviewEndNumber &&
+                            workflow.scheduleTotalItems
                           ? `Itens ${workflow.schedulePreviewStartNumber}-${workflow.schedulePreviewEndNumber} de ${workflow.scheduleTotalItems}`
                           : `${workflow.scheduleItems.length} item(ns)`
                       }
@@ -1446,17 +1463,25 @@ function AssistantTab() {
                         >
                           <Box>
                             <Typography variant="body2" fontWeight={800}>
-                              {(workflow.schedulePreviewStartNumber ?? 1) + index}. {item.title}
+                              {(isEditingExistingSchedule
+                                ? 1
+                                : workflow.schedulePreviewStartNumber ?? 1) + index}. {item.title}
                             </Typography>
                             <Typography variant="caption" color="text.secondary">
                               {formatScheduleDateTime(item.startAt)} • {item.durationMinutes} min
                             </Typography>
                           </Box>
-                          <Chip
-                            size="small"
-                            variant="outlined"
-                            label={item.sourceFileNames?.join(", ") || "Entrada manual"}
-                          />
+                          {isEditingExistingSchedule ? (
+                            workflow.draft?.scheduleExistingItemId === item.id ? (
+                              <Chip size="small" variant="outlined" color="primary" label="Selecionado" />
+                            ) : null
+                          ) : (
+                            <Chip
+                              size="small"
+                              variant="outlined"
+                              label={item.sourceFileNames?.join(", ") || "Entrada manual"}
+                            />
+                          )}
                         </Stack>
                         <Typography variant="body2" sx={{ mt: 0.8 }}>
                           Local: {item.location}
@@ -1473,6 +1498,7 @@ function AssistantTab() {
                     ))}
                     {workflow.scheduleTotalItems &&
                     workflow.schedulePreviewEndNumber &&
+                    !isEditingExistingSchedule &&
                     workflow.scheduleTotalItems > workflow.schedulePreviewEndNumber ? (
                       <Typography variant="caption" color="text.secondary">
                         Confirme este lote para cadastrar esses itens e avançar para o próximo bloco.

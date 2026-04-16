@@ -156,9 +156,9 @@ const QUICK_ACTIONS: AssistantQuickAction[] = [
   },
   {
     id: 'create_mission_schedule',
-    title: 'Criar cronograma em missão',
+    title: 'Criar ou editar cronograma em missão',
     description:
-      'Monta o cronograma da missão por PDF ou manualmente, com revisão assistida antes da gravação.',
+      'Permite criar um cronograma novo ou editar um cronograma já salvo, sempre com confirmação antes de gravar.',
   },
 ];
 
@@ -185,10 +185,10 @@ const INTENT_META: Record<
     confirmLabel: 'Confirmar criação da tarefa',
   },
   create_mission_schedule: {
-    title: 'Criar cronograma em missão',
+    title: 'Criar ou editar cronograma em missão',
     description:
-      'Fluxo assistido para montar o cronograma da missão por PDF ou manualmente, revisar os itens e só depois cadastrar.',
-    confirmLabel: 'Confirmar inclusão no cronograma',
+      'Fluxo assistido para criar ou editar o cronograma da missão, revisar os dados e só depois gravar.',
+    confirmLabel: 'Confirmar alteração no cronograma',
   },
 };
 
@@ -410,7 +410,7 @@ export class AiAssistantService {
           session,
           'assistant',
           [
-            'Posso atuar como assistente operacional para **criar missão**, **criar atividade de campo**, **criar tarefa** ou **incluir cronograma em missão**.',
+            'Posso atuar como assistente operacional para **criar missão**, **criar atividade de campo**, **criar tarefa** ou **criar/editar cronograma em missão**.',
             'Use uma ação rápida ou escreva diretamente o que deseja criar.',
           ].join('\n\n'),
         ),
@@ -447,6 +447,13 @@ export class AiAssistantService {
 
     if (wantsConfirm && workflow.status === 'confirming') {
       try {
+        if (
+          workflow.intent === 'create_mission_schedule' &&
+          workflow.draft.scheduleOperation === 'EDIT' &&
+          this.getPendingExistingScheduleUpdate(workflow.draft)
+        ) {
+          return await this.confirmExistingScheduleItemEdit(session, workflow, user);
+        }
         if (
           workflow.intent === 'create_mission_schedule' &&
           workflow.draft.scheduleInputMode === 'UPLOAD'
@@ -561,6 +568,79 @@ export class AiAssistantService {
 
     session.updatedAt = new Date().toISOString();
     const updatedView = await this.buildWorkflowView(workflow, user);
+    if (
+      workflow.intent === 'create_mission_schedule' &&
+      workflow.draft.scheduleOperation === 'EDIT'
+    ) {
+      const selectedMissionNow =
+        workflowView.currentField?.field === 'missionId' &&
+        updatedView.currentField?.field === 'scheduleCreateIfMissing' &&
+        !!workflow.draft.missionId;
+      if (selectedMissionNow) {
+        return this.buildReply(
+          session,
+          this.pushMessage(
+            session,
+            'assistant',
+            'Esta missão ainda não possui cronograma inserido. Deseja iniciar a criação agora?',
+          ),
+          updatedView,
+          null,
+        );
+      }
+      const scheduleReadyToSelectItem =
+        workflowView.currentField?.field === 'missionId' &&
+        updatedView.currentField?.field === 'scheduleExistingItemId' &&
+        Array.isArray(workflow.draft.scheduleExistingItems) &&
+        workflow.draft.scheduleExistingItems.length > 0;
+      if (scheduleReadyToSelectItem) {
+        return this.buildReply(
+          session,
+          this.pushMessage(
+            session,
+            'assistant',
+            this.buildExistingScheduleListMessage(
+              workflow.draft.scheduleExistingItems as AssistantScheduleDraftItem[],
+            ),
+          ),
+          updatedView,
+          null,
+        );
+      }
+      const switchedToCreation =
+        workflowView.currentField?.field === 'scheduleCreateIfMissing' &&
+        workflow.draft.scheduleOperation === 'CREATE';
+      if (switchedToCreation) {
+        return this.buildReply(
+          session,
+          this.pushMessage(
+            session,
+            'assistant',
+            updatedView.currentField
+              ? `A missão ainda não tinha cronograma. Vou seguir com a criação. Agora preciso de **${updatedView.currentField.label.toLowerCase()}**.`
+              : 'A missão ainda não tinha cronograma. Vou seguir com a criação.',
+          ),
+          updatedView,
+          null,
+        );
+      }
+      const declinedCreation =
+        workflowView.currentField?.field === 'scheduleCreateIfMissing' &&
+        updatedView.currentField?.field === 'missionId' &&
+        !workflow.draft.missionId;
+      if (declinedCreation) {
+        return this.buildReply(
+          session,
+          this.pushMessage(
+            session,
+            'assistant',
+            'Certo. Escolha outra missão para editar ou cancele o fluxo.',
+          ),
+          updatedView,
+          null,
+        );
+      }
+    }
     if (updatedView.readyToConfirm) {
       workflow.status = 'confirming';
       return this.buildReply(
@@ -613,9 +693,18 @@ export class AiAssistantService {
     const attachments = Array.isArray(workflow?.draft?.scheduleSourceFiles)
       ? (workflow?.draft?.scheduleSourceFiles as AssistantScheduleSourceFile[])
       : [];
-    const schedulePreview = workflow
-      ? this.getSchedulePreviewState(workflow.draft)
-      : null;
+    const schedulePreview =
+      workflow &&
+      workflow.intent === 'create_mission_schedule' &&
+      workflow.draft.scheduleOperation !== 'EDIT'
+        ? this.getSchedulePreviewState(workflow.draft)
+        : null;
+    const existingScheduleItems =
+      workflow?.intent === 'create_mission_schedule' &&
+      workflow?.draft?.scheduleOperation === 'EDIT' &&
+      Array.isArray(workflow?.draft?.scheduleExistingItems)
+        ? (workflow.draft.scheduleExistingItems as AssistantScheduleDraftItem[])
+        : [];
     return {
       sessionId: session.id,
       message,
@@ -623,7 +712,11 @@ export class AiAssistantService {
         ? {
             ...workflow,
             attachments,
-            scheduleItems: schedulePreview?.items ?? [],
+            scheduleItems:
+              workflow.intent === 'create_mission_schedule' &&
+              workflow.draft.scheduleOperation === 'EDIT'
+                ? existingScheduleItems
+                : schedulePreview?.items ?? [],
             schedulePreviewStartNumber: schedulePreview?.startNumber,
             schedulePreviewEndNumber: schedulePreview?.endNumber,
             scheduleTotalItems: schedulePreview?.total,
@@ -750,9 +843,11 @@ export class AiAssistantService {
     const summary = await this.buildDraftSummary(workflow.intent, workflow.draft, user);
     const schedulePreview =
       workflow.intent === 'create_mission_schedule' &&
+      workflow.draft.scheduleOperation !== 'EDIT' &&
       workflow.draft.scheduleInputMode === 'UPLOAD'
         ? this.getSchedulePreviewState(workflow.draft)
         : null;
+    const pendingExistingEdit = this.getPendingExistingScheduleUpdate(workflow.draft);
     return {
       intent: workflow.intent,
       title: INTENT_META[workflow.intent].title,
@@ -762,7 +857,9 @@ export class AiAssistantService {
       summary,
       currentField,
       readyToConfirm: !currentField,
-      confirmLabel: schedulePreview
+      confirmLabel: pendingExistingEdit
+        ? `Confirmar alteração do item ${pendingExistingEdit.itemNumber}`
+        : schedulePreview
         ? `Confirmar itens ${schedulePreview.startNumber}-${schedulePreview.endNumber}`
         : INTENT_META[workflow.intent].confirmLabel,
     };
@@ -801,6 +898,85 @@ export class AiAssistantService {
     const field = fields.find((item) => item.field === fieldName);
     if (!field) {
       throw new BadRequestException('Campo do assistente não reconhecido.');
+    }
+    if (workflow.intent === 'create_mission_schedule') {
+      if (field.field === 'scheduleOperation') {
+        const option = this.resolveSingleOption(
+          field.options ?? [],
+          this.normalizeFieldValue(field, value),
+        );
+        if (!option) {
+          throw new BadRequestException(
+            `Selecione uma opção válida para ${field.label.toLowerCase()}.`,
+          );
+        }
+        workflow.draft.scheduleOperation = option.value;
+        this.resetMissionScheduleDraftForOperationChange(workflow.draft);
+        return;
+      }
+      if (field.field === 'missionId') {
+        const option = this.resolveSingleOption(
+          field.options ?? [],
+          this.normalizeFieldValue(field, value),
+        );
+        if (!option) {
+          throw new BadRequestException(
+            `Selecione uma opção válida para ${field.label.toLowerCase()}.`,
+          );
+        }
+        workflow.draft.missionId = option.value;
+        this.resetMissionScheduleDraftForMissionChange(workflow.draft);
+        if (workflow.draft.scheduleOperation === 'EDIT') {
+          await this.syncExistingScheduleItems(workflow.draft, user);
+        }
+        return;
+      }
+      if (field.field === 'scheduleCreateIfMissing') {
+        const shouldCreate = this.parseBooleanValue(
+          this.normalizeFieldValue(field, value),
+          field.label,
+        );
+        if (shouldCreate) {
+          workflow.draft.scheduleOperation = 'CREATE';
+          workflow.draft.scheduleCreateIfMissing = null;
+          this.clearExistingScheduleSelection(workflow.draft);
+        } else {
+          workflow.draft.scheduleCreateIfMissing = false;
+          workflow.draft.missionId = null;
+          this.clearExistingScheduleSelection(workflow.draft);
+          workflow.draft.scheduleExistingItems = [];
+        }
+        return;
+      }
+      if (field.field === 'scheduleExistingItemId') {
+        const option = this.resolveSingleOption(
+          field.options ?? [],
+          this.normalizeFieldValue(field, value),
+        );
+        if (!option) {
+          throw new BadRequestException(
+            `Selecione uma opção válida para ${field.label.toLowerCase()}.`,
+          );
+        }
+        workflow.draft.scheduleExistingItemId = option.value;
+        workflow.draft.scheduleExistingEditFieldKey = null;
+        workflow.draft.scheduleExistingPendingUpdate = null;
+        return;
+      }
+      if (field.field === 'scheduleExistingEditFieldKey') {
+        const option = this.resolveSingleOption(
+          field.options ?? [],
+          this.normalizeFieldValue(field, value),
+        );
+        if (!option) {
+          throw new BadRequestException(
+            `Selecione uma opção válida para ${field.label.toLowerCase()}.`,
+          );
+        }
+        workflow.draft.scheduleExistingEditFieldKey = option.value;
+        workflow.draft.scheduleExistingPendingUpdate = null;
+        return;
+      }
     }
     if (field.inputType === 'file_upload') {
       throw new BadRequestException(
@@ -857,6 +1033,10 @@ export class AiAssistantService {
         this.applyScheduleItemEdit(workflow, parsed);
         return;
       }
+      if (field.field === 'scheduleExistingEditValue') {
+        this.stageExistingScheduleItemEdit(workflow, parsed);
+        return;
+      }
       workflow.draft[field.field] = parsed;
       return;
     }
@@ -866,6 +1046,10 @@ export class AiAssistantService {
       );
       if (field.field === 'scheduleEditValue') {
         this.applyScheduleItemEdit(workflow, `${parsed}T00:00:00`);
+        return;
+      }
+      if (field.field === 'scheduleExistingEditValue') {
+        this.stageExistingScheduleItemEdit(workflow, `${parsed}T00:00:00`);
         return;
       }
       workflow.draft[field.field] = parsed;
@@ -879,6 +1063,10 @@ export class AiAssistantService {
         this.applyScheduleItemEdit(workflow, parsed);
         return;
       }
+      if (field.field === 'scheduleExistingEditValue') {
+        this.stageExistingScheduleItemEdit(workflow, parsed);
+        return;
+      }
       workflow.draft[field.field] = parsed;
       return;
     }
@@ -890,6 +1078,10 @@ export class AiAssistantService {
     }
     if (field.field === 'scheduleEditValue') {
       this.applyScheduleItemEdit(workflow, text || '');
+      return;
+    }
+    if (field.field === 'scheduleExistingEditValue') {
+      this.stageExistingScheduleItemEdit(workflow, text || '');
       return;
     }
     workflow.draft[field.field] = text || null;
@@ -1122,6 +1314,25 @@ export class AiAssistantService {
 
     const baseFields: AssistantFieldConfig[] = [
       {
+        field: 'scheduleOperation',
+        label: 'O que deseja fazer no cronograma?',
+        inputType: 'single_select',
+        options: [
+          {
+            value: 'CREATE',
+            label: 'Criar novo cronograma',
+            description:
+              'Monta um cronograma novo para a missão, por PDF ou manualmente.',
+          },
+          {
+            value: 'EDIT',
+            label: 'Editar cronograma existente',
+            description:
+              'Lista os itens já salvos e permite alterar um campo por vez com confirmação.',
+          },
+        ],
+      },
+      {
         field: 'scope',
         label: 'Escopo da missão',
         inputType: 'single_select',
@@ -1136,6 +1347,86 @@ export class AiAssistantService {
         inputType: 'single_select',
         options: await this.listMissionOptions(draft.scope, user),
       },
+    ];
+
+    if (draft.scheduleOperation === 'EDIT') {
+      const existingItems = await this.syncExistingScheduleItems(draft, user);
+      if (draft.missionId && existingItems.length === 0) {
+        return [
+          ...baseFields,
+          {
+            field: 'scheduleCreateIfMissing',
+            label: 'A missão ainda não possui cronograma. Deseja criar agora?',
+            inputType: 'boolean',
+            helperText:
+              'Se responder Sim, o assistente segue para a criação do cronograma nesta mesma missão.',
+          },
+        ];
+      }
+      if (draft.scheduleExistingPendingUpdate) {
+        return baseFields;
+      }
+      const editFields: AssistantFieldConfig[] = [
+        ...baseFields,
+        {
+          field: 'scheduleExistingItemId',
+          label: 'Item do cronograma para editar',
+          inputType: 'single_select',
+          options: existingItems.map((item, index) => ({
+            value: item.id,
+            label: `${index + 1}. ${item.title}`,
+            description: `${this.formatScheduleDateTime(item.startAt)} • ${item.durationMinutes} min`,
+          })),
+        },
+      ];
+      if (!draft.scheduleExistingItemId) {
+        return editFields;
+      }
+      if (!draft.scheduleExistingEditFieldKey) {
+        return [
+          ...editFields,
+          {
+            field: 'scheduleExistingEditFieldKey',
+            label: 'Campo a alterar',
+            inputType: 'single_select',
+            options: [
+              { value: 'title', label: 'Título' },
+              { value: 'startAt', label: 'Início' },
+              { value: 'durationMinutes', label: 'Duração em minutos' },
+              { value: 'location', label: 'Local' },
+              { value: 'responsible', label: 'Responsável' },
+              { value: 'participants', label: 'Participantes' },
+            ],
+          },
+        ];
+      }
+      const itemNumber =
+        existingItems.findIndex((item) => item.id === draft.scheduleExistingItemId) + 1;
+      return [
+        ...editFields,
+        {
+          field: 'scheduleExistingEditFieldKey',
+          label: 'Campo a alterar',
+          inputType: 'single_select',
+          options: [
+            { value: 'title', label: 'Título' },
+            { value: 'startAt', label: 'Início' },
+            { value: 'durationMinutes', label: 'Duração em minutos' },
+            { value: 'location', label: 'Local' },
+            { value: 'responsible', label: 'Responsável' },
+            { value: 'participants', label: 'Participantes' },
+          ],
+        },
+        this.buildScheduleEditValueField(
+          draft.scheduleExistingEditFieldKey,
+          Math.max(itemNumber, 1),
+          'scheduleExistingEditValue',
+        ),
+      ];
+    }
+
+    const createBaseFields: AssistantFieldConfig[] = [
+      ...baseFields,
       {
         field: 'scheduleInputMode',
         label: 'Como deseja montar o cronograma?',
@@ -1161,7 +1452,7 @@ export class AiAssistantService {
       if (draft.scheduleEditIndex !== undefined && draft.scheduleEditIndex !== null) {
         if (!draft.scheduleEditFieldKey) {
           return [
-            ...baseFields,
+            ...createBaseFields,
             {
               field: 'scheduleEditFieldKey',
               label: 'Campo a ajustar',
@@ -1178,17 +1469,18 @@ export class AiAssistantService {
           ];
         }
         return [
-          ...baseFields,
+          ...createBaseFields,
           this.buildScheduleEditValueField(
             draft.scheduleEditFieldKey,
             this.getScheduleSavedCount(draft) +
               Number(draft.scheduleEditIndex) +
               1,
+            'scheduleEditValue',
           ),
         ];
       }
       return [
-        ...baseFields,
+        ...createBaseFields,
         {
           field: 'scheduleFiles',
           label: 'Arquivos do cronograma',
@@ -1200,7 +1492,7 @@ export class AiAssistantService {
     }
 
     return [
-      ...baseFields,
+      ...createBaseFields,
       {
         field: 'title',
         label: 'Título do item',
@@ -1406,12 +1698,58 @@ export class AiAssistantService {
     }
 
     const missionLabel = await findOptionLabel('missionId', draft.missionId);
+    if (draft.scheduleOperation === 'EDIT') {
+      const existingItems = Array.isArray(draft.scheduleExistingItems)
+        ? (draft.scheduleExistingItems as AssistantScheduleDraftItem[])
+        : [];
+      const selectedItem = existingItems.find(
+        (item) => item.id === draft.scheduleExistingItemId,
+      );
+      const pendingUpdate = this.getPendingExistingScheduleUpdate(draft);
+      return [
+        { label: 'Modo do fluxo', value: 'Editar cronograma existente' },
+        { label: 'Escopo', value: draft.scope || '—' },
+        { label: 'Missão', value: missionLabel || '—' },
+        {
+          label: 'Itens salvos',
+          value: existingItems.length
+            ? `${existingItems.length} item(ns) no cronograma`
+            : draft.missionId
+              ? 'Nenhum item salvo nesta missão'
+              : 'Selecione a missão',
+        },
+        {
+          label: 'Item selecionado',
+          value: selectedItem ? selectedItem.title : '—',
+        },
+        {
+          label: 'Próxima ação',
+          value: pendingUpdate
+            ? `Confirmar a alteração do item ${pendingUpdate.itemNumber}.`
+            : draft.missionId && !existingItems.length
+              ? 'Definir se deseja criar um cronograma novo nesta missão.'
+              : selectedItem
+                ? 'Escolher o campo que deseja alterar e informar o novo valor.'
+                : 'Selecionar o item do cronograma que deseja editar.',
+        },
+        ...(pendingUpdate
+          ? [
+              {
+                label: 'Alteração proposta',
+                value: `Item ${pendingUpdate.itemNumber} • ${pendingUpdate.title}\n${pendingUpdate.fieldLabel}: ${pendingUpdate.previousValue} -> ${pendingUpdate.nextValue}`,
+              },
+            ]
+          : []),
+      ];
+    }
+
     if (draft.scheduleInputMode === 'UPLOAD') {
       const sourceFiles = Array.isArray(draft.scheduleSourceFiles)
         ? (draft.scheduleSourceFiles as AssistantScheduleSourceFile[])
         : [];
       const schedulePreview = this.getSchedulePreviewState(draft);
       return [
+        { label: 'Modo do fluxo', value: 'Criar novo cronograma' },
         { label: 'Escopo', value: draft.scope || '—' },
         { label: 'Missão', value: missionLabel || '—' },
         { label: 'Modo', value: 'Análise de arquivo PDF' },
@@ -1449,6 +1787,7 @@ export class AiAssistantService {
       ];
     }
     return [
+      { label: 'Modo do fluxo', value: 'Criar novo cronograma' },
       { label: 'Escopo', value: draft.scope || '—' },
       { label: 'Missão', value: missionLabel || '—' },
       { label: 'Modo', value: 'Preenchimento manual' },
@@ -1599,18 +1938,19 @@ export class AiAssistantService {
   private buildScheduleEditValueField(
     fieldKey: string,
     itemNumber: number,
+    field = 'scheduleEditValue',
   ): AssistantFieldConfig {
     switch (fieldKey) {
       case 'startAt':
         return {
-          field: 'scheduleEditValue',
+          field,
           label: `Novo início do item ${itemNumber}`,
           inputType: 'datetime',
           helperText: 'Use DD/MM/AAAA HH:MM ou o seletor de data e hora.',
         };
       case 'durationMinutes':
         return {
-          field: 'scheduleEditValue',
+          field,
           label: `Nova duração do item ${itemNumber}`,
           inputType: 'number',
           min: 1,
@@ -1618,19 +1958,19 @@ export class AiAssistantService {
         };
       case 'location':
         return {
-          field: 'scheduleEditValue',
+          field,
           label: `Novo local do item ${itemNumber}`,
           inputType: 'text',
         };
       case 'responsible':
         return {
-          field: 'scheduleEditValue',
+          field,
           label: `Novo responsável do item ${itemNumber}`,
           inputType: 'text',
         };
       case 'participants':
         return {
-          field: 'scheduleEditValue',
+          field,
           label: `Novos participantes do item ${itemNumber}`,
           inputType: 'textarea',
           optional: true,
@@ -1638,7 +1978,7 @@ export class AiAssistantService {
         };
       default:
         return {
-          field: 'scheduleEditValue',
+          field,
           label: `Novo título do item ${itemNumber}`,
           inputType: 'text',
         };
@@ -2319,6 +2659,195 @@ export class AiAssistantService {
       hasMore: pendingItems.length > batchSize,
       pendingCount: pendingItems.length,
     };
+  }
+
+  private resetMissionScheduleDraftForOperationChange(draft: Record<string, any>) {
+    draft.scheduleInputMode = null;
+    draft.scheduleFiles = null;
+    draft.scheduleItemsDraft = [];
+    draft.scheduleSourceFiles = [];
+    draft.scheduleBatchSize = this.getScheduleBatchSize();
+    draft.scheduleSavedCount = 0;
+    draft.scheduleTotalItems = 0;
+    draft.scheduleEditIndex = null;
+    draft.scheduleEditFieldKey = null;
+    draft.title = null;
+    draft.startAt = null;
+    draft.durationMinutes = null;
+    draft.location = null;
+    draft.responsible = null;
+    draft.participants = null;
+    draft.scheduleCreateIfMissing = null;
+    this.clearExistingScheduleSelection(draft);
+    draft.scheduleExistingItems = [];
+  }
+
+  private resetMissionScheduleDraftForMissionChange(draft: Record<string, any>) {
+    draft.scheduleInputMode = null;
+    draft.scheduleFiles = null;
+    draft.scheduleItemsDraft = [];
+    draft.scheduleSourceFiles = [];
+    draft.scheduleBatchSize = this.getScheduleBatchSize();
+    draft.scheduleSavedCount = 0;
+    draft.scheduleTotalItems = 0;
+    draft.scheduleEditIndex = null;
+    draft.scheduleEditFieldKey = null;
+    draft.title = null;
+    draft.startAt = null;
+    draft.durationMinutes = null;
+    draft.location = null;
+    draft.responsible = null;
+    draft.participants = null;
+    draft.scheduleCreateIfMissing = null;
+    this.clearExistingScheduleSelection(draft);
+    draft.scheduleExistingItems = [];
+  }
+
+  private clearExistingScheduleSelection(draft: Record<string, any>) {
+    draft.scheduleExistingItemId = null;
+    draft.scheduleExistingEditFieldKey = null;
+    draft.scheduleExistingPendingUpdate = null;
+  }
+
+  private async syncExistingScheduleItems(
+    draft: Record<string, any>,
+    user?: RbacUser,
+  ) {
+    if (!draft.missionId || draft.scheduleOperation !== 'EDIT') {
+      draft.scheduleExistingItems = [];
+      return [];
+    }
+
+    const mission = await this.missions.getById(String(draft.missionId), user);
+    const items = Array.isArray(mission?.scheduleItems)
+      ? mission.scheduleItems.map((item: any) => ({
+          id: String(item.id),
+          title: String(item.title ?? ''),
+          startAt: new Date(item.startAt).toISOString(),
+          durationMinutes: Number(item.durationMinutes ?? 0),
+          location: String(item.location ?? ''),
+          responsible: String(item.responsible ?? ''),
+          participants: String(item.participants ?? ''),
+          sourceFileIds: [],
+          sourceFileNames: [],
+        }))
+      : [];
+    draft.scheduleExistingItems = items;
+    return items;
+  }
+
+  private getPendingExistingScheduleUpdate(draft: Record<string, any>) {
+    const pending = draft.scheduleExistingPendingUpdate;
+    if (!pending || typeof pending !== 'object') return null;
+    return pending as {
+      itemId: string;
+      itemNumber: number;
+      title: string;
+      fieldKey: string;
+      fieldLabel: string;
+      previousValue: string;
+      nextValue: string;
+      payload: Record<string, any>;
+    };
+  }
+
+  private stageExistingScheduleItemEdit(
+    workflow: AssistantWorkflow,
+    rawValue: string | number,
+  ) {
+    const itemId = String(workflow.draft.scheduleExistingItemId ?? '').trim();
+    const fieldKey = String(workflow.draft.scheduleExistingEditFieldKey ?? '').trim();
+    const items = Array.isArray(workflow.draft.scheduleExistingItems)
+      ? (workflow.draft.scheduleExistingItems as AssistantScheduleDraftItem[])
+      : [];
+    const itemIndex = items.findIndex((item) => item.id === itemId);
+    if (!itemId || itemIndex < 0) {
+      throw new BadRequestException(
+        'Selecione o item do cronograma que deseja alterar.',
+      );
+    }
+    if (!fieldKey) {
+      throw new BadRequestException(
+        'Selecione primeiro o campo do cronograma que deseja alterar.',
+      );
+    }
+
+    const current = items[itemIndex];
+    let nextRawValue: string | number = rawValue;
+    if (fieldKey === 'title' || fieldKey === 'responsible') {
+      const text = String(rawValue ?? '').trim();
+      if (!text) {
+        throw new BadRequestException(
+          `Informe um valor válido para ${this.getScheduleFieldLabel(fieldKey).toLowerCase()}.`,
+        );
+      }
+      nextRawValue = text;
+    } else if (fieldKey === 'location') {
+      nextRawValue = String(rawValue ?? '').trim();
+    } else if (fieldKey === 'participants') {
+      nextRawValue = String(rawValue ?? '').trim();
+    } else if (fieldKey === 'durationMinutes') {
+      const parsed = Number(rawValue);
+      if (!Number.isFinite(parsed) || parsed < 1) {
+        throw new BadRequestException('Informe uma duração válida em minutos.');
+      }
+      nextRawValue = Math.round(parsed);
+    } else if (fieldKey === 'startAt') {
+      nextRawValue = String(rawValue ?? '').trim();
+    }
+
+    workflow.draft.scheduleExistingPendingUpdate = {
+      itemId,
+      itemNumber: itemIndex + 1,
+      title: current.title,
+      fieldKey,
+      fieldLabel: this.getScheduleFieldLabel(fieldKey),
+      previousValue: this.formatScheduleFieldValue(current, fieldKey),
+      nextValue: this.formatScheduleFieldValue(
+        { ...current, [fieldKey]: nextRawValue },
+        fieldKey,
+      ),
+      payload: { [fieldKey]: nextRawValue },
+    };
+    workflow.status = 'confirming';
+  }
+
+  private async confirmExistingScheduleItemEdit(
+    session: AssistantSession,
+    workflow: AssistantWorkflow,
+    user?: RbacUser,
+  ) {
+    const pending = this.getPendingExistingScheduleUpdate(workflow.draft);
+    if (!pending) {
+      throw new BadRequestException('Nenhuma alteração pendente foi montada.');
+    }
+
+    await this.missions.updateScheduleItem(
+      workflow.draft.missionId,
+      pending.itemId,
+      pending.payload,
+      user,
+    );
+    const refreshedItems = await this.syncExistingScheduleItems(workflow.draft, user);
+    this.clearExistingScheduleSelection(workflow.draft);
+    workflow.status = 'collecting';
+    session.updatedAt = new Date().toISOString();
+
+    const updatedView = await this.buildWorkflowView(workflow, user);
+    return this.buildReply(
+      session,
+      this.pushMessage(
+        session,
+        'assistant',
+        [
+          `Alteração salva no **item ${pending.itemNumber}**.`,
+          this.buildExistingScheduleListMessage(refreshedItems),
+          'Se quiser ajustar outro item, selecione-o abaixo. Se terminou, cancele o fluxo ou inicie outra ação.',
+        ].join('\n\n'),
+      ),
+      updatedView,
+      null,
+    );
   }
 
   private async confirmScheduleUploadBatch(
@@ -3238,6 +3767,59 @@ export class AiAssistantService {
         ? `\n... e mais ${items.length - preview.length} item(ns) no rascunho.`
         : '';
     return `**Itens montados**\n\n${preview.join('\n\n')}${remaining}`;
+  }
+
+  private buildExistingScheduleListMessage(items: AssistantScheduleDraftItem[]) {
+    if (!items.length) {
+      return 'Esta missão ainda não possui itens salvos no cronograma.';
+    }
+    const lines = items.map((item, index) => {
+      const when = this.formatScheduleDateTime(item.startAt);
+      return `${index + 1}. **${item.title}**\nLocal: ${item.location || '-'}\nInício: ${when}\nDuração: ${item.durationMinutes} min\nResponsável: ${item.responsible || '-'}\nParticipantes: ${item.participants || '-'}`;
+    });
+    return [
+      `A missão já possui **${items.length} item(ns)** no cronograma.`,
+      'Escolha abaixo qual item deseja editar.',
+      '',
+      lines.join('\n\n'),
+    ].join('\n');
+  }
+
+  private getScheduleFieldLabel(fieldKey: string) {
+    switch (fieldKey) {
+      case 'startAt':
+        return 'Início';
+      case 'durationMinutes':
+        return 'Duração em minutos';
+      case 'location':
+        return 'Local';
+      case 'responsible':
+        return 'Responsável';
+      case 'participants':
+        return 'Participantes';
+      default:
+        return 'Título';
+    }
+  }
+
+  private formatScheduleFieldValue(
+    item: AssistantScheduleDraftItem,
+    fieldKey: string,
+  ) {
+    switch (fieldKey) {
+      case 'startAt':
+        return this.formatScheduleDateTime(item.startAt);
+      case 'durationMinutes':
+        return `${item.durationMinutes} min`;
+      case 'location':
+        return item.location || '-';
+      case 'responsible':
+        return item.responsible || '-';
+      case 'participants':
+        return item.participants || '-';
+      default:
+        return item.title || '-';
+    }
   }
 
   private extractErrorMessage(error: unknown) {
