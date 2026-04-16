@@ -845,6 +845,129 @@ export function useExportMissionSchedulePdf() {
   });
 }
 
+export function useMissionBannerPreview(
+  missionId: string,
+  bannerId: string,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: qk.missionBannerPreview(missionId || "", bannerId || ""),
+    queryFn: async () =>
+      (
+        await api.get(`/missions/${missionId}/banners/${bannerId}/preview`, {
+          responseType: "blob",
+        })
+      ).data as Blob,
+    enabled: Boolean(missionId) && Boolean(bannerId) && enabled,
+    staleTime: 5_000,
+  });
+}
+
+export function useCreateMissionBanner() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      payload: {
+        name: string;
+        eventDate: string;
+        eventTime: string;
+        locationPrimary: string;
+        locationSecondary?: string | null;
+      };
+    }) => (await api.post(`/missions/${args.id}/banners`, args.payload)).data,
+    onSuccess: (_data, args) => {
+      qc.invalidateQueries({ queryKey: qk.mission(args.id) });
+      qc.invalidateQueries({ queryKey: ["missions"] });
+    },
+  });
+}
+
+export function useUpdateMissionBanner() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      bannerId: string;
+      payload: {
+        name?: string;
+        eventDate?: string;
+        eventTime?: string;
+        locationPrimary?: string;
+        locationSecondary?: string | null;
+      };
+    }) =>
+      (
+        await api.put(`/missions/${args.id}/banners/${args.bannerId}`, args.payload)
+      ).data,
+    onSuccess: (_data, args) => {
+      qc.invalidateQueries({ queryKey: qk.mission(args.id) });
+      qc.invalidateQueries({ queryKey: qk.missionBannerPreview(args.id, args.bannerId) });
+      qc.invalidateQueries({ queryKey: ["missions"] });
+    },
+  });
+}
+
+export function useDeleteMissionBanner() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; bannerId: string }) =>
+      (await api.delete(`/missions/${args.id}/banners/${args.bannerId}`)).data,
+    onSuccess: (_data, args) => {
+      qc.invalidateQueries({ queryKey: qk.mission(args.id) });
+      qc.removeQueries({ queryKey: qk.missionBannerPreview(args.id, args.bannerId) });
+      qc.invalidateQueries({ queryKey: ["missions"] });
+    },
+  });
+}
+
+export function useDownloadMissionBannerFile() {
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      bannerId: string;
+      format: "png" | "pdf";
+    }) => {
+      const response = await api.get(
+        `/missions/${args.id}/banners/${args.bannerId}/file`,
+        {
+          params: { format: args.format },
+          responseType: "blob",
+        },
+      );
+      const contentType = String(
+        response.headers?.["content-type"] ?? "",
+      ).toLowerCase();
+      const expected =
+        args.format === "pdf" ? "application/pdf" : "image/png";
+      if (!contentType.includes(expected)) {
+        throw new Error(
+          "Não foi possível baixar o banner. Faça login novamente e tente de novo.",
+        );
+      }
+      const blob = new Blob([response.data], { type: expected });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const contentDisposition = String(
+        response.headers?.["content-disposition"] ?? "",
+      );
+      const fileNameMatch =
+        /filename\*=(?:UTF-8'')?([^;]+)/i.exec(contentDisposition) ??
+        /filename=\"?([^\"]+)\"?/i.exec(contentDisposition);
+      const decodedName = fileNameMatch?.[1]
+        ? decodeURIComponent(fileNameMatch[1].trim())
+        : "";
+      a.download = decodedName || `banner-missao-${args.bannerId}.${args.format}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+      return true;
+    },
+  });
+}
+
 export function useActivityComments(activityId: string) {
   return useQuery({
     queryKey: qk.activityComments(activityId || ""),

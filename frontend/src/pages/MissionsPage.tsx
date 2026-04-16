@@ -28,7 +28,6 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import { alpha } from '@mui/material/styles';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
@@ -42,12 +41,16 @@ import {
   useAddMissionParticipantFromLdap,
   useAddMissionParticipantFromUser,
   useCreateMission,
+  useCreateMissionBanner,
   useCreateMissionScheduleItem,
+  useDeleteMissionBanner,
   useDeleteMission,
   useDeleteMissionScheduleItem,
+  useDownloadMissionBannerFile,
   useExportMissionSchedulePdf,
   useLookupMissionLdapParticipant,
   useMission,
+  useMissionBannerPreview,
   useMissionChecklist,
   useMe,
   useMissionLocalityOptions,
@@ -57,6 +60,7 @@ import {
   useRemoveMissionParticipant,
   useUpdateMissionChecklist,
   useUploadMissionChecklistPhoto,
+  useUpdateMissionBanner,
   useUpdateMission,
   useUpdateMissionScheduleItem,
   useUsers,
@@ -99,6 +103,14 @@ const blankScheduleForm = {
   location: '',
   responsible: '',
   participants: '',
+};
+
+const blankBannerForm = {
+  name: '',
+  eventDate: '',
+  eventTime: '',
+  locationPrimary: '',
+  locationSecondary: '',
 };
 
 type MissionChecklistClassification =
@@ -425,6 +437,31 @@ function formatDateOnlyPtBr(value: string | Date | null | undefined) {
   return `${day}/${month}/${year}`;
 }
 
+function formatBannerDateAndWeekday(value: string | null | undefined) {
+  if (!value) return '-';
+  const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return String(value);
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12, 0, 0));
+  const weekday = new Intl.DateTimeFormat('pt-BR', {
+    weekday: 'long',
+    timeZone: 'UTC',
+  })
+    .format(date)
+    .replace(/-feira/gi, '')
+    .replace(/^\w/, (char) => char.toUpperCase());
+  return `${match[3]}/${match[2]}/${match[1]} • ${weekday}`;
+}
+
+function buildMissionBannerLocationLabel(
+  primary: string | null | undefined,
+  secondary: string | null | undefined,
+) {
+  const line1 = String(primary ?? '').trim();
+  const line2 = String(secondary ?? '').trim();
+  if (line1 && line2) return `${line1} • ${line2}`;
+  return line1 || line2 || '-';
+}
+
 export function MissionsPage() {
   const toast = useToast();
   const [params, setParams] = useSearchParams();
@@ -456,6 +493,10 @@ export function MissionsPage() {
   const addParticipantUser = useAddMissionParticipantFromUser();
   const removeParticipant = useRemoveMissionParticipant();
   const usersQuery = useUsers();
+  const createMissionBanner = useCreateMissionBanner();
+  const updateMissionBanner = useUpdateMissionBanner();
+  const deleteMissionBanner = useDeleteMissionBanner();
+  const downloadMissionBannerFile = useDownloadMissionBannerFile();
   const createScheduleItem = useCreateMissionScheduleItem();
   const updateScheduleItem = useUpdateMissionScheduleItem();
   const deleteScheduleItem = useDeleteMissionScheduleItem();
@@ -471,6 +512,8 @@ export function MissionsPage() {
   const [participantTab, setParticipantTab] = useState(0);
   const [userSearch, setUserSearch] = useState('');
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [bannerForm, setBannerForm] = useState(blankBannerForm);
+  const [editingBannerId, setEditingBannerId] = useState<string | null>(null);
   const [scheduleForm, setScheduleForm] = useState(blankScheduleForm);
   const [editingScheduleItemId, setEditingScheduleItemId] = useState<string | null>(null);
   const [checklistState, setChecklistState] = useState<Record<string, MissionChecklistItemState>>(
@@ -484,6 +527,10 @@ export function MissionsPage() {
   const [checklistDirty, setChecklistDirty] = useState(false);
   const [cloneSourceMissionId, setCloneSourceMissionId] = useState('');
   const [missionDeleteTarget, setMissionDeleteTarget] = useState<{ id: string; title: string } | null>(null);
+  const [bannerDeleteTarget, setBannerDeleteTarget] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
   const [scheduleDeleteTarget, setScheduleDeleteTarget] = useState<{
     ids: string[];
     title?: string | null;
@@ -576,6 +623,22 @@ export function MissionsPage() {
 
   const items = missionsQuery.data?.items ?? [];
   const selectedMission = missionDetailQuery.data ?? null;
+  const missionBanners = useMemo(
+    () => ((selectedMission?.banners ?? []) as any[]),
+    [selectedMission?.banners],
+  );
+  const selectedBannerForPreview = useMemo(() => {
+    if (!editingBannerId) return null;
+    return (
+      missionBanners.find((banner: any) => String(banner.id) === String(editingBannerId)) ??
+      null
+    );
+  }, [editingBannerId, missionBanners]);
+  const bannerPreviewQuery = useMissionBannerPreview(
+    String(selectedMission?.id ?? ''),
+    String(selectedBannerForPreview?.id ?? ''),
+    Boolean(selectedMission?.id) && Boolean(selectedBannerForPreview?.id),
+  );
   const missionChecklistQuery = useMissionChecklist(
     String(selectedMission?.id ?? ''),
     Boolean(selectedMission?.id) && !isCreateMode,
@@ -709,10 +772,16 @@ export function MissionsPage() {
     );
     return matchingDay?.key ?? null;
   }, [scheduleDayOptions, selectedScheduleItemIds]);
+  const [bannerPreviewUrl, setBannerPreviewUrl] = useState<string | null>(null);
 
   const resetScheduleForm = useCallback((scheduleItems?: any[] | null) => {
     setEditingScheduleItemId(null);
     setScheduleForm(buildBlankScheduleForm(scheduleItems));
+  }, []);
+
+  const resetBannerForm = useCallback(() => {
+    setEditingBannerId(null);
+    setBannerForm(blankBannerForm);
   }, []);
 
   useEffect(() => {
@@ -720,6 +789,7 @@ export function MissionsPage() {
       setDrawerOpen(false);
       setMissionTab(0);
       setSelectedScheduleItemIds([]);
+      resetBannerForm();
       if (!isCreateMode) {
         resetScheduleForm();
       }
@@ -727,7 +797,7 @@ export function MissionsPage() {
     }
     setDrawerOpen(true);
     setIsCreateMode(false);
-  }, [isCreateMode, missionIdFromUrl, resetScheduleForm]);
+  }, [isCreateMode, missionIdFromUrl, resetBannerForm, resetScheduleForm]);
 
   useEffect(() => {
     setSelectedScheduleItemIds((current) =>
@@ -745,6 +815,52 @@ export function MissionsPage() {
       endDate: selectedMission.endDate ? String(selectedMission.endDate).slice(0, 10) : '',
     });
   }, [selectedMission]);
+
+  useEffect(() => {
+    if (!selectedMission?.id) {
+      resetBannerForm();
+      return;
+    }
+    setEditingBannerId((current) => {
+      if (!current) return current;
+      const exists = missionBanners.some((banner: any) => String(banner.id) === String(current));
+      return exists ? current : null;
+    });
+  }, [missionBanners, resetBannerForm, selectedMission?.id]);
+
+  useEffect(() => {
+    if (!selectedBannerForPreview) {
+      if (!editingBannerId) {
+        setBannerForm(blankBannerForm);
+      }
+      return;
+    }
+    setBannerForm({
+      name: String(selectedBannerForPreview.name ?? ''),
+      eventDate: String(selectedBannerForPreview.eventDate ?? ''),
+      eventTime: String(selectedBannerForPreview.eventTime ?? ''),
+      locationPrimary: String(selectedBannerForPreview.locationPrimary ?? ''),
+      locationSecondary: String(selectedBannerForPreview.locationSecondary ?? ''),
+    });
+  }, [editingBannerId, selectedBannerForPreview]);
+
+  useEffect(() => {
+    if (!bannerPreviewQuery.data) {
+      setBannerPreviewUrl((current) => {
+        if (current) URL.revokeObjectURL(current);
+        return null;
+      });
+      return;
+    }
+    const nextUrl = URL.createObjectURL(bannerPreviewQuery.data);
+    setBannerPreviewUrl((current) => {
+      if (current) URL.revokeObjectURL(current);
+      return nextUrl;
+    });
+    return () => {
+      URL.revokeObjectURL(nextUrl);
+    };
+  }, [bannerPreviewQuery.data]);
 
   useEffect(() => {
     if (!selectedMission?.id) {
@@ -826,6 +942,7 @@ export function MissionsPage() {
     setChecklistOmId(localityId || localityOptions[0]?.id || '');
     setChecklistDirty(false);
     resetScheduleForm();
+    resetBannerForm();
     setCloneSourceMissionId('');
     setDrawerOpen(true);
 
@@ -840,6 +957,7 @@ export function MissionsPage() {
     setDrawerOpen(true);
     setChecklistDirty(false);
     resetScheduleForm();
+    resetBannerForm();
     setCloneSourceMissionId('');
 
     const next = new URLSearchParams(params);
@@ -852,6 +970,7 @@ export function MissionsPage() {
     setIsCreateMode(false);
     setMissionTab(0);
     resetScheduleForm();
+    resetBannerForm();
     setChecklistState(
       buildDefaultMissionChecklistState(
         missionChecklistSections,
@@ -862,6 +981,7 @@ export function MissionsPage() {
     setChecklistDirty(false);
     setCloneSourceMissionId('');
     setMissionDeleteTarget(null);
+    setBannerDeleteTarget(null);
     setScheduleDeleteTarget(null);
 
     const next = new URLSearchParams(params);
@@ -1197,6 +1317,131 @@ export function MissionsPage() {
     }
   };
 
+  const handleStartCreateBanner = () => {
+    setEditingBannerId(null);
+    setBannerForm({
+      ...blankBannerForm,
+      eventDate: selectedMission?.startDate
+        ? String(selectedMission.startDate).slice(0, 10)
+        : '',
+    });
+  };
+
+  const handleEditBanner = (banner: any) => {
+    setEditingBannerId(String(banner.id));
+    setBannerForm({
+      name: String(banner.name ?? ''),
+      eventDate: String(banner.eventDate ?? ''),
+      eventTime: String(banner.eventTime ?? ''),
+      locationPrimary: String(banner.locationPrimary ?? ''),
+      locationSecondary: String(banner.locationSecondary ?? ''),
+    });
+  };
+
+  const handleSaveBanner = async () => {
+    if (!selectedMission?.id) return;
+    if (
+      !bannerForm.name.trim() ||
+      !bannerForm.eventDate ||
+      !bannerForm.eventTime ||
+      !bannerForm.locationPrimary.trim()
+    ) {
+      toast.push({
+        message: 'Preencha nome, data, hora e local principal do banner.',
+        severity: 'warning',
+      });
+      return;
+    }
+
+    const payload = {
+      name: bannerForm.name.trim(),
+      eventDate: bannerForm.eventDate,
+      eventTime: bannerForm.eventTime,
+      locationPrimary: bannerForm.locationPrimary.trim(),
+      locationSecondary: bannerForm.locationSecondary.trim() || null,
+    };
+
+    try {
+      if (editingBannerId) {
+        const updated = await updateMissionBanner.mutateAsync({
+          id: selectedMission.id,
+          bannerId: editingBannerId,
+          payload,
+        });
+        setEditingBannerId(String(updated.id));
+        toast.push({
+          message: 'Banner atualizado.',
+          severity: 'success',
+        });
+      } else {
+        const created = await createMissionBanner.mutateAsync({
+          id: selectedMission.id,
+          payload,
+        });
+        setEditingBannerId(String(created.id));
+        toast.push({
+          message: 'Banner criado.',
+          severity: 'success',
+        });
+      }
+    } catch (error) {
+      toast.push({
+        message: parseApiError(error).message ?? 'Erro ao salvar banner.',
+        severity: 'error',
+      });
+    }
+  };
+
+  const handleDeleteBanner = (banner: any) => {
+    setBannerDeleteTarget({
+      id: String(banner.id),
+      name: String(banner.name ?? 'Banner'),
+    });
+  };
+
+  const handleConfirmDeleteBanner = async () => {
+    if (!selectedMission?.id || !bannerDeleteTarget) return;
+    try {
+      await deleteMissionBanner.mutateAsync({
+        id: selectedMission.id,
+        bannerId: bannerDeleteTarget.id,
+      });
+      if (editingBannerId === bannerDeleteTarget.id) {
+        handleStartCreateBanner();
+      }
+      toast.push({ message: 'Banner removido.', severity: 'success' });
+      setBannerDeleteTarget(null);
+    } catch (error) {
+      toast.push({
+        message: parseApiError(error).message ?? 'Erro ao remover banner.',
+        severity: 'error',
+      });
+    }
+  };
+
+  const handleDownloadBanner = async (bannerId: string, format: 'png' | 'pdf') => {
+    if (!selectedMission?.id) return;
+    try {
+      await downloadMissionBannerFile.mutateAsync({
+        id: selectedMission.id,
+        bannerId,
+        format,
+      });
+      toast.push({
+        message:
+          format === 'pdf'
+            ? 'Banner em PDF baixado com sucesso.'
+            : 'Banner em imagem baixado com sucesso.',
+        severity: 'success',
+      });
+    } catch (error) {
+      toast.push({
+        message: parseApiError(error).message ?? 'Erro ao baixar banner.',
+        severity: 'error',
+      });
+    }
+  };
+
   const handleChecklistClassificationChange = (
     itemId: string,
     classification: MissionChecklistClassification,
@@ -1334,16 +1579,14 @@ export function MissionsPage() {
   return (
     <Box sx={{ overflowX: 'clip' }}>
       <Stack
-        direction={{ xs: 'column', md: 'row' }}
+        direction={{ xs: 'column', lg: 'row' }}
         justifyContent="space-between"
-        alignItems={{ xs: 'flex-start', md: 'center' }}
-        gap={1}
-        mb={1.4}
+        alignItems={{ xs: 'stretch', lg: 'center' }}
+        spacing={1.25}
+        mb={2}
       >
         <Box>
-          <Typography variant="h4" fontWeight={700}>
-            Missões
-          </Typography>
+          <Typography variant="h4">Missões</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
             {scopeSubtitle}
           </Typography>
@@ -1353,57 +1596,10 @@ export function MissionsPage() {
         </Button>
       </Stack>
 
-      <Card
-        sx={{
-          mb: 2,
-          borderRadius: 3,
-          border: (theme) => `1px solid ${alpha(theme.palette.primary.main, 0.12)}`,
-          background: (theme) =>
-            `linear-gradient(165deg, ${theme.palette.background.paper} 0%, ${alpha(theme.palette.primary.main, 0.06)} 100%)`,
-        }}
-      >
-        <CardContent sx={{ pb: '12px !important' }}>
-          <Stack
-            direction={{ xs: 'column', md: 'row' }}
-            justifyContent="space-between"
-            alignItems={{ xs: 'flex-start', md: 'center' }}
-            gap={1}
-          >
-            <Box>
-              <Typography variant="subtitle2" color="text.secondary">
-                Escopo
-              </Typography>
-              <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                Listagem, indicadores e cadastros filtrados por {scopeLabel}
-              </Typography>
-            </Box>
-            <Tabs
-              value={missionScope}
-              onChange={handleScopeTabChange}
-              sx={{
-                minHeight: 34,
-                '& .MuiTabs-indicator': { display: 'none' },
-                '& .MuiTab-root': {
-                  minHeight: 34,
-                  py: 0.6,
-                  px: 1.8,
-                  borderRadius: 999,
-                  textTransform: 'none',
-                  fontWeight: 700,
-                  color: 'text.secondary',
-                },
-                '& .Mui-selected': {
-                  color: 'primary.main !important',
-                  bgcolor: (theme) => alpha(theme.palette.primary.main, 0.11),
-                },
-              }}
-            >
-              <Tab value="SMIF" label="SMIF" />
-              <Tab value="CIPAVD" label="CIPAVD" />
-            </Tabs>
-          </Stack>
-        </CardContent>
-      </Card>
+      <Tabs value={missionScope} onChange={handleScopeTabChange} sx={{ mb: 2 }}>
+        <Tab value="SMIF" label="SMIF" />
+        <Tab value="CIPAVD" label="CIPAVD" />
+      </Tabs>
 
       {statisticsQuery.isLoading && (
         <Card sx={{ mb: 2 }}>
@@ -1952,6 +2148,7 @@ export function MissionsPage() {
                       >
                         <Tab label="Participantes" />
                         <Tab label="Cronograma" />
+                        <Tab label="Banners" />
                         <Tab label="Mapeamento Institucional" />
                       </Tabs>
                     </CardContent>
@@ -2336,6 +2533,284 @@ export function MissionsPage() {
                   )}
 
                   {missionTab === 2 && (
+                    <Card sx={{ mb: 2 }}>
+                      <CardContent>
+                        <Stack
+                          direction={{ xs: 'column', md: 'row' }}
+                          justifyContent="space-between"
+                          alignItems={{ xs: 'stretch', md: 'center' }}
+                          spacing={1.5}
+                          mb={1.8}
+                        >
+                          <Box>
+                            <Typography variant="subtitle1" fontWeight={700}>
+                              Banners da missão
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              Preencha data, hora e local nas posições padronizadas do banner CIPAVD e baixe em imagem ou PDF.
+                            </Typography>
+                          </Box>
+                          <Button
+                            variant="outlined"
+                            startIcon={<AddRoundedIcon />}
+                            onClick={handleStartCreateBanner}
+                          >
+                            Novo banner
+                          </Button>
+                        </Stack>
+
+                        <Stack direction={{ xs: 'column', xl: 'row' }} spacing={2}>
+                          <Stack spacing={1.5} sx={{ flex: 1.1 }}>
+                            <Card variant="outlined">
+                              <CardContent>
+                                <Typography variant="subtitle2" fontWeight={700} mb={1.2}>
+                                  {editingBannerId ? 'Editar banner' : 'Criar banner'}
+                                </Typography>
+                                <Stack spacing={1}>
+                                  <TextField
+                                    size="small"
+                                    label="Nome do banner"
+                                    value={bannerForm.name}
+                                    onChange={(event) =>
+                                      setBannerForm((current) => ({
+                                        ...current,
+                                        name: event.target.value,
+                                      }))
+                                    }
+                                    fullWidth
+                                  />
+                                  <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
+                                    <TextField
+                                      size="small"
+                                      type="date"
+                                      label="Data"
+                                      value={bannerForm.eventDate}
+                                      onChange={(event) =>
+                                        setBannerForm((current) => ({
+                                          ...current,
+                                          eventDate: event.target.value,
+                                        }))
+                                      }
+                                      InputLabelProps={{ shrink: true }}
+                                      sx={{ minWidth: 180 }}
+                                    />
+                                    <TextField
+                                      size="small"
+                                      type="time"
+                                      label="Hora"
+                                      value={bannerForm.eventTime}
+                                      onChange={(event) =>
+                                        setBannerForm((current) => ({
+                                          ...current,
+                                          eventTime: event.target.value,
+                                        }))
+                                      }
+                                      InputLabelProps={{ shrink: true }}
+                                      sx={{ minWidth: 180 }}
+                                    />
+                                  </Stack>
+                                  <TextField
+                                    size="small"
+                                    label="Local principal"
+                                    value={bannerForm.locationPrimary}
+                                    onChange={(event) =>
+                                      setBannerForm((current) => ({
+                                        ...current,
+                                        locationPrimary: event.target.value,
+                                      }))
+                                    }
+                                    fullWidth
+                                    helperText="Linha principal exibida ao lado do ícone de local."
+                                  />
+                                  <TextField
+                                    size="small"
+                                    label="Complemento do local"
+                                    value={bannerForm.locationSecondary}
+                                    onChange={(event) =>
+                                      setBannerForm((current) => ({
+                                        ...current,
+                                        locationSecondary: event.target.value,
+                                      }))
+                                    }
+                                    fullWidth
+                                    helperText="Opcional. Se vazio, o sistema tenta ajustar o local automaticamente em duas linhas."
+                                  />
+                                  <Stack direction="row" spacing={1}>
+                                    <Button
+                                      variant="contained"
+                                      onClick={handleSaveBanner}
+                                      disabled={
+                                        createMissionBanner.isPending ||
+                                        updateMissionBanner.isPending
+                                      }
+                                    >
+                                      {editingBannerId ? 'Salvar banner' : 'Criar banner'}
+                                    </Button>
+                                    {(editingBannerId || bannerForm.name || bannerForm.eventDate || bannerForm.eventTime || bannerForm.locationPrimary || bannerForm.locationSecondary) && (
+                                      <Button variant="text" onClick={resetBannerForm}>
+                                        Limpar
+                                      </Button>
+                                    )}
+                                  </Stack>
+                                </Stack>
+                              </CardContent>
+                            </Card>
+
+                            <Card variant="outlined">
+                              <CardContent>
+                                <Stack
+                                  direction={{ xs: 'column', md: 'row' }}
+                                  justifyContent="space-between"
+                                  alignItems={{ xs: 'stretch', md: 'center' }}
+                                  spacing={1}
+                                  mb={1.1}
+                                >
+                                  <Typography variant="subtitle2" fontWeight={700}>
+                                    Banners cadastrados
+                                  </Typography>
+                                  <Chip
+                                    size="small"
+                                    variant="outlined"
+                                    label={`${missionBanners.length} banner(s)`}
+                                  />
+                                </Stack>
+                                {missionBanners.length === 0 ? (
+                                  <Typography variant="body2" color="text.secondary">
+                                    Nenhum banner cadastrado para esta missão.
+                                  </Typography>
+                                ) : (
+                                  <Stack spacing={1}>
+                                    {missionBanners.map((banner: any) => {
+                                      const isSelected =
+                                        String(editingBannerId ?? '') ===
+                                        String(banner.id);
+                                      return (
+                                        <Card
+                                          key={banner.id}
+                                          variant="outlined"
+                                          sx={{
+                                            borderColor: isSelected
+                                              ? 'primary.main'
+                                              : 'divider',
+                                          }}
+                                        >
+                                          <CardContent sx={{ py: 1.3, '&:last-child': { pb: 1.3 } }}>
+                                            <Stack
+                                              direction={{ xs: 'column', md: 'row' }}
+                                              justifyContent="space-between"
+                                              alignItems={{ xs: 'stretch', md: 'flex-start' }}
+                                              spacing={1}
+                                            >
+                                              <Box>
+                                                <Typography variant="body2" fontWeight={700}>
+                                                  {banner.name}
+                                                </Typography>
+                                                <Typography variant="caption" color="text.secondary" display="block">
+                                                  {formatBannerDateAndWeekday(banner.eventDate)} • {banner.eventTime}
+                                                </Typography>
+                                                <Typography variant="caption" color="text.secondary" display="block">
+                                                  {buildMissionBannerLocationLabel(
+                                                    banner.locationPrimary,
+                                                    banner.locationSecondary,
+                                                  )}
+                                                </Typography>
+                                              </Box>
+                                              <Stack direction="row" spacing={0.4} flexWrap="wrap" useFlexGap>
+                                                <Button
+                                                  size="small"
+                                                  variant={isSelected ? 'contained' : 'outlined'}
+                                                  onClick={() => handleEditBanner(banner)}
+                                                >
+                                                  Editar
+                                                </Button>
+                                                <Button
+                                                  size="small"
+                                                  variant="outlined"
+                                                  startIcon={<DownloadRoundedIcon />}
+                                                  onClick={() =>
+                                                    handleDownloadBanner(String(banner.id), 'png')
+                                                  }
+                                                >
+                                                  PNG
+                                                </Button>
+                                                <Button
+                                                  size="small"
+                                                  variant="outlined"
+                                                  startIcon={<DownloadRoundedIcon />}
+                                                  onClick={() =>
+                                                    handleDownloadBanner(String(banner.id), 'pdf')
+                                                  }
+                                                >
+                                                  PDF
+                                                </Button>
+                                                <Button
+                                                  size="small"
+                                                  color="error"
+                                                  variant="outlined"
+                                                  startIcon={<DeleteOutlineIcon />}
+                                                  onClick={() => handleDeleteBanner(banner)}
+                                                >
+                                                  Excluir
+                                                </Button>
+                                              </Stack>
+                                            </Stack>
+                                          </CardContent>
+                                        </Card>
+                                      );
+                                    })}
+                                  </Stack>
+                                )}
+                              </CardContent>
+                            </Card>
+                          </Stack>
+
+                          <Card variant="outlined" sx={{ flex: 0.9 }}>
+                            <CardContent>
+                              <Typography variant="subtitle2" fontWeight={700} mb={1.2}>
+                                Prévia do banner
+                              </Typography>
+                              {!editingBannerId ? (
+                                <Typography variant="body2" color="text.secondary">
+                                  Selecione um banner já salvo para ver a prévia final renderizada.
+                                </Typography>
+                              ) : bannerPreviewQuery.isLoading ? (
+                                <Stack spacing={1}>
+                                  <LinearProgress />
+                                  <Typography variant="body2" color="text.secondary">
+                                    Gerando prévia do banner...
+                                  </Typography>
+                                </Stack>
+                              ) : bannerPreviewQuery.isError ? (
+                                <Typography variant="body2" color="error">
+                                  Não foi possível carregar a prévia do banner.
+                                </Typography>
+                              ) : bannerPreviewUrl ? (
+                                <Box
+                                  component="img"
+                                  src={bannerPreviewUrl}
+                                  alt={`Prévia do banner ${selectedBannerForPreview?.name ?? ''}`}
+                                  sx={{
+                                    width: '100%',
+                                    maxWidth: 360,
+                                    mx: 'auto',
+                                    display: 'block',
+                                    borderRadius: 2,
+                                    boxShadow: 3,
+                                  }}
+                                />
+                              ) : (
+                                <Typography variant="body2" color="text.secondary">
+                                  Salve o banner para visualizar a composição final.
+                                </Typography>
+                              )}
+                            </CardContent>
+                          </Card>
+                        </Stack>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {missionTab === 3 && (
                     <Card>
                       <CardContent>
                         <Stack
@@ -2657,6 +3132,19 @@ export function MissionsPage() {
         confirmLabel="Excluir missão"
         severity="error"
         confirmLoading={deleteMission.isPending}
+      />
+
+      <ConfirmDialog
+        open={Boolean(bannerDeleteTarget)}
+        onCancel={() => setBannerDeleteTarget(null)}
+        onConfirm={handleConfirmDeleteBanner}
+        title="Excluir banner"
+        message="Confirma a exclusão definitiva deste banner da missão?"
+        highlightText={bannerDeleteTarget?.name ?? ''}
+        note="Você poderá criar outro banner para a missão a qualquer momento."
+        confirmLabel="Excluir banner"
+        severity="error"
+        confirmLoading={deleteMissionBanner.isPending}
       />
 
       <ConfirmDialog

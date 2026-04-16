@@ -28,6 +28,8 @@ import { CreateMissionDto } from './dto/create-mission.dto';
 import { UpdateMissionDto } from './dto/update-mission.dto';
 import { CreateMissionScheduleItemDto } from './dto/create-mission-schedule-item.dto';
 import { UpdateMissionScheduleItemDto } from './dto/update-mission-schedule-item.dto';
+import { CreateMissionBannerDto } from './dto/create-mission-banner.dto';
+import { UpdateMissionBannerDto } from './dto/update-mission-banner.dto';
 import { MissionLdapParticipantDto } from './dto/mission-ldap-participant.dto';
 import { MissionUserParticipantDto } from './dto/mission-user-participant.dto';
 import { UpsertMissionChecklistDto } from './dto/upsert-mission-checklist.dto';
@@ -257,6 +259,80 @@ export class MissionsController {
   @RequirePermission('missions', 'view')
   listSchedule(@Param('id') id: string, @CurrentUser() user: RbacUser) {
     return this.missions.listSchedule(id, user);
+  }
+
+  @Get(':id/banners')
+  @RequirePermission('missions', 'view')
+  listBanners(@Param('id') id: string, @CurrentUser() user: RbacUser) {
+    return this.missions.listBanners(id, user);
+  }
+
+  @Post(':id/banners')
+  @RequirePermission('missions', 'create')
+  createBanner(
+    @Param('id') id: string,
+    @Body() dto: CreateMissionBannerDto,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.missions.createBanner(id, dto, user);
+  }
+
+  @Put(':id/banners/:bannerId')
+  @RequirePermission('missions', 'update')
+  updateBanner(
+    @Param('id') id: string,
+    @Param('bannerId') bannerId: string,
+    @Body() dto: UpdateMissionBannerDto,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.missions.updateBanner(id, bannerId, dto, user);
+  }
+
+  @Delete(':id/banners/:bannerId')
+  @RequirePermission('missions', 'delete')
+  deleteBanner(
+    @Param('id') id: string,
+    @Param('bannerId') bannerId: string,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.missions.deleteBanner(id, bannerId, user);
+  }
+
+  @Get(':id/banners/:bannerId/preview')
+  @RequirePermission('missions', 'view')
+  async previewBanner(
+    @Param('id') id: string,
+    @Param('bannerId') bannerId: string,
+    @CurrentUser() user: RbacUser,
+    @Res() res: Response,
+  ) {
+    const buffer = await this.missions.buildBannerPng(id, bannerId, user);
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'private, max-age=60');
+    return res.send(buffer);
+  }
+
+  @Get(':id/banners/:bannerId/file')
+  @RequirePermission('missions', 'download')
+  async downloadBannerFile(
+    @Param('id') id: string,
+    @Param('bannerId') bannerId: string,
+    @Query('format') format: string | undefined,
+    @CurrentUser() user: RbacUser,
+    @Res() res: Response,
+  ) {
+    const file = await this.missions.buildBannerDownload(
+      id,
+      bannerId,
+      format,
+      user,
+    );
+    res.setHeader('Content-Type', file.contentType);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${file.fileName}"`,
+    );
+    return res.send(file.buffer);
   }
 
   @Post(':id/schedule')

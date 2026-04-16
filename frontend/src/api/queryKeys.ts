@@ -15,6 +15,8 @@ export const qk = {
   mission: (id: string) => ["mission", id] as const,
   missionSchedule: (missionId: string) =>
     ["missionSchedule", missionId] as const,
+  missionBannerPreview: (missionId: string, bannerId: string) =>
+    ["missionBannerPreview", missionId, bannerId] as const,
   missionChecklist: (missionId: string) =>
     ["missionChecklist", missionId] as const,
   missionChecklistConfig: ["missionChecklistConfig"] as const,

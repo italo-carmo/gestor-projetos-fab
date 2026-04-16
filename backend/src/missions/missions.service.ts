@@ -22,6 +22,11 @@ import {
   type MissionChecklistSectionId,
   type MissionChecklistClassification,
 } from './mission-checklist.constants';
+import {
+  renderMissionBannerPdf,
+  renderMissionBannerPng,
+  type MissionBannerRenderable,
+} from './mission-banner.renderer';
 
 const scheduleLogoCandidates = [
   path.resolve(process.cwd(), 'frontend', 'public', 'brand', 'cipavd-7.png'),
@@ -854,6 +859,13 @@ export class MissionsService {
         scheduleItems: {
           orderBy: [{ startAt: 'asc' }, { createdAt: 'asc' }],
         },
+        banners: {
+          orderBy: [
+            { eventDate: 'asc' },
+            { eventTime: 'asc' },
+            { createdAt: 'asc' },
+          ],
+        },
       },
     });
 
@@ -1442,6 +1454,229 @@ export class MissionsService {
         locality: mission.locality,
       },
       items: mission.scheduleItems,
+    };
+  }
+
+  async listBanners(missionId: string, user?: RbacUser) {
+    this.assertMissionAccess(user);
+
+    const mission = await this.prisma.mission.findUnique({
+      where: { id: missionId },
+      include: {
+        banners: {
+          orderBy: [
+            { eventDate: 'asc' },
+            { eventTime: 'asc' },
+            { createdAt: 'asc' },
+          ],
+        },
+      },
+    });
+
+    if (!mission) throwError('NOT_FOUND');
+    await this.assertMissionLocalityAllowed(mission);
+
+    return {
+      mission: {
+        id: mission.id,
+        title: mission.title,
+        scope: mission.scope,
+        localityId: mission.localityId,
+      },
+      items: mission.banners,
+    };
+  }
+
+  async createBanner(
+    missionId: string,
+    payload: {
+      name: string;
+      eventDate: string;
+      eventTime: string;
+      locationPrimary: string;
+      locationSecondary?: string;
+    },
+    user?: RbacUser,
+  ) {
+    this.assertMissionAccess(user);
+    const mission = await this.prisma.mission.findUnique({
+      where: { id: missionId },
+    });
+    if (!mission) throwError('NOT_FOUND');
+    await this.assertMissionLocalityAllowed(mission);
+
+    const created = await this.prisma.missionBanner.create({
+      data: {
+        missionId,
+        name: this.sanitizeRequiredText(payload.name, 'name'),
+        eventDate: this.normalizeBannerDate(payload.eventDate, 'eventDate'),
+        eventTime: this.normalizeBannerTime(payload.eventTime, 'eventTime'),
+        locationPrimary: this.sanitizeRequiredText(
+          payload.locationPrimary,
+          'locationPrimary',
+        ),
+        locationSecondary: this.normalizeOptionalBannerText(
+          payload.locationSecondary,
+        ),
+      },
+    });
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'missions',
+      action: 'create_banner',
+      entityId: created.id,
+      localityId: mission.localityId,
+      diffJson: { missionId, eventDate: created.eventDate, eventTime: created.eventTime },
+    });
+
+    return created;
+  }
+
+  async updateBanner(
+    missionId: string,
+    bannerId: string,
+    payload: {
+      name?: string;
+      eventDate?: string;
+      eventTime?: string;
+      locationPrimary?: string;
+      locationSecondary?: string;
+    },
+    user?: RbacUser,
+  ) {
+    this.assertMissionAccess(user);
+    const mission = await this.prisma.mission.findUnique({
+      where: { id: missionId },
+    });
+    if (!mission) throwError('NOT_FOUND');
+    await this.assertMissionLocalityAllowed(mission);
+
+    const existing = await this.prisma.missionBanner.findFirst({
+      where: { id: bannerId, missionId },
+    });
+    if (!existing) throwError('NOT_FOUND');
+
+    const updated = await this.prisma.missionBanner.update({
+      where: { id: bannerId },
+      data: {
+        name:
+          payload.name === undefined
+            ? undefined
+            : this.sanitizeRequiredText(payload.name, 'name'),
+        eventDate:
+          payload.eventDate === undefined
+            ? undefined
+            : this.normalizeBannerDate(payload.eventDate, 'eventDate'),
+        eventTime:
+          payload.eventTime === undefined
+            ? undefined
+            : this.normalizeBannerTime(payload.eventTime, 'eventTime'),
+        locationPrimary:
+          payload.locationPrimary === undefined
+            ? undefined
+            : this.sanitizeRequiredText(
+                payload.locationPrimary,
+                'locationPrimary',
+              ),
+        locationSecondary:
+          payload.locationSecondary === undefined
+            ? undefined
+            : this.normalizeOptionalBannerText(payload.locationSecondary),
+      },
+    });
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'missions',
+      action: 'update_banner',
+      entityId: bannerId,
+      localityId: mission.localityId,
+      diffJson: {
+        missionId,
+        before: {
+          eventDate: existing.eventDate,
+          eventTime: existing.eventTime,
+          locationPrimary: existing.locationPrimary,
+          locationSecondary: existing.locationSecondary,
+        },
+        after: {
+          eventDate: updated.eventDate,
+          eventTime: updated.eventTime,
+          locationPrimary: updated.locationPrimary,
+          locationSecondary: updated.locationSecondary,
+        },
+      },
+    });
+
+    return updated;
+  }
+
+  async deleteBanner(missionId: string, bannerId: string, user?: RbacUser) {
+    this.assertMissionAccess(user);
+    const mission = await this.prisma.mission.findUnique({
+      where: { id: missionId },
+    });
+    if (!mission) throwError('NOT_FOUND');
+    await this.assertMissionLocalityAllowed(mission);
+
+    const existing = await this.prisma.missionBanner.findFirst({
+      where: { id: bannerId, missionId },
+      select: { id: true, name: true },
+    });
+    if (!existing) throwError('NOT_FOUND');
+
+    await this.prisma.missionBanner.delete({ where: { id: bannerId } });
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'missions',
+      action: 'delete_banner',
+      entityId: bannerId,
+      localityId: mission.localityId,
+      diffJson: { missionId, name: existing.name },
+    });
+
+    return { ok: true };
+  }
+
+  async buildBannerPng(
+    missionId: string,
+    bannerId: string,
+    user?: RbacUser,
+  ) {
+    this.assertMissionAccess(user);
+    const result = await this.getMissionBannerOrThrow(missionId, bannerId);
+    return renderMissionBannerPng(this.serializeBanner(result.banner));
+  }
+
+  async buildBannerDownload(
+    missionId: string,
+    bannerId: string,
+    formatRaw: string | undefined,
+    user?: RbacUser,
+  ) {
+    this.assertMissionAccess(user);
+    const banner = await this.getMissionBannerOrThrow(missionId, bannerId);
+    const format = this.normalizeBannerDownloadFormat(formatRaw);
+    const renderable = this.serializeBanner(banner.banner);
+    const baseFileName = this.sanitizeBannerFileName(
+      banner.mission.title,
+      banner.banner.name,
+    );
+
+    if (format === 'pdf') {
+      return {
+        contentType: 'application/pdf',
+        fileName: `${baseFileName}.pdf`,
+        buffer: await renderMissionBannerPdf(renderable),
+      };
+    }
+
+    return {
+      contentType: 'image/png',
+      fileName: `${baseFileName}.png`,
+      buffer: await renderMissionBannerPng(renderable),
     };
   }
 
@@ -2654,6 +2889,40 @@ export class MissionsService {
     return normalized;
   }
 
+  private normalizeOptionalBannerText(value: string | null | undefined) {
+    const normalized = sanitizeText(value ?? '');
+    return normalized.trim() ? normalized : null;
+  }
+
+  private normalizeBannerDate(value: string, field: string) {
+    const safe = String(value ?? '').trim();
+    const match = safe.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) {
+      throwError('VALIDATION_ERROR', { field, reason: 'DATE_INVALID' });
+    }
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    const parsed = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+    if (
+      Number.isNaN(parsed.getTime()) ||
+      parsed.getUTCFullYear() !== year ||
+      parsed.getUTCMonth() !== month - 1 ||
+      parsed.getUTCDate() !== day
+    ) {
+      throwError('VALIDATION_ERROR', { field, reason: 'DATE_INVALID' });
+    }
+    return safe;
+  }
+
+  private normalizeBannerTime(value: string, field: string) {
+    const safe = String(value ?? '').trim();
+    if (!/^([01]\d|2[0-3]):([0-5]\d)$/.test(safe)) {
+      throwError('VALIDATION_ERROR', { field, reason: 'TIME_INVALID' });
+    }
+    return safe;
+  }
+
   private parseRequiredDate(value: string, field: string) {
     const parsed = new Date(value);
     if (Number.isNaN(parsed.getTime())) {
@@ -2708,6 +2977,66 @@ export class MissionsService {
       });
     }
     return Math.round(parsed);
+  }
+
+  private async getMissionBannerOrThrow(missionId: string, bannerId: string) {
+    const mission = await this.prisma.mission.findUnique({
+      where: { id: missionId },
+      select: {
+        id: true,
+        title: true,
+        localityId: true,
+        scope: true,
+      },
+    });
+    if (!mission) throwError('NOT_FOUND');
+    await this.assertMissionLocalityAllowed(mission);
+
+    const banner = await this.prisma.missionBanner.findFirst({
+      where: { id: bannerId, missionId },
+    });
+    if (!banner) throwError('NOT_FOUND');
+
+    return { mission, banner };
+  }
+
+  private serializeBanner(banner: {
+    id: string;
+    name: string;
+    eventDate: string;
+    eventTime: string;
+    locationPrimary: string;
+    locationSecondary: string | null;
+  }): MissionBannerRenderable {
+    return {
+      id: banner.id,
+      name: banner.name,
+      eventDate: banner.eventDate,
+      eventTime: banner.eventTime,
+      locationPrimary: banner.locationPrimary,
+      locationSecondary: banner.locationSecondary ?? null,
+    };
+  }
+
+  private normalizeBannerDownloadFormat(formatRaw?: string) {
+    const normalized = String(formatRaw ?? '')
+      .trim()
+      .toLowerCase();
+    if (normalized === 'pdf') return 'pdf';
+    return 'png';
+  }
+
+  private sanitizeBannerFileName(missionTitle: string, bannerName: string) {
+    const safe = [missionTitle, bannerName]
+      .join('-')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9]+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 80)
+      .toLowerCase();
+    return safe || 'banner-missao';
   }
 
   private findScheduleLogoPath() {

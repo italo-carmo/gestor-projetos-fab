@@ -313,11 +313,15 @@ model ActivitySpecialty {
 
 model ActivityType {
   id         String     @id @default(cuid())
-  name       String     @unique
+  name       String
+  scope      ActivityScope @default(SMIF)
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt
 
   activities Activity[]
+
+  @@unique([scope, name])
+  @@index([scope])
 }
 
 model Mission {
@@ -337,6 +341,7 @@ model Mission {
   createdBy   User?    @relation("MissionCreator", fields: [createdById], references: [id], onDelete: SetNull)
   participants MissionParticipant[]
   scheduleItems MissionScheduleItem[]
+  banners     MissionBanner[]
 
   @@index([localityId, startDate])
   @@index([startDate, endDate])
@@ -376,6 +381,22 @@ model MissionScheduleItem {
   mission         Mission  @relation(fields: [missionId], references: [id], onDelete: Cascade)
 
   @@index([missionId, startAt])
+}
+
+model MissionBanner {
+  id                String   @id @default(cuid())
+  missionId         String
+  name              String
+  eventDate         String
+  eventTime         String
+  locationPrimary   String
+  locationSecondary String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  mission           Mission  @relation(fields: [missionId], references: [id], onDelete: Cascade)
+
+  @@index([missionId, eventDate, eventTime])
 }
 
 model MissionChecklistDimension {
@@ -546,6 +567,7 @@ model TaskInstance {
   id              String        @id @default(cuid())
   taskTemplateId  String
   localityId      String
+  scope           ActivityScope @default(SMIF)
   groupKey        String?
   titleOverride   String?
   specialtyId     String?
@@ -578,7 +600,9 @@ model TaskInstance {
   commentReads    TaskCommentRead[]
 
   @@index([localityId])
+  @@index([scope])
   @@index([specialtyId])
+  @@index([scope, localityId, dueDate, status])
   @@index([localityId, dueDate, status])
   @@index([meetingId])
   @@index([eloRoleId])

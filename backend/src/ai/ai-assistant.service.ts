@@ -1423,7 +1423,7 @@ export class AiAssistantService {
           field: 'scheduleExistingItemId',
           label: 'Item do cronograma para editar',
           inputType: 'single_select',
-          options: existingItems.map((item, index) => ({
+          options: existingItems.map((item: any, index: number) => ({
             value: item.id,
             label: `${index + 1}. ${item.title}`,
             description: `${this.formatScheduleDateTime(item.startAt)} • ${item.durationMinutes} min`,
@@ -1452,7 +1452,9 @@ export class AiAssistantService {
         ];
       }
       const itemNumber =
-        existingItems.findIndex((item) => item.id === draft.scheduleExistingItemId) + 1;
+        existingItems.findIndex(
+          (item: any) => item.id === draft.scheduleExistingItemId,
+        ) + 1;
       return [
         ...editFields,
         {
@@ -2308,7 +2310,7 @@ export class AiAssistantService {
         'Selecione a missão antes de enviar o cronograma.',
       );
     }
-    const mission = await this.missions.getById(missionId, user);
+    const mission = (await this.missions.getById(missionId, user)) as any;
     const localityName = String(mission?.locality?.name ?? '').trim();
     const localityCode = String(mission?.locality?.code ?? '').trim();
     return {
@@ -2940,7 +2942,10 @@ export class AiAssistantService {
       return [];
     }
 
-    const mission = await this.missions.getById(String(draft.missionId), user);
+    const mission = (await this.missions.getById(
+      String(draft.missionId),
+      user,
+    )) as any;
     const items = Array.isArray(mission?.scheduleItems)
       ? mission.scheduleItems.map((item: any) => ({
           id: String(item.id),
