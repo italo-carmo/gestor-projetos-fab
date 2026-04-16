@@ -4707,6 +4707,49 @@ export function useExportExecutiveReportPdf() {
   });
 }
 
+export function useExportBiDashboardPdf(
+  endpoint: string,
+  fallbackFileName: string,
+) {
+  return useMutation({
+    mutationFn: async (params?: Record<string, unknown>) => {
+      const response = await api.get(endpoint, {
+        params,
+        responseType: "blob",
+      });
+      const contentType = String(
+        response.headers?.["content-type"] ?? "",
+      ).toLowerCase();
+      if (!contentType.includes("application/pdf")) {
+        throw new Error(
+          "Não foi possível gerar o PDF. Faça login novamente e tente de novo.",
+        );
+      }
+      const blob = new Blob([response.data], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const contentDisposition = String(
+        response.headers?.["content-disposition"] ?? "",
+      );
+      const fileNameMatch =
+        /filename\*=(?:UTF-8'')?([^;]+)/i.exec(contentDisposition) ??
+        /filename="?([^"]+)"?/i.exec(contentDisposition);
+      const decodedName = fileNameMatch?.[1]
+        ? decodeURIComponent(fileNameMatch[1].trim())
+        : "";
+      a.download =
+        decodedName ||
+        `${fallbackFileName}-${new Date().toISOString().slice(0, 10)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+      return true;
+    },
+  });
+}
+
 export type StrategicAiNarrativeResponse = {
   generatedAt: string;
   narrative: string;

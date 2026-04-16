@@ -7,6 +7,7 @@ import {
   Put,
   Query,
   Req,
+  Res,
   UploadedFile,
   UseFilters,
   UseGuards,
@@ -14,7 +15,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../common/current-user.decorator';
@@ -24,12 +25,16 @@ import { RequirePermission } from '../rbac/require-permission.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
 import { hasAnyRole, ROLE_TI } from '../rbac/role-access';
 import type { RbacUser } from '../rbac/rbac.types';
+import { BiPdfService } from './bi-pdf.service';
 import { BiDomesticViolenceService } from './bi-domestic-violence.service';
 
 @Controller('bi/domestic-violence')
 @UseGuards(JwtAuthGuard, RbacGuard)
 export class BiDomesticViolenceController {
-  constructor(private readonly biDomesticViolence: BiDomesticViolenceService) {}
+  constructor(
+    private readonly biDomesticViolence: BiDomesticViolenceService,
+    private readonly biPdf: BiPdfService,
+  ) {}
 
   private assertTiForSettings(user: RbacUser) {
     if (!hasAnyRole(user, [ROLE_TI])) {
@@ -96,6 +101,72 @@ export class BiDomesticViolenceController {
       q,
       combineMode,
     });
+  }
+
+  @Get('dashboard/pdf')
+  @RequirePermission('bi', 'view')
+  async dashboardPdf(
+    @Query('from') from: string | undefined,
+    @Query('to') to: string | undefined,
+    @Query('organization') organization: string | undefined,
+    @Query('rank') rank: string | undefined,
+    @Query('maritalStatus') maritalStatus: string | undefined,
+    @Query('education') education: string | undefined,
+    @Query('naturality') naturality: string | undefined,
+    @Query('fabBond') fabBond: string | undefined,
+    @Query('situationScope') situationScope: string | undefined,
+    @Query('sufferedLifetime') sufferedLifetime: string | undefined,
+    @Query('sufferedLast12Months') sufferedLast12Months: string | undefined,
+    @Query('frequency') frequency: string | undefined,
+    @Query('affectiveBond') affectiveBond: string | undefined,
+    @Query('violenceType') violenceType: string | undefined,
+    @Query('authorRelation') authorRelation: string | undefined,
+    @Query('impactIntensity') impactIntensity: string | undefined,
+    @Query('impactArea') impactArea: string | undefined,
+    @Query('soughtHelp') soughtHelp: string | undefined,
+    @Query('complaintChannel') complaintChannel: string | undefined,
+    @Query('noComplaintReason') noComplaintReason: string | undefined,
+    @Query('authorMilitaryLink') authorMilitaryLink: string | undefined,
+    @Query('occurrencePlace') occurrencePlace: string | undefined,
+    @Query('witnesses') witnesses: string | undefined,
+    @Query('q') q: string | undefined,
+    @Query('combineMode') combineMode: string | undefined,
+    @Res() res: Response,
+  ) {
+    const buffer = await this.biPdf.domesticViolenceDashboardPdf({
+      from,
+      to,
+      organization,
+      rank,
+      maritalStatus,
+      education,
+      naturality,
+      fabBond,
+      situationScope,
+      sufferedLifetime,
+      sufferedLast12Months,
+      frequency,
+      affectiveBond,
+      violenceType,
+      authorRelation,
+      impactIntensity,
+      impactArea,
+      soughtHelp,
+      complaintChannel,
+      noComplaintReason,
+      authorMilitaryLink,
+      occurrencePlace,
+      witnesses,
+      q,
+      combineMode,
+    });
+    const filename = `bi-violencia-domestica-${new Date().toISOString().slice(0, 10)}.pdf`;
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
   }
 
   @Get('responses')

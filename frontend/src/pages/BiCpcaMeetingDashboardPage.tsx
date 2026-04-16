@@ -34,6 +34,7 @@ import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import KeyboardArrowDownRoundedIcon from "@mui/icons-material/KeyboardArrowDownRounded";
 import KeyboardArrowUpRoundedIcon from "@mui/icons-material/KeyboardArrowUpRounded";
+import PictureAsPdfRoundedIcon from "@mui/icons-material/PictureAsPdfRounded";
 import {
   Bar,
   BarChart,
@@ -51,6 +52,7 @@ import {
   useBiCpcaMeetingImports,
   useBiCpcaMeetingResponses,
   useDeleteBiCpcaMeetingResponses,
+  useExportBiDashboardPdf,
   useImportBiCpcaMeeting,
   useMe,
   useUpdateBiCpcaMeetingCardSetting,
@@ -476,6 +478,10 @@ export function BiCpcaMeetingDashboardPage() {
 
   const importMutation = useImportBiCpcaMeeting();
   const deleteResponsesMutation = useDeleteBiCpcaMeetingResponses();
+  const exportPdfMutation = useExportBiDashboardPdf(
+    "/bi/cpca-meeting/dashboard/pdf",
+    "bi-encontro-cpca",
+  );
   const updateCardSettingMutation = useUpdateBiCpcaMeetingCardSetting();
 
   const dashboard = dashboardQuery.data as CpcaMeetingDashboardResponse | undefined;
@@ -708,6 +714,22 @@ export function BiCpcaMeetingDashboardPage() {
     URL.revokeObjectURL(url);
   };
 
+  const handleExportPdf = async () => {
+    try {
+      await exportPdfMutation.mutateAsync(dashboardFilters);
+      toast.push({
+        message: "PDF executivo gerado com sucesso.",
+        severity: "success",
+      });
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({
+        message: payload.message ?? "Falha ao exportar o PDF.",
+        severity: "error",
+      });
+    }
+  };
+
   const handleConfirmDelete = async () => {
     if (!deleteConfirmMode) return;
 
@@ -860,6 +882,28 @@ export function BiCpcaMeetingDashboardPage() {
             }}
           >
             Exportar recorte CSV
+          </Button>
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<PictureAsPdfRoundedIcon />}
+            onClick={handleExportPdf}
+            disabled={exportPdfMutation.isPending}
+            sx={{
+              height: 36,
+              px: 1.4,
+              fontSize: 13,
+              whiteSpace: "nowrap",
+              borderColor: alpha(CPCA_BI_PALETTE.primary, 0.5),
+              color: CPCA_BI_PALETTE.primary,
+              "& .MuiButton-startIcon > *": { fontSize: 18 },
+              "&:hover": {
+                borderColor: CPCA_BI_PALETTE.primary,
+                bgcolor: alpha(CPCA_BI_PALETTE.primary, 0.06),
+              },
+            }}
+          >
+            {exportPdfMutation.isPending ? "Gerando PDF..." : "Exportar PDF"}
           </Button>
           <Button
             size="small"

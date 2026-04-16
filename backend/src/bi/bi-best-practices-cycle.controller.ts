@@ -7,6 +7,7 @@ import {
   Put,
   Query,
   Req,
+  Res,
   UploadedFile,
   UseFilters,
   UseGuards,
@@ -14,7 +15,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../common/current-user.decorator';
@@ -24,6 +25,7 @@ import { RequirePermission } from '../rbac/require-permission.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
 import { hasAnyRole, ROLE_TI } from '../rbac/role-access';
 import type { RbacUser } from '../rbac/rbac.types';
+import { BiPdfService } from './bi-pdf.service';
 import { BiBestPracticesCycleService } from './bi-best-practices-cycle.service';
 
 @Controller('bi/best-practices-cycle')
@@ -31,6 +33,7 @@ import { BiBestPracticesCycleService } from './bi-best-practices-cycle.service';
 export class BiBestPracticesCycleController {
   constructor(
     private readonly biBestPracticesCycle: BiBestPracticesCycleService,
+    private readonly biPdf: BiPdfService,
   ) {}
 
   private assertTiForSettings(user: RbacUser) {
@@ -72,6 +75,48 @@ export class BiBestPracticesCycleController {
       q,
       combineMode,
     });
+  }
+
+  @Get('dashboard/pdf')
+  @RequirePermission('bi', 'view')
+  async dashboardPdf(
+    @Query('from') from: string | undefined,
+    @Query('to') to: string | undefined,
+    @Query('technicalRigorPerception')
+    technicalRigorPerception: string | undefined,
+    @Query('preparednessToLeadMixedClass')
+    preparednessToLeadMixedClass: string | undefined,
+    @Query('genderBiasImpact') genderBiasImpact: string | undefined,
+    @Query('interactionDifference') interactionDifference: string | undefined,
+    @Query('supportNeedRecognition') supportNeedRecognition: string | undefined,
+    @Query('mainChallengeOption') mainChallengeOption: string | undefined,
+    @Query('identification') identification: string | undefined,
+    @Query('specialty') specialty: string | undefined,
+    @Query('q') q: string | undefined,
+    @Query('combineMode') combineMode: string | undefined,
+    @Res() res: Response,
+  ) {
+    const buffer = await this.biPdf.bestPracticesCycleDashboardPdf({
+      from,
+      to,
+      technicalRigorPerception,
+      preparednessToLeadMixedClass,
+      genderBiasImpact,
+      interactionDifference,
+      supportNeedRecognition,
+      mainChallengeOption,
+      identification,
+      specialty,
+      q,
+      combineMode,
+    });
+    const filename = `bi-ciclo-boas-praticas-${new Date().toISOString().slice(0, 10)}.pdf`;
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
   }
 
   @Get('responses')

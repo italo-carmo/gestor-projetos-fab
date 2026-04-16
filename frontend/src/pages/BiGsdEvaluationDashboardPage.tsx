@@ -34,6 +34,7 @@ import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import KeyboardArrowDownRoundedIcon from "@mui/icons-material/KeyboardArrowDownRounded";
 import KeyboardArrowUpRoundedIcon from "@mui/icons-material/KeyboardArrowUpRounded";
+import PictureAsPdfRoundedIcon from "@mui/icons-material/PictureAsPdfRounded";
 import {
   Bar,
   BarChart,
@@ -50,6 +51,7 @@ import {
   useBiGsdEvaluationImports,
   useBiGsdEvaluationResponses,
   useDeleteBiGsdEvaluationResponses,
+  useExportBiDashboardPdf,
   useImportBiGsdEvaluation,
   useMe,
   useUpdateBiGsdEvaluationCardSetting,
@@ -485,6 +487,10 @@ export function BiGsdEvaluationDashboardPage() {
 
   const importMutation = useImportBiGsdEvaluation();
   const deleteResponsesMutation = useDeleteBiGsdEvaluationResponses();
+  const exportPdfMutation = useExportBiDashboardPdf(
+    "/bi/gsd-evaluation/dashboard/pdf",
+    "bi-avaliacao-gsd",
+  );
   const updateCardSettingMutation = useUpdateBiGsdEvaluationCardSetting();
 
   const dashboard = dashboardQuery.data as GsdEvaluationDashboardResponse | undefined;
@@ -717,6 +723,22 @@ export function BiGsdEvaluationDashboardPage() {
     URL.revokeObjectURL(url);
   };
 
+  const handleExportPdf = async () => {
+    try {
+      await exportPdfMutation.mutateAsync(dashboardFilters);
+      toast.push({
+        message: "PDF executivo gerado com sucesso.",
+        severity: "success",
+      });
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({
+        message: payload.message ?? "Falha ao exportar o PDF.",
+        severity: "error",
+      });
+    }
+  };
+
   const handleConfirmDelete = async () => {
     if (!deleteConfirmMode) return;
 
@@ -866,6 +888,28 @@ export function BiGsdEvaluationDashboardPage() {
             }}
           >
             Exportar recorte CSV
+          </Button>
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<PictureAsPdfRoundedIcon />}
+            onClick={handleExportPdf}
+            disabled={exportPdfMutation.isPending}
+            sx={{
+              height: 36,
+              px: 1.4,
+              fontSize: 13,
+              whiteSpace: "nowrap",
+              borderColor: alpha(GSD_BI_PALETTE.primary, 0.5),
+              color: GSD_BI_PALETTE.primary,
+              "& .MuiButton-startIcon > *": { fontSize: 18 },
+              "&:hover": {
+                borderColor: GSD_BI_PALETTE.primary,
+                bgcolor: alpha(GSD_BI_PALETTE.primary, 0.06),
+              },
+            }}
+          >
+            {exportPdfMutation.isPending ? "Gerando PDF..." : "Exportar PDF"}
           </Button>
           <Button
             size="small"

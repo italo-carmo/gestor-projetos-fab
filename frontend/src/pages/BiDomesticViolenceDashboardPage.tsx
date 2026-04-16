@@ -36,6 +36,7 @@ import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import KeyboardArrowDownRoundedIcon from "@mui/icons-material/KeyboardArrowDownRounded";
 import KeyboardArrowUpRoundedIcon from "@mui/icons-material/KeyboardArrowUpRounded";
+import PictureAsPdfRoundedIcon from "@mui/icons-material/PictureAsPdfRounded";
 import {
   Bar,
   BarChart,
@@ -55,6 +56,7 @@ import {
   useBiDomesticViolenceImports,
   useImportBiDomesticViolence,
   useDeleteBiDomesticViolenceResponses,
+  useExportBiDashboardPdf,
   useMe,
   useUpdateBiDomesticViolenceCardSetting,
 } from "../api/hooks";
@@ -647,6 +649,10 @@ export function BiDomesticViolenceDashboardPage() {
   const importsQuery = useBiDomesticViolenceImports({ page: 1, pageSize: 8 });
   const importMutation = useImportBiDomesticViolence();
   const deleteResponsesMutation = useDeleteBiDomesticViolenceResponses();
+  const exportPdfMutation = useExportBiDashboardPdf(
+    "/bi/domestic-violence/dashboard/pdf",
+    "bi-violencia-domestica",
+  );
   const updateCardSettingMutation = useUpdateBiDomesticViolenceCardSetting();
 
   const dashboard = dashboardQuery.data as
@@ -965,6 +971,22 @@ export function BiDomesticViolenceDashboardPage() {
     URL.revokeObjectURL(url);
   };
 
+  const handleExportPdf = async () => {
+    try {
+      await exportPdfMutation.mutateAsync(dashboardFilters);
+      toast.push({
+        message: "PDF executivo gerado com sucesso.",
+        severity: "success",
+      });
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({
+        message: payload.message ?? "Falha ao exportar o PDF.",
+        severity: "error",
+      });
+    }
+  };
+
   const handleConfirmDelete = async () => {
     if (!deleteConfirmMode) return;
 
@@ -1141,6 +1163,24 @@ export function BiDomesticViolenceDashboardPage() {
             }}
           >
             Exportar recorte CSV
+          </Button>
+
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<PictureAsPdfRoundedIcon />}
+            onClick={handleExportPdf}
+            disabled={exportPdfMutation.isPending}
+            sx={{
+              borderColor: alpha(DV_PALETTE.primary, 0.45),
+              color: DV_PALETTE.primary,
+              "&:hover": {
+                borderColor: DV_PALETTE.primary,
+                bgcolor: alpha(DV_PALETTE.primary, 0.08),
+              },
+            }}
+          >
+            {exportPdfMutation.isPending ? "Gerando PDF..." : "Exportar PDF"}
           </Button>
 
           <Button

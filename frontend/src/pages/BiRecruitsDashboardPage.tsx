@@ -36,6 +36,7 @@ import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import KeyboardArrowDownRoundedIcon from "@mui/icons-material/KeyboardArrowDownRounded";
 import KeyboardArrowUpRoundedIcon from "@mui/icons-material/KeyboardArrowUpRounded";
+import PictureAsPdfRoundedIcon from "@mui/icons-material/PictureAsPdfRounded";
 import {
   Bar,
   BarChart,
@@ -51,6 +52,7 @@ import {
   useBiRecruitsImports,
   useBiRecruitsResponses,
   useDeleteBiRecruitsResponses,
+  useExportBiDashboardPdf,
   useImportBiRecruits,
   useMe,
   useUpdateBiRecruitsCardSetting,
@@ -588,6 +590,10 @@ export function BiRecruitsDashboardPage() {
   const importsQuery = useBiRecruitsImports({ page: 1, pageSize: 8 });
   const importMutation = useImportBiRecruits();
   const deleteResponsesMutation = useDeleteBiRecruitsResponses();
+  const exportPdfMutation = useExportBiDashboardPdf(
+    "/bi/recruits/dashboard/pdf",
+    "bi-recrutas",
+  );
   const updateCardSettingMutation = useUpdateBiRecruitsCardSetting();
 
   const dashboard = dashboardQuery.data as RecruitsDashboardResponse | undefined;
@@ -787,6 +793,22 @@ export function BiRecruitsDashboardPage() {
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
+  };
+
+  const handleExportPdf = async () => {
+    try {
+      await exportPdfMutation.mutateAsync(dashboardFilters);
+      toast.push({
+        message: "PDF executivo gerado com sucesso.",
+        severity: "success",
+      });
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({
+        message: payload.message ?? "Falha ao exportar o PDF.",
+        severity: "error",
+      });
+    }
   };
 
   const handleConfirmDelete = async () => {
@@ -992,6 +1014,24 @@ export function BiRecruitsDashboardPage() {
             }}
           >
             Exportar recorte CSV
+          </Button>
+
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<PictureAsPdfRoundedIcon />}
+            onClick={handleExportPdf}
+            disabled={exportPdfMutation.isPending}
+            sx={{
+              borderColor: alpha(RC_PALETTE.primary, 0.45),
+              color: RC_PALETTE.primary,
+              "&:hover": {
+                borderColor: RC_PALETTE.primary,
+                bgcolor: alpha(RC_PALETTE.primary, 0.08),
+              },
+            }}
+          >
+            {exportPdfMutation.isPending ? "Gerando PDF..." : "Exportar PDF"}
           </Button>
 
           <Button

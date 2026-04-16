@@ -7,6 +7,7 @@ import {
   Put,
   Query,
   Req,
+  Res,
   UploadedFile,
   UseFilters,
   UseGuards,
@@ -14,7 +15,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../common/current-user.decorator';
@@ -24,12 +25,16 @@ import { RequirePermission } from '../rbac/require-permission.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
 import { hasAnyRole, ROLE_COMGEP, ROLE_TI } from '../rbac/role-access';
 import type { RbacUser } from '../rbac/rbac.types';
+import { BiPdfService } from './bi-pdf.service';
 import { BiRecruitsService } from './bi-recruits.service';
 
 @Controller('bi/recruits')
 @UseGuards(JwtAuthGuard, RbacGuard)
 export class BiRecruitsController {
-  constructor(private readonly biRecruits: BiRecruitsService) {}
+  constructor(
+    private readonly biRecruits: BiRecruitsService,
+    private readonly biPdf: BiPdfService,
+  ) {}
 
   private assertRecruitsAccess(user: RbacUser) {
     if (!hasAnyRole(user, [ROLE_TI, ROLE_COMGEP])) {
@@ -80,6 +85,51 @@ export class BiRecruitsController {
       q,
       combineMode,
     });
+  }
+
+  @Get('dashboard/pdf')
+  @RequirePermission('bi', 'view')
+  async dashboardPdf(
+    @Query('from') from: string | undefined,
+    @Query('to') to: string | undefined,
+    @Query('education') education: string | undefined,
+    @Query('gender') gender: string | undefined,
+    @Query('identifyHarassment') identifyHarassment: string | undefined,
+    @Query('conductLimits') conductLimits: string | undefined,
+    @Query('knowOrientation') knowOrientation: string | undefined,
+    @Query('knowReportProcess') knowReportProcess: string | undefined,
+    @Query('willingnessOrientation') willingnessOrientation: string | undefined,
+    @Query('willingnessReport') willingnessReport: string | undefined,
+    @Query('enlistmentDecisionInfluence')
+    enlistmentDecisionInfluence: string | undefined,
+    @Query('q') q: string | undefined,
+    @Query('combineMode') combineMode: string | undefined,
+    @CurrentUser() user: RbacUser,
+    @Res() res: Response,
+  ) {
+    this.assertRecruitsAccess(user);
+    const buffer = await this.biPdf.recruitsDashboardPdf({
+      from,
+      to,
+      education,
+      gender,
+      identifyHarassment,
+      conductLimits,
+      knowOrientation,
+      knowReportProcess,
+      willingnessOrientation,
+      willingnessReport,
+      enlistmentDecisionInfluence,
+      q,
+      combineMode,
+    });
+    const filename = `bi-recrutas-${new Date().toISOString().slice(0, 10)}.pdf`;
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
   }
 
   @Get('responses')

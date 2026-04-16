@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { RbacModule } from '../rbac/rbac.module';
 import { BiNormalizationController } from './bi-normalization.controller';
 import { BiNormalizationService } from './bi-normalization.service';
+import { BiPdfService } from './bi-pdf.service';
 import { BiBestPracticesCycleController } from './bi-best-practices-cycle.controller';
 import { BiBestPracticesCycleService } from './bi-best-practices-cycle.service';
 import { BiCpcaMeetingController } from './bi-cpca-meeting.controller';
@@ -29,6 +30,7 @@ import { BiService } from './bi.service';
   providers: [
     BiService,
     BiNormalizationService,
+    BiPdfService,
     BiDomesticViolenceService,
     BiRecruitsService,
     BiBestPracticesCycleService,

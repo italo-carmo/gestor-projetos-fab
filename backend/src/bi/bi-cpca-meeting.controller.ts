@@ -7,6 +7,7 @@ import {
   Put,
   Query,
   Req,
+  Res,
   UploadedFile,
   UseFilters,
   UseGuards,
@@ -14,7 +15,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../common/current-user.decorator';
@@ -24,12 +25,16 @@ import { RequirePermission } from '../rbac/require-permission.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
 import { hasAnyRole, ROLE_TI } from '../rbac/role-access';
 import type { RbacUser } from '../rbac/rbac.types';
+import { BiPdfService } from './bi-pdf.service';
 import { BiCpcaMeetingService } from './bi-cpca-meeting.service';
 
 @Controller('bi/cpca-meeting')
 @UseGuards(JwtAuthGuard, RbacGuard)
 export class BiCpcaMeetingController {
-  constructor(private readonly biCpcaMeeting: BiCpcaMeetingService) {}
+  constructor(
+    private readonly biCpcaMeeting: BiCpcaMeetingService,
+    private readonly biPdf: BiPdfService,
+  ) {}
 
   private assertTiForSettings(user: RbacUser) {
     if (!hasAnyRole(user, [ROLE_TI])) {
@@ -54,6 +59,32 @@ export class BiCpcaMeetingController {
       combineMode,
       columnFilters,
     });
+  }
+
+  @Get('dashboard/pdf')
+  @RequirePermission('bi', 'view')
+  async dashboardPdf(
+    @Query('from') from: string | undefined,
+    @Query('to') to: string | undefined,
+    @Query('q') q: string | undefined,
+    @Query('combineMode') combineMode: string | undefined,
+    @Query('columnFilters') columnFilters: string | undefined,
+    @Res() res: Response,
+  ) {
+    const buffer = await this.biPdf.cpcaMeetingDashboardPdf({
+      from,
+      to,
+      q,
+      combineMode,
+      columnFilters,
+    });
+    const filename = `bi-encontro-cpca-${new Date().toISOString().slice(0, 10)}.pdf`;
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
   }
 
   @Get('responses')
