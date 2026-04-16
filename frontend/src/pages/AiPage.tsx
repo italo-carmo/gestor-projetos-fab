@@ -740,9 +740,35 @@ type ChatbotMessage = {
   content: string;
   createdAt: string;
   model?: string | null;
+  suggestedLinks?: Array<{
+    label: string;
+    href: string;
+    kind: "screen" | "record";
+  }>;
+  suggestedActions?: Array<{
+    id:
+      | "create_mission"
+      | "create_activity"
+      | "create_task"
+      | "create_mission_schedule";
+    label: string;
+    description: string;
+    reason?: string;
+  }>;
 };
 
-function ChatbotTab() {
+function ChatbotTab({
+  onOpenAssistantAction,
+}: {
+  onOpenAssistantAction: (
+    actionId:
+      | "create_mission"
+      | "create_activity"
+      | "create_task"
+      | "create_mission_schedule",
+    actionLabel: string,
+  ) => void;
+}) {
   const toast = useToast();
   const [messages, setMessages] = useState<ChatbotMessage[]>([]);
   const [running, setRunning] = useState(false);
@@ -833,6 +859,12 @@ function ChatbotTab() {
               content: String(data.narrative ?? partialText ?? ""),
               createdAt: String(data.generatedAt ?? new Date().toISOString()),
               model: String(data.model ?? ""),
+              suggestedLinks: Array.isArray(data.suggestedLinks)
+                ? data.suggestedLinks
+                : [],
+              suggestedActions: Array.isArray(data.suggestedActions)
+                ? data.suggestedActions
+                : [],
             });
             return;
           }
@@ -1048,6 +1080,87 @@ function ChatbotTab() {
                             {msg.content}
                           </Typography>
                         )}
+                        {msg.role === "assistant" && msg.suggestedLinks?.length ? (
+                          <Stack spacing={1} sx={{ mt: 1.25 }}>
+                            <Typography variant="caption" color="text.secondary">
+                              Links sugeridos
+                            </Typography>
+                            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                              {msg.suggestedLinks.map((item) => (
+                                <Button
+                                  key={`${msg.id}-${item.href}`}
+                                  size="small"
+                                  variant="outlined"
+                                  href={item.href}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  startIcon={<OpenInNewRoundedIcon />}
+                                >
+                                  {item.label}
+                                </Button>
+                              ))}
+                            </Stack>
+                          </Stack>
+                        ) : null}
+                        {msg.role === "assistant" && msg.suggestedActions?.length ? (
+                          <Stack spacing={1} sx={{ mt: 1.25 }}>
+                            <Typography variant="caption" color="text.secondary">
+                              Transformar em ação
+                            </Typography>
+                            <Stack spacing={1}>
+                              {msg.suggestedActions.map((action) => (
+                                <Paper
+                                  key={`${msg.id}-${action.id}`}
+                                  variant="outlined"
+                                  sx={{ p: 1.1, borderRadius: 2, bgcolor: "#FAFBFD" }}
+                                >
+                                  <Stack
+                                    direction={{ xs: "column", sm: "row" }}
+                                    spacing={1}
+                                    justifyContent="space-between"
+                                    alignItems={{ sm: "center" }}
+                                  >
+                                    <Box sx={{ minWidth: 0 }}>
+                                      <Typography variant="body2" fontWeight={700}>
+                                        {action.label}
+                                      </Typography>
+                                      <Typography
+                                        variant="caption"
+                                        color="text.secondary"
+                                        sx={{ display: "block", mt: 0.35, lineHeight: 1.55 }}
+                                      >
+                                        {action.description}
+                                      </Typography>
+                                      {action.reason ? (
+                                        <Typography
+                                          variant="caption"
+                                          color="text.secondary"
+                                          sx={{ display: "block", mt: 0.5, lineHeight: 1.55 }}
+                                        >
+                                          Motivo: {action.reason}
+                                        </Typography>
+                                      ) : null}
+                                    </Box>
+                                    <Button
+                                      size="small"
+                                      variant="contained"
+                                      onClick={() =>
+                                        onOpenAssistantAction(action.id, action.label)
+                                      }
+                                      sx={{
+                                        bgcolor: "#1A3C6E",
+                                        "&:hover": { bgcolor: "#122B4E" },
+                                        flexShrink: 0,
+                                      }}
+                                    >
+                                      Abrir no assistente
+                                    </Button>
+                                  </Stack>
+                                </Paper>
+                              ))}
+                            </Stack>
+                          </Stack>
+                        ) : null}
                       </Box>
                       {msg.role === "user" ? (
                         <PersonRoundedIcon
@@ -1147,6 +1260,7 @@ function formatScheduleDateTime(value: string) {
 
 function AssistantTab() {
   const toast = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
   const agentsQuery = useAiActionAgents();
   const [messages, setMessages] = useState<UnifiedMessage[]>([]);
   const [running, setRunning] = useState(false);
@@ -1161,6 +1275,7 @@ function AssistantTab() {
   const [multiOptions, setMultiOptions] = useState<AssistantOption[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const scheduleFileInputRef = useRef<HTMLInputElement | null>(null);
+  const handledAssistantLaunchRef = useRef<string>("");
 
   useEffect(() => {
     scrollRef.current?.scrollTo({
@@ -1271,6 +1386,38 @@ function AssistantTab() {
     [appendMessage, assistantSessionId, handleAssistantResponse, toast],
   );
 
+  const launchAssistantQuickAction = useCallback(
+    async (
+      actionId:
+        | "create_mission"
+        | "create_activity"
+        | "create_task"
+        | "create_mission_schedule",
+      actionLabel?: string,
+    ) => {
+      if (assistantSessionId) {
+        try {
+          await api.post("/ai/assistant/reset", { sessionId: assistantSessionId });
+        } catch {
+          // best effort
+        }
+      }
+      setMessages([]);
+      setWorkflow(null);
+      setConversationKind(null);
+      setAssistantSessionId(null);
+      setCopilotSessionId(null);
+      setTextInput("");
+      setSingleOption(null);
+      setMultiOptions([]);
+      await postAssistant(
+        { quickAction: actionId },
+        `Iniciar fluxo: ${actionLabel ?? actionId}`,
+      );
+    },
+    [assistantSessionId, postAssistant],
+  );
+
   const uploadAssistantScheduleFiles = useCallback(
     async (files: File[]) => {
       if (!assistantSessionId) {
@@ -1323,6 +1470,39 @@ function AssistantTab() {
     },
     [appendMessage, assistantSessionId, handleAssistantResponse, toast],
   );
+
+  useEffect(() => {
+    const pendingAction = String(searchParams.get("assistantAction") ?? "").trim();
+    if (!pendingAction) {
+      handledAssistantLaunchRef.current = "";
+      return;
+    }
+    if (
+      pendingAction !== "create_mission" &&
+      pendingAction !== "create_activity" &&
+      pendingAction !== "create_task" &&
+      pendingAction !== "create_mission_schedule"
+    ) {
+      const next = new URLSearchParams(searchParams);
+      next.delete("assistantAction");
+      setSearchParams(next, { replace: true });
+      return;
+    }
+    if (running) return;
+    if (handledAssistantLaunchRef.current === pendingAction) return;
+
+    handledAssistantLaunchRef.current = pendingAction;
+    const actionConfig = OPERATIONAL_QUICK_ACTIONS.find(
+      (item) => item.id === pendingAction,
+    );
+    const next = new URLSearchParams(searchParams);
+    next.delete("assistantAction");
+    setSearchParams(next, { replace: true });
+    void launchAssistantQuickAction(
+      pendingAction,
+      actionConfig?.title ?? pendingAction,
+    );
+  }, [launchAssistantQuickAction, running, searchParams, setSearchParams]);
 
   const startCopilot = useCallback(
     async (type: string, title: string) => {
@@ -2417,6 +2597,24 @@ export function AiPage() {
     setSearchParams(next, { replace: true });
   };
 
+  const openAssistantAction = useCallback(
+    (
+      actionId:
+        | "create_mission"
+        | "create_activity"
+        | "create_task"
+        | "create_mission_schedule",
+      _actionLabel: string,
+    ) => {
+      setTab(2);
+      const next = new URLSearchParams(searchParams);
+      next.set("tab", "assistant");
+      next.set("assistantAction", actionId);
+      setSearchParams(next, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
+
   return (
     <Box sx={{ p: { xs: 1, sm: 2, md: 3 } }}>
       <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 0.5 }}>
@@ -2457,7 +2655,7 @@ export function AiPage() {
       </Tabs>
 
       {tab === 0 && <AnalysesTab />}
-      {tab === 1 && <ChatbotTab />}
+      {tab === 1 && <ChatbotTab onOpenAssistantAction={openAssistantAction} />}
       {tab === 2 && <AssistantTab />}
     </Box>
   );

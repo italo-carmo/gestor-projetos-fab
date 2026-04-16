@@ -32,6 +32,25 @@ export type ActionAgentType =
 
 export type ChatProfileType = AnalysisType | 'chatbot';
 
+type ChatSuggestedActionId =
+  | 'create_mission'
+  | 'create_activity'
+  | 'create_task'
+  | 'create_mission_schedule';
+
+type ChatSuggestedLink = {
+  label: string;
+  href: string;
+  kind: 'screen' | 'record';
+};
+
+type ChatSuggestedAction = {
+  id: ChatSuggestedActionId;
+  label: string;
+  description: string;
+  reason?: string;
+};
+
 export type ComgepCopilotMode = 'executive' | 'analyst';
 
 export type ComgepCopilotFocus = {
@@ -950,10 +969,22 @@ export class AiService {
         config.configuredSources,
       );
 
+      const [suggestedLinks, suggestedActions] = await Promise.all([
+        this.buildChatSuggestedLinks(
+          finalNarrative,
+          safeMessage,
+          safeProfile,
+          config.configuredSources,
+        ),
+        Promise.resolve(this.buildChatSuggestedActions(safeMessage, finalNarrative)),
+      ]);
+
       yield this.sseEvent('done', {
         model: completion.model,
         narrative: finalNarrative,
         generatedAt: new Date().toISOString(),
+        suggestedLinks,
+        suggestedActions,
       });
       return;
     } catch (e) {
@@ -973,10 +1004,21 @@ export class AiService {
           }),
           config.configuredSources,
         );
+        const [suggestedLinks, suggestedActions] = await Promise.all([
+          this.buildChatSuggestedLinks(
+            fallback,
+            safeMessage,
+            safeProfile,
+            config.configuredSources,
+          ),
+          Promise.resolve(this.buildChatSuggestedActions(safeMessage, fallback)),
+        ]);
         yield this.sseEvent('done', {
           model: 'local-fallback',
           narrative: fallback,
           generatedAt: new Date().toISOString(),
+          suggestedLinks,
+          suggestedActions,
         });
         return;
       }
@@ -1008,6 +1050,180 @@ export class AiService {
       '## Encaminhamento',
       'Se precisar de uma resposta mais específica, refine a pergunta com UF, OM, escopo ou tipo de dado desejado.',
     ].join('\n');
+  }
+
+  private async buildChatSuggestedLinks(
+    narrative: string,
+    question: string,
+    profile: ChatProfileType,
+    sourceIds: readonly AiKnowledgeSourceId[],
+  ): Promise<ChatSuggestedLink[]> {
+    const links = new Map<string, ChatSuggestedLink>();
+    const normalizedNarrative = this.normalizeReferenceLinks(
+      String(narrative || ''),
+    ).trim();
+
+    const markdownLinkPattern = /\[([^\]]+)\]\(([^)]+)\)/g;
+    for (const match of normalizedNarrative.matchAll(markdownLinkPattern)) {
+      const label = String(match[1] ?? '').trim();
+      const href = String(match[2] ?? '').trim();
+      if (!href) continue;
+      links.set(href, {
+        label: label || this.inferLinkLabel(href),
+        href,
+        kind: this.classifySuggestedLink(href),
+      });
+    }
+
+    try {
+      const refs = await this.strategic.aiSourceReferences(
+        profile === 'chatbot' ? 'chatbot' : profile,
+        {
+          sources: Array.isArray(sourceIds) ? Array.from(sourceIds) : undefined,
+        },
+      );
+      for (const ref of refs) {
+        const href = String(ref?.href ?? '').trim();
+        if (!href) continue;
+        if (links.has(href)) continue;
+        const label = String(ref?.label ?? '').trim();
+        links.set(href, {
+          label: label || this.inferLinkLabel(href),
+          href,
+          kind: this.classifySuggestedLink(href),
+        });
+      }
+    } catch {
+      // best effort
+    }
+
+    for (const heuristic of this.buildHeuristicScreenLinks(question)) {
+      if (!links.has(heuristic.href)) {
+        links.set(heuristic.href, heuristic);
+      }
+    }
+
+    return Array.from(links.values()).slice(0, 6);
+  }
+
+  private buildChatSuggestedActions(
+    question: string,
+    narrative: string,
+  ): ChatSuggestedAction[] {
+    const normalized = this.normalizeComgepQueryText(
+      `${question}\n${narrative}`,
+    );
+    const suggestions: ChatSuggestedAction[] = [];
+    const seen = new Set<ChatSuggestedActionId>();
+
+    const pushAction = (
+      id: ChatSuggestedActionId,
+      label: string,
+      description: string,
+      reason: string,
+    ) => {
+      if (seen.has(id)) return;
+      seen.add(id);
+      suggestions.push({ id, label, description, reason });
+    };
+
+    if (/\b(cronograma|agenda|roteiro|planejamento diario|planejamento diário)\b/.test(normalized)) {
+      pushAction(
+        'create_mission_schedule',
+        'Criar ou editar cronograma',
+        'Abre o assistente para montar ou ajustar um cronograma de missão com confirmação final.',
+        'Sua pergunta menciona cronograma, agenda ou roteiro operacional.',
+      );
+    }
+
+    if (/\b(missao|missoes|missão|missões|intervencao|intervenção)\b/.test(normalized)) {
+      pushAction(
+        'create_mission',
+        'Criar missão',
+        'Abre o assistente para cadastrar uma missão SMIF ou CIPAVD de forma guiada.',
+        'Sua pergunta sugere desdobramento em missão ou intervenção.',
+      );
+    }
+
+    if (/\b(atividade|atividades|palestra|visita|acao de campo|ação de campo)\b/.test(normalized)) {
+      pushAction(
+        'create_activity',
+        'Criar atividade de campo',
+        'Abre o assistente para cadastrar uma atividade de campo com escopo, tipo e localidades.',
+        'Sua pergunta aponta para desdobramento em atividade de campo.',
+      );
+    }
+
+    if (
+      /\b(tarefa|tarefas|encaminhamento|encaminhamentos|prazo|cobrar|plano de acao|plano de ação|acao corretiva|ação corretiva)\b/.test(
+        normalized,
+      )
+    ) {
+      pushAction(
+        'create_task',
+        'Criar tarefa',
+        'Abre o assistente para registrar um encaminhamento com prazo, fase e responsáveis.',
+        'Sua pergunta indica necessidade de acompanhamento operacional.',
+      );
+    }
+
+    return suggestions.slice(0, 3);
+  }
+
+  private classifySuggestedLink(href: string): 'screen' | 'record' {
+    const value = String(href || '').trim();
+    if (
+      /[?&](missionId|activityId|id)=/i.test(value) ||
+      /\/dashboard\/locality\//i.test(value) ||
+      /\/cpca-cases\/[a-z0-9]/i.test(value)
+    ) {
+      return 'record';
+    }
+    return 'screen';
+  }
+
+  private inferLinkLabel(href: string): string {
+    const value = String(href || '').trim();
+    if (value.includes('/tasks')) return 'Abrir tarefas';
+    if (value.includes('/missions')) return 'Abrir missões';
+    if (value.includes('/activities')) return 'Abrir atividades';
+    if (value.includes('/cipavd-activities')) return 'Abrir atividades CIPAVD';
+    if (value.includes('/cpca-cases')) return 'Abrir denúncias CPCA';
+    if (value.includes('/smif-complaints')) return 'Abrir denúncias SMIF';
+    if (value.includes('/dashboard/estrategico')) return 'Abrir painel estratégico';
+    if (value.includes('/ai')) return 'Abrir IA';
+    return 'Abrir referência';
+  }
+
+  private buildHeuristicScreenLinks(question: string): ChatSuggestedLink[] {
+    const normalized = this.normalizeComgepQueryText(question);
+    const items: ChatSuggestedLink[] = [];
+    const push = (label: string, href: string) => {
+      if (items.some((item) => item.href === href)) return;
+      items.push({ label, href, kind: 'screen' });
+    };
+
+    if (/\b(tarefa|tarefas|encaminhamento|prazo)\b/.test(normalized)) {
+      push('Abrir tarefas', '/tasks');
+    }
+    if (/\b(missao|missoes|missão|missões)\b/.test(normalized)) {
+      push('Abrir missões', '/missions');
+    }
+    if (/\b(atividade|atividades|palestra|acao de campo|ação de campo)\b/.test(normalized)) {
+      push('Abrir atividades SMIF', '/activities');
+      push('Abrir atividades CIPAVD', '/cipavd-activities');
+    }
+    if (/\b(cpca|denuncia cpca|denúncia cpca)\b/.test(normalized)) {
+      push('Abrir denúncias CPCA', '/cpca-cases');
+    }
+    if (/\b(smif|denuncia smif|denúncia smif)\b/.test(normalized)) {
+      push('Abrir denúncias SMIF', '/smif-complaints');
+    }
+    if (/\b(kpi|painel|estrategic|estrategico|estratégico|indicador)\b/.test(normalized)) {
+      push('Abrir painel estratégico', '/dashboard/estrategico');
+    }
+
+    return items;
   }
 
   private normalizeChatProfile(
