@@ -192,7 +192,7 @@ model RefreshToken {
 
 model Locality {
   id                         String          @id @default(cuid())
-  code                       String          @unique
+  code                       String
   name                       String
   uf                         String?         // Sigla do estado (ex: SP, RJ, DF)
   hasCpca                    Boolean         @default(false)
@@ -231,6 +231,7 @@ model Locality {
   cpcaCoverageAsManaged      CpcaCommissionCoverage[] @relation("CpcaCoverageManaged")
 
   @@index([catalogType])
+  @@unique([code, catalogType])
 }
 
 model CpcaCommissionCoverage {

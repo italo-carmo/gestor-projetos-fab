@@ -162,7 +162,10 @@ export class LocalitiesController {
     const uf = dto.uf ? sanitizeText(dto.uf).toUpperCase().slice(0, 2) : null;
 
     this.assertCipavdLocalityPayload({ code, name });
-    await this.assertCipavdLocalityCodeAvailable(code);
+    await this.assertCipavdLocalityCodeAvailable(
+      code,
+      LocalityCatalogType.CIPAVD,
+    );
 
     try {
       return await this.prisma.locality.create({
@@ -209,7 +212,11 @@ export class LocalitiesController {
 
     this.assertCipavdLocalityPayload({ code, name }, true);
     if (code) {
-      await this.assertCipavdLocalityCodeAvailable(code, id);
+      await this.assertCipavdLocalityCodeAvailable(
+        code,
+        LocalityCatalogType.CIPAVD,
+        id,
+      );
     }
 
     try {
@@ -980,10 +987,15 @@ export class LocalitiesController {
     }
   }
 
-  private async assertCipavdLocalityCodeAvailable(code: string, currentId?: string) {
+  private async assertCipavdLocalityCodeAvailable(
+    code: string,
+    catalogType: LocalityCatalogType,
+    currentId?: string,
+  ) {
     const duplicate = await this.prisma.locality.findFirst({
       where: {
         code,
+        catalogType,
         ...(currentId ? { NOT: { id: currentId } } : {}),
       },
       select: { id: true },
