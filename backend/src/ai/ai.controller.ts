@@ -15,6 +15,29 @@ import {
 export class AiController {
   constructor(private readonly ai: AiService) {}
 
+  private openSse(
+    res: Response,
+    initial?: { event: string; data: Record<string, unknown> },
+  ) {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+    res.write(': connected\n\n');
+    if (initial) {
+      res.write(
+        `event: ${initial.event}\ndata: ${JSON.stringify(initial.data)}\n\n`,
+      );
+    }
+    (res as any).flush?.();
+  }
+
+  private writeSseChunk(res: Response, chunk: string) {
+    res.write(chunk);
+    (res as any).flush?.();
+  }
+
   @Get('analyses')
   @RequirePermission('bi', 'view')
   listAnalyses() {
@@ -30,21 +53,23 @@ export class AiController {
   @Post('analyze')
   @RequirePermission('bi', 'view')
   async analyze(@Body() body: { type: AnalysisType }, @Res() res: Response) {
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no');
-    res.flushHeaders();
+    this.openSse(res, {
+      event: 'progress',
+      data: { percent: 1, stage: 'Conexão estabelecida...' },
+    });
 
     try {
       for await (const chunk of this.ai.analyzeStream(
         body.type ?? 'executive',
       )) {
-        res.write(chunk);
+        this.writeSseChunk(res, chunk);
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      res.write(`event: error\ndata: ${JSON.stringify({ message: msg })}\n\n`);
+      this.writeSseChunk(
+        res,
+        `event: error\ndata: ${JSON.stringify({ message: msg })}\n\n`,
+      );
     }
     res.end();
   }
@@ -87,11 +112,7 @@ export class AiController {
     },
     @Res() res: Response,
   ) {
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no');
-    res.flushHeaders();
+    this.openSse(res);
 
     const history = (body.history ?? []).map((m) => ({
       role: m.role as 'system' | 'user' | 'assistant',
@@ -104,11 +125,14 @@ export class AiController {
         history,
         body.analysisType,
       )) {
-        res.write(chunk);
+        this.writeSseChunk(res, chunk);
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      res.write(`event: error\ndata: ${JSON.stringify({ message: msg })}\n\n`);
+      this.writeSseChunk(
+        res,
+        `event: error\ndata: ${JSON.stringify({ message: msg })}\n\n`,
+      );
     }
     res.end();
   }
@@ -125,11 +149,10 @@ export class AiController {
     },
     @Res() res: Response,
   ) {
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no');
-    res.flushHeaders();
+    this.openSse(res, {
+      event: 'progress',
+      data: { percent: 1, stage: 'Conexão estabelecida com o copiloto...' },
+    });
 
     try {
       for await (const chunk of this.ai.runActionAgentStream(body.type, {
@@ -137,11 +160,14 @@ export class AiController {
         mode: body.mode,
         focus: body.focus,
       })) {
-        res.write(chunk);
+        this.writeSseChunk(res, chunk);
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      res.write(`event: error\ndata: ${JSON.stringify({ message: msg })}\n\n`);
+      this.writeSseChunk(
+        res,
+        `event: error\ndata: ${JSON.stringify({ message: msg })}\n\n`,
+      );
     }
     res.end();
   }
@@ -158,19 +184,21 @@ export class AiController {
     },
     @Res() res: Response,
   ) {
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no');
-    res.flushHeaders();
+    this.openSse(res, {
+      event: 'progress',
+      data: { percent: 1, stage: 'Conexão estabelecida para follow-up...' },
+    });
 
     try {
       for await (const chunk of this.ai.followUpActionAgentStream(body)) {
-        res.write(chunk);
+        this.writeSseChunk(res, chunk);
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      res.write(`event: error\ndata: ${JSON.stringify({ message: msg })}\n\n`);
+      this.writeSseChunk(
+        res,
+        `event: error\ndata: ${JSON.stringify({ message: msg })}\n\n`,
+      );
     }
     res.end();
   }
