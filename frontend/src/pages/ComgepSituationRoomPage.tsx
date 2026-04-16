@@ -263,24 +263,8 @@ export function ComgepSituationRoomPage() {
   const [selectedUf, setSelectedUf] = useState('');
   const [detailUf, setDetailUf] = useState<any | null>(null);
 
-  if (roomQuery.isLoading) return <SkeletonState />;
-  if (roomQuery.isError) {
-    return <ErrorState error={roomQuery.error} onRetry={() => roomQuery.refetch()} />;
-  }
-
   const data = roomQuery.data;
-  const summary = data?.summary ?? {};
   const matrixItems = Array.isArray(data?.matrix?.items) ? data.matrix.items : [];
-  const watchlists = data?.watchlists ?? {};
-  const criticalUfs = Array.isArray(watchlists?.criticalUfs) ? watchlists.criticalUfs : [];
-  const topRiskOms = Array.isArray(watchlists?.topRiskOms) ? watchlists.topRiskOms : [];
-  const coverageGaps = Array.isArray(watchlists?.coverageGaps) ? watchlists.coverageGaps : [];
-  const operationalPressure = Array.isArray(watchlists?.operationalPressure)
-    ? watchlists.operationalPressure
-    : [];
-  const dataConfidence = data?.dataConfidence ?? {};
-  const agentCatalog = Array.isArray(agentsQuery.data) ? agentsQuery.data : [];
-
   const matrixChartData = useMemo(
     () =>
       matrixItems.map((item: any) => ({
@@ -291,6 +275,22 @@ export function ComgepSituationRoomPage() {
       })),
     [matrixItems],
   );
+
+  if (roomQuery.isLoading) return <SkeletonState />;
+  if (roomQuery.isError) {
+    return <ErrorState error={roomQuery.error} onRetry={() => roomQuery.refetch()} />;
+  }
+
+  const summary = data?.summary ?? {};
+  const watchlists = data?.watchlists ?? {};
+  const criticalUfs = Array.isArray(watchlists?.criticalUfs) ? watchlists.criticalUfs : [];
+  const topRiskOms = Array.isArray(watchlists?.topRiskOms) ? watchlists.topRiskOms : [];
+  const coverageGaps = Array.isArray(watchlists?.coverageGaps) ? watchlists.coverageGaps : [];
+  const operationalPressure = Array.isArray(watchlists?.operationalPressure)
+    ? watchlists.operationalPressure
+    : [];
+  const dataConfidence = data?.dataConfidence ?? {};
+  const agentCatalog = Array.isArray(agentsQuery.data) ? agentsQuery.data : [];
 
   return (
     <Box>
