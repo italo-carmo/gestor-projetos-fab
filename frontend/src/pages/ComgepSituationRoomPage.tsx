@@ -63,7 +63,7 @@ import {
   useCreateComgepRecommendation,
   useCreateMission,
   useCreateTaskInstance,
-  useCipavdLocalities,
+  useMissionLocalityOptions,
   useExportComgepCopilotPdf,
   useLocalities,
   useMe,
@@ -747,8 +747,11 @@ function ComgepCopilotPanel(props: {
   const me = meQuery.data;
   const canCreateTask = can(me, 'task_instances', 'update');
   const canCreateMission = can(me, 'missions', 'create');
-  const localitiesQuery = useLocalities(canCreateTask || canCreateMission);
-  const cipavdLocalitiesQuery = useCipavdLocalities(canCreateMission);
+  const localitiesQuery = useLocalities(canCreateTask);
+  const missionLocalitiesQuery = useMissionLocalityOptions(
+    missionForm.scope,
+    canCreateMission,
+  );
 
   const effectiveFocus =
     props.focus ??
@@ -782,8 +785,8 @@ function ComgepCopilotPanel(props: {
   const smifLocalities = Array.isArray(localitiesQuery.data?.items)
     ? localitiesQuery.data.items
     : [];
-  const cipavdLocalities = Array.isArray(cipavdLocalitiesQuery.data?.items)
-    ? cipavdLocalitiesQuery.data.items
+  const missionLocalities = Array.isArray(missionLocalitiesQuery.data?.items)
+    ? missionLocalitiesQuery.data.items
     : [];
   const phases = Array.isArray(phasesQuery.data?.items) ? phasesQuery.data.items : [];
   const recommendations = Array.isArray(recommendationsQuery.data?.items)
@@ -800,9 +803,18 @@ function ComgepCopilotPanel(props: {
   }, [smifLocalities, focusUf]);
 
   const missionLocalityOptions = useMemo(() => {
-    const source = missionForm.scope === 'CIPAVD' ? cipavdLocalities : smifLocalities;
-    return source.filter((item: any) => !focusUf || String(item.uf ?? '').toUpperCase() === focusUf);
-  }, [cipavdLocalities, focusUf, missionForm.scope, smifLocalities]);
+    return missionLocalities
+      .filter(
+        (item: any) =>
+          !focusUf || String(item.uf ?? '').trim().toUpperCase() === focusUf,
+      )
+      .map((item: any) => ({
+        ...item,
+        label: item.code
+          ? `${item.name} (${item.code})`
+          : String(item.name ?? ''),
+      }));
+  }, [focusUf, missionLocalities]);
 
   const handleStartAgent = async (agent: any) => {
     const nextFocus = effectiveFocus;
@@ -1519,21 +1531,27 @@ function ComgepCopilotPanel(props: {
             <Autocomplete
               options={missionLocalityOptions}
               value={missionLocalityOptions.find((item: any) => item.id === missionForm.localityId) ?? null}
-              getOptionLabel={(option: any) =>
-                `${option.code ? `${option.code} · ` : ''}${option.name}${option.uf ? ` (${option.uf})` : ''}`
-              }
+              getOptionLabel={(option: any) => option.label || String(option.name ?? '')}
               onChange={(_event, value) =>
                 setMissionForm((prev) => ({
                   ...prev,
                   localityId: value?.id ?? '',
                 }))
               }
+              loading={missionLocalitiesQuery.isLoading}
+              noOptionsText={
+                focusUf
+                  ? `Nenhuma localidade ${missionForm.scope} disponível para a UF ${focusUf}`
+                  : `Nenhuma localidade ${missionForm.scope} disponível`
+              }
               renderInput={(params) => (
                 <TextField
                   {...params}
                   label={`Localidade ${missionForm.scope}`}
                   helperText={
-                    focusUf
+                    missionLocalitiesQuery.isLoading
+                      ? `Carregando localidades ${missionForm.scope}...`
+                      : focusUf
                       ? `Mostrando localidades ${missionForm.scope} da UF ${focusUf}.`
                       : `Selecione a localidade ${missionForm.scope} para a missão.`
                   }
