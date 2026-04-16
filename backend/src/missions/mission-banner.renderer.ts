@@ -81,31 +81,42 @@ function buildMissionBannerOverlaySvg(
   const monthLabel = formatMonthLabel(dateParts.month);
   const dayLabel = String(dateParts.day);
   const timeLabel = banner.eventTime.replace(':', 'h');
+  const dateTextWidth = width * 0.22;
+  const timeTextWidth = width * 0.24;
+  const locationTextWidth = width * 0.245;
   const location = resolveLocationLines(
     banner.locationPrimary,
     banner.locationSecondary,
+    locationTextWidth,
   );
 
-  const dayFont = fitFontSize(dayLabel, width * 0.082, 2, width * 0.10);
-  const monthFont = fitFontSize(monthLabel, width * 0.060, 9, width * 0.075);
-  const timeFont = fitFontSize(timeLabel, width * 0.082, 6, width * 0.10);
-  const weekdayFont = fitFontSize(
-    weekdayLabel,
-    width * 0.060,
-    10,
+  const daySizing = fitTextToWidth(dayLabel, dateTextWidth, width * 0.074, width * 0.10);
+  const monthSizing = fitTextToWidth(
+    monthLabel,
+    dateTextWidth,
+    width * 0.038,
     width * 0.075,
   );
-  const locationPrimaryFont = fitFontSize(
-    location.line1,
-    width * 0.077,
-    15,
-    width * 0.086,
+  const timeSizing = fitTextToWidth(timeLabel, timeTextWidth, width * 0.060, width * 0.10);
+  const weekdaySizing = fitTextToWidth(
+    weekdayLabel,
+    timeTextWidth,
+    width * 0.040,
+    width * 0.075,
   );
-  const locationSecondaryFont = fitFontSize(
+  const locationPrimarySizing = fitTextToWidth(
+    location.line1,
+    locationTextWidth,
+    width * 0.028,
+    width * 0.086,
+    1.42,
+  );
+  const locationSecondarySizing = fitTextToWidth(
     location.line2,
-    width * 0.058,
-    18,
+    locationTextWidth,
+    width * 0.024,
     width * 0.072,
+    1.34,
   );
 
   const calendarX = width * 0.632;
@@ -122,12 +133,12 @@ function buildMissionBannerOverlaySvg(
         .pink { fill: ${colorPink}; font-family: Arial, Helvetica, sans-serif; font-weight: 700; }
         .white { fill: ${colorWhite}; font-family: Arial, Helvetica, sans-serif; font-weight: 400; }
       </style>
-      <text class="pink" x="${calendarX}" y="${calendarDayY}" font-size="${dayFont}" dominant-baseline="text-before-edge">${escapeXml(dayLabel)}</text>
-      <text class="white" x="${calendarX}" y="${calendarMonthY}" font-size="${monthFont}" dominant-baseline="text-before-edge">${escapeXml(monthLabel)}</text>
-      <text class="pink" x="${calendarX}" y="${timeY}" font-size="${timeFont}" dominant-baseline="text-before-edge">${escapeXml(timeLabel)}</text>
-      <text class="white" x="${calendarX}" y="${weekdayY}" font-size="${weekdayFont}" dominant-baseline="text-before-edge">${escapeXml(weekdayLabel)}</text>
-      <text class="pink" x="${calendarX}" y="${locationPrimaryY}" font-size="${locationPrimaryFont}" dominant-baseline="text-before-edge">${escapeXml(location.line1)}</text>
-      ${location.line2 ? `<text class="white" x="${calendarX}" y="${locationSecondaryY}" font-size="${locationSecondaryFont}" dominant-baseline="text-before-edge">${escapeXml(location.line2)}</text>` : ''}
+      <text class="pink" x="${calendarX}" y="${calendarDayY}" font-size="${daySizing.fontSize}" dominant-baseline="text-before-edge"${buildSvgTextFitAttributes(dayLabel, dateTextWidth, daySizing)}>${escapeXml(dayLabel)}</text>
+      <text class="white" x="${calendarX}" y="${calendarMonthY}" font-size="${monthSizing.fontSize}" dominant-baseline="text-before-edge"${buildSvgTextFitAttributes(monthLabel, dateTextWidth, monthSizing)}>${escapeXml(monthLabel)}</text>
+      <text class="pink" x="${calendarX}" y="${timeY}" font-size="${timeSizing.fontSize}" dominant-baseline="text-before-edge"${buildSvgTextFitAttributes(timeLabel, timeTextWidth, timeSizing)}>${escapeXml(timeLabel)}</text>
+      <text class="white" x="${calendarX}" y="${weekdayY}" font-size="${weekdaySizing.fontSize}" dominant-baseline="text-before-edge"${buildSvgTextFitAttributes(weekdayLabel, timeTextWidth, weekdaySizing)}>${escapeXml(weekdayLabel)}</text>
+      <text class="pink" x="${calendarX}" y="${locationPrimaryY}" font-size="${locationPrimarySizing.fontSize}" dominant-baseline="text-before-edge"${buildSvgTextFitAttributes(location.line1, locationTextWidth, locationPrimarySizing)}>${escapeXml(location.line1)}</text>
+      ${location.line2 ? `<text class="white" x="${calendarX}" y="${locationSecondaryY}" font-size="${locationSecondarySizing.fontSize}" dominant-baseline="text-before-edge"${buildSvgTextFitAttributes(location.line2, locationTextWidth, locationSecondarySizing)}>${escapeXml(location.line2)}</text>` : ''}
     </svg>
   `;
 }
@@ -173,30 +184,53 @@ function formatWeekdayLabel(date: { year: number; month: number; day: number }) 
   return weekday.replace(/-feira$/i, '').toUpperCase();
 }
 
-function resolveLocationLines(primaryRaw: string, secondaryRaw: string | null) {
+function resolveLocationLines(
+  primaryRaw: string,
+  secondaryRaw: string | null,
+  maxWidth: number,
+) {
   const line1 = sanitizeLine(primaryRaw);
   const explicitLine2 = sanitizeLine(secondaryRaw ?? '');
+  if (!line1 && !explicitLine2) return { line1: '', line2: '' };
+
   if (explicitLine2) {
-    return { line1, line2: explicitLine2 };
+    if (
+      textFitsWithinWidth(line1, maxWidth, 18) &&
+      textFitsWithinWidth(explicitLine2, maxWidth, 16)
+    ) {
+      return { line1, line2: explicitLine2 };
+    }
+    return splitLocationTextIntoTwoLines(`${line1} ${explicitLine2}`.trim());
   }
 
-  if (line1.length <= 16 || !line1.includes(' ')) {
+  if (
+    textFitsWithinWidth(line1, maxWidth, 18) ||
+    line1.length <= 16 ||
+    !line1.includes(' ')
+  ) {
     return { line1, line2: '' };
   }
 
-  const words = line1.split(/\s+/).filter(Boolean);
+  return splitLocationTextIntoTwoLines(line1);
+}
+
+function splitLocationTextIntoTwoLines(text: string) {
+  const normalized = sanitizeLine(text);
+  const words = normalized.split(/\s+/).filter(Boolean);
   if (words.length < 2) {
-    return { line1, line2: '' };
+    return { line1: normalized, line2: '' };
   }
 
   let bestIndex = 1;
-  let smallestDelta = Number.POSITIVE_INFINITY;
+  let bestScore = Number.POSITIVE_INFINITY;
   for (let index = 1; index < words.length; index += 1) {
     const left = words.slice(0, index).join(' ');
     const right = words.slice(index).join(' ');
-    const delta = Math.abs(left.length - right.length);
-    if (delta < smallestDelta) {
-      smallestDelta = delta;
+    const leftUnits = estimateTextUnits(left);
+    const rightUnits = estimateTextUnits(right);
+    const score = Math.max(leftUnits, rightUnits) + Math.abs(leftUnits - rightUnits) * 0.18;
+    if (score < bestScore) {
+      bestScore = score;
       bestIndex = index;
     }
   }
@@ -214,18 +248,77 @@ function sanitizeLine(value: string) {
     .slice(0, 120);
 }
 
-function fitFontSize(
+function fitTextToWidth(
   text: string,
-  baseSize: number,
-  softLimit: number,
+  maxWidth: number,
+  minSize: number,
   maxSize: number,
+  safetyFactor = 1.16,
 ) {
-  if (!text) return baseSize;
-  if (text.length <= softLimit) {
-    return Math.min(baseSize, maxSize);
+  if (!text) {
+    return { fontSize: maxSize, constrained: false };
   }
-  const factor = softLimit / text.length;
-  return Math.max(baseSize * 0.58, Math.min(baseSize * factor * 1.05, maxSize));
+  const units = estimateTextUnits(text);
+  if (units <= 0) {
+    return { fontSize: maxSize, constrained: false };
+  }
+  const idealFont = maxWidth / (units * safetyFactor);
+  return {
+    fontSize: Math.max(minSize, Math.min(maxSize, idealFont)),
+    constrained: idealFont < maxSize,
+  };
+}
+
+function textFitsWithinWidth(text: string, maxWidth: number, minSize: number) {
+  return estimateTextUnits(text) * minSize * 1.16 <= maxWidth;
+}
+
+function estimateTextUnits(text: string) {
+  const normalized = String(text ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  let units = 0;
+  for (const char of normalized) {
+    if (char === ' ') {
+      units += 0.34;
+      continue;
+    }
+    if (/[.,:;'`"]/u.test(char)) {
+      units += 0.22;
+      continue;
+    }
+    if (/[!|(){}\[\]\\/]/u.test(char)) {
+      units += 0.30;
+      continue;
+    }
+    if (/[ilIjtfr1]/u.test(char)) {
+      units += 0.40;
+      continue;
+    }
+    if (/[mwMWQO0@#%&]/u.test(char)) {
+      units += 0.92;
+      continue;
+    }
+    if (/[A-Z]/u.test(char)) {
+      units += 0.74;
+      continue;
+    }
+    if (/[0-9]/u.test(char)) {
+      units += 0.62;
+      continue;
+    }
+    units += 0.58;
+  }
+  return units;
+}
+
+function buildSvgTextFitAttributes(
+  text: string,
+  maxWidth: number,
+  sizing: { fontSize: number; constrained: boolean },
+) {
+  if (!text || !sizing.constrained) return '';
+  const estimatedWidth = estimateTextUnits(text) * sizing.fontSize * 1.12;
+  if (estimatedWidth <= maxWidth * 0.9) return '';
+  return ` textLength="${maxWidth}" lengthAdjust="spacingAndGlyphs"`;
 }
 
 function escapeXml(value: string) {
