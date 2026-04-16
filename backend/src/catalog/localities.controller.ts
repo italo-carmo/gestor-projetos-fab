@@ -157,15 +157,32 @@ export class LocalitiesController {
   @Post('cipavd')
   @RequirePermission('localities_cipavd', 'create')
   async createCipavdLocality(@Body() dto: CreateCipavdLocalityDto) {
-    return this.prisma.locality.create({
-      data: {
-        code: sanitizeText(dto.code).toUpperCase(),
-        name: sanitizeText(dto.name),
-        uf: dto.uf ? sanitizeText(dto.uf).toUpperCase().slice(0, 2) : null,
-        catalogType: LocalityCatalogType.CIPAVD,
-      },
-      select: { id: true, code: true, name: true, uf: true, createdAt: true },
-    });
+    const code = sanitizeText(dto.code).toUpperCase();
+    const name = sanitizeText(dto.name);
+    const uf = dto.uf ? sanitizeText(dto.uf).toUpperCase().slice(0, 2) : null;
+
+    this.assertCipavdLocalityPayload({ code, name });
+    await this.assertCipavdLocalityCodeAvailable(code);
+
+    try {
+      return await this.prisma.locality.create({
+        data: {
+          code,
+          name,
+          uf,
+          catalogType: LocalityCatalogType.CIPAVD,
+        },
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          uf: true,
+          createdAt: true,
+        },
+      });
+    } catch (error) {
+      this.handleCipavdLocalityWriteError(error);
+    }
   }
 
   @Put('cipavd/:id')
@@ -180,20 +197,40 @@ export class LocalitiesController {
     });
     if (!existing) throwError('NOT_FOUND');
 
-    return this.prisma.locality.update({
-      where: { id },
-      data: {
-        code: dto.code ? sanitizeText(dto.code).toUpperCase() : undefined,
-        name: dto.name ? sanitizeText(dto.name) : undefined,
-        uf:
-          dto.uf !== undefined
-            ? dto.uf
-              ? sanitizeText(dto.uf).toUpperCase().slice(0, 2)
-              : null
-            : undefined,
-      },
-      select: { id: true, code: true, name: true, uf: true, createdAt: true },
-    });
+    const code =
+      dto.code !== undefined ? sanitizeText(dto.code).toUpperCase() : undefined;
+    const name = dto.name !== undefined ? sanitizeText(dto.name) : undefined;
+    const uf =
+      dto.uf !== undefined
+        ? dto.uf
+          ? sanitizeText(dto.uf).toUpperCase().slice(0, 2)
+          : null
+        : undefined;
+
+    this.assertCipavdLocalityPayload({ code, name }, true);
+    if (code) {
+      await this.assertCipavdLocalityCodeAvailable(code, id);
+    }
+
+    try {
+      return await this.prisma.locality.update({
+        where: { id },
+        data: {
+          code,
+          name,
+          uf,
+        },
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          uf: true,
+          createdAt: true,
+        },
+      });
+    } catch (error) {
+      this.handleCipavdLocalityWriteError(error);
+    }
   }
 
   @Delete('cipavd/:id')
@@ -923,6 +960,52 @@ export class LocalitiesController {
       throw error;
     }
     return { ok: true };
+  }
+
+  private assertCipavdLocalityPayload(
+    values: { code?: string; name?: string },
+    partial = false,
+  ) {
+    if ((!partial || values.code !== undefined) && !values.code) {
+      throwError('VALIDATION_ERROR', {
+        field: 'code',
+        reason: 'required',
+      });
+    }
+    if ((!partial || values.name !== undefined) && !values.name) {
+      throwError('VALIDATION_ERROR', {
+        field: 'name',
+        reason: 'required',
+      });
+    }
+  }
+
+  private async assertCipavdLocalityCodeAvailable(code: string, currentId?: string) {
+    const duplicate = await this.prisma.locality.findFirst({
+      where: {
+        code,
+        ...(currentId ? { NOT: { id: currentId } } : {}),
+      },
+      select: { id: true },
+    });
+    if (duplicate) {
+      throwError('CONFLICT_UNIQUE', {
+        field: 'code',
+        value: code,
+      });
+    }
+  }
+
+  private handleCipavdLocalityWriteError(error: unknown): never {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002'
+    ) {
+      throwError('CONFLICT_UNIQUE', {
+        field: 'code',
+      });
+    }
+    throw error;
   }
 
   private async getLocalityDeletionBlockers(localityId: string) {

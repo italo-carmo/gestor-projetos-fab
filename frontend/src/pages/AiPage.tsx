@@ -1387,8 +1387,9 @@ function AssistantTab() {
                       px: 2,
                       py: 1.35,
                       borderRadius: 2.5,
-                      bgcolor: msg.role === "user" ? "#1A3C6E" : "#FFFFFF",
-                      color: msg.role === "user" ? "#fff" : "text.primary",
+                      bgcolor: msg.role === "user" ? "#163A6B" : "#FFFFFF",
+                      color:
+                        msg.role === "user" ? "rgba(248, 251, 255, 0.98)" : "text.primary",
                       boxShadow: 1,
                       border:
                         msg.role === "assistant" ? "1px solid #E2E8F0" : undefined,
@@ -1399,11 +1400,28 @@ function AssistantTab() {
                         size="small"
                         label={msg.role === "assistant" ? "Assistente" : "Você"}
                         color={msg.role === "assistant" ? "primary" : "default"}
+                        sx={
+                          msg.role === "user"
+                            ? {
+                                bgcolor: "rgba(255,255,255,0.18)",
+                                color: "rgba(248, 251, 255, 0.98)",
+                                borderColor: "rgba(255,255,255,0.22)",
+                              }
+                            : undefined
+                        }
                       />
                       <Chip
                         size="small"
                         variant="outlined"
                         label={msg.origin === "copilot" ? "Copiloto gerencial" : "Ação assistida"}
+                        sx={
+                          msg.role === "user"
+                            ? {
+                                color: "rgba(248, 251, 255, 0.98)",
+                                borderColor: "rgba(255,255,255,0.24)",
+                              }
+                            : undefined
+                        }
                       />
                     </Stack>
                     {msg.role === "assistant" ? (
@@ -1411,7 +1429,12 @@ function AssistantTab() {
                     ) : (
                       <Typography
                         variant="body2"
-                        sx={{ whiteSpace: "pre-wrap", lineHeight: 1.7 }}
+                        sx={{
+                          whiteSpace: "pre-wrap",
+                          lineHeight: 1.7,
+                          color: "rgba(248, 251, 255, 0.98)",
+                          fontWeight: 500,
+                        }}
                       >
                         {msg.content}
                       </Typography>

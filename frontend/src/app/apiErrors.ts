@@ -50,8 +50,15 @@ export function parseApiError(error: unknown): ApiErrorPayload {
   const err = error as AxiosError<ApiErrorPayload>;
   if (err?.response?.data?.message) {
     const data = err.response.data;
+    const field = typeof data.details?.field === "string" ? data.details.field : undefined;
     const reasonRaw = data.details?.reason;
     const reason = typeof reasonRaw === "string" ? reasonRaw : undefined;
+    if (data.code === "CONFLICT_UNIQUE" && field === "code") {
+      return {
+        ...data,
+        message: "Já existe um cadastro com esse código.",
+      };
+    }
     if (
       (reason === "LOCALITY_HAS_LINKED_DATA" || reason === "OM_HAS_LINKED_DATA") &&
       (Array.isArray(data.details?.linkedResources) || Array.isArray(data.details?.labels))
