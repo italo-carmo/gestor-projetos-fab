@@ -628,6 +628,70 @@ export class StrategicService {
       'PROCEDURE_DEFINED',
       'INVESTIGATION',
     ]);
+    const normalizeText = (value: string | null | undefined) =>
+      String(value ?? '')
+        .trim()
+        .toUpperCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+    const hasKeyword = (
+      values: Array<string | null | undefined>,
+      keyword: string,
+    ) => values.some((value) => normalizeText(value).includes(keyword));
+    const hasMilitaryLink = (value: string | null | undefined) => {
+      const normalized = normalizeText(value);
+      if (!normalized) return false;
+      if (
+        normalized.includes('NAO') ||
+        normalized.includes('SEM') ||
+        normalized.includes('NENHUM')
+      ) {
+        return false;
+      }
+      return (
+        normalized.includes('SIM') ||
+        normalized.includes('MILITAR') ||
+        normalized.includes('FAB') ||
+        normalized.includes('FORCA AEREA') ||
+        normalized.includes('FORCAAEREA')
+      );
+    };
+    const createSurveyStats = () => ({
+      total: 0,
+      yes: 0,
+      sexual: 0,
+      moral: 0,
+    });
+    const createDomesticStats = () => ({
+      total: 0,
+      yes12m: 0,
+      sexual: 0,
+      moral: 0,
+      militaryAuthor: 0,
+    });
+    const createComplaintStats = () => ({
+      totalCases: 0,
+      openCases: 0,
+      retaliationCases: 0,
+      stalledCases: 0,
+      sexualCases: 0,
+      moralCases: 0,
+    });
+    const buildUnderreport = (
+      signalCount: number,
+      formalCases: number,
+    ) => {
+      const missingCases = Math.max(signalCount - formalCases, 0);
+      return {
+        signalCount,
+        formalCases,
+        missingCases,
+        percent:
+          signalCount > 0
+            ? Number(((missingCases / signalCount) * 100).toFixed(1))
+            : 0,
+      };
+    };
 
     const [
       oms,
@@ -722,6 +786,7 @@ export class StrategicService {
         select: {
           id: true,
           sufferedViolence: true,
+          violenceTypes: true,
         },
       }),
       this.prisma.biNormalizationLink.findMany({
@@ -740,6 +805,8 @@ export class StrategicService {
         select: {
           id: true,
           sufferedLast12Months: true,
+          violenceTypes: true,
+          authorMilitaryLink: true,
         },
       }),
       this.biNormalization.overview(),
@@ -756,57 +823,111 @@ export class StrategicService {
       return value;
     };
 
-    const surveyById = new Map<string, { sufferedViolence: boolean }>(
+    const surveyById = new Map<
+      string,
+      {
+        sufferedViolence: boolean;
+        sexual: boolean;
+        moral: boolean;
+      }
+    >(
       (surveyRows as any[]).map((row: any) => [
         String(row.id),
-        { sufferedViolence: row.sufferedViolence === true },
+        {
+          sufferedViolence: row.sufferedViolence === true,
+          sexual: hasKeyword(row.violenceTypes ?? [], 'SEXUAL'),
+          moral: hasKeyword(row.violenceTypes ?? [], 'MORAL'),
+        },
       ]),
     );
-    const domesticById = new Map<string, { sufferedLast12Months: boolean }>(
+    const domesticById = new Map<
+      string,
+      {
+        sufferedLast12Months: boolean;
+        sexual: boolean;
+        moral: boolean;
+        militaryAuthor: boolean;
+      }
+    >(
       (domesticRows as any[]).map((row: any) => [
         String(row.id),
-        { sufferedLast12Months: row.sufferedLast12Months === true },
+        {
+          sufferedLast12Months: row.sufferedLast12Months === true,
+          sexual: hasKeyword(row.violenceTypes ?? [], 'SEXUAL'),
+          moral: hasKeyword(row.violenceTypes ?? [], 'MORAL'),
+          militaryAuthor: hasMilitaryLink(row.authorMilitaryLink),
+        },
       ]),
     );
 
-    const surveySignalsByUf = new Map<string, { total: number; yes: number }>();
-    const surveySignalsByOm = new Map<string, { total: number; yes: number }>();
+    const surveySignalsByUf = new Map<
+      string,
+      ReturnType<typeof createSurveyStats>
+    >();
+    const surveySignalsByOm = new Map<
+      string,
+      ReturnType<typeof createSurveyStats>
+    >();
     for (const link of surveyLinks) {
       const response = surveyById.get(String(link.sourceRecordId));
       if (!response) continue;
       const uf = ensureUf(link.uf);
       if (uf) {
-        const current = surveySignalsByUf.get(uf) ?? { total: 0, yes: 0 };
+        const current = surveySignalsByUf.get(uf) ?? createSurveyStats();
         current.total += 1;
-        if (response.sufferedViolence) current.yes += 1;
+        if (response.sufferedViolence) {
+          current.yes += 1;
+          if (response.sexual) current.sexual += 1;
+          if (response.moral) current.moral += 1;
+        }
         surveySignalsByUf.set(uf, current);
       }
       const omId = String(link.omId ?? '').trim();
       if (omId) {
-        const current = surveySignalsByOm.get(omId) ?? { total: 0, yes: 0 };
+        const current = surveySignalsByOm.get(omId) ?? createSurveyStats();
         current.total += 1;
-        if (response.sufferedViolence) current.yes += 1;
+        if (response.sufferedViolence) {
+          current.yes += 1;
+          if (response.sexual) current.sexual += 1;
+          if (response.moral) current.moral += 1;
+        }
         surveySignalsByOm.set(omId, current);
       }
     }
 
-    const domesticSignalsByUf = new Map<string, { total: number; yes: number }>();
-    const domesticSignalsByOm = new Map<string, { total: number; yes: number }>();
+    const domesticSignalsByUf = new Map<
+      string,
+      ReturnType<typeof createDomesticStats>
+    >();
+    const domesticSignalsByOm = new Map<
+      string,
+      ReturnType<typeof createDomesticStats>
+    >();
     for (const link of domesticLinks) {
       const response = domesticById.get(String(link.sourceRecordId));
       if (!response) continue;
       const uf = ensureUf(link.uf);
       if (uf) {
-        const current = domesticSignalsByUf.get(uf) ?? { total: 0, yes: 0 };
+        const current = domesticSignalsByUf.get(uf) ?? createDomesticStats();
         current.total += 1;
-        if (response.sufferedLast12Months) current.yes += 1;
+        if (response.sufferedLast12Months) {
+          current.yes12m += 1;
+          if (response.sexual) current.sexual += 1;
+          if (response.moral) current.moral += 1;
+          if (response.militaryAuthor) current.militaryAuthor += 1;
+        }
         domesticSignalsByUf.set(uf, current);
       }
       const omId = String(link.omId ?? '').trim();
       if (omId) {
-        const current = domesticSignalsByOm.get(omId) ?? { total: 0, yes: 0 };
+        const current = domesticSignalsByOm.get(omId) ?? createDomesticStats();
         current.total += 1;
-        if (response.sufferedLast12Months) current.yes += 1;
+        if (response.sufferedLast12Months) {
+          current.yes12m += 1;
+          if (response.sexual) current.sexual += 1;
+          if (response.moral) current.moral += 1;
+          if (response.militaryAuthor) current.militaryAuthor += 1;
+        }
         domesticSignalsByOm.set(omId, current);
       }
     }
@@ -849,13 +970,7 @@ export class StrategicService {
         : 0;
 
       const applyStats = (map: Map<string, any>, key: string) => {
-        const current = map.get(key) ?? {
-          totalCases: 0,
-          openCases: 0,
-          retaliationCases: 0,
-          stalledCases: 0,
-          sexualCases: 0,
-        };
+        const current = map.get(key) ?? createComplaintStats();
         current.totalCases += 1;
         if (isOpen) {
           current.openCases += 1;
@@ -864,6 +979,10 @@ export class StrategicService {
         }
         if (String(item?.complaintType ?? '').trim().toUpperCase() === 'SEXUAL') {
           current.sexualCases += 1;
+        } else if (
+          String(item?.complaintType ?? '').trim().toUpperCase() === 'MORAL'
+        ) {
+          current.moralCases += 1;
         }
         map.set(key, current);
       };
@@ -921,18 +1040,24 @@ export class StrategicService {
 
     const omRiskRows = oms
       .map((om: StrategicGeoOmRow) => {
-        const survey = surveySignalsByOm.get(om.id) ?? { total: 0, yes: 0 };
-        const domestic = domesticSignalsByOm.get(om.id) ?? { total: 0, yes: 0 };
-        const complaintsStats = complaintsByOm.get(om.id) ?? {
-          totalCases: 0,
-          openCases: 0,
-          retaliationCases: 0,
-          stalledCases: 0,
-          sexualCases: 0,
+        const survey = surveySignalsByOm.get(om.id) ?? createSurveyStats();
+        const domestic = domesticSignalsByOm.get(om.id) ?? createDomesticStats();
+        const complaintsStats = complaintsByOm.get(om.id) ?? createComplaintStats();
+        const ufPresence = presenceByUf.get(ensureUf(om.uf)) ?? {
+          missions: 0,
+          completedActivities: 0,
+          signedReports: 0,
         };
         const surveyRate = survey.total > 0 ? (survey.yes / survey.total) * 100 : 0;
         const domesticRate =
-          domestic.total > 0 ? (domestic.yes / domestic.total) * 100 : 0;
+          domestic.total > 0 ? (domestic.yes12m / domestic.total) * 100 : 0;
+        const sexualSignals = survey.sexual + domestic.sexual;
+        const moralSignals = survey.moral + domestic.moral;
+        const researchSignals = survey.yes + domestic.yes12m;
+        const underreport = buildUnderreport(
+          researchSignals,
+          complaintsStats.totalCases,
+        );
         const covered = coveredOmIds.has(om.id);
         const rawRisk =
           complaintsStats.openCases * 8 +
@@ -941,7 +1066,73 @@ export class StrategicService {
           complaintsStats.sexualCases * 4 +
           surveyRate * 0.7 +
           domesticRate * 0.8 +
+          sexualSignals * 2 +
+          moralSignals * 1.5 +
+          domestic.militaryAuthor * 3 +
+          underreport.percent * 0.15 +
           (covered ? 0 : 10);
+        const rankingReasons: string[] = [];
+        if (sexualSignals > 0) {
+          rankingReasons.push(
+            `${sexualSignals} relato(s) de assédio/violência sexual em pesquisas`,
+          );
+        }
+        if (moralSignals > 0) {
+          rankingReasons.push(
+            `${moralSignals} relato(s) de assédio/violência moral em pesquisas`,
+          );
+        }
+        if (domestic.yes12m > 0) {
+          rankingReasons.push(
+            `${domestic.yes12m} relato(s) de violência doméstica nos últimos 12 meses`,
+          );
+        }
+        if (domestic.militaryAuthor > 0) {
+          rankingReasons.push(
+            `${domestic.militaryAuthor} relato(s) com autor vinculado ao meio militar`,
+          );
+        }
+        if (complaintsStats.openCases > 0) {
+          rankingReasons.push(`${complaintsStats.openCases} denúncia(s) formal(is) aberta(s)`);
+        }
+        if (complaintsStats.retaliationCases > 0) {
+          rankingReasons.push(
+            `${complaintsStats.retaliationCases} caso(s) com risco de retaliação`,
+          );
+        }
+        if (complaintsStats.stalledCases > 0) {
+          rankingReasons.push(`${complaintsStats.stalledCases} caso(s) além do prazo`);
+        }
+        if (underreport.percent >= 40) {
+          rankingReasons.push(
+            `subnotificação estimada em ${underreport.percent.toFixed(1)}%`,
+          );
+        }
+        if (!covered) {
+          rankingReasons.push('sem cobertura CPCA');
+        }
+        if (
+          (ufPresence.missions ?? 0) +
+            (ufPresence.completedActivities ?? 0) +
+            (ufPresence.signedReports ?? 0) ===
+          0
+        ) {
+          rankingReasons.push('sem presença operacional recente na UF');
+        }
+        let recommendedAction =
+          'Monitorar a OM e manter presença institucional na UF.';
+        if (domestic.militaryAuthor > 0 || sexualSignals > 0 || moralSignals > 0) {
+          recommendedAction =
+            'Priorizar missão com palestras, escuta qualificada e atividades de campo voltadas à prevenção.';
+        }
+        if (complaintsStats.openCases > 0 || complaintsStats.retaliationCases > 0) {
+          recommendedAction =
+            'Atuação imediata da comissão, com acompanhamento do passivo formal e reforço de presença institucional.';
+        }
+        if (underreport.percent >= 60 && complaintsStats.totalCases === 0) {
+          recommendedAction =
+            'Alta chance de subnotificação: priorizar escuta protegida, divulgação de canais e ações presenciais na OM.';
+        }
 
         return {
           id: om.id,
@@ -956,8 +1147,17 @@ export class StrategicService {
             : 'Sem cobertura',
           surveyRate: Number(surveyRate.toFixed(1)),
           domesticRate: Number(domesticRate.toFixed(1)),
+          surveySignals: survey,
+          domesticSignals: domestic,
+          researchSignals,
+          sexualSignals,
+          moralSignals,
+          underreport,
+          operationalPresence: ufPresence,
           complaints: complaintsStats,
           rawRisk,
+          rankingReasons,
+          recommendedAction,
           link: `/cpca-cases?omId=${encodeURIComponent(om.id)}`,
         };
       })
@@ -974,15 +1174,9 @@ export class StrategicService {
         const ufOms = omsByUf.get(uf) ?? [];
         const totalOms = ufOms.length;
         const coveredOms = ufOms.filter((om) => coveredOmIds.has(om.id)).length;
-        const complaintsStats = complaintsByUf.get(uf) ?? {
-          totalCases: 0,
-          openCases: 0,
-          retaliationCases: 0,
-          stalledCases: 0,
-          sexualCases: 0,
-        };
-        const survey = surveySignalsByUf.get(uf) ?? { total: 0, yes: 0 };
-        const domestic = domesticSignalsByUf.get(uf) ?? { total: 0, yes: 0 };
+        const complaintsStats = complaintsByUf.get(uf) ?? createComplaintStats();
+        const survey = surveySignalsByUf.get(uf) ?? createSurveyStats();
+        const domestic = domesticSignalsByUf.get(uf) ?? createDomesticStats();
         const presence = presenceByUf.get(uf) ?? {
           missions: 0,
           completedActivities: 0,
@@ -991,7 +1185,14 @@ export class StrategicService {
 
         const surveyRate = survey.total > 0 ? (survey.yes / survey.total) * 100 : 0;
         const domesticRate =
-          domestic.total > 0 ? (domestic.yes / domestic.total) * 100 : 0;
+          domestic.total > 0 ? (domestic.yes12m / domestic.total) * 100 : 0;
+        const sexualSignals = survey.sexual + domestic.sexual;
+        const moralSignals = survey.moral + domestic.moral;
+        const researchSignals = survey.yes + domestic.yes12m;
+        const underreport = buildUnderreport(
+          researchSignals,
+          complaintsStats.totalCases,
+        );
         const coveragePercent =
           totalOms > 0 ? Number(((coveredOms / totalOms) * 100).toFixed(1)) : 0;
 
@@ -1001,7 +1202,11 @@ export class StrategicService {
           complaintsStats.stalledCases * 6 +
           complaintsStats.sexualCases * 4 +
           surveyRate * 0.7 +
-          domesticRate * 0.8;
+          domesticRate * 0.8 +
+          sexualSignals * 2 +
+          moralSignals * 1.5 +
+          domestic.militaryAuthor * 3 +
+          underreport.percent * 0.15;
         const rawPresence =
           presence.missions * 5 +
           presence.completedActivities * 3 +
@@ -1015,6 +1220,12 @@ export class StrategicService {
           coveragePercent,
           surveyRate: Number(surveyRate.toFixed(1)),
           domesticRate: Number(domesticRate.toFixed(1)),
+          surveySignals: survey,
+          domesticSignals: domestic,
+          researchSignals,
+          sexualSignals,
+          moralSignals,
+          underreport,
           complaints: complaintsStats,
           presence,
           rawRisk,
@@ -1053,6 +1264,52 @@ export class StrategicService {
       } else if (riskScore >= 70) {
         recommendedFocus = 'Priorizar intervenção imediata de comando.';
       }
+      if (
+        item.underreport?.percent >= 50 &&
+        Number(item.complaints?.totalCases ?? 0) === 0
+      ) {
+        recommendedFocus =
+          'Há sinal forte de subnotificação: priorizar escuta protegida, palestras e presença institucional na UF.';
+      } else if (
+        Number(item.domesticSignals?.militaryAuthor ?? 0) > 0 ||
+        Number(item.sexualSignals ?? 0) > 0 ||
+        Number(item.moralSignals ?? 0) > 0
+      ) {
+        recommendedFocus =
+          'Priorizar missões com palestras e atividades de campo focadas em prevenção e canais de denúncia.';
+      }
+      const rankingReasons: string[] = [];
+      if (item.sexualSignals > 0) {
+        rankingReasons.push(
+          `${item.sexualSignals} relato(s) de assédio/violência sexual nas pesquisas`,
+        );
+      }
+      if (item.moralSignals > 0) {
+        rankingReasons.push(
+          `${item.moralSignals} relato(s) de assédio/violência moral nas pesquisas`,
+        );
+      }
+      if (item.domesticSignals?.yes12m > 0) {
+        rankingReasons.push(
+          `${item.domesticSignals.yes12m} relato(s) de violência doméstica em 12 meses`,
+        );
+      }
+      if (item.domesticSignals?.militaryAuthor > 0) {
+        rankingReasons.push(
+          `${item.domesticSignals.militaryAuthor} relato(s) com autor militar`,
+        );
+      }
+      if (item.complaints?.openCases > 0) {
+        rankingReasons.push(`${item.complaints.openCases} denúncia(s) formal(is) aberta(s)`);
+      }
+      if (item.underreport?.percent >= 40) {
+        rankingReasons.push(
+          `subnotificação estimada em ${Number(item.underreport.percent).toFixed(1)}%`,
+        );
+      }
+      if ((item.presence?.missions ?? 0) + (item.presence?.completedActivities ?? 0) === 0) {
+        rankingReasons.push('presença operacional baixa ou ausente');
+      }
 
       return {
         ...item,
@@ -1060,6 +1317,8 @@ export class StrategicService {
         presenceScore,
         priorityBand,
         recommendedFocus,
+        pressureScore: riskScore - presenceScore,
+        rankingReasons,
       };
     });
 
@@ -1074,7 +1333,6 @@ export class StrategicService {
     const operationalPressure = ufRows
       .map((item: any) => ({
         ...item,
-        pressureScore: item.riskScore - item.presenceScore,
       }))
       .sort((a: any, b: any) => b.pressureScore - a.pressureScore)
       .slice(0, 10);

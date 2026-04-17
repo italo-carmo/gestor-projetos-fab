@@ -14,7 +14,6 @@ import {
   List,
   ListItem,
   ListItemText,
-  LinearProgress,
   Stack,
   Table,
   TableBody,
@@ -163,6 +162,47 @@ function buildOmReason(item: any) {
   return reasons.slice(0, 3).join(" • ") || "Risco composto por denúncias, cobertura e sinais BI.";
 }
 
+function subnotificationColor(percent: number) {
+  if (percent >= 60) return "error";
+  if (percent >= 35) return "warning";
+  if (percent > 0) return "info";
+  return "success";
+}
+
+function formatPercent(value: number | null | undefined) {
+  return `${Number(value ?? 0).toFixed(1)}%`;
+}
+
+function SignalsPreview({ item }: { item: any }) {
+  const sexual = Number(item?.sexualSignals ?? 0);
+  const moral = Number(item?.moralSignals ?? 0);
+  const domestic = Number(item?.domesticSignals?.yes12m ?? 0);
+  const military = Number(item?.domesticSignals?.militaryAuthor ?? 0);
+  const chips = [
+    sexual > 0 ? { label: `Sexual ${sexual}`, color: "#AD1457" } : null,
+    moral > 0 ? { label: `Moral ${moral}`, color: "#6A1B9A" } : null,
+    domestic > 0 ? { label: `VD 12m ${domestic}`, color: "#1565C0" } : null,
+    military > 0 ? { label: `Autor militar ${military}`, color: "#2E7D32" } : null,
+  ].filter(Boolean) as Array<{ label: string; color: string }>;
+
+  if (!chips.length) {
+    return <Typography variant="body2" color="text.secondary">Sem sinal relevante</Typography>;
+  }
+
+  return (
+    <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+      {chips.map((chip) => (
+        <Chip
+          key={chip.label}
+          size="small"
+          label={chip.label}
+          sx={{ bgcolor: chip.color, color: "#fff" }}
+        />
+      ))}
+    </Stack>
+  );
+}
+
 function MeaningBlock({
   title,
   meaning,
@@ -259,18 +299,23 @@ export function ComgepStrategicTab() {
     | "stalled"
     | "criticalUfs"
     | "confidence"
-    | "pressure"
+    | "priorityUf"
+    | "riskOm"
   >(null);
-  const [selectedPressureUf, setSelectedPressureUf] = useState<any | null>(null);
+  const [selectedPriorityUf, setSelectedPriorityUf] = useState<any | null>(null);
+  const [selectedRiskOm, setSelectedRiskOm] = useState<any | null>(null);
 
   const room = roomQuery.data;
   const summary = room?.summary ?? {};
   const dataConfidence = room?.dataConfidence ?? {};
-  const watchlists = room?.watchlists ?? {};
   const recommendations = recommendationsQuery.data?.items ?? [];
   const confidencePercent = Number(dataConfidence.supportedCoveragePercent ?? 0);
   const omRiskIndex = Array.isArray(room?.details?.omRiskIndex)
     ? room.details.omRiskIndex
+    : [];
+  const priorityUfs = Array.isArray(room?.details?.ufMatrix) ? room.details.ufMatrix : [];
+  const topRiskOms = Array.isArray(room?.watchlists?.topRiskOms)
+    ? room.watchlists.topRiskOms
     : [];
   const retaliationOms = useMemo(
     () =>
@@ -401,219 +446,134 @@ export function ComgepStrategicTab() {
       </Grid>
 
       <SectionCard
-        title="Confiança da base executiva"
-        subtitle="Leitura rápida da sustentação analítica disponível para cruzar denúncias, cobertura CPCA e presença operacional."
+        title="UFs com atuação prioritária"
+        subtitle="Panorama executivo por UF, cruzando pesquisas normalizadas, denúncias formais, cobertura CPCA, subnotificação estimada e presença operacional. Clique para detalhar."
       >
-        <Stack spacing={1.25}>
-          <Stack
-            direction={{ xs: "column", sm: "row" }}
-            spacing={1}
-            justifyContent="space-between"
-            alignItems={{ sm: "center" }}
-          >
-            <Typography variant="body2" color="text.secondary">
-              Cobertura útil da normalização BI
-            </Typography>
-            <Chip
-              label={`${confidencePercent.toFixed(1)}%`}
-              size="small"
-              color={confidencePercent >= 70 ? "success" : confidencePercent >= 50 ? "warning" : "error"}
-            />
-          </Stack>
-          <LinearProgress
-            variant="determinate"
-            value={Math.min(100, Math.max(0, confidencePercent))}
-            sx={{
-              height: 10,
-              borderRadius: 999,
-              bgcolor: "#E8EEF6",
-              "& .MuiLinearProgress-bar": { bgcolor: "#1A3C6E" },
-            }}
-          />
-          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-            <Chip label={`Registros BI: ${dataConfidence.totalRecords ?? 0}`} size="small" variant="outlined" />
-            <Chip label={`Vínculo direto: ${dataConfidence.matched ?? 0}`} size="small" variant="outlined" />
-            <Chip label={`Só UF: ${dataConfidence.ufOnly ?? 0}`} size="small" variant="outlined" />
-            <Chip label={`Sem vínculo: ${dataConfidence.notFound ?? 0}`} size="small" variant="outlined" />
-          </Stack>
-          <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.65 }}>
-            Quanto maior esse indicador, mais confiável fica o cruzamento entre
-            denúncias por OM, cobertura CPCA e sinais operacionais por UF.
-          </Typography>
-        </Stack>
+        <TableContainer>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell><strong>UF</strong></TableCell>
+                <TableCell><strong>Faixa</strong></TableCell>
+                <TableCell><strong>Sinais de pesquisa</strong></TableCell>
+                <TableCell align="right"><strong>Formais</strong></TableCell>
+                <TableCell align="right"><strong>Subnotificação</strong></TableCell>
+                <TableCell align="right"><strong>Presença</strong></TableCell>
+                <TableCell><strong>Ação imediata</strong></TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {priorityUfs.slice(0, 12).map((item: any) => (
+                <TableRow
+                  key={item.uf}
+                  hover
+                  onClick={() => {
+                    setSelectedPriorityUf(item);
+                    setDetailModal("priorityUf");
+                  }}
+                  sx={{ cursor: "pointer" }}
+                >
+                  <TableCell>{item.uf}</TableCell>
+                  <TableCell>
+                    <Chip
+                      size="small"
+                      color={priorityChipColor(item.priorityBand)}
+                      label={`${item.priorityBand} • Pressão ${item.pressureScore ?? 0}`}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <SignalsPreview item={item} />
+                  </TableCell>
+                  <TableCell align="right">
+                    {item.complaints?.openCases ?? 0} / {item.complaints?.totalCases ?? 0}
+                  </TableCell>
+                  <TableCell align="right">
+                    <Chip
+                      size="small"
+                      color={subnotificationColor(Number(item?.underreport?.percent ?? 0))}
+                      label={formatPercent(item?.underreport?.percent)}
+                    />
+                  </TableCell>
+                  <TableCell align="right">
+                    {Number(item?.presenceScore ?? 0)}
+                  </TableCell>
+                  <TableCell>{item.recommendedFocus ?? "—"}</TableCell>
+                </TableRow>
+              ))}
+              {!priorityUfs.length && (
+                <TableRow>
+                  <TableCell colSpan={7}>
+                    <Typography variant="body2" color="text.secondary">
+                      Nenhuma UF priorizada no recorte atual.
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
       </SectionCard>
 
-      <Grid container spacing={2}>
-        <Grid size={{ xs: 12, xl: 7 }}>
-          <SectionCard
-            title="UFs prioritárias"
-            subtitle="Estados que exigem atenção do gestor por combinação de risco, cobertura e presença operacional."
-          >
-            <TableContainer>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell><strong>UF</strong></TableCell>
-                    <TableCell><strong>Faixa</strong></TableCell>
-                    <TableCell align="right"><strong>Risco</strong></TableCell>
-                    <TableCell align="right"><strong>Cobertura</strong></TableCell>
-                    <TableCell align="right"><strong>Presença</strong></TableCell>
-                    <TableCell><strong>Foco recomendado</strong></TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {(watchlists.criticalUfs ?? []).slice(0, 8).map((item: any) => (
-                    <TableRow key={item.uf} hover>
-                      <TableCell>{item.uf}</TableCell>
-                      <TableCell>
-                        <Chip
-                          size="small"
-                          color={priorityChipColor(item.priorityBand)}
-                          label={item.priorityBand}
-                        />
-                      </TableCell>
-                      <TableCell align="right">{item.riskScore ?? 0}</TableCell>
-                      <TableCell align="right">{Number(item.coveragePercent ?? 0).toFixed(1)}%</TableCell>
-                      <TableCell align="right">{item.presenceScore ?? 0}</TableCell>
-                      <TableCell>{item.recommendedFocus ?? "—"}</TableCell>
-                    </TableRow>
-                  ))}
-                  {!(watchlists.criticalUfs ?? []).length && (
-                    <TableRow>
-                      <TableCell colSpan={6}>
-                        <Typography variant="body2" color="text.secondary">
-                          Nenhuma UF crítica no recorte atual.
-                        </Typography>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </SectionCard>
-        </Grid>
-        <Grid size={{ xs: 12, xl: 5 }}>
-          <SectionCard
-            title="Pressão operacional"
-            subtitle="Estados em que o risco está mais alto do que a presença institucional disponível."
-          >
-            <Stack spacing={1}>
-              {(watchlists.operationalPressure ?? []).slice(0, 6).map((item: any) => (
-                <Card
-                  key={item.uf}
-                  variant="outlined"
+      <SectionCard
+        title="OMs de maior risco"
+        subtitle="Ranking de OMs com maior urgência de atuação, combinando assédio moral/sexual nas pesquisas, violência doméstica em 12 meses, formalização, subnotificação estimada e governança CPCA. Clique para detalhar."
+      >
+        <TableContainer>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell><strong>OM</strong></TableCell>
+                <TableCell><strong>UF</strong></TableCell>
+                <TableCell align="right"><strong>Score</strong></TableCell>
+                <TableCell><strong>Sinais de pesquisa</strong></TableCell>
+                <TableCell align="right"><strong>Formais</strong></TableCell>
+                <TableCell align="right"><strong>Subnotificação</strong></TableCell>
+                <TableCell><strong>Ação imediata</strong></TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {topRiskOms.slice(0, 12).map((item: any) => (
+                <TableRow
+                  key={item.id}
+                  hover
                   onClick={() => {
-                    setSelectedPressureUf(item);
-                    setDetailModal("pressure");
+                    setSelectedRiskOm(item);
+                    setDetailModal("riskOm");
                   }}
-                  sx={{
-                    borderRadius: 2.5,
-                    bgcolor: "#FAFBFD",
-                    cursor: "pointer",
-                    transition: "box-shadow 0.2s, transform 0.15s",
-                    "&:hover": { boxShadow: 3, transform: "translateY(-1px)" },
-                  }}
+                  sx={{ cursor: "pointer" }}
                 >
-                  <CardContent sx={{ py: 1.4, "&:last-child": { pb: 1.4 } }}>
-                    <Stack
-                      direction="row"
-                      justifyContent="space-between"
-                      alignItems="flex-start"
-                      spacing={1}
-                    >
-                      <Box>
-                        <Typography variant="subtitle2" fontWeight={800}>
-                          {item.uf}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          {item.recommendedFocus ?? "Monitorar cenário."}
-                        </Typography>
-                      </Box>
-                      <Chip
-                        size="small"
-                        color={item.pressureScore >= 30 ? "error" : item.pressureScore >= 15 ? "warning" : "success"}
-                        label={`Pressão ${item.pressureScore ?? 0}`}
-                      />
-                    </Stack>
-                    <Stack direction="row" spacing={1} sx={{ mt: 1 }} flexWrap="wrap" useFlexGap>
-                      <Chip size="small" variant="outlined" label={`Risco ${item.riskScore ?? 0}`} />
-                      <Chip size="small" variant="outlined" label={`Presença ${item.presenceScore ?? 0}`} />
-                      <Chip
-                        size="small"
-                        variant="outlined"
-                        label={`Cobertura ${Number(item.coveragePercent ?? 0).toFixed(1)}%`}
-                      />
-                    </Stack>
-                  </CardContent>
-                </Card>
+                  <TableCell>{item.code || item.name || "—"}</TableCell>
+                  <TableCell>{item.uf || "—"}</TableCell>
+                  <TableCell align="right">{item.riskScore ?? 0}</TableCell>
+                  <TableCell>
+                    <SignalsPreview item={item} />
+                  </TableCell>
+                  <TableCell align="right">
+                    {item.complaints?.openCases ?? 0} / {item.complaints?.totalCases ?? 0}
+                  </TableCell>
+                  <TableCell align="right">
+                    <Chip
+                      size="small"
+                      color={subnotificationColor(Number(item?.underreport?.percent ?? 0))}
+                      label={formatPercent(item?.underreport?.percent)}
+                    />
+                  </TableCell>
+                  <TableCell>{item.recommendedAction ?? buildOmReason(item)}</TableCell>
+                </TableRow>
               ))}
-            </Stack>
-          </SectionCard>
-        </Grid>
-      </Grid>
-
-      <Grid container spacing={2}>
-        <Grid size={{ xs: 12, xl: 6 }}>
-          <SectionCard
-            title="OMs de maior risco"
-            subtitle="Risco composto por denúncias abertas, retaliação, atraso de tratamento, cobertura CPCA e sinais BI."
-          >
-            <TableContainer>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell><strong>OM</strong></TableCell>
-                    <TableCell><strong>UF</strong></TableCell>
-                    <TableCell align="right"><strong>Score</strong></TableCell>
-                    <TableCell><strong>Cobertura</strong></TableCell>
-                    <TableCell><strong>Motivo</strong></TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {(watchlists.topRiskOms ?? []).slice(0, 8).map((item: any) => (
-                    <TableRow key={item.id} hover>
-                      <TableCell>{item.code || item.name || "—"}</TableCell>
-                      <TableCell>{item.uf || "—"}</TableCell>
-                      <TableCell align="right">{item.riskScore ?? 0}</TableCell>
-                      <TableCell>{formatCoverageType(item.coverageType)}</TableCell>
-                      <TableCell>{buildOmReason(item)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </SectionCard>
-        </Grid>
-        <Grid size={{ xs: 12, xl: 6 }}>
-          <SectionCard
-            title="Gaps de cobertura CPCA"
-            subtitle="OMs que permanecem sem CPCA próprio e sem cobertura por outra comissão."
-          >
-            <TableContainer>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell><strong>OM</strong></TableCell>
-                    <TableCell><strong>UF</strong></TableCell>
-                    <TableCell align="right"><strong>Score</strong></TableCell>
-                    <TableCell><strong>Motivo</strong></TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {(watchlists.coverageGaps ?? []).slice(0, 8).map((item: any) => (
-                    <TableRow key={item.id} hover>
-                      <TableCell>{item.code || item.name || "—"}</TableCell>
-                      <TableCell>{item.uf || "—"}</TableCell>
-                      <TableCell align="right">{item.riskScore ?? 0}</TableCell>
-                      <TableCell>{buildOmReason(item)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </SectionCard>
-        </Grid>
-      </Grid>
+              {!topRiskOms.length && (
+                <TableRow>
+                  <TableCell colSpan={7}>
+                    <Typography variant="body2" color="text.secondary">
+                      Nenhuma OM em destaque no recorte atual.
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </SectionCard>
 
       <SectionCard
         title="Recomendações registradas"
@@ -780,22 +740,38 @@ export function ComgepStrategicTab() {
                 <TableRow>
                   <TableCell><strong>UF</strong></TableCell>
                   <TableCell><strong>Faixa</strong></TableCell>
-                  <TableCell align="right"><strong>Risco</strong></TableCell>
-                  <TableCell align="right"><strong>Cobertura</strong></TableCell>
-                  <TableCell align="right"><strong>Presença</strong></TableCell>
+                  <TableCell><strong>Sinais de pesquisa</strong></TableCell>
+                  <TableCell align="right"><strong>Formais</strong></TableCell>
+                  <TableCell align="right"><strong>Subnotificação</strong></TableCell>
                   <TableCell><strong>Foco recomendado</strong></TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {(watchlists.criticalUfs ?? []).map((item: any) => (
-                  <TableRow key={item.uf}>
+                {priorityUfs.slice(0, 12).map((item: any) => (
+                  <TableRow
+                    key={item.uf}
+                    hover
+                    onClick={() => {
+                      setSelectedPriorityUf(item);
+                      setDetailModal("priorityUf");
+                    }}
+                    sx={{ cursor: "pointer" }}
+                  >
                     <TableCell>{item.uf}</TableCell>
                     <TableCell>
                       <Chip size="small" color={priorityChipColor(item.priorityBand)} label={item.priorityBand} />
                     </TableCell>
-                    <TableCell align="right">{item.riskScore ?? 0}</TableCell>
-                    <TableCell align="right">{Number(item.coveragePercent ?? 0).toFixed(1)}%</TableCell>
-                    <TableCell align="right">{item.presenceScore ?? 0}</TableCell>
+                    <TableCell><SignalsPreview item={item} /></TableCell>
+                    <TableCell align="right">
+                      {item.complaints?.openCases ?? 0} / {item.complaints?.totalCases ?? 0}
+                    </TableCell>
+                    <TableCell align="right">
+                      <Chip
+                        size="small"
+                        color={subnotificationColor(Number(item?.underreport?.percent ?? 0))}
+                        label={formatPercent(item?.underreport?.percent)}
+                      />
+                    </TableCell>
                     <TableCell>{item.recommendedFocus ?? "—"}</TableCell>
                   </TableRow>
                 ))}
@@ -840,42 +816,68 @@ export function ComgepStrategicTab() {
       </ComgepDetailModal>
 
       <ComgepDetailModal
-        open={detailModal === "pressure"}
-        title={`Detalhamento — Pressão operacional${selectedPressureUf?.uf ? ` (${selectedPressureUf.uf})` : ""}`}
+        open={detailModal === "priorityUf"}
+        title={`Detalhamento — UF prioritária${selectedPriorityUf?.uf ? ` (${selectedPriorityUf.uf})` : ""}`}
         onClose={() => {
           setDetailModal(null);
-          setSelectedPressureUf(null);
+          setSelectedPriorityUf(null);
         }}
       >
         <Stack spacing={1.25}>
           <MeaningBlock
             title="O que isso significa"
-            meaning="Pressão operacional compara o tamanho do risco com a presença institucional disponível na UF. Quando a pressão sobe, o sistema entende que o risco está avançando mais rápido do que a capacidade de resposta operacional ou de governança."
-            source="Fonte: Sala COMGEP, cruzando risco composto, cobertura CPCA e presença operacional da UF."
+            meaning="Esta UF aparece como prioritária porque concentra sinais de pesquisa, denúncias formais e capacidade de resposta abaixo do necessário. O ranking combina assédio moral/sexual, violência doméstica em 12 meses, subnotificação estimada, cobertura CPCA e presença operacional."
+            source="Fonte: cruzamento entre pesquisas BI normalizadas, denúncias formais CPCA e registros operacionais de missão e atividade."
           />
-          <ModalRow label="UF" value={selectedPressureUf?.uf ?? "—"} />
-          <ModalRow label="Pressão" value={selectedPressureUf?.pressureScore ?? 0} color="#D32F2F" />
-          <ModalRow label="Risco" value={selectedPressureUf?.riskScore ?? 0} />
-          <ModalRow label="Presença" value={selectedPressureUf?.presenceScore ?? 0} />
+          <ModalRow label="UF" value={selectedPriorityUf?.uf ?? "—"} />
+          <ModalRow label="Faixa" value={selectedPriorityUf?.priorityBand ?? "—"} color="#ED6C02" />
+          <ModalRow label="Risco" value={selectedPriorityUf?.riskScore ?? 0} />
+          <ModalRow label="Pressão operacional" value={selectedPriorityUf?.pressureScore ?? 0} color="#D32F2F" />
+          <ModalRow label="Presença" value={selectedPriorityUf?.presenceScore ?? 0} />
           <ModalRow
             label="Cobertura CPCA"
-            value={`${Number(selectedPressureUf?.coveragePercent ?? 0).toFixed(1)}%`}
+            value={`${Number(selectedPriorityUf?.coveragePercent ?? 0).toFixed(1)}%`}
           />
+          <ModalRow label="Pesquisa institucional" value={formatPercent(selectedPriorityUf?.surveyRate)} />
+          <ModalRow label="Violência doméstica 12 meses" value={formatPercent(selectedPriorityUf?.domesticRate)} />
+          <ModalRow label="Assédio/violência sexual" value={selectedPriorityUf?.sexualSignals ?? 0} />
+          <ModalRow label="Assédio/violência moral" value={selectedPriorityUf?.moralSignals ?? 0} />
+          <ModalRow label="Autor militar" value={selectedPriorityUf?.domesticSignals?.militaryAuthor ?? 0} />
+          <ModalRow
+            label="Subnotificação estimada"
+            value={formatPercent(selectedPriorityUf?.underreport?.percent)}
+            color="#6A1B9A"
+          />
+          <ModalRow label="Denúncias formais" value={selectedPriorityUf?.complaints?.totalCases ?? 0} />
+          <ModalRow label="Denúncias abertas" value={selectedPriorityUf?.complaints?.openCases ?? 0} />
           <ModalRow
             label="Missões na UF"
-            value={selectedPressureUf?.presence?.missions ?? 0}
+            value={selectedPriorityUf?.presence?.missions ?? 0}
           />
           <ModalRow
             label="Atividades concluídas"
-            value={selectedPressureUf?.presence?.completedActivities ?? 0}
+            value={selectedPriorityUf?.presence?.completedActivities ?? 0}
           />
           <ModalRow
             label="Relatórios assinados"
-            value={selectedPressureUf?.presence?.signedReports ?? 0}
+            value={selectedPriorityUf?.presence?.signedReports ?? 0}
           />
           <Typography variant="body2" color="text.secondary">
-            {selectedPressureUf?.recommendedFocus ?? "Monitorar cenário."}
+            {selectedPriorityUf?.recommendedFocus ?? "Monitorar cenário."}
           </Typography>
+          {Array.isArray(selectedPriorityUf?.rankingReasons) &&
+          selectedPriorityUf.rankingReasons.length > 0 ? (
+            <>
+              <Typography variant="subtitle2">Por que esta UF aparece aqui</Typography>
+              <List disablePadding sx={{ border: "1px solid #E6ECF5", borderRadius: 2 }}>
+                {selectedPriorityUf.rankingReasons.map((reason: string, index: number) => (
+                  <ListItem key={`${reason}-${index}`} divider={index < selectedPriorityUf.rankingReasons.length - 1}>
+                    <ListItemText primary={reason} />
+                  </ListItem>
+                ))}
+              </List>
+            </>
+          ) : null}
           <Typography variant="subtitle2">OMs que mais puxam a pressão desta UF</Typography>
           <TableContainer>
             <Table size="small">
@@ -889,8 +891,16 @@ export function ComgepStrategicTab() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {(selectedPressureUf?.oms ?? []).slice(0, 10).map((item: any) => (
-                  <TableRow key={item.id}>
+                {(selectedPriorityUf?.oms ?? []).slice(0, 10).map((item: any) => (
+                  <TableRow
+                    key={item.id}
+                    hover
+                    onClick={() => {
+                      setSelectedRiskOm(item);
+                      setDetailModal("riskOm");
+                    }}
+                    sx={{ cursor: "pointer" }}
+                  >
                     <TableCell>{item.code || item.name || "—"}</TableCell>
                     <TableCell align="right">{item.riskScore ?? 0}</TableCell>
                     <TableCell>{formatCoverageType(item.coverageType)}</TableCell>
@@ -898,7 +908,7 @@ export function ComgepStrategicTab() {
                     <TableCell>{buildOmReason(item)}</TableCell>
                   </TableRow>
                 ))}
-                {!(selectedPressureUf?.oms ?? []).length && (
+                {!(selectedPriorityUf?.oms ?? []).length && (
                   <TableRow>
                     <TableCell colSpan={5}>
                       <Typography variant="body2" color="text.secondary">
@@ -910,6 +920,77 @@ export function ComgepStrategicTab() {
               </TableBody>
             </Table>
           </TableContainer>
+        </Stack>
+      </ComgepDetailModal>
+
+      <ComgepDetailModal
+        open={detailModal === "riskOm"}
+        title={`Detalhamento — OM de maior risco${selectedRiskOm?.code ? ` (${selectedRiskOm.code})` : ""}`}
+        onClose={() => {
+          setDetailModal(null);
+          setSelectedRiskOm(null);
+        }}
+      >
+        <Stack spacing={1.25}>
+          <MeaningBlock
+            title="O que isso significa"
+            meaning="Esta OM aparece no ranking porque a combinação entre pesquisas, denúncias formais, cobertura CPCA e presença operacional indica necessidade de atuação prioritária. O objetivo aqui não é só mostrar volume, mas explicar por que a comissão deve agir nesta OM."
+            source="Fonte: cruzamento entre pesquisas BI normalizadas por OM, denúncias formais CPCA e presença operacional recente na UF."
+          />
+          <ModalRow label="OM" value={selectedRiskOm?.code ?? selectedRiskOm?.name ?? "—"} />
+          <ModalRow label="UF" value={selectedRiskOm?.uf ?? "—"} />
+          <ModalRow label="Score de risco" value={selectedRiskOm?.riskScore ?? 0} color="#D32F2F" />
+          <ModalRow label="Cobertura CPCA" value={formatCoverageType(selectedRiskOm?.coverageType)} />
+          <ModalRow label="Pesquisa institucional" value={formatPercent(selectedRiskOm?.surveyRate)} />
+          <ModalRow label="Violência doméstica 12 meses" value={formatPercent(selectedRiskOm?.domesticRate)} />
+          <ModalRow label="Assédio/violência sexual" value={selectedRiskOm?.sexualSignals ?? 0} />
+          <ModalRow label="Assédio/violência moral" value={selectedRiskOm?.moralSignals ?? 0} />
+          <ModalRow label="Autor militar" value={selectedRiskOm?.domesticSignals?.militaryAuthor ?? 0} />
+          <ModalRow
+            label="Subnotificação estimada"
+            value={formatPercent(selectedRiskOm?.underreport?.percent)}
+            color="#6A1B9A"
+          />
+          <ModalRow label="Denúncias formais" value={selectedRiskOm?.complaints?.totalCases ?? 0} />
+          <ModalRow label="Denúncias abertas" value={selectedRiskOm?.complaints?.openCases ?? 0} />
+          <ModalRow label="Risco de retaliação" value={selectedRiskOm?.complaints?.retaliationCases ?? 0} />
+          <ModalRow label="Casos além do prazo" value={selectedRiskOm?.complaints?.stalledCases ?? 0} />
+          <ModalRow label="Missões na UF" value={selectedRiskOm?.operationalPresence?.missions ?? 0} />
+          <ModalRow
+            label="Atividades concluídas na UF"
+            value={selectedRiskOm?.operationalPresence?.completedActivities ?? 0}
+          />
+          <ModalRow
+            label="Relatórios assinados na UF"
+            value={selectedRiskOm?.operationalPresence?.signedReports ?? 0}
+          />
+          <Typography variant="body2" color="text.secondary">
+            {selectedRiskOm?.recommendedAction ?? "Monitorar cenário e manter presença institucional."}
+          </Typography>
+          {Array.isArray(selectedRiskOm?.rankingReasons) && selectedRiskOm.rankingReasons.length > 0 ? (
+            <>
+              <Typography variant="subtitle2">Por que esta OM ocupa essa posição</Typography>
+              <List disablePadding sx={{ border: "1px solid #E6ECF5", borderRadius: 2 }}>
+                {selectedRiskOm.rankingReasons.map((reason: string, index: number) => (
+                  <ListItem key={`${reason}-${index}`} divider={index < selectedRiskOm.rankingReasons.length - 1}>
+                    <ListItemText primary={reason} />
+                  </ListItem>
+                ))}
+              </List>
+            </>
+          ) : null}
+          {selectedRiskOm?.link ? (
+            <Button
+              component={RouterLink}
+              to={selectedRiskOm.link}
+              target="_blank"
+              rel="noreferrer"
+              variant="outlined"
+              sx={{ alignSelf: "flex-start" }}
+            >
+              Abrir casos formais da OM
+            </Button>
+          ) : null}
         </Stack>
       </ComgepDetailModal>
     </Stack>
