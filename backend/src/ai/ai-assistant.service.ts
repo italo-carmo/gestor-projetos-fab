@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { ActivityScope, LocalityCatalogType } from '@prisma/client';
@@ -11,6 +12,11 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { ActivitiesService } from '../activities/activities.service';
+import {
+  LitellmService,
+  looksLikeInternalReasoning,
+  stripReasoningPrefix,
+} from '../llm/litellm.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { RbacUser } from '../rbac/rbac.types';
 import { MissionsService } from '../missions/missions.service';
@@ -82,6 +88,31 @@ type AssistantScheduleDraftItem = {
   participants: string;
   sourceFileIds: string[];
   sourceFileNames: string[];
+};
+
+type AssistantScheduleMissingFieldKey =
+  | 'title'
+  | 'location'
+  | 'responsible'
+  | 'participants';
+
+type AssistantScheduleMissingField = {
+  itemId: string;
+  itemNumber: number;
+  itemIndex: number;
+  fieldKey: AssistantScheduleMissingFieldKey;
+  fieldLabel: string;
+};
+
+type AssistantScheduleLlmDraftItem = {
+  title?: string | null;
+  startAt?: string | null;
+  durationMinutes?: number | null;
+  location?: string | null;
+  responsible?: string | null;
+  participants?: string | null;
+  confidence?: number | null;
+  notes?: string[] | null;
 };
 
 type AssistantWorkflow = {
@@ -194,6 +225,7 @@ const INTENT_META: Record<
 
 @Injectable()
 export class AiAssistantService {
+  private readonly logger = new Logger(AiAssistantService.name);
   private readonly sessionTtlMs = 4 * 60 * 60 * 1000;
   private readonly sessions = new Map<string, AssistantSession>();
 
@@ -202,6 +234,7 @@ export class AiAssistantService {
     private readonly missions: MissionsService,
     private readonly activities: ActivitiesService,
     private readonly tasks: TasksService,
+    private readonly litellm: LitellmService,
   ) {}
 
   listQuickActions() {
@@ -2267,7 +2300,7 @@ export class AiAssistantService {
 
     for (const file of files) {
       const extraction = await this.extractTextFromScheduleFile(file);
-      const itemDrafts =
+      const heuristicDrafts =
         extraction.method === 'text'
           ? this.parseStructuredScheduleDraftsFromText(
               extraction.text,
@@ -2277,6 +2310,16 @@ export class AiAssistantService {
               extraction.text,
               missionContext.fallbackLocation,
             );
+      const itemDrafts = await this.refineScheduleDraftsWithLlm(
+        {
+          fileName: file.originalname || 'arquivo.pdf',
+          extractionMethod: extraction.method,
+          extractedText: extraction.text,
+          heuristicDrafts,
+          missionContext,
+        },
+        user,
+      );
       const sourceFile: AssistantScheduleSourceFile = {
         id: randomUUID(),
         name: file.originalname || 'arquivo.pdf',
@@ -2314,6 +2357,8 @@ export class AiAssistantService {
     const localityName = String(mission?.locality?.name ?? '').trim();
     const localityCode = String(mission?.locality?.code ?? '').trim();
     return {
+      missionTitle: String(mission?.title ?? '').trim(),
+      missionScope: String(mission?.scope ?? 'SMIF').trim(),
       fallbackLocation:
         localityName || localityCode
           ? [localityCode, localityName].filter(Boolean).join(' - ')
@@ -2370,6 +2415,1014 @@ export class AiAssistantService {
     }
   }
 
+  private async refineScheduleDraftsWithLlm(
+    params: {
+      fileName: string;
+      extractionMethod: 'text' | 'ocr';
+      extractedText: string;
+      heuristicDrafts: Array<
+        Omit<
+          AssistantScheduleDraftItem,
+          'id' | 'sourceFileIds' | 'sourceFileNames'
+        >
+      >;
+      missionContext: {
+        missionTitle?: string;
+        missionScope?: string;
+        fallbackLocation?: string;
+      };
+    },
+    _user?: RbacUser,
+  ): Promise<
+    Array<
+      Omit<
+        AssistantScheduleDraftItem,
+        'id' | 'sourceFileIds' | 'sourceFileNames'
+      >
+    >
+  > {
+    const fallbackItems = params.heuristicDrafts;
+    if (!this.litellm.isConfigured()) {
+      return fallbackItems;
+    }
+    const pages = this.buildScheduleLlmPages(
+      params.extractedText,
+      params.extractionMethod,
+    );
+    if (!pages.length) {
+      return fallbackItems;
+    }
+
+    const refinedItems: Array<
+      Omit<
+        AssistantScheduleDraftItem,
+        'id' | 'sourceFileIds' | 'sourceFileNames'
+      >
+    > = [];
+
+    for (const page of pages) {
+      const pageFallbackItems = fallbackItems.filter((item) =>
+        String(item.startAt ?? '').startsWith(`${page.isoDate}T`),
+      );
+      const refinedPageItems = await this.extractSchedulePageItemsWithLlm({
+        fileName: params.fileName,
+        extractionMethod: params.extractionMethod,
+        missionTitle: params.missionContext.missionTitle || '-',
+        missionScope: params.missionContext.missionScope || '-',
+        page,
+        fallbackItems: pageFallbackItems,
+      });
+      const selectedPageItems = this.selectSchedulePageItems({
+        extractionMethod: params.extractionMethod,
+        refinedItems: refinedPageItems,
+        fallbackItems: pageFallbackItems,
+      });
+      refinedItems.push(
+        ...this.reconcileSelectedScheduleItemsWithFallback(
+          selectedPageItems,
+          pageFallbackItems,
+        ),
+      );
+    }
+
+    const deduplicated = this.deduplicateScheduleDraftItems(
+      refinedItems.map((item) => ({
+        ...item,
+        id: randomUUID(),
+        sourceFileIds: [],
+        sourceFileNames: [],
+      })),
+    ).map(({ id, sourceFileIds, sourceFileNames, ...item }) => item);
+
+    if (!deduplicated.length) {
+      this.logger.warn(
+        `Falha ao refinar cronograma via LLM (${params.fileName}); mantendo parser local. Motivo: SCHEDULE_LLM_EMPTY_RESULT`,
+      );
+      return fallbackItems;
+    }
+    return deduplicated;
+  }
+
+  private selectSchedulePageItems(params: {
+    extractionMethod: 'text' | 'ocr';
+    refinedItems: Array<
+      Omit<
+        AssistantScheduleDraftItem,
+        'id' | 'sourceFileIds' | 'sourceFileNames'
+      >
+    >;
+    fallbackItems: Array<
+      Omit<
+        AssistantScheduleDraftItem,
+        'id' | 'sourceFileIds' | 'sourceFileNames'
+      >
+    >;
+  }) {
+    if (!params.refinedItems.length) {
+      return params.fallbackItems;
+    }
+    if (params.extractionMethod !== 'ocr') {
+      return params.refinedItems;
+    }
+    const refinedScore = this.scoreScheduleDraftItems(params.refinedItems);
+    const fallbackScore = this.scoreScheduleDraftItems(params.fallbackItems);
+    if (
+      params.refinedItems.length < Math.max(1, params.fallbackItems.length - 1) ||
+      refinedScore < fallbackScore
+    ) {
+      return params.fallbackItems;
+    }
+    return params.refinedItems;
+  }
+
+  private scoreScheduleDraftItems(
+    items: Array<
+      Omit<
+        AssistantScheduleDraftItem,
+        'id' | 'sourceFileIds' | 'sourceFileNames'
+      >
+    >,
+  ) {
+    let score = 0;
+    for (const item of items) {
+      const normalizedTitle = this.normalizeFreeText(item.title);
+      if (
+        normalizedTitle &&
+        normalizedTitle !== 'atividade a confirmar' &&
+        !/^[0-9-]+$/.test(normalizedTitle)
+      ) {
+        score += 3;
+      } else {
+        score -= 3;
+      }
+      if (String(item.location ?? '').trim() && !this.isAmbiguousScheduleLocation(item.location)) {
+        score += 1;
+      }
+      if (String(item.responsible ?? '').trim()) {
+        score += 1;
+      }
+      if (String(item.participants ?? '').trim()) {
+        score += 1;
+      }
+    }
+    return score;
+  }
+
+  private reconcileSelectedScheduleItemsWithFallback(
+    items: Array<
+      Omit<
+        AssistantScheduleDraftItem,
+        'id' | 'sourceFileIds' | 'sourceFileNames'
+      >
+    >,
+    fallbackItems: Array<
+      Omit<
+        AssistantScheduleDraftItem,
+        'id' | 'sourceFileIds' | 'sourceFileNames'
+      >
+    >,
+  ) {
+    const reconciled = items.map((item, index) => {
+      const fallback = fallbackItems[index] ?? null;
+      const title = this.reconcileScheduleTitleWithFallback(
+        item.title,
+        fallback?.title ?? '',
+      );
+      let location = this.normalizeScheduleLocationText(item.location);
+      const fallbackLocation = this.normalizeScheduleLocationText(
+        fallback?.location ?? '',
+      );
+      if (
+        (!location || this.isAmbiguousScheduleLocation(location)) &&
+        fallbackLocation &&
+        !this.isAmbiguousScheduleLocation(fallbackLocation)
+      ) {
+        location = fallbackLocation;
+      }
+      return {
+        ...item,
+        title,
+        location: this.defaultScheduleLocationForTitle(title, location),
+      };
+    });
+    const existingKeys = new Set(
+      reconciled.map(
+        (item) =>
+          `${item.startAt}|${this.normalizeFreeText(String(item.title ?? ''))}`,
+      ),
+    );
+    for (const fallback of fallbackItems) {
+      const fallbackKey = `${fallback.startAt}|${this.normalizeFreeText(String(fallback.title ?? ''))}`;
+      if (!existingKeys.has(fallbackKey)) {
+        reconciled.push({
+          ...fallback,
+          title: this.reconcileScheduleTitleWithFallback(
+            fallback.title,
+            fallback.title,
+          ),
+          location: this.defaultScheduleLocationForTitle(
+            fallback.title,
+            this.normalizeScheduleLocationText(fallback.location),
+          ),
+        });
+      }
+    }
+    return reconciled.sort((left, right) => left.startAt.localeCompare(right.startAt));
+  }
+
+  private buildScheduleLlmPages(
+    text: string,
+    extractionMethod: 'text' | 'ocr',
+  ): Array<{
+    pageNumber: number;
+    headingLine: string;
+    isoDate: string;
+    displayDate: string;
+    rows: Array<{
+      rowNumber: number;
+      time: string;
+      nextTime: string | null;
+      rawText: string;
+      activityText?: string;
+      responsibleText?: string;
+      participantsText?: string;
+      locationText?: string;
+    }>;
+  }> {
+    const pages = String(text ?? '')
+      .split('\f')
+      .map((page) => page.replace(/\r/g, '').trim())
+      .filter(Boolean);
+    const results: Array<{
+      pageNumber: number;
+      headingLine: string;
+      isoDate: string;
+      displayDate: string;
+      rows: Array<{
+        rowNumber: number;
+        time: string;
+        nextTime: string | null;
+        rawText: string;
+        activityText?: string;
+        responsibleText?: string;
+        participantsText?: string;
+        locationText?: string;
+      }>;
+    }> = [];
+    let baseExplicitDate: string | null = null;
+    let baseExplicitDayIndex: number | null = null;
+
+    for (let pageIndex = 0; pageIndex < pages.length; pageIndex += 1) {
+      const page = pages[pageIndex];
+      const headingLine =
+        page
+          .split('\n')
+          .map((line) => this.cleanScheduleLine(line))
+          .find((line) => /cronograma/i.test(line)) ?? '';
+      let displayDate = page.match(/\b\d{2}\/\d{2}\/\d{4}\b/)?.[0] ?? null;
+      const dayIndex = Number(page.match(/\bDIA\s+(\d+)/i)?.[1] ?? 0) || null;
+      if (displayDate && dayIndex) {
+        baseExplicitDate = displayDate;
+        baseExplicitDayIndex = dayIndex;
+      }
+      if (!displayDate && baseExplicitDate && baseExplicitDayIndex && dayIndex) {
+        displayDate = this.offsetDateByDays(
+          baseExplicitDate,
+          dayIndex - baseExplicitDayIndex,
+        );
+      }
+      if (!displayDate) continue;
+      const isoDate = this.convertScheduleDisplayDateToIso(displayDate);
+      if (!isoDate) continue;
+
+      const rawRows: Array<{
+        time: string;
+        nextTimeHint?: string | null;
+        rawText: string;
+        activityText?: string;
+        responsibleText?: string;
+        participantsText?: string;
+        locationText?: string;
+      }> =
+        extractionMethod === 'text'
+          ? this.extractStructuredScheduleRowsForLlm(page).map((row) => ({
+              time: row.time,
+              nextTimeHint: row.nextTimeHint ?? null,
+              rawText: [
+                row.activityText ? `Atividade: ${row.activityText}` : '',
+                row.responsibleText
+                  ? `Participantes CIPAVD: ${row.responsibleText}`
+                  : '',
+                row.participantsText
+                  ? `Participantes: ${row.participantsText}`
+                  : '',
+                row.locationText ? `Local Sugerido: ${row.locationText}` : '',
+              ]
+                .filter(Boolean)
+                .join(' | '),
+              activityText: row.activityText,
+              responsibleText: row.responsibleText,
+              participantsText: row.participantsText,
+              locationText: row.locationText,
+            }))
+          : this.extractOcrScheduleRows(page).map((row) => ({
+              time: row.time,
+              rawText: [...row.prefixLines, row.mainLine, ...row.suffixLines]
+                .map((line) => this.cleanScheduleLine(line))
+                .filter(Boolean)
+                .join(' | '),
+            }));
+
+      const rows = rawRows
+        .filter((row) => row.rawText.trim().length > 0)
+        .map((row, index, all) => ({
+          rowNumber: index + 1,
+          time: row.time,
+          nextTime: row.nextTimeHint ?? all[index + 1]?.time ?? null,
+          rawText: row.rawText,
+          activityText: row.activityText,
+          responsibleText: row.responsibleText,
+          participantsText: row.participantsText,
+          locationText: row.locationText,
+        }));
+      if (!rows.length) continue;
+
+      results.push({
+        pageNumber: pageIndex + 1,
+        headingLine,
+        isoDate,
+        displayDate,
+        rows,
+      });
+    }
+
+    return results;
+  }
+
+  private async extractSchedulePageItemsWithLlm(params: {
+    fileName: string;
+    extractionMethod: 'text' | 'ocr';
+    missionTitle: string;
+    missionScope: string;
+    page: {
+      pageNumber: number;
+      headingLine: string;
+      isoDate: string;
+      displayDate: string;
+      rows: Array<{
+        rowNumber: number;
+        time: string;
+        nextTime: string | null;
+        rawText: string;
+        activityText?: string;
+        responsibleText?: string;
+        participantsText?: string;
+        locationText?: string;
+      }>;
+    };
+    fallbackItems: Array<
+      Omit<
+        AssistantScheduleDraftItem,
+        'id' | 'sourceFileIds' | 'sourceFileNames'
+      >
+    >;
+  }) {
+    const systemPrompt =
+      'Você extrai linhas de cronograma CIPAVD/SMIF. ' +
+      'Responda somente com um objeto JSON válido, sem qualquer texto antes ou depois. ' +
+      'Nunca invente local, responsável ou participantes. ' +
+      'Se não houver evidência suficiente, retorne string vazia. ' +
+      'Use "-" apenas quando o campo não se aplica de forma clara.';
+
+    const userPrompt = [
+      'Normalize os itens da página do cronograma abaixo.',
+      'Cada row já representa uma linha do cronograma com horário separado.',
+      'Use a data desta página em todos os itens.',
+      'Regras:',
+      '- title deve ser o nome da atividade.',
+      '- startAt = data da página + row.time em formato YYYY-MM-DDTHH:mm:00.',
+      '- durationMinutes = diferença para o nextTime da mesma página; se não houver nextTime e o item estiver claro, use 60.',
+      '- responsible = coluna Participantes CIPAVD.',
+      '- participants = coluna Participantes.',
+      '- location = coluna Local Sugerido.',
+      '- Não use a localidade da missão como local do item.',
+      '- Se uma row estiver corrompida demais, não a inclua.',
+      '- Se houver dúvida real sobre local/responsável/participantes, retorne string vazia.',
+      '- Títulos canônicos aceitos quando fizer sentido: Chegada da Equipe..., Palestra de Conscientização e Prevenção ao Assédio, Intervalo, Palestra sobre Violência Doméstica, Aplicação de pesquisa, Reunião com as CPCAs, Encontro de Comissões (CPCA), Ciclo de Boas Práticas, Encerramento das atividades.',
+      '- Quando activityText/responsibleText/participantsText/locationText vierem preenchidos, trate esses campos como a melhor separação de colunas já identificada no documento.',
+      'Formato obrigatório:',
+      '{"items":[{"rowNumber":1,"title":"","startAt":"YYYY-MM-DDTHH:mm:00","durationMinutes":60,"location":"","responsible":"","participants":"","confidence":0.0,"notes":[]}]}',
+      '',
+      `Arquivo: ${params.fileName}`,
+      `Método: ${params.extractionMethod === 'text' ? 'texto estruturado' : 'OCR'}`,
+      `Missão: ${params.missionTitle}`,
+      `Escopo: ${params.missionScope}`,
+      `Página: ${params.page.pageNumber}`,
+      `Cabeçalho: ${params.page.headingLine || '-'}`,
+      `Data da página: ${params.page.displayDate}`,
+      '',
+      'Candidatos heurísticos da mesma data:',
+      JSON.stringify(
+        params.fallbackItems.map((item, index) => ({
+          index: index + 1,
+          title: item.title,
+          startAt: item.startAt,
+          durationMinutes: item.durationMinutes,
+          location: item.location,
+          responsible: item.responsible,
+          participants: item.participants,
+        })),
+        null,
+        2,
+      ),
+      '',
+      'Rows da página:',
+      JSON.stringify(params.page.rows, null, 2),
+    ].join('\n');
+
+    try {
+      const { content } = await this.litellm.chatCompletion({
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        temperature: 0,
+        max_tokens: 1800,
+      });
+
+      const cleaned = stripReasoningPrefix(String(content ?? '').trim()).trim();
+      if (!cleaned || looksLikeInternalReasoning(cleaned)) {
+        throw new Error('SCHEDULE_LLM_PAGE_REASONING_OUTPUT');
+      }
+
+      const parsed = this.parseJsonLoose(cleaned);
+      return this.normalizeLlmScheduleDraftItems(parsed, params.fallbackItems);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(
+        `Falha ao extrair página ${params.page.pageNumber} do cronograma via LLM (${params.fileName}). Motivo: ${message}`,
+      );
+      return [];
+    }
+  }
+
+  private convertScheduleDisplayDateToIso(displayDate: string) {
+    const match = String(displayDate ?? '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (!match) return null;
+    return `${match[3]}-${match[2]}-${match[1]}`;
+  }
+
+  private extractStructuredScheduleRowsForLlm(page: string) {
+    const lines = String(page ?? '').split('\n');
+    const headerLineIndex = lines.findIndex(
+      (line) =>
+        line.includes('Horário') &&
+        line.includes('Atividade') &&
+        line.includes('Local Sugerido'),
+    );
+    const headerLine = headerLineIndex >= 0 ? lines[headerLineIndex] : null;
+    if (!headerLine) return [];
+
+    const rawActivityStart = headerLine.indexOf('Atividade');
+    const rawCipavdStart = headerLine.indexOf('Participantes CIPAVD');
+    const rawParticipantsStart = headerLine.indexOf(
+      'Participantes',
+      rawCipavdStart + 'Participantes CIPAVD'.length,
+    );
+    const rawLocationStart = headerLine.indexOf('Local Sugerido');
+    if (
+      rawActivityStart < 0 ||
+      rawCipavdStart < 0 ||
+      rawParticipantsStart < 0 ||
+      rawLocationStart < 0
+    ) {
+      return [];
+    }
+
+    const activityStart = Math.max(0, rawActivityStart - 15);
+    const cipavdStart = rawCipavdStart;
+    const participantsStart = rawParticipantsStart;
+    const locationStart = rawLocationStart;
+
+    const rows: Array<{
+      time: string;
+      nextTimeHint?: string | null;
+      awaitingEndTime?: boolean;
+      activity: string[];
+      responsible: string[];
+      participants: string[];
+      location: string[];
+    }> = [];
+    let activeRow:
+      | {
+          time: string;
+          nextTimeHint?: string | null;
+          awaitingEndTime?: boolean;
+          activity: string[];
+          responsible: string[];
+          participants: string[];
+          location: string[];
+        }
+      | null = null;
+    let pendingPrelude: {
+      activity: string[];
+      responsible: string[];
+      participants: string[];
+      location: string[];
+    } = {
+      activity: [],
+      responsible: [],
+      participants: [],
+      location: [],
+    };
+
+    const appendChunk = (
+      target: {
+        activity: string[];
+        responsible: string[];
+        participants: string[];
+        location: string[];
+      },
+      field: 'activity' | 'responsible' | 'participants' | 'location',
+      value: string,
+    ) => {
+      const safe = this.cleanScheduleLine(value);
+      if (!safe) return;
+      if (
+        (field === 'responsible' || field === 'participants') &&
+        safe === '-'
+      ) {
+        target[field].push('-');
+        return;
+      }
+      if (field === 'location' && safe === '-') {
+        target.location.push('-');
+        return;
+      }
+      target[field].push(safe);
+    };
+
+    const flushActiveRow = () => {
+      if (!activeRow) return;
+      rows.push(activeRow);
+      activeRow = null;
+    };
+
+    const flushPendingPreludeToActive = () => {
+      if (!activeRow) return;
+      activeRow.activity.push(...pendingPrelude.activity);
+      activeRow.responsible.push(...pendingPrelude.responsible);
+      activeRow.participants.push(...pendingPrelude.participants);
+      activeRow.location.push(...pendingPrelude.location);
+      pendingPrelude = {
+        activity: [],
+        responsible: [],
+        participants: [],
+        location: [],
+      };
+    };
+
+    for (let index = 0; index < lines.length; index += 1) {
+      const rawLine = lines[index] ?? '';
+      const trimmed = rawLine.trim();
+      if (!trimmed) continue;
+      if (
+        index <= headerLineIndex ||
+        trimmed.includes('Horário') ||
+        trimmed.startsWith('CRONOGRAMA') ||
+        trimmed === 'DATA' ||
+        (trimmed.includes('DATA') && trimmed.includes('MANHÃ')) ||
+        trimmed === 'MANHÃ' ||
+        trimmed === 'TARDE' ||
+        /^\(.+\)$/.test(trimmed)
+      ) {
+        if (trimmed === 'MANHÃ' || trimmed === 'TARDE') {
+          flushActiveRow();
+          pendingPrelude = {
+            activity: [],
+            responsible: [],
+            participants: [],
+            location: [],
+          };
+        }
+        continue;
+      }
+
+      const timeInfo = this.extractStructuredScheduleTimeInfo(rawLine);
+      const chunks = this.extractStructuredScheduleLineChunks(
+        timeInfo?.lineWithoutDateAndTime ?? rawLine,
+      );
+      const nextNonEmpty = lines
+        .slice(index + 1)
+        .map((line) => line.trim())
+        .find(Boolean);
+      const nextTimeInfo = nextNonEmpty
+        ? this.extractStructuredScheduleTimeInfo(nextNonEmpty)
+        : null;
+      const nextIsTimedRow = !!nextTimeInfo?.startTime;
+
+      if (
+        timeInfo?.startTime &&
+        activeRow &&
+        activeRow.awaitingEndTime &&
+        !chunks.length &&
+        !timeInfo.explicitEndTime
+      ) {
+        activeRow.nextTimeHint = timeInfo.startTime;
+        activeRow.awaitingEndTime = false;
+        continue;
+      }
+
+      if (timeInfo?.startTime) {
+        flushActiveRow();
+        activeRow = {
+          time: timeInfo.startTime,
+          nextTimeHint: timeInfo.explicitEndTime ?? null,
+          awaitingEndTime:
+            !timeInfo.explicitEndTime && timeInfo.partialRange ? true : false,
+          activity: [],
+          responsible: [],
+          participants: [],
+          location: [],
+        };
+        flushPendingPreludeToActive();
+        for (const chunk of chunks) {
+          const field = this.classifyStructuredScheduleChunk(chunk, {
+            activityStart,
+            cipavdStart,
+            participantsStart,
+            locationStart,
+          });
+          if (field) {
+            appendChunk(activeRow, field, chunk.text);
+          }
+        }
+        continue;
+      }
+
+      if (!activeRow) {
+        for (const chunk of chunks) {
+          const field = this.classifyStructuredScheduleChunk(chunk, {
+            activityStart,
+            cipavdStart,
+            participantsStart,
+            locationStart,
+          });
+          if (field) {
+            appendChunk(pendingPrelude, field, chunk.text);
+          }
+        }
+        continue;
+      }
+
+      const currentActivityText = activeRow.activity.join(' ').trim();
+      const currentActivityIncomplete = this.isStructuredScheduleActivityIncomplete(
+        currentActivityText,
+      );
+      for (const chunk of chunks) {
+        const field = this.classifyStructuredScheduleChunk(chunk, {
+          activityStart,
+          cipavdStart,
+          participantsStart,
+          locationStart,
+        });
+        if (!field) continue;
+        const shouldDeferToNextRow =
+          nextIsTimedRow &&
+          !activeRow.awaitingEndTime &&
+          ((field === 'activity' &&
+            activeRow.activity.length > 0 &&
+            !currentActivityIncomplete) ||
+            (field === 'location' &&
+              activeRow.location.length > 0 &&
+              !currentActivityIncomplete) ||
+            (field === 'participants' && activeRow.participants.length > 0) ||
+            (field === 'responsible' &&
+              activeRow.responsible.length > 0 &&
+              !this.normalizeFreeText(chunk.text).includes('cpcas')));
+        if (shouldDeferToNextRow) {
+          appendChunk(pendingPrelude, field, chunk.text);
+          continue;
+        }
+        appendChunk(activeRow, field, chunk.text);
+      }
+    }
+
+    flushActiveRow();
+
+    const normalizedRows = rows.map((row) => ({
+      time: row.time,
+      nextTimeHint: row.nextTimeHint ?? null,
+      activityText: row.activity.join(' ').replace(/\s+/g, ' ').trim(),
+      responsibleText: row.responsible.join(' ').replace(/\s+/g, ' ').trim(),
+      participantsText: row.participants.join(' ').replace(/\s+/g, ' ').trim(),
+      locationText: row.location.join(' ').replace(/\s+/g, ' ').trim(),
+    }));
+
+    const mergedRows: typeof normalizedRows = [];
+    for (let index = 0; index < normalizedRows.length; index += 1) {
+      const row = normalizedRows[index];
+      const hasSemanticContent =
+        !!row.activityText || !!row.responsibleText || !!row.participantsText;
+      if (!hasSemanticContent && row.locationText) {
+        const nextRow = normalizedRows[index + 1];
+        const previousRow = mergedRows[mergedRows.length - 1];
+        if (nextRow && nextRow.time === row.time) {
+          nextRow.locationText = [row.locationText, nextRow.locationText]
+            .filter(Boolean)
+            .join(' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+          continue;
+        }
+        if (previousRow && previousRow.time === row.time) {
+          previousRow.locationText = [previousRow.locationText, row.locationText]
+            .filter(Boolean)
+            .join(' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+          continue;
+        }
+      }
+      mergedRows.push(row);
+    }
+
+    return mergedRows;
+  }
+
+  private truncateScheduleExtractionText(text: string, maxChars = 24000) {
+    const source = String(text ?? '').trim();
+    if (source.length <= maxChars) return source;
+    const head = source.slice(0, Math.floor(maxChars * 0.65)).trimEnd();
+    const tail = source.slice(-Math.floor(maxChars * 0.3)).trimStart();
+    return `${head}\n\n[... texto intermediário omitido para caber no contexto ...]\n\n${tail}`;
+  }
+
+  private normalizeLlmScheduleDraftItems(
+    parsed: unknown,
+    fallbackItems: Array<
+      Omit<
+        AssistantScheduleDraftItem,
+        'id' | 'sourceFileIds' | 'sourceFileNames'
+      >
+    >,
+  ) {
+    const sourceList = Array.isArray(parsed)
+      ? parsed
+      : this.isRecord(parsed) && Array.isArray(parsed.items)
+        ? parsed.items
+        : [];
+    const items: Array<
+      Omit<
+        AssistantScheduleDraftItem,
+        'id' | 'sourceFileIds' | 'sourceFileNames'
+      >
+    > = [];
+
+    for (let index = 0; index < sourceList.length; index += 1) {
+      const row = sourceList[index];
+      if (!this.isRecord(row)) continue;
+      const fallback = fallbackItems[index] ?? null;
+      const titleRaw = String(row.title ?? '').trim();
+      const llmTitle =
+        this.canonicalizeOcrScheduleTitle(titleRaw) ||
+        this.normalizeScheduleTitle(titleRaw);
+      const title = this.reconcileScheduleTitleWithFallback(
+        llmTitle,
+        fallback?.title ?? '',
+      );
+      if (!title) continue;
+
+      const startAt = this.normalizeScheduleStartAtValue(
+        row.startAt,
+        fallback?.startAt ?? null,
+      );
+      if (!startAt) continue;
+
+      const durationMinutes = this.normalizeScheduleDurationValue(
+        row.durationMinutes,
+        fallback?.durationMinutes ?? null,
+      );
+      if (!durationMinutes) continue;
+
+      const location = this.normalizeScheduleLocationText(
+        this.normalizeScheduleOptionalFieldValue(row.location),
+      );
+      const responsible = this.normalizeScheduleOptionalFieldValue(
+        row.responsible,
+      );
+      const participants = this.normalizeScheduleOptionalFieldValue(
+        row.participants,
+      );
+      const confidence = Number(row.confidence);
+      const notes = Array.isArray(row.notes)
+        ? row.notes.map((item) => String(item ?? '').trim()).filter(Boolean)
+        : [];
+
+      if (
+        !this.shouldKeepLlmScheduleItem({
+          title,
+          location,
+          responsible,
+          participants,
+          confidence,
+          notes,
+        })
+      ) {
+        continue;
+      }
+
+      items.push({
+        title,
+        startAt,
+        durationMinutes,
+        location: this.defaultScheduleLocationForTitle(title, location),
+        responsible:
+          responsible ||
+          (this.requiresScheduleResponsibleConfirmation({
+            ...(fallback ?? {
+              id: '',
+              sourceFileIds: [],
+              sourceFileNames: [],
+            }),
+            title,
+            startAt,
+            durationMinutes,
+            location,
+            responsible: '',
+            participants,
+          } as AssistantScheduleDraftItem)
+            ? ''
+            : this.inferResponsibleFromTitle(title)),
+        participants:
+          participants ||
+          (title.startsWith('Chegada da Equipe') ||
+          this.normalizeFreeText(title) === 'intervalo' ||
+          this.normalizeFreeText(title) === 'encerramento das atividades'
+            ? '-'
+            : ''),
+      });
+    }
+
+    return items.sort((left, right) => left.startAt.localeCompare(right.startAt));
+  }
+
+  private normalizeScheduleStartAtValue(
+    value: unknown,
+    fallback: string | null,
+  ) {
+    const source = String(value ?? '').trim();
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00$/.test(source)) {
+      return source;
+    }
+    if (fallback && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00$/.test(fallback)) {
+      return fallback;
+    }
+    return null;
+  }
+
+  private normalizeScheduleDurationValue(
+    value: unknown,
+    fallback: number | null,
+  ) {
+    const numeric = Number(value);
+    if (Number.isFinite(numeric) && numeric >= 5 && numeric <= 240) {
+      return Math.round(numeric);
+    }
+    if (Number.isFinite(Number(fallback)) && Number(fallback) >= 5) {
+      return Math.round(Number(fallback));
+    }
+    return null;
+  }
+
+  private normalizeScheduleOptionalFieldValue(value: unknown) {
+    const safe = this.cleanScheduleLine(String(value ?? ''));
+    if (!safe) return '';
+    if (safe === '-' || safe === '—') return '-';
+    return safe;
+  }
+
+  private normalizeScheduleLocationText(value: string) {
+    const safe = this.cleanScheduleLine(String(value ?? ''));
+    if (!safe || safe === '-' || safe === '—') return safe;
+    const tokens = safe.split(/\s+/).filter(Boolean);
+    const dedupedTokens: string[] = [];
+    for (const token of tokens) {
+      if (
+        !dedupedTokens.some(
+          (existing) => existing.toLowerCase() === token.toLowerCase(),
+        )
+      ) {
+        dedupedTokens.push(token);
+      }
+    }
+    let normalized = dedupedTokens.join(' ').trim();
+    const auditIndex = normalized.search(/\bAudit[oó]rio\b/i);
+    if (auditIndex > 0) {
+      const auditLabel = normalized.match(/\bAudit[oó]rio\b/i)?.[0] ?? 'Auditório';
+      const rest = normalized
+        .replace(/\bAudit[oó]rio\b/i, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      normalized = rest ? `${auditLabel} ${rest}` : auditLabel;
+    }
+    return normalized;
+  }
+
+  private reconcileScheduleTitleWithFallback(
+    llmTitle: string,
+    fallbackTitle: string,
+  ) {
+    const safeLlmTitle = String(llmTitle ?? '').trim();
+    const safeFallbackTitle = String(fallbackTitle ?? '').trim();
+    if (
+      safeLlmTitle &&
+      safeFallbackTitle &&
+      this.normalizeFreeText(safeLlmTitle).startsWith('chegada da equipe') &&
+      this.normalizeFreeText(safeFallbackTitle).startsWith('chegada da equipe') &&
+      safeFallbackTitle.length > safeLlmTitle.length
+    ) {
+      return safeFallbackTitle;
+    }
+    return safeLlmTitle;
+  }
+
+  private shouldKeepLlmScheduleItem(input: {
+    title: string;
+    location: string;
+    responsible: string;
+    participants: string;
+    confidence: number;
+    notes: string[];
+  }) {
+    const normalizedTitle = this.normalizeFreeText(input.title);
+    if (!normalizedTitle) return false;
+    const suspiciousTitle =
+      /(?:[a-z]{4,}\s){2,}[A-Z]{2,}/.test(input.title) ||
+      /(?:[qxz]{2,}|[A-Z]{4,}\s+[a-z]{1,2}\s+[A-Z]{3,})/.test(input.title);
+    if (suspiciousTitle && (!Number.isFinite(input.confidence) || input.confidence < 0.75)) {
+      return false;
+    }
+    if (
+      Array.isArray(input.notes) &&
+      input.notes.some((note) =>
+        /corrompid|ileg[ií]vel|incerto|baixa confianc/i.test(
+          this.normalizeFreeText(note),
+        ),
+      ) &&
+      (!Number.isFinite(input.confidence) || input.confidence < 0.72)
+    ) {
+      return false;
+    }
+    return true;
+  }
+
+  private parseJsonLoose(raw: string): unknown {
+    const source = String(raw ?? '').trim();
+    if (!source) return null;
+
+    const tryParse = (input: string): unknown => {
+      try {
+        return JSON.parse(input) as unknown;
+      } catch {
+        return null;
+      }
+    };
+
+    const direct = tryParse(source);
+    if (direct !== null) return direct;
+
+    const fencedMatch = source.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fencedMatch?.[1]) {
+      const fenced = tryParse(fencedMatch[1].trim());
+      if (fenced !== null) return fenced;
+    }
+
+    const firstBrace = source.indexOf('{');
+    const lastBrace = source.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      const objectLike = tryParse(source.slice(firstBrace, lastBrace + 1));
+      if (objectLike !== null) return objectLike;
+    }
+
+    const firstBracket = source.indexOf('[');
+    const lastBracket = source.lastIndexOf(']');
+    if (
+      firstBracket !== -1 &&
+      lastBracket !== -1 &&
+      lastBracket > firstBracket
+    ) {
+      const arrayLike = tryParse(source.slice(firstBracket, lastBracket + 1));
+      if (arrayLike !== null) return arrayLike;
+    }
+
+    return null;
+  }
+
+  private isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null;
+  }
+
   private async extractTextFromPdfViaOcr(inputPath: string, workdir: string) {
     const pagePrefix = path.join(workdir, 'page');
     await execFileAsync(
@@ -2421,7 +3474,7 @@ export class AiAssistantService {
 
   private parseStructuredScheduleDraftsFromText(
     text: string,
-    fallbackLocation: string,
+    _fallbackLocation: string,
   ): Omit<
     AssistantScheduleDraftItem,
     'id' | 'sourceFileIds' | 'sourceFileNames'
@@ -2440,167 +3493,31 @@ export class AiAssistantService {
     }> = [];
 
     for (const page of pages) {
-      const lines = page.split('\n');
-      const headerLine =
-        lines.find(
-          (line) =>
-            line.includes('Horário') &&
-            line.includes('Atividade') &&
-            line.includes('Local Sugerido'),
-        ) ?? null;
-      if (!headerLine) {
-        parsedItems.push(...this.parseScheduleDraftsFromText(page, fallbackLocation));
+      const structuredRows = this.extractStructuredScheduleRowsForLlm(page);
+      if (!structuredRows.length) {
+        parsedItems.push(
+          ...this.parseScheduleDraftsFromText(page, _fallbackLocation),
+        );
         continue;
       }
-      const rawActivityStart = headerLine.indexOf('Atividade');
-      const rawCipavdStart = headerLine.indexOf('Participantes CIPAVD');
-      const rawParticipantsStart = headerLine.indexOf(
-        'Participantes',
-        rawCipavdStart + 'Participantes CIPAVD'.length,
-      );
-      const rawLocationStart = headerLine.indexOf('Local Sugerido');
-      const activityStart = Math.max(0, rawActivityStart - 23);
-      const cipavdStart = Math.max(activityStart + 1, rawCipavdStart - 6);
-      const participantsStart = Math.max(
-        cipavdStart + 1,
-        rawParticipantsStart - 6,
-      );
-      const locationStart = Math.max(participantsStart + 1, rawLocationStart - 9);
       const pageDate = page.match(/\b\d{2}\/\d{2}\/\d{4}\b/)?.[0] ?? null;
-      if (
-        !pageDate ||
-        rawActivityStart < 0 ||
-        rawCipavdStart < 0 ||
-        rawParticipantsStart < 0 ||
-        rawLocationStart < 0
-      ) {
-        parsedItems.push(...this.parseScheduleDraftsFromText(page, fallbackLocation));
+      if (!pageDate) {
+        parsedItems.push(
+          ...this.parseScheduleDraftsFromText(page, _fallbackLocation),
+        );
         continue;
       }
 
-      const rows: Array<{
-        time: string;
-        activity: string[];
-        responsible: string[];
-        participants: string[];
-        location: string[];
-      }> = [];
-      let activeRow:
-        | {
-            time: string;
-            activity: string[];
-            responsible: string[];
-            participants: string[];
-            location: string[];
-          }
-        | null = null;
-      let pendingPrelude: string[] = [];
-      let pendingResponsibleForNext: string[] = [];
-
-      const flushActiveRow = () => {
-        if (!activeRow) return;
-        rows.push(activeRow);
-        activeRow = null;
-      };
-
-      for (let index = 0; index < lines.length; index += 1) {
-        const rawLine = lines[index] ?? '';
-        const trimmed = rawLine.trim();
-        if (!trimmed) continue;
-        if (
-          trimmed.includes('Horário') ||
-          trimmed.startsWith('CRONOGRAMA') ||
-          trimmed === 'DATA' ||
-          (trimmed.includes('DATA') && trimmed.includes('MANHÃ')) ||
-          trimmed === 'MANHÃ' ||
-          trimmed === 'TARDE' ||
-          /^\(.+\)$/.test(trimmed)
-        ) {
-          if (trimmed === 'MANHÃ' || trimmed === 'TARDE') {
-            flushActiveRow();
-          }
-          continue;
-        }
-
-        const timeMarker = this.extractTimeMarker(trimmed);
-        if (timeMarker) {
-          flushActiveRow();
-          activeRow = {
-            time: timeMarker.normalizedTime,
-            activity: [],
-            responsible: [],
-            participants: [],
-            location: [],
-          };
-          if (pendingPrelude.length) {
-            activeRow.activity.push(...pendingPrelude);
-            pendingPrelude = [];
-          }
-          if (pendingResponsibleForNext.length) {
-            activeRow.responsible.push(...pendingResponsibleForNext);
-            pendingResponsibleForNext = [];
-          }
-          const segments = this.extractStructuredScheduleSegments(rawLine, {
-            activityStart,
-            cipavdStart,
-            participantsStart,
-            locationStart,
-          });
-          this.appendStructuredSegments(activeRow, segments);
-          continue;
-        }
-
-        const nextNonEmpty = lines
-          .slice(index + 1)
-          .map((line) => line.trim())
-          .find(Boolean);
-        const nextIsTimedRow = !!nextNonEmpty && !!this.extractTimeMarker(nextNonEmpty);
-
-        if (!activeRow) {
-          if (nextIsTimedRow && this.isLikelyResponsibleLine(trimmed)) {
-            pendingResponsibleForNext.push(trimmed);
-          } else {
-            pendingPrelude.push(trimmed);
-          }
-          continue;
-        }
-
-        if (
-          nextIsTimedRow &&
-          this.isLikelyResponsibleLine(trimmed) &&
-          !trimmed.includes('CPCAs')
-        ) {
-          pendingResponsibleForNext.push(trimmed);
-          continue;
-        }
-
-        const segments = this.extractStructuredScheduleSegments(rawLine, {
-          activityStart,
-          cipavdStart,
-          participantsStart,
-          locationStart,
-        });
-        this.appendStructuredSegments(activeRow, segments);
-      }
-
-      flushActiveRow();
-
-      for (let index = 0; index < rows.length; index += 1) {
-        const row = rows[index];
-        const nextRow = rows[index + 1] ?? null;
-        const activityText = row.activity.join(' ').replace(/\s+/g, ' ').trim();
-        const responsibleText = row.responsible
-          .join(' ')
-          .replace(/\s+/g, ' ')
-          .trim();
+      for (let index = 0; index < structuredRows.length; index += 1) {
+        const row = structuredRows[index];
+        const nextRow = structuredRows[index + 1] ?? null;
+        const activityText = String(row.activityText ?? '').trim();
+        const responsibleText = String(row.responsibleText ?? '').trim();
         const cleanedResponsibleText = responsibleText
           .replace(/^Intervalo\s+/i, '')
           .trim();
-        const participantsText = row.participants
-          .join(' ')
-          .replace(/\s+/g, ' ')
-          .trim();
-        const locationText = row.location.join(' ').replace(/\s+/g, ' ').trim();
+        const participantsText = String(row.participantsText ?? '').trim();
+        const locationText = String(row.locationText ?? '').trim();
         const title =
           activityText ||
           (!this.isLikelyResponsibleLine(responsibleText) ? responsibleText : '') ||
@@ -2611,10 +3528,13 @@ export class AiAssistantService {
         parsedItems.push({
           title: normalizedTitle,
           startAt: this.combineDateAndTime(pageDate, row.time),
-          durationMinutes: this.estimateDurationMinutes(row.time, nextRow?.time ?? null),
+          durationMinutes: this.estimateDurationMinutes(
+            row.time,
+            row.nextTimeHint ?? nextRow?.time ?? null,
+          ),
           location: this.defaultScheduleLocationForTitle(
             normalizedTitle,
-            locationText,
+            this.normalizeScheduleLocationText(locationText),
           ),
           responsible:
             (this.isLikelyResponsibleLine(cleanedResponsibleText)
@@ -2743,14 +3663,17 @@ export class AiAssistantService {
   }
 
   private buildScheduleMissingFieldQueue(items: AssistantScheduleDraftItem[]) {
-    const queue: Array<{
-      itemId: string;
-      itemNumber: number;
-      itemIndex: number;
-      fieldKey: 'location';
-      fieldLabel: string;
-    }> = [];
+    const queue: AssistantScheduleMissingField[] = [];
     items.forEach((item, index) => {
+      if (this.requiresScheduleTitleConfirmation(item)) {
+        queue.push({
+          itemId: item.id,
+          itemNumber: index + 1,
+          itemIndex: index,
+          fieldKey: 'title',
+          fieldLabel: 'Atividade',
+        });
+      }
       if (this.requiresScheduleLocationConfirmation(item)) {
         queue.push({
           itemId: item.id,
@@ -2758,6 +3681,24 @@ export class AiAssistantService {
           itemIndex: index,
           fieldKey: 'location',
           fieldLabel: 'Local',
+        });
+      }
+      if (this.requiresScheduleResponsibleConfirmation(item)) {
+        queue.push({
+          itemId: item.id,
+          itemNumber: index + 1,
+          itemIndex: index,
+          fieldKey: 'responsible',
+          fieldLabel: 'Responsável',
+        });
+      }
+      if (this.requiresScheduleParticipantsConfirmation(item)) {
+        queue.push({
+          itemId: item.id,
+          itemNumber: index + 1,
+          itemIndex: index,
+          fieldKey: 'participants',
+          fieldLabel: 'Participantes',
         });
       }
     });
@@ -2769,24 +3710,12 @@ export class AiAssistantService {
       ? draft.scheduleMissingFieldQueue
       : [];
     if (!queue.length) return null;
-    return queue[0] as {
-      itemId: string;
-      itemNumber: number;
-      itemIndex: number;
-      fieldKey: 'location';
-      fieldLabel: string;
-    };
+    return queue[0] as AssistantScheduleMissingField;
   }
 
   private buildMissingScheduleFieldConfig(
     draft: Record<string, any>,
-    missingField: {
-      itemId: string;
-      itemNumber: number;
-      itemIndex: number;
-      fieldKey: 'location';
-      fieldLabel: string;
-    },
+    missingField: AssistantScheduleMissingField,
   ): AssistantFieldConfig {
     const items = Array.isArray(draft.scheduleItemsDraft)
       ? (draft.scheduleItemsDraft as AssistantScheduleDraftItem[])
@@ -2801,7 +3730,7 @@ export class AiAssistantService {
         ? `${missingField.fieldLabel} do item ${missingField.itemNumber} (${itemScheduleLabel})`
         : `${missingField.fieldLabel} do item ${missingField.itemNumber}`,
       inputType: 'text',
-      placeholder: 'Ex.: Auditório da UNIFA ou -',
+      placeholder: this.getScheduleMissingFieldPlaceholder(missingField.fieldKey),
       helperText: item
         ? this.buildMissingScheduleFieldPromptMessage(draft, missingField)
         : `Informe ${missingField.fieldLabel.toLowerCase()} do item ${missingField.itemNumber}.`,
@@ -2856,7 +3785,96 @@ export class AiAssistantService {
       return false;
     }
     const location = String(item.location ?? '').trim();
-    return !location;
+    return !location || this.isAmbiguousScheduleLocation(location);
+  }
+
+  private requiresScheduleTitleConfirmation(item: AssistantScheduleDraftItem) {
+    const normalized = this.normalizeFreeText(item.title);
+    if (!normalized || normalized === 'atividade a confirmar') {
+      return true;
+    }
+    return this.isSuspiciousScheduleTitle(item.title);
+  }
+
+  private isAmbiguousScheduleLocation(location: string) {
+    const normalized = this.normalizeFreeText(location);
+    if (!normalized) return true;
+    if (/^(auditorio|sala|hangar|ala)$/.test(normalized)) {
+      return true;
+    }
+    const tokens = normalized.split(/\s+/).filter(Boolean);
+    const seen = new Set<string>();
+    for (const token of tokens) {
+      if (seen.has(token)) {
+        return true;
+      }
+      seen.add(token);
+    }
+    if (
+      tokens.length === 1 &&
+      !/^(basc|bagl|unifa|cbnb|bafl|baaf|ii|iii|comar|dtcea-[a-z]+)$/i.test(
+        tokens[0],
+      )
+    ) {
+      return true;
+    }
+    return false;
+  }
+
+  private isSuspiciousScheduleTitle(title: string) {
+    const safe = String(title ?? '').trim();
+    const normalized = this.normalizeFreeText(safe);
+    if (!normalized) return true;
+    if (
+      /(?:[a-z]{4,}\s){2,}[A-Z]{2,}/.test(safe) ||
+      /(?:[qxz]{2,}|[A-Z]{4,}\s+[a-z]{1,2}\s+[A-Z]{3,})/.test(safe)
+    ) {
+      return true;
+    }
+    return /(gianni|srisisidto|crea da|dh nl|ino dtcea|auditorio da bagl$)/i.test(
+      normalized,
+    );
+  }
+
+  private requiresScheduleResponsibleConfirmation(item: AssistantScheduleDraftItem) {
+    const title = this.normalizeFreeText(item.title);
+    if (
+      title.startsWith('chegada da equipe') ||
+      title === 'intervalo' ||
+      title === 'encerramento das atividades'
+    ) {
+      return false;
+    }
+    return !String(item.responsible ?? '').trim();
+  }
+
+  private requiresScheduleParticipantsConfirmation(item: AssistantScheduleDraftItem) {
+    const title = this.normalizeFreeText(item.title);
+    if (
+      title.startsWith('chegada da equipe') ||
+      title === 'intervalo' ||
+      title === 'encerramento das atividades'
+    ) {
+      return false;
+    }
+    return !String(item.participants ?? '').trim();
+  }
+
+  private getScheduleMissingFieldPlaceholder(
+    fieldKey: AssistantScheduleMissingFieldKey,
+  ) {
+    switch (fieldKey) {
+      case 'title':
+        return 'Ex.: Reunião com as CPCAs';
+      case 'location':
+        return 'Ex.: Auditório da UNIFA ou -';
+      case 'responsible':
+        return 'Ex.: Cap Tamires ou -';
+      case 'participants':
+        return 'Ex.: Todo efetivo escalado ou -';
+      default:
+        return 'Informe o valor correto ou use -';
+    }
   }
 
   private deduplicateScheduleDraftItems(items: AssistantScheduleDraftItem[]) {
@@ -3637,6 +4655,147 @@ export class AiAssistantService {
     return '';
   }
 
+  private extractStructuredScheduleTimeInfo(rawLine: string) {
+    const lineWithoutDate = String(rawLine ?? '').replace(
+      /\b\d{2}\/\d{2}\/\d{4}\b/g,
+      ' ',
+    );
+    const patterns = [
+      {
+        regex:
+          /(\d{1,2})h([0-5]\d)?\s*[-–]\s*(\d{1,2})h([0-5]\d)?/i,
+        resolve: (match: RegExpMatchArray) => ({
+          startTime: `${String(Number(match[1])).padStart(2, '0')}:${String(Number(match[2] ?? '0')).padStart(2, '0')}`,
+          explicitEndTime: `${String(Number(match[3])).padStart(2, '0')}:${String(Number(match[4] ?? '0')).padStart(2, '0')}`,
+          partialRange: false,
+        }),
+      },
+      {
+        regex: /(\d{1,2})h([0-5]\d)?\s*[-–](?!\s*\d)/i,
+        resolve: (match: RegExpMatchArray) => ({
+          startTime: `${String(Number(match[1])).padStart(2, '0')}:${String(Number(match[2] ?? '0')).padStart(2, '0')}`,
+          explicitEndTime: null,
+          partialRange: true,
+        }),
+      },
+      {
+        regex: /\b(\d{1,2})h([0-5]\d)?\b/i,
+        resolve: (match: RegExpMatchArray) => ({
+          startTime: `${String(Number(match[1])).padStart(2, '0')}:${String(Number(match[2] ?? '0')).padStart(2, '0')}`,
+          explicitEndTime: null,
+          partialRange: false,
+        }),
+      },
+    ] as const;
+
+    for (const pattern of patterns) {
+      const match = lineWithoutDate.match(pattern.regex);
+      if (!match || (match.index ?? 999) > 40) {
+        continue;
+      }
+      const resolved = pattern.resolve(match);
+      return {
+        ...resolved,
+        lineWithoutDateAndTime:
+          lineWithoutDate.slice(0, match.index ?? 0) +
+          ' '.repeat(match[0].length) +
+          lineWithoutDate.slice((match.index ?? 0) + match[0].length),
+      };
+    }
+
+    return null;
+  }
+
+  private extractStructuredScheduleLineChunks(rawLine: string) {
+    const source = String(rawLine ?? '').replace(/\r/g, '');
+    const matches = source.matchAll(/\S(?:.*?\S)?(?=(?:\s{2,}|$))/g);
+    const chunks: Array<{ text: string; start: number }> = [];
+    for (const match of matches) {
+      const text = this.cleanScheduleLine(match[0]);
+      if (!text) continue;
+      if (
+        /^\d{2}\/\d{2}\/\d{4}$/.test(text) ||
+        /^\([^)]+\)$/.test(text)
+      ) {
+        continue;
+      }
+      chunks.push({ text, start: match.index ?? 0 });
+    }
+    return chunks;
+  }
+
+  private classifyStructuredScheduleChunk(
+    chunk: { text: string; start: number },
+    bounds: {
+      activityStart: number;
+      cipavdStart: number;
+      participantsStart: number;
+      locationStart: number;
+    },
+  ): 'activity' | 'responsible' | 'participants' | 'location' | null {
+    const normalized = this.normalizeFreeText(chunk.text);
+    if (!normalized) return null;
+    if (normalized === 'tarde' || normalized === 'manha') return null;
+    if (chunk.text === '-' || chunk.text === '—') {
+      if (chunk.start >= bounds.participantsStart - 4) {
+        return 'participants';
+      }
+      return null;
+    }
+    const looksLikeActivity =
+      normalized.includes('chegada da equipe') ||
+      normalized.includes('apresentacao ao comandante') ||
+      normalized.includes('logistica de atividades') ||
+      normalized.includes('conscientizacao') ||
+      normalized.includes('preven') ||
+      normalized === 'assedio' ||
+      normalized.includes('violencia domest') ||
+      normalized.includes('aplicacao de pesquisa') ||
+      normalized.includes('reuniao com as cpcas') ||
+      normalized.includes('encontro de comissoes') ||
+      normalized.includes('ciclo de boas pratic') ||
+      normalized.includes('encerramento das atividades') ||
+      normalized === 'intervalo';
+    if (looksLikeActivity) {
+      return 'activity';
+    }
+    if (
+      chunk.start >= bounds.locationStart - 4 ||
+      /(audit[oó]rio|comar|unifa|basc|bagl|cbnb|cinema|sala|hangar|ala)\b/i.test(
+        chunk.text,
+      )
+    ) {
+      return 'location';
+    }
+    if (chunk.start >= bounds.participantsStart - 4) {
+      return 'participants';
+    }
+    if (
+      chunk.start >= bounds.cipavdStart - 4 ||
+      this.isLikelyResponsibleLine(chunk.text)
+    ) {
+      return 'responsible';
+    }
+    if (chunk.start >= bounds.activityStart - 4) {
+      return 'activity';
+    }
+    return null;
+  }
+
+  private isStructuredScheduleActivityIncomplete(text: string) {
+    const normalized = this.normalizeFreeText(text);
+    if (!normalized) return true;
+    return (
+      normalized.endsWith('ao') ||
+      normalized.endsWith('de') ||
+      normalized.endsWith('da') ||
+      normalized === 'assedio' ||
+      normalized.includes('conscientizacao e prevencao ao') ||
+      (normalized.includes('palestra sobre violencia') &&
+        !normalized.includes('domestica'))
+    );
+  }
+
   private extractStructuredScheduleSegments(
     rawLine: string,
     bounds: {
@@ -3831,7 +4990,9 @@ export class AiAssistantService {
   }
 
   private extractTimeMarker(line: string) {
-    const match = line.match(/^(\d{1,2})h(?:([0-5]\d))?(?:\s+|$)(.*)$/i);
+    const match = line.match(
+      /^(\d{1,2})h(?:([0-5]\d))?(?:\s*[-–]\s*\d{1,2}h(?:[0-5]\d)?)?(?:\s+|$)(.*)$/i,
+    );
     if (!match) return null;
     const hour = Number(match[1]);
     const minute = Number(match[2] ?? '0');
@@ -3907,8 +5068,6 @@ export class AiAssistantService {
 
   private defaultScheduleLocationForTitle(title: string, explicitLocation = '') {
     const safeLocation = String(explicitLocation ?? '').trim();
-    if (safeLocation === '-' || safeLocation === '—') return '-';
-    if (safeLocation) return safeLocation;
     const normalizedTitle = this.normalizeFreeText(title);
     if (
       normalizedTitle.startsWith('chegada da equipe') ||
@@ -3917,6 +5076,8 @@ export class AiAssistantService {
     ) {
       return '-';
     }
+    if (safeLocation === '-' || safeLocation === '—') return '-';
+    if (safeLocation) return safeLocation;
     return '';
   }
 
@@ -3980,15 +5141,7 @@ export class AiAssistantService {
     files: AssistantScheduleSourceFile[],
     items: AssistantScheduleDraftItem[],
     startOffset = 0,
-    missingField:
-      | {
-          itemId: string;
-          itemNumber: number;
-          itemIndex: number;
-          fieldKey: 'location';
-          fieldLabel: string;
-        }
-      | null = null,
+    missingField: AssistantScheduleMissingField | null = null,
   ) {
     const fileSummary = files
       .map(
@@ -4053,13 +5206,7 @@ export class AiAssistantService {
 
   private buildMissingScheduleFieldPromptMessage(
     draft: Record<string, any>,
-    missingField: {
-      itemId: string;
-      itemNumber: number;
-      itemIndex: number;
-      fieldKey: 'location';
-      fieldLabel: string;
-    },
+    missingField: AssistantScheduleMissingField,
     options?: { markdown?: boolean },
   ) {
     const items = Array.isArray(draft.scheduleItemsDraft)

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ActivitiesModule } from '../activities/activities.module';
+import { LitellmModule } from '../llm/litellm.module';
 import { MissionsModule } from '../missions/missions.module';
 import { RbacModule } from '../rbac/rbac.module';
 import { StrategicModule } from '../strategic/strategic.module';
@@ -15,6 +16,7 @@ import { AiService } from './ai.service';
     MissionsModule,
     ActivitiesModule,
     TasksModule,
+    LitellmModule,
   ],
   controllers: [AiController],
   providers: [AiService, AiAssistantService],
