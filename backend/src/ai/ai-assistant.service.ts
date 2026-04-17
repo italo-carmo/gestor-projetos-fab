@@ -2599,10 +2599,34 @@ export class AiAssistantService {
       ) {
         location = fallbackLocation;
       }
+      let responsible = this.cleanScheduleLine(item.responsible);
+      const fallbackResponsible = this.cleanScheduleLine(
+        fallback?.responsible ?? '',
+      );
+      if (
+        (!responsible || this.isAmbiguousScheduleResponsible(responsible)) &&
+        fallbackResponsible &&
+        !this.isAmbiguousScheduleResponsible(fallbackResponsible)
+      ) {
+        responsible = fallbackResponsible;
+      }
+      let participants = this.cleanScheduleLine(item.participants);
+      const fallbackParticipants = this.cleanScheduleLine(
+        fallback?.participants ?? '',
+      );
+      if (
+        (!participants || this.isAmbiguousScheduleParticipants(participants)) &&
+        fallbackParticipants &&
+        !this.isAmbiguousScheduleParticipants(fallbackParticipants)
+      ) {
+        participants = fallbackParticipants;
+      }
       return this.sanitizeScheduleDraftItem({
         ...item,
         title,
         location: this.defaultScheduleLocationForTitle(title, location),
+        responsible,
+        participants,
       });
     });
     const existingKeys = new Set(
@@ -2632,7 +2656,11 @@ export class AiAssistantService {
         );
       }
     }
-    return reconciled.sort((left, right) => left.startAt.localeCompare(right.startAt));
+    const rebalanced = this.rebalanceScheduleAdjacentFields(
+      reconciled.sort((left, right) => left.startAt.localeCompare(right.startAt)),
+      fallbackItems,
+    );
+    return rebalanced.sort((left, right) => left.startAt.localeCompare(right.startAt));
   }
 
   private sanitizeScheduleDraftItem(
@@ -2659,7 +2687,7 @@ export class AiAssistantService {
     if (normalizedTitle.startsWith('chegada da equipe')) {
       location = '-';
       participants = '-';
-      responsible = responsible || 'Equipe de Campo';
+      responsible = 'Equipe de Campo';
     } else if (
       normalizedTitle === 'intervalo' ||
       normalizedTitle === 'encerramento das atividades'
@@ -2668,6 +2696,14 @@ export class AiAssistantService {
       responsible = '-';
       participants = '-';
     }
+
+    const normalizedFields = this.normalizeScheduleResponsibleAndParticipants(
+      normalizedTitle,
+      responsible,
+      participants,
+    );
+    responsible = normalizedFields.responsible;
+    participants = normalizedFields.participants;
 
     return {
       ...item,
@@ -3432,7 +3468,237 @@ export class AiAssistantService {
         .trim();
       normalized = rest ? `${auditLabel} ${rest}` : auditLabel;
     }
+    normalized = normalized.replace(
+      /\bAudit[oó]rio\s+([A-Z0-9-]+)\s+do$/i,
+      'Auditório do $1',
+    );
+    normalized = normalized.replace(
+      /\bAudit[oó]rio\s+Sala de Instru[cç][aã]o\b/i,
+      'Sala de Instrução',
+    );
     return normalized;
+  }
+
+  private normalizeScheduleResponsibleAndParticipants(
+    normalizedTitle: string,
+    responsible: string,
+    participants: string,
+  ) {
+    let safeResponsible = this.cleanScheduleLine(responsible);
+    let safeParticipants = this.cleanScheduleLine(participants);
+    const teamToken = 'Equipe de Campo';
+
+    if (
+      safeResponsible &&
+      safeResponsible !== teamToken &&
+      safeResponsible.includes(teamToken)
+    ) {
+      const suffix = this.cleanScheduleLine(
+        safeResponsible.replace(teamToken, ''),
+      );
+      safeResponsible = teamToken;
+      safeParticipants = this.mergeScheduleParticipantFragments(
+        safeParticipants,
+        suffix,
+      );
+    }
+
+    const firstRoleIndex = this.findScheduleResponsibleRoleIndex(safeResponsible);
+    if (firstRoleIndex > 0) {
+      const participantPrefix = this.cleanScheduleParticipantFragment(
+        safeResponsible.slice(0, firstRoleIndex),
+      );
+      safeResponsible = this.cleanScheduleLine(
+        safeResponsible.slice(firstRoleIndex),
+      );
+      safeParticipants = this.mergeScheduleParticipantFragments(
+        safeParticipants,
+        participantPrefix,
+      );
+    }
+
+    const trailingParticipantIndex =
+      this.findScheduleParticipantMarkerIndex(safeResponsible);
+    if (trailingParticipantIndex > 0) {
+      const participantSuffix = this.cleanScheduleParticipantFragment(
+        safeResponsible.slice(trailingParticipantIndex),
+      );
+      safeResponsible = this.cleanScheduleLine(
+        safeResponsible.slice(0, trailingParticipantIndex),
+      );
+      safeParticipants = this.mergeScheduleParticipantFragments(
+        safeParticipants,
+        participantSuffix,
+      );
+    }
+
+    safeParticipants = this.cleanScheduleParticipantFragment(safeParticipants);
+    if (normalizedTitle.startsWith('chegada da equipe')) {
+      safeParticipants = '-';
+      safeResponsible = teamToken;
+    }
+    if (normalizedTitle === 'intervalo' || normalizedTitle === 'encerramento das atividades') {
+      safeParticipants = '-';
+      safeResponsible = '-';
+    }
+
+    return {
+      responsible: safeResponsible || this.inferResponsibleFromTitle(normalizedTitle),
+      participants: safeParticipants || '',
+    };
+  }
+
+  private findScheduleResponsibleRoleIndex(value: string) {
+    const safe = String(value ?? '');
+    if (!safe) return -1;
+    const match = safe.match(
+      /\b(?:Equipe de Campo|Cap(?:it[aã]o)?|1T|2T|Ten(?:ente)?|1S|2S|Maj|Cel|Tc|Cb|Sgt)\b/i,
+    );
+    return match?.index ?? -1;
+  }
+
+  private findScheduleParticipantMarkerIndex(value: string) {
+    const safe = String(value ?? '');
+    if (!safe) return -1;
+    const match = safe.match(
+      /\b(?:Todo efetivo(?: escalado)?|Efetivo feminino(?: do [A-Z0-9-]+)?|Efetivo da [A-Z0-9-]+|Recrutas(?: \((?:Todos|Todas)\))?(?: e Instrutores(?: do [A-Z0-9-]+)?)?|Instrutores(?: \([^)]+\))?|CPCAs(?: da [A-Z0-9-]+)?|Jur[ií]dicos|Psic[oó]logos|Assistentes Sociais(?: da [A-Z0-9-]+)?|ECE|BE|SLZ|CTRB)\b/i,
+    );
+    return match?.index ?? -1;
+  }
+
+  private cleanScheduleParticipantFragment(value: string) {
+    let safe = this.cleanScheduleLine(value);
+    if (!safe) return '';
+    safe = safe
+      .replace(/^e\s+/i, '')
+      .replace(/\s+e$/i, '')
+      .replace(/\s+,/g, ',')
+      .trim();
+    safe = safe.replace(/^feminino do\s+/i, 'Efetivo feminino do ');
+    safe = safe.replace(/^efetivo do\s+/i, 'Efetivo do ');
+    safe = safe.replace(/^todo efetivo escalado\s+e\s+/i, 'Todo efetivo escalado e ');
+    safe = safe.replace(/^efetivo feminino\s+e\s+efetivo$/i, 'Efetivo feminino');
+    safe = safe.replace(/^recrutas e instrutores do\s+/i, 'Recrutas e Instrutores do ');
+    safe = safe.replace(/^cpcas da\s+/i, 'CPCAs da ');
+    safe = safe.replace(/^assistentes sociais da\s+/i, 'Assistentes Sociais da ');
+    safe = safe.replace(/\b(da|do|de)\s*([A-Z]{2,}(?:-[A-Z0-9]+)?)\b/g, '$1 $2');
+    safe = safe.replace(/\bGUARNAE-\s+([A-Z0-9]+)\b/g, 'GUARNAE-$1');
+    safe = safe.replace(
+      /^(Recrutas e Instrutores do [A-Z0-9-]+)\s+Recrutas e Instrutores$/i,
+      '$1',
+    );
+    safe = safe.replace(
+      /^(Efetivo feminino da [A-Z0-9-]+)\s+Efetivo feminino$/i,
+      '$1',
+    );
+    return safe.trim();
+  }
+
+  private mergeScheduleParticipantFragments(
+    current: string,
+    incoming: string,
+  ) {
+    const safeCurrent = this.cleanScheduleParticipantFragment(current);
+    const safeIncoming = this.cleanScheduleParticipantFragment(incoming);
+    if (!safeIncoming) return safeCurrent;
+    if (!safeCurrent) return safeIncoming;
+    const currentNorm = this.normalizeFreeText(safeCurrent);
+    const incomingNorm = this.normalizeFreeText(safeIncoming);
+    if (currentNorm === incomingNorm) return safeCurrent;
+    if (currentNorm.includes(incomingNorm)) return safeCurrent;
+    if (incomingNorm.includes(currentNorm)) return safeIncoming;
+    if (/[ -]$/.test(safeCurrent) || /\b(?:da|do|de)-?$/i.test(safeCurrent)) {
+      return `${safeCurrent}${safeIncoming}`.replace(/\s+/g, ' ').trim();
+    }
+    if (/[ -]$/.test(safeIncoming) || /\b(?:da|do|de)-?$/i.test(safeIncoming)) {
+      return `${safeIncoming}${safeCurrent}`.replace(/\s+/g, ' ').trim();
+    }
+    if (/^(BE|SLZ|ECE|CTRB)$/i.test(safeCurrent)) {
+      return `${safeIncoming} ${safeCurrent}`.replace(/\s+/g, ' ').trim();
+    }
+    if (/^(BE|SLZ|ECE|CTRB)$/i.test(safeIncoming)) {
+      return `${safeCurrent} ${safeIncoming}`.replace(/\s+/g, ' ').trim();
+    }
+    if (
+      /^Efetivo feminino$/i.test(safeIncoming) &&
+      /^Efetivo feminino do /i.test(safeCurrent)
+    ) {
+      return safeCurrent;
+    }
+    if (
+      /^Efetivo feminino$/i.test(safeCurrent) &&
+      /^Efetivo feminino do /i.test(safeIncoming)
+    ) {
+      return safeIncoming;
+    }
+    return `${safeCurrent} ${safeIncoming}`.replace(/\s+/g, ' ').trim();
+  }
+
+  private rebalanceScheduleAdjacentFields(
+    items: Array<
+      Omit<
+        AssistantScheduleDraftItem,
+        'id' | 'sourceFileIds' | 'sourceFileNames'
+      >
+    >,
+    fallbackItems: Array<
+      Omit<
+        AssistantScheduleDraftItem,
+        'id' | 'sourceFileIds' | 'sourceFileNames'
+      >
+    >,
+  ) {
+    const result = items.map((item) => ({ ...item }));
+    for (let index = 0; index < fallbackItems.length - 1; index += 1) {
+      const sourceFallback = fallbackItems[index];
+      const target = result[index + 1];
+      if (!sourceFallback || !target) continue;
+      const sourceTitle = this.normalizeFreeText(sourceFallback.title);
+      if (
+        sourceTitle !== 'intervalo' &&
+        !sourceTitle.startsWith('chegada da equipe')
+      ) {
+        continue;
+      }
+
+      const carryFromResponsible = this.extractScheduleCarryoverFragment(
+        sourceFallback.responsible,
+      );
+      const carryFromParticipants = this.extractScheduleCarryoverFragment(
+        sourceFallback.participants,
+      );
+      const carryover = this.mergeScheduleParticipantFragments(
+        carryFromResponsible,
+        carryFromParticipants,
+      );
+      if (!carryover) continue;
+      if (!target.startAt.startsWith(sourceFallback.startAt.slice(0, 10))) {
+        continue;
+      }
+      target.participants = this.mergeScheduleParticipantFragments(
+        target.participants,
+        carryover,
+      );
+      const normalizedFields = this.normalizeScheduleResponsibleAndParticipants(
+        this.normalizeFreeText(target.title),
+        target.responsible,
+        target.participants,
+      );
+      target.responsible = normalizedFields.responsible;
+      target.participants = normalizedFields.participants;
+    }
+    return result;
+  }
+
+  private extractScheduleCarryoverFragment(value: string) {
+    const safe = this.cleanScheduleLine(value);
+    if (!safe || safe === '-' || safe === 'Equipe de Campo') return '';
+    if (safe.includes('Equipe de Campo')) {
+      return this.cleanScheduleParticipantFragment(
+        safe.replace('Equipe de Campo', ''),
+      );
+    }
+    return this.cleanScheduleParticipantFragment(safe);
   }
 
   private reconcileScheduleTitleWithFallback(
@@ -3964,7 +4230,14 @@ export class AiAssistantService {
     ) {
       return false;
     }
-    return !String(item.responsible ?? '').trim();
+    const responsible = String(item.responsible ?? '').trim();
+    if (
+      responsible === 'Equipe de Campo' &&
+      !/^(encontro de comiss[oõ]es|reuni[aã]o com as cpcas)/i.test(title)
+    ) {
+      return true;
+    }
+    return !responsible || this.isAmbiguousScheduleResponsible(responsible);
   }
 
   private requiresScheduleParticipantsConfirmation(item: AssistantScheduleDraftItem) {
@@ -3976,7 +4249,36 @@ export class AiAssistantService {
     ) {
       return false;
     }
-    return !String(item.participants ?? '').trim();
+    const participants = String(item.participants ?? '').trim();
+    return !participants || this.isAmbiguousScheduleParticipants(participants);
+  }
+
+  private isAmbiguousScheduleResponsible(responsible: string) {
+    const normalized = this.normalizeFreeText(responsible);
+    if (!normalized) return true;
+    return (
+      /(todo efetivo|efetivo feminino|recrutas|instrutores|cpcas|juridicos|psicologos|assistentes sociais)/i.test(
+        normalized,
+      ) ||
+      /\bda$|\bdo$|\bde$/.test(normalized)
+    );
+  }
+
+  private isAmbiguousScheduleParticipants(participants: string) {
+    const normalized = this.normalizeFreeText(participants);
+    if (!normalized) return true;
+    return (
+      /^(be|slz|co|sm|ece|ctrb|cla|comar|gds|gsd-[a-z]+)$/i.test(normalized) ||
+      /^do gsd-/.test(normalized) ||
+      /^feminino do /.test(normalized) ||
+      /^efetivo do /.test(normalized) ||
+      /^elos indicados pelo$/.test(normalized) ||
+      /(recrutas e instrutores do [a-z0-9-]+)\s+recrutas e instrutores$/.test(
+        normalized,
+      ) ||
+      /(efetivo feminino da [a-z0-9-]+)\s+efetivo feminino$/.test(normalized) ||
+      /\bda$|\bdo$|\bde$/.test(normalized)
+    );
   }
 
   private getScheduleMissingFieldPlaceholder(
@@ -4019,7 +4321,35 @@ export class AiAssistantService {
         new Set([...(existing.sourceFileNames ?? []), ...(item.sourceFileNames ?? [])]),
       );
     }
-    return Array.from(seen.values());
+    const deduped = Array.from(seen.values()).sort((left, right) =>
+      String(left.startAt ?? '').localeCompare(String(right.startAt ?? '')),
+    );
+    const collapsed: AssistantScheduleDraftItem[] = [];
+    for (const item of deduped) {
+      const previous = collapsed[collapsed.length - 1];
+      if (
+        previous &&
+        previous.startAt === item.startAt &&
+        this.normalizeFreeText(previous.title).startsWith('chegada da equipe') &&
+        this.normalizeFreeText(item.title).startsWith('chegada da equipe')
+      ) {
+        const keep =
+          String(item.title ?? '').length > String(previous.title ?? '').length
+            ? item
+            : previous;
+        const drop = keep === item ? previous : item;
+        keep.sourceFileIds = Array.from(
+          new Set([...(keep.sourceFileIds ?? []), ...(drop.sourceFileIds ?? [])]),
+        );
+        keep.sourceFileNames = Array.from(
+          new Set([...(keep.sourceFileNames ?? []), ...(drop.sourceFileNames ?? [])]),
+        );
+        collapsed[collapsed.length - 1] = keep;
+        continue;
+      }
+      collapsed.push(item);
+    }
+    return collapsed;
   }
 
   private resetMissionScheduleDraftForOperationChange(draft: Record<string, any>) {
