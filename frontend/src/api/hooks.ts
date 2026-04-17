@@ -132,8 +132,12 @@ function getTaskAssigneeIds(task: any) {
 function taskMatchesFilters(task: any, filters: Record<string, any>) {
   if (!task || typeof task !== "object") return false;
 
-  const scopeFilter = String(filters.scope ?? "").trim().toUpperCase();
-  const taskScope = String(task.scope ?? "SMIF").trim().toUpperCase();
+  const scopeFilter = String(filters.scope ?? "")
+    .trim()
+    .toUpperCase();
+  const taskScope = String(task.scope ?? "SMIF")
+    .trim()
+    .toUpperCase();
   if (scopeFilter && taskScope !== scopeFilter) {
     return false;
   }
@@ -402,8 +406,11 @@ export function useActivityTypes(scope: string) {
   return useQuery({
     queryKey: qk.activityTypes(normalizedScope),
     queryFn: async () =>
-      (await api.get("/activities/types", { params: { scope: normalizedScope } }))
-        .data,
+      (
+        await api.get("/activities/types", {
+          params: { scope: normalizedScope },
+        })
+      ).data,
     staleTime: 60_000,
   });
 }
@@ -909,11 +916,16 @@ export function useUpdateMissionBanner() {
       };
     }) =>
       (
-        await api.put(`/missions/${args.id}/banners/${args.bannerId}`, args.payload)
+        await api.put(
+          `/missions/${args.id}/banners/${args.bannerId}`,
+          args.payload,
+        )
       ).data,
     onSuccess: (_data, args) => {
       qc.invalidateQueries({ queryKey: qk.mission(args.id) });
-      qc.invalidateQueries({ queryKey: qk.missionBannerPreview(args.id, args.bannerId) });
+      qc.invalidateQueries({
+        queryKey: qk.missionBannerPreview(args.id, args.bannerId),
+      });
       qc.invalidateQueries({ queryKey: ["missions"] });
     },
   });
@@ -926,7 +938,9 @@ export function useDeleteMissionBanner() {
       (await api.delete(`/missions/${args.id}/banners/${args.bannerId}`)).data,
     onSuccess: (_data, args) => {
       qc.invalidateQueries({ queryKey: qk.mission(args.id) });
-      qc.removeQueries({ queryKey: qk.missionBannerPreview(args.id, args.bannerId) });
+      qc.removeQueries({
+        queryKey: qk.missionBannerPreview(args.id, args.bannerId),
+      });
       qc.invalidateQueries({ queryKey: ["missions"] });
     },
   });
@@ -949,8 +963,7 @@ export function useDownloadMissionBannerFile() {
       const contentType = String(
         response.headers?.["content-type"] ?? "",
       ).toLowerCase();
-      const expected =
-        args.format === "pdf" ? "application/pdf" : "image/png";
+      const expected = args.format === "pdf" ? "application/pdf" : "image/png";
       if (!contentType.includes(expected)) {
         throw new Error(
           "Não foi possível baixar o banner. Faça login novamente e tente de novo.",
@@ -969,7 +982,8 @@ export function useDownloadMissionBannerFile() {
       const decodedName = fileNameMatch?.[1]
         ? decodeURIComponent(fileNameMatch[1].trim())
         : "";
-      a.download = decodedName || `banner-missao-${args.bannerId}.${args.format}`;
+      a.download =
+        decodedName || `banner-missao-${args.bannerId}.${args.format}`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -2544,8 +2558,11 @@ export function useDeleteLessonLearned() {
 export function useCreateLessonLearnedType() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (payload: { name: string; colorHex: string; textColorHex?: string }) =>
-      (await api.post("/lessons-learned/types", payload)).data,
+    mutationFn: async (payload: {
+      name: string;
+      colorHex: string;
+      textColorHex?: string;
+    }) => (await api.post("/lessons-learned/types", payload)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["lessonLearnedTypes"] });
       qc.invalidateQueries({ queryKey: ["lessonsLearned"] });
@@ -5051,6 +5068,76 @@ export function useBiNormalizationOverview(enabled = true) {
   });
 }
 
+export type BiNormalizationReviewGroup = {
+  id: string;
+  sourceType: string;
+  fieldLabel: string;
+  targetFieldSource: "SCALAR" | "JSON" | "NONE";
+  status: "READY_TO_APPLY" | "NEEDS_MANUAL_SELECTION";
+  totalRecords: number;
+  recordIds: string[];
+  variants: Array<{ value: string; count: number }>;
+  suggestedOm: {
+    id: string;
+    code: string;
+    name: string;
+    uf: string | null;
+  } | null;
+  targetReference: string | null;
+  confidence: number | null;
+  resolutionMethod: string | null;
+  reasoning: string | null;
+  sampleValue: string | null;
+  summary: string;
+};
+
+export type BiNormalizationReviewSource = {
+  sourceType: string;
+  label: string;
+  description: string;
+  supported: boolean;
+  totalGroups: number;
+  totalRecords: number;
+  readyGroups: number;
+  readyRecords: number;
+  unresolvedGroups: number;
+  unresolvedRecords: number;
+  groups: BiNormalizationReviewGroup[];
+};
+
+export type BiNormalizationReviewResponse = {
+  generatedAt: string;
+  overall: {
+    totalGroups: number;
+    totalRecords: number;
+    readyGroups: number;
+    readyRecords: number;
+    unresolvedGroups: number;
+    unresolvedRecords: number;
+  };
+  sources: BiNormalizationReviewSource[];
+};
+
+export function useBiNormalizationReview(
+  sourceType?: string | null,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: qk.biNormalizationReview(sourceType),
+    queryFn: async () =>
+      (
+        await api.get<BiNormalizationReviewResponse>(
+          "/bi/normalization/review",
+          {
+            params: sourceType ? { sourceType } : undefined,
+          },
+        )
+      ).data,
+    enabled,
+    staleTime: 30_000,
+  });
+}
+
 export function useRebuildBiNormalization() {
   const qc = useQueryClient();
   return useMutation({
@@ -5058,6 +5145,36 @@ export function useRebuildBiNormalization() {
       (await api.post("/bi/normalization/rebuild", payload ?? {})).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.biNormalizationOverview });
+      qc.invalidateQueries({ queryKey: ["bi", "normalization", "review"] });
+      qc.invalidateQueries({ queryKey: qk.comgepSituationRoom });
+    },
+  });
+}
+
+export function useApplyBiNormalization() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      sourceType: string;
+      sourceRecordIds: string[];
+      omId?: string | null;
+    }) => (await api.post("/bi/normalization/apply", payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.biNormalizationOverview });
+      qc.invalidateQueries({ queryKey: ["bi", "normalization", "review"] });
+      qc.invalidateQueries({ queryKey: qk.comgepSituationRoom });
+    },
+  });
+}
+
+export function useApplyReadyBiNormalization() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload?: { sourceType?: string | null }) =>
+      (await api.post("/bi/normalization/apply-ready", payload ?? {})).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.biNormalizationOverview });
+      qc.invalidateQueries({ queryKey: ["bi", "normalization", "review"] });
       qc.invalidateQueries({ queryKey: qk.comgepSituationRoom });
     },
   });
@@ -5088,7 +5205,9 @@ export function useCreateComgepRecommendation() {
       evidence?: unknown;
     }) => (await api.post("/strategic/comgep-recommendations", payload)).data,
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["strategic", "comgepRecommendations"] });
+      qc.invalidateQueries({
+        queryKey: ["strategic", "comgepRecommendations"],
+      });
     },
   });
 }

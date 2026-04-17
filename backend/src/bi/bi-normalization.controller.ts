@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../common/current-user.decorator';
 import { throwError } from '../common/http-error';
@@ -32,6 +32,16 @@ export class BiNormalizationController {
     return this.normalization.overview();
   }
 
+  @Get('review')
+  @RequirePermission('bi', 'view')
+  review(
+    @Query('sourceType') sourceType: string | undefined,
+    @CurrentUser() user: RbacUser,
+  ) {
+    this.assertCanView(user);
+    return this.normalization.review({ sourceType: sourceType ?? null });
+  }
+
   @Post('rebuild')
   @RequirePermission('bi', 'upload')
   rebuild(
@@ -40,5 +50,38 @@ export class BiNormalizationController {
   ) {
     this.assertCanRebuild(user);
     return this.normalization.rebuild({ sourceType: body?.sourceType ?? null });
+  }
+
+  @Post('apply')
+  @RequirePermission('bi', 'upload')
+  apply(
+    @Body()
+    body: {
+      sourceType?: string | null;
+      sourceRecordIds?: string[];
+      omId?: string | null;
+    },
+    @CurrentUser() user: RbacUser,
+  ) {
+    this.assertCanRebuild(user);
+    return this.normalization.apply({
+      sourceType: body?.sourceType ?? null,
+      sourceRecordIds: Array.isArray(body?.sourceRecordIds)
+        ? body.sourceRecordIds
+        : [],
+      omId: body?.omId ?? null,
+    });
+  }
+
+  @Post('apply-ready')
+  @RequirePermission('bi', 'upload')
+  applyReady(
+    @Body() body: { sourceType?: string | null },
+    @CurrentUser() user: RbacUser,
+  ) {
+    this.assertCanRebuild(user);
+    return this.normalization.applyReady({
+      sourceType: body?.sourceType ?? null,
+    });
   }
 }

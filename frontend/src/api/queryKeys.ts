@@ -10,7 +10,7 @@ export const qk = {
     ["activityComments", activityId] as const,
   activitySchedule: (activityId: string) =>
     ["activitySchedule", activityId] as const,
-  activityTypes: ["activityTypes"] as const,
+  activityTypes: (scope: string) => ["activityTypes", scope] as const,
   missions: (filters: Record<string, any>) => ["missions", filters] as const,
   mission: (id: string) => ["mission", id] as const,
   missionSchedule: (missionId: string) =>
@@ -127,8 +127,7 @@ export const qk = {
     ["biCpcaMeeting", "responses", filters] as const,
   biCpcaMeetingImports: (filters: Record<string, any>) =>
     ["biCpcaMeeting", "imports", filters] as const,
-  biCpcaMeetingCardSettings: () =>
-    ["biCpcaMeeting", "cardSettings"] as const,
+  biCpcaMeetingCardSettings: () => ["biCpcaMeeting", "cardSettings"] as const,
   biGsdEvaluationDashboard: (filters: Record<string, any>) =>
     ["biGsdEvaluation", "dashboard", filters] as const,
   biGsdEvaluationResponses: (filters: Record<string, any>) =>
@@ -155,5 +154,7 @@ export const qk = {
   smifComplaintCase: (id: string) => ["smifComplaintCase", id] as const,
   aiSettings: ["admin", "aiSettings"] as const,
   biNormalizationOverview: ["bi", "normalization", "overview"] as const,
+  biNormalizationReview: (sourceType?: string | null) =>
+    ["bi", "normalization", "review", sourceType ?? "all"] as const,
   aiActionAgents: ["ai", "actionAgents"] as const,
 };
