@@ -2,13 +2,19 @@ import {
   Box,
   Button,
   Chip,
+  Divider,
   IconButton,
+  InputAdornment,
   Stack,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material';
-import KeyboardArrowDownRoundedIcon from '@mui/icons-material/KeyboardArrowDownRounded';
-import KeyboardArrowUpRoundedIcon from '@mui/icons-material/KeyboardArrowUpRounded';
+import AddRoundedIcon from '@mui/icons-material/AddRounded';
+import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
+import FormatPaintOutlinedIcon from '@mui/icons-material/FormatPaintOutlined';
+import RemoveRoundedIcon from '@mui/icons-material/RemoveRounded';
+import RestartAltRoundedIcon from '@mui/icons-material/RestartAltRounded';
 import {
   useEffect,
   useMemo,
@@ -328,10 +334,19 @@ export function MissionBannerLayoutEditor({
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [selectedBlock, setSelectedBlock] =
     useState<MissionBannerLayoutBlockKey>('locationPrimary');
+  const [selectedBlockKeys, setSelectedBlockKeys] = useState<
+    MissionBannerLayoutBlockKey[]
+  >(['locationPrimary']);
   const [inlineEditorValue, setInlineEditorValue] = useState('');
   const [colorInputValue, setColorInputValue] = useState(COLOR_PINK);
   const [editingTextBlockKey, setEditingTextBlockKey] =
     useState<MissionBannerLayoutBlockKey | null>(null);
+  const [fontSizeInputValue, setFontSizeInputValue] = useState('');
+  const [styleClipboard, setStyleClipboard] = useState<{
+    fontSizePx: number;
+    colorHex: string;
+  } | null>(null);
+  const [formatPainterArmed, setFormatPainterArmed] = useState(false);
 
   const normalizedOverrides = useMemo(
     () => normalizeLayoutOverrides(layoutOverrides),
@@ -455,12 +470,30 @@ export function MissionBannerLayoutEditor({
   );
 
   useEffect(() => {
-    if (!visibleBlocks.some((block) => block.key === selectedBlock)) {
-      setSelectedBlock(visibleBlocks[0]?.key ?? 'locationPrimary');
+    const visibleKeys = new Set(visibleBlocks.map((block) => block.key));
+    const nextSelected = selectedBlockKeys.filter((key) => visibleKeys.has(key));
+    if (!nextSelected.length) {
+      const fallback = visibleBlocks[0]?.key ?? 'locationPrimary';
+      setSelectedBlock(fallback);
+      setSelectedBlockKeys([fallback]);
+      return;
     }
-  }, [selectedBlock, visibleBlocks]);
+    if (
+      nextSelected.length !== selectedBlockKeys.length ||
+      nextSelected.some((key, index) => key !== selectedBlockKeys[index])
+    ) {
+      setSelectedBlockKeys(nextSelected);
+    }
+    if (!nextSelected.includes(selectedBlock)) {
+      setSelectedBlock(nextSelected[0]);
+    }
+  }, [selectedBlock, selectedBlockKeys, visibleBlocks]);
 
   const activeBlock = visibleBlocks.find((block) => block.key === selectedBlock) ?? null;
+  const selectedBlocks = visibleBlocks.filter((block) =>
+    selectedBlockKeys.includes(block.key),
+  );
+  const hasMultipleSelection = selectedBlocks.length > 1;
   const activeGuidePosition = activeBlock
     ? {
         currentXPct:
@@ -480,6 +513,55 @@ export function MissionBannerLayoutEditor({
     moved: boolean;
   } | null>(null);
   const suppressNextClickRef = useRef(false);
+
+  const getCurrentBlockText = (block: TextBlockDefinition) => {
+    const override = normalizedOverrides[block.key];
+    return override?.textOverride ?? block.text;
+  };
+
+  const getRecommendedFontSizePx = (block: TextBlockDefinition) =>
+    fitTextToWidth(
+      getCurrentBlockText(block),
+      block.maxWidth,
+      block.minFontSize,
+      Math.max(block.fontSizeBase, block.minFontSize),
+    );
+
+  const getCurrentFontSizePx = (block: TextBlockDefinition) => {
+    const recommendedFontSize = getRecommendedFontSizePx(block);
+    const current = normalizedOverrides[block.key];
+    if (typeof current?.fontSizePx === 'number' && Number.isFinite(current.fontSizePx)) {
+      return clamp(current.fontSizePx, block.minFontSize, 180);
+    }
+    if (typeof current?.fontScale === 'number' && Number.isFinite(current.fontScale)) {
+      return Math.max(
+        block.minFontSize,
+        recommendedFontSize * clamp(current.fontScale, 0.45, 1.8),
+      );
+    }
+    return Math.max(block.minFontSize, recommendedFontSize);
+  };
+
+  const commonSelectedFontSizePx = useMemo(() => {
+    if (!selectedBlocks.length) return null;
+    const roundedValues = selectedBlocks.map((block) =>
+      Math.round(getCurrentFontSizePx(block)),
+    );
+    const [first, ...rest] = roundedValues;
+    return rest.every((value) => value === first) ? first : null;
+  }, [selectedBlocks, normalizedOverrides, blocks]);
+
+  const activeBlockColor = activeBlock
+    ? normalizedOverrides[activeBlock.key]?.colorHex ?? activeBlock.defaultColor
+    : COLOR_PINK;
+
+  useEffect(() => {
+    if (commonSelectedFontSizePx === null) {
+      setFontSizeInputValue('');
+      return;
+    }
+    setFontSizeInputValue(String(commonSelectedFontSizePx));
+  }, [commonSelectedFontSizePx]);
 
   useEffect(() => {
     const handleMove = (event: PointerEvent) => {
@@ -536,74 +618,85 @@ export function MissionBannerLayoutEditor({
     };
   };
 
-  const updateSelectedBlock = (patch: MissionBannerLayoutBlockOverride) => {
-    if (!activeBlock) return;
-    onChange({
-      ...normalizedOverrides,
-      [activeBlock.key]: {
-        ...(normalizedOverrides[activeBlock.key] ?? {}),
-        ...patch,
-      },
+  const updateBlocks = (
+    keys: MissionBannerLayoutBlockKey[],
+    patch:
+      | MissionBannerLayoutBlockOverride
+      | ((block: TextBlockDefinition) => MissionBannerLayoutBlockOverride),
+  ) => {
+    if (!keys.length) return;
+    const next = { ...normalizedOverrides };
+    for (const key of keys) {
+      const block = visibleBlocks.find((item) => item.key === key);
+      if (!block) continue;
+      const resolvedPatch = typeof patch === 'function' ? patch(block) : patch;
+      const current = next[key] ?? {};
+      const merged: MissionBannerLayoutBlockOverride = {
+        ...current,
+        ...resolvedPatch,
+      };
+      if (resolvedPatch.fontScale === undefined && 'fontScale' in resolvedPatch) {
+        delete merged.fontScale;
+      }
+      if (resolvedPatch.fontSizePx === undefined && 'fontSizePx' in resolvedPatch) {
+        delete merged.fontSizePx;
+      }
+      if (resolvedPatch.colorHex === undefined && 'colorHex' in resolvedPatch) {
+        delete merged.colorHex;
+      }
+      if (resolvedPatch.textOverride === undefined && 'textOverride' in resolvedPatch) {
+        delete merged.textOverride;
+      }
+      if (Object.keys(merged).length > 0) {
+        next[key] = merged;
+      } else {
+        delete next[key];
+      }
+    }
+    onChange(next);
+  };
+
+  const setSingleSelection = (key: MissionBannerLayoutBlockKey) => {
+    setSelectedBlock(key);
+    setSelectedBlockKeys([key]);
+  };
+
+  const toggleBlockSelection = (key: MissionBannerLayoutBlockKey) => {
+    setSelectedBlock(key);
+    setSelectedBlockKeys((current) => {
+      if (current.includes(key)) {
+        if (current.length === 1) return current;
+        return current.filter((item) => item !== key);
+      }
+      return [...current, key];
     });
   };
 
-  const resetSelectedBlock = () => {
-    if (!activeBlock) return;
+  const resetSelectedBlocks = () => {
+    if (!selectedBlockKeys.length) return;
     const next = { ...normalizedOverrides };
-    delete next[activeBlock.key];
+    for (const key of selectedBlockKeys) {
+      delete next[key];
+    }
     onChange(next);
   };
 
   const resetAll = () => onChange({});
 
   const nudgeSelectedBlock = (axis: 'xPct' | 'yPct', delta: number) => {
-    if (!activeBlock) return;
-    const current = normalizedOverrides[activeBlock.key];
-    const baseValue = axis === 'xPct' ? activeBlock.xPct : activeBlock.yPct;
-    const currentValue =
-      axis === 'xPct' ? current?.xPct ?? baseValue : current?.yPct ?? baseValue;
-    updateSelectedBlock({
-      [axis]:
-        axis === 'xPct'
-          ? clamp(currentValue + delta, 0.05, 0.92)
-          : clamp(currentValue + delta, 0.05, 0.95),
+    if (!selectedBlockKeys.length) return;
+    updateBlocks(selectedBlockKeys, (block) => {
+      const current = normalizedOverrides[block.key];
+      const baseValue = axis === 'xPct' ? block.xPct : block.yPct;
+      const currentValue =
+        axis === 'xPct' ? current?.xPct ?? baseValue : current?.yPct ?? baseValue;
+      return {
+        [axis]:
+          axis === 'xPct'
+            ? clamp(currentValue + delta, 0.05, 0.92)
+            : clamp(currentValue + delta, 0.05, 0.95),
+      };
     });
-  };
-
-  const getCurrentFontSizePx = (block: TextBlockDefinition) => {
-    const recommendedFontSize = getRecommendedFontSizePx(block);
-    const current = normalizedOverrides[block.key];
-    if (typeof current?.fontSizePx === 'number' && Number.isFinite(current.fontSizePx)) {
-      return clamp(current.fontSizePx, block.minFontSize, 180);
-    }
-    if (typeof current?.fontScale === 'number' && Number.isFinite(current.fontScale)) {
-      return Math.max(
-        block.minFontSize,
-        recommendedFontSize * clamp(current.fontScale, 0.45, 1.8),
-      );
-    }
-    return Math.max(block.minFontSize, recommendedFontSize);
-  };
-
-  const getRecommendedFontSizePx = (block: TextBlockDefinition) =>
-    fitTextToWidth(
-      getCurrentBlockText(block),
-      block.maxWidth,
-      block.minFontSize,
-      Math.max(block.fontSizeBase, block.minFontSize),
-    );
-
-  const setSelectedBlockFontSize = (nextFontSizePx: number) => {
-    if (!activeBlock) return;
-    updateSelectedBlock({
-      fontSizePx: clamp(nextFontSizePx, activeBlock.minFontSize, 180),
-      fontScale: undefined,
-    });
-  };
-
-  const getCurrentBlockText = (block: TextBlockDefinition) => {
-    const override = normalizedOverrides[block.key];
-    return override?.textOverride ?? block.text;
   };
 
   const setSelectedBlockText = (nextText: string) => {
@@ -614,15 +707,71 @@ export function MissionBannerLayoutEditor({
       .join('\n');
     const defaultText = activeBlock.text;
     const hasMeaningfulText = normalized.trim().length > 0;
-    updateSelectedBlock({
+    updateBlocks([activeBlock.key], {
       textOverride:
         hasMeaningfulText && normalized !== defaultText ? normalized : undefined,
     });
   };
 
   const setSelectedBlockColor = (colorHex: string | undefined) => {
+    if (!selectedBlockKeys.length) return;
+    updateBlocks(selectedBlockKeys, { colorHex });
+  };
+
+  const applyFontSizeToSelection = (nextFontSizePx: number) => {
+    if (!selectedBlockKeys.length) return;
+    updateBlocks(selectedBlockKeys, (block) => ({
+      fontSizePx: clamp(nextFontSizePx, block.minFontSize, 180),
+      fontScale: undefined,
+    }));
+  };
+
+  const nudgeSelectionFontSize = (delta: number) => {
+    if (!selectedBlockKeys.length) return;
+    updateBlocks(selectedBlockKeys, (block) => ({
+      fontSizePx: clamp(getCurrentFontSizePx(block) + delta, block.minFontSize, 180),
+      fontScale: undefined,
+    }));
+  };
+
+  const matchSelectionToActiveFontSize = () => {
+    if (!activeBlock || !selectedBlockKeys.length) return;
+    applyFontSizeToSelection(getCurrentFontSizePx(activeBlock));
+  };
+
+  const copyActiveStyle = () => {
     if (!activeBlock) return;
-    updateSelectedBlock({ colorHex });
+    setStyleClipboard({
+      fontSizePx: getCurrentFontSizePx(activeBlock),
+      colorHex: activeBlockColor.toUpperCase(),
+    });
+    setFormatPainterArmed(false);
+  };
+
+  const applyClipboardToKeys = (keys: MissionBannerLayoutBlockKey[]) => {
+    if (!styleClipboard || !keys.length) return;
+    updateBlocks(keys, {
+      fontSizePx: styleClipboard.fontSizePx,
+      colorHex: styleClipboard.colorHex,
+      fontScale: undefined,
+    });
+  };
+
+  const handleToolbarFontSizeChange = (rawValue: string) => {
+    setFontSizeInputValue(rawValue);
+    const nextValue = Number(rawValue);
+    if (!Number.isFinite(nextValue)) return;
+    applyFontSizeToSelection(nextValue);
+  };
+
+  const commitFontSizeInput = () => {
+    const nextValue = Number(fontSizeInputValue);
+    if (!Number.isFinite(nextValue)) {
+      setFontSizeInputValue(commonSelectedFontSizePx ? String(commonSelectedFontSizePx) : '');
+      return;
+    }
+    applyFontSizeToSelection(nextValue);
+    setFontSizeInputValue(String(Math.round(nextValue)));
   };
 
   useEffect(() => {
@@ -633,10 +782,8 @@ export function MissionBannerLayoutEditor({
 
   useEffect(() => {
     if (!activeBlock) return;
-    const activeColor =
-      normalizedOverrides[activeBlock.key]?.colorHex ?? activeBlock.defaultColor;
-    setColorInputValue(activeColor.toUpperCase());
-  }, [activeBlock, normalizedOverrides]);
+    setColorInputValue(activeBlockColor.toUpperCase());
+  }, [activeBlock, activeBlockColor]);
 
   return (
     <Stack spacing={1.5}>
@@ -769,16 +916,22 @@ export function MissionBannerLayoutEditor({
                   suppressNextClickRef.current = false;
                   return;
                 }
-                if (selectedBlock !== block.key) {
-                  setSelectedBlock(block.key);
+                if (formatPainterArmed && styleClipboard) {
+                  setSingleSelection(block.key);
+                  applyClipboardToKeys([block.key]);
+                  setFormatPainterArmed(false);
                   return;
                 }
-                setEditingTextBlockKey(block.key);
-                setInlineEditorValue(getCurrentBlockText(block));
+                if (event.metaKey || event.ctrlKey || event.shiftKey) {
+                  toggleBlockSelection(block.key);
+                  return;
+                }
+                setSingleSelection(block.key);
               }}
               onDoubleClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
+                setSingleSelection(block.key);
                 setEditingTextBlockKey(block.key);
                 setInlineEditorValue(getCurrentBlockText(block));
               }}
@@ -798,11 +951,11 @@ export function MissionBannerLayoutEditor({
                 py: 0.15,
                 whiteSpace: 'pre',
                 outline:
-                  selectedBlock === block.key
-                    ? '1px dashed rgba(255,255,255,0.72)'
+                  selectedBlockKeys.includes(block.key)
+                    ? '1px dashed rgba(255,255,255,0.78)'
                     : 'none',
                 backgroundColor:
-                  selectedBlock === block.key
+                  selectedBlockKeys.includes(block.key)
                     ? 'rgba(15, 23, 42, 0.18)'
                     : 'transparent',
                 textShadow: '0 1px 2px rgba(15, 23, 42, 0.12)',
@@ -849,120 +1002,160 @@ export function MissionBannerLayoutEditor({
       </Box>
 
       <Stack spacing={1}>
-        <Stack
-          direction={{ xs: 'column', sm: 'row' }}
-          spacing={0.8}
-          alignItems={{ xs: 'flex-start', sm: 'center' }}
-          justifyContent="space-between"
+        <Box
+          sx={{
+            border: '1px solid',
+            borderColor: 'divider',
+            borderRadius: 2,
+            bgcolor: 'background.paper',
+            px: 1.2,
+            py: 1,
+          }}
         >
-          <Typography variant="caption" color="text.secondary">
-            Linhas azuis mostram a posição atual do bloco ativo. Linhas tracejadas mostram a posição base do layout.
-          </Typography>
-        </Stack>
-        <Typography variant="caption" color="text.secondary">
-          Blocos do banner
-        </Typography>
-        <Stack direction="row" spacing={0.8} flexWrap="wrap" useFlexGap>
-          {visibleBlocks.map((block) => (
-            <Chip
-              key={block.key}
-              size="small"
-              clickable
-              color={selectedBlock === block.key ? 'primary' : 'default'}
-              variant={selectedBlock === block.key ? 'filled' : 'outlined'}
-              label={block.label}
-              onClick={() => setSelectedBlock(block.key)}
-            />
-          ))}
-        </Stack>
-      </Stack>
-
-      {activeBlock ? (
-        <Stack spacing={1.2}>
-          <Box>
-            <Typography variant="caption" color="text.secondary" display="block">
-              Ajustando
-            </Typography>
-            <Typography variant="body2" fontWeight={700}>
-              {activeBlock.label}
-            </Typography>
-          </Box>
-
-          <Box>
-            <Typography variant="caption" color="text.secondary" display="block">
-              Tamanho da letra
-            </Typography>
-            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-              <IconButton
-                size="small"
-                onClick={() => setSelectedBlockFontSize(getCurrentFontSizePx(activeBlock) - 1)}
-              >
-                <KeyboardArrowDownRoundedIcon />
-              </IconButton>
-              <Chip
-                size="small"
-                label={`${Math.round(getCurrentFontSizePx(activeBlock))} px`}
-                variant="outlined"
-              />
-              <TextField
-                size="small"
-                type="number"
-                label="Fonte"
-                value={Math.round(getCurrentFontSizePx(activeBlock))}
-                onChange={(event) => {
-                  const nextValue = Number(event.target.value);
-                  if (!Number.isFinite(nextValue)) return;
-                  setSelectedBlockFontSize(nextValue);
-                }}
-                inputProps={{
-                  min: Math.round(activeBlock.minFontSize),
-                  max: 180,
-                  step: 1,
-                }}
-                sx={{
-                  width: 116,
-                  '& input': {
-                    textAlign: 'center',
-                  },
-                }}
-                helperText="px"
-              />
-              <IconButton
-                size="small"
-                onClick={() => setSelectedBlockFontSize(getCurrentFontSizePx(activeBlock) + 1)}
-              >
-                <KeyboardArrowUpRoundedIcon />
-              </IconButton>
+          <Stack spacing={1}>
+            <Stack
+              direction={{ xs: 'column', md: 'row' }}
+              spacing={1}
+              alignItems={{ xs: 'stretch', md: 'center' }}
+              justifyContent="space-between"
+            >
+              <Stack direction="row" spacing={0.8} alignItems="center" flexWrap="wrap" useFlexGap>
+                <Chip
+                  size="small"
+                  color="primary"
+                  variant="outlined"
+                  label={
+                    selectedBlocks.length === 1
+                      ? `1 item selecionado`
+                      : `${selectedBlocks.length} itens selecionados`
+                  }
+                />
+                <Typography variant="caption" color="text.secondary">
+                  Ctrl/⌘ clique para multisselecionar. Ajustes de estilo valem para toda a seleção.
+                </Typography>
+              </Stack>
+              <Stack direction="row" spacing={0.6} alignItems="center" flexWrap="wrap" useFlexGap>
+                <Tooltip title="Copiar formatação do bloco ativo">
+                  <span>
+                    <IconButton size="small" onClick={copyActiveStyle} disabled={!activeBlock}>
+                      <ContentCopyRoundedIcon fontSize="small" />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+                <Tooltip
+                  title={
+                    formatPainterArmed
+                      ? 'Clique em outro bloco para aplicar a formatação copiada'
+                      : 'Pincel de formatação'
+                  }
+                >
+                  <span>
+                    <IconButton
+                      size="small"
+                      color={formatPainterArmed ? 'primary' : 'default'}
+                      onClick={() => {
+                        if (!activeBlock) return;
+                        setStyleClipboard({
+                          fontSizePx: getCurrentFontSizePx(activeBlock),
+                          colorHex: activeBlockColor.toUpperCase(),
+                        });
+                        setFormatPainterArmed((current) => !current);
+                      }}
+                      disabled={!activeBlock}
+                    >
+                      <FormatPaintOutlinedIcon fontSize="small" />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+                <Tooltip title="Aplicar a formatação copiada na seleção atual">
+                  <span>
+                    <Button
+                      size="small"
+                      variant="text"
+                      onClick={() => applyClipboardToKeys(selectedBlockKeys)}
+                      disabled={!styleClipboard || !selectedBlockKeys.length}
+                    >
+                      Aplicar estilo
+                    </Button>
+                  </span>
+                </Tooltip>
+              </Stack>
             </Stack>
-            <Typography variant="caption" color="text.secondary">
-              O valor acima é o tamanho real da fonte em `px`. Se dois blocos estiverem com
-              o mesmo valor, eles usarão o mesmo tamanho tipográfico base no banner final.
-            </Typography>
-          </Box>
 
-          <TextField
-            size="small"
-            label="Texto do bloco"
-            value={getCurrentBlockText(activeBlock)}
-            onChange={(event) => setSelectedBlockText(event.target.value)}
-            multiline
-            minRows={2}
-            helperText='Use Enter para quebrar linha. Duplo clique no texto da imagem também abre edição inline.'
-            fullWidth
-          />
+            <Divider flexItem />
 
-          <Box>
-            <Typography variant="caption" color="text.secondary" display="block" mb={0.6}>
-              Cor do texto
-            </Typography>
-            <Stack spacing={1}>
-              <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+            <Stack
+              direction={{ xs: 'column', md: 'row' }}
+              spacing={1}
+              alignItems={{ xs: 'stretch', md: 'center' }}
+              flexWrap="wrap"
+              useFlexGap
+            >
+              <Stack direction="row" spacing={0.6} alignItems="center">
+                <Tooltip title="Diminuir 1 px">
+                  <span>
+                    <IconButton
+                      size="small"
+                      onClick={() => nudgeSelectionFontSize(-1)}
+                      disabled={!selectedBlockKeys.length}
+                    >
+                      <RemoveRoundedIcon fontSize="small" />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+                <TextField
+                  size="small"
+                  label="Fonte"
+                  value={fontSizeInputValue}
+                  onChange={(event) => handleToolbarFontSizeChange(event.target.value)}
+                  onBlur={commitFontSizeInput}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      commitFontSizeInput();
+                    }
+                  }}
+                  placeholder={hasMultipleSelection ? 'Misto' : '0'}
+                  type="number"
+                  sx={{ width: 110 }}
+                  inputProps={{ min: 8, max: 180, step: 1 }}
+                  InputProps={{
+                    endAdornment: <InputAdornment position="end">px</InputAdornment>,
+                  }}
+                />
+                <Tooltip title="Aumentar 1 px">
+                  <span>
+                    <IconButton
+                      size="small"
+                      onClick={() => nudgeSelectionFontSize(1)}
+                      disabled={!selectedBlockKeys.length}
+                    >
+                      <AddRoundedIcon fontSize="small" />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+              </Stack>
+
+              <Tooltip title="Aplicar o tamanho do bloco ativo para toda a seleção">
+                <span>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={matchSelectionToActiveFontSize}
+                    disabled={!hasMultipleSelection || !activeBlock}
+                  >
+                    Igualar ao ativo
+                  </Button>
+                </span>
+              </Tooltip>
+
+              <Stack direction="row" spacing={0.8} alignItems="center" flexWrap="wrap" useFlexGap>
                 <Box
                   component="label"
                   sx={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 1.5,
+                    width: 34,
+                    height: 34,
+                    borderRadius: 1.2,
                     border: '1px solid rgba(15, 23, 42, 0.18)',
                     overflow: 'hidden',
                     cursor: 'pointer',
@@ -982,8 +1175,8 @@ export function MissionBannerLayoutEditor({
                       setSelectedBlockColor(next);
                     }}
                     sx={{
-                      width: 56,
-                      height: 56,
+                      width: 44,
+                      height: 44,
                       border: 'none',
                       p: 0,
                       m: -0.5,
@@ -994,15 +1187,13 @@ export function MissionBannerLayoutEditor({
                 </Box>
                 <TextField
                   size="small"
-                  label="Hexadecimal"
+                  label="Cor"
                   value={colorInputValue}
                   onChange={(event) => setColorInputValue(event.target.value)}
                   onBlur={() => {
                     const normalized = normalizeHexColorInput(colorInputValue);
                     if (!normalized) {
-                      const fallback =
-                        normalizedOverrides[activeBlock.key]?.colorHex ?? activeBlock.defaultColor;
-                      setColorInputValue(fallback.toUpperCase());
+                      setColorInputValue(activeBlockColor.toUpperCase());
                       return;
                     }
                     setColorInputValue(normalized);
@@ -1018,61 +1209,123 @@ export function MissionBannerLayoutEditor({
                     }
                   }}
                   placeholder="#F6C3CF"
-                  sx={{ width: 150 }}
-                  helperText="Use #RRGGBB"
+                  sx={{ width: 142 }}
                 />
+                {bannerColorPalette.map((color) => {
+                  const selected = activeBlockColor.toUpperCase() === color.toUpperCase();
+                  return (
+                    <Box
+                      key={color}
+                      component="button"
+                      type="button"
+                      onClick={() => setSelectedBlockColor(color)}
+                      sx={{
+                        width: 22,
+                        height: 22,
+                        borderRadius: '50%',
+                        border: selected
+                          ? '2px solid rgba(15, 23, 42, 0.88)'
+                          : '1px solid rgba(15, 23, 42, 0.22)',
+                        bgcolor: color,
+                        cursor: 'pointer',
+                      }}
+                    />
+                  );
+                })}
                 <Button size="small" variant="text" onClick={() => setSelectedBlockColor(undefined)}>
                   Cor padrão
                 </Button>
               </Stack>
-              <Stack direction="row" spacing={0.8} flexWrap="wrap" useFlexGap alignItems="center">
-              {bannerColorPalette.map((color) => {
-                const activeColor =
-                  normalizedOverrides[activeBlock.key]?.colorHex ?? activeBlock.defaultColor;
-                const selected = activeColor.toUpperCase() === color.toUpperCase();
-                return (
-                  <Box
-                    key={color}
-                    component="button"
-                    type="button"
-                    onClick={() => setSelectedBlockColor(color)}
-                    sx={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: '50%',
-                      border: selected
-                        ? '2px solid rgba(15, 23, 42, 0.88)'
-                        : '1px solid rgba(15, 23, 42, 0.22)',
-                      bgcolor: color,
-                      cursor: 'pointer',
-                    }}
-                  />
-                );
-              })}
+
+              <Stack direction="row" spacing={0.6} alignItems="center" flexWrap="wrap" useFlexGap>
+                <Button size="small" variant="outlined" onClick={() => nudgeSelectedBlock('xPct', -0.01)}>
+                  ←
+                </Button>
+                <Button size="small" variant="outlined" onClick={() => nudgeSelectedBlock('yPct', -0.01)}>
+                  ↑
+                </Button>
+                <Button size="small" variant="outlined" onClick={() => nudgeSelectedBlock('yPct', 0.01)}>
+                  ↓
+                </Button>
+                <Button size="small" variant="outlined" onClick={() => nudgeSelectedBlock('xPct', 0.01)}>
+                  →
+                </Button>
+              </Stack>
+
+              <Stack direction="row" spacing={0.6} alignItems="center" flexWrap="wrap" useFlexGap>
+                <Button
+                  size="small"
+                  variant="text"
+                  startIcon={<RestartAltRoundedIcon />}
+                  onClick={resetSelectedBlocks}
+                >
+                  Resetar seleção
+                </Button>
+                <Button size="small" variant="text" color="inherit" onClick={resetAll}>
+                  Resetar layout
+                </Button>
               </Stack>
             </Stack>
-          </Box>
-
-          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-            <Button size="small" variant="outlined" onClick={() => nudgeSelectedBlock('xPct', -0.01)}>
-              ←
-            </Button>
-            <Button size="small" variant="outlined" onClick={() => nudgeSelectedBlock('yPct', -0.01)}>
-              ↑
-            </Button>
-            <Button size="small" variant="outlined" onClick={() => nudgeSelectedBlock('yPct', 0.01)}>
-              ↓
-            </Button>
-            <Button size="small" variant="outlined" onClick={() => nudgeSelectedBlock('xPct', 0.01)}>
-              →
-            </Button>
-            <Button size="small" variant="text" onClick={resetSelectedBlock}>
-              Resetar bloco
-            </Button>
-            <Button size="small" variant="text" color="inherit" onClick={resetAll}>
-              Resetar layout
-            </Button>
           </Stack>
+        </Box>
+
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={0.8}
+          alignItems={{ xs: 'flex-start', sm: 'center' }}
+          justifyContent="space-between"
+        >
+          <Typography variant="caption" color="text.secondary">
+            Linhas azuis mostram a posição atual do bloco ativo. Linhas tracejadas mostram a posição base do layout.
+          </Typography>
+        </Stack>
+        <Typography variant="caption" color="text.secondary">
+          Blocos do banner
+        </Typography>
+        <Stack direction="row" spacing={0.8} flexWrap="wrap" useFlexGap>
+          {visibleBlocks.map((block) => (
+            <Chip
+              key={block.key}
+              size="small"
+              clickable
+              color={selectedBlockKeys.includes(block.key) ? 'primary' : 'default'}
+              variant={selectedBlockKeys.includes(block.key) ? 'filled' : 'outlined'}
+              label={block.label}
+              onClick={() => setSingleSelection(block.key)}
+            />
+          ))}
+        </Stack>
+      </Stack>
+
+      {activeBlock ? (
+        <Stack spacing={1.2}>
+          <Box>
+            <Typography variant="caption" color="text.secondary" display="block">
+              Ajustando
+            </Typography>
+            <Typography variant="body2" fontWeight={700}>
+              {hasMultipleSelection
+                ? `${activeBlock.label} + ${selectedBlocks.length - 1} item(ns)`
+                : activeBlock.label}
+            </Typography>
+          </Box>
+          {hasMultipleSelection ? (
+            <Typography variant="caption" color="text.secondary">
+              Os controles acima já estão aplicando fonte, cor e posição para toda a seleção.
+              Para editar texto, selecione apenas um bloco.
+            </Typography>
+          ) : (
+            <TextField
+              size="small"
+              label="Texto do bloco"
+              value={getCurrentBlockText(activeBlock)}
+              onChange={(event) => setSelectedBlockText(event.target.value)}
+              multiline
+              minRows={2}
+              helperText='Use Enter para quebrar linha. Duplo clique no texto da imagem também abre edição inline.'
+              fullWidth
+            />
+          )}
         </Stack>
       ) : null}
     </Stack>
