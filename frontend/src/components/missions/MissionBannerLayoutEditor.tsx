@@ -29,6 +29,7 @@ const TEMPLATE_HEIGHT = 1280;
 const COLOR_PINK = '#F6C3CF';
 const COLOR_WHITE = '#FFFFFF';
 const BANNER_FONT_FAMILY = 'Arial, Helvetica, sans-serif';
+const SNAP_TOLERANCE_PX = 8;
 
 export const missionBannerLayoutKeys = [
   'day',
@@ -75,6 +76,16 @@ type TextBlockDefinition = {
   fontSizeBase: number;
   minFontSize: number;
   maxWidth: number;
+};
+
+type SnapAxisGuide = {
+  valuePct: number;
+  kind: 'edge' | 'center' | 'base';
+};
+
+type SnapGuides = {
+  x?: SnapAxisGuide;
+  y?: SnapAxisGuide;
 };
 
 const bannerColorPalette = [
@@ -347,6 +358,11 @@ export function MissionBannerLayoutEditor({
     colorHex: string;
   } | null>(null);
   const [formatPainterArmed, setFormatPainterArmed] = useState(false);
+  const [snapGuides, setSnapGuides] = useState<SnapGuides>({});
+  const blockElementRefs = useRef<
+    Partial<Record<MissionBannerLayoutBlockKey, HTMLDivElement | null>>
+  >({});
+  const snapGuideClearTimeoutRef = useRef<number | null>(null);
 
   const normalizedOverrides = useMemo(
     () => normalizeLayoutOverrides(layoutOverrides),
@@ -514,6 +530,24 @@ export function MissionBannerLayoutEditor({
   } | null>(null);
   const suppressNextClickRef = useRef(false);
 
+  const clearSnapGuides = () => {
+    if (snapGuideClearTimeoutRef.current) {
+      window.clearTimeout(snapGuideClearTimeoutRef.current);
+      snapGuideClearTimeoutRef.current = null;
+    }
+    setSnapGuides({});
+  };
+
+  const scheduleSnapGuideClear = () => {
+    if (snapGuideClearTimeoutRef.current) {
+      window.clearTimeout(snapGuideClearTimeoutRef.current);
+    }
+    snapGuideClearTimeoutRef.current = window.setTimeout(() => {
+      setSnapGuides({});
+      snapGuideClearTimeoutRef.current = null;
+    }, 700);
+  };
+
   const getCurrentBlockText = (block: TextBlockDefinition) => {
     const override = normalizedOverrides[block.key];
     return override?.textOverride ?? block.text;
@@ -540,6 +574,133 @@ export function MissionBannerLayoutEditor({
       );
     }
     return Math.max(block.minFontSize, recommendedFontSize);
+  };
+
+  const getBlockCurrentPosition = (block: TextBlockDefinition) => {
+    const current = normalizedOverrides[block.key];
+    return {
+      xPct: current?.xPct ?? block.xPct,
+      yPct: current?.yPct ?? block.yPct,
+    };
+  };
+
+  const getBlockRenderedMetrics = (key: MissionBannerLayoutBlockKey) => {
+    const element = blockElementRefs.current[key];
+    const container = containerRef.current;
+    if (!element || !container) return null;
+    const elementRect = element.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+    const widthPct = containerRect.width > 0 ? elementRect.width / containerRect.width : 0;
+    const heightPct =
+      containerRect.height > 0 ? elementRect.height / containerRect.height : 0;
+    return {
+      widthPct,
+      heightPct,
+      centerXPct: widthPct / 2,
+      centerYPct: heightPct / 2,
+    };
+  };
+
+  const resolveSnappedPlacement = ({
+    movingBlockKey,
+    proposedXPct,
+    proposedYPct,
+    excludedKeys = [],
+  }: {
+    movingBlockKey: MissionBannerLayoutBlockKey;
+    proposedXPct: number;
+    proposedYPct: number;
+    excludedKeys?: MissionBannerLayoutBlockKey[];
+  }) => {
+    const movingBlock = visibleBlocks.find((block) => block.key === movingBlockKey);
+    if (!movingBlock) {
+      return {
+        xPct: proposedXPct,
+        yPct: proposedYPct,
+        guides: {} as SnapGuides,
+      };
+    }
+
+    const movingMetrics = getBlockRenderedMetrics(movingBlockKey);
+    const movingCenterXOffsetPct = movingMetrics?.centerXPct ?? 0;
+    const movingCenterYOffsetPct = movingMetrics?.centerYPct ?? 0;
+    const toleranceXPct = SNAP_TOLERANCE_PX / Math.max(dimensions.width || 1, 1);
+    const toleranceYPct = SNAP_TOLERANCE_PX / Math.max(dimensions.height || 1, 1);
+    const excludedKeySet = new Set<MissionBannerLayoutBlockKey>([
+      movingBlockKey,
+      ...excludedKeys,
+    ]);
+
+    let snappedX = proposedXPct;
+    let snappedY = proposedYPct;
+    let bestXDistance = Number.POSITIVE_INFINITY;
+    let bestYDistance = Number.POSITIVE_INFINITY;
+    let bestXGuide: SnapAxisGuide | undefined;
+    let bestYGuide: SnapAxisGuide | undefined;
+
+    const considerX = (targetXPct: number, guide: SnapAxisGuide) => {
+      const distance = Math.abs(proposedXPct - targetXPct);
+      if (distance <= toleranceXPct && distance < bestXDistance) {
+        bestXDistance = distance;
+        snappedX = clamp(targetXPct, 0.05, 0.92);
+        bestXGuide = guide;
+      }
+    };
+
+    const considerY = (targetYPct: number, guide: SnapAxisGuide) => {
+      const distance = Math.abs(proposedYPct - targetYPct);
+      if (distance <= toleranceYPct && distance < bestYDistance) {
+        bestYDistance = distance;
+        snappedY = clamp(targetYPct, 0.05, 0.95);
+        bestYGuide = guide;
+      }
+    };
+
+    considerX(movingBlock.xPct, {
+      valuePct: movingBlock.xPct,
+      kind: 'base',
+    });
+    considerY(movingBlock.yPct, {
+      valuePct: movingBlock.yPct,
+      kind: 'base',
+    });
+
+    for (const block of visibleBlocks) {
+      if (excludedKeySet.has(block.key)) continue;
+      const blockMetrics = getBlockRenderedMetrics(block.key);
+      const blockPosition = getBlockCurrentPosition(block);
+
+      considerX(blockPosition.xPct, {
+        valuePct: blockPosition.xPct,
+        kind: 'edge',
+      });
+      considerY(blockPosition.yPct, {
+        valuePct: blockPosition.yPct,
+        kind: 'edge',
+      });
+
+      if (blockMetrics) {
+        const blockCenterXPct = blockPosition.xPct + blockMetrics.centerXPct;
+        const blockCenterYPct = blockPosition.yPct + blockMetrics.centerYPct;
+        considerX(blockCenterXPct - movingCenterXOffsetPct, {
+          valuePct: blockCenterXPct,
+          kind: 'center',
+        });
+        considerY(blockCenterYPct - movingCenterYOffsetPct, {
+          valuePct: blockCenterYPct,
+          kind: 'center',
+        });
+      }
+    }
+
+    return {
+      xPct: snappedX,
+      yPct: snappedY,
+      guides: {
+        x: bestXGuide,
+        y: bestYGuide,
+      } satisfies SnapGuides,
+    };
   };
 
   const commonSelectedFontSizePx = useMemo(() => {
@@ -574,12 +735,18 @@ export function MissionBannerLayoutEditor({
       }
       const deltaXPct = deltaX / rect.width;
       const deltaYPct = deltaY / rect.height;
+      const snapped = resolveSnappedPlacement({
+        movingBlockKey: dragStateRef.current.key,
+        proposedXPct: clamp(dragStateRef.current.baseXPct + deltaXPct, 0.05, 0.92),
+        proposedYPct: clamp(dragStateRef.current.baseYPct + deltaYPct, 0.05, 0.95),
+      });
+      setSnapGuides(snapped.guides);
       onChange({
         ...normalizedOverrides,
         [dragStateRef.current.key]: {
           ...(normalizedOverrides[dragStateRef.current.key] ?? {}),
-          xPct: clamp(dragStateRef.current.baseXPct + deltaXPct, 0.05, 0.92),
-          yPct: clamp(dragStateRef.current.baseYPct + deltaYPct, 0.05, 0.95),
+          xPct: snapped.xPct,
+          yPct: snapped.yPct,
         },
       });
     };
@@ -589,6 +756,7 @@ export function MissionBannerLayoutEditor({
         suppressNextClickRef.current = true;
       }
       dragStateRef.current = null;
+      clearSnapGuides();
     };
 
     window.addEventListener('pointermove', handleMove);
@@ -597,7 +765,14 @@ export function MissionBannerLayoutEditor({
       window.removeEventListener('pointermove', handleMove);
       window.removeEventListener('pointerup', handleUp);
     };
-  }, [normalizedOverrides, onChange]);
+  }, [
+    clearSnapGuides,
+    dimensions.height,
+    dimensions.width,
+    normalizedOverrides,
+    onChange,
+    visibleBlocks,
+  ]);
 
   const handleStartDrag = (
     event: ReactPointerEvent<HTMLDivElement>,
@@ -684,34 +859,42 @@ export function MissionBannerLayoutEditor({
   const resetAll = () => onChange({});
 
   const nudgeSelectedBlock = (axis: 'xPct' | 'yPct', delta: number) => {
-    if (!selectedBlockKeys.length) return;
+    if (axis === 'xPct') {
+      moveSelectionByPct(delta, 0);
+      return;
+    }
+    moveSelectionByPct(0, delta);
+  };
+
+  const moveSelectionByPct = (deltaXPct: number, deltaYPct: number) => {
+    if (!selectedBlockKeys.length || !activeBlock) return;
+    const activePosition = getBlockCurrentPosition(activeBlock);
+    const snapped = resolveSnappedPlacement({
+      movingBlockKey: activeBlock.key,
+      proposedXPct: clamp(activePosition.xPct + deltaXPct, 0.05, 0.92),
+      proposedYPct: clamp(activePosition.yPct + deltaYPct, 0.05, 0.95),
+      excludedKeys:
+        selectedBlockKeys.length > 1
+          ? selectedBlockKeys.filter((key) => key !== activeBlock.key)
+          : [],
+    });
+    const adjustedDeltaX = snapped.xPct - activePosition.xPct;
+    const adjustedDeltaY = snapped.yPct - activePosition.yPct;
     updateBlocks(selectedBlockKeys, (block) => {
-      const current = normalizedOverrides[block.key];
-      const baseValue = axis === 'xPct' ? block.xPct : block.yPct;
-      const currentValue =
-        axis === 'xPct' ? current?.xPct ?? baseValue : current?.yPct ?? baseValue;
+      const current = getBlockCurrentPosition(block);
       return {
-        [axis]:
-          axis === 'xPct'
-            ? clamp(currentValue + delta, 0.05, 0.92)
-            : clamp(currentValue + delta, 0.05, 0.95),
+        xPct: clamp(current.xPct + adjustedDeltaX, 0.05, 0.92),
+        yPct: clamp(current.yPct + adjustedDeltaY, 0.05, 0.95),
       };
     });
+    setSnapGuides(snapped.guides);
+    scheduleSnapGuideClear();
   };
 
   const nudgeSelectedBlocksByPixels = (deltaX: number, deltaY: number) => {
-    if (!selectedBlockKeys.length) return;
     const width = dimensions.width || 1;
     const height = dimensions.height || 1;
-    const deltaXPct = deltaX / width;
-    const deltaYPct = deltaY / height;
-    updateBlocks(selectedBlockKeys, (block) => {
-      const current = normalizedOverrides[block.key];
-      return {
-        xPct: clamp((current?.xPct ?? block.xPct) + deltaXPct, 0.05, 0.92),
-        yPct: clamp((current?.yPct ?? block.yPct) + deltaYPct, 0.05, 0.95),
-      };
-    });
+    moveSelectionByPct(deltaX / width, deltaY / height);
   };
 
   const setSelectedBlockText = (nextText: string) => {
@@ -842,6 +1025,15 @@ export function MissionBannerLayoutEditor({
     return () => element.removeEventListener('keydown', handleKeyDown);
   }, [dimensions.height, dimensions.width, editingTextBlockKey, normalizedOverrides, selectedBlockKeys]);
 
+  useEffect(
+    () => () => {
+      if (snapGuideClearTimeoutRef.current) {
+        window.clearTimeout(snapGuideClearTimeoutRef.current);
+      }
+    },
+    [],
+  );
+
   return (
     <Stack spacing={1.5}>
       <Typography variant="body2" color="text.secondary">
@@ -952,6 +1144,46 @@ export function MissionBannerLayoutEditor({
             />
           </>
         ) : null}
+        {snapGuides.x ? (
+          <Box
+            sx={{
+              position: 'absolute',
+              left: `${snapGuides.x.valuePct * 100}%`,
+              top: '0%',
+              width: '1px',
+              height: '100%',
+              backgroundColor:
+                snapGuides.x.kind === 'center'
+                  ? 'rgba(255, 214, 102, 0.92)'
+                  : 'rgba(121, 196, 255, 0.92)',
+              boxShadow:
+                snapGuides.x.kind === 'base'
+                  ? '0 0 0 1px rgba(255,255,255,0.12)'
+                  : '0 0 0 1px rgba(15, 23, 42, 0.08)',
+              pointerEvents: 'none',
+            }}
+          />
+        ) : null}
+        {snapGuides.y ? (
+          <Box
+            sx={{
+              position: 'absolute',
+              left: '0%',
+              top: `${snapGuides.y.valuePct * 100}%`,
+              width: '100%',
+              height: '1px',
+              backgroundColor:
+                snapGuides.y.kind === 'center'
+                  ? 'rgba(255, 214, 102, 0.92)'
+                  : 'rgba(121, 196, 255, 0.92)',
+              boxShadow:
+                snapGuides.y.kind === 'base'
+                  ? '0 0 0 1px rgba(255,255,255,0.12)'
+                  : '0 0 0 1px rgba(15, 23, 42, 0.08)',
+              pointerEvents: 'none',
+            }}
+          />
+        ) : null}
         {visibleBlocks.map((block) => {
           const override = normalizedOverrides[block.key];
           const xPct = override?.xPct ?? block.xPct;
@@ -967,6 +1199,9 @@ export function MissionBannerLayoutEditor({
           return (
             <Box
               key={block.key}
+              ref={(element: HTMLDivElement | null) => {
+                blockElementRefs.current[block.key] = element;
+              }}
               onPointerDown={(event) => handleStartDrag(event, block)}
               onClick={(event) => {
                 event.preventDefault();
@@ -1340,7 +1575,7 @@ export function MissionBannerLayoutEditor({
             Linhas azuis mostram a posição atual do bloco ativo. Linhas tracejadas mostram a posição base do layout.
           </Typography>
           <Typography variant="caption" color="text.secondary">
-            Clique em um texto e use as setas do teclado para mover. `Shift + seta` move 10px.
+            Clique em um texto e use as setas do teclado para mover. `Shift + seta` move 10px. Quando um bloco se aproxima de outro, ele encaixa magneticamente.
           </Typography>
         </Stack>
         <Typography variant="caption" color="text.secondary">
