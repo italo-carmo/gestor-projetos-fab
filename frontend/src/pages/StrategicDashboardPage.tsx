@@ -532,6 +532,139 @@ function DetailRow({ label, value, color }: { label: string; value: string | num
   );
 }
 
+type StrategicLinkedDetailItem = {
+  id: string;
+  title: string;
+  subtitle?: string;
+  badge?: string;
+  link?: string;
+  date?: string;
+};
+
+function formatDetailDateLabel(value?: string) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
+}
+
+function DetailMeaningBlock({
+  title,
+  meaning,
+  source,
+}: {
+  title: string;
+  meaning: string;
+  source: string;
+}) {
+  return (
+    <Box
+      sx={{
+        p: 1.5,
+        borderRadius: 2,
+        bgcolor: "#F5F8FC",
+        border: "1px solid #D7E3F4",
+      }}
+    >
+      <Typography variant="subtitle2" fontWeight={800} color="#1A3C6E">
+        {title}
+      </Typography>
+      <Typography variant="body2" sx={{ mt: 0.6, lineHeight: 1.65 }}>
+        {meaning}
+      </Typography>
+      <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.8 }}>
+        {source}
+      </Typography>
+    </Box>
+  );
+}
+
+function DetailItemList({
+  items,
+  emptyMessage,
+}: {
+  items: StrategicLinkedDetailItem[];
+  emptyMessage: string;
+}) {
+  if (!items.length) {
+    return (
+      <Typography variant="body2" color="text.secondary">
+        {emptyMessage}
+      </Typography>
+    );
+  }
+
+  return (
+    <List disablePadding sx={{ border: "1px solid #E6ECF5", borderRadius: 2, overflow: "hidden" }}>
+      {items.map((item, index) => (
+        <ListItem
+          key={item.id}
+          divider={index < items.length - 1}
+          secondaryAction={
+            item.link ? (
+              <Button
+                size="small"
+                component={RouterLink}
+                to={item.link}
+                target="_blank"
+                rel="noopener noreferrer"
+                endIcon={<OpenInNewRoundedIcon />}
+              >
+                Abrir
+              </Button>
+            ) : undefined
+          }
+          sx={{ alignItems: "flex-start", py: 1.25, pr: item.link ? 12 : 2 }}
+        >
+          <ListItemText
+            primary={
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                spacing={1}
+                alignItems={{ sm: "center" }}
+                useFlexGap
+              >
+                <Typography variant="body2" fontWeight={800}>
+                  {item.title}
+                </Typography>
+                {item.badge ? (
+                  <Chip
+                    size="small"
+                    variant="outlined"
+                    label={item.badge}
+                    sx={{ width: "fit-content" }}
+                  />
+                ) : null}
+                {formatDetailDateLabel(item.date) ? (
+                  <Typography variant="caption" color="text.secondary">
+                    {formatDetailDateLabel(item.date)}
+                  </Typography>
+                ) : null}
+              </Stack>
+            }
+            secondary={
+              item.subtitle ? (
+                <Typography
+                  component="span"
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ display: "block", mt: 0.5, lineHeight: 1.6 }}
+                >
+                  {item.subtitle}
+                </Typography>
+              ) : null
+            }
+          />
+        </ListItem>
+      ))}
+    </List>
+  );
+}
+
 type ActivityKpiDetailItem = {
   id: string;
   title: string;
@@ -618,11 +751,30 @@ function formatCoveredOmResponsibility(item: any) {
     .join(", ");
 }
 
-function formatCoveredOmCoverageType(item: any) {
-  if (Boolean(item?.hasCpca) || String(item?.coverageType ?? "").toUpperCase() === "OWN") {
-    return "CPCA própria";
-  }
-  return "Coberta por outra OM";
+function CoveredOmCoverageChip({ item }: { item: any }) {
+  const isOwn =
+    Boolean(item?.hasCpca) ||
+    String(item?.coverageType ?? "").toUpperCase() === "OWN";
+
+  return (
+    <Chip
+      size="small"
+      label={isOwn ? "CPCA própria" : "Coberta por outra OM"}
+      sx={
+        isOwn
+          ? {
+              bgcolor: "#E8F5E9",
+              color: "#1B5E20",
+              fontWeight: 700,
+            }
+          : {
+              bgcolor: "#FFF3E0",
+              color: "#E65100",
+              fontWeight: 700,
+            }
+      }
+    />
+  );
 }
 
 function ExpandableActivityMetricRow({
@@ -1063,7 +1215,12 @@ function SituationalTab() {
     switch (detailModal) {
       case "surveys":
         return (
-          <Stack spacing={1}>
+          <Stack spacing={1.25}>
+            <DetailMeaningBlock
+              title="O que este número significa"
+              meaning="A Taxa de violência mostra o percentual de respondentes da Pesquisa de Violência que declararam já ter sofrido algum tipo de violência. Os demais números do modal mostram a base total de respondentes e como essa base se divide entre respostas SIM e NÃO."
+              source="Fonte: módulo BI > Pesquisas. Base: respostas da Pesquisa de Violência aplicadas nas localidades visitadas pela comissão."
+            />
             {surveysMetrics.map((metric) => (
               <ExpandableKpiMetricRow
                 key={metric.key}
@@ -1083,14 +1240,18 @@ function SituationalTab() {
             <DetailRow label="Taxa de violência" value={`${s.violenceRatePercent ?? 0}%`} color="#D32F2F" />
             <Divider sx={{ my: 1 }} />
             <Typography variant="body2" color="text.secondary">
-              Dados provenientes das pesquisas de avaliação realizadas durante as visitas da comissão itinerante.
-              A taxa de violência representa o percentual de respondentes que declararam ter sofrido algum tipo de violência.
+              Este KPI é lido diretamente da Pesquisa de Violência. Se a taxa subir, isso indica maior proporção de respondentes que reportaram experiência de violência dentro do universo pesquisado.
             </Typography>
           </Stack>
         );
       case "domesticViolence":
         return (
-          <Stack spacing={1}>
+          <Stack spacing={1.25}>
+            <DetailMeaningBlock
+              title="O que este número significa"
+              meaning="Os indicadores deste bloco medem a violência doméstica autorreferida na pesquisa específica de violência doméstica. 'Alguma vez' captura histórico de vida; 'últimos 12 meses' mostra recorrência recente; 'buscaram ajuda' mede reação institucional e rede de apoio."
+              source="Fonte: módulo BI > Violência Doméstica. Base: respostas da pesquisa específica de violência doméstica aplicada nas localidades visitadas."
+            />
             {domesticMetrics.map((metric) => (
               <ExpandableKpiMetricRow
                 key={metric.key}
@@ -1112,14 +1273,18 @@ function SituationalTab() {
             <DetailRow label="Taxa de busca de ajuda" value={`${dv.soughtHelpPercent ?? 0}%`} />
             <Divider sx={{ my: 1 }} />
             <Typography variant="body2" color="text.secondary">
-              Dados da pesquisa sobre violência doméstica aplicada nas localidades visitadas.
-              A taxa de busca de ajuda é calculada sobre o total que sofreu violência em algum momento.
+              A taxa de busca de ajuda é calculada sobre o subconjunto que declarou ter sofrido violência em algum momento. Isso ajuda a distinguir ocorrência de violência da capacidade de reação e acolhimento.
             </Typography>
           </Stack>
         );
       case "recruits":
         return (
-          <Stack spacing={1}>
+          <Stack spacing={1.25}>
+            <DetailMeaningBlock
+              title="O que este número significa"
+              meaning="Os indicadores de recrutas medem percepção institucional. 'Segurança para denunciar' indica confiança para buscar ajuda; 'conhecimento do canal' indica preparo informacional mínimo para acionar o fluxo correto."
+              source="Fonte: módulo BI > Pesquisa de Recrutas do SMIF. Base: respostas das recrutas sobre percepção de segurança e conhecimento dos canais."
+            />
             {recruitMetrics.map((metric) => (
               <ExpandableKpiMetricRow
                 key={metric.key}
@@ -1140,14 +1305,18 @@ function SituationalTab() {
             <DetailRow label="Taxa de conhecimento do canal" value={`${r.knowReportProcessPercent ?? 0}%`} color="#0288D1" />
             <Divider sx={{ my: 1 }} />
             <Typography variant="body2" color="text.secondary">
-              Dados da pesquisa com recrutas do SMIF (alistamento feminino).
-              Indicadores medem o nível de segurança percebida e conhecimento dos canais de denúncia.
+              Esses números não medem ocorrência de caso, mas prontidão do ambiente para denúncia e acolhimento. Queda nesses indicadores tende a sinalizar risco de subnotificação.
             </Typography>
           </Stack>
         );
       case "complaints":
         return (
-          <Stack spacing={1}>
+          <Stack spacing={1.25}>
+            <DetailMeaningBlock
+              title="O que este número significa"
+              meaning="Este bloco consolida os casos e denúncias efetivamente registrados no sistema, somando fluxos CPCA e SMIF. Ele mostra carga real de tratamento institucional, status atual e distribuição por tipo e fluxo."
+              source="Fonte: registros de denúncias do sistema, com origem nos módulos CPCA e SMIF."
+            />
             {complaintMetrics.map((metric) => (
               <ExpandableKpiMetricRow
                 key={metric.key}
@@ -1176,7 +1345,12 @@ function SituationalTab() {
         );
       case "activities":
         return (
-          <Stack spacing={1}>
+          <Stack spacing={1.25}>
+            <DetailMeaningBlock
+              title="O que este número significa"
+              meaning="Os números de atividades mostram execução operacional em campo. Eles distinguem o que foi realizado em SMIF e CIPAVD e ainda indicam maturidade de registro por meio de relatório preenchido e relatório assinado."
+              source="Fonte: registros de Atividades de Campo do sistema, com status operacional e vínculo de relatório."
+            />
             {activityMetrics.map((metric) => (
               <ExpandableActivityMetricRow
                 key={metric.key}
@@ -1209,7 +1383,12 @@ function SituationalTab() {
         );
       case "missions":
         return (
-          <Stack spacing={1}>
+          <Stack spacing={1.25}>
+            <DetailMeaningBlock
+              title="O que este número significa"
+              meaning="As missões representam deslocamentos e frentes operacionais cadastradas no sistema. O detalhamento mostra volume por escopo e quantas OMs distintas já foram efetivamente alcançadas pelas missões lançadas."
+              source="Fonte: módulo Missões, considerando registros ativos de SMIF e CIPAVD."
+            />
             {missionMetrics.map((metric) => (
               <ExpandableKpiMetricRow
                 key={metric.key}
@@ -1449,6 +1628,11 @@ function AggressorProfileTab() {
       <EmptyState message="Nenhum caso de assédio/violência registrado ainda. Os dados aparecerão aqui conforme casos forem inseridos." />
     );
 
+  const detailItems = (data.detailItems ?? {}) as Record<
+    string,
+    StrategicLinkedDetailItem[]
+  >;
+
   return (
     <Box>
       <Grid container spacing={2} sx={{ mb: 3 }}>
@@ -1500,7 +1684,12 @@ function AggressorProfileTab() {
         onClose={() => setDetailModal(null)}
       >
         {detailModal === "total" && (
-          <Stack spacing={1}>
+          <Stack spacing={1.25}>
+            <DetailMeaningBlock
+              title="O que este número significa"
+              meaning="Este total reúne todos os casos usados para montar o perfil do agressor. A lista abaixo mostra exatamente quais denúncias formam o agregado, para que o gestor consiga sair do KPI e chegar ao registro real."
+              source="Fonte: denúncias CPCA e SMIF consolidadas no painel de Perfil de Assédio."
+            />
             <DetailRow label="Total de casos registrados" value={data.totalCases} />
             <DetailRow label="Assédio Moral" value={`${data.byComplaintType.moral.count} (${data.byComplaintType.moral.percent}%)`} color="#ED6C02" />
             <DetailRow label="Assédio Sexual" value={`${data.byComplaintType.sexual.count} (${data.byComplaintType.sexual.percent}%)`} color="#D32F2F" />
@@ -1518,30 +1707,61 @@ function AggressorProfileTab() {
                 ))}
               </>
             )}
+            <Divider sx={{ my: 0.5 }} />
+            <Typography variant="subtitle2">Casos que compõem o total</Typography>
+            <DetailItemList
+              items={Array.isArray(detailItems.total) ? detailItems.total : []}
+              emptyMessage="Nenhum caso disponível para detalhamento."
+            />
           </Stack>
         )}
         {detailModal === "moral" && (
-          <Stack spacing={1}>
+          <Stack spacing={1.25}>
+            <DetailMeaningBlock
+              title="O que este número significa"
+              meaning="Casos classificados como assédio moral. O detalhamento abaixo mostra quais registros foram enquadrados nessa tipologia."
+              source="Fonte: campo de tipificação da denúncia nos módulos CPCA e SMIF."
+            />
             <DetailRow label="Total de casos de assédio moral" value={data.byComplaintType.moral.count} color="#ED6C02" />
             <DetailRow label="Percentual do total" value={`${data.byComplaintType.moral.percent}%`} />
             <Divider sx={{ my: 1 }} />
             <Typography variant="body2" color="text.secondary">
               O assédio moral inclui humilhações, exclusão, ameaças, intimidações, críticas excessivas, injustiças e outras formas de violência psicológica no ambiente de trabalho.
             </Typography>
+            <Typography variant="subtitle2">Itens classificados como assédio moral</Typography>
+            <DetailItemList
+              items={Array.isArray(detailItems.moral) ? detailItems.moral : []}
+              emptyMessage="Nenhum item classificado como assédio moral."
+            />
           </Stack>
         )}
         {detailModal === "sexual" && (
-          <Stack spacing={1}>
+          <Stack spacing={1.25}>
+            <DetailMeaningBlock
+              title="O que este número significa"
+              meaning="Casos classificados como assédio sexual. A lista abaixo mostra os registros exatos por trás do KPI, com acesso direto ao fluxo correspondente."
+              source="Fonte: campo de tipificação da denúncia nos módulos CPCA e SMIF."
+            />
             <DetailRow label="Total de casos de assédio sexual" value={data.byComplaintType.sexual.count} color="#D32F2F" />
             <DetailRow label="Percentual do total" value={`${data.byComplaintType.sexual.percent}%`} />
             <Divider sx={{ my: 1 }} />
             <Typography variant="body2" color="text.secondary">
               O assédio sexual inclui comentários sexistas, contato físico indesejado, chantagem por favores sexuais, exibição de material pornográfico e outras formas de violência sexual.
             </Typography>
+            <Typography variant="subtitle2">Itens classificados como assédio sexual</Typography>
+            <DetailItemList
+              items={Array.isArray(detailItems.sexual) ? detailItems.sexual : []}
+              emptyMessage="Nenhum item classificado como assédio sexual."
+            />
           </Stack>
         )}
         {detailModal === "hierarchical" && (
-          <Stack spacing={1}>
+          <Stack spacing={1.25}>
+            <DetailMeaningBlock
+              title="O que este número significa"
+              meaning="Conta os casos em que o agressor ocupava posição hierárquica ou funcional superior à vítima. A lista abaixo mostra os registros usados nessa leitura."
+              source="Fonte: campo de relação hierárquica/funcional da denúncia."
+            />
             <DetailRow label="Casos com relação hierárquica" value={data.hierarchicalRelation.count} color="#7B1FA2" />
             <DetailRow label="Percentual do total" value={`${data.hierarchicalRelation.percent}%`} />
             <DetailRow label="Total de casos" value={data.totalCases} />
@@ -1549,6 +1769,11 @@ function AggressorProfileTab() {
             <Typography variant="body2" color="text.secondary">
               {data.hierarchicalRelation.description}. Inclui relações de superior hierárquico, chefe imediato ou instrutor/professor com subordinado.
             </Typography>
+            <Typography variant="subtitle2">Itens com relação hierárquica</Typography>
+            <DetailItemList
+              items={Array.isArray(detailItems.hierarchical) ? detailItems.hierarchical : []}
+              emptyMessage="Nenhum item com relação hierárquica identificado."
+            />
           </Stack>
         )}
       </KpiDetailModal>
@@ -2309,7 +2534,9 @@ function GeoMapTab() {
                     <TableCell>{loc.code || "—"}</TableCell>
                     <TableCell>{loc.name || "—"}</TableCell>
                     <TableCell>{loc.uf || "—"}</TableCell>
-                    <TableCell>{formatCoveredOmCoverageType(loc)}</TableCell>
+                    <TableCell>
+                      <CoveredOmCoverageChip item={loc} />
+                    </TableCell>
                     <TableCell>{formatCoveredOmResponsibility(loc)}</TableCell>
                   </TableRow>
                 ))}

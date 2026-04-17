@@ -1629,6 +1629,8 @@ export class StrategicService {
     const cases = await complaintModel.findMany({
       where,
       select: {
+        id: true,
+        caseNumber: true,
         complaintType: true,
         aggressorRank: true,
         aggressorGender: true,
@@ -1644,6 +1646,7 @@ export class StrategicService {
         occurrenceForm: true,
         workflowScope: true,
         status: true,
+        reportedAt: true,
         localityId: true,
         locality: { select: { code: true, name: true } },
       },
@@ -1666,6 +1669,47 @@ export class StrategicService {
     ).length;
 
     const byScope = countByField(cases, 'workflowScope');
+
+    const toCaseDetail = (row: any): StrategicKpiDetailItem => {
+      const id = String(row?.id ?? '').trim();
+      const caseNumber = String(row?.caseNumber ?? '').trim();
+      const scope = String(row?.workflowScope ?? 'CPCA').trim().toUpperCase();
+      const localityLabel = this.formatOmDisplayLabel(
+        row?.locality?.code,
+        row?.locality?.name,
+      );
+      return {
+        id: id || `aggressor-${caseNumber || 'case'}`,
+        title: caseNumber ? `Denúncia ${caseNumber}` : 'Denúncia',
+        subtitle: [
+          scope,
+          String(row?.complaintType ?? '').trim()
+            ? `Tipo: ${String(row?.complaintType ?? '').trim().toUpperCase() === 'SEXUAL' ? 'Assédio Sexual' : 'Assédio Moral'}`
+            : '',
+          localityLabel,
+        ]
+          .filter(Boolean)
+          .join(' • '),
+        date: row?.reportedAt?.toISOString?.() ?? undefined,
+        badge: String(row?.status ?? '').trim() || undefined,
+        link:
+          scope === 'SMIF'
+            ? `/smif-complaints?q=${encodeURIComponent(caseNumber)}`
+            : `/cpca-cases?q=${encodeURIComponent(caseNumber)}`,
+      };
+    };
+    const totalDetails = cases.map((row: any) => toCaseDetail(row));
+    const moralDetails = moralCases.map((row: any) => toCaseDetail(row));
+    const sexualDetails = sexualCases.map((row: any) => toCaseDetail(row));
+    const hierarchicalDetails = cases
+      .filter(
+        (c: any) =>
+          c.hierarchicalFunctionalRelation &&
+          /superior|chefia|comando|hierarq/i.test(
+            c.hierarchicalFunctionalRelation,
+          ),
+      )
+      .map((row: any) => toCaseDetail(row));
 
     const crossTab: {
       complaintType: string;
@@ -1721,6 +1765,12 @@ export class StrategicService {
       },
       crossTabulation: crossTab,
       byScope,
+      detailItems: {
+        total: totalDetails,
+        moral: moralDetails,
+        sexual: sexualDetails,
+        hierarchical: hierarchicalDetails,
+      },
       byLocality: countByField(cases, 'localityId').map((item) => {
         const loc = cases.find(
           (c: any) => c.localityId === item.label,

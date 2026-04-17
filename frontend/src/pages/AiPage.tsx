@@ -1343,6 +1343,7 @@ function AssistantTab() {
   const isMissionScheduleWorkflow =
     workflow?.intent === "create_mission_schedule";
   const isChatOnlyAssistantWorkflow =
+    workflow?.intent === "create_mission" ||
     workflow?.intent === "create_activity" ||
     workflow?.intent === "create_task";
 

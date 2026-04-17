@@ -505,9 +505,38 @@ export class AiAssistantService {
           return await this.confirmScheduleUploadBatch(session, workflow, user);
         }
         const createdItem = await this.executeWorkflow(workflow, user);
+        session.updatedAt = new Date().toISOString();
+        if (workflow.intent === 'create_mission') {
+          session.workflow = {
+            intent: 'create_mission_schedule',
+            status: 'collecting',
+            currentField: null,
+            draft: {
+              scheduleOperation: 'CREATE',
+              scope: workflow.draft.scope,
+              missionId: createdItem.id,
+              scheduleFromMissionCreation: true,
+              scheduleCreateAfterMission: null,
+            },
+          };
+          const nextWorkflowView = await this.buildWorkflowView(session.workflow, user);
+          return this.buildReply(
+            session,
+            this.pushMessage(
+              session,
+              'assistant',
+              [
+                'Missão criada com sucesso.',
+                `Registro criado: **${createdItem.title}**.`,
+                'Deseja criar o cronograma dessa missão agora?',
+              ].join('\n\n'),
+            ),
+            nextWorkflowView,
+            createdItem,
+          );
+        }
         workflow.status = 'completed';
         session.workflow = null;
-        session.updatedAt = new Date().toISOString();
         return this.buildReply(
           session,
           this.pushMessage(
@@ -614,6 +643,24 @@ export class AiAssistantService {
     const updatedView = await this.buildWorkflowView(workflow, user);
     if (
       workflow.intent === 'create_mission_schedule' &&
+      workflow.draft.scheduleFromMissionCreation === true &&
+      workflow.draft.scheduleCreateAfterMission === false
+    ) {
+      workflow.status = 'completed';
+      session.workflow = null;
+      return this.buildReply(
+        session,
+        this.pushMessage(
+          session,
+          'assistant',
+          'Certo. A missão foi criada sem cronograma. Se precisar, você pode iniciar o cronograma depois pelo próprio assistente ou pela tela da missão.',
+        ),
+        null,
+        null,
+      );
+    }
+    if (
+      workflow.intent === 'create_mission_schedule' &&
       workflow.draft.scheduleOperation === 'EDIT'
     ) {
       const selectedMissionNow =
@@ -692,7 +739,8 @@ export class AiAssistantService {
         workflow.draft.scheduleOperation !== 'EDIT'
           ? this.buildScheduleReadyToConfirmMessage(updatedView, workflow.draft)
           : workflow.intent === 'create_activity' ||
-              workflow.intent === 'create_task'
+              workflow.intent === 'create_task' ||
+              workflow.intent === 'create_mission'
             ? this.buildEntityReadyToConfirmMessage(updatedView)
           : [
               `Rascunho de **${updatedView.title.toLowerCase()}** pronto para conferência.`,
@@ -950,6 +998,13 @@ export class AiAssistantService {
       throw new BadRequestException('Campo do assistente não reconhecido.');
     }
     if (workflow.intent === 'create_mission_schedule') {
+      if (field.field === 'scheduleCreateAfterMission') {
+        workflow.draft.scheduleCreateAfterMission = this.parseBooleanValue(
+          this.normalizeFieldValue(field, value),
+          field.label,
+        );
+        return;
+      }
       if (field.field === 'scheduleOperation') {
         const option = this.resolveSingleOption(
           field.options ?? [],
@@ -1396,42 +1451,60 @@ export class AiAssistantService {
       ];
     }
 
-    const baseFields: AssistantFieldConfig[] = [
-      {
-        field: 'scheduleOperation',
-        label: 'O que deseja fazer no cronograma?',
-        inputType: 'single_select',
-        options: [
+    const isMissionCreatedInFlow = draft.scheduleFromMissionCreation === true;
+    if (
+      isMissionCreatedInFlow &&
+      typeof draft.scheduleCreateAfterMission !== 'boolean'
+    ) {
+      return [
+        {
+          field: 'scheduleCreateAfterMission',
+          label: 'Deseja criar o cronograma agora?',
+          inputType: 'boolean',
+          helperText:
+            'Se responder Sim, o assistente continua imediatamente no fluxo de cronograma desta missão.',
+        },
+      ];
+    }
+
+    const baseFields: AssistantFieldConfig[] = isMissionCreatedInFlow
+      ? []
+      : [
           {
-            value: 'CREATE',
-            label: 'Criar novo cronograma',
-            description:
-              'Monta um cronograma novo para a missão, por PDF ou manualmente.',
+            field: 'scheduleOperation',
+            label: 'O que deseja fazer no cronograma?',
+            inputType: 'single_select',
+            options: [
+              {
+                value: 'CREATE',
+                label: 'Criar novo cronograma',
+                description:
+                  'Monta um cronograma novo para a missão, por PDF ou manualmente.',
+              },
+              {
+                value: 'EDIT',
+                label: 'Editar cronograma existente',
+                description:
+                  'Lista os itens já salvos e permite alterar um campo por vez com confirmação.',
+              },
+            ],
           },
           {
-            value: 'EDIT',
-            label: 'Editar cronograma existente',
-            description:
-              'Lista os itens já salvos e permite alterar um campo por vez com confirmação.',
+            field: 'scope',
+            label: 'Escopo da missão',
+            inputType: 'single_select',
+            options: [
+              { value: 'SMIF', label: 'SMIF' },
+              { value: 'CIPAVD', label: 'CIPAVD' },
+            ],
           },
-        ],
-      },
-      {
-        field: 'scope',
-        label: 'Escopo da missão',
-        inputType: 'single_select',
-        options: [
-          { value: 'SMIF', label: 'SMIF' },
-          { value: 'CIPAVD', label: 'CIPAVD' },
-        ],
-      },
-      {
-        field: 'missionId',
-        label: 'Missão',
-        inputType: 'single_select',
-        options: await this.listMissionOptions(draft.scope, user),
-      },
-    ];
+          {
+            field: 'missionId',
+            label: 'Missão',
+            inputType: 'single_select',
+            options: await this.listMissionOptions(draft.scope, user),
+          },
+        ];
 
     if (draft.scheduleOperation === 'EDIT') {
       const existingItems = await this.syncExistingScheduleItems(draft, user);
@@ -1898,6 +1971,9 @@ export class AiAssistantService {
       { label: 'Modo do fluxo', value: 'Criar novo cronograma' },
       { label: 'Escopo', value: draft.scope || '—' },
       { label: 'Missão', value: missionLabel || '—' },
+      ...(draft.scheduleFromMissionCreation === true
+        ? [{ label: 'Origem', value: 'Missão criada nesta conversa' }]
+        : []),
       { label: 'Modo', value: 'Preenchimento manual' },
       { label: 'Título do item', value: draft.title || '—' },
       { label: 'Início', value: draft.startAt || '—' },
