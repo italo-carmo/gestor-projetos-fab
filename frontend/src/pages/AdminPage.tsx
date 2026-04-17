@@ -37,14 +37,19 @@ import SmartToyRoundedIcon from '@mui/icons-material/SmartToyRounded';
 import AssignmentTurnedInRoundedIcon from '@mui/icons-material/AssignmentTurnedInRounded';
 import ShieldRoundedIcon from '@mui/icons-material/ShieldRounded';
 import TextSnippetRoundedIcon from '@mui/icons-material/TextSnippetRounded';
+import TuneRoundedIcon from '@mui/icons-material/TuneRounded';
+import TrendingUpRoundedIcon from '@mui/icons-material/TrendingUpRounded';
+import RadarRoundedIcon from '@mui/icons-material/RadarRounded';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
-import { useCallback, useEffect, useState, type ReactNode, type SyntheticEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode, type SyntheticEvent } from 'react';
 import {
   useAiSettings,
+  useComgepScoringSettings,
   useMe,
   usePhases,
   useUpdateAiSettings,
+  useUpdateComgepScoringSettings,
   useUpdatePhase,
   useTestAiConnection,
   type AiAnalysisSourceSelection,
@@ -52,6 +57,10 @@ import {
   type AiKnowledgeSourceId,
   type AiSettingsPatch,
   type AiSettingsResponse,
+  type ComgepScoringGroupId,
+  type ComgepScoringSettingItem,
+  type ComgepScoringSettingsPatch,
+  type ComgepScoringWeightKey,
 } from '../api/hooks';
 import {
   useCreatePosto,
@@ -2569,6 +2578,385 @@ function AiSettingsTab() {
   );
 }
 
+function ComgepSettingsTab() {
+  const settingsQuery = useComgepScoringSettings();
+  const updateSettings = useUpdateComgepScoringSettings();
+  const toast = useToast();
+  const [loaded, setLoaded] = useState(false);
+  const [expandedGroup, setExpandedGroup] = useState<ComgepScoringGroupId | false>('risk');
+  const [weights, setWeights] = useState<Partial<Record<ComgepScoringWeightKey, number>>>({});
+
+  useEffect(() => {
+    if (loaded || !settingsQuery.data) return;
+    setWeights(settingsQuery.data.values);
+    setLoaded(true);
+  }, [loaded, settingsQuery.data]);
+
+  const getCurrentValue = useCallback(
+    (item: ComgepScoringSettingItem) => weights[item.key] ?? item.value ?? item.defaultValue,
+    [weights],
+  );
+
+  const isDirty = useMemo(() => {
+    const baseline: Partial<Record<ComgepScoringWeightKey, number>> =
+      settingsQuery.data?.values ?? {};
+    return Object.keys(weights).some((key) => {
+      const typedKey = key as ComgepScoringWeightKey;
+      return Number(weights[typedKey]) !== Number(baseline[typedKey]);
+    });
+  }, [settingsQuery.data?.values, weights]);
+
+  const changedCountByGroup = useMemo(() => {
+    const counts: Partial<Record<ComgepScoringGroupId, number>> = {};
+    for (const group of settingsQuery.data?.groups ?? []) {
+      counts[group.id] = group.items.filter((item) => getCurrentValue(item) !== item.value).length;
+    }
+    return counts;
+  }, [getCurrentValue, settingsQuery.data?.groups]);
+
+  const updateWeight = (item: ComgepScoringSettingItem, next: number) => {
+    const bounded = Math.min(Math.max(next, item.min), item.max);
+    setWeights((current) => ({
+      ...current,
+      [item.key]: Number.isFinite(bounded) ? Number(bounded.toFixed(3)) : item.defaultValue,
+    }));
+  };
+
+  const handleInputChange = (item: ComgepScoringSettingItem, raw: string) => {
+    if (raw.trim() === '') {
+      setWeights((current) => ({ ...current, [item.key]: item.defaultValue }));
+      return;
+    }
+    const normalized = Number(raw.replace(',', '.'));
+    if (!Number.isFinite(normalized)) return;
+    updateWeight(item, normalized);
+  };
+
+  const resetItem = (item: ComgepScoringSettingItem) => {
+    setWeights((current) => ({
+      ...current,
+      [item.key]: item.defaultValue,
+    }));
+  };
+
+  const resetGroup = (groupId: ComgepScoringGroupId) => {
+    const group = settingsQuery.data?.groups.find((entry) => entry.id === groupId);
+    if (!group) return;
+    setWeights((current) => {
+      const next = { ...current };
+      for (const item of group.items) {
+        next[item.key] = item.defaultValue;
+      }
+      return next;
+    });
+  };
+
+  const resetAll = () => {
+    const next: Partial<Record<ComgepScoringWeightKey, number>> = {};
+    for (const item of settingsQuery.data?.groups.flatMap((group) => group.items) ?? []) {
+      next[item.key] = item.defaultValue;
+    }
+    setWeights(next);
+  };
+
+  const handleSave = async () => {
+    const baseline: Partial<Record<ComgepScoringWeightKey, number>> =
+      settingsQuery.data?.values ?? {};
+    const patch: Partial<Record<ComgepScoringWeightKey, number>> = {};
+    for (const [key, currentValue] of Object.entries(weights)) {
+      const typedKey = key as ComgepScoringWeightKey;
+      if (Number(currentValue) !== Number(baseline[typedKey])) {
+        patch[typedKey] = Number(currentValue);
+      }
+    }
+
+    if (Object.keys(patch).length === 0) {
+      toast.push({ message: 'Nenhuma alteração detectada.', severity: 'info' });
+      return;
+    }
+
+    try {
+      await updateSettings.mutateAsync({
+        weights: patch,
+      } satisfies ComgepScoringSettingsPatch);
+      toast.push({
+        message: 'Parâmetros do COMGEP salvos.',
+        severity: 'success',
+      });
+      setLoaded(false);
+    } catch (error) {
+      toast.push({
+        message: parseApiError(error).message ?? 'Erro ao salvar os parâmetros do COMGEP.',
+        severity: 'error',
+      });
+    }
+  };
+
+  if (settingsQuery.isLoading) return <SkeletonState />;
+  if (settingsQuery.isError) {
+    return <ErrorState error={settingsQuery.error} onRetry={() => settingsQuery.refetch()} />;
+  }
+
+  return (
+    <Box sx={{ width: '100%', maxWidth: 'none' }}>
+      <Stack direction="row" spacing={2} alignItems="flex-start" sx={{ mb: 2.5 }}>
+        <Box
+          sx={{
+            width: 52,
+            height: 52,
+            borderRadius: 2,
+            bgcolor: (t) => alpha(t.palette.primary.main, 0.12),
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+          }}
+        >
+          <TuneRoundedIcon color="primary" sx={{ fontSize: 30 }} />
+        </Box>
+        <Box>
+          <Typography variant="h6" fontWeight={700}>
+            Configuração COMGEP
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Ajuste os pesos que compõem o score de risco e a presença operacional da Sala
+            COMGEP. Maior peso significa maior impacto daquele fator no ranking exibido ao
+            gestor. Os efeitos aparecem nas tabelas de OMs de maior risco e UFs com atuação
+            prioritária.
+          </Typography>
+        </Box>
+      </Stack>
+
+      <Paper
+        variant="outlined"
+        sx={{
+          p: 2.5,
+          mb: 2.5,
+          borderRadius: 2.5,
+          borderColor: (t) => alpha(t.palette.primary.main, 0.2),
+          bgcolor: (t) => alpha(t.palette.primary.main, 0.03),
+        }}
+      >
+        <Stack
+          direction={{ xs: 'column', md: 'row' }}
+          spacing={1.5}
+          justifyContent="space-between"
+          alignItems={{ md: 'center' }}
+        >
+          <Box>
+            <Typography variant="subtitle1" fontWeight={800}>
+              Como ler esta configuração
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.4 }}>
+              Os fatores de risco aumentam a prioridade de OMs e UFs. Os fatores de presença
+              mostram o quanto já houve atuação operacional. A pressão operacional da UF é
+              calculada cruzando esses dois blocos.
+            </Typography>
+          </Box>
+          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+            <Chip size="small" color="primary" variant="outlined" label={`${settingsQuery.data?.groups.length ?? 0} grupos`} />
+            <Chip
+              size="small"
+              color={isDirty ? 'warning' : 'success'}
+              variant={isDirty ? 'filled' : 'outlined'}
+              label={isDirty ? 'Há alterações não salvas' : 'Tudo sincronizado'}
+            />
+          </Stack>
+        </Stack>
+      </Paper>
+
+      <Stack spacing={1.5}>
+        {(settingsQuery.data?.groups ?? []).map((group) => (
+          <Accordion
+            key={group.id}
+            expanded={expandedGroup === group.id}
+            onChange={(_, expanded) => setExpandedGroup(expanded ? group.id : false)}
+            disableGutters
+            elevation={0}
+            sx={{
+              border: '1px solid',
+              borderColor: alpha(group.id === 'risk' ? '#C62828' : '#1565C0', 0.22),
+              borderRadius: '16px !important',
+              overflow: 'hidden',
+              bgcolor: '#fff',
+              '&:before': { display: 'none' },
+            }}
+          >
+            <AccordionSummary
+              expandIcon={<ExpandMoreIcon />}
+              sx={{
+                px: 2,
+                py: 1,
+                minHeight: 88,
+                bgcolor:
+                  expandedGroup === group.id
+                    ? alpha(group.id === 'risk' ? '#C62828' : '#1565C0', 0.06)
+                    : '#fff',
+              }}
+            >
+              <Stack direction="row" spacing={1.5} alignItems="flex-start" sx={{ width: '100%' }}>
+                <Box
+                  sx={{
+                    width: 42,
+                    height: 42,
+                    borderRadius: 2,
+                    bgcolor: alpha(group.id === 'risk' ? '#C62828' : '#1565C0', 0.12),
+                    color: group.id === 'risk' ? '#C62828' : '#1565C0',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  {group.id === 'risk' ? (
+                    <TrendingUpRoundedIcon sx={{ fontSize: 28 }} />
+                  ) : (
+                    <RadarRoundedIcon sx={{ fontSize: 28 }} />
+                  )}
+                </Box>
+                <Box sx={{ minWidth: 0, flex: 1 }}>
+                  <Stack
+                    direction={{ xs: 'column', md: 'row' }}
+                    spacing={1}
+                    justifyContent="space-between"
+                    alignItems={{ md: 'flex-start' }}
+                  >
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography variant="subtitle1" fontWeight={800}>
+                        {group.label}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.35 }}>
+                        {group.description}
+                      </Typography>
+                    </Box>
+                    <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+                      <Chip size="small" variant="outlined" label={`${group.items.length} fatores`} />
+                      <Chip
+                        size="small"
+                        color={(changedCountByGroup[group.id] ?? 0) > 0 ? 'warning' : 'default'}
+                        variant={(changedCountByGroup[group.id] ?? 0) > 0 ? 'filled' : 'outlined'}
+                        label={
+                          (changedCountByGroup[group.id] ?? 0) > 0
+                            ? `${changedCountByGroup[group.id]} alterado(s)`
+                            : 'Sem alterações'
+                        }
+                      />
+                    </Stack>
+                  </Stack>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.8 }}>
+                    {group.effectSummary}
+                  </Typography>
+                </Box>
+              </Stack>
+            </AccordionSummary>
+            <AccordionDetails sx={{ px: 2, pb: 2 }}>
+              <Stack
+                direction={{ xs: 'column', md: 'row' }}
+                spacing={1}
+                justifyContent="space-between"
+                alignItems={{ md: 'center' }}
+                sx={{ mb: 1.5 }}
+              >
+                <Typography variant="body2" color="text.secondary">
+                  Edite os pesos com granularidade fina. Se quiser voltar ao desenho original do
+                  sistema, use os valores padrão.
+                </Typography>
+                <Button size="small" variant="outlined" onClick={() => resetGroup(group.id)}>
+                  Restaurar padrão deste grupo
+                </Button>
+              </Stack>
+
+              <Stack spacing={1.2}>
+                {group.items.map((item) => {
+                  const currentValue = getCurrentValue(item);
+                  const dirty = currentValue !== item.value;
+                  return (
+                    <Paper
+                      key={item.key}
+                      variant="outlined"
+                      sx={{
+                        p: 1.5,
+                        borderRadius: 2.5,
+                        borderColor: dirty
+                          ? alpha(group.id === 'risk' ? '#C62828' : '#1565C0', 0.35)
+                          : '#E6ECF5',
+                        bgcolor: dirty
+                          ? alpha(group.id === 'risk' ? '#C62828' : '#1565C0', 0.03)
+                          : '#fff',
+                      }}
+                    >
+                      <Stack
+                        direction={{ xs: 'column', lg: 'row' }}
+                        spacing={1.5}
+                        justifyContent="space-between"
+                        alignItems={{ lg: 'flex-start' }}
+                      >
+                        <Box sx={{ minWidth: 0, flex: 1 }}>
+                          <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+                            <Chip size="small" label={item.appliesTo} variant="outlined" />
+                            <Chip size="small" label={item.unitLabel} variant="outlined" />
+                            {dirty && <Chip size="small" color="warning" label="Alterado" />}
+                          </Stack>
+                          <Typography variant="subtitle2" fontWeight={800} sx={{ mt: 1 }}>
+                            {item.label}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.35 }}>
+                            {item.description}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.9 }}>
+                            {item.impact}
+                          </Typography>
+                        </Box>
+
+                        <Stack spacing={0.9} sx={{ width: { xs: '100%', lg: 260 }, flexShrink: 0 }}>
+                          <TextField
+                            size="small"
+                            type="number"
+                            label="Peso"
+                            value={String(currentValue)}
+                            onChange={(event) => handleInputChange(item, event.target.value)}
+                            inputProps={{
+                              min: item.min,
+                              max: item.max,
+                              step: item.step,
+                            }}
+                            helperText={`Padrão: ${item.defaultValue} • Faixa: ${item.min} a ${item.max}`}
+                            fullWidth
+                          />
+                          <Stack direction="row" spacing={1} justifyContent="flex-end">
+                            <Button size="small" onClick={() => updateWeight(item, currentValue - item.step)}>
+                              -{item.step}
+                            </Button>
+                            <Button size="small" onClick={() => updateWeight(item, currentValue + item.step)}>
+                              +{item.step}
+                            </Button>
+                            <Button size="small" variant="outlined" onClick={() => resetItem(item)}>
+                              Usar padrão
+                            </Button>
+                          </Stack>
+                        </Stack>
+                      </Stack>
+                    </Paper>
+                  );
+                })}
+              </Stack>
+            </AccordionDetails>
+          </Accordion>
+        ))}
+      </Stack>
+
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mt: 3 }}>
+        <Button variant="contained" onClick={handleSave} disabled={updateSettings.isPending || !isDirty}>
+          {updateSettings.isPending ? 'Salvando...' : 'Salvar parâmetros'}
+        </Button>
+        <Button variant="outlined" onClick={resetAll}>
+          Restaurar todos os padrões
+        </Button>
+      </Stack>
+    </Box>
+  );
+}
+
 export function AdminPage() {
   const { data: me } = useMe();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -2576,6 +2964,7 @@ export function AdminPage() {
   const [currentTab, setCurrentTab] = useState(tabParam);
   const canViewCipavdLocalities = can(me, 'localities_cipavd', 'view');
   const canViewAiSettings = hasAnyRole(me, [ROLE_TI]);
+  const canViewComgepSettings = canViewAiSettings;
   const canViewBiNormalization = hasAnyRole(me, [ROLE_TI, ROLE_COMGEP]);
 
   useEffect(() => {
@@ -2596,6 +2985,13 @@ export function AdminPage() {
     setSearchParams(params, { replace: true });
   }, [canViewBiNormalization, currentTab, searchParams, setSearchParams]);
 
+  useEffect(() => {
+    if (currentTab !== 'comgep-settings' || canViewComgepSettings) return;
+    const params = new URLSearchParams(searchParams);
+    params.set('tab', 'postos');
+    setSearchParams(params, { replace: true });
+  }, [canViewComgepSettings, currentTab, searchParams, setSearchParams]);
+
   const handleTabChange = (_event: SyntheticEvent, newValue: string) => {
     setCurrentTab(newValue);
     const params = new URLSearchParams(searchParams);
@@ -2610,7 +3006,8 @@ export function AdminPage() {
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
         Gerencie localidades SMIF e CIPAVD, postos, fases, papéis de elo e o
-        mapeamento institucional do sistema.
+        mapeamento institucional do sistema, além das configurações de IA e
+        dos parâmetros executivos do COMGEP.
       </Typography>
 
       <Card>
@@ -2631,6 +3028,9 @@ export function AdminPage() {
             {canViewBiNormalization && (
               <Tab label="Normalização BI" value="bi-normalization" />
             )}
+            {canViewComgepSettings && (
+              <Tab label="Configuração COMGEP" value="comgep-settings" />
+            )}
             {canViewAiSettings && <Tab label="Configuração IA" value="ai-settings" />}
           </Tabs>
 
@@ -2644,6 +3044,9 @@ export function AdminPage() {
           {currentTab === 'institutional-mapping' && <InstitutionalMappingTab />}
           {canViewBiNormalization && currentTab === 'bi-normalization' && (
             <BiNormalizationTab />
+          )}
+          {canViewComgepSettings && currentTab === 'comgep-settings' && (
+            <ComgepSettingsTab />
           )}
           {canViewAiSettings && currentTab === 'ai-settings' && <AiSettingsTab />}
         </CardContent>

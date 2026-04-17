@@ -5040,6 +5040,54 @@ export type AiSettingsPatch = {
   analysisSources?: Partial<Record<AiAnalysisType, AiKnowledgeSourceId[]>>;
 };
 
+export type ComgepScoringWeightKey =
+  | "riskOpenCases"
+  | "riskRetaliationCases"
+  | "riskStalledCases"
+  | "riskSexualFormalCases"
+  | "riskSurveyRate"
+  | "riskDomesticRate"
+  | "riskSexualSignals"
+  | "riskMoralSignals"
+  | "riskMilitaryAuthor"
+  | "riskUnderreportPercent"
+  | "riskUncoveredOmPenalty"
+  | "presenceMissions"
+  | "presenceCompletedActivities"
+  | "presenceSignedReports";
+
+export type ComgepScoringGroupId = "risk" | "presence";
+
+export type ComgepScoringSettingItem = {
+  key: ComgepScoringWeightKey;
+  group: ComgepScoringGroupId;
+  label: string;
+  description: string;
+  impact: string;
+  appliesTo: "OM" | "UF" | "OM e UF";
+  unitLabel: string;
+  defaultValue: number;
+  min: number;
+  max: number;
+  step: number;
+  value: number;
+};
+
+export type ComgepScoringSettingsResponse = {
+  groups: Array<{
+    id: ComgepScoringGroupId;
+    label: string;
+    description: string;
+    effectSummary: string;
+    items: ComgepScoringSettingItem[];
+  }>;
+  values: Record<ComgepScoringWeightKey, number>;
+};
+
+export type ComgepScoringSettingsPatch = {
+  weights: Partial<Record<ComgepScoringWeightKey, number>>;
+};
+
 export function useStrategicAiNarrative() {
   return useMutation({
     mutationFn: async () =>
@@ -5056,6 +5104,16 @@ export function useAiSettings() {
     queryKey: qk.aiSettings,
     queryFn: async () =>
       (await api.get<AiSettingsResponse>("/admin/ai-settings")).data,
+  });
+}
+
+export function useComgepScoringSettings() {
+  return useQuery({
+    queryKey: qk.comgepSettings,
+    queryFn: async () =>
+      (
+        await api.get<ComgepScoringSettingsResponse>("/admin/comgep-settings")
+      ).data,
   });
 }
 
@@ -5219,6 +5277,18 @@ export function useUpdateAiSettings() {
       (await api.put("/admin/ai-settings", payload)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.aiSettings });
+    },
+  });
+}
+
+export function useUpdateComgepScoringSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: ComgepScoringSettingsPatch) =>
+      (await api.put("/admin/comgep-settings", payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.comgepSettings });
+      qc.invalidateQueries({ queryKey: qk.comgepSituationRoom });
     },
   });
 }

@@ -16,6 +16,13 @@ import {
   AI_ANALYSIS_TYPES,
   type AiKnowledgeSourceId,
 } from '../ai/ai-knowledge-sources';
+import {
+  buildComgepScoringSettingsResponse,
+  COMGEP_SCORING_SETTING_KEY,
+  type ComgepScoringWeights,
+  type ComgepScoringWeightKey,
+  normalizeComgepScoringWeights,
+} from './comgep-scoring';
 
 export const AI_SETTING_KEYS = {
   systemPrompt: 'ai.systemPrompt',
@@ -211,6 +218,38 @@ export class SettingsService implements OnModuleInit {
   ): Promise<AiKnowledgeSourceId[]> {
     const rows = await this.getAnalysisSources();
     return rows[type] ?? ANALYSIS_DEFAULT_SOURCES[type];
+  }
+
+  async getComgepScoringWeights(): Promise<ComgepScoringWeights> {
+    const row = await this.appSetting.findUnique({
+      where: { key: COMGEP_SCORING_SETTING_KEY },
+    });
+
+    if (!row?.value) {
+      return normalizeComgepScoringWeights(null);
+    }
+
+    try {
+      return normalizeComgepScoringWeights(JSON.parse(row.value));
+    } catch {
+      return normalizeComgepScoringWeights(null);
+    }
+  }
+
+  async getComgepScoringSettings() {
+    const weights = await this.getComgepScoringWeights();
+    return buildComgepScoringSettingsResponse(weights);
+  }
+
+  async updateComgepScoringSettings(
+    patch: Partial<Record<ComgepScoringWeightKey, number>>,
+  ): Promise<void> {
+    const current = await this.getComgepScoringWeights();
+    const next = normalizeComgepScoringWeights({
+      ...current,
+      ...patch,
+    });
+    await this.set(COMGEP_SCORING_SETTING_KEY, JSON.stringify(next));
   }
 
   async updateAiSettings(

@@ -153,6 +153,7 @@ export const qk = {
     ["smifComplaints", filters] as const,
   smifComplaintCase: (id: string) => ["smifComplaintCase", id] as const,
   aiSettings: ["admin", "aiSettings"] as const,
+  comgepSettings: ["admin", "comgepSettings"] as const,
   biNormalizationOverview: ["bi", "normalization", "overview"] as const,
   biNormalizationReview: (sourceType?: string | null) =>
     ["bi", "normalization", "review", sourceType ?? "all"] as const,

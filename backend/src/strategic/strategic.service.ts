@@ -20,6 +20,7 @@ import {
 } from '../llm/litellm.service';
 import PDFDocument from 'pdfkit';
 import type { RbacUser } from '../rbac/rbac.types';
+import { SettingsService } from '../settings/settings.service';
 
 const PT_STOPWORDS = new Set([
   'a',
@@ -421,6 +422,7 @@ export class StrategicService {
     private readonly prisma: PrismaService,
     private readonly litellm: LitellmService,
     private readonly biNormalization: BiNormalizationService,
+    private readonly settings: SettingsService,
   ) {}
 
   private resolveSourceSet(
@@ -621,6 +623,7 @@ export class StrategicService {
   async comgepSituationRoom() {
     const now = new Date();
     const lookbackStart = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
+    const comgepWeights = await this.settings.getComgepScoringWeights();
     const openStatuses = new Set([
       'RECEIVED',
       'PROTECTION_MEASURES',
@@ -1060,17 +1063,17 @@ export class StrategicService {
         );
         const covered = coveredOmIds.has(om.id);
         const rawRisk =
-          complaintsStats.openCases * 8 +
-          complaintsStats.retaliationCases * 12 +
-          complaintsStats.stalledCases * 6 +
-          complaintsStats.sexualCases * 4 +
-          surveyRate * 0.7 +
-          domesticRate * 0.8 +
-          sexualSignals * 2 +
-          moralSignals * 1.5 +
-          domestic.militaryAuthor * 3 +
-          underreport.percent * 0.15 +
-          (covered ? 0 : 10);
+          complaintsStats.openCases * comgepWeights.riskOpenCases +
+          complaintsStats.retaliationCases * comgepWeights.riskRetaliationCases +
+          complaintsStats.stalledCases * comgepWeights.riskStalledCases +
+          complaintsStats.sexualCases * comgepWeights.riskSexualFormalCases +
+          surveyRate * comgepWeights.riskSurveyRate +
+          domesticRate * comgepWeights.riskDomesticRate +
+          sexualSignals * comgepWeights.riskSexualSignals +
+          moralSignals * comgepWeights.riskMoralSignals +
+          domestic.militaryAuthor * comgepWeights.riskMilitaryAuthor +
+          underreport.percent * comgepWeights.riskUnderreportPercent +
+          (covered ? 0 : comgepWeights.riskUncoveredOmPenalty);
         const rankingReasons: string[] = [];
         if (sexualSignals > 0) {
           rankingReasons.push(
@@ -1197,20 +1200,20 @@ export class StrategicService {
           totalOms > 0 ? Number(((coveredOms / totalOms) * 100).toFixed(1)) : 0;
 
         const rawRisk =
-          complaintsStats.openCases * 8 +
-          complaintsStats.retaliationCases * 12 +
-          complaintsStats.stalledCases * 6 +
-          complaintsStats.sexualCases * 4 +
-          surveyRate * 0.7 +
-          domesticRate * 0.8 +
-          sexualSignals * 2 +
-          moralSignals * 1.5 +
-          domestic.militaryAuthor * 3 +
-          underreport.percent * 0.15;
+          complaintsStats.openCases * comgepWeights.riskOpenCases +
+          complaintsStats.retaliationCases * comgepWeights.riskRetaliationCases +
+          complaintsStats.stalledCases * comgepWeights.riskStalledCases +
+          complaintsStats.sexualCases * comgepWeights.riskSexualFormalCases +
+          surveyRate * comgepWeights.riskSurveyRate +
+          domesticRate * comgepWeights.riskDomesticRate +
+          sexualSignals * comgepWeights.riskSexualSignals +
+          moralSignals * comgepWeights.riskMoralSignals +
+          domestic.militaryAuthor * comgepWeights.riskMilitaryAuthor +
+          underreport.percent * comgepWeights.riskUnderreportPercent;
         const rawPresence =
-          presence.missions * 5 +
-          presence.completedActivities * 3 +
-          presence.signedReports * 2;
+          presence.missions * comgepWeights.presenceMissions +
+          presence.completedActivities * comgepWeights.presenceCompletedActivities +
+          presence.signedReports * comgepWeights.presenceSignedReports;
 
         return {
           uf,

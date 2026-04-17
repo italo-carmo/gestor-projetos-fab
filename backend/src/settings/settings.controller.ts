@@ -5,6 +5,7 @@ import { RequirePermission } from '../rbac/require-permission.decorator';
 import { SettingsService } from './settings.service';
 import { LitellmService } from '../llm/litellm.service';
 import { AiKnowledgeSourceId } from '../ai/ai-knowledge-sources';
+import type { ComgepScoringWeightKey } from './comgep-scoring';
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RbacGuard)
@@ -41,5 +42,23 @@ export class SettingsController {
   @RequirePermission('admin_rbac', 'update')
   async testLitellmConnection() {
     return this.litellm.testConnection();
+  }
+
+  @Get('comgep-settings')
+  @RequirePermission('admin_rbac', 'update')
+  async getComgepSettings() {
+    return this.settings.getComgepScoringSettings();
+  }
+
+  @Put('comgep-settings')
+  @RequirePermission('admin_rbac', 'update')
+  async updateComgepSettings(
+    @Body()
+    body: {
+      weights?: Partial<Record<ComgepScoringWeightKey, number>>;
+    },
+  ) {
+    await this.settings.updateComgepScoringSettings(body.weights ?? {});
+    return { ok: true };
   }
 }
