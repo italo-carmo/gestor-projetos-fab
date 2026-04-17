@@ -2583,7 +2583,10 @@ export class AiAssistantService {
     >,
   ) {
     const reconciled = items.map((item, index) => {
-      const fallback = fallbackItems[index] ?? null;
+      const fallback =
+        this.findBestScheduleFallbackForItem(item, fallbackItems) ??
+        fallbackItems[index] ??
+        null;
       const title = this.reconcileScheduleTitleWithFallback(
         item.title,
         fallback?.title ?? '',
@@ -2604,6 +2607,14 @@ export class AiAssistantService {
         fallback?.responsible ?? '',
       );
       if (
+        responsible === 'Equipe de Campo' &&
+        fallbackResponsible &&
+        !/^(?:[ivxlcdm]+\s+)?(?:encontro de comiss[oõ]es|reuni[aã]o com as cpcas|visita [àa]s instala[cç][õo]es|acompanhamento e observa[cç][ãa]o)/i.test(
+          this.normalizeFreeText(title),
+        )
+      ) {
+        responsible = fallbackResponsible;
+      } else if (
         (!responsible || this.isAmbiguousScheduleResponsible(responsible)) &&
         fallbackResponsible &&
         !this.isAmbiguousScheduleResponsible(fallbackResponsible)
@@ -2663,13 +2674,59 @@ export class AiAssistantService {
     return rebalanced.sort((left, right) => left.startAt.localeCompare(right.startAt));
   }
 
+  private findBestScheduleFallbackForItem(
+    item: Omit<
+      AssistantScheduleDraftItem,
+      'id' | 'sourceFileIds' | 'sourceFileNames'
+    >,
+    fallbackItems: Array<
+      Omit<
+        AssistantScheduleDraftItem,
+        'id' | 'sourceFileIds' | 'sourceFileNames'
+      >
+    >,
+  ) {
+    const sameStart = fallbackItems.filter(
+      (fallback) => fallback.startAt === item.startAt,
+    );
+    if (!sameStart.length) {
+      return null;
+    }
+    const itemTitle = this.normalizeFreeText(item.title);
+    let best: (typeof fallbackItems)[number] | null = null;
+    let bestScore = -1;
+    for (const candidate of sameStart) {
+      const candidateTitle = this.normalizeFreeText(candidate.title);
+      let score = 0;
+      if (candidateTitle === itemTitle) score += 5;
+      if (candidateTitle.includes(itemTitle) || itemTitle.includes(candidateTitle)) {
+        score += 3;
+      }
+      if (
+        candidateTitle.startsWith(itemTitle) ||
+        itemTitle.startsWith(candidateTitle)
+      ) {
+        score += 2;
+      }
+      if (String(candidate.location ?? '').trim()) score += 1;
+      if (String(candidate.responsible ?? '').trim()) score += 1;
+      if (String(candidate.participants ?? '').trim()) score += 1;
+      if (score > bestScore) {
+        bestScore = score;
+        best = candidate;
+      }
+    }
+    return best;
+  }
+
   private sanitizeScheduleDraftItem(
     item: Omit<
       AssistantScheduleDraftItem,
       'id' | 'sourceFileIds' | 'sourceFileNames'
     >,
   ) {
-    const normalizedTitle = this.normalizeFreeText(item.title);
+    let title = this.cleanScheduleLine(item.title);
+    let normalizedTitle = this.normalizeFreeText(title);
     let location = this.normalizeScheduleLocationText(item.location);
     let responsible = this.cleanScheduleLine(item.responsible);
     let participants = this.cleanScheduleLine(item.participants);
@@ -2683,6 +2740,15 @@ export class AiAssistantService {
       participants = extractedParticipantsFromLocation.participants;
       location = extractedParticipantsFromLocation.location;
     }
+
+    const titleAndLocation = this.reconcileScheduleTitleAndLocationFragments(
+      normalizedTitle,
+      title,
+      location,
+    );
+    title = titleAndLocation.title;
+    normalizedTitle = this.normalizeFreeText(title);
+    location = titleAndLocation.location;
 
     if (normalizedTitle.startsWith('chegada da equipe')) {
       location = '-';
@@ -2707,7 +2773,8 @@ export class AiAssistantService {
 
     return {
       ...item,
-      location: this.defaultScheduleLocationForTitle(item.title, location),
+      title,
+      location: this.defaultScheduleLocationForTitle(title, location),
       responsible,
       participants,
     };
@@ -2721,6 +2788,7 @@ export class AiAssistantService {
       /^(Audit[oó]rio)\s+(Efetivo feminino)\s+(da\s+[A-Z0-9-]+)$/i,
       /^(Audit[oó]rio)\s+(Recrutas.*|Instrutores.*|Equipe.*)\s+(da\s+[A-Z0-9-]+)$/i,
       /^(Centro de Convenções do GAP-CO)\s+(Todo efetivo escalado|Efetivo feminino)$/i,
+      /^(Todo efetivo escalado|Efetivo feminino|Recrutas.*|Instrutores.*)\s+(Audit[oó]rio(?:\s+(?:da|do))?\s+.+)$/i,
     ];
     for (const pattern of patterns) {
       const match = safe.match(pattern);
@@ -3476,7 +3544,40 @@ export class AiAssistantService {
       /\bAudit[oó]rio\s+Sala de Instru[cç][aã]o\b/i,
       'Sala de Instrução',
     );
+    normalized = normalized.replace(/\s+Centro de$/i, '');
+    if (/^Conven[cç][oõ]es do GAP-CO$/i.test(normalized)) {
+      normalized = 'Centro de Convenções do GAP-CO';
+    }
     return normalized;
+  }
+
+  private reconcileScheduleTitleAndLocationFragments(
+    normalizedTitle: string,
+    title: string,
+    location: string,
+  ) {
+    let safeTitle = this.cleanScheduleLine(title);
+    let safeLocation = this.normalizeScheduleLocationText(location);
+    if (
+      (/^a ser definido pelo gsd$/i.test(normalizedTitle) || !normalizedTitle) &&
+      /visita [àa]s instala[cç][õo]es/i.test(safeLocation)
+    ) {
+      safeTitle = 'Visita às instalações';
+      safeLocation = safeLocation
+        .replace(/visita [àa]s instala[cç][õo]es/i, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (/^do smif$/i.test(safeLocation)) {
+        safeLocation = 'Locais de atividades do SMIF';
+      }
+      if (!safeLocation) {
+        safeLocation = 'Locais de atividades do SMIF';
+      }
+    }
+    return {
+      title: safeTitle,
+      location: safeLocation,
+    };
   }
 
   private normalizeScheduleResponsibleAndParticipants(
@@ -3569,6 +3670,7 @@ export class AiAssistantService {
   private cleanScheduleParticipantFragment(value: string) {
     let safe = this.cleanScheduleLine(value);
     if (!safe) return '';
+    if (safe === '-') return '-';
     safe = safe
       .replace(/^e\s+/i, '')
       .replace(/\s+e$/i, '')
@@ -3581,6 +3683,7 @@ export class AiAssistantService {
     safe = safe.replace(/^recrutas e instrutores do\s+/i, 'Recrutas e Instrutores do ');
     safe = safe.replace(/^cpcas da\s+/i, 'CPCAs da ');
     safe = safe.replace(/^assistentes sociais da\s+/i, 'Assistentes Sociais da ');
+    safe = safe.replace(/^(?:-\s*)+/, '');
     safe = safe.replace(/\b(da|do|de)\s*([A-Z]{2,}(?:-[A-Z0-9]+)?)\b/g, '$1 $2');
     safe = safe.replace(/\bGUARNAE-\s+([A-Z0-9]+)\b/g, 'GUARNAE-$1');
     safe = safe.replace(
@@ -3654,19 +3757,21 @@ export class AiAssistantService {
       const target = result[index + 1];
       if (!sourceFallback || !target) continue;
       const sourceTitle = this.normalizeFreeText(sourceFallback.title);
+      const carryFromParticipants = this.extractScheduleCarryoverFragment(
+        sourceFallback.participants,
+      );
+      const carryFromResponsible = this.extractScheduleCarryoverFragment(
+        sourceFallback.responsible,
+      );
       if (
         sourceTitle !== 'intervalo' &&
-        !sourceTitle.startsWith('chegada da equipe')
+        !sourceTitle.startsWith('chegada da equipe') &&
+        !this.shouldCarryScheduleFragmentToNextItem(carryFromParticipants) &&
+        !this.shouldCarryScheduleFragmentToNextItem(carryFromResponsible)
       ) {
         continue;
       }
 
-      const carryFromResponsible = this.extractScheduleCarryoverFragment(
-        sourceFallback.responsible,
-      );
-      const carryFromParticipants = this.extractScheduleCarryoverFragment(
-        sourceFallback.participants,
-      );
       const carryover = this.mergeScheduleParticipantFragments(
         carryFromResponsible,
         carryFromParticipants,
@@ -3675,10 +3780,23 @@ export class AiAssistantService {
       if (!target.startAt.startsWith(sourceFallback.startAt.slice(0, 10))) {
         continue;
       }
-      target.participants = this.mergeScheduleParticipantFragments(
-        target.participants,
-        carryover,
-      );
+      if (
+        this.shouldCarryScheduleFragmentToNextItem(carryover) &&
+        /^(?:[A-Z]{2,}(?:-[A-Z0-9]+)?|GSD-[A-Z0-9-]+)$/i.test(
+          this.cleanScheduleLine(target.participants),
+        )
+      ) {
+        target.participants = `${carryover} ${this.cleanScheduleLine(
+          target.participants,
+        )}`
+          .replace(/\s+/g, ' ')
+          .trim();
+      } else {
+        target.participants = this.mergeScheduleParticipantFragments(
+          target.participants,
+          carryover,
+        );
+      }
       const normalizedFields = this.normalizeScheduleResponsibleAndParticipants(
         this.normalizeFreeText(target.title),
         target.responsible,
@@ -3690,6 +3808,12 @@ export class AiAssistantService {
     return result;
   }
 
+  private shouldCarryScheduleFragmentToNextItem(value: string) {
+    const normalized = this.normalizeFreeText(value);
+    if (!normalized) return false;
+    return /\b(?:da|do|de|pelo)$/i.test(normalized);
+  }
+
   private extractScheduleCarryoverFragment(value: string) {
     const safe = this.cleanScheduleLine(value);
     if (!safe || safe === '-' || safe === 'Equipe de Campo') return '';
@@ -3697,6 +3821,12 @@ export class AiAssistantService {
       return this.cleanScheduleParticipantFragment(
         safe.replace('Equipe de Campo', ''),
       );
+    }
+    if (
+      this.findScheduleResponsibleRoleIndex(safe) === 0 &&
+      !this.shouldCarryScheduleFragmentToNextItem(safe)
+    ) {
+      return '';
     }
     return this.cleanScheduleParticipantFragment(safe);
   }
@@ -4233,7 +4363,9 @@ export class AiAssistantService {
     const responsible = String(item.responsible ?? '').trim();
     if (
       responsible === 'Equipe de Campo' &&
-      !/^(encontro de comiss[oõ]es|reuni[aã]o com as cpcas)/i.test(title)
+      !/^(?:[ivxlcdm]+\s+)?(?:encontro de comiss[oõ]es|reuni[aã]o com as cpcas|visita [àa]s instala[cç][õo]es|acompanhamento e observa[cç][ãa]o)/i.test(
+        title,
+      )
     ) {
       return true;
     }
@@ -4273,6 +4405,7 @@ export class AiAssistantService {
       /^feminino do /.test(normalized) ||
       /^efetivo do /.test(normalized) ||
       /^elos indicados pelo$/.test(normalized) ||
+      /\bpelo$/.test(normalized) ||
       /(recrutas e instrutores do [a-z0-9-]+)\s+recrutas e instrutores$/.test(
         normalized,
       ) ||
