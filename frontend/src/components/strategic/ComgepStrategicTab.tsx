@@ -5,7 +5,15 @@ import {
   Card,
   CardContent,
   Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
   Grid,
+  List,
+  ListItem,
+  ListItemText,
   LinearProgress,
   Stack,
   Table,
@@ -17,11 +25,13 @@ import {
   Typography,
 } from "@mui/material";
 import AutoAwesomeRoundedIcon from "@mui/icons-material/AutoAwesomeRounded";
+import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import HubRoundedIcon from "@mui/icons-material/HubRounded";
 import ShieldRoundedIcon from "@mui/icons-material/ShieldRounded";
 import TrendingUpRoundedIcon from "@mui/icons-material/TrendingUpRounded";
 import WarningAmberRoundedIcon from "@mui/icons-material/WarningAmberRounded";
 import { Link as RouterLink } from "react-router-dom";
+import { useMemo, useState } from "react";
 import {
   useComgepRecommendations,
   useComgepSituationRoom,
@@ -35,20 +45,30 @@ function SummaryCard({
   subtitle,
   icon,
   color,
+  onClick,
 }: {
   title: string;
   value: string | number;
   subtitle: string;
   icon: React.ReactNode;
   color: string;
+  onClick?: () => void;
 }) {
   return (
     <Card
       variant="outlined"
+      onClick={onClick}
       sx={{
         height: "100%",
         borderRadius: 3,
         borderTop: `4px solid ${color}`,
+        ...(onClick
+          ? {
+              cursor: "pointer",
+              transition: "box-shadow 0.2s, transform 0.15s",
+              "&:hover": { boxShadow: 4, transform: "translateY(-2px)" },
+            }
+          : {}),
       }}
     >
       <CardContent>
@@ -143,9 +163,105 @@ function buildOmReason(item: any) {
   return reasons.slice(0, 3).join(" • ") || "Risco composto por denúncias, cobertura e sinais BI.";
 }
 
+function MeaningBlock({
+  title,
+  meaning,
+  source,
+}: {
+  title: string;
+  meaning: string;
+  source: string;
+}) {
+  return (
+    <Box
+      sx={{
+        p: 1.5,
+        borderRadius: 2,
+        bgcolor: "#F5F8FC",
+        border: "1px solid #D7E3F4",
+      }}
+    >
+      <Typography variant="subtitle2" fontWeight={800} color="#1A3C6E">
+        {title}
+      </Typography>
+      <Typography variant="body2" sx={{ mt: 0.6, lineHeight: 1.65 }}>
+        {meaning}
+      </Typography>
+      <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.8 }}>
+        {source}
+      </Typography>
+    </Box>
+  );
+}
+
+function ModalRow({
+  label,
+  value,
+  color,
+}: {
+  label: string;
+  value: string | number;
+  color?: string;
+}) {
+  return (
+    <Box
+      sx={{
+        display: "flex",
+        justifyContent: "space-between",
+        py: 0.5,
+        borderBottom: "1px solid #EDF1F7",
+      }}
+    >
+      <Typography variant="body2">{label}</Typography>
+      <Chip
+        size="small"
+        label={value}
+        sx={color ? { bgcolor: color, color: "#fff" } : undefined}
+      />
+    </Box>
+  );
+}
+
+function ComgepDetailModal({
+  open,
+  title,
+  onClose,
+  children,
+}: {
+  open: boolean;
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth scroll="paper">
+      <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <Typography variant="h6">{title}</Typography>
+        <Button onClick={onClose} size="small" sx={{ minWidth: "auto" }}>
+          <CloseRoundedIcon />
+        </Button>
+      </DialogTitle>
+      <Divider />
+      <DialogContent>{children}</DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Fechar</Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
 export function ComgepStrategicTab() {
   const roomQuery = useComgepSituationRoom();
   const recommendationsQuery = useComgepRecommendations(6);
+  const [detailModal, setDetailModal] = useState<
+    | null
+    | "retaliation"
+    | "stalled"
+    | "criticalUfs"
+    | "confidence"
+    | "pressure"
+  >(null);
+  const [selectedPressureUf, setSelectedPressureUf] = useState<any | null>(null);
 
   if (roomQuery.isLoading) {
     return <SkeletonState />;
@@ -162,11 +278,40 @@ export function ComgepStrategicTab() {
   const dataConfidence = room?.dataConfidence ?? {};
   const watchlists = room?.watchlists ?? {};
   const recommendations = recommendationsQuery.data?.items ?? [];
-  const uncoveredOms = Math.max(
-    0,
-    Number(summary.totalOms ?? 0) - Number(summary.coveredOms ?? 0),
-  );
   const confidencePercent = Number(dataConfidence.supportedCoveragePercent ?? 0);
+  const omRiskIndex = Array.isArray(room?.details?.omRiskIndex)
+    ? room.details.omRiskIndex
+    : [];
+  const retaliationOms = useMemo(
+    () =>
+      omRiskIndex
+        .filter((item: any) => Number(item?.complaints?.retaliationCases ?? 0) > 0)
+        .sort(
+          (a: any, b: any) =>
+            Number(b?.complaints?.retaliationCases ?? 0) -
+            Number(a?.complaints?.retaliationCases ?? 0),
+        ),
+    [omRiskIndex],
+  );
+  const stalledOms = useMemo(
+    () =>
+      omRiskIndex
+        .filter((item: any) => Number(item?.complaints?.stalledCases ?? 0) > 0)
+        .sort(
+          (a: any, b: any) =>
+            Number(b?.complaints?.stalledCases ?? 0) -
+            Number(a?.complaints?.stalledCases ?? 0),
+        ),
+    [omRiskIndex],
+  );
+  const retaliationCount = retaliationOms.reduce(
+    (sum: number, item: any) => sum + Number(item?.complaints?.retaliationCases ?? 0),
+    0,
+  );
+  const stalledCount = stalledOms.reduce(
+    (sum: number, item: any) => sum + Number(item?.complaints?.stalledCases ?? 0),
+    0,
+  );
 
   return (
     <Stack spacing={2}>
@@ -215,20 +360,22 @@ export function ComgepStrategicTab() {
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 6, xl: 3 }}>
           <SummaryCard
-            title="OMs cobertas pela CPCA"
-            value={`${summary.coveredOms ?? 0}/${summary.totalOms ?? 0}`}
-            subtitle={`${summary.coveredOmsPercent ?? 0}% das OMs já possuem cobertura própria ou por comissão gestora.`}
-            color="#1A3C6E"
-            icon={<ShieldRoundedIcon />}
+            title="Risco de retaliação"
+            value={retaliationCount}
+            subtitle="Casos abertos com indicação de retaliação ou risco de retaliação à vítima."
+            color="#D32F2F"
+            icon={<WarningAmberRoundedIcon />}
+            onClick={() => setDetailModal("retaliation")}
           />
         </Grid>
         <Grid size={{ xs: 12, md: 6, xl: 3 }}>
           <SummaryCard
-            title="OMs descobertas"
-            value={uncoveredOms}
-            subtitle="OMs sem CPCA próprio e sem cobertura de outra comissão."
-            color="#D32F2F"
-            icon={<WarningAmberRoundedIcon />}
+            title="Casos além do prazo"
+            value={stalledCount}
+            subtitle="Denúncias abertas há mais de 30 dias, com potencial de desgaste institucional."
+            color="#ED6C02"
+            icon={<ShieldRoundedIcon />}
+            onClick={() => setDetailModal("stalled")}
           />
         </Grid>
         <Grid size={{ xs: 12, md: 6, xl: 3 }}>
@@ -238,6 +385,7 @@ export function ComgepStrategicTab() {
             subtitle="UFs em faixa crítica, com risco alto e governança ou presença insuficientes."
             color="#ED6C02"
             icon={<TrendingUpRoundedIcon />}
+            onClick={() => setDetailModal("criticalUfs")}
           />
         </Grid>
         <Grid size={{ xs: 12, md: 6, xl: 3 }}>
@@ -247,6 +395,7 @@ export function ComgepStrategicTab() {
             subtitle="Percentual da base BI já normalizado por OM ou UF para cruzamento executivo."
             color="#2E7D32"
             icon={<HubRoundedIcon />}
+            onClick={() => setDetailModal("confidence")}
           />
         </Grid>
       </Grid>
@@ -353,7 +502,17 @@ export function ComgepStrategicTab() {
                 <Card
                   key={item.uf}
                   variant="outlined"
-                  sx={{ borderRadius: 2.5, bgcolor: "#FAFBFD" }}
+                  onClick={() => {
+                    setSelectedPressureUf(item);
+                    setDetailModal("pressure");
+                  }}
+                  sx={{
+                    borderRadius: 2.5,
+                    bgcolor: "#FAFBFD",
+                    cursor: "pointer",
+                    transition: "box-shadow 0.2s, transform 0.15s",
+                    "&:hover": { boxShadow: 3, transform: "translateY(-1px)" },
+                  }}
                 >
                   <CardContent sx={{ py: 1.4, "&:last-child": { pb: 1.4 } }}>
                     <Stack
@@ -504,6 +663,255 @@ export function ComgepStrategicTab() {
           )}
         </Stack>
       </SectionCard>
+
+      <ComgepDetailModal
+        open={detailModal === "retaliation"}
+        title="Detalhamento — Risco de retaliação"
+        onClose={() => setDetailModal(null)}
+      >
+        <Stack spacing={1.25}>
+          <MeaningBlock
+            title="O que isso significa"
+            meaning="Este indicador mostra quantos casos abertos hoje carregam marcação de retaliação ou risco de retaliação. Ele não mede volume total de denúncias; ele destaca os casos mais sensíveis para proteção da vítima e ação imediata do gestor."
+            source="Fonte: denúncias abertas da base CPCA/SMIF consolidadas na Sala COMGEP."
+          />
+          <ModalRow label="Casos com risco de retaliação" value={retaliationCount} color="#D32F2F" />
+          <ModalRow label="OMs impactadas" value={retaliationOms.length} />
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell><strong>OM</strong></TableCell>
+                  <TableCell><strong>UF</strong></TableCell>
+                  <TableCell align="right"><strong>Retaliação</strong></TableCell>
+                  <TableCell align="right"><strong>Abertos</strong></TableCell>
+                  <TableCell><strong>Motivo</strong></TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {retaliationOms.slice(0, 12).map((item: any) => (
+                  <TableRow key={item.id}>
+                    <TableCell>{item.code || item.name || "—"}</TableCell>
+                    <TableCell>{item.uf || "—"}</TableCell>
+                    <TableCell align="right">{item.complaints?.retaliationCases ?? 0}</TableCell>
+                    <TableCell align="right">{item.complaints?.openCases ?? 0}</TableCell>
+                    <TableCell>{buildOmReason(item)}</TableCell>
+                  </TableRow>
+                ))}
+                {!retaliationOms.length && (
+                  <TableRow>
+                    <TableCell colSpan={5}>
+                      <Typography variant="body2" color="text.secondary">
+                        Nenhum caso com risco de retaliação no recorte atual.
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Stack>
+      </ComgepDetailModal>
+
+      <ComgepDetailModal
+        open={detailModal === "stalled"}
+        title="Detalhamento — Casos além do prazo"
+        onClose={() => setDetailModal(null)}
+      >
+        <Stack spacing={1.25}>
+          <MeaningBlock
+            title="O que isso significa"
+            meaning="Este indicador soma os casos abertos há mais de 30 dias. Ele funciona como alerta de atraso de tratamento, risco de perda de confiança na resposta institucional e potencial de agravamento do passivo."
+            source="Fonte: denúncias abertas da base CPCA/SMIF, com cálculo de tempo desde o registro."
+          />
+          <ModalRow label="Casos além do prazo" value={stalledCount} color="#ED6C02" />
+          <ModalRow label="OMs impactadas" value={stalledOms.length} />
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell><strong>OM</strong></TableCell>
+                  <TableCell><strong>UF</strong></TableCell>
+                  <TableCell align="right"><strong>Além do prazo</strong></TableCell>
+                  <TableCell align="right"><strong>Abertos</strong></TableCell>
+                  <TableCell><strong>Motivo</strong></TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {stalledOms.slice(0, 12).map((item: any) => (
+                  <TableRow key={item.id}>
+                    <TableCell>{item.code || item.name || "—"}</TableCell>
+                    <TableCell>{item.uf || "—"}</TableCell>
+                    <TableCell align="right">{item.complaints?.stalledCases ?? 0}</TableCell>
+                    <TableCell align="right">{item.complaints?.openCases ?? 0}</TableCell>
+                    <TableCell>{buildOmReason(item)}</TableCell>
+                  </TableRow>
+                ))}
+                {!stalledOms.length && (
+                  <TableRow>
+                    <TableCell colSpan={5}>
+                      <Typography variant="body2" color="text.secondary">
+                        Nenhum caso acima do prazo no recorte atual.
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Stack>
+      </ComgepDetailModal>
+
+      <ComgepDetailModal
+        open={detailModal === "criticalUfs"}
+        title="Detalhamento — UFs prioritárias"
+        onClose={() => setDetailModal(null)}
+      >
+        <Stack spacing={1.25}>
+          <MeaningBlock
+            title="O que isso significa"
+            meaning="Este KPI conta quantas UFs estão em faixa crítica na matriz da Sala COMGEP. A classificação considera risco composto, cobertura CPCA e presença operacional. Não é um volume bruto; é um indicador de prioridade executiva."
+            source="Fonte: matriz consolidada da Sala COMGEP, com cruzamento entre denúncias, cobertura, BI e presença operacional."
+          />
+          <ModalRow label="UFs em faixa crítica" value={summary.criticalUfCount ?? 0} color="#ED6C02" />
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell><strong>UF</strong></TableCell>
+                  <TableCell><strong>Faixa</strong></TableCell>
+                  <TableCell align="right"><strong>Risco</strong></TableCell>
+                  <TableCell align="right"><strong>Cobertura</strong></TableCell>
+                  <TableCell align="right"><strong>Presença</strong></TableCell>
+                  <TableCell><strong>Foco recomendado</strong></TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {(watchlists.criticalUfs ?? []).map((item: any) => (
+                  <TableRow key={item.uf}>
+                    <TableCell>{item.uf}</TableCell>
+                    <TableCell>
+                      <Chip size="small" color={priorityChipColor(item.priorityBand)} label={item.priorityBand} />
+                    </TableCell>
+                    <TableCell align="right">{item.riskScore ?? 0}</TableCell>
+                    <TableCell align="right">{Number(item.coveragePercent ?? 0).toFixed(1)}%</TableCell>
+                    <TableCell align="right">{item.presenceScore ?? 0}</TableCell>
+                    <TableCell>{item.recommendedFocus ?? "—"}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Stack>
+      </ComgepDetailModal>
+
+      <ComgepDetailModal
+        open={detailModal === "confidence"}
+        title="Detalhamento — Confiança do dado"
+        onClose={() => setDetailModal(null)}
+      >
+        <Stack spacing={1.25}>
+          <MeaningBlock
+            title="O que isso significa"
+            meaning="Este indicador mede quanto da base BI já está normalizada por OM ou ao menos por UF. Quanto maior a cobertura útil, mais confiável fica o cruzamento entre pesquisas, denúncias, cobertura CPCA e presença operacional."
+            source="Fonte: processo de normalização BI que vincula registros a OM e UF."
+          />
+          <ModalRow label="Cobertura útil" value={`${confidencePercent.toFixed(1)}%`} color="#2E7D32" />
+          <ModalRow label="Total de registros BI" value={dataConfidence.totalRecords ?? 0} />
+          <ModalRow label="Vínculo direto com OM" value={dataConfidence.matched ?? 0} />
+          <ModalRow label="Vínculo apenas por UF" value={dataConfidence.ufOnly ?? 0} />
+          <ModalRow label="Sem vínculo" value={dataConfidence.notFound ?? 0} />
+          {Array.isArray(dataConfidence.sources) && dataConfidence.sources.length > 0 ? (
+            <>
+              <Typography variant="subtitle2">Fontes consideradas</Typography>
+              <List disablePadding sx={{ border: "1px solid #E6ECF5", borderRadius: 2 }}>
+                {dataConfidence.sources.map((item: any, index: number) => (
+                  <ListItem key={`${item.sourceType}-${index}`} divider={index < dataConfidence.sources.length - 1}>
+                    <ListItemText
+                      primary={item.label || item.sourceType || "Fonte"}
+                      secondary={`Registros: ${item.totalRecords ?? 0} • Vínculo direto: ${item.matched ?? 0} • Só UF: ${item.ufOnly ?? 0} • Sem vínculo: ${item.notFound ?? 0}`}
+                    />
+                  </ListItem>
+                ))}
+              </List>
+            </>
+          ) : null}
+        </Stack>
+      </ComgepDetailModal>
+
+      <ComgepDetailModal
+        open={detailModal === "pressure"}
+        title={`Detalhamento — Pressão operacional${selectedPressureUf?.uf ? ` (${selectedPressureUf.uf})` : ""}`}
+        onClose={() => {
+          setDetailModal(null);
+          setSelectedPressureUf(null);
+        }}
+      >
+        <Stack spacing={1.25}>
+          <MeaningBlock
+            title="O que isso significa"
+            meaning="Pressão operacional compara o tamanho do risco com a presença institucional disponível na UF. Quando a pressão sobe, o sistema entende que o risco está avançando mais rápido do que a capacidade de resposta operacional ou de governança."
+            source="Fonte: Sala COMGEP, cruzando risco composto, cobertura CPCA e presença operacional da UF."
+          />
+          <ModalRow label="UF" value={selectedPressureUf?.uf ?? "—"} />
+          <ModalRow label="Pressão" value={selectedPressureUf?.pressureScore ?? 0} color="#D32F2F" />
+          <ModalRow label="Risco" value={selectedPressureUf?.riskScore ?? 0} />
+          <ModalRow label="Presença" value={selectedPressureUf?.presenceScore ?? 0} />
+          <ModalRow
+            label="Cobertura CPCA"
+            value={`${Number(selectedPressureUf?.coveragePercent ?? 0).toFixed(1)}%`}
+          />
+          <ModalRow
+            label="Missões na UF"
+            value={selectedPressureUf?.presence?.missions ?? 0}
+          />
+          <ModalRow
+            label="Atividades concluídas"
+            value={selectedPressureUf?.presence?.completedActivities ?? 0}
+          />
+          <ModalRow
+            label="Relatórios assinados"
+            value={selectedPressureUf?.presence?.signedReports ?? 0}
+          />
+          <Typography variant="body2" color="text.secondary">
+            {selectedPressureUf?.recommendedFocus ?? "Monitorar cenário."}
+          </Typography>
+          <Typography variant="subtitle2">OMs que mais puxam a pressão desta UF</Typography>
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell><strong>OM</strong></TableCell>
+                  <TableCell align="right"><strong>Score</strong></TableCell>
+                  <TableCell><strong>Cobertura</strong></TableCell>
+                  <TableCell align="right"><strong>Abertos</strong></TableCell>
+                  <TableCell><strong>Motivo</strong></TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {(selectedPressureUf?.oms ?? []).slice(0, 10).map((item: any) => (
+                  <TableRow key={item.id}>
+                    <TableCell>{item.code || item.name || "—"}</TableCell>
+                    <TableCell align="right">{item.riskScore ?? 0}</TableCell>
+                    <TableCell>{formatCoverageType(item.coverageType)}</TableCell>
+                    <TableCell align="right">{item.complaints?.openCases ?? 0}</TableCell>
+                    <TableCell>{buildOmReason(item)}</TableCell>
+                  </TableRow>
+                ))}
+                {!(selectedPressureUf?.oms ?? []).length && (
+                  <TableRow>
+                    <TableCell colSpan={5}>
+                      <Typography variant="body2" color="text.secondary">
+                        Nenhuma OM detalhada para esta UF.
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Stack>
+      </ComgepDetailModal>
     </Stack>
   );
 }

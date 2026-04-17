@@ -635,7 +635,7 @@ function DetailItemList({
                   <Chip
                     size="small"
                     variant="outlined"
-                    label={item.badge}
+                    label={formatComplaintStatusLabel(item.badge)}
                     sx={{ width: "fit-content" }}
                   />
                 ) : null}
