@@ -1,4 +1,7 @@
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Alert,
   Box,
   Button,
@@ -6,12 +9,10 @@ import {
   CardContent,
   Chip,
   Checkbox,
-  Divider,
   Drawer,
   IconButton,
   InputAdornment,
   FormControlLabel,
-  FormGroup,
   MenuItem,
   Paper,
   Stack,
@@ -26,6 +27,7 @@ import {
   Typography,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import AutoAwesomeRoundedIcon from '@mui/icons-material/AutoAwesomeRounded';
 import CampaignRoundedIcon from '@mui/icons-material/CampaignRounded';
 import DashboardRoundedIcon from '@mui/icons-material/DashboardRounded';
@@ -1790,6 +1792,7 @@ function AiSettingsTab() {
   const toast = useToast();
 
   const [aiSection, setAiSection] = useState<'prompts' | 'server'>('prompts');
+  const [expandedAiProfile, setExpandedAiProfile] = useState<string | false>(false);
   const [form, setForm] = useState({
     baseUrl: '',
     apiKey: '',
@@ -1905,6 +1908,20 @@ function AiSettingsTab() {
     }));
   };
 
+  const getSourceSelectionSummary = (analysisType: AiAnalysisType) => {
+    const selected = analysisSources[analysisType] ?? [];
+    const selectedLabels = ANALYSIS_SOURCE_CATALOG.filter((source) =>
+      selected.includes(source.id),
+    ).map((source) => source.label);
+    if (selectedLabels.length === 0) {
+      return 'Nenhuma fonte selecionada';
+    }
+    if (selectedLabels.length <= 2) {
+      return selectedLabels.join(' • ');
+    }
+    return `${selectedLabels.slice(0, 2).join(' • ')} +${selectedLabels.length - 2}`;
+  };
+
   useEffect(() => {
     if (aiSection !== 'server') return;
     if (availableModels.length > 0) return;
@@ -2005,7 +2022,7 @@ function AiSettingsTab() {
           '& .MuiTab-root': { fontWeight: 600, textTransform: 'none', fontSize: '0.95rem' },
         }}
       >
-        <Tab value="prompts" label="Prompts e escopo (9 perfis + system)" />
+        <Tab value="prompts" label="Perfis, escopo e prompts" />
         <Tab value="server" label="Servidor LiteLLM" />
       </Tabs>
 
@@ -2110,155 +2127,45 @@ function AiSettingsTab() {
             variant="outlined"
             sx={{
               p: 2.5,
-              borderRadius: 2,
+              borderRadius: 2.5,
               borderColor: (t) => alpha(t.palette.primary.main, 0.2),
               bgcolor: (t) => alpha(t.palette.primary.main, 0.03),
             }}
           >
-            <Stack spacing={2}>
-              <Stack spacing={0.5}>
-                <Typography variant="subtitle1" fontWeight={800}>
-                  Fontes por perfil
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Configure, para cada análise, chatbot ou copiloto, quais bases o módulo de IA
-                  pode usar. Seleção vazia = nenhuma base considerada naquele perfil.
-                </Typography>
+            <Stack spacing={1.25}>
+              <Stack
+                direction={{ xs: 'column', sm: 'row' }}
+                spacing={1.25}
+                justifyContent="space-between"
+                alignItems={{ sm: 'center' }}
+              >
+                <Box>
+                  <Typography variant="subtitle1" fontWeight={800}>
+                    Perfis de IA
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.35 }}>
+                    Cada perfil reúne no mesmo lugar as fontes permitidas e o prompt específico.
+                    A visualização começa compacta e você expande apenas o que precisa editar.
+                  </Typography>
+                </Box>
+                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                  <Chip
+                    size="small"
+                    color="primary"
+                    variant="outlined"
+                    label={`${ANALYSIS_PROMPTS_CONFIG.length} perfis`}
+                  />
+                  <Chip
+                    size="small"
+                    color="primary"
+                    variant="outlined"
+                    label={`${ANALYSIS_SOURCE_CATALOG.length} fontes`}
+                  />
+                  <Chip size="small" color="primary" variant="outlined" label="1 system prompt" />
+                </Stack>
               </Stack>
-              {AI_SETTINGS_GROUPS.map((group) => {
-                const items = ANALYSIS_PROMPTS_CONFIG.filter(
-                  (item) => item.group === group.id,
-                );
-                return (
-                  <Stack key={`sources-group-${group.id}`} spacing={1.25}>
-                    <Box>
-                      <Stack
-                        direction={{ xs: 'column', sm: 'row' }}
-                        spacing={1}
-                        alignItems={{ sm: 'center' }}
-                        justifyContent="space-between"
-                      >
-                        <Typography variant="subtitle2" fontWeight={800}>
-                          {group.label}
-                        </Typography>
-                        <Chip
-                          size="small"
-                          color="primary"
-                          variant="outlined"
-                          label={`${items.length} perfil(is)`}
-                        />
-                      </Stack>
-                      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.35 }}>
-                        {group.description}
-                      </Typography>
-                    </Box>
-                    {items.map((item) => (
-                      <Card
-                        key={`sources-${item.type}`}
-                        variant="outlined"
-                        sx={{
-                          borderRadius: 2,
-                          borderColor: alpha(item.accent, 0.25),
-                        }}
-                      >
-                        <Box
-                          sx={{
-                            px: 2,
-                            py: 1.25,
-                            bgcolor: alpha(item.accent, 0.09),
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            gap: 1.25,
-                          }}
-                        >
-                          <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap">
-                            <Box sx={{ color: item.accent, display: 'flex', lineHeight: 0 }}>
-                              {item.icon}
-                            </Box>
-                            <Typography variant="subtitle2" fontWeight={700}>
-                              {item.label}
-                            </Typography>
-                            <Chip
-                              size="small"
-                              label={`${(analysisSources[item.type] ?? []).length} fonte(s)`}
-                              color="primary"
-                              variant="outlined"
-                              sx={{ ml: 'auto' }}
-                            />
-                          </Stack>
-                          <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
-                            <Button
-                              size="small"
-                              variant="text"
-                              onClick={() => setAllSources(item.type)}
-                            >
-                              Todas
-                            </Button>
-                            <Button
-                              size="small"
-                              variant="text"
-                              onClick={() => clearSources(item.type)}
-                            >
-                              Nenhuma
-                            </Button>
-                          </Stack>
-                        </Box>
-                        <Divider />
-                        <Box sx={{ p: 1.5, px: 1.75 }}>
-                          <FormGroup>
-                            {ANALYSIS_SOURCE_CATALOG.map((source) => (
-                              <FormControlLabel
-                                key={`${item.type}-${source.id}`}
-                                control={
-                                  <Checkbox
-                                    size="small"
-                                    checked={
-                                      analysisSources[item.type]?.includes(
-                                        source.id,
-                                      ) ?? false
-                                    }
-                                    onChange={(event) =>
-                                      toggleSource(
-                                        item.type,
-                                        source.id,
-                                        event.target.checked,
-                                      )
-                                    }
-                                  />
-                                }
-                                label={
-                                  <Stack spacing={0.1}>
-                                    <Typography variant="body2" fontWeight={600}>
-                                      {source.label}
-                                    </Typography>
-                                    <Typography
-                                      variant="caption"
-                                      color="text.secondary"
-                                    >
-                                      {source.description}
-                                    </Typography>
-                                  </Stack>
-                                }
-                                sx={{ alignItems: 'flex-start', mb: 0.2 }}
-                              />
-                            ))}
-                          </FormGroup>
-                        </Box>
-                      </Card>
-                    ))}
-                  </Stack>
-                );
-              })}
             </Stack>
           </Paper>
-
-          <Alert severity="info" variant="outlined" sx={{ borderRadius: 2 }}>
-            Abaixo há <strong>9 caixas de texto</strong>: 5 para as análises estruturadas da
-            página IA, 1 para o chatbot livre e 3 para os copilotos gerenciais da aba
-            Assistente. Conteúdo vazio = o sistema usa o texto padrão interno. O bloco final é o
-            <strong> system prompt</strong>, aplicado a todas as chamadas de IA.
-          </Alert>
 
           {ANALYSIS_PROMPTS_CONFIG.length === 0 ? (
             <Alert severity="warning" variant="outlined">
@@ -2280,132 +2187,368 @@ function AiSettingsTab() {
                         {group.description}
                       </Typography>
                     </Box>
-                    <Box
-                      sx={{
-                        display: 'grid',
-                        gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
-                        gap: 2,
-                      }}
-                    >
-                      {items.map((item, index) => (
-                        <Card
-                          key={item.type}
-                          variant="outlined"
-                          sx={{
-                            height: '100%',
-                            borderRadius: 2,
-                            overflow: 'hidden',
-                            borderColor: alpha(item.accent, 0.4),
-                            boxShadow: (t) =>
-                              `0 1px 4px ${alpha(t.palette.common.black, 0.06)}`,
-                          }}
-                        >
-                          <Box
+                    <Stack spacing={1}>
+                      {items.map((item, index) => {
+                        const selectedCount = (analysisSources[item.type] ?? []).length;
+                        const hasCustomPrompt = Boolean((analysisPrompts[item.type] ?? '').trim());
+                        const isExpanded = expandedAiProfile === item.type;
+
+                        return (
+                          <Accordion
+                            key={item.type}
+                            expanded={isExpanded}
+                            onChange={(_, expanded) =>
+                              setExpandedAiProfile(expanded ? item.type : false)
+                            }
+                            disableGutters
+                            elevation={0}
                             sx={{
-                              px: 2,
-                              py: 1.5,
-                              bgcolor: alpha(item.accent, 0.09),
-                              display: 'flex',
-                              alignItems: 'flex-start',
-                              gap: 1.5,
+                              border: '1px solid',
+                              borderColor: alpha(item.accent, 0.22),
+                              borderRadius: '16px !important',
+                              overflow: 'hidden',
+                              bgcolor: '#fff',
+                              '&:before': { display: 'none' },
                             }}
                           >
-                            <Box sx={{ color: item.accent, display: 'flex', lineHeight: 0 }}>
-                              {item.icon}
-                            </Box>
-                            <Box sx={{ minWidth: 0, flex: 1 }}>
-                              <Stack direction="row" alignItems="center" gap={1} flexWrap="wrap">
-                                <Chip
-                                  label={`${
-                                    group.id === 'ia'
-                                      ? 'Análise'
-                                      : group.id === 'chatbot'
-                                        ? 'Chatbot'
-                                        : 'Copiloto'
-                                  } ${index + 1} de ${items.length}`}
-                                  size="small"
+                            <AccordionSummary
+                              expandIcon={<ExpandMoreIcon />}
+                              sx={{
+                                px: 2,
+                                py: 1,
+                                minHeight: 88,
+                                bgcolor: isExpanded ? alpha(item.accent, 0.08) : '#fff',
+                                '& .MuiAccordionSummary-content': {
+                                  my: 0,
+                                },
+                              }}
+                            >
+                              <Stack
+                                direction="row"
+                                spacing={1.5}
+                                alignItems="flex-start"
+                                sx={{ width: '100%' }}
+                              >
+                                <Box
                                   sx={{
-                                    bgcolor: item.accent,
-                                    color: '#fff',
-                                    fontWeight: 700,
-                                    height: 24,
-                                    '& .MuiChip-label': { px: 1 },
+                                    width: 42,
+                                    height: 42,
+                                    borderRadius: 2,
+                                    bgcolor: alpha(item.accent, 0.12),
+                                    color: item.accent,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    flexShrink: 0,
                                   }}
-                                />
+                                >
+                                  {item.icon}
+                                </Box>
+                                <Box sx={{ minWidth: 0, flex: 1 }}>
+                                  <Stack
+                                    direction={{ xs: 'column', md: 'row' }}
+                                    spacing={1}
+                                    justifyContent="space-between"
+                                    alignItems={{ md: 'flex-start' }}
+                                  >
+                                    <Box sx={{ minWidth: 0 }}>
+                                      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                                        <Chip
+                                          label={`${
+                                            group.id === 'ia'
+                                              ? 'Análise'
+                                              : group.id === 'chatbot'
+                                                ? 'Chatbot'
+                                                : 'Copiloto'
+                                          } ${index + 1}`}
+                                          size="small"
+                                          sx={{
+                                            bgcolor: alpha(item.accent, 0.16),
+                                            color: item.accent,
+                                            fontWeight: 700,
+                                          }}
+                                        />
+                                      </Stack>
+                                      <Typography
+                                        variant="subtitle1"
+                                        fontWeight={800}
+                                        sx={{ mt: 0.8, lineHeight: 1.25 }}
+                                      >
+                                        {item.label}
+                                      </Typography>
+                                      <Typography
+                                        variant="body2"
+                                        color="text.secondary"
+                                        sx={{ mt: 0.35, lineHeight: 1.55 }}
+                                      >
+                                        {item.short}
+                                      </Typography>
+                                    </Box>
+                                    <Stack
+                                      direction="row"
+                                      spacing={0.75}
+                                      flexWrap="wrap"
+                                      useFlexGap
+                                      justifyContent={{ xs: 'flex-start', md: 'flex-end' }}
+                                    >
+                                      <Chip
+                                        size="small"
+                                        variant="outlined"
+                                        label={`${selectedCount} fonte(s)`}
+                                      />
+                                      <Chip
+                                        size="small"
+                                        color={hasCustomPrompt ? 'success' : 'default'}
+                                        variant={hasCustomPrompt ? 'filled' : 'outlined'}
+                                        label={hasCustomPrompt ? 'Prompt customizado' : 'Prompt padrão'}
+                                      />
+                                    </Stack>
+                                  </Stack>
+                                  <Typography
+                                    variant="caption"
+                                    color="text.secondary"
+                                    sx={{ display: 'block', mt: 0.9 }}
+                                  >
+                                    {getSourceSelectionSummary(item.type)}
+                                  </Typography>
+                                </Box>
                               </Stack>
-                              <Typography
-                                variant="subtitle1"
-                                fontWeight={800}
-                                sx={{ mt: 0.75, lineHeight: 1.3 }}
+                            </AccordionSummary>
+                            <AccordionDetails sx={{ p: 0 }}>
+                              <Box
+                                sx={{
+                                  display: 'grid',
+                                  gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 0.95fr) minmax(0, 1.05fr)' },
+                                }}
                               >
-                                {item.label}
-                              </Typography>
-                              <Typography
-                                variant="caption"
-                                color="text.secondary"
-                                sx={{ display: 'block', mt: 0.35 }}
-                              >
-                                {item.short}
-                              </Typography>
-                            </Box>
-                          </Box>
-                          <CardContent sx={{ pt: 2, pb: 2 }}>
-                            <TextField
-                              size="small"
-                              label="Instrução enviada ao modelo (opcional)"
-                              value={analysisPrompts[item.type] ?? ''}
-                              onChange={(e) =>
-                                setAnalysisPrompts((prev) => ({
-                                  ...prev,
-                                  [item.type]: e.target.value,
-                                }))
-                              }
-                              placeholder={item.placeholder}
-                              multiline
-                              minRows={5}
-                              maxRows={16}
-                              fullWidth
-                              helperText="Deixe vazio para manter o padrão do sistema."
-                            />
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </Box>
+                                <Box
+                                  sx={{
+                                    p: 2,
+                                    borderRight: { xs: 'none', lg: '1px solid #EEF2F7' },
+                                    borderBottom: { xs: '1px solid #EEF2F7', lg: 'none' },
+                                  }}
+                                >
+                                  <Stack spacing={1.25}>
+                                    <Stack
+                                      direction={{ xs: 'column', sm: 'row' }}
+                                      spacing={1}
+                                      justifyContent="space-between"
+                                      alignItems={{ sm: 'center' }}
+                                    >
+                                      <Box>
+                                        <Typography variant="subtitle2" fontWeight={800}>
+                                          Fontes permitidas
+                                        </Typography>
+                                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.35 }}>
+                                          Selecione apenas as bases que este perfil pode consultar.
+                                        </Typography>
+                                      </Box>
+                                      <Stack direction="row" spacing={1}>
+                                        <Button
+                                          size="small"
+                                          variant="text"
+                                          onClick={() => setAllSources(item.type)}
+                                        >
+                                          Todas
+                                        </Button>
+                                        <Button
+                                          size="small"
+                                          variant="text"
+                                          onClick={() => clearSources(item.type)}
+                                        >
+                                          Nenhuma
+                                        </Button>
+                                      </Stack>
+                                    </Stack>
+                                    <Box
+                                      sx={{
+                                        display: 'grid',
+                                        gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+                                        gap: 1,
+                                      }}
+                                    >
+                                      {ANALYSIS_SOURCE_CATALOG.map((source) => (
+                                        <Paper
+                                          key={`${item.type}-${source.id}`}
+                                          variant="outlined"
+                                          sx={{
+                                            p: 1.1,
+                                            borderRadius: 2,
+                                            borderColor:
+                                              analysisSources[item.type]?.includes(source.id)
+                                                ? alpha(item.accent, 0.45)
+                                                : '#E6ECF5',
+                                            bgcolor:
+                                              analysisSources[item.type]?.includes(source.id)
+                                                ? alpha(item.accent, 0.06)
+                                                : '#fff',
+                                          }}
+                                        >
+                                          <FormControlLabel
+                                            control={
+                                              <Checkbox
+                                                size="small"
+                                                checked={
+                                                  analysisSources[item.type]?.includes(source.id) ??
+                                                  false
+                                                }
+                                                onChange={(event) =>
+                                                  toggleSource(
+                                                    item.type,
+                                                    source.id,
+                                                    event.target.checked,
+                                                  )
+                                                }
+                                              />
+                                            }
+                                            label={
+                                              <Stack spacing={0.1}>
+                                                <Typography variant="body2" fontWeight={700}>
+                                                  {source.label}
+                                                </Typography>
+                                                <Typography variant="caption" color="text.secondary">
+                                                  {source.description}
+                                                </Typography>
+                                              </Stack>
+                                            }
+                                            sx={{
+                                              m: 0,
+                                              alignItems: 'flex-start',
+                                              width: '100%',
+                                            }}
+                                          />
+                                        </Paper>
+                                      ))}
+                                    </Box>
+                                  </Stack>
+                                </Box>
+
+                                <Box sx={{ p: 2 }}>
+                                  <Stack spacing={1.25}>
+                                    <Box>
+                                      <Typography variant="subtitle2" fontWeight={800}>
+                                        Prompt específico do perfil
+                                      </Typography>
+                                      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.35 }}>
+                                        Instrução adicional usada só neste perfil. Se ficar vazio, o sistema usa o padrão interno.
+                                      </Typography>
+                                    </Box>
+                                    <TextField
+                                      size="small"
+                                      label="Prompt do perfil (opcional)"
+                                      value={analysisPrompts[item.type] ?? ''}
+                                      onChange={(e) =>
+                                        setAnalysisPrompts((prev) => ({
+                                          ...prev,
+                                          [item.type]: e.target.value,
+                                        }))
+                                      }
+                                      placeholder={item.placeholder}
+                                      multiline
+                                      minRows={7}
+                                      maxRows={18}
+                                      fullWidth
+                                    />
+                                  </Stack>
+                                </Box>
+                              </Box>
+                            </AccordionDetails>
+                          </Accordion>
+                        );
+                      })}
+                    </Stack>
                   </Stack>
                 );
               })}
             </Stack>
           )}
 
-          <Paper
-            variant="outlined"
+          <Accordion
+            expanded={expandedAiProfile === 'system'}
+            onChange={(_, expanded) => setExpandedAiProfile(expanded ? 'system' : false)}
+            disableGutters
+            elevation={0}
             sx={{
-              p: 2.5,
-              borderRadius: 2,
-              bgcolor: (t) => alpha(t.palette.primary.main, 0.04),
-              borderColor: (t) => alpha(t.palette.primary.main, 0.2),
+              border: '1px solid',
+              borderColor: (t) => alpha(t.palette.primary.main, 0.24),
+              borderRadius: '16px !important',
+              overflow: 'hidden',
+              '&:before': { display: 'none' },
             }}
           >
-            <Stack direction="row" alignItems="center" gap={1} sx={{ mb: 1 }}>
-              <Chip label="Global" size="small" color="primary" variant="filled" sx={{ fontWeight: 700 }} />
-              <Typography variant="subtitle1" fontWeight={800}>
-                System prompt (todas as IAs)
-              </Typography>
-            </Stack>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Tom, idioma, regras de formatação e proibições comuns a análises e ao chatbot.
-            </Typography>
-            <TextField
-              size="small"
-              label="Conteúdo do system prompt"
-              value={form.systemPrompt}
-              onChange={(e) => setForm({ ...form, systemPrompt: e.target.value })}
-              multiline
-              minRows={8}
-              maxRows={24}
-              fullWidth
-            />
-          </Paper>
+            <AccordionSummary
+              expandIcon={<ExpandMoreIcon />}
+              sx={{
+                px: 2,
+                py: 1,
+                minHeight: 84,
+                bgcolor: (t) =>
+                  expandedAiProfile === 'system'
+                    ? alpha(t.palette.primary.main, 0.08)
+                    : alpha(t.palette.primary.main, 0.03),
+              }}
+            >
+              <Stack
+                direction="row"
+                spacing={1.5}
+                alignItems="flex-start"
+                sx={{ width: '100%' }}
+              >
+                <Box
+                  sx={{
+                    width: 42,
+                    height: 42,
+                    borderRadius: 2,
+                    bgcolor: (t) => alpha(t.palette.primary.main, 0.12),
+                    color: 'primary.main',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  <SmartToyRoundedIcon />
+                </Box>
+                <Box sx={{ minWidth: 0, flex: 1 }}>
+                  <Stack
+                    direction={{ xs: 'column', md: 'row' }}
+                    spacing={1}
+                    justifyContent="space-between"
+                  >
+                    <Box>
+                      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                        <Chip label="Global" size="small" color="primary" />
+                      </Stack>
+                      <Typography variant="subtitle1" fontWeight={800} sx={{ mt: 0.8 }}>
+                        System prompt
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.35 }}>
+                        Regras comuns a todas as IAs: tom, idioma, limites e instruções globais.
+                      </Typography>
+                    </Box>
+                    <Chip
+                      size="small"
+                      color={form.systemPrompt.trim() ? 'success' : 'default'}
+                      variant={form.systemPrompt.trim() ? 'filled' : 'outlined'}
+                      label={form.systemPrompt.trim() ? 'Conteúdo carregado' : 'Sem conteúdo'}
+                    />
+                  </Stack>
+                </Box>
+              </Stack>
+            </AccordionSummary>
+            <AccordionDetails sx={{ p: 2 }}>
+              <TextField
+                size="small"
+                label="Conteúdo do system prompt"
+                value={form.systemPrompt}
+                onChange={(e) => setForm({ ...form, systemPrompt: e.target.value })}
+                multiline
+                minRows={8}
+                maxRows={24}
+                fullWidth
+              />
+            </AccordionDetails>
+          </Accordion>
         </Stack>
       )}
 
