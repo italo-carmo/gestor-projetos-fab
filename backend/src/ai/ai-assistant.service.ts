@@ -2599,11 +2599,11 @@ export class AiAssistantService {
       ) {
         location = fallbackLocation;
       }
-      return {
+      return this.sanitizeScheduleDraftItem({
         ...item,
         title,
         location: this.defaultScheduleLocationForTitle(title, location),
-      };
+      });
     });
     const existingKeys = new Set(
       reconciled.map(
@@ -2613,8 +2613,12 @@ export class AiAssistantService {
     );
     for (const fallback of fallbackItems) {
       const fallbackKey = `${fallback.startAt}|${this.normalizeFreeText(String(fallback.title ?? ''))}`;
-      if (!existingKeys.has(fallbackKey)) {
-        reconciled.push({
+      const duplicatesExistingTime = reconciled.some((item) =>
+        this.isScheduleSameTimeDuplicateCandidate(item, fallback),
+      );
+      if (!existingKeys.has(fallbackKey) && !duplicatesExistingTime) {
+        reconciled.push(
+          this.sanitizeScheduleDraftItem({
           ...fallback,
           title: this.reconcileScheduleTitleWithFallback(
             fallback.title,
@@ -2624,10 +2628,101 @@ export class AiAssistantService {
             fallback.title,
             this.normalizeScheduleLocationText(fallback.location),
           ),
-        });
+          }),
+        );
       }
     }
     return reconciled.sort((left, right) => left.startAt.localeCompare(right.startAt));
+  }
+
+  private sanitizeScheduleDraftItem(
+    item: Omit<
+      AssistantScheduleDraftItem,
+      'id' | 'sourceFileIds' | 'sourceFileNames'
+    >,
+  ) {
+    const normalizedTitle = this.normalizeFreeText(item.title);
+    let location = this.normalizeScheduleLocationText(item.location);
+    let responsible = this.cleanScheduleLine(item.responsible);
+    let participants = this.cleanScheduleLine(item.participants);
+
+    const extractedParticipantsFromLocation =
+      this.extractScheduleParticipantsFromMixedLocation(location);
+    if (
+      extractedParticipantsFromLocation &&
+      (!participants || participants === '-')
+    ) {
+      participants = extractedParticipantsFromLocation.participants;
+      location = extractedParticipantsFromLocation.location;
+    }
+
+    if (normalizedTitle.startsWith('chegada da equipe')) {
+      location = '-';
+      participants = '-';
+      responsible = responsible || 'Equipe de Campo';
+    } else if (
+      normalizedTitle === 'intervalo' ||
+      normalizedTitle === 'encerramento das atividades'
+    ) {
+      location = '-';
+      responsible = '-';
+      participants = '-';
+    }
+
+    return {
+      ...item,
+      location: this.defaultScheduleLocationForTitle(item.title, location),
+      responsible,
+      participants,
+    };
+  }
+
+  private extractScheduleParticipantsFromMixedLocation(location: string) {
+    const safe = this.normalizeScheduleLocationText(location);
+    if (!safe) return null;
+    const patterns = [
+      /^(Audit[oó]rio)\s+(Todo efetivo escalado)\s+(da\s+[A-Z0-9-]+)$/i,
+      /^(Audit[oó]rio)\s+(Efetivo feminino)\s+(da\s+[A-Z0-9-]+)$/i,
+      /^(Audit[oó]rio)\s+(Recrutas.*|Instrutores.*|Equipe.*)\s+(da\s+[A-Z0-9-]+)$/i,
+      /^(Centro de Convenções do GAP-CO)\s+(Todo efetivo escalado|Efetivo feminino)$/i,
+    ];
+    for (const pattern of patterns) {
+      const match = safe.match(pattern);
+      if (!match) continue;
+      if (match.length === 4) {
+        return {
+          location: `${match[1]} ${match[3]}`.replace(/\s+/g, ' ').trim(),
+          participants: match[2].replace(/\s+/g, ' ').trim(),
+        };
+      }
+      if (match.length === 3) {
+        return {
+          location: match[1].replace(/\s+/g, ' ').trim(),
+          participants: match[2].replace(/\s+/g, ' ').trim(),
+        };
+      }
+    }
+    return null;
+  }
+
+  private isScheduleSameTimeDuplicateCandidate(
+    existing: Omit<
+      AssistantScheduleDraftItem,
+      'id' | 'sourceFileIds' | 'sourceFileNames'
+    >,
+    candidate: Omit<
+      AssistantScheduleDraftItem,
+      'id' | 'sourceFileIds' | 'sourceFileNames'
+    >,
+  ) {
+    if (existing.startAt !== candidate.startAt) return false;
+    const existingTitle = this.normalizeFreeText(existing.title);
+    const candidateTitle = this.normalizeFreeText(candidate.title);
+    if (!existingTitle || !candidateTitle) return false;
+    return (
+      existingTitle.includes(candidateTitle) ||
+      candidateTitle.includes(existingTitle)
+    );
   }
 
   private buildScheduleLlmPages(
@@ -3087,6 +3182,17 @@ export class AiAssistantService {
           locationStart,
         });
         if (!field) continue;
+        if (
+          field === 'participants' &&
+          activeRow.activity.length > 0 &&
+          this.normalizeFreeText(activeRow.activity.join(' ')).startsWith(
+            'chegada da equipe',
+          ) &&
+          activeRow.participants.some((value) => value.trim() === '-')
+        ) {
+          appendChunk(pendingPrelude, field, chunk.text);
+          continue;
+        }
         const shouldDeferToNextRow =
           nextIsTimedRow &&
           !activeRow.awaitingEndTime &&
@@ -3802,6 +3908,19 @@ export class AiAssistantService {
     if (/^(auditorio|sala|hangar|ala)$/.test(normalized)) {
       return true;
     }
+    if (
+      /(todo efetivo escalado|efetivo feminino|recrutas|instrutores|equipe gsd|equipe de instrutores|elos indicados pelo|cpcas|juridicos|psicologos|assistentes sociais)/i.test(
+        normalized,
+      )
+    ) {
+      return true;
+    }
+    if (
+      /\bcentro de$/.test(normalized) ||
+      /\bconven[cç]oes do$/.test(normalized)
+    ) {
+      return true;
+    }
     const tokens = normalized.split(/\s+/).filter(Boolean);
     const seen = new Set<string>();
     for (const token of tokens) {
@@ -3812,7 +3931,7 @@ export class AiAssistantService {
     }
     if (
       tokens.length === 1 &&
-      !/^(basc|bagl|unifa|cbnb|bafl|baaf|ii|iii|comar|dtcea-[a-z]+)$/i.test(
+      !/^(basc|bagl|unifa|cbnb|bafl|baaf|ii|iii|comar|dtcea-[a-z]+|gsd-[a-z]+)$/i.test(
         tokens[0],
       )
     ) {
