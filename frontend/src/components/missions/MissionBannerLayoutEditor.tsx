@@ -699,6 +699,21 @@ export function MissionBannerLayoutEditor({
     });
   };
 
+  const nudgeSelectedBlocksByPixels = (deltaX: number, deltaY: number) => {
+    if (!selectedBlockKeys.length) return;
+    const width = dimensions.width || 1;
+    const height = dimensions.height || 1;
+    const deltaXPct = deltaX / width;
+    const deltaYPct = deltaY / height;
+    updateBlocks(selectedBlockKeys, (block) => {
+      const current = normalizedOverrides[block.key];
+      return {
+        xPct: clamp((current?.xPct ?? block.xPct) + deltaXPct, 0.05, 0.92),
+        yPct: clamp((current?.yPct ?? block.yPct) + deltaYPct, 0.05, 0.95),
+      };
+    });
+  };
+
   const setSelectedBlockText = (nextText: string) => {
     if (!activeBlock) return;
     const normalized = nextText
@@ -785,6 +800,48 @@ export function MissionBannerLayoutEditor({
     setColorInputValue(activeBlockColor.toUpperCase());
   }, [activeBlock, activeBlockColor]);
 
+  useEffect(() => {
+    const element = containerRef.current;
+    if (!element) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!selectedBlockKeys.length) return;
+      if (editingTextBlockKey) return;
+      const target = event.target as HTMLElement | null;
+      if (
+        target &&
+        (target instanceof HTMLInputElement ||
+          target instanceof HTMLTextAreaElement ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      const step = event.shiftKey ? 10 : 1;
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        nudgeSelectedBlocksByPixels(-step, 0);
+        return;
+      }
+      if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        nudgeSelectedBlocksByPixels(step, 0);
+        return;
+      }
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        nudgeSelectedBlocksByPixels(0, -step);
+        return;
+      }
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        nudgeSelectedBlocksByPixels(0, step);
+      }
+    };
+
+    element.addEventListener('keydown', handleKeyDown);
+    return () => element.removeEventListener('keydown', handleKeyDown);
+  }, [dimensions.height, dimensions.width, editingTextBlockKey, normalizedOverrides, selectedBlockKeys]);
+
   return (
     <Stack spacing={1.5}>
       <Typography variant="body2" color="text.secondary">
@@ -795,6 +852,7 @@ export function MissionBannerLayoutEditor({
 
       <Box
         ref={containerRef}
+        tabIndex={0}
         sx={{
           position: 'relative',
           width: '100%',
@@ -810,6 +868,7 @@ export function MissionBannerLayoutEditor({
           boxShadow: '0 18px 40px rgba(15, 23, 42, 0.18)',
           mx: 'auto',
           userSelect: 'none',
+          outline: 'none',
         }}
       >
         <Box
@@ -912,6 +971,7 @@ export function MissionBannerLayoutEditor({
               onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
+                containerRef.current?.focus({ preventScroll: true });
                 if (suppressNextClickRef.current) {
                   suppressNextClickRef.current = false;
                   return;
@@ -931,6 +991,7 @@ export function MissionBannerLayoutEditor({
               onDoubleClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
+                containerRef.current?.focus({ preventScroll: true });
                 setSingleSelection(block.key);
                 setEditingTextBlockKey(block.key);
                 setInlineEditorValue(getCurrentBlockText(block));
@@ -1277,6 +1338,9 @@ export function MissionBannerLayoutEditor({
         >
           <Typography variant="caption" color="text.secondary">
             Linhas azuis mostram a posição atual do bloco ativo. Linhas tracejadas mostram a posição base do layout.
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            Clique em um texto e use as setas do teclado para mover. `Shift + seta` move 10px.
           </Typography>
         </Stack>
         <Typography variant="caption" color="text.secondary">
