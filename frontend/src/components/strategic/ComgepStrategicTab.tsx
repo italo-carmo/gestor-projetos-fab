@@ -263,16 +263,6 @@ export function ComgepStrategicTab() {
   >(null);
   const [selectedPressureUf, setSelectedPressureUf] = useState<any | null>(null);
 
-  if (roomQuery.isLoading) {
-    return <SkeletonState />;
-  }
-
-  if (roomQuery.isError) {
-    return (
-      <ErrorState error={roomQuery.error} onRetry={() => roomQuery.refetch()} />
-    );
-  }
-
   const room = roomQuery.data;
   const summary = room?.summary ?? {};
   const dataConfidence = room?.dataConfidence ?? {};
@@ -312,6 +302,16 @@ export function ComgepStrategicTab() {
     (sum: number, item: any) => sum + Number(item?.complaints?.stalledCases ?? 0),
     0,
   );
+
+  if (roomQuery.isLoading) {
+    return <SkeletonState />;
+  }
+
+  if (roomQuery.isError) {
+    return (
+      <ErrorState error={roomQuery.error} onRetry={() => roomQuery.refetch()} />
+    );
+  }
 
   return (
     <Stack spacing={2}>
