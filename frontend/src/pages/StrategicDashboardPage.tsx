@@ -1905,9 +1905,11 @@ function AggressorProfileTab() {
                     interval={0}
                   />
                   <RechartsTooltip
-                    formatter={(v: number, _: any, entry: any) =>
-                      `${v} (${entry.payload.percent}%)`
-                    }
+                    labelFormatter={(label: string) => `OM: ${label}`}
+                    formatter={(v: number, _: any, entry: any) => [
+                      `${v} caso(s) (${entry.payload.percent}%)`,
+                      "Ocorrências",
+                    ]}
                   />
                   <Bar
                     dataKey="count"
@@ -2331,6 +2333,12 @@ function GeoMapTab() {
       Missões: s.missions,
     }));
 
+  const openStateDetail = (ufRaw: string | null | undefined) => {
+    const uf = String(ufRaw ?? "").trim().toUpperCase();
+    if (!uf || !stateDataMap[uf]) return;
+    setSelectedState({ uf, data: stateDataMap[uf] });
+  };
+
   return (
     <Box>
       <Grid container spacing={2} sx={{ mb: 3 }}>
@@ -2408,17 +2416,43 @@ function GeoMapTab() {
               <Typography variant="subtitle2" gutterBottom>
                 Ranking por Estado
               </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: "block" }}>
+                Clique em qualquer barra para abrir o detalhamento do estado.
+              </Typography>
               {chartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={400}>
                   <BarChart data={chartData} layout="vertical" margin={{ left: 5, right: 20, top: 5, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                     <XAxis type="number" />
                     <YAxis dataKey="uf" type="category" width={35} tick={{ fontSize: 11 }} interval={0} />
-                    <RechartsTooltip />
+                    <RechartsTooltip
+                      labelFormatter={(label: string) =>
+                        `${BR_STATES[label]?.name ?? label} (${label})`
+                      }
+                    />
                     <Legend />
-                    <Bar dataKey="Denúncias" stackId="a" fill="#D32F2F" barSize={16} />
-                    <Bar dataKey="Atividades" stackId="a" fill="#1A3C6E" barSize={16} />
-                    <Bar dataKey="Missões" stackId="a" fill="#2E7D32" barSize={16} radius={[0, 4, 4, 0]} />
+                    <Bar
+                      dataKey="Denúncias"
+                      stackId="a"
+                      fill="#D32F2F"
+                      barSize={16}
+                      onClick={(entry: any) => openStateDetail(entry?.uf)}
+                    />
+                    <Bar
+                      dataKey="Atividades"
+                      stackId="a"
+                      fill="#1A3C6E"
+                      barSize={16}
+                      onClick={(entry: any) => openStateDetail(entry?.uf)}
+                    />
+                    <Bar
+                      dataKey="Missões"
+                      stackId="a"
+                      fill="#2E7D32"
+                      barSize={16}
+                      radius={[0, 4, 4, 0]}
+                      onClick={(entry: any) => openStateDetail(entry?.uf)}
+                    />
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
