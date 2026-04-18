@@ -111,10 +111,6 @@ export class CpcaService {
   ) {
     const workflowContext = this.resolveContext(context);
     const constraints = this.getScopeConstraints(user, workflowContext);
-    const cpcaManagerCaseMarker = await this.resolveCpcaManagerCaseMarker(
-      constraints,
-      workflowContext,
-    );
     const cpcaScopedLocalityIds = await this.resolveCpcaScopedLocalityIds(
       constraints,
       workflowContext,
@@ -135,11 +131,10 @@ export class CpcaService {
             !cpcaScopedLocalityIds.includes(filters.localityId))
         ) {
           where.omId = '__none__';
-        }
-        if (cpcaManagerCaseMarker) {
-          andConditions.push({
-            caseNumber: { contains: cpcaManagerCaseMarker },
-          });
+        } else if (cpcaScopedLocalityIds?.length) {
+          where.omId = filters.localityId
+            ? filters.localityId
+            : { in: cpcaScopedLocalityIds };
         }
       } else if (
         filters.localityId &&
@@ -218,10 +213,6 @@ export class CpcaService {
   ) {
     const workflowContext = this.resolveContext(context);
     const constraints = this.getScopeConstraints(user, workflowContext);
-    const cpcaManagerCaseMarker = await this.resolveCpcaManagerCaseMarker(
-      constraints,
-      workflowContext,
-    );
     const cpcaScopedLocalityIds = await this.resolveCpcaScopedLocalityIds(
       constraints,
       workflowContext,
@@ -242,11 +233,10 @@ export class CpcaService {
             !cpcaScopedLocalityIds.includes(filters.localityId))
         ) {
           where.omId = '__none__';
-        }
-        if (cpcaManagerCaseMarker) {
-          andConditions.push({
-            caseNumber: { contains: cpcaManagerCaseMarker },
-          });
+        } else if (cpcaScopedLocalityIds?.length) {
+          where.omId = filters.localityId
+            ? filters.localityId
+            : { in: cpcaScopedLocalityIds };
         }
       } else if (
         filters.localityId &&
@@ -1670,12 +1660,13 @@ export class CpcaService {
     }
 
     if (context.workflowScope === 'CPCA') {
-      const cpcaManagerCaseMarker = await this.resolveCpcaManagerCaseMarker(
+      const allowedLocalityIds = await this.resolveCpcaScopedLocalityIds(
         constraints,
         context,
       );
-      const caseNumber = String(item.caseNumber ?? '');
-      if (cpcaManagerCaseMarker && caseNumber.includes(cpcaManagerCaseMarker)) {
+      if (
+        allowedLocalityIds?.includes(String(item.localityId ?? '').trim())
+      ) {
         return;
       }
     }
