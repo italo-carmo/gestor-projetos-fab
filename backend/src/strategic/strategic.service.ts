@@ -354,9 +354,18 @@ function countByField(
 ): { label: string; count: number; percent: number }[] {
   const map = new Map<string, number>();
   for (const item of items) {
-    const val =
-      String(item[field] ?? 'Não informado').trim() || 'Não informado';
-    map.set(val, (map.get(val) ?? 0) + 1);
+    const rawValue = item[field];
+    const values = Array.isArray(rawValue)
+      ? rawValue
+          .map((value) => String(value ?? '').trim())
+          .filter(Boolean)
+      : [String(rawValue ?? 'Não informado').trim() || 'Não informado'];
+    const uniqueValues = values.length
+      ? Array.from(new Set(values))
+      : ['Não informado'];
+    for (const val of uniqueValues) {
+      map.set(val, (map.get(val) ?? 0) + 1);
+    }
   }
   return Array.from(map.entries())
     .map(([label, count]) => ({
@@ -1905,6 +1914,7 @@ export class StrategicService {
         hierarchicalFunctionalRelation: true,
         incidentFrequency: true,
         occurrenceForm: true,
+        occurrenceForms: true,
         workflowScope: true,
         status: true,
         reportedAt: true,
@@ -1917,6 +1927,12 @@ export class StrategicService {
 
     const casesWithResolvedLocality = cases.map((row: any) => ({
       ...row,
+      resolvedOccurrenceForms:
+        Array.isArray(row?.occurrenceForms) && row.occurrenceForms.length > 0
+          ? row.occurrenceForms
+          : row?.occurrenceForm
+            ? [row.occurrenceForm]
+            : [],
       resolvedLocalityId:
         String(row?.omId ?? row?.localityId ?? '').trim() || 'NAO_INFORMADO',
       resolvedLocality: row?.om ?? row?.locality ?? null,
@@ -2046,7 +2062,7 @@ export class StrategicService {
           casesWithResolvedLocality,
           'incidentFrequency',
         ),
-        byForm: countByField(casesWithResolvedLocality, 'occurrenceForm'),
+        byForm: countByField(casesWithResolvedLocality, 'resolvedOccurrenceForms'),
       },
       crossTabulation: crossTab,
       byScope,

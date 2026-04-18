@@ -1,5 +1,7 @@
 import {
+  ArrayUnique,
   IsBoolean,
+  IsArray,
   IsIn,
   IsInt,
   IsISO8601,
@@ -247,6 +249,12 @@ export class CreateCpcaCaseDto {
   @IsOptional()
   @IsIn(CPCA_OCCURRENCE_FORMS)
   occurrenceForm?: (typeof CPCA_OCCURRENCE_FORMS)[number];
+
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @IsIn(CPCA_OCCURRENCE_FORMS, { each: true })
+  occurrenceForms?: (typeof CPCA_OCCURRENCE_FORMS)[number][];
 
   @IsOptional()
   @IsIn(CPCA_ADMIN_PROCEDURES)

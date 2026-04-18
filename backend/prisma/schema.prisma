@@ -1279,6 +1279,7 @@ model CpcComplaintCase {
   incidentFrequency               String?
   hierarchicalFunctionalRelation  String?
   occurrenceForm                  String?
+  occurrenceForms                 String[]           @default([])
   administrativeProcedure         String?
   procedureCurrentSituation       String?
   retaliationReported             String?

@@ -948,6 +948,9 @@ export class CpcaService {
       notifierGender: payload.notifierGender,
       notifierAgeRange: payload.notifierAgeRange,
     });
+    const occurrenceForms = this.cleanMultiSelect(
+      payload.occurrenceForms ?? payload.occurrenceForm,
+    );
 
     const createData = {
       complaintType: payload.complaintType,
@@ -974,7 +977,8 @@ export class CpcaService {
       hierarchicalFunctionalRelation: this.cleanOptional(
         payload.hierarchicalFunctionalRelation,
       ),
-      occurrenceForm: this.cleanOptional(payload.occurrenceForm),
+      occurrenceForm: occurrenceForms[0] ?? null,
+      occurrenceForms,
       administrativeProcedure: this.cleanOptional(
         payload.administrativeProcedure,
       ),
@@ -1237,6 +1241,12 @@ export class CpcaService {
           ? current.notifierAgeRange
           : payload.notifierAgeRange,
     });
+    const nextOccurrenceForms =
+      payload.occurrenceForms !== undefined
+        ? this.cleanMultiSelect(payload.occurrenceForms)
+        : payload.occurrenceForm !== undefined
+          ? this.cleanMultiSelect(payload.occurrenceForm)
+          : undefined;
 
     this.assertIcaConsistency({
       status: nextStatus,
@@ -1301,9 +1311,11 @@ export class CpcaService {
             ? this.cleanOptional(payload.hierarchicalFunctionalRelation)
             : undefined,
         occurrenceForm:
-          payload.occurrenceForm !== undefined
-            ? this.cleanOptional(payload.occurrenceForm)
+          nextOccurrenceForms !== undefined
+            ? (nextOccurrenceForms[0] ?? null)
             : undefined,
+        occurrenceForms:
+          nextOccurrenceForms !== undefined ? nextOccurrenceForms : undefined,
         administrativeProcedure:
           payload.administrativeProcedure !== undefined
             ? this.cleanOptional(payload.administrativeProcedure)
@@ -1807,6 +1819,20 @@ export class CpcaService {
     if (value === null) return null;
     const normalized = this.cleanText(value);
     return normalized || null;
+  }
+
+  private cleanMultiSelect(value?: string[] | string | null) {
+    const rawItems = Array.isArray(value)
+      ? value
+      : value === undefined || value === null
+        ? []
+        : [value];
+
+    const normalized = rawItems
+      .map((item) => this.cleanText(String(item ?? '')))
+      .filter(Boolean);
+
+    return Array.from(new Set(normalized));
   }
 
   private resolveNotifierProfile(input: {

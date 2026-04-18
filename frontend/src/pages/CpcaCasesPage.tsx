@@ -69,6 +69,47 @@ const STATUS_OPTIONS = [
   { value: "ARCHIVED", label: "Arquivada" },
 ];
 
+const STATUS_CHIP_STYLES: Record<
+  string,
+  { bgcolor: string; color: string; borderColor: string }
+> = {
+  RECEIVED: {
+    bgcolor: "rgba(30, 136, 229, 0.14)",
+    color: "#0D47A1",
+    borderColor: "rgba(30, 136, 229, 0.3)",
+  },
+  PROTECTION_MEASURES: {
+    bgcolor: "rgba(0, 121, 107, 0.14)",
+    color: "#00695C",
+    borderColor: "rgba(0, 121, 107, 0.3)",
+  },
+  PRELIMINARY_ANALYSIS: {
+    bgcolor: "rgba(251, 140, 0, 0.14)",
+    color: "#E65100",
+    borderColor: "rgba(251, 140, 0, 0.3)",
+  },
+  PROCEDURE_DEFINED: {
+    bgcolor: "rgba(142, 36, 170, 0.14)",
+    color: "#6A1B9A",
+    borderColor: "rgba(142, 36, 170, 0.3)",
+  },
+  INVESTIGATION: {
+    bgcolor: "rgba(94, 53, 177, 0.14)",
+    color: "#4527A0",
+    borderColor: "rgba(94, 53, 177, 0.3)",
+  },
+  CONCLUDED: {
+    bgcolor: "rgba(46, 125, 50, 0.14)",
+    color: "#1B5E20",
+    borderColor: "rgba(46, 125, 50, 0.3)",
+  },
+  ARCHIVED: {
+    bgcolor: "rgba(84, 110, 122, 0.16)",
+    color: "#37474F",
+    borderColor: "rgba(84, 110, 122, 0.3)",
+  },
+};
+
 const COMPLAINT_TYPE_OPTIONS = [
   { value: "MORAL", label: "Assédio moral" },
   { value: "SEXUAL", label: "Assédio sexual" },
@@ -229,6 +270,9 @@ const OCCURRENCE_FORM_OPTIONS = [
   },
 ];
 
+const NOT_INFORMED_RANK_VALUE = "NAO INFORMADO";
+const NOT_INFORMED_RANK_LABEL = "Não informado";
+
 const PROCEDURE_CURRENT_SITUATION_OPTIONS = [
   { value: "EM_ANDAMENTO", label: "Em andamento" },
   {
@@ -313,7 +357,7 @@ const defaultForm = {
   occurrenceLocation: "",
   incidentFrequency: "",
   hierarchicalFunctionalRelation: "",
-  occurrenceForm: "",
+  occurrenceForms: [] as string[],
   procedureCurrentSituation: "",
   evidenceCount: 0,
   evidenceSummary: "",
@@ -558,6 +602,24 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
   const rankOptions: string[] = (postosQuery.data?.items ?? []).map(
     (item: any) => String(item.name),
   );
+  const rankOptionsWithUnknown = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          [NOT_INFORMED_RANK_VALUE, ...rankOptions]
+            .map((item) => String(item ?? "").trim())
+            .filter(Boolean),
+        ),
+      ),
+    [rankOptions],
+  );
+  const occurrenceFormLabelByValue = useMemo(
+    () =>
+      new Map(
+        OCCURRENCE_FORM_OPTIONS.map((item) => [item.value, item.label] as const),
+      ),
+    [],
+  );
   const notifierIsVictim = form.notifierType === "VITIMA";
   const hasStep1Progress = Boolean(
     toNullable(form.incidentDate) ||
@@ -574,7 +636,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
         form.notifierGender !== "NAO_INFORMADO")) ||
     toNullable(form.incidentFrequency) ||
     toNullable(form.hierarchicalFunctionalRelation) ||
-    toNullable(form.occurrenceForm) ||
+    form.occurrenceForms.length > 0 ||
     Number(form.evidenceCount ?? 0) > 0 ||
     toNullable(form.evidenceSummary),
   );
@@ -652,7 +714,12 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
       occurrenceLocation: item.occurrenceLocation ?? "",
       incidentFrequency: item.incidentFrequency ?? "",
       hierarchicalFunctionalRelation: item.hierarchicalFunctionalRelation ?? "",
-      occurrenceForm: item.occurrenceForm ?? "",
+      occurrenceForms:
+        Array.isArray(item.occurrenceForms) && item.occurrenceForms.length > 0
+          ? item.occurrenceForms.map((value: any) => String(value))
+          : item.occurrenceForm
+            ? [String(item.occurrenceForm)]
+            : [],
       procedureCurrentSituation: item.procedureCurrentSituation ?? "",
       evidenceCount: Number(item.evidenceCount ?? 0),
       evidenceSummary: item.evidenceSummary ?? "",
@@ -881,7 +948,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
       hierarchicalFunctionalRelation: toNullable(
         form.hierarchicalFunctionalRelation,
       ),
-      occurrenceForm: toNullable(form.occurrenceForm),
+      occurrenceForms: form.occurrenceForms,
       procedureCurrentSituation: toNullable(form.procedureCurrentSituation),
       evidenceCount: Number(form.evidenceCount ?? 0),
       evidenceSummary: toNullable(form.evidenceSummary),
@@ -1158,9 +1225,11 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
               setForm((prev) => ({ ...prev, aggressorRank: e.target.value }))
             }
           >
-            {rankOptions.map((rank: string) => (
+            {rankOptionsWithUnknown.map((rank: string) => (
               <MenuItem key={rank} value={rank}>
-                {rank}
+                {rank === NOT_INFORMED_RANK_VALUE
+                  ? NOT_INFORMED_RANK_LABEL
+                  : rank}
               </MenuItem>
             ))}
           </TextField>
@@ -1226,9 +1295,11 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
               })
             }
           >
-            {rankOptions.map((rank: string) => (
+            {rankOptionsWithUnknown.map((rank: string) => (
               <MenuItem key={rank} value={rank}>
-                {rank}
+                {rank === NOT_INFORMED_RANK_VALUE
+                  ? NOT_INFORMED_RANK_LABEL
+                  : rank}
               </MenuItem>
             ))}
           </TextField>
@@ -1303,9 +1374,11 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                 setForm((prev) => ({ ...prev, notifierRank: e.target.value }))
               }
             >
-              {rankOptions.map((rank: string) => (
+              {rankOptionsWithUnknown.map((rank: string) => (
                 <MenuItem key={`notifier-rank-${rank}`} value={rank}>
-                  {rank}
+                  {rank === NOT_INFORMED_RANK_VALUE
+                    ? NOT_INFORMED_RANK_LABEL
+                    : rank}
                 </MenuItem>
               ))}
             </TextField>
@@ -1403,13 +1476,34 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
             select
             size="small"
             label="Forma de ocorrência"
-            value={form.occurrenceForm}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, occurrenceForm: e.target.value }))
-            }
+            value={form.occurrenceForms}
+            onChange={(e) => {
+              const value = e.target.value;
+              setForm((prev) => ({
+                ...prev,
+                occurrenceForms: Array.isArray(value)
+                  ? value.map((item) => String(item))
+                  : [String(value)],
+              }));
+            }}
             sx={{ gridColumn: { xs: "1 / -1", md: "1 / -1" } }}
+            SelectProps={{
+              multiple: true,
+              displayEmpty: true,
+              renderValue: (selected) => {
+                const selectedValues = Array.isArray(selected)
+                  ? selected.map((item) => String(item).trim()).filter(Boolean)
+                  : [];
+                if (!selectedValues.length) return "Selecionar";
+                return selectedValues
+                  .map(
+                    (value) =>
+                      occurrenceFormLabelByValue.get(value) ?? value,
+                  )
+                  .join(", ");
+              },
+            }}
           >
-            <MenuItem value="">Selecionar</MenuItem>
             {OCCURRENCE_FORM_OPTIONS.map((item) => (
               <MenuItem key={item.value} value={item.value}>
                 {item.label}
@@ -2132,6 +2226,19 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                             (entry) => entry.value === item.status,
                           )?.label ?? item.status
                         }
+                        sx={{
+                          fontWeight: 700,
+                          bgcolor:
+                            STATUS_CHIP_STYLES[String(item.status)]?.bgcolor ??
+                            "rgba(17, 24, 39, 0.08)",
+                          color:
+                            STATUS_CHIP_STYLES[String(item.status)]?.color ??
+                            "#111827",
+                          border: "1px solid",
+                          borderColor:
+                            STATUS_CHIP_STYLES[String(item.status)]?.borderColor ??
+                            "rgba(17, 24, 39, 0.14)",
+                        }}
                       />
                     </TableCell>
                     <TableCell>
