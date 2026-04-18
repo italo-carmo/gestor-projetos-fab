@@ -1908,20 +1908,33 @@ export class StrategicService {
         workflowScope: true,
         status: true,
         reportedAt: true,
+        omId: true,
+        om: { select: { code: true, name: true } },
         localityId: true,
         locality: { select: { code: true, name: true } },
       },
     });
 
-    const totalCases = cases.length;
+    const casesWithResolvedLocality = cases.map((row: any) => ({
+      ...row,
+      resolvedLocalityId:
+        String(row?.omId ?? row?.localityId ?? '').trim() || 'NAO_INFORMADO',
+      resolvedLocality: row?.om ?? row?.locality ?? null,
+    }));
+
+    const totalCases = casesWithResolvedLocality.length;
     if (totalCases === 0) {
       return { totalCases: 0, message: 'Nenhum caso registrado.' };
     }
 
-    const moralCases = cases.filter((c: any) => c.complaintType === 'MORAL');
-    const sexualCases = cases.filter((c: any) => c.complaintType === 'SEXUAL');
+    const moralCases = casesWithResolvedLocality.filter(
+      (c: any) => c.complaintType === 'MORAL',
+    );
+    const sexualCases = casesWithResolvedLocality.filter(
+      (c: any) => c.complaintType === 'SEXUAL',
+    );
 
-    const hierarchicalCount = cases.filter(
+    const hierarchicalCount = casesWithResolvedLocality.filter(
       (c: any) =>
         c.hierarchicalFunctionalRelation &&
         /superior|chefia|comando|hierarq/i.test(
@@ -1929,15 +1942,15 @@ export class StrategicService {
         ),
     ).length;
 
-    const byScope = countByField(cases, 'workflowScope');
+    const byScope = countByField(casesWithResolvedLocality, 'workflowScope');
 
     const toCaseDetail = (row: any): StrategicKpiDetailItem => {
       const id = String(row?.id ?? '').trim();
       const caseNumber = String(row?.caseNumber ?? '').trim();
       const scope = String(row?.workflowScope ?? 'CPCA').trim().toUpperCase();
       const localityLabel = this.formatOmDisplayLabel(
-        row?.locality?.code,
-        row?.locality?.name,
+        row?.resolvedLocality?.code,
+        row?.resolvedLocality?.name,
       );
       return {
         id: id || `aggressor-${caseNumber || 'case'}`,
@@ -1959,10 +1972,12 @@ export class StrategicService {
             : `/cpca-cases?q=${encodeURIComponent(caseNumber)}`,
       };
     };
-    const totalDetails = cases.map((row: any) => toCaseDetail(row));
+    const totalDetails = casesWithResolvedLocality.map((row: any) =>
+      toCaseDetail(row),
+    );
     const moralDetails = moralCases.map((row: any) => toCaseDetail(row));
     const sexualDetails = sexualCases.map((row: any) => toCaseDetail(row));
-    const hierarchicalDetails = cases
+    const hierarchicalDetails = casesWithResolvedLocality
       .filter(
         (c: any) =>
           c.hierarchicalFunctionalRelation &&
@@ -1979,7 +1994,7 @@ export class StrategicService {
       count: number;
     }[] = [];
     const crossMap = new Map<string, number>();
-    for (const c of cases) {
+    for (const c of casesWithResolvedLocality) {
       const key = `${c.complaintType ?? '?'}|${c.aggressorGender ?? '?'}|${c.victimGender ?? '?'}`;
       crossMap.set(key, (crossMap.get(key) ?? 0) + 1);
     }
@@ -2008,21 +2023,30 @@ export class StrategicService {
         description: 'Casos onde o agressor é superior hierárquico da vítima',
       },
       aggressorProfile: {
-        byRank: countByField(cases, 'aggressorRank'),
-        byGender: countByField(cases, 'aggressorGender'),
-        byAgeRange: countByField(cases, 'aggressorAgeRange'),
+        byRank: countByField(casesWithResolvedLocality, 'aggressorRank'),
+        byGender: countByField(casesWithResolvedLocality, 'aggressorGender'),
+        byAgeRange: countByField(casesWithResolvedLocality, 'aggressorAgeRange'),
       },
       victimProfile: {
-        byRank: countByField(cases, 'victimRank'),
-        byGender: countByField(cases, 'victimGender'),
-        byAgeRange: countByField(cases, 'victimAgeRange'),
+        byRank: countByField(casesWithResolvedLocality, 'victimRank'),
+        byGender: countByField(casesWithResolvedLocality, 'victimGender'),
+        byAgeRange: countByField(casesWithResolvedLocality, 'victimAgeRange'),
       },
       context: {
-        byViolenceType: countByField(cases, 'detailedViolenceType'),
-        byHarassmentContext: countByField(cases, 'harassmentContext'),
-        byLocation: countByField(cases, 'occurrenceLocation'),
-        byFrequency: countByField(cases, 'incidentFrequency'),
-        byForm: countByField(cases, 'occurrenceForm'),
+        byViolenceType: countByField(
+          casesWithResolvedLocality,
+          'detailedViolenceType',
+        ),
+        byHarassmentContext: countByField(
+          casesWithResolvedLocality,
+          'harassmentContext',
+        ),
+        byLocation: countByField(casesWithResolvedLocality, 'occurrenceLocation'),
+        byFrequency: countByField(
+          casesWithResolvedLocality,
+          'incidentFrequency',
+        ),
+        byForm: countByField(casesWithResolvedLocality, 'occurrenceForm'),
       },
       crossTabulation: crossTab,
       byScope,
@@ -2032,16 +2056,71 @@ export class StrategicService {
         sexual: sexualDetails,
         hierarchical: hierarchicalDetails,
       },
-      byLocality: countByField(cases, 'localityId').map((item) => {
-        const loc = cases.find(
-          (c: any) => c.localityId === item.label,
-        )?.locality;
-        return {
+      byLocality: Array.from<{
+        label: string;
+        count: number;
+        localityCode: string;
+        localityName: string;
+      }>(
+        casesWithResolvedLocality.reduce(
+          (
+            acc: Map<
+              string,
+              {
+                label: string;
+                count: number;
+                localityCode: string;
+                localityName: string;
+              }
+            >,
+            row: any,
+          ) => {
+            const key = String(row?.resolvedLocalityId ?? '').trim() || 'NAO_INFORMADO';
+            const current = acc.get(key) ?? {
+              label: key,
+              count: 0,
+              localityCode: String(row?.resolvedLocality?.code ?? '').trim(),
+              localityName:
+                this.formatOmDisplayLabel(
+                  row?.resolvedLocality?.code,
+                  row?.resolvedLocality?.name,
+                ) ||
+                (key === 'NAO_INFORMADO' ? 'Não informado' : key),
+            };
+            current.count += 1;
+            if (!current.localityCode) {
+              current.localityCode = String(row?.resolvedLocality?.code ?? '').trim();
+            }
+            if (
+              !current.localityName ||
+              current.localityName === 'Não informado'
+            ) {
+              current.localityName =
+                this.formatOmDisplayLabel(
+                  row?.resolvedLocality?.code,
+                  row?.resolvedLocality?.name,
+                ) ||
+                current.localityName;
+            }
+            acc.set(key, current);
+            return acc;
+          },
+          new Map<
+            string,
+            {
+              label: string;
+              count: number;
+              localityCode: string;
+              localityName: string;
+            }
+          >(),
+        ).values(),
+      )
+        .map((item) => ({
           ...item,
-          localityCode: loc?.code ?? '',
-          localityName: loc?.name ?? item.label,
-        };
-      }),
+          percent: pct(item.count, totalCases),
+        }))
+        .sort((a, b) => b.count - a.count),
     };
   }
 

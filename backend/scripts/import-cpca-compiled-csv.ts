@@ -335,7 +335,9 @@ function parseDateCell(raw: unknown): Date | null {
       );
     }
   }
-  const normalized = normalizeLabel(raw);
+  const normalized = normalizeLabel(
+    raw == null ? null : typeof raw === 'string' ? raw : String(raw),
+  );
   if (!normalized || normalized === 'NAO INFORMADO') return null;
   const match = normalized.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (!match) return null;
