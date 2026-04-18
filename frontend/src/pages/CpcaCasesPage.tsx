@@ -18,11 +18,13 @@ import {
   TableBody,
   TableCell,
   TableHead,
+  TablePagination,
   TableRow,
   TextField,
   Typography,
 } from "@mui/material";
 import { useEffect, useMemo, useState } from "react";
+import type { ChangeEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   useAddCpcaCaseComment,
@@ -426,6 +428,11 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
   const status = params.get("status") ?? "";
   const detailedViolenceType = params.get("detailedViolenceType") ?? "";
   const procedureType = params.get("procedureType") ?? "";
+  const page = Math.max(1, Number(params.get("page") ?? 1) || 1);
+  const pageSize = Math.min(
+    100,
+    Math.max(10, Number(params.get("pageSize") ?? 20) || 20),
+  );
 
   const filters = useMemo(
     () => ({
@@ -434,8 +441,10 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
       status: status || undefined,
       detailedViolenceType: detailedViolenceType || undefined,
       procedureType: procedureType || undefined,
+      page,
+      pageSize,
     }),
-    [q, localityId, status, detailedViolenceType, procedureType],
+    [q, localityId, status, detailedViolenceType, procedureType, page, pageSize],
   );
 
   const cpcaCasesQuery = useCpcaCases(
@@ -503,6 +512,9 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     const next = new URLSearchParams(params);
     if (value) next.set(key, value);
     else next.delete(key);
+    if (key !== "page" && key !== "pageSize") {
+      next.set("page", "1");
+    }
     if (key === "detailedViolenceType") {
       next.delete("complaintType");
     }
@@ -512,6 +524,25 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
   const clearFilters = () => setParams({}, { replace: true });
 
   const items = casesQuery.data?.items ?? [];
+  const totalItems = Number(casesQuery.data?.total ?? 0);
+
+  const handlePageChange = (_event: unknown, nextPage: number) => {
+    updateParam("page", String(nextPage + 1));
+  };
+
+  const handlePageSizeChange = (
+    event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
+  ) => {
+    const next = new URLSearchParams(params);
+    const nextSize = Math.min(
+      100,
+      Math.max(10, Number(event.target.value ?? 20) || 20),
+    );
+    next.set("page", "1");
+    next.set("pageSize", String(nextSize));
+    setParams(next, { replace: true });
+  };
+
   const localities = useMemo(
     () =>
       [...(localitiesQuery.data?.items ?? [])].sort((a: any, b: any) =>
@@ -2114,6 +2145,21 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
             </Table>
           )}
         </CardContent>
+        {totalItems > 0 && (
+          <TablePagination
+            component="div"
+            count={totalItems}
+            page={Math.max(0, page - 1)}
+            onPageChange={handlePageChange}
+            rowsPerPage={pageSize}
+            onRowsPerPageChange={handlePageSizeChange}
+            rowsPerPageOptions={[20, 50, 100]}
+            labelRowsPerPage="Denúncias por página"
+            labelDisplayedRows={({ from, to, count }) =>
+              `${from}-${to} de ${count !== -1 ? count : `mais de ${to}`}`
+            }
+          />
+        )}
       </Card>
 
       <Drawer
