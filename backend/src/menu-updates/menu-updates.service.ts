@@ -29,6 +29,7 @@ const MENU_UPDATE_RESOURCES: Record<string, readonly string[]> = {
   library: ['library'],
   cpca_dashboard: [],
   cpca_cases: ['cpca_cases'],
+  cpca_commission: ['cpca_cases'],
   cpca_president_approvals: [],
   bi: ['bi', 'bi_survey'],
   admin_rbac: ['admin_rbac', 'roles', 'users'],
@@ -134,12 +135,28 @@ export class MenuUpdatesService {
                   )
                 )
               WHERE (
-                mr."menuKey" NOT IN ('activities_smif', 'activities_cipavd')
-                OR (
-                  "act_scope"."id" IS NOT NULL
-                  AND (
-                    (mr."menuKey" = 'activities_smif' AND "act_scope"."scope" = 'SMIF'::"ActivityScope")
-                    OR (mr."menuKey" = 'activities_cipavd' AND "act_scope"."scope" = 'CIPAVD'::"ActivityScope")
+                (
+                  mr."menuKey" NOT IN (
+                    'activities_smif',
+                    'activities_cipavd',
+                    'cpca_cases',
+                    'cpca_commission'
+                  )
+                  OR (
+                    "act_scope"."id" IS NOT NULL
+                    AND (
+                      (mr."menuKey" = 'activities_smif' AND "act_scope"."scope" = 'SMIF'::"ActivityScope")
+                      OR (mr."menuKey" = 'activities_cipavd' AND "act_scope"."scope" = 'CIPAVD'::"ActivityScope")
+                    )
+                  )
+                  OR (
+                    mr."menuKey" = 'cpca_cases'
+                    AND al."action" NOT LIKE 'cpca_commission_%'
+                    AND al."action" NOT LIKE 'cpca_president_%'
+                  )
+                  OR (
+                    mr."menuKey" = 'cpca_commission'
+                    AND al."action" LIKE 'cpca_commission_%'
                   )
                 )
               )

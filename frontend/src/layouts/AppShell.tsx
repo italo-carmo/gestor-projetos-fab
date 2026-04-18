@@ -312,7 +312,7 @@ const navSections: NavSection[] = [
         label: "Comissão CPCA",
         to: "/cpca-commission",
         icon: <GroupsIcon fontSize="small" />,
-        menuKey: "cpca_cases",
+        menuKey: "cpca_commission",
       },
       {
         label: "Homologações CPCA",
