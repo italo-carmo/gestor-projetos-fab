@@ -266,15 +266,17 @@ function ComgepDetailModal({
   open,
   title,
   onClose,
+  maxWidth = "md",
   children,
 }: {
   open: boolean;
   title: string;
   onClose: () => void;
+  maxWidth?: "sm" | "md" | "lg" | "xl";
   children: React.ReactNode;
 }) {
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth scroll="paper">
+    <Dialog open={open} onClose={onClose} maxWidth={maxWidth} fullWidth scroll="paper">
       <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <Typography variant="h6">{title}</Typography>
         <Button onClick={onClose} size="small" sx={{ minWidth: "auto" }}>
@@ -726,6 +728,7 @@ export function ComgepStrategicTab() {
         open={detailModal === "criticalUfs"}
         title="Detalhamento — UFs prioritárias"
         onClose={() => setDetailModal(null)}
+        maxWidth="xl"
       >
         <Stack spacing={1.25}>
           <MeaningBlock
