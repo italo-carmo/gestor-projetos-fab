@@ -428,11 +428,12 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
   const status = params.get("status") ?? "";
   const detailedViolenceType = params.get("detailedViolenceType") ?? "";
   const procedureType = params.get("procedureType") ?? "";
+  const pageSizeParam = String(params.get("pageSize") ?? "20").trim().toLowerCase();
+  const showAllRows = pageSizeParam === "all";
   const page = Math.max(1, Number(params.get("page") ?? 1) || 1);
-  const pageSize = Math.min(
-    100,
-    Math.max(10, Number(params.get("pageSize") ?? 20) || 20),
-  );
+  const pageSize = showAllRows
+    ? -1
+    : Math.min(100, Math.max(10, Number(params.get("pageSize") ?? 20) || 20));
 
   const filters = useMemo(
     () => ({
@@ -442,9 +443,9 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
       detailedViolenceType: detailedViolenceType || undefined,
       procedureType: procedureType || undefined,
       page,
-      pageSize,
+      pageSize: showAllRows ? "all" : pageSize,
     }),
-    [q, localityId, status, detailedViolenceType, procedureType, page, pageSize],
+    [q, localityId, status, detailedViolenceType, procedureType, page, pageSize, showAllRows],
   );
 
   const cpcaCasesQuery = useCpcaCases(
@@ -534,12 +535,16 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
   ) => {
     const next = new URLSearchParams(params);
-    const nextSize = Math.min(
-      100,
-      Math.max(10, Number(event.target.value ?? 20) || 20),
-    );
     next.set("page", "1");
-    next.set("pageSize", String(nextSize));
+    if (String(event.target.value ?? "").trim() === "-1") {
+      next.set("pageSize", "all");
+    } else {
+      const nextSize = Math.min(
+        100,
+        Math.max(10, Number(event.target.value ?? 20) || 20),
+      );
+      next.set("pageSize", String(nextSize));
+    }
     setParams(next, { replace: true });
   };
 
@@ -2149,14 +2154,16 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
           <TablePagination
             component="div"
             count={totalItems}
-            page={Math.max(0, page - 1)}
+            page={showAllRows ? 0 : Math.max(0, page - 1)}
             onPageChange={handlePageChange}
             rowsPerPage={pageSize}
             onRowsPerPageChange={handlePageSizeChange}
-            rowsPerPageOptions={[20, 50, 100]}
+            rowsPerPageOptions={[20, 50, 100, { label: "Todas", value: -1 }]}
             labelRowsPerPage="Denúncias por página"
             labelDisplayedRows={({ from, to, count }) =>
-              `${from}-${to} de ${count !== -1 ? count : `mais de ${to}`}`
+              showAllRows
+                ? `1-${count} de ${count}`
+                : `${from}-${to} de ${count !== -1 ? count : `mais de ${to}`}`
             }
           />
         )}

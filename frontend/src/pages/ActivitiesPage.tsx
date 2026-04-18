@@ -32,7 +32,7 @@ import CheckBoxRoundedIcon from '@mui/icons-material/CheckBoxRounded';
 import CheckBoxOutlineBlankRoundedIcon from '@mui/icons-material/CheckBoxOutlineBlankRounded';
 import DragIndicatorRoundedIcon from '@mui/icons-material/DragIndicatorRounded';
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   useActivityComments,
   useActivity,
@@ -49,6 +49,7 @@ import {
   useCreateActivityType,
   useCreateActivity,
   useDeleteActivity,
+  useDeleteActivityType,
   useDeleteActivityReportPhoto,
   useExportActivityReportPdf,
   useCipavdLocalitiesCatalog,
@@ -132,6 +133,7 @@ type ActivityDrawerTab = 'activity' | 'report';
 type ActivitySortColumn = 'type' | 'activity' | 'locality' | 'specialty' | 'eventDate' | 'status';
 type ActivitySortDirection = 'asc' | 'desc';
 const ACTIVITY_PAGE_SIZE = 15;
+const ACTIVITY_PAGE_SIZE_OPTIONS = [15, 30, 50, 'all'] as const;
 
 function normalizeSortText(value: unknown) {
   return String(value ?? '')
@@ -327,18 +329,30 @@ function getActivitySpecialtyLabel(activity: any) {
 type ActivitiesPageScope = 'smif' | 'cipavd';
 
 export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope }) {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const activityIdFromUrl = searchParams.get('activityId') ?? '';
   const localityIdFromUrl = searchParams.get('localityId') ?? '';
   const tabFromUrl = searchParams.get('tab') === 'report' ? 'report' : 'activity';
   const toast = useToast();
   const scopeApi = scope === 'cipavd' ? 'CIPAVD' : 'SMIF';
+  const scopeSubtitle =
+    scopeApi === 'CIPAVD'
+      ? 'Atividades de campo vinculadas ao catálogo CIPAVD, com tipos, localidades e relatórios próprios.'
+      : 'Atividades de campo do escopo SMIF, com localidades, especialidades e fluxo de relatório independentes do CIPAVD.';
 
   const [statusFilter, setStatusFilter] = useState('');
   const [localityFilter, setLocalityFilter] = useState(localityIdFromUrl);
   const [specialtyFilter, setSpecialtyFilter] = useState('');
   const [search, setSearch] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [activityPageSizeMode, setActivityPageSizeMode] = useState<string>(
+    String(ACTIVITY_PAGE_SIZE),
+  );
+  const showAllActivities = activityPageSizeMode === 'all';
+  const activityPageSize = showAllActivities
+    ? -1
+    : Math.min(100, Math.max(10, Number(activityPageSizeMode) || ACTIVITY_PAGE_SIZE));
 
   const { data: localitiesData } = useLocalities(scope !== 'cipavd');
   const cipavdLocalitiesQuery = useCipavdLocalitiesCatalog(scope === 'cipavd');
@@ -354,7 +368,7 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
     () => specialties.find((s: any) => s.name === 'Comissão CIPAVD'),
     [specialties],
   );
-  const activityTypesQuery = useActivityTypes();
+  const activityTypesQuery = useActivityTypes(scopeApi);
   const activityTypes = activityTypesQuery.data?.items ?? [];
   const responsibleUsersQuery = useActivityResponsibleUsers({});
   const allResponsibleUsers = responsibleUsersQuery.data?.items ?? [];
@@ -384,7 +398,7 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
     scope: scopeApi,
     q: search || undefined,
     page: currentPage,
-    pageSize: ACTIVITY_PAGE_SIZE,
+    pageSize: showAllActivities ? 'all' : String(activityPageSize),
   });
 
   const { data: me } = useMe();
@@ -400,6 +414,8 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
   const [sign2faError, setSign2faError] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [batchDeleteConfirmOpen, setBatchDeleteConfirmOpen] = useState(false);
+  const [deleteActivityTypeConfirmOpen, setDeleteActivityTypeConfirmOpen] =
+    useState(false);
   const [replicateDialogOpen, setReplicateDialogOpen] = useState(false);
   const [batchStatus, setBatchStatus] = useState('');
   const [batchSpecialtyIds, setBatchSpecialtyIds] = useState<string[]>([]);
@@ -411,6 +427,7 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
 
   const createActivity = useCreateActivity();
   const createActivityType = useCreateActivityType();
+  const deleteActivityType = useDeleteActivityType();
   const deleteActivity = useDeleteActivity();
   const updateActivity = useUpdateActivity();
   const updateActivityStatus = useUpdateActivityStatus();
@@ -431,9 +448,13 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
 
   const items = activitiesQuery.data?.items ?? [];
   const totalActivities = Number(activitiesQuery.data?.total ?? 0);
-  const totalPages = Math.max(1, Math.ceil(totalActivities / ACTIVITY_PAGE_SIZE));
-  const pageStart = totalActivities === 0 ? 0 : (currentPage - 1) * ACTIVITY_PAGE_SIZE + 1;
-  const pageEnd = Math.min(currentPage * ACTIVITY_PAGE_SIZE, totalActivities);
+  const totalPages = showAllActivities
+    ? 1
+    : Math.max(1, Math.ceil(totalActivities / activityPageSize));
+  const pageStart = totalActivities === 0 ? 0 : showAllActivities ? 1 : (currentPage - 1) * activityPageSize + 1;
+  const pageEnd = showAllActivities
+    ? totalActivities
+    : Math.min(currentPage * activityPageSize, totalActivities);
   const [orderedItems, setOrderedItems] = useState<any[]>([]);
   const [draggingActivityId, setDraggingActivityId] = useState('');
   const [sortState, setSortState] = useState<{
@@ -611,7 +632,7 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [statusFilter, localityFilter, specialtyFilter, search, scopeApi]);
+  }, [statusFilter, localityFilter, specialtyFilter, search, scopeApi, activityPageSizeMode]);
 
   useEffect(() => {
     if (currentPage <= totalPages) return;
@@ -649,6 +670,14 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
     eventDate: '',
     reportRequired: false,
   });
+  const selectedActivityType = useMemo(
+    () =>
+      activityTypes.find(
+        (item: any) =>
+          String(item?.id ?? '') === String(activityForm.activityTypeId ?? ''),
+      ) ?? null,
+    [activityForm.activityTypeId, activityTypes],
+  );
 
   useEffect(() => {
     if (!selected) return;
@@ -839,6 +868,24 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
       toast.push({ message: 'Atividade atualizada', severity: 'success' });
     } catch (error) {
       toast.push({ message: parseApiError(error).message ?? 'Erro ao atualizar atividade', severity: 'error' });
+    }
+  };
+
+  const handleDeleteSelectedActivityType = async () => {
+    if (!selectedActivityType) return;
+    try {
+      await deleteActivityType.mutateAsync({
+        id: String(selectedActivityType.id),
+        scope: scopeApi,
+      });
+      setActivityForm((prev) => ({ ...prev, activityTypeId: '' }));
+      setDeleteActivityTypeConfirmOpen(false);
+      toast.push({ message: 'Tipo excluído com sucesso', severity: 'success' });
+    } catch (error) {
+      toast.push({
+        message: parseApiError(error).message ?? 'Erro ao excluir tipo',
+        severity: 'error',
+      });
     }
   };
 
@@ -1370,14 +1417,34 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
         </Box>
       )}
 
-      <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
-        <Typography variant="h4">
-          Atividades de Campo - {scope === 'cipavd' ? 'CIPAVD' : 'SMIF'}
-        </Typography>
+      <Stack
+        direction={{ xs: 'column', lg: 'row' }}
+        justifyContent="space-between"
+        alignItems={{ xs: 'stretch', lg: 'center' }}
+        spacing={1.25}
+        mb={2}
+      >
+        <Box>
+          <Typography variant="h4">Atividades de Campo</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            {scopeSubtitle}
+          </Typography>
+        </Box>
         <Button variant="contained" onClick={openCreateDrawer} disabled={!canCreate}>
           Nova atividade
         </Button>
       </Stack>
+
+      <Tabs
+        value={scope}
+        onChange={(_event, value: ActivitiesPageScope) => {
+          navigate(value === 'cipavd' ? '/cipavd-activities' : '/activities');
+        }}
+        sx={{ mb: 2 }}
+      >
+        <Tab value="smif" label="SMIF" />
+        <Tab value="cipavd" label="CIPAVD" />
+      </Tabs>
 
       <Card sx={{ mb: 2 }}>
         <CardContent>
@@ -1849,17 +1916,44 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
                   justifyContent="space-between"
                   sx={{ mt: 1.5 }}
                 >
-                  <Typography variant="body2" color="text.secondary">
-                    Mostrando {pageStart}-{pageEnd} de {totalActivities} atividades
-                  </Typography>
-                  <Pagination
-                    color="primary"
-                    shape="rounded"
-                    size="small"
-                    page={currentPage}
-                    count={totalPages}
-                    onChange={(_, value) => setCurrentPage(value)}
-                  />
+                  <Stack
+                    direction={{ xs: 'column', sm: 'row' }}
+                    spacing={1}
+                    alignItems={{ xs: 'flex-start', sm: 'center' }}
+                  >
+                    <Typography variant="body2" color="text.secondary">
+                      {showAllActivities
+                        ? `Mostrando todas as ${totalActivities} atividades`
+                        : `Mostrando ${pageStart}-${pageEnd} de ${totalActivities} atividades`}
+                    </Typography>
+                    <TextField
+                      select
+                      size="small"
+                      label="Atividades por página"
+                      value={activityPageSizeMode}
+                      onChange={(event) => setActivityPageSizeMode(String(event.target.value))}
+                      sx={{ minWidth: 180 }}
+                    >
+                      {ACTIVITY_PAGE_SIZE_OPTIONS.map((option) => {
+                        const value = String(option);
+                        return (
+                          <MenuItem key={value} value={value}>
+                            {value === 'all' ? 'Todas' : value}
+                          </MenuItem>
+                        );
+                      })}
+                    </TextField>
+                  </Stack>
+                  {!showAllActivities && (
+                    <Pagination
+                      color="primary"
+                      shape="rounded"
+                      size="small"
+                      page={currentPage}
+                      count={totalPages}
+                      onChange={(_, value) => setCurrentPage(value)}
+                    />
+                  )}
                 </Stack>
               </>
             )}
@@ -1952,7 +2046,10 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
                     const normalized = String(name ?? '').trim();
                     if (!normalized) return;
                     try {
-                      const created = await createActivityType.mutateAsync({ name: normalized });
+                      const created = await createActivityType.mutateAsync({
+                        name: normalized,
+                        scope: scopeApi,
+                      });
                       setActivityForm((prev) => ({
                         ...prev,
                         activityTypeId: String(created?.id ?? ''),
@@ -1968,7 +2065,27 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
                 >
                   Adicionar tipo
                 </Button>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  color="error"
+                  sx={drawerActionButtonSx}
+                  disabled={
+                    !canEditActivityForm ||
+                    !selectedActivityType ||
+                    Number(selectedActivityType?.usageCount ?? 0) > 0 ||
+                    deleteActivityType.isPending
+                  }
+                  onClick={() => setDeleteActivityTypeConfirmOpen(true)}
+                >
+                  Excluir tipo
+                </Button>
               </Stack>
+              {selectedActivityType && Number(selectedActivityType?.usageCount ?? 0) > 0 && (
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.75, display: 'block' }}>
+                  Este tipo possui {Number(selectedActivityType.usageCount)} atividade(s) vinculada(s) e não pode ser excluído.
+                </Typography>
+              )}
               <TextField
                 size="small"
                 label="Título"
@@ -2990,6 +3107,19 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
         confirmLabel="Excluir atividade"
         severity="error"
         confirmLoading={deleteActivity.isPending}
+      />
+
+      <ConfirmDialog
+        open={deleteActivityTypeConfirmOpen}
+        onCancel={() => setDeleteActivityTypeConfirmOpen(false)}
+        onConfirm={handleDeleteSelectedActivityType}
+        title="Excluir tipo de atividade"
+        message="Deseja excluir este tipo de atividade do escopo atual?"
+        highlightText={selectedActivityType?.name ?? ''}
+        note="A exclusão só é permitida quando não houver nenhuma atividade vinculada a este tipo."
+        confirmLabel="Excluir tipo"
+        severity="error"
+        confirmLoading={deleteActivityType.isPending}
       />
 
       <ConfirmDialog

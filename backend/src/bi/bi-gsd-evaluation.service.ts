@@ -287,9 +287,13 @@ export class BiGsdEvaluationService {
       filters.page,
       filters.pageSize,
     );
+    const pagedRows =
+      take === undefined
+        ? filteredRows.slice(skip)
+        : filteredRows.slice(skip, skip + take);
 
     return {
-      items: filteredRows.slice(skip, skip + take).map((row) => ({
+      items: pagedRows.map((row) => ({
         id: row.id,
         submittedAt: row.submittedAt,
         answers: row.answers,
