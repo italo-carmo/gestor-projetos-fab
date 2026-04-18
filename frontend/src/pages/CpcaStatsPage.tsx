@@ -219,12 +219,6 @@ function formatPercent(value: number) {
   return `${Math.round(numeric)}%`;
 }
 
-function buildDefaultFromDate() {
-  const date = new Date();
-  date.setMonth(date.getMonth() - 6);
-  return date.toISOString().slice(0, 10);
-}
-
 function translateMetricName(name: string | number) {
   const normalized = String(name ?? "")
     .trim()
@@ -267,7 +261,7 @@ export function CpcaStatsPage() {
   const localitiesQuery = useOmsCatalog(isNationalScope);
 
   const localityId = params.get("localityId") ?? "";
-  const from = params.get("from") ?? buildDefaultFromDate();
+  const from = params.get("from") ?? "";
   const to = params.get("to") ?? "";
 
   const filters = useMemo(
@@ -744,9 +738,7 @@ export function CpcaStatsPage() {
               onChange={(event) => updateParam("to", event.target.value)}
             />
             <Button
-              onClick={() =>
-                setParams({ from: buildDefaultFromDate() }, { replace: true })
-              }
+              onClick={() => setParams({}, { replace: true })}
             >
               Limpar filtros
             </Button>
