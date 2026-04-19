@@ -37,9 +37,10 @@ export function StrategicTabGuideCard({
       sx={{
         mb: 3,
         borderRadius: 3,
-        borderColor: alpha(accentColor, 0.22),
-        background: `linear-gradient(135deg, ${alpha(accentColor, 0.08)} 0%, #FFFFFF 58%)`,
-        boxShadow: `0 12px 32px ${alpha(accentColor, 0.08)}`,
+        borderColor: "#DDE5F0",
+        borderLeft: `4px solid ${accentColor}`,
+        bgcolor: "#FFFFFF",
+        boxShadow: "0 8px 24px rgba(15, 23, 42, 0.05)",
       }}
     >
       <CardContent sx={{ p: { xs: 2, md: 2.5 }, "&:last-child": { pb: { xs: 2, md: 2.5 } } }}>
@@ -56,9 +57,10 @@ export function StrategicTabGuideCard({
                 label="O que esta tela responde"
                 sx={{
                   mb: 1,
-                  bgcolor: alpha(accentColor, 0.12),
+                  bgcolor: "#F5F8FC",
                   color: accentColor,
                   fontWeight: 700,
+                  border: `1px solid ${alpha(accentColor, 0.18)}`,
                 }}
               />
               <Typography variant="h6" fontWeight={800} color={accentColor}>
@@ -75,9 +77,10 @@ export function StrategicTabGuideCard({
                 borderRadius: 2,
                 display: "grid",
                 placeItems: "center",
-                bgcolor: alpha(accentColor, 0.1),
+                bgcolor: "#F5F8FC",
                 color: accentColor,
                 flexShrink: 0,
+                border: `1px solid ${alpha(accentColor, 0.14)}`,
               }}
             >
               {icon}
@@ -92,11 +95,10 @@ export function StrategicTabGuideCard({
                   flex: 1,
                   minWidth: { xs: "100%", md: 220 },
                   borderRadius: 2.5,
-                  border: `1px solid ${alpha(accentColor, 0.16)}`,
-                  bgcolor: "rgba(255,255,255,0.8)",
+                  border: "1px solid #E4EBF5",
+                  bgcolor: "#F8FAFD",
                   px: 1.5,
                   py: 1.25,
-                  backdropFilter: "blur(8px)",
                 }}
               >
                 <Stack direction="row" spacing={1} alignItems="flex-start">
@@ -106,9 +108,10 @@ export function StrategicTabGuideCard({
                     sx={{
                       mt: 0.1,
                       minWidth: 28,
-                      bgcolor: accentColor,
-                      color: "#fff",
+                      bgcolor: "#FFFFFF",
+                      color: accentColor,
                       fontWeight: 800,
+                      border: `1px solid ${alpha(accentColor, 0.24)}`,
                     }}
                   />
                   <Typography variant="body2" fontWeight={700} sx={{ lineHeight: 1.6 }}>
@@ -138,7 +141,16 @@ export function StrategicTabGuideCard({
                       }}
                     />
                   }
-                  sx={{ alignSelf: "flex-start", color: accentColor, fontWeight: 700 }}
+                  sx={{
+                    alignSelf: "flex-start",
+                    color: accentColor,
+                    fontWeight: 700,
+                    px: 0.25,
+                    "&:hover": {
+                      bgcolor: "transparent",
+                      color: accentColor,
+                    },
+                  }}
                 >
                   Como usar esta tela
                 </Button>
@@ -154,8 +166,8 @@ export function StrategicTabGuideCard({
               <Box
                 sx={{
                   borderRadius: 2,
-                  border: `1px dashed ${alpha(accentColor, 0.22)}`,
-                  bgcolor: "rgba(255,255,255,0.72)",
+                  border: `1px dashed ${alpha(accentColor, 0.2)}`,
+                  bgcolor: "#FAFBFD",
                   px: 1.5,
                   py: 1.2,
                 }}
