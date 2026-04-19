@@ -2092,16 +2092,16 @@ export class StrategicService {
             row: any,
           ) => {
             const key = String(row?.resolvedLocalityId ?? '').trim() || 'NAO_INFORMADO';
+            const displayLabel =
+              this.formatOmDisplayLabel(
+                row?.resolvedLocality?.code,
+                row?.resolvedLocality?.name,
+              ) || (key === 'NAO_INFORMADO' ? 'Não informado' : key);
             const current = acc.get(key) ?? {
-              label: key,
+              label: displayLabel,
               count: 0,
               localityCode: String(row?.resolvedLocality?.code ?? '').trim(),
-              localityName:
-                this.formatOmDisplayLabel(
-                  row?.resolvedLocality?.code,
-                  row?.resolvedLocality?.name,
-                ) ||
-                (key === 'NAO_INFORMADO' ? 'Não informado' : key),
+              localityName: displayLabel,
             };
             current.count += 1;
             if (!current.localityCode) {
@@ -2117,6 +2117,9 @@ export class StrategicService {
                   row?.resolvedLocality?.name,
                 ) ||
                 current.localityName;
+            }
+            if (!current.label || current.label === key) {
+              current.label = current.localityName || displayLabel;
             }
             acc.set(key, current);
             return acc;

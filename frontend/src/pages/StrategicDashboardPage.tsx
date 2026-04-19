@@ -758,7 +758,7 @@ function SituationalTab() {
   }, [detailModal]);
 
   if (isLoading) return <SkeletonState />;
-  if (error) return <ErrorState message="Erro ao carregar painel situacional." />;
+  if (error) return <ErrorState message="Erro ao carregar visão geral." />;
   if (!data) return <EmptyState message="Sem dados." />;
 
   const s = data.surveys ?? {};
@@ -2114,7 +2114,11 @@ function GeoMapTab() {
   const localityDistribution = Array.isArray(aggressorProfileQuery.data?.byLocality)
     ? aggressorProfileQuery.data.byLocality
         .map((item: any) => ({
-          label: item.label,
+          label:
+            String(item?.localityName ?? "").trim() ||
+            String(item?.localityCode ?? "").trim() ||
+            String(item?.label ?? "").trim() ||
+            "Não informado",
           count: Number(item.count ?? 0),
           percent: Number(item.percent ?? 0),
         }))

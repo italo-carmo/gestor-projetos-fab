@@ -73,17 +73,17 @@ const ANALYSIS_CARDS: {
   },
   {
     type: "situational",
-    title: "Análise Situacional",
+    title: "Visão Geral",
     description:
-      "Panorama dos indicadores-chave: pesquisas, denúncias, atividades e missões.",
+      "Leitura executiva dos indicadores-chave: pesquisas, denúncias, atividades e missões.",
     icon: <DashboardRoundedIcon />,
     color: "#2E7D32",
   },
   {
     type: "aggressor",
-    title: "Perfil de Assédio e Violência",
+    title: "Perfil dos Casos",
     description:
-      "Análise do perfil do agressor, vítima, tipos de violência e relações hierárquicas.",
+      "Análise do perfil do agressor, da vítima, das tipologias e das relações hierárquicas.",
     icon: <FingerprintRoundedIcon />,
     color: "#D32F2F",
   },
@@ -97,9 +97,9 @@ const ANALYSIS_CARDS: {
   },
   {
     type: "geo",
-    title: "Distribuição Geográfica",
+    title: "Território",
     description:
-      "Concentração de ocorrências, atividades e missões por estado e localidade.",
+      "Concentração territorial de ocorrências, atividades e missões por estado e localidade.",
     icon: <MapRoundedIcon />,
     color: "#ED6C02",
   },
