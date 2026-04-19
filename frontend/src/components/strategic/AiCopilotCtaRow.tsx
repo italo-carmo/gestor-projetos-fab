@@ -10,31 +10,37 @@ export function AiCopilotCtaRow({
   explainHref,
   briefingHref,
   actionHref,
+  compact = false,
 }: {
   title?: string;
   subtitle?: string;
   explainHref: string;
   briefingHref: string;
   actionHref?: string | null;
+  compact?: boolean;
 }) {
   return (
     <Box
       sx={{
-        p: 1.5,
-        borderRadius: 2.5,
+        p: compact ? 1.2 : 1.5,
+        borderRadius: compact ? 2 : 2.5,
         border: '1px solid rgba(26,60,110,0.12)',
         bgcolor: '#F8FAFC',
       }}
     >
-      <Typography variant="subtitle2" fontWeight={800} color="#1A3C6E">
+      <Typography variant={compact ? 'body2' : 'subtitle2'} fontWeight={800} color="#1A3C6E">
         {title}
       </Typography>
       {subtitle ? (
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.4, lineHeight: 1.6 }}>
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          sx={{ mt: 0.4, lineHeight: 1.6, fontSize: compact ? '0.8rem' : undefined }}
+        >
           {subtitle}
         </Typography>
       ) : null}
-      <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mt: 1.25 }}>
+      <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mt: compact ? 1 : 1.25 }}>
         <Button
           component={RouterLink}
           to={explainHref}

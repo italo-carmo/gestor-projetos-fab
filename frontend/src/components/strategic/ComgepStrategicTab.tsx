@@ -503,7 +503,7 @@ export function ComgepStrategicTab() {
           <SummaryCard
             title="Retaliação"
             value={retaliationCount}
-            subtitle="Casos abertos com risco atual para a vítima."
+            subtitle="Casos abertos que exigem proteção institucional imediata."
             color="#D32F2F"
             icon={<WarningAmberRoundedIcon />}
             onClick={() => setDetailModal("retaliation")}
@@ -513,7 +513,7 @@ export function ComgepStrategicTab() {
           <SummaryCard
             title="Passivo > 30 dias"
             value={stalledCount}
-            subtitle="Casos abertos com atraso relevante de tratamento."
+            subtitle="Casos abertos há mais de 30 dias sem fechamento."
             color="#ED6C02"
             icon={<ShieldRoundedIcon />}
             onClick={() => setDetailModal("stalled")}
@@ -523,7 +523,7 @@ export function ComgepStrategicTab() {
           <SummaryCard
             title="UFs críticas"
             value={summary.criticalUfCount ?? 0}
-            subtitle="Estados que pedem atuação prioritária agora."
+            subtitle="Estados que concentram pressão e resposta abaixo do necessário."
             color="#ED6C02"
             icon={<TrendingUpRoundedIcon />}
             onClick={() => setDetailModal("criticalUfs")}
@@ -531,9 +531,9 @@ export function ComgepStrategicTab() {
         </Grid>
         <Grid size={{ xs: 12, md: 6, xl: 3 }}>
           <SummaryCard
-            title="Base normalizada"
+            title="Qualidade da base"
             value={`${confidencePercent.toFixed(1)}%`}
-            subtitle="Qualidade mínima da base para cruzamento executivo."
+            subtitle="Cobertura BI pronta para cruzamento executivo por OM e UF."
             color="#2E7D32"
             icon={<HubRoundedIcon />}
             onClick={() => setDetailModal("confidence")}
@@ -543,23 +543,27 @@ export function ComgepStrategicTab() {
 
       <SectionCard
         title="Onde atuar agora"
-        subtitle="UFs que concentram risco, formalização insuficiente ou resposta abaixo do necessário. Clique para detalhar."
+        subtitle="UFs que concentram risco, formalização insuficiente ou resposta abaixo do necessário. Clique na linha para entender a posição no ranking."
       >
+        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1.2 }}>
+          Colunas-chave: denúncias abertas sobre o total, subnotificação estimada, resposta em campo e foco sugerido de atuação.
+        </Typography>
         <TableContainer>
           <Table size="small">
             <TableHead>
               <TableRow>
+                <TableCell width={48}><strong>#</strong></TableCell>
                 <TableCell><strong>UF</strong></TableCell>
                 <TableCell><strong>Prioridade</strong></TableCell>
                 <TableCell><strong>Sinais</strong></TableCell>
-                <TableCell align="right"><strong>Casos</strong></TableCell>
-                <TableCell align="right"><strong>Subnotif.</strong></TableCell>
-                <TableCell align="right"><strong>Presença</strong></TableCell>
-                <TableCell><strong>Foco</strong></TableCell>
+                <TableCell align="right"><strong>Abertos / total</strong></TableCell>
+                <TableCell align="right"><strong>Subnotificação</strong></TableCell>
+                <TableCell align="right"><strong>Resposta em campo</strong></TableCell>
+                <TableCell><strong>Foco sugerido</strong></TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {priorityUfs.slice(0, 12).map((item: any) => (
+              {priorityUfs.slice(0, 12).map((item: any, index: number) => (
                 <TableRow
                   key={item.uf}
                   hover
@@ -569,6 +573,9 @@ export function ComgepStrategicTab() {
                   }}
                   sx={{ cursor: "pointer" }}
                 >
+                  <TableCell>
+                    <Chip size="small" label={index + 1} />
+                  </TableCell>
                   <TableCell>{item.uf}</TableCell>
                   <TableCell>
                     <Chip
@@ -598,7 +605,7 @@ export function ComgepStrategicTab() {
               ))}
               {!priorityUfs.length && (
                 <TableRow>
-                  <TableCell colSpan={7}>
+                  <TableCell colSpan={8}>
                     <Typography variant="body2" color="text.secondary">
                       Nenhuma UF priorizada no recorte atual.
                     </Typography>
@@ -612,23 +619,27 @@ export function ComgepStrategicTab() {
 
       <SectionCard
         title="OMs que puxam o risco"
-        subtitle="OMs que mais explicam a priorização nacional. Clique para detalhar."
+        subtitle="OMs que mais explicam a priorização nacional. Clique na linha para ver por que cada uma ocupa essa posição."
       >
+        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1.2 }}>
+          O ranking combina pesquisas, denúncias formais, subnotificação estimada, cobertura CPCA e presença operacional recente.
+        </Typography>
         <TableContainer>
           <Table size="small">
             <TableHead>
               <TableRow>
+                <TableCell width={48}><strong>#</strong></TableCell>
                 <TableCell><strong>OM</strong></TableCell>
                 <TableCell><strong>UF</strong></TableCell>
                 <TableCell align="right"><strong>Score</strong></TableCell>
                 <TableCell><strong>Sinais</strong></TableCell>
-                <TableCell align="right"><strong>Casos</strong></TableCell>
-                <TableCell align="right"><strong>Subnotif.</strong></TableCell>
-                <TableCell><strong>Foco</strong></TableCell>
+                <TableCell align="right"><strong>Abertos / total</strong></TableCell>
+                <TableCell align="right"><strong>Subnotificação</strong></TableCell>
+                <TableCell><strong>Ação sugerida</strong></TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {topRiskOms.slice(0, 12).map((item: any) => (
+              {topRiskOms.slice(0, 12).map((item: any, index: number) => (
                 <TableRow
                   key={item.id}
                   hover
@@ -638,6 +649,9 @@ export function ComgepStrategicTab() {
                   }}
                   sx={{ cursor: "pointer" }}
                 >
+                  <TableCell>
+                    <Chip size="small" label={index + 1} />
+                  </TableCell>
                   <TableCell>{item.code || item.name || "—"}</TableCell>
                   <TableCell>{item.uf || "—"}</TableCell>
                   <TableCell align="right">{item.riskScore ?? 0}</TableCell>
@@ -659,7 +673,7 @@ export function ComgepStrategicTab() {
               ))}
               {!topRiskOms.length && (
                 <TableRow>
-                  <TableCell colSpan={7}>
+                  <TableCell colSpan={8}>
                     <Typography variant="body2" color="text.secondary">
                       Nenhuma OM em destaque no recorte atual.
                     </Typography>
@@ -1005,7 +1019,7 @@ export function ComgepStrategicTab() {
               <ModalRow label="Faixa" value={selectedPriorityUf?.priorityBand ?? "—"} color="#ED6C02" />
               <ModalRow label="Risco" value={selectedPriorityUf?.riskScore ?? 0} />
               <ModalRow label="Pressão operacional" value={selectedPriorityUf?.pressureScore ?? 0} color="#D32F2F" />
-              <ModalRow label="Presença" value={selectedPriorityUf?.presenceScore ?? 0} />
+              <ModalRow label="Resposta em campo" value={selectedPriorityUf?.presenceScore ?? 0} />
               <ModalRow
                 label="Cobertura CPCA"
                 value={`${Number(selectedPriorityUf?.coveragePercent ?? 0).toFixed(1)}%`}

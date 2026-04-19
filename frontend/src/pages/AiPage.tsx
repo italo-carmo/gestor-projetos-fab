@@ -304,6 +304,22 @@ function getAuthHeaders(): Record<string, string> {
   return headers;
 }
 
+function buildAssistantContextBadges(context: AssistantContextSeed | null): string[] {
+  if (!context) return [];
+  const badges: string[] = [];
+  badges.push(context.source === "copilot" ? "Origem: copiloto" : "Origem: painel estratégico");
+  if (String(context.uf ?? "").trim()) {
+    badges.push(`UF ${String(context.uf).trim()}`);
+  }
+  if (String(context.omLabel ?? "").trim()) {
+    badges.push(String(context.omLabel).trim());
+  }
+  if (String(context.suggestedScope ?? "").trim()) {
+    badges.push(`Escopo ${String(context.suggestedScope).trim()}`);
+  }
+  return badges;
+}
+
 const mdStyles = {
   "& h1, & h2, & h3": { color: "#1A3C6E", fontWeight: 800, mt: 1.6 },
   "& p": { my: 0.7, lineHeight: 1.75, fontSize: "0.875rem" },
@@ -2451,11 +2467,11 @@ function AssistantTab() {
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 {conversationKind === "copilot"
-                  ? "Sessão analítica com memória de follow-up."
+                  ? "Sessão analítica com memória curta para follow-up, briefing e conversão em ação."
                   : isMissionScheduleWorkflow
                     ? "Fluxo de cronograma conduzido diretamente no chat, com confirmação no rodapé da conversa."
                   : conversationKind === "assistant"
-                    ? "Sessão operacional guiada com rascunho e confirmação."
+                    ? "Sessão operacional guiada com rascunho, contexto anexado e confirmação."
                     : "Escolha uma ação rápida ou escreva o que deseja criar."}
               </Typography>
             </Box>
@@ -2516,7 +2532,21 @@ function AssistantTab() {
                     ? copilotActionContext.description
                     : "Use esta mesma leitura para baixar o briefing em PDF ou abrir um fluxo assistido com o contexto já anexado."}
                 </Typography>
-                <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mt: 1.25 }}>
+                {buildAssistantContextBadges(copilotActionContext).length ? (
+                  <Stack direction="row" spacing={0.8} useFlexGap flexWrap="wrap" sx={{ mt: 1 }}>
+                    {buildAssistantContextBadges(copilotActionContext).map((badge) => (
+                      <Chip key={badge} size="small" label={badge} variant="outlined" />
+                    ))}
+                  </Stack>
+                ) : null}
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: "block", mt: 1.1, textTransform: "uppercase", letterSpacing: 0.5 }}
+                >
+                  Próximo passo
+                </Typography>
+                <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mt: 0.8 }}>
                   {copilotSessionId ? (
                     <Button
                       size="small"
@@ -2583,6 +2613,13 @@ function AssistantTab() {
                 <Typography variant="body2" sx={{ mt: 0.35, lineHeight: 1.6 }}>
                   {String(workflow.draft.assistantContext.title ?? "").trim() || "Contexto em referência."}
                 </Typography>
+                {buildAssistantContextBadges(workflow.draft.assistantContext as AssistantContextSeed).length ? (
+                  <Stack direction="row" spacing={0.8} useFlexGap flexWrap="wrap" sx={{ mt: 1 }}>
+                    {buildAssistantContextBadges(workflow.draft.assistantContext as AssistantContextSeed).map((badge) => (
+                      <Chip key={badge} size="small" label={badge} variant="outlined" />
+                    ))}
+                  </Stack>
+                ) : null}
                 {String(workflow.draft.assistantContext.description ?? "").trim() ? (
                   <Typography variant="body2" sx={{ mt: 0.35, lineHeight: 1.6 }}>
                     {String(workflow.draft.assistantContext.description)}

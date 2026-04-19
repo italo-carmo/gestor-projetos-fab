@@ -1601,41 +1601,16 @@ function SituationalTab() {
                               <Button size="small" variant="outlined" onClick={() => setDetailModal(item.detail)}>
                                 Ver detalhe
                               </Button>
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                component={RouterLink}
-                                to={buildStrategicCopilotLinks({
-                                  label: item.title,
-                                  description: item.description,
-                                }).explainHref}
-                              >
-                                Explicar na IA
-                              </Button>
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                component={RouterLink}
-                                to={buildStrategicCopilotLinks({
-                                  label: item.title,
-                                  description: item.description,
-                                }).briefingHref}
-                              >
-                                Gerar briefing
-                              </Button>
-                              <Button
-                                size="small"
-                                variant="contained"
-                                component={RouterLink}
-                                to={buildStrategicCopilotLinks({
-                                  label: item.title,
-                                  description: item.description,
-                                }).actionHref}
-                                sx={{ bgcolor: "#1A3C6E", "&:hover": { bgcolor: "#122B4E" } }}
-                              >
-                                Transformar em ação
-                              </Button>
                             </Stack>
+                            <AiCopilotCtaRow
+                              compact
+                              title="Levar este alerta para a IA"
+                              subtitle="Explique o sinal, gere um briefing executivo ou converta o recorte em ação."
+                              {...buildStrategicCopilotLinks({
+                                label: item.title,
+                                description: item.description,
+                              })}
+                            />
                           </Stack>
                         }
                         primaryTypographyProps={{ fontWeight: 700 }}
