@@ -64,6 +64,7 @@ import { SkeletonState } from "../components/states/SkeletonState";
 import { EmptyState } from "../components/states/EmptyState";
 import { ErrorState } from "../components/states/ErrorState";
 import { ComgepStrategicTab } from "../components/strategic/ComgepStrategicTab";
+import { StrategicTabGuideCard } from "../components/strategic/StrategicTabGuideCard";
 
 const COLORS = [
   "#1A3C6E",
@@ -766,13 +767,28 @@ function SituationalTab() {
   const [detailModal, setDetailModal] = useState<string | null>(null);
   const [expandedMetric, setExpandedMetric] = useState<string | null>(null);
 
+  const guideCard = (
+    <StrategicTabGuideCard
+      title="Visão Geral"
+      description="Use esta aba para abrir a leitura executiva do cenário antes de aprofundar no perfil, no território ou na priorização."
+      questions={[
+        "Qual é o tamanho do problema agora?",
+        "O que já virou resposta institucional no sistema?",
+        "O que exige atenção imediata da gestão?",
+      ]}
+      accentColor="#1A3C6E"
+      icon={<DashboardRoundedIcon />}
+      usageHint="Comece por aqui. Se o sinal crítico vier das pesquisas, aprofunde em Perfil dos Casos. Se o problema estiver concentrado em estados ou OMs, vá para Território. Se a decisão já for de comando, siga para Prioridades COMGEP."
+    />
+  );
+
   useEffect(() => {
     setExpandedMetric(null);
   }, [detailModal]);
 
-  if (isLoading) return <SkeletonState />;
-  if (error) return <ErrorState message="Erro ao carregar visão geral." />;
-  if (!data) return <EmptyState message="Sem dados." />;
+  if (isLoading) return <Stack spacing={2}>{guideCard}<SkeletonState /></Stack>;
+  if (error) return <Stack spacing={2}>{guideCard}<ErrorState message="Erro ao carregar visão geral." /></Stack>;
+  if (!data) return <Stack spacing={2}>{guideCard}<EmptyState message="Sem dados." /></Stack>;
 
   const s = data.surveys ?? {};
   const dv = data.domesticViolence ?? {};
@@ -1446,6 +1462,7 @@ function SituationalTab() {
 
   return (
     <Box>
+      {guideCard}
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <KpiCard
@@ -1656,12 +1673,31 @@ function SituationalTab() {
 function AggressorProfileTab() {
   const { data, isLoading, error } = useAggressorProfile();
   const [detailModal, setDetailModal] = useState<string | null>(null);
-  if (isLoading) return <SkeletonState />;
+
+  const guideCard = (
+    <StrategicTabGuideCard
+      title="Perfil dos Casos"
+      description="Esta aba explica a natureza dos casos registrados, sem misturar leitura territorial ou prioridade executiva."
+      questions={[
+        "Quem sofre e quem agride?",
+        "Que tipo de caso predomina no recorte atual?",
+        "Como, em que contexto e com que relação hierárquica os casos acontecem?",
+      ]}
+      accentColor="#7B1FA2"
+      icon={<FingerprintRoundedIcon />}
+      usageHint="Use esta aba quando a gestão precisar entender padrão de caso, perfil dos envolvidos e contexto do assédio para orientar prevenção, capacitação e resposta institucional."
+    />
+  );
+
+  if (isLoading) return <Stack spacing={2}>{guideCard}<SkeletonState /></Stack>;
   if (error)
-    return <ErrorState message="Erro ao carregar perfil do agressor." />;
+    return <Stack spacing={2}>{guideCard}<ErrorState message="Erro ao carregar perfil do agressor." /></Stack>;
   if (!data || data.totalCases === 0)
     return (
-      <EmptyState message="Nenhum caso de assédio/violência registrado ainda. Os dados aparecerão aqui conforme casos forem inseridos." />
+      <Stack spacing={2}>
+        {guideCard}
+        <EmptyState message="Nenhum caso de assédio/violência registrado ainda. Os dados aparecerão aqui conforme casos forem inseridos." />
+      </Stack>
     );
 
   const detailItems = (data.detailItems ?? {}) as Record<
@@ -1671,6 +1707,7 @@ function AggressorProfileTab() {
 
   return (
     <Box>
+      {guideCard}
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <KpiCard
@@ -2107,9 +2144,24 @@ function GeoMapTab() {
     "mappedOms" | "cpca" | "statesWithData" | null
   >(null);
 
-  if (isLoading) return <SkeletonState />;
-  if (error) return <ErrorState message="Erro ao carregar mapa geográfico." />;
-  if (!data) return <EmptyState message="Sem dados geográficos." />;
+  const guideCard = (
+    <StrategicTabGuideCard
+      title="Território"
+      description="Esta aba concentra a leitura territorial do problema e da atuação, com foco em estados, OMs/localidades e cobertura institucional."
+      questions={[
+        "Onde o problema está concentrado no território?",
+        "Onde já existe cobertura e atuação institucional?",
+        "Em quais estados e OMs a pressão territorial é maior?",
+      ]}
+      accentColor="#0288D1"
+      icon={<MapRoundedIcon />}
+      usageHint="Use esta aba para decidir onde concentrar presença física, entender distribuição geográfica dos casos e comparar pressão territorial com cobertura CPCA e atuação em campo."
+    />
+  );
+
+  if (isLoading) return <Stack spacing={2}>{guideCard}<SkeletonState /></Stack>;
+  if (error) return <Stack spacing={2}>{guideCard}<ErrorState message="Erro ao carregar mapa geográfico." /></Stack>;
+  if (!data) return <Stack spacing={2}>{guideCard}<EmptyState message="Sem dados geográficos." /></Stack>;
 
   const omsCatalog = Array.isArray(data.omsCatalog) ? data.omsCatalog : [];
   const coveredOmsCatalog = Array.isArray(data.cpcaCoveredOmsCatalog)
@@ -2180,6 +2232,7 @@ function GeoMapTab() {
 
   return (
     <Box>
+      {guideCard}
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid size={{ xs: 12, sm: 6, md: 4 }}>
           <KpiCard

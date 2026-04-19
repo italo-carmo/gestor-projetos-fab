@@ -2,7 +2,6 @@ import {
   Accordion,
   AccordionDetails,
   AccordionSummary,
-  Alert,
   Box,
   Button,
   Card,
@@ -42,6 +41,7 @@ import {
 import { AiCopilotCtaRow } from "./AiCopilotCtaRow";
 import { ErrorState } from "../states/ErrorState";
 import { SkeletonState } from "../states/SkeletonState";
+import { StrategicTabGuideCard } from "./StrategicTabGuideCard";
 
 function SummaryCard({
   title,
@@ -446,57 +446,52 @@ export function ComgepStrategicTab() {
     0,
   );
 
+  const guideCard = (
+    <StrategicTabGuideCard
+      title="Prioridades COMGEP"
+      description="Esta aba transforma os sinais do sistema em priorização prática de comando, mostrando onde atuar primeiro e por que aquele recorte entrou no topo."
+      questions={[
+        "Onde atuar primeiro, em UF e em OM?",
+        "Por que aquele recorte entrou no topo do ranking?",
+        "Que tipo de atuação faz mais sentido agora?",
+      ]}
+      accentColor="#1A3C6E"
+      icon={<ShieldRoundedIcon />}
+      usageHint="Use esta aba quando a pergunta já for de decisão. Ela não substitui o perfil nem o território: ela combina os sinais e entrega uma fila de priorização executiva pronta para briefing ou transformação em ação."
+      action={
+        <Button
+          component={RouterLink}
+          to="/ai?tab=assistant"
+          variant="contained"
+          startIcon={<AutoAwesomeRoundedIcon />}
+          sx={{
+            bgcolor: "#1A3C6E",
+            "&:hover": { bgcolor: "#122B4E" },
+            alignSelf: { xs: "stretch", md: "auto" },
+          }}
+        >
+          Abrir IA
+        </Button>
+      }
+    />
+  );
+
   if (roomQuery.isLoading) {
-    return <SkeletonState />;
+    return <Stack spacing={2}>{guideCard}<SkeletonState /></Stack>;
   }
 
   if (roomQuery.isError) {
     return (
-      <ErrorState error={roomQuery.error} onRetry={() => roomQuery.refetch()} />
+      <Stack spacing={2}>
+        {guideCard}
+        <ErrorState error={roomQuery.error} onRetry={() => roomQuery.refetch()} />
+      </Stack>
     );
   }
 
   return (
     <Stack spacing={2}>
-      <Alert
-        severity="info"
-        sx={{
-          borderRadius: 3,
-          alignItems: "flex-start",
-          "& .MuiAlert-message": { width: "100%" },
-        }}
-      >
-        <Stack
-          direction={{ xs: "column", md: "row" }}
-          spacing={1.5}
-          justifyContent="space-between"
-          alignItems={{ md: "center" }}
-        >
-          <Box>
-            <Typography variant="subtitle1" fontWeight={800}>
-              Priorização executiva COMGEP
-            </Typography>
-            <Typography variant="body2" sx={{ mt: 0.5, lineHeight: 1.65 }}>
-              Este recorte mostra só o que muda decisão: UFs críticas, OMs que puxam o risco,
-              retaliação, passivo acima do prazo e confiança mínima para cruzar os dados.
-              Explicações mais longas e transformação em ação ficam na IA.
-            </Typography>
-          </Box>
-          <Button
-            component={RouterLink}
-            to="/ai?tab=assistant"
-            variant="contained"
-            startIcon={<AutoAwesomeRoundedIcon />}
-            sx={{
-              bgcolor: "#1A3C6E",
-              "&:hover": { bgcolor: "#122B4E" },
-              alignSelf: { xs: "stretch", md: "auto" },
-            }}
-          >
-            Abrir IA
-          </Button>
-        </Stack>
-      </Alert>
+      {guideCard}
 
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 6, xl: 3 }}>
