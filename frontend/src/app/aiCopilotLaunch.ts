@@ -34,6 +34,25 @@ export type AiCopilotLaunch = {
   focus?: AiCopilotFocus | null;
 };
 
+export type AssistantActionId =
+  | 'create_mission'
+  | 'create_activity'
+  | 'create_task'
+  | 'create_mission_schedule'
+  | 'create_social_article'
+  | 'create_report';
+
+export type AssistantContextSeed = {
+  source: 'strategic_dashboard' | 'copilot';
+  title: string;
+  description?: string | null;
+  suggestedScope?: 'SMIF' | 'CIPAVD' | null;
+  uf?: string | null;
+  omId?: string | null;
+  omLabel?: string | null;
+  recommendedAction?: string | null;
+};
+
 const COPILOT_TYPES = new Set<AiCopilotType>([
   'briefing_comgep',
   'priorizacao_intervencao',
@@ -176,4 +195,26 @@ export function describeAiCopilotTarget(focus?: AiCopilotFocus | null) {
     default:
       return 'painel estratégico';
   }
+}
+
+export function buildAssistantContextSeedFromCopilotLaunch(
+  input: AiCopilotLaunch,
+  source: AssistantContextSeed['source'] = 'strategic_dashboard',
+): AssistantContextSeed {
+  return {
+    source,
+    title: clean(input.label) ?? buildAiCopilotLaunchTitle(input),
+    description: clean(input.description),
+    uf: clean(input.focus?.uf),
+    omId: clean(input.focus?.omId),
+    omLabel:
+      input.focus?.kind === 'om'
+        ? clean(input.label) ?? describeAiCopilotTarget(input.focus)
+        : null,
+    recommendedAction:
+      input.intent === 'action'
+        ? 'Converter este recorte em missão, atividade, tarefa ou relatório.'
+        : null,
+    suggestedScope: null,
+  };
 }

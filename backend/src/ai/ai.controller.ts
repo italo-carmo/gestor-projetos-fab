@@ -258,6 +258,18 @@ export class AiController {
         | 'create_social_article'
         | 'create_report'
         | null;
+      contextSeed?:
+        | {
+            source?: string | null;
+            title?: string | null;
+            description?: string | null;
+            suggestedScope?: string | null;
+            uf?: string | null;
+            omId?: string | null;
+            omLabel?: string | null;
+            recommendedAction?: string | null;
+          }
+        | null;
       fieldInput?: { field?: string; value?: unknown } | null;
       confirmExecution?: boolean;
       cancelWorkflow?: boolean;

@@ -170,6 +170,17 @@ type AssistantResultLink = {
   url: string;
 };
 
+type AssistantContextSeed = {
+  source: string;
+  title: string;
+  description?: string | null;
+  suggestedScope?: string | null;
+  uf?: string | null;
+  omId?: string | null;
+  omLabel?: string | null;
+  recommendedAction?: string | null;
+};
+
 type AssistantReply = {
   sessionId: string;
   message: AssistantMessage;
@@ -430,6 +441,18 @@ export class AiAssistantService {
       sessionId?: string | null;
       message?: string | null;
       quickAction?: AssistantIntent | null;
+      contextSeed?:
+        | {
+            source?: string | null;
+            title?: string | null;
+            description?: string | null;
+            suggestedScope?: string | null;
+            uf?: string | null;
+            omId?: string | null;
+            omLabel?: string | null;
+            recommendedAction?: string | null;
+          }
+        | null;
       fieldInput?: { field?: string; value?: unknown } | null;
       confirmExecution?: boolean;
       cancelWorkflow?: boolean;
@@ -456,6 +479,7 @@ export class AiAssistantService {
     }
 
     const quickAction = this.normalizeQuickAction(payload.quickAction);
+    const contextSeed = this.normalizeAssistantContextSeed(payload.contextSeed);
     const rawMessage = String(payload.message ?? '').trim();
     const fieldInput = payload.fieldInput ?? null;
     const wantsSkip = payload.skipCurrentField === true;
@@ -472,11 +496,16 @@ export class AiAssistantService {
         draft: {},
         currentField: null,
       };
+      if (contextSeed) {
+        session.workflow.draft.assistantContext = contextSeed;
+        this.applyAssistantContextSeed(session.workflow.draft, quickAction, contextSeed);
+      }
       session.updatedAt = new Date().toISOString();
       const workflowView = await this.buildWorkflowView(session.workflow, user);
       const intro = [
         `Vou conduzir o fluxo de **${INTENT_META[quickAction].title.toLowerCase()}**.`,
         'Vou pedir apenas os campos essenciais e só executo após sua confirmação final.',
+        contextSeed ? this.buildAssistantContextIntro(contextSeed) : null,
         workflowView.currentField
           ? `Primeiro passo: **${workflowView.currentField.label}**.`
           : 'Não encontrei campos para este fluxo.',
@@ -1127,6 +1156,74 @@ export class AiAssistantService {
       .trim();
   }
 
+  private normalizeAssistantContextSeed(
+    value:
+      | {
+          source?: string | null;
+          title?: string | null;
+          description?: string | null;
+          suggestedScope?: string | null;
+          uf?: string | null;
+          omId?: string | null;
+          omLabel?: string | null;
+          recommendedAction?: string | null;
+        }
+      | null
+      | undefined,
+  ): AssistantContextSeed | null {
+    const title = String(value?.title ?? '').trim();
+    if (!title) return null;
+    const suggestedScope = String(value?.suggestedScope ?? '')
+      .trim()
+      .toUpperCase();
+    return {
+      source: String(value?.source ?? '').trim() || 'ai',
+      title,
+      description: this.normalizeNullableText(value?.description),
+      suggestedScope:
+        suggestedScope === 'SMIF' || suggestedScope === 'CIPAVD'
+          ? suggestedScope
+          : null,
+      uf: this.normalizeNullableText(value?.uf)?.toUpperCase() ?? null,
+      omId: this.normalizeNullableText(value?.omId),
+      omLabel: this.normalizeNullableText(value?.omLabel),
+      recommendedAction: this.normalizeNullableText(value?.recommendedAction),
+    };
+  }
+
+  private buildAssistantContextIntro(context: AssistantContextSeed) {
+    const fragments = [`**Contexto recebido:** ${context.title}`];
+    if (context.description) {
+      fragments.push(context.description);
+    }
+    if (context.recommendedAction) {
+      fragments.push(`Foco sugerido: ${context.recommendedAction}`);
+    }
+    return fragments.join('\n');
+  }
+
+  private applyAssistantContextSeed(
+    draft: Record<string, any>,
+    intent: AssistantIntent,
+    context: AssistantContextSeed,
+  ) {
+    if (
+      intent === 'create_report' &&
+      !String(draft.focusLabel ?? '').trim()
+    ) {
+      draft.focusLabel = context.omLabel || context.uf || context.title;
+    }
+    if (
+      intent === 'create_report' &&
+      !String(draft.reportInstructions ?? '').trim()
+    ) {
+      draft.reportInstructions = [context.description, context.recommendedAction]
+        .map((item) => String(item ?? '').trim())
+        .filter(Boolean)
+        .join(' ');
+    }
+  }
+
   private async buildWorkflowView(
     workflow: AssistantWorkflow,
     user?: RbacUser,
@@ -1526,12 +1623,18 @@ export class AiAssistantService {
     draft: Record<string, any>,
     user?: RbacUser,
   ): Promise<AssistantFieldConfig[]> {
+    const contextSeed = this.normalizeAssistantContextSeed(draft.assistantContext);
+    const scopeHelperText = contextSeed?.suggestedScope
+      ? `O contexto atual sugere começar por ${contextSeed.suggestedScope}.`
+      : undefined;
+
     if (intent === 'create_mission') {
       return [
         {
           field: 'scope',
           label: 'Escopo',
           inputType: 'single_select',
+          helperText: scopeHelperText,
           options: [
             { value: 'SMIF', label: 'SMIF' },
             { value: 'CIPAVD', label: 'CIPAVD' },
@@ -1575,6 +1678,7 @@ export class AiAssistantService {
           field: 'scope',
           label: 'Escopo',
           inputType: 'single_select',
+          helperText: scopeHelperText,
           options: [
             { value: 'SMIF', label: 'SMIF' },
             { value: 'CIPAVD', label: 'CIPAVD' },
@@ -1623,6 +1727,7 @@ export class AiAssistantService {
         field: 'scope',
         label: 'Escopo da tarefa',
         inputType: 'single_select',
+        helperText: scopeHelperText,
         options: [
           { value: 'SMIF', label: 'SMIF' },
           { value: 'CIPAVD', label: 'CIPAVD' },
@@ -1684,6 +1789,7 @@ export class AiAssistantService {
           field: 'scope',
           label: 'Escopo da matéria',
           inputType: 'single_select',
+          helperText: scopeHelperText,
           options: [
             { value: 'SMIF', label: 'SMIF' },
             { value: 'CIPAVD', label: 'CIPAVD' },
@@ -1804,6 +1910,7 @@ export class AiAssistantService {
         field: 'scope',
         label: 'Escopo do relatório',
         inputType: 'single_select',
+        helperText: scopeHelperText,
         options: scopeOptions,
       });
 
@@ -2260,6 +2367,15 @@ export class AiAssistantService {
     draft: Record<string, any>,
     user?: RbacUser,
   ) {
+    const contextSeed = this.normalizeAssistantContextSeed(draft.assistantContext);
+    const contextSummary = contextSeed
+      ? [
+          { label: 'Contexto de origem', value: contextSeed.title },
+          ...(contextSeed.description
+            ? [{ label: 'Referência', value: contextSeed.description }]
+            : []),
+        ]
+      : [];
     const localityLookup = async (ids: string[] | string | null | undefined) => {
       const idList = Array.isArray(ids)
         ? ids.map((item) => String(item)).filter(Boolean)
@@ -2286,6 +2402,7 @@ export class AiAssistantService {
 
     if (intent === 'create_mission') {
       return [
+        ...contextSummary,
         { label: 'Escopo', value: draft.scope || '—' },
         {
           label: 'Localidade',
@@ -2300,6 +2417,7 @@ export class AiAssistantService {
 
     if (intent === 'create_activity') {
       return [
+        ...contextSummary,
         { label: 'Escopo', value: draft.scope || '—' },
         {
           label: 'Localidades',
@@ -2326,6 +2444,7 @@ export class AiAssistantService {
 
     if (intent === 'create_task') {
       return [
+        ...contextSummary,
         { label: 'Escopo', value: draft.scope || 'SMIF' },
         {
           label: 'Localidades',
@@ -2348,6 +2467,7 @@ export class AiAssistantService {
     if (intent === 'create_social_article') {
       const generatedDraft = this.readGeneratedArticleDraft(draft);
       return [
+        ...contextSummary,
         { label: 'Escopo', value: draft.scope || '—' },
         { label: 'Missão', value: (await findOptionLabel('missionId', draft.missionId)) || '—' },
         {
@@ -2384,6 +2504,7 @@ export class AiAssistantService {
         ),
       );
       return [
+        ...contextSummary,
         {
           label: 'Tipo',
           value:

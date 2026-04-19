@@ -45,10 +45,13 @@ import { api } from "../api/client";
 import { consumeJsonSseStream } from "../app/sse";
 import { useToast } from "../app/toast";
 import {
+  buildAssistantContextSeedFromCopilotLaunch,
   buildAiCopilotLaunchMessage,
   buildAiCopilotLaunchTitle,
   parseAiCopilotLaunch,
   stripAiCopilotLaunchParams,
+  type AssistantActionId,
+  type AssistantContextSeed,
   type AiCopilotMode,
 } from "../app/aiCopilotLaunch";
 import { useAiActionAgents } from "../api/hooks";
@@ -1336,6 +1339,7 @@ function AssistantTab() {
   const [copilotSessionId, setCopilotSessionId] = useState<string | null>(null);
   const [workflow, setWorkflow] = useState<AssistantWorkflow | null>(null);
   const [copilotMode, setCopilotMode] = useState<"executive" | "analyst">("executive");
+  const [copilotActionContext, setCopilotActionContext] = useState<AssistantContextSeed | null>(null);
   const [textInput, setTextInput] = useState("");
   const [singleOption, setSingleOption] = useState<AssistantOption | null>(null);
   const [multiOptions, setMultiOptions] = useState<AssistantOption[]>([]);
@@ -1374,6 +1378,7 @@ function AssistantTab() {
     setConversationKind(null);
     setAssistantSessionId(null);
     setCopilotSessionId(null);
+    setCopilotActionContext(null);
     setRunning(false);
     setStatusText("");
     setTextInput("");
@@ -1447,6 +1452,46 @@ function AssistantTab() {
     [toast],
   );
 
+  const downloadCopilotBriefingPdf = useCallback(
+    async (sessionId: string, title?: string | null) => {
+      setRunning(true);
+      setStatusText("Gerando PDF do briefing...");
+      try {
+        const response = await api.post(
+          "/ai/action-agents/pdf",
+          { sessionId },
+          { responseType: "blob" },
+        );
+        const blob = new Blob([response.data], { type: "application/pdf" });
+        const url = window.URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        const base =
+          String(title ?? "briefing-comgep")
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .replace(/[^a-zA-Z0-9]+/g, "-")
+            .replace(/^-+|-+$/g, "")
+            .toLowerCase() || "briefing-comgep";
+        anchor.href = url;
+        anchor.download = `${base}.pdf`;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        window.URL.revokeObjectURL(url);
+      } catch (error: any) {
+        const message =
+          error?.response?.data?.message ??
+          error?.message ??
+          "Falha ao baixar o briefing em PDF.";
+        toast.push({ message, severity: "error" });
+      } finally {
+        setRunning(false);
+        setStatusText("");
+      }
+    },
+    [toast],
+  );
+
   const isEditingExistingSchedule =
     workflow?.intent === "create_mission_schedule" &&
     workflow?.draft?.scheduleOperation === "EDIT";
@@ -1501,14 +1546,12 @@ function AssistantTab() {
 
   const launchAssistantQuickAction = useCallback(
     async (
-      actionId:
-        | "create_mission"
-        | "create_activity"
-        | "create_task"
-        | "create_mission_schedule"
-        | "create_social_article"
-        | "create_report",
+      actionId: AssistantActionId,
       actionLabel?: string,
+      options?: {
+        contextSeed?: AssistantContextSeed | null;
+        userMessage?: string;
+      },
     ) => {
       if (assistantSessionId) {
         try {
@@ -1522,12 +1565,16 @@ function AssistantTab() {
       setConversationKind(null);
       setAssistantSessionId(null);
       setCopilotSessionId(null);
+      setCopilotActionContext(null);
       setTextInput("");
       setSingleOption(null);
       setMultiOptions([]);
       await postAssistant(
-        { quickAction: actionId },
-        `Iniciar fluxo: ${actionLabel ?? actionId}`,
+        {
+          quickAction: actionId,
+          contextSeed: options?.contextSeed ?? null,
+        },
+        options?.userMessage ?? `Iniciar fluxo: ${actionLabel ?? actionId}`,
       );
     },
     [assistantSessionId, postAssistant],
@@ -1629,6 +1676,7 @@ function AssistantTab() {
         mode?: AiCopilotMode;
         focus?: Record<string, any> | null;
         launchMessage?: string;
+        actionContext?: AssistantContextSeed | null;
       },
     ) => {
       const resolvedMode = options?.mode ?? copilotMode;
@@ -1639,6 +1687,7 @@ function AssistantTab() {
       setStatusText("Inicializando copiloto gerencial...");
       setConversationKind("copilot");
       setWorkflow(null);
+      setCopilotActionContext(options?.actionContext ?? null);
       appendMessage({
         id: `user-${Date.now()}`,
         role: "user",
@@ -1766,9 +1815,36 @@ function AssistantTab() {
         mode: launch.mode,
         focus: normalizedFocus,
         launchMessage: buildAiCopilotLaunchMessage(launch),
+        actionContext: buildAssistantContextSeedFromCopilotLaunch(
+          launch,
+          "strategic_dashboard",
+        ),
       },
     );
   }, [running, searchParams, setSearchParams, startCopilot]);
+
+  const transformContextToAction = useCallback(
+    async (actionId: AssistantActionId, actionLabel: string) => {
+      const contextSeed = copilotActionContext
+        ? {
+            ...copilotActionContext,
+            source: "copilot" as const,
+          }
+        : null;
+      const contextLabel = String(copilotActionContext?.title ?? "").trim();
+      const contextDescription = String(copilotActionContext?.description ?? "").trim();
+      const messageParts = [
+        `Iniciar fluxo: ${actionLabel}`,
+        contextLabel ? `Contexto: ${contextLabel}` : "",
+        contextDescription ? contextDescription : "",
+      ].filter(Boolean);
+      await launchAssistantQuickAction(actionId, actionLabel, {
+        contextSeed,
+        userMessage: messageParts.join(". "),
+      });
+    },
+    [copilotActionContext, launchAssistantQuickAction],
+  );
 
   const sendCopilotFollowUp = useCallback(
     async (text: string) => {
@@ -2423,6 +2499,95 @@ function AssistantTab() {
                       ? `O próximo passo está no rodapé do chat: ${workflow.currentField.label.toLowerCase()}.`
                       : "O assistente vai guiando o cronograma passo a passo na própria conversa."}
                 </Typography>
+              </Alert>
+            ) : null}
+            {conversationKind === "copilot" && (copilotActionContext || copilotSessionId) ? (
+              <Alert
+                severity="info"
+                sx={{ mb: 1.5, borderRadius: 2.5, alignItems: "flex-start" }}
+              >
+                <Typography variant="subtitle2" fontWeight={800}>
+                  {copilotActionContext?.title
+                    ? `Contexto em foco: ${copilotActionContext.title}`
+                    : "Sessão de briefing pronta para ação"}
+                </Typography>
+                <Typography variant="body2" sx={{ mt: 0.35, lineHeight: 1.6 }}>
+                  {copilotActionContext?.description
+                    ? copilotActionContext.description
+                    : "Use esta mesma leitura para baixar o briefing em PDF ou abrir um fluxo assistido com o contexto já anexado."}
+                </Typography>
+                <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mt: 1.25 }}>
+                  {copilotSessionId ? (
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={<PictureAsPdfRoundedIcon />}
+                      onClick={() =>
+                        void downloadCopilotBriefingPdf(
+                          copilotSessionId,
+                          copilotActionContext?.title ?? "briefing-comgep",
+                        )
+                      }
+                    >
+                      Baixar briefing PDF
+                    </Button>
+                  ) : null}
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<RocketLaunchRoundedIcon />}
+                    onClick={() => void transformContextToAction("create_mission", "Criar missão")}
+                    disabled={running}
+                  >
+                    Criar missão
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<EventAvailableRoundedIcon />}
+                    onClick={() => void transformContextToAction("create_activity", "Criar atividade")}
+                    disabled={running}
+                  >
+                    Criar atividade
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<AddTaskRoundedIcon />}
+                    onClick={() => void transformContextToAction("create_task", "Criar tarefa")}
+                    disabled={running}
+                  >
+                    Criar tarefa
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    startIcon={<PictureAsPdfRoundedIcon />}
+                    onClick={() => void transformContextToAction("create_report", "Criar relatório")}
+                    disabled={running}
+                    sx={{ bgcolor: "#1A3C6E", "&:hover": { bgcolor: "#122B4E" } }}
+                  >
+                    Criar relatório
+                  </Button>
+                </Stack>
+              </Alert>
+            ) : null}
+            {conversationKind === "assistant" && workflow?.draft?.assistantContext ? (
+              <Alert
+                severity="info"
+                sx={{ mb: 1.5, borderRadius: 2.5, alignItems: "flex-start" }}
+              >
+                <Typography variant="subtitle2" fontWeight={800}>
+                  Contexto anexado ao fluxo
+                </Typography>
+                <Typography variant="body2" sx={{ mt: 0.35, lineHeight: 1.6 }}>
+                  {String(workflow.draft.assistantContext.title ?? "").trim() || "Contexto em referência."}
+                </Typography>
+                {String(workflow.draft.assistantContext.description ?? "").trim() ? (
+                  <Typography variant="body2" sx={{ mt: 0.35, lineHeight: 1.6 }}>
+                    {String(workflow.draft.assistantContext.description)}
+                  </Typography>
+                ) : null}
               </Alert>
             ) : null}
             {!messages.length ? (
