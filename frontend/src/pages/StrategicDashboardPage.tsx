@@ -1671,7 +1671,7 @@ function AggressorProfileTab() {
       title="Perfil dos Casos"
       description="Esta aba explica a natureza dos casos registrados, sem misturar leitura territorial ou prioridade executiva."
       questions={[
-        "Quem sofre e quem agride?",
+        "Quais perfis aparecem com mais frequência nos casos?",
         "Que tipo de caso predomina no recorte atual?",
         "Como, em que contexto e com que relação hierárquica os casos acontecem?",
       ]}
@@ -1683,7 +1683,7 @@ function AggressorProfileTab() {
 
   if (isLoading) return <Stack spacing={2}>{guideCard}<SkeletonState /></Stack>;
   if (error)
-    return <Stack spacing={2}>{guideCard}<ErrorState message="Erro ao carregar perfil do agressor." /></Stack>;
+    return <Stack spacing={2}>{guideCard}<ErrorState message="Erro ao carregar perfil dos casos." /></Stack>;
   if (!data || data.totalCases === 0)
     return (
       <Stack spacing={2}>
@@ -1886,7 +1886,7 @@ function AggressorProfileTab() {
       </KpiDetailModal>
 
       <Typography variant="h6" sx={{ mb: 2, color: "#1A3C6E" }}>
-        Quem agride
+        Perfis apontados
       </Typography>
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid size={{ xs: 12, md: 4 }}>
@@ -1916,7 +1916,7 @@ function AggressorProfileTab() {
       </Grid>
 
       <Typography variant="h6" sx={{ mb: 2, color: "#1A3C6E" }}>
-        Quem sofre
+        Perfis afetados
       </Typography>
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid size={{ xs: 12, md: 4 }}>
