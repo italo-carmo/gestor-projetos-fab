@@ -44,6 +44,13 @@ import remarkGfm from "remark-gfm";
 import { api } from "../api/client";
 import { consumeJsonSseStream } from "../app/sse";
 import { useToast } from "../app/toast";
+import {
+  buildAiCopilotLaunchMessage,
+  buildAiCopilotLaunchTitle,
+  parseAiCopilotLaunch,
+  stripAiCopilotLaunchParams,
+  type AiCopilotMode,
+} from "../app/aiCopilotLaunch";
 import { useAiActionAgents } from "../api/hooks";
 
 const ANALYSIS_CARDS: {
@@ -1335,6 +1342,7 @@ function AssistantTab() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const scheduleFileInputRef = useRef<HTMLInputElement | null>(null);
   const handledAssistantLaunchRef = useRef<string>("");
+  const handledCopilotLaunchRef = useRef<string>("");
 
   useEffect(() => {
     scrollRef.current?.scrollTo({
@@ -1614,7 +1622,19 @@ function AssistantTab() {
   }, [launchAssistantQuickAction, running, searchParams, setSearchParams]);
 
   const startCopilot = useCallback(
-    async (type: string, title: string) => {
+    async (
+      type: string,
+      title: string,
+      options?: {
+        mode?: AiCopilotMode;
+        focus?: Record<string, any> | null;
+        launchMessage?: string;
+      },
+    ) => {
+      const resolvedMode = options?.mode ?? copilotMode;
+      if (options?.mode && options.mode !== copilotMode) {
+        setCopilotMode(options.mode);
+      }
       setRunning(true);
       setStatusText("Inicializando copiloto gerencial...");
       setConversationKind("copilot");
@@ -1622,7 +1642,7 @@ function AssistantTab() {
       appendMessage({
         id: `user-${Date.now()}`,
         role: "user",
-        content: `Executar ${title}`,
+        content: options?.launchMessage ?? `Executar ${title}`,
         createdAt: new Date().toISOString(),
         origin: "copilot",
       });
@@ -1631,7 +1651,11 @@ function AssistantTab() {
         const res = await fetch(`${getBaseUrl()}/ai/action-agents/run`, {
           method: "POST",
           headers: getAuthHeaders(),
-          body: JSON.stringify({ type, mode: copilotMode }),
+          body: JSON.stringify({
+            type,
+            mode: resolvedMode,
+            focus: options?.focus ?? null,
+          }),
         });
 
         if (!res.ok) {
@@ -1705,6 +1729,46 @@ function AssistantTab() {
     },
     [appendMessage, copilotMode, toast],
   );
+
+  useEffect(() => {
+    const launch = parseAiCopilotLaunch(searchParams);
+    if (!launch) {
+      handledCopilotLaunchRef.current = "";
+      return;
+    }
+    if (running) return;
+
+    const launchKey = JSON.stringify(launch);
+    if (handledCopilotLaunchRef.current === launchKey) return;
+    handledCopilotLaunchRef.current = launchKey;
+
+    const next = stripAiCopilotLaunchParams(searchParams);
+    setSearchParams(next, { replace: true });
+
+    const normalizedFocus = launch.focus
+      ? {
+          ...launch.focus,
+          label: launch.label,
+          description: launch.description,
+        }
+      : launch.label || launch.description
+        ? {
+            kind: "overview" as const,
+            label: launch.label,
+            description: launch.description,
+          }
+        : null;
+
+    void startCopilot(
+      launch.type,
+      buildAiCopilotLaunchTitle(launch),
+      {
+        mode: launch.mode,
+        focus: normalizedFocus,
+        launchMessage: buildAiCopilotLaunchMessage(launch),
+      },
+    );
+  }, [running, searchParams, setSearchParams, startCopilot]);
 
   const sendCopilotFollowUp = useCallback(
     async (text: string) => {

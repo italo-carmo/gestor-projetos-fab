@@ -35,9 +35,11 @@ import TrendingUpRoundedIcon from "@mui/icons-material/TrendingUpRounded";
 import WarningAmberRoundedIcon from "@mui/icons-material/WarningAmberRounded";
 import { Link as RouterLink } from "react-router-dom";
 import { useMemo, useState } from "react";
+import { buildAiCopilotPath } from "../../app/aiCopilotLaunch";
 import {
   useComgepSituationRoom,
 } from "../../api/hooks";
+import { AiCopilotCtaRow } from "./AiCopilotCtaRow";
 import { ErrorState } from "../states/ErrorState";
 import { SkeletonState } from "../states/SkeletonState";
 
@@ -174,6 +176,56 @@ function subnotificationColor(percent: number) {
 
 function formatPercent(value: number | null | undefined) {
   return `${Number(value ?? 0).toFixed(1)}%`;
+}
+
+function buildComgepCopilotLinks(args: {
+  label: string;
+  description: string;
+  focus?: {
+    kind:
+      | "overview"
+      | "kpi_covered_oms"
+      | "kpi_critical_ufs"
+      | "kpi_high_risk_oms"
+      | "kpi_operational_presence"
+      | "uf"
+      | "om"
+      | "coverage_gap"
+      | "operational_pressure";
+    uf?: string | null;
+    omId?: string | null;
+    refId?: string | null;
+  } | null;
+  allowAction?: boolean;
+}) {
+  return {
+    explainHref: buildAiCopilotPath({
+      type: "briefing_comgep",
+      mode: "analyst",
+      intent: "explain",
+      label: args.label,
+      description: args.description,
+      focus: args.focus ?? { kind: "overview" },
+    }),
+    briefingHref: buildAiCopilotPath({
+      type: "briefing_comgep",
+      mode: "executive",
+      intent: "briefing",
+      label: args.label,
+      description: args.description,
+      focus: args.focus ?? { kind: "overview" },
+    }),
+    actionHref: args.allowAction === false
+      ? null
+      : buildAiCopilotPath({
+          type: "priorizacao_intervencao",
+          mode: "executive",
+          intent: "action",
+          label: args.label,
+          description: args.description,
+          focus: args.focus ?? { kind: "overview" },
+        }),
+  };
 }
 
 function SignalsPreview({ item }: { item: any }) {
@@ -625,6 +677,14 @@ export function ComgepStrategicTab() {
         onClose={() => setDetailModal(null)}
       >
         <Stack spacing={1.25}>
+          <AiCopilotCtaRow
+            title="Usar este KPI na IA"
+            subtitle="Abra a IA já focada em retaliação para explicar o cenário, gerar briefing ou propor intervenção."
+            {...buildComgepCopilotLinks({
+              label: "Risco de retaliação",
+              description: "Casos abertos com risco de retaliação e OMs impactadas no recorte atual.",
+            })}
+          />
           <MeaningBlock
             title="O que isso significa"
             meaning="Este indicador mostra quantos casos abertos hoje carregam marcação de retaliação ou risco de retaliação. Ele não mede volume total de denúncias; ele destaca os casos mais sensíveis para proteção da vítima e ação imediata do gestor."
@@ -690,6 +750,14 @@ export function ComgepStrategicTab() {
         onClose={() => setDetailModal(null)}
       >
         <Stack spacing={1.25}>
+          <AiCopilotCtaRow
+            title="Usar este KPI na IA"
+            subtitle="Leve o passivo além do prazo para a IA e peça leitura executiva, briefing ou plano de ação."
+            {...buildComgepCopilotLinks({
+              label: "Casos além do prazo",
+              description: "Casos abertos há mais de 30 dias e OMs com atraso relevante de tratamento.",
+            })}
+          />
           <MeaningBlock
             title="O que isso significa"
             meaning="Este indicador soma os casos abertos há mais de 30 dias. Ele funciona como alerta de atraso de tratamento, risco de perda de confiança na resposta institucional e potencial de agravamento do passivo."
@@ -756,6 +824,15 @@ export function ComgepStrategicTab() {
         maxWidth="xl"
       >
         <Stack spacing={1.25}>
+          <AiCopilotCtaRow
+            title="Usar este KPI na IA"
+            subtitle="Abra a IA com foco nas UFs críticas para gerar explicação, briefing ou priorização de intervenção."
+            {...buildComgepCopilotLinks({
+              label: "UFs críticas",
+              description: "UFs classificadas em faixa crítica pela matriz da Sala COMGEP.",
+              focus: { kind: "kpi_critical_ufs" },
+            })}
+          />
           <MeaningBlock
             title="O que isso significa"
             meaning="Este KPI conta quantas UFs estão em faixa crítica na matriz da Sala COMGEP. A classificação considera risco composto, cobertura CPCA e presença operacional. Não é um volume bruto; é um indicador de prioridade executiva."
@@ -831,6 +908,15 @@ export function ComgepStrategicTab() {
         onClose={() => setDetailModal(null)}
       >
         <Stack spacing={1.25}>
+          <AiCopilotCtaRow
+            title="Usar este KPI na IA"
+            subtitle="Leve a qualidade da base para a IA quando precisar explicar confiança do dado ou gerar resumo executivo do recorte."
+            {...buildComgepCopilotLinks({
+              label: "Confiança do dado",
+              description: "Cobertura útil da normalização BI para cruzamento executivo por OM e UF.",
+              allowAction: false,
+            })}
+          />
           <MeaningBlock
             title="O que isso significa"
             meaning="Este indicador mede quanto da base BI já está normalizada por OM ou ao menos por UF. Quanto maior a cobertura útil, mais confiável fica o cruzamento entre pesquisas, denúncias, cobertura CPCA e presença operacional."
@@ -889,6 +975,21 @@ export function ComgepStrategicTab() {
         maxWidth="xl"
       >
         <Stack spacing={1.25}>
+          <AiCopilotCtaRow
+            title="Levar esta UF para a IA"
+            subtitle="Use a IA para explicar por que esta UF entrou no ranking, gerar briefing pronto ou converter o insight em plano de atuação."
+            {...buildComgepCopilotLinks({
+              label: `UF prioritária ${selectedPriorityUf?.uf ?? ""}`.trim(),
+              description:
+                selectedPriorityUf?.recommendedFocus
+                  ? `${selectedPriorityUf.recommendedFocus} Pressão ${selectedPriorityUf?.pressureScore ?? 0}, risco ${selectedPriorityUf?.riskScore ?? 0}.`
+                  : `UF ${selectedPriorityUf?.uf ?? "selecionada"} em faixa prioritária na Sala COMGEP.`,
+              focus: {
+                kind: "uf",
+                uf: selectedPriorityUf?.uf ?? null,
+              },
+            })}
+          />
           <MeaningBlock
             title="O que isso significa"
             meaning="Esta UF aparece como prioritária porque concentra sinais de pesquisa, denúncias formais e capacidade de resposta abaixo do necessário. O ranking combina assédio moral/sexual, violência doméstica em 12 meses, subnotificação estimada, cobertura CPCA e presença operacional."
@@ -1010,6 +1111,24 @@ export function ComgepStrategicTab() {
         maxWidth="lg"
       >
         <Stack spacing={1.25}>
+          <AiCopilotCtaRow
+            title="Levar esta OM para a IA"
+            subtitle="Explique a posição da OM, gere um briefing executivo ou peça à IA um pacote de intervenção orientado por evidências."
+            {...buildComgepCopilotLinks({
+              label:
+                selectedRiskOm?.code ??
+                selectedRiskOm?.name ??
+                "OM de maior risco",
+              description:
+                selectedRiskOm?.recommendedAction ??
+                "OM em destaque no ranking de risco da Sala COMGEP.",
+              focus: {
+                kind: "om",
+                uf: selectedRiskOm?.uf ?? null,
+                omId: selectedRiskOm?.id ?? null,
+              },
+            })}
+          />
           <MeaningBlock
             title="O que isso significa"
             meaning="Esta OM aparece no ranking porque a combinação entre pesquisas, denúncias formais, cobertura CPCA e presença operacional indica necessidade de atuação prioritária. O objetivo aqui não é só mostrar volume, mas explicar por que a comissão deve agir nesta OM."

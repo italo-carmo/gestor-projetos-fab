@@ -57,7 +57,9 @@ import {
   useGeoMap,
   useExportExecutiveReportPdf,
 } from "../api/hooks";
+import { buildAiCopilotPath } from "../app/aiCopilotLaunch";
 import { Link as RouterLink, useSearchParams } from "react-router-dom";
+import { AiCopilotCtaRow } from "../components/strategic/AiCopilotCtaRow";
 import { SkeletonState } from "../components/states/SkeletonState";
 import { EmptyState } from "../components/states/EmptyState";
 import { ErrorState } from "../components/states/ErrorState";
@@ -83,6 +85,53 @@ const GENDER_LABELS: Record<string, string> = {
   FEMININO: "Feminino",
   NAO_INFORMADO: "Não informado",
 };
+
+function buildStrategicCopilotLinks(args: {
+  label: string;
+  description: string;
+  focus?: {
+    kind:
+      | "overview"
+      | "kpi_covered_oms"
+      | "kpi_critical_ufs"
+      | "kpi_high_risk_oms"
+      | "kpi_operational_presence"
+      | "uf"
+      | "om"
+      | "coverage_gap"
+      | "operational_pressure";
+    uf?: string | null;
+    omId?: string | null;
+    refId?: string | null;
+  } | null;
+}) {
+  return {
+    explainHref: buildAiCopilotPath({
+      type: "briefing_comgep",
+      mode: "analyst",
+      intent: "explain",
+      label: args.label,
+      description: args.description,
+      focus: args.focus ?? { kind: "overview" },
+    }),
+    briefingHref: buildAiCopilotPath({
+      type: "briefing_comgep",
+      mode: "executive",
+      intent: "briefing",
+      label: args.label,
+      description: args.description,
+      focus: args.focus ?? { kind: "overview" },
+    }),
+    actionHref: buildAiCopilotPath({
+      type: "priorizacao_intervencao",
+      mode: "executive",
+      intent: "action",
+      label: args.label,
+      description: args.description,
+      focus: args.focus ?? { kind: "overview" },
+    }),
+  };
+}
 
 function KpiCard({
   title,
@@ -1034,6 +1083,14 @@ function SituationalTab() {
       case "surveys":
         return (
           <Stack spacing={1.25}>
+            <AiCopilotCtaRow
+              title="Levar este indicador para a IA"
+              subtitle="Use a IA para explicar a taxa, gerar um briefing executivo ou transformar o sinal em proposta de atuação."
+              {...buildStrategicCopilotLinks({
+                label: "Violência reportada",
+                description: `${s.violenceRatePercent ?? 0}% dos respondentes declararam violência na pesquisa institucional.`,
+              })}
+            />
             <DetailMeaningBlock
               title="O que este número significa"
               meaning="A Taxa de violência mostra o percentual de respondentes da Pesquisa de Violência que declararam já ter sofrido algum tipo de violência. Os demais números do modal mostram a base total de respondentes e como essa base se divide entre respostas SIM e NÃO."
@@ -1080,6 +1137,14 @@ function SituationalTab() {
       case "domesticViolence":
         return (
           <Stack spacing={1.25}>
+            <AiCopilotCtaRow
+              title="Levar este indicador para a IA"
+              subtitle="Abra a IA com foco em violência doméstica recente para aprofundar explicação, briefing ou resposta institucional."
+              {...buildStrategicCopilotLinks({
+                label: "Violência doméstica recente",
+                description: `${dv.last12MonthsRatePercent ?? 0}% apontam ocorrência de violência doméstica nos últimos 12 meses.`,
+              })}
+            />
             <DetailMeaningBlock
               title="O que este número significa"
               meaning="Os indicadores deste bloco medem a violência doméstica autorreferida na pesquisa específica de violência doméstica. 'Alguma vez' captura histórico de vida; 'últimos 12 meses' mostra recorrência recente; 'buscaram ajuda' mede reação institucional e rede de apoio."
@@ -1128,6 +1193,14 @@ function SituationalTab() {
       case "recruits":
         return (
           <Stack spacing={1.25}>
+            <AiCopilotCtaRow
+              title="Levar este indicador para a IA"
+              subtitle="Use a IA para explicar risco de subnotificação entre recrutas, gerar briefing ou montar resposta de prevenção."
+              {...buildStrategicCopilotLinks({
+                label: "Prontidão para denunciar entre recrutas",
+                description: `Segurança para denunciar em ${r.safeToReportPercent ?? 0}% e conhecimento do canal em ${r.knowReportProcessPercent ?? 0}%.`,
+              })}
+            />
             <DetailMeaningBlock
               title="O que este número significa"
               meaning="Os indicadores de recrutas medem percepção institucional. 'Segurança para denunciar' indica confiança para buscar ajuda; 'conhecimento do canal' indica preparo informacional mínimo para acionar o fluxo correto."
@@ -1175,6 +1248,14 @@ function SituationalTab() {
       case "complaints":
         return (
           <Stack spacing={1.25}>
+            <AiCopilotCtaRow
+              title="Levar este indicador para a IA"
+              subtitle="Abra a IA já focada nos casos formais para explicar o passivo, gerar briefing ou propor ação prioritária."
+              {...buildStrategicCopilotLinks({
+                label: "Casos em tratamento",
+                description: `${c.openCases ?? 0} casos seguem abertos no recorte atual, sobre um total de ${c.totalCases ?? 0}.`,
+              })}
+            />
             <DetailMeaningBlock
               title="O que este número significa"
               meaning="Este bloco consolida os casos e denúncias efetivamente registrados no sistema, somando fluxos CPCA e SMIF. Ele mostra carga real de tratamento institucional, status atual e distribuição por tipo e fluxo."
@@ -1227,6 +1308,14 @@ function SituationalTab() {
       case "activities":
         return (
           <Stack spacing={1.25}>
+            <AiCopilotCtaRow
+              title="Levar este indicador para a IA"
+              subtitle="Use a IA para relacionar execução em campo, maturidade de registro e necessidade de reforço operacional."
+              {...buildStrategicCopilotLinks({
+                label: "Resposta em campo",
+                description: `${a.done ?? 0} atividades concluídas e ${a.signed ?? 0} relatórios assinados no recorte atual.`,
+              })}
+            />
             <DetailMeaningBlock
               title="O que este número significa"
               meaning="Os números de atividades mostram execução operacional em campo. Eles distinguem o que foi realizado em SMIF e CIPAVD e ainda indicam maturidade de registro por meio de relatório preenchido e relatório assinado."
@@ -1280,6 +1369,14 @@ function SituationalTab() {
       case "missions":
         return (
           <Stack spacing={1.25}>
+            <AiCopilotCtaRow
+              title="Levar este indicador para a IA"
+              subtitle="Abra a IA com foco nas missões do recorte para explicar alcance, gerar briefing ou transformar o cenário em nova frente de atuação."
+              {...buildStrategicCopilotLinks({
+                label: "Missões realizadas",
+                description: `${m.totalMissions ?? 0} missões registradas, cobrindo ${m.localitiesCovered ?? 0} OMs distintas.`,
+              })}
+            />
             <DetailMeaningBlock
               title="O que este número significa"
               meaning="As missões representam deslocamentos e frentes operacionais cadastradas no sistema. O detalhamento mostra volume por escopo e quantas OMs distintas já foram efetivamente alcançadas pelas missões lançadas."
@@ -1492,17 +1589,56 @@ function SituationalTab() {
                       key={item.id}
                       divider={index < executiveAlerts.length - 1}
                       sx={{ px: 0, alignItems: "flex-start" }}
-                      secondaryAction={
-                        <Button size="small" variant="outlined" onClick={() => setDetailModal(item.detail)}>
-                          Ver detalhe
-                        </Button>
-                      }
                     >
                       <ListItemText
                         primary={item.title}
-                        secondary={item.description}
+                        secondary={
+                          <Stack spacing={1.2} sx={{ mt: 0.3 }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.55 }}>
+                              {item.description}
+                            </Typography>
+                            <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+                              <Button size="small" variant="outlined" onClick={() => setDetailModal(item.detail)}>
+                                Ver detalhe
+                              </Button>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                component={RouterLink}
+                                to={buildStrategicCopilotLinks({
+                                  label: item.title,
+                                  description: item.description,
+                                }).explainHref}
+                              >
+                                Explicar na IA
+                              </Button>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                component={RouterLink}
+                                to={buildStrategicCopilotLinks({
+                                  label: item.title,
+                                  description: item.description,
+                                }).briefingHref}
+                              >
+                                Gerar briefing
+                              </Button>
+                              <Button
+                                size="small"
+                                variant="contained"
+                                component={RouterLink}
+                                to={buildStrategicCopilotLinks({
+                                  label: item.title,
+                                  description: item.description,
+                                }).actionHref}
+                                sx={{ bgcolor: "#1A3C6E", "&:hover": { bgcolor: "#122B4E" } }}
+                              >
+                                Transformar em ação
+                              </Button>
+                            </Stack>
+                          </Stack>
+                        }
                         primaryTypographyProps={{ fontWeight: 700 }}
-                        secondaryTypographyProps={{ sx: { mt: 0.3, lineHeight: 1.55 } }}
                       />
                     </ListItem>
                   ))}
@@ -2443,6 +2579,26 @@ function GeoMapTab() {
                 title="O que este detalhamento mostra"
                 meaning="Este modal concentra toda a leitura territorial do estado selecionado. O resumo executivo mostra o volume agregado; os blocos expansíveis separam denúncias, atividades, missões e OMs vinculadas ao estado."
                 source="Fonte: consolidação territorial por UF do Painel Estratégico."
+              />
+              <AiCopilotCtaRow
+                title="Levar este estado para a IA"
+                subtitle="Abra a IA com foco na UF para explicar o cenário, gerar briefing do estado ou transformar o insight territorial em atuação."
+                {...buildStrategicCopilotLinks({
+                  label: selectedState
+                    ? `${BR_STATES[selectedState.uf]?.name ?? selectedState.uf} (${selectedState.uf})`
+                    : "Estado selecionado",
+                  description: selectedState?.data
+                    ? `${selectedState.data.complaints ?? 0} denúncias, ${selectedState.data.activities ?? 0} atividades e ${selectedState.data.missions ?? 0} missões no recorte atual.`
+                    : "Leitura territorial do estado selecionado.",
+                  focus: selectedState
+                    ? {
+                        kind: "uf",
+                        uf: selectedState.uf,
+                      }
+                    : {
+                        kind: "overview",
+                      },
+                })}
               />
               <Grid container spacing={2}>
                 <Grid size={{ xs: 6, sm: 3 }}>
