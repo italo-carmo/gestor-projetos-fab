@@ -935,78 +935,64 @@ function SituationalTab() {
     : 0;
   const researchSignals = [
     {
-      title: "Pesquisa de violência",
+      title: "Violência reportada",
       value: `${s.violenceRatePercent ?? 0}%`,
       helper: `${s.yesCount ?? 0} de ${s.totalResponses ?? 0} respondentes relataram violência.`,
       color: "#D32F2F",
       detail: "surveys",
     },
     {
-      title: "Violência doméstica — 12 meses",
+      title: "Violência doméstica recente",
       value: `${dv.last12MonthsRatePercent ?? 0}%`,
-      helper: `${dv.last12MonthsYes ?? 0} respondentes declararam ocorrência recente.`,
+      helper: `${dv.last12MonthsYes ?? 0} respondentes declararam ocorrência nos últimos 12 meses.`,
       color: "#C2185B",
       detail: "domesticViolence",
     },
     {
-      title: "Recrutas — segurança para denunciar",
+      title: "Prontidão para denunciar",
       value: `${r.safeToReportPercent ?? 0}%`,
-      helper: `${r.safeCount ?? 0} de ${r.totalResponses ?? 0} sentem segurança para reportar.`,
+      helper: `Segurança ${r.safeToReportPercent ?? 0}% • conhecimento do canal ${r.knowReportProcessPercent ?? 0}%`,
       color: "#2E7D32",
-      detail: "recruits",
-    },
-    {
-      title: "Recrutas — conhecimento do canal",
-      value: `${r.knowReportProcessPercent ?? 0}%`,
-      helper: `${r.knowProcess ?? 0} de ${r.totalResponses ?? 0} conhecem o fluxo de denúncia.`,
-      color: "#0288D1",
       detail: "recruits",
     },
   ];
   const institutionalResponse = [
     {
-      title: "Denúncias/casos",
-      value: `${c.openCases ?? 0} abertos`,
+      title: "Casos em tratamento",
+      value: `${c.openCases ?? 0}`,
       helper: `Total ${c.totalCases ?? 0} • concluídos ${c.concludedCases ?? 0}`,
       color: "#1A3C6E",
       detail: "complaints",
     },
     {
-      title: "Atividades de campo",
-      value: `${a.done ?? 0} concluídas`,
-      helper: `Total ${a.totalActivities ?? 0} • relatórios preenchidos ${a.withReport ?? 0}`,
+      title: "Resposta em campo",
+      value: `${a.done ?? 0}`,
+      helper: `Atividades concluídas ${a.done ?? 0} • missões ${m.totalMissions ?? 0}`,
       color: "#4E342E",
       detail: "activities",
     },
     {
-      title: "Relatórios assinados",
+      title: "Registro validado",
       value: `${a.signed ?? 0}`,
       helper: `Preenchimento ${reportFillRate.toFixed(1)}% • assinatura ${reportSignRate.toFixed(1)}%`,
       color: "#2E7D32",
       detail: "activities",
-    },
-    {
-      title: "Missões realizadas",
-      value: `${m.totalMissions ?? 0}`,
-      helper: `SMIF ${m.smif ?? 0} • CIPAVD ${m.cipavd ?? 0} • OMs alcançadas ${m.localitiesCovered ?? 0}`,
-      color: "#7B1FA2",
-      detail: "missions",
     },
   ];
   const executiveAlerts = [
     Number(s.violenceRatePercent ?? 0) >= 20
       ? {
           id: "survey-risk",
-          title: "Pesquisa de violência com sinal elevado",
-          description: `${s.violenceRatePercent ?? 0}% dos respondentes relataram violência. Vale revisar distribuição por perfil e localidade.`,
+          title: "Violência reportada acima do limite",
+          description: `${s.violenceRatePercent ?? 0}% relataram violência. Vale priorizar leitura de perfil e território.`,
           detail: "surveys",
         }
       : null,
     Number(dv.last12MonthsRatePercent ?? 0) >= 10
       ? {
           id: "domestic-recent",
-          title: "Violência doméstica recente pede atenção",
-          description: `${dv.last12MonthsRatePercent ?? 0}% apontam ocorrência nos últimos 12 meses, com potencial de demanda institucional imediata.`,
+          title: "Violência doméstica recente em destaque",
+          description: `${dv.last12MonthsRatePercent ?? 0}% apontam ocorrência recente e possível demanda institucional imediata.`,
           detail: "domesticViolence",
         }
       : null,
@@ -1015,23 +1001,23 @@ function SituationalTab() {
       Number(r.knowReportProcessPercent ?? 0) < 60)
       ? {
           id: "recruits-underreport",
-          title: "Ambiente com risco de subnotificação",
-          description: `Recrutas com segurança para denunciar em ${r.safeToReportPercent ?? 0}% e conhecimento do canal em ${r.knowReportProcessPercent ?? 0}%.`,
+          title: "Risco de subnotificação entre recrutas",
+          description: `Segurança para denunciar em ${r.safeToReportPercent ?? 0}% e conhecimento do canal em ${r.knowReportProcessPercent ?? 0}%.`,
           detail: "recruits",
         }
       : null,
     Number(c.openCases ?? 0) > 0
       ? {
           id: "open-complaints",
-          title: "Backlog institucional ativo",
-          description: `${c.openCases ?? 0} casos seguem abertos no sistema e exigem monitoramento gerencial.`,
+          title: "Passivo de casos em tratamento",
+          description: `${c.openCases ?? 0} casos seguem abertos e exigem monitoramento gerencial.`,
           detail: "complaints",
         }
       : null,
     Number(a.totalActivities ?? 0) > 0 && reportSignRate < 60
       ? {
           id: "report-compliance",
-          title: "Baixa assinatura de relatórios de campo",
+          title: "Baixa validação de relatórios de campo",
           description: `Apenas ${reportSignRate.toFixed(1)}% dos relatórios preenchidos foram assinados.`,
           detail: "activities",
         }
@@ -1353,7 +1339,7 @@ function SituationalTab() {
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <KpiCard
-            title="Taxa de violência"
+            title="Violência reportada"
             value={`${s.violenceRatePercent ?? 0}%`}
             subtitle={`${s.yesCount ?? 0} de ${s.totalResponses ?? 0} respondentes`}
             color="#D32F2F"
@@ -1362,7 +1348,7 @@ function SituationalTab() {
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <KpiCard
-            title="Violência doméstica — 12 meses"
+            title="Violência doméstica recente"
             value={`${dv.last12MonthsRatePercent ?? 0}%`}
             subtitle={`${dv.last12MonthsYes ?? 0} de ${dv.totalResponses ?? 0}`}
             color="#C2185B"
@@ -1371,16 +1357,16 @@ function SituationalTab() {
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <KpiCard
-            title="Denúncias Ativas"
+            title="Casos em tratamento"
             value={c.openCases ?? 0}
-            subtitle={`Total: ${c.totalCases ?? 0} | CPCA: ${c.byCpca ?? 0} | SMIF: ${c.bySmif ?? 0}`}
+            subtitle={`Total ${c.totalCases ?? 0} | CPCA ${c.byCpca ?? 0} | SMIF ${c.bySmif ?? 0}`}
             color="#1A3C6E"
             onClick={() => setDetailModal("complaints")}
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <KpiCard
-            title="Atuação em campo"
+            title="Resposta em campo"
             value={a.totalActivities ?? 0}
             subtitle={`Concluídas: ${a.done ?? 0} | Missões: ${m.totalMissions ?? 0}`}
             color="#4E342E"
@@ -1394,10 +1380,10 @@ function SituationalTab() {
           <Card variant="outlined">
             <CardContent>
               <Typography variant="subtitle1" fontWeight={700} gutterBottom>
-                Sinais das pesquisas
+                Sinais de risco
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                Consolidado executivo das pesquisas institucionais e de percepção. O detalhe analítico permanece nos modais e na IA.
+                O que as pesquisas estão sinalizando agora. O detalhe analítico permanece nos modais e na IA.
               </Typography>
               <Stack spacing={1.2}>
                 {researchSignals.map((signal) => (
@@ -1444,10 +1430,10 @@ function SituationalTab() {
           <Card variant="outlined">
             <CardContent>
               <Typography variant="subtitle1" fontWeight={700} gutterBottom>
-                Resposta institucional
+                Capacidade de resposta
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                Panorama do que o sistema já transformou em resposta: casos tratados, execução em campo e capacidade de registro.
+                O que o sistema já transformou em resposta: tratamento, presença em campo e qualidade de registro.
               </Typography>
               <Stack spacing={1.2}>
                 {institutionalResponse.map((item) => (
@@ -1494,10 +1480,10 @@ function SituationalTab() {
           <Card variant="outlined">
             <CardContent>
               <Typography variant="subtitle1" fontWeight={700} gutterBottom>
-                Alertas executivos do momento
+                O que exige atenção agora
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                Leitura rápida dos sinais que merecem acompanhamento imediato da gestão. O detalhamento permanece nos modais temáticos e na Sala COMGEP.
+                Leitura rápida dos sinais que merecem acompanhamento imediato da gestão.
               </Typography>
               {executiveAlerts.length ? (
                 <List disablePadding>
@@ -1564,8 +1550,9 @@ function AggressorProfileTab() {
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <KpiCard
-            title="Total de Casos"
+            title="Casos analisados"
             value={data.totalCases}
+            subtitle="Base usada para leitura do perfil"
             color="#1A3C6E"
             onClick={() => setDetailModal("total")}
           />
@@ -1590,7 +1577,7 @@ function AggressorProfileTab() {
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <KpiCard
-            title="Relação Hierárquica"
+            title="Assimetria hierárquica"
             value={`${data.hierarchicalRelation.percent}%`}
             subtitle={`${data.hierarchicalRelation.count} casos com superior hierárquico`}
             color="#7B1FA2"
@@ -1746,19 +1733,19 @@ function AggressorProfileTab() {
       </KpiDetailModal>
 
       <Typography variant="h6" sx={{ mb: 2, color: "#1A3C6E" }}>
-        Perfil do Agressor
+        Quem agride
       </Typography>
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid size={{ xs: 12, md: 4 }}>
           <HorizontalBarCard
-            title="Posto/Graduação do Agressor"
+            title="Posto/graduação"
             data={data.aggressorProfile.byRank}
             color="#D32F2F"
           />
         </Grid>
         <Grid size={{ xs: 12, md: 4 }}>
           <HorizontalBarCard
-            title="Gênero do Agressor"
+            title="Gênero"
             data={data.aggressorProfile.byGender.map((d: any) => ({
               ...d,
               label: GENDER_LABELS[d.label] ?? d.label,
@@ -1768,7 +1755,7 @@ function AggressorProfileTab() {
         </Grid>
         <Grid size={{ xs: 12, md: 4 }}>
           <HorizontalBarCard
-            title="Faixa Etária do Agressor"
+            title="Faixa etária"
             data={data.aggressorProfile.byAgeRange}
             color="#7B1FA2"
           />
@@ -1776,19 +1763,19 @@ function AggressorProfileTab() {
       </Grid>
 
       <Typography variant="h6" sx={{ mb: 2, color: "#1A3C6E" }}>
-        Perfil da Vítima
+        Quem sofre
       </Typography>
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid size={{ xs: 12, md: 4 }}>
           <HorizontalBarCard
-            title="Posto/Graduação da Vítima"
+            title="Posto/graduação"
             data={data.victimProfile.byRank}
             color="#0288D1"
           />
         </Grid>
         <Grid size={{ xs: 12, md: 4 }}>
           <HorizontalBarCard
-            title="Gênero da Vítima"
+            title="Gênero"
             data={data.victimProfile.byGender.map((d: any) => ({
               ...d,
               label: GENDER_LABELS[d.label] ?? d.label,
@@ -1798,7 +1785,7 @@ function AggressorProfileTab() {
         </Grid>
         <Grid size={{ xs: 12, md: 4 }}>
           <HorizontalBarCard
-            title="Faixa Etária da Vítima"
+            title="Faixa etária"
             data={data.victimProfile.byAgeRange}
             color="#2E7D32"
           />
@@ -1806,33 +1793,33 @@ function AggressorProfileTab() {
       </Grid>
 
       <Typography variant="h6" sx={{ mb: 2, color: "#1A3C6E" }}>
-        Contexto das Ocorrências
+        Como os casos acontecem
       </Typography>
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid size={{ xs: 12, md: 6 }}>
           <HorizontalBarCard
-            title="Tipo Detalhado de Violência"
+            title="Tipo detalhado"
             data={data.context.byViolenceType}
             color="#D32F2F"
           />
         </Grid>
         <Grid size={{ xs: 12, md: 6 }}>
           <HorizontalBarCard
-            title="Contexto do Assédio"
+            title="Contexto"
             data={data.context.byHarassmentContext}
             color="#7B1FA2"
           />
         </Grid>
         <Grid size={{ xs: 12, md: 4 }}>
           <HorizontalBarCard
-            title="Local de Ocorrência"
+            title="Local"
             data={data.context.byLocation}
             color="#4E342E"
           />
         </Grid>
         <Grid size={{ xs: 12, md: 4 }}>
           <HorizontalBarCard
-            title="Frequência da Violência"
+            title="Frequência"
             data={data.context.byFrequency}
             color="#ED6C02"
           />
@@ -2060,15 +2047,16 @@ function GeoMapTab() {
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid size={{ xs: 12, sm: 6, md: 4 }}>
           <KpiCard
-            title="OMs mapeadas"
+            title="OMs no mapa"
             value={omsCatalog.length}
+            subtitle="Base territorial pronta para cruzamento"
             color="#1A3C6E"
             onClick={() => setGeoKpiModal("mappedOms")}
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 4 }}>
           <KpiCard
-            title="OMs cobertas pela CPCA"
+            title="Cobertura CPCA"
             value={totalOmsCoveredByCpca}
             subtitle={totalOms
               ? `${((totalOmsCoveredByCpca / totalOms) * 100).toFixed(0)}% das OMs`
@@ -2079,8 +2067,9 @@ function GeoMapTab() {
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 4 }}>
           <KpiCard
-            title="Estados com sinal relevante"
+            title="Estados com pressão"
             value={statesWithData.length}
+            subtitle="Com denúncia, atividade ou missão"
             color="#ED6C02"
             onClick={() => setGeoKpiModal("statesWithData")}
           />
@@ -2106,10 +2095,10 @@ function GeoMapTab() {
           <Card variant="outlined">
             <CardContent>
               <Typography variant="subtitle2" gutterBottom>
-                Mapa do Brasil — Distribuição por Estado
+                Pressão por estado
               </Typography>
               <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: "block" }}>
-                Clique em um estado para ver detalhes. Intensidade do azul indica volume de dados.
+                Clique em um estado para abrir o resumo territorial. A intensidade do azul indica volume combinado.
               </Typography>
               <BrazilMap
                 stateData={stateDataMap}
@@ -2122,10 +2111,10 @@ function GeoMapTab() {
           <Card variant="outlined" sx={{ height: "100%" }}>
             <CardContent>
               <Typography variant="subtitle2" gutterBottom>
-                Ranking por Estado
+                Estados com maior pressão
               </Typography>
               <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: "block" }}>
-                Clique em qualquer barra para abrir o detalhamento do estado.
+                Cada barra soma denúncias, atividades e missões. Clique para abrir o estado.
               </Typography>
               {chartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={400}>
@@ -2177,7 +2166,7 @@ function GeoMapTab() {
         <Card variant="outlined">
           <CardContent>
             <Typography variant="subtitle2" gutterBottom>
-              Tabela Detalhada por Estado
+              Resumo por estado
             </Typography>
             <TableContainer>
               <Table size="small">
@@ -2223,13 +2212,13 @@ function GeoMapTab() {
       {localityDistribution.length > 0 && (
         <Box sx={{ mt: 3 }}>
           <Typography variant="h6" sx={{ mb: 1.2, color: "#1A3C6E" }}>
-            Distribuição por OM / Localidade
+            OMs com maior concentração
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            A leitura territorial dos casos fica concentrada nesta aba. Assim, o Perfil de Assédio passa a focar apenas no perfil das pessoas e no contexto das ocorrências.
+            A leitura territorial dos casos fica concentrada nesta aba. Assim, o Perfil de Assédio passa a focar pessoas e contexto, sem duplicar a visão de território.
           </Typography>
           <HorizontalBarCard
-            title="Casos por OM / Localidade"
+            title="Casos por OM / localidade"
             data={localityDistribution}
             maxItems={15}
             height={520}
@@ -2699,8 +2688,7 @@ export function StrategicDashboardPage() {
             Painel Estratégico
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Visão consolidada para prevenção e combate ao assédio e violência
-            doméstica
+            Leitura executiva para decidir onde agir, por quê e com qual capacidade de resposta.
           </Typography>
         </Box>
         <Stack
@@ -2715,7 +2703,7 @@ export function StrategicDashboardPage() {
             to="/ai?tab=analyses"
             sx={{ borderColor: "#1A3C6E", color: "#1A3C6E" }}
           >
-            IA e insights textuais
+            IA para explicar ou agir
           </Button>
           <Button
             variant="contained"
@@ -2746,19 +2734,19 @@ export function StrategicDashboardPage() {
           sx={{ textTransform: "none" }}
         />
         <Tab
-          label="Perfil de Assédio"
+          label="Perfil dos Casos"
           icon={<FingerprintRoundedIcon />}
           iconPosition="start"
           sx={{ textTransform: "none" }}
         />
         <Tab
-          label="Mapa Geográfico"
+          label="Território"
           icon={<MapRoundedIcon />}
           iconPosition="start"
           sx={{ textTransform: "none" }}
         />
         <Tab
-          label="Sala COMGEP"
+          label="Prioridades COMGEP"
           icon={<ShieldRoundedIcon />}
           iconPosition="start"
           sx={{ textTransform: "none" }}

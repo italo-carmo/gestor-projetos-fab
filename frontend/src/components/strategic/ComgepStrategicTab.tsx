@@ -422,13 +422,12 @@ export function ComgepStrategicTab() {
         >
           <Box>
             <Typography variant="subtitle1" fontWeight={800}>
-              Sala COMGEP consolidada no Painel Estratégico
+              Priorização executiva COMGEP
             </Typography>
             <Typography variant="body2" sx={{ mt: 0.5, lineHeight: 1.65 }}>
-              Este recorte mostra apenas a priorização executiva: UFs críticas,
-              OMs de maior risco, risco de retaliação, atraso de tratamento e
-              confiança do dado. Os aprofundamentos textuais e a geração de
-              recomendações ficaram centralizados na Inteligência Artificial.
+              Este recorte mostra só o que muda decisão: UFs críticas, OMs que puxam o risco,
+              retaliação, passivo acima do prazo e confiança mínima para cruzar os dados.
+              Explicações mais longas e transformação em ação ficam na IA.
             </Typography>
           </Box>
           <Button
@@ -450,9 +449,9 @@ export function ComgepStrategicTab() {
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 6, xl: 3 }}>
           <SummaryCard
-            title="Risco de retaliação"
+            title="Retaliação"
             value={retaliationCount}
-            subtitle="Casos abertos com indicação de retaliação ou risco de retaliação à vítima."
+            subtitle="Casos abertos com risco atual para a vítima."
             color="#D32F2F"
             icon={<WarningAmberRoundedIcon />}
             onClick={() => setDetailModal("retaliation")}
@@ -460,9 +459,9 @@ export function ComgepStrategicTab() {
         </Grid>
         <Grid size={{ xs: 12, md: 6, xl: 3 }}>
           <SummaryCard
-            title="Casos além do prazo"
+            title="Passivo > 30 dias"
             value={stalledCount}
-            subtitle="Denúncias abertas há mais de 30 dias, com potencial de desgaste institucional."
+            subtitle="Casos abertos com atraso relevante de tratamento."
             color="#ED6C02"
             icon={<ShieldRoundedIcon />}
             onClick={() => setDetailModal("stalled")}
@@ -470,9 +469,9 @@ export function ComgepStrategicTab() {
         </Grid>
         <Grid size={{ xs: 12, md: 6, xl: 3 }}>
           <SummaryCard
-            title="UFs prioritárias"
+            title="UFs críticas"
             value={summary.criticalUfCount ?? 0}
-            subtitle="UFs em faixa crítica, com risco alto e governança ou presença insuficientes."
+            subtitle="Estados que pedem atuação prioritária agora."
             color="#ED6C02"
             icon={<TrendingUpRoundedIcon />}
             onClick={() => setDetailModal("criticalUfs")}
@@ -480,9 +479,9 @@ export function ComgepStrategicTab() {
         </Grid>
         <Grid size={{ xs: 12, md: 6, xl: 3 }}>
           <SummaryCard
-            title="Confiança do dado"
+            title="Base normalizada"
             value={`${confidencePercent.toFixed(1)}%`}
-            subtitle="Percentual da base BI já normalizado por OM ou UF para cruzamento executivo."
+            subtitle="Qualidade mínima da base para cruzamento executivo."
             color="#2E7D32"
             icon={<HubRoundedIcon />}
             onClick={() => setDetailModal("confidence")}
@@ -491,20 +490,20 @@ export function ComgepStrategicTab() {
       </Grid>
 
       <SectionCard
-        title="UFs com atuação prioritária"
-        subtitle="Panorama executivo por UF, cruzando pesquisas normalizadas, denúncias formais, cobertura CPCA, subnotificação estimada e presença operacional. Clique para detalhar."
+        title="Onde atuar agora"
+        subtitle="UFs que concentram risco, formalização insuficiente ou resposta abaixo do necessário. Clique para detalhar."
       >
         <TableContainer>
           <Table size="small">
             <TableHead>
               <TableRow>
                 <TableCell><strong>UF</strong></TableCell>
-                <TableCell><strong>Faixa</strong></TableCell>
-                <TableCell><strong>Sinais de pesquisa</strong></TableCell>
-                <TableCell align="right"><strong>Formais</strong></TableCell>
-                <TableCell align="right"><strong>Subnotificação</strong></TableCell>
+                <TableCell><strong>Prioridade</strong></TableCell>
+                <TableCell><strong>Sinais</strong></TableCell>
+                <TableCell align="right"><strong>Casos</strong></TableCell>
+                <TableCell align="right"><strong>Subnotif.</strong></TableCell>
                 <TableCell align="right"><strong>Presença</strong></TableCell>
-                <TableCell><strong>Ação imediata</strong></TableCell>
+                <TableCell><strong>Foco</strong></TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -560,8 +559,8 @@ export function ComgepStrategicTab() {
       </SectionCard>
 
       <SectionCard
-        title="OMs de maior risco"
-        subtitle="Ranking de OMs com maior urgência de atuação, combinando assédio moral/sexual nas pesquisas, violência doméstica em 12 meses, formalização, subnotificação estimada e governança CPCA. Clique para detalhar."
+        title="OMs que puxam o risco"
+        subtitle="OMs que mais explicam a priorização nacional. Clique para detalhar."
       >
         <TableContainer>
           <Table size="small">
@@ -570,10 +569,10 @@ export function ComgepStrategicTab() {
                 <TableCell><strong>OM</strong></TableCell>
                 <TableCell><strong>UF</strong></TableCell>
                 <TableCell align="right"><strong>Score</strong></TableCell>
-                <TableCell><strong>Sinais de pesquisa</strong></TableCell>
-                <TableCell align="right"><strong>Formais</strong></TableCell>
-                <TableCell align="right"><strong>Subnotificação</strong></TableCell>
-                <TableCell><strong>Ação imediata</strong></TableCell>
+                <TableCell><strong>Sinais</strong></TableCell>
+                <TableCell align="right"><strong>Casos</strong></TableCell>
+                <TableCell align="right"><strong>Subnotif.</strong></TableCell>
+                <TableCell><strong>Foco</strong></TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
