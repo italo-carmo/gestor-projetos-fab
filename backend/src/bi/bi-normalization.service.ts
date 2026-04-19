@@ -1,6 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { type Prisma } from '@prisma/client';
-import { normalizeFabOm } from '../catalog/om-resolver';
+import {
+  buildFabOmCandidateSet,
+  buildFabOmRowAliasSet,
+  normalizeFabOm,
+} from '../catalog/om-resolver';
 import { LitellmService } from '../llm/litellm.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -74,6 +78,7 @@ type OmCatalogItem = {
   uf: string | null;
   codeKey: string;
   nameKey: string;
+  aliasKeys: string[];
 };
 
 type LocalityCatalogItem = {
@@ -195,6 +200,70 @@ type ApplyNormalizationParams = {
   omId?: string | null;
 };
 
+export type BiImportNormalizationFieldKind = 'OM' | 'SPECIALTY';
+
+export type BiImportNormalizationInputField = {
+  fieldKey: string;
+  fieldLabel: string;
+  kind: BiImportNormalizationFieldKind;
+  value?: string | null;
+};
+
+export type BiImportNormalizationInputRow = {
+  rowNumber: number;
+  fields: BiImportNormalizationInputField[];
+};
+
+export type BiImportNormalizationSuggestion = {
+  id: string;
+  sourceType: BiNormalizationSourceTypeValue;
+  fieldKey: string;
+  fieldLabel: string;
+  kind: BiImportNormalizationFieldKind;
+  originalValue: string;
+  suggestedValue: string;
+  confidence: number | null;
+  resolutionMethod: string | null;
+  reasoning: string | null;
+  rowCount: number;
+  sampleRows: number[];
+};
+
+export type BiImportNormalizationUnresolved = {
+  id: string;
+  sourceType: BiNormalizationSourceTypeValue;
+  fieldKey: string;
+  fieldLabel: string;
+  kind: Extract<BiImportNormalizationFieldKind, 'OM'>;
+  originalValue: string;
+  resolutionMethod: string | null;
+  reasoning: string | null;
+  rowCount: number;
+  sampleRows: number[];
+};
+
+export type BiImportNormalizationPreview = {
+  sourceType: BiNormalizationSourceTypeValue;
+  totalRows: number;
+  suggestions: BiImportNormalizationSuggestion[];
+  unresolved: BiImportNormalizationUnresolved[];
+  summary: {
+    suggestionCount: number;
+    unresolvedCount: number;
+    omSuggestionCount: number;
+    specialtySuggestionCount: number;
+  };
+};
+
+export type BiImportNormalizationDecision = {
+  id: string;
+  apply: boolean;
+};
+
+export type BiImportNormalizationPlan = {
+  decisions?: BiImportNormalizationDecision[];
+};
+
 const SOURCE_CONFIGS: SourceConfig[] = [
   {
     sourceType: BI_NORMALIZATION_SOURCE_TYPES.SURVEY_SCHOOLS,
@@ -272,6 +341,50 @@ function normalizeDisplayText(value: string | null | undefined) {
   return String(value ?? '').trim();
 }
 
+function collapseImportWhitespace(value: string | null | undefined) {
+  return normalizeDisplayText(value).replace(/\s+/g, ' ').trim();
+}
+
+function normalizeSpecialtyKey(value: string | null | undefined) {
+  return collapseImportWhitespace(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Za-z0-9/]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase();
+}
+
+function formatSpecialtyToken(value: string) {
+  const token = String(value ?? '').trim();
+  if (!token) return '';
+  const normalized = token
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase();
+  if (/^(?:GSD|CPCA|TI|OM|FAB|RH|TI|TI\/RH|SMS|S1|S2|S3|S4)$/.test(normalized)) {
+    return normalized;
+  }
+  if (/^(?:I|II|III|IV|V|VI|VII|VIII|IX|X|XI|XII)$/.test(normalized)) {
+    return normalized;
+  }
+  return token.charAt(0).toUpperCase() + token.slice(1).toLowerCase();
+}
+
+function buildCanonicalSpecialtyValue(value: string | null | undefined) {
+  return collapseImportWhitespace(value)
+    .split(' ')
+    .filter(Boolean)
+    .map((chunk) =>
+      chunk
+        .split('/')
+        .map((part) => formatSpecialtyToken(part))
+        .join('/'),
+    )
+    .join(' ')
+    .trim();
+}
+
 function normalizeUfCode(value: string | null | undefined) {
   const raw = normalizeFabOm(value);
   if (UF_CODES.has(raw)) return raw;
@@ -312,32 +425,40 @@ function computeOmScore(
   rowCode: string,
   rowName: string,
   candidateKey: string,
+  rowAliases: string[] = [],
 ) {
+  const rowKeys = [rowCode, rowName, ...rowAliases].filter(Boolean);
   let score = -1;
-  if (rowCode && rowCode === candidateKey)
-    score = Math.max(score, 2000 + rowCode.length);
-  if (rowName && rowName === candidateKey)
-    score = Math.max(score, 1700 + rowName.length);
-  if (rowCode && rowCode.length >= 3 && candidateKey.includes(rowCode)) {
-    score = Math.max(score, 1400 + rowCode.length);
-  }
-  if (rowCode && candidateKey.length >= 3 && rowCode.includes(candidateKey)) {
-    score = Math.max(score, 1350 + candidateKey.length);
-  }
-  if (rowName && rowName.length >= 5 && candidateKey.includes(rowName)) {
-    score = Math.max(score, 1200 + rowName.length);
-  }
-  if (
-    rowCode &&
-    candidateKey &&
-    rowCode.length >= 4 &&
-    candidateKey.length >= 4 &&
-    (rowCode.endsWith(candidateKey) || candidateKey.endsWith(rowCode))
-  ) {
-    score = Math.max(
-      score,
-      1000 + Math.min(rowCode.length, candidateKey.length),
-    );
+  for (const rowKey of rowKeys) {
+    if (rowKey === candidateKey) {
+      const exactBonus =
+        rowKey === rowCode ? 2000 : rowKey === rowName ? 1700 : 1600;
+      score = Math.max(score, exactBonus + rowKey.length);
+    }
+    if (rowKey.length >= 4 && candidateKey.includes(rowKey)) {
+      const containsBonus =
+        rowKey === rowCode ? 1400 : rowKey === rowName ? 1200 : 1150;
+      score = Math.max(score, containsBonus + rowKey.length);
+    }
+    if (candidateKey.length >= 4 && rowKey.includes(candidateKey)) {
+      const inverseBonus =
+        rowKey === rowCode ? 1350 : rowKey === rowName ? 1180 : 1120;
+      score = Math.max(score, inverseBonus + candidateKey.length);
+    }
+    if (
+      rowKey &&
+      candidateKey &&
+      rowKey.length >= 5 &&
+      candidateKey.length >= 5 &&
+      (rowKey.endsWith(candidateKey) || candidateKey.endsWith(rowKey))
+    ) {
+      const suffixBonus =
+        rowKey === rowCode ? 1000 : rowKey === rowName ? 920 : 900;
+      score = Math.max(
+        score,
+        suffixBonus + Math.min(rowKey.length, candidateKey.length),
+      );
+    }
   }
   return score;
 }
@@ -385,6 +506,230 @@ export class BiNormalizationService {
     private readonly prisma: PrismaService,
     private readonly litellm?: LitellmService,
   ) {}
+
+  async previewImportRows(params: {
+    sourceType: BiNormalizationSourceTypeValue;
+    rows: BiImportNormalizationInputRow[];
+  }): Promise<BiImportNormalizationPreview> {
+    const omCatalog = await this.loadOmCatalog();
+    const omSuggestionCache = new Map<string, Promise<SuggestedResolution>>();
+    const suggestions = new Map<string, BiImportNormalizationSuggestion>();
+    const unresolved = new Map<string, BiImportNormalizationUnresolved>();
+    const specialtyVariants = new Map<
+      string,
+      {
+        fieldKey: string;
+        fieldLabel: string;
+        variants: Map<string, { count: number; sampleRows: number[] }>;
+      }
+    >();
+
+    for (const row of params.rows) {
+      for (const field of row.fields ?? []) {
+        const fieldValue = collapseImportWhitespace(field.value);
+        if (!fieldValue) continue;
+
+        if (field.kind === 'OM') {
+          const suggestion = await this.resolveOmSuggestionCached(
+            fieldValue,
+            omCatalog,
+            omSuggestionCache,
+          );
+          if (
+            suggestion.status === BI_NORMALIZATION_STATUSES.MATCHED &&
+            suggestion.om
+          ) {
+            const suggestedValue = String(suggestion.om.code ?? '').trim();
+            if (!suggestedValue || suggestedValue === fieldValue) continue;
+            const id = `${field.kind}:${field.fieldKey}:${encodeURIComponent(
+              fieldValue,
+            )}`;
+            const existing = suggestions.get(id);
+            suggestions.set(id, {
+              id,
+              sourceType: params.sourceType,
+              fieldKey: field.fieldKey,
+              fieldLabel: field.fieldLabel,
+              kind: field.kind,
+              originalValue: fieldValue,
+              suggestedValue,
+              confidence: suggestion.confidence ?? null,
+              resolutionMethod: suggestion.resolutionMethod ?? null,
+              reasoning: suggestion.reasoning ?? null,
+              rowCount: (existing?.rowCount ?? 0) + 1,
+              sampleRows: this.pushSampleRow(existing?.sampleRows, row.rowNumber),
+            });
+            continue;
+          }
+
+          const unresolvedId = `${field.kind}:${field.fieldKey}:${encodeURIComponent(
+            fieldValue,
+          )}`;
+          const existing = unresolved.get(unresolvedId);
+          unresolved.set(unresolvedId, {
+            id: unresolvedId,
+            sourceType: params.sourceType,
+            fieldKey: field.fieldKey,
+            fieldLabel: field.fieldLabel,
+            kind: 'OM',
+            originalValue: fieldValue,
+            resolutionMethod: suggestion.resolutionMethod ?? null,
+            reasoning: suggestion.reasoning ?? null,
+            rowCount: (existing?.rowCount ?? 0) + 1,
+            sampleRows: this.pushSampleRow(existing?.sampleRows, row.rowNumber),
+          });
+          continue;
+        }
+
+        const specialtyKey = `${field.fieldKey}:${normalizeSpecialtyKey(fieldValue)}`;
+        const bucket = specialtyVariants.get(specialtyKey) ?? {
+          fieldKey: field.fieldKey,
+          fieldLabel: field.fieldLabel,
+          variants: new Map<string, { count: number; sampleRows: number[] }>(),
+        };
+        const currentVariant = bucket.variants.get(fieldValue);
+        bucket.variants.set(fieldValue, {
+          count: (currentVariant?.count ?? 0) + 1,
+          sampleRows: this.pushSampleRow(currentVariant?.sampleRows, row.rowNumber),
+        });
+        specialtyVariants.set(specialtyKey, bucket);
+      }
+    }
+
+    for (const [bucketKey, bucket] of specialtyVariants.entries()) {
+      const normalizedKey = bucketKey.split(':').slice(1).join(':');
+      if (!normalizedKey) continue;
+      const variants = Array.from(bucket.variants.entries()).map(
+        ([value, meta]) => ({
+          value,
+          count: meta.count,
+          sampleRows: meta.sampleRows,
+        }),
+      );
+      const canonical = this.chooseCanonicalSpecialtyValue(variants);
+      if (!canonical) continue;
+
+      for (const variant of variants) {
+        const currentValue = collapseImportWhitespace(variant.value);
+        if (!currentValue || currentValue === canonical) continue;
+        const id = `SPECIALTY:${bucket.fieldKey}:${encodeURIComponent(
+          currentValue,
+        )}`;
+        suggestions.set(id, {
+          id,
+          sourceType: params.sourceType,
+          fieldKey: bucket.fieldKey,
+          fieldLabel: bucket.fieldLabel,
+          kind: 'SPECIALTY',
+          originalValue: currentValue,
+          suggestedValue: canonical,
+          confidence: 1,
+          resolutionMethod: 'CASE_SPACE_NORMALIZATION',
+          reasoning:
+            'Padronização conservadora de caixa e espaços, sem alterar o significado informado.',
+          rowCount: variant.count,
+          sampleRows: variant.sampleRows,
+        });
+      }
+    }
+
+    const suggestionList = Array.from(suggestions.values()).sort((a, b) => {
+      if (a.kind !== b.kind) return a.kind.localeCompare(b.kind, 'pt-BR');
+      if (a.fieldLabel !== b.fieldLabel)
+        return a.fieldLabel.localeCompare(b.fieldLabel, 'pt-BR');
+      return (
+        b.rowCount - a.rowCount ||
+        a.originalValue.localeCompare(b.originalValue, 'pt-BR')
+      );
+    });
+
+    const unresolvedList = Array.from(unresolved.values()).sort(
+      (a, b) =>
+        b.rowCount - a.rowCount ||
+        a.fieldLabel.localeCompare(b.fieldLabel, 'pt-BR') ||
+        a.originalValue.localeCompare(b.originalValue, 'pt-BR'),
+    );
+
+    return {
+      sourceType: params.sourceType,
+      totalRows: params.rows.length,
+      suggestions: suggestionList,
+      unresolved: unresolvedList,
+      summary: {
+        suggestionCount: suggestionList.length,
+        unresolvedCount: unresolvedList.length,
+        omSuggestionCount: suggestionList.filter((item) => item.kind === 'OM')
+          .length,
+        specialtySuggestionCount: suggestionList.filter(
+          (item) => item.kind === 'SPECIALTY',
+        ).length,
+      },
+    };
+  }
+
+  applyImportNormalization<T extends Record<string, any>>(
+    rows: T[],
+    preview: BiImportNormalizationPreview | null | undefined,
+    plan?: BiImportNormalizationPlan | null,
+  ) {
+    const acceptedIds = new Set(
+      (plan?.decisions ?? [])
+        .filter((item) => item?.apply)
+        .map((item) => String(item.id ?? '').trim())
+        .filter(Boolean),
+    );
+
+    if (!preview || acceptedIds.size === 0) {
+      return {
+        rows,
+        appliedSuggestions: 0,
+        updatedFields: 0,
+      };
+    }
+
+    const suggestionMap = new Map<
+      string,
+      { fieldKey: string; originalValue: string; suggestedValue: string }
+    >();
+    for (const suggestion of preview.suggestions) {
+      if (!acceptedIds.has(suggestion.id)) continue;
+      suggestionMap.set(suggestion.id, {
+        fieldKey: suggestion.fieldKey,
+        originalValue: suggestion.originalValue,
+        suggestedValue: suggestion.suggestedValue,
+      });
+    }
+
+    if (suggestionMap.size === 0) {
+      return {
+        rows,
+        appliedSuggestions: 0,
+        updatedFields: 0,
+      };
+    }
+
+    let updatedFields = 0;
+    const nextRows = rows.map((row) => {
+      let changed = false;
+      const nextRow: Record<string, any> = { ...row };
+      for (const suggestion of suggestionMap.values()) {
+        const currentValue = collapseImportWhitespace(
+          nextRow[suggestion.fieldKey] as string | null | undefined,
+        );
+        if (currentValue !== suggestion.originalValue) continue;
+        nextRow[suggestion.fieldKey] = suggestion.suggestedValue;
+        updatedFields += 1;
+        changed = true;
+      }
+      return changed ? (nextRow as T) : row;
+    });
+
+    return {
+      rows: nextRows,
+      appliedSuggestions: suggestionMap.size,
+      updatedFields,
+    };
+  }
 
   async overview() {
     const [sourceSummaries, latestUpdate] = await Promise.all([
@@ -1451,7 +1796,7 @@ export class BiNormalizationService {
     const normalized = normalizeDisplayText(reference);
     if (!normalized) return null;
 
-    const candidateKeys = Array.from(this.buildCandidateSet(normalized))
+    const candidateKeys = Array.from(buildFabOmCandidateSet(normalized))
       .map((candidate) => normalizeKey(candidate))
       .filter(Boolean);
     if (candidateKeys.length === 0) return null;
@@ -1461,6 +1806,8 @@ export class BiNormalizationService {
       if (exactCode) return exactCode;
       const exactName = catalog.find((row) => row.nameKey === candidateKey);
       if (exactName) return exactName;
+      const exactAlias = catalog.find((row) => row.aliasKeys.includes(candidateKey));
+      if (exactAlias) return exactAlias;
     }
 
     return null;
@@ -1470,7 +1817,7 @@ export class BiNormalizationService {
     const normalized = normalizeDisplayText(reference);
     if (!normalized) return [] as Array<{ row: OmCatalogItem; score: number }>;
 
-    const candidateKeys = Array.from(this.buildCandidateSet(normalized))
+    const candidateKeys = Array.from(buildFabOmCandidateSet(normalized))
       .map((candidate) => normalizeKey(candidate))
       .filter(Boolean);
     if (candidateKeys.length === 0) return [];
@@ -1479,7 +1826,12 @@ export class BiNormalizationService {
     for (const row of catalog) {
       let bestScore = -1;
       for (const candidateKey of candidateKeys) {
-        const score = computeOmScore(row.codeKey, row.nameKey, candidateKey);
+        const score = computeOmScore(
+          row.codeKey,
+          row.nameKey,
+          candidateKey,
+          row.aliasKeys,
+        );
         if (score > bestScore) bestScore = score;
       }
       if (bestScore < 0) continue;
@@ -1556,23 +1908,6 @@ export class BiNormalizationService {
       );
       return null;
     }
-  }
-
-  private buildCandidateSet(reference: string) {
-    const candidates = new Set<string>();
-    const push = (value: string | null | undefined) => {
-      const trimmed = normalizeDisplayText(value);
-      if (!trimmed) return;
-      candidates.add(trimmed);
-    };
-
-    push(reference);
-    for (const token of reference.split(/[\/|;,]+/)) push(token);
-    for (const token of reference.split(/\s+-\s+|-/)) push(token);
-    for (const token of reference.split(/\s+/)) {
-      if (token.length >= 3) push(token);
-    }
-    return candidates;
   }
 
   private extractJsonCandidate(
@@ -1739,6 +2074,34 @@ export class BiNormalizationService {
     }) as Prisma.PrismaPromise<any>;
   }
 
+  private pushSampleRow(
+    current: number[] | undefined,
+    rowNumber: number,
+    limit = 6,
+  ) {
+    const base = Array.isArray(current) ? [...current] : [];
+    if (!Number.isFinite(rowNumber) || base.includes(rowNumber)) return base;
+    base.push(rowNumber);
+    base.sort((a, b) => a - b);
+    return base.slice(0, limit);
+  }
+
+  private chooseCanonicalSpecialtyValue(
+    variants: Array<{ value: string; count: number }>,
+  ) {
+    if (!variants.length) return '';
+    const ranked = [...variants].sort(
+      (a, b) =>
+        b.count - a.count || a.value.localeCompare(b.value, 'pt-BR'),
+    );
+    const preferred = ranked.find(
+      (item) =>
+        collapseImportWhitespace(item.value) ===
+        buildCanonicalSpecialtyValue(item.value),
+    );
+    return buildCanonicalSpecialtyValue(preferred?.value ?? ranked[0]?.value ?? '');
+  }
+
   private async loadOmCatalog(): Promise<OmCatalogItem[]> {
     const items = await this.prisma.om.findMany({
       select: { id: true, code: true, name: true, uf: true },
@@ -1747,6 +2110,15 @@ export class BiNormalizationService {
       ...item,
       codeKey: normalizeKey(item.code),
       nameKey: normalizeKey(item.name),
+      aliasKeys: Array.from(buildFabOmRowAliasSet(item.code, item.name))
+        .map((candidate) => normalizeKey(candidate))
+        .filter(
+          (candidate, index, values) =>
+            Boolean(candidate) &&
+            candidate !== normalizeKey(item.code) &&
+            candidate !== normalizeKey(item.name) &&
+            values.indexOf(candidate) === index,
+        ),
     }));
   }
 

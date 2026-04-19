@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import type { RbacUser } from '../rbac/rbac.types';
 import {
   BI_NORMALIZATION_SOURCE_TYPES,
+  type BiImportNormalizationPlan,
   BiNormalizationService,
 } from './bi-normalization.service';
 
@@ -28,6 +29,8 @@ type SurveyFilters = {
 
 type ImportSurveyOptions = {
   replaceAll?: boolean;
+  previewOnly?: boolean;
+  normalizationPlan?: BiImportNormalizationPlan | null;
 };
 
 type SurveyCardSettingInput = {
@@ -163,6 +166,7 @@ export class BiService {
     const format =
       extension === 'csv' ? BiImportFormat.CSV : BiImportFormat.XLSX;
     const replaceAll = options.replaceAll === true;
+    const previewOnly = options.previewOnly === true;
     const { sheetName, rows, correlatedViolence } = this.extractRows(
       file.buffer,
       format,
@@ -189,6 +193,45 @@ export class BiService {
       parsed.push(parsedRow.value);
     }
 
+    const normalizationPreview = await this.normalization.previewImportRows({
+      sourceType: BI_NORMALIZATION_SOURCE_TYPES.SURVEY_SCHOOLS,
+      rows: parsed.map((item) => ({
+        rowNumber: item.sourceRow,
+        fields: [
+          {
+            fieldKey: 'om',
+            fieldLabel: 'OM',
+            kind: 'OM',
+            value: item.om,
+          },
+        ],
+      })),
+    });
+
+    if (previewOnly) {
+      return {
+        previewOnly: true,
+        importMode: replaceAll ? 'REPLACE' : 'APPEND',
+        normalization: normalizationPreview,
+        preview: parsed.slice(0, 5).map((item) => ({
+          submittedAt: item.submittedAt,
+          sufferedViolenceRaw: item.sufferedViolenceRaw,
+          violenceTypes: item.violenceTypes,
+          postoGraduacao: item.postoGraduacao,
+          om: item.om,
+          posto: item.posto,
+          autodeclara: item.autodeclara,
+        })),
+      };
+    }
+
+    const normalizedImport = this.normalization.applyImportNormalization(
+      parsed,
+      normalizationPreview,
+      options.normalizationPlan,
+    );
+    const rowsToInsert = normalizedImport.rows;
+
     if (replaceAll) {
       await this.prisma.$transaction([
         this.prisma.biSurveyResponse.deleteMany(),
@@ -201,7 +244,7 @@ export class BiService {
         fileName: file.originalname,
         format,
         sheetName,
-        totalRows: parsed.length,
+        totalRows: rowsToInsert.length,
         insertedRows: 0,
         duplicateRows: 0,
         invalidRows,
@@ -211,9 +254,9 @@ export class BiService {
 
     let insertedRows = 0;
 
-    if (parsed.length > 0) {
+    if (rowsToInsert.length > 0) {
       const created = await this.prisma.biSurveyResponse.createMany({
-        data: parsed.map((item) => ({
+        data: rowsToInsert.map((item) => ({
           batchId: batch.id,
           submittedAt: item.submittedAt,
           sufferedViolenceRaw: item.sufferedViolenceRaw,
@@ -233,7 +276,7 @@ export class BiService {
       insertedRows = created.count;
     }
 
-    const duplicateRows = parsed.length - insertedRows;
+    const duplicateRows = rowsToInsert.length - insertedRows;
 
     const updatedBatch = await this.prisma.biSurveyImportBatch.update({
       where: { id: batch.id },
@@ -254,7 +297,7 @@ export class BiService {
 
     return {
       batch: updatedBatch,
-      preview: parsed.slice(0, 5).map((item) => ({
+      preview: rowsToInsert.slice(0, 5).map((item) => ({
         submittedAt: item.submittedAt,
         sufferedViolenceRaw: item.sufferedViolenceRaw,
         violenceTypes: item.violenceTypes,
@@ -263,6 +306,11 @@ export class BiService {
         posto: item.posto,
         autodeclara: item.autodeclara,
       })),
+      normalization: {
+        suggestionsApplied: normalizedImport.appliedSuggestions,
+        updatedFields: normalizedImport.updatedFields,
+        unresolvedCount: normalizationPreview.summary.unresolvedCount,
+      },
       importMode: replaceAll ? 'REPLACE' : 'APPEND',
       correlatedViolence,
     };

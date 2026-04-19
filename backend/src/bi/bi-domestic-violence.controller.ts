@@ -25,8 +25,32 @@ import { RequirePermission } from '../rbac/require-permission.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
 import { hasAnyRole, ROLE_TI } from '../rbac/role-access';
 import type { RbacUser } from '../rbac/rbac.types';
+import { type BiImportNormalizationPlan } from './bi-normalization.service';
 import { BiPdfService } from './bi-pdf.service';
 import { BiDomesticViolenceService } from './bi-domestic-violence.service';
+
+function parseTruthyBodyFlag(value: string | undefined) {
+  return typeof value === 'string'
+    ? ['1', 'true', 'sim', 'yes'].includes(value.toLowerCase().trim())
+    : false;
+}
+
+function parseNormalizationPlan(
+  value: string | undefined,
+): BiImportNormalizationPlan | null {
+  const raw = String(value ?? '').trim();
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    return parsed as BiImportNormalizationPlan;
+  } catch {
+    throwError('VALIDATION_ERROR', {
+      field: 'normalizationPlan',
+      reason: 'INVALID_JSON',
+    });
+  }
+}
 
 @Controller('bi/domestic-violence')
 @UseGuards(JwtAuthGuard, RbacGuard)
@@ -272,6 +296,8 @@ export class BiDomesticViolenceController {
   importResponses(
     @UploadedFile() file: Express.Multer.File,
     @Body('replace') replace: string | undefined,
+    @Body('preview') preview: string | undefined,
+    @Body('normalizationPlan') normalizationPlan: string | undefined,
     @Req() req: Request & { fileValidationError?: string },
     @CurrentUser() user: RbacUser,
   ) {
@@ -282,13 +308,10 @@ export class BiDomesticViolenceController {
       throwError('VALIDATION_ERROR', { reason: 'FILE_REQUIRED' });
     }
 
-    const replaceAll =
-      typeof replace === 'string'
-        ? ['1', 'true', 'sim', 'yes'].includes(replace.toLowerCase().trim())
-        : false;
-
     return this.biDomesticViolence.importResponses(file, user, {
-      replaceAll,
+      replaceAll: parseTruthyBodyFlag(replace),
+      previewOnly: parseTruthyBodyFlag(preview),
+      normalizationPlan: parseNormalizationPlan(normalizationPlan),
     });
   }
 

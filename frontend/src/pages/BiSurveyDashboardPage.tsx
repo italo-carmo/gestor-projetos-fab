@@ -48,6 +48,7 @@ import {
   YAxis,
 } from "recharts";
 import {
+  type BiImportNormalizationPreview,
   useBiSurveyDashboard,
   useDeleteBiSurveyResponses,
   useBiSurveyImports,
@@ -56,6 +57,7 @@ import {
   useExportBiDashboardPdf,
   useExportBiExecutiveNotebookPdf,
   useImportBiSurvey,
+  usePreviewImportBiSurvey,
   useMe,
   useUpdateBiSurveyCardSetting,
 } from "../api/hooks";
@@ -66,6 +68,7 @@ import {
   BiExecutiveNotebookDialog,
   type BiExecutiveNotebookPayload,
 } from "../components/bi/BiExecutiveNotebookDialog";
+import { BiImportNormalizationReviewDialog } from "../components/bi/BiImportNormalizationReviewDialog";
 import { EmptyState } from "../components/states/EmptyState";
 import { ErrorState } from "../components/states/ErrorState";
 import { SkeletonState } from "../components/states/SkeletonState";
@@ -456,6 +459,11 @@ export function BiSurveyDashboardPage() {
   );
   const [notebookDialogOpen, setNotebookDialogOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
+  const [importPreview, setImportPreview] =
+    useState<BiImportNormalizationPreview | null>(null);
+  const [selectedNormalizationIds, setSelectedNormalizationIds] = useState<
+    string[]
+  >([]);
   const [page, setPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [deleteConfirmMode, setDeleteConfirmMode] =
@@ -577,6 +585,7 @@ export function BiSurveyDashboardPage() {
   );
   const importsQuery = useBiSurveyImports({ page: 1, pageSize: 6 });
   const importMutation = useImportBiSurvey();
+  const previewImportMutation = usePreviewImportBiSurvey();
   const deleteResponsesMutation = useDeleteBiSurveyResponses();
   const exportPdfMutation = useExportBiDashboardPdf(
     "/bi/surveys/dashboard/pdf",
@@ -623,11 +632,60 @@ export function BiSurveyDashboardPage() {
     }
 
     try {
-      const result = await importMutation.mutateAsync({ file, replace: true });
-      setFile(null);
-      const mentions = Number(result?.correlatedViolence?.mentionRows ?? 0);
+      const result = await previewImportMutation.mutateAsync({
+        file,
+        replace: true,
+      });
+      const preview = (result?.normalization ??
+        null) as BiImportNormalizationPreview | null;
+      if (!preview) {
+        throw new Error("A prévia de normalização não foi retornada.");
+      }
+      setImportPreview(preview);
+      setSelectedNormalizationIds(
+        (preview.suggestions ?? []).map((item) => item.id),
+      );
+    } catch (error) {
+      const payload = parseApiError(error);
       toast.push({
-        message: `Base substituída com sucesso. Inseridos: ${result?.batch?.insertedRows ?? 0}. Menções de violência: ${mentions}.`,
+        message: payload.message ?? "Falha ao importar arquivo.",
+        severity: "error",
+      });
+    }
+  };
+
+  const closeImportPreview = () => {
+    setImportPreview(null);
+    setSelectedNormalizationIds([]);
+  };
+
+  const confirmImport = async (applyNormalization: boolean) => {
+    if (!file) {
+      closeImportPreview();
+      return;
+    }
+
+    try {
+      const result = await importMutation.mutateAsync({
+        file,
+        replace: true,
+        normalizationPlan: applyNormalization
+          ? {
+              decisions: selectedNormalizationIds.map((id) => ({
+                id,
+                apply: true,
+              })),
+            }
+          : { decisions: [] },
+      });
+      setFile(null);
+      closeImportPreview();
+      const mentions = Number(result?.correlatedViolence?.mentionRows ?? 0);
+      const normalizedFields = Number(result?.normalization?.updatedFields ?? 0);
+      toast.push({
+        message:
+          `Base substituída com sucesso. Inseridos: ${result?.batch?.insertedRows ?? 0}. ` +
+          `Menções de violência: ${mentions}. Campos normalizados: ${normalizedFields}.`,
         severity: "success",
       });
     } catch (error) {
@@ -1188,7 +1246,7 @@ export function BiSurveyDashboardPage() {
               variant="contained"
               size="small"
               onClick={handleImport}
-              disabled={importMutation.isPending}
+              disabled={importMutation.isPending || previewImportMutation.isPending}
               sx={{
                 height: 40,
                 px: 2,
@@ -1198,9 +1256,11 @@ export function BiSurveyDashboardPage() {
                 "&:hover": { bgcolor: BI_PALETTE.primaryDark },
               }}
             >
-              {importMutation.isPending
-                ? "Importando..."
-                : "Substituir base no banco"}
+              {previewImportMutation.isPending
+                ? "Analisando..."
+                : importMutation.isPending
+                  ? "Importando..."
+                  : "Substituir base no banco"}
             </Button>
             <Box sx={{ ml: { lg: "auto" } }}>
               <Typography variant="caption" sx={{ color: BI_PALETTE.muted }}>
@@ -2588,6 +2648,24 @@ export function BiSurveyDashboardPage() {
         accentColor={BI_PALETTE.primary}
         currentPanelKey="surveys"
         currentPanelFilters={dashboardFilters}
+      />
+
+      <BiImportNormalizationReviewDialog
+        open={Boolean(importPreview)}
+        title="Revisar normalização antes da importação"
+        preview={importPreview}
+        selectedIds={selectedNormalizationIds}
+        onToggle={(id, checked) =>
+          setSelectedNormalizationIds((prev) =>
+            checked
+              ? [...new Set([...prev, id])]
+              : prev.filter((item) => item !== id),
+          )
+        }
+        onClose={closeImportPreview}
+        onConfirm={() => void confirmImport(true)}
+        onImportWithoutNormalization={() => void confirmImport(false)}
+        confirmLoading={importMutation.isPending}
       />
 
       <ConfirmDialog

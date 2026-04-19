@@ -52,10 +52,12 @@ import {
   YAxis,
 } from "recharts";
 import {
+  type BiImportNormalizationPreview,
   useBiDomesticViolenceDashboard,
   useBiDomesticViolenceResponses,
   useBiDomesticViolenceImports,
   useImportBiDomesticViolence,
+  usePreviewImportBiDomesticViolence,
   useDeleteBiDomesticViolenceResponses,
   useExportBiDashboardPdf,
   useExportBiExecutiveNotebookPdf,
@@ -70,6 +72,7 @@ import {
   BiExecutiveNotebookDialog,
   type BiExecutiveNotebookPayload,
 } from "../components/bi/BiExecutiveNotebookDialog";
+import { BiImportNormalizationReviewDialog } from "../components/bi/BiImportNormalizationReviewDialog";
 import { ErrorState } from "../components/states/ErrorState";
 import { SkeletonState } from "../components/states/SkeletonState";
 import { ConfirmDialog } from "../components/dialogs/ConfirmDialog";
@@ -567,6 +570,11 @@ export function BiDomesticViolenceDashboardPage() {
   );
   const [notebookDialogOpen, setNotebookDialogOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
+  const [importPreview, setImportPreview] =
+    useState<BiImportNormalizationPreview | null>(null);
+  const [selectedNormalizationIds, setSelectedNormalizationIds] = useState<
+    string[]
+  >([]);
   const [replaceOnImport, setReplaceOnImport] = useState(true);
   const [page, setPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -655,6 +663,7 @@ export function BiDomesticViolenceDashboardPage() {
   });
   const importsQuery = useBiDomesticViolenceImports({ page: 1, pageSize: 8 });
   const importMutation = useImportBiDomesticViolence();
+  const previewImportMutation = usePreviewImportBiDomesticViolence();
   const deleteResponsesMutation = useDeleteBiDomesticViolenceResponses();
   const exportPdfMutation = useExportBiDashboardPdf(
     "/bi/domestic-violence/dashboard/pdf",
@@ -938,15 +947,59 @@ export function BiDomesticViolenceDashboardPage() {
     }
 
     try {
-      const result = await importMutation.mutateAsync({
+      const result = await previewImportMutation.mutateAsync({
         file,
         replace: replaceOnImport,
       });
+      const preview = (result?.normalization ??
+        null) as BiImportNormalizationPreview | null;
+      if (!preview) {
+        throw new Error("A prévia de normalização não foi retornada.");
+      }
+      setImportPreview(preview);
+      setSelectedNormalizationIds(
+        (preview.suggestions ?? []).map((item) => item.id),
+      );
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({
+        message: payload.message ?? "Falha ao importar o arquivo.",
+        severity: "error",
+      });
+    }
+  };
+
+  const closeImportPreview = () => {
+    setImportPreview(null);
+    setSelectedNormalizationIds([]);
+  };
+
+  const confirmImport = async (applyNormalization: boolean) => {
+    if (!file) {
+      closeImportPreview();
+      return;
+    }
+
+    try {
+      const result = await importMutation.mutateAsync({
+        file,
+        replace: replaceOnImport,
+        normalizationPlan: applyNormalization
+          ? {
+              decisions: selectedNormalizationIds.map((id) => ({
+                id,
+                apply: true,
+              })),
+            }
+          : { decisions: [] },
+      });
       setFile(null);
+      closeImportPreview();
       toast.push({
         message:
           `Importação concluída. Inseridos: ${result?.batch?.insertedRows ?? 0}. ` +
-          `Duplicados: ${result?.batch?.duplicateRows ?? 0}. Inválidos: ${result?.batch?.invalidRows ?? 0}.`,
+          `Duplicados: ${result?.batch?.duplicateRows ?? 0}. Inválidos: ${result?.batch?.invalidRows ?? 0}. ` +
+          `Campos normalizados: ${Number(result?.normalization?.updatedFields ?? 0)}.`,
         severity: "success",
       });
     } catch (error) {
@@ -1308,13 +1361,22 @@ export function BiDomesticViolenceDashboardPage() {
                     size="small"
                     variant="contained"
                     onClick={handleImport}
-                    disabled={!canUpload || !file || importMutation.isPending}
+                    disabled={
+                      !canUpload ||
+                      !file ||
+                      importMutation.isPending ||
+                      previewImportMutation.isPending
+                    }
                     sx={{
                       bgcolor: DV_PALETTE.accent,
                       "&:hover": { bgcolor: "#CA3325" },
                     }}
                   >
-                    {importMutation.isPending ? "Importando..." : "Importar"}
+                    {previewImportMutation.isPending
+                      ? "Analisando..."
+                      : importMutation.isPending
+                        ? "Importando..."
+                        : "Importar"}
                   </Button>
                 </Stack>
               </Stack>
@@ -3725,6 +3787,24 @@ export function BiDomesticViolenceDashboardPage() {
         accentColor={DV_PALETTE.primary}
         currentPanelKey="domestic-violence"
         currentPanelFilters={dashboardFilters}
+      />
+
+      <BiImportNormalizationReviewDialog
+        open={Boolean(importPreview)}
+        title="Revisar normalização antes da importação"
+        preview={importPreview}
+        selectedIds={selectedNormalizationIds}
+        onToggle={(id, checked) =>
+          setSelectedNormalizationIds((prev) =>
+            checked
+              ? [...new Set([...prev, id])]
+              : prev.filter((item) => item !== id),
+          )
+        }
+        onClose={closeImportPreview}
+        onConfirm={() => void confirmImport(true)}
+        onImportWithoutNormalization={() => void confirmImport(false)}
+        confirmLoading={importMutation.isPending}
       />
 
       <ConfirmDialog

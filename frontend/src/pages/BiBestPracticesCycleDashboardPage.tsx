@@ -49,6 +49,7 @@ import {
   YAxis,
 } from "recharts";
 import {
+  type BiImportNormalizationPreview,
   useBiBestPracticesCycleDashboard,
   useBiBestPracticesCycleImports,
   useBiBestPracticesCycleResponses,
@@ -56,6 +57,7 @@ import {
   useExportBiDashboardPdf,
   useExportBiExecutiveNotebookPdf,
   useImportBiBestPracticesCycle,
+  usePreviewImportBiBestPracticesCycle,
   useMe,
   useUpdateBiBestPracticesCycleCardSetting,
 } from "../api/hooks";
@@ -67,6 +69,7 @@ import {
   BiExecutiveNotebookDialog,
   type BiExecutiveNotebookPayload,
 } from "../components/bi/BiExecutiveNotebookDialog";
+import { BiImportNormalizationReviewDialog } from "../components/bi/BiImportNormalizationReviewDialog";
 import { ConfirmDialog } from "../components/dialogs/ConfirmDialog";
 import { ErrorState } from "../components/states/ErrorState";
 import { SkeletonState } from "../components/states/SkeletonState";
@@ -516,6 +519,11 @@ export function BiBestPracticesCycleDashboardPage() {
   const [notebookDialogOpen, setNotebookDialogOpen] = useState(false);
   const [replaceOnImport, setReplaceOnImport] = useState(true);
   const [file, setFile] = useState<File | null>(null);
+  const [importPreview, setImportPreview] =
+    useState<BiImportNormalizationPreview | null>(null);
+  const [selectedNormalizationIds, setSelectedNormalizationIds] = useState<
+    string[]
+  >([]);
   const [page, setPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [deleteConfirmMode, setDeleteConfirmMode] =
@@ -570,6 +578,7 @@ export function BiBestPracticesCycleDashboardPage() {
   const importsQuery = useBiBestPracticesCycleImports({ page: 1, pageSize: 8 });
 
   const importMutation = useImportBiBestPracticesCycle();
+  const previewImportMutation = usePreviewImportBiBestPracticesCycle();
   const deleteResponsesMutation = useDeleteBiBestPracticesCycleResponses();
   const exportPdfMutation = useExportBiDashboardPdf(
     "/bi/best-practices-cycle/dashboard/pdf",
@@ -728,18 +737,60 @@ export function BiBestPracticesCycleDashboardPage() {
     }
 
     try {
-      const result = await importMutation.mutateAsync({
+      const result = await previewImportMutation.mutateAsync({
         file,
         replace: replaceOnImport,
       });
+      const preview = (result?.normalization ??
+        null) as BiImportNormalizationPreview | null;
+      if (!preview) {
+        throw new Error("A prévia de normalização não foi retornada.");
+      }
+      setImportPreview(preview);
+      setSelectedNormalizationIds(
+        (preview.suggestions ?? []).map((item) => item.id),
+      );
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({
+        message: payload.message ?? "Falha ao importar arquivo.",
+        severity: "error",
+      });
+    }
+  };
+
+  const closeImportPreview = () => {
+    setImportPreview(null);
+    setSelectedNormalizationIds([]);
+  };
+
+  const confirmImport = async (applyNormalization: boolean) => {
+    if (!file) {
+      closeImportPreview();
+      return;
+    }
+
+    try {
+      const result = await importMutation.mutateAsync({
+        file,
+        replace: replaceOnImport,
+        normalizationPlan: applyNormalization
+          ? {
+              decisions: selectedNormalizationIds.map((id) => ({
+                id,
+                apply: true,
+              })),
+            }
+          : { decisions: [] },
+      });
       setFile(null);
+      closeImportPreview();
       toast.push({
         message:
-          `Importação concluída. Inseridos: ${
-            result?.batch?.insertedRows ?? 0
-          }. ` +
+          `Importação concluída. Inseridos: ${result?.batch?.insertedRows ?? 0}. ` +
           `Duplicados: ${result?.batch?.duplicateRows ?? 0}. ` +
-          `Inválidos: ${result?.batch?.invalidRows ?? 0}.`,
+          `Inválidos: ${result?.batch?.invalidRows ?? 0}. ` +
+          `Campos normalizados: ${Number(result?.normalization?.updatedFields ?? 0)}.`,
         severity: "success",
       });
     } catch (error) {
@@ -1111,7 +1162,11 @@ export function BiBestPracticesCycleDashboardPage() {
               variant="contained"
               size="small"
               onClick={handleImport}
-              disabled={!canUpload || importMutation.isPending}
+              disabled={
+                !canUpload ||
+                importMutation.isPending ||
+                previewImportMutation.isPending
+              }
               sx={{
                 height: 40,
                 px: 2,
@@ -1121,7 +1176,11 @@ export function BiBestPracticesCycleDashboardPage() {
                 "&:hover": { bgcolor: BPC_PALETTE.primaryDark },
               }}
             >
-              {importMutation.isPending ? "Importando..." : "Importar"}
+              {previewImportMutation.isPending
+                ? "Analisando..."
+                : importMutation.isPending
+                  ? "Importando..."
+                  : "Importar"}
             </Button>
             <Box sx={{ ml: { lg: "auto" } }}>
               <Typography variant="caption" sx={{ color: BPC_PALETTE.muted }}>
@@ -1851,6 +1910,24 @@ export function BiBestPracticesCycleDashboardPage() {
         accentColor={BPC_PALETTE.primary}
         currentPanelKey="best-practices-cycle"
         currentPanelFilters={dashboardFilters}
+      />
+
+      <BiImportNormalizationReviewDialog
+        open={Boolean(importPreview)}
+        title="Revisar normalização antes da importação"
+        preview={importPreview}
+        selectedIds={selectedNormalizationIds}
+        onToggle={(id, checked) =>
+          setSelectedNormalizationIds((prev) =>
+            checked
+              ? [...new Set([...prev, id])]
+              : prev.filter((item) => item !== id),
+          )
+        }
+        onClose={closeImportPreview}
+        onConfirm={() => void confirmImport(true)}
+        onImportWithoutNormalization={() => void confirmImport(false)}
+        confirmLoading={importMutation.isPending}
       />
 
       <Card sx={{ mt: 1.2, ...cardSx }}>

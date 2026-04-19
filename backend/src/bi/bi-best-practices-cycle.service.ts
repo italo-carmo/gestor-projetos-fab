@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import type { RbacUser } from '../rbac/rbac.types';
 import {
   BI_NORMALIZATION_SOURCE_TYPES,
+  type BiImportNormalizationPlan,
   BiNormalizationService,
 } from './bi-normalization.service';
 
@@ -28,6 +29,8 @@ type BestPracticeCycleFilters = {
 
 type ImportBestPracticeCycleOptions = {
   replaceAll?: boolean;
+  previewOnly?: boolean;
+  normalizationPlan?: BiImportNormalizationPlan | null;
 };
 
 type ParsedBestPracticeCycleRow = {
@@ -112,6 +115,7 @@ export class BiBestPracticesCycleService {
     const format =
       extension === 'csv' ? BiImportFormat.CSV : BiImportFormat.XLSX;
     const replaceAll = options.replaceAll === true;
+    const previewOnly = options.previewOnly === true;
 
     const { sheetName, rows } = this.extractRows(file.buffer, format);
     if (rows.length === 0) {
@@ -135,6 +139,52 @@ export class BiBestPracticesCycleService {
       parsed.push(parsedRow.value);
     }
 
+    const normalizationPreview = await this.normalization.previewImportRows({
+      sourceType: BI_NORMALIZATION_SOURCE_TYPES.BEST_PRACTICE_CYCLE,
+      rows: parsed.map((item) => ({
+        rowNumber: item.sourceRow,
+        fields: [
+          {
+            fieldKey: 'identification',
+            fieldLabel: 'Identificação / OM',
+            kind: 'OM',
+            value: item.identification,
+          },
+          {
+            fieldKey: 'specialty',
+            fieldLabel: 'Especialidade',
+            kind: 'SPECIALTY',
+            value: item.specialty,
+          },
+        ],
+      })),
+    });
+
+    if (previewOnly) {
+      return {
+        previewOnly: true,
+        importMode: replaceAll ? 'REPLACE' : 'APPEND',
+        normalization: normalizationPreview,
+        preview: parsed.slice(0, 5).map((item) => ({
+          submittedAt: item.submittedAt,
+          technicalRigorPerception: item.technicalRigorPerception,
+          preparednessToLeadMixedClass: item.preparednessToLeadMixedClass,
+          interactionDifference: item.interactionDifference,
+          supportNeedRecognition: item.supportNeedRecognition,
+          mainChallengeOptions: item.mainChallengeOptions,
+          identification: item.identification,
+          specialty: item.specialty,
+        })),
+      };
+    }
+
+    const normalizedImport = this.normalization.applyImportNormalization(
+      parsed,
+      normalizationPreview,
+      options.normalizationPlan,
+    );
+    const rowsToInsert = normalizedImport.rows;
+
     const responseModel = (this.prisma as any).biBestPracticeCycleResponse;
     const importModel = (this.prisma as any).biBestPracticeCycleImportBatch;
 
@@ -151,7 +201,7 @@ export class BiBestPracticesCycleService {
         fileName: file.originalname,
         format,
         sheetName,
-        totalRows: parsed.length,
+        totalRows: rowsToInsert.length,
         insertedRows: 0,
         duplicateRows: 0,
         invalidRows,
@@ -161,9 +211,9 @@ export class BiBestPracticesCycleService {
 
     let insertedRows = 0;
 
-    if (parsed.length > 0) {
+    if (rowsToInsert.length > 0) {
       const created = await responseModel.createMany({
-        data: parsed.map((item) => ({
+        data: rowsToInsert.map((item) => ({
           id: this.makeId('bibpcr_'),
           batchId: batch.id,
           submittedAt: item.submittedAt,
@@ -185,7 +235,7 @@ export class BiBestPracticesCycleService {
       insertedRows = Number(created?.count ?? 0);
     }
 
-    const duplicateRows = parsed.length - insertedRows;
+    const duplicateRows = rowsToInsert.length - insertedRows;
 
     const updatedBatch = await importModel.update({
       where: { id: batch.id },
@@ -206,15 +256,21 @@ export class BiBestPracticesCycleService {
 
     return {
       batch: updatedBatch,
-      preview: parsed.slice(0, 5).map((item) => ({
+      preview: rowsToInsert.slice(0, 5).map((item) => ({
         submittedAt: item.submittedAt,
         technicalRigorPerception: item.technicalRigorPerception,
         preparednessToLeadMixedClass: item.preparednessToLeadMixedClass,
         interactionDifference: item.interactionDifference,
         supportNeedRecognition: item.supportNeedRecognition,
         mainChallengeOptions: item.mainChallengeOptions,
+        identification: item.identification,
         specialty: item.specialty,
       })),
+      normalization: {
+        suggestionsApplied: normalizedImport.appliedSuggestions,
+        updatedFields: normalizedImport.updatedFields,
+        unresolvedCount: normalizationPreview.summary.unresolvedCount,
+      },
       importMode: replaceAll ? 'REPLACE' : 'APPEND',
     };
   }

@@ -4254,19 +4254,93 @@ export function useBiSurveyCardSettings(enabled = true) {
   });
 }
 
+export type BiImportNormalizationSuggestion = {
+  id: string;
+  sourceType: string;
+  fieldKey: string;
+  fieldLabel: string;
+  kind: "OM" | "SPECIALTY";
+  originalValue: string;
+  suggestedValue: string;
+  confidence: number | null;
+  resolutionMethod: string | null;
+  reasoning: string | null;
+  rowCount: number;
+  sampleRows: number[];
+};
+
+export type BiImportNormalizationUnresolved = {
+  id: string;
+  sourceType: string;
+  fieldKey: string;
+  fieldLabel: string;
+  kind: "OM";
+  originalValue: string;
+  resolutionMethod: string | null;
+  reasoning: string | null;
+  rowCount: number;
+  sampleRows: number[];
+};
+
+export type BiImportNormalizationPreview = {
+  sourceType: string;
+  totalRows: number;
+  suggestions: BiImportNormalizationSuggestion[];
+  unresolved: BiImportNormalizationUnresolved[];
+  summary: {
+    suggestionCount: number;
+    unresolvedCount: number;
+    omSuggestionCount: number;
+    specialtySuggestionCount: number;
+  };
+};
+
+export type BiImportNormalizationDecision = {
+  id: string;
+  apply: boolean;
+};
+
+type BiImportMutationArgs = {
+  file: File;
+  replace?: boolean;
+};
+
+type BiConfirmedImportArgs = BiImportMutationArgs & {
+  normalizationPlan?: {
+    decisions?: BiImportNormalizationDecision[];
+  } | null;
+};
+
 export function useImportBiSurvey() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (args: { file: File; replace?: boolean }) => {
+    mutationFn: async (args: BiConfirmedImportArgs) => {
       const form = new FormData();
       form.append("file", args.file);
       if (typeof args.replace === "boolean") {
         form.append("replace", String(args.replace));
       }
+      if (args.normalizationPlan) {
+        form.append("normalizationPlan", JSON.stringify(args.normalizationPlan));
+      }
       return (await api.post("/bi/surveys/import", form)).data;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["biSurvey"] });
+    },
+  });
+}
+
+export function usePreviewImportBiSurvey() {
+  return useMutation({
+    mutationFn: async (args: BiImportMutationArgs) => {
+      const form = new FormData();
+      form.append("file", args.file);
+      if (typeof args.replace === "boolean") {
+        form.append("replace", String(args.replace));
+      }
+      form.append("preview", "true");
+      return (await api.post("/bi/surveys/import", form)).data;
     },
   });
 }
@@ -4357,16 +4431,33 @@ export function useBiDomesticViolenceCardSettings(enabled = true) {
 export function useImportBiDomesticViolence() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (args: { file: File; replace?: boolean }) => {
+    mutationFn: async (args: BiConfirmedImportArgs) => {
       const form = new FormData();
       form.append("file", args.file);
       if (typeof args.replace === "boolean") {
         form.append("replace", String(args.replace));
       }
+      if (args.normalizationPlan) {
+        form.append("normalizationPlan", JSON.stringify(args.normalizationPlan));
+      }
       return (await api.post("/bi/domestic-violence/import", form)).data;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["biDomesticViolence"] });
+    },
+  });
+}
+
+export function usePreviewImportBiDomesticViolence() {
+  return useMutation({
+    mutationFn: async (args: BiImportMutationArgs) => {
+      const form = new FormData();
+      form.append("file", args.file);
+      if (typeof args.replace === "boolean") {
+        form.append("replace", String(args.replace));
+      }
+      form.append("preview", "true");
+      return (await api.post("/bi/domestic-violence/import", form)).data;
     },
   });
 }
@@ -4581,16 +4672,33 @@ export function useBiBestPracticesCycleCardSettings(enabled = true) {
 export function useImportBiBestPracticesCycle() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (args: { file: File; replace?: boolean }) => {
+    mutationFn: async (args: BiConfirmedImportArgs) => {
       const form = new FormData();
       form.append("file", args.file);
       if (typeof args.replace === "boolean") {
         form.append("replace", String(args.replace));
       }
+      if (args.normalizationPlan) {
+        form.append("normalizationPlan", JSON.stringify(args.normalizationPlan));
+      }
       return (await api.post("/bi/best-practices-cycle/import", form)).data;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["biBestPracticesCycle"] });
+    },
+  });
+}
+
+export function usePreviewImportBiBestPracticesCycle() {
+  return useMutation({
+    mutationFn: async (args: BiImportMutationArgs) => {
+      const form = new FormData();
+      form.append("file", args.file);
+      if (typeof args.replace === "boolean") {
+        form.append("replace", String(args.replace));
+      }
+      form.append("preview", "true");
+      return (await api.post("/bi/best-practices-cycle/import", form)).data;
     },
   });
 }

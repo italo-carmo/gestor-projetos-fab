@@ -48,6 +48,9 @@ async function main() {
       undefined,
       { replaceAll: reset },
     );
+    if (!result?.batch) {
+      throw new Error('A importação não retornou lote persistido.');
+    }
 
     console.log(
       JSON.stringify(

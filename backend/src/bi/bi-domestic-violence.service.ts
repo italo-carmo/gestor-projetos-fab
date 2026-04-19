@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import type { RbacUser } from '../rbac/rbac.types';
 import {
   BI_NORMALIZATION_SOURCE_TYPES,
+  type BiImportNormalizationPlan,
   BiNormalizationService,
 } from './bi-normalization.service';
 
@@ -42,6 +43,8 @@ type DomesticViolenceFilters = {
 
 type ImportDomesticViolenceOptions = {
   replaceAll?: boolean;
+  previewOnly?: boolean;
+  normalizationPlan?: BiImportNormalizationPlan | null;
 };
 
 type DomesticViolenceCardSettingInput = {
@@ -182,6 +185,7 @@ export class BiDomesticViolenceService {
     const format =
       extension === 'csv' ? BiImportFormat.CSV : BiImportFormat.XLSX;
     const replaceAll = options.replaceAll === true;
+    const previewOnly = options.previewOnly === true;
 
     const { sheetName, rows } = this.extractRows(file.buffer, format);
     if (rows.length === 0) {
@@ -205,6 +209,51 @@ export class BiDomesticViolenceService {
       parsed.push(parsedRow.value);
     }
 
+    const normalizationPreview = await this.normalization.previewImportRows({
+      sourceType: BI_NORMALIZATION_SOURCE_TYPES.DOMESTIC_VIOLENCE,
+      rows: parsed.map((item) => ({
+        rowNumber: item.sourceRow,
+        fields: [
+          {
+            fieldKey: 'organization',
+            fieldLabel: 'Organização / OM',
+            kind: 'OM',
+            value: item.organization,
+          },
+        ],
+      })),
+    });
+
+    if (previewOnly) {
+      return {
+        previewOnly: true,
+        importMode: replaceAll ? 'REPLACE' : 'APPEND',
+        normalization: normalizationPreview,
+        preview: parsed.slice(0, 5).map((item) => ({
+          submittedAt: item.submittedAt,
+          age: item.age,
+          organization: item.organization,
+          rank: item.rank,
+          naturality: item.naturality,
+          situationScope: item.situationScope,
+          sufferedLifetimeRaw: item.sufferedLifetimeRaw,
+          sufferedLast12MonthsRaw: item.sufferedLast12MonthsRaw,
+          affectiveBond: item.affectiveBond,
+          violenceTypes: item.violenceTypes,
+          authorRelation: item.authorRelation,
+          impactIntensity: item.impactIntensity,
+          soughtHelpRaw: item.soughtHelpRaw,
+        })),
+      };
+    }
+
+    const normalizedImport = this.normalization.applyImportNormalization(
+      parsed,
+      normalizationPreview,
+      options.normalizationPlan,
+    );
+    const rowsToInsert = normalizedImport.rows;
+
     if (replaceAll) {
       await this.prisma.$transaction([
         this.prisma.biDomesticViolenceResponse.deleteMany(),
@@ -217,7 +266,7 @@ export class BiDomesticViolenceService {
         fileName: file.originalname,
         format,
         sheetName,
-        totalRows: parsed.length,
+        totalRows: rowsToInsert.length,
         insertedRows: 0,
         duplicateRows: 0,
         invalidRows,
@@ -227,9 +276,9 @@ export class BiDomesticViolenceService {
 
     let insertedRows = 0;
 
-    if (parsed.length > 0) {
+    if (rowsToInsert.length > 0) {
       const created = await this.prisma.biDomesticViolenceResponse.createMany({
-        data: parsed.map((item) => ({
+        data: rowsToInsert.map((item) => ({
           batchId: batch.id,
           submittedAt: item.submittedAt,
           age: item.age,
@@ -268,7 +317,7 @@ export class BiDomesticViolenceService {
       insertedRows = created.count;
     }
 
-    const duplicateRows = parsed.length - insertedRows;
+    const duplicateRows = rowsToInsert.length - insertedRows;
 
     const updatedBatch = await this.prisma.biDomesticViolenceImportBatch.update(
       {
@@ -291,7 +340,7 @@ export class BiDomesticViolenceService {
 
     return {
       batch: updatedBatch,
-      preview: parsed.slice(0, 5).map((item) => ({
+      preview: rowsToInsert.slice(0, 5).map((item) => ({
         submittedAt: item.submittedAt,
         age: item.age,
         organization: item.organization,
@@ -306,6 +355,11 @@ export class BiDomesticViolenceService {
         impactIntensity: item.impactIntensity,
         soughtHelpRaw: item.soughtHelpRaw,
       })),
+      normalization: {
+        suggestionsApplied: normalizedImport.appliedSuggestions,
+        updatedFields: normalizedImport.updatedFields,
+        unresolvedCount: normalizationPreview.summary.unresolvedCount,
+      },
       importMode: replaceAll ? 'REPLACE' : 'APPEND',
     };
   }
