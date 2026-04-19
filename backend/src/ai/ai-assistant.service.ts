@@ -22,6 +22,10 @@ import type { RbacUser } from '../rbac/rbac.types';
 import { MissionsService } from '../missions/missions.service';
 import { SocialCommunicationService } from '../social-communication/social-communication.service';
 import { TasksService } from '../tasks/tasks.service';
+import {
+  AiReportService,
+  type AssistantGeneratedReportDraft,
+} from './ai-report.service';
 
 const execFileAsync = promisify(execFile);
 
@@ -30,7 +34,8 @@ type AssistantIntent =
   | 'create_activity'
   | 'create_task'
   | 'create_mission_schedule'
-  | 'create_social_article';
+  | 'create_social_article'
+  | 'create_report';
 
 type AssistantRole = 'user' | 'assistant';
 
@@ -158,7 +163,8 @@ type AssistantResultLink = {
     | 'activity'
     | 'task'
     | 'mission_schedule'
-    | 'social_communication_article';
+    | 'social_communication_article'
+    | 'assistant_report';
   id: string;
   title: string;
   url: string;
@@ -218,6 +224,12 @@ const QUICK_ACTIONS: AssistantQuickAction[] = [
     description:
       'Cruza missão, atividades executadas e matérias do mesmo escopo para montar uma notícia revisável antes de salvar.',
   },
+  {
+    id: 'create_report',
+    title: 'Criar relatório personalizado',
+    description:
+      'Monta um relatório em PDF com seções, gráficos, tabelas e revisão no chat antes da entrega final.',
+  },
 ];
 
 const INTENT_META: Record<
@@ -254,6 +266,12 @@ const INTENT_META: Record<
       'Fluxo assistido para gerar uma matéria com base na missão, nas atividades executadas e nas matérias do mesmo escopo.',
     confirmLabel: 'Confirmar criação da matéria',
   },
+  create_report: {
+    title: 'Criar relatório personalizado',
+    description:
+      'Fluxo assistido para definir escopo, seções e formato do relatório antes de gerar o PDF final.',
+    confirmLabel: 'Gerar PDF do relatório',
+  },
 };
 
 @Injectable()
@@ -269,6 +287,7 @@ export class AiAssistantService {
     private readonly tasks: TasksService,
     private readonly socialCommunication: SocialCommunicationService,
     private readonly litellm: LitellmService,
+    private readonly reports: AiReportService,
   ) {}
 
   listQuickActions() {
@@ -281,6 +300,31 @@ export class AiAssistantService {
       this.sessions.delete(safeSessionId);
     }
     return { ok: true };
+  }
+
+  async buildReportPdfForSession(sessionId?: string | null, user?: RbacUser) {
+    const safeSessionId = String(sessionId ?? '').trim();
+    if (!safeSessionId) {
+      throw new BadRequestException('Sessão do assistente não informada.');
+    }
+    const session = this.sessions.get(safeSessionId);
+    if (!session?.workflow || session.workflow.intent !== 'create_report') {
+      throw new NotFoundException(
+        'Não encontrei um relatório em preparação nesta sessão.',
+      );
+    }
+    const draft = this.readGeneratedReportDraft(session.workflow.draft);
+    if (!draft) {
+      throw new BadRequestException(
+        'Ainda não há um relatório pronto para download nesta sessão.',
+      );
+    }
+    const buffer = await this.reports.renderPdf(draft, user);
+    return {
+      buffer,
+      filename: this.reports.buildFileName(draft),
+      title: draft.title,
+    };
   }
 
   async handleUpload(
@@ -488,7 +532,7 @@ export class AiAssistantService {
           session,
           'assistant',
           [
-            'Posso atuar como assistente operacional para **criar missão**, **criar atividade de campo**, **criar tarefa**, **criar/editar cronograma em missão** ou **criar matéria a partir de missão**.',
+            'Posso atuar como assistente operacional para **criar missão**, **criar atividade de campo**, **criar tarefa**, **criar/editar cronograma em missão**, **criar matéria a partir de missão** ou **criar relatório personalizado**.',
             'Use uma ação rápida ou escreva diretamente o que deseja criar.',
           ].join('\n\n'),
         ),
@@ -540,6 +584,23 @@ export class AiAssistantService {
       );
     }
 
+    if (
+      workflow.intent === 'create_report' &&
+      rawMessage &&
+      !fieldInput?.field &&
+      !wantsSkip &&
+      !wantsConfirm &&
+      !workflowView.currentField &&
+      this.readGeneratedReportDraft(workflow.draft)
+    ) {
+      return await this.handleReportRevision(
+        session,
+        workflow,
+        rawMessage,
+        user,
+      );
+    }
+
     if (wantsConfirm && workflow.status === 'confirming') {
       try {
         if (
@@ -554,6 +615,32 @@ export class AiAssistantService {
           workflow.draft.scheduleInputMode === 'UPLOAD'
         ) {
           return await this.confirmScheduleUploadBatch(session, workflow, user);
+        }
+        if (workflow.intent === 'create_report') {
+          const reportDraft = this.readGeneratedReportDraft(workflow.draft);
+          if (!reportDraft) {
+            throw new BadRequestException(
+              'O relatório ainda não foi montado. Revise o rascunho atual antes de gerar o PDF.',
+            );
+          }
+          workflow.status = 'confirming';
+          session.updatedAt = new Date().toISOString();
+          const updatedWorkflow = await this.buildWorkflowView(workflow, user);
+          const createdItem = this.buildReportDownloadLink(session.id, reportDraft);
+          return this.buildReply(
+            session,
+            this.pushMessage(
+              session,
+              'assistant',
+              [
+                'Relatório pronto para download em PDF.',
+                `Arquivo preparado: **${reportDraft.title}**.`,
+                'Se quiser ajustar título, seções, tom, gráficos, tabelas ou recomendações, descreva a alteração aqui no chat e eu gero uma nova versão.',
+              ].join('\n\n'),
+            ),
+            updatedWorkflow,
+            createdItem,
+          );
         }
         const createdItem = await this.executeWorkflow(workflow, user);
         session.updatedAt = new Date().toISOString();
@@ -715,6 +802,28 @@ export class AiAssistantService {
       );
     }
     if (
+      workflow.intent === 'create_report' &&
+      updatedView.readyToConfirm &&
+      !this.readGeneratedReportDraft(workflow.draft)
+    ) {
+      workflow.draft.generatedReport = await this.reports.buildDraft(
+        this.buildReportInputFromDraft(workflow.draft),
+        user,
+      );
+      workflow.status = 'confirming';
+      const refreshedView = await this.buildWorkflowView(workflow, user);
+      return this.buildReply(
+        session,
+        this.pushMessage(
+          session,
+          'assistant',
+          this.buildReportDraftMessage(workflow.draft),
+        ),
+        refreshedView,
+        null,
+      );
+    }
+    if (
       workflow.intent === 'create_mission_schedule' &&
       workflow.draft.scheduleFromMissionCreation === true &&
       workflow.draft.scheduleCreateAfterMission === false
@@ -813,6 +922,8 @@ export class AiAssistantService {
           ? this.buildScheduleReadyToConfirmMessage(updatedView, workflow.draft)
           : workflow.intent === 'create_social_article'
             ? this.buildSocialArticleDraftMessage(workflow.draft)
+          : workflow.intent === 'create_report'
+            ? this.buildReportDraftMessage(workflow.draft)
           : workflow.intent === 'create_activity' ||
               workflow.intent === 'create_task' ||
               workflow.intent === 'create_mission'
@@ -966,6 +1077,9 @@ export class AiAssistantService {
       normalized.includes('agenda da missão')
     ) {
       return 'create_mission_schedule';
+    }
+    if (normalized.includes('relatorio') || normalized.includes('relatório')) {
+      return 'create_report';
     }
     if (normalized.includes('missao') || normalized.includes('missão')) {
       return 'create_mission';
@@ -1302,6 +1416,36 @@ export class AiAssistantService {
     return String(value ?? '').trim();
   }
 
+  private normalizeNullableText(value: unknown) {
+    const safe = String(value ?? '').trim();
+    return safe ? safe : null;
+  }
+
+  private buildReportInputFromDraft(draft: Record<string, any>) {
+    return {
+      kind: String(draft.reportKind ?? '').trim(),
+      scope: String(draft.scope ?? '').trim(),
+      title: this.normalizeNullableText(draft.title),
+      tone: this.normalizeNullableText(draft.tone),
+      missionId: this.normalizeNullableText(draft.missionId),
+      focusLabel: this.normalizeNullableText(draft.focusLabel),
+      periodFrom: this.normalizeNullableText(draft.periodFrom),
+      periodTo: this.normalizeNullableText(draft.periodTo),
+      includeCharts:
+        typeof draft.includeCharts === 'boolean' ? draft.includeCharts : null,
+      includeTables:
+        typeof draft.includeTables === 'boolean' ? draft.includeTables : null,
+      includeSystemImages:
+        typeof draft.includeSystemImages === 'boolean'
+          ? draft.includeSystemImages
+          : null,
+      sections: Array.isArray(draft.sections)
+        ? draft.sections.map((item: unknown) => String(item ?? '').trim()).filter(Boolean)
+        : [],
+      reportInstructions: this.normalizeNullableText(draft.reportInstructions),
+    };
+  }
+
   private resolveSingleOption(
     options: AssistantFieldOption[],
     value: string | string[],
@@ -1579,6 +1723,200 @@ export class AiAssistantService {
             'Campo opcional. Ex.: destacar prevenção, alcance da missão, atuação nas OMs atendidas.',
         },
       ];
+    }
+
+    if (intent === 'create_report') {
+      const reportKind = String(draft.reportKind ?? '').trim().toUpperCase();
+      const kindOptions: AssistantFieldOption[] = [
+        {
+          value: 'MISSION',
+          label: 'Relatório de missão',
+          description:
+            'Focado em uma missão específica, com cronograma, atividades, tarefas e casos relacionados.',
+        },
+        {
+          value: 'STRATEGIC',
+          label: 'Relatório estratégico',
+          description:
+            'Cruza pesquisas, denúncias, missões, atividades e dados executivos para visão gerencial.',
+        },
+        {
+          value: 'OPERATIONAL',
+          label: 'Relatório operacional',
+          description:
+            'Foca em execução, acompanhamento, backlog e atuação em campo.',
+        },
+      ];
+
+      const scopeOptions: AssistantFieldOption[] =
+        reportKind === 'MISSION'
+          ? [
+              { value: 'SMIF', label: 'SMIF' },
+              { value: 'CIPAVD', label: 'CIPAVD' },
+            ]
+          : [
+              { value: 'COMGEP', label: 'COMGEP' },
+              { value: 'CIPAVD', label: 'CIPAVD' },
+              { value: 'SMIF', label: 'SMIF' },
+              { value: 'CPCA', label: 'CPCA' },
+            ];
+
+      const sectionOptions: AssistantFieldOption[] =
+        reportKind === 'MISSION'
+          ? [
+              { value: 'MISSION_OVERVIEW', label: 'Visão da missão' },
+              { value: 'MISSION_SCHEDULE', label: 'Cronograma da missão' },
+              { value: 'ACTIVITIES', label: 'Atividades executadas' },
+              { value: 'TASKS', label: 'Tarefas e pendências' },
+              { value: 'CPCA_CASES', label: 'Denúncias CPCA' },
+              { value: 'SMIF_CASES', label: 'Denúncias SMIF' },
+              { value: 'RECOMMENDATIONS', label: 'Recomendações' },
+            ]
+          : [
+              { value: 'STRATEGIC_OVERVIEW', label: 'Panorama estratégico' },
+              { value: 'SURVEY_INSTITUTIONAL', label: 'Pesquisa institucional' },
+              {
+                value: 'SURVEY_DOMESTIC',
+                label: 'Pesquisa de violência doméstica',
+              },
+              { value: 'CPCA_CASES', label: 'Denúncias CPCA' },
+              { value: 'SMIF_CASES', label: 'Denúncias SMIF' },
+              { value: 'MISSION_OVERVIEW', label: 'Missões' },
+              { value: 'ACTIVITIES', label: 'Atividades' },
+              { value: 'TASKS', label: 'Tarefas' },
+              { value: 'RECOMMENDATIONS', label: 'Recomendações' },
+            ];
+
+      const fields: AssistantFieldConfig[] = [
+        {
+          field: 'reportKind',
+          label: 'Tipo de relatório',
+          inputType: 'single_select',
+          options: kindOptions,
+        },
+      ];
+
+      if (!reportKind) {
+        return fields;
+      }
+
+      fields.push({
+        field: 'scope',
+        label: 'Escopo do relatório',
+        inputType: 'single_select',
+        options: scopeOptions,
+      });
+
+      if (reportKind === 'MISSION') {
+        fields.push({
+          field: 'missionId',
+          label: 'Missão de referência',
+          inputType: 'single_select',
+          options: await this.listMissionOptions(draft.scope, user),
+        });
+      }
+
+      fields.push(
+        {
+          field: 'title',
+          label: 'Título do relatório',
+          inputType: 'text',
+          optional: true,
+          helperText:
+            'Opcional. Se deixar em branco, o assistente cria um título alinhado ao recorte.',
+        },
+        {
+          field: 'tone',
+          label: 'Tom do relatório',
+          inputType: 'single_select',
+          options: [
+            {
+              value: 'EXECUTIVE',
+              label: 'Executivo',
+              description:
+                'Texto mais direto, sintético e orientado à decisão.',
+            },
+            {
+              value: 'ANALYTICAL',
+              label: 'Analítico',
+              description:
+                'Texto mais detalhado, com maior rastreabilidade dos sinais.',
+            },
+            {
+              value: 'OPERATIONAL',
+              label: 'Operacional',
+              description:
+                'Texto focado em execução, acompanhamento e pendências.',
+            },
+          ],
+        },
+        {
+          field: 'sections',
+          label: 'Seções do relatório',
+          inputType: 'multi_select',
+          multiple: true,
+          options: sectionOptions,
+        },
+      );
+
+      if (reportKind !== 'MISSION') {
+        fields.push(
+          {
+            field: 'focusLabel',
+            label: 'Recorte principal',
+            inputType: 'text',
+            optional: true,
+            helperText:
+              'Opcional. Informe uma UF, OM ou localidade para orientar o foco do relatório.',
+          },
+          {
+            field: 'periodFrom',
+            label: 'Período inicial',
+            inputType: 'date',
+            optional: true,
+          },
+          {
+            field: 'periodTo',
+            label: 'Período final',
+            inputType: 'date',
+            optional: true,
+          },
+        );
+      }
+
+      fields.push(
+        {
+          field: 'includeCharts',
+          label: 'Incluir gráficos?',
+          inputType: 'boolean',
+        },
+        {
+          field: 'includeTables',
+          label: 'Incluir tabelas?',
+          inputType: 'boolean',
+        },
+      );
+
+      if (reportKind === 'MISSION') {
+        fields.push({
+          field: 'includeSystemImages',
+          label: 'Incluir imagens do sistema?',
+          inputType: 'boolean',
+          helperText:
+            'Quando houver banner cadastrado na missão, ele pode entrar no relatório.',
+        });
+      }
+
+      fields.push({
+        field: 'reportInstructions',
+        label: 'Instruções adicionais',
+        inputType: 'textarea',
+        optional: true,
+        helperText:
+          'Opcional. Ex.: destacar subnotificação, focar em prevenção, priorizar recomendações operacionais.',
+      });
+
+      return fields;
     }
 
     const isMissionCreatedInFlow = draft.scheduleFromMissionCreation === true;
@@ -2038,6 +2376,100 @@ export class AiAssistantService {
       ];
     }
 
+    if (intent === 'create_report') {
+      const generatedDraft = this.readGeneratedReportDraft(draft);
+      const sectionLabels = await Promise.all(
+        (Array.isArray(draft.sections) ? draft.sections : []).map(async (sectionId) =>
+          (await findOptionLabel('sections', sectionId)) || String(sectionId),
+        ),
+      );
+      return [
+        {
+          label: 'Tipo',
+          value:
+            (await findOptionLabel('reportKind', draft.reportKind)) || '—',
+        },
+        { label: 'Escopo', value: draft.scope || '—' },
+        ...(draft.reportKind === 'MISSION'
+          ? [
+              {
+                label: 'Missão',
+                value:
+                  (await findOptionLabel('missionId', draft.missionId)) || '—',
+              },
+            ]
+          : []),
+        {
+          label: 'Título',
+          value: draft.title || generatedDraft?.title || 'Automático',
+        },
+        {
+          label: 'Tom',
+          value: (await findOptionLabel('tone', draft.tone)) || '—',
+        },
+        {
+          label: 'Seções',
+          value: sectionLabels.length ? sectionLabels.join(', ') : '—',
+        },
+        ...(draft.reportKind !== 'MISSION'
+          ? [
+              {
+                label: 'Recorte',
+                value: draft.focusLabel || 'Sem recorte adicional',
+              },
+              {
+                label: 'Período',
+                value:
+                  draft.periodFrom || draft.periodTo
+                    ? [draft.periodFrom || '—', draft.periodTo || '—'].join(' a ')
+                    : 'Sem recorte temporal explícito',
+              },
+            ]
+          : []),
+        {
+          label: 'Gráficos',
+          value:
+            typeof draft.includeCharts === 'boolean'
+              ? draft.includeCharts
+                ? 'Sim'
+                : 'Não'
+              : '—',
+        },
+        {
+          label: 'Tabelas',
+          value:
+            typeof draft.includeTables === 'boolean'
+              ? draft.includeTables
+                ? 'Sim'
+                : 'Não'
+              : '—',
+        },
+        ...(draft.reportKind === 'MISSION'
+          ? [
+              {
+                label: 'Imagens do sistema',
+                value:
+                  typeof draft.includeSystemImages === 'boolean'
+                    ? draft.includeSystemImages
+                      ? 'Sim'
+                      : 'Não'
+                    : '—',
+              },
+            ]
+          : []),
+        {
+          label: 'Instruções adicionais',
+          value: draft.reportInstructions || 'Nenhuma',
+        },
+        {
+          label: 'Rascunho gerado',
+          value: generatedDraft
+            ? `${generatedDraft.sections.length} seção(ões), ${generatedDraft.charts.length} gráfico(s), ${generatedDraft.tables.length} tabela(s)`
+            : 'Aguardando geração',
+        },
+      ];
+    }
+
     const missionLabel = await findOptionLabel('missionId', draft.missionId);
     if (draft.scheduleOperation === 'EDIT') {
       const existingItems = Array.isArray(draft.scheduleExistingItems)
@@ -2341,6 +2773,160 @@ export class AiAssistantService {
     };
   }
 
+  private readGeneratedReportDraft(
+    draft: Record<string, any>,
+  ): AssistantGeneratedReportDraft | null {
+    const raw = draft.generatedReport;
+    if (!raw || typeof raw !== 'object') return null;
+    const title = String(raw.title ?? '').trim();
+    const subtitle = String(raw.subtitle ?? '').trim();
+    const executiveSummary = String(raw.executiveSummary ?? '').trim();
+    if (!title || !subtitle || !executiveSummary) return null;
+    const sections = Array.isArray(raw.sections)
+      ? raw.sections
+          .map((item: any) => ({
+            id: String(item?.id ?? '').trim(),
+            title: String(item?.title ?? '').trim(),
+            body: String(item?.body ?? '').trim(),
+            bullets: Array.isArray(item?.bullets)
+              ? item.bullets
+                  .map((entry: unknown) => String(entry ?? '').trim())
+                  .filter(Boolean)
+              : [],
+            chartIds: Array.isArray(item?.chartIds)
+              ? item.chartIds
+                  .map((entry: unknown) => String(entry ?? '').trim())
+                  .filter(Boolean)
+              : [],
+            tableIds: Array.isArray(item?.tableIds)
+              ? item.tableIds
+                  .map((entry: unknown) => String(entry ?? '').trim())
+                  .filter(Boolean)
+              : [],
+            imageIds: Array.isArray(item?.imageIds)
+              ? item.imageIds
+                  .map((entry: unknown) => String(entry ?? '').trim())
+                  .filter(Boolean)
+              : [],
+          }))
+          .filter((item: any) => item.id && item.title && item.body)
+      : [];
+    if (!sections.length) return null;
+    return {
+      title,
+      subtitle,
+      executiveSummary,
+      kind:
+        String(raw.kind ?? '').trim().toUpperCase() === 'MISSION'
+          ? 'MISSION'
+          : String(raw.kind ?? '').trim().toUpperCase() === 'OPERATIONAL'
+            ? 'OPERATIONAL'
+            : 'STRATEGIC',
+      scope:
+        String(raw.scope ?? '').trim().toUpperCase() === 'CIPAVD'
+          ? 'CIPAVD'
+          : String(raw.scope ?? '').trim().toUpperCase() === 'CPCA'
+            ? 'CPCA'
+            : String(raw.scope ?? '').trim().toUpperCase() === 'COMGEP'
+              ? 'COMGEP'
+              : 'SMIF',
+      tone:
+        String(raw.tone ?? '').trim().toUpperCase() === 'ANALYTICAL'
+          ? 'ANALYTICAL'
+          : String(raw.tone ?? '').trim().toUpperCase() === 'OPERATIONAL'
+            ? 'OPERATIONAL'
+            : 'EXECUTIVE',
+      generatedAt: String(raw.generatedAt ?? new Date().toISOString()),
+      periodLabel: String(raw.periodLabel ?? '').trim(),
+      focusLabel: this.normalizeNullableText(raw.focusLabel),
+      highlights: Array.isArray(raw.highlights)
+        ? raw.highlights
+            .map((item: any) => ({
+              label: String(item?.label ?? '').trim(),
+              value: String(item?.value ?? '').trim(),
+              detail: this.normalizeNullableText(item?.detail),
+            }))
+            .filter((item: any) => item.label && item.value)
+        : [],
+      sections,
+      charts: Array.isArray(raw.charts)
+        ? raw.charts
+            .map((item: any) => ({
+              id: String(item?.id ?? '').trim(),
+              title: String(item?.title ?? '').trim(),
+              subtitle: this.normalizeNullableText(item?.subtitle),
+              labels: Array.isArray(item?.labels)
+                ? item.labels
+                    .map((entry: unknown) => String(entry ?? '').trim())
+                    .filter(Boolean)
+                : [],
+              values: Array.isArray(item?.values)
+                ? item.values
+                    .map((entry: unknown) => Number(entry))
+                    .filter((entry: number) => Number.isFinite(entry))
+                : [],
+              colorHex: this.normalizeNullableText(item?.colorHex),
+            }))
+            .filter((item: any) => item.id && item.title)
+        : [],
+      tables: Array.isArray(raw.tables)
+        ? raw.tables
+            .map((item: any) => ({
+              id: String(item?.id ?? '').trim(),
+              title: String(item?.title ?? '').trim(),
+              columns: Array.isArray(item?.columns)
+                ? item.columns
+                    .map((entry: unknown) => String(entry ?? '').trim())
+                    .filter(Boolean)
+                : [],
+              rows: Array.isArray(item?.rows)
+                ? item.rows.map((row: unknown) =>
+                    Array.isArray(row)
+                      ? row.map((entry: unknown) => String(entry ?? ''))
+                      : [],
+                  )
+                : [],
+              note: this.normalizeNullableText(item?.note),
+            }))
+            .filter((item: any) => item.id && item.title)
+        : [],
+      images: Array.isArray(raw.images)
+        ? raw.images
+            .map((item: any) => ({
+              id: String(item?.id ?? '').trim(),
+              title: String(item?.title ?? '').trim(),
+              caption: this.normalizeNullableText(item?.caption),
+              kind: 'mission_banner' as const,
+              missionId: String(item?.missionId ?? '').trim(),
+              bannerId: String(item?.bannerId ?? '').trim(),
+            }))
+            .filter((item: any) => item.id && item.title && item.missionId && item.bannerId)
+        : [],
+      recommendations: Array.isArray(raw.recommendations)
+        ? raw.recommendations
+            .map((entry: unknown) => String(entry ?? '').trim())
+            .filter(Boolean)
+        : [],
+      dataNotes: Array.isArray(raw.dataNotes)
+        ? raw.dataNotes
+            .map((entry: unknown) => String(entry ?? '').trim())
+            .filter(Boolean)
+        : [],
+    };
+  }
+
+  private buildReportDownloadLink(
+    sessionId: string,
+    draft: AssistantGeneratedReportDraft,
+  ): AssistantResultLink {
+    return {
+      entityType: 'assistant_report',
+      id: sessionId,
+      title: draft.title,
+      url: '/ai/assistant/report/pdf',
+    };
+  }
+
   private async resolveSocialArticleMission(missionId: string, user?: RbacUser) {
     const mission = (await this.missions.getById(missionId, user)) as any;
     if (!mission?.id) {
@@ -2585,6 +3171,39 @@ export class AiAssistantService {
         session,
         'assistant',
         this.buildSocialArticleDraftMessage(workflow.draft),
+      ),
+      updatedView,
+      null,
+    );
+  }
+
+  private async handleReportRevision(
+    session: AssistantSession,
+    workflow: AssistantWorkflow,
+    instruction: string,
+    user?: RbacUser,
+  ): Promise<AssistantReply> {
+    const currentDraft = this.readGeneratedReportDraft(workflow.draft);
+    if (!currentDraft) {
+      throw new BadRequestException(
+        'Ainda não há um rascunho de relatório para revisar.',
+      );
+    }
+
+    workflow.draft.generatedReport = await this.reports.reviseDraft(
+      this.buildReportInputFromDraft(workflow.draft),
+      currentDraft,
+      instruction,
+      user,
+    );
+    workflow.status = 'confirming';
+    const updatedView = await this.buildWorkflowView(workflow, user);
+    return this.buildReply(
+      session,
+      this.pushMessage(
+        session,
+        'assistant',
+        this.buildReportDraftMessage(workflow.draft),
       ),
       updatedView,
       null,
@@ -2838,6 +3457,64 @@ export class AiAssistantService {
       referenceList,
       'Se quiser ajustar o texto, responda no chat com a mudança desejada. Se estiver tudo certo, confirme a criação.',
     ].join('\n\n');
+  }
+
+  private buildReportDraftMessage(draft: Record<string, any>) {
+    const generatedDraft = this.readGeneratedReportDraft(draft);
+    if (!generatedDraft) {
+      return 'Ainda não consegui montar um rascunho válido do relatório.';
+    }
+    const highlightList = generatedDraft.highlights.length
+      ? generatedDraft.highlights
+          .slice(0, 6)
+          .map((item) =>
+            item.detail
+              ? `- **${item.label}:** ${item.value} (${item.detail})`
+              : `- **${item.label}:** ${item.value}`,
+          )
+          .join('\n')
+      : '- Nenhum destaque executivo foi montado.';
+    const sectionList = generatedDraft.sections
+      .map((section, index) => {
+        const assets = [
+          section.chartIds.length ? `${section.chartIds.length} gráfico(s)` : '',
+          section.tableIds.length ? `${section.tableIds.length} tabela(s)` : '',
+          section.imageIds.length ? `${section.imageIds.length} imagem(ns)` : '',
+        ]
+          .filter(Boolean)
+          .join(', ');
+        return `${index + 1}. **${section.title}**${assets ? ` — ${assets}` : ''}`;
+      })
+      .join('\n');
+    const recommendations = generatedDraft.recommendations.length
+      ? generatedDraft.recommendations.map((item) => `- ${item}`).join('\n')
+      : '- Sem recomendações explícitas neste rascunho.';
+    return [
+      'Rascunho de **criar relatório personalizado** pronto para conferência.',
+      `**Título sugerido:** ${generatedDraft.title}`,
+      `**Subtítulo:** ${generatedDraft.subtitle}`,
+      `**Período:** ${generatedDraft.periodLabel || 'Sem recorte temporal explícito'}`,
+      generatedDraft.focusLabel
+        ? `**Recorte principal:** ${generatedDraft.focusLabel}`
+        : '',
+      '',
+      '### Resumo executivo',
+      generatedDraft.executiveSummary,
+      '',
+      '### Destaques',
+      highlightList,
+      '',
+      '### Estrutura do relatório',
+      sectionList,
+      '',
+      '### Recomendações',
+      recommendations,
+      '',
+      `O PDF será gerado com **${generatedDraft.charts.length} gráfico(s)**, **${generatedDraft.tables.length} tabela(s)** e **${generatedDraft.images.length} imagem(ns)**.`,
+      'Se quiser mudar qualquer parte do relatório, escreva o ajuste no chat. Se estiver correto, confirme para liberar o PDF.',
+    ]
+      .filter(Boolean)
+      .join('\n\n');
   }
 
   private buildGeneratedArticleSourceUrl(missionId: string) {

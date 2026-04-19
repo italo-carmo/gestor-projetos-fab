@@ -8,6 +8,7 @@ import { StrategicModule } from '../strategic/strategic.module';
 import { TasksModule } from '../tasks/tasks.module';
 import { AiController } from './ai.controller';
 import { AiAssistantService } from './ai-assistant.service';
+import { AiReportService } from './ai-report.service';
 import { AiService } from './ai.service';
 
 @Module({
@@ -21,6 +22,6 @@ import { AiService } from './ai.service';
     LitellmModule,
   ],
   controllers: [AiController],
-  providers: [AiService, AiAssistantService],
+  providers: [AiService, AiAssistantService, AiReportService],
 })
 export class AiModule {}

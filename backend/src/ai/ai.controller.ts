@@ -255,6 +255,8 @@ export class AiController {
         | 'create_activity'
         | 'create_task'
         | 'create_mission_schedule'
+        | 'create_social_article'
+        | 'create_report'
         | null;
       fieldInput?: { field?: string; value?: unknown } | null;
       confirmExecution?: boolean;
@@ -295,5 +297,24 @@ export class AiController {
   @RequirePermission('bi', 'view')
   resetAssistantSession(@Body() body: { sessionId?: string | null }) {
     return this.assistant.resetSession(body.sessionId);
+  }
+
+  @Post('assistant/report/pdf')
+  @RequirePermission('bi', 'view')
+  async assistantReportPdf(
+    @Body() body: { sessionId?: string | null },
+    @CurrentUser() user: RbacUser,
+    @Res() res: Response,
+  ) {
+    const result = await this.assistant.buildReportPdfForSession(
+      body.sessionId,
+      user,
+    );
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${result.filename}"`,
+      'Content-Length': result.buffer.length,
+    });
+    res.end(result.buffer);
   }
 }

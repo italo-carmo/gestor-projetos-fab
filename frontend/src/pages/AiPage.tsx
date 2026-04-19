@@ -136,6 +136,14 @@ const OPERATIONAL_QUICK_ACTIONS = [
     icon: <NewspaperRoundedIcon />,
     color: "#8E244D",
   },
+  {
+    id: "create_report",
+    title: "Criar relatório personalizado",
+    description:
+      "Monta um relatório em PDF com seções, gráficos, tabelas e revisão no chat antes da entrega final.",
+    icon: <PictureAsPdfRoundedIcon />,
+    color: "#3949AB",
+  },
 ] as const;
 
 const CHATBOT_QUICK_PROMPTS = [
@@ -783,7 +791,8 @@ type ChatbotMessage = {
       | "create_activity"
       | "create_task"
       | "create_mission_schedule"
-      | "create_social_article";
+      | "create_social_article"
+      | "create_report";
     label: string;
     description: string;
     reason?: string;
@@ -799,7 +808,8 @@ function ChatbotTab({
       | "create_activity"
       | "create_task"
       | "create_mission_schedule"
-      | "create_social_article",
+      | "create_social_article"
+      | "create_report",
     actionLabel: string,
   ) => void;
 }) {
@@ -1364,12 +1374,55 @@ function AssistantTab() {
       });
       if (data.createdItem?.url) {
         toast.push({
-          message: "Ação executada com sucesso.",
+          message:
+            data.createdItem?.entityType === "assistant_report"
+              ? "Relatório pronto para download."
+              : "Ação executada com sucesso.",
           severity: "success",
         });
       }
     },
     [appendMessage, toast],
+  );
+
+  const downloadAssistantReport = useCallback(
+    async (sessionId: string, title?: string | null) => {
+      setRunning(true);
+      setStatusText("Gerando PDF do relatório...");
+      try {
+        const response = await api.post(
+          "/ai/assistant/report/pdf",
+          { sessionId },
+          { responseType: "blob" },
+        );
+        const blob = new Blob([response.data], { type: "application/pdf" });
+        const url = window.URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        const base =
+          String(title ?? "")
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .replace(/[^a-zA-Z0-9]+/g, "-")
+            .replace(/^-+|-+$/g, "")
+            .toLowerCase() || "relatorio-ai";
+        anchor.href = url;
+        anchor.download = `${base}.pdf`;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        window.URL.revokeObjectURL(url);
+      } catch (error: any) {
+        const message =
+          error?.response?.data?.message ??
+          error?.message ??
+          "Falha ao baixar o relatório em PDF.";
+        toast.push({ message, severity: "error" });
+      } finally {
+        setRunning(false);
+        setStatusText("");
+      }
+    },
+    [toast],
   );
 
   const isEditingExistingSchedule =
@@ -1381,7 +1434,8 @@ function AssistantTab() {
     workflow?.intent === "create_mission" ||
     workflow?.intent === "create_activity" ||
     workflow?.intent === "create_task" ||
-    workflow?.intent === "create_social_article";
+    workflow?.intent === "create_social_article" ||
+    workflow?.intent === "create_report";
 
   const postAssistant = useCallback(
     async (payload: Record<string, unknown>, userContent?: string) => {
@@ -1430,7 +1484,8 @@ function AssistantTab() {
         | "create_activity"
         | "create_task"
         | "create_mission_schedule"
-        | "create_social_article",
+        | "create_social_article"
+        | "create_report",
       actionLabel?: string,
     ) => {
       if (assistantSessionId) {
@@ -1520,7 +1575,8 @@ function AssistantTab() {
       pendingAction !== "create_activity" &&
       pendingAction !== "create_task" &&
       pendingAction !== "create_mission_schedule" &&
-      pendingAction !== "create_social_article"
+      pendingAction !== "create_social_article" &&
+      pendingAction !== "create_report"
     ) {
       const next = new URLSearchParams(searchParams);
       next.delete("assistantAction");
@@ -2304,7 +2360,7 @@ function AssistantTab() {
                 >
                   Use os copilotos gerenciais para briefing e priorização ou
                   inicie um fluxo assistido para criar missão, atividade de
-                  campo, tarefa, cronograma em missão ou matéria.
+                  campo, tarefa, cronograma em missão, matéria ou relatório.
                 </Typography>
               </Box>
             ) : null}
@@ -2382,16 +2438,32 @@ function AssistantTab() {
                     )}
                     {msg.createdItem?.url ? (
                       <Stack direction="row" spacing={1} sx={{ mt: 1.2 }}>
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          href={msg.createdItem.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          startIcon={<OpenInNewRoundedIcon />}
-                        >
-                          Abrir item criado
-                        </Button>
+                        {msg.createdItem.entityType === "assistant_report" ? (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={<PictureAsPdfRoundedIcon />}
+                            onClick={() =>
+                              void downloadAssistantReport(
+                                msg.createdItem!.id,
+                                msg.createdItem?.title,
+                              )
+                            }
+                          >
+                            Baixar relatório PDF
+                          </Button>
+                        ) : (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            href={msg.createdItem.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            startIcon={<OpenInNewRoundedIcon />}
+                          >
+                            Abrir item criado
+                          </Button>
+                        )}
                       </Stack>
                     ) : null}
                     {msg.evidences?.length ? (
@@ -2711,7 +2783,8 @@ export function AiPage() {
         | "create_activity"
         | "create_task"
         | "create_mission_schedule"
-        | "create_social_article",
+        | "create_social_article"
+        | "create_report",
       _actionLabel: string,
     ) => {
       setTab(2);
