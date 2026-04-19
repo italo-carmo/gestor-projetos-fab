@@ -20,6 +20,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import type { RbacUser } from '../rbac/rbac.types';
 import { MissionsService } from '../missions/missions.service';
+import { SocialCommunicationService } from '../social-communication/social-communication.service';
 import { TasksService } from '../tasks/tasks.service';
 
 const execFileAsync = promisify(execFile);
@@ -28,7 +29,8 @@ type AssistantIntent =
   | 'create_mission'
   | 'create_activity'
   | 'create_task'
-  | 'create_mission_schedule';
+  | 'create_mission_schedule'
+  | 'create_social_article';
 
 type AssistantRole = 'user' | 'assistant';
 
@@ -115,6 +117,20 @@ type AssistantScheduleLlmDraftItem = {
   notes?: string[] | null;
 };
 
+type AssistantGeneratedArticleDraft = {
+  title: string;
+  summary: string;
+  contentText: string;
+  tags: string[];
+  audience: 'INTERNAL' | 'EXTERNAL';
+  referencesUsed: Array<{
+    id: string;
+    title: string;
+    publishedAt?: string | null;
+    sourceUrl: string;
+  }>;
+};
+
 type AssistantWorkflow = {
   intent: AssistantIntent;
   status: 'collecting' | 'confirming' | 'completed';
@@ -137,7 +153,12 @@ type AssistantQuickAction = {
 };
 
 type AssistantResultLink = {
-  entityType: 'mission' | 'activity' | 'task' | 'mission_schedule';
+  entityType:
+    | 'mission'
+    | 'activity'
+    | 'task'
+    | 'mission_schedule'
+    | 'social_communication_article';
   id: string;
   title: string;
   url: string;
@@ -191,6 +212,12 @@ const QUICK_ACTIONS: AssistantQuickAction[] = [
     description:
       'Permite criar um cronograma novo ou editar um cronograma já salvo, sempre com confirmação antes de gravar.',
   },
+  {
+    id: 'create_social_article',
+    title: 'Criar matéria a partir de missão',
+    description:
+      'Cruza missão, atividades executadas e matérias do mesmo escopo para montar uma notícia revisável antes de salvar.',
+  },
 ];
 
 const INTENT_META: Record<
@@ -221,6 +248,12 @@ const INTENT_META: Record<
       'Fluxo assistido para criar ou editar o cronograma da missão, revisar os dados e só depois gravar.',
     confirmLabel: 'Confirmar alteração no cronograma',
   },
+  create_social_article: {
+    title: 'Criar matéria a partir de missão',
+    description:
+      'Fluxo assistido para gerar uma matéria com base na missão, nas atividades executadas e nas matérias do mesmo escopo.',
+    confirmLabel: 'Confirmar criação da matéria',
+  },
 };
 
 @Injectable()
@@ -234,6 +267,7 @@ export class AiAssistantService {
     private readonly missions: MissionsService,
     private readonly activities: ActivitiesService,
     private readonly tasks: TasksService,
+    private readonly socialCommunication: SocialCommunicationService,
     private readonly litellm: LitellmService,
   ) {}
 
@@ -454,7 +488,7 @@ export class AiAssistantService {
           session,
           'assistant',
           [
-            'Posso atuar como assistente operacional para **criar missão**, **criar atividade de campo**, **criar tarefa** ou **criar/editar cronograma em missão**.',
+            'Posso atuar como assistente operacional para **criar missão**, **criar atividade de campo**, **criar tarefa**, **criar/editar cronograma em missão** ou **criar matéria a partir de missão**.',
             'Use uma ação rápida ou escreva diretamente o que deseja criar.',
           ].join('\n\n'),
         ),
@@ -487,6 +521,23 @@ export class AiAssistantService {
       if (commandReply) {
         return commandReply;
       }
+    }
+
+    if (
+      workflow.intent === 'create_social_article' &&
+      rawMessage &&
+      !fieldInput?.field &&
+      !wantsSkip &&
+      !wantsConfirm &&
+      !workflowView.currentField &&
+      this.readGeneratedArticleDraft(workflow.draft)
+    ) {
+      return await this.handleSocialArticleRevision(
+        session,
+        workflow,
+        rawMessage,
+        user,
+      );
     }
 
     if (wantsConfirm && workflow.status === 'confirming') {
@@ -642,6 +693,28 @@ export class AiAssistantService {
     session.updatedAt = new Date().toISOString();
     const updatedView = await this.buildWorkflowView(workflow, user);
     if (
+      workflow.intent === 'create_social_article' &&
+      updatedView.readyToConfirm &&
+      !this.readGeneratedArticleDraft(workflow.draft)
+    ) {
+      workflow.draft.generatedArticle = await this.generateSocialArticleDraft(
+        workflow.draft,
+        user,
+      );
+      workflow.status = 'confirming';
+      const refreshedView = await this.buildWorkflowView(workflow, user);
+      return this.buildReply(
+        session,
+        this.pushMessage(
+          session,
+          'assistant',
+          this.buildSocialArticleDraftMessage(workflow.draft),
+        ),
+        refreshedView,
+        null,
+      );
+    }
+    if (
       workflow.intent === 'create_mission_schedule' &&
       workflow.draft.scheduleFromMissionCreation === true &&
       workflow.draft.scheduleCreateAfterMission === false
@@ -738,6 +811,8 @@ export class AiAssistantService {
         workflow.intent === 'create_mission_schedule' &&
         workflow.draft.scheduleOperation !== 'EDIT'
           ? this.buildScheduleReadyToConfirmMessage(updatedView, workflow.draft)
+          : workflow.intent === 'create_social_article'
+            ? this.buildSocialArticleDraftMessage(workflow.draft)
           : workflow.intent === 'create_activity' ||
               workflow.intent === 'create_task' ||
               workflow.intent === 'create_mission'
@@ -900,6 +975,14 @@ export class AiAssistantService {
       normalized.includes('atividade')
     ) {
       return 'create_activity';
+    }
+    if (
+      normalized.includes('noticia') ||
+      normalized.includes('notícia') ||
+      normalized.includes('materia') ||
+      normalized.includes('matéria')
+    ) {
+      return 'create_social_article';
     }
     if (normalized.includes('tarefa')) {
       return 'create_task';
@@ -1451,6 +1534,53 @@ export class AiAssistantService {
       ];
     }
 
+    if (intent === 'create_social_article') {
+      return [
+        {
+          field: 'scope',
+          label: 'Escopo da matéria',
+          inputType: 'single_select',
+          options: [
+            { value: 'SMIF', label: 'SMIF' },
+            { value: 'CIPAVD', label: 'CIPAVD' },
+          ],
+        },
+        {
+          field: 'missionId',
+          label: 'Missão de referência',
+          inputType: 'single_select',
+          options: await this.listMissionOptions(draft.scope, user),
+        },
+        {
+          field: 'audience',
+          label: 'Público da matéria',
+          inputType: 'single_select',
+          options: [
+            {
+              value: 'INTERNAL',
+              label: 'Interno',
+              description:
+                'Texto mais institucional, voltado ao público interno do sistema.',
+            },
+            {
+              value: 'EXTERNAL',
+              label: 'Externo',
+              description:
+                'Texto com linguagem mais aberta para divulgação externa.',
+            },
+          ],
+        },
+        {
+          field: 'articleAngle',
+          label: 'Ângulo ou foco principal',
+          inputType: 'textarea',
+          optional: true,
+          helperText:
+            'Campo opcional. Ex.: destacar prevenção, alcance da missão, atuação nas OMs atendidas.',
+        },
+      ];
+    }
+
     const isMissionCreatedInFlow = draft.scheduleFromMissionCreation === true;
     if (
       isMissionCreatedInFlow &&
@@ -1876,6 +2006,37 @@ export class AiAssistantService {
       ];
     }
 
+    if (intent === 'create_social_article') {
+      const generatedDraft = this.readGeneratedArticleDraft(draft);
+      return [
+        { label: 'Escopo', value: draft.scope || '—' },
+        { label: 'Missão', value: (await findOptionLabel('missionId', draft.missionId)) || '—' },
+        {
+          label: 'Público',
+          value:
+            draft.audience === 'EXTERNAL'
+              ? 'Externo'
+              : draft.audience === 'INTERNAL'
+                ? 'Interno'
+                : '—',
+        },
+        {
+          label: 'Foco principal',
+          value: draft.articleAngle || 'Matéria institucional baseada na missão',
+        },
+        {
+          label: 'Título sugerido',
+          value: generatedDraft?.title || 'Aguardando geração',
+        },
+        {
+          label: 'Tags',
+          value: generatedDraft?.tags?.length
+            ? generatedDraft.tags.map((item) => `#${item}`).join(' ')
+            : 'Aguardando geração',
+        },
+      ];
+    }
+
     const missionLabel = await findOptionLabel('missionId', draft.missionId);
     if (draft.scheduleOperation === 'EDIT') {
       const existingItems = Array.isArray(draft.scheduleExistingItems)
@@ -2071,6 +2232,34 @@ export class AiAssistantService {
       };
     }
 
+    if (workflow.intent === 'create_social_article') {
+      const generatedDraft = this.readGeneratedArticleDraft(draft);
+      if (!generatedDraft) {
+        throw new BadRequestException(
+          'Gere e revise o rascunho da matéria antes de confirmar a criação.',
+        );
+      }
+      const mission = await this.resolveSocialArticleMission(draft.missionId, user);
+      const created = await this.socialCommunication.create(
+        {
+          url: this.buildGeneratedArticleSourceUrl(mission.id),
+          title: generatedDraft.title,
+          summary: generatedDraft.summary,
+          contentText: generatedDraft.contentText,
+          tags: generatedDraft.tags,
+          audience: generatedDraft.audience,
+          publishedAt: new Date().toISOString(),
+        },
+        user,
+      );
+      return {
+        entityType: 'social_communication_article',
+        id: String(created.id),
+        title: String(created.title),
+        url: '/social-communication',
+      };
+    }
+
     if (draft.scheduleInputMode === 'UPLOAD') {
       const scheduleItems = Array.isArray(draft.scheduleItemsDraft)
         ? (draft.scheduleItemsDraft as AssistantScheduleDraftItem[])
@@ -2120,6 +2309,541 @@ export class AiAssistantService {
       title: String(created.title),
       url: `/missions?scope=${encodeURIComponent(String(draft.scope ?? 'SMIF'))}&missionId=${encodeURIComponent(String(draft.missionId))}`,
     };
+  }
+
+  private readGeneratedArticleDraft(
+    draft: Record<string, any>,
+  ): AssistantGeneratedArticleDraft | null {
+    const raw = draft.generatedArticle;
+    if (!raw || typeof raw !== 'object') return null;
+    const title = String(raw.title ?? '').trim();
+    const summary = String(raw.summary ?? '').trim();
+    const contentText = String(raw.contentText ?? '').trim();
+    if (!title || !summary || !contentText) return null;
+    return {
+      title,
+      summary,
+      contentText,
+      tags: Array.isArray(raw.tags)
+        ? raw.tags.map((item: unknown) => String(item ?? '').trim()).filter(Boolean)
+        : [],
+      audience: raw.audience === 'EXTERNAL' ? 'EXTERNAL' : 'INTERNAL',
+      referencesUsed: Array.isArray(raw.referencesUsed)
+        ? raw.referencesUsed
+            .map((item: any) => ({
+              id: String(item?.id ?? '').trim(),
+              title: String(item?.title ?? '').trim(),
+              publishedAt: item?.publishedAt ? String(item.publishedAt) : null,
+              sourceUrl: String(item?.sourceUrl ?? '').trim(),
+            }))
+            .filter((item: any) => item.id && item.title)
+        : [],
+    };
+  }
+
+  private async resolveSocialArticleMission(missionId: string, user?: RbacUser) {
+    const mission = (await this.missions.getById(missionId, user)) as any;
+    if (!mission?.id) {
+      throw new BadRequestException(
+        'Selecione uma missão válida para gerar a matéria.',
+      );
+    }
+    return mission;
+  }
+
+  private async listExecutedMissionActivities(mission: any) {
+    const startDate = mission?.startDate ? new Date(mission.startDate) : null;
+    const endDate = mission?.endDate ? new Date(mission.endDate) : null;
+    if (!mission?.localityId || !startDate || !endDate) {
+      return [];
+    }
+
+    const baseWhere = {
+      localityId: String(mission.localityId),
+      scope:
+        String(mission.scope ?? '').toUpperCase() === 'CIPAVD'
+          ? ActivityScope.CIPAVD
+          : ActivityScope.SMIF,
+      eventDate: {
+        gte: startDate,
+        lte: endDate,
+      },
+    } as any;
+
+    const include = {
+      locality: { select: { id: true, code: true, name: true } },
+      activityType: { select: { id: true, name: true } },
+      report: {
+        select: {
+          id: true,
+          date: true,
+          location: true,
+          responsible: true,
+          activitiesPerformed: true,
+          mainPointsObserved: true,
+          nextSteps: true,
+          signedAt: true,
+        },
+      },
+    } as const;
+
+    const doneItems = await this.prisma.activity.findMany({
+      where: {
+        ...baseWhere,
+        status: 'DONE',
+      },
+      include,
+      orderBy: [{ eventDate: 'asc' }, { createdAt: 'asc' }],
+      take: 20,
+    } as any);
+
+    if (doneItems.length) {
+      return doneItems;
+    }
+
+    return this.prisma.activity.findMany({
+      where: {
+        ...baseWhere,
+        report: {
+          isNot: null,
+        },
+      },
+      include,
+      orderBy: [{ eventDate: 'asc' }, { createdAt: 'asc' }],
+      take: 20,
+    } as any);
+  }
+
+  private summarizeMissionActivities(activities: any[]) {
+    return activities.map((activity, index) => {
+      const when = activity?.eventDate ? this.formatDate(activity.eventDate) : 'sem data';
+      const report = activity?.report;
+      const reportNotes = [
+        report?.activitiesPerformed
+          ? `Execução registrada: ${String(report.activitiesPerformed).trim()}`
+          : '',
+        report?.mainPointsObserved
+          ? `Pontos observados: ${String(report.mainPointsObserved).trim()}`
+          : '',
+        report?.nextSteps
+          ? `Próximos passos: ${String(report.nextSteps).trim()}`
+          : '',
+      ]
+        .filter(Boolean)
+        .join(' ');
+      return [
+        `${index + 1}. ${String(activity?.title ?? 'Atividade').trim()}`,
+        `Data: ${when}`,
+        `Tipo: ${String(activity?.activityType?.name ?? 'Não informado')}`,
+        `Localidade: ${String(activity?.locality?.code ?? activity?.locality?.name ?? 'Não informada')}`,
+        `Descrição: ${String(activity?.description ?? '').trim() || 'Não informada'}`,
+        reportNotes ? `Relatório: ${reportNotes}` : '',
+      ]
+        .filter(Boolean)
+        .join('\n');
+    });
+  }
+
+  private async generateSocialArticleDraft(
+    draft: Record<string, any>,
+    user?: RbacUser,
+  ): Promise<AssistantGeneratedArticleDraft> {
+    const mission = await this.resolveSocialArticleMission(draft.missionId, user);
+    const activities = await this.listExecutedMissionActivities(mission);
+    const references = (
+      await this.socialCommunication.listAssistantReferences(
+        String(draft.scope ?? mission.scope ?? 'SMIF'),
+        5,
+      )
+    ).items;
+
+    const fallback = this.buildFallbackSocialArticleDraft(
+      draft,
+      mission,
+      activities,
+      references,
+    );
+
+    try {
+      const response = await this.litellm.chatCompletion({
+        temperature: 0.35,
+        max_tokens: 2200,
+        messages: [
+          {
+            role: 'system',
+            content: [
+              'Você é um redator institucional do COMAER.',
+              'Sua tarefa é redigir uma matéria com linguagem clara, formal e objetiva.',
+              'Use as matérias de referência apenas para absorver tom, estrutura e vocabulário. Nunca copie fatos, números ou nomes que não estejam no contexto factual fornecido.',
+              'Não invente atividades, públicos, locais, resultados ou autoridades.',
+              'Responda apenas em JSON válido.',
+            ].join(' '),
+          },
+          {
+            role: 'user',
+            content: this.buildSocialArticleGenerationPrompt(
+              draft,
+              mission,
+              activities,
+              references,
+            ),
+          },
+        ],
+      });
+      const parsed = this.parseSocialArticleDraftResponse(
+        response.content,
+        draft,
+        mission,
+        references,
+      );
+      if (parsed) {
+        return parsed;
+      }
+    } catch (error) {
+      this.logger.warn(
+        `Falha ao gerar matéria via LLM: ${this.extractErrorMessage(error)}`,
+      );
+    }
+
+    return fallback;
+  }
+
+  private async handleSocialArticleRevision(
+    session: AssistantSession,
+    workflow: AssistantWorkflow,
+    instruction: string,
+    user?: RbacUser,
+  ): Promise<AssistantReply> {
+    const currentDraft = this.readGeneratedArticleDraft(workflow.draft);
+    if (!currentDraft) {
+      throw new BadRequestException(
+        'Ainda não há rascunho de matéria para revisar.',
+      );
+    }
+
+    const mission = await this.resolveSocialArticleMission(
+      workflow.draft.missionId,
+      user,
+    );
+    const activities = await this.listExecutedMissionActivities(mission);
+    const references = (
+      await this.socialCommunication.listAssistantReferences(
+        String(workflow.draft.scope ?? mission.scope ?? 'SMIF'),
+        5,
+      )
+    ).items;
+
+    let nextDraft = currentDraft;
+    try {
+      const response = await this.litellm.chatCompletion({
+        temperature: 0.3,
+        max_tokens: 2200,
+        messages: [
+          {
+            role: 'system',
+            content: [
+              'Você está revisando uma matéria institucional já rascunhada.',
+              'Ajuste apenas o necessário para atender à instrução do usuário.',
+              'Mantenha aderência total aos fatos fornecidos. Não invente fatos novos.',
+              'Responda apenas em JSON válido.',
+            ].join(' '),
+          },
+          {
+            role: 'user',
+            content: this.buildSocialArticleRevisionPrompt(
+              instruction,
+              workflow.draft,
+              mission,
+              activities,
+              references,
+              currentDraft,
+            ),
+          },
+        ],
+      });
+      const parsed = this.parseSocialArticleDraftResponse(
+        response.content,
+        workflow.draft,
+        mission,
+        references,
+      );
+      if (parsed) {
+        nextDraft = parsed;
+      }
+    } catch (error) {
+      this.logger.warn(
+        `Falha ao revisar matéria via LLM: ${this.extractErrorMessage(error)}`,
+      );
+    }
+
+    workflow.draft.generatedArticle = nextDraft;
+    workflow.status = 'confirming';
+    const updatedView = await this.buildWorkflowView(workflow, user);
+    return this.buildReply(
+      session,
+      this.pushMessage(
+        session,
+        'assistant',
+        this.buildSocialArticleDraftMessage(workflow.draft),
+      ),
+      updatedView,
+      null,
+    );
+  }
+
+  private buildSocialArticleGenerationPrompt(
+    draft: Record<string, any>,
+    mission: any,
+    activities: any[],
+    references: any[],
+  ) {
+    const missionPeriod =
+      mission?.startDate && mission?.endDate
+        ? `${this.formatDate(mission.startDate)} a ${this.formatDate(mission.endDate)}`
+        : 'período não informado';
+    const referenceLines = references.length
+      ? references
+          .map(
+            (item: any, index: number) =>
+              `${index + 1}. ${String(item.title).trim()} (${item.publishedAt ? this.formatDate(item.publishedAt) : 'sem data'})\nTexto-base:\n${String(item.referenceText ?? '').trim()}`,
+          )
+          .join('\n\n')
+      : 'Nenhuma matéria de referência encontrada para este escopo.';
+
+    const activityLines = activities.length
+      ? this.summarizeMissionActivities(activities).join('\n\n')
+      : 'Nenhuma atividade executada encontrada no período/localidade da missão.';
+
+    return [
+      'Gere uma matéria institucional a partir do contexto abaixo.',
+      '',
+      `Escopo: ${String(draft.scope ?? mission.scope ?? 'SMIF')}`,
+      `Público: ${draft.audience === 'EXTERNAL' ? 'EXTERNO' : 'INTERNO'}`,
+      `Foco principal pedido pelo usuário: ${String(draft.articleAngle ?? '').trim() || 'não informado'}`,
+      '',
+      'Fatos da missão:',
+      `- Título: ${String(mission?.title ?? '').trim()}`,
+      `- Descrição: ${String(mission?.description ?? '').trim() || 'não informada'}`,
+      `- Localidade: ${String(mission?.locality?.code ?? '').trim()} - ${String(mission?.locality?.name ?? '').trim()}`,
+      `- Período: ${missionPeriod}`,
+      `- Participantes cadastrados na missão: ${Array.isArray(mission?.participants) ? mission.participants.length : 0}`,
+      '',
+      'Atividades executadas relacionadas à missão:',
+      activityLines,
+      '',
+      'Matérias de referência do mesmo escopo:',
+      referenceLines,
+      '',
+      'Regras obrigatórias:',
+      '- Use apenas os fatos informados acima.',
+      '- Não invente números, autoridades, resultados, públicos ou locais.',
+      '- Se alguma informação não estiver no contexto, omita.',
+      '- Use as matérias de referência só para tom e estrutura.',
+      '- Gere uma matéria pronta para revisão humana.',
+      '',
+      'Responda APENAS em JSON com este formato:',
+      '{',
+      '  "title": "titulo da materia",',
+      '  "summary": "resumo curto com 2 ou 3 frases",',
+      '  "contentText": "texto completo da materia em markdown simples ou texto corrido",',
+      '  "tags": ["tag1", "tag2"],',
+      '  "referencesUsed": ["id-da-referencia-1", "id-da-referencia-2"]',
+      '}',
+    ].join('\n');
+  }
+
+  private buildSocialArticleRevisionPrompt(
+    instruction: string,
+    draft: Record<string, any>,
+    mission: any,
+    activities: any[],
+    references: any[],
+    currentDraft: AssistantGeneratedArticleDraft,
+  ) {
+    return [
+      'Revise a matéria abaixo conforme a instrução do usuário.',
+      `Instrução: ${instruction}`,
+      '',
+      'Rascunho atual:',
+      JSON.stringify(currentDraft, null, 2),
+      '',
+      'Fatos da missão:',
+      this.buildSocialArticleGenerationPrompt(draft, mission, activities, references),
+      '',
+      'Regras:',
+      '- Ajuste apenas o necessário para atender à instrução.',
+      '- Mantenha aderência total aos fatos disponíveis.',
+      '- Não invente informações novas.',
+      '- Preserve tags úteis e atualize-as se fizer sentido.',
+      '',
+      'Responda APENAS em JSON com o mesmo formato do rascunho atual.',
+    ].join('\n');
+  }
+
+  private parseSocialArticleDraftResponse(
+    rawContent: string,
+    draft: Record<string, any>,
+    mission: any,
+    references: any[],
+  ): AssistantGeneratedArticleDraft | null {
+    const safe = String(rawContent ?? '').trim();
+    if (!safe) return null;
+    const jsonMatch =
+      safe.match(/```json\s*([\s\S]*?)```/i)?.[1] ??
+      safe.match(/(\{[\s\S]*\})/)?.[1] ??
+      safe;
+    try {
+      const parsed = JSON.parse(jsonMatch);
+      const title = String(parsed?.title ?? '').trim();
+      const summary = String(parsed?.summary ?? '').trim();
+      const contentText = String(parsed?.contentText ?? '').trim();
+      if (!title || !summary || !contentText) {
+        return null;
+      }
+      const normalizedTags = this.normalizeGeneratedArticleTags(
+        Array.isArray(parsed?.tags) ? parsed.tags : [],
+        String(draft.scope ?? mission?.scope ?? 'SMIF'),
+        mission,
+      );
+      const referencesUsed = Array.isArray(parsed?.referencesUsed)
+        ? references.filter((item: any) =>
+            parsed.referencesUsed.includes(item.id),
+          )
+        : [];
+      return {
+        title,
+        summary,
+        contentText,
+        tags: normalizedTags,
+        audience: draft.audience === 'EXTERNAL' ? 'EXTERNAL' : 'INTERNAL',
+        referencesUsed: referencesUsed.map((item: any) => ({
+          id: String(item.id),
+          title: String(item.title),
+          publishedAt: item.publishedAt ? String(item.publishedAt) : null,
+          sourceUrl: String(item.sourceUrl ?? ''),
+        })),
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  private buildFallbackSocialArticleDraft(
+    draft: Record<string, any>,
+    mission: any,
+    activities: any[],
+    references: any[],
+  ): AssistantGeneratedArticleDraft {
+    const localityLabel = [
+      String(mission?.locality?.code ?? '').trim(),
+      String(mission?.locality?.name ?? '').trim(),
+    ]
+      .filter(Boolean)
+      .join(' - ');
+    const firstParagraph = [
+      `A ${String(draft.scope ?? mission?.scope ?? 'SMIF')} realizou a missão **${String(mission?.title ?? '').trim()}** em ${localityLabel || 'localidade não informada'}, no período de ${this.formatDate(mission?.startDate)} a ${this.formatDate(mission?.endDate)}.`,
+      activities.length
+        ? `Durante a agenda, foram executadas ${activities.length} atividade(s) de campo relacionadas ao escopo da missão, com foco em prevenção, orientação institucional e apoio às organizações atendidas.`
+        : 'A agenda registrada destaca a atuação institucional da comissão no período, com ênfase em prevenção e orientação.',
+    ].join(' ');
+
+    const activityParagraphs = activities.slice(0, 8).map((activity: any) => {
+      const report = activity?.report;
+      const details = [
+        String(activity?.title ?? '').trim(),
+        String(activity?.description ?? '').trim(),
+        String(report?.activitiesPerformed ?? '').trim(),
+      ]
+        .filter(Boolean)
+        .join(' ');
+      return `- ${details || 'Atividade registrada na missão.'}`;
+    });
+
+    const contentParts = [
+      firstParagraph,
+      draft.articleAngle
+        ? `O enfoque desta matéria é ${String(draft.articleAngle).trim()}.`
+        : '',
+      activityParagraphs.length
+        ? ['Entre as ações executadas, destacam-se:', ...activityParagraphs].join('\n')
+        : '',
+      'A iniciativa reforça o acompanhamento institucional e a atuação coordenada da comissão no escopo da missão.',
+    ].filter(Boolean);
+
+    return {
+      title: `Missão ${String(draft.scope ?? mission?.scope ?? 'SMIF')} em ${String(mission?.locality?.name ?? 'localidade atendida').trim()} destaca ações institucionais`,
+      summary: firstParagraph,
+      contentText: contentParts.join('\n\n'),
+      tags: this.normalizeGeneratedArticleTags([], String(draft.scope ?? mission?.scope ?? 'SMIF'), mission),
+      audience: draft.audience === 'EXTERNAL' ? 'EXTERNAL' : 'INTERNAL',
+      referencesUsed: references.slice(0, 2).map((item: any) => ({
+        id: String(item.id),
+        title: String(item.title),
+        publishedAt: item.publishedAt ? String(item.publishedAt) : null,
+        sourceUrl: String(item.sourceUrl ?? ''),
+      })),
+    };
+  }
+
+  private normalizeGeneratedArticleTags(
+    rawTags: unknown[],
+    scopeRaw: string,
+    mission: any,
+  ) {
+    const seen = new Set<string>();
+    const normalized: string[] = [];
+    const add = (value: unknown) => {
+      const clean = String(value ?? '')
+        .normalize('NFD')
+        .replace(/\p{Diacritic}/gu, '')
+        .trim()
+        .toLowerCase();
+      const slug = clean.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      if (!slug || seen.has(slug)) return;
+      seen.add(slug);
+      normalized.push(slug);
+    };
+
+    rawTags.forEach(add);
+    add(scopeRaw);
+    add('missao');
+    add(mission?.locality?.code);
+    add(mission?.locality?.name);
+    return normalized.slice(0, 12);
+  }
+
+  private buildSocialArticleDraftMessage(draft: Record<string, any>) {
+    const generatedDraft = this.readGeneratedArticleDraft(draft);
+    if (!generatedDraft) {
+      return 'Ainda não consegui montar um rascunho válido da matéria.';
+    }
+    const referenceList = generatedDraft.referencesUsed.length
+      ? generatedDraft.referencesUsed
+          .map((item, index) => {
+            const dateLabel = item.publishedAt
+              ? this.formatDate(item.publishedAt)
+              : 'sem data';
+            return `${index + 1}. ${item.title} (${dateLabel})`;
+          })
+          .join('\n')
+      : 'Nenhuma matéria de referência precisou ser citada explicitamente.';
+    return [
+      'Rascunho de **criar matéria a partir de missão** pronto para conferência.',
+      `**Título sugerido:** ${generatedDraft.title}`,
+      `**Resumo:** ${generatedDraft.summary}`,
+      `**Tags:** ${generatedDraft.tags.map((item) => `#${item}`).join(' ') || '—'}`,
+      '### Texto sugerido',
+      generatedDraft.contentText,
+      '### Referências de estilo consideradas',
+      referenceList,
+      'Se quiser ajustar o texto, responda no chat com a mudança desejada. Se estiver tudo certo, confirme a criação.',
+    ].join('\n\n');
+  }
+
+  private buildGeneratedArticleSourceUrl(missionId: string) {
+    return `https://cipavd.ccabr.intraer/social-communication/generated/${encodeURIComponent(
+      String(missionId ?? '').trim() || 'mission',
+    )}`;
   }
 
   private buildScheduleEditValueField(

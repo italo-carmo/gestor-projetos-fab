@@ -15,5 +15,6 @@ import { SocialCommunicationService } from './social-communication.service';
     SocialCommunicationUploadsController,
   ],
   providers: [SocialCommunicationService],
+  exports: [SocialCommunicationService],
 })
 export class SocialCommunicationModule {}

@@ -947,6 +947,7 @@ model SocialCommunicationArticle {
   title         String
   coverImageUrl String?
   summary       String?
+  contentText   String?
   tags          String[]                      @default([])
   audience      SocialCommunicationAudience   @default(INTERNAL)
   publishedAt   DateTime?

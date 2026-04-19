@@ -36,6 +36,7 @@ import EventAvailableRoundedIcon from "@mui/icons-material/EventAvailableRounded
 import PlaylistAddCheckRoundedIcon from "@mui/icons-material/PlaylistAddCheckRounded";
 import RestartAltRoundedIcon from "@mui/icons-material/RestartAltRounded";
 import OpenInNewRoundedIcon from "@mui/icons-material/OpenInNewRounded";
+import NewspaperRoundedIcon from "@mui/icons-material/NewspaperRounded";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
@@ -127,6 +128,14 @@ const OPERATIONAL_QUICK_ACTIONS = [
     icon: <PlaylistAddCheckRoundedIcon />,
     color: "#7B1FA2",
   },
+  {
+    id: "create_social_article",
+    title: "Criar matéria a partir de missão",
+    description:
+      "Cruza missão, atividades executadas e matérias do mesmo escopo para montar uma notícia revisável antes de salvar.",
+    icon: <NewspaperRoundedIcon />,
+    color: "#8E244D",
+  },
 ] as const;
 
 const CHATBOT_QUICK_PROMPTS = [
@@ -135,6 +144,29 @@ const CHATBOT_QUICK_PROMPTS = [
   "Quais estados parecem concentrar mais pressão institucional ou operacional?",
   "Resuma o que o sistema mostra sobre missões, atividades e tarefas em andamento.",
 ] as const;
+
+const COPILOT_MODE_DESCRIPTIONS: Record<
+  "executive" | "analyst",
+  {
+    title: string;
+    summary: string;
+    useCase: string;
+  }
+> = {
+  executive: {
+    title: "Executivo",
+    summary:
+      "Resposta curta, direta e orientada à decisão. Destaca risco, impacto e ação recomendada.",
+    useCase: "Use para briefing rápido, despacho e priorização de atuação.",
+  },
+  analyst: {
+    title: "Analista",
+    summary:
+      "Resposta mais detalhada, com rastreabilidade dos sinais, indicadores e razões do diagnóstico.",
+    useCase:
+      "Use para validação técnica, nota analítica e entendimento do porquê da conclusão.",
+  },
+};
 
 type AnalysisState = {
   running: boolean;
@@ -750,7 +782,8 @@ type ChatbotMessage = {
       | "create_mission"
       | "create_activity"
       | "create_task"
-      | "create_mission_schedule";
+      | "create_mission_schedule"
+      | "create_social_article";
     label: string;
     description: string;
     reason?: string;
@@ -765,7 +798,8 @@ function ChatbotTab({
       | "create_mission"
       | "create_activity"
       | "create_task"
-      | "create_mission_schedule",
+      | "create_mission_schedule"
+      | "create_social_article",
     actionLabel: string,
   ) => void;
 }) {
@@ -922,303 +956,304 @@ function ChatbotTab({
           Esta aba é para perguntas abertas sobre CIPAVD, SMIF e CPCA. O chatbot
           responde somente com base nas fontes permitidas em{" "}
           <strong>Administração &gt; Configuração IA</strong>. Para criar missão,
-          atividade, tarefa ou cronograma, use a aba <strong>Assistente virtual</strong>.
+          atividade, tarefa, cronograma ou matéria, use a aba <strong>Assistente virtual</strong>.
         </Typography>
       </Alert>
 
-      <Grid container spacing={2}>
-        <Grid size={{ xs: 12, md: 4 }}>
-          <Card variant="outlined" sx={{ borderRadius: 3, height: "100%" }}>
-            <CardContent>
-              <Stack spacing={1.5}>
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <SmartToyRoundedIcon sx={{ color: "#00695C" }} />
-                  <Typography variant="subtitle1" fontWeight={800} color="#1A3C6E">
-                    Como usar
-                  </Typography>
-                </Stack>
-                <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
-                  Faça perguntas livres sobre dados, tendências, diferenças entre fluxos,
-                  panorama operacional e sinais institucionais do sistema.
-                </Typography>
-                <Stack spacing={1}>
-                  {CHATBOT_QUICK_PROMPTS.map((prompt) => (
-                    <Button
-                      key={prompt}
-                      variant="outlined"
-                      color="inherit"
-                      sx={{ justifyContent: "flex-start", textAlign: "left", borderRadius: 2.5 }}
-                      disabled={running}
-                      onClick={() => void sendMessage(prompt)}
-                    >
-                      {prompt}
-                    </Button>
-                  ))}
-                </Stack>
-              </Stack>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid size={{ xs: 12, md: 8 }}>
-          <Card variant="outlined" sx={{ borderRadius: 3 }}>
-            <CardContent>
-              <Stack
-                direction={{ xs: "column", sm: "row" }}
-                spacing={1}
-                justifyContent="space-between"
-                alignItems={{ sm: "center" }}
-                sx={{ mb: 1.5 }}
-              >
-                <Box>
-                  <Typography variant="subtitle1" fontWeight={800} color="#1A3C6E">
-                    Conversa
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Perguntas abertas com resposta em Markdown, respeitando o escopo configurado.
-                  </Typography>
-                </Box>
+      <Card variant="outlined" sx={{ borderRadius: 3 }}>
+        <CardContent>
+          <Stack spacing={1.5}>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <SmartToyRoundedIcon sx={{ color: "#00695C" }} />
+              <Typography variant="subtitle1" fontWeight={800} color="#1A3C6E">
+                Como usar
+              </Typography>
+            </Stack>
+            <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
+              Faça perguntas livres sobre dados, tendências, diferenças entre fluxos,
+              panorama operacional e sinais institucionais do sistema.
+            </Typography>
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+              {CHATBOT_QUICK_PROMPTS.map((prompt) => (
                 <Button
+                  key={prompt}
                   variant="outlined"
                   color="inherit"
-                  startIcon={<RestartAltRoundedIcon />}
-                  onClick={resetConversation}
-                  disabled={running && !messages.length}
-                >
-                  Nova conversa
-                </Button>
-              </Stack>
-
-              <Box
-                ref={scrollRef}
-                sx={{
-                  minHeight: 360,
-                  maxHeight: 720,
-                  overflow: "auto",
-                  p: 1.5,
-                  bgcolor: "#F8F9FA",
-                  borderRadius: 2.5,
-                  border: "1px solid #E8EAF0",
-                }}
-              >
-                {!messages.length ? (
-                  <Box sx={{ textAlign: "center", py: 8 }}>
-                    <SmartToyRoundedIcon sx={{ fontSize: 48, color: "#00695C", mb: 1 }} />
-                    <Typography variant="h6" color="#1A3C6E" fontWeight={700}>
-                      Chatbot institucional
-                    </Typography>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      sx={{ maxWidth: 560, mx: "auto", mt: 1, lineHeight: 1.7 }}
-                    >
-                      Pergunte livremente sobre CIPAVD, SMIF e CPCA. O chatbot vai
-                      responder com base no escopo liberado pelo administrador.
-                    </Typography>
-                  </Box>
-                ) : null}
-
-                <Stack spacing={1.5}>
-                  {messages.map((msg) => (
-                    <Stack
-                      key={msg.id}
-                      direction="row"
-                      spacing={1}
-                      justifyContent={msg.role === "user" ? "flex-end" : "flex-start"}
-                    >
-                      {msg.role === "assistant" ? (
-                        <SmartToyRoundedIcon
-                          sx={{ fontSize: 28, color: "#00695C", mt: 0.5, flexShrink: 0 }}
-                        />
-                      ) : null}
-                      <Box
-                        sx={{
-                          maxWidth: msg.role === "assistant" ? "86%" : "75%",
-                          px: 2,
-                          py: 1.35,
-                          borderRadius: 2.5,
-                          bgcolor: msg.role === "user" ? "#163A6B" : "#FFFFFF",
-                          color:
-                            msg.role === "user"
-                              ? "rgba(248, 251, 255, 0.98)"
-                              : "text.primary",
-                          boxShadow: 1,
-                          border:
-                            msg.role === "assistant" ? "1px solid #E2E8F0" : undefined,
-                        }}
-                      >
-                        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.8 }}>
-                          <Chip
-                            size="small"
-                            label={msg.role === "assistant" ? "Chatbot" : "Você"}
-                            color={msg.role === "assistant" ? "success" : "default"}
-                            sx={
-                              msg.role === "user"
-                                ? {
-                                    bgcolor: "rgba(255,255,255,0.18)",
-                                    color: "rgba(248, 251, 255, 0.98)",
-                                    borderColor: "rgba(255,255,255,0.22)",
-                                  }
-                                : undefined
-                            }
-                          />
-                          {msg.model ? (
-                            <Chip size="small" variant="outlined" label={msg.model} />
-                          ) : null}
-                        </Stack>
-                        {msg.role === "assistant" ? (
-                          <MdContent>{msg.content}</MdContent>
-                        ) : (
-                          <Typography
-                            variant="body2"
-                            sx={{
-                              whiteSpace: "pre-wrap",
-                              lineHeight: 1.7,
-                              color: "rgba(248, 251, 255, 0.98)",
-                              fontWeight: 500,
-                            }}
-                          >
-                            {msg.content}
-                          </Typography>
-                        )}
-                        {msg.role === "assistant" && msg.suggestedLinks?.length ? (
-                          <Stack spacing={1} sx={{ mt: 1.25 }}>
-                            <Typography variant="caption" color="text.secondary">
-                              Links sugeridos
-                            </Typography>
-                            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                              {msg.suggestedLinks.map((item) => (
-                                <Button
-                                  key={`${msg.id}-${item.href}`}
-                                  size="small"
-                                  variant="outlined"
-                                  href={item.href}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  startIcon={<OpenInNewRoundedIcon />}
-                                >
-                                  {item.label}
-                                </Button>
-                              ))}
-                            </Stack>
-                          </Stack>
-                        ) : null}
-                        {msg.role === "assistant" && msg.suggestedActions?.length ? (
-                          <Stack spacing={1} sx={{ mt: 1.25 }}>
-                            <Typography variant="caption" color="text.secondary">
-                              Transformar em ação
-                            </Typography>
-                            <Stack spacing={1}>
-                              {msg.suggestedActions.map((action) => (
-                                <Paper
-                                  key={`${msg.id}-${action.id}`}
-                                  variant="outlined"
-                                  sx={{ p: 1.1, borderRadius: 2, bgcolor: "#FAFBFD" }}
-                                >
-                                  <Stack
-                                    direction={{ xs: "column", sm: "row" }}
-                                    spacing={1}
-                                    justifyContent="space-between"
-                                    alignItems={{ sm: "center" }}
-                                  >
-                                    <Box sx={{ minWidth: 0 }}>
-                                      <Typography variant="body2" fontWeight={700}>
-                                        {action.label}
-                                      </Typography>
-                                      <Typography
-                                        variant="caption"
-                                        color="text.secondary"
-                                        sx={{ display: "block", mt: 0.35, lineHeight: 1.55 }}
-                                      >
-                                        {action.description}
-                                      </Typography>
-                                      {action.reason ? (
-                                        <Typography
-                                          variant="caption"
-                                          color="text.secondary"
-                                          sx={{ display: "block", mt: 0.5, lineHeight: 1.55 }}
-                                        >
-                                          Motivo: {action.reason}
-                                        </Typography>
-                                      ) : null}
-                                    </Box>
-                                    <Button
-                                      size="small"
-                                      variant="contained"
-                                      onClick={() =>
-                                        onOpenAssistantAction(action.id, action.label)
-                                      }
-                                      sx={{
-                                        bgcolor: "#1A3C6E",
-                                        "&:hover": { bgcolor: "#122B4E" },
-                                        flexShrink: 0,
-                                      }}
-                                    >
-                                      Abrir no assistente
-                                    </Button>
-                                  </Stack>
-                                </Paper>
-                              ))}
-                            </Stack>
-                          </Stack>
-                        ) : null}
-                      </Box>
-                      {msg.role === "user" ? (
-                        <PersonRoundedIcon
-                          sx={{ fontSize: 28, color: "#1A3C6E", mt: 0.5, flexShrink: 0 }}
-                        />
-                      ) : null}
-                    </Stack>
-                  ))}
-                  {running || statusText ? (
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <SmartToyRoundedIcon sx={{ fontSize: 28, color: "#00695C" }} />
-                      <Paper variant="outlined" sx={{ px: 2, py: 1.2, borderRadius: 2.5 }}>
-                        <Typography variant="body2" color="text.secondary">
-                          {statusText || "Processando..."}
-                        </Typography>
-                      </Paper>
-                    </Stack>
-                  ) : null}
-                </Stack>
-              </Box>
-
-              <Stack spacing={1.25} sx={{ mt: 1.5 }}>
-                <TextField
-                  fullWidth
-                  size="small"
-                  label="Pergunta"
-                  placeholder="Ex.: Quais são os principais riscos hoje em CIPAVD, SMIF e CPCA?"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      void sendMessage(input);
-                    }
+                  sx={{
+                    justifyContent: "flex-start",
+                    textAlign: "left",
+                    borderRadius: 2.5,
+                    px: 1.5,
+                    py: 1,
                   }}
-                  multiline
-                  maxRows={4}
                   disabled={running}
-                />
-                <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-                  <Button
-                    variant="contained"
-                    onClick={() => void sendMessage(input)}
-                    disabled={running || !input.trim()}
-                    startIcon={<SendRoundedIcon />}
+                  onClick={() => void sendMessage(prompt)}
+                >
+                  {prompt}
+                </Button>
+              ))}
+            </Stack>
+          </Stack>
+        </CardContent>
+      </Card>
+
+      <Card variant="outlined" sx={{ borderRadius: 3 }}>
+        <CardContent>
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            spacing={1}
+            justifyContent="space-between"
+            alignItems={{ sm: "center" }}
+            sx={{ mb: 1.5 }}
+          >
+            <Box>
+              <Typography variant="subtitle1" fontWeight={800} color="#1A3C6E">
+                Conversa
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Perguntas abertas com resposta em Markdown, respeitando o escopo configurado.
+              </Typography>
+            </Box>
+            <Button
+              variant="outlined"
+              color="inherit"
+              startIcon={<RestartAltRoundedIcon />}
+              onClick={resetConversation}
+              disabled={running && !messages.length}
+            >
+              Nova conversa
+            </Button>
+          </Stack>
+
+          <Box
+            ref={scrollRef}
+            sx={{
+              minHeight: 360,
+              maxHeight: 720,
+              overflow: "auto",
+              p: 1.5,
+              bgcolor: "#F8F9FA",
+              borderRadius: 2.5,
+              border: "1px solid #E8EAF0",
+            }}
+          >
+            {!messages.length ? (
+              <Box sx={{ textAlign: "center", py: 8 }}>
+                <SmartToyRoundedIcon sx={{ fontSize: 48, color: "#00695C", mb: 1 }} />
+                <Typography variant="h6" color="#1A3C6E" fontWeight={700}>
+                  Chatbot institucional
+                </Typography>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ maxWidth: 560, mx: "auto", mt: 1, lineHeight: 1.7 }}
+                >
+                  Pergunte livremente sobre CIPAVD, SMIF e CPCA. O chatbot vai
+                  responder com base no escopo liberado pelo administrador.
+                </Typography>
+              </Box>
+            ) : null}
+
+            <Stack spacing={1.5}>
+              {messages.map((msg) => (
+                <Stack
+                  key={msg.id}
+                  direction="row"
+                  spacing={1}
+                  justifyContent={msg.role === "user" ? "flex-end" : "flex-start"}
+                >
+                  {msg.role === "assistant" ? (
+                    <SmartToyRoundedIcon
+                      sx={{ fontSize: 28, color: "#00695C", mt: 0.5, flexShrink: 0 }}
+                    />
+                  ) : null}
+                  <Box
                     sx={{
-                      bgcolor: "#00695C",
-                      "&:hover": { bgcolor: "#004D40" },
+                      maxWidth: msg.role === "assistant" ? "92%" : "80%",
+                      px: 2,
+                      py: 1.35,
+                      borderRadius: 2.5,
+                      bgcolor: msg.role === "user" ? "#163A6B" : "#FFFFFF",
+                      color:
+                        msg.role === "user"
+                          ? "rgba(248, 251, 255, 0.98)"
+                          : "text.primary",
+                      boxShadow: 1,
+                      border:
+                        msg.role === "assistant" ? "1px solid #E2E8F0" : undefined,
                     }}
                   >
-                    Enviar pergunta
-                  </Button>
+                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.8 }}>
+                      <Chip
+                        size="small"
+                        label={msg.role === "assistant" ? "Chatbot" : "Você"}
+                        color={msg.role === "assistant" ? "success" : "default"}
+                        sx={
+                          msg.role === "user"
+                            ? {
+                                bgcolor: "rgba(255,255,255,0.18)",
+                                color: "rgba(248, 251, 255, 0.98)",
+                                borderColor: "rgba(255,255,255,0.22)",
+                              }
+                            : undefined
+                        }
+                      />
+                      {msg.model ? (
+                        <Chip size="small" variant="outlined" label={msg.model} />
+                      ) : null}
+                    </Stack>
+                    {msg.role === "assistant" ? (
+                      <MdContent>{msg.content}</MdContent>
+                    ) : (
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          whiteSpace: "pre-wrap",
+                          lineHeight: 1.7,
+                          color: "rgba(248, 251, 255, 0.98)",
+                          fontWeight: 500,
+                        }}
+                      >
+                        {msg.content}
+                      </Typography>
+                    )}
+                    {msg.role === "assistant" && msg.suggestedLinks?.length ? (
+                      <Stack spacing={1} sx={{ mt: 1.25 }}>
+                        <Typography variant="caption" color="text.secondary">
+                          Links sugeridos
+                        </Typography>
+                        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                          {msg.suggestedLinks.map((item) => (
+                            <Button
+                              key={`${msg.id}-${item.href}`}
+                              size="small"
+                              variant="outlined"
+                              href={item.href}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              startIcon={<OpenInNewRoundedIcon />}
+                            >
+                              {item.label}
+                            </Button>
+                          ))}
+                        </Stack>
+                      </Stack>
+                    ) : null}
+                    {msg.role === "assistant" && msg.suggestedActions?.length ? (
+                      <Stack spacing={1} sx={{ mt: 1.25 }}>
+                        <Typography variant="caption" color="text.secondary">
+                          Transformar em ação
+                        </Typography>
+                        <Stack spacing={1}>
+                          {msg.suggestedActions.map((action) => (
+                            <Paper
+                              key={`${msg.id}-${action.id}`}
+                              variant="outlined"
+                              sx={{ p: 1.1, borderRadius: 2, bgcolor: "#FAFBFD" }}
+                            >
+                              <Stack
+                                direction={{ xs: "column", sm: "row" }}
+                                spacing={1}
+                                justifyContent="space-between"
+                                alignItems={{ sm: "center" }}
+                              >
+                                <Box sx={{ minWidth: 0 }}>
+                                  <Typography variant="body2" fontWeight={700}>
+                                    {action.label}
+                                  </Typography>
+                                  <Typography
+                                    variant="caption"
+                                    color="text.secondary"
+                                    sx={{ display: "block", mt: 0.35, lineHeight: 1.55 }}
+                                  >
+                                    {action.description}
+                                  </Typography>
+                                  {action.reason ? (
+                                    <Typography
+                                      variant="caption"
+                                      color="text.secondary"
+                                      sx={{ display: "block", mt: 0.5, lineHeight: 1.55 }}
+                                    >
+                                      Motivo: {action.reason}
+                                    </Typography>
+                                  ) : null}
+                                </Box>
+                                <Button
+                                  size="small"
+                                  variant="contained"
+                                  onClick={() =>
+                                    onOpenAssistantAction(action.id, action.label)
+                                  }
+                                  sx={{
+                                    bgcolor: "#1A3C6E",
+                                    "&:hover": { bgcolor: "#122B4E" },
+                                    flexShrink: 0,
+                                  }}
+                                >
+                                  Abrir no assistente
+                                </Button>
+                              </Stack>
+                            </Paper>
+                          ))}
+                        </Stack>
+                      </Stack>
+                    ) : null}
+                  </Box>
+                  {msg.role === "user" ? (
+                    <PersonRoundedIcon
+                      sx={{ fontSize: 28, color: "#1A3C6E", mt: 0.5, flexShrink: 0 }}
+                    />
+                  ) : null}
                 </Stack>
-              </Stack>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+              ))}
+              {running || statusText ? (
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <SmartToyRoundedIcon sx={{ fontSize: 28, color: "#00695C" }} />
+                  <Paper variant="outlined" sx={{ px: 2, py: 1.2, borderRadius: 2.5 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      {statusText || "Processando..."}
+                    </Typography>
+                  </Paper>
+                </Stack>
+              ) : null}
+            </Stack>
+          </Box>
+
+          <Stack spacing={1.25} sx={{ mt: 1.5 }}>
+            <TextField
+              fullWidth
+              size="small"
+              label="Pergunta"
+              placeholder="Ex.: Quais são os principais riscos hoje em CIPAVD, SMIF e CPCA?"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  void sendMessage(input);
+                }
+              }}
+              multiline
+              maxRows={4}
+              disabled={running}
+            />
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+              <Button
+                variant="contained"
+                onClick={() => void sendMessage(input)}
+                disabled={running || !input.trim()}
+                startIcon={<SendRoundedIcon />}
+                sx={{
+                  bgcolor: "#00695C",
+                  "&:hover": { bgcolor: "#004D40" },
+                }}
+              >
+                Enviar pergunta
+              </Button>
+            </Stack>
+          </Stack>
+        </CardContent>
+      </Card>
     </Stack>
   );
 }
@@ -1345,7 +1380,8 @@ function AssistantTab() {
   const isChatOnlyAssistantWorkflow =
     workflow?.intent === "create_mission" ||
     workflow?.intent === "create_activity" ||
-    workflow?.intent === "create_task";
+    workflow?.intent === "create_task" ||
+    workflow?.intent === "create_social_article";
 
   const postAssistant = useCallback(
     async (payload: Record<string, unknown>, userContent?: string) => {
@@ -1393,7 +1429,8 @@ function AssistantTab() {
         | "create_mission"
         | "create_activity"
         | "create_task"
-        | "create_mission_schedule",
+        | "create_mission_schedule"
+        | "create_social_article",
       actionLabel?: string,
     ) => {
       if (assistantSessionId) {
@@ -1482,7 +1519,8 @@ function AssistantTab() {
       pendingAction !== "create_mission" &&
       pendingAction !== "create_activity" &&
       pendingAction !== "create_task" &&
-      pendingAction !== "create_mission_schedule"
+      pendingAction !== "create_mission_schedule" &&
+      pendingAction !== "create_social_article"
     ) {
       const next = new URLSearchParams(searchParams);
       next.delete("assistantAction");
@@ -1843,6 +1881,74 @@ function AssistantTab() {
                 <ToggleButton value="analyst">Analista</ToggleButton>
               </ToggleButtonGroup>
             </Stack>
+            <Box
+              sx={{
+                p: 1.5,
+                borderRadius: 2.5,
+                border: "1px solid rgba(26,60,110,0.12)",
+                bgcolor: "#F8FAFC",
+              }}
+            >
+              <Grid container spacing={1.25}>
+                {(Object.entries(COPILOT_MODE_DESCRIPTIONS) as Array<
+                  ["executive" | "analyst", (typeof COPILOT_MODE_DESCRIPTIONS)["executive"]]
+                >).map(([mode, item]) => {
+                  const selected = copilotMode === mode;
+                  return (
+                    <Grid key={mode} size={{ xs: 12, md: 6 }}>
+                      <Box
+                        sx={{
+                          height: "100%",
+                          p: 1.25,
+                          borderRadius: 2,
+                          border: "1px solid",
+                          borderColor: selected
+                            ? "rgba(26,60,110,0.32)"
+                            : "rgba(26,60,110,0.1)",
+                          bgcolor: selected ? "rgba(26,60,110,0.05)" : "#FFFFFF",
+                        }}
+                      >
+                        <Stack
+                          direction="row"
+                          spacing={1}
+                          alignItems="center"
+                          justifyContent="space-between"
+                          sx={{ mb: 0.5 }}
+                        >
+                          <Typography variant="subtitle2" fontWeight={800} color="#1A3C6E">
+                            {item.title}
+                          </Typography>
+                          {selected ? (
+                            <Chip
+                              size="small"
+                              label="Selecionado"
+                              sx={{
+                                bgcolor: "rgba(26,60,110,0.12)",
+                                color: "#1A3C6E",
+                                fontWeight: 700,
+                              }}
+                            />
+                          ) : null}
+                        </Stack>
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          sx={{ lineHeight: 1.6 }}
+                        >
+                          {item.summary}
+                        </Typography>
+                        <Typography
+                          variant="caption"
+                          sx={{ display: "block", mt: 0.85, color: "#1A3C6E" }}
+                        >
+                          {item.useCase}
+                        </Typography>
+                      </Box>
+                    </Grid>
+                  );
+                })}
+              </Grid>
+            </Box>
             <Grid container spacing={1.5}>
               {copilotCards.map((item: any) => (
                 <Grid key={item.type} size={{ xs: 12, md: 4 }}>
@@ -2198,7 +2304,7 @@ function AssistantTab() {
                 >
                   Use os copilotos gerenciais para briefing e priorização ou
                   inicie um fluxo assistido para criar missão, atividade de
-                  campo, tarefa ou cronograma em missão.
+                  campo, tarefa, cronograma em missão ou matéria.
                 </Typography>
               </Box>
             ) : null}
@@ -2604,7 +2710,8 @@ export function AiPage() {
         | "create_mission"
         | "create_activity"
         | "create_task"
-        | "create_mission_schedule",
+        | "create_mission_schedule"
+        | "create_social_article",
       _actionLabel: string,
     ) => {
       setTab(2);

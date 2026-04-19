@@ -53,15 +53,56 @@ export class SocialCommunicationService {
       orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
     });
 
-    const items = rows.map((item) => ({
-      ...item,
-      contentProxyPath: this.buildContentProxyPath(item.id),
-      coverProxyPath: item.coverImageUrl
-        ? this.buildCoverProxyPath(item.id)
-        : null,
-    }));
+    const items = rows.map((item) => {
+      const hasInternalContent = Boolean(item.contentText?.trim());
+      return {
+        ...item,
+        hasInternalContent,
+        sourceLabel: hasInternalContent ? 'Conteúdo interno' : null,
+        contentProxyPath: this.buildContentProxyPath(item.id),
+        coverProxyPath: item.coverImageUrl
+          ? this.buildCoverProxyPath(item.id)
+          : null,
+      };
+    });
 
     return { items };
+  }
+
+  async listAssistantReferences(scopeRaw: string, limit = 5) {
+    const normalizedScope = sanitizeText(scopeRaw).toLowerCase();
+    if (!normalizedScope) {
+      return { items: [] };
+    }
+
+    const rows = await this.prisma.socialCommunicationArticle.findMany({
+      where: {
+        tags: {
+          has: normalizedScope,
+        },
+      },
+      orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
+      take: Math.min(Math.max(limit, 1), 8),
+      select: {
+        id: true,
+        sourceUrl: true,
+        title: true,
+        summary: true,
+        contentText: true,
+        tags: true,
+        audience: true,
+        publishedAt: true,
+      },
+    });
+
+    return {
+      items: await Promise.all(
+        rows.map(async (row) => ({
+          ...row,
+          referenceText: await this.buildAssistantReferenceText(row),
+        })),
+      ),
+    };
   }
 
   async listHighlights(filters: { q?: string }) {
@@ -349,6 +390,7 @@ export class SocialCommunicationService {
       title?: string;
       coverImageUrl?: string | null;
       summary?: string | null;
+      contentText?: string | null;
       publishedAt?: string | null;
       tags?: string[];
       audience?: 'INTERNAL' | 'EXTERNAL';
@@ -374,6 +416,7 @@ export class SocialCommunicationService {
         summary: this.normalizeOptionalText(
           payload.summary ?? metadata.summary ?? null,
         ),
+        contentText: this.normalizeOptionalText(payload.contentText ?? null),
         tags: this.normalizeTags(payload.tags) ?? [],
         audience: payload.audience ?? 'INTERNAL',
         publishedAt: this.parseOptionalDate(
@@ -408,6 +451,7 @@ export class SocialCommunicationService {
       title?: string;
       coverImageUrl?: string | null;
       summary?: string | null;
+      contentText?: string | null;
       publishedAt?: string | null;
       tags?: string[];
       audience?: 'INTERNAL' | 'EXTERNAL';
@@ -459,6 +503,10 @@ export class SocialCommunicationService {
               metadata.summary ?? existing.summary ?? null,
             )
           : undefined;
+    const contentText =
+      payload.contentText !== undefined
+        ? this.normalizeOptionalText(payload.contentText)
+        : undefined;
 
     const publishedAt =
       payload.publishedAt !== undefined
@@ -485,6 +533,7 @@ export class SocialCommunicationService {
         title,
         coverImageUrl,
         summary,
+        contentText,
         publishedAt,
         tags,
         audience,
@@ -568,9 +617,25 @@ export class SocialCommunicationService {
 
     const article = await this.prisma.socialCommunicationArticle.findUnique({
       where: { id: normalizedId },
-      select: { id: true, sourceUrl: true },
+      select: {
+        id: true,
+        sourceUrl: true,
+        title: true,
+        summary: true,
+        contentText: true,
+      },
     });
     if (!article) throwError('NOT_FOUND');
+
+    if (article.contentText?.trim()) {
+      return {
+        html: this.buildInternalArticleHtml({
+          title: article.title,
+          summary: article.summary ?? null,
+          contentText: article.contentText,
+        }),
+      };
+    }
 
     const payload = await this.fetchRemoteHtml(article.sourceUrl);
     const html = this.rewriteHtmlForProxy(payload.html, payload.sourceUrl);
@@ -879,6 +944,134 @@ export class SocialCommunicationService {
       (tag) => this.rewriteStyleAttribute(tag, baseUrl),
     );
     return output;
+  }
+
+  private async buildAssistantReferenceText(article: {
+    sourceUrl: string;
+    title: string;
+    summary: string | null;
+    contentText: string | null;
+  }) {
+    if (article.contentText?.trim()) {
+      return article.contentText.trim().slice(0, 5000);
+    }
+
+    try {
+      const payload = await this.fetchRemoteHtml(article.sourceUrl);
+      const plainText = this.extractPlainTextFromHtml(payload.html);
+      if (plainText) {
+        return plainText.slice(0, 5000);
+      }
+    } catch {
+      // fallback abaixo
+    }
+
+    return [article.title, article.summary]
+      .filter((item) => String(item ?? '').trim())
+      .join('\n\n')
+      .trim()
+      .slice(0, 3000);
+  }
+
+  private extractPlainTextFromHtml(html: string) {
+    return String(html ?? '')
+      .replace(/<script\b[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<style\b[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<noscript\b[\s\S]*?<\/noscript>/gi, ' ')
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/(p|div|section|article|li|h1|h2|h3|h4|h5|h6)>/gi, '\n')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/&amp;/gi, '&')
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;/gi, "'")
+      .replace(/&lt;/gi, '<')
+      .replace(/&gt;/gi, '>')
+      .replace(/\r/g, '')
+      .replace(/[ \t]+\n/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+  }
+
+  private buildInternalArticleHtml(payload: {
+    title: string;
+    summary?: string | null;
+    contentText: string;
+  }) {
+    const title = this.escapeHtml(payload.title);
+    const summary = this.escapeHtml(payload.summary ?? '');
+    const paragraphs = String(payload.contentText ?? '')
+      .split(/\n{2,}/)
+      .map((item) => this.escapeHtml(item.trim()))
+      .filter(Boolean)
+      .map((item) => `<p>${item.replace(/\n/g, '<br />')}</p>`)
+      .join('\n');
+
+    return `<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${title}</title>
+    <style>
+      :root { color-scheme: light; }
+      body {
+        margin: 0;
+        font-family: Arial, Helvetica, sans-serif;
+        background: #f5f7fb;
+        color: #10243e;
+      }
+      main {
+        max-width: 860px;
+        margin: 0 auto;
+        padding: 40px 24px 64px;
+      }
+      article {
+        background: #ffffff;
+        border: 1px solid #dce5f0;
+        border-radius: 20px;
+        padding: 32px;
+        box-shadow: 0 10px 30px rgba(16, 36, 62, 0.08);
+      }
+      h1 {
+        margin: 0 0 16px;
+        font-size: 2rem;
+        line-height: 1.2;
+        color: #15396b;
+      }
+      .lead {
+        margin: 0 0 24px;
+        font-size: 1.05rem;
+        line-height: 1.7;
+        color: #40566f;
+      }
+      p {
+        margin: 0 0 18px;
+        line-height: 1.8;
+        font-size: 1rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <article>
+        <h1>${title}</h1>
+        ${summary ? `<p class="lead">${summary}</p>` : ''}
+        ${paragraphs}
+      </article>
+    </main>
+  </body>
+</html>`;
+  }
+
+  private escapeHtml(value: string) {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 
   private rewriteMediaTag(tag: string, baseUrl: string) {

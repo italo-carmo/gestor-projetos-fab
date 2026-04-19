@@ -3,6 +3,7 @@ import { ActivitiesModule } from '../activities/activities.module';
 import { LitellmModule } from '../llm/litellm.module';
 import { MissionsModule } from '../missions/missions.module';
 import { RbacModule } from '../rbac/rbac.module';
+import { SocialCommunicationModule } from '../social-communication/social-communication.module';
 import { StrategicModule } from '../strategic/strategic.module';
 import { TasksModule } from '../tasks/tasks.module';
 import { AiController } from './ai.controller';
@@ -16,6 +17,7 @@ import { AiService } from './ai.service';
     MissionsModule,
     ActivitiesModule,
     TasksModule,
+    SocialCommunicationModule,
     LitellmModule,
   ],
   controllers: [AiController],

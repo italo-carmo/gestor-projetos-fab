@@ -2332,6 +2332,7 @@ export function useCreateSocialCommunicationArticle() {
       title?: string;
       coverImageUrl?: string | null;
       summary?: string | null;
+      contentText?: string | null;
       publishedAt?: string | null;
       tags?: string[];
     }) => (await api.post("/social-communication", payload)).data,
@@ -2350,6 +2351,7 @@ export function useUpdateSocialCommunicationArticle() {
         title?: string;
         coverImageUrl?: string | null;
         summary?: string | null;
+        contentText?: string | null;
         publishedAt?: string | null;
         tags?: string[];
       };

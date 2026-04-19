@@ -86,8 +86,11 @@ type SocialCommunicationArticle = {
   coverImageUrl?: string | null;
   coverProxyPath?: string | null;
   summary?: string | null;
+  contentText?: string | null;
   publishedAt?: string | null;
   contentProxyPath?: string | null;
+  hasInternalContent?: boolean;
+  sourceLabel?: string | null;
   tags?: string[];
   audience?: "INTERNAL" | "EXTERNAL";
   createdAt: string;
@@ -405,6 +408,7 @@ export function SocialCommunicationPage() {
     title: "",
     coverImageUrl: "",
     summary: "",
+    contentText: "",
     publishedAt: "",
     tags: [] as string[],
     audience: "INTERNAL" as "INTERNAL" | "EXTERNAL",
@@ -517,6 +521,9 @@ export function SocialCommunicationPage() {
 
   const openPreview = (item: SocialCommunicationArticle) => {
     const url =
+      (item.hasInternalContent && item.contentProxyPath
+        ? toApiUrl(item.contentProxyPath)
+        : "") ||
       item.sourceUrl?.trim() ||
       (item.contentProxyPath ? toApiUrl(item.contentProxyPath) : "");
     if (!url) return;
@@ -531,6 +538,7 @@ export function SocialCommunicationPage() {
       title: "",
       coverImageUrl: "",
       summary: "",
+      contentText: "",
       publishedAt: "",
       tags: [],
       audience: "INTERNAL",
@@ -546,6 +554,7 @@ export function SocialCommunicationPage() {
       title: item.title ?? "",
       coverImageUrl: item.coverImageUrl ?? "",
       summary: item.summary ?? "",
+      contentText: item.contentText ?? "",
       publishedAt: toInputDate(item.publishedAt),
       tags: normalizeTags(item.tags ?? []),
       audience: item.audience ?? "INTERNAL",
@@ -801,6 +810,7 @@ export function SocialCommunicationPage() {
         title: form.title.trim() || undefined,
         coverImageUrl: form.coverImageUrl.trim() || null,
         summary: form.summary.trim() || null,
+        contentText: form.contentText.trim() || null,
         publishedAt: form.publishedAt
           ? new Date(form.publishedAt).toISOString()
           : null,
@@ -1329,7 +1339,7 @@ export function SocialCommunicationPage() {
                         sx={{ mt: 1.1 }}
                       >
                         <Chip
-                          label={sourceHost(item.sourceUrl)}
+                          label={item.sourceLabel || sourceHost(item.sourceUrl)}
                           size="small"
                           variant="outlined"
                         />
@@ -1551,7 +1561,7 @@ export function SocialCommunicationPage() {
                             sx={{ mt: 1.1 }}
                           >
                             <Chip
-                              label={sourceHost(item.sourceUrl)}
+                              label={item.sourceLabel || sourceHost(item.sourceUrl)}
                               size="small"
                               variant="outlined"
                             />
@@ -1865,7 +1875,7 @@ export function SocialCommunicationPage() {
                               sx={{ mt: 1.1 }}
                             >
                               <Chip
-                                label={sourceHost(item.sourceUrl)}
+                                label={item.sourceLabel || sourceHost(item.sourceUrl)}
                                 size="small"
                                 variant="outlined"
                               />
@@ -2057,7 +2067,7 @@ export function SocialCommunicationPage() {
                               sx={{ mt: 1.1 }}
                             >
                               <Chip
-                                label={sourceHost(item.sourceUrl)}
+                                label={item.sourceLabel || sourceHost(item.sourceUrl)}
                                 size="small"
                                 variant="outlined"
                               />
@@ -2618,6 +2628,20 @@ export function SocialCommunicationPage() {
               onChange={(event) =>
                 setForm((prev) => ({ ...prev, summary: event.target.value }))
               }
+            />
+            <TextField
+              label="Conteúdo interno da matéria"
+              size="small"
+              multiline
+              minRows={8}
+              value={form.contentText}
+              onChange={(event) =>
+                setForm((prev) => ({
+                  ...prev,
+                  contentText: event.target.value,
+                }))
+              }
+              helperText="Opcional. Se preenchido, a matéria abre esse conteúdo interno em vez de depender apenas da URL."
             />
             <Autocomplete
               multiple

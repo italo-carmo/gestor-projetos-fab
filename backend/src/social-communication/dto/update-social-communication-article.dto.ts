@@ -26,6 +26,10 @@ export class UpdateSocialCommunicationArticleDto {
   summary?: string | null;
 
   @IsOptional()
+  @IsString()
+  contentText?: string | null;
+
+  @IsOptional()
   @IsDateString()
   publishedAt?: string | null;
 
