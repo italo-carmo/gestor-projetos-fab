@@ -1,4 +1,4 @@
-import { can } from './rbac';
+import { can, canAccessAdminCatalog } from './rbac';
 
 export const ROLE_COORDENACAO_CIPAVD = 'Coordenação CIPAVD';
 export const ROLE_COMISSAO_CIPAVD = 'Comissão CIPAVD';
@@ -16,6 +16,7 @@ type MePayload = {
   activeRole?: { id?: string; name?: string } | null;
   activeRoleId?: string | null;
   permissions?: Array<{ resource: string; action: string; scope?: string }>;
+  executive_hide_pii?: boolean | null;
 };
 
 export function normalizeRoleName(roleName: string | null | undefined) {
@@ -76,10 +77,82 @@ export function canEditRecruitsCount(
 }
 
 export function resolveHomePath(user: MePayload | undefined) {
-  if (hasRole(user, ROLE_CIPAVD)) return '/dashboard/cipavd';
-  if (hasNationalManagementScope(user)) return '/dashboard/smif';
-  if (can(user, 'cpca_cases', 'view')) return '/cpca-cases';
-  if (can(user, 'cpca_dashboard', 'view')) return '/dashboard/cpca';
+  const canSeeStrategicDashboard = hasAnyRole(user, [
+    ROLE_COMGEP,
+    ROLE_COORDENACAO_CIPAVD,
+    ROLE_TI,
+  ]);
+  const canSeeAi = can(user, 'bi', 'view');
+  const canSeeSmifDashboard = can(user, 'dashboard', 'view', 'NATIONAL');
+  const canSeeCipavdDashboard =
+    can(user, 'dashboard', 'view') &&
+    (Boolean(user?.executive_hide_pii) || can(user, 'roles', 'view'));
+  const canSeeCpcaDashboard = can(user, 'cpca_dashboard', 'view');
+  const canSeeSocialCommunication = can(user, 'social_communication', 'view');
+  const canSeeLibrary = can(user, 'library', 'view');
+  const canSeeActivities = can(user, 'task_instances', 'view');
+  const canSeeSmifComplaints = can(user, 'smif_complaints', 'view');
+  const canSeeGsdRecruits =
+    can(user, 'localities', 'view') || can(user, 'dashboard', 'view');
+  const canSeeElos = can(user, 'elos', 'view');
+  const canSeeBestPractices = can(user, 'best_practices', 'view');
+  const canSeeMeetings = can(user, 'meetings', 'view');
+  const canSeeOrgChart = can(user, 'org_chart', 'view');
+  const canSeeGantt = can(user, 'gantt', 'view');
+  const canSeeCalendar = can(user, 'calendar', 'view');
+  const canSeeMissions = can(user, 'missions', 'view');
+  const canSeeNotices = can(user, 'notices', 'view');
+  const canSeeCpcaCases = can(user, 'cpca_cases', 'view');
+  const canSeeCpcaPresidentApprovals =
+    canSeeCpcaCases && hasAnyRole(user, [ROLE_TI, ROLE_COMGEP]);
+  const canSeeAdminRbac =
+    can(user, 'users', 'view') ||
+    can(user, 'roles', 'view') ||
+    can(user, 'roles', 'permissions');
+  const canSeeAudit = can(user, 'audit_logs', 'view');
+  const canSeeAdminCatalog = canAccessAdminCatalog(user);
+  const canSeeOmsAdmin = can(user, 'localities', 'view');
+
+  const homeCandidates: Array<[boolean, string]> = [
+    [canSeeStrategicDashboard, '/dashboard/estrategico'],
+    [canSeeAi, '/ai'],
+    [canSeeSmifDashboard, '/dashboard/smif'],
+    [canSeeCipavdDashboard, '/dashboard/cipavd'],
+    [canSeeCpcaDashboard, '/dashboard/cpca'],
+    [canSeeSocialCommunication, '/social-communication'],
+    [canSeeLibrary, '/library'],
+    [canSeeActivities, '/activities'],
+    [canSeeSmifComplaints, '/smif-complaints'],
+    [canSeeGsdRecruits, '/gsd-recruits'],
+    [canSeeElos, '/elos'],
+    [canSeeBestPractices, '/best-practices'],
+    [canSeeActivities, '/tasks'],
+    [canSeeMeetings, '/meetings'],
+    [canSeeOrgChart, '/org-chart'],
+    [canSeeGantt, '/gantt'],
+    [canSeeCalendar, '/calendar'],
+    [canSeeMissions, '/missions'],
+    [canSeeActivities, '/activities-cipavd'],
+    [canSeeNotices, '/notices'],
+    [canSeeAi, '/dashboard/bi'],
+    [canSeeAi, '/dashboard/bi-violencia-domestica'],
+    [canSeeAi && hasAnyRole(user, [ROLE_TI, ROLE_COMGEP]), '/dashboard/bi-recrutas'],
+    [canSeeAi, '/dashboard/bi-ciclo-boas-praticas'],
+    [canSeeAi, '/dashboard/bi-encontro-cpca'],
+    [canSeeAi, '/dashboard/bi-avaliacao-gsd'],
+    [canSeeCpcaCases, '/cpca-cases'],
+    [canSeeCpcaCases, '/cpca-commission'],
+    [canSeeCpcaPresidentApprovals, '/cpca-president-approvals'],
+    [canSeeAdminRbac, '/admin/rbac'],
+    [canSeeAudit, '/audit'],
+    [canSeeAdminCatalog, '/admin'],
+    [canSeeOmsAdmin, '/admin/oms'],
+  ];
+
+  for (const [allowed, path] of homeCandidates) {
+    if (allowed) return path;
+  }
+
   if (can(user, 'task_instances', 'view')) return '/activities';
   return '/dashboard/cipavd';
 }

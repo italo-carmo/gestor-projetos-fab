@@ -147,6 +147,12 @@ const navSections: NavSection[] = [
         icon: <InsightsRoundedIcon fontSize="small" />,
       },
       {
+        label: "CPCA",
+        to: "/dashboard/cpca",
+        icon: <PolicyRoundedIcon fontSize="small" />,
+        menuKey: "cpca_dashboard",
+      },
+      {
         label: "Impacto Positivo",
         to: "/social-communication",
         icon: <NewspaperRoundedIcon fontSize="small" />,
@@ -157,12 +163,6 @@ const navSections: NavSection[] = [
         to: "/library",
         icon: <PhotoLibraryRoundedIcon fontSize="small" />,
         menuKey: "library",
-      },
-      {
-        label: "CPCA",
-        to: "/dashboard/cpca",
-        icon: <PolicyRoundedIcon fontSize="small" />,
-        menuKey: "cpca_dashboard",
       },
     ],
   },
