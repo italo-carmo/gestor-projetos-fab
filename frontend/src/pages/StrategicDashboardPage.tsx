@@ -141,15 +141,17 @@ function KpiDetailModal({
   open,
   title,
   onClose,
+  maxWidth = "md",
   children,
 }: {
   open: boolean;
   title: string;
   onClose: () => void;
+  maxWidth?: "sm" | "md" | "lg" | "xl";
   children: React.ReactNode;
 }) {
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth scroll="paper">
+    <Dialog open={open} onClose={onClose} maxWidth={maxWidth} fullWidth scroll="paper">
       <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <Typography variant="h6">{title}</Typography>
         <Button onClick={onClose} size="small" sx={{ minWidth: "auto" }}>
@@ -276,6 +278,53 @@ function DetailMeaningBlock({
         {source}
       </Typography>
     </Box>
+  );
+}
+
+function DetailAccordionSection({
+  title,
+  subtitle,
+  defaultExpanded = false,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  defaultExpanded?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <Accordion
+      disableGutters
+      elevation={0}
+      defaultExpanded={defaultExpanded}
+      sx={{
+        border: "1px solid #E1E7F0",
+        borderRadius: "12px !important",
+        overflow: "hidden",
+        "&:before": { display: "none" },
+      }}
+    >
+      <AccordionSummary
+        expandIcon={<ExpandMoreIcon />}
+        sx={{
+          bgcolor: "#F8FAFD",
+          px: 2,
+          py: 0.4,
+        }}
+      >
+        <Box>
+          <Typography variant="subtitle2" fontWeight={800} color="#1A3C6E">
+            {title}
+          </Typography>
+          {subtitle ? (
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.2 }}>
+              {subtitle}
+            </Typography>
+          ) : null}
+        </Box>
+      </AccordionSummary>
+      <AccordionDetails sx={{ p: 2 }}>{children}</AccordionDetails>
+    </Accordion>
   );
 }
 
@@ -1004,27 +1053,42 @@ function SituationalTab() {
               meaning="A Taxa de violência mostra o percentual de respondentes da Pesquisa de Violência que declararam já ter sofrido algum tipo de violência. Os demais números do modal mostram a base total de respondentes e como essa base se divide entre respostas SIM e NÃO."
               source="Fonte: módulo BI > Pesquisas. Base: respostas da Pesquisa de Violência aplicadas nas localidades visitadas pela comissão."
             />
-            {surveysMetrics.map((metric) => (
-              <ExpandableKpiMetricRow
-                key={metric.key}
-                metricKey={`surveys-${metric.key}`}
-                label={metric.label}
-                value={metric.value}
-                color={metric.color}
-                items={metric.items}
-                expandedKey={expandedMetric}
-                onToggle={(metricKey) =>
-                  setExpandedMetric((prev) =>
-                    prev === metricKey ? null : metricKey,
-                  )
-                }
-              />
-            ))}
-            <DetailRow label="Taxa de violência" value={`${s.violenceRatePercent ?? 0}%`} color="#D32F2F" />
-            <Divider sx={{ my: 1 }} />
-            <Typography variant="body2" color="text.secondary">
-              Este KPI é lido diretamente da Pesquisa de Violência. Se a taxa subir, isso indica maior proporção de respondentes que reportaram experiência de violência dentro do universo pesquisado.
-            </Typography>
+            <DetailAccordionSection
+              title="Leitura executiva"
+              subtitle="Como interpretar este KPI no contexto da gestão"
+              defaultExpanded
+            >
+              <Stack spacing={1}>
+                <DetailRow label="Taxa de violência" value={`${s.violenceRatePercent ?? 0}%`} color="#D32F2F" />
+                <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
+                  Este KPI é lido diretamente da Pesquisa de Violência. Se a taxa subir, isso indica maior proporção de respondentes que reportaram experiência de violência dentro do universo pesquisado, o que tende a pressionar prevenção, acolhimento e capacidade institucional de resposta.
+                </Typography>
+              </Stack>
+            </DetailAccordionSection>
+            <DetailAccordionSection
+              title="Composição do indicador"
+              subtitle="Itens que sustentam o total e permitem chegar ao registro detalhado"
+              defaultExpanded
+            >
+              <Stack spacing={1}>
+                {surveysMetrics.map((metric) => (
+                  <ExpandableKpiMetricRow
+                    key={metric.key}
+                    metricKey={`surveys-${metric.key}`}
+                    label={metric.label}
+                    value={metric.value}
+                    color={metric.color}
+                    items={metric.items}
+                    expandedKey={expandedMetric}
+                    onToggle={(metricKey) =>
+                      setExpandedMetric((prev) =>
+                        prev === metricKey ? null : metricKey,
+                      )
+                    }
+                  />
+                ))}
+              </Stack>
+            </DetailAccordionSection>
           </Stack>
         );
       case "domesticViolence":
@@ -1035,29 +1099,44 @@ function SituationalTab() {
               meaning="Os indicadores deste bloco medem a violência doméstica autorreferida na pesquisa específica de violência doméstica. 'Alguma vez' captura histórico de vida; 'últimos 12 meses' mostra recorrência recente; 'buscaram ajuda' mede reação institucional e rede de apoio."
               source="Fonte: módulo BI > Violência Doméstica. Base: respostas da pesquisa específica de violência doméstica aplicada nas localidades visitadas."
             />
-            {domesticMetrics.map((metric) => (
-              <ExpandableKpiMetricRow
-                key={metric.key}
-                metricKey={`domestic-${metric.key}`}
-                label={metric.label}
-                value={metric.value}
-                color={metric.color}
-                items={metric.items}
-                expandedKey={expandedMetric}
-                onToggle={(metricKey) =>
-                  setExpandedMetric((prev) =>
-                    prev === metricKey ? null : metricKey,
-                  )
-                }
-              />
-            ))}
-            <DetailRow label="Taxa — alguma vez na vida" value={`${dv.lifetimeRatePercent ?? 0}%`} color="#ED6C02" />
-            <DetailRow label="Taxa — últimos 12 meses" value={`${dv.last12MonthsRatePercent ?? 0}%`} color="#C2185B" />
-            <DetailRow label="Taxa de busca de ajuda" value={`${dv.soughtHelpPercent ?? 0}%`} />
-            <Divider sx={{ my: 1 }} />
-            <Typography variant="body2" color="text.secondary">
-              A taxa de busca de ajuda é calculada sobre o subconjunto que declarou ter sofrido violência em algum momento. Isso ajuda a distinguir ocorrência de violência da capacidade de reação e acolhimento.
-            </Typography>
+            <DetailAccordionSection
+              title="Leitura executiva"
+              subtitle="Histórico, recorrência recente e reação institucional"
+              defaultExpanded
+            >
+              <Stack spacing={1}>
+                <DetailRow label="Taxa — alguma vez na vida" value={`${dv.lifetimeRatePercent ?? 0}%`} color="#ED6C02" />
+                <DetailRow label="Taxa — últimos 12 meses" value={`${dv.last12MonthsRatePercent ?? 0}%`} color="#C2185B" />
+                <DetailRow label="Taxa de busca de ajuda" value={`${dv.soughtHelpPercent ?? 0}%`} />
+                <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
+                  A taxa de busca de ajuda é calculada sobre o subconjunto que declarou ter sofrido violência em algum momento. Isso ajuda a distinguir ocorrência de violência da capacidade de reação e acolhimento.
+                </Typography>
+              </Stack>
+            </DetailAccordionSection>
+            <DetailAccordionSection
+              title="Composição do indicador"
+              subtitle="Itens detalhados que formam cada métrica"
+              defaultExpanded
+            >
+              <Stack spacing={1}>
+                {domesticMetrics.map((metric) => (
+                  <ExpandableKpiMetricRow
+                    key={metric.key}
+                    metricKey={`domestic-${metric.key}`}
+                    label={metric.label}
+                    value={metric.value}
+                    color={metric.color}
+                    items={metric.items}
+                    expandedKey={expandedMetric}
+                    onToggle={(metricKey) =>
+                      setExpandedMetric((prev) =>
+                        prev === metricKey ? null : metricKey,
+                      )
+                    }
+                  />
+                ))}
+              </Stack>
+            </DetailAccordionSection>
           </Stack>
         );
       case "recruits":
@@ -1068,28 +1147,43 @@ function SituationalTab() {
               meaning="Os indicadores de recrutas medem percepção institucional. 'Segurança para denunciar' indica confiança para buscar ajuda; 'conhecimento do canal' indica preparo informacional mínimo para acionar o fluxo correto."
               source="Fonte: módulo BI > Pesquisa de Recrutas do SMIF. Base: respostas das recrutas sobre percepção de segurança e conhecimento dos canais."
             />
-            {recruitMetrics.map((metric) => (
-              <ExpandableKpiMetricRow
-                key={metric.key}
-                metricKey={`recruits-${metric.key}`}
-                label={metric.label}
-                value={metric.value}
-                color={metric.color}
-                items={metric.items}
-                expandedKey={expandedMetric}
-                onToggle={(metricKey) =>
-                  setExpandedMetric((prev) =>
-                    prev === metricKey ? null : metricKey,
-                  )
-                }
-              />
-            ))}
-            <DetailRow label="Taxa de segurança para denúncia" value={`${r.safeToReportPercent ?? 0}%`} color="#2E7D32" />
-            <DetailRow label="Taxa de conhecimento do canal" value={`${r.knowReportProcessPercent ?? 0}%`} color="#0288D1" />
-            <Divider sx={{ my: 1 }} />
-            <Typography variant="body2" color="text.secondary">
-              Esses números não medem ocorrência de caso, mas prontidão do ambiente para denúncia e acolhimento. Queda nesses indicadores tende a sinalizar risco de subnotificação.
-            </Typography>
+            <DetailAccordionSection
+              title="Leitura executiva"
+              subtitle="Prontidão do ambiente para denúncia e acolhimento"
+              defaultExpanded
+            >
+              <Stack spacing={1}>
+                <DetailRow label="Taxa de segurança para denúncia" value={`${r.safeToReportPercent ?? 0}%`} color="#2E7D32" />
+                <DetailRow label="Taxa de conhecimento do canal" value={`${r.knowReportProcessPercent ?? 0}%`} color="#0288D1" />
+                <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
+                  Esses números não medem ocorrência de caso, mas prontidão do ambiente para denúncia e acolhimento. Queda nesses indicadores tende a sinalizar risco de subnotificação.
+                </Typography>
+              </Stack>
+            </DetailAccordionSection>
+            <DetailAccordionSection
+              title="Composição do indicador"
+              subtitle="Itens usados para construir o percentual e abrir o detalhe"
+              defaultExpanded
+            >
+              <Stack spacing={1}>
+                {recruitMetrics.map((metric) => (
+                  <ExpandableKpiMetricRow
+                    key={metric.key}
+                    metricKey={`recruits-${metric.key}`}
+                    label={metric.label}
+                    value={metric.value}
+                    color={metric.color}
+                    items={metric.items}
+                    expandedKey={expandedMetric}
+                    onToggle={(metricKey) =>
+                      setExpandedMetric((prev) =>
+                        prev === metricKey ? null : metricKey,
+                      )
+                    }
+                  />
+                ))}
+              </Stack>
+            </DetailAccordionSection>
           </Stack>
         );
       case "complaints":
@@ -1100,30 +1194,48 @@ function SituationalTab() {
               meaning="Este bloco consolida os casos e denúncias efetivamente registrados no sistema, somando fluxos CPCA e SMIF. Ele mostra carga real de tratamento institucional, status atual e distribuição por tipo e fluxo."
               source="Fonte: registros de denúncias do sistema, com origem nos módulos CPCA e SMIF."
             />
-            {complaintMetrics.map((metric) => (
-              <ExpandableKpiMetricRow
-                key={metric.key}
-                metricKey={`complaints-${metric.key}`}
-                label={metric.label}
-                value={metric.value}
-                color={metric.color}
-                items={metric.items}
-                expandedKey={expandedMetric}
-                onToggle={(metricKey) =>
-                  setExpandedMetric((prev) =>
-                    prev === metricKey ? null : metricKey,
-                  )
-                }
-              />
-            ))}
-            <Divider sx={{ my: 0.5 }} />
-            <Typography variant="subtitle2" sx={{ mt: 1 }}>Por tipo</Typography>
-            <DetailRow label="Assédio Moral (%)" value={`${c.moralPercent ?? 0}%`} color="#ED6C02" />
-            <DetailRow label="Assédio Sexual (%)" value={`${c.sexualPercent ?? 0}%`} color="#D32F2F" />
-            <Divider sx={{ my: 0.5 }} />
-            <Typography variant="subtitle2" sx={{ mt: 1 }}>Por escopo</Typography>
-            <DetailRow label="CPCA (%)" value={`${c.totalCases ? ((Number(c.byCpca ?? 0) / Number(c.totalCases ?? 1)) * 100).toFixed(1) : "0.0"}%`} color="#1A3C6E" />
-            <DetailRow label="SMIF (%)" value={`${c.totalCases ? ((Number(c.bySmif ?? 0) / Number(c.totalCases ?? 1)) * 100).toFixed(1) : "0.0"}%`} color="#7B1FA2" />
+            <DetailAccordionSection
+              title="Leitura executiva"
+              subtitle="Carga real de tratamento institucional em andamento"
+              defaultExpanded
+            >
+              <Stack spacing={1}>
+                {complaintMetrics.map((metric) => (
+                  <ExpandableKpiMetricRow
+                    key={metric.key}
+                    metricKey={`complaints-${metric.key}`}
+                    label={metric.label}
+                    value={metric.value}
+                    color={metric.color}
+                    items={metric.items}
+                    expandedKey={expandedMetric}
+                    onToggle={(metricKey) =>
+                      setExpandedMetric((prev) =>
+                        prev === metricKey ? null : metricKey,
+                      )
+                    }
+                  />
+                ))}
+              </Stack>
+            </DetailAccordionSection>
+            <DetailAccordionSection
+              title="Distribuição por tipologia"
+              subtitle="Leitura rápida do peso relativo entre assédio moral e sexual"
+            >
+              <Stack spacing={1}>
+                <DetailRow label="Assédio Moral (%)" value={`${c.moralPercent ?? 0}%`} color="#ED6C02" />
+                <DetailRow label="Assédio Sexual (%)" value={`${c.sexualPercent ?? 0}%`} color="#D32F2F" />
+              </Stack>
+            </DetailAccordionSection>
+            <DetailAccordionSection
+              title="Distribuição por fluxo"
+              subtitle="Participação relativa entre CPCA e SMIF no total registrado"
+            >
+              <Stack spacing={1}>
+                <DetailRow label="CPCA (%)" value={`${c.totalCases ? ((Number(c.byCpca ?? 0) / Number(c.totalCases ?? 1)) * 100).toFixed(1) : "0.0"}%`} color="#1A3C6E" />
+                <DetailRow label="SMIF (%)" value={`${c.totalCases ? ((Number(c.bySmif ?? 0) / Number(c.totalCases ?? 1)) * 100).toFixed(1) : "0.0"}%`} color="#7B1FA2" />
+              </Stack>
+            </DetailAccordionSection>
           </Stack>
         );
       case "activities":
@@ -1134,34 +1246,49 @@ function SituationalTab() {
               meaning="Os números de atividades mostram execução operacional em campo. Eles distinguem o que foi realizado em SMIF e CIPAVD e ainda indicam maturidade de registro por meio de relatório preenchido e relatório assinado."
               source="Fonte: registros de Atividades de Campo do sistema, com status operacional e vínculo de relatório."
             />
-            {activityMetrics.map((metric) => (
-              <ExpandableActivityMetricRow
-                key={metric.key}
-                metricKey={metric.key}
-                label={metric.label}
-                value={metric.value}
-                color={metric.color}
-                items={metric.items}
-                expandedKey={expandedMetric}
-                onToggle={(metricKey) =>
-                  setExpandedMetric((prev) =>
-                    prev === metricKey ? null : metricKey,
-                  )
-                }
-              />
-            ))}
-            <Divider sx={{ my: 0.5 }} />
-            <DetailRow
-              label="Taxa de preenchimento"
-              value={a.totalActivities ? `${((a.withReport / a.totalActivities) * 100).toFixed(1)}%` : "0%"}
-            />
-            <DetailRow
-              label="Taxa de assinatura"
-              value={a.withReport ? `${((a.signed / a.withReport) * 100).toFixed(1)}%` : "0%"}
-            />
-            <Typography variant="caption" color="text.secondary">
-              Clique na seta ao lado de cada número para ver a lista exata de atividades e abrir cada item.
-            </Typography>
+            <DetailAccordionSection
+              title="Leitura executiva"
+              subtitle="Execução em campo e maturidade do registro operacional"
+              defaultExpanded
+            >
+              <Stack spacing={1}>
+                <DetailRow
+                  label="Taxa de preenchimento"
+                  value={a.totalActivities ? `${((a.withReport / a.totalActivities) * 100).toFixed(1)}%` : "0%"}
+                />
+                <DetailRow
+                  label="Taxa de assinatura"
+                  value={a.withReport ? `${((a.signed / a.withReport) * 100).toFixed(1)}%` : "0%"}
+                />
+                <Typography variant="caption" color="text.secondary">
+                  Clique na seta ao lado de cada número para ver a lista exata de atividades e abrir cada item.
+                </Typography>
+              </Stack>
+            </DetailAccordionSection>
+            <DetailAccordionSection
+              title="Composição do indicador"
+              subtitle="Atividades que sustentam o volume operacional"
+              defaultExpanded
+            >
+              <Stack spacing={1}>
+                {activityMetrics.map((metric) => (
+                  <ExpandableActivityMetricRow
+                    key={metric.key}
+                    metricKey={metric.key}
+                    label={metric.label}
+                    value={metric.value}
+                    color={metric.color}
+                    items={metric.items}
+                    expandedKey={expandedMetric}
+                    onToggle={(metricKey) =>
+                      setExpandedMetric((prev) =>
+                        prev === metricKey ? null : metricKey,
+                      )
+                    }
+                  />
+                ))}
+              </Stack>
+            </DetailAccordionSection>
           </Stack>
         );
       case "missions":
@@ -1172,26 +1299,39 @@ function SituationalTab() {
               meaning="As missões representam deslocamentos e frentes operacionais cadastradas no sistema. O detalhamento mostra volume por escopo e quantas OMs distintas já foram efetivamente alcançadas pelas missões lançadas."
               source="Fonte: módulo Missões, considerando registros ativos de SMIF e CIPAVD."
             />
-            {missionMetrics.map((metric) => (
-              <ExpandableKpiMetricRow
-                key={metric.key}
-                metricKey={`missions-${metric.key}`}
-                label={metric.label}
-                value={metric.value}
-                color={metric.color}
-                items={metric.items}
-                expandedKey={expandedMetric}
-                onToggle={(metricKey) =>
-                  setExpandedMetric((prev) =>
-                    prev === metricKey ? null : metricKey,
-                  )
-                }
-              />
-            ))}
-            <Divider sx={{ my: 1 }} />
-            <Typography variant="body2" color="text.secondary">
-              Missões realizadas pela comissão itinerante em todo o território nacional.
-            </Typography>
+            <DetailAccordionSection
+              title="Leitura executiva"
+              subtitle="Volume de frentes operacionais e alcance territorial"
+              defaultExpanded
+            >
+              <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
+                Missões realizadas pela comissão itinerante em todo o território nacional. O foco aqui é entender quantas frentes foram abertas, por qual escopo e quantas OMs distintas já receberam atuação registrada.
+              </Typography>
+            </DetailAccordionSection>
+            <DetailAccordionSection
+              title="Composição do indicador"
+              subtitle="Missões cadastradas e seus agrupamentos principais"
+              defaultExpanded
+            >
+              <Stack spacing={1}>
+                {missionMetrics.map((metric) => (
+                  <ExpandableKpiMetricRow
+                    key={metric.key}
+                    metricKey={`missions-${metric.key}`}
+                    label={metric.label}
+                    value={metric.value}
+                    color={metric.color}
+                    items={metric.items}
+                    expandedKey={expandedMetric}
+                    onToggle={(metricKey) =>
+                      setExpandedMetric((prev) =>
+                        prev === metricKey ? null : metricKey,
+                      )
+                    }
+                  />
+                ))}
+              </Stack>
+            </DetailAccordionSection>
           </Stack>
         );
       default:
@@ -1395,6 +1535,7 @@ function SituationalTab() {
         open={!!detailModal}
         title={modalTitles[detailModal ?? ""] ?? ""}
         onClose={() => setDetailModal(null)}
+        maxWidth="lg"
       >
         {renderModalContent()}
       </KpiDetailModal>
@@ -1467,6 +1608,7 @@ function AggressorProfileTab() {
           "Detalhes — Relação Hierárquica"
         }
         onClose={() => setDetailModal(null)}
+        maxWidth="lg"
       >
         {detailModal === "total" && (
           <Stack spacing={1.25}>
@@ -1475,20 +1617,36 @@ function AggressorProfileTab() {
               meaning="Este total reúne todos os casos usados para montar o perfil do agressor. A lista abaixo mostra exatamente quais denúncias formam o agregado, para que o gestor consiga sair do KPI e chegar ao registro real."
               source="Fonte: denúncias CPCA e SMIF consolidadas no painel de Perfil de Assédio."
             />
-            <DetailRow label="Total de casos registrados" value={data.totalCases} />
-            <DetailRow label="Assédio Moral" value={`${data.byComplaintType.moral.count} (${data.byComplaintType.moral.percent}%)`} color="#ED6C02" />
-            <DetailRow label="Assédio Sexual" value={`${data.byComplaintType.sexual.count} (${data.byComplaintType.sexual.percent}%)`} color="#D32F2F" />
-            <Divider sx={{ my: 0.5 }} />
-            <Typography variant="subtitle2">Por escopo</Typography>
-            {(data.byScope ?? []).map((s: any) => (
-              <DetailRow key={s.label} label={s.label} value={`${s.count} (${s.percent}%)`} />
-            ))}
-            <Divider sx={{ my: 0.5 }} />
-            <Typography variant="subtitle2">Casos que compõem o total</Typography>
-            <DetailItemList
-              items={Array.isArray(detailItems.total) ? detailItems.total : []}
-              emptyMessage="Nenhum caso disponível para detalhamento."
-            />
+            <DetailAccordionSection
+              title="Resumo executivo"
+              subtitle="Leitura consolidada do conjunto usado no painel"
+              defaultExpanded
+            >
+              <Stack spacing={1}>
+                <DetailRow label="Total de casos registrados" value={data.totalCases} />
+                <DetailRow label="Assédio Moral" value={`${data.byComplaintType.moral.count} (${data.byComplaintType.moral.percent}%)`} color="#ED6C02" />
+                <DetailRow label="Assédio Sexual" value={`${data.byComplaintType.sexual.count} (${data.byComplaintType.sexual.percent}%)`} color="#D32F2F" />
+              </Stack>
+            </DetailAccordionSection>
+            <DetailAccordionSection
+              title="Distribuição por escopo"
+              subtitle="Como o total se divide entre CPCA e SMIF"
+            >
+              <Stack spacing={1}>
+                {(data.byScope ?? []).map((s: any) => (
+                  <DetailRow key={s.label} label={s.label} value={`${s.count} (${s.percent}%)`} />
+                ))}
+              </Stack>
+            </DetailAccordionSection>
+            <DetailAccordionSection
+              title="Casos que compõem o total"
+              subtitle="Lista operacional para chegar do KPI ao registro real"
+            >
+              <DetailItemList
+                items={Array.isArray(detailItems.total) ? detailItems.total : []}
+                emptyMessage="Nenhum caso disponível para detalhamento."
+              />
+            </DetailAccordionSection>
           </Stack>
         )}
         {detailModal === "moral" && (
@@ -1498,17 +1656,28 @@ function AggressorProfileTab() {
               meaning="Casos classificados como assédio moral. O detalhamento abaixo mostra quais registros foram enquadrados nessa tipologia."
               source="Fonte: campo de tipificação da denúncia nos módulos CPCA e SMIF."
             />
-            <DetailRow label="Total de casos de assédio moral" value={data.byComplaintType.moral.count} color="#ED6C02" />
-            <DetailRow label="Percentual do total" value={`${data.byComplaintType.moral.percent}%`} />
-            <Divider sx={{ my: 1 }} />
-            <Typography variant="body2" color="text.secondary">
-              O assédio moral inclui humilhações, exclusão, ameaças, intimidações, críticas excessivas, injustiças e outras formas de violência psicológica no ambiente de trabalho.
-            </Typography>
-            <Typography variant="subtitle2">Itens classificados como assédio moral</Typography>
-            <DetailItemList
-              items={Array.isArray(detailItems.moral) ? detailItems.moral : []}
-              emptyMessage="Nenhum item classificado como assédio moral."
-            />
+            <DetailAccordionSection
+              title="Resumo executivo"
+              subtitle="Peso relativo do assédio moral dentro do total"
+              defaultExpanded
+            >
+              <Stack spacing={1}>
+                <DetailRow label="Total de casos de assédio moral" value={data.byComplaintType.moral.count} color="#ED6C02" />
+                <DetailRow label="Percentual do total" value={`${data.byComplaintType.moral.percent}%`} />
+                <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
+                  O assédio moral inclui humilhações, exclusão, ameaças, intimidações, críticas excessivas, injustiças e outras formas de violência psicológica no ambiente de trabalho.
+                </Typography>
+              </Stack>
+            </DetailAccordionSection>
+            <DetailAccordionSection
+              title="Itens classificados como assédio moral"
+              subtitle="Registros usados para compor este KPI"
+            >
+              <DetailItemList
+                items={Array.isArray(detailItems.moral) ? detailItems.moral : []}
+                emptyMessage="Nenhum item classificado como assédio moral."
+              />
+            </DetailAccordionSection>
           </Stack>
         )}
         {detailModal === "sexual" && (
@@ -1518,17 +1687,28 @@ function AggressorProfileTab() {
               meaning="Casos classificados como assédio sexual. A lista abaixo mostra os registros exatos por trás do KPI, com acesso direto ao fluxo correspondente."
               source="Fonte: campo de tipificação da denúncia nos módulos CPCA e SMIF."
             />
-            <DetailRow label="Total de casos de assédio sexual" value={data.byComplaintType.sexual.count} color="#D32F2F" />
-            <DetailRow label="Percentual do total" value={`${data.byComplaintType.sexual.percent}%`} />
-            <Divider sx={{ my: 1 }} />
-            <Typography variant="body2" color="text.secondary">
-              O assédio sexual inclui comentários sexistas, contato físico indesejado, chantagem por favores sexuais, exibição de material pornográfico e outras formas de violência sexual.
-            </Typography>
-            <Typography variant="subtitle2">Itens classificados como assédio sexual</Typography>
-            <DetailItemList
-              items={Array.isArray(detailItems.sexual) ? detailItems.sexual : []}
-              emptyMessage="Nenhum item classificado como assédio sexual."
-            />
+            <DetailAccordionSection
+              title="Resumo executivo"
+              subtitle="Peso relativo do assédio sexual dentro do total"
+              defaultExpanded
+            >
+              <Stack spacing={1}>
+                <DetailRow label="Total de casos de assédio sexual" value={data.byComplaintType.sexual.count} color="#D32F2F" />
+                <DetailRow label="Percentual do total" value={`${data.byComplaintType.sexual.percent}%`} />
+                <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
+                  O assédio sexual inclui comentários sexistas, contato físico indesejado, chantagem por favores sexuais, exibição de material pornográfico e outras formas de violência sexual.
+                </Typography>
+              </Stack>
+            </DetailAccordionSection>
+            <DetailAccordionSection
+              title="Itens classificados como assédio sexual"
+              subtitle="Registros usados para compor este KPI"
+            >
+              <DetailItemList
+                items={Array.isArray(detailItems.sexual) ? detailItems.sexual : []}
+                emptyMessage="Nenhum item classificado como assédio sexual."
+              />
+            </DetailAccordionSection>
           </Stack>
         )}
         {detailModal === "hierarchical" && (
@@ -1538,18 +1718,29 @@ function AggressorProfileTab() {
               meaning="Conta os casos em que o agressor ocupava posição hierárquica ou funcional superior à vítima. A lista abaixo mostra os registros usados nessa leitura."
               source="Fonte: campo de relação hierárquica/funcional da denúncia."
             />
-            <DetailRow label="Casos com relação hierárquica" value={data.hierarchicalRelation.count} color="#7B1FA2" />
-            <DetailRow label="Percentual do total" value={`${data.hierarchicalRelation.percent}%`} />
-            <DetailRow label="Total de casos" value={data.totalCases} />
-            <Divider sx={{ my: 1 }} />
-            <Typography variant="body2" color="text.secondary">
-              {data.hierarchicalRelation.description}. Inclui relações de superior hierárquico, chefe imediato ou instrutor/professor com subordinado.
-            </Typography>
-            <Typography variant="subtitle2">Itens com relação hierárquica</Typography>
-            <DetailItemList
-              items={Array.isArray(detailItems.hierarchical) ? detailItems.hierarchical : []}
-              emptyMessage="Nenhum item com relação hierárquica identificado."
-            />
+            <DetailAccordionSection
+              title="Resumo executivo"
+              subtitle="Peso da assimetria hierárquica nos casos registrados"
+              defaultExpanded
+            >
+              <Stack spacing={1}>
+                <DetailRow label="Casos com relação hierárquica" value={data.hierarchicalRelation.count} color="#7B1FA2" />
+                <DetailRow label="Percentual do total" value={`${data.hierarchicalRelation.percent}%`} />
+                <DetailRow label="Total de casos" value={data.totalCases} />
+                <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
+                  {data.hierarchicalRelation.description}. Inclui relações de superior hierárquico, chefe imediato ou instrutor/professor com subordinado.
+                </Typography>
+              </Stack>
+            </DetailAccordionSection>
+            <DetailAccordionSection
+              title="Itens com relação hierárquica"
+              subtitle="Registros usados para compor este KPI"
+            >
+              <DetailItemList
+                items={Array.isArray(detailItems.hierarchical) ? detailItems.hierarchical : []}
+                emptyMessage="Nenhum item com relação hierárquica identificado."
+              />
+            </DetailAccordionSection>
           </Stack>
         )}
       </KpiDetailModal>
@@ -2059,110 +2250,184 @@ function GeoMapTab() {
                   : ""
         }
         onClose={() => setGeoKpiModal(null)}
+        maxWidth="lg"
       >
         {geoKpiModal === "mappedOms" && (
-          <TableContainer>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell><strong>OM</strong></TableCell>
-                  <TableCell><strong>Descrição</strong></TableCell>
-                  <TableCell><strong>UF</strong></TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {omsCatalog.map((loc: any) => (
-                  <TableRow key={loc.id}>
-                    <TableCell>{loc.code || "—"}</TableCell>
-                    <TableCell>{loc.name || "—"}</TableCell>
-                    <TableCell>{loc.uf || "—"}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+          <Stack spacing={1.25}>
+            <DetailMeaningBlock
+              title="O que este número significa"
+              meaning="Este KPI mostra quantas OMs/localidades do catálogo já estão aptas a entrar na leitura territorial. Ele serve para medir cobertura de cadastro geográfico, não volume de caso ou intensidade de risco."
+              source="Fonte: catálogo de OMs/localidades do sistema com campo UF informado."
+            />
+            <DetailAccordionSection
+              title="Resumo executivo"
+              subtitle="Base territorial disponível para cruzamento"
+              defaultExpanded
+            >
+              <Stack spacing={1}>
+                <DetailRow label="OMs mapeadas" value={omsCatalog.length} color="#1A3C6E" />
+                <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
+                  Quanto maior esse número, maior a capacidade do painel de distribuir denúncias, atividades e missões por estado e OM de forma confiável.
+                </Typography>
+              </Stack>
+            </DetailAccordionSection>
+            <DetailAccordionSection
+              title="Lista detalhada"
+              subtitle="OMs/localidades atualmente disponíveis no mapa"
+            >
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell><strong>OM</strong></TableCell>
+                      <TableCell><strong>Descrição</strong></TableCell>
+                      <TableCell><strong>UF</strong></TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {omsCatalog.map((loc: any) => (
+                      <TableRow key={loc.id}>
+                        <TableCell>{loc.code || "—"}</TableCell>
+                        <TableCell>{loc.name || "—"}</TableCell>
+                        <TableCell>{loc.uf || "—"}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </DetailAccordionSection>
+          </Stack>
         )}
 
         {geoKpiModal === "cpca" && (
-          <TableContainer>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell><strong>OM</strong></TableCell>
-                  <TableCell><strong>Descrição</strong></TableCell>
-                  <TableCell><strong>UF</strong></TableCell>
-                  <TableCell><strong>Cobertura</strong></TableCell>
-                  <TableCell><strong>Comissão responsável</strong></TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {omsCoveredByCpca.map((loc: any) => (
-                  <TableRow key={loc.id}>
-                    <TableCell>{loc.code || "—"}</TableCell>
-                    <TableCell>{loc.name || "—"}</TableCell>
-                    <TableCell>{loc.uf || "—"}</TableCell>
-                    <TableCell>
-                      <CoveredOmCoverageChip item={loc} />
-                    </TableCell>
-                    <TableCell>{formatCoveredOmResponsibility(loc)}</TableCell>
-                  </TableRow>
-                ))}
-                {omsCoveredByCpca.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={5}>
-                      <Typography variant="body2" color="text.secondary">
-                        Nenhuma OM coberta pela CPCA.
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
+          <Stack spacing={1.25}>
+            <DetailMeaningBlock
+              title="O que este número significa"
+              meaning="Este KPI mostra quantas OMs contam com CPCA própria ou estão formalmente cobertas por outra OM. Ele ajuda a entender a malha de governança territorial disponível para acolhimento e encaminhamento."
+              source="Fonte: catálogo de OMs/localidades e configuração de cobertura CPCA."
+            />
+            <DetailAccordionSection
+              title="Resumo executivo"
+              subtitle="Cobertura territorial disponível para acolhimento"
+              defaultExpanded
+            >
+              <Stack spacing={1}>
+                <DetailRow label="OMs cobertas pela CPCA" value={totalOmsCoveredByCpca} color="#2E7D32" />
+                <DetailRow
+                  label="Cobertura relativa"
+                  value={totalOms ? `${((totalOmsCoveredByCpca / totalOms) * 100).toFixed(1)}%` : "0%"}
+                />
+              </Stack>
+            </DetailAccordionSection>
+            <DetailAccordionSection
+              title="Lista detalhada"
+              subtitle="Como a cobertura está distribuída por OM"
+            >
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell><strong>OM</strong></TableCell>
+                      <TableCell><strong>Descrição</strong></TableCell>
+                      <TableCell><strong>UF</strong></TableCell>
+                      <TableCell><strong>Cobertura</strong></TableCell>
+                      <TableCell><strong>Comissão responsável</strong></TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {omsCoveredByCpca.map((loc: any) => (
+                      <TableRow key={loc.id}>
+                        <TableCell>{loc.code || "—"}</TableCell>
+                        <TableCell>{loc.name || "—"}</TableCell>
+                        <TableCell>{loc.uf || "—"}</TableCell>
+                        <TableCell>
+                          <CoveredOmCoverageChip item={loc} />
+                        </TableCell>
+                        <TableCell>{formatCoveredOmResponsibility(loc)}</TableCell>
+                      </TableRow>
+                    ))}
+                    {omsCoveredByCpca.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={5}>
+                          <Typography variant="body2" color="text.secondary">
+                            Nenhuma OM coberta pela CPCA.
+                          </Typography>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </DetailAccordionSection>
+          </Stack>
         )}
 
         {geoKpiModal === "statesWithData" && (
-          <TableContainer>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell><strong>UF</strong></TableCell>
-                  <TableCell><strong>Estado</strong></TableCell>
-                  <TableCell align="right"><strong>Denúncias</strong></TableCell>
-                  <TableCell align="right"><strong>Atividades</strong></TableCell>
-                  <TableCell align="right"><strong>Missões</strong></TableCell>
-                  <TableCell align="right"><strong>Total</strong></TableCell>
-                  <TableCell align="right"><strong>Ação</strong></TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {statesWithData.map((s: any) => (
-                  <TableRow key={s.uf}>
-                    <TableCell>{s.uf}</TableCell>
-                    <TableCell>{BR_STATES[s.uf]?.name ?? s.uf}</TableCell>
-                    <TableCell align="right">{s.complaints}</TableCell>
-                    <TableCell align="right">{s.activities}</TableCell>
-                    <TableCell align="right">{s.missions}</TableCell>
-                    <TableCell align="right">
-                      <strong>{s.complaints + s.activities + s.missions}</strong>
-                    </TableCell>
-                    <TableCell align="right">
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        onClick={() => {
-                          setGeoKpiModal(null);
-                          setSelectedState({ uf: s.uf, data: stateDataMap[s.uf] });
-                        }}
-                      >
-                        Abrir Estado
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+          <Stack spacing={1.25}>
+            <DetailMeaningBlock
+              title="O que este número significa"
+              meaning="Este KPI mostra em quantos estados já existe pelo menos um sinal territorial relevante: denúncia, atividade ou missão. Ele ajuda a entender abrangência territorial da atuação, não gravidade isolada."
+              source="Fonte: consolidação por UF de denúncias, atividades de campo e missões cadastradas."
+            />
+            <DetailAccordionSection
+              title="Resumo executivo"
+              subtitle="Abrangência territorial com algum sinal registrado"
+              defaultExpanded
+            >
+              <Stack spacing={1}>
+                <DetailRow label="Estados com sinal relevante" value={statesWithData.length} color="#ED6C02" />
+                <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
+                  Cada estado listado abaixo tem pelo menos um registro territorial relevante no recorte atual. O botão de ação leva direto ao modal completo daquele estado.
+                </Typography>
+              </Stack>
+            </DetailAccordionSection>
+            <DetailAccordionSection
+              title="Lista detalhada"
+              subtitle="Estados com presença territorial registrada"
+            >
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell><strong>UF</strong></TableCell>
+                      <TableCell><strong>Estado</strong></TableCell>
+                      <TableCell align="right"><strong>Denúncias</strong></TableCell>
+                      <TableCell align="right"><strong>Atividades</strong></TableCell>
+                      <TableCell align="right"><strong>Missões</strong></TableCell>
+                      <TableCell align="right"><strong>Total</strong></TableCell>
+                      <TableCell align="right"><strong>Ação</strong></TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {statesWithData.map((s: any) => (
+                      <TableRow key={s.uf}>
+                        <TableCell>{s.uf}</TableCell>
+                        <TableCell>{BR_STATES[s.uf]?.name ?? s.uf}</TableCell>
+                        <TableCell align="right">{s.complaints}</TableCell>
+                        <TableCell align="right">{s.activities}</TableCell>
+                        <TableCell align="right">{s.missions}</TableCell>
+                        <TableCell align="right">
+                          <strong>{s.complaints + s.activities + s.missions}</strong>
+                        </TableCell>
+                        <TableCell align="right">
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            onClick={() => {
+                              setGeoKpiModal(null);
+                              setSelectedState({ uf: s.uf, data: stateDataMap[s.uf] });
+                            }}
+                          >
+                            Abrir Estado
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </DetailAccordionSection>
+          </Stack>
         )}
 
       </KpiDetailModal>
@@ -2170,7 +2435,7 @@ function GeoMapTab() {
       <Dialog
         open={!!selectedState}
         onClose={() => setSelectedState(null)}
-        maxWidth="md"
+        maxWidth="lg"
         fullWidth
         PaperProps={{ sx: { borderRadius: 2 } }}
       >
@@ -2185,6 +2450,11 @@ function GeoMapTab() {
         <DialogContent sx={{ pt: 3, pb: 2 }}>
           {selectedState?.data ? (
             <Stack spacing={1.5} sx={{ mt: 1 }}>
+              <DetailMeaningBlock
+                title="O que este detalhamento mostra"
+                meaning="Este modal concentra toda a leitura territorial do estado selecionado. O resumo executivo mostra o volume agregado; os blocos expansíveis separam denúncias, atividades, missões e OMs vinculadas ao estado."
+                source="Fonte: consolidação territorial por UF do Painel Estratégico."
+              />
               <Grid container spacing={2}>
                 <Grid size={{ xs: 6, sm: 3 }}>
                   <Card variant="outlined" sx={{ textAlign: "center", p: 1 }}>
