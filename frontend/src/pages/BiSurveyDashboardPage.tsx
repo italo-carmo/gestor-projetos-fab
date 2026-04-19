@@ -1734,9 +1734,10 @@ export function BiSurveyDashboardPage() {
                   tickLine={{ stroke: chartAxisStroke }}
                 />
                 <Tooltip
-                  formatter={(value: number) =>
-                    metricMode === "PERCENT" ? getPercentLabel(value) : value
-                  }
+                  formatter={(value: number) => [
+                    metricMode === "PERCENT" ? getPercentLabel(value) : value,
+                    metricMode === "PERCENT" ? "Percentual" : "Respostas",
+                  ]}
                   contentStyle={tooltipContentStyle}
                   labelStyle={tooltipLabelStyle}
                 />
@@ -1822,7 +1823,7 @@ export function BiSurveyDashboardPage() {
                   ))}
                 </Pie>
                 <Tooltip
-                  formatter={(value: number) => value}
+                  formatter={(value: number) => [value, "Respostas"]}
                   contentStyle={tooltipContentStyle}
                   labelStyle={tooltipLabelStyle}
                 />
@@ -1907,14 +1908,16 @@ export function BiSurveyDashboardPage() {
                   tickLine={{ stroke: chartAxisStroke }}
                 />
                 <Tooltip
-                  formatter={(value: number) =>
-                    metricMode === "PERCENT" ? getPercentLabel(value) : value
-                  }
+                  formatter={(value: number) => [
+                    metricMode === "PERCENT" ? getPercentLabel(value) : value,
+                    metricMode === "PERCENT" ? "Percentual" : "Respostas",
+                  ]}
                   contentStyle={tooltipContentStyle}
                   labelStyle={tooltipLabelStyle}
                 />
                 <Bar
                   dataKey={metricMode === "PERCENT" ? "percent" : "count"}
+                  name={metricMode === "PERCENT" ? "Percentual" : "Respostas"}
                   barSize={BAR_SIZE_PRIMARY}
                 >
                   {dashboard.charts.violenceTypePercent.map((entry) => (
@@ -1999,9 +2002,10 @@ export function BiSurveyDashboardPage() {
                   tickLine={{ stroke: chartAxisStroke }}
                 />
                 <Tooltip
-                  formatter={(value: number) =>
-                    metricMode === "PERCENT" ? getPercentLabel(value) : value
-                  }
+                  formatter={(value: number) => [
+                    metricMode === "PERCENT" ? getPercentLabel(value) : value,
+                    metricMode === "PERCENT" ? "Percentual" : "Respostas",
+                  ]}
                   contentStyle={tooltipContentStyle}
                   labelStyle={tooltipLabelStyle}
                 />
@@ -2096,14 +2100,16 @@ export function BiSurveyDashboardPage() {
                   tickLine={{ stroke: chartAxisStroke }}
                 />
                 <Tooltip
-                  formatter={(value: number) =>
-                    metricMode === "PERCENT" ? getPercentLabel(value) : value
-                  }
+                  formatter={(value: number) => [
+                    metricMode === "PERCENT" ? getPercentLabel(value) : value,
+                    metricMode === "PERCENT" ? "Percentual" : "Respostas",
+                  ]}
                   contentStyle={tooltipContentStyle}
                   labelStyle={tooltipLabelStyle}
                 />
                 <Bar
                   dataKey={metricMode === "PERCENT" ? "percent" : "count"}
+                  name={metricMode === "PERCENT" ? "Percentual" : "Respostas"}
                   fill={BI_PALETTE.primaryMid}
                   barSize={BAR_SIZE_PRIMARY}
                 />

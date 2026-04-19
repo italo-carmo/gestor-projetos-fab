@@ -222,12 +222,16 @@ function HorizontalBarCard({
   maxItems = 10,
   height = 300,
   color = "#1A3C6E",
+  valueLabel = "Ocorrências",
+  onItemClick,
 }: {
   title: string;
   data: { label: string; count: number; percent: number }[];
   maxItems?: number;
   height?: number;
   color?: string;
+  valueLabel?: string;
+  onItemClick?: ((item: { label: string; count: number; percent: number }) => void) | null;
 }) {
   const sliced = data.slice(0, maxItems);
   if (sliced.length === 0) return null;
@@ -254,11 +258,20 @@ function HorizontalBarCard({
               interval={0}
             />
             <RechartsTooltip
-              formatter={(val: number, _: any, entry: any) =>
-                `${val} (${entry.payload.percent}%)`
-              }
+              formatter={(val: number, _name: any, entry: any) => [
+                `${val} (${entry.payload.percent}%)`,
+                valueLabel,
+              ]}
             />
-            <Bar dataKey="count" fill={color} barSize={18} radius={[0, 4, 4, 0]}>
+            <Bar
+              dataKey="count"
+              name={valueLabel}
+              fill={color}
+              barSize={18}
+              radius={[0, 4, 4, 0]}
+              cursor={onItemClick ? "pointer" : "default"}
+              onClick={onItemClick ? (entry: any) => onItemClick(entry?.payload) : undefined}
+            >
               {sliced.map((_: any, i: number) => (
                 <Cell key={i} fill={COLORS[i % COLORS.length]} />
               ))}
@@ -2089,6 +2102,7 @@ function GeoMapTab() {
   const aggressorProfileQuery = useAggressorProfile();
   const { data, isLoading, error } = useGeoMap();
   const [selectedState, setSelectedState] = useState<{ uf: string; data: any } | null>(null);
+  const [selectedLocalityBar, setSelectedLocalityBar] = useState<any | null>(null);
   const [geoKpiModal, setGeoKpiModal] = useState<
     "mappedOms" | "cpca" | "statesWithData" | null
   >(null);
@@ -2119,8 +2133,15 @@ function GeoMapTab() {
             String(item?.localityCode ?? "").trim() ||
             String(item?.label ?? "").trim() ||
             "Não informado",
+          localityCode: String(item?.localityCode ?? "").trim(),
+          localityName:
+            String(item?.localityName ?? "").trim() ||
+            String(item?.localityCode ?? "").trim() ||
+            String(item?.label ?? "").trim() ||
+            "Não informado",
           count: Number(item.count ?? 0),
           percent: Number(item.percent ?? 0),
+          detailItems: Array.isArray(item?.detailItems) ? item.detailItems : [],
         }))
         .filter((item: any) => item.count > 0)
         .slice(0, 15)
@@ -2338,6 +2359,8 @@ function GeoMapTab() {
             maxItems={15}
             height={520}
             color="#546E7A"
+            valueLabel="Casos"
+            onItemClick={(item) => setSelectedLocalityBar(item)}
           />
         </Box>
       )}
@@ -2767,6 +2790,47 @@ function GeoMapTab() {
           )}
         </DialogContent>
       </Dialog>
+
+      <KpiDetailModal
+        open={Boolean(selectedLocalityBar)}
+        title={`Detalhamento — ${selectedLocalityBar?.localityName ?? selectedLocalityBar?.label ?? "OM / localidade"}`}
+        onClose={() => setSelectedLocalityBar(null)}
+        maxWidth="lg"
+      >
+        {selectedLocalityBar ? (
+          <Stack spacing={1.25}>
+            <DetailMeaningBlock
+              title="O que este detalhamento mostra"
+              meaning="Este modal reúne os casos que compõem a barra selecionada no gráfico territorial. Ele serve para sair do agregado por OM/localidade e chegar ao conjunto exato de registros que puxam essa concentração."
+              source="Fonte: distribuição territorial do Perfil dos Casos, consolidada por OM/localidade normalizada."
+            />
+            <DetailAccordionSection
+              title="Resumo executivo"
+              subtitle="Peso desta OM/localidade dentro do recorte atual"
+              defaultExpanded
+            >
+              <Stack spacing={1}>
+                <DetailRow label="OM / localidade" value={selectedLocalityBar.localityName ?? selectedLocalityBar.label ?? "—"} />
+                {selectedLocalityBar.localityCode ? (
+                  <DetailRow label="Sigla" value={selectedLocalityBar.localityCode} color="#1A3C6E" />
+                ) : null}
+                <DetailRow label="Casos" value={selectedLocalityBar.count ?? 0} color="#546E7A" />
+                <DetailRow label="Participação no recorte" value={`${Number(selectedLocalityBar.percent ?? 0).toFixed(1)}%`} />
+              </Stack>
+            </DetailAccordionSection>
+            <DetailAccordionSection
+              title="Casos que compõem a barra"
+              subtitle="Lista operacional para abrir cada registro"
+              defaultExpanded
+            >
+              <DetailItemList
+                items={Array.isArray(selectedLocalityBar.detailItems) ? selectedLocalityBar.detailItems : []}
+                emptyMessage="Nenhum caso detalhado disponível para esta OM/localidade."
+              />
+            </DetailAccordionSection>
+          </Stack>
+        ) : null}
+      </KpiDetailModal>
     </Box>
   );
 }

@@ -2077,6 +2077,7 @@ export class StrategicService {
         count: number;
         localityCode: string;
         localityName: string;
+        detailItems: StrategicKpiDetailItem[];
       }>(
         casesWithResolvedLocality.reduce(
           (
@@ -2087,6 +2088,7 @@ export class StrategicService {
                 count: number;
                 localityCode: string;
                 localityName: string;
+                detailItems: StrategicKpiDetailItem[];
               }
             >,
             row: any,
@@ -2102,8 +2104,10 @@ export class StrategicService {
               count: 0,
               localityCode: String(row?.resolvedLocality?.code ?? '').trim(),
               localityName: displayLabel,
+              detailItems: [],
             };
             current.count += 1;
+            current.detailItems.push(toCaseDetail(row));
             if (!current.localityCode) {
               current.localityCode = String(row?.resolvedLocality?.code ?? '').trim();
             }
