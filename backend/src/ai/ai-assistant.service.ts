@@ -1880,7 +1880,8 @@ export class AiAssistantService {
   }
 
   private async listActivityTypeOptions(scope?: string) {
-    const response = await this.activities.listTypes(scope);
+    void scope;
+    const response = await this.activities.listTypes();
     return (response?.items ?? []).map((item: any) => ({
       value: String(item.id),
       label: String(item.name),
@@ -2208,7 +2209,6 @@ export class AiAssistantService {
     if (workflow.intent === 'create_task') {
       const created = await this.tasks.createTaskInstancesManual(
         {
-          scope: draft.scope || ActivityScope.SMIF,
           title: draft.title,
           description: draft.description || null,
           phaseId: draft.phaseId,
