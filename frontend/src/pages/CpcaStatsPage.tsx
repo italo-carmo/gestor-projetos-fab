@@ -22,7 +22,7 @@ import {
   Typography,
 } from "@mui/material";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   Bar,
@@ -261,8 +261,16 @@ export function CpcaStatsPage() {
   const localitiesQuery = useOmsCatalog(isNationalScope);
 
   const localityId = params.get("localityId") ?? "";
-  const from = params.get("from") ?? "";
-  const to = params.get("to") ?? "";
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+
+  useEffect(() => {
+    if (!params.has("from") && !params.has("to")) return;
+    const next = new URLSearchParams(params);
+    next.delete("from");
+    next.delete("to");
+    setParams(next, { replace: true });
+  }, [params, setParams]);
 
   const filters = useMemo(
     () => ({
@@ -727,7 +735,7 @@ export function CpcaStatsPage() {
               label="De"
               InputLabelProps={{ shrink: true }}
               value={from}
-              onChange={(event) => updateParam("from", event.target.value)}
+              onChange={(event) => setFrom(event.target.value)}
             />
             <TextField
               type="date"
@@ -735,10 +743,14 @@ export function CpcaStatsPage() {
               label="Até"
               InputLabelProps={{ shrink: true }}
               value={to}
-              onChange={(event) => updateParam("to", event.target.value)}
+              onChange={(event) => setTo(event.target.value)}
             />
             <Button
-              onClick={() => setParams({}, { replace: true })}
+              onClick={() => {
+                setFrom("");
+                setTo("");
+                setParams({}, { replace: true });
+              }}
             >
               Limpar filtros
             </Button>
