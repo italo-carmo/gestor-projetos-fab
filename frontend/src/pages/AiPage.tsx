@@ -709,6 +709,20 @@ function AnalysesTab() {
 
   return (
     <Grid container spacing={2}>
+      <Grid size={{ xs: 12 }}>
+        <Alert
+          severity="info"
+          sx={{
+            borderRadius: 3,
+            alignItems: "flex-start",
+            "& .MuiAlert-message": { width: "100%" },
+          }}
+        >
+          <Typography variant="body2" sx={{ lineHeight: 1.7 }}>
+            Os insights textuais do sistema foram concentrados nesta área de IA. O Painel Estratégico agora fica restrito a leitura executiva, perfil, território e priorização COMGEP.
+          </Typography>
+        </Alert>
+      </Grid>
       {ANALYSIS_CARDS.map((card) => (
         <Grid key={card.type} size={{ xs: 12 }}>
           <AnalysisCard

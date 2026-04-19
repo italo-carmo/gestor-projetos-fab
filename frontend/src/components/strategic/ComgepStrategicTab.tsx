@@ -32,7 +32,6 @@ import WarningAmberRoundedIcon from "@mui/icons-material/WarningAmberRounded";
 import { Link as RouterLink } from "react-router-dom";
 import { useMemo, useState } from "react";
 import {
-  useComgepRecommendations,
   useComgepSituationRoom,
 } from "../../api/hooks";
 import { ErrorState } from "../states/ErrorState";
@@ -294,7 +293,6 @@ function ComgepDetailModal({
 
 export function ComgepStrategicTab() {
   const roomQuery = useComgepSituationRoom();
-  const recommendationsQuery = useComgepRecommendations(6);
   const [detailModal, setDetailModal] = useState<
     | null
     | "retaliation"
@@ -310,7 +308,6 @@ export function ComgepStrategicTab() {
   const room = roomQuery.data;
   const summary = room?.summary ?? {};
   const dataConfidence = room?.dataConfidence ?? {};
-  const recommendations = recommendationsQuery.data?.items ?? [];
   const confidencePercent = Number(dataConfidence.supportedCoveragePercent ?? 0);
   const omRiskIndex = Array.isArray(room?.details?.omRiskIndex)
     ? room.details.omRiskIndex
@@ -381,11 +378,10 @@ export function ComgepStrategicTab() {
               Sala COMGEP consolidada no Painel Estratégico
             </Typography>
             <Typography variant="body2" sx={{ mt: 0.5, lineHeight: 1.65 }}>
-              Este recorte mostra apenas os sinais executivos de decisão:
-              cobertura CPCA, OMs descobertas, UFs prioritárias, risco por OM,
-              pressão operacional e confiança da base. As análises com IA e o
-              assistente operacional foram centralizados em Inteligência
-              Artificial.
+              Este recorte mostra apenas a priorização executiva: UFs críticas,
+              OMs de maior risco, risco de retaliação, atraso de tratamento e
+              confiança do dado. Os aprofundamentos textuais e a geração de
+              recomendações ficaram centralizados na Inteligência Artificial.
             </Typography>
           </Box>
           <Button
@@ -575,55 +571,6 @@ export function ComgepStrategicTab() {
             </TableBody>
           </Table>
         </TableContainer>
-      </SectionCard>
-
-      <SectionCard
-        title="Recomendações registradas"
-        subtitle="Últimas recomendações estratégicas gravadas no sistema. A nova geração assistida foi centralizada no menu Inteligência Artificial."
-      >
-        <Stack spacing={1}>
-          {recommendations.map((item: any) => (
-            <Card key={item.id} variant="outlined" sx={{ borderRadius: 2.5 }}>
-              <CardContent sx={{ py: 1.4, "&:last-child": { pb: 1.4 } }}>
-                <Stack spacing={0.75}>
-                  <Stack
-                    direction={{ xs: "column", sm: "row" }}
-                    spacing={1}
-                    justifyContent="space-between"
-                  >
-                    <Typography variant="subtitle2" fontWeight={800}>
-                      {item.title}
-                    </Typography>
-                    <Chip
-                      size="small"
-                      label={item.sourceAgentType || "manual"}
-                      variant="outlined"
-                    />
-                  </Stack>
-                  <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.65 }}>
-                    {item.summary}
-                  </Typography>
-                  <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                    {item.uf ? <Chip size="small" label={`UF ${item.uf}`} /> : null}
-                    {item.om?.code ? (
-                      <Chip size="small" label={`OM ${item.om.code}`} />
-                    ) : null}
-                    <Chip
-                      size="small"
-                      variant="outlined"
-                      label={new Date(item.createdAt).toLocaleString("pt-BR")}
-                    />
-                  </Stack>
-                </Stack>
-              </CardContent>
-            </Card>
-          ))}
-          {!recommendations.length && (
-            <Typography variant="body2" color="text.secondary">
-              Nenhuma recomendação registrada até o momento.
-            </Typography>
-          )}
-        </Stack>
       </SectionCard>
 
       <ComgepDetailModal

@@ -35,20 +35,17 @@ import DownloadRoundedIcon from "@mui/icons-material/DownloadRounded";
 import AutoAwesomeRoundedIcon from "@mui/icons-material/AutoAwesomeRounded";
 import DashboardRoundedIcon from "@mui/icons-material/DashboardRounded";
 import FingerprintRoundedIcon from "@mui/icons-material/FingerprintRounded";
-import TextSnippetRoundedIcon from "@mui/icons-material/TextSnippetRounded";
 import MapRoundedIcon from "@mui/icons-material/MapRounded";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import OpenInNewRoundedIcon from "@mui/icons-material/OpenInNewRounded";
 import ShieldRoundedIcon from "@mui/icons-material/ShieldRounded";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Bar,
   BarChart,
   CartesianGrid,
   Cell,
   Legend,
-  Pie,
-  PieChart,
   ResponsiveContainer,
   Tooltip as RechartsTooltip,
   XAxis,
@@ -57,7 +54,6 @@ import {
 import {
   useStrategicDashboard,
   useAggressorProfile,
-  useTextAnalysis,
   useGeoMap,
   useExportExecutiveReportPdf,
 } from "../api/hooks";
@@ -86,47 +82,6 @@ const GENDER_LABELS: Record<string, string> = {
   MASCULINO: "Masculino",
   FEMININO: "Feminino",
   NAO_INFORMADO: "Não informado",
-};
-const SOURCE_META: Record<string, { label: string; description: string }> = {
-  recruitsSuggestions: {
-    label: "Sugestões dos Recrutas",
-    description: "Origem: campo de sugestões livres da Pesquisa de Recrutas.",
-  },
-  reportObservations: {
-    label: "Observações dos Relatórios",
-    description:
-      "Origem: campo “Principais pontos observados” dos relatórios de Atividade de Campo.",
-  },
-  reportAttentionPoints: {
-    label: "Pontos de Atenção",
-    description:
-      "Origem: campo “Pontos de atenção” dos relatórios de Atividade de Campo.",
-  },
-  reportConclusions: {
-    label: "Conclusões dos Relatórios",
-    description:
-      "Origem: campo “Conclusão” dos relatórios de Atividade de Campo.",
-  },
-  bestPracticeComments: {
-    label: "Comentários Boas Práticas",
-    description:
-      "Origem: comentário livre da pesquisa do Ciclo de Boas Práticas.",
-  },
-  cpcaComments: {
-    label: "Comentários CPCA/SMIF",
-    description:
-      "Origem: comentários textuais registrados nas denúncias CPCA/SMIF.",
-  },
-  cpcaMeeting: {
-    label: "Respostas Reuniões CPCA",
-    description:
-      "Origem: respostas textuais livres dos formulários de Reuniões CPCA.",
-  },
-  gsdEvaluation: {
-    label: "Respostas Avaliação GSD",
-    description:
-      "Origem: respostas textuais livres da pesquisa de Avaliação GSD.",
-  },
 };
 
 function KpiCard({
@@ -261,265 +216,6 @@ function HorizontalBarCard({
         </ResponsiveContainer>
       </CardContent>
     </Card>
-  );
-}
-
-function ClickableBarCard({
-  data,
-  height = 280,
-  onBarClick,
-}: {
-  data: { label: string; count: number; percent: number }[];
-  height?: number;
-  onBarClick?: (word: string) => void;
-}) {
-  if (data.length === 0) return null;
-  const chartHeight = Math.max(height, data.length * 28 + 40);
-  return (
-    <ResponsiveContainer width="100%" height={chartHeight}>
-      <BarChart
-        data={data}
-        layout="vertical"
-        margin={{ left: 10, right: 30, top: 5, bottom: 5 }}
-      >
-        <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-        <XAxis type="number" tickFormatter={(v) => `${v}`} />
-        <YAxis
-          dataKey="label"
-          type="category"
-          width={140}
-          tick={{ fontSize: 11 }}
-          interval={0}
-        />
-        <RechartsTooltip
-          formatter={(val: number) => [`${val} ocorrências — clique para ver textos`]}
-        />
-        <Bar
-          dataKey="count"
-          barSize={16}
-          radius={[0, 4, 4, 0]}
-          cursor="pointer"
-          onClick={(entry: any) => onBarClick?.(entry?.label ?? "")}
-        >
-          {data.map((_: any, i: number) => (
-            <Cell key={i} fill={COLORS[i % COLORS.length]} />
-          ))}
-        </Bar>
-      </BarChart>
-    </ResponsiveContainer>
-  );
-}
-
-function normalizeForSearch(text: string) {
-  return text
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-}
-
-function getAccentInsensitiveHighlightParts(text: string, word: string) {
-  const needle = normalizeForSearch(word).trim();
-  if (!needle) return [{ value: text, highlight: false }];
-
-  let normalizedText = "";
-  const indexMap: number[] = [];
-
-  for (let i = 0; i < text.length; i++) {
-    const normalizedChar = text[i]
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "");
-    if (!normalizedChar) continue;
-    for (const c of normalizedChar) {
-      normalizedText += c;
-      indexMap.push(i);
-    }
-  }
-
-  const ranges: Array<{ start: number; end: number }> = [];
-  let from = 0;
-  while (from < normalizedText.length) {
-    const idx = normalizedText.indexOf(needle, from);
-    if (idx === -1) break;
-
-    const start = indexMap[idx];
-    const end = (indexMap[idx + needle.length - 1] ?? start) + 1;
-    if (ranges.length > 0 && start <= ranges[ranges.length - 1].end) {
-      ranges[ranges.length - 1].end = Math.max(ranges[ranges.length - 1].end, end);
-    } else {
-      ranges.push({ start, end });
-    }
-
-    from = idx + needle.length;
-  }
-
-  if (ranges.length === 0) return [{ value: text, highlight: false }];
-
-  const parts: Array<{ value: string; highlight: boolean }> = [];
-  let cursor = 0;
-  for (const range of ranges) {
-    if (cursor < range.start) {
-      parts.push({ value: text.slice(cursor, range.start), highlight: false });
-    }
-    parts.push({ value: text.slice(range.start, range.end), highlight: true });
-    cursor = range.end;
-  }
-  if (cursor < text.length) {
-    parts.push({ value: text.slice(cursor), highlight: false });
-  }
-
-  return parts.filter((p) => p.value.length > 0);
-}
-
-function filterTextsByWord(texts: string[], word: string): string[] {
-  const normalized = normalizeForSearch(word);
-  return texts.filter((t) => normalizeForSearch(t).includes(normalized));
-}
-
-function TextsModal({
-  open,
-  word,
-  texts,
-  onClose,
-}: {
-  open: boolean;
-  word: string;
-  texts: string[];
-  onClose: () => void;
-}) {
-  const filtered = useMemo(
-    () => (word ? filterTextsByWord(texts, word) : []),
-    [texts, word],
-  );
-  return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth scroll="paper">
-      <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <Box>
-          <Typography variant="h6" component="span">
-            Textos contendo:{" "}
-          </Typography>
-          <Chip label={word} color="primary" size="small" sx={{ ml: 0.5 }} />
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            {filtered.length} texto(s) encontrado(s)
-          </Typography>
-        </Box>
-        <Button onClick={onClose} size="small" sx={{ minWidth: "auto" }}>
-          <CloseRoundedIcon />
-        </Button>
-      </DialogTitle>
-      <Divider />
-      <DialogContent sx={{ p: 0 }}>
-        {filtered.length === 0 ? (
-          <Typography sx={{ p: 3 }} color="text.secondary">
-            Nenhum texto encontrado.
-          </Typography>
-        ) : (
-          <List dense>
-            {filtered.map((text, i) => {
-              const parts = getAccentInsensitiveHighlightParts(text, word);
-              return (
-                <ListItem
-                  key={i}
-                  sx={{
-                    borderBottom: "1px solid #F0F0F0",
-                    alignItems: "flex-start",
-                    py: 1.2,
-                  }}
-                >
-                  <ListItemText
-                    primary={
-                      <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
-                        {parts.map((part, j) =>
-                          part.highlight ? (
-                            <Box
-                              key={j}
-                              component="mark"
-                              sx={{
-                                bgcolor: "#FFF3CD",
-                                color: "#856404",
-                                px: 0.3,
-                                borderRadius: 0.5,
-                                fontWeight: 600,
-                              }}
-                            >
-                              {part.value}
-                            </Box>
-                          ) : (
-                            <span key={j}>{part.value}</span>
-                          ),
-                        )}
-                      </Typography>
-                    }
-                  />
-                </ListItem>
-              );
-            })}
-          </List>
-        )}
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Fechar</Button>
-      </DialogActions>
-    </Dialog>
-  );
-}
-
-function WordCloud({
-  words,
-  maxWords = 60,
-  onWordClick,
-}: {
-  words: { word: string; count: number }[];
-  maxWords?: number;
-  onWordClick?: (word: string) => void;
-}) {
-  const sliced = words.slice(0, maxWords);
-  if (sliced.length === 0)
-    return (
-      <Typography color="text.secondary" variant="body2">
-        Nenhum texto disponível.
-      </Typography>
-    );
-  const maxCount = sliced[0]?.count ?? 1;
-  const minSize = 11;
-  const maxSize = 36;
-  return (
-    <Box
-      sx={{
-        display: "flex",
-        flexWrap: "wrap",
-        gap: 0.8,
-        justifyContent: "center",
-        alignItems: "baseline",
-        p: 2,
-      }}
-    >
-      {sliced.map((w, i) => {
-        const size = Math.max(
-          minSize,
-          Math.round((w.count / maxCount) * maxSize),
-        );
-        return (
-          <Tooltip key={i} title={`${w.word}: ${w.count} ocorrências — clique para ver textos`} arrow>
-            <Typography
-              component="span"
-              onClick={() => onWordClick?.(w.word)}
-              sx={{
-                fontSize: size,
-                fontWeight: size > 20 ? 700 : size > 15 ? 600 : 400,
-                color: COLORS[i % COLORS.length],
-                cursor: "pointer",
-                lineHeight: 1.2,
-                transition: "transform 0.2s",
-                "&:hover": { transform: "scale(1.15)", textDecoration: "underline" },
-              }}
-            >
-              {w.word}
-            </Typography>
-          </Tooltip>
-        );
-      })}
-    </Box>
   );
 }
 
@@ -720,25 +416,6 @@ function formatActivityScopeLabel(scope: string) {
   if (normalized === "SMIF") return "SMIF";
   if (normalized === "CIPAVD") return "CIPAVD";
   return normalized || "—";
-}
-
-function formatGeoComplaintDetails(item: any) {
-  return [
-    `Tipo: ${formatComplaintTypeLabel(item?.type ?? "")}`,
-    `Status: ${formatComplaintStatusLabel(item?.status ?? "")}`,
-    `Fluxo: ${formatWorkflowScopeLabel(item?.scope ?? "")}`,
-  ].join(" • ");
-}
-
-function formatGeoActivityDetails(item: any) {
-  return [
-    `Escopo: ${formatActivityScopeLabel(item?.scope ?? "")}`,
-    `Status: ${formatActivityStatusLabel(item?.status ?? "")}`,
-  ].join(" • ");
-}
-
-function formatGeoMissionDetails(item: any) {
-  return `Escopo: ${formatActivityScopeLabel(item?.scope ?? "")}`;
 }
 
 function formatCoveredOmResponsibility(item: any) {
@@ -1201,15 +878,121 @@ function SituationalTab() {
     },
   ];
 
-  const complaintDonut = [
-    { name: "Assédio Moral", value: c.moral ?? 0 },
-    { name: "Assédio Sexual", value: c.sexual ?? 0 },
-  ].filter((d) => d.value > 0);
-
-  const scopeDonut = [
-    { name: "CPCA", value: c.byCpca ?? 0 },
-    { name: "SMIF", value: c.bySmif ?? 0 },
-  ].filter((d) => d.value > 0);
+  const reportFillRate = a.totalActivities
+    ? (Number(a.withReport ?? 0) / Math.max(1, Number(a.totalActivities ?? 0))) * 100
+    : 0;
+  const reportSignRate = a.withReport
+    ? (Number(a.signed ?? 0) / Math.max(1, Number(a.withReport ?? 0))) * 100
+    : 0;
+  const researchSignals = [
+    {
+      title: "Pesquisa de violência",
+      value: `${s.violenceRatePercent ?? 0}%`,
+      helper: `${s.yesCount ?? 0} de ${s.totalResponses ?? 0} respondentes relataram violência.`,
+      color: "#D32F2F",
+      detail: "surveys",
+    },
+    {
+      title: "Violência doméstica — 12 meses",
+      value: `${dv.last12MonthsRatePercent ?? 0}%`,
+      helper: `${dv.last12MonthsYes ?? 0} respondentes declararam ocorrência recente.`,
+      color: "#C2185B",
+      detail: "domesticViolence",
+    },
+    {
+      title: "Recrutas — segurança para denunciar",
+      value: `${r.safeToReportPercent ?? 0}%`,
+      helper: `${r.safeCount ?? 0} de ${r.totalResponses ?? 0} sentem segurança para reportar.`,
+      color: "#2E7D32",
+      detail: "recruits",
+    },
+    {
+      title: "Recrutas — conhecimento do canal",
+      value: `${r.knowReportProcessPercent ?? 0}%`,
+      helper: `${r.knowProcess ?? 0} de ${r.totalResponses ?? 0} conhecem o fluxo de denúncia.`,
+      color: "#0288D1",
+      detail: "recruits",
+    },
+  ];
+  const institutionalResponse = [
+    {
+      title: "Denúncias/casos",
+      value: `${c.openCases ?? 0} abertos`,
+      helper: `Total ${c.totalCases ?? 0} • concluídos ${c.concludedCases ?? 0}`,
+      color: "#1A3C6E",
+      detail: "complaints",
+    },
+    {
+      title: "Atividades de campo",
+      value: `${a.done ?? 0} concluídas`,
+      helper: `Total ${a.totalActivities ?? 0} • relatórios preenchidos ${a.withReport ?? 0}`,
+      color: "#4E342E",
+      detail: "activities",
+    },
+    {
+      title: "Relatórios assinados",
+      value: `${a.signed ?? 0}`,
+      helper: `Preenchimento ${reportFillRate.toFixed(1)}% • assinatura ${reportSignRate.toFixed(1)}%`,
+      color: "#2E7D32",
+      detail: "activities",
+    },
+    {
+      title: "Missões realizadas",
+      value: `${m.totalMissions ?? 0}`,
+      helper: `SMIF ${m.smif ?? 0} • CIPAVD ${m.cipavd ?? 0} • OMs alcançadas ${m.localitiesCovered ?? 0}`,
+      color: "#7B1FA2",
+      detail: "missions",
+    },
+  ];
+  const executiveAlerts = [
+    Number(s.violenceRatePercent ?? 0) >= 20
+      ? {
+          id: "survey-risk",
+          title: "Pesquisa de violência com sinal elevado",
+          description: `${s.violenceRatePercent ?? 0}% dos respondentes relataram violência. Vale revisar distribuição por perfil e localidade.`,
+          detail: "surveys",
+        }
+      : null,
+    Number(dv.last12MonthsRatePercent ?? 0) >= 10
+      ? {
+          id: "domestic-recent",
+          title: "Violência doméstica recente pede atenção",
+          description: `${dv.last12MonthsRatePercent ?? 0}% apontam ocorrência nos últimos 12 meses, com potencial de demanda institucional imediata.`,
+          detail: "domesticViolence",
+        }
+      : null,
+    Number(r.safeToReportPercent ?? 0) > 0 &&
+    (Number(r.safeToReportPercent ?? 0) < 60 ||
+      Number(r.knowReportProcessPercent ?? 0) < 60)
+      ? {
+          id: "recruits-underreport",
+          title: "Ambiente com risco de subnotificação",
+          description: `Recrutas com segurança para denunciar em ${r.safeToReportPercent ?? 0}% e conhecimento do canal em ${r.knowReportProcessPercent ?? 0}%.`,
+          detail: "recruits",
+        }
+      : null,
+    Number(c.openCases ?? 0) > 0
+      ? {
+          id: "open-complaints",
+          title: "Backlog institucional ativo",
+          description: `${c.openCases ?? 0} casos seguem abertos no sistema e exigem monitoramento gerencial.`,
+          detail: "complaints",
+        }
+      : null,
+    Number(a.totalActivities ?? 0) > 0 && reportSignRate < 60
+      ? {
+          id: "report-compliance",
+          title: "Baixa assinatura de relatórios de campo",
+          description: `Apenas ${reportSignRate.toFixed(1)}% dos relatórios preenchidos foram assinados.`,
+          detail: "activities",
+        }
+      : null,
+  ].filter(Boolean) as Array<{
+    id: string;
+    title: string;
+    description: string;
+    detail: string;
+  }>;
 
   const renderModalContent = () => {
     switch (detailModal) {
@@ -1430,7 +1213,7 @@ function SituationalTab() {
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <KpiCard
-            title="Pesquisas — Taxa de Violência"
+            title="Taxa de violência"
             value={`${s.violenceRatePercent ?? 0}%`}
             subtitle={`${s.yesCount ?? 0} de ${s.totalResponses ?? 0} respondentes`}
             color="#D32F2F"
@@ -1439,20 +1222,11 @@ function SituationalTab() {
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <KpiCard
-            title="Violência Doméstica"
-            value={`${dv.lifetimeRatePercent ?? 0}%`}
-            subtitle={`${dv.lifetimeYes ?? 0} de ${dv.totalResponses ?? 0}`}
-            color="#ED6C02"
+            title="Violência doméstica — 12 meses"
+            value={`${dv.last12MonthsRatePercent ?? 0}%`}
+            subtitle={`${dv.last12MonthsYes ?? 0} de ${dv.totalResponses ?? 0}`}
+            color="#C2185B"
             onClick={() => setDetailModal("domesticViolence")}
-          />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <KpiCard
-            title="Recrutas — Segurança p/ denunciar"
-            value={`${r.safeToReportPercent ?? 0}%`}
-            subtitle={`${r.safeCount ?? 0} de ${r.totalResponses ?? 0}`}
-            color="#2E7D32"
-            onClick={() => setDetailModal("recruits")}
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
@@ -1464,143 +1238,154 @@ function SituationalTab() {
             onClick={() => setDetailModal("complaints")}
           />
         </Grid>
-      </Grid>
-
-      <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <KpiCard
-            title="Viol. Doméstica (12 meses)"
-            value={`${dv.last12MonthsRatePercent ?? 0}%`}
-            subtitle={`${dv.last12MonthsYes ?? 0} respondentes`}
-            color="#C2185B"
-            onClick={() => setDetailModal("domesticViolence")}
-          />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <KpiCard
-            title="Recrutas — Conhece canal"
-            value={`${r.knowReportProcessPercent ?? 0}%`}
-            subtitle={`${r.knowProcess ?? 0} de ${r.totalResponses ?? 0}`}
-            color="#0288D1"
-            onClick={() => setDetailModal("recruits")}
-          />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <KpiCard
-            title="Atividades de Campo"
+            title="Atuação em campo"
             value={a.totalActivities ?? 0}
-            subtitle={`SMIF: ${a.smif ?? 0} | CIPAVD: ${a.cipavd ?? 0} | Concluídas: ${a.done ?? 0}`}
+            subtitle={`Concluídas: ${a.done ?? 0} | Missões: ${m.totalMissions ?? 0}`}
             color="#4E342E"
             onClick={() => setDetailModal("activities")}
-          />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <KpiCard
-            title="Missões Realizadas"
-            value={m.totalMissions ?? 0}
-            subtitle={`SMIF: ${m.smif ?? 0} | CIPAVD: ${m.cipavd ?? 0} | OMs: ${m.localitiesCovered ?? 0}`}
-            color="#7B1FA2"
-            onClick={() => setDetailModal("missions")}
           />
         </Grid>
       </Grid>
 
       <Grid container spacing={2}>
-        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+        <Grid size={{ xs: 12, lg: 6 }}>
           <Card variant="outlined">
             <CardContent>
-              <Typography variant="subtitle2" gutterBottom>
-                Denúncias por Tipo
+              <Typography variant="subtitle1" fontWeight={700} gutterBottom>
+                Sinais das pesquisas
               </Typography>
-              {complaintDonut.length > 0 ? (
-                <ResponsiveContainer width="100%" height={220}>
-                  <PieChart>
-                    <Pie
-                      data={complaintDonut}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={50}
-                      outerRadius={80}
-                      dataKey="value"
-                      label={({ name, value }) => `${name}: ${value}`}
-                      cursor="pointer"
-                      onClick={() => setDetailModal("complaints")}
-                    >
-                      {complaintDonut.map((_, i) => (
-                        <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <RechartsTooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-              ) : (
-                <Typography color="text.secondary" variant="body2">
-                  Sem denúncias registradas.
-                </Typography>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-          <Card variant="outlined">
-            <CardContent>
-              <Typography variant="subtitle2" gutterBottom>
-                Denúncias por Escopo
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                Consolidado executivo das pesquisas institucionais e de percepção. O detalhe analítico permanece nos modais e na IA.
               </Typography>
-              {scopeDonut.length > 0 ? (
-                <ResponsiveContainer width="100%" height={220}>
-                  <PieChart>
-                    <Pie
-                      data={scopeDonut}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={50}
-                      outerRadius={80}
-                      dataKey="value"
-                      label={({ name, value }) => `${name}: ${value}`}
-                      cursor="pointer"
-                      onClick={() => setDetailModal("complaints")}
-                    >
-                      {scopeDonut.map((_, i) => (
-                        <Cell key={i} fill={COLORS[(i + 3) % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <RechartsTooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-              ) : (
-                <Typography color="text.secondary" variant="body2">
-                  Sem dados.
-                </Typography>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-          <Card variant="outlined" sx={{ cursor: "pointer", "&:hover": { boxShadow: 4 } }}
-            onClick={() => setDetailModal("activities")}>
-            <CardContent>
-              <Typography variant="subtitle2" gutterBottom>
-                Relatórios de Campo
-              </Typography>
-              <Stack spacing={1} sx={{ mt: 1 }}>
-                <Box sx={{ display: "flex", justifyContent: "space-between" }}>
-                  <Typography variant="body2">Relatórios preenchidos</Typography>
-                  <Chip label={a.withReport ?? 0} size="small" />
-                </Box>
-                <Box sx={{ display: "flex", justifyContent: "space-between" }}>
-                  <Typography variant="body2">Relatórios assinados</Typography>
-                  <Chip label={a.signed ?? 0} size="small" color="success" />
-                </Box>
-                <Box sx={{ display: "flex", justifyContent: "space-between" }}>
-                  <Typography variant="body2">Buscaram ajuda (viol. doméstica)</Typography>
-                  <Chip
-                    label={`${dv.soughtHelpPercent ?? 0}%`}
-                    size="small"
-                    color="warning"
-                  />
-                </Box>
+              <Stack spacing={1.2}>
+                {researchSignals.map((signal) => (
+                  <Box
+                    key={signal.title}
+                    sx={{
+                      border: "1px solid #E5EAF2",
+                      borderRadius: 2,
+                      p: 1.2,
+                    }}
+                  >
+                    <Stack direction="row" justifyContent="space-between" spacing={1}>
+                      <Box sx={{ minWidth: 0 }}>
+                        <Typography variant="subtitle2" fontWeight={700}>
+                          {signal.title}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.4 }}>
+                          {signal.helper}
+                        </Typography>
+                      </Box>
+                      <Chip
+                        label={signal.value}
+                        sx={{ bgcolor: signal.color, color: "#fff", fontWeight: 700 }}
+                      />
+                    </Stack>
+                  </Box>
+                ))}
               </Stack>
+              <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mt: 1.5 }}>
+                <Button size="small" variant="outlined" onClick={() => setDetailModal("surveys")}>
+                  Violência
+                </Button>
+                <Button size="small" variant="outlined" onClick={() => setDetailModal("domesticViolence")}>
+                  Violência doméstica
+                </Button>
+                <Button size="small" variant="outlined" onClick={() => setDetailModal("recruits")}>
+                  Recrutas
+                </Button>
+              </Stack>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid size={{ xs: 12, lg: 6 }}>
+          <Card variant="outlined">
+            <CardContent>
+              <Typography variant="subtitle1" fontWeight={700} gutterBottom>
+                Resposta institucional
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                Panorama do que o sistema já transformou em resposta: casos tratados, execução em campo e capacidade de registro.
+              </Typography>
+              <Stack spacing={1.2}>
+                {institutionalResponse.map((item) => (
+                  <Box
+                    key={item.title}
+                    sx={{
+                      border: "1px solid #E5EAF2",
+                      borderRadius: 2,
+                      p: 1.2,
+                    }}
+                  >
+                    <Stack direction="row" justifyContent="space-between" spacing={1}>
+                      <Box sx={{ minWidth: 0 }}>
+                        <Typography variant="subtitle2" fontWeight={700}>
+                          {item.title}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.4 }}>
+                          {item.helper}
+                        </Typography>
+                      </Box>
+                      <Chip
+                        label={item.value}
+                        sx={{ bgcolor: item.color, color: "#fff", fontWeight: 700 }}
+                      />
+                    </Stack>
+                  </Box>
+                ))}
+              </Stack>
+              <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mt: 1.5 }}>
+                <Button size="small" variant="outlined" onClick={() => setDetailModal("complaints")}>
+                  Denúncias
+                </Button>
+                <Button size="small" variant="outlined" onClick={() => setDetailModal("activities")}>
+                  Atividades
+                </Button>
+                <Button size="small" variant="outlined" onClick={() => setDetailModal("missions")}>
+                  Missões
+                </Button>
+              </Stack>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid size={{ xs: 12 }}>
+          <Card variant="outlined">
+            <CardContent>
+              <Typography variant="subtitle1" fontWeight={700} gutterBottom>
+                Alertas executivos do momento
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                Leitura rápida dos sinais que merecem acompanhamento imediato da gestão. O detalhamento permanece nos modais temáticos e na Sala COMGEP.
+              </Typography>
+              {executiveAlerts.length ? (
+                <List disablePadding>
+                  {executiveAlerts.map((item, index) => (
+                    <ListItem
+                      key={item.id}
+                      divider={index < executiveAlerts.length - 1}
+                      sx={{ px: 0, alignItems: "flex-start" }}
+                      secondaryAction={
+                        <Button size="small" variant="outlined" onClick={() => setDetailModal(item.detail)}>
+                          Ver detalhe
+                        </Button>
+                      }
+                    >
+                      <ListItemText
+                        primary={item.title}
+                        secondary={item.description}
+                        primaryTypographyProps={{ fontWeight: 700 }}
+                        secondaryTypographyProps={{ sx: { mt: 0.3, lineHeight: 1.55 } }}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              ) : (
+                <Typography variant="body2" color="text.secondary">
+                  Sem alertas executivos críticos no recorte atual.
+                </Typography>
+              )}
             </CardContent>
           </Card>
         </Grid>
@@ -1698,15 +1483,6 @@ function AggressorProfileTab() {
             {(data.byScope ?? []).map((s: any) => (
               <DetailRow key={s.label} label={s.label} value={`${s.count} (${s.percent}%)`} />
             ))}
-            {data.byLocality?.length > 0 && (
-              <>
-                <Divider sx={{ my: 0.5 }} />
-                <Typography variant="subtitle2">Por localidade</Typography>
-                {data.byLocality.slice(0, 10).map((l: any) => (
-                  <DetailRow key={l.label} label={l.localityName || l.label} value={`${l.count} (${l.percent}%)`} />
-                ))}
-              </>
-            )}
             <Divider sx={{ my: 0.5 }} />
             <Typography variant="subtitle2">Casos que compõem o total</Typography>
             <DetailItemList
@@ -1878,228 +1654,6 @@ function AggressorProfileTab() {
           />
         </Grid>
       </Grid>
-
-      {data.byLocality?.length > 0 && (
-        <>
-          <Typography variant="h6" sx={{ mb: 2, color: "#1A3C6E" }}>
-            Distribuição por Localidade
-          </Typography>
-          <Card variant="outlined" sx={{ mb: 3 }}>
-            <CardContent>
-              <ResponsiveContainer
-                width="100%"
-                height={Math.max(300, data.byLocality.length * 28 + 40)}
-              >
-                <BarChart
-                  data={data.byLocality.slice(0, 20)}
-                  layout="vertical"
-                  margin={{ left: 10, right: 30, top: 5, bottom: 5 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                  <XAxis type="number" />
-                  <YAxis
-                    dataKey="localityName"
-                    type="category"
-                    width={200}
-                    tick={{ fontSize: 11 }}
-                    interval={0}
-                  />
-                  <RechartsTooltip
-                    labelFormatter={(label: string) => `OM: ${label}`}
-                    formatter={(v: number, _: any, entry: any) => [
-                      `${v} caso(s) (${entry.payload.percent}%)`,
-                      "Ocorrências",
-                    ]}
-                  />
-                  <Bar
-                    dataKey="count"
-                    fill="#1A3C6E"
-                    barSize={16}
-                    radius={[0, 4, 4, 0]}
-                  >
-                    {data.byLocality
-                      .slice(0, 20)
-                      .map((_: any, i: number) => (
-                        <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                      ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </>
-      )}
-    </Box>
-  );
-}
-
-function TextAnalysisTab() {
-  const { data, isLoading, error } = useTextAnalysis();
-  const [activeSource, setActiveSource] = useState<string | null>(null);
-  const [modalWord, setModalWord] = useState("");
-  const [modalOpen, setModalOpen] = useState(false);
-
-  const sourcesWithData = useMemo(() => {
-    if (!data?.sources) return [];
-    return Object.entries(data.sources)
-      .filter(([, v]: [string, any]) => v.count > 0)
-      .map(([key, v]: [string, any]) => ({
-        key,
-        label: SOURCE_META[key]?.label ?? key,
-        description:
-          SOURCE_META[key]?.description ??
-          "Origem: textos coletados da fonte selecionada.",
-        ...v,
-      }));
-  }, [data]);
-
-  const activeRawTexts = useMemo(() => {
-    if (!data) return [];
-    if (activeSource) {
-      return sourcesWithData.find((s) => s.key === activeSource)?.rawTexts ?? [];
-    }
-    return data.consolidated.rawTexts ?? [];
-  }, [data, activeSource, sourcesWithData]);
-
-  const handleWordClick = useCallback((word: string) => {
-    setModalWord(word);
-    setModalOpen(true);
-  }, []);
-
-  if (isLoading) return <SkeletonState />;
-  if (error) return <ErrorState message="Erro ao carregar análise de texto." />;
-  if (!data || data.consolidated.totalTexts === 0)
-    return (
-      <EmptyState message="Nenhum texto disponível para análise. Os dados aparecerão conforme relatórios e pesquisas forem preenchidos." />
-    );
-
-  const activeWords = activeSource
-    ? sourcesWithData.find((s) => s.key === activeSource)?.topWords ?? []
-    : data.consolidated.topWords;
-  const activeLabel = activeSource
-    ? sourcesWithData.find((s) => s.key === activeSource)?.label ?? ""
-    : "Todas as fontes consolidadas";
-  const activeDescription = activeSource
-    ? sourcesWithData.find((s) => s.key === activeSource)?.description ??
-      "Origem: textos coletados da fonte selecionada."
-    : "Origem: consolidação de todas as fontes textuais selecionadas (pesquisas, relatórios e comentários).";
-
-  return (
-    <Box>
-      <Grid container spacing={2} sx={{ mb: 3 }}>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <KpiCard
-            title="Total de Textos Analisados"
-            value={data.consolidated.totalTexts}
-            color="#1A3C6E"
-          />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <KpiCard
-            title="Fontes de Dados"
-            value={sourcesWithData.length}
-            subtitle="fontes com texto"
-            color="#7B1FA2"
-          />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <KpiCard
-            title="Termos Únicos"
-            value={data.consolidated.topWords.length}
-            subtitle="palavras mais frequentes"
-            color="#0288D1"
-          />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <KpiCard
-            title="Termo mais frequente"
-            value={data.consolidated.topWords[0]?.word ?? "—"}
-            subtitle={`${data.consolidated.topWords[0]?.count ?? 0} ocorrências`}
-            color="#2E7D32"
-          />
-        </Grid>
-      </Grid>
-
-      <Card variant="outlined" sx={{ mb: 3 }}>
-        <CardContent>
-          <Stack
-            direction="row"
-            spacing={1}
-            sx={{ mb: 2, flexWrap: "wrap", gap: 0.5 }}
-          >
-            <Chip
-              label="Todas as fontes"
-              variant={activeSource === null ? "filled" : "outlined"}
-              color={activeSource === null ? "primary" : "default"}
-              onClick={() => setActiveSource(null)}
-              size="small"
-            />
-            {sourcesWithData.map((s) => (
-              <Chip
-                key={s.key}
-                label={`${s.label} (${s.count})`}
-                variant={activeSource === s.key ? "filled" : "outlined"}
-                color={activeSource === s.key ? "primary" : "default"}
-                onClick={() => setActiveSource(s.key)}
-                size="small"
-              />
-            ))}
-          </Stack>
-          <Typography variant="subtitle2" gutterBottom>
-            {activeLabel}
-          </Typography>
-          <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: "block" }}>
-            {activeDescription}
-          </Typography>
-          <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: "block" }}>
-            Clique em qualquer palavra para ver os textos completos que a contêm.
-          </Typography>
-          <WordCloud words={activeWords} maxWords={60} onWordClick={handleWordClick} />
-        </CardContent>
-      </Card>
-
-      <Typography variant="h6" sx={{ mb: 2, color: "#1A3C6E" }}>
-        Termos mais frequentes por fonte
-      </Typography>
-      <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: "block" }}>
-        Clique em uma barra do gráfico para ver os textos que contêm a palavra.
-      </Typography>
-      <Grid container spacing={2}>
-        {sourcesWithData.map((source) => (
-          <Grid key={source.key} size={{ xs: 12, md: 6 }}>
-            <Card variant="outlined">
-              <CardContent>
-                <Typography variant="subtitle2" gutterBottom>
-                  {source.label}{" "}
-                  <Chip label={`${source.count} textos`} size="small" sx={{ ml: 1 }} />
-                </Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: "block" }}>
-                  {source.description}
-                </Typography>
-                <ClickableBarCard
-                  data={source.topWords.slice(0, 15).map((w: any) => ({
-                    label: w.word,
-                    count: w.count,
-                    percent: 0,
-                  }))}
-                  height={280}
-                  onBarClick={(word) => {
-                    setActiveSource(source.key);
-                    handleWordClick(word);
-                  }}
-                />
-              </CardContent>
-            </Card>
-          </Grid>
-        ))}
-      </Grid>
-
-      <TextsModal
-        open={modalOpen}
-        word={modalWord}
-        texts={activeRawTexts}
-        onClose={() => setModalOpen(false)}
-      />
     </Box>
   );
 }
@@ -2243,19 +1797,17 @@ function BrazilMap({
 }
 
 function GeoMapTab() {
+  const aggressorProfileQuery = useAggressorProfile();
   const { data, isLoading, error } = useGeoMap();
   const [selectedState, setSelectedState] = useState<{ uf: string; data: any } | null>(null);
   const [geoKpiModal, setGeoKpiModal] = useState<
-    "localities" | "cpca" | "statesWithData" | "totalRecords" | null
+    "mappedOms" | "cpca" | "statesWithData" | null
   >(null);
 
   if (isLoading) return <SkeletonState />;
   if (error) return <ErrorState message="Erro ao carregar mapa geográfico." />;
   if (!data) return <EmptyState message="Sem dados geográficos." />;
 
-  const localitiesCatalog = Array.isArray(data.localitiesCatalog)
-    ? data.localitiesCatalog
-    : [];
   const omsCatalog = Array.isArray(data.omsCatalog) ? data.omsCatalog : [];
   const coveredOmsCatalog = Array.isArray(data.cpcaCoveredOmsCatalog)
     ? data.cpcaCoveredOmsCatalog
@@ -2270,43 +1822,16 @@ function GeoMapTab() {
   const statesWithData = (data.states ?? []).filter(
     (s: any) => s.complaints + s.activities + s.missions > 0,
   );
-  const totalRecordsCount = (data.states ?? []).reduce(
-    (sum: number, s: any) => sum + s.complaints + s.activities + s.missions,
-    0,
-  );
-  const totalRecordItems = statesWithData.flatMap((s: any) => {
-    const complaintItems = (s.complaintDetails ?? []).map((item: any) => ({
-      type: "Denúncia",
-      uf: s.uf,
-      title: item.caseNumber || formatComplaintTypeLabel(item.type) || "Caso",
-      subtitle: formatGeoComplaintDetails(item),
-      locality: item.locality || "—",
-      date: item.date || "",
-    }));
-    const activityItems = (s.activityDetails ?? []).map((item: any) => ({
-      type: "Atividade",
-      uf: s.uf,
-      title: item.title || "Atividade de Campo",
-      subtitle: formatGeoActivityDetails(item),
-      locality: item.locality || "—",
-      date: item.date || "",
-    }));
-    const missionItems = (s.missionDetails ?? []).map((item: any) => ({
-      type: "Missão",
-      uf: s.uf,
-      title: item.title || "Missão",
-      subtitle: formatGeoMissionDetails(item),
-      locality: item.locality || "—",
-      date: item.startDate || item.endDate || "",
-    }));
-    return [...complaintItems, ...activityItems, ...missionItems];
-  });
-  const totalRecordItemsSorted = [...totalRecordItems].sort((a, b) => {
-    const dateA = a.date ? new Date(a.date).getTime() : 0;
-    const dateB = b.date ? new Date(b.date).getTime() : 0;
-    return dateB - dateA;
-  });
-  const totalRecordItemsLimited = totalRecordItemsSorted.slice(0, 500);
+  const localityDistribution = Array.isArray(aggressorProfileQuery.data?.byLocality)
+    ? aggressorProfileQuery.data.byLocality
+        .map((item: any) => ({
+          label: item.label,
+          count: Number(item.count ?? 0),
+          percent: Number(item.percent ?? 0),
+        }))
+        .filter((item: any) => item.count > 0)
+        .slice(0, 15)
+    : [];
 
   const stateDataMap: Record<string, any> = {};
   for (const s of (data.states ?? [])) {
@@ -2342,15 +1867,15 @@ function GeoMapTab() {
   return (
     <Box>
       <Grid container spacing={2} sx={{ mb: 3 }}>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
           <KpiCard
-            title="Localidades Cadastradas"
-            value={data.totalLocalities ?? 0}
+            title="OMs mapeadas"
+            value={omsCatalog.length}
             color="#1A3C6E"
-            onClick={() => setGeoKpiModal("localities")}
+            onClick={() => setGeoKpiModal("mappedOms")}
           />
         </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
           <KpiCard
             title="OMs cobertas pela CPCA"
             value={totalOmsCoveredByCpca}
@@ -2361,20 +1886,12 @@ function GeoMapTab() {
             onClick={() => setGeoKpiModal("cpca")}
           />
         </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
           <KpiCard
-            title="Estados com Dados"
+            title="Estados com sinal relevante"
             value={statesWithData.length}
             color="#ED6C02"
             onClick={() => setGeoKpiModal("statesWithData")}
-          />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <KpiCard
-            title="Total de Registros"
-            value={totalRecordsCount}
-            color="#D32F2F"
-            onClick={() => setGeoKpiModal("totalRecords")}
           />
         </Grid>
       </Grid>
@@ -2512,37 +2029,53 @@ function GeoMapTab() {
         </Card>
       )}
 
+      {localityDistribution.length > 0 && (
+        <Box sx={{ mt: 3 }}>
+          <Typography variant="h6" sx={{ mb: 1.2, color: "#1A3C6E" }}>
+            Distribuição por OM / Localidade
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            A leitura territorial dos casos fica concentrada nesta aba. Assim, o Perfil de Assédio passa a focar apenas no perfil das pessoas e no contexto das ocorrências.
+          </Typography>
+          <HorizontalBarCard
+            title="Casos por OM / Localidade"
+            data={localityDistribution}
+            maxItems={15}
+            height={520}
+            color="#546E7A"
+          />
+        </Box>
+      )}
+
       <KpiDetailModal
         open={Boolean(geoKpiModal)}
         title={
-          geoKpiModal === "localities"
-            ? "Detalhamento — Localidades Cadastradas"
+          geoKpiModal === "mappedOms"
+            ? "Detalhamento — OMs mapeadas"
             : geoKpiModal === "cpca"
               ? "Detalhamento — OMs cobertas pela CPCA"
               : geoKpiModal === "statesWithData"
                 ? "Detalhamento — Estados com Dados"
-                : geoKpiModal === "totalRecords"
-                  ? "Detalhamento — Total de Registros"
                   : ""
         }
         onClose={() => setGeoKpiModal(null)}
       >
-        {geoKpiModal === "localities" && (
+        {geoKpiModal === "mappedOms" && (
           <TableContainer>
             <Table size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell><strong>Localidade</strong></TableCell>
+                  <TableCell><strong>OM</strong></TableCell>
+                  <TableCell><strong>Descrição</strong></TableCell>
                   <TableCell><strong>UF</strong></TableCell>
-                  <TableCell><strong>Catálogo</strong></TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {localitiesCatalog.map((loc: any) => (
+                {omsCatalog.map((loc: any) => (
                   <TableRow key={loc.id}>
+                    <TableCell>{loc.code || "—"}</TableCell>
                     <TableCell>{loc.name || "—"}</TableCell>
                     <TableCell>{loc.uf || "—"}</TableCell>
-                    <TableCell>{loc.catalogType || "—"}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -2632,47 +2165,6 @@ function GeoMapTab() {
           </TableContainer>
         )}
 
-        {geoKpiModal === "totalRecords" && (
-          <Stack spacing={1.2}>
-            <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap" }}>
-              <Chip label={`Total: ${totalRecordsCount}`} />
-              <Chip label={`Denúncias: ${(data.states ?? []).reduce((sum: number, s: any) => sum + Number(s.complaints ?? 0), 0)}`} />
-              <Chip label={`Atividades: ${(data.states ?? []).reduce((sum: number, s: any) => sum + Number(s.activities ?? 0), 0)}`} />
-              <Chip label={`Missões: ${(data.states ?? []).reduce((sum: number, s: any) => sum + Number(s.missions ?? 0), 0)}`} />
-            </Stack>
-            <Typography variant="caption" color="text.secondary">
-              Exibindo {totalRecordItemsLimited.length} de {totalRecordItemsSorted.length} registros.
-            </Typography>
-            <TableContainer>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell><strong>Tipo</strong></TableCell>
-                    <TableCell><strong>Item</strong></TableCell>
-                    <TableCell><strong>Detalhes</strong></TableCell>
-                    <TableCell><strong>UF</strong></TableCell>
-                    <TableCell><strong>Localidade</strong></TableCell>
-                    <TableCell><strong>Data</strong></TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {totalRecordItemsLimited.map((item: any, index: number) => (
-                    <TableRow key={`${item.type}-${item.uf}-${item.title}-${index}`}>
-                      <TableCell>{item.type}</TableCell>
-                      <TableCell>{item.title || "—"}</TableCell>
-                      <TableCell>{item.subtitle || "—"}</TableCell>
-                      <TableCell>{item.uf || "—"}</TableCell>
-                      <TableCell>{item.locality || "—"}</TableCell>
-                      <TableCell>
-                        {item.date ? new Date(item.date).toLocaleDateString("pt-BR") : "—"}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </Stack>
-        )}
       </KpiDetailModal>
 
       <Dialog
@@ -2888,21 +2380,29 @@ function GeoMapTab() {
 export function StrategicDashboardPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const currentTabParam = String(searchParams.get("tab") ?? "situational");
+  const normalizedTabParam =
+    currentTabParam === "text" ? "situational" : currentTabParam;
   const tabKeyByIndex = [
     "situational",
     "aggressor",
     "geo",
-    "text",
     "comgep",
   ];
-  const initialIndex = Math.max(0, tabKeyByIndex.indexOf(currentTabParam));
+  const initialIndex = Math.max(0, tabKeyByIndex.indexOf(normalizedTabParam));
   const [tab, setTab] = useState(initialIndex);
   const exportPdf = useExportExecutiveReportPdf();
 
   useEffect(() => {
-    const nextIndex = Math.max(0, tabKeyByIndex.indexOf(currentTabParam));
+    if (currentTabParam === "text") {
+      const next = new URLSearchParams(searchParams);
+      next.delete("tab");
+      setSearchParams(next, { replace: true });
+      return;
+    }
+
+    const nextIndex = Math.max(0, tabKeyByIndex.indexOf(normalizedTabParam));
     setTab((prev) => (prev === nextIndex ? prev : nextIndex));
-  }, [currentTabParam]);
+  }, [currentTabParam, normalizedTabParam, searchParams, setSearchParams]);
 
   const handleTabChange = (_: unknown, value: number) => {
     setTab(value);
@@ -2942,10 +2442,10 @@ export function StrategicDashboardPage() {
             variant="outlined"
             startIcon={<AutoAwesomeRoundedIcon />}
             component={RouterLink}
-            to="/ai"
+            to="/ai?tab=analyses"
             sx={{ borderColor: "#1A3C6E", color: "#1A3C6E" }}
           >
-            Análises com IA
+            IA e insights textuais
           </Button>
           <Button
             variant="contained"
@@ -2970,7 +2470,7 @@ export function StrategicDashboardPage() {
         sx={{ mb: 2, borderBottom: 1, borderColor: "divider" }}
       >
         <Tab
-          label="Painel Situacional"
+          label="Visão Geral"
           icon={<DashboardRoundedIcon />}
           iconPosition="start"
           sx={{ textTransform: "none" }}
@@ -2988,12 +2488,6 @@ export function StrategicDashboardPage() {
           sx={{ textTransform: "none" }}
         />
         <Tab
-          label="Análise de Texto"
-          icon={<TextSnippetRoundedIcon />}
-          iconPosition="start"
-          sx={{ textTransform: "none" }}
-        />
-        <Tab
           label="Sala COMGEP"
           icon={<ShieldRoundedIcon />}
           iconPosition="start"
@@ -3004,8 +2498,7 @@ export function StrategicDashboardPage() {
       {tab === 0 && <SituationalTab />}
       {tab === 1 && <AggressorProfileTab />}
       {tab === 2 && <GeoMapTab />}
-      {tab === 3 && <TextAnalysisTab />}
-      {tab === 4 && <ComgepStrategicTab />}
+      {tab === 3 && <ComgepStrategicTab />}
     </Box>
   );
 }
