@@ -52,6 +52,7 @@ type ChatSuggestedAction = {
 };
 
 export type ComgepCopilotMode = 'executive' | 'analyst';
+export type ComgepCopilotIntent = 'explain' | 'briefing' | 'action';
 
 export type ComgepCopilotFocus = {
   kind:
@@ -92,6 +93,7 @@ type ComgepCopilotMessage = {
   content: string;
   createdAt: string;
   mode: ComgepCopilotMode;
+  intent: ComgepCopilotIntent;
   focus: ComgepCopilotFocus | null;
   evidences: ComgepCopilotEvidenceItem[];
   agentType: ActionAgentType;
@@ -104,6 +106,7 @@ type ComgepCopilotSession = {
   agentType: ActionAgentType;
   scopeUf: string | null;
   mode: ComgepCopilotMode;
+  intent: ComgepCopilotIntent;
   focus: ComgepCopilotFocus | null;
   configuredPrompt: string | null;
   configuredSources: AiKnowledgeSourceId[];
@@ -115,6 +118,7 @@ type ComgepCopilotStreamParams = {
   room: any;
   scopeUf: string | null;
   mode: ComgepCopilotMode;
+  intent: ComgepCopilotIntent;
   focus: ComgepCopilotFocus | null;
   evidences: ComgepCopilotEvidenceItem[];
   history: ComgepCopilotMessage[];
@@ -427,12 +431,14 @@ export class AiService {
     options?: {
       uf?: string | null;
       mode?: ComgepCopilotMode | null;
+      intent?: ComgepCopilotIntent | null;
       focus?: Partial<ComgepCopilotFocus> | null;
     },
   ): AsyncGenerator<string> {
     const safeType = this.normalizeActionAgentType(type);
     const scopeUf = String(options?.uf ?? '').trim().toUpperCase() || null;
     const mode = this.normalizeComgepMode(options?.mode);
+    const intent = this.normalizeComgepIntent(options?.intent, safeType, mode);
     const focus = this.normalizeComgepFocus(options?.focus, scopeUf);
 
     this.pruneComgepSessions();
@@ -447,6 +453,7 @@ export class AiService {
     const initialUserMessage = this.buildInitialComgepUserMessage(
       safeType,
       mode,
+      intent,
       focus,
       scopeUf,
     );
@@ -454,6 +461,7 @@ export class AiService {
       agentType: safeType,
       scopeUf,
       mode,
+      intent,
       focus,
       configuredPrompt: config.configuredPrompt,
       configuredSources: config.configuredSources,
@@ -462,6 +470,7 @@ export class AiService {
       role: 'user',
       content: initialUserMessage,
       mode,
+      intent,
       focus,
       evidences: [],
     });
@@ -490,6 +499,7 @@ export class AiService {
         room,
         scopeUf,
         mode,
+        intent,
         focus,
         evidences,
         history: session.messages,
@@ -521,6 +531,7 @@ export class AiService {
             room,
             scopeUf,
             mode,
+            intent,
             focus,
             evidences,
             history: session.messages,
@@ -535,6 +546,7 @@ export class AiService {
         role: 'assistant',
         content: finalResult.narrative,
         mode,
+        intent,
         focus,
         evidences,
       });
@@ -549,6 +561,7 @@ export class AiService {
         sessionId: session.id,
         messageId: assistantMessage.id,
         mode,
+        intent,
         focus,
         evidences,
         evidenceLinks: latestEvidenceLinks,
@@ -563,6 +576,7 @@ export class AiService {
     sessionId: string;
     message: string;
     mode?: ComgepCopilotMode | null;
+    intent?: ComgepCopilotIntent | null;
     focus?: Partial<ComgepCopilotFocus> | null;
   }): AsyncGenerator<string> {
     const session = this.getComgepSessionOrThrow(args.sessionId);
@@ -575,10 +589,16 @@ export class AiService {
     }
 
     const mode = this.normalizeComgepMode(args.mode ?? session.mode);
+    const intent = this.normalizeComgepIntent(
+      args.intent ?? session.intent,
+      session.agentType,
+      mode,
+    );
     const scopeUf = session.scopeUf;
     const focus = this.normalizeComgepFocus(args.focus, scopeUf) ?? session.focus;
 
     session.mode = mode;
+    session.intent = intent;
     session.focus = focus;
     session.updatedAt = new Date().toISOString();
 
@@ -592,6 +612,7 @@ export class AiService {
       role: 'user',
       content: message,
       mode,
+      intent,
       focus,
       evidences: [],
     });
@@ -615,6 +636,7 @@ export class AiService {
         room,
         scopeUf,
         mode,
+        intent,
         focus,
         evidences,
         history: session.messages,
@@ -640,13 +662,14 @@ export class AiService {
       finalResult = {
         ...finalResult,
         narrative: this.sanitizeComgepNarrative(finalResult.narrative, {
-          agentType: session.agentType,
-          room,
-          scopeUf,
-          mode,
-          focus,
-          evidences,
-          history: session.messages,
+            agentType: session.agentType,
+            room,
+            scopeUf,
+            mode,
+            intent,
+            focus,
+            evidences,
+            history: session.messages,
           userMessage: userMessage.content,
           configuredPrompt: session.configuredPrompt,
           configuredSources: session.configuredSources,
@@ -657,6 +680,7 @@ export class AiService {
         role: 'assistant',
         content: finalResult.narrative,
         mode,
+        intent,
         focus,
         evidences,
       });
@@ -670,6 +694,7 @@ export class AiService {
         sessionId: session.id,
         messageId: assistantMessage.id,
         mode,
+        intent,
         focus,
         evidences,
         evidenceLinks: this.extractEvidenceLinks(evidences),
@@ -2688,6 +2713,32 @@ export class AiService {
       : 'executive';
   }
 
+  private normalizeComgepIntent(
+    value: ComgepCopilotIntent | string | null | undefined,
+    agentType: ActionAgentType,
+    mode: ComgepCopilotMode,
+  ): ComgepCopilotIntent {
+    const normalized = String(value ?? '').trim().toLowerCase();
+    if (agentType === 'priorizacao_intervencao') {
+      return 'action';
+    }
+    if (normalized === 'action' || normalized === 'briefing' || normalized === 'explain') {
+      return normalized as ComgepCopilotIntent;
+    }
+    return mode === 'analyst' ? 'explain' : 'briefing';
+  }
+
+  private describeComgepIntent(intent: ComgepCopilotIntent) {
+    switch (intent) {
+      case 'action':
+        return 'transformar o diagnóstico em ação';
+      case 'briefing':
+        return 'produzir um briefing executivo';
+      default:
+        return 'explicar o contexto e o diagnóstico';
+    }
+  }
+
   private normalizeComgepFocus(
     value: Partial<ComgepCopilotFocus> | null | undefined,
     scopeUf: string | null,
@@ -2742,6 +2793,7 @@ export class AiService {
     agentType: ActionAgentType;
     scopeUf: string | null;
     mode: ComgepCopilotMode;
+    intent: ComgepCopilotIntent;
     focus: ComgepCopilotFocus | null;
     configuredPrompt: string | null;
     configuredSources: AiKnowledgeSourceId[];
@@ -2754,6 +2806,7 @@ export class AiService {
       agentType: args.agentType,
       scopeUf: args.scopeUf,
       mode: args.mode,
+      intent: args.intent,
       focus: args.focus,
       configuredPrompt: args.configuredPrompt,
       configuredSources: [...args.configuredSources],
@@ -2776,6 +2829,7 @@ export class AiService {
     session.messages = [...session.messages.slice(-11), message];
     session.updatedAt = message.createdAt;
     session.mode = input.mode;
+    session.intent = input.intent;
     session.focus = input.focus;
     this.comgepSessions.set(session.id, session);
     return message;
@@ -2812,12 +2866,13 @@ export class AiService {
   private buildInitialComgepUserMessage(
     agentType: ActionAgentType,
     mode: ComgepCopilotMode,
+    intent: ComgepCopilotIntent,
     focus: ComgepCopilotFocus | null,
     scopeUf: string | null,
   ) {
     const agent = ACTION_AGENT_CATALOG.find((item) => item.type === agentType);
     const scopeLabel = scopeUf ? `na UF ${scopeUf}` : 'em visão nacional';
-    return `Executar ${agent?.title ?? 'copiloto COMGEP'} no modo ${mode === 'analyst' ? 'analista' : 'executivo'} ${scopeLabel}, com foco em ${this.describeComgepFocus(focus, scopeUf)}.`;
+    return `Executar ${agent?.title ?? 'copiloto COMGEP'} para ${this.describeComgepIntent(intent)}, no modo ${mode === 'analyst' ? 'analista' : 'executivo'} ${scopeLabel}, com foco em ${this.describeComgepFocus(focus, scopeUf)}.`;
   }
 
   private describeComgepFocus(
@@ -3164,24 +3219,45 @@ export class AiService {
     const dominantUf = topUfs[0] ?? null;
 
     const lines: string[] = [];
-    lines.push('## Síntese executiva');
-    lines.push(
-      `No recorte de ${scopeLabel}, com foco em ${focusLabel}, o cenário exige atenção sobre cobertura CPCA, risco institucional e presença operacional.`,
-    );
-    lines.push(
-      `Hoje o sistema registra ${roomSummary?.resumo?.omsCobertasCpca ?? 0} de ${roomSummary?.resumo?.totalOms ?? 0} OMs cobertas (${coveragePercent.toFixed(1)}%), ${roomSummary?.resumo?.ufsCriticas ?? 0} UFs prioritárias, ${roomSummary?.resumo?.omsAltoRisco ?? 0} OMs de alto risco e ${roomSummary?.resumo?.denunciasAbertas ?? 0} denúncia(s) aberta(s).`,
-    );
-    if (dominantRiskOm) {
+    if (params.intent === 'explain') {
+      lines.push('## Resposta direta');
       lines.push(
-        `A OM que mais pressiona o cenário atual é ${dominantRiskOm.om}, na UF ${dominantRiskOm.uf}, com score ${dominantRiskOm.risco}.`,
+        `No recorte de ${scopeLabel}, com foco em ${focusLabel}, o sistema está destacando cobertura CPCA, risco institucional e presença operacional porque a combinação atual desses sinais eleva a prioridade de leitura.`,
       );
-    } else if (dominantUf) {
+      lines.push('');
+      lines.push('## Por que este recorte apareceu');
       lines.push(
-        `A UF mais sensível neste recorte é ${dominantUf.uf}, combinando risco ${dominantUf.risco}, cobertura ${dominantUf.coberturaCpcaPercentual.toFixed(1)}% e presença operacional ${dominantUf.presencaOperacional}.`,
+        `Hoje o sistema registra ${roomSummary?.resumo?.omsCobertasCpca ?? 0} de ${roomSummary?.resumo?.totalOms ?? 0} OMs cobertas (${coveragePercent.toFixed(1)}%), ${roomSummary?.resumo?.ufsCriticas ?? 0} UFs prioritárias, ${roomSummary?.resumo?.omsAltoRisco ?? 0} OMs de alto risco e ${roomSummary?.resumo?.denunciasAbertas ?? 0} denúncia(s) aberta(s).`,
       );
+      if (dominantRiskOm) {
+        lines.push(
+          `A OM que mais pressiona o cenário atual é ${dominantRiskOm.om}, na UF ${dominantRiskOm.uf}, com score ${dominantRiskOm.risco}.`,
+        );
+      } else if (dominantUf) {
+        lines.push(
+          `A UF mais sensível neste recorte é ${dominantUf.uf}, combinando risco ${dominantUf.risco}, cobertura ${dominantUf.coberturaCpcaPercentual.toFixed(1)}% e presença operacional ${dominantUf.presencaOperacional}.`,
+        );
+      }
+    } else {
+      lines.push('## Síntese executiva');
+      lines.push(
+        `No recorte de ${scopeLabel}, com foco em ${focusLabel}, o cenário exige atenção sobre cobertura CPCA, risco institucional e presença operacional.`,
+      );
+      lines.push(
+        `Hoje o sistema registra ${roomSummary?.resumo?.omsCobertasCpca ?? 0} de ${roomSummary?.resumo?.totalOms ?? 0} OMs cobertas (${coveragePercent.toFixed(1)}%), ${roomSummary?.resumo?.ufsCriticas ?? 0} UFs prioritárias, ${roomSummary?.resumo?.omsAltoRisco ?? 0} OMs de alto risco e ${roomSummary?.resumo?.denunciasAbertas ?? 0} denúncia(s) aberta(s).`,
+      );
+      if (dominantRiskOm) {
+        lines.push(
+          `A OM que mais pressiona o cenário atual é ${dominantRiskOm.om}, na UF ${dominantRiskOm.uf}, com score ${dominantRiskOm.risco}.`,
+        );
+      } else if (dominantUf) {
+        lines.push(
+          `A UF mais sensível neste recorte é ${dominantUf.uf}, combinando risco ${dominantUf.risco}, cobertura ${dominantUf.coberturaCpcaPercentual.toFixed(1)}% e presença operacional ${dominantUf.presencaOperacional}.`,
+        );
+      }
     }
 
-    if (params.agentType === 'briefing_comgep') {
+    if (params.agentType === 'briefing_comgep' && params.intent === 'briefing') {
       lines.push('');
       lines.push('## Decisão recomendada agora');
       if (dominantUf && coverageGaps.length) {
@@ -3289,7 +3365,7 @@ export class AiService {
       });
     }
 
-    if (params.mode === 'analyst') {
+    if (params.intent === 'explain') {
       lines.push('');
       lines.push('## Leitura analítica do dado');
       lines.push(
@@ -3315,6 +3391,10 @@ export class AiService {
     } else if (params.agentType === 'priorizacao_intervencao') {
       lines.push(
         'Transformar as OMs e UFs acima em tarefa e missão com responsável, prazo e critério objetivo de impacto esperado.',
+      );
+    } else if (params.intent === 'explain') {
+      lines.push(
+        'Usar esta leitura para validar o diagnóstico, depois converter o mesmo recorte em briefing executivo ou ação assistida.',
       );
     } else {
       lines.push(
@@ -4016,7 +4096,7 @@ export class AiService {
                 item.focus,
                 params.scopeUf,
               );
-              return `- ${roleLabel} [modo=${item.mode}; foco=${focusLabelLine}]: ${this.truncateText(
+              return `- ${roleLabel} [modo=${item.mode}; intenção=${item.intent}; foco=${focusLabelLine}]: ${this.truncateText(
                 this.normalizeInlineMarkdown(item.content),
                 280,
               )}`;
@@ -4025,17 +4105,26 @@ export class AiService {
         : 'Sem histórico anterior.';
 
     const modeInstruction =
-      params.mode === 'analyst'
+      params.intent === 'explain'
         ? [
-            'Modo analista: detalhe a lógica, mas de forma objetiva.',
-            'Explique por que a conclusão foi formada, cite lacunas e mostre rastreabilidade.',
-            'Estruture em: 1) Resposta direta; 2) Evidências; 3) Riscos e limites; 4) Encaminhamento.',
+            'Objetivo desta resposta: explicar o contexto e o diagnóstico.',
+            'Responda como análise detalhada, não como despacho.',
+            'Estruture em: 1) Resposta direta; 2) Por que este recorte apareceu; 3) Evidências principais; 4) Limites e ambiguidades; 5) O que observar a seguir.',
+            'Mostre rastreabilidade e confiança do dado quando isso afetar a conclusão.',
           ].join(' ')
-        : [
-            'Modo executivo: responda curto e direto.',
-            'Estruture em: 1) Síntese; 2) Decisão recomendada; 3) Risco se nada for feito; 4) Próxima ação.',
-            'Use no máximo 4 bullets por seção.',
-          ].join(' ');
+        : params.intent === 'briefing'
+          ? [
+              'Objetivo desta resposta: produzir um briefing executivo.',
+              'Responda curto, orientado à decisão e pronto para despacho ou reunião.',
+              'Estruture em: 1) Síntese; 2) Decisão recomendada; 3) Risco se nada for feito; 4) Próxima ação.',
+              'Evite aprofundamento metodológico, a menos que ele altere a decisão.',
+              'Use no máximo 4 bullets por seção.',
+            ].join(' ')
+          : [
+              'Objetivo desta resposta: transformar o diagnóstico em ação.',
+              'Seja operacional e priorize ordem de execução, critério de escolha e resultado esperado.',
+              'Estruture em: 1) Prioridade; 2) Ação sugerida; 3) Justificativa; 4) Próximo passo.',
+            ].join(' ');
 
     const specificInstruction =
       params.configuredPrompt?.trim() ||
@@ -4046,6 +4135,7 @@ export class AiService {
       `Escopo ativo: ${scopeLabel}.`,
       `Foco atual: ${focusLabel}.`,
       `Fontes permitidas nesta análise: ${sourceProfile.sourceLabels.join(', ') || 'nenhuma base selecionada'}.`,
+      `Intenção desta execução: ${this.describeComgepIntent(params.intent)}.`,
       modeInstruction,
       'Use somente o contexto fornecido. Não invente números nem links.',
       'Quando citar uma conclusão, explicite OM/UF, score e motivo sempre que existirem nas evidências.',
@@ -4114,6 +4204,7 @@ export class AiService {
         this.getDefaultActionAgentInstruction(params.agentType)
       }`,
       `Modo: ${params.mode === 'analyst' ? 'analista' : 'executivo'}.`,
+      `Intenção: ${this.describeComgepIntent(params.intent)}.`,
       `Escopo ativo: ${scopeLabel}.`,
       `Foco atual: ${focusLabel}.`,
       `Fontes permitidas: ${sourceProfile.sourceLabels.join(', ') || 'nenhuma base selecionada'}.`,
@@ -4507,6 +4598,7 @@ export class AiService {
         .fontSize(9)
         .fillColor(DARK)
         .text(`Modo: ${session.mode === 'analyst' ? 'Analista' : 'Executivo'}`)
+        .text(`Intenção: ${this.describeComgepIntent(session.intent)}`)
         .text(
           `Foco: ${this.describeComgepFocus(session.focus, session.scopeUf)}`,
         )

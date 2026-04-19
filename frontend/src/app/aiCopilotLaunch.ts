@@ -159,10 +159,12 @@ export function buildAiCopilotLaunchTitle(input: AiCopilotLaunch) {
     return targetLabel ? `Transformar em ação — ${targetLabel}` : 'Transformar em ação';
   }
   if (input.intent === 'briefing') {
-    return targetLabel ? `Gerar briefing — ${targetLabel}` : 'Gerar briefing';
+    return targetLabel
+      ? `Gerar briefing executivo — ${targetLabel}`
+      : 'Gerar briefing executivo';
   }
   if (input.intent === 'explain') {
-    return targetLabel ? `Explicar na IA — ${targetLabel}` : 'Explicar na IA';
+    return targetLabel ? `Entender contexto — ${targetLabel}` : 'Entender contexto';
   }
   return targetLabel ? `Executar copiloto — ${targetLabel}` : 'Executar copiloto';
 }

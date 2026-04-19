@@ -20,6 +20,7 @@ import {
   AiService,
   AnalysisType,
   type ChatProfileType,
+  type ComgepCopilotIntent,
   type ComgepCopilotMode,
   type ComgepCopilotFocus,
 } from './ai.service';
@@ -169,6 +170,7 @@ export class AiController {
       type: 'briefing_comgep' | 'priorizacao_intervencao' | 'governanca_cpca';
       uf?: string | null;
       mode?: ComgepCopilotMode | null;
+      intent?: ComgepCopilotIntent | null;
       focus?: Partial<ComgepCopilotFocus> | null;
     },
     @Res() res: Response,
@@ -182,6 +184,7 @@ export class AiController {
       for await (const chunk of this.ai.runActionAgentStream(body.type, {
         uf: body.uf,
         mode: body.mode,
+        intent: body.intent,
         focus: body.focus,
       })) {
         this.writeSseChunk(res, chunk);
@@ -204,6 +207,7 @@ export class AiController {
       sessionId: string;
       message: string;
       mode?: ComgepCopilotMode | null;
+      intent?: ComgepCopilotIntent | null;
       focus?: Partial<ComgepCopilotFocus> | null;
     },
     @Res() res: Response,

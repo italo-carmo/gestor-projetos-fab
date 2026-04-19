@@ -107,18 +107,10 @@ function buildStrategicCopilotLinks(args: {
   } | null;
 }) {
   return {
-    explainHref: buildAiCopilotPath({
+    contextHref: buildAiCopilotPath({
       type: "briefing_comgep",
       mode: "analyst",
       intent: "explain",
-      label: args.label,
-      description: args.description,
-      focus: args.focus ?? { kind: "overview" },
-    }),
-    briefingHref: buildAiCopilotPath({
-      type: "briefing_comgep",
-      mode: "executive",
-      intent: "briefing",
       label: args.label,
       description: args.description,
       focus: args.focus ?? { kind: "overview" },

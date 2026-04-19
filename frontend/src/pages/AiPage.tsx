@@ -52,6 +52,7 @@ import {
   stripAiCopilotLaunchParams,
   type AssistantActionId,
   type AssistantContextSeed,
+  type AiCopilotIntent,
   type AiCopilotMode,
 } from "../app/aiCopilotLaunch";
 import { useAiActionAgents } from "../api/hooks";
@@ -172,19 +173,43 @@ const COPILOT_MODE_DESCRIPTIONS: Record<
   }
 > = {
   executive: {
-    title: "Executivo",
+    title: "Briefing executivo",
     summary:
-      "Resposta curta, direta e orientada à decisão. Destaca risco, impacto e ação recomendada.",
-    useCase: "Use para briefing rápido, despacho e priorização de atuação.",
+      "Resposta curta, com síntese, impacto, risco de inação e encaminhamento imediato.",
+    useCase: "Use para despacho, reunião de comando e PDF executivo.",
   },
   analyst: {
-    title: "Analista",
+    title: "Análise detalhada",
     summary:
-      "Resposta mais detalhada, com rastreabilidade dos sinais, indicadores e razões do diagnóstico.",
+      "Resposta mais detalhada, com evidências, composição do diagnóstico, confiança e limites.",
     useCase:
-      "Use para validação técnica, nota analítica e entendimento do porquê da conclusão.",
+      "Use para entender por que o recorte entrou no painel e validar a leitura técnica.",
   },
 };
+
+const COPILOT_INTENT_HELP: Record<
+  Exclude<AiCopilotIntent, "action">,
+  { title: string; summary: string }
+> = {
+  explain: {
+    title: "Análise detalhada",
+    summary:
+      "Explica por que o recorte apareceu, quais sinais pesaram e quais limites ou ambiguidades ainda existem.",
+  },
+  briefing: {
+    title: "Briefing executivo",
+    summary:
+      "Consolida o recorte em linguagem de decisão, com síntese, risco e recomendação pronta para despacho ou reunião.",
+  },
+};
+
+function getIntentFromMode(mode: AiCopilotMode): Exclude<AiCopilotIntent, "action"> {
+  return mode === "analyst" ? "explain" : "briefing";
+}
+
+function getModeFromIntent(intent: AiCopilotIntent | null | undefined): AiCopilotMode {
+  return intent === "explain" ? "analyst" : "executive";
+}
 
 type AnalysisState = {
   running: boolean;
@@ -1355,6 +1380,10 @@ function AssistantTab() {
   const [copilotSessionId, setCopilotSessionId] = useState<string | null>(null);
   const [workflow, setWorkflow] = useState<AssistantWorkflow | null>(null);
   const [copilotMode, setCopilotMode] = useState<"executive" | "analyst">("executive");
+  const [copilotIntent, setCopilotIntent] = useState<Exclude<AiCopilotIntent, "action">>("briefing");
+  const [copilotType, setCopilotType] = useState<string | null>(null);
+  const [copilotFocus, setCopilotFocus] = useState<Record<string, any> | null>(null);
+  const [copilotTitle, setCopilotTitle] = useState<string | null>(null);
   const [copilotActionContext, setCopilotActionContext] = useState<AssistantContextSeed | null>(null);
   const [textInput, setTextInput] = useState("");
   const [singleOption, setSingleOption] = useState<AssistantOption | null>(null);
@@ -1394,6 +1423,11 @@ function AssistantTab() {
     setConversationKind(null);
     setAssistantSessionId(null);
     setCopilotSessionId(null);
+    setCopilotMode("executive");
+    setCopilotIntent("briefing");
+    setCopilotType(null);
+    setCopilotFocus(null);
+    setCopilotTitle(null);
     setCopilotActionContext(null);
     setRunning(false);
     setStatusText("");
@@ -1690,19 +1724,30 @@ function AssistantTab() {
       title: string,
       options?: {
         mode?: AiCopilotMode;
+        intent?: AiCopilotIntent;
         focus?: Record<string, any> | null;
         launchMessage?: string;
         actionContext?: AssistantContextSeed | null;
       },
     ) => {
-      const resolvedMode = options?.mode ?? copilotMode;
-      if (options?.mode && options.mode !== copilotMode) {
-        setCopilotMode(options.mode);
+      const resolvedIntent = (options?.intent === "action"
+        ? "briefing"
+        : options?.intent) ?? getIntentFromMode(options?.mode ?? copilotMode);
+      const resolvedMode = options?.mode ?? getModeFromIntent(resolvedIntent);
+      if (resolvedMode !== copilotMode) {
+        setCopilotMode(resolvedMode);
+      }
+      if (resolvedIntent !== copilotIntent) {
+        setCopilotIntent(resolvedIntent);
       }
       setRunning(true);
       setStatusText("Inicializando copiloto gerencial...");
       setConversationKind("copilot");
       setWorkflow(null);
+      setCopilotSessionId(null);
+      setCopilotType(type);
+      setCopilotFocus(options?.focus ?? null);
+      setCopilotTitle(title);
       setCopilotActionContext(options?.actionContext ?? null);
       appendMessage({
         id: `user-${Date.now()}`,
@@ -1719,6 +1764,7 @@ function AssistantTab() {
           body: JSON.stringify({
             type,
             mode: resolvedMode,
+            intent: resolvedIntent,
             focus: options?.focus ?? null,
           }),
         });
@@ -1792,7 +1838,7 @@ function AssistantTab() {
         setStatusText("");
       }
     },
-    [appendMessage, copilotMode, toast],
+    [appendMessage, copilotIntent, copilotMode, toast],
   );
 
   useEffect(() => {
@@ -1829,6 +1875,7 @@ function AssistantTab() {
       buildAiCopilotLaunchTitle(launch),
       {
         mode: launch.mode,
+        intent: launch.intent,
         focus: normalizedFocus,
         launchMessage: buildAiCopilotLaunchMessage(launch),
         actionContext: buildAssistantContextSeedFromCopilotLaunch(
@@ -1862,6 +1909,32 @@ function AssistantTab() {
     [copilotActionContext, launchAssistantQuickAction],
   );
 
+  const rerunCurrentCopilotVariant = useCallback(async () => {
+    if (!copilotType || conversationKind !== "copilot") return;
+    await startCopilot(
+      copilotType,
+      copilotTitle ?? "Copiloto gerencial",
+      {
+        mode: getModeFromIntent(copilotIntent),
+        intent: copilotIntent,
+        focus: copilotFocus,
+        launchMessage:
+          copilotIntent === "briefing"
+            ? `Regerar como briefing executivo${copilotActionContext?.title ? ` — ${copilotActionContext.title}` : ""}`
+            : `Regerar como análise detalhada${copilotActionContext?.title ? ` — ${copilotActionContext.title}` : ""}`,
+        actionContext: copilotActionContext,
+      },
+    );
+  }, [
+    conversationKind,
+    copilotActionContext,
+    copilotFocus,
+    copilotIntent,
+    copilotTitle,
+    copilotType,
+    startCopilot,
+  ]);
+
   const sendCopilotFollowUp = useCallback(
     async (text: string) => {
       if (!copilotSessionId) {
@@ -1889,6 +1962,7 @@ function AssistantTab() {
             sessionId: copilotSessionId,
             message: text,
             mode: copilotMode,
+            intent: copilotIntent,
           }),
         });
 
@@ -1958,7 +2032,7 @@ function AssistantTab() {
         setStatusText("");
       }
     },
-    [appendMessage, copilotMode, copilotSessionId, toast],
+    [appendMessage, copilotIntent, copilotMode, copilotSessionId, toast],
   );
 
   const submitCurrentStep = useCallback(async () => {
@@ -2087,24 +2161,27 @@ function AssistantTab() {
                 Copilotos gerenciais
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                Use estes copilotos para briefing, priorização e governança CPCA.
-                O follow-up permanece na mesma conversa.
+                Use estes copilotos para entender o contexto, gerar síntese executiva,
+                priorizar atuação e tratar governança CPCA. O follow-up permanece na mesma conversa.
               </Typography>
             </Box>
             <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
               <Typography variant="body2" color="text.secondary">
-                Modo:
+                Formato de leitura:
               </Typography>
               <ToggleButtonGroup
                 size="small"
                 exclusive
                 value={copilotMode}
                 onChange={(_, value) => {
-                  if (value) setCopilotMode(value);
+                  if (value) {
+                    setCopilotMode(value);
+                    setCopilotIntent(getIntentFromMode(value));
+                  }
                 }}
               >
-                <ToggleButton value="executive">Executivo</ToggleButton>
-                <ToggleButton value="analyst">Analista</ToggleButton>
+                <ToggleButton value="analyst">Análise detalhada</ToggleButton>
+                <ToggleButton value="executive">Briefing executivo</ToggleButton>
               </ToggleButtonGroup>
             </Stack>
             <Box
@@ -2467,7 +2544,7 @@ function AssistantTab() {
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 {conversationKind === "copilot"
-                  ? "Sessão analítica com memória curta para follow-up, briefing e conversão em ação."
+                  ? "Sessão gerencial com memória curta para análise, briefing e conversão em ação."
                   : isMissionScheduleWorkflow
                     ? "Fluxo de cronograma conduzido diretamente no chat, com confirmação no rodapé da conversa."
                   : conversationKind === "assistant"
@@ -2538,6 +2615,60 @@ function AssistantTab() {
                       <Chip key={badge} size="small" label={badge} variant="outlined" />
                     ))}
                   </Stack>
+                ) : null}
+                {copilotType === "briefing_comgep" ? (
+                  <Box
+                    sx={{
+                      mt: 1.25,
+                      p: 1.2,
+                      borderRadius: 2,
+                      border: "1px solid rgba(26,60,110,0.12)",
+                      bgcolor: "#FFFFFF",
+                    }}
+                  >
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ display: "block", textTransform: "uppercase", letterSpacing: 0.5 }}
+                    >
+                      Leitura deste recorte
+                    </Typography>
+                    <Stack
+                      direction={{ xs: "column", md: "row" }}
+                      spacing={1}
+                      alignItems={{ md: "center" }}
+                      justifyContent="space-between"
+                      sx={{ mt: 0.8 }}
+                    >
+                      <Box>
+                        <ToggleButtonGroup
+                          size="small"
+                          exclusive
+                          value={copilotIntent}
+                          onChange={(_, value) => {
+                            if (!value || value === "action") return;
+                            setCopilotIntent(value);
+                            setCopilotMode(getModeFromIntent(value));
+                          }}
+                        >
+                          <ToggleButton value="explain">Análise detalhada</ToggleButton>
+                          <ToggleButton value="briefing">Briefing executivo</ToggleButton>
+                        </ToggleButtonGroup>
+                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.8, lineHeight: 1.55 }}>
+                          {COPILOT_INTENT_HELP[copilotIntent].summary}
+                        </Typography>
+                      </Box>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={<AutoAwesomeRoundedIcon />}
+                        onClick={() => void rerunCurrentCopilotVariant()}
+                        disabled={running}
+                      >
+                        Gerar neste formato
+                      </Button>
+                    </Stack>
+                  </Box>
                 ) : null}
                 <Typography
                   variant="caption"
