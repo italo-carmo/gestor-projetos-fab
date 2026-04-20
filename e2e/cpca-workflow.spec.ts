@@ -18,13 +18,15 @@ async function loginWithScenarioActor(
     | CpcaE2eScenario['ti']
     | CpcaE2eScenario['approvedPresident']
     | CpcaE2eScenario['member']
-    | CpcaE2eScenario['currentPresidentActor'],
+    | CpcaE2eScenario['currentPresidentActor']
+    | CpcaE2eScenario['outsiderActor'],
   loginAs: (
     actor:
       | CpcaE2eScenario['ti']
       | CpcaE2eScenario['approvedPresident']
       | CpcaE2eScenario['member']
-      | CpcaE2eScenario['currentPresidentActor'],
+      | CpcaE2eScenario['currentPresidentActor']
+      | CpcaE2eScenario['outsiderActor'],
   ) => Promise<void>,
 ) {
   await loginAs(actor);
@@ -320,6 +322,79 @@ test.describe.serial('CPCA workflow', () => {
     await expect(
       page.locator('tr').filter({ hasText: scenario.removableMemberName }),
     ).toHaveCount(0);
+  });
+
+  test('Presidente atual adiciona membro por e-mail/CPF e o histórico registra a inclusão', async ({ page }) => {
+    const session = await installCpcaApiMocks(page, scenario);
+    await loginWithScenarioActor(page, scenario.member, session.loginAs);
+    await page.goto('/cpca-commission');
+
+    const newMemberEmail = `${scenario.namespace.toLowerCase()}.novo.integrante@e2e.cpca.local`;
+    const membersCard = page
+      .locator('div.MuiCardContent-root')
+      .filter({ has: page.getByText('Membros da Comissão') });
+    await membersCard.getByRole('textbox', { name: 'E-mail ou CPF', exact: true }).fill(newMemberEmail);
+    await membersCard.getByRole('button', { name: 'Adicionar membro' }).click();
+
+    await expect(page.getByText('Membro adicionado à comissão CPCA.')).toBeVisible();
+    await expect(
+      page.locator('tr').filter({ hasText: newMemberEmail }),
+    ).toBeVisible();
+    await expect(
+      page.getByText('Membro adicionado', { exact: true }).first(),
+    ).toBeVisible();
+    await expect(
+      page.getByText(`${newMemberEmail} incluído na comissão.`, { exact: true }).first(),
+    ).toBeVisible();
+  });
+
+  test('TI aplica cobertura diretamente sem passar por homologação', async ({ page }) => {
+    const scenario = await seedCpcaE2eScenario(
+      `E2ECPCACOV${Date.now().toString(36).toUpperCase()}`,
+    );
+    const session = await installCpcaApiMocks(page, scenario);
+
+    await loginWithScenarioActor(page, scenario.ti, session.loginAs);
+    await page.goto('/cpca-commission');
+    await selectOm(page, `${scenario.managerOm.code} - ${scenario.managerOm.name}`);
+
+    const coverageInput = page.getByRole('combobox', {
+      name: /^OMs adicionais cobertas por esta comissão/,
+    });
+    await coverageInput.click();
+    await coverageInput.fill(scenario.managedOm.code);
+    await page
+      .getByRole('option', {
+        name: new RegExp(`${scenario.managedOm.code}.*${scenario.managedOm.name}`),
+      })
+      .click();
+
+    await page.getByRole('button', { name: 'Salvar cobertura' }).click();
+
+    await expect(page.getByText('Cobertura CPCA atualizada com sucesso.')).toBeVisible();
+    await expect(
+      page.getByText('Cobertura atualizada', { exact: true }).first(),
+    ).toBeVisible();
+    await expect(
+      page.getByText('Cobertura atualizada para 1 OM(s).', { exact: true }).first(),
+    ).toBeVisible();
+    await expect(
+      page.getByText('Existe uma solicitação pendente de cobertura para esta OM'),
+    ).toHaveCount(0);
+  });
+
+  test('Perfil sem permissão CPCA é redirecionado ao tentar acessar a comissão', async ({ page }) => {
+    const scenario = await seedCpcaE2eScenario(
+      `E2ECPCAOUT${Date.now().toString(36).toUpperCase()}`,
+    );
+    const session = await installCpcaApiMocks(page, scenario);
+
+    await loginWithScenarioActor(page, scenario.outsiderActor, session.loginAs);
+    await page.goto('/cpca-commission');
+
+    await expect(page).not.toHaveURL(/\/cpca-commission$/);
+    await expect(page).toHaveURL(/\/dashboard\/smif$/);
+    await expect(page.getByRole('link', { name: 'Comissão CPCA' })).toHaveCount(0);
   });
 });
 

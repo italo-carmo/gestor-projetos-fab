@@ -117,7 +117,12 @@ type MockCurrentPresident = {
   assignedByUser?: { id: string; name: string; email: string } | null;
 };
 
-type CpcaE2eActorKey = 'ti' | 'approvedPresident' | 'member' | 'currentPresident';
+type CpcaE2eActorKey =
+  | 'ti'
+  | 'approvedPresident'
+  | 'member'
+  | 'currentPresident'
+  | 'outsider';
 
 export type CpcaE2eActor = {
   key: CpcaE2eActorKey;
@@ -157,6 +162,7 @@ export type CpcaE2eScenario = {
   namespace: string;
   ti: CpcaE2eActor;
   currentPresidentActor: CpcaE2eActor;
+  outsiderActor: CpcaE2eActor;
   roleCpcaId: string;
   managerOm: MockOm;
   managedOm: MockOm;
@@ -280,7 +286,16 @@ function createMockUsers(namespace: string, managerOmId: string) {
     permissions: [{ resource: 'cpca_cases', action: 'view', scope: 'LOCAL' }],
   };
 
-  return { ti, president, member, currentPresident };
+  const outsider: MockUser = {
+    id: `${namespace}-user-outsider`,
+    email: `${namespace.toLowerCase()}.outsider@e2e.cpca.local`,
+    name: `Usuário Externo ${namespace}`,
+    roleId: `${namespace}-role-outsider`,
+    roleName: 'ANALISTA',
+    permissions: [{ resource: 'dashboard', action: 'view', scope: 'NATIONAL' }],
+  };
+
+  return { ti, president, member, currentPresident, outsider };
 }
 
 function buildApprovalRequests(scenario: CpcaE2eScenario) {
@@ -611,6 +626,61 @@ async function handleApiRequest(
     return json(route, 200, { ok: true });
   }
 
+  if (request.method() === 'POST' && pathname === '/cpca-commission/members') {
+    const canManageMembers =
+      actor.roleName === 'TI' ||
+      actor.roleName === 'COMGEP' ||
+      actor.id === scenario.state.currentPresident.user.id;
+
+    if (!canManageMembers) {
+      return json(route, 403, { message: 'Acesso negado.' });
+    }
+
+    const body = request.postDataJSON() as {
+      identifier?: string;
+      localityId?: string;
+    };
+    const identifier = String(body.identifier ?? '').trim();
+    const localityId = String(body.localityId ?? scenario.managerOm.id).trim();
+    const userName = identifier || `Novo membro ${scenario.namespace}`;
+    const userEmail = identifier.includes('@')
+      ? identifier
+      : `${scenario.namespace.toLowerCase()}.novo.membro@e2e.cpca.local`;
+    const addedMember = {
+      id: `${scenario.namespace}-member-added-${scenario.state.members.length + 1}`,
+      createdAt: isoNow(60),
+      user: {
+        id: `${scenario.namespace}-user-added-${scenario.state.members.length + 1}`,
+        name: userName,
+        email: userEmail,
+        ldapUid: `${scenario.namespace.toLowerCase()}-added-${scenario.state.members.length + 1}`,
+      },
+      addedByUser: {
+        id: actor.id,
+        name: actor.name,
+        email: actor.email,
+      },
+    };
+
+    scenario.state.members.push(addedMember);
+    scenario.state.history.unshift({
+      id: nextHistoryId(scenario.namespace, scenario.state.history.length),
+      action: 'cpca_member_added',
+      actionLabel: 'Membro adicionado',
+      summary: `${addedMember.user.name} incluído na comissão.`,
+      createdAt: isoNow(60),
+      actor: {
+        id: actor.id,
+        name: actor.name,
+        email: actor.email,
+      },
+    });
+
+    return json(route, 200, {
+      member: { ...addedMember, omId: localityId },
+    });
+  }
+
   if (
     request.method() === 'POST' &&
     pathname ===
@@ -850,6 +920,26 @@ async function handleApiRequest(
       )
       .filter(Boolean) as MockOm[];
 
+    const isApprover = actor.roleName === 'TI' || actor.roleName === 'COMGEP';
+
+    if (isApprover) {
+      scenario.state.managedLocalities = [...requestedLocalities];
+      scenario.state.pendingCoverageRequest = null;
+      scenario.state.history.unshift({
+        id: nextHistoryId(scenario.namespace, scenario.state.history.length),
+        action: 'cpca_coverage_updated',
+        actionLabel: 'Cobertura atualizada',
+        summary: `Cobertura atualizada para ${requestedLocalities.length} OM(s).`,
+        createdAt: isoNow(24),
+        actor: {
+          id: actor.id,
+          name: actor.name,
+          email: actor.email,
+        },
+      });
+      return json(route, 200, { mode: 'APPLIED' });
+    }
+
     scenario.state.pendingCoverageRequest = {
       id: `${scenario.namespace}-coverage-request`,
       status: 'PENDING',
@@ -1001,6 +1091,7 @@ export async function installCpcaApiMocks(
       if (actor.key === 'approvedPresident') currentActor = users.president;
       if (actor.key === 'member') currentActor = users.member;
       if (actor.key === 'currentPresident') currentActor = users.currentPresident;
+      if (actor.key === 'outsider') currentActor = users.outsider;
       await authenticatePage(page, actor);
     },
   };
@@ -1044,6 +1135,7 @@ export async function seedCpcaE2eScenario(
     namespace,
     ti: buildActor('ti', users.ti),
     currentPresidentActor: buildActor('currentPresident', users.currentPresident),
+    outsiderActor: buildActor('outsider', users.outsider),
     roleCpcaId: users.member.roleId,
     managerOm,
     managedOm,
