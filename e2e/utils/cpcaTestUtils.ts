@@ -134,7 +134,7 @@ export type CpcaE2eActor = {
 };
 
 type CpcaE2eState = {
-  currentPresident: MockCurrentPresident;
+  currentPresident: MockCurrentPresident | null;
   selfRegistrationRequest: MockSelfRegistrationRequest;
   pendingPresidentNominationRequest: MockNominationRequest | null;
   pendingCoverageRequest: MockCoverageRequest | null;
@@ -332,7 +332,7 @@ function buildCommissionOverview(
 ) {
   const isApprover = actor.roleName === 'TI' || actor.roleName === 'COMGEP';
   const isCurrentPresident =
-    actor.id === scenario.state.currentPresident.user.id;
+    actor.id === scenario.state.currentPresident?.user.id;
   const canManageMembers = isApprover || isCurrentPresident;
   const canManageCoverage = isApprover || isCurrentPresident;
   const canNominatePresident = isCurrentPresident;
@@ -649,6 +649,7 @@ async function handleApiRequest(
       ].find((item) => item.email.toLowerCase() === identifier) ?? scenario.member;
 
     if (
+      scenario.state.currentPresident &&
       scenario.state.currentPresident.user.id !== candidateFromKnownUsers.id &&
       !body.proceedWithExistingPresident
     ) {
@@ -662,7 +663,9 @@ async function handleApiRequest(
       });
     }
 
-    const previousPresident = { ...scenario.state.currentPresident.user };
+    const previousPresident = scenario.state.currentPresident
+      ? { ...scenario.state.currentPresident.user }
+      : null;
     const assignmentSourceLabel =
       actor.roleName === 'COMGEP' ? 'Cadastro direto por COMGEP' : 'Cadastro direto por TI';
 
@@ -691,7 +694,9 @@ async function handleApiRequest(
       id: nextHistoryId(scenario.namespace, scenario.state.history.length),
       action: 'cpca_president_assign',
       actionLabel: 'Presidente definido',
-      summary: `Presidência transferida para ${candidateFromKnownUsers.name}${body.designationBulletin ? ` • boletim ${body.designationBulletin}` : ''}.`,
+      summary: previousPresident
+        ? `Presidência transferida para ${candidateFromKnownUsers.name}${body.designationBulletin ? ` • boletim ${body.designationBulletin}` : ''}.`
+        : `Presidência definida para ${candidateFromKnownUsers.name}${body.designationBulletin ? ` • boletim ${body.designationBulletin}` : ''}.`,
       createdAt: isoNow(62),
       actor: {
         id: actor.id,
@@ -704,8 +709,11 @@ async function handleApiRequest(
       locality: scenario.managerOm,
       president: scenario.state.currentPresident,
       replacedPresident:
-        previousPresident.id !== candidateFromKnownUsers.id ? previousPresident : null,
+        previousPresident && previousPresident.id !== candidateFromKnownUsers.id
+          ? previousPresident
+          : null,
       proceededOverExistingPresident:
+        Boolean(previousPresident) &&
         previousPresident.id !== candidateFromKnownUsers.id &&
         Boolean(body.proceedWithExistingPresident),
     });
@@ -715,7 +723,7 @@ async function handleApiRequest(
     const canManageMembers =
       actor.roleName === 'TI' ||
       actor.roleName === 'COMGEP' ||
-      actor.id === scenario.state.currentPresident.user.id;
+      actor.id === scenario.state.currentPresident?.user.id;
 
     if (!canManageMembers) {
       return json(route, 403, { message: 'Acesso negado.' });
@@ -1058,7 +1066,7 @@ async function handleApiRequest(
     const canManageMembers =
       actor.roleName === 'TI' ||
       actor.roleName === 'COMGEP' ||
-      actor.id === scenario.state.currentPresident.user.id;
+      actor.id === scenario.state.currentPresident?.user.id;
 
     if (!canManageMembers) {
       return json(route, 403, { message: 'Acesso negado.' });
@@ -1186,7 +1194,9 @@ export async function cleanupCpcaE2eNamespace(_namespace: string) {}
 
 export async function seedCpcaE2eScenario(
   namespace: string,
+  options?: { hasCurrentPresident?: boolean },
 ): Promise<CpcaE2eScenario> {
+  const hasCurrentPresident = options?.hasCurrentPresident !== false;
   const managerOm: MockOm = {
     id: `${namespace}-om-manager`,
     code: `${namespace}-MGR`,
@@ -1228,30 +1238,32 @@ export async function seedCpcaE2eScenario(
     approvedPresident: buildActor('approvedPresident', users.president),
     member: buildActor('member', users.member),
     selfRegistrationApplicantName: users.president.name,
-    originalPresidentName: users.currentPresident.name,
+    originalPresidentName: hasCurrentPresident ? users.currentPresident.name : '',
     removableMemberId,
     removableMemberName,
     caseOwnNumber,
     caseManagedNumber,
     caseOutsiderNumber,
     state: {
-      currentPresident: {
-        user: {
-          id: users.currentPresident.id,
-          name: users.currentPresident.name,
-          email: users.currentPresident.email,
-        },
-        designationBulletin: `${namespace}/DIR`,
-        isSubstitution: false,
-        assignedAt: isoNow(1),
-        assignmentSource: 'DIRECT_ASSIGNMENT',
-        assignmentSourceLabel: 'Cadastro direto por TI',
-        assignedByUser: {
-          id: users.ti.id,
-          name: users.ti.name,
-          email: users.ti.email,
-        },
-      },
+      currentPresident: hasCurrentPresident
+        ? {
+            user: {
+              id: users.currentPresident.id,
+              name: users.currentPresident.name,
+              email: users.currentPresident.email,
+            },
+            designationBulletin: `${namespace}/DIR`,
+            isSubstitution: false,
+            assignedAt: isoNow(1),
+            assignmentSource: 'DIRECT_ASSIGNMENT',
+            assignmentSourceLabel: 'Cadastro direto por TI',
+            assignedByUser: {
+              id: users.ti.id,
+              name: users.ti.name,
+              email: users.ti.email,
+            },
+          }
+        : null,
       selfRegistrationRequest: {
         id: `${namespace}-self-registration`,
         type: 'SELF_REGISTRATION',
@@ -1269,64 +1281,68 @@ export async function seedCpcaE2eScenario(
       pendingPresidentNominationRequest: null,
       pendingCoverageRequest: null,
       managedLocalities: [],
-      members: [
-        {
-          id: `${namespace}-member-record`,
-          createdAt: isoNow(2),
-          user: {
-            id: users.member.id,
-            name: users.member.name,
-            email: users.member.email,
-            ldapUid: `${namespace.toLowerCase()}-member`,
-          },
-          addedByUser: {
-            id: users.currentPresident.id,
-            name: users.currentPresident.name,
-            email: users.currentPresident.email,
-          },
-        },
-        {
-          id: removableMemberId,
-          createdAt: isoNow(3),
-          user: {
-            id: `${namespace}-user-removable`,
-            name: removableMemberName,
-            email: `${namespace.toLowerCase()}.removivel@e2e.cpca.local`,
-            ldapUid: `${namespace.toLowerCase()}-removivel`,
-          },
-          addedByUser: {
-            id: users.currentPresident.id,
-            name: users.currentPresident.name,
-            email: users.currentPresident.email,
-          },
-        },
-      ],
-      history: [
-        {
-          id: nextHistoryId(namespace, 0),
-          action: 'cpca_member_added',
-          actionLabel: 'Membro adicionado',
-          summary: 'Membro incluído na comissão da OM.',
-          createdAt: isoNow(2),
-          actor: {
-            id: users.currentPresident.id,
-            name: users.currentPresident.name,
-            email: users.currentPresident.email,
-          },
-        },
-        {
-          id: nextHistoryId(namespace, 1),
-          action: 'cpca_member_added',
-          actionLabel: 'Membro adicionado',
-          summary: 'Membro incluído na comissão da OM.',
-          createdAt: isoNow(3),
-          actor: {
-            id: users.currentPresident.id,
-            name: users.currentPresident.name,
-            email: users.currentPresident.email,
-          },
-        },
-      ],
+      members: hasCurrentPresident
+        ? [
+            {
+              id: `${namespace}-member-record`,
+              createdAt: isoNow(2),
+              user: {
+                id: users.member.id,
+                name: users.member.name,
+                email: users.member.email,
+                ldapUid: `${namespace.toLowerCase()}-member`,
+              },
+              addedByUser: {
+                id: users.currentPresident.id,
+                name: users.currentPresident.name,
+                email: users.currentPresident.email,
+              },
+            },
+            {
+              id: removableMemberId,
+              createdAt: isoNow(3),
+              user: {
+                id: `${namespace}-user-removable`,
+                name: removableMemberName,
+                email: `${namespace.toLowerCase()}.removivel@e2e.cpca.local`,
+                ldapUid: `${namespace.toLowerCase()}-removivel`,
+              },
+              addedByUser: {
+                id: users.currentPresident.id,
+                name: users.currentPresident.name,
+                email: users.currentPresident.email,
+              },
+            },
+          ]
+        : [],
+      history: hasCurrentPresident
+        ? [
+            {
+              id: nextHistoryId(namespace, 0),
+              action: 'cpca_member_added',
+              actionLabel: 'Membro adicionado',
+              summary: 'Membro incluído na comissão da OM.',
+              createdAt: isoNow(2),
+              actor: {
+                id: users.currentPresident.id,
+                name: users.currentPresident.name,
+                email: users.currentPresident.email,
+              },
+            },
+            {
+              id: nextHistoryId(namespace, 1),
+              action: 'cpca_member_added',
+              actionLabel: 'Membro adicionado',
+              summary: 'Membro incluído na comissão da OM.',
+              createdAt: isoNow(3),
+              actor: {
+                id: users.currentPresident.id,
+                name: users.currentPresident.name,
+                email: users.currentPresident.email,
+              },
+            },
+          ]
+        : [],
       cases: [
         {
           id: `${namespace}-case-own`,

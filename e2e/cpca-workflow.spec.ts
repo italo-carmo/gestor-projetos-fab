@@ -488,6 +488,54 @@ test.describe('CPCA rejection workflow', () => {
 });
 
 test.describe('CPCA direct president assignment workflow', () => {
+  test('TI designa presidente pela tela de OMs quando a OM ainda não possui presidente', async ({ page }) => {
+    const scenario = await seedCpcaE2eScenario(
+      `E2ECPCAOM0${Date.now().toString(36).toUpperCase()}`,
+      { hasCurrentPresident: false },
+    );
+    const session = await installCpcaApiMocks(page, scenario);
+
+    await loginWithScenarioActor(page, scenario.ti, session.loginAs);
+    await page.goto('/admin/oms');
+
+    const omRow = page.locator('tr').filter({ hasText: scenario.managerOm.code });
+    await omRow.getByRole('button', { name: 'Editar' }).click();
+
+    const drawer = page.locator('[role="presentation"]').filter({
+      has: page.getByText('Editar OM'),
+    });
+
+    await expect(drawer.getByText('Presidente atual: Não designado')).toBeVisible();
+
+    await drawer
+      .getByRole('textbox', { name: 'E-mail ou CPF (LDAP)' })
+      .fill(scenario.member.email);
+    await drawer.getByRole('button', { name: 'Pesquisar' }).click();
+
+    await expect(
+      page.getByText('Militar localizado no LDAP. Revise os dados e confirme a designação.'),
+    ).toBeVisible();
+    await drawer.getByRole('button', { name: 'Selecionar como presidente' }).click();
+
+    await expect(
+      page.getByRole('dialog', { name: 'Confirmar troca de presidente CPCA' }),
+    ).toBeVisible();
+    await page
+      .getByRole('dialog', { name: 'Confirmar troca de presidente CPCA' })
+      .getByRole('button', { name: 'Confirmar troca' })
+      .click();
+
+    await expect(page.getByText('Presidente CPCA atualizado com sucesso.')).toBeVisible();
+    await expect(
+      page.getByRole('dialog', { name: 'OM já possui presidente' }),
+    ).toHaveCount(0);
+    await expect(drawer.getByText(`Presidente atual: ${scenario.member.name}`)).toBeVisible();
+    await expect(drawer.getByText(/Cadastro direto por TI/)).toBeVisible();
+    await expect(
+      drawer.getByText(`Boletim atual: ${scenario.namespace}/DIR-NOVO`),
+    ).toBeVisible();
+  });
+
   test('TI designa presidente diretamente na comissão e confirma overwrite do presidente atual', async ({ page }) => {
     const scenario = await seedCpcaE2eScenario(
       `E2ECPCADIR${Date.now().toString(36).toUpperCase()}`,
