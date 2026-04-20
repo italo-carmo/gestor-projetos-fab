@@ -1626,7 +1626,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                   }
                 />
               }
-              label="Assistência social"
+              label="Assistência do Serviço Social"
             />
             <FormControlLabel
               control={
