@@ -2173,6 +2173,8 @@ export class CpcaCommissionService {
           : `Presidência definida para ${assignedUserName || 'militar designado'}${bulletinNumber ? ` • boletim ${bulletinNumber}` : ''}.`;
       case 'cpca_president_self_registration_create':
         return `${applicantName || 'Militar'} solicitou homologação como presidente${bulletinNumber ? ` • boletim ${bulletinNumber}` : ''}.`;
+      case 'cpca_president_request_reject':
+        return 'Solicitação de presidente rejeitada.';
       case 'cpca_president_nomination_request_create':
         return nomineeName
           ? `Sucessão proposta para ${nomineeName}${bulletinNumber ? ` • boletim ${bulletinNumber}` : ''}.`

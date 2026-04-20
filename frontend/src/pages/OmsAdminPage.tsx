@@ -143,6 +143,14 @@ type CpcaPresidentCandidate = {
   } | null;
 };
 
+type CpcaCommissionHistoryItem = {
+  id: string;
+  actionLabel?: string | null;
+  summary?: string | null;
+  createdAt?: string | null;
+  actor?: { name?: string | null } | null;
+};
+
 function hasCpcaRole(user: UserItem) {
   return (user.roles ?? []).some(
     (entry) =>
@@ -172,6 +180,11 @@ function formatOmLabel(
     return `${codeValue} - ${nameValue}`;
   }
   return codeValue || nameValue;
+}
+
+function formatDateTime(value: string | null | undefined) {
+  if (!value) return "Data não informada";
+  return new Date(value).toLocaleString("pt-BR");
 }
 
 type DeleteOmResponse = {
@@ -265,6 +278,9 @@ export function OmsAdminPage() {
       }
     | null
     | undefined;
+  const recentCommissionHistory = (
+    (cpcaOverviewQuery.data?.history ?? []) as CpcaCommissionHistoryItem[]
+  ).slice(0, 4);
 
   const localities = useMemo(
     () =>
@@ -1174,6 +1190,72 @@ export function OmsAdminPage() {
                   Boletim atual:{" "}
                   {currentPresident?.designationBulletin || "Não informado"}
                 </Typography>
+
+                <Box
+                  sx={{
+                    border: (theme) => `1px solid ${theme.palette.divider}`,
+                    borderRadius: 1.5,
+                    p: 1,
+                    bgcolor: "grey.50",
+                  }}
+                >
+                  <Typography variant="caption" color="text.secondary">
+                    Histórico CPCA recente
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ mb: recentCommissionHistory.length ? 1 : 0 }}
+                  >
+                    Últimos eventos da comissão registrados para esta OM.
+                  </Typography>
+                  {cpcaOverviewQuery.isLoading ? (
+                    <Typography variant="caption" color="text.secondary">
+                      Carregando histórico...
+                    </Typography>
+                  ) : recentCommissionHistory.length > 0 ? (
+                    <Stack spacing={1}>
+                      {recentCommissionHistory.map((item) => (
+                        <Box
+                          key={item.id}
+                          sx={{
+                            border: (theme) =>
+                              `1px solid ${theme.palette.divider}`,
+                            borderRadius: 1.5,
+                            p: 1,
+                            bgcolor: "background.paper",
+                          }}
+                        >
+                          <Stack
+                            direction="row"
+                            spacing={1}
+                            alignItems="center"
+                            useFlexGap
+                            flexWrap="wrap"
+                            sx={{ mb: 0.5 }}
+                          >
+                            <Chip
+                              size="small"
+                              variant="outlined"
+                              label={item.actionLabel || "Evento registrado"}
+                            />
+                            <Typography variant="caption" color="text.secondary">
+                              {item.actor?.name || "Sistema"} •{" "}
+                              {formatDateTime(item.createdAt)}
+                            </Typography>
+                          </Stack>
+                          <Typography variant="body2">
+                            {item.summary || "Alteração registrada na comissão CPCA."}
+                          </Typography>
+                        </Box>
+                      ))}
+                    </Stack>
+                  ) : (
+                    <Typography variant="caption" color="text.secondary">
+                      Ainda não há eventos registrados para esta OM.
+                    </Typography>
+                  )}
+                </Box>
 
                 {presidentCandidate ? (
                   <Box

@@ -815,7 +815,7 @@ async function handleApiRequest(
       id: nextHistoryId(scenario.namespace, scenario.state.history.length),
       action: 'cpca_president_assignment',
       actionLabel: 'Presidente definido',
-      summary: 'Homologado por autoinscrição',
+      summary: `Presidência transferida para ${scenario.approvedPresident.name} • boletim ${scenario.state.selfRegistrationRequest.bulletinNumber}.`,
       createdAt: isoNow(10),
       actor: {
         id: scenario.ti.id,
@@ -973,8 +973,8 @@ async function handleApiRequest(
     scenario.state.history.unshift({
       id: nextHistoryId(scenario.namespace, scenario.state.history.length),
       action: 'cpca_self_registration_rejected',
-      actionLabel: 'Autoinscrição rejeitada',
-      summary: 'A solicitação de autoinscrição para presidência foi rejeitada.',
+      actionLabel: 'Solicitação de presidente rejeitada',
+      summary: 'Solicitação de presidente rejeitada.',
       createdAt: isoNow(53),
       actor: {
         id: actor.id,

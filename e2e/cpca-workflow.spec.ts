@@ -85,7 +85,7 @@ test.describe.serial('CPCA workflow', () => {
       page.getByText(scenario.selfRegistrationApplicantName, { exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByText('Homologado por autoinscrição', { exact: true }).first(),
+      page.getByText(/Homologado por autoinscrição/).first(),
     ).toBeVisible();
     await expect(
       page.getByText('Presidente definido', { exact: true }).first(),
@@ -98,6 +98,16 @@ test.describe.serial('CPCA workflow', () => {
     await expect(page.getByText('Homologado por autoinscrição')).toBeVisible();
     await expect(
       page.getByText(`Presidente atual: ${scenario.selfRegistrationApplicantName}`),
+    ).toBeVisible();
+    await expect(page.getByText('Histórico CPCA recente')).toBeVisible();
+    await expect(
+      page.getByText('Presidente definido', { exact: true }).last(),
+    ).toBeVisible();
+    await expect(
+      page.getByText(
+        `Presidência transferida para ${scenario.selfRegistrationApplicantName} • boletim ${scenario.namespace}/AUTO.`,
+        { exact: true },
+      ),
     ).toBeVisible();
   });
 
@@ -430,7 +440,18 @@ test.describe('CPCA rejection workflow', () => {
     ).toBeVisible();
     await expect(page.getByText(/Cadastro direto por TI/)).toBeVisible();
     await expect(
-      page.getByText('Autoinscrição rejeitada', { exact: true }).first(),
+      page.getByText('Solicitação de presidente rejeitada', { exact: true }).first(),
+    ).toBeVisible();
+
+    await page.goto('/admin/oms');
+    const omRow = page.locator('tr').filter({ hasText: scenario.managerOm.code });
+    await omRow.getByRole('button', { name: 'Editar' }).click();
+    await expect(page.getByText('Histórico CPCA recente')).toBeVisible();
+    await expect(
+      page.getByText('Solicitação de presidente rejeitada', { exact: true }).last(),
+    ).toBeVisible();
+    await expect(
+      page.getByText('Solicitação de presidente rejeitada.', { exact: true }),
     ).toBeVisible();
   });
 
