@@ -626,6 +626,91 @@ async function handleApiRequest(
     return json(route, 200, { ok: true });
   }
 
+  if (request.method() === 'POST' && pathname === '/cpca-commission/presidents') {
+    const isApprover = actor.roleName === 'TI' || actor.roleName === 'COMGEP';
+    if (!isApprover) {
+      return json(route, 403, { message: 'Acesso negado.' });
+    }
+
+    const body = request.postDataJSON() as {
+      identifier?: string;
+      localityId?: string;
+      isSubstitution?: boolean;
+      designationBulletin?: string;
+      proceedWithExistingPresident?: boolean;
+    };
+    const identifier = String(body.identifier ?? '').trim().toLowerCase();
+    const candidateFromKnownUsers =
+      [
+        scenario.approvedPresident,
+        scenario.member,
+        scenario.currentPresidentActor,
+        scenario.outsiderActor,
+      ].find((item) => item.email.toLowerCase() === identifier) ?? scenario.member;
+
+    if (
+      scenario.state.currentPresident.user.id !== candidateFromKnownUsers.id &&
+      !body.proceedWithExistingPresident
+    ) {
+      return json(route, 409, {
+        message: 'Esta OM já possui presidente registrado.',
+        details: {
+          reason: 'CPCA_LOCALITY_ALREADY_HAS_PRESIDENT',
+          currentPresident: scenario.state.currentPresident.user.name,
+          localityName: scenario.managerOm.name,
+        },
+      });
+    }
+
+    const previousPresident = { ...scenario.state.currentPresident.user };
+    const assignmentSourceLabel =
+      actor.roleName === 'COMGEP' ? 'Cadastro direto por COMGEP' : 'Cadastro direto por TI';
+
+    scenario.state.currentPresident = {
+      user: {
+        id: candidateFromKnownUsers.id,
+        name: candidateFromKnownUsers.name,
+        email: candidateFromKnownUsers.email,
+      },
+      designationBulletin:
+        String(body.designationBulletin ?? '').trim() || `${scenario.namespace}/DIR-NOVO`,
+      isSubstitution: Boolean(body.isSubstitution),
+      assignedAt: isoNow(62),
+      assignmentSource: 'DIRECT_ASSIGNMENT',
+      assignmentSourceLabel,
+      assignedByUser: {
+        id: actor.id,
+        name: actor.name,
+        email: actor.email,
+      },
+    };
+    scenario.state.members = scenario.state.members.filter(
+      (item) => item.user.id !== candidateFromKnownUsers.id,
+    );
+    scenario.state.history.unshift({
+      id: nextHistoryId(scenario.namespace, scenario.state.history.length),
+      action: 'cpca_president_assign',
+      actionLabel: 'Presidente definido',
+      summary: `Presidência transferida para ${candidateFromKnownUsers.name}${body.designationBulletin ? ` • boletim ${body.designationBulletin}` : ''}.`,
+      createdAt: isoNow(62),
+      actor: {
+        id: actor.id,
+        name: actor.name,
+        email: actor.email,
+      },
+    });
+
+    return json(route, 200, {
+      locality: scenario.managerOm,
+      president: scenario.state.currentPresident,
+      replacedPresident:
+        previousPresident.id !== candidateFromKnownUsers.id ? previousPresident : null,
+      proceededOverExistingPresident:
+        previousPresident.id !== candidateFromKnownUsers.id &&
+        Boolean(body.proceedWithExistingPresident),
+    });
+  }
+
   if (request.method() === 'POST' && pathname === '/cpca-commission/members') {
     const canManageMembers =
       actor.roleName === 'TI' ||

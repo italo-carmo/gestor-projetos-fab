@@ -486,3 +486,53 @@ test.describe('CPCA rejection workflow', () => {
     ).toBeVisible();
   });
 });
+
+test.describe('CPCA direct president assignment workflow', () => {
+  test('TI designa presidente diretamente na comissão e confirma overwrite do presidente atual', async ({ page }) => {
+    const scenario = await seedCpcaE2eScenario(
+      `E2ECPCADIR${Date.now().toString(36).toUpperCase()}`,
+    );
+    const session = await installCpcaApiMocks(page, scenario);
+
+    await loginWithScenarioActor(page, scenario.ti, session.loginAs);
+    await page.goto('/cpca-commission');
+    await selectOm(page, `${scenario.managerOm.code} - ${scenario.managerOm.name}`);
+
+    const assignCard = page
+      .locator('div.MuiCardContent-root')
+      .filter({ has: page.getByText('Designar Presidente CPCA') });
+
+    await assignCard
+      .getByRole('textbox', { name: 'E-mail ou CPF', exact: true })
+      .fill(scenario.member.email);
+    await assignCard
+      .getByRole('textbox', { name: 'Boletim de designação' })
+      .fill(`${scenario.namespace}/DIR-OVR`);
+    await assignCard.getByRole('button', { name: 'Designar' }).click();
+
+    await expect(
+      page.getByRole('dialog', { name: 'Substituir presidente atual?' }),
+    ).toBeVisible();
+    await page
+      .getByRole('dialog', { name: 'Substituir presidente atual?' })
+      .getByRole('button', { name: 'Prosseguir' })
+      .click();
+
+    await expect(page.getByText('Presidente CPCA designado com sucesso.')).toBeVisible();
+    await expect(page.getByText(scenario.member.name, { exact: true }).first()).toBeVisible();
+    await expect(page.getByText(/Cadastro direto por TI/)).toBeVisible();
+    await expect(page.getByText(`Boletim atual: ${scenario.namespace}/DIR-OVR`)).toBeVisible();
+    await expect(
+      page.getByText('Presidente definido', { exact: true }).first(),
+    ).toBeVisible();
+    await expect(
+      page.getByText(
+        `Presidência transferida para ${scenario.member.name} • boletim ${scenario.namespace}/DIR-OVR.`,
+        { exact: true },
+      ).first(),
+    ).toBeVisible();
+    await expect(
+      page.locator('tr').filter({ hasText: scenario.member.email }),
+    ).toHaveCount(0);
+  });
+});
