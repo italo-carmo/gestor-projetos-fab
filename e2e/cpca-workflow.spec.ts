@@ -535,4 +535,54 @@ test.describe('CPCA direct president assignment workflow', () => {
       page.locator('tr').filter({ hasText: scenario.member.email }),
     ).toHaveCount(0);
   });
+
+  test('TI designa presidente pela tela de OMs e confirma o overwrite do presidente atual', async ({ page }) => {
+    const scenario = await seedCpcaE2eScenario(
+      `E2ECPCAOMS${Date.now().toString(36).toUpperCase()}`,
+    );
+    const session = await installCpcaApiMocks(page, scenario);
+
+    await loginWithScenarioActor(page, scenario.ti, session.loginAs);
+    await page.goto('/admin/oms');
+
+    const omRow = page.locator('tr').filter({ hasText: scenario.managerOm.code });
+    await omRow.getByRole('button', { name: 'Editar' }).click();
+
+    const drawer = page.locator('[role="presentation"]').filter({
+      has: page.getByText('Editar OM'),
+    });
+
+    await drawer
+      .getByRole('textbox', { name: 'E-mail ou CPF (LDAP)' })
+      .fill(scenario.member.email);
+    await drawer.getByRole('button', { name: 'Pesquisar' }).click();
+
+    await expect(
+      page.getByText('Militar localizado no LDAP. Revise os dados e confirme a designação.'),
+    ).toBeVisible();
+    await drawer.getByRole('button', { name: 'Selecionar como presidente' }).click();
+
+    await expect(
+      page.getByRole('dialog', { name: 'Confirmar troca de presidente CPCA' }),
+    ).toBeVisible();
+    await page
+      .getByRole('dialog', { name: 'Confirmar troca de presidente CPCA' })
+      .getByRole('button', { name: 'Confirmar troca' })
+      .click();
+
+    await expect(
+      page.getByRole('dialog', { name: 'OM já possui presidente' }),
+    ).toBeVisible();
+    await page
+      .getByRole('dialog', { name: 'OM já possui presidente' })
+      .getByRole('button', { name: 'Prosseguir' })
+      .click();
+
+    await expect(page.getByText('Presidente CPCA atualizado com sucesso.')).toBeVisible();
+    await expect(drawer.getByText(`Presidente atual: ${scenario.member.name}`)).toBeVisible();
+    await expect(drawer.getByText(/Cadastro direto por TI/)).toBeVisible();
+    await expect(
+      drawer.getByText(`Boletim atual: ${scenario.namespace}/DIR-NOVO`),
+    ).toBeVisible();
+  });
 });
