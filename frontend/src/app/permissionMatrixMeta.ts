@@ -74,6 +74,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     description: "Acesso ao calendario consolidado de compromissos.",
     route: "/calendar",
     sidebarItems: ["Calendario"],
+    expectedActions: VIEW_ONLY,
   },
   meetings: {
     menu: "Planejamento",

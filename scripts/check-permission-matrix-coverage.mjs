@@ -62,6 +62,24 @@ for (const match of appSource.matchAll(routeBlockRegex)) {
   appRoutes.push({ path: match[1], block: match[0] });
 }
 
+const frontendPermissionUsage = new Map();
+const frontendFiles = walk('frontend/src').filter((file) =>
+  /\.(ts|tsx)$/.test(file),
+);
+for (const file of frontendFiles) {
+  const source = read(file);
+  for (const match of source.matchAll(
+    /can\([^)]*?['"]([a-zA-Z0-9_]+)['"]\s*,\s*['"]([a-zA-Z0-9_]+)['"]/g,
+  )) {
+    const resource = match[1];
+    const action = match[2];
+    if (!frontendPermissionUsage.has(resource)) {
+      frontendPermissionUsage.set(resource, new Set());
+    }
+    frontendPermissionUsage.get(resource).add(action);
+  }
+}
+
 const navRouteRegex = /to:\s*"([^"]+)"/g;
 const navRoutes = Array.from(appShellSource.matchAll(navRouteRegex)).map(
   (match) => match[1],
@@ -164,6 +182,29 @@ const missingMetaResources = Array.from(declaredResources)
   .filter((resource) => !metaResourceSet.has(resource))
   .sort((a, b) => a.localeCompare(b, 'pt-BR'));
 
+const frontendOnlyResourcesWithoutMeta = Array.from(frontendPermissionUsage.keys())
+  .filter((resource) => !metaResourceSet.has(resource))
+  .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+
+const frontendUsageMissingInContract = Array.from(frontendPermissionUsage.entries())
+  .filter(([resource]) => expectedActionsByResource.has(resource))
+  .map(([resource, actions]) => {
+    const expected = expectedActionsByResource.get(resource) ?? [];
+    const missing = Array.from(actions).sort().filter((action) => !expected.includes(action));
+    return { resource, missing };
+  })
+  .filter((item) => item.missing.length > 0)
+  .sort((a, b) => a.resource.localeCompare(b.resource, 'pt-BR'));
+
+const frontendUsageMissingInBackend = Array.from(frontendPermissionUsage.entries())
+  .map(([resource, actions]) => {
+    const declared = Array.from(declaredActionsByResource.get(resource) ?? []).sort();
+    const missing = Array.from(actions).sort().filter((action) => !declared.includes(action));
+    return { resource, missing };
+  })
+  .filter((item) => item.missing.length > 0)
+  .sort((a, b) => a.resource.localeCompare(b.resource, 'pt-BR'));
+
 const missingExpectedActionContracts = Array.from(declaredResources)
   .filter((resource) => metaResourceSet.has(resource))
   .filter((resource) => !expectedActionsByResource.has(resource))
@@ -210,11 +251,41 @@ if (missingMetaResources.length > 0) {
     ].join('\n'),
   );
 }
+if (frontendOnlyResourcesWithoutMeta.length > 0) {
+  errors.push(
+    [
+      'Permissões usadas no frontend sem metadado explícito na matriz:',
+      ...frontendOnlyResourcesWithoutMeta.map((item) => `- ${item}`),
+    ].join('\n'),
+  );
+}
 if (missingExpectedActionContracts.length > 0) {
   errors.push(
     [
       'Recursos RBAC com metadado na matriz, mas sem contrato expectedActions explícito:',
       ...missingExpectedActionContracts.map((item) => `- ${item}`),
+    ].join('\n'),
+  );
+}
+if (frontendUsageMissingInContract.length > 0) {
+  errors.push(
+    [
+      'Permissões usadas no frontend fora do contrato expectedActions da matriz:',
+      ...frontendUsageMissingInContract.flatMap((item) => [
+        `- ${item.resource}`,
+        `  - faltando no contrato: ${item.missing.join(', ')}`,
+      ]),
+    ].join('\n'),
+  );
+}
+if (frontendUsageMissingInBackend.length > 0) {
+  errors.push(
+    [
+      'Permissões usadas no frontend sem declaração correspondente no backend:',
+      ...frontendUsageMissingInBackend.flatMap((item) => [
+        `- ${item.resource}`,
+        `  - faltando no backend: ${item.missing.join(', ')}`,
+      ]),
     ].join('\n'),
   );
 }
@@ -246,3 +317,4 @@ console.log(`- Rotas verificadas: ${appRoutes.length}`);
 console.log(`- Itens de menu verificados: ${navRoutes.length}`);
 console.log(`- Recursos RBAC com metadado explícito: ${metaResources.length}`);
 console.log(`- Recursos RBAC com contrato de ações: ${expectedActionsByResource.size}`);
+console.log(`- Recursos de permissão usados no frontend: ${frontendPermissionUsage.size}`);
