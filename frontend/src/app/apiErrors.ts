@@ -35,6 +35,10 @@ const REASON_MESSAGES: Record<string, string> = {
     "Sua OM no LDAP ainda não está habilitada com CPCA no sistema.",
   CPCA_PRESIDENT_CANNOT_BE_MEMBER:
     "O presidente da comissão não pode ser adicionado como membro.",
+  CPCA_COVERAGE_REQUEST_ALREADY_PENDING:
+    "Já existe uma solicitação pendente de alteração de cobertura para esta OM.",
+  CPCA_PRESIDENT_NOMINATION_ALREADY_PENDING:
+    "Já existe uma solicitação pendente de sucessão da presidência para esta OM.",
   LOCALITY_HAS_LINKED_DATA:
     "Esta localidade não pode ser excluída porque possui dados vinculados. Remova ou ajuste esses vínculos antes de excluir.",
   OM_HAS_LINKED_DATA:
@@ -43,6 +47,8 @@ const REASON_MESSAGES: Record<string, string> = {
     "Quando noticiante e vítima forem pessoas diferentes, informe o posto/graduação do noticiante.",
   NOTIFIER_GENDER_REQUIRED_WHEN_DIFFERENT:
     "Quando noticiante e vítima forem pessoas diferentes, informe o sexo do noticiante.",
+  ACTIVITY_TYPE_IN_USE:
+    "Este tipo não pode ser excluído porque já possui atividades vinculadas.",
   INVALID_STATUS_TRANSITION: "Transição de status inválida.",
 };
 
@@ -50,7 +56,8 @@ export function parseApiError(error: unknown): ApiErrorPayload {
   const err = error as AxiosError<ApiErrorPayload>;
   if (err?.response?.data?.message) {
     const data = err.response.data;
-    const field = typeof data.details?.field === "string" ? data.details.field : undefined;
+    const field =
+      typeof data.details?.field === "string" ? data.details.field : undefined;
     const reasonRaw = data.details?.reason;
     const reason = typeof reasonRaw === "string" ? reasonRaw : undefined;
     if (data.code === "CONFLICT_UNIQUE" && field === "code") {
@@ -59,23 +66,46 @@ export function parseApiError(error: unknown): ApiErrorPayload {
         message: "Já existe um cadastro com esse código.",
       };
     }
+    if (reason === "ACTIVITY_TYPE_IN_USE") {
+      const count =
+        typeof data.details?.count === "number"
+          ? data.details.count
+          : Number(data.details?.count ?? 0);
+      const name =
+        typeof data.details?.name === "string" ? data.details.name.trim() : "";
+      if (Number.isFinite(count) && count > 0) {
+        return {
+          ...data,
+          message: `O tipo${name ? ` "${name}"` : ""} não pode ser excluído porque já possui ${count} atividade(s) vinculada(s).`,
+        };
+      }
+    }
     if (
-      (reason === "LOCALITY_HAS_LINKED_DATA" || reason === "OM_HAS_LINKED_DATA") &&
-      (Array.isArray(data.details?.linkedResources) || Array.isArray(data.details?.labels))
+      (reason === "LOCALITY_HAS_LINKED_DATA" ||
+        reason === "OM_HAS_LINKED_DATA") &&
+      (Array.isArray(data.details?.linkedResources) ||
+        Array.isArray(data.details?.labels))
     ) {
       const labelsSource = Array.isArray(data.details?.linkedResources)
         ? data.details.linkedResources
         : data.details?.labels;
-      const labels = (labelsSource as Array<
-        string | {
-          label?: unknown;
-          count?: unknown;
-        }
-      >)
+      const labels = (
+        labelsSource as Array<
+          | string
+          | {
+              label?: unknown;
+              count?: unknown;
+            }
+        >
+      )
         .map((item) => {
           if (typeof item === "string") return item.trim() || null;
-          const label = typeof item?.label === "string" ? item.label.trim() : "";
-          const count = typeof item?.count === "number" ? item.count : Number(item?.count ?? 0);
+          const label =
+            typeof item?.label === "string" ? item.label.trim() : "";
+          const count =
+            typeof item?.count === "number"
+              ? item.count
+              : Number(item?.count ?? 0);
           if (!label) return null;
           if (!Number.isFinite(count) || count <= 0) return label;
           return `${label} (${count})`;

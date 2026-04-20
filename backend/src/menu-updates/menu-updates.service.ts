@@ -242,9 +242,19 @@ export class MenuUpdatesService {
         `,
       ),
       shouldTrackCpcaApprovals && this.isCpcaApprovalsManager(user)
-        ? this.prisma.cpcaPresidentSelfRegistration.count({
-            where: { status: 'PENDING' },
-          })
+        ? Promise.all([
+            this.prisma.cpcaPresidentSelfRegistration.count({
+              where: { status: 'PENDING' },
+            }),
+            this.prisma.cpcaPresidentNominationRequest.count({
+              where: { status: 'PENDING' },
+            }),
+            this.prisma.cpcaCommissionCoverageRequest.count({
+              where: { status: 'PENDING' },
+            }),
+          ]).then((counts: number[]) =>
+            counts.reduce((sum: number, value: number) => sum + value, 0),
+          )
         : Promise.resolve(0),
     ]);
 

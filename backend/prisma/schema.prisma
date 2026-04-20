@@ -79,6 +79,11 @@ model User {
   cpcaCommissionMembershipsAdded CpcaCommissionMember[] @relation("CpcaCommissionMemberAddedBy")
   cpcaPresidentRequests CpcaPresidentSelfRegistration[] @relation("CpcaPresidentSelfRegistrationApplicant")
   cpcaPresidentRequestDecisions CpcaPresidentSelfRegistration[] @relation("CpcaPresidentSelfRegistrationDecidedBy")
+  cpcaPresidentNominationRequestsCreated CpcaPresidentNominationRequest[] @relation("CpcaPresidentNominationRequester")
+  cpcaPresidentNominationRequestsNominee CpcaPresidentNominationRequest[] @relation("CpcaPresidentNominationNominee")
+  cpcaPresidentNominationRequestDecisions CpcaPresidentNominationRequest[] @relation("CpcaPresidentNominationDecider")
+  cpcaCoverageRequestsCreated CpcaCommissionCoverageRequest[] @relation("CpcaCoverageRequestRequester")
+  cpcaCoverageRequestDecisions CpcaCommissionCoverageRequest[] @relation("CpcaCoverageRequestDecider")
   strategicRecommendationsCreated StrategicRecommendation[] @relation("StrategicRecommendationCreator")
   libraryPhotosCreated LibraryPhoto[] @relation("LibraryPhotoCreator")
   libraryDocumentsCreated LibraryDocument[] @relation("LibraryDocumentCreator")
@@ -103,6 +108,8 @@ model Om {
   cpcaCommissionPresident    CpcaCommissionPresident?
   cpcaCommissionMembers      CpcaCommissionMember[]
   cpcaPresidentRequests      CpcaPresidentSelfRegistration[]
+  cpcaPresidentNominationRequests CpcaPresidentNominationRequest[]
+  cpcaCoverageRequests       CpcaCommissionCoverageRequest[]
   cpcaCoverageAsManager      CpcaCommissionCoverageOm[] @relation("CpcaCoverageOmManager")
   cpcaCoverageAsManaged      CpcaCommissionCoverageOm[] @relation("CpcaCoverageOmManaged")
   biNormalizationLinks       BiNormalizationLink[]
@@ -1374,6 +1381,7 @@ model CpcaCommissionPresident {
   omId                  String?   @unique
   userId                String
   assignedByUserId      String?
+  assignmentSource      CpcaCommissionPresidentAssignmentSource @default(DIRECT_ASSIGNMENT)
   designationBulletin   String?
   isSubstitution        Boolean  @default(false)
   assignedAt            DateTime @default(now())
@@ -1431,6 +1439,58 @@ model CpcaPresidentSelfRegistration {
   @@index([status, createdAt])
   @@index([omId, status])
   @@index([applicantUserId])
+  @@index([decidedByUserId])
+}
+
+model CpcaPresidentNominationRequest {
+  id                       String                     @id @default(cuid())
+  omId                     String?
+  requestedByUserId        String
+  nomineeUserId            String
+  nomineeIdentifier        String
+  nomineeUid               String
+  nomineeEmail             String?
+  nomineeName              String
+  requestedAsSubstitution  Boolean                    @default(true)
+  bulletinNumber           String?
+  status                   CpcaPresidentRequestStatus @default(PENDING)
+  decidedByUserId          String?
+  decidedAt                DateTime?
+  decisionNotes            String?
+  createdAt                DateTime                   @default(now())
+  updatedAt                DateTime                   @updatedAt
+
+  om                       Om?      @relation(fields: [omId], references: [id], onDelete: SetNull)
+  requestedByUser          User     @relation("CpcaPresidentNominationRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
+  nomineeUser             User      @relation("CpcaPresidentNominationNominee", fields: [nomineeUserId], references: [id], onDelete: Restrict)
+  decidedByUser           User?     @relation("CpcaPresidentNominationDecider", fields: [decidedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([omId, status])
+  @@index([requestedByUserId])
+  @@index([nomineeUserId])
+  @@index([decidedByUserId])
+}
+
+model CpcaCommissionCoverageRequest {
+  id                    String                     @id @default(cuid())
+  omId                  String?
+  requestedByUserId     String
+  requestedManagedOmIds String[]                   @default([])
+  status                CpcaPresidentRequestStatus @default(PENDING)
+  decidedByUserId       String?
+  decidedAt             DateTime?
+  decisionNotes         String?
+  createdAt             DateTime                   @default(now())
+  updatedAt             DateTime                   @updatedAt
+
+  om                    Om?       @relation(fields: [omId], references: [id], onDelete: SetNull)
+  requestedByUser       User      @relation("CpcaCoverageRequestRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
+  decidedByUser         User?     @relation("CpcaCoverageRequestDecider", fields: [decidedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([omId, status])
+  @@index([requestedByUserId])
   @@index([decidedByUserId])
 }
 
@@ -1999,6 +2059,12 @@ enum CpcaPresidentRequestStatus {
   PENDING
   APPROVED
   REJECTED
+}
+
+enum CpcaCommissionPresidentAssignmentSource {
+  DIRECT_ASSIGNMENT
+  SELF_REGISTRATION_APPROVAL
+  PRESIDENT_NOMINATION_APPROVAL
 }
 
 enum PermissionScope {

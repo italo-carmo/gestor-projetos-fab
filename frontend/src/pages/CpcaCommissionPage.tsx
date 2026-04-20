@@ -1,4 +1,8 @@
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
+  Alert,
   Autocomplete,
   Box,
   Button,
@@ -20,11 +24,14 @@ import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import PersonSearchRoundedIcon from "@mui/icons-material/PersonSearchRounded";
 import WorkspacePremiumRoundedIcon from "@mui/icons-material/WorkspacePremiumRounded";
 import GroupRoundedIcon from "@mui/icons-material/GroupRounded";
+import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
+import HistoryRoundedIcon from "@mui/icons-material/HistoryRounded";
 import { useEffect, useMemo, useState } from "react";
 import {
   useAddCpcaCommissionMember,
   useAssignCpcaPresident,
   useCpcaCommissionOverview,
+  useCreateCpcaPresidentNominationRequest,
   useMe,
   useOmsCatalog,
   useRemoveCpcaCommissionMember,
@@ -62,6 +69,48 @@ type CommissionMemberItem = {
   } | null;
 };
 
+type CommissionHistoryItem = {
+  id: string;
+  action: string;
+  actionLabel: string;
+  summary: string;
+  createdAt: string;
+  actor?: {
+    id: string;
+    name: string;
+    email?: string | null;
+  } | null;
+};
+
+type CoverageRequestItem = {
+  id: string;
+  status: string;
+  createdAt: string;
+  requestedByUser?: {
+    id: string;
+    name: string;
+    email?: string | null;
+  } | null;
+  requestedManagedLocalities?: OmsCatalogItem[];
+};
+
+type NominationRequestItem = {
+  id: string;
+  status: string;
+  createdAt: string;
+  requestedByUser?: {
+    id: string;
+    name: string;
+    email?: string | null;
+  } | null;
+  nominee?: {
+    displayName?: string | null;
+    email?: string | null;
+  } | null;
+  bulletinNumber?: string | null;
+  requestedAsSubstitution?: boolean;
+};
+
 function extractReason(error: unknown) {
   const responseData = (
     error as { response?: { data?: { details?: { reason?: string } } } }
@@ -86,6 +135,14 @@ function formatOmLabel(
   return codeValue || nameValue;
 }
 
+function formatDateTime(value: string | null | undefined) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "-";
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleString("pt-BR");
+}
+
 export function CpcaCommissionPage() {
   const toast = useToast();
   const { data: me } = useMe();
@@ -105,6 +162,10 @@ export function CpcaCommissionPage() {
   const [presidentIdentifier, setPresidentIdentifier] = useState("");
   const [presidentBulletin, setPresidentBulletin] = useState("");
   const [presidentIsSubstitution, setPresidentIsSubstitution] = useState(true);
+  const [nominationIdentifier, setNominationIdentifier] = useState("");
+  const [nominationBulletin, setNominationBulletin] = useState("");
+  const [nominationIsSubstitution, setNominationIsSubstitution] =
+    useState(true);
   const [memberIdentifier, setMemberIdentifier] = useState("");
   const [managedLocalityIds, setManagedLocalityIds] = useState<string[]>([]);
   const [pendingPresidentOverwrite, setPendingPresidentOverwrite] = useState<{
@@ -149,7 +210,7 @@ export function CpcaCommissionPage() {
     if (ownLocalityId) {
       setSelectedLocalityId(ownLocalityId);
     }
-  }, [cpcaLocalities, isApprover, me?.omId, selectedLocalityId]);
+  }, [cpcaLocalities, isApprover, me?.omId, ownLocalityId, selectedLocalityId]);
 
   const overviewQuery = useCpcaCommissionOverview(
     isApprover ? selectedLocalityId : undefined,
@@ -157,18 +218,28 @@ export function CpcaCommissionPage() {
   );
 
   const assignPresidentMutation = useAssignCpcaPresident();
+  const createNominationMutation = useCreateCpcaPresidentNominationRequest();
   const addMemberMutation = useAddCpcaCommissionMember();
   const removeMemberMutation = useRemoveCpcaCommissionMember();
   const updateCoverageMutation = useUpdateCpcaCommissionCoverage();
 
   const canManageMembers = Boolean(overviewQuery.data?.canManageMembers);
   const canAssignPresident = Boolean(overviewQuery.data?.canAssignPresident);
+  const canNominatePresident = Boolean(
+    overviewQuery.data?.canNominatePresident,
+  );
+  const canManageCoverage = Boolean(overviewQuery.data?.canManageCoverage);
+  const managesCoverageByApproval = Boolean(
+    overviewQuery.data?.managesCoverageByApproval,
+  );
   const currentPresident = overviewQuery.data?.currentPresident as
     | {
         id: string;
         designationBulletin?: string | null;
         isSubstitution: boolean;
         assignedAt: string;
+        assignmentSource?: string | null;
+        assignmentSourceLabel?: string | null;
         user: {
           id: string;
           name: string;
@@ -184,21 +255,34 @@ export function CpcaCommissionPage() {
     | { id: string; code: string; name: string }
     | null
     | undefined;
-  const managedLocalities = ((overviewQuery.data?.managedLocalities ??
-    []) as OmsCatalogItem[]).sort((a, b) =>
+  const managedLocalities = (
+    (overviewQuery.data?.managedLocalities ?? []) as OmsCatalogItem[]
+  ).sort((a, b) =>
     formatOmLabel(a.code, a.name).localeCompare(
       formatOmLabel(b.code, b.name),
       "pt-BR",
     ),
   );
-  const availableManagedLocalities = ((overviewQuery.data
-    ?.availableManagedLocalities ?? []) as OmsCatalogItem[]).sort((a, b) =>
+  const availableManagedLocalities = (
+    (overviewQuery.data?.availableManagedLocalities ?? []) as OmsCatalogItem[]
+  ).sort((a, b) =>
     formatOmLabel(a.code, a.name).localeCompare(
       formatOmLabel(b.code, b.name),
       "pt-BR",
     ),
   );
-  const canManageCoverage = Boolean(overviewQuery.data?.canManageCoverage);
+  const pendingCoverageRequest =
+    (overviewQuery.data?.pendingCoverageRequest as
+      | CoverageRequestItem
+      | null
+      | undefined) ?? null;
+  const pendingPresidentNominationRequest =
+    (overviewQuery.data?.pendingPresidentNominationRequest as
+      | NominationRequestItem
+      | null
+      | undefined) ?? null;
+  const history =
+    (overviewQuery.data?.history as CommissionHistoryItem[] | undefined) ?? [];
 
   useEffect(() => {
     if (isApprover) return;
@@ -237,12 +321,15 @@ export function CpcaCommissionPage() {
     }
 
     try {
-      await updateCoverageMutation.mutateAsync({
+      const response = await updateCoverageMutation.mutateAsync({
         localityId,
         managedLocalityIds,
       });
       toast.push({
-        message: "Cobertura CPCA atualizada com sucesso.",
+        message:
+          response?.mode === "REQUESTED"
+            ? "Solicitação de cobertura enviada para homologação."
+            : "Cobertura CPCA atualizada com sucesso.",
         severity: "success",
       });
     } catch (error) {
@@ -287,6 +374,39 @@ export function CpcaCommissionPage() {
       }
       toast.push({
         message: parseApiError(error).message ?? "Erro ao designar presidente.",
+        severity: "error",
+      });
+    }
+  };
+
+  const handleCreateNomination = async () => {
+    const identifier = nominationIdentifier.trim();
+    if (!identifier) {
+      toast.push({
+        message: "Informe e-mail ou CPF do próximo presidente.",
+        severity: "warning",
+      });
+      return;
+    }
+
+    try {
+      await createNominationMutation.mutateAsync({
+        identifier,
+        localityId: isApprover ? selectedLocalityId : undefined,
+        isSubstitution: nominationIsSubstitution,
+        bulletinNumber: nominationBulletin.trim() || undefined,
+      });
+      toast.push({
+        message: "Solicitação de sucessão enviada para homologação.",
+        severity: "success",
+      });
+      setNominationIdentifier("");
+      setNominationBulletin("");
+    } catch (error) {
+      toast.push({
+        message:
+          parseApiError(error).message ??
+          "Erro ao solicitar sucessão de presidente.",
         severity: "error",
       });
     }
@@ -381,7 +501,8 @@ export function CpcaCommissionPage() {
                   Comissão CPCA
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Gestão de presidente e membros da comissão por OM.
+                  Gestão do presidente, membros, cobertura e histórico da
+                  comissão por OM.
                 </Typography>
               </Box>
               <Stack
@@ -417,7 +538,7 @@ export function CpcaCommissionPage() {
                 value={
                   isApprover
                     ? selectedLocalityId
-                    : (ownLocalityId || locality?.id || selectedLocalityId)
+                    : ownLocalityId || locality?.id || selectedLocalityId
                 }
                 onChange={(event) => {
                   if (!isApprover) return;
@@ -439,6 +560,21 @@ export function CpcaCommissionPage() {
                 )}
               </TextField>
             </Stack>
+
+            <Stack spacing={0.5} sx={{ mt: 1.5 }}>
+              <Typography variant="body2" fontWeight={700}>
+                {currentPresident?.user?.name ?? "Presidente não designado"}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {currentPresident
+                  ? `${currentPresident.assignmentSourceLabel ?? "Origem não identificada"}${currentPresident.assignedByUser?.name ? ` por ${currentPresident.assignedByUser.name}` : ""} em ${formatDateTime(currentPresident.assignedAt)}`
+                  : "Ainda não existe presidente registrado para esta OM."}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Boletim atual:{" "}
+                {currentPresident?.designationBulletin || "Não informado"}
+              </Typography>
+            </Stack>
           </CardContent>
         </Card>
 
@@ -453,8 +589,8 @@ export function CpcaCommissionPage() {
                 color="text.secondary"
                 sx={{ mb: 1.5 }}
               >
-                Cadastro via LDAP por e-mail/CPF, com concessão automática da
-                permissão CPCA na OM.
+                Fluxo direto para TI/COMGEP. O militar é localizado pelo LDAP e
+                a presidência é aplicada imediatamente na OM selecionada.
               </Typography>
 
               <Stack
@@ -528,16 +664,137 @@ export function CpcaCommissionPage() {
           </Card>
         ) : null}
 
+        {canNominatePresident ? (
+          <Card>
+            <CardContent>
+              <Typography variant="h6" fontWeight={700}>
+                Solicitar sucessão da presidência
+              </Typography>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ mb: 1.5 }}
+              >
+                Use este fluxo quando a comissão precisar indicar o próximo
+                presidente. A alteração só passa a valer após homologação de TI
+                ou COMGEP.
+              </Typography>
+
+              {pendingPresidentNominationRequest ? (
+                <Alert severity="info" sx={{ mb: 1.5 }}>
+                  Existe uma solicitação pendente de sucessão para esta OM.
+                  Candidato:{" "}
+                  <strong>
+                    {pendingPresidentNominationRequest.nominee?.displayName ||
+                      "Não informado"}
+                  </strong>
+                  {pendingPresidentNominationRequest.bulletinNumber
+                    ? ` • Boletim: ${pendingPresidentNominationRequest.bulletinNumber}`
+                    : ""}
+                  {pendingPresidentNominationRequest.requestedByUser?.name
+                    ? ` • Enviada por ${pendingPresidentNominationRequest.requestedByUser.name}`
+                    : ""}
+                  {` • ${formatDateTime(pendingPresidentNominationRequest.createdAt)}`}
+                </Alert>
+              ) : null}
+
+              <Stack
+                direction={{ xs: "column", lg: "row" }}
+                spacing={1.2}
+                alignItems={{ xs: "stretch", lg: "flex-end" }}
+              >
+                <TextField
+                  size="small"
+                  label="E-mail ou CPF do indicado"
+                  value={nominationIdentifier}
+                  onChange={(event) =>
+                    setNominationIdentifier(event.target.value)
+                  }
+                  fullWidth
+                  disabled={
+                    Boolean(pendingPresidentNominationRequest) ||
+                    createNominationMutation.isPending
+                  }
+                  sx={{ flex: 1 }}
+                />
+                <TextField
+                  size="small"
+                  label="Boletim da sucessão"
+                  value={nominationBulletin}
+                  onChange={(event) =>
+                    setNominationBulletin(event.target.value)
+                  }
+                  fullWidth
+                  disabled={
+                    Boolean(pendingPresidentNominationRequest) ||
+                    createNominationMutation.isPending
+                  }
+                  sx={{ flex: 1, maxWidth: { lg: 340 } }}
+                />
+                <TextField
+                  select
+                  size="small"
+                  label="Substituição"
+                  value={nominationIsSubstitution ? "SIM" : "NAO"}
+                  onChange={(event) =>
+                    setNominationIsSubstitution(event.target.value === "SIM")
+                  }
+                  disabled={
+                    Boolean(pendingPresidentNominationRequest) ||
+                    createNominationMutation.isPending
+                  }
+                  sx={{ minWidth: 150, flexShrink: 0 }}
+                >
+                  <MenuItem value="SIM">Sim</MenuItem>
+                  <MenuItem value="NAO">Não</MenuItem>
+                </TextField>
+                <Button
+                  variant="contained"
+                  disabled={
+                    Boolean(pendingPresidentNominationRequest) ||
+                    !nominationIdentifier.trim() ||
+                    createNominationMutation.isPending
+                  }
+                  onClick={() => {
+                    void handleCreateNomination();
+                  }}
+                  sx={{
+                    minHeight: 40,
+                    minWidth: { lg: 180 },
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {createNominationMutation.isPending
+                    ? "Enviando..."
+                    : "Enviar para homologação"}
+                </Button>
+              </Stack>
+            </CardContent>
+          </Card>
+        ) : null}
+
         <Card>
           <CardContent>
             <Typography variant="h6" fontWeight={700}>
               Cobertura da Comissão
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-              {canManageCoverage
-                ? "Defina quais OMs sem CPCA próprio ficam sob responsabilidade desta comissão. A própria OM já entra automaticamente."
-                : "Consulte abaixo quais OMs esta comissão atende além da própria OM."}
+              {canAssignPresident
+                ? "TI/COMGEP podem aplicar a cobertura imediatamente."
+                : managesCoverageByApproval
+                  ? "A presidência propõe a cobertura e a alteração só vale após homologação de TI ou COMGEP."
+                  : "Consulte abaixo quais OMs esta comissão atende além da própria OM."}
             </Typography>
+
+            {pendingCoverageRequest ? (
+              <Alert severity="info" sx={{ mb: 1.5 }}>
+                Existe uma solicitação pendente de cobertura para esta OM,
+                enviada em {formatDateTime(pendingCoverageRequest.createdAt)}.
+                {pendingCoverageRequest.requestedByUser?.name
+                  ? ` Responsável: ${pendingCoverageRequest.requestedByUser.name}.`
+                  : ""}
+              </Alert>
+            ) : null}
 
             <Autocomplete
               multiple
@@ -561,7 +818,11 @@ export function CpcaCommissionPage() {
                   helperText="OMs com CPCA próprio ficam bloqueadas para evitar sobreposição de gestão."
                 />
               )}
-              disabled={!canManageCoverage || updateCoverageMutation.isPending}
+              disabled={
+                !canManageCoverage ||
+                updateCoverageMutation.isPending ||
+                (!canAssignPresident && Boolean(pendingCoverageRequest))
+              }
             />
 
             <Stack
@@ -584,12 +845,17 @@ export function CpcaCommissionPage() {
                 <Button
                   variant="contained"
                   onClick={handleSaveCoverage}
-                  disabled={updateCoverageMutation.isPending}
-                  sx={{ minWidth: { md: 180 } }}
+                  disabled={
+                    updateCoverageMutation.isPending ||
+                    (!canAssignPresident && Boolean(pendingCoverageRequest))
+                  }
+                  sx={{ minWidth: { md: 220 } }}
                 >
                   {updateCoverageMutation.isPending
-                    ? "Salvando..."
-                    : "Salvar cobertura"}
+                    ? "Enviando..."
+                    : canAssignPresident
+                      ? "Salvar cobertura"
+                      : "Enviar para homologação"}
                 </Button>
               ) : null}
             </Stack>
@@ -604,7 +870,7 @@ export function CpcaCommissionPage() {
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
               {canManageMembers
                 ? "Cadastre membros por LDAP (e-mail ou CPF)."
-                : "Somente o presidente da comissão (ou TI/COMGEP) pode cadastrar/remover membros."}
+                : "Somente o presidente da comissão (ou TI/COMGEP) pode cadastrar ou remover membros."}
             </Typography>
 
             <Stack
@@ -657,6 +923,7 @@ export function CpcaCommissionPage() {
                     <TableCell>E-mail</TableCell>
                     <TableCell>UID</TableCell>
                     <TableCell>Cadastrado por</TableCell>
+                    <TableCell>Em</TableCell>
                     <TableCell align="right">Ações</TableCell>
                   </TableRow>
                 </TableHead>
@@ -667,6 +934,7 @@ export function CpcaCommissionPage() {
                       <TableCell>{member.user.email}</TableCell>
                       <TableCell>{member.user.ldapUid ?? "-"}</TableCell>
                       <TableCell>{member.addedByUser?.name ?? "-"}</TableCell>
+                      <TableCell>{formatDateTime(member.createdAt)}</TableCell>
                       <TableCell align="right">
                         <IconButton
                           color="error"
@@ -683,6 +951,74 @@ export function CpcaCommissionPage() {
                   ))}
                 </TableBody>
               </Table>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent>
+            <Stack
+              direction="row"
+              spacing={1}
+              alignItems="center"
+              sx={{ mb: 1.5 }}
+            >
+              <HistoryRoundedIcon color="primary" fontSize="small" />
+              <Typography variant="h6" fontWeight={700}>
+                Histórico da OM
+              </Typography>
+            </Stack>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+              Todas as inclusões, exclusões e mudanças de presidência ou
+              cobertura ficam registradas aqui com autor, data e hora.
+            </Typography>
+            {history.length === 0 ? (
+              <Typography variant="body2" color="text.secondary">
+                Ainda não há eventos registrados para esta OM.
+              </Typography>
+            ) : (
+              <Stack spacing={1}>
+                {history.map((item) => (
+                  <Accordion key={item.id} disableGutters>
+                    <AccordionSummary expandIcon={<ExpandMoreRoundedIcon />}>
+                      <Stack
+                        direction={{ xs: "column", md: "row" }}
+                        spacing={1}
+                        justifyContent="space-between"
+                        alignItems={{ xs: "flex-start", md: "center" }}
+                        sx={{ width: "100%", pr: 1 }}
+                      >
+                        <Box>
+                          <Typography variant="body2" fontWeight={700}>
+                            {item.actionLabel}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {item.summary}
+                          </Typography>
+                        </Box>
+                        <Typography variant="caption" color="text.secondary">
+                          {item.actor?.name ? `${item.actor.name} • ` : ""}
+                          {formatDateTime(item.createdAt)}
+                        </Typography>
+                      </Stack>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <Stack spacing={0.5}>
+                        <Typography variant="caption" color="text.secondary">
+                          O que isso significa
+                        </Typography>
+                        <Typography variant="body2">{item.summary}</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Responsável: {item.actor?.name ?? "Sistema"}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Data e hora: {formatDateTime(item.createdAt)}
+                        </Typography>
+                      </Stack>
+                    </AccordionDetails>
+                  </Accordion>
+                ))}
+              </Stack>
             )}
           </CardContent>
         </Card>

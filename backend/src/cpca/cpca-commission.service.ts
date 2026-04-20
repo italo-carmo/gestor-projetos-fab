@@ -1,7 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
-import type { CpcaPresidentRequestStatus, Prisma } from '@prisma/client';
+import {
+  CpcaCommissionPresidentAssignmentSource,
+  CpcaPresidentRequestStatus,
+  Prisma,
+} from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { resolveBestOmByFabOm } from '../catalog/om-resolver';
 import { throwError } from '../common/http-error';
@@ -20,6 +24,12 @@ const ROLE_NAMES_ALLOWED_TO_APPROVE = new Set([
   normalizeRoleName(ROLE_TI),
   normalizeRoleName(ROLE_COMANDANTE_COMGEP),
 ]);
+const CPCA_APPROVAL_REQUEST_TYPES = [
+  'SELF_REGISTRATION',
+  'PRESIDENT_NOMINATION',
+  'COVERAGE',
+] as const;
+type CpcaApprovalRequestType = (typeof CPCA_APPROVAL_REQUEST_TYPES)[number];
 const MILITARY_RANK_PREFIX =
   /^(ALUNO|SD|CB|3S|2S|1S|SO|ASP|CP|CL|MB|TB|2T|1T|CAP|MAJ|TCEL|TEN CEL|CEL|BRIG|BRIGADEIRO|GEN)\b/i;
 
@@ -50,7 +60,7 @@ export class CpcaCommissionService {
   async createSelfRegistration(
     payload: {
       identifier: string;
-      localityId: string;
+      localityId?: string;
       isSubstitution: boolean;
       bulletinNumber: string;
     },
@@ -64,19 +74,11 @@ export class CpcaCommissionService {
       });
     }
 
-    const localityId = String(payload.localityId ?? '').trim();
-    if (!localityId) {
-      throwError('VALIDATION_ERROR', {
-        field: 'localityId',
-        reason: 'required',
-      });
-    }
     const bulletinNumber = this.cleanRequiredText(payload.bulletinNumber, {
       field: 'bulletinNumber',
       maxLength: 220,
     });
 
-    const locality = await this.assertOmSupportsCpca(localityId);
     const ldapProfile = await this.resolveLdapProfile(identifier);
     const ldapLocality = await this.resolveOmFromFabOm(ldapProfile.fabom);
     if (!ldapLocality) {
@@ -89,24 +91,24 @@ export class CpcaCommissionService {
         reason: 'CPCA_SELF_REGISTRATION_LDAP_LOCALITY_WITHOUT_CPCA',
       });
     }
-    if (ldapLocality.id !== locality.id) {
+    const requestedLocalityId = String(payload.localityId ?? '').trim();
+    if (requestedLocalityId && ldapLocality.id !== requestedLocalityId) {
       throwError('VALIDATION_ERROR', {
         reason: 'CPCA_SELF_REGISTRATION_LOCALITY_MISMATCH',
-        selectedLocalityId: locality.id,
-        selectedLocalityCode: locality.code,
-        selectedLocalityName: locality.name,
+        selectedLocalityId: requestedLocalityId,
         ldapLocalityId: ldapLocality.id,
         ldapLocalityCode: ldapLocality.code,
         ldapLocalityName: ldapLocality.name,
       });
     }
+    const locality = await this.assertOmSupportsCpca(ldapLocality.id);
 
     const user = await this.upsertLdapBackedUser(ldapProfile, ldapLocality.id);
 
     const pendingExisting =
       await this.prisma.cpcaPresidentSelfRegistration.findFirst({
         where: {
-          omId: localityId,
+          omId: locality.id,
           applicantUserId: user.id,
           status: 'PENDING',
         },
@@ -120,7 +122,7 @@ export class CpcaCommissionService {
 
     const created = await this.prisma.cpcaPresidentSelfRegistration.create({
       data: {
-        omId: localityId,
+        omId: locality.id,
         applicantUserId: user.id,
         applicantIdentifier: identifier,
         applicantUid: ldapProfile.uid,
@@ -136,6 +138,7 @@ export class CpcaCommissionService {
 
     await this.audit.log({
       userId: user.id,
+      localityId: locality.id,
       resource: 'cpca_cases',
       action: 'cpca_president_self_registration_create',
       entityId: created.id,
@@ -143,6 +146,7 @@ export class CpcaCommissionService {
         omId: locality.id,
         omCode: locality.code,
         omName: locality.name,
+        applicantName: created.applicantName,
         requestedAsSubstitution: Boolean(payload.isSubstitution),
         bulletinNumber,
         ip: ip || null,
@@ -226,14 +230,27 @@ export class CpcaCommissionService {
         currentPresident: null,
         members: [],
         canAssignPresident: isApprover,
+        canNominatePresident: false,
         canManageMembers: false,
+        canManageCoverage: false,
+        managesCoverageByApproval: false,
+        pendingCoverageRequest: null,
+        pendingPresidentNominationRequest: null,
+        history: [],
         userIsPresident: false,
       };
     }
 
     const locality = await this.assertOmSupportsCpca(localityId);
-    const [currentPresident, members, managedLocalities, availableManagedLocalities] =
-      await Promise.all([
+    const [
+      currentPresident,
+      members,
+      managedLocalities,
+      availableManagedLocalities,
+      pendingCoverageRequest,
+      pendingPresidentNominationRequest,
+      history,
+    ] = await Promise.all([
       this.prisma.cpcaCommissionPresident.findUnique({
         where: { omId: localityId },
         include: {
@@ -273,6 +290,9 @@ export class CpcaCommissionService {
       }),
       this.listManagedLocalities(localityId),
       this.listAvailableManagedLocalities(localityId),
+      this.findPendingCoverageRequest(localityId),
+      this.findPendingPresidentNominationRequest(localityId),
+      this.listCommissionHistory(localityId),
     ]);
 
     const userIsPresident =
@@ -287,6 +307,10 @@ export class CpcaCommissionService {
             designationBulletin: currentPresident.designationBulletin,
             isSubstitution: currentPresident.isSubstitution,
             assignedAt: currentPresident.assignedAt,
+            assignmentSource: currentPresident.assignmentSource,
+            assignmentSourceLabel: this.getPresidentAssignmentSourceLabel(
+              currentPresident.assignmentSource,
+            ),
             user: currentPresident.user,
             assignedByUser: currentPresident.assignedByUser,
           }
@@ -300,8 +324,13 @@ export class CpcaCommissionService {
       managedLocalities,
       availableManagedLocalities,
       canAssignPresident: isApprover,
+      canNominatePresident: userIsPresident,
       canManageMembers: isApprover || userIsPresident,
       canManageCoverage,
+      managesCoverageByApproval: !isApprover && userIsPresident,
+      pendingCoverageRequest,
+      pendingPresidentNominationRequest,
+      history,
       userIsPresident,
     };
   }
@@ -314,6 +343,7 @@ export class CpcaCommissionService {
     user: RbacUser | undefined,
   ) {
     const actorUserId = this.requireUserId(user);
+    const isApprover = this.isApproverUser(user);
     const localityId = String(payload.localityId ?? '').trim();
     if (!localityId) {
       throwError('VALIDATION_ERROR', {
@@ -415,24 +445,60 @@ export class CpcaCommissionService {
       });
     }
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.cpcaCommissionCoverageOm.deleteMany({
-        where: { managerOmId: localityId },
-      });
-      if (managedLocalityIds.length > 0) {
-        await tx.cpcaCommissionCoverageOm.createMany({
-          data: managedLocalityIds.map((managedLocalityId) => ({
-            managerOmId: localityId,
-            managedOmId: managedLocalityId,
-          })),
+    if (!isApprover) {
+      const pendingRequest =
+        await this.prisma.cpcaCommissionCoverageRequest.findFirst({
+          where: {
+            omId: localityId,
+            status: 'PENDING',
+          },
+          select: { id: true },
+        });
+      if (pendingRequest) {
+        throwError('VALIDATION_ERROR', {
+          reason: 'CPCA_COVERAGE_REQUEST_ALREADY_PENDING',
         });
       }
-    });
 
-    const nextManagedLocalities = await this.listManagedLocalities(localityId);
+      const request = await this.prisma.cpcaCommissionCoverageRequest.create({
+        data: {
+          omId: localityId,
+          requestedByUserId: actorUserId,
+          requestedManagedOmIds: managedLocalityIds,
+        },
+        include: {
+          requestedByUser: {
+            select: { id: true, name: true, email: true },
+          },
+        },
+      });
+
+      await this.audit.log({
+        userId: actorUserId,
+        localityId,
+        resource: 'cpca_cases',
+        action: 'cpca_commission_coverage_request_create',
+        entityId: request.id,
+        diffJson: {
+          omId: localityId,
+          managedLocalityIds,
+        },
+      });
+
+      return {
+        mode: 'REQUESTED',
+        request: await this.serializeCoverageRequest(request),
+      };
+    }
+
+    const nextManagedLocalities = await this.applyCoverageAssignment(
+      localityId,
+      managedLocalityIds,
+    );
 
     await this.audit.log({
       userId: actorUserId,
+      localityId,
       resource: 'cpca_cases',
       action: 'cpca_commission_coverage_update',
       entityId: localityId,
@@ -443,6 +509,7 @@ export class CpcaCommissionService {
     });
 
     return {
+      mode: 'APPLIED',
       locality: {
         id: locality.id,
         code: locality.code,
@@ -497,6 +564,7 @@ export class CpcaCommissionService {
         maxLength: 220,
       }),
       requestId: null,
+      assignmentSource: 'DIRECT_ASSIGNMENT',
     });
 
     return assignment;
@@ -654,6 +722,7 @@ export class CpcaCommissionService {
       ),
       designationBulletin: request.bulletinNumber,
       requestId: request.id,
+      assignmentSource: 'SELF_REGISTRATION_APPROVAL',
     });
 
     const approved = await this.prisma.cpcaPresidentSelfRegistration.update({
@@ -739,8 +808,385 @@ export class CpcaCommissionService {
 
     await this.audit.log({
       userId: actorUserId,
+      localityId: rejected.omId ?? null,
       resource: 'cpca_cases',
       action: 'cpca_president_request_reject',
+      entityId: rejected.id,
+      diffJson: {
+        omId: rejected.omId,
+        applicantUserId: rejected.applicantUserId,
+        decisionNotes: rejected.decisionNotes,
+      },
+    });
+
+    return { request: rejected };
+  }
+
+  async createPresidentNominationRequest(
+    payload: {
+      identifier: string;
+      localityId?: string;
+      isSubstitution?: boolean;
+      bulletinNumber?: string;
+    },
+    user: RbacUser | undefined,
+  ) {
+    const requesterUserId = this.requireUserId(user);
+    const localityId = await this.resolveLocalityForPresidentNomination(
+      user,
+      payload.localityId,
+    );
+
+    const identifier = this.normalizeIdentifier(payload.identifier);
+    if (!identifier) {
+      throwError('VALIDATION_ERROR', {
+        field: 'identifier',
+        reason: 'required',
+      });
+    }
+
+    const pendingExisting =
+      await this.prisma.cpcaPresidentNominationRequest.findFirst({
+        where: {
+          omId: localityId,
+          status: 'PENDING',
+        },
+        select: { id: true },
+      });
+    if (pendingExisting) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'CPCA_PRESIDENT_NOMINATION_ALREADY_PENDING',
+      });
+    }
+
+    const profile = await this.resolveLdapProfile(identifier);
+    const nomineeUser = await this.upsertLdapBackedUser(profile);
+    const locality = await this.assertOmSupportsCpca(localityId);
+
+    const request = await this.prisma.cpcaPresidentNominationRequest.create({
+      data: {
+        omId: localityId,
+        requestedByUserId: requesterUserId,
+        nomineeUserId: nomineeUser.id,
+        nomineeIdentifier: identifier,
+        nomineeUid: profile.uid,
+        nomineeEmail: this.normalizeEmail(profile.email),
+        nomineeName: profile.name?.trim() || nomineeUser.name,
+        requestedAsSubstitution: payload.isSubstitution ?? true,
+        bulletinNumber: this.cleanOptionalText(payload.bulletinNumber, {
+          maxLength: 220,
+        }),
+      },
+      include: {
+        om: { select: { id: true, code: true, name: true } },
+        requestedByUser: {
+          select: { id: true, name: true, email: true },
+        },
+        nomineeUser: {
+          select: { id: true, name: true, email: true, ldapUid: true },
+        },
+      },
+    });
+
+    await this.audit.log({
+      userId: requesterUserId,
+      localityId,
+      resource: 'cpca_cases',
+      action: 'cpca_president_nomination_request_create',
+      entityId: request.id,
+      diffJson: {
+        omId: localityId,
+        omCode: locality.code,
+        omName: locality.name,
+        nomineeUserId: nomineeUser.id,
+        nomineeName: request.nomineeName,
+        requestedAsSubstitution: request.requestedAsSubstitution,
+        bulletinNumber: request.bulletinNumber,
+      },
+    });
+
+    return {
+      request: this.serializePresidentNominationRequest(request),
+    };
+  }
+
+  async listApprovalRequests(user: RbacUser | undefined, statusRaw?: string) {
+    this.assertApproverUser(user);
+    const status = this.normalizeCpcaRequestStatus(statusRaw);
+    const where = status ? { status } : undefined;
+
+    const [selfRegistrations, nominations, coverageRequests, pendingCounts] =
+      await Promise.all([
+        this.prisma.cpcaPresidentSelfRegistration.findMany({
+          where,
+          include: {
+            om: { select: { id: true, code: true, name: true } },
+            applicantUser: {
+              select: { id: true, name: true, email: true, ldapUid: true },
+            },
+            decidedByUser: {
+              select: { id: true, name: true, email: true },
+            },
+          },
+          orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
+        }),
+        this.prisma.cpcaPresidentNominationRequest.findMany({
+          where,
+          include: {
+            om: { select: { id: true, code: true, name: true } },
+            requestedByUser: {
+              select: { id: true, name: true, email: true },
+            },
+            nomineeUser: {
+              select: { id: true, name: true, email: true, ldapUid: true },
+            },
+            decidedByUser: {
+              select: { id: true, name: true, email: true },
+            },
+          },
+          orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
+        }),
+        this.prisma.cpcaCommissionCoverageRequest.findMany({
+          where,
+          include: {
+            om: { select: { id: true, code: true, name: true } },
+            requestedByUser: {
+              select: { id: true, name: true, email: true },
+            },
+            decidedByUser: {
+              select: { id: true, name: true, email: true },
+            },
+          },
+          orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
+        }),
+        Promise.all([
+          this.prisma.cpcaPresidentSelfRegistration.count({
+            where: { status: 'PENDING' },
+          }),
+          this.prisma.cpcaPresidentNominationRequest.count({
+            where: { status: 'PENDING' },
+          }),
+          this.prisma.cpcaCommissionCoverageRequest.count({
+            where: { status: 'PENDING' },
+          }),
+        ]),
+      ]);
+
+    const items = [
+      ...selfRegistrations.map((item) =>
+        this.serializeApprovalSelfRegistration(item),
+      ),
+      ...nominations.map((item) => this.serializeApprovalNomination(item)),
+      ...(await Promise.all(
+        coverageRequests.map((item) => this.serializeApprovalCoverage(item)),
+      )),
+    ].sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+
+    return {
+      items,
+      pendingCount: pendingCounts.reduce((sum, value) => sum + value, 0),
+    };
+  }
+
+  async pendingApprovalRequestsCount(user: RbacUser | undefined) {
+    if (!this.isApproverUser(user)) {
+      return { pendingCount: 0 };
+    }
+
+    const [selfRegistrations, nominations, coverageRequests] =
+      await Promise.all([
+        this.prisma.cpcaPresidentSelfRegistration.count({
+          where: { status: 'PENDING' },
+        }),
+        this.prisma.cpcaPresidentNominationRequest.count({
+          where: { status: 'PENDING' },
+        }),
+        this.prisma.cpcaCommissionCoverageRequest.count({
+          where: { status: 'PENDING' },
+        }),
+      ]);
+
+    return {
+      pendingCount: selfRegistrations + nominations + coverageRequests,
+    };
+  }
+
+  async approveApprovalRequest(
+    requestTypeRaw: string,
+    requestId: string,
+    payload: { proceedWithExistingPresident?: boolean },
+    user: RbacUser | undefined,
+  ) {
+    const requestType = this.normalizeApprovalRequestType(requestTypeRaw);
+    if (requestType === 'SELF_REGISTRATION') {
+      return this.approvePresidentRequest(requestId, payload, user);
+    }
+    if (requestType === 'PRESIDENT_NOMINATION') {
+      return this.approvePresidentNominationRequest(requestId, payload, user);
+    }
+    return this.approveCoverageRequest(requestId, user);
+  }
+
+  async rejectApprovalRequest(
+    requestTypeRaw: string,
+    requestId: string,
+    payload: { notes?: string },
+    user: RbacUser | undefined,
+  ) {
+    const requestType = this.normalizeApprovalRequestType(requestTypeRaw);
+    if (requestType === 'SELF_REGISTRATION') {
+      return this.rejectPresidentRequest(requestId, payload, user);
+    }
+    if (requestType === 'PRESIDENT_NOMINATION') {
+      return this.rejectPresidentNominationRequest(requestId, payload, user);
+    }
+    return this.rejectCoverageRequest(requestId, payload, user);
+  }
+
+  async approvePresidentNominationRequest(
+    requestId: string,
+    payload: { proceedWithExistingPresident?: boolean },
+    user: RbacUser | undefined,
+  ) {
+    this.assertApproverUser(user);
+    const actorUserId = this.requireUserId(user);
+
+    const request = await this.prisma.cpcaPresidentNominationRequest.findUnique(
+      {
+        where: { id: requestId },
+        include: {
+          om: { select: { id: true, code: true, name: true } },
+          requestedByUser: {
+            select: { id: true, name: true, email: true },
+          },
+          nomineeUser: {
+            select: { id: true, name: true, email: true, ldapUid: true },
+          },
+        },
+      },
+    );
+    if (!request) {
+      throwError('NOT_FOUND');
+    }
+    if (request.status !== 'PENDING') {
+      throwError('VALIDATION_ERROR', {
+        reason: 'CPCA_PRESIDENT_REQUEST_ALREADY_PROCESSED',
+      });
+    }
+
+    const requestOmId = this.requireCommissionOmId(
+      request.omId,
+      'CPCA_PRESIDENT_REQUEST_OM_REMOVED',
+    );
+
+    const assignment = await this.assignPresidentToLocality({
+      localityId: requestOmId,
+      targetUserId: request.nomineeUserId,
+      actorUserId,
+      isSubstitution: Boolean(request.requestedAsSubstitution),
+      proceedWithExistingPresident: Boolean(
+        payload.proceedWithExistingPresident,
+      ),
+      designationBulletin: request.bulletinNumber,
+      requestId: request.id,
+      assignmentSource: 'PRESIDENT_NOMINATION_APPROVAL',
+    });
+
+    const approved = await this.prisma.cpcaPresidentNominationRequest.update({
+      where: { id: request.id },
+      data: {
+        status: 'APPROVED',
+        decidedByUserId: actorUserId,
+        decidedAt: new Date(),
+        decisionNotes: null,
+      },
+      include: {
+        om: { select: { id: true, code: true, name: true } },
+        requestedByUser: {
+          select: { id: true, name: true, email: true },
+        },
+        nomineeUser: {
+          select: { id: true, name: true, email: true, ldapUid: true },
+        },
+        decidedByUser: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+    });
+
+    await this.audit.log({
+      userId: actorUserId,
+      localityId: requestOmId,
+      resource: 'cpca_cases',
+      action: 'cpca_president_nomination_request_approve',
+      entityId: approved.id,
+      diffJson: {
+        omId: requestOmId,
+        nomineeUserId: approved.nomineeUserId,
+      },
+    });
+
+    return {
+      request: this.serializePresidentNominationRequest(approved),
+      assignment,
+    };
+  }
+
+  async rejectPresidentNominationRequest(
+    requestId: string,
+    payload: { notes?: string },
+    user: RbacUser | undefined,
+  ) {
+    this.assertApproverUser(user);
+    const actorUserId = this.requireUserId(user);
+
+    const request = await this.prisma.cpcaPresidentNominationRequest.findUnique(
+      {
+        where: { id: requestId },
+        select: { id: true, omId: true, status: true },
+      },
+    );
+    if (!request) {
+      throwError('NOT_FOUND');
+    }
+    if (request.status !== 'PENDING') {
+      throwError('VALIDATION_ERROR', {
+        reason: 'CPCA_PRESIDENT_REQUEST_ALREADY_PROCESSED',
+      });
+    }
+
+    const rejected = await this.prisma.cpcaPresidentNominationRequest.update({
+      where: { id: request.id },
+      data: {
+        status: 'REJECTED',
+        decidedByUserId: actorUserId,
+        decidedAt: new Date(),
+        decisionNotes: this.cleanOptionalText(payload.notes, {
+          maxLength: 320,
+        }),
+      },
+      include: {
+        om: { select: { id: true, code: true, name: true } },
+        requestedByUser: {
+          select: { id: true, name: true, email: true },
+        },
+        nomineeUser: {
+          select: { id: true, name: true, email: true, ldapUid: true },
+        },
+        decidedByUser: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+    });
+
+    await this.audit.log({
+      userId: actorUserId,
+      localityId: rejected.omId ?? null,
+      resource: 'cpca_cases',
+      action: 'cpca_president_nomination_request_reject',
       entityId: rejected.id,
       diffJson: {
         omId: rejected.omId,
@@ -748,7 +1194,133 @@ export class CpcaCommissionService {
       },
     });
 
-    return { request: rejected };
+    return { request: this.serializePresidentNominationRequest(rejected) };
+  }
+
+  async approveCoverageRequest(requestId: string, user: RbacUser | undefined) {
+    this.assertApproverUser(user);
+    const actorUserId = this.requireUserId(user);
+
+    const request = await this.prisma.cpcaCommissionCoverageRequest.findUnique({
+      where: { id: requestId },
+      include: {
+        om: { select: { id: true, code: true, name: true, hasCpca: true } },
+        requestedByUser: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+    });
+    if (!request) {
+      throwError('NOT_FOUND');
+    }
+    if (request.status !== 'PENDING') {
+      throwError('VALIDATION_ERROR', {
+        reason: 'CPCA_PRESIDENT_REQUEST_ALREADY_PROCESSED',
+      });
+    }
+
+    const requestOmId = this.requireCommissionOmId(
+      request.omId,
+      'CPCA_PRESIDENT_REQUEST_OM_REMOVED',
+    );
+
+    const managedLocalities = await this.applyCoverageAssignment(
+      requestOmId,
+      request.requestedManagedOmIds,
+    );
+
+    const approved = await this.prisma.cpcaCommissionCoverageRequest.update({
+      where: { id: request.id },
+      data: {
+        status: 'APPROVED',
+        decidedByUserId: actorUserId,
+        decidedAt: new Date(),
+        decisionNotes: null,
+      },
+      include: {
+        om: { select: { id: true, code: true, name: true } },
+        requestedByUser: {
+          select: { id: true, name: true, email: true },
+        },
+        decidedByUser: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+    });
+
+    await this.audit.log({
+      userId: actorUserId,
+      localityId: requestOmId,
+      resource: 'cpca_cases',
+      action: 'cpca_commission_coverage_request_approve',
+      entityId: approved.id,
+      diffJson: {
+        omId: requestOmId,
+        managedLocalityIds: request.requestedManagedOmIds,
+      },
+    });
+
+    return {
+      request: await this.serializeCoverageRequest(approved),
+      managedLocalities,
+    };
+  }
+
+  async rejectCoverageRequest(
+    requestId: string,
+    payload: { notes?: string },
+    user: RbacUser | undefined,
+  ) {
+    this.assertApproverUser(user);
+    const actorUserId = this.requireUserId(user);
+
+    const request = await this.prisma.cpcaCommissionCoverageRequest.findUnique({
+      where: { id: requestId },
+      select: { id: true, omId: true, status: true },
+    });
+    if (!request) {
+      throwError('NOT_FOUND');
+    }
+    if (request.status !== 'PENDING') {
+      throwError('VALIDATION_ERROR', {
+        reason: 'CPCA_PRESIDENT_REQUEST_ALREADY_PROCESSED',
+      });
+    }
+
+    const rejected = await this.prisma.cpcaCommissionCoverageRequest.update({
+      where: { id: request.id },
+      data: {
+        status: 'REJECTED',
+        decidedByUserId: actorUserId,
+        decidedAt: new Date(),
+        decisionNotes: this.cleanOptionalText(payload.notes, {
+          maxLength: 320,
+        }),
+      },
+      include: {
+        om: { select: { id: true, code: true, name: true } },
+        requestedByUser: {
+          select: { id: true, name: true, email: true },
+        },
+        decidedByUser: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+    });
+
+    await this.audit.log({
+      userId: actorUserId,
+      localityId: rejected.omId ?? null,
+      resource: 'cpca_cases',
+      action: 'cpca_commission_coverage_request_reject',
+      entityId: rejected.id,
+      diffJson: {
+        omId: rejected.omId,
+        decisionNotes: rejected.decisionNotes,
+      },
+    });
+
+    return { request: await this.serializeCoverageRequest(rejected) };
   }
 
   async addMember(
@@ -826,12 +1398,14 @@ export class CpcaCommissionService {
 
     await this.audit.log({
       userId: actorUserId,
+      localityId,
       resource: 'cpca_cases',
       action: 'cpca_commission_member_add',
       entityId: created.id,
       diffJson: {
         omId: localityId,
         memberUserId: memberUser.id,
+        memberUserName: memberUser.name,
       },
     });
 
@@ -884,12 +1458,14 @@ export class CpcaCommissionService {
 
     await this.audit.log({
       userId: actorUserId,
+      localityId: memberOmId,
       resource: 'cpca_cases',
       action: 'cpca_commission_member_remove',
       entityId: member.id,
       diffJson: {
         omId: member.omId,
         memberUserId: member.userId,
+        memberUserName: member.user.name,
       },
     });
 
@@ -908,6 +1484,7 @@ export class CpcaCommissionService {
     proceedWithExistingPresident: boolean;
     designationBulletin: string | null;
     requestId: string | null;
+    assignmentSource: CpcaCommissionPresidentAssignmentSource;
   }) {
     const locality = await this.assertOmSupportsCpca(input.localityId);
 
@@ -961,6 +1538,7 @@ export class CpcaCommissionService {
       update: {
         userId: input.targetUserId,
         assignedByUserId: input.actorUserId,
+        assignmentSource: input.assignmentSource,
         designationBulletin: input.designationBulletin,
         isSubstitution: Boolean(input.isSubstitution),
         assignedAt: new Date(),
@@ -969,6 +1547,7 @@ export class CpcaCommissionService {
         omId: input.localityId,
         userId: input.targetUserId,
         assignedByUserId: input.actorUserId,
+        assignmentSource: input.assignmentSource,
         designationBulletin: input.designationBulletin,
         isSubstitution: Boolean(input.isSubstitution),
       },
@@ -998,15 +1577,23 @@ export class CpcaCommissionService {
 
     await this.audit.log({
       userId: input.actorUserId,
+      localityId: input.localityId,
       resource: 'cpca_cases',
       action: 'cpca_commission_president_assign',
       entityId: assigned.id,
       diffJson: {
         omId: input.localityId,
         requestId: input.requestId,
+        assignedUserId: assigned.user.id,
+        assignedUserName: assigned.user.name,
+        assignmentSource: input.assignmentSource,
         replacedUserId:
           existing && existing.userId !== input.targetUserId
             ? existing.userId
+            : null,
+        replacedUserName:
+          existing && existing.userId !== input.targetUserId
+            ? (existing.user?.name ?? null)
             : null,
         isSubstitution: Boolean(input.isSubstitution),
         designationBulletin: input.designationBulletin,
@@ -1384,6 +1971,562 @@ export class CpcaCommissionService {
     if (!this.isApproverUser(user)) {
       throwError('RBAC_FORBIDDEN');
     }
+  }
+
+  private normalizeApprovalRequestType(
+    value: string | null | undefined,
+  ): CpcaApprovalRequestType {
+    const normalized = String(value ?? '')
+      .trim()
+      .toUpperCase();
+    if (
+      CPCA_APPROVAL_REQUEST_TYPES.includes(
+        normalized as CpcaApprovalRequestType,
+      )
+    ) {
+      return normalized as CpcaApprovalRequestType;
+    }
+    throwError('VALIDATION_ERROR', {
+      field: 'type',
+      reason: 'INVALID_CPCA_APPROVAL_REQUEST_TYPE',
+    });
+  }
+
+  private normalizeCpcaRequestStatus(
+    value: string | null | undefined,
+  ): CpcaPresidentRequestStatus | null {
+    const normalized = String(value ?? '')
+      .trim()
+      .toUpperCase();
+    if (
+      normalized === 'PENDING' ||
+      normalized === 'APPROVED' ||
+      normalized === 'REJECTED'
+    ) {
+      return normalized as CpcaPresidentRequestStatus;
+    }
+    return null;
+  }
+
+  private getPresidentAssignmentSourceLabel(
+    source: CpcaCommissionPresidentAssignmentSource | string | null | undefined,
+  ) {
+    const normalized = String(source ?? '')
+      .trim()
+      .toUpperCase();
+    if (normalized === 'SELF_REGISTRATION_APPROVAL') {
+      return 'Homologado por autoinscrição';
+    }
+    if (normalized === 'PRESIDENT_NOMINATION_APPROVAL') {
+      return 'Homologado por indicação do presidente';
+    }
+    return 'Cadastrado diretamente';
+  }
+
+  private async findPendingCoverageRequest(localityId: string) {
+    const request = await this.prisma.cpcaCommissionCoverageRequest.findFirst({
+      where: {
+        omId: localityId,
+        status: 'PENDING',
+      },
+      include: {
+        om: { select: { id: true, code: true, name: true } },
+        requestedByUser: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return request ? this.serializeCoverageRequest(request) : null;
+  }
+
+  private async findPendingPresidentNominationRequest(localityId: string) {
+    const request = await this.prisma.cpcaPresidentNominationRequest.findFirst({
+      where: {
+        omId: localityId,
+        status: 'PENDING',
+      },
+      include: {
+        om: { select: { id: true, code: true, name: true } },
+        requestedByUser: {
+          select: { id: true, name: true, email: true },
+        },
+        nomineeUser: {
+          select: { id: true, name: true, email: true, ldapUid: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return request ? this.serializePresidentNominationRequest(request) : null;
+  }
+
+  private async listCommissionHistory(localityId: string) {
+    const rows = await this.prisma.$queryRaw<
+      Array<{
+        id: string;
+        action: string;
+        createdAt: Date;
+        diffJson: Prisma.JsonValue | null;
+        userId: string | null;
+        userName: string | null;
+        userEmail: string | null;
+      }>
+    >(Prisma.sql`
+      SELECT
+        al."id" AS "id",
+        al."action" AS "action",
+        al."createdAt" AS "createdAt",
+        al."diffJson" AS "diffJson",
+        u."id" AS "userId",
+        u."name" AS "userName",
+        u."email" AS "userEmail"
+      FROM "AuditLog" al
+      LEFT JOIN "User" u
+        ON u."id" = al."userId"
+      WHERE al."resource" = 'cpca_cases'
+        AND (
+          al."localityId" = ${localityId}
+          OR COALESCE(al."diffJson"->>'omId', '') = ${localityId}
+        )
+        AND (
+          al."action" LIKE 'cpca_commission_%'
+          OR al."action" LIKE 'cpca_president_%'
+        )
+      ORDER BY al."createdAt" DESC
+      LIMIT 30
+    `);
+
+    return rows.map((row) => ({
+      id: row.id,
+      action: row.action,
+      actionLabel: this.describeCommissionHistoryAction(row.action),
+      summary: this.describeCommissionHistorySummary(
+        row.action,
+        row.diffJson as Record<string, unknown> | null,
+      ),
+      createdAt: row.createdAt.toISOString(),
+      actor: row.userId
+        ? {
+            id: row.userId,
+            name: row.userName,
+            email: row.userEmail,
+          }
+        : null,
+      diffJson: row.diffJson,
+    }));
+  }
+
+  private describeCommissionHistoryAction(action: string) {
+    switch (action) {
+      case 'cpca_commission_president_assign':
+        return 'Presidente definido';
+      case 'cpca_president_self_registration_create':
+        return 'Autoinscrição de presidente';
+      case 'cpca_president_request_reject':
+        return 'Solicitação de presidente rejeitada';
+      case 'cpca_president_nomination_request_create':
+        return 'Solicitação de sucessão criada';
+      case 'cpca_president_nomination_request_approve':
+        return 'Solicitação de sucessão homologada';
+      case 'cpca_president_nomination_request_reject':
+        return 'Solicitação de sucessão rejeitada';
+      case 'cpca_commission_member_add':
+        return 'Membro adicionado';
+      case 'cpca_commission_member_remove':
+        return 'Membro removido';
+      case 'cpca_commission_coverage_request_create':
+        return 'Solicitação de cobertura criada';
+      case 'cpca_commission_coverage_request_approve':
+        return 'Solicitação de cobertura homologada';
+      case 'cpca_commission_coverage_request_reject':
+        return 'Solicitação de cobertura rejeitada';
+      case 'cpca_commission_coverage_update':
+        return 'Cobertura atualizada';
+      default:
+        return action;
+    }
+  }
+
+  private describeCommissionHistorySummary(
+    action: string,
+    diffJson: Record<string, unknown> | null,
+  ) {
+    const nomineeName = String(diffJson?.nomineeName ?? '').trim();
+    const assignedUserName = String(diffJson?.assignedUserName ?? '').trim();
+    const applicantName = String(diffJson?.applicantName ?? '').trim();
+    const memberUserName = String(diffJson?.memberUserName ?? '').trim();
+    const bulletinNumber = String(
+      diffJson?.bulletinNumber ?? diffJson?.designationBulletin ?? '',
+    ).trim();
+    const replacedUserId = String(diffJson?.replacedUserId ?? '').trim();
+    const memberUserId = String(diffJson?.memberUserId ?? '').trim();
+    const managedLocalityIds = Array.isArray(diffJson?.managedLocalityIds)
+      ? diffJson.managedLocalityIds
+      : [];
+
+    switch (action) {
+      case 'cpca_commission_president_assign':
+        return replacedUserId
+          ? `Presidência transferida para ${assignedUserName || 'novo presidente'}${bulletinNumber ? ` • boletim ${bulletinNumber}` : ''}.`
+          : `Presidência definida para ${assignedUserName || 'militar designado'}${bulletinNumber ? ` • boletim ${bulletinNumber}` : ''}.`;
+      case 'cpca_president_self_registration_create':
+        return `${applicantName || 'Militar'} solicitou homologação como presidente${bulletinNumber ? ` • boletim ${bulletinNumber}` : ''}.`;
+      case 'cpca_president_nomination_request_create':
+        return nomineeName
+          ? `Sucessão proposta para ${nomineeName}${bulletinNumber ? ` • boletim ${bulletinNumber}` : ''}.`
+          : 'Sucessão proposta para homologação.';
+      case 'cpca_president_nomination_request_approve':
+        return 'Sucessão homologada.';
+      case 'cpca_president_nomination_request_reject':
+        return 'Sucessão rejeitada.';
+      case 'cpca_commission_member_add':
+        return memberUserName
+          ? `${memberUserName} incluído na comissão.`
+          : memberUserId
+            ? `Membro incluído na comissão.`
+            : 'Membro incluído na comissão.';
+      case 'cpca_commission_member_remove':
+        return memberUserName
+          ? `${memberUserName} removido da comissão.`
+          : memberUserId
+            ? `Membro removido da comissão.`
+            : 'Membro removido da comissão.';
+      case 'cpca_commission_coverage_request_create':
+        return `Cobertura proposta para ${managedLocalityIds.length} OM(s).`;
+      case 'cpca_commission_coverage_request_approve':
+      case 'cpca_commission_coverage_update':
+        return `Cobertura atualizada para ${managedLocalityIds.length} OM(s).`;
+      case 'cpca_commission_coverage_request_reject':
+        return 'Solicitação de cobertura rejeitada.';
+      default:
+        return 'Alteração registrada na comissão CPCA.';
+    }
+  }
+
+  private async serializeCoverageRequest(request: {
+    id: string;
+    omId?: string | null;
+    requestedManagedOmIds: string[];
+    status: CpcaPresidentRequestStatus;
+    createdAt: Date;
+    decidedAt?: Date | null;
+    decisionNotes?: string | null;
+    om?: { id: string; code: string; name: string } | null;
+    requestedByUser?: { id: string; name: string; email: string } | null;
+    decidedByUser?: { id: string; name: string; email: string } | null;
+  }) {
+    const requestedIds = Array.from(
+      new Set(
+        (request.requestedManagedOmIds ?? [])
+          .map((item) => String(item ?? '').trim())
+          .filter(Boolean),
+      ),
+    );
+    const managedLocalities = requestedIds.length
+      ? await this.prisma.om.findMany({
+          where: { id: { in: requestedIds } },
+          select: { id: true, code: true, name: true, uf: true, hasCpca: true },
+          orderBy: { name: 'asc' },
+        })
+      : [];
+
+    return {
+      id: request.id,
+      type: 'COVERAGE' as const,
+      status: request.status,
+      createdAt: request.createdAt.toISOString(),
+      decidedAt: request.decidedAt ? request.decidedAt.toISOString() : null,
+      decisionNotes: request.decisionNotes ?? null,
+      locality: request.om ?? null,
+      requestedByUser: request.requestedByUser ?? null,
+      decidedByUser: request.decidedByUser ?? null,
+      requestedManagedLocalities: managedLocalities,
+    };
+  }
+
+  private serializePresidentNominationRequest(request: {
+    id: string;
+    om?: { id: string; code: string; name: string } | null;
+    requestedByUser?: { id: string; name: string; email: string } | null;
+    nomineeUser?: {
+      id: string;
+      name: string;
+      email: string;
+      ldapUid?: string | null;
+    } | null;
+    nomineeName: string;
+    nomineeIdentifier: string;
+    nomineeEmail?: string | null;
+    requestedAsSubstitution: boolean;
+    bulletinNumber?: string | null;
+    status: CpcaPresidentRequestStatus;
+    createdAt: Date;
+    decidedAt?: Date | null;
+    decisionNotes?: string | null;
+    decidedByUser?: { id: string; name: string; email: string } | null;
+  }) {
+    return {
+      id: request.id,
+      type: 'PRESIDENT_NOMINATION' as const,
+      status: request.status,
+      createdAt: request.createdAt.toISOString(),
+      decidedAt: request.decidedAt ? request.decidedAt.toISOString() : null,
+      decisionNotes: request.decisionNotes ?? null,
+      locality: request.om ?? null,
+      requestedByUser: request.requestedByUser ?? null,
+      nominee: request.nomineeUser
+        ? {
+            ...request.nomineeUser,
+            displayName: request.nomineeUser.name ?? request.nomineeName,
+          }
+        : {
+            id: '',
+            name: request.nomineeName,
+            email: request.nomineeEmail ?? '',
+            ldapUid: null,
+            displayName: request.nomineeName,
+          },
+      nomineeIdentifier: request.nomineeIdentifier,
+      requestedAsSubstitution: request.requestedAsSubstitution,
+      bulletinNumber: request.bulletinNumber ?? null,
+      decidedByUser: request.decidedByUser ?? null,
+    };
+  }
+
+  private serializeApprovalSelfRegistration(request: {
+    id: string;
+    status: CpcaPresidentRequestStatus;
+    applicantIdentifier: string;
+    applicantUid: string;
+    applicantEmail?: string | null;
+    applicantName: string;
+    requestedAsSubstitution: boolean;
+    bulletinNumber: string;
+    createdAt: Date;
+    decidedAt?: Date | null;
+    decisionNotes?: string | null;
+    om: { id: string; code: string; name: string } | null;
+    applicantUser: {
+      id: string;
+      name: string;
+      email: string;
+      ldapUid?: string | null;
+    };
+    decidedByUser?: { id: string; name: string; email: string } | null;
+  }) {
+    return {
+      id: request.id,
+      type: 'SELF_REGISTRATION' as const,
+      status: request.status,
+      createdAt: request.createdAt.toISOString(),
+      decidedAt: request.decidedAt ? request.decidedAt.toISOString() : null,
+      decisionNotes: request.decisionNotes ?? null,
+      locality: request.om,
+      applicant: {
+        id: request.applicantUser.id,
+        name: request.applicantName || request.applicantUser.name,
+        email: request.applicantEmail ?? request.applicantUser.email,
+        ldapUid: request.applicantUid || request.applicantUser.ldapUid,
+      },
+      requestedAsSubstitution: request.requestedAsSubstitution,
+      bulletinNumber: request.bulletinNumber,
+      decidedByUser: request.decidedByUser ?? null,
+    };
+  }
+
+  private serializeApprovalNomination(request: {
+    id: string;
+    status: CpcaPresidentRequestStatus;
+    createdAt: Date;
+    decidedAt?: Date | null;
+    decisionNotes?: string | null;
+    requestedAsSubstitution: boolean;
+    bulletinNumber?: string | null;
+    om: { id: string; code: string; name: string } | null;
+    requestedByUser: { id: string; name: string; email: string };
+    nomineeUser: {
+      id: string;
+      name: string;
+      email: string;
+      ldapUid?: string | null;
+    };
+    nomineeName: string;
+    nomineeIdentifier: string;
+    decidedByUser?: { id: string; name: string; email: string } | null;
+  }) {
+    const base = this.serializePresidentNominationRequest({
+      ...request,
+      requestedByUser: request.requestedByUser,
+      nomineeUser: request.nomineeUser,
+      om: request.om,
+      decidedByUser: request.decidedByUser ?? null,
+    });
+    return base;
+  }
+
+  private async serializeApprovalCoverage(request: {
+    id: string;
+    status: CpcaPresidentRequestStatus;
+    createdAt: Date;
+    decidedAt?: Date | null;
+    decisionNotes?: string | null;
+    om: { id: string; code: string; name: string } | null;
+    requestedByUser: { id: string; name: string; email: string };
+    decidedByUser?: { id: string; name: string; email: string } | null;
+    requestedManagedOmIds: string[];
+  }) {
+    return this.serializeCoverageRequest({
+      ...request,
+      om: request.om,
+      requestedByUser: request.requestedByUser,
+      decidedByUser: request.decidedByUser ?? null,
+    });
+  }
+
+  private async resolveLocalityForPresidentNomination(
+    user: RbacUser | undefined,
+    requestedLocalityId?: string,
+  ) {
+    if (this.isApproverUser(user)) {
+      throwError('RBAC_FORBIDDEN');
+    }
+
+    const requested = String(requestedLocalityId ?? '').trim();
+    const userLocalityId = String(user?.omId ?? '').trim();
+    if (!userLocalityId) {
+      throwError('RBAC_FORBIDDEN');
+    }
+    if (requested && requested !== userLocalityId) {
+      throwError('RBAC_FORBIDDEN');
+    }
+
+    const userId = this.requireUserId(user);
+    const isPresident = await this.prisma.cpcaCommissionPresident.findFirst({
+      where: {
+        omId: userLocalityId,
+        userId,
+      },
+      select: { id: true },
+    });
+    if (!isPresident) {
+      throwError('RBAC_FORBIDDEN');
+    }
+
+    return userLocalityId;
+  }
+
+  private async applyCoverageAssignment(
+    localityId: string,
+    managedLocalityIdsRaw: string[],
+  ) {
+    const locality = await this.prisma.om.findUnique({
+      where: { id: localityId },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        hasCpca: true,
+      },
+    });
+    if (!locality) {
+      throwError('NOT_FOUND');
+    }
+
+    const managedLocalityIds = Array.from(
+      new Set(
+        (managedLocalityIdsRaw ?? [])
+          .map((value) => String(value ?? '').trim())
+          .filter(Boolean)
+          .filter((value) => value !== localityId),
+      ),
+    );
+
+    if (!locality.hasCpca && managedLocalityIds.length > 0) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'CPCA_NOT_ENABLED_FOR_LOCALITY',
+      });
+    }
+
+    const managedLocalities = managedLocalityIds.length
+      ? await this.prisma.om.findMany({
+          where: {
+            id: { in: managedLocalityIds },
+          },
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            uf: true,
+            hasCpca: true,
+          },
+        })
+      : [];
+
+    if (managedLocalities.length !== managedLocalityIds.length) {
+      throwError('VALIDATION_ERROR', {
+        field: 'managedLocalityIds',
+        reason: 'LOCALITY_INVALID_ID',
+      });
+    }
+
+    const localityWithOwnCpca = managedLocalities.find((item) => item.hasCpca);
+    if (localityWithOwnCpca) {
+      throwError('VALIDATION_ERROR', {
+        field: 'managedLocalityIds',
+        reason: 'CPCA_COVERAGE_TARGET_ALREADY_HAS_CPCA',
+        localityId: localityWithOwnCpca.id,
+        localityCode: localityWithOwnCpca.code,
+        localityName: localityWithOwnCpca.name,
+      });
+    }
+
+    const conflictingCoverage = managedLocalityIds.length
+      ? await this.prisma.cpcaCommissionCoverageOm.findMany({
+          where: {
+            managedOmId: { in: managedLocalityIds },
+            managerOmId: { not: localityId },
+          },
+          include: {
+            managerOm: {
+              select: { id: true, code: true, name: true },
+            },
+            managedOm: {
+              select: { id: true, code: true, name: true },
+            },
+          },
+        })
+      : [];
+    if (conflictingCoverage.length > 0) {
+      const firstConflict = conflictingCoverage[0];
+      throwError('VALIDATION_ERROR', {
+        field: 'managedLocalityIds',
+        reason: 'CPCA_COVERAGE_TARGET_ALREADY_ASSIGNED',
+        managedLocalityId: firstConflict.managedOm.id,
+        managedLocalityCode: firstConflict.managedOm.code,
+        managedLocalityName: firstConflict.managedOm.name,
+        managerLocalityId: firstConflict.managerOm.id,
+        managerLocalityCode: firstConflict.managerOm.code,
+        managerLocalityName: firstConflict.managerOm.name,
+      });
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.cpcaCommissionCoverageOm.deleteMany({
+        where: { managerOmId: localityId },
+      });
+      if (managedLocalityIds.length > 0) {
+        await tx.cpcaCommissionCoverageOm.createMany({
+          data: managedLocalityIds.map((managedLocalityId) => ({
+            managerOmId: localityId,
+            managedOmId: managedLocalityId,
+          })),
+        });
+      }
+    });
+
+    return this.listManagedLocalities(localityId);
   }
 
   private normalizeIdentifier(value: string) {

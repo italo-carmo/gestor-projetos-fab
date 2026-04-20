@@ -3341,6 +3341,13 @@ export function useUpdateCpcaCommissionCoverage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["cpcaCommission"] });
       qc.invalidateQueries({ queryKey: ["cpcaCases", "localityOptions"] });
+      qc.invalidateQueries({
+        queryKey: qk.cpcaPresidentRequestsPendingCount(),
+      });
+      qc.invalidateQueries({
+        queryKey: ["cpcaCommission", "presidentRequests"],
+      });
+      qc.invalidateQueries({ queryKey: ["menuUpdates"] });
       qc.invalidateQueries({ queryKey: qk.oms });
       qc.invalidateQueries({ queryKey: qk.omsCatalog });
     },
@@ -3367,7 +3374,7 @@ export function useCpcaPresidentRequests(
     queryKey: qk.cpcaPresidentRequests(filters),
     queryFn: async () =>
       (
-        await api.get("/cpca-commission/president-requests", {
+        await api.get("/cpca-commission/approval-requests", {
           params: filters,
         })
       ).data,
@@ -3381,7 +3388,7 @@ export function useCpcaPresidentRequestsPendingCount(enabled = true) {
     queryKey: qk.cpcaPresidentRequestsPendingCount(),
     queryFn: async () => {
       const response = await api.get(
-        "/cpca-commission/president-requests/pending-count",
+        "/cpca-commission/approval-requests/pending-count",
       );
       return response.data as { pendingCount: number };
     },
@@ -3394,12 +3401,13 @@ export function useApproveCpcaPresidentRequest() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (args: {
+      type: string;
       id: string;
       proceedWithExistingPresident?: boolean;
     }) =>
       (
         await api.post(
-          `/cpca-commission/president-requests/${args.id}/approve`,
+          `/cpca-commission/approval-requests/${args.type}/${args.id}/approve`,
           { proceedWithExistingPresident: args.proceedWithExistingPresident },
         )
       ).data,
@@ -3420,13 +3428,36 @@ export function useApproveCpcaPresidentRequest() {
 export function useRejectCpcaPresidentRequest() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (args: { id: string; notes?: string }) =>
+    mutationFn: async (args: { type: string; id: string; notes?: string }) =>
       (
         await api.post(
-          `/cpca-commission/president-requests/${args.id}/reject`,
+          `/cpca-commission/approval-requests/${args.type}/${args.id}/reject`,
           { notes: args.notes },
         )
       ).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cpcaCommission"] });
+      qc.invalidateQueries({
+        queryKey: qk.cpcaPresidentRequestsPendingCount(),
+      });
+      qc.invalidateQueries({
+        queryKey: ["cpcaCommission", "presidentRequests"],
+      });
+      qc.invalidateQueries({ queryKey: ["menuUpdates"] });
+    },
+  });
+}
+
+export function useCreateCpcaPresidentNominationRequest() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      identifier: string;
+      localityId?: string;
+      isSubstitution?: boolean;
+      bulletinNumber?: string;
+    }) =>
+      (await api.post("/cpca-commission/president-nominations", payload)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["cpcaCommission"] });
       qc.invalidateQueries({
@@ -4321,7 +4352,10 @@ export function useImportBiSurvey() {
         form.append("replace", String(args.replace));
       }
       if (args.normalizationPlan) {
-        form.append("normalizationPlan", JSON.stringify(args.normalizationPlan));
+        form.append(
+          "normalizationPlan",
+          JSON.stringify(args.normalizationPlan),
+        );
       }
       return (await api.post("/bi/surveys/import", form)).data;
     },
@@ -4438,7 +4472,10 @@ export function useImportBiDomesticViolence() {
         form.append("replace", String(args.replace));
       }
       if (args.normalizationPlan) {
-        form.append("normalizationPlan", JSON.stringify(args.normalizationPlan));
+        form.append(
+          "normalizationPlan",
+          JSON.stringify(args.normalizationPlan),
+        );
       }
       return (await api.post("/bi/domestic-violence/import", form)).data;
     },
@@ -4679,7 +4716,10 @@ export function useImportBiBestPracticesCycle() {
         form.append("replace", String(args.replace));
       }
       if (args.normalizationPlan) {
-        form.append("normalizationPlan", JSON.stringify(args.normalizationPlan));
+        form.append(
+          "normalizationPlan",
+          JSON.stringify(args.normalizationPlan),
+        );
       }
       return (await api.post("/bi/best-practices-cycle/import", form)).data;
     },
@@ -5221,9 +5261,8 @@ export function useComgepScoringSettings() {
   return useQuery({
     queryKey: qk.comgepSettings,
     queryFn: async () =>
-      (
-        await api.get<ComgepScoringSettingsResponse>("/admin/comgep-settings")
-      ).data,
+      (await api.get<ComgepScoringSettingsResponse>("/admin/comgep-settings"))
+        .data,
   });
 }
 

@@ -258,6 +258,9 @@ export function OmsAdminPage() {
     | {
         id: string;
         designationBulletin?: string | null;
+        assignedAt?: string;
+        assignmentSourceLabel?: string | null;
+        assignedByUser?: { name?: string | null } | null;
         user?: { name?: string | null; email?: string | null } | null;
       }
     | null
@@ -352,7 +355,8 @@ export function OmsAdminPage() {
   const visibleCpcaCoverageCount = useMemo(
     () =>
       cpcaCoverageOptions.filter(
-        (item) => !managedUfFilter || String(item.uf ?? "").trim() === managedUfFilter,
+        (item) =>
+          !managedUfFilter || String(item.uf ?? "").trim() === managedUfFilter,
       ).length,
     [cpcaCoverageOptions, managedUfFilter],
   );
@@ -887,7 +891,10 @@ export function OmsAdminPage() {
                             size="small"
                             variant="outlined"
                             label={managedBy.code}
-                            title={formatOmLabel(managedBy.code, managedBy.name)}
+                            title={formatOmLabel(
+                              managedBy.code,
+                              managedBy.name,
+                            )}
                           />
                         ) : (
                           "—"
@@ -1077,13 +1084,12 @@ export function OmsAdminPage() {
             </Stack>
           ) : null}
           {canManagePresident && editing && form.hasCpca ? (
-            <Stack
-              direction="row"
-              spacing={1}
-              useFlexGap
-              flexWrap="wrap"
-            >
-              <Chip size="small" color="primary" label="A própria OM sempre entra na cobertura" />
+            <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+              <Chip
+                size="small"
+                color="primary"
+                label="A própria OM sempre entra na cobertura"
+              />
               <Chip
                 size="small"
                 variant="outlined"
@@ -1152,6 +1158,18 @@ export function OmsAdminPage() {
                   Presidente atual:{" "}
                   {currentPresident?.user?.name ?? "Não designado"}
                 </Typography>
+                {currentPresident ? (
+                  <Typography variant="caption" color="text.secondary">
+                    {currentPresident.assignmentSourceLabel ??
+                      "Origem não identificada"}
+                    {currentPresident.assignedByUser?.name
+                      ? ` por ${currentPresident.assignedByUser.name}`
+                      : ""}
+                    {currentPresident.assignedAt
+                      ? ` em ${new Date(currentPresident.assignedAt).toLocaleString("pt-BR")}`
+                      : ""}
+                  </Typography>
+                ) : null}
                 <Typography variant="caption" color="text.secondary">
                   Boletim atual:{" "}
                   {currentPresident?.designationBulletin || "Não informado"}

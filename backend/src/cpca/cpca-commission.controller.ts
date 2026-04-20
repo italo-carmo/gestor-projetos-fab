@@ -20,6 +20,7 @@ import type { RbacUser } from '../rbac/rbac.types';
 import { CpcaCommissionService } from './cpca-commission.service';
 import { ApproveCpcaPresidentRequestDto } from './dto/approve-cpca-president-request.dto';
 import { CreateCpcaCommissionMemberDto } from './dto/create-cpca-commission-member.dto';
+import { CreateCpcaPresidentNominationRequestDto } from './dto/create-cpca-president-nomination-request.dto';
 import { CreateCpcaPresidentDto } from './dto/create-cpca-president.dto';
 import { CreateCpcaPresidentSelfRegistrationDto } from './dto/create-cpca-president-self-registration.dto';
 import { LookupCpcaPresidentCandidateDto } from './dto/lookup-cpca-president-candidate.dto';
@@ -150,6 +151,23 @@ export class CpcaCommissionController {
     return this.cpcaCommission.listPresidentRequests(user, status);
   }
 
+  @Get('approval-requests')
+  @UseGuards(JwtAuthGuard, RbacGuard)
+  @RequirePermission('cpca_cases', 'view')
+  listApprovalRequests(
+    @Query('status') status: string | undefined,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.cpcaCommission.listApprovalRequests(user, status);
+  }
+
+  @Get('approval-requests/pending-count')
+  @UseGuards(JwtAuthGuard, RbacGuard)
+  @RequirePermission('cpca_cases', 'view')
+  pendingApprovalRequestsCount(@CurrentUser() user: RbacUser) {
+    return this.cpcaCommission.pendingApprovalRequestsCount(user);
+  }
+
   @Get('president-requests/pending-count')
   @UseGuards(JwtAuthGuard, RbacGuard)
   @RequirePermission('cpca_cases', 'view')
@@ -181,6 +199,58 @@ export class CpcaCommissionController {
     @CurrentUser() user: RbacUser,
   ) {
     return this.cpcaCommission.rejectPresidentRequest(
+      id,
+      { notes: dto.notes },
+      user,
+    );
+  }
+
+  @Post('president-nominations')
+  @UseGuards(JwtAuthGuard, RbacGuard)
+  @RequirePermission('cpca_cases', 'update')
+  createPresidentNominationRequest(
+    @Body() dto: CreateCpcaPresidentNominationRequestDto,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.cpcaCommission.createPresidentNominationRequest(
+      {
+        identifier: dto.identifier,
+        localityId: dto.localityId,
+        isSubstitution: dto.isSubstitution,
+        bulletinNumber: dto.bulletinNumber,
+      },
+      user,
+    );
+  }
+
+  @Post('approval-requests/:type/:id/approve')
+  @UseGuards(JwtAuthGuard, RbacGuard)
+  @RequirePermission('cpca_cases', 'update')
+  approveApprovalRequest(
+    @Param('type') type: string,
+    @Param('id') id: string,
+    @Body() dto: ApproveCpcaPresidentRequestDto,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.cpcaCommission.approveApprovalRequest(
+      type,
+      id,
+      { proceedWithExistingPresident: dto.proceedWithExistingPresident },
+      user,
+    );
+  }
+
+  @Post('approval-requests/:type/:id/reject')
+  @UseGuards(JwtAuthGuard, RbacGuard)
+  @RequirePermission('cpca_cases', 'update')
+  rejectApprovalRequest(
+    @Param('type') type: string,
+    @Param('id') id: string,
+    @Body() dto: RejectCpcaPresidentRequestDto,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.cpcaCommission.rejectApprovalRequest(
+      type,
       id,
       { notes: dto.notes },
       user,

@@ -1,6 +1,6 @@
 import { IsBoolean, IsOptional, IsString, MaxLength } from 'class-validator';
 
-export class CreateCpcaPresidentSelfRegistrationDto {
+export class CreateCpcaPresidentNominationRequestDto {
   @IsString()
   @MaxLength(120)
   identifier: string;
@@ -9,10 +9,12 @@ export class CreateCpcaPresidentSelfRegistrationDto {
   @IsString()
   localityId?: string;
 
+  @IsOptional()
   @IsBoolean()
-  isSubstitution: boolean;
+  isSubstitution?: boolean;
 
+  @IsOptional()
   @IsString()
   @MaxLength(220)
-  bulletinNumber: string;
+  bulletinNumber?: string;
 }
