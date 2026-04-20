@@ -21,6 +21,7 @@
     "run:all:prod": "bash scripts/run-all.sh --prod",
     "test": "npm --prefix backend run test",
     "e2e": "playwright test",
+    "e2e:cpca": "playwright test e2e/cpca-workflow.spec.ts",
     "lint": "npm --prefix backend run lint && npm --prefix frontend run lint",
     "format": "npm --prefix backend run format && npm --prefix frontend run format"
   },
