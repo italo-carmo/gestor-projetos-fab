@@ -194,6 +194,7 @@ type PermissionMatrixRow = {
   meta: ReturnType<typeof getPermissionResourceMeta>;
   crudRoles: Record<CrudAction, MatrixRoleBadge[]>;
   availableActions: string[];
+  missingExpectedActions: string[];
   extraActions: MatrixExtraAction[];
 };
 
@@ -590,6 +591,7 @@ export function AdminRbacPage() {
 
     const rows: PermissionMatrixRow[] = [];
     for (const [resource, actionSet] of actionsByResource.entries()) {
+      const meta = getPermissionResourceMeta(resource);
       const crudRoles = {
         view: [] as MatrixRoleBadge[],
         create: [] as MatrixRoleBadge[],
@@ -611,9 +613,12 @@ export function AdminRbacPage() {
 
       rows.push({
         resource,
-        meta: getPermissionResourceMeta(resource),
+        meta,
         crudRoles,
         availableActions,
+        missingExpectedActions: (meta.expectedActions ?? [])
+          .filter((action) => !availableActions.includes(action))
+          .sort(sortActions),
         extraActions,
       });
     }
@@ -661,6 +666,9 @@ export function AdminRbacPage() {
         ...(row.meta.routeAliases ?? []),
         ...(row.meta.sidebarItems ?? []),
         ...row.availableActions.map((action) => getPermissionActionLabel(action)),
+        ...row.missingExpectedActions.map((action) =>
+          `faltando ${getPermissionActionLabel(action)}`,
+        ),
         ...CRUD_ACTIONS.flatMap((action) =>
           row.crudRoles[action].map((role) => role.roleName),
         ),
@@ -1764,6 +1772,19 @@ export function AdminRbacPage() {
                                 ))
                               )}
                             </Stack>
+                            {row.missingExpectedActions.length > 0 && (
+                              <Typography
+                                variant="caption"
+                                color="warning.main"
+                                sx={{ display: "block", mt: 0.8 }}
+                              >
+                                Contrato da matriz incompleto: faltando{" "}
+                                {row.missingExpectedActions
+                                  .map((action) => getPermissionActionLabel(action))
+                                  .join(", ")}
+                                .
+                              </Typography>
+                            )}
                             {row.extraActions.length > 0 && (
                               <Stack spacing={0.6} sx={{ mt: 0.9 }}>
                                 {row.extraActions.map((extraAction) => (

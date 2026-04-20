@@ -6,7 +6,16 @@ export type PermissionResourceMeta = {
   route?: string;
   routeAliases?: string[];
   sidebarItems?: string[];
+  expectedActions?: string[];
 };
+
+const VIEW_ONLY = ["view"];
+const VIEW_UPDATE = ["view", "update"];
+const VIEW_CREATE = ["view", "create"];
+const CRUD = ["view", "create", "update", "delete"];
+const CRUD_DOWNLOAD = ["view", "create", "update", "delete", "download"];
+const CRUD_UPLOAD = ["view", "create", "update", "delete", "upload"];
+const CRUD_COMMENT = ["view", "create", "update", "delete", "comment"];
 
 const RESOURCE_META: Record<string, PermissionResourceMeta> = {
   dashboard: {
@@ -17,6 +26,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     route: "/dashboard/smif",
     routeAliases: ["/dashboard/cipavd", "/dashboard/locality/:id"],
     sidebarItems: ["SMIF", "CIPAVD"],
+    expectedActions: VIEW_UPDATE,
   },
   strategic_dashboard: {
     menu: "Dashboards",
@@ -27,6 +37,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     route: "/dashboard/estrategico",
     routeAliases: ["/dashboard/comgep"],
     sidebarItems: ["Painel Estratégico"],
+    expectedActions: VIEW_ONLY,
   },
   ai: {
     menu: "Dashboards",
@@ -36,6 +47,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
       "Assistentes, análises, copilotos e fluxos assistidos por IA.",
     route: "/ai",
     sidebarItems: ["Inteligência Artificial"],
+    expectedActions: VIEW_ONLY,
   },
   kpis: {
     menu: "Dashboards",
@@ -44,6 +56,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     description: "Cadastro e manutencao de indicadores exibidos nos paineis.",
     route: "/dashboard/cipavd",
     sidebarItems: ["CIPAVD"],
+    expectedActions: VIEW_CREATE,
   },
   gantt: {
     menu: "Planejamento",
@@ -52,6 +65,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     description: "Acesso ao cronograma visual de tarefas e fases.",
     route: "/gantt",
     sidebarItems: ["Cronograma"],
+    expectedActions: VIEW_ONLY,
   },
   calendar: {
     menu: "Planejamento",
@@ -68,6 +82,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     description: "Gestao de reunioes, decisoes, participantes e vinculos.",
     route: "/meetings",
     sidebarItems: ["Reunioes"],
+    expectedActions: CRUD,
   },
   tasks: {
     menu: "Planejamento",
@@ -76,6 +91,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     description: "Acoes especiais de tarefas geradas a partir de reunioes.",
     route: "/meetings",
     sidebarItems: ["Reunioes"],
+    expectedActions: ["generate_from_meeting"],
   },
   task_instances: {
     menu: "Planejamento",
@@ -86,6 +102,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     route: "/activities",
     routeAliases: ["/activities-cipavd", "/tasks"],
     sidebarItems: ["Tarefas", "Atividades de Campo"],
+    expectedActions: ["view", "create", "update", "delete", "assign", "export"],
   },
   task_templates: {
     menu: "Planejamento",
@@ -94,6 +111,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     description: "Modelos para criacao e padronizacao de tarefas.",
     route: "/templates",
     sidebarItems: ["Administração"],
+    expectedActions: ["view", "create", "update"],
   },
   checklists: {
     menu: "Planejamento",
@@ -102,6 +120,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     description: "Controle de checklists por fase, OM e especialidade.",
     route: "/checklists",
     sidebarItems: ["Checklists"],
+    expectedActions: ["view", "create", "update", "export"],
   },
   phases: {
     menu: "Planejamento",
@@ -111,6 +130,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     route: "/admin?tab=phases",
     routeAliases: ["/admin/phases"],
     sidebarItems: ["Administracao"],
+    expectedActions: VIEW_UPDATE,
   },
   missions: {
     menu: "Operacoes",
@@ -119,6 +139,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     description: "Fluxos de missao, participantes, agenda e checklist.",
     route: "/missions",
     sidebarItems: ["Missoes"],
+    expectedActions: ["view", "create", "update", "delete", "upload", "download"],
   },
   reports: {
     menu: "Operacoes",
@@ -127,6 +148,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     description: "Upload, aprovacao e download de relatorios operacionais.",
     route: "/tasks",
     sidebarItems: ["Atividades de Campo", "Tarefas"],
+    expectedActions: ["create", "update", "upload", "approve", "download"],
   },
   notices: {
     menu: "Comunicacao",
@@ -135,6 +157,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     description: "Publicacao e fixacao de avisos institucionais.",
     route: "/notices",
     sidebarItems: ["Avisos"],
+    expectedActions: ["view", "create", "update", "delete", "pin"],
   },
   documents: {
     menu: "Comunicacao",
@@ -143,6 +166,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     description: "Estrutura de documentos, links e subcategorias.",
     route: "/documents",
     sidebarItems: ["Documentos"],
+    expectedActions: CRUD_DOWNLOAD,
   },
   social_communication: {
     menu: "Comunicacao",
@@ -151,6 +175,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     description: "Gestao de comunicados e cards de comunicacao social.",
     route: "/social-communication",
     sidebarItems: ["Impacto Positivo"],
+    expectedActions: CRUD_UPLOAD,
   },
   social_communication_highlight: {
     menu: "Comunicacao",
@@ -159,6 +184,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     description: "Painel de destaques usados na comunicacao social.",
     route: "/social-communication",
     sidebarItems: ["Impacto Positivo"],
+    expectedActions: CRUD,
   },
   library: {
     menu: "Comunicacao",
@@ -167,6 +193,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     description: "Fotos, documentos e configuracoes da biblioteca.",
     route: "/library",
     sidebarItems: ["Biblioteca"],
+    expectedActions: CRUD_DOWNLOAD,
   },
   best_practices: {
     menu: "Conhecimento",
@@ -175,6 +202,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     description: "Publicacoes e curadoria de boas praticas.",
     route: "/best-practices",
     sidebarItems: ["Boas Praticas"],
+    expectedActions: CRUD,
   },
   best_practice_types: {
     menu: "Conhecimento",
@@ -183,6 +211,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     description: "Taxonomia dos tipos usados em boas praticas.",
     route: "/best-practices",
     sidebarItems: ["Boas Praticas"],
+    expectedActions: CRUD,
   },
   lessons_learned: {
     menu: "Conhecimento",
@@ -191,6 +220,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     description: "Registro, analise e manutencao de licoes aprendidas.",
     route: "/lessons-learned",
     sidebarItems: ["Licoes Aprendidas"],
+    expectedActions: CRUD,
   },
   cpca_cases: {
     menu: "CPCA",
@@ -201,6 +231,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     route: "/cpca-cases",
     routeAliases: ["/cpca-commission", "/cpca-president-approvals"],
     sidebarItems: ["Denúncias", "Comissão CPCA", "Homologações CPCA"],
+    expectedActions: CRUD_COMMENT,
   },
   cpca_dashboard: {
     menu: "CPCA",
@@ -210,6 +241,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     route: "/dashboard/cpca",
     routeAliases: ["/cpca-stats"],
     sidebarItems: ["CPCA"],
+    expectedActions: VIEW_ONLY,
   },
   smif_complaints: {
     menu: "CPCA",
@@ -218,6 +250,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     description: "Gestao de denuncias SMIF e seu fluxo de tratativa.",
     route: "/smif-complaints",
     sidebarItems: ["Denuncias"],
+    expectedActions: CRUD_COMMENT,
   },
   elos: {
     menu: "Estrutura",
@@ -226,6 +259,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     description: "Cadastro e manutencao de elos da organizacao.",
     route: "/elos",
     sidebarItems: ["Elos"],
+    expectedActions: CRUD,
   },
   org_chart: {
     menu: "Estrutura",
@@ -234,6 +268,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     description: "Visualizacao e ajustes de membros no organograma.",
     route: "/org-chart",
     sidebarItems: ["Organograma"],
+    expectedActions: CRUD,
   },
   localities: {
     menu: "Administracao",
@@ -243,6 +278,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     route: "/admin?tab=localities",
     routeAliases: ["/gsd-recruits", "/recruits-history", "/admin/oms", "/admin/localities", "/admin/localidades"],
     sidebarItems: ["GSD e Recrutas", "Administracao", "OMs"],
+    expectedActions: CRUD,
   },
   localities_cipavd: {
     menu: "Administracao",
@@ -252,6 +288,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     route: "/admin?tab=localities-cipavd",
     routeAliases: ["/admin/localities-cipavd", "/admin/localidades-cipavd", "/activities-cipavd"],
     sidebarItems: ["Administracao", "Atividades de Campo"],
+    expectedActions: CRUD,
   },
   specialties: {
     menu: "Administracao",
@@ -260,6 +297,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     description: "Cadastro de especialidades usadas no sistema.",
     route: "/admin",
     sidebarItems: ["Administracao"],
+    expectedActions: CRUD,
   },
   postos: {
     menu: "Administracao",
@@ -269,6 +307,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     route: "/admin?tab=postos",
     routeAliases: ["/admin/postos"],
     sidebarItems: ["Administracao"],
+    expectedActions: CRUD,
   },
   elo_roles: {
     menu: "Administracao",
@@ -279,6 +318,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     route: "/admin?tab=elo-roles",
     routeAliases: ["/admin/elo-roles"],
     sidebarItems: ["Administracao"],
+    expectedActions: CRUD,
   },
   users: {
     menu: "Seguranca",
@@ -287,6 +327,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     description: "Gestao de usuarios LDAP, papeis e dados vinculados.",
     route: "/admin/rbac",
     sidebarItems: ["Usuarios e Permissoes"],
+    expectedActions: ["view", "update"],
   },
   roles: {
     menu: "Seguranca",
@@ -295,6 +336,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     description: "Definicao de papeis, clonagem e atribuicao de permissoes.",
     route: "/admin/rbac",
     sidebarItems: ["Usuarios e Permissoes"],
+    expectedActions: ["view", "create", "update", "delete", "clone", "permissions"],
   },
   admin_rbac: {
     menu: "Seguranca",
@@ -303,12 +345,14 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     description: "Importacao, exportacao e simulacao de acessos RBAC.",
     route: "/admin/rbac",
     sidebarItems: ["Usuarios e Permissoes"],
+    expectedActions: ["update", "export", "import"],
   },
   search: {
     menu: "Seguranca",
     menuOrder: 90,
     title: "Busca Global",
     description: "Controle de uso do mecanismo de busca unificada.",
+    expectedActions: VIEW_ONLY,
   },
   audit_logs: {
     menu: "Seguranca",
@@ -317,6 +361,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     description: "Consulta de logs de login e trilha de auditoria do sistema.",
     route: "/audit",
     sidebarItems: ["Logs"],
+    expectedActions: VIEW_ONLY,
   },
   bi: {
     menu: "Dashboards",
@@ -326,6 +371,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     route: "/dashboard/bi",
     routeAliases: ["/dashboard/bi-violencia-domestica", "/dashboard/bi-recrutas", "/dashboard/bi-ciclo-boas-praticas", "/dashboard/bi-encontro-cpca", "/dashboard/bi-avaliacao-gsd"],
     sidebarItems: ["Escolas", "Violência Doméstica", "Recrutas", "Ciclo de Boas Práticas", "Encontro CPCA", "Avaliação GSD"],
+    expectedActions: ["view", "upload", "delete"],
   },
 };
 

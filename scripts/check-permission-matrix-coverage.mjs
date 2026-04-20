@@ -33,6 +33,28 @@ function extractQuotedStrings(raw) {
 const appSource = read('frontend/src/App.tsx');
 const appShellSource = read('frontend/src/layouts/AppShell.tsx');
 const matrixMetaSource = read('frontend/src/app/permissionMatrixMeta.ts');
+const matrixActionSetConstants = new Map(
+  Array.from(
+    matrixMetaSource.matchAll(/const\s+([A-Z_]+)\s*=\s*\[([^\]]*)\];/gm),
+  ).map((match) => [match[1], extractQuotedStrings(match[2]).sort()]),
+);
+
+function parseResourceBlocks(source) {
+  const blocks = new Map();
+  const regex = /^\s{2}([a-zA-Z0-9_]+):\s*\{/gm;
+  const matches = Array.from(source.matchAll(regex));
+  for (let index = 0; index < matches.length; index += 1) {
+    const key = matches[index][1];
+    const start = matches[index].index ?? 0;
+    const end =
+      index + 1 < matches.length
+        ? (matches[index + 1].index ?? source.length)
+        : source.indexOf('\n};', start);
+    const block = source.slice(start, end === -1 ? source.length : end);
+    blocks.set(key, block);
+  }
+  return blocks;
+}
 
 const routeBlockRegex = /<Route\s+path="([^"]+)"[\s\S]*?\/\>/g;
 const appRoutes = [];
@@ -49,6 +71,7 @@ const resourceKeyRegex = /^\s{2}([a-zA-Z0-9_]+):\s*\{/gm;
 const metaResources = Array.from(matrixMetaSource.matchAll(resourceKeyRegex)).map(
   (match) => match[1],
 );
+const metaResourceBlocks = parseResourceBlocks(matrixMetaSource);
 
 const routeValueRegex = /route:\s*"([^"]+)"/g;
 const routesFromMeta = Array.from(matrixMetaSource.matchAll(routeValueRegex)).map(
@@ -62,6 +85,19 @@ const routeAliasesFromMeta = Array.from(
 
 const coveredRoutes = new Set([...routesFromMeta, ...routeAliasesFromMeta]);
 const metaResourceSet = new Set(metaResources);
+const expectedActionsByResource = new Map(
+  Array.from(metaResourceBlocks.entries()).flatMap(([resource, block]) => {
+    const inlineMatch = block.match(/expectedActions:\s*\[([^\]]*)\]/m);
+    if (inlineMatch) {
+      return [[resource, extractQuotedStrings(inlineMatch[1]).sort()]];
+    }
+    const refMatch = block.match(/expectedActions:\s*([A-Z_]+)/m);
+    if (refMatch) {
+      return [[resource, matrixActionSetConstants.get(refMatch[1]) ?? []]];
+    }
+    return [];
+  }),
+);
 
 const ignoredRoutes = new Set([
   '/',
@@ -108,16 +144,46 @@ const unguardedRoutes = appRoutes
 
 const backendFiles = walk('backend/src').filter((file) => file.endsWith('.ts'));
 const declaredResources = new Set();
+const declaredActionsByResource = new Map();
 for (const file of backendFiles) {
   const source = read(file);
-  for (const match of source.matchAll(/@RequirePermission\(\s*['"]([^'"]+)['"]/g)) {
-    declaredResources.add(match[1]);
+  for (const match of source.matchAll(
+    /@RequirePermission\(\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]+)['"]/g,
+  )) {
+    const resource = match[1];
+    const action = match[2];
+    declaredResources.add(resource);
+    if (!declaredActionsByResource.has(resource)) {
+      declaredActionsByResource.set(resource, new Set());
+    }
+    declaredActionsByResource.get(resource).add(action);
   }
 }
 
 const missingMetaResources = Array.from(declaredResources)
   .filter((resource) => !metaResourceSet.has(resource))
   .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+
+const missingExpectedActionContracts = Array.from(declaredResources)
+  .filter((resource) => metaResourceSet.has(resource))
+  .filter((resource) => !expectedActionsByResource.has(resource))
+  .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+
+const actionContractMismatches = Array.from(declaredResources)
+  .filter((resource) => expectedActionsByResource.has(resource))
+  .map((resource) => {
+    const expected = expectedActionsByResource.get(resource) ?? [];
+    const declared = Array.from(declaredActionsByResource.get(resource) ?? []).sort();
+    const missingInMeta = declared.filter((action) => !expected.includes(action));
+    const missingInBackend = expected.filter((action) => !declared.includes(action));
+    return {
+      resource,
+      missingInMeta,
+      missingInBackend,
+    };
+  })
+  .filter((item) => item.missingInMeta.length > 0 || item.missingInBackend.length > 0)
+  .sort((a, b) => a.resource.localeCompare(b.resource, 'pt-BR'));
 
 const errors = [];
 if (missingRouteCoverage.length > 0) {
@@ -144,6 +210,31 @@ if (missingMetaResources.length > 0) {
     ].join('\n'),
   );
 }
+if (missingExpectedActionContracts.length > 0) {
+  errors.push(
+    [
+      'Recursos RBAC com metadado na matriz, mas sem contrato expectedActions explícito:',
+      ...missingExpectedActionContracts.map((item) => `- ${item}`),
+    ].join('\n'),
+  );
+}
+if (actionContractMismatches.length > 0) {
+  errors.push(
+    [
+      'Ações esperadas na matriz divergentes do backend:',
+      ...actionContractMismatches.flatMap((item) => {
+        const lines = [`- ${item.resource}`];
+        if (item.missingInMeta.length > 0) {
+          lines.push(`  - faltando na matriz: ${item.missingInMeta.join(', ')}`);
+        }
+        if (item.missingInBackend.length > 0) {
+          lines.push(`  - faltando no backend: ${item.missingInBackend.join(', ')}`);
+        }
+        return lines;
+      }),
+    ].join('\n'),
+  );
+}
 
 if (errors.length > 0) {
   console.error(errors.join('\n\n'));
@@ -154,3 +245,4 @@ console.log('Permission matrix coverage OK.');
 console.log(`- Rotas verificadas: ${appRoutes.length}`);
 console.log(`- Itens de menu verificados: ${navRoutes.length}`);
 console.log(`- Recursos RBAC com metadado explícito: ${metaResources.length}`);
+console.log(`- Recursos RBAC com contrato de ações: ${expectedActionsByResource.size}`);
