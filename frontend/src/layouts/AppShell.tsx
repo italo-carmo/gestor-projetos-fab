@@ -60,7 +60,6 @@ import {
   hasAnyRole,
   normalizeRoleName,
   ROLE_COMGEP,
-  ROLE_COORDENACAO_CIPAVD,
   ROLE_TI,
 } from "../app/roleAccess";
 import {
@@ -473,10 +472,10 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const canSeeNavItem = (item: NavItem) => {
     if (item.to === "/dashboard/estrategico") {
-      return hasAnyRole(me, [ROLE_COMGEP, ROLE_COORDENACAO_CIPAVD, ROLE_TI]);
+      return can(me, "strategic_dashboard", "view");
     }
     if (item.to === "/ai") {
-      return can(me, "bi", "view");
+      return can(me, "ai", "view");
     }
     if (item.to === "/dashboard/smif") {
       return can(me, "dashboard", "view", "NATIONAL");

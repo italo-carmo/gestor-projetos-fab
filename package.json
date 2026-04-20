@@ -20,6 +20,7 @@
     "run:all": "bash scripts/run-all.sh",
     "run:all:prod": "bash scripts/run-all.sh --prod",
     "test": "npm --prefix backend run test",
+    "check:permission-matrix": "node scripts/check-permission-matrix-coverage.mjs",
     "e2e": "playwright test",
     "e2e:cpca": "playwright test e2e/cpca-workflow.spec.ts",
     "lint": "npm --prefix backend run lint && npm --prefix frontend run lint",

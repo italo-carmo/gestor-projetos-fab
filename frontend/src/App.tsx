@@ -44,7 +44,7 @@ import { LessonsLearnedPage } from "./pages/LessonsLearnedPage";
 import { RequireAuth } from "./app/RequireAuth";
 import { RequireRoleAccess } from "./app/RequireRoleAccess";
 import { can, canAccessAdminCatalog } from "./app/rbac";
-import { hasAnyRole, resolveHomePath, ROLE_COMGEP, ROLE_COORDENACAO_CIPAVD, ROLE_TI } from "./app/roleAccess";
+import { hasAnyRole, resolveHomePath, ROLE_COMGEP, ROLE_TI } from "./app/roleAccess";
 import { useMe } from "./api/hooks";
 
 function HomeRedirect() {
@@ -89,7 +89,17 @@ function App() {
                 />
                 <Route
                   path="/dashboard/cipavd"
-                  element={<DashboardExecutivePage />}
+                  element={
+                    <RequireRoleAccess
+                      allow={(user) =>
+                        can(user, "dashboard", "view") &&
+                        (Boolean(user?.executive_hide_pii) ||
+                          can(user, "roles", "view"))
+                      }
+                    >
+                      <DashboardExecutivePage />
+                    </RequireRoleAccess>
+                  }
                 />
                 <Route
                   path="/dashboard/executive"
@@ -173,8 +183,7 @@ function App() {
                   element={
                     <RequireRoleAccess
                       allow={(user) =>
-                        hasAnyRole(user, [ROLE_COMGEP, ROLE_TI]) &&
-                        can(user, "bi", "view")
+                        can(user, "strategic_dashboard", "view")
                       }
                     >
                       <ComgepSituationRoomPage />
@@ -186,7 +195,7 @@ function App() {
                   element={
                     <RequireRoleAccess
                       allow={(user) =>
-                        hasAnyRole(user, [ROLE_COMGEP, ROLE_COORDENACAO_CIPAVD, ROLE_TI])
+                        can(user, "strategic_dashboard", "view")
                       }
                     >
                       <StrategicDashboardPage />
@@ -197,7 +206,7 @@ function App() {
                   path="/ai"
                   element={
                     <RequireRoleAccess
-                      allow={(user) => can(user, "bi", "view")}
+                      allow={(user) => can(user, "ai", "view")}
                     >
                       <AiPage />
                     </RequireRoleAccess>
@@ -205,9 +214,27 @@ function App() {
                 />
                 <Route
                   path="/dashboard/locality/:id"
-                  element={<DashboardLocalityPage />}
+                  element={
+                    <RequireRoleAccess
+                      allow={(user) =>
+                        can(user, "dashboard", "view") ||
+                        can(user, "localities", "view")
+                      }
+                    >
+                      <DashboardLocalityPage />
+                    </RequireRoleAccess>
+                  }
                 />
-                <Route path="/tasks" element={<TasksPage />} />
+                <Route
+                  path="/tasks"
+                  element={
+                    <RequireRoleAccess
+                      allow={(user) => can(user, "task_instances", "view")}
+                    >
+                      <TasksPage />
+                    </RequireRoleAccess>
+                  }
+                />
                 <Route
                   path="/smif-complaints"
                   element={
@@ -271,12 +298,36 @@ function App() {
                     </RequireRoleAccess>
                   }
                 />
-                <Route path="/activities" element={<ActivitiesPage />} />
+                <Route
+                  path="/activities"
+                  element={
+                    <RequireRoleAccess
+                      allow={(user) => can(user, "task_instances", "view")}
+                    >
+                      <ActivitiesPage />
+                    </RequireRoleAccess>
+                  }
+                />
                 <Route
                   path="/activities-cipavd"
-                  element={<ActivitiesPage scope="cipavd" />}
+                  element={
+                    <RequireRoleAccess
+                      allow={(user) => can(user, "task_instances", "view")}
+                    >
+                      <ActivitiesPage scope="cipavd" />
+                    </RequireRoleAccess>
+                  }
                 />
-                <Route path="/gantt" element={<GanttPage />} />
+                <Route
+                  path="/gantt"
+                  element={
+                    <RequireRoleAccess
+                      allow={(user) => can(user, "gantt", "view")}
+                    >
+                      <GanttPage />
+                    </RequireRoleAccess>
+                  }
+                />
                 <Route
                   path="/calendar"
                   element={
@@ -297,17 +348,71 @@ function App() {
                     </RequireRoleAccess>
                   }
                 />
-                <Route path="/gsd-recruits" element={<GsdRecruitsPage />} />
+                <Route
+                  path="/gsd-recruits"
+                  element={
+                    <RequireRoleAccess
+                      allow={(user) =>
+                        can(user, "localities", "view") ||
+                        can(user, "dashboard", "view")
+                      }
+                    >
+                      <GsdRecruitsPage />
+                    </RequireRoleAccess>
+                  }
+                />
                 <Route
                   path="/recruits-history"
-                  element={<RecruitsHistoryRedirect />}
+                  element={
+                    <RequireRoleAccess
+                      allow={(user) =>
+                        can(user, "localities", "view") ||
+                        can(user, "dashboard", "view")
+                      }
+                    >
+                      <RecruitsHistoryRedirect />
+                    </RequireRoleAccess>
+                  }
                 />
-                <Route path="/notices" element={<NoticesPage />} />
-                <Route path="/checklists" element={<ChecklistsPage />} />
-                <Route path="/templates" element={<TaskTemplatesPage />} />
+                <Route
+                  path="/notices"
+                  element={
+                    <RequireRoleAccess
+                      allow={(user) => can(user, "notices", "view")}
+                    >
+                      <NoticesPage />
+                    </RequireRoleAccess>
+                  }
+                />
+                <Route
+                  path="/checklists"
+                  element={
+                    <RequireRoleAccess
+                      allow={(user) => can(user, "checklists", "view")}
+                    >
+                      <ChecklistsPage />
+                    </RequireRoleAccess>
+                  }
+                />
+                <Route
+                  path="/templates"
+                  element={
+                    <RequireRoleAccess
+                      allow={(user) => can(user, "task_templates", "view")}
+                    >
+                      <TaskTemplatesPage />
+                    </RequireRoleAccess>
+                  }
+                />
                 <Route
                   path="/social-communication"
-                  element={<SocialCommunicationPage />}
+                  element={
+                    <RequireRoleAccess
+                      allow={(user) => can(user, "social_communication", "view")}
+                    >
+                      <SocialCommunicationPage />
+                    </RequireRoleAccess>
+                  }
                 />
                 <Route
                   path="/best-practices"
@@ -319,7 +424,16 @@ function App() {
                     </RequireRoleAccess>
                   }
                 />
-                <Route path="/library" element={<LibraryPage />} />
+                <Route
+                  path="/library"
+                  element={
+                    <RequireRoleAccess
+                      allow={(user) => can(user, "library", "view")}
+                    >
+                      <LibraryPage />
+                    </RequireRoleAccess>
+                  }
+                />
                 <Route
                   path="/lessons-learned"
                   element={
@@ -340,8 +454,26 @@ function App() {
                     </RequireRoleAccess>
                   }
                 />
-                <Route path="/elos" element={<ElosPage />} />
-                <Route path="/org-chart" element={<OrgChartPage />} />
+                <Route
+                  path="/elos"
+                  element={
+                    <RequireRoleAccess
+                      allow={(user) => can(user, "elos", "view")}
+                    >
+                      <ElosPage />
+                    </RequireRoleAccess>
+                  }
+                />
+                <Route
+                  path="/org-chart"
+                  element={
+                    <RequireRoleAccess
+                      allow={(user) => can(user, "org_chart", "view")}
+                    >
+                      <OrgChartPage />
+                    </RequireRoleAccess>
+                  }
+                />
                 <Route
                   path="/audit"
                   element={
@@ -352,7 +484,20 @@ function App() {
                     </RequireRoleAccess>
                   }
                 />
-                <Route path="/admin/rbac" element={<AdminRbacPage />} />
+                <Route
+                  path="/admin/rbac"
+                  element={
+                    <RequireRoleAccess
+                      allow={(user) =>
+                        can(user, "users", "view") ||
+                        can(user, "roles", "view") ||
+                        can(user, "roles", "permissions")
+                      }
+                    >
+                      <AdminRbacPage />
+                    </RequireRoleAccess>
+                  }
+                />
                 <Route
                   path="/admin"
                   element={

@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { FilesInterceptor } from '@nestjs/platform-express';
+import { PermissionScope } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../common/current-user.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
@@ -57,25 +58,25 @@ export class AiController {
   }
 
   @Get('analyses')
-  @RequirePermission('bi', 'view')
+  @RequirePermission('ai', 'view', PermissionScope.NATIONAL)
   listAnalyses() {
     return this.ai.getAnalysesCatalog();
   }
 
   @Get('action-agents')
-  @RequirePermission('bi', 'view')
+  @RequirePermission('ai', 'view', PermissionScope.NATIONAL)
   listActionAgents() {
     return this.ai.getActionAgentsCatalog();
   }
 
   @Get('assistant/quick-actions')
-  @RequirePermission('bi', 'view')
+  @RequirePermission('ai', 'view', PermissionScope.NATIONAL)
   listAssistantQuickActions() {
     return { items: this.assistant.listQuickActions() };
   }
 
   @Post('analyze')
-  @RequirePermission('bi', 'view')
+  @RequirePermission('ai', 'view', PermissionScope.NATIONAL)
   async analyze(@Body() body: { type: AnalysisType }, @Res() res: Response) {
     this.openSse(res, {
       event: 'progress',
@@ -99,7 +100,7 @@ export class AiController {
   }
 
   @Post('analyze/pdf')
-  @RequirePermission('bi', 'view')
+  @RequirePermission('ai', 'view', PermissionScope.NATIONAL)
   async analyzePdf(
     @Body()
     body: {
@@ -126,7 +127,7 @@ export class AiController {
   }
 
   @Post('chat')
-  @RequirePermission('bi', 'view')
+  @RequirePermission('ai', 'view', PermissionScope.NATIONAL)
   async chat(
     @Body()
     body: {
@@ -163,7 +164,7 @@ export class AiController {
   }
 
   @Post('action-agents/run')
-  @RequirePermission('bi', 'view')
+  @RequirePermission('ai', 'view', PermissionScope.NATIONAL)
   async runActionAgent(
     @Body()
     body: {
@@ -200,7 +201,7 @@ export class AiController {
   }
 
   @Post('action-agents/follow-up')
-  @RequirePermission('bi', 'view')
+  @RequirePermission('ai', 'view', PermissionScope.NATIONAL)
   async followUpActionAgent(
     @Body()
     body: {
@@ -232,7 +233,7 @@ export class AiController {
   }
 
   @Post('action-agents/pdf')
-  @RequirePermission('bi', 'view')
+  @RequirePermission('ai', 'view', PermissionScope.NATIONAL)
   async actionAgentPdf(
     @Body() body: { sessionId: string },
     @Res() res: Response,
@@ -248,7 +249,7 @@ export class AiController {
   }
 
   @Post('assistant/message')
-  @RequirePermission('bi', 'view')
+  @RequirePermission('ai', 'view', PermissionScope.NATIONAL)
   async assistantMessage(
     @Body()
     body: {
@@ -285,7 +286,7 @@ export class AiController {
   }
 
   @Post('assistant/upload')
-  @RequirePermission('bi', 'view')
+  @RequirePermission('ai', 'view', PermissionScope.NATIONAL)
   @UseInterceptors(
     FilesInterceptor('files', 6, {
       limits: { fileSize: 12 * 1024 * 1024 },
@@ -310,13 +311,13 @@ export class AiController {
   }
 
   @Post('assistant/reset')
-  @RequirePermission('bi', 'view')
+  @RequirePermission('ai', 'view', PermissionScope.NATIONAL)
   resetAssistantSession(@Body() body: { sessionId?: string | null }) {
     return this.assistant.resetSession(body.sessionId);
   }
 
   @Post('assistant/report/pdf')
-  @RequirePermission('bi', 'view')
+  @RequirePermission('ai', 'view', PermissionScope.NATIONAL)
   async assistantReportPdf(
     @Body() body: { sessionId?: string | null },
     @CurrentUser() user: RbacUser,

@@ -13,6 +13,7 @@ import { CurrentUser } from '../common/current-user.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
 import { RequirePermission } from '../rbac/require-permission.decorator';
 import type { RbacUser } from '../rbac/rbac.types';
+import { PermissionScope } from '@prisma/client';
 import { StrategicService } from './strategic.service';
 
 @Controller('strategic')
@@ -21,25 +22,25 @@ export class StrategicController {
   constructor(private readonly service: StrategicService) {}
 
   @Get('dashboard')
-  @RequirePermission('bi', 'view')
+  @RequirePermission('strategic_dashboard', 'view', PermissionScope.NATIONAL)
   dashboard() {
     return this.service.situationalDashboard();
   }
 
   @Get('comgep-room')
-  @RequirePermission('bi', 'view')
+  @RequirePermission('strategic_dashboard', 'view', PermissionScope.NATIONAL)
   comgepRoom() {
     return this.service.comgepSituationRoom();
   }
 
   @Get('comgep-recommendations')
-  @RequirePermission('bi', 'view')
+  @RequirePermission('strategic_dashboard', 'view', PermissionScope.NATIONAL)
   listComgepRecommendations(@Query('limit') limit: string | undefined) {
     return this.service.listComgepRecommendations(Number(limit ?? 8));
   }
 
   @Post('comgep-recommendations')
-  @RequirePermission('bi', 'view')
+  @RequirePermission('strategic_dashboard', 'view', PermissionScope.NATIONAL)
   createComgepRecommendation(
     @Body()
     body: {
@@ -60,19 +61,19 @@ export class StrategicController {
   }
 
   @Get('aggressor-profile')
-  @RequirePermission('bi', 'view')
+  @RequirePermission('strategic_dashboard', 'view', PermissionScope.NATIONAL)
   aggressorProfile() {
     return this.service.aggressorProfile();
   }
 
   @Get('text-analysis')
-  @RequirePermission('bi', 'view')
+  @RequirePermission('strategic_dashboard', 'view', PermissionScope.NATIONAL)
   textAnalysis() {
     return this.service.textAnalysis();
   }
 
   @Get('geo-map')
-  @RequirePermission('bi', 'view')
+  @RequirePermission('strategic_dashboard', 'view', PermissionScope.NATIONAL)
   geoMap() {
     return this.service.geoMap();
   }
@@ -82,19 +83,19 @@ export class StrategicController {
    * o frontend usa GET (como as outras rotas /strategic/*).
    */
   @Get('ai-narrative')
-  @RequirePermission('bi', 'view')
+  @RequirePermission('strategic_dashboard', 'view', PermissionScope.NATIONAL)
   getAiNarrative() {
     return this.service.strategicAiNarrative();
   }
 
   @Post('ai-narrative')
-  @RequirePermission('bi', 'view')
+  @RequirePermission('strategic_dashboard', 'view', PermissionScope.NATIONAL)
   postAiNarrative() {
     return this.service.strategicAiNarrative();
   }
 
   @Get('executive-report/pdf')
-  @RequirePermission('bi', 'view')
+  @RequirePermission('strategic_dashboard', 'view', PermissionScope.NATIONAL)
   async executiveReportPdf(@Res() res: Response) {
     const buffer = await this.service.executiveReportPdf();
     const filename = `relatorio-executivo-${new Date().toISOString().slice(0, 10)}.pdf`;

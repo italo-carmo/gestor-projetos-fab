@@ -1,0 +1,46 @@
+name: Permission Matrix Guard
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'frontend/src/App.tsx'
+      - 'frontend/src/layouts/AppShell.tsx'
+      - 'frontend/src/app/permissionMatrixMeta.ts'
+      - 'backend/src/**/*.controller.ts'
+      - 'backend/src/rbac/**'
+      - 'package.json'
+      - 'scripts/check-permission-matrix-coverage.mjs'
+      - '.github/workflows/permission-matrix-guard.yml'
+  push:
+    branches: [ main ]
+    paths:
+      - 'frontend/src/App.tsx'
+      - 'frontend/src/layouts/AppShell.tsx'
+      - 'frontend/src/app/permissionMatrixMeta.ts'
+      - 'backend/src/**/*.controller.ts'
+      - 'backend/src/rbac/**'
+      - 'package.json'
+      - 'scripts/check-permission-matrix-coverage.mjs'
+      - '.github/workflows/permission-matrix-guard.yml'
+
+jobs:
+  permission-matrix-guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify permission matrix coverage
+        run: npm run check:permission-matrix

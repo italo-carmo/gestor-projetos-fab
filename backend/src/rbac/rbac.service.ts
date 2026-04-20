@@ -1048,7 +1048,128 @@ export class RbacService implements OnModuleInit {
       });
     }
 
+    await this.backfillPermissionAssignments({
+      sourceResource: 'bi',
+      sourceAction: 'view',
+      targetResource: 'ai',
+      targetAction: 'view',
+    });
+    await this.backfillPermissionAssignments({
+      sourceResource: 'bi',
+      sourceAction: 'view',
+      targetResource: 'strategic_dashboard',
+      targetAction: 'view',
+      allowedRoleNames: [
+        ROLE_TI,
+        ROLE_COORDENACAO_CIPAVD,
+        ROLE_COMANDANTE_COMGEP,
+      ],
+    });
     await this.backfillCpcaDashboardViewPermission();
+  }
+
+  private async backfillPermissionAssignments(input: {
+    sourceResource: string;
+    sourceAction: string;
+    targetResource: string;
+    targetAction: string;
+    allowedRoleNames?: string[];
+  }) {
+    const [sourcePermissions, targetPermissions] = await Promise.all([
+      this.prisma.permission.findMany({
+        where: {
+          resource: input.sourceResource,
+          action: input.sourceAction,
+        },
+        select: { id: true, scope: true },
+      }),
+      this.prisma.permission.findMany({
+        where: {
+          resource: input.targetResource,
+          action: input.targetAction,
+        },
+        select: { id: true, scope: true },
+      }),
+    ]);
+
+    if (sourcePermissions.length === 0 || targetPermissions.length === 0) {
+      return;
+    }
+
+    let allowedRoleIds: Set<string> | null = null;
+    if (Array.isArray(input.allowedRoleNames) && input.allowedRoleNames.length > 0) {
+      const allowedNames = new Set(
+        input.allowedRoleNames.map((name) => normalizeRoleName(name)),
+      );
+      const roles = await this.prisma.role.findMany({
+        select: { id: true, name: true },
+      });
+      allowedRoleIds = new Set(
+        roles
+          .filter((role) => allowedNames.has(normalizeRoleName(role.name)))
+          .map((role) => role.id),
+      );
+      if (allowedRoleIds.size === 0) {
+        return;
+      }
+    }
+
+    const sourceScopeByPermissionId = new Map(
+      sourcePermissions.map((item) => [item.id, item.scope] as const),
+    );
+    const targetPermissionByScope = new Map(
+      targetPermissions.map((item) => [item.scope, item.id] as const),
+    );
+    const fallbackTargetPermissionId = targetPermissions[0]?.id;
+    if (!fallbackTargetPermissionId) {
+      return;
+    }
+
+    const sourcePermissionIds = sourcePermissions.map((item) => item.id);
+    const targetPermissionIds = targetPermissions.map((item) => item.id);
+
+    const [rolePermissionsWithSource, rolePermissionsWithTarget] =
+      await Promise.all([
+        this.prisma.rolePermission.findMany({
+          where: {
+            permissionId: { in: sourcePermissionIds },
+            ...(allowedRoleIds
+              ? { roleId: { in: Array.from(allowedRoleIds.values()) } }
+              : {}),
+          },
+          select: { roleId: true, permissionId: true },
+        }),
+        this.prisma.rolePermission.findMany({
+          where: { permissionId: { in: targetPermissionIds } },
+          select: { roleId: true, permissionId: true },
+        }),
+      ]);
+
+    const existingTargetByRole = new Set(
+      rolePermissionsWithTarget.map(
+        (item) => `${item.roleId}:${item.permissionId}`,
+      ),
+    );
+
+    const toCreate: Array<{ roleId: string; permissionId: string }> = [];
+    for (const item of rolePermissionsWithSource) {
+      const sourceScope = sourceScopeByPermissionId.get(item.permissionId);
+      const targetPermissionId =
+        (sourceScope
+          ? targetPermissionByScope.get(sourceScope)
+          : undefined) ?? fallbackTargetPermissionId;
+      const key = `${item.roleId}:${targetPermissionId}`;
+      if (existingTargetByRole.has(key)) continue;
+      existingTargetByRole.add(key);
+      toCreate.push({ roleId: item.roleId, permissionId: targetPermissionId });
+    }
+
+    if (toCreate.length === 0) return;
+
+    await this.prisma.rolePermission.createMany({
+      data: toCreate,
+      skipDuplicates: true,
+    });
   }
 
   private async backfillCpcaDashboardViewPermission() {

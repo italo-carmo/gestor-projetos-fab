@@ -77,12 +77,8 @@ export function canEditRecruitsCount(
 }
 
 export function resolveHomePath(user: MePayload | undefined) {
-  const canSeeStrategicDashboard = hasAnyRole(user, [
-    ROLE_COMGEP,
-    ROLE_COORDENACAO_CIPAVD,
-    ROLE_TI,
-  ]);
-  const canSeeAi = can(user, 'bi', 'view');
+  const canSeeStrategicDashboard = can(user, 'strategic_dashboard', 'view');
+  const canSeeAi = can(user, 'ai', 'view');
   const canSeeSmifDashboard = can(user, 'dashboard', 'view', 'NATIONAL');
   const canSeeCipavdDashboard =
     can(user, 'dashboard', 'view') &&

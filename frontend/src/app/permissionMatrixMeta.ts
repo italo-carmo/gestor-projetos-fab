@@ -15,8 +15,27 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     title: "Dashboards",
     description: "Visualização e ajustes dos paineis executivos e CIPAVD.",
     route: "/dashboard/smif",
-    routeAliases: ["/dashboard/cipavd"],
-    sidebarItems: ["SMIF", "CIPAVD", "Escolas"],
+    routeAliases: ["/dashboard/cipavd", "/dashboard/locality/:id"],
+    sidebarItems: ["SMIF", "CIPAVD"],
+  },
+  strategic_dashboard: {
+    menu: "Dashboards",
+    menuOrder: 10,
+    title: "Painel Estratégico",
+    description:
+      "Leitura executiva, territorial e prioritária do panorama institucional.",
+    route: "/dashboard/estrategico",
+    routeAliases: ["/dashboard/comgep"],
+    sidebarItems: ["Painel Estratégico"],
+  },
+  ai: {
+    menu: "Dashboards",
+    menuOrder: 10,
+    title: "Inteligência Artificial",
+    description:
+      "Assistentes, análises, copilotos e fluxos assistidos por IA.",
+    route: "/ai",
+    sidebarItems: ["Inteligência Artificial"],
   },
   kpis: {
     menu: "Dashboards",
@@ -90,6 +109,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     title: "Fases",
     description: "Gestao das fases usadas em tarefas e checklists.",
     route: "/admin?tab=phases",
+    routeAliases: ["/admin/phases"],
     sidebarItems: ["Administracao"],
   },
   missions: {
@@ -175,10 +195,12 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
   cpca_cases: {
     menu: "CPCA",
     menuOrder: 60,
-    title: "Casos CPCA",
-    description: "Abertura, acompanhamento e comentarios em casos CPCA.",
+    title: "Casos e Operação CPCA",
+    description:
+      "Abertura de casos, operação da comissão CPCA e fluxo de homologações.",
     route: "/cpca-cases",
-    sidebarItems: ["Denuncias", "Comissão CPCA"],
+    routeAliases: ["/cpca-commission", "/cpca-president-approvals"],
+    sidebarItems: ["Denúncias", "Comissão CPCA", "Homologações CPCA"],
   },
   cpca_dashboard: {
     menu: "CPCA",
@@ -219,7 +241,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     title: "Localidades / OMs",
     description: "Cadastro das OMs e dados estruturais de localidade.",
     route: "/admin?tab=localities",
-    routeAliases: ["/gsd-recruits", "/admin/oms", "/admin/localities"],
+    routeAliases: ["/gsd-recruits", "/recruits-history", "/admin/oms", "/admin/localities", "/admin/localidades"],
     sidebarItems: ["GSD e Recrutas", "Administracao", "OMs"],
   },
   localities_cipavd: {
@@ -228,7 +250,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     title: "Localidades CIPAVD",
     description: "Cadastro de localidades usadas pelas atividades de campo CIPAVD.",
     route: "/admin?tab=localities-cipavd",
-    routeAliases: ["/admin/localities-cipavd", "/activities-cipavd"],
+    routeAliases: ["/admin/localities-cipavd", "/admin/localidades-cipavd", "/activities-cipavd"],
     sidebarItems: ["Administracao", "Atividades de Campo"],
   },
   specialties: {
@@ -245,6 +267,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     title: "Postos",
     description: "Cadastro de postos para ordenacao e exibicao.",
     route: "/admin?tab=postos",
+    routeAliases: ["/admin/postos"],
     sidebarItems: ["Administracao"],
   },
   elo_roles: {
@@ -254,6 +277,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     description:
       "Cadastro de papeis de elo para atribuicao de responsabilidade.",
     route: "/admin?tab=elo-roles",
+    routeAliases: ["/admin/elo-roles"],
     sidebarItems: ["Administracao"],
   },
   users: {
