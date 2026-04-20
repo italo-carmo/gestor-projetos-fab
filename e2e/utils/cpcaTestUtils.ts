@@ -117,7 +117,7 @@ type MockCurrentPresident = {
   assignedByUser?: { id: string; name: string; email: string } | null;
 };
 
-type CpcaE2eActorKey = 'ti' | 'approvedPresident' | 'member';
+type CpcaE2eActorKey = 'ti' | 'approvedPresident' | 'member' | 'currentPresident';
 
 export type CpcaE2eActor = {
   key: CpcaE2eActorKey;
@@ -156,6 +156,7 @@ type CpcaE2eState = {
 export type CpcaE2eScenario = {
   namespace: string;
   ti: CpcaE2eActor;
+  currentPresidentActor: CpcaE2eActor;
   roleCpcaId: string;
   managerOm: MockOm;
   managedOm: MockOm;
@@ -163,6 +164,9 @@ export type CpcaE2eScenario = {
   approvedPresident: CpcaE2eActor;
   member: CpcaE2eActor;
   selfRegistrationApplicantName: string;
+  originalPresidentName: string;
+  removableMemberId: string;
+  removableMemberName: string;
   caseOwnNumber: string;
   caseManagedNumber: string;
   caseOutsiderNumber: string;
@@ -803,6 +807,18 @@ async function handleApiRequest(
       `/cpca-commission/approval-requests/SELF_REGISTRATION/${scenario.state.selfRegistrationRequest.id}/reject`
   ) {
     scenario.state.selfRegistrationRequest.status = 'REJECTED';
+    scenario.state.history.unshift({
+      id: nextHistoryId(scenario.namespace, scenario.state.history.length),
+      action: 'cpca_self_registration_rejected',
+      actionLabel: 'Autoinscrição rejeitada',
+      summary: 'A solicitação de autoinscrição para presidência foi rejeitada.',
+      createdAt: isoNow(53),
+      actor: {
+        id: actor.id,
+        name: actor.name,
+        email: actor.email,
+      },
+    });
     return json(route, 200, { ok: true });
   }
 
@@ -858,6 +874,41 @@ async function handleApiRequest(
       },
     });
     return json(route, 200, { mode: 'REQUESTED' });
+  }
+
+  if (
+    request.method() === 'DELETE' &&
+    pathname.startsWith('/cpca-commission/members/')
+  ) {
+    const canManageMembers =
+      actor.roleName === 'TI' ||
+      actor.roleName === 'COMGEP' ||
+      actor.id === scenario.state.currentPresident.user.id;
+
+    if (!canManageMembers) {
+      return json(route, 403, { message: 'Acesso negado.' });
+    }
+
+    const memberId = pathname.split('/').at(-1) ?? '';
+    const memberIndex = scenario.state.members.findIndex((item) => item.id === memberId);
+    if (memberIndex === -1) {
+      return json(route, 404, { message: 'Membro não encontrado.' });
+    }
+
+    const [removedMember] = scenario.state.members.splice(memberIndex, 1);
+    scenario.state.history.unshift({
+      id: nextHistoryId(scenario.namespace, scenario.state.history.length),
+      action: 'cpca_member_removed',
+      actionLabel: 'Membro removido',
+      summary: `${removedMember.user.name} foi removido da comissão da OM.`,
+      createdAt: isoNow(61),
+      actor: {
+        id: actor.id,
+        name: actor.name,
+        email: actor.email,
+      },
+    });
+    return json(route, 200, { ok: true });
   }
 
   if (
@@ -949,6 +1000,7 @@ export async function installCpcaApiMocks(
       if (actor.key === 'ti') currentActor = users.ti;
       if (actor.key === 'approvedPresident') currentActor = users.president;
       if (actor.key === 'member') currentActor = users.member;
+      if (actor.key === 'currentPresident') currentActor = users.currentPresident;
       await authenticatePage(page, actor);
     },
   };
@@ -982,6 +1034,8 @@ export async function seedCpcaE2eScenario(
   };
 
   const users = createMockUsers(namespace, managerOm.id);
+  const removableMemberId = `${namespace}-member-removable`;
+  const removableMemberName = `Membro Removível ${namespace}`;
   const caseOwnNumber = `${namespace}-CASO-OM`;
   const caseManagedNumber = `${namespace}-CASO-GERIDA`;
   const caseOutsiderNumber = `${namespace}-CASO-EXTERNA`;
@@ -989,6 +1043,7 @@ export async function seedCpcaE2eScenario(
   const scenario: CpcaE2eScenario = {
     namespace,
     ti: buildActor('ti', users.ti),
+    currentPresidentActor: buildActor('currentPresident', users.currentPresident),
     roleCpcaId: users.member.roleId,
     managerOm,
     managedOm,
@@ -996,6 +1051,9 @@ export async function seedCpcaE2eScenario(
     approvedPresident: buildActor('approvedPresident', users.president),
     member: buildActor('member', users.member),
     selfRegistrationApplicantName: users.president.name,
+    originalPresidentName: users.currentPresident.name,
+    removableMemberId,
+    removableMemberName,
     caseOwnNumber,
     caseManagedNumber,
     caseOutsiderNumber,
@@ -1050,6 +1108,21 @@ export async function seedCpcaE2eScenario(
             email: users.currentPresident.email,
           },
         },
+        {
+          id: removableMemberId,
+          createdAt: isoNow(3),
+          user: {
+            id: `${namespace}-user-removable`,
+            name: removableMemberName,
+            email: `${namespace.toLowerCase()}.removivel@e2e.cpca.local`,
+            ldapUid: `${namespace.toLowerCase()}-removivel`,
+          },
+          addedByUser: {
+            id: users.currentPresident.id,
+            name: users.currentPresident.name,
+            email: users.currentPresident.email,
+          },
+        },
       ],
       history: [
         {
@@ -1058,6 +1131,18 @@ export async function seedCpcaE2eScenario(
           actionLabel: 'Membro adicionado',
           summary: 'Membro incluído na comissão da OM.',
           createdAt: isoNow(2),
+          actor: {
+            id: users.currentPresident.id,
+            name: users.currentPresident.name,
+            email: users.currentPresident.email,
+          },
+        },
+        {
+          id: nextHistoryId(namespace, 1),
+          action: 'cpca_member_added',
+          actionLabel: 'Membro adicionado',
+          summary: 'Membro incluído na comissão da OM.',
+          createdAt: isoNow(3),
           actor: {
             id: users.currentPresident.id,
             name: users.currentPresident.name,

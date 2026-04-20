@@ -14,8 +14,18 @@ async function selectOm(page: Page, label: string) {
 
 async function loginWithScenarioActor(
   page: Page,
-  actor: CpcaE2eScenario['ti'] | CpcaE2eScenario['approvedPresident'] | CpcaE2eScenario['member'],
-  loginAs: (actor: CpcaE2eScenario['ti'] | CpcaE2eScenario['approvedPresident'] | CpcaE2eScenario['member']) => Promise<void>,
+  actor:
+    | CpcaE2eScenario['ti']
+    | CpcaE2eScenario['approvedPresident']
+    | CpcaE2eScenario['member']
+    | CpcaE2eScenario['currentPresidentActor'],
+  loginAs: (
+    actor:
+      | CpcaE2eScenario['ti']
+      | CpcaE2eScenario['approvedPresident']
+      | CpcaE2eScenario['member']
+      | CpcaE2eScenario['currentPresidentActor'],
+  ) => Promise<void>,
 ) {
   await loginAs(actor);
 }
@@ -278,5 +288,126 @@ test.describe.serial('CPCA workflow', () => {
     await page.goto('/dashboard/estrategico');
     await expect(page).not.toHaveURL(/dashboard\/estrategico/);
     await expect(page.getByText('Homologações CPCA')).toHaveCount(0);
+  });
+
+  test('Presidente atual remove membro da comissão e o histórico registra a alteração', async ({ page }) => {
+    const session = await installCpcaApiMocks(page, scenario);
+    await loginWithScenarioActor(page, scenario.member, session.loginAs);
+    await page.goto('/cpca-commission');
+
+    const memberRow = page.locator('tr').filter({
+      hasText: scenario.removableMemberName,
+    });
+
+    await expect(memberRow).toBeVisible();
+    await memberRow.getByRole('button').click();
+
+    await page
+      .getByRole('dialog', { name: 'Remover membro da comissão' })
+      .getByRole('button', { name: 'Remover' })
+      .click();
+
+    await expect(page.getByText('Membro removido da comissão.')).toBeVisible();
+    await expect(
+      page.getByText('Membro removido', { exact: true }).first(),
+    ).toBeVisible();
+    await expect(
+      page.getByText(
+        `${scenario.removableMemberName} foi removido da comissão da OM.`,
+        { exact: true },
+      ).first(),
+    ).toBeVisible();
+    await expect(
+      page.locator('tr').filter({ hasText: scenario.removableMemberName }),
+    ).toHaveCount(0);
+  });
+});
+
+test.describe('CPCA rejection workflow', () => {
+  test('TI rejeita autoinscrição e mantém o presidente anterior da OM', async ({ page }) => {
+    const scenario = await seedCpcaE2eScenario(
+      `E2ECPCAREJ${Date.now().toString(36).toUpperCase()}`,
+    );
+    const session = await installCpcaApiMocks(page, scenario);
+
+    await loginWithScenarioActor(page, scenario.ti, session.loginAs);
+    await page.goto('/cpca-president-approvals');
+
+    const requestRow = page.locator('tr').filter({
+      hasText: scenario.selfRegistrationApplicantName,
+    });
+
+    await requestRow.getByRole('button', { name: 'Rejeitar' }).click();
+    await page
+      .getByRole('dialog', { name: 'Rejeitar solicitação' })
+      .getByRole('button', { name: 'Rejeitar' })
+      .click();
+
+    await expect(page.getByText('Solicitação rejeitada.')).toBeVisible();
+    await expect(
+      page.locator('tr').filter({ hasText: scenario.selfRegistrationApplicantName }),
+    ).toHaveCount(0);
+
+    await page.goto('/cpca-commission');
+    await selectOm(page, `${scenario.managerOm.code} - ${scenario.managerOm.name}`);
+    await expect(
+      page.getByText(scenario.originalPresidentName, { exact: true }).first(),
+    ).toBeVisible();
+    await expect(page.getByText(/Cadastro direto por TI/)).toBeVisible();
+    await expect(
+      page.getByText('Autoinscrição rejeitada', { exact: true }).first(),
+    ).toBeVisible();
+  });
+
+  test('TI rejeita sucessão e mantém a presidência atual', async ({ page }) => {
+    const scenario = await seedCpcaE2eScenario(
+      `E2ECPCANOM${Date.now().toString(36).toUpperCase()}`,
+    );
+    const session = await installCpcaApiMocks(page, scenario);
+
+    await loginWithScenarioActor(page, scenario.currentPresidentActor, session.loginAs);
+    await page.goto('/cpca-commission');
+
+    const nominationCard = page
+      .locator('div.MuiCardContent-root')
+      .filter({ has: page.getByText('Solicitar sucessão da presidência') });
+
+    await page.getByLabel('E-mail ou CPF do indicado').fill(scenario.member.email);
+    await page.getByLabel('Boletim da sucessão').fill(`${scenario.namespace}/SUC-REJ`);
+    await nominationCard
+      .getByRole('button', { name: 'Enviar para homologação' })
+      .click();
+
+    await expect(
+      page.getByText('Solicitação de sucessão enviada para homologação.'),
+    ).toBeVisible();
+
+    await loginWithScenarioActor(page, scenario.ti, session.loginAs);
+    await page.goto('/cpca-president-approvals');
+
+    const nominationRow = page
+      .locator('tr')
+      .filter({ hasText: 'Sucessão de presidente' })
+      .filter({ hasText: scenario.member.name });
+
+    await nominationRow.getByRole('button', { name: 'Rejeitar' }).click();
+    await page
+      .getByRole('dialog', { name: 'Rejeitar solicitação' })
+      .getByRole('button', { name: 'Rejeitar' })
+      .click();
+
+    await expect(page.getByText('Solicitação rejeitada.')).toBeVisible();
+    await expect(
+      page.locator('tr').filter({ hasText: 'Sucessão de presidente' }),
+    ).toHaveCount(0);
+
+    await page.goto('/cpca-commission');
+    await selectOm(page, `${scenario.managerOm.code} - ${scenario.managerOm.name}`);
+    await expect(
+      page.getByText(scenario.originalPresidentName, { exact: true }).first(),
+    ).toBeVisible();
+    await expect(
+      page.getByText('Solicitação de sucessão rejeitada', { exact: true }).first(),
+    ).toBeVisible();
   });
 });
